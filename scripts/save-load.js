@@ -17,6 +17,7 @@ $("btn-reset").onclick = () => {
   state.chatHistory = [];
   state.currentFileId = null;
   state.currentSheet = null;
+  state.editingStepId = null;
   $("chat-messages").innerHTML = `<div class="msg system">입력 또는 출력 파일 업로드 후 활성화됩니다.</div>`;
   renderInputList();
   renderOutputChip();
@@ -325,6 +326,7 @@ function loadLogic(data, filename, meta) {
   state.pipeline = deepClone(data.pipeline || []);
   // 채팅 히스토리도 함께 복원 (있으면)
   state.chatHistory = Array.isArray(data.chatHistory) ? deepClone(data.chatHistory) : [];
+  state.editingStepId = null;
   renderPipeline();
   renderChatFromHistory();
   refreshChatState();

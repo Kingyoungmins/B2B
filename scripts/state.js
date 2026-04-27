@@ -11,4 +11,5 @@ const state = {
   pipeline: [],     // [{ id, prompt, code, description, applied: bool }]
   chatHistory: [],  // for Claude context
   currentPage: "generator",
+  editingStepId: null, // id of pipeline step currently being edited (or null)
 };

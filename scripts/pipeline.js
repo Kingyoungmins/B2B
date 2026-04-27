@@ -15,6 +15,92 @@ function applyLogic(step) {
   }
 }
 
+// 1-based position. position=1 → 맨 앞, position=N+1 → 맨 뒤(append와 동일)
+function insertLogic(step, position) {
+  const total = state.pipeline.length;
+  const idx = Math.max(0, Math.min(total, (position | 0) - 1));
+  const next = state.pipeline.slice();
+  next.splice(idx, 0, step);
+  try {
+    runPipeline(next);
+    state.pipeline = next;
+    renderPipeline();
+    refreshRunButton();
+    toast(`"${step.description}" 단계가 ${idx + 1}번째에 삽입되었습니다`, "success");
+  } catch (err) {
+    toast("코드 실행 오류: " + err.message, "error");
+    console.error(err);
+  }
+}
+
+function replaceLogicAt(stepId, newCode, newDescription) {
+  const idx = state.pipeline.findIndex(s => s.id === stepId);
+  if (idx < 0) {
+    toast("수정 대상 단계를 찾지 못했습니다", "error");
+    return false;
+  }
+  const next = state.pipeline.slice();
+  next[idx] = { ...next[idx], code: newCode, description: newDescription || next[idx].description };
+  try {
+    runPipeline(next);
+    state.pipeline = next;
+    renderPipeline();
+    refreshRunButton();
+    toast(`Step ${idx + 1} 코드가 수정되었습니다`, "success");
+    return true;
+  } catch (err) {
+    toast("코드 실행 오류: " + err.message, "error");
+    console.error(err);
+    return false;
+  }
+}
+
+// 특정 step 직전(=steps[0..stepIdx-1] 이 적용된) 입력/출력 상태를 계산해서 반환.
+// 실제 state는 변경하지 않는다. 실패 시 null 반환.
+function computeStateBeforeStep(stepIdx) {
+  if (state.inputsOriginal.length === 0 && !state.outputOriginal) return null;
+  const inputsMap = {};
+  state.inputsOriginal.forEach(orig => {
+    const cloned = cloneFileRecord(orig);
+    inputsMap[orig.name] = cloned.sheets;
+  });
+  const outputSheets = state.outputOriginal ? deepClone(state.outputOriginal.sheets) : {};
+  for (let i = 0; i < stepIdx && i < state.pipeline.length; i++) {
+    const step = state.pipeline[i];
+    try {
+      const fn = new Function("inputs", "output", step.code + "\nreturn typeof transform === 'function' ? transform(inputs, output) : { inputs, output };");
+      const result = fn(inputsMap, outputSheets);
+      if (result && typeof result === "object" && !Array.isArray(result)) {
+        if (result.inputs && typeof result.inputs === "object") {
+          Object.keys(result.inputs).forEach(name => { inputsMap[name] = result.inputs[name]; });
+        }
+        if (result.output && typeof result.output === "object") {
+          Object.keys(result.output).forEach(k => { outputSheets[k] = result.output[k]; });
+        } else if (!result.inputs) {
+          Object.keys(result).forEach(k => { outputSheets[k] = result[k]; });
+        }
+      }
+    } catch (err) {
+      console.warn(`Step ${i+1} 시뮬레이션 실패:`, err);
+      return null;
+    }
+  }
+  return { inputsMap, outputSheets };
+}
+
+function toggleEditStep(stepId) {
+  if (state.editingStepId === stepId) {
+    state.editingStepId = null;
+    toast("수정 모드 해제", "success");
+  } else {
+    state.editingStepId = stepId;
+    const idx = state.pipeline.findIndex(s => s.id === stepId);
+    toast(`Step ${idx + 1} 수정 모드 활성화 — 채팅으로 수정 사항을 입력하세요`, "success");
+  }
+  renderPipeline();
+  if (typeof renderEditingBanner === "function") renderEditingBanner();
+}
+
 function runPipeline(steps) {
   steps = steps || state.pipeline;
   if (!state.outputOriginal && state.inputsOriginal.length === 0) {
@@ -122,19 +208,33 @@ function renderPipeline() {
   $("pipe-count").textContent = state.pipeline.length + " 단계";
   if (state.pipeline.length === 0) {
     list.innerHTML = `<div class="pipeline-empty">아직 단계가 없습니다. AI가 생성한 코드를 "적용"하면 추가됩니다.</div>`;
+    if (state.editingStepId) state.editingStepId = null;
+    if (typeof renderEditingBanner === "function") renderEditingBanner();
     renderRunnerWorkflow();
     return;
+  }
+  // 편집 중이던 step이 사라졌으면 정리
+  if (state.editingStepId && !state.pipeline.some(s => s.id === state.editingStepId)) {
+    state.editingStepId = null;
   }
   list.innerHTML = "";
   state.pipeline.forEach((step, idx) => {
     const item = document.createElement("div");
     item.className = "pipeline-item";
+    if (state.editingStepId === step.id) item.classList.add("editing");
+    const editing = state.editingStepId === step.id;
     item.innerHTML = `
       <div class="step-n">${idx+1}</div>
       <div class="step-label" title="${escapeHtml(step.description)}">${escapeHtml(step.description)}</div>
+      <button class="step-edit ${editing ? 'active' : ''}" title="${editing ? '수정 모드 해제' : '수정'}">✎</button>
       <button class="step-del" title="삭제">✕</button>
     `;
+    item.querySelector(".step-edit").onclick = (e) => {
+      e.stopPropagation();
+      toggleEditStep(step.id);
+    };
     item.querySelector(".step-del").onclick = () => {
+      if (state.editingStepId === step.id) state.editingStepId = null;
       state.pipeline.splice(idx, 1);
       try { runPipeline(); } catch {}
       renderPipeline();
@@ -142,6 +242,7 @@ function renderPipeline() {
     };
     list.appendChild(item);
   });
+  if (typeof renderEditingBanner === "function") renderEditingBanner();
   renderRunnerWorkflow();
 }
 

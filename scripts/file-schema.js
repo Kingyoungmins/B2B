@@ -88,3 +88,106 @@ function transform(inputs, output) {
 - 일부 셀만 갱신해야 하면 해당 셀만 정확히 건드리세요. 전체 행을 루프 돌면서 같은 값으로 덮어쓰지 마세요.
 - 빈 칸으로 명시적으로 만들어야 할 때만 \`""\` 를 대입하세요 (의도적 clear 로 간주되어 수식도 제거됨).
 `;
+
+const EDIT_SYSTEM_PROMPT = `당신은 엑셀 데이터 자동화 로직(JavaScript)을 **수정**하는 도우미입니다.
+
+## ⚠️ 수정 모드 (반드시 이해할 것)
+사용자가 이미 만들어 둔 파이프라인의 **특정 한 단계(step)** 의 코드를 수정하려고 합니다.
+- 새 단계를 추가하는 것이 아닙니다.
+- 이전/이후 단계는 그대로 유지됩니다.
+- 당신의 응답 코드는 **이 한 단계를 통째로 교체** 합니다. 따라서 이 단계가 원래 수행하던 일을 (사용자 의도에 맞게 수정해서) 모두 포함해야 합니다.
+- 아래에 \`현재 코드\` 와 \`이 단계 직전의 데이터 상태\` 가 함께 제공됩니다. 둘 다 참고해서 사용자 의도를 정확히 파악하세요.
+
+## 함수 시그니처 (필수 형태)
+function transform(inputs, output) {
+  // inputs: { "파일명.xlsx": { "시트명": any[][] } }
+  // output: { "시트명": any[][] }
+  return { inputs, output };
+}
+
+## 규칙
+1. 응답은 반드시 하나의 \`\`\`javascript 코드 블록으로 감싸주세요.
+2. 코드 블록 밖에 한국어로 1~2문장의 짧은 설명(무엇을 수정했는지)을 쓰세요.
+3. 외부 라이브러리 금지. 순수 JavaScript 만 사용.
+4. 엑셀 셀 값은 문자열일 수 있으니 산술 연산 전에 \`Number(v)\` 로 변환하세요.
+
+## 수식(함수) 보존 규칙 — 매우 중요
+다운로드 시, 값을 바꾸지 않은 셀은 원본 xlsx 의 수식·서식이 그대로 유지됩니다.
+- 값을 "읽기만" 하는 셀은 절대 재할당하지 마세요.
+- "A 열을 G 열로 복사" 같은 이동 작업에서 **A 열에 원래 값을 다시 쓰는 코드를 작성하지 마세요.**
+- 일부 셀만 갱신해야 하면 해당 셀만 정확히 건드리세요.
+- 빈 칸으로 명시적으로 만들어야 할 때만 \`""\` 를 대입하세요.
+`;
+
+function previewSheets(sheets, headRows) {
+  const lines = [];
+  Object.keys(sheets || {}).forEach(sn => {
+    const aoa = sheets[sn] || [];
+    lines.push(`시트 "${sn}": ${aoa.length}행`);
+    const limit = headRows || 5;
+    const preview = aoa.slice(0, limit);
+    preview.forEach((row, i) => {
+      lines.push(`  행${i+1}: [${(row || []).slice(0,15).map(v => JSON.stringify(v)).join(", ")}]`);
+    });
+    if (aoa.length > limit) lines.push(`  ... (${aoa.length - limit}행 생략)`);
+  });
+  return lines;
+}
+
+function buildEditingContext(editIdx) {
+  const step = state.pipeline[editIdx];
+  const lines = [];
+  lines.push(`## 수정 대상 단계`);
+  lines.push(`전체 ${state.pipeline.length}단계 중 **Step ${editIdx + 1}** 을 수정합니다.`);
+  lines.push(`기존 설명: "${step.description}"`);
+
+  lines.push(`\n## 이 단계의 현재 코드 (수정 대상)`);
+  lines.push("```javascript");
+  lines.push(step.code);
+  lines.push("```");
+
+  if (state.pipeline.length > 1) {
+    lines.push(`\n## 파이프라인 전체 단계 (참고)`);
+    state.pipeline.forEach((s, i) => {
+      const marker = i === editIdx ? " ← 수정 대상" : "";
+      lines.push(`  Step ${i+1}. ${s.description}${marker}`);
+    });
+  }
+
+  // Step 직전 데이터 상태 (Step 0..editIdx-1 적용 후, editIdx 적용 전)
+  const before = (typeof computeStateBeforeStep === "function")
+    ? computeStateBeforeStep(editIdx)
+    : null;
+
+  if (editIdx === 0) {
+    lines.push(`\n## 이 단계 직전 데이터 상태 (= 원본, 이전 단계 없음)`);
+  } else {
+    lines.push(`\n## 이 단계 직전 데이터 상태 (Step 1 ~ ${editIdx} 이 적용된 결과)`);
+  }
+
+  if (before) {
+    lines.push(`\n### 입력 파일`);
+    state.inputsOriginal.forEach(orig => {
+      const sheets = before.inputsMap[orig.name] || orig.sheets;
+      lines.push(`\n#### ${orig.name}`);
+      lines.push(...previewSheets(sheets, 5));
+    });
+    if (state.outputOriginal) {
+      lines.push(`\n### 출력 템플릿: ${state.outputOriginal.name}`);
+      lines.push(...previewSheets(before.outputSheets, 30));
+    }
+  } else {
+    lines.push(`(직전 상태 시뮬레이션 실패 — 원본 데이터를 참고하세요)`);
+    lines.push(...previewSheets({}, 0));
+    state.inputsOriginal.forEach(orig => {
+      lines.push(`\n#### ${orig.name}`);
+      lines.push(...previewSheets(orig.sheets, 5));
+    });
+    if (state.outputOriginal) {
+      lines.push(`\n### 출력 템플릿: ${state.outputOriginal.name}`);
+      lines.push(...previewSheets(state.outputOriginal.sheets, 30));
+    }
+  }
+
+  return lines.join("\n");
+}

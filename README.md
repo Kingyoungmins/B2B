@@ -1,4 +1,4 @@
-# B2B 빌링 Agent — ver1.1.1
+# B2B 빌링 Agent — ver1.2
 
 엑셀 입력 파일과 출력 템플릿을 받아 AI(Claude 또는 사내 ixi 모델)와의 대화로 로직을 설계하고, 결과 xlsx를 원본 양식 그대로 보존해 다운로드하는 데스크톱 웹앱.
 
@@ -9,6 +9,10 @@
 ## 최근 변경사항
 
 > 자세한 항목은 [CHANGELOG.md](CHANGELOG.md) 참고.
+
+### ver1.2 (로직 파이프라인 편집 강화)
+- **로직 중간 삽입** — AI 응답에 `↳ 삽입` 버튼 추가. 팝업으로 단계 위치(1 ~ N+1)를 입력해 원하는 자리에 끼워넣을 수 있다. 더 이상 중간 단계 수정을 위해 전체를 지울 필요 없음
+- **로직 인라인 수정** — 파이프라인 항목의 `✎` 버튼으로 특정 단계만 수정 모드 진입. 수정 모드에서 채팅하면 그 단계의 **현재 코드 + 직전 데이터 상태**가 LLM에 함께 전달되어 의도 파악이 쉬워진다. 응답의 `✓ 수정 적용` 으로 단계 코드만 교체
 
 ### ver1.1.1 (개발자 모드 추가)
 - **F9 히든 개발자 모드** — 설정 모달을 dev 모드로 열어 Claude API 직접 호출 옵션 노출. 사용자가 API 키를 직접 입력
@@ -112,7 +116,7 @@ build_exe.bat
 ## 디렉토리 구조
 
 ```
-B2B_ver1.1/
+B2B_ver1.2/
 ├── index.html              # slim shell — link/script 태그로 모듈 조립
 ├── styles/                 # CSS 8개 (base/layout/panels/components/chat/pipeline/workflow/runner)
 ├── scripts/                # JS 16개 (config/state/util/file-parsing/drop-handling/excel-viewer/

@@ -36,6 +36,7 @@
     box-shadow: var(--shadow-mag);
   }
   .pipeline-item .step-label { flex: 1; color: var(--ink-700); font-weight: 500; }
+  .pipeline-item .step-edit,
   .pipeline-item .step-del {
     background: transparent;
     border: none;
@@ -45,8 +46,21 @@
     padding: 2px 6px;
     border-radius: 4px;
     transition: all 0.15s;
+    font-size: 13px;
+    line-height: 1;
+  }
+  .pipeline-item .step-edit:hover { color: var(--m-600); background: var(--m-50); }
+  .pipeline-item .step-edit.active {
+    color: white;
+    background: var(--grad);
+    box-shadow: var(--shadow-mag);
   }
   .pipeline-item .step-del:hover { color: var(--m-600); background: var(--m-50); }
+  .pipeline-item.editing {
+    border-color: var(--m-400);
+    background: var(--m-50);
+    box-shadow: 0 0 0 3px rgba(255,0,128,0.12);
+  }
   .pipeline-empty {
     color: var(--ink-400);
     font-size: 11.5px;

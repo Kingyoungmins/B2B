@@ -1,5 +1,29 @@
 # Changelog
 
+## ver1.2 (2026-04-27)
+
+### 추가
+- **로직 중간 삽입** — AI 응답 코드 블록의 액션 버튼에 `↳ 삽입` 추가. 클릭 시 팝업이 열리며 1 ~ N+1 사이의 단계 위치를 입력하면 해당 위치에 새 단계가 끼어든다. 기존 `✓ 적용 (맨 뒤)`, `✕ 거절` 과 함께 노출 ([scripts/chat-ui.js](scripts/chat-ui.js)).
+  - 내부적으로 `insertLogic(step, position)` 이 추가됨 ([scripts/pipeline.js](scripts/pipeline.js)).
+- **로직 단계 인라인 수정** — 파이프라인 항목마다 `✎` 수정 버튼이 생기고, 누르면 해당 단계가 수정 모드로 진입한다. 다시 누르거나 채팅 입력창 위 배너의 `해제` 버튼을 누르면 비활성화. 수정 모드에서 채팅을 보내면 LLM에게 다음 세 가지가 함께 전달된다:
+  - 수정 대상 단계의 **현재 코드**
+  - 그 단계 **직전의 입력/출력 데이터 상태** (앞 단계들이 적용된 결과)
+  - 사용자의 수정 요청
+  
+  덕분에 모델이 의도와 컨텍스트를 더 정확히 이해한다. 응답의 `✓ 수정 적용` 을 누르면 해당 단계의 코드가 통째로 교체되며 파이프라인이 재실행된다 ([scripts/chat-ui.js](scripts/chat-ui.js), [scripts/file-schema.js](scripts/file-schema.js), [scripts/pipeline.js](scripts/pipeline.js)).
+
+### 변경
+- `state.editingStepId` 필드 추가 ([scripts/state.js](scripts/state.js)).
+- `callLLM(userMessage, options)` 에 `editTargetId` 옵션 도입. 수정 모드 호출 시 별도의 `EDIT_SYSTEM_PROMPT` + 편집 컨텍스트가 system 프롬프트로 주입됨 ([scripts/claude-api.js](scripts/claude-api.js), [scripts/file-schema.js](scripts/file-schema.js)).
+- `renderPipeline()` 이 수정 중인 단계를 `editing` 클래스로 강조하고 채팅 입력창 위에 수정 배너를 자동으로 표시한다 ([styles/pipeline.css](styles/pipeline.css), [styles/chat.css](styles/chat.css)).
+- 초기화 / 로직 불러오기 시 `editingStepId` 가 함께 정리된다 ([scripts/save-load.js](scripts/save-load.js)).
+
+### 비고
+- 새 헬퍼 `computeStateBeforeStep(stepIdx)` 가 `state` 를 변경하지 않고 K번째 단계 직전의 데이터를 시뮬레이션해 반환함. 이 결과가 LLM 편집 컨텍스트의 입력/출력 미리보기에 사용된다.
+- 단계 삭제 시 그 단계가 수정 모드 대상이었다면 모드도 함께 해제된다.
+
+---
+
 ## ver1.1.1 (2026-04-27)
 
 ### 추가

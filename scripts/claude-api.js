@@ -1,10 +1,21 @@
 /* ===================================================================
    CLAUDE API
    =================================================================== */
-async function callLLM(userMessage) {
+async function callLLM(userMessage, options) {
   state.chatHistory.push({ role: "user", content: userMessage });
-  const schema = buildSchemaSummary();
-  const fullSystem = SYSTEM_PROMPT + "\n\n## 현재 파일 스키마\n" + schema;
+  const editTargetId = options && options.editTargetId;
+  const editIdx = editTargetId
+    ? state.pipeline.findIndex(s => s.id === editTargetId)
+    : -1;
+
+  let fullSystem;
+  if (editIdx >= 0) {
+    const editContext = buildEditingContext(editIdx);
+    fullSystem = EDIT_SYSTEM_PROMPT + "\n\n" + editContext;
+  } else {
+    const schema = buildSchemaSummary();
+    fullSystem = SYSTEM_PROMPT + "\n\n## 현재 파일 스키마\n" + schema;
+  }
 
   if (settings.provider === "openai-compat") {
     return await callOpenAICompat(fullSystem);
