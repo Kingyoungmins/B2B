@@ -4,7 +4,7 @@
 const DEFAULTS = {
   anthropic: {
     apiKey: "",
-    model: "claude-sonnet-4-5-20250929",
+    model: "claude-opus-4-7",
     baseUrl: "https://api.anthropic.com/v1",
   },
   "openai-compat": {
@@ -27,6 +27,15 @@ function loadSettings() {
     const raw = localStorage.getItem(SETTINGS_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
+      // Hidden dev-mode (F9) lets users persist Claude settings.
+      // Honor stored apiKey/model/baseUrl so the dev doesn't re-enter on reload.
+      if (parsed && parsed.provider === "anthropic") {
+        return {
+          ...DEFAULTS.anthropic,
+          ...parsed,
+          provider: "anthropic",
+        };
+      }
       if (parsed && parsed.provider === "openai-compat") {
         return {
           ...DEFAULTS["openai-compat"],

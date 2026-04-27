@@ -1,4 +1,4 @@
-# B2B 빌링 Agent — ver1.1
+# B2B 빌링 Agent — ver1.1.1
 
 엑셀 입력 파일과 출력 템플릿을 받아 AI(Claude 또는 사내 ixi 모델)와의 대화로 로직을 설계하고, 결과 xlsx를 원본 양식 그대로 보존해 다운로드하는 데스크톱 웹앱.
 
@@ -6,10 +6,16 @@
 
 ---
 
-## ver1.1 변경사항 (vs ver1)
+## 최근 변경사항
 
 > 자세한 항목은 [CHANGELOG.md](CHANGELOG.md) 참고.
 
+### ver1.1.1 (개발자 모드 추가)
+- **F9 히든 개발자 모드** — 설정 모달을 dev 모드로 열어 Claude API 직접 호출 옵션 노출. 사용자가 API 키를 직접 입력
+- **Claude 모델 선택** 드롭다운 (기본 `claude-opus-4-7`)
+- anthropic 설정 localStorage에 영속화
+
+### ver1.1 (vs ver1)
 - **모듈화**: 3.4MB 단일 `sym2.html` → CSS 8개 / JS 16개 모듈 + slim `index.html`
 - **Bundler 제거**: base64+gzip 압축으로 묶여 있던 SheetJS·Pretendard를 [vendor/](vendor/)에 평문 파일로 분리. 런타임 unpacker 코드 제거
 - **중복 코드 정리**: `setupResizer` IIFE가 두 번 정의되어 있던 부분을 1회로 통합
@@ -86,10 +92,20 @@ build_exe.bat
 - 실행 후 우측에 결과 시뮬레이터 표시
 
 ### 🎛️ 환경
-- AI 모델 설정 모달 (provider, apiKey, model, baseUrl)
+- AI 모델 설정 모달 (provider, apiKey, model, baseUrl) — ⚙ 버튼
+- **F9: 히든 개발자 모드** — Claude API 직접 호출 옵션 노출 (개발자 테스트용)
 - 좌우 패널 너비 드래그 조절 (더블클릭 시 기본값 복원, localStorage에 저장)
 - 메뉴 드로어로 페이지 전환 (생성기 ↔ 러너)
 - 패널 헤더 클릭으로 섹션 접기/펼치기
+
+### 🔐 개발자 모드 (F9)
+일반 사용자는 `⚙ AI 모델 설정` 버튼으로 ixi 모델만 사용. 개발자는 `F9` 키로 설정 모달을 열면 추가로 Claude provider 옵션이 보입니다.
+
+- Provider 토글: ixi / Claude
+- Claude API Key 입력 (사용자가 직접 입력, 로컬 `localStorage`에만 저장)
+- 모델 드롭다운: `claude-opus-4-7`(기본), `claude-opus-4-7[1m]`, `claude-sonnet-4-6`, `claude-haiku-4-5-20251001`, `claude-sonnet-4-5-20250929`
+- Base URL 변경 가능 (기본 `https://api.anthropic.com/v1`)
+- "🔌 연결 테스트" 버튼이 provider에 맞춰 ping 요청 수행
 
 ---
 

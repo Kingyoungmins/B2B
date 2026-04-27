@@ -1,5 +1,22 @@
 # Changelog
 
+## ver1.1.1 (2026-04-27)
+
+### 추가
+- **히든 개발자 모드** — `F9` 키로 설정 모달을 dev 모드로 열면 Claude API 직접 호출 옵션이 노출됨. 일반 ⚙ 버튼은 기존대로 ixi 모델만 표시 ([scripts/model-modal.js](scripts/model-modal.js)).
+- Claude 모델 선택 드롭다운: `claude-opus-4-7`(기본), `claude-opus-4-7[1m]`, `claude-sonnet-4-6`, `claude-haiku-4-5-20251001`, `claude-sonnet-4-5-20250929`.
+- `localStorage`에 anthropic 설정(apiKey/model/baseUrl) 영속화 — 새로고침해도 유지.
+- 연결 테스트 버튼이 provider별로 다른 엔드포인트로 ping 호출.
+
+### 변경
+- `DEFAULTS.anthropic.model`: `claude-sonnet-4-5-20250929` → `claude-opus-4-7`.
+- `loadSettings()`가 `provider: "anthropic"` 케이스를 처리하도록 확장.
+
+### 비고
+- API 키는 사용자가 직접 입력하며 저장도 로컬에만 됨. 코드/리포에 키 박지 않음.
+
+---
+
 ## ver1.1 (2026-04-27)
 
 ### 변경 요약
