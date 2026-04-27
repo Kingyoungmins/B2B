@@ -1,0 +1,21 @@
+KGM 업무망 배포 버전 만들기
+
+1. 기본 실행
+- start_kgm.bat 를 더블클릭하면 launch_kgm.py 가 serve_kgm.py 를 자동 실행하고
+  브라우저에서 http://127.0.0.1:8090/sym2.html 을 엽니다.
+
+2. exe 로 묶고 싶을 때
+- Windows 에서 Python 과 pyinstaller 를 준비한 뒤 아래처럼 실행합니다.
+
+  pip install pyinstaller
+  cd KGM_업무망
+  pyinstaller --clean launch_kgm.spec
+
+- 생성 결과:
+  dist\\KGM_업무망.exe
+
+3. 참고
+- serve_kgm.py 의 기본 프록시 대상은 canvas 모델 서버입니다.
+- 앱 기본 Base URL 은 http://127.0.0.1:8090/v1 로 맞춰져 있습니다.
+- exe 는 Python 이 없는 PC 에서도 단독 실행됩니다.
+- exe 를 실행하면 브라우저가 열리고, 함께 뜨는 작은 창에서 종료할 수 있습니다.

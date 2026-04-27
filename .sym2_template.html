@@ -1,0 +1,3719 @@
+<!DOCTYPE html>
+<html lang="ko"><head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>B2B 빌링 Agent</title>
+
+<script src="efc38862-3171-41e1-9342-b9a5fac9eb8c"></script>
+<style>
+  /* ============================================================
+     KGM Magenta — redesigned visual system
+     Main gradient: #FF0080 → #7928CA
+     ============================================================ */
+  /*
+Copyright (c) 2021 Kil Hyung-jin, with Reserved Font Name Pretendard.
+https://github.com/orioncactus/pretendard
+
+This Font Software is licensed under the SIL Open Font License, Version 1.1.
+This license is copied below, and is also available with a FAQ at:
+http://scripts.sil.org/OFL
+*/
+
+@font-face {
+	font-family: 'Pretendard Variable';
+	font-weight: 45 920;
+	font-style: normal;
+	font-display: swap;
+	src: url("a993db03-4bfd-48fe-96c0-f7cd720cba5c") format('woff2-variations');
+}
+
+
+  :root {
+    --m-50:  #FFF0F9;
+    --m-100: #FFE0F2;
+    --m-200: #FFB8DF;
+    --m-300: #FF80C2;
+    --m-400: #FF3DA1;
+    --m-500: #FF0080;   /* primary magenta */
+    --m-600: #E00072;
+    --m-700: #B8005E;
+
+    --p-500: #7928CA;   /* purple end of gradient */
+    --p-600: #5B1F99;
+
+    --grad: linear-gradient(135deg, #FF0080 0%, #7928CA 100%);
+    --grad-soft: linear-gradient(135deg, #FFE0F2 0%, #EADCFF 100%);
+    --grad-text: linear-gradient(135deg, #FF0080 0%, #7928CA 100%);
+
+    --ink-900: #0F0A1E;
+    --ink-700: #2C2440;
+    --ink-500: #5B5270;
+    --ink-400: #7E7792;
+    --ink-300: #A8A2B8;
+    --ink-200: #D5D1DF;
+    --ink-100: #EBE9F1;
+    --ink-50:  #F7F6FB;
+
+    --bg: #FAFAFD;
+    --card: #FFFFFF;
+    --border: #EBE9F1;
+    --border-strong: #D5D1DF;
+
+    --shadow-sm: 0 1px 2px rgba(15,10,30,0.04), 0 1px 3px rgba(15,10,30,0.05);
+    --shadow-md: 0 4px 12px rgba(15,10,30,0.05), 0 2px 4px rgba(15,10,30,0.04);
+    --shadow-lg: 0 12px 32px rgba(121,40,202,0.10), 0 4px 12px rgba(15,10,30,0.06);
+    --shadow-mag: 0 8px 24px rgba(255,0,128,0.22);
+
+    --r-sm: 8px;
+    --r-md: 12px;
+    --r-lg: 16px;
+    --r-xl: 20px;
+    --r-full: 999px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    font-family: 'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont,
+                 'Malgun Gothic', 'Noto Sans KR', sans-serif;
+    background:
+      radial-gradient(1200px 600px at 85% -10%, rgba(255,0,128,0.08), transparent 60%),
+      radial-gradient(900px 500px at -10% 110%, rgba(121,40,202,0.08), transparent 60%),
+      var(--bg);
+    color: var(--ink-900);
+    font-size: 13px;
+    line-height: 1.5;
+    letter-spacing: -0.01em;
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  ::selection { background: var(--m-200); color: var(--ink-900); }
+
+  /* Scrollbars */
+  *::-webkit-scrollbar { width: 10px; height: 10px; }
+  *::-webkit-scrollbar-track { background: transparent; }
+  *::-webkit-scrollbar-thumb { background: var(--ink-200); border-radius: 999px; border: 2px solid transparent; background-clip: padding-box; }
+  *::-webkit-scrollbar-thumb:hover { background: var(--ink-300); background-clip: padding-box; border: 2px solid transparent; }
+
+  .app { display: flex; height: 100vh; gap: 12px; padding: 12px; }
+
+  /* ============ MENU DRAWER ============ */
+  .menu-drawer {
+    position: fixed;
+    top: 0; left: 0; bottom: 0;
+    width: 0;
+    overflow: hidden;
+    background: var(--card);
+    border-right: 1px solid var(--border);
+    box-shadow: var(--shadow-lg);
+    z-index: 2500;
+    transition: width 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .menu-drawer.open { width: 272px; }
+  .menu-drawer-inner { width: 272px; height: 100%; display: flex; flex-direction: column; }
+  .menu-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 18px 20px;
+    font-weight: 700;
+    font-size: 14px;
+    border-bottom: 1px solid var(--border);
+  }
+  .menu-list { padding: 12px; display: flex; flex-direction: column; gap: 4px; }
+  .menu-item {
+    display: flex; align-items: center; gap: 12px;
+    padding: 12px 14px;
+    border: 1px solid transparent;
+    border-radius: var(--r-md);
+    background: transparent;
+    cursor: pointer;
+    color: var(--ink-500);
+    font-size: 13px;
+    font-weight: 500;
+    font-family: inherit;
+    transition: all 0.15s;
+  }
+  .menu-item:hover { background: var(--ink-50); color: var(--ink-900); }
+  .menu-item.active {
+    background: var(--grad-soft);
+    color: var(--m-700);
+    font-weight: 700;
+  }
+  .menu-scrim {
+    position: fixed; inset: 0;
+    background: rgba(15,10,30,0.35);
+    backdrop-filter: blur(2px);
+    z-index: 2400;
+    display: none;
+  }
+  .menu-scrim.show { display: block; }
+
+  /* ============ RESIZER ============ */
+  .resizer {
+    width: 8px;
+    background: transparent;
+    cursor: col-resize;
+    flex-shrink: 0;
+    position: relative;
+    border-radius: 4px;
+    transition: background 0.15s;
+  }
+  .resizer::before {
+    content: "";
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    width: 3px; height: 36px;
+    background: var(--ink-200);
+    border-radius: 999px;
+    transition: background 0.15s, height 0.15s;
+  }
+  .resizer:hover::before,
+  .resizer.dragging::before {
+    background: var(--m-500);
+    height: 52px;
+  }
+  body.resizing { cursor: col-resize !important; user-select: none !important; }
+  body.resizing iframe, body.resizing * { pointer-events: none; }
+  body.resizing .resizer { pointer-events: auto; }
+
+  /* ============ LEFT PANEL ============ */
+  .left {
+    width: 44%;
+    min-width: 460px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--r-lg);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    box-shadow: var(--shadow-sm);
+  }
+
+  .brand {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-shrink: 0;
+    background: linear-gradient(180deg, #FFFFFF 0%, #FDFCFF 100%);
+    position: relative;
+  }
+  .brand::after {
+    content: '';
+    position: absolute;
+    left: 20px; right: 20px; bottom: -1px;
+    height: 2px;
+    background: var(--grad);
+    border-radius: 2px;
+    opacity: 0.85;
+  }
+  .brand .logo {
+    width: 40px; height: 40px;
+    background: var(--grad);
+    border-radius: var(--r-md);
+    color: white;
+    font-weight: 800;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px;
+    letter-spacing: -0.02em;
+    box-shadow: var(--shadow-mag);
+    flex-shrink: 0;
+  }
+  .brand-info { flex: 1; min-width: 0; }
+  .brand h1 {
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    color: var(--ink-900);
+  }
+  .brand .sub {
+    font-size: 11px;
+    color: var(--ink-400);
+    margin-top: 2px;
+    font-weight: 500;
+  }
+  .brand-btn {
+    background: transparent;
+    border: 1px solid var(--border);
+    padding: 8px 10px;
+    border-radius: var(--r-sm);
+    cursor: pointer;
+    font-size: 14px;
+    color: var(--ink-500);
+    flex-shrink: 0;
+    font-family: inherit;
+    transition: all 0.15s;
+  }
+  .brand-btn:hover {
+    background: var(--m-50);
+    color: var(--m-600);
+    border-color: var(--m-200);
+  }
+  .brand-btn.icon { width: 36px; height: 36px; padding: 0; display: inline-flex; align-items: center; justify-content: center; }
+
+  .left-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .page-panel { display: none; flex-direction: column; gap: 14px; }
+  .page-panel.active { display: flex; }
+
+  /* Legacy panel-title (not used but kept) */
+  .panel-title {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--ink-700);
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .panel-title .hint { font-size: 11px; color: var(--ink-400); font-weight: 500; }
+
+  /* ============ PANEL SECTIONS (cards) ============ */
+  .panel-section {
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+    min-height: 0;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  .panel-section:hover { border-color: var(--border-strong); }
+  .panel-section.growable:not(.collapsed) { overflow: visible; }
+
+  .panel-section .panel-head {
+    font-size: 12.5px;
+    font-weight: 700;
+    color: var(--ink-900);
+    display: flex; align-items: center; gap: 8px;
+    padding: 12px 14px;
+    cursor: pointer;
+    user-select: none;
+    letter-spacing: -0.01em;
+    transition: color 0.15s;
+  }
+  .panel-section .panel-head:hover { color: var(--m-600); }
+  .panel-section .panel-head .hint {
+    font-size: 11px;
+    color: var(--ink-400);
+    font-weight: 500;
+    margin-left: auto;
+    letter-spacing: 0;
+  }
+  .panel-section .panel-head .caret {
+    display: inline-block;
+    font-size: 9px;
+    color: var(--ink-400);
+    width: 14px;
+    text-align: center;
+    transition: transform 0.2s;
+  }
+  .panel-section.collapsed .panel-head .caret { transform: rotate(-90deg); }
+  .panel-section .panel-body {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 0 14px 14px;
+    overflow: hidden;
+    min-height: 0;
+  }
+  .panel-section.collapsed > .panel-body { display: none; }
+
+  /* ============ DROPZONES ============ */
+  .dropzone {
+    border: 1.5px dashed var(--border-strong);
+    border-radius: var(--r-md);
+    padding: 22px 18px;
+    text-align: center;
+    color: var(--ink-400);
+    font-size: 12.5px;
+    font-weight: 500;
+    transition: all 0.2s;
+    cursor: pointer;
+    background: var(--ink-50);
+  }
+  .dropzone:hover {
+    border-color: var(--m-400);
+    background: var(--m-50);
+    color: var(--m-600);
+  }
+  .dropzone.drag-over {
+    border-color: var(--m-500);
+    background: var(--m-50);
+    color: var(--m-700);
+    transform: scale(1.005);
+    box-shadow: 0 0 0 4px rgba(255,0,128,0.08);
+  }
+  .dropzone .ico { font-size: 26px; display: block; margin-bottom: 8px; filter: grayscale(0.2); }
+  .dropzone small {
+    display: block;
+    margin-top: 6px;
+    font-size: 10.5px;
+    color: var(--ink-300);
+    font-weight: 500;
+  }
+  .dropzone.output { border-color: var(--m-300); background: var(--m-50); color: var(--m-600); }
+  .dropzone.output:hover { background: var(--m-100); color: var(--m-700); border-color: var(--m-500); }
+
+  /* ============ FILE CHIPS ============ */
+  .file-chip {
+    display: flex; align-items: center; gap: 10px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--r-sm);
+    padding: 10px 12px;
+    font-size: 12px;
+    margin-top: 6px;
+    transition: all 0.15s;
+  }
+  .file-chip:hover { border-color: var(--border-strong); box-shadow: var(--shadow-sm); }
+  .file-chip.active {
+    border-color: var(--m-400);
+    background: var(--m-50);
+    box-shadow: 0 0 0 3px rgba(255,0,128,0.08);
+  }
+  .file-chip .chip-icon {
+    width: 28px; height: 32px;
+    background: linear-gradient(135deg, #217346, #1a5c38);
+    color: white;
+    border-radius: 4px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 9px;
+    font-weight: 700;
+    flex-shrink: 0;
+  }
+  .file-chip.output .chip-icon { background: var(--grad); }
+  .chip-body { flex: 1; min-width: 0; }
+  .chip-name {
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: var(--ink-900);
+  }
+  .chip-meta { font-size: 10.5px; color: var(--ink-400); margin-top: 2px; font-weight: 500; }
+  .chip-remove {
+    background: transparent;
+    border: none;
+    color: var(--ink-300);
+    cursor: pointer;
+    font-size: 16px;
+    padding: 4px 6px;
+    border-radius: 4px;
+    transition: all 0.15s;
+  }
+  .chip-remove:hover { color: var(--m-600); background: var(--m-50); }
+  .chip-view {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--ink-500);
+    font-size: 10.5px;
+    padding: 4px 10px;
+    border-radius: var(--r-full);
+    cursor: pointer;
+    font-weight: 600;
+    font-family: inherit;
+    transition: all 0.15s;
+  }
+  .chip-view:hover { background: var(--m-50); color: var(--m-600); border-color: var(--m-200); }
+
+  /* ============ CHAT ============ */
+  .chat-panel.disabled .panel-body { opacity: 0.5; pointer-events: none; }
+  .chat-messages {
+    background: var(--ink-50);
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    padding: 12px;
+    height: 280px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    font-size: 12.5px;
+    resize: vertical;
+  }
+  .msg {
+    padding: 10px 14px;
+    border-radius: 14px;
+    max-width: 92%;
+    line-height: 1.55;
+    word-break: break-word;
+    white-space: pre-wrap;
+    animation: msgIn 0.25s ease;
+  }
+  @keyframes msgIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+  .msg.user {
+    background: var(--grad);
+    color: white;
+    align-self: flex-end;
+    border-bottom-right-radius: 4px;
+    box-shadow: var(--shadow-mag);
+    font-weight: 500;
+  }
+  .msg.assistant {
+    background: white;
+    color: var(--ink-900);
+    border: 1px solid var(--border);
+    align-self: flex-start;
+    border-bottom-left-radius: 4px;
+    box-shadow: var(--shadow-sm);
+  }
+  .msg.system {
+    background: transparent;
+    color: var(--ink-400);
+    border: 1px dashed var(--border-strong);
+    align-self: center;
+    font-size: 11.5px;
+    font-style: normal;
+    text-align: center;
+    padding: 6px 12px;
+    border-radius: var(--r-full);
+  }
+  .msg .code-block {
+    background: #1A1428;
+    color: #E8E3F5;
+    padding: 10px 12px;
+    border-radius: var(--r-sm);
+    font-family: 'JetBrains Mono', 'Consolas', 'Monaco', monospace;
+    font-size: 11.5px;
+    margin-top: 8px;
+    max-height: 220px;
+    overflow: auto;
+    white-space: pre;
+    line-height: 1.5;
+    border: 1px solid #2D2240;
+  }
+  .msg .action-btns { display: flex; gap: 6px; margin-top: 10px; }
+  .msg .action-btn {
+    background: var(--grad);
+    color: white;
+    border: none;
+    padding: 6px 12px;
+    border-radius: var(--r-sm);
+    font-size: 11px;
+    cursor: pointer;
+    font-weight: 700;
+    font-family: inherit;
+    transition: transform 0.1s, box-shadow 0.15s;
+  }
+  .msg .action-btn:hover { transform: translateY(-1px); box-shadow: var(--shadow-mag); }
+  .msg .action-btn.reject {
+    background: var(--ink-50);
+    color: var(--ink-500);
+    border: 1px solid var(--border);
+  }
+  .msg .action-btn.reject:hover { background: var(--ink-100); color: var(--ink-700); box-shadow: none; transform: none; }
+  .msg .action-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: none; }
+
+  .chat-input-row { display: flex; gap: 8px; }
+  .chat-input-row textarea {
+    flex: 1;
+    resize: none;
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    padding: 10px 12px;
+    font-family: inherit;
+    font-size: 12.5px;
+    height: 60px;
+    color: var(--ink-900);
+    background: white;
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  .chat-input-row textarea::placeholder { color: var(--ink-300); }
+  .chat-input-row textarea:focus {
+    outline: none;
+    border-color: var(--m-400);
+    box-shadow: 0 0 0 3px rgba(255,0,128,0.1);
+  }
+
+  /* ============ PIPELINE ============ */
+  .pipeline-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    height: 280px;
+    overflow-y: auto;
+    padding: 2px;
+    resize: vertical;
+  }
+  .pipeline-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: var(--r-sm);
+    padding: 10px 12px;
+    font-size: 12px;
+    transition: all 0.15s;
+  }
+  .pipeline-item:hover {
+    border-color: var(--m-300);
+    box-shadow: 0 0 0 3px rgba(255,0,128,0.06);
+    transform: translateX(2px);
+  }
+  .pipeline-item .step-n {
+    width: 22px; height: 22px;
+    background: var(--grad);
+    color: white;
+    border-radius: 50%;
+    font-size: 10.5px;
+    font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+    box-shadow: var(--shadow-mag);
+  }
+  .pipeline-item .step-label { flex: 1; color: var(--ink-700); font-weight: 500; }
+  .pipeline-item .step-del {
+    background: transparent;
+    border: none;
+    color: var(--ink-300);
+    cursor: pointer;
+    font-family: inherit;
+    padding: 2px 6px;
+    border-radius: 4px;
+    transition: all 0.15s;
+  }
+  .pipeline-item .step-del:hover { color: var(--m-600); background: var(--m-50); }
+  .pipeline-empty {
+    color: var(--ink-400);
+    font-size: 11.5px;
+    text-align: center;
+    padding: 30px 12px;
+    border: 1px dashed var(--border);
+    border-radius: var(--r-sm);
+    background: var(--ink-50);
+  }
+
+  /* ============ BUTTONS ============ */
+  button {
+    padding: 10px 14px;
+    font-family: inherit;
+    font-size: 12.5px;
+    font-weight: 700;
+    border: none;
+    border-radius: var(--r-sm);
+    cursor: pointer;
+    transition: all 0.15s;
+    letter-spacing: -0.01em;
+  }
+  .btn-primary {
+    background: var(--grad);
+    color: white;
+    box-shadow: var(--shadow-mag);
+  }
+  .btn-primary:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 12px 28px rgba(255,0,128,0.28);
+  }
+  .btn-primary:active:not(:disabled) { transform: translateY(0); }
+  .btn-primary:disabled {
+    background: var(--ink-200);
+    color: white;
+    box-shadow: none;
+    cursor: not-allowed;
+  }
+  .btn-secondary {
+    background: white;
+    color: var(--ink-700);
+    border: 1px solid var(--border);
+  }
+  .btn-secondary:hover:not(:disabled) {
+    background: var(--m-50);
+    color: var(--m-700);
+    border-color: var(--m-200);
+  }
+  .btn-secondary:disabled { opacity: 0.5; cursor: not-allowed; }
+  .btn-send {
+    background: var(--grad);
+    color: white;
+    padding: 10px 18px;
+    box-shadow: var(--shadow-mag);
+    border-radius: var(--r-sm);
+  }
+  .btn-send:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 12px 28px rgba(255,0,128,0.28); }
+  .btn-send:disabled { background: var(--ink-200); box-shadow: none; cursor: not-allowed; }
+
+  .action-row { display: flex; gap: 8px; flex-wrap: wrap; }
+  .action-row button { flex: 1; min-width: 92px; }
+
+  /* ============ WORKFLOW ============ */
+  .workflow-panel { display: flex; flex-direction: column; gap: 12px; }
+  .workflow-board {
+    background: linear-gradient(135deg, #FFF9FD 0%, #F7F2FE 100%);
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    padding: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .workflow-lane {
+    display: flex;
+    align-items: stretch;
+    gap: 10px;
+    overflow-x: auto;
+    padding-bottom: 4px;
+  }
+  .workflow-node {
+    flex: 0 0 200px;
+    min-height: 140px;
+    border: 1.5px dashed var(--border-strong);
+    border-radius: var(--r-md);
+    background: white;
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    transition: all 0.2s;
+  }
+  .workflow-node.drop-target { cursor: pointer; }
+  .workflow-node.drop-target:hover {
+    border-color: var(--m-400);
+    background: var(--m-50);
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+  }
+  .workflow-node.drop-target.drag-over {
+    border-color: var(--m-500);
+    background: var(--m-50);
+    transform: translateY(-2px);
+    box-shadow: 0 12px 32px rgba(255,0,128,0.18);
+  }
+  .workflow-node.filled {
+    border-style: solid;
+    border-color: var(--m-400);
+    box-shadow: 0 4px 14px rgba(255,0,128,0.12);
+  }
+  .workflow-node.output-node.filled {
+    border-color: var(--p-500);
+    box-shadow: 0 4px 14px rgba(121,40,202,0.15);
+  }
+  .workflow-node-title {
+    font-size: 12.5px;
+    font-weight: 700;
+    color: var(--ink-900);
+    letter-spacing: -0.01em;
+  }
+  .workflow-node-sub {
+    font-size: 11px;
+    color: var(--ink-400);
+    line-height: 1.5;
+    font-weight: 500;
+  }
+  .workflow-node-list {
+    display: flex; flex-direction: column; gap: 6px;
+    font-size: 11px; color: var(--ink-700);
+    min-height: 40px;
+  }
+  .workflow-pill {
+    border: 1px solid var(--border);
+    border-radius: var(--r-sm);
+    padding: 6px 10px;
+    background: var(--ink-50);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-weight: 500;
+  }
+  .workflow-node .btn-secondary,
+  .workflow-node .btn-primary { width: 100%; }
+  .workflow-drop-hint {
+    margin-top: auto;
+    border-top: 1px dashed var(--border);
+    padding-top: 10px;
+    font-size: 10.5px;
+    color: var(--ink-400);
+    line-height: 1.5;
+    font-weight: 500;
+  }
+  .workflow-connector {
+    flex: 0 0 32px;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--m-400);
+    font-size: 22px;
+    font-weight: 700;
+  }
+  .workflow-note {
+    font-size: 11.5px;
+    color: var(--ink-500);
+    line-height: 1.55;
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: var(--r-sm);
+    padding: 12px 14px;
+    font-weight: 500;
+  }
+  .workflow-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+  .workflow-actions button { flex: 1; min-width: 130px; }
+  .logic-dropzone {
+    border: 1.5px dashed var(--border-strong);
+    border-radius: var(--r-sm);
+    padding: 14px;
+    background: var(--ink-50);
+    text-align: center;
+    color: var(--ink-500);
+    font-size: 11.5px;
+    cursor: pointer;
+    font-weight: 500;
+    transition: all 0.15s;
+  }
+  .logic-dropzone:hover, .logic-dropzone.drag-over {
+    border-color: var(--m-400);
+    background: var(--m-50);
+    color: var(--m-600);
+  }
+  .logic-summary {
+    font-size: 11.5px;
+    color: var(--ink-500);
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: var(--r-sm);
+    padding: 12px 14px;
+    line-height: 1.6;
+    font-weight: 500;
+  }
+
+  /* ============ RIGHT ============ */
+  .right {
+    flex: 1;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--r-lg);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    box-shadow: var(--shadow-sm);
+  }
+  .right-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+    position: relative;
+    background: linear-gradient(180deg, #FFFFFF 0%, #FDFCFF 100%);
+  }
+  .right-header::after {
+    content: '';
+    position: absolute;
+    left: 20px; right: 20px; bottom: -1px;
+    height: 2px;
+    background: var(--grad);
+    border-radius: 2px;
+    opacity: 0.85;
+  }
+  .right-header h2 {
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    color: var(--ink-900);
+  }
+  .right-header span { font-weight: 500; color: var(--ink-400) !important; }
+  .right-page { display: none; flex: 1; min-height: 0; }
+  .right-page.active { display: flex; flex-direction: column; }
+
+  .file-tabs {
+    display: flex;
+    gap: 4px;
+    padding: 10px 14px 0;
+    background: var(--ink-50);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+    overflow-x: auto;
+  }
+  .tab {
+    padding: 8px 14px;
+    font-size: 12px;
+    background: transparent;
+    border: 1px solid transparent;
+    border-bottom: none;
+    border-radius: var(--r-sm) var(--r-sm) 0 0;
+    cursor: pointer;
+    color: var(--ink-500);
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-weight: 500;
+    transition: all 0.15s;
+  }
+  .tab:hover { background: white; color: var(--ink-900); }
+  .tab.active {
+    background: white;
+    color: var(--m-700);
+    font-weight: 700;
+    border-color: var(--border);
+    border-bottom: 1px solid white;
+    margin-bottom: -1px;
+  }
+  .tab .dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: #10B981;
+  }
+  .tab.output .dot { background: var(--m-500); }
+
+  .sheet-tabs {
+    display: flex;
+    gap: 2px;
+    padding: 6px 14px 0;
+    background: white;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+    overflow-x: auto;
+    min-height: 32px;
+  }
+  .sheet-tab {
+    padding: 5px 12px;
+    font-size: 11px;
+    background: var(--ink-50);
+    border: 1px solid var(--border);
+    border-bottom: none;
+    border-radius: 4px 4px 0 0;
+    cursor: pointer;
+    color: var(--ink-500);
+    font-weight: 500;
+    transition: all 0.15s;
+  }
+  .sheet-tab:hover { background: var(--m-50); color: var(--m-600); }
+  .sheet-tab.active {
+    background: white;
+    color: var(--ink-900);
+    font-weight: 700;
+    border-color: var(--border);
+    border-bottom: 1px solid white;
+    margin-bottom: -1px;
+  }
+
+  .excel-viewer {
+    flex: 1;
+    overflow: auto;
+    background: white;
+    padding: 12px;
+  }
+  .excel-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: var(--ink-300);
+    gap: 12px;
+    font-weight: 500;
+  }
+  .excel-empty .big-ico {
+    font-size: 56px;
+    color: var(--ink-200);
+    background: var(--grad-text);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    opacity: 0.5;
+  }
+
+  table.excel-sheet {
+    border-collapse: collapse;
+    background: white;
+    font-size: 11.5px;
+    table-layout: auto;
+    border-radius: var(--r-sm);
+    overflow: hidden;
+  }
+  table.excel-sheet td, table.excel-sheet th {
+    border: 1px solid var(--ink-100);
+    padding: 5px 10px;
+    white-space: nowrap;
+    background: white;
+    min-width: 60px;
+    max-width: 260px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    transition: background 0.6s;
+    color: var(--ink-700);
+  }
+  table.excel-sheet th.col-header {
+    background: var(--ink-50);
+    color: var(--ink-400);
+    text-align: center;
+    font-weight: 600;
+    font-size: 10.5px;
+    min-width: 50px;
+    position: sticky;
+    top: 0;
+    z-index: 2;
+  }
+  table.excel-sheet td.row-header {
+    background: var(--ink-50);
+    color: var(--ink-400);
+    text-align: center;
+    font-weight: 600;
+    font-size: 10.5px;
+    min-width: 38px;
+    width: 38px;
+    position: sticky;
+    left: 0;
+    z-index: 1;
+  }
+  table.excel-sheet td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  table.excel-sheet td.num.negative { color: #DC2626; }
+  table.excel-sheet td.filled { background: #FFFCF0; }
+  table.excel-sheet td.flash { animation: flash 1.5s; }
+  @keyframes flash {
+    0% { background: var(--m-200) !important; }
+    100% { background: inherit; }
+  }
+  table.excel-sheet td.section-title {
+    background: #374151;
+    color: white;
+    font-weight: 700;
+  }
+  table.excel-sheet td.header-row {
+    background: #F3F4F6;
+    font-weight: 700;
+    text-align: center;
+    color: var(--ink-900);
+  }
+  table.excel-sheet td.sum-row {
+    background: #FEF3C7;
+    font-weight: 700;
+    color: #78350F;
+  }
+  table.excel-sheet td.vat-row {
+    background: #E0E7FF;
+    color: #3730A3;
+    font-weight: 700;
+  }
+
+  /* ============ TOAST ============ */
+  .toast {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%) translateY(80px);
+    background: var(--ink-900);
+    color: white;
+    padding: 12px 20px;
+    border-radius: var(--r-full);
+    font-size: 13px;
+    font-weight: 600;
+    z-index: 2000;
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s;
+    opacity: 0;
+    box-shadow: var(--shadow-lg);
+    letter-spacing: -0.01em;
+  }
+  .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+  .toast.error { background: #DC2626; }
+  .toast.success { background: #10B981; }
+
+  /* ============ MODAL ============ */
+  .modal-bg {
+    display: none;
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(15,10,30,0.45);
+    backdrop-filter: blur(4px);
+    z-index: 3000;
+    align-items: center;
+    justify-content: center;
+    animation: fadeIn 0.2s;
+  }
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+  .modal-bg.show { display: flex; }
+  .modal {
+    background: white;
+    border-radius: var(--r-lg);
+    padding: 24px;
+    min-width: 400px;
+    max-width: 540px;
+    max-height: 72vh;
+    overflow-y: auto;
+    box-shadow: var(--shadow-lg);
+    animation: modalIn 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  @keyframes modalIn { from { opacity: 0; transform: translateY(10px) scale(0.98); } to { opacity: 1; transform: none; } }
+  .modal h3 {
+    margin-bottom: 16px;
+    color: var(--ink-900);
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+  }
+  .modal input, .modal select {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--r-sm);
+    font-family: inherit;
+    font-size: 13px;
+    margin-bottom: 12px;
+    color: var(--ink-900);
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  .modal input[type="radio"] {
+    width: auto;
+    padding: 0;
+    margin: 0;
+    border: none;
+    border-radius: 0;
+    flex: 0 0 auto;
+  }
+  .modal input:focus, .modal select:focus {
+    outline: none;
+    border-color: var(--m-400);
+    box-shadow: 0 0 0 3px rgba(255,0,128,0.1);
+  }
+  .modal input[type="radio"]:focus {
+    outline: auto;
+    border-color: transparent;
+    box-shadow: none;
+  }
+  .modal .saved-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+  .saved-item {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 12px;
+    background: var(--ink-50);
+    border: 1px solid var(--border);
+    border-radius: var(--r-sm);
+    transition: all 0.15s;
+  }
+  .saved-item:hover { border-color: var(--m-200); background: var(--m-50); }
+  .saved-item .info { flex: 1; }
+  .saved-item .name { font-weight: 700; font-size: 12.5px; color: var(--ink-900); }
+  .saved-item .meta { font-size: 10.5px; color: var(--ink-400); margin-top: 2px; font-weight: 500; }
+  .saved-item .btns { display: flex; gap: 6px; }
+  .saved-item button { padding: 5px 10px; font-size: 11px; }
+  .modal .row { display: flex; gap: 8px; justify-content: flex-end; }
+
+  .loader {
+    display: inline-block;
+    width: 12px; height: 12px;
+    border: 2px solid var(--ink-200);
+    border-top-color: var(--m-500);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    vertical-align: middle;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  @media (max-width: 1000px) {
+    body { overflow: auto; }
+    .app { flex-direction: column; height: auto; padding: 8px; gap: 8px; }
+    .left { width: 100% !important; min-width: 0; border-right: none; }
+    .excel-viewer { min-height: 400px; }
+    .resizer { display: none; }
+  }
+
+
+  /* ============ RUNNER (redesigned) ============ */
+  .runner-hero {
+    display: flex; align-items: center; gap: 14px;
+    padding: 16px; border-radius: var(--r-md);
+    background: linear-gradient(135deg, rgba(255,0,128,0.08), rgba(121,40,202,0.08)), white;
+    border: 1px solid var(--border);
+    position: relative; overflow: hidden;
+  }
+  .runner-hero::before {
+    content: ''; position: absolute; top: 0; left: 0; bottom: 0;
+    width: 3px; background: var(--grad);
+  }
+  .runner-hero-icon {
+    width: 40px; height: 40px; border-radius: var(--r-md);
+    background: var(--grad); color: white;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0; box-shadow: var(--shadow-mag);
+  }
+  .runner-hero-body { flex: 1; min-width: 0; }
+  .runner-hero-title { font-size: 13.5px; font-weight: 700; color: var(--ink-900); letter-spacing: -0.02em; }
+  .runner-hero-sub { font-size: 11.5px; color: var(--ink-400); margin-top: 2px; font-weight: 500; }
+  .runner-hero-badge {
+    font-size: 11px; font-weight: 700; padding: 5px 10px;
+    border-radius: var(--r-full); background: white;
+    border: 1px solid var(--border); color: var(--ink-500);
+    letter-spacing: -0.01em; flex-shrink: 0;
+  }
+  .runner-hero-badge.ready { background: var(--grad); color: white; border-color: transparent; box-shadow: var(--shadow-mag); }
+  .runner-hero-badge.running { background: #FEF3C7; color: #92400E; border-color: #FDE68A; }
+  .runner-hero-badge.done { background: #D1FAE5; color: #065F46; border-color: #A7F3D0; }
+
+  /* ============ RUNNER TRIANGLE LAYOUT ============ */
+  .runner-flow {
+    position: relative;
+    width: 100%;
+    max-width: 620px;
+    margin: 0 auto;
+    aspect-ratio: 1 / 0.92;
+  }
+  .runner-triangle-lines {
+    position: absolute;
+    inset: 0;
+    width: 100%; height: 100%;
+    pointer-events: none;
+    z-index: 0;
+  }
+  .runner-triangle-lines .tri-outline,
+  .runner-triangle-lines .tri-spoke {
+    animation: dashSlide 14s linear infinite;
+  }
+  @keyframes dashSlide { to { stroke-dashoffset: -60; } }
+
+  .runner-circle {
+    position: absolute;
+    width: 28%;
+    aspect-ratio: 1;
+    border-radius: 50%;
+    background: white;
+    border: 2px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: var(--shadow-md);
+    z-index: 2;
+  }
+  .runner-circle::before {
+    content: '';
+    position: absolute;
+    inset: -4px;
+    border-radius: 50%;
+    background: var(--grad);
+    opacity: 0;
+    z-index: -1;
+    transition: opacity 0.25s;
+    filter: blur(8px);
+  }
+  .runner-circle:hover { transform: scale(1.05); border-color: var(--m-400); }
+  .runner-circle:hover::before { opacity: 0.35; }
+  .runner-circle.drag-over { border-color: var(--m-500); transform: scale(1.08); }
+  .runner-circle.drag-over::before { opacity: 0.5; }
+  .runner-circle.filled {
+    border-color: var(--m-400);
+    background: linear-gradient(135deg, #FFFFFF, #FFF5FB);
+  }
+  .runner-circle.filled::before { opacity: 0.25; }
+  .runner-circle-inner {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    padding: 10px 8px 22px;
+    text-align: center;
+  }
+  .runner-circle-num {
+    width: 30px; height: 30px;
+    border-radius: 50%;
+    background: var(--grad);
+    color: white;
+    font-weight: 800;
+    font-size: 13px;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: var(--shadow-mag);
+    letter-spacing: -0.02em;
+    margin-bottom: 4px;
+  }
+  .runner-circle-label {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--ink-900);
+    letter-spacing: -0.01em;
+  }
+  .runner-circle-count {
+    font-size: 17px;
+    font-weight: 800;
+    background: var(--grad);
+    -webkit-background-clip: text; background-clip: text;
+    -webkit-text-fill-color: transparent;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.02em;
+    line-height: 1;
+  }
+  .runner-circle-status {
+    position: absolute;
+    bottom: -14px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 10px;
+    font-weight: 700;
+    padding: 4px 10px;
+    border-radius: var(--r-full);
+    background: white;
+    border: 1px solid var(--border);
+    color: var(--ink-400);
+    white-space: nowrap;
+    box-shadow: var(--shadow-sm);
+    z-index: 3;
+  }
+  .runner-circle-status[data-status="ok"] {
+    background: var(--m-500);
+    color: white;
+    border-color: var(--m-500);
+  }
+
+  /* Triangle positions — wider & taller */
+  .runner-pos-1 { top: 2%;  left: 2%; }
+  .runner-pos-2 { top: 2%;  right: 2%; }
+  .runner-pos-3 { bottom: 0; left: 50%; transform: translateX(-50%); }
+  .runner-pos-3:hover { transform: translateX(-50%) scale(1.05); }
+  .runner-pos-3.drag-over { transform: translateX(-50%) scale(1.08); }
+
+  /* Center (4) – bigger, special */
+  .runner-center {
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    width: 34%;
+    border: none;
+    background: transparent;
+    box-shadow: none;
+    cursor: default;
+  }
+  .runner-center:hover { transform: translate(-50%, -50%); }
+  .runner-center::before { display: none; }
+
+  .runner-progress-ring {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    background: conic-gradient(from 0deg, var(--m-500) 0%, var(--p-500) 100%);
+    padding: 3px;
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+            mask-composite: exclude;
+    opacity: 0.35;
+    transition: opacity 0.3s;
+  }
+  .runner-center.running .runner-progress-ring {
+    opacity: 1;
+    animation: ringSpin 1.2s linear infinite;
+    background: conic-gradient(from 0deg, transparent 0deg, var(--m-500) 120deg, var(--p-500) 260deg, transparent 360deg);
+  }
+  .runner-center.done .runner-progress-ring {
+    opacity: 1;
+    background: conic-gradient(from 0deg, #10B981 0deg, #10B981 360deg);
+  }
+  @keyframes ringSpin { to { transform: rotate(360deg); } }
+
+  .runner-center-btn {
+    position: absolute;
+    inset: 8px;
+    border-radius: 50%;
+    background: var(--grad);
+    border: none;
+    color: white;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    padding: 0;
+    box-shadow: 0 10px 30px rgba(255,0,128,0.4), inset 0 1px 0 rgba(255,255,255,0.2);
+    font-family: inherit;
+    transition: all 0.2s;
+    letter-spacing: -0.01em;
+  }
+  .runner-center-btn:hover:not(:disabled) {
+    transform: scale(1.04);
+    box-shadow: 0 14px 36px rgba(255,0,128,0.5), inset 0 1px 0 rgba(255,255,255,0.25);
+  }
+  .runner-center-btn:disabled {
+    background: linear-gradient(135deg, #D5D1DF, #B8B2C8);
+    box-shadow: none;
+    cursor: not-allowed;
+  }
+  .runner-center-btn .runner-circle-num {
+    background: rgba(255,255,255,0.22);
+    box-shadow: none;
+    width: 26px; height: 26px; font-size: 12px;
+    margin-bottom: 4px;
+  }
+  .runner-center-btn:disabled .runner-circle-num { background: rgba(255,255,255,0.3); }
+  .runner-center-label {
+    font-size: 15px;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    margin-top: 2px;
+  }
+  .runner-center-sub {
+    font-size: 11px;
+    font-weight: 600;
+    opacity: 0.85;
+    letter-spacing: -0.01em;
+  }
+  .runner-center.running .runner-center-btn { pointer-events: none; }
+  .runner-center.done .runner-center-btn {
+    background: linear-gradient(135deg, #10B981, #059669);
+    box-shadow: 0 10px 30px rgba(16,185,129,0.4), inset 0 1px 0 rgba(255,255,255,0.2);
+  }
+
+  @media (max-width: 520px) {
+    .runner-flow { max-width: 340px; }
+  }
+
+  .runner-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .runner-stat {
+    background: white; border: 1px solid var(--border);
+    border-radius: var(--r-sm); padding: 10px 12px;
+    display: flex; flex-direction: column; gap: 2px;
+  }
+  .runner-stat-label {
+    font-size: 10px; color: var(--ink-400); font-weight: 600;
+    letter-spacing: 0.04em; text-transform: uppercase;
+  }
+  .runner-stat-value {
+    font-size: 18px; font-weight: 800; letter-spacing: -0.03em;
+    font-variant-numeric: tabular-nums;
+    background: var(--grad); -webkit-background-clip: text; background-clip: text;
+    -webkit-text-fill-color: transparent;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+
+  #runner-summary.logic-summary {
+    display: flex; align-items: flex-start; gap: 10px;
+    padding: 14px 16px;
+    background: linear-gradient(135deg, #FFF9FD, #F7F2FE);
+    border: 1px solid var(--m-100);
+    border-radius: var(--r-md);
+  }
+  .runner-summary-ico { font-size: 16px; line-height: 1.2; flex-shrink: 0; }
+
+  .runner-step .workflow-node-list:empty { display: none; }
+  .runner-step .workflow-drop-hint {
+    margin-top: 0;
+    border: 1px dashed var(--border-strong);
+    padding: 10px 12px; border-radius: var(--r-sm);
+    background: var(--ink-50); text-align: center;
+    color: var(--ink-400); font-size: 11px; font-weight: 500;
+    transition: all 0.15s;
+  }
+  .runner-step.drop-target:hover .workflow-drop-hint {
+    border-color: var(--m-300); background: var(--m-50); color: var(--m-600);
+  }
+
+</style>
+</head>
+<body>
+
+<div class="menu-scrim" id="menu-scrim"></div>
+<aside class="menu-drawer" id="menu-drawer">
+  <div class="menu-drawer-inner">
+    <div class="menu-head">
+      <span>메뉴</span>
+      <button class="brand-btn icon" id="menu-close" type="button">✕</button>
+    </div>
+    <div class="menu-list">
+      <button class="menu-item active" data-page="generator" type="button">
+        <span>🧩</span>
+        <span>B2B 빌링 Agent</span>
+      </button>
+      <button class="menu-item" data-page="runner" type="button">
+        <span>▶</span>
+        <span>로직 실행기</span>
+      </button>
+    </div>
+  </div>
+</aside>
+
+<div class="app">
+  <!-- ============ LEFT ============ -->
+  <aside class="left">
+    <div class="brand">
+      <button class="brand-btn icon" id="btn-menu" title="메뉴">☰</button>
+      <div class="logo">U+</div>
+      <div class="brand-info">
+        <h1 id="page-title">B2B 빌링 Agent</h1>
+        <div class="sub" id="model-label">AI: Claude Sonnet 4.5</div>
+      </div>
+      <button class="brand-btn" id="btn-settings" title="AI 모델 설정">⚙</button>
+    </div>
+
+    <div class="left-body">
+      <div class="page-panel active" id="page-generator">
+      <section class="panel-section" id="panel-inputs">
+        <div class="panel-head" data-target="panel-inputs">
+          <span class="caret">▼</span>
+          <span>① 입력 파일</span>
+          <span class="hint" id="input-count">0개</span>
+        </div>
+        <div class="panel-body">
+          <div class="dropzone" id="drop-inputs">
+            <span class="ico">📥</span>
+            입력 파일을 드래그해서 놓거나 클릭하여 선택
+            <small>.xlsx / .xls / .csv · 여러 파일 가능</small>
+            <input type="file" id="input-files" accept=".xlsx,.xls,.csv" multiple="" style="display:none">
+          </div>
+          <div id="input-list"></div>
+        </div>
+      </section>
+
+      <section class="panel-section" id="panel-output">
+        <div class="panel-head" data-target="panel-output">
+          <span class="caret">▼</span>
+          <span>② 출력 템플릿</span>
+          <span class="hint" id="output-status">미업로드</span>
+        </div>
+        <div class="panel-body">
+          <div class="dropzone output" id="drop-output">
+            <span class="ico">📤</span>
+            최종 결과 템플릿을 드래그해서 놓거나 클릭
+            <small>.xlsx / .xls · 1개 파일</small>
+            <input type="file" id="output-file" accept=".xlsx,.xls" style="display:none">
+          </div>
+          <div id="output-chip"></div>
+        </div>
+      </section>
+
+      <section class="panel-section growable chat-panel disabled" id="panel-chat">
+        <div class="panel-head" data-target="panel-chat">
+          <span class="caret">▼</span>
+          <span>③ 로직 설계 (AI)</span>
+          <span class="hint">대화로 로직을 만드세요</span>
+        </div>
+        <div class="panel-body">
+          <div class="chat-messages" id="chat-messages">
+            <div class="msg system">입력 또는 출력 파일 업로드 후 활성화됩니다.</div>
+          </div>
+          <div class="chat-input-row">
+            <textarea id="chat-text" placeholder="각 요청은 하나의 단계로 작성됩니다. 예:
+- 입력1에서 상품별 피벗을 새 시트 '피벗'에 만들어줘
+- Sheet1 의 A~E 열 데이터를 G~K 로 이동시켜줘
+- 월 정보를 1개월 증가시켜줘"></textarea>
+            <button class="btn-send" id="chat-send" disabled="">전송</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel-section growable" id="panel-pipeline">
+        <div class="panel-head" data-target="panel-pipeline">
+          <span class="caret">▼</span>
+          <span>④ 로직 파이프라인</span>
+          <span class="hint" id="pipe-count">0 단계</span>
+        </div>
+        <div class="panel-body">
+          <div class="pipeline-list" id="pipeline-list">
+            <div class="pipeline-empty">아직 단계가 없습니다. AI가 생성한 코드를 "적용"하면 추가됩니다.</div>
+          </div>
+        </div>
+      </section>
+
+      <div class="action-row">
+        <button class="btn-primary" id="btn-run" disabled="">▶ 전체 실행</button>
+        <button class="btn-primary" id="btn-download" disabled="" style="background:#217346">📥 출력 xlsx 다운로드</button>
+      </div>
+      <div class="action-row">
+        <button class="btn-secondary" id="btn-save" disabled="">💾 로직 저장</button>
+        <button class="btn-secondary" id="btn-load">📂 로직 불러오기</button>
+        <button class="btn-secondary" id="btn-reset">↻ 초기화</button>
+      </div>
+      </div>
+
+      <div class="page-panel" id="page-runner">
+        <div class="workflow-panel">
+          <div class="runner-hero">
+            <div class="runner-hero-icon">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+            </div>
+            <div class="runner-hero-body">
+              <div class="runner-hero-title">로직 실행 파이프라인</div>
+              <div class="runner-hero-sub">입력 · 템플릿 · 로직을 연결하고 한 번에 실행합니다</div>
+            </div>
+            <div class="runner-hero-badge" id="runner-hero-badge">대기 중</div>
+          </div>
+
+          <div class="runner-flow">
+            <svg class="runner-triangle-lines" viewBox="0 0 500 460" preserveAspectRatio="none" aria-hidden="true">
+              <defs>
+                <linearGradient id="tri-grad" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0%" stop-color="#FF0080" stop-opacity="0.55"></stop>
+                  <stop offset="100%" stop-color="#7928CA" stop-opacity="0.55"></stop>
+                </linearGradient>
+              </defs>
+              <polygon class="tri-outline" points="80,80 420,80 250,400" fill="none" stroke="url(#tri-grad)" stroke-width="2" stroke-dasharray="5 6" stroke-linejoin="round"></polygon>
+              <line class="tri-spoke" x1="80" y1="80" x2="250" y2="230" stroke="url(#tri-grad)" stroke-width="1.5" stroke-dasharray="3 5"></line>
+              <line class="tri-spoke" x1="420" y1="80" x2="250" y2="230" stroke="url(#tri-grad)" stroke-width="1.5" stroke-dasharray="3 5"></line>
+              <line class="tri-spoke" x1="250" y1="400" x2="250" y2="230" stroke="url(#tri-grad)" stroke-width="1.5" stroke-dasharray="3 5"></line>
+            </svg>
+
+            <div class="runner-circle runner-pos-1 drop-target" id="runner-input-node" data-role="input">
+              <div class="runner-circle-inner">
+                <span class="runner-circle-num">1</span>
+                <span class="runner-circle-label">입력 파일</span>
+                <span class="runner-circle-count" id="runner-input-count">0</span>
+              </div>
+              <span class="runner-circle-status" data-status="empty">비어있음</span>
+            </div>
+
+            <div class="runner-circle runner-pos-2 drop-target" id="runner-output-node" data-role="output">
+              <div class="runner-circle-inner">
+                <span class="runner-circle-num">2</span>
+                <span class="runner-circle-label">출력 템플릿</span>
+                <span class="runner-circle-count" id="runner-output-count">—</span>
+              </div>
+              <span class="runner-circle-status" data-status="empty">비어있음</span>
+            </div>
+
+            <div class="runner-circle runner-pos-3" id="runner-logic-node" data-role="logic">
+              <div class="runner-circle-inner">
+                <span class="runner-circle-num">3</span>
+                <span class="runner-circle-label">로직</span>
+                <span class="runner-circle-count" id="runner-logic-count">0</span>
+              </div>
+              <span class="runner-circle-status" data-status="empty">비어있음</span>
+              <input type="file" id="logic-files" accept=".zip,.json,.js,.py,text/javascript,application/json" multiple="" style="display:none">
+            </div>
+
+            <div class="runner-circle runner-pos-4 runner-center" id="runner-result-node" data-role="result">
+              <div class="runner-progress-ring" aria-hidden="true"></div>
+              <button class="runner-center-btn" id="runner-run-btn" type="button" disabled="">
+                <span class="runner-circle-num">4</span>
+                <span class="runner-center-label">실행하기</span>
+                <span class="runner-center-sub" id="runner-center-sub">대기 중</span>
+              </button>
+            </div>
+
+            <!-- hidden lists kept for JS compatibility -->
+            <div style="display:none">
+              <div id="runner-input-list"></div>
+              <div id="runner-output-list"></div>
+              <div id="runner-logic-list"></div>
+              <div id="runner-result-list"></div>
+              <div id="drop-logic"></div>
+            </div>
+          </div>
+
+          <div class="runner-stats">
+            <div class="runner-stat">
+              <div class="runner-stat-label">입력 파일</div>
+              <div class="runner-stat-value" id="runner-stat-inputs">0</div>
+            </div>
+            <div class="runner-stat">
+              <div class="runner-stat-label">템플릿</div>
+              <div class="runner-stat-value" id="runner-stat-template">—</div>
+            </div>
+            <div class="runner-stat">
+              <div class="runner-stat-label">로직 단계</div>
+              <div class="runner-stat-value" id="runner-stat-steps">0</div>
+            </div>
+            <div class="runner-stat">
+              <div class="runner-stat-label">상태</div>
+              <div class="runner-stat-value" id="runner-stat-state">준비</div>
+            </div>
+          </div>
+
+          <div class="logic-summary" id="runner-summary">
+            <span class="runner-summary-ico">💡</span>
+            <span>아직 로드된 파일과 로직이 없습니다. 위 4단계를 순서대로 채워주세요.</span>
+          </div>
+
+          <div class="workflow-actions">
+            <button class="btn-secondary" id="runner-load-btn" type="button">📂 로직 불러오기</button>
+            <button class="btn-secondary" id="runner-open-generator" type="button">🧩 생성기로 이동</button>
+            <button class="btn-primary" id="runner-download-btn" type="button" disabled="">📥 출력 xlsx 다운로드</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- 드래그 가능한 세로 구분선 -->
+  <div class="resizer" id="resizer" title="드래그해서 너비 조절"></div>
+
+  <!-- ============ RIGHT ============ -->
+  <main class="right">
+    <section class="right-page active" id="right-generator">
+      <div class="right-header">
+        <h2>엑셀 실시간 미리보기</h2>
+        <span style="font-size:11.5px; color:#666" id="view-info">파일이 업로드되면 여기에 표시됩니다</span>
+      </div>
+      <div class="file-tabs" id="file-tabs"></div>
+      <div class="sheet-tabs" id="sheet-tabs"></div>
+      <div class="excel-viewer" id="excel-viewer">
+        <div class="excel-empty">
+          <div class="big-ico">📊</div>
+          <div>입력 또는 출력 파일을 업로드하면</div>
+          <div>여기에 엑셀이 렌더링됩니다</div>
+        </div>
+      </div>
+    </section>
+    <section class="right-page" id="right-runner">
+      <div class="right-header">
+        <h2>출력파일 시뮬레이터</h2>
+        <span style="font-size:11.5px; color:#666" id="runner-view-info">실행 후 결과를 우측에서 확인합니다</span>
+      </div>
+      <div class="file-tabs" id="runner-file-tabs"></div>
+      <div class="sheet-tabs" id="runner-sheet-tabs"></div>
+      <div class="excel-viewer" id="runner-excel-viewer">
+        <div class="excel-empty">
+          <div class="big-ico">🧪</div>
+          <div>로직을 실행하면</div>
+          <div>여기에 결과 시뮬레이터가 표시됩니다</div>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<!-- Modal -->
+<div class="modal-bg" id="modal-bg">
+  <div class="modal" id="modal"></div>
+</div>
+
+<script>
+/* ===================================================================
+   CONFIG
+   =================================================================== */
+const DEFAULTS = {
+  anthropic: {
+    apiKey: "",
+    model: "claude-sonnet-4-5-20250929",
+    baseUrl: "https://api.anthropic.com/v1",
+  },
+  "openai-compat": {
+    apiKey: "7365676d",
+    model: "Qwen3.5-27B-FP8",
+    baseUrl: location.protocol === "http:" || location.protocol === "https:"
+      ? `${location.origin}/v1`
+      : "http://127.0.0.1:8090/v1",
+  },
+};
+const OPENAI_COMPAT_FALLBACK_BASE_URLS = [
+  DEFAULTS["openai-compat"].baseUrl,
+  "http://127.0.0.1:8090/v1",
+];
+const SETTINGS_KEY = "mvno_llm_settings_v1";
+let settings = loadSettings();
+
+function loadSettings() {
+  try {
+    const raw = localStorage.getItem(SETTINGS_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed && parsed.provider === "openai-compat") {
+        return {
+          ...DEFAULTS["openai-compat"],
+          ...parsed,
+          provider: "openai-compat",
+          baseUrl: DEFAULTS["openai-compat"].baseUrl,
+          apiKey: DEFAULTS["openai-compat"].apiKey,
+          model: DEFAULTS["openai-compat"].model,
+        };
+      }
+    }
+  } catch {}
+  return { provider: "openai-compat", ...DEFAULTS["openai-compat"] };
+}
+function saveSettings() {
+  try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); } catch {}
+  updateModelLabel();
+}
+function updateModelLabel() {
+  const el = document.getElementById("model-label");
+  if (!el) return;
+  if (settings.provider === "openai-compat") {
+    el.textContent = "AI: ixi 모델";
+    el.style.color = "#28a745";
+  } else {
+    el.textContent = `AI: ${settings.model || "Claude"}`;
+    el.style.color = "#777";
+  }
+}
+
+/* ===================================================================
+   STATE
+   =================================================================== */
+const state = {
+  inputs: [],       // [{ name, size, sheets: {sheetName: aoa}, merges: {sheetName: merges} }]
+  inputsOriginal: [],
+  output: null,     // same shape OR null
+  outputOriginal: null, // frozen copy of original output template
+  currentFileId: null,  // "input:NAME" or "output"
+  currentSheet: null,
+  pipeline: [],     // [{ id, prompt, code, description, applied: bool }]
+  chatHistory: [],  // for Claude context
+  currentPage: "generator",
+};
+
+/* ===================================================================
+   UTIL
+   =================================================================== */
+function $(id) { return document.getElementById(id); }
+function toast(msg, type) {
+  const el = $("toast");
+  el.textContent = msg;
+  el.className = "toast show " + (type || "");
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => el.classList.remove("show"), 3000);
+}
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function fmtNum(v) {
+  if (v === "" || v === null || v === undefined) return "";
+  const n = Number(v);
+  if (isNaN(n)) return String(v);
+  if (Math.abs(n) >= 1 && Number.isInteger(n)) return n.toLocaleString("ko-KR");
+  if (!Number.isInteger(n)) return n.toLocaleString("ko-KR", { maximumFractionDigits: 2 });
+  return String(n);
+}
+function isNumLike(v) {
+  if (v === "" || v === null || v === undefined) return false;
+  return !isNaN(Number(v)) && String(v).trim() !== "";
+}
+function uid() { return Math.random().toString(36).slice(2, 10); }
+
+/* ===================================================================
+   FILE PARSING
+   =================================================================== */
+async function parseFile(file) {
+  const ext = file.name.split('.').pop().toLowerCase();
+  const buf = await file.arrayBuffer();
+  const LARGE_FILE_BYTES = 8 * 1024 * 1024;
+  const useCellStyles = file.size <= LARGE_FILE_BYTES;
+  const wb = XLSX.read(buf, { type: "array", cellDates: true, cellStyles: useCellStyles });
+  const sheets = {};
+  const merges = {};
+  const styles = {};
+  wb.SheetNames.forEach(name => {
+    const ws = wb.Sheets[name];
+    const aoa = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: "" });
+    sheets[name] = aoa;
+    merges[name] = ws["!merges"] ? ws["!merges"].map(m => ({ s: {...m.s}, e: {...m.e} })) : [];
+    // Extract per-cell styles from xlsx
+    const sheetStyles = [];
+    const ref = ws["!ref"];
+    if (useCellStyles && ref) {
+      const range = XLSX.utils.decode_range(ref);
+      for (let r = range.s.r; r <= range.e.r; r++) {
+        const row = [];
+        for (let c = range.s.c; c <= range.e.c; c++) {
+          const addr = XLSX.utils.encode_cell({ r, c });
+          const cell = ws[addr];
+          row[c] = cell && cell.s ? extractCellStyle(cell.s) : null;
+        }
+        sheetStyles[r] = row;
+      }
+    }
+    styles[name] = sheetStyles;
+  });
+  return {
+    name: file.name,
+    size: file.size,
+    sheetNames: wb.SheetNames,
+    sheets,
+    merges,
+    styles,
+    lightweightPreview: !useCellStyles,
+    originalBuffer: buf,  // 다운로드 시 원본 양식 복원용
+  };
+}
+
+// xlsx.js cell style → inline CSS string
+function extractCellStyle(s) {
+  if (!s) return null;
+  const css = [];
+  // Background color
+  const fill = s.fgColor || (s.fill && s.fill.fgColor) || s.patternFill;
+  const fgRgb = fill && (fill.rgb || fill.RGB);
+  if (fgRgb && typeof fgRgb === "string" && fgRgb.length >= 6) {
+    const hex = fgRgb.length === 8 ? fgRgb.slice(2) : fgRgb;
+    if (!/^f{6}$/i.test(hex) && !/^0{6}$/i.test(hex)) {
+      css.push(`background:#${hex}`);
+    } else if (/^f{6}$/i.test(hex)) {
+      // explicit white background — keep so it beats class defaults
+      css.push(`background:#FFFFFF`);
+    }
+  }
+  // Font color
+  const fontColor = s.color || (s.font && s.font.color);
+  const fcRgb = fontColor && (fontColor.rgb || fontColor.RGB);
+  if (fcRgb && typeof fcRgb === "string" && fcRgb.length >= 6) {
+    const hex = fcRgb.length === 8 ? fcRgb.slice(2) : fcRgb;
+    if (!/^0{6}$/i.test(hex)) css.push(`color:#${hex}`);
+  }
+  // Bold
+  if (s.font && (s.font.bold || s.bold)) css.push("font-weight:700");
+  if (s.font && (s.font.italic || s.italic)) css.push("font-style:italic");
+  // Alignment
+  const align = s.alignment || {};
+  if (align.horizontal) css.push(`text-align:${align.horizontal}`);
+  return css.length ? css.join(";") : null;
+}
+
+function deepClone(value) {
+  if (typeof structuredClone === "function") {
+    return structuredClone(value);
+  }
+  if (value === null || typeof value !== "object") return value;
+
+  const root = Array.isArray(value) ? [] : {};
+  const stack = [{ source: value, target: root }];
+
+  while (stack.length) {
+    const { source, target } = stack.pop();
+    if (Array.isArray(source)) {
+      for (let i = 0; i < source.length; i++) {
+        const item = source[i];
+        if (item && typeof item === "object") {
+          const next = Array.isArray(item) ? [] : {};
+          target[i] = next;
+          stack.push({ source: item, target: next });
+        } else {
+          target[i] = item;
+        }
+      }
+      continue;
+    }
+
+    Object.keys(source).forEach(key => {
+      const item = source[key];
+      if (item && typeof item === "object") {
+        const next = Array.isArray(item) ? [] : {};
+        target[key] = next;
+        stack.push({ source: item, target: next });
+      } else {
+        target[key] = item;
+      }
+    });
+  }
+
+  return root;
+}
+function cloneFileRecord(file) {
+  return deepClone({
+    name: file.name,
+    size: file.size,
+    sheetNames: file.sheetNames,
+    sheets: file.sheets,
+    merges: file.merges,
+    styles: file.styles,
+    originalBuffer: null,
+  });
+}
+function syncFileMetadata(file) {
+  const sheetKeys = Object.keys(file.sheets || {});
+  file.sheetNames = [
+    ...file.sheetNames.filter(name => sheetKeys.includes(name)),
+    ...sheetKeys.filter(name => !file.sheetNames.includes(name)),
+  ];
+  file.sheetNames.forEach(name => {
+    if (!file.merges[name]) file.merges[name] = [];
+  });
+}
+
+/* ===================================================================
+   DROP HANDLING
+   =================================================================== */
+function setupDrop(zone, input, handler) {
+  zone.addEventListener("click", () => input.click());
+  zone.addEventListener("dragover", e => { e.preventDefault(); zone.classList.add("drag-over"); });
+  zone.addEventListener("dragleave", () => zone.classList.remove("drag-over"));
+  zone.addEventListener("drop", e => {
+    e.preventDefault();
+    zone.classList.remove("drag-over");
+    handler(Array.from(e.dataTransfer.files));
+  });
+  input.addEventListener("change", e => {
+    handler(Array.from(e.target.files));
+    input.value = "";
+  });
+}
+
+function setupNodeDrop(zone, input, handler) {
+  zone.addEventListener("click", () => input.click());
+  zone.addEventListener("dragover", e => {
+    e.preventDefault();
+    zone.classList.add("drag-over");
+  });
+  zone.addEventListener("dragleave", e => {
+    if (!zone.contains(e.relatedTarget)) zone.classList.remove("drag-over");
+  });
+  zone.addEventListener("drop", e => {
+    e.preventDefault();
+    zone.classList.remove("drag-over");
+    handler(Array.from(e.dataTransfer.files));
+  });
+}
+
+setupDrop($("drop-inputs"), $("input-files"), async (files) => {
+  for (const f of files) {
+    try {
+      const parsed = await parseFile(f);
+      state.inputs.push(parsed);
+      state.inputsOriginal.push(cloneFileRecord(parsed));
+    } catch (err) {
+      toast("파일 파싱 실패: " + f.name, "error");
+    }
+  }
+  renderInputList();
+  refreshTabs();
+  refreshChatState();
+});
+
+setupDrop($("drop-output"), $("output-file"), async (files) => {
+  if (files.length === 0) return;
+  const f = files[0];
+  try {
+    const parsed = await parseFile(f);
+    state.output = parsed;
+    const buf = parsed.originalBuffer;
+    // deepClone 은 ArrayBuffer 를 복사하지 못하므로 버퍼는 별도 보관 후 다시 붙임
+    state.outputOriginal = deepClone({ ...parsed, originalBuffer: null });
+    state.outputOriginal.originalBuffer = buf;
+    state.output.originalBuffer = buf;
+    renderOutputChip();
+    refreshTabs();
+    refreshChatState();
+    setCurrentView("output");
+    if (state.pipeline.length > 0) {
+      toast(`출력 템플릿 로드됨. 좌측 "▶ 전체 실행" 버튼을 눌러 ${state.pipeline.length}단계 로직을 적용하세요.`, "success");
+    } else {
+      toast("출력 템플릿 로드: " + f.name, "success");
+    }
+  } catch (err) {
+    toast("파일 파싱 실패: " + f.name, "error");
+  }
+});
+
+setupNodeDrop($("runner-input-node"), $("input-files"), async (files) => {
+  if (!files.length) return;
+  for (const f of files) {
+    try {
+      const parsed = await parseFile(f);
+      state.inputs.push(parsed);
+      state.inputsOriginal.push(cloneFileRecord(parsed));
+    } catch (err) {
+      toast("파일 파싱 실패: " + f.name, "error");
+    }
+  }
+  renderInputList();
+  refreshTabs();
+  refreshChatState();
+});
+
+setupNodeDrop($("runner-output-node"), $("output-file"), async (files) => {
+  if (!files.length) return;
+  const f = files[0];
+  try {
+    const parsed = await parseFile(f);
+    state.output = parsed;
+    const buf = parsed.originalBuffer;
+    state.outputOriginal = deepClone({ ...parsed, originalBuffer: null });
+    state.outputOriginal.originalBuffer = buf;
+    state.output.originalBuffer = buf;
+    renderOutputChip();
+    refreshTabs();
+    refreshChatState();
+    setCurrentView("output");
+    toast("출력 템플릿 로드: " + f.name, "success");
+  } catch (err) {
+    toast("파일 파싱 실패: " + f.name, "error");
+  }
+});
+
+setupNodeDrop($("runner-logic-node"), $("logic-files"), async (files) => {
+  if (!files.length) return;
+  try {
+    await loadLogicFiles(files);
+  } catch (err) {
+    toast("불러오기 실패: " + err.message, "error");
+    console.error(err);
+  }
+});
+
+function renderInputList() {
+  const list = $("input-list");
+  list.innerHTML = "";
+  $("input-count").textContent = state.inputs.length + "개";
+  state.inputs.forEach((f, idx) => {
+    const div = document.createElement("div");
+    div.className = "file-chip" + (state.currentFileId === "input:" + f.name ? " active" : "");
+    const kb = (f.size / 1024).toFixed(1);
+    const totalRows = Object.values(f.sheets).reduce((a, s) => a + s.length, 0);
+    div.innerHTML = `
+      <div class="chip-icon">XLSX</div>
+      <div class="chip-body">
+        <div class="chip-name" title="${escapeHtml(f.name)}">${escapeHtml(f.name)}</div>
+        <div class="chip-meta">${kb} KB · 시트 ${f.sheetNames.length}개 · 행 ${totalRows}</div>
+      </div>
+      <button class="chip-view" data-idx="${idx}">보기</button>
+      <button class="chip-remove" data-idx="${idx}" title="삭제">✕</button>
+    `;
+    list.appendChild(div);
+  });
+  list.querySelectorAll(".chip-view").forEach(btn => {
+    btn.onclick = () => setCurrentView("input:" + state.inputs[btn.dataset.idx].name);
+  });
+  list.querySelectorAll(".chip-remove").forEach(btn => {
+    btn.onclick = () => {
+      const idx = Number(btn.dataset.idx);
+      const removed = state.inputs.splice(idx, 1)[0];
+      state.inputsOriginal.splice(idx, 1);
+      if (state.currentFileId === "input:" + removed.name) {
+        state.currentFileId = null;
+        state.currentSheet = null;
+      }
+      renderInputList();
+      refreshTabs();
+      refreshChatState();
+      renderExcelViewer();
+    };
+  });
+  renderRunnerWorkflow();
+}
+
+function renderOutputChip() {
+  const el = $("output-chip");
+  el.innerHTML = "";
+  if (!state.output) {
+    $("output-status").textContent = "미업로드";
+    renderRunnerWorkflow();
+    return;
+  }
+  $("output-status").textContent = "로드됨";
+  const f = state.output;
+  const kb = (f.size / 1024).toFixed(1);
+  const totalRows = Object.values(f.sheets).reduce((a, s) => a + s.length, 0);
+  const div = document.createElement("div");
+  div.className = "file-chip output" + (state.currentFileId === "output" ? " active" : "");
+  div.innerHTML = `
+    <div class="chip-icon">XLSX</div>
+    <div class="chip-body">
+      <div class="chip-name" title="${escapeHtml(f.name)}">${escapeHtml(f.name)}</div>
+      <div class="chip-meta">${kb} KB · 시트 ${f.sheetNames.length}개 · 행 ${totalRows}</div>
+    </div>
+    <button class="chip-view" id="view-output">보기</button>
+    <button class="chip-remove" id="remove-output" title="삭제">✕</button>
+  `;
+  el.appendChild(div);
+  $("view-output").onclick = () => setCurrentView("output");
+  $("remove-output").onclick = () => {
+    state.output = null;
+    state.outputOriginal = null;
+    if (state.currentFileId === "output") {
+      state.currentFileId = null; state.currentSheet = null;
+    }
+    renderOutputChip();
+    refreshTabs();
+    refreshChatState();
+    renderExcelViewer();
+  };
+  renderRunnerWorkflow();
+}
+
+function renderRunnerWorkflow() {
+  const inputNode = $("runner-input-node");
+  const outputNode = $("runner-output-node");
+  const logicNode = $("runner-logic-node");
+  const resultNode = $("runner-result-node");
+  const inputList = $("runner-input-list");
+  const outputList = $("runner-output-list");
+  const logicList = $("runner-logic-list");
+  const resultList = $("runner-result-list");
+  const summary = $("runner-summary");
+  const runBtn = $("runner-run-btn");
+  const downloadBtn = $("runner-download-btn");
+  if (!inputList || !outputList || !logicList || !resultList || !summary || !runBtn || !downloadBtn) return;
+
+  inputList.innerHTML = state.inputs.length
+    ? state.inputs.map(f => `<div class="workflow-pill" title="${escapeHtml(f.name)}">${escapeHtml(f.name)}</div>`).join("")
+    : ``;
+  outputList.innerHTML = state.output
+    ? `<div class="workflow-pill" title="${escapeHtml(state.output.name)}">${escapeHtml(state.output.name)}</div>`
+    : ``;
+  logicList.innerHTML = state.pipeline.length
+    ? state.pipeline.map((step, idx) => `<div class="workflow-pill" title="${escapeHtml(step.description)}">${idx + 1}. ${escapeHtml(step.description)}</div>`).join("")
+    : ``;
+  resultList.innerHTML = state.output && state.pipeline.length
+    ? `<div class="workflow-pill">${state.pipeline.length}개 단계 실행 대상</div>`
+    : ``;
+
+  if (inputNode) inputNode.classList.toggle("filled", state.inputs.length > 0);
+  if (outputNode) outputNode.classList.toggle("filled", !!state.output);
+  if (logicNode) logicNode.classList.toggle("filled", state.pipeline.length > 0);
+  if (resultNode) resultNode.classList.toggle("filled", !!state.output && state.pipeline.length > 0);
+
+  // Circle count badges
+  const setCount = (id, val) => { const el = $(id); if (el) el.textContent = val; };
+  setCount('runner-input-count', state.inputs.length);
+  setCount('runner-output-count', state.output ? '1' : '—');
+  setCount('runner-logic-count', state.pipeline.length);
+
+  // Circle status pills (new layout)
+  const setStatus = (node, ok, okLabel, emptyLabel) => {
+    if (!node) return;
+    const pill = node.querySelector('.runner-circle-status') || node.querySelector('.runner-step-status');
+    if (!pill) return;
+    pill.dataset.status = ok ? 'ok' : 'empty';
+    pill.textContent = ok ? okLabel : emptyLabel;
+  };
+  setStatus(inputNode, state.inputs.length > 0, `${state.inputs.length}개`, '비어있음');
+  setStatus(outputNode, !!state.output, '연결됨', '비어있음');
+  setStatus(logicNode, state.pipeline.length > 0, `${state.pipeline.length}단계`, '비어있음');
+
+  const runnable = (state.inputs.length > 0 || !!state.output) && state.pipeline.length > 0;
+
+  // Center (4) sub label
+  const centerSub = $("runner-center-sub");
+  if (centerSub && !resultNode?.classList.contains('running') && !resultNode?.classList.contains('done')) {
+    centerSub.textContent = runnable ? '실행 준비' : '대기 중';
+  }
+
+  // Hero badge
+  const heroBadge = $("runner-hero-badge");
+  if (heroBadge) {
+    heroBadge.classList.remove('ready','running','done');
+    if (runnable) { heroBadge.classList.add('ready'); heroBadge.textContent = '실행 준비 완료'; }
+    else { heroBadge.textContent = '대기 중'; }
+  }
+
+  // Stats
+  const statInputs = $("runner-stat-inputs");
+  const statTemplate = $("runner-stat-template");
+  const statSteps = $("runner-stat-steps");
+  const statState = $("runner-stat-state");
+  if (statInputs) statInputs.textContent = state.inputs.length;
+  if (statTemplate) statTemplate.textContent = state.output ? '1' : '—';
+  if (statSteps) statSteps.textContent = state.pipeline.length;
+  if (statState) statState.textContent = runnable ? '준비완료' : '준비';
+
+  const hasAny = state.inputs.length || state.output || state.pipeline.length;
+  summary.innerHTML = hasAny
+    ? `<span class="runner-summary-ico">📊</span><span>` + [
+        `입력 <b>${state.inputs.length}개</b>`,
+        `출력 템플릿 <b>${state.output ? "1개" : "0개"}</b>`,
+        `로직 단계 <b>${state.pipeline.length}개</b>`,
+        state.currentFileId ? `현재 미리보기: ${escapeHtml(getFile(state.currentFileId)?.name || "")} / ${escapeHtml(state.currentSheet || "-")}` : "미리보기 없음",
+      ].join(" · ") + `</span>`
+    : `<span class="runner-summary-ico">💡</span><span>아직 로드된 파일과 로직이 없습니다. 위 4단계를 순서대로 채워주세요.</span>`;
+
+  runBtn.disabled = !runnable;
+  downloadBtn.disabled = !state.output;
+}
+
+// Running state helpers for center circle
+window.runnerSetRunning = function(running) {
+  const node = document.getElementById('runner-result-node');
+  const sub = document.getElementById('runner-center-sub');
+  if (!node) return;
+  node.classList.toggle('running', !!running);
+  if (running) node.classList.remove('done');
+  if (sub && running) sub.textContent = '실행 중...';
+};
+window.runnerSetDone = function() {
+  const node = document.getElementById('runner-result-node');
+  const sub = document.getElementById('runner-center-sub');
+  if (!node) return;
+  node.classList.remove('running');
+  node.classList.add('done');
+  if (sub) sub.textContent = '완료';
+  setTimeout(() => {
+    node.classList.remove('done');
+    if (sub) sub.textContent = '실행 준비';
+  }, 2500);
+};
+
+/* ===================================================================
+   EXCEL VIEWER
+   =================================================================== */
+function setCurrentView(fileId) {
+  const changed = state.currentFileId !== fileId;
+  state.currentFileId = fileId;
+  const file = getFile(fileId);
+  if (file) {
+    if (changed || !state.currentSheet || !file.sheetNames.includes(state.currentSheet)) {
+      state.currentSheet = file.sheetNames[0];
+    }
+  }
+  renderInputList();
+  renderOutputChip();
+  refreshTabs();
+  renderExcelViewer();
+}
+
+function getFile(fileId) {
+  if (!fileId) return null;
+  if (fileId === "output") return state.output;
+  if (fileId.startsWith("input:")) {
+    const name = fileId.slice(6);
+    return state.inputs.find(f => f.name === name);
+  }
+  return null;
+}
+
+function refreshTabs() {
+  const tabTargets = [
+    { fileTabs: $("file-tabs"), sheetTabs: $("sheet-tabs"), info: $("view-info"), empty: "파일이 업로드되면 여기에 표시됩니다" },
+    { fileTabs: $("runner-file-tabs"), sheetTabs: $("runner-sheet-tabs"), info: $("runner-view-info"), empty: "실행 후 결과를 우측에서 확인합니다" },
+  ];
+  const all = [
+    ...state.inputs.map(f => ({ id: "input:" + f.name, name: f.name, cls: "" })),
+    ...(state.output ? [{ id: "output", name: state.output.name, cls: "output" }] : []),
+  ];
+
+  if (state.currentFileId && !all.some(f => f.id === state.currentFileId)) {
+    state.currentFileId = null;
+    state.currentSheet = null;
+  }
+
+  if (!state.currentFileId && all.length) {
+    setCurrentView(all[all.length - 1].id);
+    return;
+  }
+
+  tabTargets.forEach(({ fileTabs, sheetTabs, info, empty }) => {
+    if (!fileTabs || !sheetTabs || !info) return;
+    fileTabs.innerHTML = "";
+    all.forEach(f => {
+      const t = document.createElement("div");
+      t.className = "tab " + f.cls + (state.currentFileId === f.id ? " active" : "");
+      t.innerHTML = `<span class="dot"></span>${escapeHtml(f.name)}`;
+      t.onclick = () => setCurrentView(f.id);
+      fileTabs.appendChild(t);
+    });
+
+    sheetTabs.innerHTML = "";
+    const cur = getFile(state.currentFileId);
+    if (cur) {
+      cur.sheetNames.forEach(sn => {
+        const t = document.createElement("div");
+        t.className = "sheet-tab" + (state.currentSheet === sn ? " active" : "");
+        t.textContent = sn;
+        t.onclick = () => { state.currentSheet = sn; refreshTabs(); renderExcelViewer(); };
+        sheetTabs.appendChild(t);
+      });
+      info.textContent = `${cur.name} · ${state.currentSheet || ""}`;
+    } else {
+      info.textContent = empty;
+    }
+  });
+}
+
+function classifyCell(value, rowIdx, colIdx, aoa) {
+  // Heuristic styling for Korean spreadsheet conventions
+  const s = String(value || "").trim();
+  if (s.startsWith("■")) return "section-title";
+  if (s === "계") return "sum-row";
+  if (s.includes("부가세") && s.includes("별도")) return "vat-row";
+  // Header row: 구분/건수/금액 in same row
+  if (aoa[rowIdx]) {
+    const rowStr = aoa[rowIdx].map(v => String(v||"")).join("|");
+    if (/구분.*건수.*금액/.test(rowStr) || /구분.*금액.*금액/.test(rowStr)) {
+      return "header-row";
+    }
+    const first = String(aoa[rowIdx][0] || "").trim();
+    if (first === "계") return "sum-row";
+    if (first.includes("부가세") && first.includes("별도")) return "vat-row";
+  }
+  return "";
+}
+
+function renderExcelViewer() {
+  const file = getFile(state.currentFileId);
+  const viewers = [$("excel-viewer"), $("runner-excel-viewer")].filter(Boolean);
+  if (!file || !state.currentSheet) {
+    viewers.forEach(viewer => {
+      viewer.innerHTML = `<div class="excel-empty">
+      <div class="big-ico">📊</div>
+      <div>입력 또는 출력 파일을 업로드하면</div>
+      <div>여기에 엑셀이 렌더링됩니다</div>
+    </div>`;
+    });
+    return;
+  }
+  const aoa = file.sheets[state.currentSheet] || [];
+  const merges = file.merges[state.currentSheet] || [];
+  const MAX_PREVIEW_ROWS = 300;
+  const MAX_PREVIEW_COLS = 60;
+
+  const hidden = new Set();
+  const merge_map = {};
+  merges.forEach(m => {
+    merge_map[m.s.r + "," + m.s.c] = m;
+    for (let r = m.s.r; r <= m.e.r; r++) {
+      for (let c = m.s.c; c <= m.e.c; c++) {
+        if (r === m.s.r && c === m.s.c) continue;
+        hidden.add(r + "," + c);
+      }
+    }
+  });
+
+  let maxCols = 1;
+  for (let i = 0; i < aoa.length; i++) {
+    const rowLen = aoa[i] ? aoa[i].length : 0;
+    if (rowLen > maxCols) maxCols = rowLen;
+  }
+  const visibleRows = Math.min(aoa.length, MAX_PREVIEW_ROWS);
+  const visibleCols = Math.min(maxCols, MAX_PREVIEW_COLS);
+  const isTrimmed = visibleRows < aoa.length || visibleCols < maxCols;
+  const excelCol = (n) => {
+    let s = ""; n++;
+    while (n > 0) { const r = (n-1) % 26; s = String.fromCharCode(65+r) + s; n = Math.floor((n-1)/26); }
+    return s;
+  };
+
+  let html = "";
+  if (isTrimmed) {
+    const hints = [];
+    if (visibleRows < aoa.length) hints.push(`행 ${visibleRows}/${aoa.length}`);
+    if (visibleCols < maxCols) hints.push(`열 ${visibleCols}/${maxCols}`);
+    if (file.lightweightPreview) hints.push("대용량 파일 경량 미리보기");
+    html += `<div class="excel-preview-note">${hints.join(" · ")}</div>`;
+  }
+  let tableHtml = '<table class="excel-sheet"><thead><tr><th class="col-header"></th>';
+  for (let c = 0; c < visibleCols; c++) tableHtml += `<th class="col-header">${excelCol(c)}</th>`;
+  if (visibleCols < maxCols) tableHtml += '<th class="col-header">...</th>';
+  tableHtml += '</tr></thead><tbody>';
+
+  for (let r = 0; r < visibleRows; r++) {
+    tableHtml += `<tr><td class="row-header">${r+1}</td>`;
+    for (let c = 0; c < visibleCols; c++) {
+      if (hidden.has(r + "," + c)) continue;
+      const m = merge_map[r + "," + c];
+      const rowspan = m ? Math.min(m.e.r, visibleRows - 1) - m.s.r + 1 : 1;
+      const colspan = m ? Math.min(m.e.c, visibleCols - 1) - m.s.c + 1 : 1;
+      const v = (aoa[r] && aoa[r][c] !== undefined) ? aoa[r][c] : "";
+      const isNum = isNumLike(v);
+      const neg = isNum && Number(v) < 0;
+      const cls = [];
+      if (isNum) cls.push("num");
+      if (neg) cls.push("negative");
+      // Prefer real xlsx cell styles; fall back to heuristic only if cell has no style
+      const realStyle = file.styles && file.styles[state.currentSheet] && file.styles[state.currentSheet][r] && file.styles[state.currentSheet][r][c];
+      if (!realStyle) {
+        const styleCls = classifyCell(aoa[r] && aoa[r][0], r, c, aoa);
+        if (styleCls) cls.push(styleCls);
+      }
+      const display = isNum
+        ? (neg ? `(${Math.abs(Number(v)).toLocaleString("ko-KR")})` : Number(v).toLocaleString("ko-KR", {maximumFractionDigits: 2}))
+        : escapeHtml(String(v));
+      const rs = rowspan > 1 ? ` rowspan="${rowspan}"` : "";
+      const cs = colspan > 1 ? ` colspan="${colspan}"` : "";
+      const styleAttr = realStyle ? ` style="${realStyle}"` : "";
+      tableHtml += `<td class="${cls.join(" ")}" data-r="${r}" data-c="${c}"${rs}${cs}${styleAttr}>${display}</td>`;
+    }
+    if (visibleCols < maxCols) tableHtml += '<td class="truncated-cell">...</td>';
+    tableHtml += '</tr>';
+  }
+  if (visibleRows < aoa.length) {
+    tableHtml += `<tr><td class="row-header">...</td><td colspan="${visibleCols + (visibleCols < maxCols ? 1 : 0)}" class="truncated-cell">나머지 ${aoa.length - visibleRows}개 행은 미리보기에서 생략됨</td></tr>`;
+  }
+  tableHtml += '</tbody></table>';
+  html += tableHtml;
+  viewers.forEach(viewer => { viewer.innerHTML = html; });
+}
+
+/* ===================================================================
+   FILE SCHEMA FOR CLAUDE
+   =================================================================== */
+function buildSchemaSummary() {
+  const lines = [];
+  lines.push("## 입력 파일 목록 (수정 가능)");
+  state.inputs.forEach(f => {
+    lines.push(`\n### ${f.name}`);
+    f.sheetNames.forEach(sn => {
+      const aoa = f.sheets[sn];
+      lines.push(`시트 "${sn}": ${aoa.length}행`);
+      const preview = aoa.slice(0, 5);
+      preview.forEach((row, i) => {
+        lines.push(`  행${i+1}: [${row.slice(0,12).map(v => JSON.stringify(v)).join(", ")}]`);
+      });
+      if (aoa.length > 5) lines.push(`  ... (${aoa.length-5}행 생략)`);
+    });
+  });
+
+  // 이미 적용된 파이프라인 단계들
+  if (state.pipeline.length > 0) {
+    lines.push(`\n## 이미 적용된 파이프라인 단계 (${state.pipeline.length}개) — 반복 금지`);
+    state.pipeline.forEach((s, i) => {
+      lines.push(`  Step ${i+1}. ${s.description}`);
+    });
+    lines.push("\n위 단계들은 이미 inputs/output 에 적용된 상태입니다. 새 요청에서는 절대 이 작업들을 다시 수행하지 마세요.");
+  }
+
+  // 현재 출력 상태 (이전 단계 적용 후)
+  if (state.output) {
+    const label = state.pipeline.length > 0
+      ? "## 현재 출력 상태 (위 단계들이 모두 적용된 결과, 수정 가능)"
+      : `## 출력 템플릿 (원본, 수정 가능): ${state.output.name}`;
+    lines.push("\n" + label);
+    state.output.sheetNames.forEach(sn => {
+      const aoa = state.output.sheets[sn];
+      lines.push(`\n시트 "${sn}": ${aoa.length}행`);
+      const preview = aoa.slice(0, 30);
+      preview.forEach((row, i) => {
+        lines.push(`  행${i+1}: [${row.slice(0,15).map(v => JSON.stringify(v)).join(", ")}]`);
+      });
+      if (aoa.length > 30) lines.push(`  ... (${aoa.length-30}행 생략)`);
+    });
+  }
+  return lines.join("\n");
+}
+
+const SYSTEM_PROMPT = `당신은 엑셀 데이터 자동화 로직을 JavaScript 로 작성하는 도우미입니다.
+
+## 실행 구조 — 반드시 이해할 것
+사용자는 여러 개의 "단계(step)"를 순서대로 쌓아 하나의 파이프라인을 만듭니다.
+각 단계는 이전 단계들이 **이미 모두 적용된 결과물** 을 input 으로 받아 시작합니다.
+즉, 당신이 지금 작성하는 코드는 "하나의 새 단계" 만 수행하면 되고, 이전 단계에서
+이미 한 작업은 절대로 반복하거나 포함시켜서는 안 됩니다. 실행 시 자동으로 앞 단계가
+먼저 적용된 후 당신의 코드가 이어서 실행됩니다.
+
+나쁜 예: 사용자가 "월 정보 수정" 을 이전에 요청했고, 이번엔 "피벗테이블 만들기" 를 요청했는데,
+당신이 "열 이동 + 월 수정 + 피벗테이블 생성" 을 모두 한 코드에 담는 경우 → 이전 작업이
+두 번 실행되어 데이터가 망가집니다.
+
+좋은 예: 이번 요청이 "피벗테이블 만들기" 이면, 피벗테이블을 만드는 코드만 작성.
+
+## 함수 시그니처 (필수 형태)
+function transform(inputs, output) {
+  // inputs: { "파일명.xlsx": { "시트명": any[][] } }   ← 수정 가능한 입력 파일들
+  // output: { "시트명": any[][] }                     ← 이전 단계들이 이미 적용된 현재 상태 (없을 수 있음)
+  //   (기존 시트 수정) output["기존시트"][r][c] = ...
+  //   (새 시트 추가)  output["피벗"] = [["헤더1","헤더2"], [1,2], ...];
+  //   (입력 수정)      inputs["입력1.xlsx"]["원본"][0][0] = "변경";
+  return { inputs, output };
+}
+
+## 규칙
+1. 응답은 반드시 하나의 \`\`\`javascript 코드 블록으로 감싸주세요.
+2. 이전 단계의 코드를 반복하지 마세요. 오직 이번 요청만 처리하세요.
+3. 입력 파일과 출력 템플릿 모두 수정 가능합니다. 새 시트/탭을 만들고 싶으면 대상 객체에 key 를 추가하세요.
+   - 예: \`inputs["입력1.xlsx"]["전처리"] = [[...]]\`
+   - 예: \`output["새시트명"] = [[...]]\`
+4. 외부 라이브러리 금지. 순수 JavaScript 만 사용.
+5. 엑셀 셀 값은 문자열일 수 있으니 산술 연산 전에 \`Number(v)\` 로 변환하세요.
+6. 코드 블록 밖에 한국어로 1~2문장의 짧은 설명을 쓰세요.
+
+## 수식(함수) 보존 규칙 — 매우 중요
+다운로드 시, **값을 바꾸지 않은 셀은 원본 xlsx 의 수식·서식이 그대로 유지** 됩니다.
+따라서 다음 원칙을 반드시 지키세요:
+- 값을 "읽기만" 하는 셀은 절대 재할당하지 마세요. (\`row[0] = row[0]\` 같은 의미 없는 재할당 금지 — 이러면 원본 수식이 손실됩니다)
+- "A 열을 G 열로 복사" 같은 이동 작업에서 **A 열에 원래 값을 다시 쓰는 코드를 작성하지 마세요.** A 에 손대지 않으면 원본 수식이 자동으로 보존됩니다.
+- 일부 셀만 갱신해야 하면 해당 셀만 정확히 건드리세요. 전체 행을 루프 돌면서 같은 값으로 덮어쓰지 마세요.
+- 빈 칸으로 명시적으로 만들어야 할 때만 \`""\` 를 대입하세요 (의도적 clear 로 간주되어 수식도 제거됨).
+`;
+
+/* ===================================================================
+   CLAUDE API
+   =================================================================== */
+async function callLLM(userMessage) {
+  state.chatHistory.push({ role: "user", content: userMessage });
+  const schema = buildSchemaSummary();
+  const fullSystem = SYSTEM_PROMPT + "\n\n## 현재 파일 스키마\n" + schema;
+
+  if (settings.provider === "openai-compat") {
+    return await callOpenAICompat(fullSystem);
+  }
+  return await callAnthropic(fullSystem);
+}
+
+async function callAnthropic(system) {
+  const base = (settings.baseUrl || DEFAULTS.anthropic.baseUrl).replace(/\/$/, "");
+  const resp = await fetch(base + "/messages", {
+    method: "POST",
+    headers: {
+      "x-api-key": settings.apiKey || DEFAULTS.anthropic.apiKey,
+      "anthropic-version": "2023-06-01",
+      "anthropic-dangerous-direct-browser-access": "true",
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      model: settings.model || DEFAULTS.anthropic.model,
+      max_tokens: 4096,
+      system,
+      messages: state.chatHistory,
+    }),
+  });
+  if (!resp.ok) {
+    const text = await resp.text();
+    throw new Error("Anthropic API 오류 " + resp.status + ": " + text.slice(0, 300));
+  }
+  const data = await resp.json();
+  const content = data.content?.[0]?.text || "";
+  state.chatHistory.push({ role: "assistant", content });
+  return content;
+}
+
+async function callOpenAICompat(system) {
+  const base = (settings.baseUrl || DEFAULTS["openai-compat"].baseUrl).replace(/\/$/, "");
+  const messages = [
+    { role: "system", content: system },
+    ...state.chatHistory,
+  ];
+  const { resp, url } = await fetchOpenAICompat("/chat/completions", base, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Api-Key": settings.apiKey || DEFAULTS["openai-compat"].apiKey,
+    },
+    body: JSON.stringify({
+      model: settings.model || DEFAULTS["openai-compat"].model,
+      messages,
+      max_tokens: 4096,
+      temperature: 0.2,
+    }),
+  });
+  if (!resp.ok) {
+    const text = await resp.text();
+    throw new Error(`LLM API 오류 ${resp.status}: ${text.slice(0, 300)}\n(URL: ${url})`);
+  }
+  const data = await resp.json();
+  const content = data.choices?.[0]?.message?.content || "";
+  state.chatHistory.push({ role: "assistant", content });
+  return content;
+}
+
+async function fetchOpenAICompat(path, preferredBase, options = {}) {
+  const bases = [
+    preferredBase,
+    ...OPENAI_COMPAT_FALLBACK_BASE_URLS,
+  ]
+    .filter(Boolean)
+    .map(base => base.replace(/\/$/, ""))
+    .filter((base, idx, arr) => arr.indexOf(base) === idx);
+
+  const errors = [];
+  for (const base of bases) {
+    const url = base + path;
+    try {
+      const resp = await fetch(url, options);
+      return { resp, url, base };
+    } catch (err) {
+      errors.push(`${url} → ${err.message || err}`);
+    }
+  }
+
+  const secureHint = location.protocol === "https:"
+    ? "\n현재 페이지가 HTTPS라서 HTTP vLLM 호출이 브라우저에서 차단될 수 있습니다. KGM을 file:// 또는 http:// 로 여세요."
+    : "";
+  throw new Error("vLLM 서버에 연결할 수 없습니다.\n" + errors.join("\n") + secureHint);
+}
+
+function extractCode(text) {
+  const m = text.match(/```(?:javascript|js)?\s*([\s\S]*?)```/);
+  return m ? m[1].trim() : null;
+}
+function extractDescription(text) {
+  // remove code blocks, take first line
+  const stripped = text.replace(/```[\s\S]*?```/g, "").trim();
+  const firstLine = stripped.split("\n").find(l => l.trim()) || "로직 생성";
+  return firstLine.trim().slice(0, 100);
+}
+
+/* ===================================================================
+   CHAT UI
+   =================================================================== */
+function refreshChatState() {
+  const ready = state.output !== null || state.inputs.length > 0;
+  const panel = $("panel-chat");
+  panel.classList.toggle("disabled", !ready);
+  $("chat-send").disabled = !ready;
+  if (ready && $("chat-messages").children.length === 1 && $("chat-messages").children[0].classList.contains("system")) {
+    $("chat-messages").innerHTML = "";
+    const targetLabel = state.output
+      ? `출력 템플릿 "${state.output.name}" 이 로드되었습니다.`
+      : `입력 파일 ${state.inputs.length}개가 로드되었습니다.`;
+    addMessage("system", `${targetLabel} 입력/출력 파일을 함께 수정하는 로직을 만들어보세요.`);
+  }
+  refreshRunButton();
+}
+
+function addMessage(role, text, opts) {
+  const container = $("chat-messages");
+  const div = document.createElement("div");
+  div.className = "msg " + role;
+  if (opts && opts.html) {
+    div.innerHTML = text;
+  } else {
+    div.textContent = text;
+  }
+  container.appendChild(div);
+  container.scrollTop = container.scrollHeight;
+  return div;
+}
+
+function addAssistantReply(fullText) {
+  const code = extractCode(fullText);
+  const desc = extractDescription(fullText);
+  const stripped = fullText.replace(/```[\s\S]*?```/g, "").trim();
+
+  const div = document.createElement("div");
+  div.className = "msg assistant";
+  div.innerHTML = `<div>${escapeHtml(stripped)}</div>`;
+  if (code) {
+    const codeBlk = document.createElement("pre");
+    codeBlk.className = "code-block";
+    codeBlk.textContent = code;
+    div.appendChild(codeBlk);
+
+    const actions = document.createElement("div");
+    actions.className = "action-btns";
+    const applyBtn = document.createElement("button");
+    applyBtn.className = "action-btn";
+    applyBtn.textContent = "✓ 적용 (파이프라인 추가)";
+    const rejectBtn = document.createElement("button");
+    rejectBtn.className = "action-btn reject";
+    rejectBtn.textContent = "✕ 거절";
+    actions.appendChild(applyBtn);
+    actions.appendChild(rejectBtn);
+    div.appendChild(actions);
+
+    applyBtn.onclick = () => {
+      applyLogic({ id: uid(), prompt: "", code, description: desc });
+      applyBtn.disabled = true; rejectBtn.disabled = true;
+      applyBtn.textContent = "✓ 적용됨";
+    };
+    rejectBtn.onclick = () => {
+      applyBtn.disabled = true; rejectBtn.disabled = true;
+      rejectBtn.textContent = "거절됨";
+    };
+  }
+  $("chat-messages").appendChild(div);
+  $("chat-messages").scrollTop = $("chat-messages").scrollHeight;
+}
+
+async function sendChat() {
+  const input = $("chat-text");
+  const msg = input.value.trim();
+  if (!msg) return;
+  if (!state.output && state.inputs.length === 0) { toast("입력 또는 출력 파일을 먼저 업로드하세요", "error"); return; }
+  input.value = "";
+  addMessage("user", msg);
+  const loading = addMessage("assistant", "", {});
+  const aiName = settings.provider === "openai-compat" ? "로컬 LLM" : "Claude";
+  loading.innerHTML = `<span class="loader"></span> ${aiName}에게 전송 중...`;
+  $("chat-send").disabled = true;
+  try {
+    const reply = await callLLM(msg);
+    loading.remove();
+    addAssistantReply(reply);
+  } catch (err) {
+    loading.innerHTML = "❌ " + escapeHtml(err.message);
+    loading.classList.remove("assistant");
+    loading.classList.add("system");
+  } finally {
+    $("chat-send").disabled = false;
+  }
+}
+
+$("chat-send").onclick = sendChat;
+$("chat-text").addEventListener("keydown", e => {
+  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendChat(); }
+});
+
+/* ===================================================================
+   LOGIC PIPELINE
+   =================================================================== */
+function applyLogic(step) {
+  // Try run once to validate and preview
+  try {
+    runPipeline([...state.pipeline, step]);
+    state.pipeline.push(step);
+    renderPipeline();
+    refreshRunButton();
+    toast(`"${step.description}" 단계가 추가되었습니다`, "success");
+  } catch (err) {
+    toast("코드 실행 오류: " + err.message, "error");
+    console.error(err);
+  }
+}
+
+function runPipeline(steps) {
+  steps = steps || state.pipeline;
+  if (!state.outputOriginal && state.inputsOriginal.length === 0) {
+    throw new Error("실행할 입력 또는 출력 파일이 없습니다");
+  }
+
+  state.inputs = state.inputsOriginal.map(orig => {
+    const cloned = cloneFileRecord(orig);
+    cloned.originalBuffer = orig.originalBuffer || null;
+    return cloned;
+  });
+
+  if (state.outputOriginal) {
+    const buf = state.outputOriginal.originalBuffer;
+    state.output = deepClone({ ...state.outputOriginal, originalBuffer: null });
+    state.output.originalBuffer = buf;
+  } else {
+    state.output = null;
+  }
+
+  const inputsMap = {};
+  state.inputs.forEach(f => { inputsMap[f.name] = f.sheets; });
+  const outputSheets = state.output ? state.output.sheets : {};
+
+  steps.forEach((step) => {
+    const fn = new Function("inputs", "output", step.code + "\nreturn typeof transform === 'function' ? transform(inputs, output) : { inputs, output };");
+    const result = fn(inputsMap, outputSheets);
+    if (result && typeof result === "object" && !Array.isArray(result)) {
+      if (result.inputs && typeof result.inputs === "object") {
+        Object.keys(result.inputs).forEach(name => { inputsMap[name] = result.inputs[name]; });
+      }
+      if (state.output && result.output && typeof result.output === "object") {
+        Object.keys(result.output).forEach(k => { state.output.sheets[k] = result.output[k]; });
+      } else if (state.output && !result.inputs) {
+        Object.keys(result).forEach(k => { state.output.sheets[k] = result[k]; });
+      }
+    }
+  });
+
+  state.inputs.forEach(file => {
+    file.sheets = inputsMap[file.name] || {};
+    syncFileMetadata(file);
+  });
+
+  if (state.output) syncFileMetadata(state.output);
+
+  // 적용 후에도 사용자가 보고 있던 시뮬레이터 화면을 유지한다.
+  const currentFile = getFile(state.currentFileId);
+  if (!currentFile) {
+    if (state.output) {
+      state.currentFileId = "output";
+      state.currentSheet = state.output.sheetNames[0] || null;
+    } else if (state.inputs[0]) {
+      state.currentFileId = "input:" + state.inputs[0].name;
+      state.currentSheet = state.inputs[0].sheetNames[0] || null;
+    } else {
+      state.currentFileId = null;
+      state.currentSheet = null;
+    }
+  } else if (state.currentSheet && !currentFile.sheetNames.includes(state.currentSheet)) {
+    state.currentSheet = currentFile.sheetNames[0] || null;
+  } else if (!state.currentSheet) {
+    state.currentSheet = currentFile.sheetNames[0] || null;
+  }
+
+  renderInputList();
+  renderOutputChip();
+  refreshTabs();
+  renderExcelViewer();
+  flashFilled();
+}
+
+function flashFilled() {
+  const currentFile = getFile(state.currentFileId);
+  if (!currentFile || !state.currentSheet) return;
+  let original = null;
+  if (state.currentFileId === "output") {
+    original = state.outputOriginal;
+  } else if (state.currentFileId && state.currentFileId.startsWith("input:")) {
+    const name = state.currentFileId.slice(6);
+    original = state.inputsOriginal.find(f => f.name === name) || null;
+  }
+  if (!original) return;
+  const cur = currentFile.sheets[state.currentSheet] || [];
+  const orig = original.sheets[state.currentSheet] || [];
+  setTimeout(() => {
+    ["excel-viewer", "runner-excel-viewer"].forEach(id => {
+      const root = $(id);
+      if (!root) return;
+      root.querySelectorAll("td[data-r]").forEach(td => {
+        const r = Number(td.dataset.r);
+        const c = Number(td.dataset.c);
+        const o = orig[r] && orig[r][c];
+        const n = cur[r] && cur[r][c];
+        if (String(o || "") !== String(n || "")) {
+          td.classList.add("flash");
+        }
+      });
+    });
+  }, 50);
+}
+
+function renderPipeline() {
+  const list = $("pipeline-list");
+  $("pipe-count").textContent = state.pipeline.length + " 단계";
+  if (state.pipeline.length === 0) {
+    list.innerHTML = `<div class="pipeline-empty">아직 단계가 없습니다. AI가 생성한 코드를 "적용"하면 추가됩니다.</div>`;
+    renderRunnerWorkflow();
+    return;
+  }
+  list.innerHTML = "";
+  state.pipeline.forEach((step, idx) => {
+    const item = document.createElement("div");
+    item.className = "pipeline-item";
+    item.innerHTML = `
+      <div class="step-n">${idx+1}</div>
+      <div class="step-label" title="${escapeHtml(step.description)}">${escapeHtml(step.description)}</div>
+      <button class="step-del" title="삭제">✕</button>
+    `;
+    item.querySelector(".step-del").onclick = () => {
+      state.pipeline.splice(idx, 1);
+      try { runPipeline(); } catch {}
+      renderPipeline();
+      refreshRunButton();
+    };
+    list.appendChild(item);
+  });
+  renderRunnerWorkflow();
+}
+
+function refreshRunButton() {
+  const hasAnyFile = !!state.output || state.inputs.length > 0;
+  const hasOutput = !!state.output;
+  const hasSteps = state.pipeline.length > 0;
+  $("btn-run").disabled = !(hasAnyFile && hasSteps);
+  $("btn-save").disabled = !hasSteps;
+  $("btn-download").disabled = !hasOutput;
+  renderRunnerWorkflow();
+}
+
+$("btn-run").onclick = () => {
+  try {
+    runPipeline();
+    toast(`${state.pipeline.length}개 단계 실행 완료`, "success");
+  } catch (err) {
+    toast("실행 오류: " + err.message, "error");
+  }
+};
+$("runner-run-btn").onclick = () => {
+  if ($("runner-run-btn").disabled) return;
+  if (window.runnerSetRunning) window.runnerSetRunning(true);
+  // Give the UI a tick to paint the ring, then execute
+  setTimeout(() => {
+    try {
+      runPipeline();
+      toast(`${state.pipeline.length}개 단계 실행 완료`, "success");
+      if (window.runnerSetDone) window.runnerSetDone();
+    } catch (err) {
+      toast("실행 오류: " + err.message, "error");
+      if (window.runnerSetRunning) window.runnerSetRunning(false);
+    }
+  }, 650);
+};
+$("runner-download-btn").onclick = () => openDownloadModal();
+$("runner-load-btn").onclick = () => openLoadDialog();
+$("runner-open-generator").onclick = () => setPage("generator");
+
+setupDrop($("drop-logic"), $("logic-files"), async (files) => {
+  try {
+    await loadLogicFiles(files);
+  } catch (err) {
+    toast("불러오기 실패: " + err.message, "error");
+    console.error(err);
+  }
+});
+
+/* ===================================================================
+   출력 템플릿 다운로드 (원본 양식 보존)
+   =================================================================== */
+$("btn-download").onclick = () => openDownloadModal();
+
+function openDownloadModal() {
+  if (!state.output) { toast("출력 템플릿이 없습니다", "error"); return; }
+  const baseName = state.output.name.replace(/\.(xlsx|xls)$/i, "");
+  const today = new Date().toISOString().slice(0, 10);
+  const defaultName = `${baseName}_결과_${today}`;
+  const modal = $("modal");
+  modal.innerHTML = `
+    <h3>출력 템플릿 다운로드 (.xlsx)</h3>
+    <p style="font-size:12px; color:#666; margin-bottom:10px">
+      파이프라인 ${state.pipeline.length}단계가 적용된 결과를 다운로드합니다.<br/>
+      원본 파일의 서식·병합셀·열너비 등 양식이 그대로 유지됩니다.
+    </p>
+    <input type="text" id="dl-name" value="${escapeHtml(defaultName)}" placeholder="파일명 (확장자 제외)" />
+    <div class="row">
+      <button class="btn-secondary" id="modal-cancel">취소</button>
+      <button class="btn-primary" id="modal-dl" style="background:#217346">📥 다운로드</button>
+    </div>
+  `;
+  $("modal-bg").classList.add("show");
+  setTimeout(() => $("dl-name").select(), 50);
+  $("modal-cancel").onclick = () => $("modal-bg").classList.remove("show");
+  $("modal-dl").onclick = () => {
+    const name = $("dl-name").value.trim();
+    if (!name) { toast("파일명을 입력하세요", "error"); return; }
+    try {
+      exportOutputXlsx(name + ".xlsx");
+      $("modal-bg").classList.remove("show");
+      toast(`"${name}.xlsx" 다운로드 시작`, "success");
+    } catch (err) {
+      toast("다운로드 오류: " + err.message, "error");
+      console.error(err);
+    }
+  };
+}
+
+function exportOutputXlsx(filename) {
+  if (!state.output || !state.output.originalBuffer) {
+    throw new Error("원본 버퍼가 없습니다");
+  }
+  // 원본 xlsx 를 새로 파싱 (스타일·병합·열너비 포함)
+  const freshBuf = state.output.originalBuffer.slice(0);
+  const wb = XLSX.read(freshBuf, {
+    type: "array",
+    cellDates: true,
+    cellStyles: true,
+    cellNF: true,
+  });
+
+  // 기존 시트: 셀 값만 in-place 업데이트 (스타일·수식 보존)
+  Object.keys(state.output.sheets).forEach(sheetName => {
+    const aoa = state.output.sheets[sheetName];
+    const origAoa = state.outputOriginal && state.outputOriginal.sheets
+      ? state.outputOriginal.sheets[sheetName]
+      : null;
+    if (wb.Sheets[sheetName]) {
+      updateSheetCells(wb.Sheets[sheetName], aoa, origAoa);
+    } else {
+      // 파이프라인이 새로 만든 시트 (피벗 등)
+      const ws = XLSX.utils.aoa_to_sheet(aoa);
+      XLSX.utils.book_append_sheet(wb, ws, sheetName);
+    }
+  });
+
+  XLSX.writeFile(wb, filename);
+}
+
+function updateSheetCells(ws, aoa, origAoa) {
+  const maxRows = Math.max(
+    aoa.length,
+    origAoa ? origAoa.length : 0
+  );
+  const maxCols = Math.max(
+    aoa.reduce((m, r) => Math.max(m, r ? r.length : 0), 0),
+    origAoa ? origAoa.reduce((m, r) => Math.max(m, r ? r.length : 0), 0) : 0
+  );
+
+  // 원본 값과 동일한지 비교 (문자/숫자/Date 모두 안정 비교)
+  const sameVal = (a, b) => {
+    const ea = (a === undefined || a === null) ? "" : a;
+    const eb = (b === undefined || b === null) ? "" : b;
+    if (ea === eb) return true;
+    if (ea instanceof Date && eb instanceof Date) return ea.getTime() === eb.getTime();
+    if (typeof ea === "number" && typeof eb === "number") return ea === eb;
+    return String(ea) === String(eb);
+  };
+
+  for (let r = 0; r < maxRows; r++) {
+    for (let c = 0; c < maxCols; c++) {
+      const addr = XLSX.utils.encode_cell({ r, c });
+      const newVal = (aoa[r] && aoa[r][c] !== undefined) ? aoa[r][c] : "";
+      const oldVal = (origAoa && origAoa[r] && origAoa[r][c] !== undefined) ? origAoa[r][c] : "";
+      const existing = ws[addr];
+
+      // ★ 값이 원본과 동일하면 셀 자체를 건드리지 않음
+      //    → 기존 수식(.f), 스타일(.s), 숫자서식(.z) 모두 보존
+      if (sameVal(newVal, oldVal)) continue;
+
+      // 빈 값으로 변경
+      if (newVal === "" || newVal === null || newVal === undefined) {
+        if (existing) {
+          existing.t = "z";
+          delete existing.v;
+          delete existing.w;
+          delete existing.f;  // 값을 비웠으므로 수식도 제거 (의도적 clear)
+          delete existing.h;
+          delete existing.r;
+        }
+        continue;
+      }
+
+      // 타입 결정 (AI가 문자열 형태 숫자를 반환해도 숫자로 저장)
+      let t, v;
+      if (typeof newVal === "number" && !isNaN(newVal)) {
+        t = "n"; v = newVal;
+      } else if (typeof newVal === "boolean") {
+        t = "b"; v = newVal;
+      } else if (newVal instanceof Date) {
+        t = "d"; v = newVal;
+      } else {
+        const str = String(newVal);
+        const trimmed = str.trim();
+        if (trimmed !== "" && /^-?\d+(\.\d+)?$/.test(trimmed)) {
+          t = "n"; v = Number(trimmed);
+        } else {
+          t = "s"; v = str;
+        }
+      }
+
+      if (existing) {
+        // 값이 바뀐 셀: 스타일(.s), 숫자서식(.z) 은 유지, 값/타입 교체
+        existing.v = v;
+        existing.t = t;
+        delete existing.w; // 캐시된 표시값 (재생성)
+        delete existing.f; // 수식은 이제 고정값으로 대체
+        delete existing.h;
+        delete existing.r;
+      } else {
+        ws[addr] = { v, t };
+      }
+    }
+  }
+
+  // 시트 범위 확장 (새로 추가된 셀 포함)
+  const newEndR = Math.max(maxRows - 1, 0);
+  const newEndC = Math.max(maxCols - 1, 0);
+  if (ws["!ref"]) {
+    const exist = XLSX.utils.decode_range(ws["!ref"]);
+    ws["!ref"] = XLSX.utils.encode_range({
+      s: exist.s,
+      e: { r: Math.max(exist.e.r, newEndR), c: Math.max(exist.e.c, newEndC) },
+    });
+  } else {
+    ws["!ref"] = XLSX.utils.encode_range({
+      s: { r: 0, c: 0 },
+      e: { r: newEndR, c: newEndC },
+    });
+  }
+}
+
+/* ===================================================================
+   SAVE / LOAD
+   =================================================================== */
+$("btn-save").onclick = () => {
+  openSaveModal();
+};
+$("btn-load").onclick = () => {
+  openLoadDialog();
+};
+$("btn-reset").onclick = () => {
+  if (!confirm("현재 화면 상태를 초기화할까요? (다운로드한 .logic.json 파일은 영향 없음)")) return;
+  state.inputs = [];
+  state.inputsOriginal = [];
+  state.output = null;
+  state.outputOriginal = null;
+  state.pipeline = [];
+  state.chatHistory = [];
+  state.currentFileId = null;
+  state.currentSheet = null;
+  $("chat-messages").innerHTML = `<div class="msg system">입력 또는 출력 파일 업로드 후 활성화됩니다.</div>`;
+  renderInputList();
+  renderOutputChip();
+  renderPipeline();
+  refreshTabs();
+  refreshChatState();
+  renderExcelViewer();
+  refreshRunButton();
+};
+
+function openSaveModal() {
+  if (state.pipeline.length === 0) { toast("저장할 단계가 없습니다", "error"); return; }
+  const modal = $("modal");
+  const defaultName = "logic_" + new Date().toISOString().slice(0,16).replace(/[T:]/g,"-");
+  modal.innerHTML = `
+    <h3>로직 저장 (ZIP 다운로드)</h3>
+    <p style="font-size:12px; color:#666; margin-bottom:10px">
+      아래 파일들을 ZIP 하나로 묶어 다운로드합니다:
+    </p>
+    <ul style="font-size:12px; color:#444; margin:0 0 10px 18px; line-height:1.7">
+      <li><b>{이름}.logic.json</b> — 파이프라인 매니페스트 + 채팅 히스토리 (${state.chatHistory.length}개 메시지)</li>
+      <li><b>{이름}_step_1.js ~ step_${state.pipeline.length}.js</b> — 각 단계별 실행 코드 파일</li>
+    </ul>
+    <p style="font-size:11.5px; color:#888; margin-bottom:10px">
+      .js 파일은 VSCode 등 외부 에디터에서 직접 수정 가능합니다. 불러오기 시 JSON 과 함께 선택하면 수정된 코드가 반영됩니다.
+    </p>
+    <input type="text" id="save-name" placeholder="파일 이름 (확장자 제외)" value="${defaultName}" />
+    <div class="row">
+      <button class="btn-secondary" id="modal-cancel">취소</button>
+      <button class="btn-primary" id="modal-save">💾 ZIP 다운로드</button>
+    </div>
+  `;
+  $("modal-bg").classList.add("show");
+  setTimeout(() => $("save-name").select(), 50);
+  $("modal-cancel").onclick = () => $("modal-bg").classList.remove("show");
+  $("modal-save").onclick = () => {
+    const name = $("save-name").value.trim();
+    if (!name) return;
+
+    // 각 단계를 개별 .js 파일로 저장하고, 매니페스트에서 파일명 참조
+    const safeBase = name.replace(/[^\w가-힣\-]/g, "_");
+    const stepFiles = state.pipeline.map((s, idx) =>
+      `${safeBase}_step_${idx + 1}.js`);
+
+    const manifest = {
+      version: 3,
+      type: "mvno-logic",
+      name,
+      createdAt: new Date().toISOString(),
+      stepCount: state.pipeline.length,
+      pipeline: state.pipeline.map((s, idx) => ({
+        id: s.id,
+        description: s.description,
+        stepFile: stepFiles[idx],
+        code: s.code, // .js 파일이 누락되어도 동작하도록 임베딩 fallback 유지
+      })),
+      chatHistory: state.chatHistory, // 복원 시 대화 내용도 표시되도록 함께 저장
+    };
+
+    const zipEntries = [{
+      name: name + ".logic.json",
+      text: JSON.stringify(manifest, null, 2),
+      mime: "application/json",
+    }];
+
+    state.pipeline.forEach((step, idx) => {
+      const header =
+        `// ${name}\n` +
+        `// Step ${idx + 1}: ${step.description}\n` +
+        `// 생성: ${new Date().toISOString()}\n` +
+        `// ──────────────────────────────────────────────────────────\n` +
+        `// 이 파일은 자동 생성되었습니다. 직접 수정 후 저장한 뒤\n` +
+        `// "로직 불러오기" 에서 .logic.json 과 함께 선택하면 반영됩니다.\n` +
+        `// 함수 시그니처: function transform(inputs, output) { ... return { inputs, output }; }\n` +
+        `// ──────────────────────────────────────────────────────────\n\n`;
+      zipEntries.push({
+        name: stepFiles[idx],
+        text: header + step.code,
+        mime: "text/javascript",
+      });
+    });
+
+    downloadZip(zipEntries, name + ".zip");
+    $("modal-bg").classList.remove("show");
+    toast(`"${name}.zip" 다운로드 시작`, "success");
+  };
+}
+
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename.replace(/[^\w가-힣\.\-\s]/g, "_");
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function downloadText(text, filename, mime) {
+  const blob = new Blob([text], { type: mime || "text/plain" });
+  downloadBlob(blob, filename);
+}
+
+function downloadJSON(obj, filename) {
+  const blob = new Blob([JSON.stringify(obj, null, 2)], { type: "application/json" });
+  downloadBlob(blob, filename);
+}
+
+const ZIP_CRC_TABLE = (() => {
+  const table = new Uint32Array(256);
+  for (let i = 0; i < 256; i++) {
+    let c = i;
+    for (let j = 0; j < 8; j++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+    table[i] = c >>> 0;
+  }
+  return table;
+})();
+
+function crc32(bytes) {
+  let crc = 0xFFFFFFFF;
+  for (let i = 0; i < bytes.length; i++) {
+    crc = ZIP_CRC_TABLE[(crc ^ bytes[i]) & 0xFF] ^ (crc >>> 8);
+  }
+  return (crc ^ 0xFFFFFFFF) >>> 0;
+}
+
+function downloadZip(entries, filename) {
+  const encoder = new TextEncoder();
+  const localParts = [];
+  const centralParts = [];
+  let offset = 0;
+
+  entries.forEach(entry => {
+    const nameBytes = encoder.encode(entry.name);
+    const dataBytes = typeof entry.text === "string" ? encoder.encode(entry.text) : new Uint8Array(entry.bytes || []);
+    const crc = crc32(dataBytes);
+
+    const localHeader = new Uint8Array(30 + nameBytes.length);
+    const localView = new DataView(localHeader.buffer);
+    localView.setUint32(0, 0x04034b50, true);
+    localView.setUint16(4, 20, true);
+    localView.setUint16(6, 0, true);
+    localView.setUint16(8, 0, true);
+    localView.setUint16(10, 0, true);
+    localView.setUint16(12, 0, true);
+    localView.setUint32(14, crc, true);
+    localView.setUint32(18, dataBytes.length, true);
+    localView.setUint32(22, dataBytes.length, true);
+    localView.setUint16(26, nameBytes.length, true);
+    localView.setUint16(28, 0, true);
+    localHeader.set(nameBytes, 30);
+    localParts.push(localHeader, dataBytes);
+
+    const centralHeader = new Uint8Array(46 + nameBytes.length);
+    const centralView = new DataView(centralHeader.buffer);
+    centralView.setUint32(0, 0x02014b50, true);
+    centralView.setUint16(4, 20, true);
+    centralView.setUint16(6, 20, true);
+    centralView.setUint16(8, 0, true);
+    centralView.setUint16(10, 0, true);
+    centralView.setUint16(12, 0, true);
+    centralView.setUint16(14, 0, true);
+    centralView.setUint32(16, crc, true);
+    centralView.setUint32(20, dataBytes.length, true);
+    centralView.setUint32(24, dataBytes.length, true);
+    centralView.setUint16(28, nameBytes.length, true);
+    centralView.setUint16(30, 0, true);
+    centralView.setUint16(32, 0, true);
+    centralView.setUint16(34, 0, true);
+    centralView.setUint16(36, 0, true);
+    centralView.setUint32(38, entry.mime === "application/json" ? 0x20 : 0, true);
+    centralView.setUint32(42, offset, true);
+    centralHeader.set(nameBytes, 46);
+    centralParts.push(centralHeader);
+
+    offset += localHeader.length + dataBytes.length;
+  });
+
+  const centralSize = centralParts.reduce((sum, part) => sum + part.length, 0);
+  const endHeader = new Uint8Array(22);
+  const endView = new DataView(endHeader.buffer);
+  endView.setUint32(0, 0x06054b50, true);
+  endView.setUint16(4, 0, true);
+  endView.setUint16(6, 0, true);
+  endView.setUint16(8, entries.length, true);
+  endView.setUint16(10, entries.length, true);
+  endView.setUint32(12, centralSize, true);
+  endView.setUint32(16, offset, true);
+  endView.setUint16(20, 0, true);
+
+  const blob = new Blob([...localParts, ...centralParts, endHeader], { type: "application/zip" });
+  downloadBlob(blob, filename);
+}
+
+async function normalizeLoadedFiles(files) {
+  const normalized = [];
+  for (const file of files) {
+    if (file.name.toLowerCase().endsWith(".zip")) {
+      const extracted = await readStoredZip(file);
+      normalized.push(...extracted);
+    } else {
+      normalized.push(file);
+    }
+  }
+  return normalized;
+}
+
+async function readStoredZip(file) {
+  const buf = await file.arrayBuffer();
+  const bytes = new Uint8Array(buf);
+  const decoder = new TextDecoder();
+  const files = [];
+  let offset = 0;
+
+  while (offset + 30 <= bytes.length) {
+    const view = new DataView(bytes.buffer, bytes.byteOffset + offset);
+    const sig = view.getUint32(0, true);
+    if (sig === 0x02014b50 || sig === 0x06054b50) break;
+    if (sig !== 0x04034b50) throw new Error("지원하지 않는 ZIP 형식입니다");
+    const compression = view.getUint16(8, true);
+    if (compression !== 0) throw new Error("압축된 ZIP은 아직 불러올 수 없습니다");
+    const compressedSize = view.getUint32(18, true);
+    const nameLen = view.getUint16(26, true);
+    const extraLen = view.getUint16(28, true);
+    const nameStart = offset + 30;
+    const dataStart = nameStart + nameLen + extraLen;
+    const name = decoder.decode(bytes.slice(nameStart, nameStart + nameLen));
+    const data = bytes.slice(dataStart, dataStart + compressedSize);
+    files.push(new File([data], name));
+    offset = dataStart + compressedSize;
+  }
+  return files;
+}
+
+async function loadLogicFiles(files) {
+  if (files.length === 0) return;
+  files = await normalizeLoadedFiles(files);
+  // 매니페스트 JSON 찾기
+  const jsonFiles = files.filter(f => f.name.toLowerCase().endsWith(".json"));
+  if (jsonFiles.length === 0) {
+    throw new Error(".logic.json 매니페스트 파일을 포함해서 선택해주세요");
+  }
+  if (jsonFiles.length > 1) {
+    throw new Error("매니페스트 JSON 파일은 1개만 선택하세요");
+  }
+  const text = await jsonFiles[0].text();
+  const data = JSON.parse(text);
+  if (!data || !Array.isArray(data.pipeline)) {
+    throw new Error("유효한 로직 파일이 아닙니다 (pipeline 필드 없음)");
+  }
+
+  const stepFiles = files.filter(f => /\.(js|py)$/i.test(f.name));
+  const stepContents = {};
+  for (const sf of stepFiles) {
+    stepContents[sf.name] = await sf.text();
+  }
+
+  let externallyLoaded = 0;
+  const resolvedPipeline = data.pipeline.map((s, idx) => {
+    let code = s.code || "";
+    const expected = s.stepFile || "";
+    if (expected && stepContents[expected]) {
+      code = stepContents[expected];
+      externallyLoaded++;
+    } else {
+      const fallback = stepFiles[idx];
+      if (fallback && !s.code) {
+        code = stepContents[fallback.name];
+        externallyLoaded++;
+      }
+    }
+    return {
+      id: s.id || uid(),
+      description: s.description || `Step ${idx + 1}`,
+      code,
+    };
+  });
+
+  loadLogic({ ...data, pipeline: resolvedPipeline }, jsonFiles[0].name, {
+    externallyLoaded,
+    totalSteps: resolvedPipeline.length,
+    jsCount: stepFiles.length,
+  });
+}
+
+function openLoadDialog() {
+  const input = document.createElement("input");
+  input.type = "file";
+  input.accept = ".zip,.json,application/json,.js,.py,text/javascript";
+  input.multiple = true;
+  input.onchange = async (e) => {
+    const files = Array.from(e.target.files || []);
+    try {
+      await loadLogicFiles(files);
+    } catch (err) {
+      toast("불러오기 실패: " + err.message, "error");
+      console.error(err);
+    }
+  };
+  input.click();
+}
+
+function loadLogic(data, filename, meta) {
+  // 파이프라인 복원. 자동 실행 X (사용자가 "전체 실행" 을 눌러야 적용됨).
+  state.pipeline = deepClone(data.pipeline || []);
+  // 채팅 히스토리도 함께 복원 (있으면)
+  state.chatHistory = Array.isArray(data.chatHistory) ? deepClone(data.chatHistory) : [];
+  renderPipeline();
+  renderChatFromHistory();
+  refreshChatState();
+  refreshRunButton();
+  const label = data.name || filename;
+  const n = state.pipeline.length;
+  const extInfo = meta && meta.externallyLoaded > 0
+    ? ` (외부 .js 파일 ${meta.externallyLoaded}/${n}개 반영)`
+    : " (매니페스트 임베딩 코드 사용)";
+  const chatInfo = state.chatHistory.length > 0
+    ? `, 대화 ${state.chatHistory.length}개 복원`
+    : "";
+  toast(`"${label}" ${n}단계 로드됨${extInfo}${chatInfo}. 입력/출력 업로드 후 "전체 실행" 을 눌러 적용하세요.`, "success");
+}
+
+function renderChatFromHistory() {
+  const container = $("chat-messages");
+  container.innerHTML = "";
+  if (state.chatHistory.length === 0) {
+    const text = state.output
+      ? `출력 템플릿 "${state.output.name}" 이 로드되었습니다. 로직을 만들어보세요.`
+      : (state.inputs.length > 0 ? `입력 파일 ${state.inputs.length}개가 로드되었습니다. 로직을 만들어보세요.` : "입력 또는 출력 파일 업로드 후 활성화됩니다.");
+    addMessage("system", text);
+    return;
+  }
+  addMessage("system", `저장된 대화 ${state.chatHistory.length}개 복원 · 이어서 질문 가능`);
+  state.chatHistory.forEach(msg => {
+    if (msg.role === "user") {
+      addMessage("user", msg.content);
+    } else if (msg.role === "assistant") {
+      addHistoricAssistant(msg.content);
+    }
+  });
+}
+
+function addHistoricAssistant(fullText) {
+  const code = extractCode(fullText);
+  const stripped = fullText.replace(/```[\s\S]*?```/g, "").trim();
+  const div = document.createElement("div");
+  div.className = "msg assistant";
+  div.innerHTML = `<div>${escapeHtml(stripped)}</div>`;
+  if (code) {
+    const codeBlk = document.createElement("pre");
+    codeBlk.className = "code-block";
+    codeBlk.textContent = code;
+    div.appendChild(codeBlk);
+    const badge = document.createElement("div");
+    badge.style.cssText = "margin-top:6px; font-size:11px; color:#28a745; font-weight:bold;";
+    badge.textContent = "✓ 이미 적용된 단계";
+    div.appendChild(badge);
+  }
+  $("chat-messages").appendChild(div);
+  $("chat-messages").scrollTop = $("chat-messages").scrollHeight;
+}
+
+/* Close modal on backdrop click */
+$("modal-bg").addEventListener("click", e => {
+  if (e.target === $("modal-bg")) $("modal-bg").classList.remove("show");
+});
+
+/* ===================================================================
+   페이지 / 메뉴 / 접기
+   =================================================================== */
+function setPage(page) {
+  state.currentPage = page;
+  document.querySelectorAll(".page-panel").forEach(el => {
+    el.classList.toggle("active", el.id === `page-${page}`);
+  });
+  document.querySelectorAll(".right-page").forEach(el => {
+    el.classList.toggle("active", el.id === `right-${page}`);
+  });
+  document.querySelectorAll(".menu-item").forEach(el => {
+    el.classList.toggle("active", el.dataset.page === page);
+  });
+  $("page-title").textContent = page === "runner" ? "로직 실행기" : "B2B 빌링 Agent";
+  closeMenu();
+  refreshTabs();
+  renderExcelViewer();
+  renderRunnerWorkflow();
+}
+
+function openMenu() {
+  $("menu-drawer").classList.add("open");
+  $("menu-scrim").classList.add("show");
+}
+
+function closeMenu() {
+  $("menu-drawer").classList.remove("open");
+  $("menu-scrim").classList.remove("show");
+}
+
+$("btn-menu").onclick = openMenu;
+$("menu-close").onclick = closeMenu;
+$("menu-scrim").onclick = closeMenu;
+document.querySelectorAll(".menu-item").forEach(item => {
+  item.onclick = () => setPage(item.dataset.page);
+});
+
+document.addEventListener("click", e => {
+  const head = e.target.closest(".panel-head");
+  if (!head) return;
+  const section = document.getElementById(head.dataset.target);
+  if (section) section.classList.toggle("collapsed");
+});
+
+/* ===================================================================
+   세로 구분선 드래그로 좌우 너비 조절
+   =================================================================== */
+(function setupResizer() {
+  const resizer = $("resizer");
+  const leftEl = document.querySelector(".left");
+  const app = document.querySelector(".app");
+  if (!resizer || !leftEl || !app) return;
+  let dragging = false;
+
+  const onDown = (clientX, e) => {
+    dragging = true;
+    resizer.classList.add("dragging");
+    document.body.classList.add("resizing");
+    e.preventDefault();
+  };
+  const onMove = (clientX) => {
+    if (!dragging) return;
+    const rect = app.getBoundingClientRect();
+    const MIN_LEFT = 320;
+    const MIN_RIGHT = 360;
+    const raw = clientX - rect.left;
+    const clamped = Math.max(MIN_LEFT, Math.min(rect.width - MIN_RIGHT, raw));
+    leftEl.style.width = clamped + "px";
+    leftEl.style.minWidth = "0"; // CSS 기본 min-width 오버라이드
+    leftEl.style.flex = "0 0 auto";
+  };
+  const onUp = () => {
+    if (!dragging) return;
+    dragging = false;
+    resizer.classList.remove("dragging");
+    document.body.classList.remove("resizing");
+    try {
+      localStorage.setItem("mvno_left_width", leftEl.style.width);
+    } catch {}
+  };
+
+  resizer.addEventListener("mousedown", e => onDown(e.clientX, e));
+  document.addEventListener("mousemove", e => onMove(e.clientX));
+  document.addEventListener("mouseup", onUp);
+
+  // 터치 지원
+  resizer.addEventListener("touchstart", e => {
+    if (e.touches[0]) onDown(e.touches[0].clientX, e);
+  }, { passive: false });
+  document.addEventListener("touchmove", e => {
+    if (dragging && e.touches[0]) { onMove(e.touches[0].clientX); e.preventDefault(); }
+  }, { passive: false });
+  document.addEventListener("touchend", onUp);
+
+  // 더블클릭 시 기본값(42%) 으로 리셋
+  resizer.addEventListener("dblclick", () => {
+    leftEl.style.width = "";
+    leftEl.style.minWidth = "";
+    leftEl.style.flex = "";
+    try { localStorage.removeItem("mvno_left_width"); } catch {}
+  });
+
+  // 이전 세션에서 저장한 너비 복원
+  try {
+    const saved = localStorage.getItem("mvno_left_width");
+    if (saved && window.innerWidth > 1000) {
+      leftEl.style.width = saved;
+      leftEl.style.minWidth = "0";
+      leftEl.style.flex = "0 0 auto";
+    }
+  } catch {}
+})();
+
+/* ===================================================================
+   AI 모델 설정 모달
+   =================================================================== */
+$("btn-settings").onclick = openSettingsModal;
+
+function openSettingsModal() {
+  const modal = $("modal");
+  const p = "openai-compat";
+  modal.innerHTML = `
+    <h3>AI 모델 설정</h3>
+    <div style="font-size:12px; color:#666; margin-bottom:12px">
+      내부망 ixi 모델 엔드포인트를 사용합니다.
+    </div>
+
+    <div id="group-openai">
+      <label style="font-size:11.5px; color:#666">Base URL (exe 로컬 프록시 /v1)</label>
+      <input type="text" id="set-o-url" value="${escapeHtml(DEFAULTS["openai-compat"].baseUrl)}" />
+      <label style="font-size:11.5px; color:#666">API Key</label>
+      <input type="text" id="set-o-key" value="${escapeHtml(DEFAULTS["openai-compat"].apiKey)}" />
+    </div>
+
+    <div class="row" style="margin-top:14px">
+      <button class="btn-secondary" id="btn-test">🔌 연결 테스트</button>
+      <button class="btn-secondary" id="modal-cancel">취소</button>
+      <button class="btn-primary" id="modal-save">저장</button>
+    </div>
+    <div id="test-result" style="margin-top:8px; font-size:11.5px"></div>
+  `;
+  $("modal-bg").classList.add("show");
+
+  // 현재 폼 상태 읽기
+  const readForm = () => {
+    return {
+      provider: "openai-compat",
+      baseUrl: $("set-o-url").value.trim() || DEFAULTS["openai-compat"].baseUrl,
+      apiKey:  $("set-o-key").value.trim() || DEFAULTS["openai-compat"].apiKey,
+      model:   DEFAULTS["openai-compat"].model,
+    };
+  };
+
+  $("btn-test").onclick = async () => {
+    const form = readForm();
+    const res = $("test-result");
+    res.innerHTML = '<span class="loader"></span> 연결 테스트 중...';
+    try {
+      const { resp: r, url } = await fetchOpenAICompat("/models", form.baseUrl.replace(/\/$/, ""), {
+        method: "GET",
+        headers: {
+          "Api-Key": form.apiKey,
+        },
+      });
+      if (!r.ok) throw new Error("HTTP " + r.status + " " + (await r.text()).slice(0,200));
+      const data = await r.json();
+      const count = Array.isArray(data.data) ? data.data.length : 0;
+      res.innerHTML = `<span style="color:#28a745">✓ 연결 성공 · ${count}개 확인 · ${escapeHtml(url.replace(/\/models$/, ""))}</span>`;
+    } catch (err) {
+      res.innerHTML = `<span style="color:#dc3545">✗ 실패: ${escapeHtml(err.message)}</span>`;
+    }
+  };
+
+  $("modal-cancel").onclick = () => $("modal-bg").classList.remove("show");
+  $("modal-save").onclick = () => {
+    settings = readForm();
+    saveSettings();
+    $("modal-bg").classList.remove("show");
+    toast("설정 저장 완료", "success");
+  };
+}
+
+/* ===================================================================
+   세로 구분선 드래그로 좌우 너비 조절
+   =================================================================== */
+(function setupResizer() {
+  const resizer = $("resizer");
+  const leftEl = document.querySelector(".left");
+  const app = document.querySelector(".app");
+  if (!resizer || !leftEl || !app) return;
+  let dragging = false;
+
+  const onDown = (clientX, e) => {
+    dragging = true;
+    resizer.classList.add("dragging");
+    document.body.classList.add("resizing");
+    e.preventDefault();
+  };
+  const onMove = (clientX) => {
+    if (!dragging) return;
+    const rect = app.getBoundingClientRect();
+    const MIN_LEFT = 320;
+    const MIN_RIGHT = 360;
+    const raw = clientX - rect.left;
+    const clamped = Math.max(MIN_LEFT, Math.min(rect.width - MIN_RIGHT, raw));
+    leftEl.style.width = clamped + "px";
+    leftEl.style.minWidth = "0";
+    leftEl.style.flex = "0 0 auto";
+  };
+  const onUp = () => {
+    if (!dragging) return;
+    dragging = false;
+    resizer.classList.remove("dragging");
+    document.body.classList.remove("resizing");
+    try { localStorage.setItem("mvno_left_width", leftEl.style.width); } catch {}
+  };
+
+  resizer.addEventListener("mousedown", e => onDown(e.clientX, e));
+  document.addEventListener("mousemove", e => onMove(e.clientX));
+  document.addEventListener("mouseup", onUp);
+
+  resizer.addEventListener("touchstart", e => {
+    if (e.touches[0]) onDown(e.touches[0].clientX, e);
+  }, { passive: false });
+  document.addEventListener("touchmove", e => {
+    if (dragging && e.touches[0]) { onMove(e.touches[0].clientX); e.preventDefault(); }
+  }, { passive: false });
+  document.addEventListener("touchend", onUp);
+
+  resizer.addEventListener("dblclick", () => {
+    leftEl.style.width = "";
+    leftEl.style.minWidth = "";
+    leftEl.style.flex = "";
+    try { localStorage.removeItem("mvno_left_width"); } catch {}
+  });
+
+  try {
+    const saved = localStorage.getItem("mvno_left_width");
+    if (saved && window.innerWidth > 1000) {
+      leftEl.style.width = saved;
+      leftEl.style.minWidth = "0";
+      leftEl.style.flex = "0 0 auto";
+    }
+  } catch {}
+})();
+
+/* Initial render */
+renderInputList();
+renderOutputChip();
+renderPipeline();
+refreshTabs();
+renderExcelViewer();
+renderRunnerWorkflow();
+refreshChatState();
+setPage(state.currentPage);
+updateModelLabel();
+</script>
+
+
+</body></html>
