@@ -63,7 +63,8 @@ function updateModelLabel() {
     el.textContent = "AI: ixi 모델";
     el.style.color = "#28a745";
   } else {
-    el.textContent = `AI: ${settings.model || "Claude"}`;
+    // Claude 사용 중에도 외부엔 모델 이름을 노출하지 않는다 (F9 설정 모달에선 그대로 보여줌).
+    el.textContent = "AI: LLM";
     el.style.color = "#777";
   }
 }

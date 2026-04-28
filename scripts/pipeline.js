@@ -73,10 +73,15 @@ function computeStateBeforeStep(stepIdx) {
     const step = state.pipeline[i];
     try {
       const fn = new Function("inputs", "output", "col", "findColumnGlobal", "similarity",
+        "insertColumns", "copyColumns", "deleteColumns", "shiftFormulaText",
         step.code +
         "\nreturn typeof transform === 'function' ? transform(inputs, output) : { inputs, output };"
       );
-      const result = fn(proxiedInputs, proxiedOutput, col, findColumnGlobal, similarity);
+      const result = fn(proxiedInputs, proxiedOutput, col, findColumnGlobal, similarity,
+        typeof insertColumns === "function" ? insertColumns : null,
+        typeof copyColumns === "function" ? copyColumns : null,
+        typeof deleteColumns === "function" ? deleteColumns : null,
+        typeof shiftFormulaText === "function" ? shiftFormulaText : null);
       if (result && typeof result === "object" && !Array.isArray(result)) {
         if (result.inputs && typeof result.inputs === "object") {
           Object.keys(result.inputs).forEach(name => { inputsMap[name] = result.inputs[name]; });
@@ -159,6 +164,7 @@ function runPipeline(steps) {
     let fn;
     try {
       fn = new Function("inputs", "output", "col", "findColumnGlobal", "similarity",
+        "insertColumns", "copyColumns", "deleteColumns", "shiftFormulaText",
         step.code +
         "\nreturn typeof transform === 'function' ? transform(inputs, output) : { inputs, output };"
       );
@@ -171,7 +177,12 @@ function runPipeline(steps) {
     }
     let result;
     try {
-      result = fn(proxiedInputs, proxiedOutput, helpers.col, helpers.findColumnGlobal, helpers.similarity);
+      result = fn(proxiedInputs, proxiedOutput,
+        helpers.col, helpers.findColumnGlobal, helpers.similarity,
+        typeof insertColumns === "function" ? insertColumns : null,
+        typeof copyColumns === "function" ? copyColumns : null,
+        typeof deleteColumns === "function" ? deleteColumns : null,
+        typeof shiftFormulaText === "function" ? shiftFormulaText : null);
     } catch (err) {
       state.lastError = {
         stepIdx, description: step.description || `Step ${stepIdx + 1}`,

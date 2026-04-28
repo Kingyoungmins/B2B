@@ -187,7 +187,8 @@ async function sendChat() {
   input.value = "";
   addMessage("user", msg);
   const loading = addMessage("assistant", "", {});
-  const aiName = settings.provider === "openai-compat" ? "로컬 LLM" : "Claude";
+  // 외부 노출 시엔 provider 무관하게 LLM 으로 통일 (사내 모델/Claude 구분은 F9 안에서만)
+  const aiName = settings.provider === "openai-compat" ? "ixi 모델" : "LLM";
   const modeLabel = editTargetId ? "(수정 모드) " : "";
   loading.innerHTML = `<span class="loader"></span> ${modeLabel}${aiName}에게 전송 중...`;
   $("chat-send").disabled = true;

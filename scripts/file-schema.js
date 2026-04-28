@@ -118,6 +118,42 @@ function transform(inputs, output) {
 - \`findColumnGlobal(inputs, "회사명")\` → 모든 inputs 안에서 해당 컬럼이 있는 [{file, sheet, colIdx}] 배열 반환.
 - \`similarity("a", "b")\` → 0~1 유사도 점수.
 
+### 컬럼 시프트 헬퍼 — **반드시 이걸 써야 수식이 보존됨**
+열을 추가/삭제/복사할 때 사용자 코드가 직접 \`aoa[r][c] = ...\` 만 만지면 \`file.formulas\` 의 키와 수식 안 셀 참조가 옛 위치 그대로 남아 수식이 망가진다. 아래 헬퍼를 쓰면 데이터 + merges + 수식 키 + 수식 안 참조 + 서식이 일관되게 이동한다.
+
+- \`insertColumns(target, sheetName, atColIdx, count)\` — Excel "열 삽입" 동작. atColIdx 위치에 빈 컬럼 N개를 끼워넣고, 이후의 모든 셀 참조를 +N 만큼 시프트 (절대 참조 \`$A\` 도 함께 시프트 — Excel 과 동일).
+  - 예: \`insertColumns("output", "회사별청구", 0, 6)\` → A:F 가 G:L 로 밀리고, 그 안의 수식 \`=C4-D4\` 는 자동으로 \`=I4-J4\` 가 된다.
+- \`copyColumns(target, sheetName, srcStart, srcCount, destStart)\` — Excel 복사·붙여넣기. 데이터 + 수식 + 서식을 srcStart 부터 srcCount 개를 destStart 위치로 복사. 수식의 상대 참조만 (destStart - srcStart) 만큼 시프트, 절대 참조(\`$\`)는 보존.
+  - 예: \`copyColumns("output", "회사별청구", 6, 6, 0)\` → G:L 데이터+수식을 A:F 에 복사. \`=I4-J4\` 는 \`=C4-D4\` 로 자동 복원.
+- \`deleteColumns(target, sheetName, atColIdx, count)\` — 컬럼 N개 삭제 + 이후 참조 -N 시프트.
+- \`shiftFormulaText(formulaStr, delta, atColIdx, mode)\` — 저수준. 수식 텍스트만 직접 보정해야 할 때 (mode = "insert" 또는 "copy").
+
+\`target\` 은 \`"output"\` 또는 \`"input:파일명.xlsx"\` 또는 그냥 파일명 문자열.
+
+#### 컬럼 시프트 시나리오 — 권장 패턴
+"앞단에 N 컬럼 추가하고 기존 데이터를 그쪽으로 복사" 같은 요청이 오면 다음 패턴을 쓰세요:
+\`\`\`javascript
+function transform(inputs, output) {
+  // 1. 빈 6컬럼 삽입 — 기존 A:F 가 G:L 로 밀림. 수식도 자동 보정.
+  insertColumns("output", "회사별청구", 0, 6);
+
+  // 2. G:L 의 데이터+수식+서식을 A:F 로 복사. 수식의 상대 참조도 자동 복원.
+  copyColumns("output", "회사별청구", 6, 6, 0);
+
+  // 3. A:F 안의 헤더/제목 텍스트만 "3월" → "4월" 치환
+  const sheet = output["회사별청구"];
+  for (let r = 0; r < Math.min(sheet.length, 10); r++) {
+    if (!sheet[r]) continue;
+    for (let c = 0; c < 6; c++) {
+      if (typeof sheet[r][c] === "string") {
+        sheet[r][c] = sheet[r][c].replace(/3월/g, "4월");
+      }
+    }
+  }
+  return { inputs, output };
+}
+\`\`\`
+
 ## 유연 매칭 (자동)
 inputs / 시트 객체는 Proxy로 감싸져 있어, 키가 약간 달라도 유사도 매칭됩니다.
 예) \`inputs["입력1"]\` 가 실제 이름 "입력1_v3.xlsx" 와 매칭되면 자동으로 그쪽을 가리킵니다.

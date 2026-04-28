@@ -64,31 +64,65 @@ async function parseFile(file) {
   };
 }
 
-// xlsx.js cell style → inline CSS string
+// xlsx.js cell style → inline CSS string.
+//
+// SheetJS 커뮤니티 빌드는 폰트 색을 추출하지 않고 fill(배경) 색만 추출한다.
+// 따라서 어두운 셀에 폰트 색을 명시적으로 못 주면 기본 검정 글씨가 묻힌다.
+// 해결책: 배경의 상대 명도를 보고 자동으로 대비되는 텍스트 색을 부여한다.
+function _hexLuminance(hex) {
+  // hex: 6자리 RRGGBB
+  const r = parseInt(hex.slice(0, 2), 16);
+  const g = parseInt(hex.slice(2, 4), 16);
+  const b = parseInt(hex.slice(4, 6), 16);
+  // 단순 가중 평균 (sRGB 근사)
+  return (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+}
+
 function extractCellStyle(s) {
   if (!s) return null;
   const css = [];
+  let bgHex = null;
+
   // Background color
   const fill = s.fgColor || (s.fill && s.fill.fgColor) || s.patternFill;
   const fgRgb = fill && (fill.rgb || fill.RGB);
   if (fgRgb && typeof fgRgb === "string" && fgRgb.length >= 6) {
     const hex = fgRgb.length === 8 ? fgRgb.slice(2) : fgRgb;
     if (!/^f{6}$/i.test(hex) && !/^0{6}$/i.test(hex)) {
+      bgHex = hex.toLowerCase();
       css.push(`background:#${hex}`);
     } else if (/^f{6}$/i.test(hex)) {
-      // explicit white background — keep so it beats class defaults
+      bgHex = "ffffff";
       css.push(`background:#FFFFFF`);
     }
   }
-  // Font color — s.font.color 가 더 신뢰할 만한 소스. s.color 는 SheetJS 가
-  // 일부 케이스에서 fill 색을 그대로 넣어 텍스트가 배경에 묻히는 버그가 있음.
+
+  // Font color (시도). SheetJS 커뮤니티에선 보통 둘 다 undefined 임.
+  let fontHex = null;
   const fontColor = (s.font && s.font.color) || s.color;
   const fcRgb = fontColor && (fontColor.rgb || fontColor.RGB);
   if (fcRgb && typeof fcRgb === "string" && fcRgb.length >= 6) {
     const hex = fcRgb.length === 8 ? fcRgb.slice(2) : fcRgb;
-    if (!/^0{6}$/i.test(hex)) css.push(`color:#${hex}`);
+    if (!/^0{6}$/i.test(hex)) fontHex = hex.toLowerCase();
   }
-  // Bold
+
+  // 폰트 색이 없거나, fill 과 동일하게 추출돼 묻힐 위험이 있으면 자동 대비 적용.
+  if (bgHex) {
+    const lum = _hexLuminance(bgHex);
+    const isDark = lum < 0.55;
+    if (!fontHex || fontHex === bgHex) {
+      // 어두운 배경이면 흰 글씨, 밝은 배경이면 어두운 글씨로 보정
+      if (isDark) css.push("color:#FFFFFF");
+      // 밝은 배경에선 기본(검정) 글씨로 두면 보임 — 색 추가 안 함
+    } else {
+      // 폰트 색이 따로 있으면 그대로 사용
+      css.push(`color:#${fontHex}`);
+    }
+  } else if (fontHex) {
+    css.push(`color:#${fontHex}`);
+  }
+
+  // Bold / italic
   if (s.font && (s.font.bold || s.bold)) css.push("font-weight:700");
   if (s.font && (s.font.italic || s.italic)) css.push("font-style:italic");
   // Alignment
