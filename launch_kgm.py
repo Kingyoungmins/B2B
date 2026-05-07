@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import os
+import socket
 import sys
 import threading
 import time
@@ -40,8 +41,19 @@ def wait_for_server(url: str, timeout: float = 15.0) -> bool:
     return False
 
 
+def is_port_available(host: str, port: int) -> bool:
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            if hasattr(socket, "SO_EXCLUSIVEADDRUSE"):
+                sock.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+            sock.bind((host, port))
+            return True
+    except OSError:
+        return False
+
+
 class ReusableThreadingTCPServer(socketserver.ThreadingTCPServer):
-    allow_reuse_address = True
+    allow_reuse_address = False
     daemon_threads = True
 
 
@@ -106,6 +118,9 @@ def main() -> int:
         errors = []
         selected_port = None
         for port in candidate_ports():
+            if not is_port_available(SERVER_HOST, port):
+                errors.append(f"{SERVER_HOST}:{port} -> already in use")
+                continue
             try:
                 httpd = start_server(port)
                 selected_port = port
