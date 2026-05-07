@@ -4,8 +4,9 @@
 $("btn-download").onclick = () => openDownloadModal();
 
 function openDownloadModal() {
-  if (!state.output) { toast("출력 템플릿이 없습니다", "error"); return; }
-  const baseName = state.output.name.replace(/\.(xlsx|xls)$/i, "");
+  const target = getDownloadOutputTarget();
+  if (!target.file) { toast("출력 템플릿이 없습니다", "error"); return; }
+  const baseName = target.file.name.replace(/\.(xlsx|xls)$/i, "");
   const today = new Date().toISOString().slice(0, 10);
   const defaultName = `${baseName}_결과_${today}`;
   const modal = $("modal");
@@ -28,7 +29,7 @@ function openDownloadModal() {
     const name = $("dl-name").value.trim();
     if (!name) { toast("파일명을 입력하세요", "error"); return; }
     try {
-      exportOutputXlsx(name + ".xlsx");
+      exportOutputXlsx(name + ".xlsx", target.file, target.original);
       $("modal-bg").classList.remove("show");
       toast(`"${name}.xlsx" 다운로드 시작`, "success");
     } catch (err) {
@@ -38,12 +39,23 @@ function openDownloadModal() {
   };
 }
 
-function exportOutputXlsx(filename) {
-  if (!state.output || !state.output.originalBuffer) {
+function getDownloadOutputTarget() {
+  if (state.currentFileId && state.currentFileId.startsWith("output:")) {
+    const idx = outputTemplateIndexFromFileId(state.currentFileId);
+    const tpl = state.outputTemplates && state.outputTemplates[idx];
+    if (tpl) return { file: tpl.file, original: tpl.original };
+  }
+  return { file: state.output, original: state.outputOriginal };
+}
+
+function exportOutputXlsx(filename, fileArg, originalArg) {
+  const outputFile = fileArg || state.output;
+  const outputOriginal = originalArg || state.outputOriginal;
+  if (!outputFile || !outputFile.originalBuffer) {
     throw new Error("원본 버퍼가 없습니다");
   }
   // 원본 xlsx 를 새로 파싱 (스타일·병합·열너비 포함)
-  const freshBuf = state.output.originalBuffer.slice(0);
+  const freshBuf = outputFile.originalBuffer.slice(0);
   const wb = XLSX.read(freshBuf, {
     type: "array",
     cellDates: true,
@@ -52,10 +64,10 @@ function exportOutputXlsx(filename) {
   });
 
   // 기존 시트: 셀 값만 in-place 업데이트 (스타일·수식 보존)
-  Object.keys(state.output.sheets).forEach(sheetName => {
-    const aoa = state.output.sheets[sheetName];
-    const origAoa = state.outputOriginal && state.outputOriginal.sheets
-      ? state.outputOriginal.sheets[sheetName]
+  Object.keys(outputFile.sheets).forEach(sheetName => {
+    const aoa = outputFile.sheets[sheetName];
+    const origAoa = outputOriginal && outputOriginal.sheets
+      ? outputOriginal.sheets[sheetName]
       : null;
     if (wb.Sheets[sheetName]) {
       updateSheetCells(wb.Sheets[sheetName], aoa, origAoa);
@@ -92,7 +104,8 @@ function updateSheetCells(ws, aoa, origAoa) {
   for (let r = 0; r < maxRows; r++) {
     for (let c = 0; c < maxCols; c++) {
       const addr = XLSX.utils.encode_cell({ r, c });
-      const newVal = (aoa[r] && aoa[r][c] !== undefined) ? aoa[r][c] : "";
+      let newVal = (aoa[r] && aoa[r][c] !== undefined) ? aoa[r][c] : "";
+      newVal = resolveFormulaStringValue(newVal, aoa, r, c);
       const oldVal = (origAoa && origAoa[r] && origAoa[r][c] !== undefined) ? origAoa[r][c] : "";
       const existing = ws[addr];
 
@@ -160,4 +173,13 @@ function updateSheetCells(ws, aoa, origAoa) {
       e: { r: newEndR, c: newEndC },
     });
   }
+}
+
+function resolveFormulaStringValue(value, aoa, r, c) {
+  if (typeof value !== "string") return value;
+  const trimmed = value.trim();
+  if (!trimmed.startsWith("=")) return value;
+  if (typeof evalFormula !== "function") return "";
+  const result = evalFormula(trimmed, aoa, { r, c }, null);
+  return (typeof FORMULA_UNSUPPORTED !== "undefined" && result === FORMULA_UNSUPPORTED) ? "" : result;
 }

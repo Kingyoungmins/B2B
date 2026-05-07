@@ -2,20 +2,25 @@
    STATE
    =================================================================== */
 const state = {
-  inputs: [],       // [{ name, size, sheets, merges, styles, formulas, tables, originalFormulaValues }]
+  inputs: [],
   inputsOriginal: [],
   output: null,
   outputOriginal: null,
-  currentFileId: null,  // "input:NAME" or "output"
+  outputTemplates: [],
+  activeOutputIndex: -1,
+  currentFileId: null,  // "input:NAME", "output", or "output:INDEX"
   currentSheet: null,
-  selectedSheets: [],   // 현재 파일 안에서 다중 선택된 시트(기본=[currentSheet])
+  selectedCell: null,   // { fileId, sheet, r, c }
+  selectedRange: null,  // { fileId, sheet, r1, c1, r2, c2, type }
+  selectedSheets: [],
   pipeline: [],
+  history: { undo: [], redo: [], limit: 80 },
   chatHistory: [],
   currentPage: "generator",
   editingStepId: null,
+  uploadJob: null,
 
-  // ver2.0
-  fuzzyResolution: {},   // { "lookupKey": "actualKey" } 사용자가 한번 선택한 매핑 캐시
-  lastError: null,       // { stepIdx, description, message, stack }
-  formulaResults: {},    // { fileId: { sheetName: { "A1": evaluatedValue } } } 시뮬레이터용
+  fuzzyResolution: {},
+  lastError: null,
+  formulaResults: {},
 };

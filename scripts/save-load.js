@@ -13,6 +13,8 @@ $("btn-reset").onclick = () => {
   state.inputsOriginal = [];
   state.output = null;
   state.outputOriginal = null;
+  state.outputTemplates = [];
+  state.activeOutputIndex = -1;
   state.pipeline = [];
   state.chatHistory = [];
   state.currentFileId = null;

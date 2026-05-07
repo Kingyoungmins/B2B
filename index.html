@@ -79,8 +79,8 @@
           <div class="dropzone output" id="drop-output">
             <span class="ico">📤</span>
             최종 결과 템플릿을 드래그해서 놓거나 클릭
-            <small>.xlsx / .xls · 1개 파일</small>
-            <input type="file" id="output-file" accept=".xlsx,.xls" style="display:none">
+            <small>.xlsx / .xls · 여러 파일 가능</small>
+            <input type="file" id="output-file" accept=".xlsx,.xls" multiple style="display:none">
           </div>
           <div id="output-chip"></div>
         </div>
@@ -121,6 +121,8 @@
 
       <div class="action-row">
         <button class="btn-primary" id="btn-run" disabled="">▶ 전체 실행</button>
+        <button class="btn-secondary" id="btn-undo" disabled title="Undo">Undo</button>
+        <button class="btn-secondary" id="btn-redo" disabled title="Redo">Redo</button>
         <button class="btn-primary" id="btn-download" disabled="" style="background:#217346">📥 출력 xlsx 다운로드</button>
       </div>
       <div class="action-row">
@@ -279,6 +281,12 @@
 <!-- Toast -->
 <div class="toast" id="toast"></div>
 
+<div class="upload-status" id="upload-status" hidden>
+  <div class="upload-spinner"></div>
+  <div class="upload-text" id="upload-status-text">파일 업로드 중...</div>
+  <button type="button" class="btn-secondary" id="upload-cancel">Cancel</button>
+</div>
+
 <!-- Modal -->
 <div class="modal-bg" id="modal-bg">
   <div class="modal" id="modal"></div>
@@ -287,6 +295,7 @@
   <script src="scripts/config.js"></script>
   <script src="scripts/state.js"></script>
   <script src="scripts/util.js"></script>
+  <script src="scripts/history.js"></script>
   <script src="scripts/fuzzy.js"></script>
   <script src="scripts/formula-engine.js"></script>
   <script src="scripts/table-detect.js"></script>
@@ -296,9 +305,10 @@
   <script src="scripts/excel-viewer.js"></script>
   <script src="scripts/search.js"></script>
   <script src="scripts/file-schema.js"></script>
-  <script src="scripts/claude-api.js"></script>
+  <script src="scripts/llm-api.js"></script>
   <script src="scripts/disambiguate.js"></script>
   <script src="scripts/chat-ui.js"></script>
+  <script src="scripts/mentions.js"></script>
   <script src="scripts/pipeline.js"></script>
   <script src="scripts/output-template.js"></script>
   <script src="scripts/save-load.js"></script>

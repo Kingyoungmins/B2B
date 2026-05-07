@@ -1,5 +1,5 @@
 /* ===================================================================
-   CLAUDE API
+   LLM API
    =================================================================== */
 async function callLLM(userMessage, options) {
   state.chatHistory.push({ role: "user", content: userMessage });
@@ -8,19 +8,14 @@ async function callLLM(userMessage, options) {
     ? state.pipeline.findIndex(s => s.id === editTargetId)
     : -1;
 
-  let fullSystem;
-  if (editIdx >= 0) {
-    const editContext = buildEditingContext(editIdx);
-    fullSystem = EDIT_SYSTEM_PROMPT + "\n\n" + editContext;
-  } else {
-    const schema = buildSchemaSummary();
-    fullSystem = SYSTEM_PROMPT + "\n\n## 현재 파일 스키마\n" + schema;
-  }
+  const fullSystem = editIdx >= 0
+    ? EDIT_SYSTEM_PROMPT + "\n\n" + buildEditingContext(editIdx)
+    : SYSTEM_PROMPT + "\n\n## 현재 파일 스키마\n" + buildSchemaSummary();
 
-  if (settings.provider === "openai-compat") {
-    return await callOpenAICompat(fullSystem);
+  if (settings.provider === "anthropic") {
+    return await callAnthropic(fullSystem);
   }
-  return await callAnthropic(fullSystem);
+  return await callOpenAICompat(fullSystem);
 }
 
 async function callAnthropic(system) {
@@ -95,12 +90,12 @@ async function fetchOpenAICompat(path, preferredBase, options = {}) {
       const resp = await fetch(url, options);
       return { resp, url, base };
     } catch (err) {
-      errors.push(`${url} → ${err.message || err}`);
+      errors.push(`${url} -> ${err.message || err}`);
     }
   }
 
   const secureHint = location.protocol === "https:"
-    ? "\n현재 페이지가 HTTPS라서 HTTP vLLM 호출이 브라우저에서 차단될 수 있습니다. KGM을 file:// 또는 http:// 로 여세요."
+    ? "\n현재 페이지가 HTTPS라면 HTTP vLLM 호출이 브라우저에서 차단될 수 있습니다. exe 로컬 프록시 또는 http:// 실행을 사용하세요."
     : "";
   throw new Error("vLLM 서버에 연결할 수 없습니다.\n" + errors.join("\n") + secureHint);
 }
@@ -109,8 +104,8 @@ function extractCode(text) {
   const m = text.match(/```(?:javascript|js)?\s*([\s\S]*?)```/);
   return m ? m[1].trim() : null;
 }
+
 function extractDescription(text) {
-  // remove code blocks, take first line
   const stripped = text.replace(/```[\s\S]*?```/g, "").trim();
   const firstLine = stripped.split("\n").find(l => l.trim()) || "로직 생성";
   return firstLine.trim().slice(0, 100);

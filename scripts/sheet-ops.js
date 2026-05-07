@@ -33,6 +33,10 @@ function _resolveFileForOps(fileRef) {
   if (!fileRef) return null;
   if (typeof fileRef === "object" && fileRef.sheets) return fileRef;
   if (fileRef === "output") return state.output;
+  if (typeof fileRef === "string" && fileRef.startsWith("output:")) {
+    const idx = typeof outputTemplateIndexFromFileId === "function" ? outputTemplateIndexFromFileId(fileRef) : Number(fileRef.slice(7));
+    return (state.outputTemplates[idx] && state.outputTemplates[idx].file) || null;
+  }
   if (typeof fileRef === "string" && fileRef.startsWith("input:")) {
     const name = fileRef.slice(6);
     return state.inputs.find(f => f.name === name);

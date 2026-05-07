@@ -52,7 +52,13 @@ function buildSchemaSummary() {
   }
 
   // 현재 출력 상태 (이전 단계 적용 후)
-  if (state.output) {
+  if (state.outputTemplates && state.outputTemplates.length) {
+    lines.push("\n## 현재 출력 템플릿 목록");
+    state.outputTemplates.forEach((tpl, idx) => {
+      lines.push(`\n#### 출력 템플릿 ${idx + 1}: ${tpl.file.name}`);
+      _describeFile(tpl.file, 30, lines);
+    });
+  } else if (state.output) {
     const label = state.pipeline.length > 0
       ? "## 현재 출력 상태 (위 단계들이 모두 적용된 결과, 수정 가능)"
       : `## 출력 템플릿 (원본, 수정 가능): ${state.output.name}`;
@@ -60,6 +66,10 @@ function buildSchemaSummary() {
     _describeFile(state.output, 30, lines);
   }
 
+  if (state.selectedCell && state.selectedCell.fileId === state.currentFileId && state.selectedCell.sheet) {
+    lines.push(`선택 셀: "${state.selectedCell.sheet}!${_excelCol(state.selectedCell.c)}${state.selectedCell.r + 1}"`);
+    lines.push("사용자가 결과 위치를 직접 클릭한 경우, '여기에', '선택한 셀', '이 셀'은 이 선택 셀을 의미합니다.");
+  }
   return lines.join("\n");
 }
 
@@ -70,7 +80,7 @@ function _buildDefaultTargetHint() {
   const sheets = (state.selectedSheets && state.selectedSheets.length)
     ? state.selectedSheets
     : (state.currentSheet ? [state.currentSheet] : []);
-  const tag = state.currentFileId === "output" ? "[출력]" : "[입력]";
+  const tag = (typeof isOutputFileId === "function" && isOutputFileId(state.currentFileId)) ? "[출력]" : "[입력]";
   const multi = sheets.length > 1;
   const lines = [];
   lines.push(`${tag} 파일: "${file.name}"`);
@@ -117,6 +127,9 @@ function transform(inputs, output) {
 - \`col(sheetAoA, "회사명")\` → 헤더 행에서 컬럼명을 유사도 기반으로 찾아 인덱스 반환. 없으면 -1.
 - \`findColumnGlobal(inputs, "회사명")\` → 모든 inputs 안에서 해당 컬럼이 있는 [{file, sheet, colIdx}] 배열 반환.
 - \`similarity("a", "b")\` → 0~1 유사도 점수.
+- \`normalizeText(value)\` → 문자열 비교용 정규화. 앞뒤 공백, 중간 공백, 대소문자 차이를 제거합니다. 예: \`normalizeText("안전 제일") === normalizeText("안전제일")\`.
+
+문자열을 찾을 때는 \`String(cell).includes("검색어")\`를 바로 쓰지 말고, \`normalizeText(cell).includes(normalizeText("검색어"))\` 패턴을 사용하세요. 사용자가 "안전제일"이라고 말해도 엑셀 값이 "안전 제일"이면 매칭되어야 합니다.
 
 ### 컬럼 시프트 헬퍼 — **반드시 이걸 써야 수식이 보존됨**
 열을 추가/삭제/복사할 때 사용자 코드가 직접 \`aoa[r][c] = ...\` 만 만지면 \`file.formulas\` 의 키와 수식 안 셀 참조가 옛 위치 그대로 남아 수식이 망가진다. 아래 헬퍼를 쓰면 데이터 + merges + 수식 키 + 수식 안 참조 + 서식이 일관되게 이동한다.
@@ -167,7 +180,8 @@ inputs / 시트 객체는 Proxy로 감싸져 있어, 키가 약간 달라도 유
    - 예: \`output["새시트명"] = [[...]]\`
 4. 외부 라이브러리 금지. 순수 JavaScript 만 사용.
 5. 엑셀 셀 값은 문자열일 수 있으니 산술 연산 전에 \`Number(v)\` 로 변환하세요.
-6. 코드 블록 밖에 한국어로 1~2문장의 짧은 설명을 쓰세요.
+6. 문자열 검색/행 찾기에서는 \`String(cell).includes("검색어")\`를 바로 쓰지 말고 \`normalizeText(cell).includes(normalizeText("검색어"))\`를 사용하세요. "안전제일"과 "안전 제일"처럼 공백만 다른 값은 같은 값으로 취급해야 합니다.
+7. 코드 블록 밖에 한국어로 1~2문장의 짧은 설명을 쓰세요.
 
 ## 기본 대상 — **반드시 우선**
 사용자가 명령에 파일/시트를 지정하지 않으면, 위의 "사용자가 현재 보고 있는 탭" 정보를 기본 대상으로 간주합니다.
@@ -218,6 +232,7 @@ function transform(inputs, output) {
 2. 코드 블록 밖에 한국어로 1~2문장의 짧은 설명(무엇을 수정했는지)을 쓰세요.
 3. 외부 라이브러리 금지. 순수 JavaScript 만 사용.
 4. 엑셀 셀 값은 문자열일 수 있으니 산술 연산 전에 \`Number(v)\` 로 변환하세요.
+5. 문자열 검색/행 찾기에서는 \`String(cell).includes("검색어")\`를 바로 쓰지 말고 \`normalizeText(cell).includes(normalizeText("검색어"))\`를 사용하세요. "안전제일"과 "안전 제일"처럼 공백만 다른 값은 같은 값으로 취급해야 합니다.
 
 ## 수식(함수) 보존 규칙 — 매우 중요
 다운로드 시, 값을 바꾸지 않은 셀은 원본 xlsx 의 수식·서식이 그대로 유지됩니다.

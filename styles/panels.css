@@ -354,6 +354,24 @@
   }
   table.excel-sheet td.find-hit { background-color: rgba(255,235,59,0.45) !important; outline: 1px solid rgba(255,193,7,0.7); }
   table.excel-sheet td.find-current { background-color: rgba(255,128,0,0.55) !important; outline: 2px solid #FF6F00; outline-offset: -2px; }
+  table.excel-sheet td[contenteditable="true"] { cursor: cell; }
+  table.excel-sheet td[contenteditable="true"]:focus {
+    outline: 2px solid #217346;
+    outline-offset: -2px;
+    background: #F0FDF4 !important;
+    white-space: pre-wrap;
+    overflow: visible;
+  }
+  table.excel-sheet td.selected-cell {
+    outline: 2px solid #217346;
+    outline-offset: -2px;
+    background: #ECFDF5 !important;
+  }
+  table.excel-sheet td.selected-range {
+    background: #E8F4FF !important;
+    outline: 1px solid rgba(33, 115, 70, 0.35);
+    outline-offset: -1px;
+  }
   .excel-scroll-sentinel { height: 1px; }
   .excel-preview-note {
     font-size: 11px;
@@ -390,3 +408,66 @@
     color: #3730A3;
     font-weight: 700;
   }
+
+  .upload-status {
+    position: fixed;
+    left: 50%;
+    bottom: 22px;
+    transform: translateX(-50%);
+    z-index: 2000;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 320px;
+    padding: 12px 14px;
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: var(--r-sm);
+    box-shadow: var(--shadow-lg);
+    font-size: 12px;
+    color: var(--ink-700);
+  }
+  .upload-status[hidden] { display: none; }
+  .upload-spinner {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    border: 2px solid var(--ink-100);
+    border-top-color: #217346;
+    animation: uploadSpin 0.8s linear infinite;
+  }
+  .upload-text { flex: 1; min-width: 0; }
+  @keyframes uploadSpin { to { transform: rotate(360deg); } }
+
+  .mention-menu {
+    position: fixed;
+    z-index: 1800;
+    width: 280px;
+    max-height: 240px;
+    overflow: auto;
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: var(--r-sm);
+    box-shadow: var(--shadow-lg);
+    padding: 6px;
+  }
+  .mention-item {
+    width: 100%;
+    border: 0;
+    background: transparent;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+    padding: 8px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-family: inherit;
+    text-align: left;
+  }
+  .mention-item:hover,
+  .mention-item.active {
+    background: var(--m-50);
+  }
+  .mention-label { font-size: 12px; color: var(--ink-900); font-weight: 700; }
+  .mention-meta { font-size: 10.5px; color: var(--ink-400); }

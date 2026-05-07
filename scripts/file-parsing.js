@@ -6,19 +6,28 @@ async function parseFile(file) {
   const buf = await file.arrayBuffer();
   const LARGE_FILE_BYTES = 8 * 1024 * 1024;
   const useCellStyles = file.size <= LARGE_FILE_BYTES;
-  const wb = XLSX.read(buf, { type: "array", cellDates: true, cellStyles: useCellStyles });
+  const wb = XLSX.read(buf, {
+    type: "array",
+    cellDates: true,
+    cellStyles: useCellStyles,
+    cellNF: true,
+    cellFormula: true,
+    sheetStubs: true,
+  });
   const sheets = {};
   const merges = {};
   const styles = {};
+  const formats = {};
   const formulas = {};            // ver2.0: { sheetName: { "A1": "=SUM(...)" } }
   const originalFormulaValues = {}; // 원본 캐시값 (수식 평가 실패 시 fallback)
   const tables = {};              // ver2.0: { sheetName: [{ startRow, endRow, ... }] }
   wb.SheetNames.forEach(name => {
     const ws = wb.Sheets[name];
-    const aoa = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: "" });
+    const aoa = sheetToFullAoA(ws);
     sheets[name] = aoa;
     merges[name] = ws["!merges"] ? ws["!merges"].map(m => ({ s: {...m.s}, e: {...m.e} })) : [];
     const sheetStyles = [];
+    const sheetFormats = [];
     const sheetFormulas = {};
     const sheetOriginalValues = {};
     const ref = ws["!ref"];
@@ -26,11 +35,13 @@ async function parseFile(file) {
       const range = XLSX.utils.decode_range(ref);
       for (let r = range.s.r; r <= range.e.r; r++) {
         const row = useCellStyles ? [] : null;
+        const fmtRow = [];
         for (let c = range.s.c; c <= range.e.c; c++) {
           const addr = XLSX.utils.encode_cell({ r, c });
           const cell = ws[addr];
           if (!cell) continue;
           if (useCellStyles && row && cell.s) row[c] = extractCellStyle(cell.s);
+          if (cell.z) fmtRow[c] = cell.z;
           // 수식 추출 (ver2.0)
           if (cell.f) {
             sheetFormulas[addr] = "=" + cell.f;
@@ -39,9 +50,11 @@ async function parseFile(file) {
           }
         }
         if (row) sheetStyles[r] = row;
+        if (fmtRow.length) sheetFormats[r] = fmtRow;
       }
     }
     styles[name] = sheetStyles;
+    formats[name] = sheetFormats;
     formulas[name] = sheetFormulas;
     originalFormulaValues[name] = sheetOriginalValues;
     // 표 감지 (ver2.0)
@@ -56,12 +69,30 @@ async function parseFile(file) {
     sheets,
     merges,
     styles,
+    formats,
     formulas,
     originalFormulaValues,
     tables,
     lightweightPreview: !useCellStyles,
     originalBuffer: buf,
   };
+}
+
+function sheetToFullAoA(ws) {
+  const ref = ws && ws["!ref"];
+  if (!ref) return [];
+  const range = XLSX.utils.decode_range(ref);
+  const rows = [];
+  for (let r = 0; r <= range.e.r; r++) {
+    const row = [];
+    for (let c = 0; c <= range.e.c; c++) {
+      const addr = XLSX.utils.encode_cell({ r, c });
+      const cell = ws[addr];
+      row[c] = cell && cell.v !== undefined ? cell.v : "";
+    }
+    rows[r] = row;
+  }
+  return rows;
 }
 
 // xlsx.js cell style → inline CSS string.
@@ -178,6 +209,7 @@ function cloneFileRecord(file) {
     sheets: file.sheets,
     merges: file.merges,
     styles: file.styles,
+    formats: file.formats || {},
     formulas: file.formulas || {},
     originalFormulaValues: file.originalFormulaValues || {},
     tables: file.tables || {},

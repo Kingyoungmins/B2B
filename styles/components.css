@@ -95,6 +95,7 @@
     transition: all 0.15s;
   }
   .chip-view:hover { background: var(--m-50); color: var(--m-600); border-color: var(--m-200); }
+  .file-chip.output .chip-view { display: none; }
   /* ============ BUTTONS ============ */
   button {
     padding: 10px 14px;

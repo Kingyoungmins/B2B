@@ -187,13 +187,16 @@ async function sendChat() {
   input.value = "";
   addMessage("user", msg);
   const loading = addMessage("assistant", "", {});
-  // 외부 노출 시엔 provider 무관하게 LLM 으로 통일 (사내 모델/Claude 구분은 F9 안에서만)
+  // 외부 노출 시엔 내부 모델명을 표시하지 않고 LLM 으로 통일
   const aiName = settings.provider === "openai-compat" ? "ixi 모델" : "LLM";
   const modeLabel = editTargetId ? "(수정 모드) " : "";
   loading.innerHTML = `<span class="loader"></span> ${modeLabel}${aiName}에게 전송 중...`;
   $("chat-send").disabled = true;
   try {
-    const reply = await callLLM(msg, { editTargetId });
+    const prompt = typeof augmentUserPromptWithMentions === "function"
+      ? augmentUserPromptWithMentions(msg)
+      : msg;
+    const reply = await callLLM(prompt, { editTargetId });
     loading.remove();
     addAssistantReply(reply, { editTargetId });
   } catch (err) {
@@ -207,5 +210,12 @@ async function sendChat() {
 
 $("chat-send").onclick = sendChat;
 $("chat-text").addEventListener("keydown", e => {
-  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendChat(); }
+  if (e.key === "Enter" && !e.shiftKey) {
+    if (typeof isMentionMenuOpen === "function" && isMentionMenuOpen()) {
+      e.preventDefault();
+      return;
+    }
+    e.preventDefault();
+    sendChat();
+  }
 });

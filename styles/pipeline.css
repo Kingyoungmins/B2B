@@ -37,6 +37,7 @@
   }
   .pipeline-item .step-label { flex: 1; color: var(--ink-700); font-weight: 500; }
   .pipeline-item .step-edit,
+  .pipeline-item .step-toggle,
   .pipeline-item .step-del {
     background: transparent;
     border: none;
@@ -48,6 +49,30 @@
     transition: all 0.15s;
     font-size: 13px;
     line-height: 1;
+  }
+  .pipeline-item .step-toggle {
+    min-width: 34px;
+    font-size: 10.5px;
+    border: 1px solid var(--border);
+    color: var(--ink-400);
+  }
+  .pipeline-item .step-toggle.active {
+    color: #217346;
+    border-color: rgba(33,115,70,0.28);
+    background: #ECFDF5;
+    font-weight: 700;
+  }
+  .pipeline-item.disabled {
+    opacity: 0.62;
+    background: var(--ink-50);
+  }
+  .pipeline-item.disabled .step-n {
+    background: var(--ink-200);
+    box-shadow: none;
+  }
+  .pipeline-item.disabled .step-label {
+    text-decoration: line-through;
+    color: var(--ink-400);
   }
   .pipeline-item .step-edit:hover { color: var(--m-600); background: var(--m-50); }
   .pipeline-item .step-edit.active {

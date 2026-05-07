@@ -33,6 +33,25 @@ function _formatNumberKR(n) {
   else frac = 4; // |n| < 1 — 비율/소수 케이스
   return n.toLocaleString("ko-KR", { minimumFractionDigits: 0, maximumFractionDigits: frac });
 }
+function _formatCellDisplay(value, numFormat) {
+  if (!isNumLike(value)) return escapeHtml(String(value));
+  const n = Number(value);
+  const fmt = String(numFormat || "");
+  if (fmt.includes("%")) {
+    const decimals = (() => {
+      const m = fmt.match(/0\.([0#]+)/);
+      return m ? m[1].length : 0;
+    })();
+    return (n * 100).toLocaleString("ko-KR", {
+      minimumFractionDigits: decimals,
+      maximumFractionDigits: decimals,
+    }) + "%";
+  }
+  if (fmt.includes(",")) {
+    return n.toLocaleString("ko-KR", { maximumFractionDigits: 4 });
+  }
+  return n < 0 ? `(${_formatNumberKR(Math.abs(n))})` : _formatNumberKR(n);
+}
 function _addrToRC(addr) {
   const m = /^([A-Z]+)([0-9]+)$/.exec(addr);
   if (!m) return null;
@@ -41,7 +60,28 @@ function _addrToRC(addr) {
   return { r: parseInt(m[2], 10) - 1, c: n - 1 };
 }
 
+function outputTemplateFileId(index) {
+  return "output:" + index;
+}
+
+function outputTemplateIndexFromFileId(fileId) {
+  if (fileId === "output") return state.activeOutputIndex >= 0 ? state.activeOutputIndex : 0;
+  const m = /^output:(\d+)$/.exec(String(fileId || ""));
+  return m ? Number(m[1]) : -1;
+}
+
+function isOutputFileId(fileId) {
+  return fileId === "output" || outputTemplateIndexFromFileId(fileId) >= 0;
+}
+
 function setCurrentView(fileId) {
+  if (fileId === "output" && state.outputTemplates && state.outputTemplates.length) {
+    const idx = state.activeOutputIndex >= 0 ? state.activeOutputIndex : 0;
+    fileId = outputTemplateFileId(idx);
+  }
+  if (fileId && fileId.startsWith("output:") && typeof activateOutputTemplate === "function") {
+    activateOutputTemplate(outputTemplateIndexFromFileId(fileId));
+  }
   const changed = state.currentFileId !== fileId;
   state.currentFileId = fileId;
   const file = getFile(fileId);
@@ -61,9 +101,27 @@ function setCurrentView(fileId) {
 function getFile(fileId) {
   if (!fileId) return null;
   if (fileId === "output") return state.output;
+  if (fileId.startsWith("output:")) {
+    const idx = outputTemplateIndexFromFileId(fileId);
+    return (state.outputTemplates[idx] && state.outputTemplates[idx].file) || null;
+  }
   if (fileId.startsWith("input:")) {
     const name = fileId.slice(6);
     return state.inputs.find(f => f.name === name);
+  }
+  return null;
+}
+
+function getOriginalFile(fileId) {
+  if (!fileId) return null;
+  if (fileId === "output") return state.outputOriginal;
+  if (fileId.startsWith("output:")) {
+    const idx = outputTemplateIndexFromFileId(fileId);
+    return (state.outputTemplates[idx] && state.outputTemplates[idx].original) || null;
+  }
+  if (fileId.startsWith("input:")) {
+    const name = fileId.slice(6);
+    return state.inputsOriginal.find(f => f.name === name) || null;
   }
   return null;
 }
@@ -96,8 +154,17 @@ function refreshTabs() {
   ];
   const all = [
     ...state.inputs.map(f => ({ id: "input:" + f.name, name: f.name, cls: "" })),
-    ...(state.output ? [{ id: "output", name: state.output.name, cls: "output" }] : []),
+    ...(state.outputTemplates || []).map((tpl, idx) => ({
+      id: outputTemplateFileId(idx),
+      name: tpl.file.name,
+      cls: "output",
+    })),
   ];
+
+  if (state.currentFileId === "output" && state.outputTemplates && state.outputTemplates.length) {
+    const idx = state.activeOutputIndex >= 0 ? state.activeOutputIndex : 0;
+    state.currentFileId = outputTemplateFileId(idx);
+  }
 
   if (state.currentFileId && !all.some(f => f.id === state.currentFileId)) {
     state.currentFileId = null;
@@ -247,7 +314,7 @@ function _renderViewerInitial(viewer, file) {
   if (file.lightweightPreview) html += `<div class="excel-preview-note">대용량 파일 경량 미리보기</div>`;
 
   let tableHtml = '<table class="excel-sheet"><thead><tr><th class="col-header"></th>';
-  for (let c = 0; c < visibleCols; c++) tableHtml += `<th class="col-header">${_excelCol(c)}</th>`;
+  for (let c = 0; c < visibleCols; c++) tableHtml += `<th class="col-header" data-col-header="${c}">${_excelCol(c)}</th>`;
   if (truncatedCols) tableHtml += '<th class="col-header">...</th>';
   tableHtml += '</tr></thead><tbody id="" class="excel-tbody"></tbody></table>';
   // sentinel for infinite scroll
@@ -259,6 +326,7 @@ function _renderViewerInitial(viewer, file) {
   ctx.tbody = tbody;
   _appendRows(viewer, ctx, 0, initialRows);
   ctx.rendered = initialRows;
+  setupExcelCellEditing(viewer, ctx);
 
   // 가상 스크롤 IntersectionObserver
   const sentinel = viewer.querySelector(".excel-scroll-sentinel");
@@ -285,7 +353,7 @@ function _appendRows(viewer, ctx, fromRow, toRow) {
   const truncatedCols = visibleCols < maxCols;
   const buf = [];
   for (let r = fromRow; r < toRow; r++) {
-    buf.push(`<tr><td class="row-header">${r + 1}</td>`);
+    buf.push(`<tr><td class="row-header" data-row-header="${r}">${r + 1}</td>`);
     for (let c = 0; c < visibleCols; c++) {
       if (hidden.has(r + "," + c)) continue;
       const m = merge_map[r + "," + c];
@@ -304,24 +372,269 @@ function _appendRows(viewer, ctx, fromRow, toRow) {
       if (isNum) cls.push("num");
       if (neg) cls.push("negative");
       if (hasFormula) cls.push("has-formula");
+      if (state.selectedCell &&
+          state.selectedCell.fileId === ctx.fileId &&
+          state.selectedCell.sheet === sheet &&
+          state.selectedCell.r === r &&
+          state.selectedCell.c === c) {
+        cls.push("selected-cell");
+      }
       const realStyle = file.styles && file.styles[sheet] && file.styles[sheet][r] && file.styles[sheet][r][c];
+      const numFormat = file.formats && file.formats[sheet] && file.formats[sheet][r] && file.formats[sheet][r][c];
       if (!realStyle) {
         const styleCls = classifyCell(aoa[r] && aoa[r][0], r, c, aoa);
         if (styleCls) cls.push(styleCls);
       }
-      const display = isNum
-        ? (neg ? `(${_formatNumberKR(Math.abs(Number(v)))})` : _formatNumberKR(Number(v)))
-        : escapeHtml(String(v));
+      const display = _formatCellDisplay(v, numFormat);
       const rs = rowspan > 1 ? ` rowspan="${rowspan}"` : "";
       const cs = colspan > 1 ? ` colspan="${colspan}"` : "";
       const styleAttr = realStyle ? ` style="${realStyle}"` : "";
       const titleAttr = hasFormula ? ` title="${escapeHtml(formulas[addr])}"` : "";
-      buf.push(`<td class="${cls.join(" ")}" data-r="${r}" data-c="${c}"${rs}${cs}${styleAttr}${titleAttr}>${display}</td>`);
+      buf.push(`<td class="${cls.join(" ")}" data-r="${r}" data-c="${c}" contenteditable="true" tabindex="0"${rs}${cs}${styleAttr}${titleAttr}>${display}</td>`);
     }
     if (truncatedCols) buf.push('<td class="truncated-cell">...</td>');
     buf.push("</tr>");
   }
   ctx.tbody.insertAdjacentHTML("beforeend", buf.join(""));
+}
+
+function setupExcelCellEditing(viewer, ctx) {
+  let dragAnchor = null;
+  let didDrag = false;
+  let mouseDown = false;
+
+  viewer.onmousedown = (e) => {
+    const target = getSelectionTarget(e, ctx);
+    if (!target) return;
+    mouseDown = true;
+    didDrag = false;
+    dragAnchor = target;
+    applyViewerSelection(viewer, ctx, target);
+    if (target.type !== "cell") e.preventDefault();
+  };
+
+  viewer.onmouseover = (e) => {
+    if (!mouseDown || !dragAnchor) return;
+    const target = getSelectionTarget(e, ctx);
+    if (!target) return;
+    didDrag = true;
+    applyViewerSelection(viewer, ctx, mergeSelectionTargets(dragAnchor, target, ctx));
+  };
+
+  document.addEventListener("mouseup", () => {
+    mouseDown = false;
+    dragAnchor = null;
+  });
+
+  viewer.onclick = (e) => {
+    if (didDrag) {
+      didDrag = false;
+      return;
+    }
+    const td = e.target.closest("td[data-r][data-c]");
+    if (!td) return;
+    const r = Number(td.dataset.r);
+    const c = Number(td.dataset.c);
+    state.selectedCell = { fileId: ctx.fileId, sheet: ctx.sheet, r, c };
+    state.selectedRange = { fileId: ctx.fileId, sheet: ctx.sheet, r1: r, c1: c, r2: r, c2: c, type: "cell" };
+    document.querySelectorAll("td.selected-cell").forEach(el => el.classList.remove("selected-cell"));
+    td.classList.add("selected-cell");
+    updateChatRangeReference(state.selectedRange);
+    if (typeof renderMentionMenu === "function") renderMentionMenu();
+  };
+
+  viewer.onfocusin = (e) => {
+    const td = e.target.closest("td[data-r][data-c]");
+    if (!td) return;
+    const r = Number(td.dataset.r);
+    const c = Number(td.dataset.c);
+    const raw = (ctx.aoa[r] && ctx.aoa[r][c] !== undefined) ? ctx.aoa[r][c] : "";
+    td.dataset.editOriginal = String(raw ?? "");
+    td.textContent = String(raw ?? "");
+  };
+
+  viewer.onkeydown = (e) => {
+    const td = e.target.closest("td[data-r][data-c]");
+    if (!td) return;
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      commitCellFromElement(td, ctx);
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      td.dataset.skipCommit = "1";
+      td.textContent = td.dataset.editOriginal || "";
+      td.blur();
+    }
+  };
+
+  viewer.onfocusout = (e) => {
+    const td = e.target.closest("td[data-r][data-c]");
+    if (!td) return;
+    if (td.dataset.skipCommit === "1") {
+      delete td.dataset.skipCommit;
+      delete td.dataset.editOriginal;
+      renderExcelViewer();
+      return;
+    }
+    if (td.dataset.committed === "1") {
+      delete td.dataset.committed;
+      delete td.dataset.editOriginal;
+      return;
+    }
+    commitCellFromElement(td, ctx);
+  };
+}
+
+function commitCellFromElement(td, ctx) {
+    const before = td.dataset.editOriginal || "";
+    const after = td.textContent;
+    if (before === after) {
+      delete td.dataset.editOriginal;
+      renderExcelViewer();
+      return;
+    }
+    td.dataset.committed = "1";
+    commitCellEdit(ctx.fileId, ctx.sheet, Number(td.dataset.r), Number(td.dataset.c), coerceCellInput(after));
+}
+
+function getSelectionTarget(e, ctx) {
+  const td = e.target.closest("td[data-r][data-c]");
+  if (td) {
+    const r = Number(td.dataset.r);
+    const c = Number(td.dataset.c);
+    return { fileId: ctx.fileId, sheet: ctx.sheet, r1: r, c1: c, r2: r, c2: c, type: "cell" };
+  }
+  const rh = e.target.closest("[data-row-header]");
+  if (rh) {
+    const r = Number(rh.dataset.rowHeader);
+    return { fileId: ctx.fileId, sheet: ctx.sheet, r1: r, c1: 0, r2: r, c2: ctx.visibleCols - 1, type: "row" };
+  }
+  const ch = e.target.closest("[data-col-header]");
+  if (ch) {
+    const c = Number(ch.dataset.colHeader);
+    return { fileId: ctx.fileId, sheet: ctx.sheet, r1: 0, c1: c, r2: Math.max(ctx.totalRows - 1, 0), c2: c, type: "col" };
+  }
+  return null;
+}
+
+function mergeSelectionTargets(a, b, ctx) {
+  if (a.type === "row" || b.type === "row") {
+    return {
+      fileId: ctx.fileId, sheet: ctx.sheet,
+      r1: Math.min(a.r1, b.r1), c1: 0,
+      r2: Math.max(a.r2, b.r2), c2: ctx.visibleCols - 1,
+      type: "row",
+    };
+  }
+  if (a.type === "col" || b.type === "col") {
+    return {
+      fileId: ctx.fileId, sheet: ctx.sheet,
+      r1: 0, c1: Math.min(a.c1, b.c1),
+      r2: Math.max(ctx.totalRows - 1, 0), c2: Math.max(a.c2, b.c2),
+      type: "col",
+    };
+  }
+  return {
+    fileId: ctx.fileId, sheet: ctx.sheet,
+    r1: Math.min(a.r1, b.r1), c1: Math.min(a.c1, b.c1),
+    r2: Math.max(a.r2, b.r2), c2: Math.max(a.c2, b.c2),
+    type: "range",
+  };
+}
+
+function applyViewerSelection(viewer, ctx, range) {
+  state.selectedRange = normalizeRange(range);
+  if (range.type === "cell") {
+    state.selectedCell = { fileId: ctx.fileId, sheet: ctx.sheet, r: range.r1, c: range.c1 };
+  }
+  viewer.querySelectorAll(".selected-cell,.selected-range").forEach(el => {
+    el.classList.remove("selected-cell", "selected-range");
+  });
+  viewer.querySelectorAll("td[data-r][data-c]").forEach(td => {
+    const r = Number(td.dataset.r);
+    const c = Number(td.dataset.c);
+    if (r >= state.selectedRange.r1 && r <= state.selectedRange.r2 && c >= state.selectedRange.c1 && c <= state.selectedRange.c2) {
+      td.classList.add(range.type === "cell" ? "selected-cell" : "selected-range");
+    }
+  });
+  updateChatRangeReference(state.selectedRange);
+}
+
+function normalizeRange(range) {
+  return {
+    ...range,
+    r1: Math.min(range.r1, range.r2),
+    c1: Math.min(range.c1, range.c2),
+    r2: Math.max(range.r1, range.r2),
+    c2: Math.max(range.c1, range.c2),
+  };
+}
+
+function updateChatRangeReference(range) {
+  const ta = $("chat-text");
+  if (!ta || !range) return;
+  const file = getFile(range.fileId);
+  const name = file ? file.name : range.fileId;
+  const a = _excelCol(range.c1) + (range.r1 + 1);
+  const b = _excelCol(range.c2) + (range.r2 + 1);
+  const ref = `${name}/${range.sheet}!${a}${a === b ? "" : ":" + b}`;
+  const line = `선택 범위: @범위[${ref}]`;
+  const marker = /(?:^|\n)선택 범위: @범위\[[^\]]+\]/;
+  if (marker.test(ta.value)) {
+    ta.value = ta.value.replace(marker, (m) => (m.startsWith("\n") ? "\n" : "") + line);
+  } else {
+    ta.value = ta.value.trim() ? ta.value + "\n" + line : line;
+  }
+}
+
+function coerceCellInput(text) {
+  const value = String(text ?? "").trim();
+  if (value === "") return "";
+  if (/^-?\d+(\.\d+)?$/.test(value)) return Number(value);
+  if (/^(true|false)$/i.test(value)) return /^true$/i.test(value);
+  return text;
+}
+
+function commitCellEdit(fileId, sheet, r, c, value) {
+  const file = getFile(fileId);
+  if (!file || !sheet) return;
+  if (typeof createManualEditStep !== "function") {
+    toast("직접 편집 기능을 초기화하지 못했습니다.", "error");
+    renderExcelViewer();
+    return;
+  }
+  try {
+    if (typeof pushHistory === "function") pushHistory("셀 직접 편집");
+    const step = createManualEditStep(fileId, sheet, r, c, value);
+    const next = [...state.pipeline, step];
+    if (fileId && fileId.startsWith("output:")) {
+      applyManualEditToFile(file, sheet, r, c, value);
+      if (typeof syncFileMetadata === "function") syncFileMetadata(file);
+      state.pipeline = next;
+      if (typeof recomputeAllFormulas === "function") recomputeAllFormulas();
+      renderInputList();
+      renderOutputChip();
+      refreshTabs();
+      renderExcelViewer();
+    } else {
+      runPipeline(next);
+      state.pipeline = next;
+    }
+    state.selectedCell = { fileId, sheet, r, c };
+    renderPipeline();
+    refreshRunButton();
+    toast(`${sheet}!${_excelCol(c)}${r + 1} 값을 변경했습니다.`, "success");
+  } catch (err) {
+    reportPipelineError(err);
+    renderExcelViewer();
+  }
+}
+
+function applyManualEditToFile(file, sheet, r, c, value) {
+  if (!file.sheets) file.sheets = {};
+  if (!file.sheets[sheet]) file.sheets[sheet] = [];
+  if (!file.sheets[sheet][r]) file.sheets[sheet][r] = [];
+  file.sheets[sheet][r][c] = value;
 }
 
 function _maxRowFromFormulas(formulas) {

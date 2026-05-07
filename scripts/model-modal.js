@@ -1,9 +1,8 @@
 /* ===================================================================
-   AI 모델 설정 모달
+   AI MODEL SETTINGS
    =================================================================== */
 $("btn-settings").onclick = () => openSettingsModal(false);
 
-// F9: 히든 개발자 모드 — Claude 직접 호출 옵션 노출
 document.addEventListener("keydown", (e) => {
   if (e.key === "F9") {
     e.preventDefault();
@@ -21,10 +20,19 @@ const CLAUDE_MODELS = [
 
 function openSettingsModal(devMode) {
   const modal = $("modal");
-  const usingClaude = devMode && settings.provider === "anthropic";
-  const ixiUrl = DEFAULTS["openai-compat"].baseUrl;
-  const ixiKey = DEFAULTS["openai-compat"].apiKey;
-  const claudeKey = settings.provider === "anthropic" ? (settings.apiKey || "") : "";
+  const activeProvider = devMode ? (settings.provider || "openai-compat") : "openai-compat";
+  const activeClaude = activeProvider === "anthropic";
+
+  const ixiUrl = settings.provider === "openai-compat"
+    ? (settings.baseUrl || DEFAULTS["openai-compat"].baseUrl)
+    : DEFAULTS["openai-compat"].baseUrl;
+  const ixiKey = settings.provider === "openai-compat"
+    ? (settings.apiKey || DEFAULTS["openai-compat"].apiKey)
+    : DEFAULTS["openai-compat"].apiKey;
+
+  const claudeKey = settings.provider === "anthropic"
+    ? (settings.apiKey || DEFAULTS.anthropic.apiKey)
+    : DEFAULTS.anthropic.apiKey;
   const claudeModel = settings.provider === "anthropic"
     ? (settings.model || DEFAULTS.anthropic.model)
     : DEFAULTS.anthropic.model;
@@ -33,25 +41,25 @@ function openSettingsModal(devMode) {
     : DEFAULTS.anthropic.baseUrl;
 
   modal.innerHTML = `
-    <h3>AI 모델 설정${devMode ? ' <span style="font-size:11px;color:#FF0080;background:#FFE0F2;padding:2px 8px;border-radius:8px;font-weight:600;margin-left:6px;">DEV</span>' : ''}</h3>
+    <h3>AI 연결 설정${devMode ? ' <span style="font-size:11px;color:#FF0080;background:#FFE0F2;padding:2px 8px;border-radius:8px;font-weight:600;margin-left:6px;">DEV</span>' : ''}</h3>
     <div style="font-size:12px; color:#666; margin-bottom:12px">
-      ${devMode ? '개발자 모드 — Claude API 직접 호출이 가능합니다.' : '내부망 ixi 모델 엔드포인트를 사용합니다.'}
+      ${devMode ? '개발자 옵션입니다. 기본 연결은 내부망 ixi이며, 필요할 때 Claude Opus 4.7로 전환할 수 있습니다.' : '내부망 ixi 호환 서버와 연결합니다.'}
     </div>
 
     ${devMode ? `
     <div class="row" style="gap:16px; margin-bottom:14px">
       <label style="display:flex; align-items:center; gap:6px; cursor:pointer">
-        <input type="radio" name="provider" value="openai-compat" ${!usingClaude ? "checked" : ""}>
-        <span>ixi 모델 (내부망)</span>
+        <input type="radio" name="provider" value="openai-compat" ${!activeClaude ? "checked" : ""}>
+        <span>ixi 모델</span>
       </label>
       <label style="display:flex; align-items:center; gap:6px; cursor:pointer">
-        <input type="radio" name="provider" value="anthropic" ${usingClaude ? "checked" : ""}>
-        <span>Claude (개발자용)</span>
+        <input type="radio" name="provider" value="anthropic" ${activeClaude ? "checked" : ""}>
+        <span>Claude Opus 4.7</span>
       </label>
     </div>
     ` : ""}
 
-    <div id="group-openai" style="${usingClaude ? "display:none" : ""}">
+    <div id="group-openai" style="${devMode && activeClaude ? "display:none" : ""}">
       <label style="font-size:11.5px; color:#666">Base URL (exe 로컬 프록시 /v1)</label>
       <input type="text" id="set-o-url" value="${escapeHtml(ixiUrl)}" />
       <label style="font-size:11.5px; color:#666">API Key</label>
@@ -59,7 +67,7 @@ function openSettingsModal(devMode) {
     </div>
 
     ${devMode ? `
-    <div id="group-claude" style="${usingClaude ? "" : "display:none"}">
+    <div id="group-claude" style="${activeClaude ? "" : "display:none"}">
       <label style="font-size:11.5px; color:#666">Anthropic API Key</label>
       <input type="password" id="set-c-key" placeholder="sk-ant-..." value="${escapeHtml(claudeKey)}" autocomplete="off" />
       <label style="font-size:11.5px; color:#666">모델</label>
@@ -72,7 +80,7 @@ function openSettingsModal(devMode) {
     ` : ""}
 
     <div class="row" style="margin-top:14px">
-      <button class="btn-secondary" id="btn-test">🔌 연결 테스트</button>
+      <button class="btn-secondary" id="btn-test">연결 테스트</button>
       <button class="btn-secondary" id="modal-cancel">취소</button>
       <button class="btn-primary" id="modal-save">저장</button>
     </div>
@@ -99,9 +107,8 @@ function openSettingsModal(devMode) {
       return {
         provider: "anthropic",
         baseUrl: $("set-c-url").value.trim() || DEFAULTS.anthropic.baseUrl,
-        apiKey: $("set-c-key").value.trim(),
+        apiKey: $("set-c-key").value.trim() || DEFAULTS.anthropic.apiKey,
         model: $("set-c-model").value || DEFAULTS.anthropic.model,
-        // ver2.0: dev가 명시적으로 저장한 경우만 마킹 — 새로고침 시 자동 복원 조건
         devModeSet: true,
       };
     }
@@ -119,9 +126,8 @@ function openSettingsModal(devMode) {
     res.innerHTML = '<span class="loader"></span> 연결 테스트 중...';
     try {
       if (form.provider === "anthropic") {
-        if (!form.apiKey) throw new Error("API Key가 비어있습니다");
-        const base = form.baseUrl.replace(/\/$/, "");
-        const r = await fetch(base + "/messages", {
+        if (!form.apiKey) throw new Error("Anthropic API Key가 비어 있습니다.");
+        const r = await fetch(form.baseUrl.replace(/\/$/, "") + "/messages", {
           method: "POST",
           headers: {
             "x-api-key": form.apiKey,
@@ -136,19 +142,20 @@ function openSettingsModal(devMode) {
           }),
         });
         if (!r.ok) throw new Error("HTTP " + r.status + " " + (await r.text()).slice(0, 200));
-        res.innerHTML = `<span style="color:#28a745">✓ Claude 연결 성공 · ${escapeHtml(form.model)}</span>`;
-      } else {
-        const { resp: r, url } = await fetchOpenAICompat("/models", form.baseUrl.replace(/\/$/, ""), {
-          method: "GET",
-          headers: { "Api-Key": form.apiKey },
-        });
-        if (!r.ok) throw new Error("HTTP " + r.status + " " + (await r.text()).slice(0, 200));
-        const data = await r.json();
-        const count = Array.isArray(data.data) ? data.data.length : 0;
-        res.innerHTML = `<span style="color:#28a745">✓ 연결 성공 · ${count}개 확인 · ${escapeHtml(url.replace(/\/models$/, ""))}</span>`;
+        res.innerHTML = `<span style="color:#28a745">Claude 연결 성공 · ${escapeHtml(form.model)}</span>`;
+        return;
       }
+
+      const { resp: r, url } = await fetchOpenAICompat("/models", form.baseUrl.replace(/\/$/, ""), {
+        method: "GET",
+        headers: { "Api-Key": form.apiKey },
+      });
+      if (!r.ok) throw new Error("HTTP " + r.status + " " + (await r.text()).slice(0, 200));
+      const data = await r.json();
+      const count = Array.isArray(data.data) ? data.data.length : 0;
+      res.innerHTML = `<span style="color:#28a745">연결 성공 · ${count}개 모델 확인 · ${escapeHtml(url.replace(/\/models$/, ""))}</span>`;
     } catch (err) {
-      res.innerHTML = `<span style="color:#dc3545">✗ 실패: ${escapeHtml(err.message)}</span>`;
+      res.innerHTML = `<span style="color:#dc3545">실패: ${escapeHtml(err.message)}</span>`;
     }
   };
 
@@ -156,12 +163,12 @@ function openSettingsModal(devMode) {
   $("modal-save").onclick = () => {
     const form = readForm();
     if (form.provider === "anthropic" && !form.apiKey) {
-      toast("Claude API Key를 입력하세요", "error");
+      toast("Claude API Key가 비어 있습니다.", "error");
       return;
     }
     settings = form;
     saveSettings();
     $("modal-bg").classList.remove("show");
-    toast("설정 저장 완료", "success");
+    toast("설정을 저장했습니다.", "success");
   };
 }

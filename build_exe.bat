@@ -3,50 +3,45 @@ setlocal
 cd /d "%~dp0"
 
 echo ============================================
-echo  KGM 업무망 EXE 빌드
+echo  KGM B2B ver3 EXE build
 echo ============================================
 echo.
 
-REM Python 확인
 where python >nul 2>nul
 if errorlevel 1 (
-    echo [ERROR] Python이 설치되어 있지 않습니다.
-    echo Python을 설치한 뒤 다시 실행해주세요.
+    echo [ERROR] Python is not installed on this build PC.
     pause
     exit /b 1
 )
 
-REM PyInstaller 설치 확인 및 자동 설치
 python -m pip show pyinstaller >nul 2>nul
 if errorlevel 1 (
-    echo [INFO] PyInstaller가 없어 자동 설치합니다...
+    echo [INFO] Installing PyInstaller...
     python -m pip install --upgrade pip
     python -m pip install pyinstaller
     if errorlevel 1 (
-        echo [ERROR] PyInstaller 설치 실패.
+        echo [ERROR] Failed to install PyInstaller.
         pause
         exit /b 1
     )
 )
 
-REM 이전 빌드 산출물 정리
 if exist "build" rmdir /s /q "build"
 if exist "dist" rmdir /s /q "dist"
 
-REM EXE 빌드
 echo.
-echo [INFO] EXE 빌드 시작...
+echo [INFO] Building EXE...
 python -m PyInstaller --clean launch_kgm.spec
 if errorlevel 1 (
     echo.
-    echo [ERROR] 빌드 실패.
+    echo [ERROR] Build failed.
     pause
     exit /b 1
 )
 
 echo.
 echo ============================================
-echo  빌드 완료: dist\KGM_업무망.exe
+echo  Build complete: dist\KGM_B2B_ver3.exe
 echo ============================================
 echo.
 pause

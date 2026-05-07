@@ -1,9 +1,74 @@
 /* ===================================================================
    LOGIC PIPELINE
    =================================================================== */
+function isStepEnabled(step) {
+  return !step || step.enabled !== false;
+}
+
+function normalizeStep(step) {
+  return { enabled: true, ...step };
+}
+
+function toJsLiteral(value) {
+  return JSON.stringify(value === undefined ? "" : value);
+}
+
+function createManualEditStep(fileId, sheet, r, c, value) {
+  const target = fileId === "output" ? "output" : `inputs[${toJsLiteral(fileId.slice(6))}]`;
+  const sheetKey = toJsLiteral(sheet);
+  const valueLiteral = toJsLiteral(value);
+  const descTarget = `${fileId === "output" ? "출력" : fileId.slice(6)} / ${sheet}!${_excelCol(c)}${r + 1}`;
+  return {
+    id: uid(),
+    prompt: "manual cell edit",
+    description: `직접 편집: ${descTarget}`,
+    enabled: true,
+    manual: true,
+    code: `function transform(inputs, output) {
+  const target = ${target};
+  if (!target[${sheetKey}]) target[${sheetKey}] = [];
+  if (!target[${sheetKey}][${r}]) target[${sheetKey}][${r}] = [];
+  target[${sheetKey}][${r}][${c}] = ${valueLiteral};
+  return { inputs, output };
+}`,
+  };
+}
+
+function createManualEditStepV3(fileId, sheet, r, c, value) {
+  const outputIdx = typeof outputTemplateIndexFromFileId === "function" ? outputTemplateIndexFromFileId(fileId) : -1;
+  const isOutputTarget = fileId === "output" || outputIdx >= 0;
+  const inputName = !isOutputTarget && fileId && fileId.startsWith("input:") ? fileId.slice(6) : "";
+  const target = isOutputTarget ? "output" : `inputs[${toJsLiteral(inputName)}]`;
+  const sheetKey = toJsLiteral(sheet);
+  const valueLiteral = toJsLiteral(value);
+  const descName = isOutputTarget
+    ? (outputIdx >= 0 ? `output template ${outputIdx + 1}` : "output")
+    : inputName;
+  const descTarget = `${descName} / ${sheet}!${_excelCol(c)}${r + 1}`;
+  return {
+    id: uid(),
+    prompt: "manual cell edit",
+    description: `직접 편집: ${descTarget}`,
+    enabled: true,
+    manual: true,
+    manualEdit: { fileId, sheet, r, c, value },
+    code: `function transform(inputs, output) {
+  const target = ${target};
+  if (!target[${sheetKey}]) target[${sheetKey}] = [];
+  if (!target[${sheetKey}][${r}]) target[${sheetKey}][${r}] = [];
+  target[${sheetKey}][${r}][${c}] = ${valueLiteral};
+  return { inputs, output };
+}`,
+  };
+}
+
+createManualEditStep = createManualEditStepV3;
+
 function applyLogic(step) {
   try {
+    step = normalizeStep(step);
     runPipeline([...state.pipeline, step]);
+    if (typeof pushHistory === "function") pushHistory("단계 추가");
     state.pipeline.push(step);
     renderPipeline();
     refreshRunButton();
@@ -16,12 +81,14 @@ function applyLogic(step) {
 
 // 1-based position. position=1 → 맨 앞, position=N+1 → 맨 뒤(append와 동일)
 function insertLogic(step, position) {
+  step = normalizeStep(step);
   const total = state.pipeline.length;
   const idx = Math.max(0, Math.min(total, (position | 0) - 1));
   const next = state.pipeline.slice();
   next.splice(idx, 0, step);
   try {
     runPipeline(next);
+    if (typeof pushHistory === "function") pushHistory("단계 삽입");
     state.pipeline = next;
     renderPipeline();
     refreshRunButton();
@@ -42,6 +109,7 @@ function replaceLogicAt(stepId, newCode, newDescription) {
   next[idx] = { ...next[idx], code: newCode, description: newDescription || next[idx].description };
   try {
     runPipeline(next);
+    if (typeof pushHistory === "function") pushHistory("단계 수정");
     state.pipeline = next;
     renderPipeline();
     refreshRunButton();
@@ -71,13 +139,15 @@ function computeStateBeforeStep(stepIdx) {
   const proxiedOutput = wrapSheets(outputSheets);
   for (let i = 0; i < stepIdx && i < state.pipeline.length; i++) {
     const step = state.pipeline[i];
+    if (!isStepEnabled(step)) continue;
     try {
-      const fn = new Function("inputs", "output", "col", "findColumnGlobal", "similarity",
+      const fn = new Function("inputs", "output", "col", "findColumnGlobal", "similarity", "normalizeText",
         "insertColumns", "copyColumns", "deleteColumns", "shiftFormulaText",
         step.code +
         "\nreturn typeof transform === 'function' ? transform(inputs, output) : { inputs, output };"
       );
       const result = fn(proxiedInputs, proxiedOutput, col, findColumnGlobal, similarity,
+        typeof normalizeText === "function" ? normalizeText : ((v) => String(v || "").trim().toLowerCase().replace(/\s+/g, "")),
         typeof insertColumns === "function" ? insertColumns : null,
         typeof copyColumns === "function" ? copyColumns : null,
         typeof deleteColumns === "function" ? deleteColumns : null,
@@ -113,6 +183,28 @@ function toggleEditStep(stepId) {
   if (typeof renderEditingBanner === "function") renderEditingBanner();
 }
 
+function applyManualEditForPipeline(edit, inputsMap, outputSheets) {
+  if (!edit) return false;
+  let targetSheets = null;
+  if (edit.fileId === "output") {
+    targetSheets = outputSheets;
+  } else if (edit.fileId && edit.fileId.startsWith("output:")) {
+    const idx = typeof outputTemplateIndexFromFileId === "function" ? outputTemplateIndexFromFileId(edit.fileId) : -1;
+    const tpl = state.outputTemplates && state.outputTemplates[idx];
+    if (!tpl) return true;
+    targetSheets = idx === state.activeOutputIndex ? outputSheets : tpl.file.sheets;
+  } else if (edit.fileId && edit.fileId.startsWith("input:")) {
+    const name = edit.fileId.slice(6);
+    if (!inputsMap[name]) inputsMap[name] = {};
+    targetSheets = inputsMap[name];
+  }
+  if (!targetSheets) return false;
+  if (!targetSheets[edit.sheet]) targetSheets[edit.sheet] = [];
+  if (!targetSheets[edit.sheet][edit.r]) targetSheets[edit.sheet][edit.r] = [];
+  targetSheets[edit.sheet][edit.r][edit.c] = edit.value;
+  return true;
+}
+
 function runPipeline(steps) {
   steps = steps || state.pipeline;
   if (!state.outputOriginal && state.inputsOriginal.length === 0) {
@@ -125,7 +217,19 @@ function runPipeline(steps) {
     return cloned;
   });
 
-  if (state.outputOriginal) {
+  if (state.outputTemplates && state.outputTemplates.length) {
+    state.outputTemplates = state.outputTemplates.map(tpl => {
+      const source = tpl.original || tpl.file;
+      const file = cloneFileRecord(source);
+      file.originalBuffer = source.originalBuffer || null;
+      return { ...tpl, file, original: source };
+    });
+    if (state.activeOutputIndex < 0 || !state.outputTemplates[state.activeOutputIndex]) {
+      state.activeOutputIndex = 0;
+    }
+    state.output = state.outputTemplates[state.activeOutputIndex].file;
+    state.outputOriginal = state.outputTemplates[state.activeOutputIndex].original;
+  } else if (state.outputOriginal) {
     const buf = state.outputOriginal.originalBuffer;
     state.output = deepClone({ ...state.outputOriginal, originalBuffer: null });
     state.output.originalBuffer = buf;
@@ -157,13 +261,16 @@ function runPipeline(steps) {
     col: typeof col === "function" ? col : null,
     findColumnGlobal: typeof findColumnGlobal === "function" ? findColumnGlobal : null,
     similarity: typeof similarity === "function" ? similarity : null,
+    normalizeText: typeof normalizeText === "function" ? normalizeText : ((v) => String(v || "").trim().toLowerCase().replace(/\s+/g, "")),
   };
 
   state.lastError = null;
   steps.forEach((step, stepIdx) => {
+    if (!isStepEnabled(step)) return;
+    if (step.manualEdit && applyManualEditForPipeline(step.manualEdit, inputsMap, outputSheets)) return;
     let fn;
     try {
-      fn = new Function("inputs", "output", "col", "findColumnGlobal", "similarity",
+      fn = new Function("inputs", "output", "col", "findColumnGlobal", "similarity", "normalizeText",
         "insertColumns", "copyColumns", "deleteColumns", "shiftFormulaText",
         step.code +
         "\nreturn typeof transform === 'function' ? transform(inputs, output) : { inputs, output };"
@@ -178,7 +285,7 @@ function runPipeline(steps) {
     let result;
     try {
       result = fn(proxiedInputs, proxiedOutput,
-        helpers.col, helpers.findColumnGlobal, helpers.similarity,
+        helpers.col, helpers.findColumnGlobal, helpers.similarity, helpers.normalizeText,
         typeof insertColumns === "function" ? insertColumns : null,
         typeof copyColumns === "function" ? copyColumns : null,
         typeof deleteColumns === "function" ? deleteColumns : null,
@@ -211,7 +318,16 @@ function runPipeline(steps) {
     syncFileMetadata(file);
   });
 
-  if (state.output) syncFileMetadata(state.output);
+  if (state.output) {
+    syncFileMetadata(state.output);
+    if (state.outputTemplates && state.activeOutputIndex >= 0 && state.outputTemplates[state.activeOutputIndex]) {
+      state.outputTemplates[state.activeOutputIndex].file = state.output;
+      state.outputTemplates[state.activeOutputIndex].original = state.outputOriginal;
+    }
+  }
+  (state.outputTemplates || []).forEach(tpl => {
+    if (tpl && tpl.file) syncFileMetadata(tpl.file);
+  });
 
   // 수식 재평가 (item 10) — 모든 파일/시트의 수식을 현재 데이터로 다시 계산.
   recomputeAllFormulas();
@@ -219,9 +335,10 @@ function runPipeline(steps) {
   // 적용 후에도 사용자가 보고 있던 시뮬레이터 화면을 유지한다.
   const currentFile = getFile(state.currentFileId);
   if (!currentFile) {
-    if (state.output) {
-      state.currentFileId = "output";
-      state.currentSheet = state.output.sheetNames[0] || null;
+    if (state.outputTemplates && state.outputTemplates.length) {
+      const idx = state.activeOutputIndex >= 0 ? state.activeOutputIndex : 0;
+      state.currentFileId = "output:" + idx;
+      state.currentSheet = state.outputTemplates[idx].file.sheetNames[0] || null;
     } else if (state.inputs[0]) {
       state.currentFileId = "input:" + state.inputs[0].name;
       state.currentSheet = state.inputs[0].sheetNames[0] || null;
@@ -257,6 +374,9 @@ function recomputeAllFormulas() {
   state.formulaResults = {};
   const filesById = [];
   state.inputs.forEach(f => filesById.push({ id: "input:" + f.name, file: f }));
+  (state.outputTemplates || []).forEach((tpl, idx) => {
+    if (tpl && tpl.file) filesById.push({ id: "output:" + idx, file: tpl.file });
+  });
   if (state.output) filesById.push({ id: "output", file: state.output });
   filesById.forEach(({ id, file }) => {
     if (!file.formulas) return;
@@ -273,13 +393,7 @@ function recomputeAllFormulas() {
 function flashFilled() {
   const currentFile = getFile(state.currentFileId);
   if (!currentFile || !state.currentSheet) return;
-  let original = null;
-  if (state.currentFileId === "output") {
-    original = state.outputOriginal;
-  } else if (state.currentFileId && state.currentFileId.startsWith("input:")) {
-    const name = state.currentFileId.slice(6);
-    original = state.inputsOriginal.find(f => f.name === name) || null;
-  }
+  let original = typeof getOriginalFile === "function" ? getOriginalFile(state.currentFileId) : null;
   if (!original) return;
   const cur = currentFile.sheets[state.currentSheet] || [];
   const orig = original.sheets[state.currentSheet] || [];
@@ -318,19 +432,30 @@ function renderPipeline() {
   state.pipeline.forEach((step, idx) => {
     const item = document.createElement("div");
     item.className = "pipeline-item";
+    if (!isStepEnabled(step)) item.classList.add("disabled");
     if (state.editingStepId === step.id) item.classList.add("editing");
     const editing = state.editingStepId === step.id;
     item.innerHTML = `
       <div class="step-n">${idx+1}</div>
       <div class="step-label" title="${escapeHtml(step.description)}">${escapeHtml(step.description)}</div>
+      <button class="step-toggle ${isStepEnabled(step) ? 'active' : ''}" title="계산 반영 여부">${isStepEnabled(step) ? 'ON' : 'OFF'}</button>
       <button class="step-edit ${editing ? 'active' : ''}" title="${editing ? '수정 모드 해제' : '수정'}">✎</button>
       <button class="step-del" title="삭제">✕</button>
     `;
+    item.querySelector(".step-toggle").onclick = (e) => {
+      e.stopPropagation();
+      if (typeof pushHistory === "function") pushHistory("단계 적용 여부 변경");
+      state.pipeline[idx] = { ...state.pipeline[idx], enabled: !isStepEnabled(step) };
+      try { runPipeline(); } catch (err) { reportPipelineError(err); }
+      renderPipeline();
+      refreshRunButton();
+    };
     item.querySelector(".step-edit").onclick = (e) => {
       e.stopPropagation();
       toggleEditStep(step.id);
     };
     item.querySelector(".step-del").onclick = () => {
+      if (typeof pushHistory === "function") pushHistory("단계 삭제");
       if (state.editingStepId === step.id) state.editingStepId = null;
       state.pipeline.splice(idx, 1);
       try { runPipeline(); } catch {}
@@ -355,6 +480,7 @@ function refreshRunButton() {
 
 $("btn-run").onclick = () => {
   try {
+    if (typeof pushHistory === "function") pushHistory("전체 실행");
     runPipeline();
     toast(`${state.pipeline.length}개 단계 실행 완료`, "success");
   } catch (err) {
@@ -389,6 +515,7 @@ $("runner-run-btn").onclick = () => {
   // Give the UI a tick to paint the ring, then execute
   setTimeout(() => {
     try {
+      if (typeof pushHistory === "function") pushHistory("전체 실행");
       runPipeline();
       toast(`${state.pipeline.length}개 단계 실행 완료`, "success");
       if (window.runnerSetDone) window.runnerSetDone();

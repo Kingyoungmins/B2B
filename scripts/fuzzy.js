@@ -12,6 +12,10 @@ function _normalize(s) {
   return String(s || "").trim().toLowerCase().replace(/\s+/g, "");
 }
 
+function normalizeText(value) {
+  return _normalize(value);
+}
+
 function levenshtein(a, b) {
   if (a === b) return 0;
   const al = a.length, bl = b.length;
