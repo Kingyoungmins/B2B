@@ -1,10 +1,20 @@
-# B2B 빌링 Agent ver3
+# B2B 빌링 Agent ver3.1
 
 엑셀 입력 파일과 출력 템플릿을 업로드한 뒤, AI가 생성한 JavaScript 로직을 단계별 파이프라인으로 실행해 결과 xlsx를 만드는 로컬 웹앱입니다.
 
 브라우저에서 동작하는 SPA와 로컬 Python HTTP 서버로 구성되어 있으며, `/v1/*` 요청은 사내 OpenAI-compatible ixi 모델 서버로 프록시됩니다. F9 개발자 모드에서는 Claude API를 선택해 테스트할 수 있습니다.
 
 ## 최근 변경사항
+
+### ver3.1
+- AI 로직 생성 프롬프트에 `코드 작성 원칙`을 추가했습니다.
+- 요청받은 작업만 수행하고 이전 단계 작업을 반복하지 않도록 명시했습니다.
+- 단일 작업에 불필요한 추상화, 설정, 범용 헬퍼를 만들지 않도록 제한했습니다.
+- 전체 시트 순회 전에 대상 시트, 헤더, 행, 열을 먼저 좁히도록 안내했습니다.
+- 파일/시트/범위가 불명확할 때는 현재 선택된 대상을 우선 사용하고, 그래도 모호할 때만 질문하도록 정리했습니다.
+- 수정 모드에서도 관련 코드만 바꾸고 기존 단계의 다른 동작을 임의로 리팩터링하지 않도록 별도 규칙을 추가했습니다.
+- UI 제목과 EXE 빌드 이름을 ver3.1로 갱신했습니다.
+- EXE 빌드 결과 파일명은 `KGM_B2B_ver3.1.exe`입니다.
 
 ### ver3
 - 기본 AI 모델을 ixi 모델로 고정했습니다. 새 창을 열 때 이전 Claude 설정이 남아 있어도 상단 라벨은 `AI: ixi 모델`로 시작합니다.
@@ -13,7 +23,6 @@
 - AI 프롬프트에 `String(cell).includes(...)` 대신 `normalizeText(cell).includes(normalizeText(...))` 패턴을 사용하도록 안내를 추가했습니다.
 - LLM 호출 모듈을 `llm-api.js`로 정리하고, ixi/OpenAI-compatible 호출과 Claude 호출을 함께 관리합니다.
 - 로직 저장/불러오기, 멘션, 직접 셀 편집, undo/redo, runner 화면 관련 ver3 모듈을 포함합니다.
-- EXE 빌드 결과 파일명은 `KGM_B2B_ver3.exe`입니다.
 
 ### ver2 기반 기능
 - 파일명, 시트명, 컬럼명 유사도 매칭
@@ -55,7 +64,7 @@ build_exe.bat
 빌드 결과:
 
 ```text
-dist\KGM_B2B_ver3.exe
+dist\KGM_B2B_ver3.1.exe
 ```
 
 `dist/`와 `build/`는 git 추적 대상이 아닙니다.
@@ -117,7 +126,7 @@ normalizeText(cell).includes(normalizeText("안전제일"))
 ## 디렉터리 구조
 
 ```text
-B2B_ver3.0/
+B2B_ver3.1/
 ├─ index.html
 ├─ styles/
 │  ├─ base.css
