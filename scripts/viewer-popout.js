@@ -107,6 +107,7 @@ function syncViewerPopout() {
   if (newViewer) {
     newViewer.scrollTop = oldScroll.top;
     newViewer.scrollLeft = oldScroll.left;
+    setupPopoutCellEditing(newViewer);
     newViewer.addEventListener("scroll", () => {
       const sourceViewer = getActiveRightPage()?.querySelector(".excel-viewer");
       if (!sourceViewer) return;
@@ -132,6 +133,71 @@ function syncViewerPopout() {
       syncViewerPopout();
     });
   });
+}
+
+function setupPopoutCellEditing(viewer) {
+  viewer.addEventListener("focusin", (e) => {
+    const td = e.target.closest("td[data-r][data-c]");
+    if (!td) return;
+    const file = getFile(state.currentFileId);
+    const sheet = state.currentSheet;
+    const r = Number(td.dataset.r);
+    const c = Number(td.dataset.c);
+    const raw = file && sheet && file.sheets[sheet] && file.sheets[sheet][r]
+      ? file.sheets[sheet][r][c]
+      : "";
+    td.dataset.editOriginal = String(raw ?? "");
+    td.textContent = String(raw ?? "");
+  });
+
+  viewer.addEventListener("keydown", (e) => {
+    const td = e.target.closest("td[data-r][data-c]");
+    if (!td) return;
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      commitPopoutCell(td);
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      td.dataset.skipCommit = "1";
+      td.textContent = td.dataset.editOriginal || "";
+      td.blur();
+    }
+  });
+
+  viewer.addEventListener("focusout", (e) => {
+    const td = e.target.closest("td[data-r][data-c]");
+    if (!td) return;
+    if (td.dataset.skipCommit === "1") {
+      delete td.dataset.skipCommit;
+      delete td.dataset.editOriginal;
+      syncViewerPopout();
+      return;
+    }
+    if (td.dataset.committed === "1") {
+      delete td.dataset.committed;
+      delete td.dataset.editOriginal;
+      return;
+    }
+    commitPopoutCell(td);
+  });
+}
+
+function commitPopoutCell(td) {
+  const before = td.dataset.editOriginal || "";
+  const after = td.textContent;
+  if (before === after) {
+    delete td.dataset.editOriginal;
+    syncViewerPopout();
+    return;
+  }
+
+  const fileId = state.currentFileId;
+  const sheet = state.currentSheet;
+  const r = Number(td.dataset.r);
+  const c = Number(td.dataset.c);
+  td.dataset.committed = "1";
+  commitCellEdit(fileId, sheet, r, c, coerceCellInput(after));
+  syncViewerPopout();
 }
 
 (function wrapViewerPopoutSync() {
