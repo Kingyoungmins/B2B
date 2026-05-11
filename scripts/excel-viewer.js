@@ -192,6 +192,7 @@ function refreshTabs() {
     all.forEach(f => {
       const t = document.createElement("div");
       t.className = "tab " + f.cls + (state.currentFileId === f.id ? " active" : "");
+      t.dataset.fileId = f.id;
       t.innerHTML = `<span class="dot"></span>${escapeHtml(f.name)}`;
       t.onclick = () => setCurrentView(f.id);
       fileTabs.appendChild(t);
@@ -210,6 +211,7 @@ function refreshTabs() {
         if (isCurrent) cls.push("active");
         if (multiMode && isSelected) cls.push("selected");
         t.className = cls.join(" ");
+        t.dataset.sheetName = sn;
         t.textContent = sn;
         t.title = "Ctrl/Cmd+click 로 다중 선택";
         t.onclick = (e) => {
