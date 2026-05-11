@@ -28,11 +28,14 @@ function openViewerPopout() {
     return;
   }
 
-  viewerPopout = window.open("", "kgm-excel-viewer", "width=1280,height=820,menubar=no,toolbar=no,location=no");
-  if (!viewerPopout) {
+  const nextPopout = window.open("", "kgm-excel-viewer", "width=1280,height=820,menubar=no,toolbar=no,location=no");
+  if (!nextPopout) {
     toast("팝업이 차단되었습니다. 브라우저 팝업 허용 후 다시 시도하세요.", "error");
     return;
   }
+
+  viewerPopout = nextPopout;
+  document.body.classList.add("viewer-popped-out");
 
   const cssLinks = Array.from(document.querySelectorAll('link[rel="stylesheet"]'))
     .map(link => `<link rel="stylesheet" href="${link.href}">`)
@@ -50,7 +53,10 @@ function openViewerPopout() {
     html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; background: #f8f9fb; }
     body { font-family: Pretendard, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
     .popout-shell { display: flex; flex-direction: column; height: 100vh; min-width: 0; }
-    .popout-note { padding: 8px 14px; font-size: 12px; color: #666; background: #fff; border-bottom: 1px solid #e8e8e8; }
+    .popout-bar { display: flex; align-items: center; gap: 10px; padding: 8px 14px; background: #fff; border-bottom: 1px solid #e8e8e8; }
+    .popout-note { flex: 1; min-width: 0; font-size: 12px; color: #666; }
+    .popout-restore { border: 1px solid #d8dbe2; background: #fff; color: #333; border-radius: 6px; padding: 6px 10px; font-size: 12px; font-weight: 700; cursor: pointer; }
+    .popout-restore:hover { border-color: #FF0080; color: #FF0080; background: #fff7fc; }
     .popout-content { flex: 1; min-height: 0; display: flex; flex-direction: column; }
     .popout-content .right-page { display: flex !important; flex-direction: column; height: 100%; min-height: 0; padding: 0; }
     .popout-content .right-header { flex: 0 0 auto; }
@@ -61,14 +67,30 @@ function openViewerPopout() {
 </head>
 <body>
   <div class="popout-shell">
-    <div class="popout-note">메인 창과 동기화된 미리보기입니다. 탭 전환은 가능하며, 셀 편집은 메인 창에서 수행하세요.</div>
+    <div class="popout-bar">
+      <div class="popout-note">메인 창과 동기화된 미리보기입니다. 탭 전환은 가능하며, 셀 편집은 메인 창에서 수행하세요.</div>
+      <button class="popout-restore" id="popout-restore" type="button">분리해제</button>
+    </div>
     <main class="right popout-content" id="popout-content"></main>
   </div>
 </body>
 </html>`);
   viewerPopout.document.close();
-  viewerPopout.addEventListener("beforeunload", () => { viewerPopout = null; });
+  viewerPopout.document.getElementById("popout-restore").onclick = restoreViewerPopout;
+  viewerPopout.addEventListener("beforeunload", () => {
+    document.body.classList.remove("viewer-popped-out");
+    viewerPopout = null;
+  });
   syncViewerPopout();
+}
+
+function restoreViewerPopout() {
+  const popout = viewerPopout;
+  document.body.classList.remove("viewer-popped-out");
+  viewerPopout = null;
+  if (popout && !popout.closed) popout.close();
+  refreshTabs();
+  renderExcelViewer();
 }
 
 function syncViewerPopout() {

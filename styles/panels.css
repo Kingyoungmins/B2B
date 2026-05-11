@@ -204,6 +204,23 @@
   .right-page { display: none; flex: 1; min-height: 0; }
   .right-page.active { display: flex; flex-direction: column; }
 
+  body.viewer-popped-out .right-page.active {
+    display: none;
+  }
+
+  body.viewer-popped-out .right::before {
+    content: '엑셀 시뮬레이터가 별도 창으로 분리되었습니다.';
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: 1;
+    min-height: 0;
+    color: var(--ink-400);
+    font-size: 13px;
+    font-weight: 700;
+    background: #fff;
+  }
+
   .file-tabs {
     display: flex;
     gap: 4px;
