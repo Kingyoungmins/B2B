@@ -2,8 +2,9 @@
    LLM API
    =================================================================== */
 async function callLLM(userMessage, options) {
+  options = options || {};
   state.chatHistory.push({ role: "user", content: userMessage });
-  const editTargetId = options && options.editTargetId;
+  const editTargetId = options.editTargetId;
   const editIdx = editTargetId
     ? state.pipeline.findIndex(s => s.id === editTargetId)
     : -1;
@@ -15,7 +16,7 @@ async function callLLM(userMessage, options) {
   if (settings.provider === "anthropic") {
     return await callAnthropic(fullSystem);
   }
-  return await callOpenAICompat(fullSystem);
+  return await callOpenAICompat(fullSystem, options);
 }
 
 async function callAnthropic(system) {
@@ -45,7 +46,7 @@ async function callAnthropic(system) {
   return content;
 }
 
-async function callOpenAICompat(system) {
+async function callOpenAICompat(system, options) {
   const base = (settings.baseUrl || DEFAULTS["openai-compat"].baseUrl).replace(/\/$/, "");
   const messages = [
     { role: "system", content: system },
@@ -62,16 +63,59 @@ async function callOpenAICompat(system) {
       messages,
       max_tokens: 4096,
       temperature: 0.2,
+      stream: true,
     }),
   });
   if (!resp.ok) {
     const text = await resp.text();
     throw new Error(`LLM API 오류 ${resp.status}: ${text.slice(0, 300)}\n(URL: ${url})`);
   }
+  const contentType = resp.headers.get("content-type") || "";
+  if (resp.body && contentType.includes("text/event-stream")) {
+    const content = await readOpenAICompatStream(resp, options && options.onDelta);
+    state.chatHistory.push({ role: "assistant", content });
+    return content;
+  }
+
   const data = await resp.json();
   const content = data.choices?.[0]?.message?.content || "";
   state.chatHistory.push({ role: "assistant", content });
   return content;
+}
+
+async function readOpenAICompatStream(resp, onDelta) {
+  const reader = resp.body.getReader();
+  const decoder = new TextDecoder("utf-8");
+  let buffer = "";
+  let full = "";
+
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split(/\r?\n/);
+    buffer = lines.pop() || "";
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith(":") || !trimmed.startsWith("data:")) continue;
+      const data = trimmed.slice(5).trim();
+      if (data === "[DONE]") return full;
+      let parsed;
+      try {
+        parsed = JSON.parse(data);
+      } catch {
+        continue;
+      }
+      const delta = parsed.choices?.[0]?.delta?.content
+        ?? parsed.choices?.[0]?.text
+        ?? "";
+      if (!delta) continue;
+      full += delta;
+      if (typeof onDelta === "function") onDelta(delta, full);
+    }
+  }
+
+  return full;
 }
 
 async function fetchOpenAICompat(path, preferredBase, options = {}) {

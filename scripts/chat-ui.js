@@ -196,7 +196,13 @@ async function sendChat() {
     const prompt = typeof augmentUserPromptWithMentions === "function"
       ? augmentUserPromptWithMentions(msg)
       : msg;
-    const reply = await callLLM(prompt, { editTargetId });
+    const reply = await callLLM(prompt, {
+      editTargetId,
+      onDelta: (delta, full) => {
+        loading.textContent = full || `${modeLabel}${aiName} 응답 수신 중...`;
+        $("chat-messages").scrollTop = $("chat-messages").scrollHeight;
+      },
+    });
     loading.remove();
     addAssistantReply(reply, { editTargetId });
   } catch (err) {

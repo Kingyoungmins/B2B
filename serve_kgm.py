@@ -65,14 +65,18 @@ class KGMHandler(http.server.SimpleHTTPRequestHandler):
         )
         try:
             with urllib.request.urlopen(req, timeout=300) as resp:
-                payload = resp.read()
                 self.send_response(resp.status)
                 for key, value in resp.headers.items():
-                    if key.lower() in {"connection", "transfer-encoding", "content-encoding"}:
+                    if key.lower() in {"connection", "transfer-encoding", "content-encoding", "content-length"}:
                         continue
                     self.send_header(key, value)
                 self.end_headers()
-                self.wfile.write(payload)
+                while True:
+                    chunk = resp.read(8192)
+                    if not chunk:
+                        break
+                    self.wfile.write(chunk)
+                    self.wfile.flush()
         except urllib.error.HTTPError as err:
             payload = err.read()
             self.send_response(err.code)
