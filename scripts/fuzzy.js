@@ -16,6 +16,23 @@ function normalizeText(value) {
   return _normalize(value);
 }
 
+function escapeRegExpText(value) {
+  return String(value ?? "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function looseTextRegex(search, flags) {
+  const normalized = normalizeText(search);
+  if (!normalized) return null;
+  const pattern = Array.from(normalized).map(escapeRegExpText).join("\\s*");
+  return new RegExp(pattern, flags || "g");
+}
+
+function replaceNormalizedText(value, from, to) {
+  const source = String(value ?? "");
+  const regex = looseTextRegex(from, "g");
+  return regex ? source.replace(regex, String(to ?? "")) : source;
+}
+
 function levenshtein(a, b) {
   if (a === b) return 0;
   const al = a.length, bl = b.length;

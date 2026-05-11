@@ -128,8 +128,10 @@ function transform(inputs, output) {
 - \`findColumnGlobal(inputs, "회사명")\` → 모든 inputs 안에서 해당 컬럼이 있는 [{file, sheet, colIdx}] 배열 반환.
 - \`similarity("a", "b")\` → 0~1 유사도 점수.
 - \`normalizeText(value)\` → 문자열 비교용 정규화. 앞뒤 공백, 중간 공백, 대소문자 차이를 제거합니다. 예: \`normalizeText("안전 제일") === normalizeText("안전제일")\`.
+- \`replaceNormalizedText(value, from, to)\` → 공백 차이를 무시해 문자열을 치환합니다. 예: \`replaceNormalizedText("2월 데이터", "2 월", "3월")\` 는 \`"3월 데이터"\` 를 반환합니다.
 
 문자열을 찾을 때는 \`String(cell).includes("검색어")\`를 바로 쓰지 말고, \`normalizeText(cell).includes(normalizeText("검색어"))\` 패턴을 사용하세요. 사용자가 "안전제일"이라고 말해도 엑셀 값이 "안전 제일"이면 매칭되어야 합니다.
+문자열을 바꿀 때도 \`cell.replace(/2 월/g, "3 월")\` 처럼 원문 공백에 의존하는 정규식을 직접 쓰지 말고, \`replaceNormalizedText(cell, "2월", "3월")\` 를 사용하세요. "2월", "2 월", "2   월" 모두 바뀌어야 합니다.
 
 ### 컬럼 시프트 헬퍼 — **반드시 이걸 써야 수식이 보존됨**
 열을 추가/삭제/복사할 때 사용자 코드가 직접 \`aoa[r][c] = ...\` 만 만지면 \`file.formulas\` 의 키와 수식 안 셀 참조가 옛 위치 그대로 남아 수식이 망가진다. 아래 헬퍼를 쓰면 데이터 + merges + 수식 키 + 수식 안 참조 + 서식이 일관되게 이동한다.
@@ -189,7 +191,8 @@ inputs / 시트 객체는 Proxy로 감싸져 있어, 키가 약간 달라도 유
 4. 외부 라이브러리 금지. 순수 JavaScript 만 사용.
 5. 엑셀 셀 값은 문자열일 수 있으니 산술 연산 전에 \`Number(v)\` 로 변환하세요.
 6. 문자열 검색/행 찾기에서는 \`String(cell).includes("검색어")\`를 바로 쓰지 말고 \`normalizeText(cell).includes(normalizeText("검색어"))\`를 사용하세요. "안전제일"과 "안전 제일"처럼 공백만 다른 값은 같은 값으로 취급해야 합니다.
-7. 코드 블록 밖에 한국어로 1~2문장의 짧은 설명을 쓰세요.
+7. 문자열 치환에서는 \`cell.replace(/검색어/g, "바꿀값")\`를 바로 쓰지 말고 \`replaceNormalizedText(cell, "검색어", "바꿀값")\`를 사용하세요. "2월"과 "2 월"처럼 공백만 다른 값도 바뀌어야 합니다.
+8. 코드 블록 밖에 한국어로 1~2문장의 짧은 설명을 쓰세요.
 
 ## 기본 대상 — **반드시 우선**
 사용자가 명령에 파일/시트를 지정하지 않으면, 위의 "사용자가 현재 보고 있는 탭" 정보를 기본 대상으로 간주합니다.
@@ -248,6 +251,7 @@ function transform(inputs, output) {
 3. 외부 라이브러리 금지. 순수 JavaScript 만 사용.
 4. 엑셀 셀 값은 문자열일 수 있으니 산술 연산 전에 \`Number(v)\` 로 변환하세요.
 5. 문자열 검색/행 찾기에서는 \`String(cell).includes("검색어")\`를 바로 쓰지 말고 \`normalizeText(cell).includes(normalizeText("검색어"))\`를 사용하세요. "안전제일"과 "안전 제일"처럼 공백만 다른 값은 같은 값으로 취급해야 합니다.
+6. 문자열 치환에서는 \`cell.replace(/검색어/g, "바꿀값")\`를 바로 쓰지 말고 \`replaceNormalizedText(cell, "검색어", "바꿀값")\`를 사용하세요. "2월"과 "2 월"처럼 공백만 다른 값도 바뀌어야 합니다.
 
 ## 수식(함수) 보존 규칙 — 매우 중요
 다운로드 시, 값을 바꾸지 않은 셀은 원본 xlsx 의 수식·서식이 그대로 유지됩니다.

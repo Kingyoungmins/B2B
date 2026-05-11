@@ -10,6 +10,7 @@
 - ixi/OpenAI-compatible 모델 호출에 스트리밍 응답을 적용했습니다.
 - 채팅 응답을 기다리는 동안 전체 완료를 기다리지 않고 수신되는 토큰을 실시간으로 표시합니다.
 - 로컬 `/v1/*` Python 프록시도 응답을 한 번에 버퍼링하지 않고 chunk 단위로 브라우저에 전달합니다.
+- 공백 차이를 무시하는 문자열 치환 헬퍼 `replaceNormalizedText(value, from, to)`를 추가했습니다. 예: `2월`, `2 월`, `2   월`을 모두 `3월`로 바꿀 수 있습니다.
 - UI 제목과 EXE 빌드 이름을 ver3.2로 갱신했습니다.
 - EXE 빌드 결과 파일명은 `KGM_B2B_ver3.2.exe`입니다.
 
@@ -117,6 +118,7 @@ col(sheetAoA, "회사명")
 findColumnGlobal(inputs, "회사명")
 similarity("안전제일", "안전 제일")
 normalizeText("안전 제일")
+replaceNormalizedText("2월 데이터", "2 월", "3월")
 ```
 
 행이나 셀을 찾을 때 권장 패턴:

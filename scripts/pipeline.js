@@ -141,13 +141,14 @@ function computeStateBeforeStep(stepIdx) {
     const step = state.pipeline[i];
     if (!isStepEnabled(step)) continue;
     try {
-      const fn = new Function("inputs", "output", "col", "findColumnGlobal", "similarity", "normalizeText",
+      const fn = new Function("inputs", "output", "col", "findColumnGlobal", "similarity", "normalizeText", "replaceNormalizedText",
         "insertColumns", "copyColumns", "deleteColumns", "shiftFormulaText",
         step.code +
         "\nreturn typeof transform === 'function' ? transform(inputs, output) : { inputs, output };"
       );
       const result = fn(proxiedInputs, proxiedOutput, col, findColumnGlobal, similarity,
         typeof normalizeText === "function" ? normalizeText : ((v) => String(v || "").trim().toLowerCase().replace(/\s+/g, "")),
+        typeof replaceNormalizedText === "function" ? replaceNormalizedText : ((v) => String(v ?? "")),
         typeof insertColumns === "function" ? insertColumns : null,
         typeof copyColumns === "function" ? copyColumns : null,
         typeof deleteColumns === "function" ? deleteColumns : null,
@@ -262,6 +263,7 @@ function runPipeline(steps) {
     findColumnGlobal: typeof findColumnGlobal === "function" ? findColumnGlobal : null,
     similarity: typeof similarity === "function" ? similarity : null,
     normalizeText: typeof normalizeText === "function" ? normalizeText : ((v) => String(v || "").trim().toLowerCase().replace(/\s+/g, "")),
+    replaceNormalizedText: typeof replaceNormalizedText === "function" ? replaceNormalizedText : ((v) => String(v ?? "")),
   };
 
   state.lastError = null;
@@ -270,7 +272,7 @@ function runPipeline(steps) {
     if (step.manualEdit && applyManualEditForPipeline(step.manualEdit, inputsMap, outputSheets)) return;
     let fn;
     try {
-      fn = new Function("inputs", "output", "col", "findColumnGlobal", "similarity", "normalizeText",
+      fn = new Function("inputs", "output", "col", "findColumnGlobal", "similarity", "normalizeText", "replaceNormalizedText",
         "insertColumns", "copyColumns", "deleteColumns", "shiftFormulaText",
         step.code +
         "\nreturn typeof transform === 'function' ? transform(inputs, output) : { inputs, output };"
@@ -285,7 +287,7 @@ function runPipeline(steps) {
     let result;
     try {
       result = fn(proxiedInputs, proxiedOutput,
-        helpers.col, helpers.findColumnGlobal, helpers.similarity, helpers.normalizeText,
+        helpers.col, helpers.findColumnGlobal, helpers.similarity, helpers.normalizeText, helpers.replaceNormalizedText,
         typeof insertColumns === "function" ? insertColumns : null,
         typeof copyColumns === "function" ? copyColumns : null,
         typeof deleteColumns === "function" ? deleteColumns : null,
