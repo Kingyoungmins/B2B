@@ -170,6 +170,10 @@ function refreshTabs() {
     state.currentFileId = null;
     state.currentSheet = null;
     state.selectedSheets = [];
+    state.selectedCell = null;
+    state.selectedRange = null;
+    state.selectedRanges = [];
+    state.selectionAnchor = null;
   }
 
   if (!state.currentFileId && all.length) {
@@ -380,6 +384,8 @@ function _appendRows(viewer, ctx, fromRow, toRow) {
           state.selectedCell.r === r &&
           state.selectedCell.c === c) {
         cls.push("selected-cell");
+      } else if (isCellInSelectedRanges(ctx.fileId, sheet, r, c)) {
+        cls.push("selected-range");
       }
       const realStyle = file.styles && file.styles[sheet] && file.styles[sheet][r] && file.styles[sheet][r][c];
       const numFormat = file.formats && file.formats[sheet] && file.formats[sheet][r] && file.formats[sheet][r][c];
@@ -404,14 +410,30 @@ function setupExcelCellEditing(viewer, ctx) {
   let dragAnchor = null;
   let didDrag = false;
   let mouseDown = false;
+  let skipClickSelection = false;
 
   viewer.onmousedown = (e) => {
     const target = getSelectionTarget(e, ctx);
     if (!target) return;
     mouseDown = true;
     didDrag = false;
+    const multi = e.ctrlKey || e.metaKey;
+    if (e.shiftKey && state.selectionAnchor) {
+      const range = mergeSelectionTargets(state.selectionAnchor, target, ctx);
+      applyViewerSelection(viewer, ctx, range, { append: multi });
+      skipClickSelection = true;
+      e.preventDefault();
+      return;
+    }
+    if (multi) {
+      toggleViewerSelection(viewer, ctx, target);
+      skipClickSelection = true;
+      e.preventDefault();
+      return;
+    }
     dragAnchor = target;
     applyViewerSelection(viewer, ctx, target);
+    skipClickSelection = true;
     if (target.type !== "cell") e.preventDefault();
   };
 
@@ -433,15 +455,15 @@ function setupExcelCellEditing(viewer, ctx) {
       didDrag = false;
       return;
     }
+    if (skipClickSelection) {
+      skipClickSelection = false;
+      return;
+    }
     const td = e.target.closest("td[data-r][data-c]");
     if (!td) return;
     const r = Number(td.dataset.r);
     const c = Number(td.dataset.c);
-    state.selectedCell = { fileId: ctx.fileId, sheet: ctx.sheet, r, c };
-    state.selectedRange = { fileId: ctx.fileId, sheet: ctx.sheet, r1: r, c1: c, r2: r, c2: c, type: "cell" };
-    document.querySelectorAll("td.selected-cell").forEach(el => el.classList.remove("selected-cell"));
-    td.classList.add("selected-cell");
-    updateChatRangeReference(state.selectedRange);
+    applyViewerSelection(viewer, ctx, { fileId: ctx.fileId, sheet: ctx.sheet, r1: r, c1: c, r2: r, c2: c, type: "cell" });
     if (typeof renderMentionMenu === "function") renderMentionMenu();
   };
 
@@ -544,22 +566,60 @@ function mergeSelectionTargets(a, b, ctx) {
   };
 }
 
-function applyViewerSelection(viewer, ctx, range) {
-  state.selectedRange = normalizeRange(range);
-  if (range.type === "cell") {
-    state.selectedCell = { fileId: ctx.fileId, sheet: ctx.sheet, r: range.r1, c: range.c1 };
+function applyViewerSelection(viewer, ctx, range, options = {}) {
+  const normalized = normalizeRange(range);
+  state.selectedRange = normalized;
+  state.selectionAnchor = options.append && state.selectionAnchor ? state.selectionAnchor : normalized;
+  state.selectedRanges = options.append
+    ? addSelectionRange(state.selectedRanges || [], normalized)
+    : [normalized];
+  if (normalized.type === "cell") {
+    state.selectedCell = { fileId: ctx.fileId, sheet: ctx.sheet, r: normalized.r1, c: normalized.c1 };
+  } else {
+    state.selectedCell = null;
   }
+  paintViewerSelections(viewer);
+  updateChatRangeReference(normalized);
+}
+
+function toggleViewerSelection(viewer, ctx, range) {
+  const normalized = normalizeRange(range);
+  const current = state.selectedRanges || [];
+  const idx = current.findIndex(item => rangesEqual(item, normalized));
+  state.selectedRanges = idx >= 0
+    ? current.filter((_, i) => i !== idx)
+    : [...current, normalized];
+  state.selectedRange = normalized;
+  state.selectionAnchor = normalized;
+  if (normalized.type === "cell") {
+    state.selectedCell = { fileId: ctx.fileId, sheet: ctx.sheet, r: normalized.r1, c: normalized.c1 };
+  } else {
+    state.selectedCell = null;
+  }
+  paintViewerSelections(viewer);
+  updateChatRangeReference(normalized);
+}
+
+function paintViewerSelections(viewer) {
   viewer.querySelectorAll(".selected-cell,.selected-range").forEach(el => {
     el.classList.remove("selected-cell", "selected-range");
   });
+  const ranges = state.selectedRanges && state.selectedRanges.length
+    ? state.selectedRanges
+    : (state.selectedRange ? [state.selectedRange] : []);
   viewer.querySelectorAll("td[data-r][data-c]").forEach(td => {
     const r = Number(td.dataset.r);
     const c = Number(td.dataset.c);
-    if (r >= state.selectedRange.r1 && r <= state.selectedRange.r2 && c >= state.selectedRange.c1 && c <= state.selectedRange.c2) {
-      td.classList.add(range.type === "cell" ? "selected-cell" : "selected-range");
+    const hit = ranges.find(range => isCellInRange(range, r, c, state.currentFileId, state.currentSheet));
+    if (hit) {
+      const isPrimaryCell = state.selectedCell &&
+        state.selectedCell.fileId === hit.fileId &&
+        state.selectedCell.sheet === hit.sheet &&
+        state.selectedCell.r === r &&
+        state.selectedCell.c === c;
+      td.classList.add(isPrimaryCell ? "selected-cell" : "selected-range");
     }
   });
-  updateChatRangeReference(state.selectedRange);
 }
 
 function normalizeRange(range) {
@@ -572,21 +632,52 @@ function normalizeRange(range) {
   };
 }
 
+function addSelectionRange(ranges, range) {
+  return ranges.some(item => rangesEqual(item, range)) ? ranges : [...ranges, range];
+}
+
+function rangesEqual(a, b) {
+  return !!a && !!b &&
+    a.fileId === b.fileId &&
+    a.sheet === b.sheet &&
+    a.r1 === b.r1 &&
+    a.c1 === b.c1 &&
+    a.r2 === b.r2 &&
+    a.c2 === b.c2;
+}
+
+function isCellInRange(range, r, c, fileId, sheet) {
+  return !!range &&
+    range.fileId === fileId &&
+    range.sheet === sheet &&
+    r >= range.r1 && r <= range.r2 &&
+    c >= range.c1 && c <= range.c2;
+}
+
+function isCellInSelectedRanges(fileId, sheet, r, c) {
+  return (state.selectedRanges || []).some(range => isCellInRange(range, r, c, fileId, sheet));
+}
+
 function updateChatRangeReference(range) {
   const ta = $("chat-text");
   if (!ta || !range) return;
-  const file = getFile(range.fileId);
-  const name = file ? file.name : range.fileId;
-  const a = _excelCol(range.c1) + (range.r1 + 1);
-  const b = _excelCol(range.c2) + (range.r2 + 1);
-  const ref = `${name}/${range.sheet}!${a}${a === b ? "" : ":" + b}`;
+  const ref = formatRangeMentionBody(range);
   const line = `선택 범위: @범위[${ref}]`;
-  const marker = /(?:^|\n)선택 범위: @범위\[[^\]]+\]/;
-  if (marker.test(ta.value)) {
-    ta.value = ta.value.replace(marker, (m) => (m.startsWith("\n") ? "\n" : "") + line);
-  } else {
-    ta.value = ta.value.trim() ? ta.value + "\n" + line : line;
+  const marker = /(^|\n)선택 범위: @범위\[[^\]]+\]/g;
+  let last = null;
+  let match;
+  while ((match = marker.exec(ta.value)) !== null) last = match;
+  if (last) {
+    const trailing = ta.value.slice(last.index + last[0].length);
+    if (!trailing.trim()) {
+      const prefix = last[1] || "";
+      ta.value = ta.value.slice(0, last.index) + prefix + line + trailing;
+      ta.setSelectionRange(ta.value.length, ta.value.length);
+      return;
+    }
   }
+  ta.value = ta.value.trim() ? ta.value + "\n" + line : line;
+  ta.setSelectionRange(ta.value.length, ta.value.length);
 }
 
 function coerceCellInput(text) {
@@ -623,6 +714,9 @@ function commitCellEdit(fileId, sheet, r, c, value) {
       state.pipeline = next;
     }
     state.selectedCell = { fileId, sheet, r, c };
+    state.selectedRange = { fileId, sheet, r1: r, c1: c, r2: r, c2: c, type: "cell" };
+    state.selectedRanges = [state.selectedRange];
+    state.selectionAnchor = state.selectedRange;
     renderPipeline();
     refreshRunButton();
     toast(`${sheet}!${_excelCol(c)}${r + 1} 값을 변경했습니다.`, "success");

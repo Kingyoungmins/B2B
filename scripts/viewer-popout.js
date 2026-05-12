@@ -136,6 +136,67 @@ function syncViewerPopout() {
 }
 
 function setupPopoutCellEditing(viewer) {
+  let dragAnchor = null;
+  let didDrag = false;
+  let mouseDown = false;
+
+  viewer.addEventListener("mousedown", (e) => {
+    const ctx = getPopoutSelectionContext();
+    if (!ctx) return;
+    const target = getSelectionTarget(e, ctx);
+    if (!target) return;
+    mouseDown = true;
+    didDrag = false;
+    const multi = e.ctrlKey || e.metaKey;
+    if (e.shiftKey && state.selectionAnchor) {
+      applyViewerSelection(viewer, ctx, mergeSelectionTargets(state.selectionAnchor, target, ctx), { append: multi });
+      e.preventDefault();
+      return;
+    }
+    if (multi) {
+      toggleViewerSelection(viewer, ctx, target);
+      e.preventDefault();
+      return;
+    }
+    dragAnchor = target;
+    applyViewerSelection(viewer, ctx, target);
+    if (target.type !== "cell") e.preventDefault();
+  });
+
+  viewer.addEventListener("mouseover", (e) => {
+    if (!mouseDown || !dragAnchor) return;
+    const ctx = getPopoutSelectionContext();
+    if (!ctx) return;
+    const target = getSelectionTarget(e, ctx);
+    if (!target) return;
+    didDrag = true;
+    applyViewerSelection(viewer, ctx, mergeSelectionTargets(dragAnchor, target, ctx));
+  });
+
+  viewerPopout.document.addEventListener("mouseup", () => {
+    mouseDown = false;
+    dragAnchor = null;
+  });
+
+  viewer.addEventListener("click", (e) => {
+    if (didDrag) {
+      didDrag = false;
+      return;
+    }
+    const ctx = getPopoutSelectionContext();
+    const td = e.target.closest("td[data-r][data-c]");
+    if (!ctx || !td || e.ctrlKey || e.metaKey || e.shiftKey) return;
+    applyViewerSelection(viewer, ctx, {
+      fileId: ctx.fileId,
+      sheet: ctx.sheet,
+      r1: Number(td.dataset.r),
+      c1: Number(td.dataset.c),
+      r2: Number(td.dataset.r),
+      c2: Number(td.dataset.c),
+      type: "cell",
+    });
+  });
+
   viewer.addEventListener("focusin", (e) => {
     const td = e.target.closest("td[data-r][data-c]");
     if (!td) return;
@@ -198,6 +259,29 @@ function commitPopoutCell(td) {
   td.dataset.committed = "1";
   commitCellEdit(fileId, sheet, r, c, coerceCellInput(after));
   syncViewerPopout();
+}
+
+function getPopoutSelectionContext() {
+  const file = getFile(state.currentFileId);
+  if (!file || !state.currentSheet) return null;
+  const sheet = state.currentSheet;
+  const aoa = file.sheets[sheet] || [];
+  const formulas = (file.formulas || {})[sheet] || {};
+  let maxCols = 1;
+  for (let i = 0; i < aoa.length; i++) {
+    maxCols = Math.max(maxCols, aoa[i] ? aoa[i].length : 0);
+  }
+  Object.keys(formulas).forEach(addr => {
+    const rc = _addrToRC(addr);
+    if (rc) maxCols = Math.max(maxCols, rc.c + 1);
+  });
+  return {
+    file,
+    sheet,
+    fileId: state.currentFileId,
+    visibleCols: Math.min(maxCols, VIEWER_MAX_COLS),
+    totalRows: Math.max(aoa.length, _maxRowFromFormulas(formulas)),
+  };
 }
 
 (function wrapViewerPopoutSync() {

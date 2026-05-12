@@ -177,6 +177,7 @@ function augmentUserPromptWithMentions(message) {
   if (state.selectedRange) {
     add(`- 선택 범위: ${formatRangeMentionBody(state.selectedRange)}`);
   }
+  (state.selectedRanges || []).forEach(range => add(`- 선택 범위: ${formatRangeMentionBody(range)}`));
   if (!lines.length) return message;
   return `${message}\n\n[정확 참조]\n${lines.join("\n")}`;
 }

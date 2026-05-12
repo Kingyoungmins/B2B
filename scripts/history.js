@@ -33,6 +33,8 @@ function makeHistorySnapshot(label) {
     selectedSheets: deepClone(state.selectedSheets || []),
     selectedCell: deepClone(state.selectedCell || null),
     selectedRange: deepClone(state.selectedRange || null),
+    selectedRanges: deepClone(state.selectedRanges || []),
+    selectionAnchor: deepClone(state.selectionAnchor || null),
     pipeline: deepClone(state.pipeline || []),
     fuzzyResolution: deepClone(state.fuzzyResolution || {}),
   };
@@ -63,6 +65,8 @@ function restoreHistorySnapshot(snapshot) {
   state.selectedSheets = deepClone(snapshot.selectedSheets || []);
   state.selectedCell = deepClone(snapshot.selectedCell || null);
   state.selectedRange = deepClone(snapshot.selectedRange || null);
+  state.selectedRanges = deepClone(snapshot.selectedRanges || []);
+  state.selectionAnchor = deepClone(snapshot.selectionAnchor || null);
   state.pipeline = deepClone(snapshot.pipeline || []);
   state.fuzzyResolution = deepClone(snapshot.fuzzyResolution || {});
   state.editingStepId = null;

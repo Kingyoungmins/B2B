@@ -213,6 +213,9 @@ function renderInputList() {
         state.currentFileId = null;
         state.currentSheet = null;
         state.selectedCell = null;
+        state.selectedRange = null;
+        state.selectedRanges = [];
+        state.selectionAnchor = null;
       }
       renderInputList();
       refreshTabs();
@@ -265,6 +268,9 @@ function renderOutputChip() {
           state.currentFileId = null;
           state.currentSheet = null;
           state.selectedCell = null;
+          state.selectedRange = null;
+          state.selectedRanges = [];
+          state.selectionAnchor = null;
         }
       } else {
         activateOutputTemplate(0);

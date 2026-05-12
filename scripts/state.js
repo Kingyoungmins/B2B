@@ -12,6 +12,8 @@ const state = {
   currentSheet: null,
   selectedCell: null,   // { fileId, sheet, r, c }
   selectedRange: null,  // { fileId, sheet, r1, c1, r2, c2, type }
+  selectedRanges: [],   // multiple explicit cell/range selections
+  selectionAnchor: null,
   selectedSheets: [],
   pipeline: [],
   history: { undo: [], redo: [], limit: 80 },

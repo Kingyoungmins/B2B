@@ -24,6 +24,10 @@ $("btn-reset").onclick = () => {
   state.lastError = null;
   state.formulaResults = {};
   state.selectedSheets = [];
+  state.selectedCell = null;
+  state.selectedRange = null;
+  state.selectedRanges = [];
+  state.selectionAnchor = null;
   $("chat-messages").innerHTML = `<div class="msg system">입력 또는 출력 파일 업로드 후 활성화됩니다.</div>`;
   renderInputList();
   renderOutputChip();
