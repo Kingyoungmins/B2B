@@ -1,6 +1,9 @@
 /* ===================================================================
    LLM API
    =================================================================== */
+const LLM_HISTORY_MAX_MESSAGES = 18;
+const LLM_HISTORY_MAX_CHARS = 32000;
+
 async function callLLM(userMessage, options) {
   options = options || {};
   state.chatHistory.push({ role: "user", content: userMessage });
@@ -21,6 +24,7 @@ async function callLLM(userMessage, options) {
 
 async function callAnthropic(system) {
   const base = (settings.baseUrl || DEFAULTS.anthropic.baseUrl).replace(/\/$/, "");
+  const messages = getLLMChatHistory();
   const resp = await fetch(base + "/messages", {
     method: "POST",
     headers: {
@@ -33,7 +37,7 @@ async function callAnthropic(system) {
       model: settings.model || DEFAULTS.anthropic.model,
       max_tokens: 4096,
       system,
-      messages: state.chatHistory,
+      messages,
     }),
   });
   if (!resp.ok) {
@@ -50,7 +54,7 @@ async function callOpenAICompat(system, options) {
   const base = (settings.baseUrl || DEFAULTS["openai-compat"].baseUrl).replace(/\/$/, "");
   const messages = [
     { role: "system", content: system },
-    ...state.chatHistory,
+    ...getLLMChatHistory(),
   ];
   const { resp, url } = await fetchOpenAICompat("/chat/completions", base, {
     method: "POST",
@@ -81,6 +85,26 @@ async function callOpenAICompat(system, options) {
   const content = data.choices?.[0]?.message?.content || "";
   state.chatHistory.push({ role: "assistant", content });
   return content;
+}
+
+function getLLMChatHistory() {
+  const source = Array.isArray(state.chatHistory) ? state.chatHistory : [];
+  const picked = [];
+  let totalChars = 0;
+
+  for (let i = source.length - 1; i >= 0 && picked.length < LLM_HISTORY_MAX_MESSAGES; i--) {
+    const msg = source[i];
+    if (!msg || (msg.role !== "user" && msg.role !== "assistant")) continue;
+    const content = String(msg.content || "");
+    const nextChars = totalChars + content.length;
+    if (picked.length > 0 && nextChars > LLM_HISTORY_MAX_CHARS) break;
+    picked.push({ role: msg.role, content });
+    totalChars = nextChars;
+  }
+
+  const history = picked.reverse();
+  while (history.length && history[0].role !== "user") history.shift();
+  return history;
 }
 
 async function readOpenAICompatStream(resp, onDelta) {
