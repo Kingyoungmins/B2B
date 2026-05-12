@@ -579,13 +579,14 @@ function applyViewerSelection(viewer, ctx, range, options = {}) {
     state.selectedCell = null;
   }
   paintViewerSelections(viewer);
-  updateChatRangeReference(normalized);
+  updateChatRangeReference(normalized, { append: !!options.append });
 }
 
 function toggleViewerSelection(viewer, ctx, range) {
   const normalized = normalizeRange(range);
   const current = state.selectedRanges || [];
   const idx = current.findIndex(item => rangesEqual(item, normalized));
+  const wasSelected = idx >= 0;
   state.selectedRanges = idx >= 0
     ? current.filter((_, i) => i !== idx)
     : [...current, normalized];
@@ -597,7 +598,7 @@ function toggleViewerSelection(viewer, ctx, range) {
     state.selectedCell = null;
   }
   paintViewerSelections(viewer);
-  updateChatRangeReference(normalized);
+  if (!wasSelected) updateChatRangeReference(normalized, { append: true });
 }
 
 function paintViewerSelections(viewer) {
@@ -658,12 +659,18 @@ function isCellInSelectedRanges(fileId, sheet, r, c) {
   return (state.selectedRanges || []).some(range => isCellInRange(range, r, c, fileId, sheet));
 }
 
-function updateChatRangeReference(range) {
+function updateChatRangeReference(range, options = {}) {
   const ta = $("chat-text");
   if (!ta || !range) return;
   const ref = formatRangeMentionBody(range);
   const line = `선택 범위: @범위[${ref}]`;
   const marker = /(^|\n)선택 범위: @범위\[[^\]]+\]/g;
+  if (ta.value.includes(line)) return;
+  if (options.append) {
+    ta.value = ta.value.trim() ? ta.value + "\n" + line : line;
+    ta.setSelectionRange(ta.value.length, ta.value.length);
+    return;
+  }
   let last = null;
   let match;
   while ((match = marker.exec(ta.value)) !== null) last = match;
