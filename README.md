@@ -63,15 +63,32 @@
 
 ### Ubuntu/Linux 실행
 
-Qwen OpenAI-compatible 서버가 먼저 떠 있어야 합니다.
+Ubuntu에서는 Windows용 `.exe`를 실행하지 않습니다. 또한 `index.html`을 파일로 직접 열면 `/v1/*` 프록시 서버가 없어서 AI 연결 테스트가 실패합니다. 반드시 Python 로컬 서버를 먼저 실행한 뒤 `http://.../index.html` 주소로 접속합니다.
+
+1. Qwen OpenAI-compatible 서버를 먼저 실행합니다.
+
+Qwen이 앱과 같은 Ubuntu 장비에서 실행 중이면 기본 대상은 다음 주소입니다.
 
 ```text
 http://127.0.0.1:8080/v1/chat/completions
 ```
 
-그 다음 앱은 `index.html`을 직접 열지 말고 로컬 Python 서버로 실행합니다.
+간단히 확인:
 
 ```bash
+curl http://127.0.0.1:8080/v1/models
+```
+
+Qwen이 다른 장비에 있으면 앱 실행 전에 `KGM_VLLM_BASE`를 그 서버 주소로 지정합니다.
+
+```bash
+export KGM_VLLM_BASE=http://<QWEN_SERVER_IP>:8080
+```
+
+2. KGM 앱 서버를 실행합니다.
+
+```bash
+cd B2B_ver3.31
 chmod +x start_kgm.sh
 ./start_kgm.sh
 ```
@@ -82,13 +99,15 @@ chmod +x start_kgm.sh
 python3 launch_kgm.py
 ```
 
-기본 주소:
+3. 브라우저에서 앱에 접속합니다.
 
 ```text
 http://127.0.0.1:8090/index.html
 ```
 
 포트가 사용 중이면 `18090`부터 `18095`까지 자동 fallback 합니다.
+
+4. AI 연결 설정을 확인합니다.
 
 AI 연결 설정의 Base URL은 Qwen의 `8080`이 아니라 KGM 프록시 주소를 사용합니다.
 
@@ -107,7 +126,7 @@ Model: Qwen3.5 또는 Qwen3.6
 
 모델명은 실제 Qwen 서버가 `/v1/models`에서 반환하는 이름과 같아야 합니다. 기본값은 `Qwen3.5`이며, AI 연결 설정의 `Model` 입력칸에서 `Qwen3.6` 등으로 바꿔 저장할 수 있습니다.
 
-Ubuntu 서버를 다른 PC 브라우저에서 접속해야 하면 다음처럼 바인딩 주소를 열고 실행합니다.
+5. 다른 PC 브라우저에서 Ubuntu 서버로 접속해야 하는 경우:
 
 ```bash
 KGM_HOST=0.0.0.0 KGM_LAUNCH_HOST=<Ubuntu_IP> ./start_kgm.sh
@@ -117,6 +136,20 @@ KGM_HOST=0.0.0.0 KGM_LAUNCH_HOST=<Ubuntu_IP> ./start_kgm.sh
 
 ```text
 http://<Ubuntu_IP>:8090/index.html
+```
+
+Ubuntu 방화벽이 켜져 있으면 `8090` 포트를 열어야 합니다.
+
+```bash
+sudo ufw allow 8090/tcp
+```
+
+문제 확인 순서:
+
+```bash
+curl http://127.0.0.1:8080/v1/models   # Qwen 서버 확인
+curl http://127.0.0.1:8090/index.html  # KGM 앱 서버 확인
+curl http://127.0.0.1:8090/v1/models   # KGM 프록시 확인
 ```
 
 ### Windows 실행
