@@ -7,7 +7,7 @@
 ## 최근 변경사항
 
 ### ver3.31
-- `/v1/*` 프록시 기본 대상을 사내 violet 서버가 아니라 로컬 Qwen 서버 `http://127.0.0.1:8080`으로 변경했습니다.
+- `/v1/*` 프록시 기본 대상을 사내 violet 서버가 아니라 내부망 Qwen 서버 `http://192.168.0.14:8080`으로 변경했습니다.
 - `KGM_VLLM_BASE` 환경변수를 지정하면 기존처럼 다른 OpenAI-compatible 서버 주소로 덮어쓸 수 있습니다.
 - Ubuntu/Linux 실행용 `start_kgm.sh`를 추가했습니다. Ubuntu에서는 EXE나 `index.html` 직접 열기가 아니라 이 스크립트 또는 `python3 launch_kgm.py`로 로컬 프록시 서버를 먼저 띄워야 합니다.
 - UI 제목과 EXE 빌드 이름을 ver3.31로 갱신했습니다.
@@ -78,13 +78,13 @@ chmod +x start_kgm.sh
 Qwen이 앱과 같은 Ubuntu 장비에서 실행 중이면 기본 대상은 다음 주소입니다.
 
 ```text
-http://127.0.0.1:8080/v1/chat/completions
+http://192.168.0.14:8080/v1/chat/completions
 ```
 
 간단히 확인:
 
 ```bash
-curl http://127.0.0.1:8080/v1/models
+curl http://192.168.0.14:8080/v1/models
 ```
 
 Qwen이 다른 장비에 있으면 앱 실행 전에 `KGM_VLLM_BASE`를 그 서버 주소로 지정합니다.
@@ -129,10 +129,10 @@ AI 연결 설정 값:
 Provider: Qwen 로컬
 Base URL: http://127.0.0.1:8090/v1
 API Key: local
-Model: Qwen3.5 또는 Qwen3.6 또는 Qwen3.6-35B-A3B-FP8
+Model: Qwen3.6-35B-A3B-FP8
 ```
 
-모델명은 실제 Qwen 서버가 `/v1/models`에서 반환하는 이름과 같아야 합니다. 기본값은 `Qwen3.5`이며, AI 연결 설정의 `Model` 입력칸에서 `Qwen3.6`, `Qwen3.6-35B-A3B-FP8` 등으로 바꿔 저장할 수 있습니다.
+모델명은 실제 Qwen 서버가 `/v1/models`에서 반환하는 이름과 같아야 합니다. 기본값은 `Qwen3.6-35B-A3B-FP8`이며, AI 연결 설정의 `Model` 입력칸에서 `Qwen3.5`, `Qwen3.6` 등으로 바꿔 저장할 수 있습니다.
 
 5. 다른 PC 브라우저에서 Ubuntu 서버로 접속해야 하는 경우:
 
@@ -155,7 +155,7 @@ sudo ufw allow 8090/tcp
 문제 확인 순서:
 
 ```bash
-curl http://127.0.0.1:8080/v1/models   # Qwen 서버 확인
+curl http://192.168.0.14:8080/v1/models   # Qwen 서버 확인
 curl http://127.0.0.1:8090/index.html  # KGM 앱 서버 확인
 curl http://127.0.0.1:8090/v1/models   # KGM 프록시 확인
 ```
@@ -193,7 +193,7 @@ dist\KGM_B2B_ver3.31.exe
 | `KGM_PORT` | `8090` | 로컬 서버 포트 |
 | `KGM_HOST` | `127.0.0.1` | 서버 바인딩 주소 |
 | `KGM_LAUNCH_HOST` | `127.0.0.1` | 브라우저에서 여는 주소 |
-| `KGM_VLLM_BASE` | `http://127.0.0.1:8080` | `/v1/*` 프록시 대상 |
+| `KGM_VLLM_BASE` | `http://192.168.0.14:8080` | `/v1/*` 프록시 대상 |
 | `KGM_NO_BROWSER` | 없음 | `1`이면 브라우저 자동 실행 안 함 |
 | `KGM_LOG_REQUESTS` | 없음 | `1`이면 HTTP 요청 로그 출력 |
 
