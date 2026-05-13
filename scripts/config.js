@@ -9,7 +9,7 @@ const DEFAULTS = {
   },
   "openai-compat": {
     apiKey: "local",
-    model: "Qwen3.6",
+    model: "Qwen3.5",
     baseUrl: location.protocol === "http:" || location.protocol === "https:"
       ? `${location.origin}/v1`
       : "http://127.0.0.1:8090/v1",
