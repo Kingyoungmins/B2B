@@ -9,6 +9,7 @@
 ### ver3.4
 - OpenAI-compatible 스트리밍 응답에서 `reasoning_content`/`reasoning` delta를 별도로 수신해 채팅창에 표시합니다.
 - reasoning은 기본 접힘 상태의 `생각 펼치기/생각 접기` 영역으로 제공해, 사용자가 필요할 때만 확인할 수 있습니다.
+- 서버 chunk 크기와 무관하게 브라우저에서 응답/생각 텍스트를 글자 단위로 부드럽게 표시하는 typewriter 렌더링을 추가했습니다.
 - UI 제목과 EXE 빌드 이름을 ver3.4로 갱신했습니다.
 - EXE 빌드 결과 파일명은 `KGM_B2B_ver3.4.exe`입니다.
 

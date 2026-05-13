@@ -210,6 +210,11 @@ function setupStreamingAssistantMessage(container, modeLabel, aiName) {
   const reasoningToggle = container.querySelector(".reasoning-toggle");
   const reasoningContent = container.querySelector(".reasoning-content");
   const answer = container.querySelector(".assistant-stream");
+  const answerRenderer = createSmoothTextRenderer(
+    answer,
+    `${modeLabel}${aiName} 응답 수신 중...`,
+  );
+  const reasoningRenderer = createSmoothTextRenderer(reasoningContent, "");
 
   reasoningToggle.onclick = () => {
     const open = reasoningBox.classList.toggle("open");
@@ -218,13 +223,66 @@ function setupStreamingAssistantMessage(container, modeLabel, aiName) {
 
   return {
     setAnswer(text) {
-      answer.textContent = text || `${modeLabel}${aiName} 응답 수신 중...`;
+      answerRenderer.setTarget(text);
     },
     setReasoning(text) {
       if (!text) return;
       reasoningBox.hidden = false;
-      reasoningContent.textContent = text;
+      reasoningRenderer.setTarget(text);
       if (!reasoningBox.classList.contains("open")) reasoningToggle.textContent = "생각 펼치기";
+    },
+    flush() {
+      answerRenderer.flush();
+      reasoningRenderer.flush();
+    },
+  };
+}
+
+function createSmoothTextRenderer(el, emptyText) {
+  let target = "";
+  let shown = "";
+  let rafId = null;
+  let lastTs = 0;
+
+  function render(ts) {
+    rafId = null;
+    if (!target) {
+      shown = "";
+      el.textContent = emptyText || "";
+      return;
+    }
+    const elapsed = lastTs ? Math.max(0, ts - lastTs) : 16;
+    lastTs = ts;
+    const remaining = target.length - shown.length;
+    if (remaining <= 0) return;
+    const charsPerFrame = Math.max(1, Math.min(10, Math.ceil(elapsed / 12)));
+    shown = target.slice(0, shown.length + Math.min(remaining, charsPerFrame));
+    el.textContent = shown;
+    if (shown.length < target.length) schedule();
+  }
+
+  function schedule() {
+    if (rafId === null) rafId = requestAnimationFrame(render);
+  }
+
+  return {
+    setTarget(text) {
+      target = String(text || "");
+      if (!target) {
+        shown = "";
+        el.textContent = emptyText || "";
+        return;
+      }
+      if (!target.startsWith(shown)) shown = "";
+      schedule();
+    },
+    flush() {
+      if (rafId !== null) {
+        cancelAnimationFrame(rafId);
+        rafId = null;
+      }
+      shown = target;
+      el.textContent = target || emptyText || "";
     },
   };
 }
@@ -261,6 +319,7 @@ async function sendChat() {
         $("chat-messages").scrollTop = $("chat-messages").scrollHeight;
       },
     });
+    streamView.flush();
     loading.remove();
     addAssistantReply(reply, { editTargetId, reasoning: reasoningText });
   } catch (err) {
