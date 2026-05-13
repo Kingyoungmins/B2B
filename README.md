@@ -65,6 +65,14 @@
 
 Ubuntu에서는 Windows용 `.exe`를 실행하지 않습니다. 또한 `index.html`을 파일로 직접 열면 `/v1/*` 프록시 서버가 없어서 AI 연결 테스트가 실패합니다. 반드시 Python 로컬 서버를 먼저 실행한 뒤 `http://.../index.html` 주소로 접속합니다.
 
+빠른 실행:
+
+```bash
+cd B2B_ver3.31
+chmod +x start_kgm.sh
+./start_kgm.sh
+```
+
 1. Qwen OpenAI-compatible 서버를 먼저 실행합니다.
 
 Qwen이 앱과 같은 Ubuntu 장비에서 실행 중이면 기본 대상은 다음 주소입니다.
