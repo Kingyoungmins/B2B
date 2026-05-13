@@ -8,8 +8,8 @@ const DEFAULTS = {
     baseUrl: "https://api.anthropic.com/v1",
   },
   "openai-compat": {
-    apiKey: "7365676d",
-    model: ["Qwen3.5", "27B", "FP8"].join("-"),
+    apiKey: "local",
+    model: "Qwen3.6",
     baseUrl: location.protocol === "http:" || location.protocol === "https:"
       ? `${location.origin}/v1`
       : "http://127.0.0.1:8090/v1",
@@ -21,8 +21,8 @@ const OPENAI_COMPAT_FALLBACK_BASE_URLS = [
   "http://127.0.0.1:8090/v1",
 ];
 
-const SETTINGS_KEY = "mvno_llm_settings_v3";
-const SETTINGS_KEY_MIGRATE = ["mvno_llm_settings_v2", "mvno_llm_settings_v1"];
+const SETTINGS_KEY = "mvno_llm_settings_v331";
+const SETTINGS_KEY_MIGRATE = [];
 let settings = loadSettings();
 
 function normalizeSettings(parsed) {
@@ -86,7 +86,7 @@ function updateModelLabel() {
     el.textContent = "AI: Claude";
     el.style.color = "#777";
   } else {
-    el.textContent = "AI: ixi 모델";
+    el.textContent = "AI: Qwen 로컬";
     el.style.color = "#28a745";
   }
 }

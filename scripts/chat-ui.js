@@ -188,7 +188,7 @@ async function sendChat() {
   addMessage("user", msg);
   const loading = addMessage("assistant", "", {});
   // 외부 노출 시엔 내부 모델명을 표시하지 않고 LLM 으로 통일
-  const aiName = settings.provider === "openai-compat" ? "ixi 모델" : "LLM";
+  const aiName = settings.provider === "openai-compat" ? "Qwen 로컬" : "LLM";
   const modeLabel = editTargetId ? "(수정 모드) " : "";
   loading.innerHTML = `<span class="loader"></span> ${modeLabel}${aiName}에게 전송 중...`;
   $("chat-send").disabled = true;

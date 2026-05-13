@@ -9,6 +9,7 @@
 ### ver3.31
 - `/v1/*` 프록시 기본 대상을 사내 violet 서버가 아니라 로컬 Qwen 서버 `http://127.0.0.1:8080`으로 변경했습니다.
 - `KGM_VLLM_BASE` 환경변수를 지정하면 기존처럼 다른 OpenAI-compatible 서버 주소로 덮어쓸 수 있습니다.
+- Ubuntu/Linux 실행용 `start_kgm.sh`를 추가했습니다. Ubuntu에서는 EXE나 `index.html` 직접 열기가 아니라 이 스크립트 또는 `python3 launch_kgm.py`로 로컬 프록시 서버를 먼저 띄워야 합니다.
 - UI 제목과 EXE 빌드 이름을 ver3.31로 갱신했습니다.
 - EXE 빌드 결과 파일명은 `KGM_B2B_ver3.31.exe`입니다.
 
@@ -60,7 +61,63 @@
 
 ## 실행 방법
 
-### 개발 모드
+### Ubuntu/Linux 실행
+
+Qwen OpenAI-compatible 서버가 먼저 떠 있어야 합니다.
+
+```text
+http://127.0.0.1:8080/v1/chat/completions
+```
+
+그 다음 앱은 `index.html`을 직접 열지 말고 로컬 Python 서버로 실행합니다.
+
+```bash
+chmod +x start_kgm.sh
+./start_kgm.sh
+```
+
+또는:
+
+```bash
+python3 launch_kgm.py
+```
+
+기본 주소:
+
+```text
+http://127.0.0.1:8090/index.html
+```
+
+포트가 사용 중이면 `18090`부터 `18095`까지 자동 fallback 합니다.
+
+AI 연결 설정의 Base URL은 Qwen의 `8080`이 아니라 KGM 프록시 주소를 사용합니다.
+
+```text
+http://127.0.0.1:8090/v1
+```
+
+AI 연결 설정 값:
+
+```text
+Provider: Qwen 로컬
+Base URL: http://127.0.0.1:8090/v1
+API Key: local
+Model: Qwen3.6
+```
+
+Ubuntu 서버를 다른 PC 브라우저에서 접속해야 하면 다음처럼 바인딩 주소를 열고 실행합니다.
+
+```bash
+KGM_HOST=0.0.0.0 KGM_LAUNCH_HOST=<Ubuntu_IP> ./start_kgm.sh
+```
+
+브라우저에서는:
+
+```text
+http://<Ubuntu_IP>:8090/index.html
+```
+
+### Windows 실행
 
 ```bat
 start_kgm.bat
@@ -72,15 +129,7 @@ start_kgm.bat
 python launch_kgm.py
 ```
 
-기본 주소:
-
-```text
-http://127.0.0.1:8090/index.html
-```
-
-포트가 사용 중이면 `18090`부터 `18095`까지 자동 fallback 합니다.
-
-### EXE 빌드
+### Windows EXE 빌드
 
 ```bat
 build_exe.bat
@@ -101,7 +150,7 @@ dist\KGM_B2B_ver3.31.exe
 | `KGM_PORT` | `8090` | 로컬 서버 포트 |
 | `KGM_HOST` | `127.0.0.1` | 서버 바인딩 주소 |
 | `KGM_LAUNCH_HOST` | `127.0.0.1` | 브라우저에서 여는 주소 |
-| `KGM_VLLM_BASE` | 사내 ixi/vLLM 주소 | `/v1/*` 프록시 대상 |
+| `KGM_VLLM_BASE` | `http://127.0.0.1:8080` | `/v1/*` 프록시 대상 |
 | `KGM_NO_BROWSER` | 없음 | `1`이면 브라우저 자동 실행 안 함 |
 | `KGM_LOG_REQUESTS` | 없음 | `1`이면 HTTP 요청 로그 출력 |
 
@@ -115,8 +164,8 @@ dist\KGM_B2B_ver3.31.exe
 - 원본 xlsx의 스타일과 수식을 최대한 보존해 다운로드
 
 ### AI 로직 생성
-- 기본 모델은 ixi 모델입니다.
-- 일반 설정 버튼에서는 ixi 연결 정보만 노출합니다.
+- 기본 모델은 로컬 Qwen 모델입니다.
+- 일반 설정 버튼에서는 Qwen/OpenAI-compatible 연결 정보를 노출합니다.
 - F9 개발자 모드에서 Claude provider를 선택할 수 있습니다.
 - AI는 `function transform(inputs, output) { ... return { inputs, output }; }` 형태의 JavaScript 코드를 생성합니다.
 

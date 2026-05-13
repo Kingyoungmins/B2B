@@ -29,6 +29,9 @@ function openSettingsModal(devMode) {
   const ixiKey = settings.provider === "openai-compat"
     ? (settings.apiKey || DEFAULTS["openai-compat"].apiKey)
     : DEFAULTS["openai-compat"].apiKey;
+  const ixiModel = settings.provider === "openai-compat"
+    ? (settings.model || DEFAULTS["openai-compat"].model)
+    : DEFAULTS["openai-compat"].model;
 
   const claudeKey = settings.provider === "anthropic"
     ? (settings.apiKey || DEFAULTS.anthropic.apiKey)
@@ -43,14 +46,14 @@ function openSettingsModal(devMode) {
   modal.innerHTML = `
     <h3>AI 연결 설정${devMode ? ' <span style="font-size:11px;color:#FF0080;background:#FFE0F2;padding:2px 8px;border-radius:8px;font-weight:600;margin-left:6px;">DEV</span>' : ''}</h3>
     <div style="font-size:12px; color:#666; margin-bottom:12px">
-      ${devMode ? '개발자 옵션입니다. 기본 연결은 내부망 ixi이며, 필요할 때 Claude Opus 4.7로 전환할 수 있습니다.' : '내부망 ixi 호환 서버와 연결합니다.'}
+      ${devMode ? '개발자 옵션입니다. 기본 연결은 로컬 Qwen이며, 필요할 때 Claude Opus 4.7로 전환할 수 있습니다.' : '로컬 Qwen OpenAI 호환 서버와 연결합니다.'}
     </div>
 
     ${devMode ? `
     <div class="row" style="gap:16px; margin-bottom:14px">
       <label style="display:flex; align-items:center; gap:6px; cursor:pointer">
         <input type="radio" name="provider" value="openai-compat" ${!activeClaude ? "checked" : ""}>
-        <span>ixi 모델</span>
+        <span>Qwen 로컬</span>
       </label>
       <label style="display:flex; align-items:center; gap:6px; cursor:pointer">
         <input type="radio" name="provider" value="anthropic" ${activeClaude ? "checked" : ""}>
@@ -60,10 +63,12 @@ function openSettingsModal(devMode) {
     ` : ""}
 
     <div id="group-openai" style="${devMode && activeClaude ? "display:none" : ""}">
-      <label style="font-size:11.5px; color:#666">Base URL (exe 로컬 프록시 /v1)</label>
+      <label style="font-size:11.5px; color:#666">Base URL (KGM 로컬 프록시 /v1)</label>
       <input type="text" id="set-o-url" value="${escapeHtml(ixiUrl)}" />
       <label style="font-size:11.5px; color:#666">API Key</label>
       <input type="text" id="set-o-key" value="${escapeHtml(ixiKey)}" />
+      <label style="font-size:11.5px; color:#666">Model</label>
+      <input type="text" id="set-o-model" value="${escapeHtml(ixiModel)}" />
     </div>
 
     ${devMode ? `
@@ -116,7 +121,7 @@ function openSettingsModal(devMode) {
       provider: "openai-compat",
       baseUrl: $("set-o-url").value.trim() || DEFAULTS["openai-compat"].baseUrl,
       apiKey: $("set-o-key").value.trim() || DEFAULTS["openai-compat"].apiKey,
-      model: DEFAULTS["openai-compat"].model,
+      model: $("set-o-model").value.trim() || DEFAULTS["openai-compat"].model,
     };
   };
 
