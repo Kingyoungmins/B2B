@@ -33,7 +33,7 @@ exe = EXE(
     a.binaries,
     a.datas,
     [],
-    name='KGM_B2B_ver3.3',
+    name='KGM_B2B_ver3.31',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,

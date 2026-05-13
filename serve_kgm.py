@@ -10,7 +10,7 @@ HOST = os.environ.get("KGM_HOST", "127.0.0.1")
 PORT = int(os.environ.get("KGM_PORT", "8090"))
 VLLM_BASE = os.environ.get(
     "KGM_VLLM_BASE",
-    "http://canvas-ns-1727666527880704.mng.ip.violet.uplus.co.kr",
+    "http://127.0.0.1:8080",
 ).rstrip("/")
 
 
