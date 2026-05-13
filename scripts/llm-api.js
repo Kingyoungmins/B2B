@@ -76,7 +76,7 @@ async function callOpenAICompat(system, options) {
   }
   const contentType = resp.headers.get("content-type") || "";
   if (resp.body && contentType.includes("text/event-stream")) {
-    const content = await readOpenAICompatStream(resp, options && options.onDelta);
+    const content = await readOpenAICompatStream(resp, options);
     state.chatHistory.push({ role: "assistant", content });
     return content;
   }
@@ -107,11 +107,13 @@ function getLLMChatHistory() {
   return history;
 }
 
-async function readOpenAICompatStream(resp, onDelta) {
+async function readOpenAICompatStream(resp, options) {
+  options = options || {};
   const reader = resp.body.getReader();
   const decoder = new TextDecoder("utf-8");
   let buffer = "";
   let full = "";
+  let reasoningFull = "";
 
   while (true) {
     const { value, done } = await reader.read();
@@ -130,12 +132,27 @@ async function readOpenAICompatStream(resp, onDelta) {
       } catch {
         continue;
       }
-      const delta = parsed.choices?.[0]?.delta?.content
+      const choice = parsed.choices?.[0] || {};
+      const deltaObj = choice.delta || {};
+      const reasoningDelta = deltaObj.reasoning_content
+        ?? deltaObj.reasoning
+        ?? deltaObj.reasoningContent
+        ?? choice.reasoning_content
+        ?? choice.reasoning
+        ?? "";
+      if (reasoningDelta) {
+        reasoningFull += reasoningDelta;
+        if (typeof options.onReasoningDelta === "function") {
+          options.onReasoningDelta(reasoningDelta, reasoningFull);
+        }
+      }
+
+      const delta = deltaObj.content
         ?? parsed.choices?.[0]?.text
         ?? "";
       if (!delta) continue;
       full += delta;
-      if (typeof onDelta === "function") onDelta(delta, full);
+      if (typeof options.onDelta === "function") options.onDelta(delta, full);
     }
   }
 

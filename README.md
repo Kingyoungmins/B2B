@@ -1,10 +1,16 @@
-# B2B 빌링 Agent ver3.3
+# B2B 빌링 Agent ver3.4
 
 엑셀 입력 파일과 출력 템플릿을 업로드한 뒤, AI가 생성한 JavaScript 로직을 단계별 파이프라인으로 실행해 결과 xlsx를 만드는 로컬 웹앱입니다.
 
 브라우저에서 동작하는 SPA와 로컬 Python HTTP 서버로 구성되어 있으며, `/v1/*` 요청은 사내 OpenAI-compatible ixi 모델 서버로 프록시됩니다. F9 개발자 모드에서는 Claude API를 선택해 테스트할 수 있습니다.
 
 ## 최근 변경사항
+
+### ver3.4
+- OpenAI-compatible 스트리밍 응답에서 `reasoning_content`/`reasoning` delta를 별도로 수신해 채팅창에 표시합니다.
+- reasoning은 기본 접힘 상태의 `생각 펼치기/생각 접기` 영역으로 제공해, 사용자가 필요할 때만 확인할 수 있습니다.
+- UI 제목과 EXE 빌드 이름을 ver3.4로 갱신했습니다.
+- EXE 빌드 결과 파일명은 `KGM_B2B_ver3.4.exe`입니다.
 
 ### ver3.3
 - API 요청에 보낼 채팅 기록에 sliding window를 적용했습니다.
@@ -83,7 +89,7 @@ build_exe.bat
 빌드 결과:
 
 ```text
-dist\KGM_B2B_ver3.3.exe
+dist\KGM_B2B_ver3.4.exe
 ```
 
 `dist/`와 `build/`는 git 추적 대상이 아닙니다.
@@ -147,7 +153,7 @@ normalizeText(cell).includes(normalizeText("안전제일"))
 ## 디렉터리 구조
 
 ```text
-B2B_ver3.3/
+B2B_ver3.4/
 ├─ index.html
 ├─ styles/
 │  ├─ base.css

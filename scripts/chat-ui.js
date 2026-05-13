@@ -68,10 +68,12 @@ function addAssistantReply(fullText, replyContext) {
   const desc = extractDescription(fullText);
   const stripped = fullText.replace(/```[\s\S]*?```/g, "").trim();
   const editTargetId = replyContext && replyContext.editTargetId;
+  const reasoning = replyContext && replyContext.reasoning;
 
   const div = document.createElement("div");
   div.className = "msg assistant";
   div.innerHTML = `<div>${escapeHtml(stripped)}</div>`;
+  if (reasoning) div.insertBefore(createReasoningBox(reasoning), div.firstChild);
   if (code) {
     const codeBlk = document.createElement("pre");
     codeBlk.className = "code-block";
@@ -142,6 +144,25 @@ function addAssistantReply(fullText, replyContext) {
   $("chat-messages").scrollTop = $("chat-messages").scrollHeight;
 }
 
+function createReasoningBox(text) {
+  const box = document.createElement("div");
+  box.className = "reasoning-box";
+  const toggle = document.createElement("button");
+  toggle.className = "reasoning-toggle";
+  toggle.type = "button";
+  toggle.textContent = "생각 펼치기";
+  const content = document.createElement("div");
+  content.className = "reasoning-content";
+  content.textContent = text;
+  toggle.onclick = () => {
+    const open = box.classList.toggle("open");
+    toggle.textContent = open ? "생각 접기" : "생각 펼치기";
+  };
+  box.appendChild(toggle);
+  box.appendChild(content);
+  return box;
+}
+
 function openInsertPositionDialog(currentCount, onConfirm) {
   const modal = $("modal");
   const maxPos = currentCount + 1;
@@ -177,6 +198,37 @@ function openInsertPositionDialog(currentCount, onConfirm) {
   });
 }
 
+function setupStreamingAssistantMessage(container, modeLabel, aiName) {
+  container.innerHTML = `
+    <div class="reasoning-box" hidden>
+      <button class="reasoning-toggle" type="button">생각 펼치기</button>
+      <div class="reasoning-content"></div>
+    </div>
+    <div class="assistant-stream"><span class="loader"></span> ${modeLabel}${aiName}에게 전송 중...</div>
+  `;
+  const reasoningBox = container.querySelector(".reasoning-box");
+  const reasoningToggle = container.querySelector(".reasoning-toggle");
+  const reasoningContent = container.querySelector(".reasoning-content");
+  const answer = container.querySelector(".assistant-stream");
+
+  reasoningToggle.onclick = () => {
+    const open = reasoningBox.classList.toggle("open");
+    reasoningToggle.textContent = open ? "생각 접기" : "생각 펼치기";
+  };
+
+  return {
+    setAnswer(text) {
+      answer.textContent = text || `${modeLabel}${aiName} 응답 수신 중...`;
+    },
+    setReasoning(text) {
+      if (!text) return;
+      reasoningBox.hidden = false;
+      reasoningContent.textContent = text;
+      if (!reasoningBox.classList.contains("open")) reasoningToggle.textContent = "생각 펼치기";
+    },
+  };
+}
+
 async function sendChat() {
   const input = $("chat-text");
   const msg = input.value.trim();
@@ -190,8 +242,9 @@ async function sendChat() {
   // 외부 노출 시엔 내부 모델명을 표시하지 않고 LLM 으로 통일
   const aiName = settings.provider === "openai-compat" ? "ixi 모델" : "LLM";
   const modeLabel = editTargetId ? "(수정 모드) " : "";
-  loading.innerHTML = `<span class="loader"></span> ${modeLabel}${aiName}에게 전송 중...`;
+  const streamView = setupStreamingAssistantMessage(loading, modeLabel, aiName);
   $("chat-send").disabled = true;
+  let reasoningText = "";
   try {
     const prompt = typeof augmentUserPromptWithMentions === "function"
       ? augmentUserPromptWithMentions(msg)
@@ -199,12 +252,17 @@ async function sendChat() {
     const reply = await callLLM(prompt, {
       editTargetId,
       onDelta: (delta, full) => {
-        loading.textContent = full || `${modeLabel}${aiName} 응답 수신 중...`;
+        streamView.setAnswer(full);
+        $("chat-messages").scrollTop = $("chat-messages").scrollHeight;
+      },
+      onReasoningDelta: (delta, full) => {
+        reasoningText = full;
+        streamView.setReasoning(full);
         $("chat-messages").scrollTop = $("chat-messages").scrollHeight;
       },
     });
     loading.remove();
-    addAssistantReply(reply, { editTargetId });
+    addAssistantReply(reply, { editTargetId, reasoning: reasoningText });
   } catch (err) {
     loading.innerHTML = "❌ " + escapeHtml(err.message);
     loading.classList.remove("assistant");
