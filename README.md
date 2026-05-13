@@ -129,10 +129,10 @@ AI 연결 설정 값:
 Provider: Qwen 로컬
 Base URL: http://127.0.0.1:8090/v1
 API Key: local
-Model: Qwen3.5 또는 Qwen3.6
+Model: Qwen3.5 또는 Qwen3.6 또는 Qwen3.6-35B-A3B-FP8
 ```
 
-모델명은 실제 Qwen 서버가 `/v1/models`에서 반환하는 이름과 같아야 합니다. 기본값은 `Qwen3.5`이며, AI 연결 설정의 `Model` 입력칸에서 `Qwen3.6` 등으로 바꿔 저장할 수 있습니다.
+모델명은 실제 Qwen 서버가 `/v1/models`에서 반환하는 이름과 같아야 합니다. 기본값은 `Qwen3.5`이며, AI 연결 설정의 `Model` 입력칸에서 `Qwen3.6`, `Qwen3.6-35B-A3B-FP8` 등으로 바꿔 저장할 수 있습니다.
 
 5. 다른 PC 브라우저에서 Ubuntu 서버로 접속해야 하는 경우:
 

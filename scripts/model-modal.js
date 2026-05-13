@@ -18,6 +18,12 @@ const CLAUDE_MODELS = [
   "claude-sonnet-4-5-20250929",
 ];
 
+const QWEN_MODELS = [
+  "Qwen3.5",
+  "Qwen3.6",
+  "Qwen3.6-35B-A3B-FP8",
+];
+
 function openSettingsModal(devMode) {
   const modal = $("modal");
   const activeProvider = devMode ? (settings.provider || "openai-compat") : "openai-compat";
@@ -68,7 +74,10 @@ function openSettingsModal(devMode) {
       <label style="font-size:11.5px; color:#666">API Key</label>
       <input type="text" id="set-o-key" value="${escapeHtml(ixiKey)}" />
       <label style="font-size:11.5px; color:#666">Model</label>
-      <input type="text" id="set-o-model" value="${escapeHtml(ixiModel)}" />
+      <input type="text" id="set-o-model" value="${escapeHtml(ixiModel)}" list="qwen-model-options" />
+      <datalist id="qwen-model-options">
+        ${QWEN_MODELS.map(m => `<option value="${escapeHtml(m)}"></option>`).join("")}
+      </datalist>
     </div>
 
     ${devMode ? `
