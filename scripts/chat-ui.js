@@ -300,6 +300,7 @@ async function sendChat() {
   // 외부 노출 시엔 내부 모델명을 표시하지 않고 LLM 으로 통일
   const aiName = settings.provider === "openai-compat" ? "ixi 모델" : "LLM";
   const modeLabel = editTargetId ? "(수정 모드) " : "";
+  const thinkMode = typeof isThinkModeEnabled === "function" && isThinkModeEnabled();
   const streamView = setupStreamingAssistantMessage(loading, modeLabel, aiName);
   $("chat-send").disabled = true;
   let reasoningText = "";
@@ -307,18 +308,22 @@ async function sendChat() {
     const prompt = typeof augmentUserPromptWithMentions === "function"
       ? augmentUserPromptWithMentions(msg)
       : msg;
-    const reply = await callLLM(prompt, {
+    const requestOptions = {
       editTargetId,
+      thinkMode,
       onDelta: (delta, full) => {
         streamView.setAnswer(full);
         $("chat-messages").scrollTop = $("chat-messages").scrollHeight;
       },
-      onReasoningDelta: (delta, full) => {
+    };
+    if (thinkMode) {
+      requestOptions.onReasoningDelta = (delta, full) => {
         reasoningText = full;
         streamView.setReasoning(full);
         $("chat-messages").scrollTop = $("chat-messages").scrollHeight;
-      },
-    });
+      };
+    }
+    const reply = await callLLM(prompt, requestOptions);
     streamView.flush();
     loading.remove();
     addAssistantReply(reply, { editTargetId, reasoning: reasoningText });

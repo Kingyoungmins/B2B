@@ -73,6 +73,53 @@
     border-color: var(--m-200);
   }
   .brand-btn.icon { width: 36px; height: 36px; padding: 0; display: inline-flex; align-items: center; justify-content: center; }
+  .think-toggle {
+    width: 58px;
+    height: 28px;
+    padding: 0 6px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: #fff;
+    color: var(--ink-500);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    flex-shrink: 0;
+    cursor: pointer;
+    font-family: inherit;
+    transition: all 0.15s;
+  }
+  .think-toggle:hover {
+    border-color: var(--m-200);
+    background: var(--m-50);
+  }
+  .think-toggle:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+  .think-toggle-knob {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: var(--ink-300);
+    flex-shrink: 0;
+  }
+  .think-toggle-text {
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 1;
+    white-space: nowrap;
+  }
+  .think-toggle.on {
+    border-color: var(--m-300);
+    background: var(--m-50);
+    color: var(--m-700);
+  }
+  .think-toggle.on .think-toggle-knob {
+    background: var(--m-500);
+    box-shadow: 0 0 0 3px rgba(255, 0, 128, 0.12);
+  }
 
   .left-body {
     flex: 1;

@@ -13,6 +13,7 @@ const DEFAULTS = {
     baseUrl: location.protocol === "http:" || location.protocol === "https:"
       ? `${location.origin}/v1`
       : "http://127.0.0.1:8090/v1",
+    thinkMode: false,
   },
 };
 
@@ -46,6 +47,7 @@ function normalizeSettings(parsed) {
       model: parsed.model || DEFAULTS["openai-compat"].model,
       baseUrl: parsed.baseUrl || DEFAULTS["openai-compat"].baseUrl,
       apiKey: parsed.apiKey || DEFAULTS["openai-compat"].apiKey,
+      thinkMode: parsed.thinkMode === true,
     };
   }
   return null;
@@ -77,6 +79,7 @@ function loadSettings() {
 function saveSettings() {
   try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); } catch {}
   updateModelLabel();
+  updateThinkToggle();
 }
 
 function updateModelLabel() {
@@ -89,4 +92,36 @@ function updateModelLabel() {
     el.textContent = "AI: ixi 모델";
     el.style.color = "#28a745";
   }
+}
+
+function isThinkModeEnabled() {
+  return settings.provider === "openai-compat" && settings.thinkMode === true;
+}
+
+function updateThinkToggle() {
+  const btn = document.getElementById("btn-think-toggle");
+  if (!btn) return;
+  const enabled = isThinkModeEnabled();
+  const available = settings.provider === "openai-compat";
+  btn.classList.toggle("on", enabled);
+  btn.disabled = !available;
+  btn.setAttribute("aria-pressed", enabled ? "true" : "false");
+  btn.title = available
+    ? (enabled ? "Think 모드 끄기" : "Think 모드 켜기")
+    : "ixi 모델에서만 Think 모드를 사용할 수 있습니다";
+}
+
+function setupThinkToggle() {
+  const btn = document.getElementById("btn-think-toggle");
+  if (!btn) return;
+  btn.onclick = () => {
+    if (settings.provider !== "openai-compat") return;
+    settings = {
+      ...settings,
+      thinkMode: !isThinkModeEnabled(),
+    };
+    saveSettings();
+    toast(`Think 모드 ${settings.thinkMode ? "켜짐" : "꺼짐"}`, "success");
+  };
+  updateThinkToggle();
 }

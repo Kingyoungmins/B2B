@@ -9,5 +9,6 @@ refreshChatState();
 if (typeof setupHistoryButtons === "function") setupHistoryButtons();
 if (typeof setupMentionAutocomplete === "function") setupMentionAutocomplete();
 if (typeof setupViewerPopout === "function") setupViewerPopout();
+if (typeof setupThinkToggle === "function") setupThinkToggle();
 setPage(state.currentPage);
 updateModelLabel();

@@ -117,6 +117,7 @@ function openSettingsModal(devMode) {
       baseUrl: $("set-o-url").value.trim() || DEFAULTS["openai-compat"].baseUrl,
       apiKey: $("set-o-key").value.trim() || DEFAULTS["openai-compat"].apiKey,
       model: DEFAULTS["openai-compat"].model,
+      thinkMode: settings.thinkMode === true,
     };
   };
 

@@ -1,10 +1,19 @@
-# B2B 빌링 Agent ver3.4
+# B2B 빌링 Agent ver3.5
 
 엑셀 입력 파일과 출력 템플릿을 업로드한 뒤, AI가 생성한 JavaScript 로직을 단계별 파이프라인으로 실행해 결과 xlsx를 만드는 로컬 웹앱입니다.
 
 브라우저에서 동작하는 SPA와 로컬 Python HTTP 서버로 구성되어 있으며, `/v1/*` 요청은 사내 OpenAI-compatible ixi 모델 서버로 프록시됩니다. F9 개발자 모드에서는 Claude API를 선택해 테스트할 수 있습니다.
 
 ## 최근 변경사항
+
+### ver3.5
+- 상단 톱니바퀴 왼쪽에 Think 모드 토글을 추가했습니다.
+- Think 모드는 기본값이 꺼짐이며, 꺼진 상태에서는 Qwen 계열 요청의 마지막 사용자 메시지에 `/no_think`를 붙여 전송합니다.
+- Think 모드를 켜면 `/think`를 붙여 전송하고, 스트리밍 중 `reasoning_content`/`reasoning` delta가 들어오는 경우에만 `생각 접기/펼치기` 영역에 표시합니다.
+- Think 모드가 꺼진 상태에서는 서버가 reasoning delta를 보내더라도 UI에 표시하지 않습니다.
+- Qwen3.5와 Qwen3.6 모두 같은 `/think`/`/no_think` 방식으로 제어합니다. 실제 동작은 서빙 서버의 chat template 또는 OpenAI-compatible 구현이 해당 토큰을 지원한다는 전제입니다.
+- UI 제목과 EXE 빌드 이름을 ver3.5로 갱신했습니다.
+- EXE 빌드 결과 파일명은 `KGM_B2B_ver3.5.exe`입니다.
 
 ### ver3.4
 - OpenAI-compatible 스트리밍 응답에서 `reasoning_content`/`reasoning` delta를 별도로 수신해 채팅창에 표시합니다.
@@ -90,7 +99,7 @@ build_exe.bat
 빌드 결과:
 
 ```text
-dist\KGM_B2B_ver3.4.exe
+dist\KGM_B2B_ver3.5.exe
 ```
 
 `dist/`와 `build/`는 git 추적 대상이 아닙니다.
@@ -154,7 +163,7 @@ normalizeText(cell).includes(normalizeText("안전제일"))
 ## 디렉터리 구조
 
 ```text
-B2B_ver3.4/
+B2B_ver3.5/
 ├─ index.html
 ├─ styles/
 │  ├─ base.css

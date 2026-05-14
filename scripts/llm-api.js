@@ -6,6 +6,8 @@ const LLM_HISTORY_MAX_CHARS = 32000;
 
 async function callLLM(userMessage, options) {
   options = options || {};
+  const thinkMode = settings.provider === "openai-compat"
+    && (options.thinkMode === true || (options.thinkMode == null && isThinkModeEnabled()));
   state.chatHistory.push({ role: "user", content: userMessage });
   const editTargetId = options.editTargetId;
   const editIdx = editTargetId
@@ -19,7 +21,11 @@ async function callLLM(userMessage, options) {
   if (settings.provider === "anthropic") {
     return await callAnthropic(fullSystem);
   }
-  return await callOpenAICompat(fullSystem, options);
+  return await callOpenAICompat(fullSystem, {
+    ...options,
+    enableReasoning: thinkMode,
+    thinkMode,
+  });
 }
 
 async function callAnthropic(system) {
@@ -51,11 +57,13 @@ async function callAnthropic(system) {
 }
 
 async function callOpenAICompat(system, options) {
+  options = options || {};
   const base = (settings.baseUrl || DEFAULTS["openai-compat"].baseUrl).replace(/\/$/, "");
   const messages = [
     { role: "system", content: system },
     ...getLLMChatHistory(),
   ];
+  applyQwenThinkDirective(messages, options.thinkMode === true);
   const { resp, url } = await fetchOpenAICompat("/chat/completions", base, {
     method: "POST",
     headers: {
@@ -109,6 +117,7 @@ function getLLMChatHistory() {
 
 async function readOpenAICompatStream(resp, options) {
   options = options || {};
+  const allowReasoning = options.enableReasoning === true;
   const reader = resp.body.getReader();
   const decoder = new TextDecoder("utf-8");
   let buffer = "";
@@ -140,7 +149,7 @@ async function readOpenAICompatStream(resp, options) {
         ?? choice.reasoning_content
         ?? choice.reasoning
         ?? "";
-      if (reasoningDelta) {
+      if (allowReasoning && reasoningDelta) {
         reasoningFull += reasoningDelta;
         if (typeof options.onReasoningDelta === "function") {
           options.onReasoningDelta(reasoningDelta, reasoningFull);
@@ -157,6 +166,18 @@ async function readOpenAICompatStream(resp, options) {
   }
 
   return full;
+}
+
+function applyQwenThinkDirective(messages, thinkMode) {
+  const directive = thinkMode ? "/think" : "/no_think";
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (messages[i].role !== "user") continue;
+    messages[i] = {
+      ...messages[i],
+      content: `${messages[i].content || ""}\n\n${directive}`,
+    };
+    return;
+  }
 }
 
 async function fetchOpenAICompat(path, preferredBase, options = {}) {
