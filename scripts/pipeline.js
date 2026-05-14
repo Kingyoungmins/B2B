@@ -218,18 +218,20 @@ function runPipeline(steps) {
     throw new Error("실행할 입력 또는 출력 파일이 없습니다");
   }
 
-  state.inputs = state.inputsOriginal.map(orig => {
+  state.inputs = [];
+  state.inputsOriginal.forEach(orig => {
     const cloned = cloneFileRecord(orig);
     cloned.originalBuffer = orig.originalBuffer || null;
-    return cloned;
+    state.inputs.push(cloned);
   });
 
   if (state.outputTemplates && state.outputTemplates.length) {
-    state.outputTemplates = state.outputTemplates.map(tpl => {
+    state.output = null;
+    state.outputTemplates.forEach((tpl, idx) => {
       const source = tpl.original || tpl.file;
       const file = cloneFileRecord(source);
       file.originalBuffer = source.originalBuffer || null;
-      return { ...tpl, file, original: source };
+      state.outputTemplates[idx] = { ...tpl, file, original: source };
     });
     if (state.activeOutputIndex < 0 || !state.outputTemplates[state.activeOutputIndex]) {
       state.activeOutputIndex = 0;
@@ -238,6 +240,7 @@ function runPipeline(steps) {
     state.outputOriginal = state.outputTemplates[state.activeOutputIndex].original;
   } else if (state.outputOriginal) {
     const buf = state.outputOriginal.originalBuffer;
+    state.output = null;
     state.output = deepClone({ ...state.outputOriginal, originalBuffer: null });
     state.output.originalBuffer = buf;
   } else {
@@ -378,6 +381,29 @@ function runPipeline(steps) {
   flashFilled();
 }
 
+function clearPipelineExecutionMemory() {
+  if (state.history) {
+    state.history.undo = [];
+    state.history.redo = [];
+    if (typeof refreshHistoryButtons === "function") refreshHistoryButtons();
+  }
+  state.viewerPreviewMode = true;
+  if (typeof refreshViewerPreviewButtons === "function") refreshViewerPreviewButtons();
+  clearViewerDomForPipelineRun();
+}
+
+function clearViewerDomForPipelineRun() {
+  ["excel-viewer", "runner-excel-viewer"].forEach(id => {
+    const viewer = $(id);
+    if (!viewer) return;
+    viewer.innerHTML = `<div class="excel-empty">
+      <div class="big-ico">…</div>
+      <div>실행 준비 중입니다</div>
+      <div>대용량 파일 메모리를 정리하고 있습니다</div>
+    </div>`;
+  });
+}
+
 // runPipeline 에서 발생한 step 오류를 풍부한 메시지로 감싸 던진다 (item 9).
 function _stepError(info) {
   const stepLabel = `Step ${info.stepIdx + 1}` + (info.description ? ` (${info.description})` : "");
@@ -514,10 +540,11 @@ function refreshRunButton() {
 
 $("btn-run").onclick = () => {
   try {
-    if (typeof pushHistory === "function") pushHistory("전체 실행");
+    clearPipelineExecutionMemory();
     runPipeline();
     toast(`${state.pipeline.length}개 단계 실행 완료`, "success");
   } catch (err) {
+    renderExcelViewer();
     reportPipelineError(err);
   }
 };
@@ -571,11 +598,12 @@ $("runner-run-btn").onclick = () => {
   // Give the UI a tick to paint the ring, then execute
   setTimeout(() => {
     try {
-      if (typeof pushHistory === "function") pushHistory("전체 실행");
+      clearPipelineExecutionMemory();
       runPipeline();
       toast(`${state.pipeline.length}개 단계 실행 완료`, "success");
       if (window.runnerSetDone) window.runnerSetDone();
     } catch (err) {
+      renderExcelViewer();
       reportPipelineError(err);
       if (window.runnerSetRunning) window.runnerSetRunning(false);
     }
