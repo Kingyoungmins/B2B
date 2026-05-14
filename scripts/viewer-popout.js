@@ -146,6 +146,7 @@ function syncViewerPopout() {
     newViewer.addEventListener("scroll", () => {
       const sourceViewer = getActiveRightPage()?.querySelector(".excel-viewer");
       if (!sourceViewer) return;
+      extendSourceViewerRowsForPopout(sourceViewer, newViewer);
       sourceViewer.scrollTop = newViewer.scrollTop;
       sourceViewer.scrollLeft = newViewer.scrollLeft;
       clearTimeout(viewerPopoutScrollTimer);
@@ -168,6 +169,16 @@ function syncViewerPopout() {
       syncViewerPopout();
     });
   });
+}
+
+function extendSourceViewerRowsForPopout(sourceViewer, popoutViewer) {
+  const ctx = _viewerState.get(sourceViewer);
+  if (!ctx || ctx.rendered >= ctx.totalRows) return;
+  const nearBottom = popoutViewer.scrollTop + popoutViewer.clientHeight >= popoutViewer.scrollHeight - 160;
+  if (!nearBottom) return;
+  const next = Math.min(ctx.totalRows, ctx.rendered + VIEWER_ROW_INCREMENT);
+  _appendRows(sourceViewer, ctx, ctx.rendered, next);
+  ctx.rendered = next;
 }
 
 function setupPopoutCellEditing(viewer) {
@@ -310,16 +321,20 @@ function getPopoutSelectionContext() {
     const rc = _addrToRC(addr);
     if (rc) maxCols = Math.max(maxCols, rc.c + 1);
   });
+  const sourceRows = Math.max(aoa.length, _maxRowFromFormulas(formulas));
+  const sourceCols = maxCols;
   return {
     file,
     sheet,
     fileId: state.currentFileId,
+    sourceRows,
+    sourceCols,
     visibleCols: state.viewerPreviewMode === false
       ? Math.min(maxCols, VIEWER_MAX_COLS)
       : Math.min(maxCols, VIEWER_PREVIEW_COLS),
     totalRows: state.viewerPreviewMode === false
-      ? Math.max(aoa.length, _maxRowFromFormulas(formulas))
-      : Math.min(Math.max(aoa.length, _maxRowFromFormulas(formulas)), VIEWER_PREVIEW_ROWS),
+      ? sourceRows
+      : Math.min(sourceRows, VIEWER_PREVIEW_ROWS),
   };
 }
 

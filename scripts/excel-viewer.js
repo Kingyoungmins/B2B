@@ -357,6 +357,7 @@ function _renderViewerInitial(viewer, file) {
   const ctx = {
     file, sheet, aoa, merges, hidden, merge_map,
     maxCols, totalRows, visibleCols,
+    sourceRows, sourceCols,
     rendered: 0,
     fileId: state.currentFileId,
     formulas,
@@ -589,12 +590,12 @@ function getSelectionTarget(e, ctx) {
   const rh = e.target.closest("[data-row-header]");
   if (rh) {
     const r = Number(rh.dataset.rowHeader);
-    return { fileId: ctx.fileId, sheet: ctx.sheet, r1: r, c1: 0, r2: r, c2: ctx.visibleCols - 1, type: "row" };
+    return { fileId: ctx.fileId, sheet: ctx.sheet, r1: r, c1: 0, r2: r, c2: getSelectionMaxCol(ctx), type: "row" };
   }
   const ch = e.target.closest("[data-col-header]");
   if (ch) {
     const c = Number(ch.dataset.colHeader);
-    return { fileId: ctx.fileId, sheet: ctx.sheet, r1: 0, c1: c, r2: Math.max(ctx.totalRows - 1, 0), c2: c, type: "col" };
+    return { fileId: ctx.fileId, sheet: ctx.sheet, r1: 0, c1: c, r2: getSelectionMaxRow(ctx), c2: c, type: "col" };
   }
   return null;
 }
@@ -604,7 +605,7 @@ function mergeSelectionTargets(a, b, ctx) {
     return {
       fileId: ctx.fileId, sheet: ctx.sheet,
       r1: Math.min(a.r1, b.r1), c1: 0,
-      r2: Math.max(a.r2, b.r2), c2: ctx.visibleCols - 1,
+      r2: Math.max(a.r2, b.r2), c2: getSelectionMaxCol(ctx),
       type: "row",
     };
   }
@@ -612,7 +613,7 @@ function mergeSelectionTargets(a, b, ctx) {
     return {
       fileId: ctx.fileId, sheet: ctx.sheet,
       r1: 0, c1: Math.min(a.c1, b.c1),
-      r2: Math.max(ctx.totalRows - 1, 0), c2: Math.max(a.c2, b.c2),
+      r2: getSelectionMaxRow(ctx), c2: Math.max(a.c2, b.c2),
       type: "col",
     };
   }
@@ -622,6 +623,14 @@ function mergeSelectionTargets(a, b, ctx) {
     r2: Math.max(a.r2, b.r2), c2: Math.max(a.c2, b.c2),
     type: "range",
   };
+}
+
+function getSelectionMaxRow(ctx) {
+  return Math.max((ctx.sourceRows || ctx.totalRows || 1) - 1, 0);
+}
+
+function getSelectionMaxCol(ctx) {
+  return Math.max((ctx.sourceCols || ctx.maxCols || ctx.visibleCols || 1) - 1, 0);
 }
 
 function applyViewerSelection(viewer, ctx, range, options = {}) {
