@@ -12,7 +12,6 @@ async function parseFile(file) {
     cellStyles: useCellStyles,
     cellNF: true,
     cellFormula: true,
-    sheetStubs: true,
   });
   const sheets = {};
   const merges = {};
@@ -24,7 +23,8 @@ async function parseFile(file) {
   const tables = {};              // ver2.0: { sheetName: [{ startRow, endRow, ... }] }
   wb.SheetNames.forEach(name => {
     const ws = wb.Sheets[name];
-    const aoa = sheetToFullAoA(ws);
+    const cellKeys = getWorksheetCellKeys(ws);
+    const aoa = sheetToFullAoA(ws, cellKeys);
     sheets[name] = aoa;
     merges[name] = ws["!merges"] ? ws["!merges"].map(m => ({ s: {...m.s}, e: {...m.e} })) : [];
     const sheetStyles = [];
@@ -32,33 +32,29 @@ async function parseFile(file) {
     const sheetDisplays = [];
     const sheetFormulas = {};
     const sheetOriginalValues = {};
-    const ref = ws["!ref"];
-    if (ref) {
-      const range = XLSX.utils.decode_range(ref);
-      for (let r = range.s.r; r <= range.e.r; r++) {
-        const row = useCellStyles ? [] : null;
-        const fmtRow = [];
-        for (let c = range.s.c; c <= range.e.c; c++) {
-          const addr = XLSX.utils.encode_cell({ r, c });
-          const cell = ws[addr];
-          if (!cell) continue;
-          if (useCellStyles && row && cell.s) row[c] = extractCellStyle(cell.s);
-          if (cell.z) fmtRow[c] = cell.z;
-          if (cell.w !== undefined) {
-            if (!sheetDisplays[r]) sheetDisplays[r] = [];
-            sheetDisplays[r][c] = cell.w;
-          }
-          // 수식 추출 (ver2.0)
-          if (cell.f) {
-            sheetFormulas[addr] = "=" + cell.f;
-            // .v는 저장 시점 캐시 값
-            if (cell.v !== undefined) sheetOriginalValues[addr] = cell.v;
-          }
-        }
-        if (row) sheetStyles[r] = row;
-        if (fmtRow.length) sheetFormats[r] = fmtRow;
+    cellKeys.forEach(addr => {
+      const cell = ws[addr];
+      if (!cell) return;
+      const pos = XLSX.utils.decode_cell(addr);
+      if (useCellStyles && cell.s) {
+        if (!sheetStyles[pos.r]) sheetStyles[pos.r] = [];
+        sheetStyles[pos.r][pos.c] = extractCellStyle(cell.s);
       }
-    }
+      if (cell.z) {
+        if (!sheetFormats[pos.r]) sheetFormats[pos.r] = [];
+        sheetFormats[pos.r][pos.c] = cell.z;
+      }
+      if (cell.w !== undefined) {
+        if (!sheetDisplays[pos.r]) sheetDisplays[pos.r] = [];
+        sheetDisplays[pos.r][pos.c] = cell.w;
+      }
+      // 수식 추출 (ver2.0)
+      if (cell.f) {
+        sheetFormulas[addr] = "=" + cell.f;
+        // .v는 저장 시점 캐시 값
+        if (cell.v !== undefined) sheetOriginalValues[addr] = cell.v;
+      }
+    });
     styles[name] = sheetStyles;
     formats[name] = sheetFormats;
     displays[name] = sheetDisplays;
@@ -86,20 +82,34 @@ async function parseFile(file) {
   };
 }
 
-function sheetToFullAoA(ws) {
-  const ref = ws && ws["!ref"];
-  if (!ref) return [];
-  const range = XLSX.utils.decode_range(ref);
+function getWorksheetCellKeys(ws) {
+  if (!ws) return [];
+  return Object.keys(ws).filter(key => key[0] !== "!" && ws[key] && (
+    ws[key].v !== undefined || ws[key].f || ws[key].w !== undefined
+  ));
+}
+
+function sheetToFullAoA(ws, cellKeys) {
+  cellKeys = cellKeys || getWorksheetCellKeys(ws);
+  if (!cellKeys.length) return [];
+  let maxR = 0;
+  let maxC = 0;
+  cellKeys.forEach(addr => {
+    const pos = XLSX.utils.decode_cell(addr);
+    if (pos.r > maxR) maxR = pos.r;
+    if (pos.c > maxC) maxC = pos.c;
+  });
   const rows = [];
-  for (let r = 0; r <= range.e.r; r++) {
+  for (let r = 0; r <= maxR; r++) {
     const row = [];
-    for (let c = 0; c <= range.e.c; c++) {
-      const addr = XLSX.utils.encode_cell({ r, c });
-      const cell = ws[addr];
-      row[c] = cell && cell.v !== undefined ? cell.v : "";
-    }
+    if (maxC >= 0) row[maxC] = "";
     rows[r] = row;
   }
+  cellKeys.forEach(addr => {
+    const cell = ws[addr];
+    const pos = XLSX.utils.decode_cell(addr);
+    rows[pos.r][pos.c] = cell && cell.v !== undefined ? cell.v : "";
+  });
   return rows;
 }
 

@@ -42,10 +42,39 @@ function makeHistorySnapshot(label) {
 
 function pushHistory(label) {
   if (!state.history) state.history = { undo: [], redo: [], limit: 80 };
+  if (shouldSkipHeavyHistory()) {
+    state.history.undo = [];
+    state.history.redo = [];
+    refreshHistoryButtons();
+    return;
+  }
   state.history.undo.push(makeHistorySnapshot(label));
   if (state.history.undo.length > (state.history.limit || 80)) state.history.undo.shift();
   state.history.redo = [];
   refreshHistoryButtons();
+}
+
+function shouldSkipHeavyHistory() {
+  const HEAVY_FILE_BYTES = 8 * 1024 * 1024;
+  const HEAVY_CELL_COUNT = 250000;
+  let bytes = 0;
+  let cells = 0;
+  const countFile = (file) => {
+    if (!file) return;
+    bytes += file.size || 0;
+    Object.values(file.sheets || {}).forEach(sheet => {
+      cells += (sheet || []).reduce((sum, row) => sum + (row ? row.length : 0), 0);
+    });
+  };
+  (state.inputs || []).forEach(countFile);
+  (state.inputsOriginal || []).forEach(countFile);
+  countFile(state.output);
+  countFile(state.outputOriginal);
+  (state.outputTemplates || []).forEach(tpl => {
+    countFile(tpl && tpl.file);
+    countFile(tpl && tpl.original);
+  });
+  return bytes >= HEAVY_FILE_BYTES || cells >= HEAVY_CELL_COUNT;
 }
 
 function restoreHistorySnapshot(snapshot) {

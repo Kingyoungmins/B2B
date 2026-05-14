@@ -380,6 +380,7 @@ function recomputeAllFormulas() {
     if (tpl && tpl.file) filesById.push({ id: "output:" + idx, file: tpl.file });
   });
   if (state.output) filesById.push({ id: "output", file: state.output });
+  if (isHeavyFormulaRecompute(filesById)) return;
   filesById.forEach(({ id, file }) => {
     if (!file.formulas) return;
     state.formulaResults[id] = {};
@@ -390,6 +391,18 @@ function recomputeAllFormulas() {
       if (computed) state.formulaResults[id][sheetName] = computed;
     });
   });
+}
+
+function isHeavyFormulaRecompute(filesById) {
+  const FORMULA_RECOMPUTE_CELL_LIMIT = 250000;
+  let cells = 0;
+  for (const { file } of filesById) {
+    Object.values((file && file.sheets) || {}).forEach(sheet => {
+      cells += (sheet || []).reduce((sum, row) => sum + (row ? row.length : 0), 0);
+    });
+    if (cells > FORMULA_RECOMPUTE_CELL_LIMIT) return true;
+  }
+  return false;
 }
 
 function flashFilled() {
