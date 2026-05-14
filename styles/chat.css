@@ -62,6 +62,10 @@
     white-space: nowrap;
     overflow: visible;
   }
+  .msg.assistant.streaming.has-code {
+    width: 92%;
+    max-width: 92%;
+  }
   .msg.system {
     background: transparent;
     color: var(--ink-400);
@@ -174,7 +178,14 @@
     overflow: visible;
   }
   .msg.assistant.streaming .assistant-stream-code {
+    box-sizing: border-box;
+    width: 100%;
+    max-width: 100%;
     margin-top: 6px;
+  }
+  .msg.assistant.streaming.has-code .assistant-stream {
+    width: 100%;
+    max-width: 100%;
   }
   .msg.assistant.streaming .loader {
     flex: 0 0 auto;

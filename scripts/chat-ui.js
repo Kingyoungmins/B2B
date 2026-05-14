@@ -296,6 +296,7 @@ function createSmoothStructuredRenderer(textEl, codeEl, emptyText) {
   return {
     setTarget(text) {
       const parsed = splitStreamingReply(text);
+      codeEl.closest(".msg")?.classList.toggle("has-code", parsed.hasCode);
       textRenderer.setTarget(parsed.text);
       codeEl.hidden = !parsed.hasCode;
       codeRenderer.setTarget(parsed.code);
