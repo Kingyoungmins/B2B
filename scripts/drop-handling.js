@@ -71,6 +71,15 @@ function makeOutputTemplate(parsed) {
   return { id: uid(), file: parsed, original };
 }
 
+function prepareMemoryForFileUpload(files) {
+  const totalBytes = files.reduce((sum, file) => sum + (file.size || 0), 0);
+  const largeUploadBytes = 8 * 1024 * 1024;
+  if (totalBytes < largeUploadBytes || !state.history) return;
+  state.history.undo = [];
+  state.history.redo = [];
+  if (typeof refreshHistoryButtons === "function") refreshHistoryButtons();
+}
+
 function activateOutputTemplate(index) {
   const tpl = state.outputTemplates[index];
   if (!tpl) return false;
@@ -89,8 +98,9 @@ function activateOutputTemplate(index) {
 
 async function loadInputFiles(files) {
   if (!files.length) return;
-  const before = typeof makeHistorySnapshot === "function" ? makeHistorySnapshot("업로드 전") : null;
-  if (typeof pushHistory === "function") pushHistory("입력 파일 업로드");
+  prepareMemoryForFileUpload(files);
+  const startInputCount = state.inputs.length;
+  const startOriginalCount = state.inputsOriginal.length;
   const job = beginUpload("입력 파일 업로드", files.length);
   try {
     for (let i = 0; i < files.length; i++) {
@@ -101,6 +111,7 @@ async function loadInputFiles(files) {
       try {
         const parsed = await parseFile(f);
         if (job.cancelled) break;
+        parsed.originalBuffer = null;
         state.inputs.push(parsed);
         state.inputsOriginal.push(cloneFileRecord(parsed));
       } catch (err) {
@@ -112,8 +123,9 @@ async function loadInputFiles(files) {
   } finally {
     finishUpload(job);
   }
-  if (job.cancelled && before && typeof restoreHistorySnapshot === "function") {
-    restoreHistorySnapshot(before);
+  if (job.cancelled) {
+    state.inputs.splice(startInputCount);
+    state.inputsOriginal.splice(startOriginalCount);
     toast("파일 업로드를 중단하고 이전 상태로 복귀했습니다.", "success");
     return;
   }
@@ -126,10 +138,12 @@ async function loadInputFiles(files) {
 
 async function loadOutputTemplates(files) {
   if (!files.length) return;
-  const before = typeof makeHistorySnapshot === "function" ? makeHistorySnapshot("업로드 전") : null;
-  if (typeof pushHistory === "function") pushHistory("출력 템플릿 업로드");
+  prepareMemoryForFileUpload(files);
   const job = beginUpload("출력 템플릿 업로드", files.length);
   const startIndex = state.outputTemplates.length;
+  const previousActiveOutputIndex = state.activeOutputIndex;
+  const previousOutput = state.output;
+  const previousOutputOriginal = state.outputOriginal;
   try {
     for (let i = 0; i < files.length; i++) {
       if (job.cancelled) break;
@@ -149,8 +163,11 @@ async function loadOutputTemplates(files) {
   } finally {
     finishUpload(job);
   }
-  if (job.cancelled && before && typeof restoreHistorySnapshot === "function") {
-    restoreHistorySnapshot(before);
+  if (job.cancelled) {
+    state.outputTemplates.splice(startIndex);
+    state.activeOutputIndex = previousActiveOutputIndex;
+    state.output = previousOutput;
+    state.outputOriginal = previousOutputOriginal;
     toast("출력 템플릿 업로드를 중단하고 이전 상태로 복귀했습니다.", "success");
     return;
   }
