@@ -165,16 +165,14 @@
   .msg .assistant-stream-code { margin-top: 8px; }
   .msg.assistant.streaming .assistant-stream,
   .msg.assistant.streaming .assistant-stream-text {
-    width: fit-content;
     max-width: 100%;
   }
   .msg.assistant.streaming .assistant-stream { display: block; }
   .msg.assistant.streaming .assistant-stream-text {
-    display: inline-flex;
-    align-items: center;
+    display: block;
+    width: auto;
     min-height: 18px;
-    gap: 4px;
-    vertical-align: top;
+    word-break: break-word;
     overflow: visible;
   }
   .msg.assistant.streaming .assistant-stream-code {
