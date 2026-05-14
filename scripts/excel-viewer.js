@@ -10,6 +10,8 @@
 const VIEWER_INITIAL_ROWS = 300;
 const VIEWER_ROW_INCREMENT = 300;
 const VIEWER_MAX_COLS = 60;
+const VIEWER_PREVIEW_ROWS = 500;
+const VIEWER_PREVIEW_COLS = 40;
 
 // 각 viewer DOM별 렌더 상태
 const _viewerState = new WeakMap();
@@ -283,6 +285,36 @@ function renderExcelViewer() {
   if (typeof reapplyFindHighlights === "function") setTimeout(reapplyFindHighlights, 0);
 }
 
+function setupViewerPreviewMode() {
+  document.querySelectorAll(".right-header").forEach(header => {
+    if (header.querySelector(".viewer-preview-btn")) return;
+    const btn = document.createElement("button");
+    btn.className = "viewer-preview-btn";
+    btn.type = "button";
+    btn.onclick = toggleViewerPreviewMode;
+    header.appendChild(btn);
+  });
+  refreshViewerPreviewButtons();
+}
+
+function toggleViewerPreviewMode() {
+  state.viewerPreviewMode = !state.viewerPreviewMode;
+  renderExcelViewer();
+  refreshViewerPreviewButtons();
+}
+
+function refreshViewerPreviewButtons(root) {
+  const scope = root || document;
+  scope.querySelectorAll(".viewer-preview-btn").forEach(btn => {
+    const preview = state.viewerPreviewMode !== false;
+    btn.textContent = preview ? "전체보기" : "미리보기";
+    btn.title = preview
+      ? "전체보기로 전환합니다. 큰 파일에서는 메모리 사용이 늘 수 있습니다."
+      : "미리보기 모드로 전환합니다.";
+    btn.classList.toggle("full", !preview);
+  });
+}
+
 function _renderViewerInitial(viewer, file) {
   const sheet = state.currentSheet;
   const aoa = file.sheets[sheet] || [];
@@ -313,9 +345,14 @@ function _renderViewerInitial(viewer, file) {
     if (rc && rc.c + 1 > maxCols) maxCols = rc.c + 1;
   });
 
-  const visibleCols = Math.min(maxCols, VIEWER_MAX_COLS);
-  const totalRows = Math.max(aoa.length, _maxRowFromFormulas(formulas));
-  const initialRows = Math.min(totalRows, VIEWER_INITIAL_ROWS);
+  const fullMode = state.viewerPreviewMode === false;
+  const sourceRows = Math.max(aoa.length, _maxRowFromFormulas(formulas));
+  const sourceCols = maxCols;
+  const visibleCols = fullMode
+    ? Math.min(sourceCols, VIEWER_MAX_COLS)
+    : Math.min(sourceCols, VIEWER_PREVIEW_COLS);
+  const totalRows = fullMode ? sourceRows : Math.min(sourceRows, VIEWER_PREVIEW_ROWS);
+  const initialRows = Math.min(totalRows, fullMode ? VIEWER_INITIAL_ROWS : VIEWER_PREVIEW_ROWS);
 
   const ctx = {
     file, sheet, aoa, merges, hidden, merge_map,
@@ -328,8 +365,15 @@ function _renderViewerInitial(viewer, file) {
   _viewerState.set(viewer, ctx);
 
   let html = "";
-  const truncatedCols = visibleCols < maxCols;
-  if (truncatedCols) html += `<div class="excel-preview-note">열 ${visibleCols}/${maxCols} (오른쪽 ${maxCols - visibleCols}열 생략)</div>`;
+  const truncatedCols = visibleCols < sourceCols;
+  const truncatedRows = totalRows < sourceRows;
+  if (state.viewerPreviewMode !== false) {
+    const parts = [];
+    if (truncatedRows) parts.push(`행 ${totalRows}/${sourceRows}`);
+    if (truncatedCols) parts.push(`열 ${visibleCols}/${sourceCols}`);
+    html += `<div class="excel-preview-note">미리보기 모드${parts.length ? " · " + parts.join(" · ") : ""}</div>`;
+  }
+  if (truncatedCols && fullMode) html += `<div class="excel-preview-note">열 ${visibleCols}/${sourceCols} (오른쪽 ${sourceCols - visibleCols}열 생략)</div>`;
   if (file.lightweightPreview) html += `<div class="excel-preview-note">대용량 파일 경량 미리보기</div>`;
 
   let tableHtml = '<table class="excel-sheet"><thead><tr><th class="col-header"></th>';
@@ -350,7 +394,7 @@ function _renderViewerInitial(viewer, file) {
   // 가상 스크롤 IntersectionObserver
   const sentinel = viewer.querySelector(".excel-scroll-sentinel");
   if (ctx.observer) ctx.observer.disconnect();
-  if (sentinel && initialRows < totalRows) {
+  if (fullMode && sentinel && initialRows < totalRows) {
     const observer = new IntersectionObserver((entries) => {
       entries.forEach(entry => {
         if (entry.isIntersecting && ctx.rendered < ctx.totalRows) {

@@ -21,6 +21,7 @@ const state = {
   currentPage: "generator",
   editingStepId: null,
   uploadJob: null,
+  viewerPreviewMode: true,
 
   fuzzyResolution: {},
   lastError: null,

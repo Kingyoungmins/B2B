@@ -230,6 +230,7 @@
   }
   .right-header span { font-weight: 500; color: var(--ink-400) !important; }
 
+  .viewer-preview-btn,
   .viewer-popout-btn {
     margin-left: auto;
     border: 1px solid var(--border);
@@ -241,11 +242,19 @@
     font-weight: 700;
     cursor: pointer;
   }
+  .viewer-popout-btn { margin-left: 6px; }
 
+  .viewer-preview-btn:hover,
   .viewer-popout-btn:hover {
     border-color: var(--brand);
     color: var(--brand);
     background: #fff7fc;
+  }
+
+  .viewer-preview-btn.full {
+    border-color: var(--m-300);
+    color: var(--m-700);
+    background: var(--m-50);
   }
 
   .right-page { display: none; flex: 1; min-height: 0; }

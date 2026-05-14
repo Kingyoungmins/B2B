@@ -47,7 +47,7 @@ function openViewerPopout() {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>B2B 빌링 Agent ver3.5 - 엑셀 시뮬레이터</title>
+  <title>B2B 빌링 Agent ver3.6 - 엑셀 시뮬레이터</title>
   ${cssLinks}
   <style>
     html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; background: #f8f9fb; }
@@ -102,6 +102,14 @@ function syncViewerPopout() {
   const oldViewer = target.querySelector(".excel-viewer");
   const oldScroll = oldViewer ? { top: oldViewer.scrollTop, left: oldViewer.scrollLeft } : { top: 0, left: 0 };
   target.innerHTML = source.outerHTML;
+  refreshViewerPreviewButtons(target);
+
+  target.querySelectorAll(".viewer-preview-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      toggleViewerPreviewMode();
+      syncViewerPopout();
+    });
+  });
 
   const newViewer = target.querySelector(".excel-viewer");
   if (newViewer) {
@@ -279,8 +287,12 @@ function getPopoutSelectionContext() {
     file,
     sheet,
     fileId: state.currentFileId,
-    visibleCols: Math.min(maxCols, VIEWER_MAX_COLS),
-    totalRows: Math.max(aoa.length, _maxRowFromFormulas(formulas)),
+    visibleCols: state.viewerPreviewMode === false
+      ? Math.min(maxCols, VIEWER_MAX_COLS)
+      : Math.min(maxCols, VIEWER_PREVIEW_COLS),
+    totalRows: state.viewerPreviewMode === false
+      ? Math.max(aoa.length, _maxRowFromFormulas(formulas))
+      : Math.min(Math.max(aoa.length, _maxRowFromFormulas(formulas)), VIEWER_PREVIEW_ROWS),
   };
 }
 

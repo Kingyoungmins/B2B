@@ -3,7 +3,7 @@ setlocal
 cd /d "%~dp0"
 
 echo ============================================
-echo  KGM B2B ver3.5 EXE build
+echo  KGM B2B ver3.6 EXE build
 echo ============================================
 echo.
 
@@ -41,7 +41,7 @@ if errorlevel 1 (
 
 echo.
 echo ============================================
-echo  Build complete: dist\KGM_B2B_ver3.5.exe
+echo  Build complete: dist\KGM_B2B_ver3.6.exe
 echo ============================================
 echo.
 pause
