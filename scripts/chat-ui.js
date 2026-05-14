@@ -59,7 +59,7 @@ function addMessage(role, text, opts) {
     div.textContent = text;
   }
   container.appendChild(div);
-  container.scrollTop = container.scrollHeight;
+  scrollChatToBottom();
   return div;
 }
 
@@ -68,6 +68,9 @@ function scrollChatToBottom() {
   if (!container) return;
   requestAnimationFrame(() => {
     container.scrollTop = container.scrollHeight;
+    requestAnimationFrame(() => {
+      container.scrollTop = container.scrollHeight;
+    });
   });
 }
 
@@ -159,7 +162,7 @@ function addAssistantReply(fullText, replyContext) {
     }
   }
   $("chat-messages").appendChild(div);
-  $("chat-messages").scrollTop = $("chat-messages").scrollHeight;
+  scrollChatToBottom();
 }
 
 function createReasoningBox(text) {
@@ -217,46 +220,67 @@ function openInsertPositionDialog(currentCount, onConfirm) {
 }
 
 function setupStreamingAssistantMessage(container, modeLabel, aiName) {
-  container.innerHTML = `
-    <div class="reasoning-box" hidden>
-      <button class="reasoning-toggle" type="button">생각 펼치기</button>
-      <div class="reasoning-content"></div>
-    </div>
-    <div class="assistant-stream">
-      <div class="assistant-stream-text"><span class="loader"></span> ${modeLabel}${aiName}에게 전송 중...</div>
-      <pre class="code-block assistant-stream-code" hidden></pre>
-    </div>
-  `;
-  const reasoningBox = container.querySelector(".reasoning-box");
-  const reasoningToggle = container.querySelector(".reasoning-toggle");
-  const reasoningContent = container.querySelector(".reasoning-content");
-  const answerText = container.querySelector(".assistant-stream-text");
-  const codeBlock = container.querySelector(".assistant-stream-code");
-  const answerRenderer = createSmoothStructuredRenderer(
-    answerText,
-    codeBlock,
-    `${modeLabel}${aiName} 응답 수신 중...`,
-  );
-  const reasoningRenderer = createSmoothTextRenderer(reasoningContent, "");
+  let initialized = false;
+  let reasoningBox;
+  let reasoningToggle;
+  let reasoningContent;
+  let answerText;
+  let codeBlock;
+  let answerRenderer;
+  let reasoningRenderer;
 
-  reasoningToggle.onclick = () => {
-    const open = reasoningBox.classList.toggle("open");
-    reasoningToggle.textContent = open ? "생각 접기" : "생각 펼치기";
-  };
+  container.classList.add("loading");
+  container.innerHTML = `<span class="loader"></span> ${escapeHtml(modeLabel)}${escapeHtml(aiName)}에게 전송 중...`;
+  scrollChatToBottom();
+
+  function initialize() {
+    if (initialized) return;
+    initialized = true;
+    container.classList.remove("loading");
+    container.innerHTML = `
+      <div class="reasoning-box" hidden>
+        <button class="reasoning-toggle" type="button">생각 펼치기</button>
+        <div class="reasoning-content"></div>
+      </div>
+      <div class="assistant-stream">
+        <div class="assistant-stream-text"></div>
+        <pre class="code-block assistant-stream-code" hidden></pre>
+      </div>
+    `;
+    reasoningBox = container.querySelector(".reasoning-box");
+    reasoningToggle = container.querySelector(".reasoning-toggle");
+    reasoningContent = container.querySelector(".reasoning-content");
+    answerText = container.querySelector(".assistant-stream-text");
+    codeBlock = container.querySelector(".assistant-stream-code");
+    answerRenderer = createSmoothStructuredRenderer(
+      answerText,
+      codeBlock,
+      `${modeLabel}${aiName} 응답 수신 중...`,
+    );
+    reasoningRenderer = createSmoothTextRenderer(reasoningContent, "");
+
+    reasoningToggle.onclick = () => {
+      const open = reasoningBox.classList.toggle("open");
+      reasoningToggle.textContent = open ? "생각 접기" : "생각 펼치기";
+    };
+  }
 
   return {
     setAnswer(text) {
+      initialize();
       answerRenderer.setTarget(text);
       scrollChatToBottom();
     },
     setReasoning(text) {
       if (!text) return;
+      initialize();
       reasoningBox.hidden = false;
       reasoningRenderer.setTarget(text);
       if (!reasoningBox.classList.contains("open")) reasoningToggle.textContent = "생각 펼치기";
       scrollChatToBottom();
     },
     flush() {
+      if (!initialized) initialize();
       answerRenderer.flush();
       reasoningRenderer.flush();
     },
@@ -265,7 +289,9 @@ function setupStreamingAssistantMessage(container, modeLabel, aiName) {
 
 function createSmoothStructuredRenderer(textEl, codeEl, emptyText) {
   const textRenderer = createSmoothTextRenderer(textEl, emptyText);
-  const codeRenderer = createSmoothTextRenderer(codeEl, "");
+  const codeRenderer = createSmoothTextRenderer(codeEl, "", () => {
+    codeEl.scrollTop = codeEl.scrollHeight;
+  });
 
   return {
     setTarget(text) {
@@ -301,7 +327,7 @@ function splitStreamingReply(text) {
   };
 }
 
-function createSmoothTextRenderer(el, emptyText) {
+function createSmoothTextRenderer(el, emptyText, onRender) {
   let target = "";
   let shown = "";
   let rafId = null;
@@ -312,6 +338,7 @@ function createSmoothTextRenderer(el, emptyText) {
     if (!target) {
       shown = "";
       el.textContent = emptyText || "";
+      if (onRender) onRender();
       return;
     }
     const elapsed = lastTs ? Math.max(0, ts - lastTs) : 16;
@@ -324,6 +351,7 @@ function createSmoothTextRenderer(el, emptyText) {
     const charsPerFrame = getSmoothCharsPerFrame(remaining, elapsed);
     shown = target.slice(0, shown.length + Math.min(remaining, charsPerFrame));
     el.textContent = shown;
+    if (onRender) onRender();
     schedule();
   }
 
@@ -337,6 +365,7 @@ function createSmoothTextRenderer(el, emptyText) {
       if (!target) {
         shown = "";
         el.textContent = emptyText || "";
+        if (onRender) onRender();
         return;
       }
       if (!target.startsWith(shown)) shown = "";
@@ -349,6 +378,7 @@ function createSmoothTextRenderer(el, emptyText) {
       }
       shown = target;
       el.textContent = target || emptyText || "";
+      if (onRender) onRender();
     },
   };
 }
@@ -404,6 +434,7 @@ async function sendChat() {
     scrollChatToBottom();
   } catch (err) {
     loading.classList.remove("streaming");
+    loading.classList.remove("loading");
     loading.innerHTML = "❌ " + escapeHtml(err.message);
     loading.classList.remove("assistant");
     loading.classList.add("system");
