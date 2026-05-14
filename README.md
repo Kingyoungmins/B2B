@@ -8,10 +8,10 @@
 
 ### ver3.5
 - 상단 톱니바퀴 왼쪽에 Think 모드 토글을 추가했습니다.
-- Think 모드는 기본값이 꺼짐이며, 꺼진 상태에서는 Qwen 계열 요청의 마지막 사용자 메시지에 `/no_think`를 붙여 전송합니다.
+- Think 모드는 기본값이 꺼짐이며, 선택한 Think 제어 방식에 따라 `/no_think` 또는 `chat_template_kwargs.enable_thinking: false`를 전송합니다.
 - Think 모드를 켜면 `/think`를 붙여 전송하고, 스트리밍 중 `reasoning_content`/`reasoning` delta가 들어오는 경우에만 `생각 접기/펼치기` 영역에 표시합니다.
 - Think 모드가 꺼진 상태에서는 서버가 reasoning delta를 보내더라도 UI에 표시하지 않습니다.
-- Qwen3.5와 Qwen3.6 모두 같은 `/think`/`/no_think` 방식으로 제어합니다. 실제 동작은 서빙 서버의 chat template 또는 OpenAI-compatible 구현이 해당 토큰을 지원한다는 전제입니다.
+- AI 연결 설정에서 Think 제어 방식을 선택할 수 있습니다. Qwen3.5는 `/think`, `/no_think` soft switch를 사용하고, Qwen3.6/vLLM은 요청 바디의 `chat_template_kwargs.enable_thinking`을 사용합니다.
 - UI 제목과 EXE 빌드 이름을 ver3.5로 갱신했습니다.
 - EXE 빌드 결과 파일명은 `KGM_B2B_ver3.5.exe`입니다.
 

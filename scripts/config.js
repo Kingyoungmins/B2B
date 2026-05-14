@@ -14,6 +14,7 @@ const DEFAULTS = {
       ? `${location.origin}/v1`
       : "http://127.0.0.1:8090/v1",
     thinkMode: false,
+    thinkControlMode: "soft_switch",
   },
 };
 
@@ -48,9 +49,15 @@ function normalizeSettings(parsed) {
       baseUrl: parsed.baseUrl || DEFAULTS["openai-compat"].baseUrl,
       apiKey: parsed.apiKey || DEFAULTS["openai-compat"].apiKey,
       thinkMode: parsed.thinkMode === true,
+      thinkControlMode: normalizeThinkControlMode(parsed.thinkControlMode),
     };
   }
   return null;
+}
+
+function normalizeThinkControlMode(value) {
+  if (value === "chat_template_kwargs") return value;
+  return DEFAULTS["openai-compat"].thinkControlMode;
 }
 
 function loadSettings() {

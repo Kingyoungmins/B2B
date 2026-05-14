@@ -63,20 +63,21 @@ async function callOpenAICompat(system, options) {
     { role: "system", content: system },
     ...getLLMChatHistory(),
   ];
-  applyQwenThinkDirective(messages, options.thinkMode === true);
+  const payload = {
+    model: settings.model || DEFAULTS["openai-compat"].model,
+    messages,
+    max_tokens: 4096,
+    temperature: 0.2,
+    stream: true,
+  };
+  applyQwenThinkControl(payload, options.thinkMode === true);
   const { resp, url } = await fetchOpenAICompat("/chat/completions", base, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       "Api-Key": settings.apiKey || DEFAULTS["openai-compat"].apiKey,
     },
-    body: JSON.stringify({
-      model: settings.model || DEFAULTS["openai-compat"].model,
-      messages,
-      max_tokens: 4096,
-      temperature: 0.2,
-      stream: true,
-    }),
+    body: JSON.stringify(payload),
   });
   if (!resp.ok) {
     const text = await resp.text();
@@ -166,6 +167,18 @@ async function readOpenAICompatStream(resp, options) {
   }
 
   return full;
+}
+
+function applyQwenThinkControl(payload, thinkMode) {
+  const mode = settings.thinkControlMode || DEFAULTS["openai-compat"].thinkControlMode;
+  if (mode === "chat_template_kwargs") {
+    payload.chat_template_kwargs = {
+      ...(payload.chat_template_kwargs || {}),
+      enable_thinking: thinkMode,
+    };
+    return;
+  }
+  applyQwenThinkDirective(payload.messages, thinkMode);
 }
 
 function applyQwenThinkDirective(messages, thinkMode) {

@@ -29,6 +29,9 @@ function openSettingsModal(devMode) {
   const ixiKey = settings.provider === "openai-compat"
     ? (settings.apiKey || DEFAULTS["openai-compat"].apiKey)
     : DEFAULTS["openai-compat"].apiKey;
+  const ixiThinkControlMode = settings.provider === "openai-compat"
+    ? (settings.thinkControlMode || DEFAULTS["openai-compat"].thinkControlMode)
+    : DEFAULTS["openai-compat"].thinkControlMode;
 
   const claudeKey = settings.provider === "anthropic"
     ? (settings.apiKey || DEFAULTS.anthropic.apiKey)
@@ -64,6 +67,11 @@ function openSettingsModal(devMode) {
       <input type="text" id="set-o-url" value="${escapeHtml(ixiUrl)}" />
       <label style="font-size:11.5px; color:#666">API Key</label>
       <input type="text" id="set-o-key" value="${escapeHtml(ixiKey)}" />
+      <label style="font-size:11.5px; color:#666">Think 제어 방식</label>
+      <select id="set-o-think-control">
+        <option value="soft_switch" ${ixiThinkControlMode === "soft_switch" ? "selected" : ""}>Qwen3.5: /think, /no_think</option>
+        <option value="chat_template_kwargs" ${ixiThinkControlMode === "chat_template_kwargs" ? "selected" : ""}>Qwen3.6/vLLM: chat_template_kwargs.enable_thinking</option>
+      </select>
     </div>
 
     ${devMode ? `
@@ -118,6 +126,7 @@ function openSettingsModal(devMode) {
       apiKey: $("set-o-key").value.trim() || DEFAULTS["openai-compat"].apiKey,
       model: DEFAULTS["openai-compat"].model,
       thinkMode: settings.thinkMode === true,
+      thinkControlMode: normalizeThinkControlMode($("set-o-think-control").value),
     };
   };
 
