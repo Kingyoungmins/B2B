@@ -41,7 +41,7 @@
   }
   .msg.assistant.streaming {
     display: block;
-    width: fit-content;
+    width: 92%;
     max-width: 92%;
     box-sizing: border-box;
     padding: 7px 10px;
@@ -61,10 +61,6 @@
     min-height: 30px;
     white-space: nowrap;
     overflow: visible;
-  }
-  .msg.assistant.streaming.has-code {
-    width: 92%;
-    max-width: 92%;
   }
   .msg.system {
     background: transparent;
@@ -165,6 +161,7 @@
   .msg .assistant-stream-code { margin-top: 8px; }
   .msg.assistant.streaming .assistant-stream,
   .msg.assistant.streaming .assistant-stream-text {
+    width: 100%;
     max-width: 100%;
   }
   .msg.assistant.streaming .assistant-stream { display: block; }
