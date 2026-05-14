@@ -33,10 +33,23 @@ function _formatNumberKR(n) {
   else frac = 4; // |n| < 1 — 비율/소수 케이스
   return n.toLocaleString("ko-KR", { minimumFractionDigits: 0, maximumFractionDigits: frac });
 }
-function _formatCellDisplay(value, numFormat) {
+function _looksLikeDateFormat(numFormat) {
+  const fmt = String(numFormat || "").replace(/\[[^\]]+\]/g, "").toLowerCase();
+  return /(^|[^a-z])([ymd]|yyyy|yy|mm|dd)([^a-z]|$)/.test(fmt) && !fmt.includes("%");
+}
+
+function _formatCellDisplay(value, numFormat, sourceDisplay) {
+  const isDateFormat = _looksLikeDateFormat(numFormat);
+  if (sourceDisplay !== undefined && (value instanceof Date || isDateFormat)) {
+    return escapeHtml(String(sourceDisplay));
+  }
+  if (value instanceof Date) return escapeHtml(value.toLocaleDateString("ko-KR"));
   if (!isNumLike(value)) return escapeHtml(String(value));
   const n = Number(value);
   const fmt = String(numFormat || "");
+  if (isDateFormat && typeof XLSX !== "undefined" && XLSX.SSF && typeof XLSX.SSF.format === "function") {
+    try { return escapeHtml(String(XLSX.SSF.format(fmt || "yyyy-mm-dd", n))); } catch {}
+  }
   if (fmt.includes("%")) {
     const decimals = (() => {
       const m = fmt.match(/0\.([0#]+)/);
@@ -389,11 +402,12 @@ function _appendRows(viewer, ctx, fromRow, toRow) {
       }
       const realStyle = file.styles && file.styles[sheet] && file.styles[sheet][r] && file.styles[sheet][r][c];
       const numFormat = file.formats && file.formats[sheet] && file.formats[sheet][r] && file.formats[sheet][r][c];
+      const sourceDisplay = file.displays && file.displays[sheet] && file.displays[sheet][r] && file.displays[sheet][r][c];
       if (!realStyle) {
         const styleCls = classifyCell(aoa[r] && aoa[r][0], r, c, aoa);
         if (styleCls) cls.push(styleCls);
       }
-      const display = _formatCellDisplay(v, numFormat);
+      const display = _formatCellDisplay(v, numFormat, sourceDisplay);
       const rs = rowspan > 1 ? ` rowspan="${rowspan}"` : "";
       const cs = colspan > 1 ? ` colspan="${colspan}"` : "";
       const styleAttr = realStyle ? ` style="${realStyle}"` : "";

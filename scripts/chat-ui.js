@@ -63,6 +63,24 @@ function addMessage(role, text, opts) {
   return div;
 }
 
+function scrollChatToBottom() {
+  const container = $("chat-messages");
+  if (!container) return;
+  requestAnimationFrame(() => {
+    container.scrollTop = container.scrollHeight;
+  });
+}
+
+function clearViewerDragSelection() {
+  state.selectedCell = null;
+  state.selectedRange = null;
+  state.selectedRanges = [];
+  state.selectionAnchor = null;
+  document.querySelectorAll(".selected-cell,.selected-range").forEach(el => {
+    el.classList.remove("selected-cell", "selected-range");
+  });
+}
+
 function addAssistantReply(fullText, replyContext) {
   const code = extractCode(fullText);
   const desc = extractDescription(fullText);
@@ -229,12 +247,14 @@ function setupStreamingAssistantMessage(container, modeLabel, aiName) {
   return {
     setAnswer(text) {
       answerRenderer.setTarget(text);
+      scrollChatToBottom();
     },
     setReasoning(text) {
       if (!text) return;
       reasoningBox.hidden = false;
       reasoningRenderer.setTarget(text);
       if (!reasoningBox.classList.contains("open")) reasoningToggle.textContent = "생각 펼치기";
+      scrollChatToBottom();
     },
     flush() {
       answerRenderer.flush();
@@ -285,7 +305,7 @@ function createSmoothTextRenderer(el, emptyText) {
   let target = "";
   let shown = "";
   let rafId = null;
-  let lastTs = 0;
+  let lastTs = performance.now();
 
   function render(ts) {
     rafId = null;
@@ -297,11 +317,14 @@ function createSmoothTextRenderer(el, emptyText) {
     const elapsed = lastTs ? Math.max(0, ts - lastTs) : 16;
     lastTs = ts;
     const remaining = target.length - shown.length;
-    if (remaining <= 0) return;
-    const charsPerFrame = Math.max(1, Math.min(10, Math.ceil(elapsed / 12)));
+    if (remaining <= 0) {
+      schedule();
+      return;
+    }
+    const charsPerFrame = getSmoothCharsPerFrame(remaining, elapsed);
     shown = target.slice(0, shown.length + Math.min(remaining, charsPerFrame));
     el.textContent = shown;
-    if (shown.length < target.length) schedule();
+    schedule();
   }
 
   function schedule() {
@@ -330,6 +353,12 @@ function createSmoothTextRenderer(el, emptyText) {
   };
 }
 
+function getSmoothCharsPerFrame(remaining, elapsed) {
+  if (remaining > 240) return Math.max(3, Math.min(12, Math.ceil(elapsed / 8)));
+  if (remaining > 80) return Math.max(2, Math.min(6, Math.ceil(elapsed / 12)));
+  return 1;
+}
+
 async function sendChat() {
   const input = $("chat-text");
   const msg = input.value.trim();
@@ -339,6 +368,7 @@ async function sendChat() {
   const editTargetId = state.editingStepId || null;
   input.value = "";
   addMessage("user", msg);
+  clearViewerDragSelection();
   const loading = addMessage("assistant", "", {});
   // 외부 노출 시엔 내부 모델명을 표시하지 않고 LLM 으로 통일
   const aiName = settings.provider === "openai-compat" ? "ixi 모델" : "LLM";
@@ -356,24 +386,26 @@ async function sendChat() {
       thinkMode,
       onDelta: (delta, full) => {
         streamView.setAnswer(full);
-        $("chat-messages").scrollTop = $("chat-messages").scrollHeight;
+        scrollChatToBottom();
       },
     };
     if (thinkMode) {
       requestOptions.onReasoningDelta = (delta, full) => {
         reasoningText = full;
         streamView.setReasoning(full);
-        $("chat-messages").scrollTop = $("chat-messages").scrollHeight;
+        scrollChatToBottom();
       };
     }
     const reply = await callLLM(prompt, requestOptions);
     streamView.flush();
     loading.remove();
     addAssistantReply(reply, { editTargetId, reasoning: reasoningText });
+    scrollChatToBottom();
   } catch (err) {
     loading.innerHTML = "❌ " + escapeHtml(err.message);
     loading.classList.remove("assistant");
     loading.classList.add("system");
+    scrollChatToBottom();
   } finally {
     $("chat-send").disabled = false;
   }

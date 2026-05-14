@@ -18,6 +18,7 @@ async function parseFile(file) {
   const merges = {};
   const styles = {};
   const formats = {};
+  const displays = {};
   const formulas = {};            // ver2.0: { sheetName: { "A1": "=SUM(...)" } }
   const originalFormulaValues = {}; // 원본 캐시값 (수식 평가 실패 시 fallback)
   const tables = {};              // ver2.0: { sheetName: [{ startRow, endRow, ... }] }
@@ -28,6 +29,7 @@ async function parseFile(file) {
     merges[name] = ws["!merges"] ? ws["!merges"].map(m => ({ s: {...m.s}, e: {...m.e} })) : [];
     const sheetStyles = [];
     const sheetFormats = [];
+    const sheetDisplays = [];
     const sheetFormulas = {};
     const sheetOriginalValues = {};
     const ref = ws["!ref"];
@@ -42,6 +44,10 @@ async function parseFile(file) {
           if (!cell) continue;
           if (useCellStyles && row && cell.s) row[c] = extractCellStyle(cell.s);
           if (cell.z) fmtRow[c] = cell.z;
+          if (cell.w !== undefined) {
+            if (!sheetDisplays[r]) sheetDisplays[r] = [];
+            sheetDisplays[r][c] = cell.w;
+          }
           // 수식 추출 (ver2.0)
           if (cell.f) {
             sheetFormulas[addr] = "=" + cell.f;
@@ -55,6 +61,7 @@ async function parseFile(file) {
     }
     styles[name] = sheetStyles;
     formats[name] = sheetFormats;
+    displays[name] = sheetDisplays;
     formulas[name] = sheetFormulas;
     originalFormulaValues[name] = sheetOriginalValues;
     // 표 감지 (ver2.0)
@@ -70,6 +77,7 @@ async function parseFile(file) {
     merges,
     styles,
     formats,
+    displays,
     formulas,
     originalFormulaValues,
     tables,
@@ -210,6 +218,7 @@ function cloneFileRecord(file) {
     merges: file.merges,
     styles: file.styles,
     formats: file.formats || {},
+    displays: file.displays || {},
     formulas: file.formulas || {},
     originalFormulaValues: file.originalFormulaValues || {},
     tables: file.tables || {},
