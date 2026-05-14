@@ -31,7 +31,7 @@
       </button>
       <button class="menu-item" data-page="runner" type="button">
         <span>▶</span>
-        <span>로직 실행기</span>
+        <span>스킬 실행기</span>
       </button>
     </div>
   </div>
@@ -45,7 +45,7 @@
       <div class="logo">U+</div>
       <div class="brand-info">
         <h1 id="page-title">B2B 빌링 Agent ver3.32</h1>
-        <div class="sub" id="model-label">AI: ixi 모델</div>
+        <div class="sub" id="model-label">AI: Qwen 로컬</div>
       </div>
       <button class="brand-btn" id="btn-settings" title="AI 모델 설정">⚙</button>
     </div>
@@ -89,8 +89,8 @@
       <section class="panel-section growable chat-panel disabled" id="panel-chat">
         <div class="panel-head" data-target="panel-chat">
           <span class="caret">▼</span>
-          <span>③ 로직 설계 (AI)</span>
-          <span class="hint">대화로 로직을 만드세요</span>
+          <span>③ 스킬 설계 (AI)</span>
+          <span class="hint">대화로 스킬을 만드세요</span>
         </div>
         <div class="panel-body">
           <div class="chat-messages" id="chat-messages">
@@ -109,7 +109,7 @@
       <section class="panel-section growable" id="panel-pipeline">
         <div class="panel-head" data-target="panel-pipeline">
           <span class="caret">▼</span>
-          <span>④ 로직 파이프라인</span>
+          <span>④ 스킬 파이프라인</span>
           <span class="hint" id="pipe-count">0 단계</span>
         </div>
         <div class="panel-body">
@@ -126,8 +126,8 @@
         <button class="btn-primary" id="btn-download" disabled="" style="background:#217346">📥 출력 xlsx 다운로드</button>
       </div>
       <div class="action-row">
-        <button class="btn-secondary" id="btn-save" disabled="">💾 로직 저장</button>
-        <button class="btn-secondary" id="btn-load">📂 로직 불러오기</button>
+        <button class="btn-secondary" id="btn-save" disabled="">💾 스킬 저장</button>
+        <button class="btn-secondary" id="btn-load">📂 스킬 불러오기</button>
         <button class="btn-secondary" id="btn-reset">↻ 초기화</button>
       </div>
       </div>
@@ -139,8 +139,8 @@
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
             </div>
             <div class="runner-hero-body">
-              <div class="runner-hero-title">로직 실행 파이프라인</div>
-              <div class="runner-hero-sub">입력 · 템플릿 · 로직을 연결하고 한 번에 실행합니다</div>
+              <div class="runner-hero-title">스킬 실행 파이프라인</div>
+              <div class="runner-hero-sub">입력 · 템플릿 · 스킬을 연결하고 한 번에 실행합니다</div>
             </div>
             <div class="runner-hero-badge" id="runner-hero-badge">대기 중</div>
           </div>
@@ -180,7 +180,7 @@
             <div class="runner-circle runner-pos-3" id="runner-logic-node" data-role="logic">
               <div class="runner-circle-inner">
                 <span class="runner-circle-num">3</span>
-                <span class="runner-circle-label">로직</span>
+                <span class="runner-circle-label">스킬</span>
                 <span class="runner-circle-count" id="runner-logic-count">0</span>
               </div>
               <span class="runner-circle-status" data-status="empty">비어있음</span>
@@ -216,7 +216,7 @@
               <div class="runner-stat-value" id="runner-stat-template">—</div>
             </div>
             <div class="runner-stat">
-              <div class="runner-stat-label">로직 단계</div>
+              <div class="runner-stat-label">스킬 단계</div>
               <div class="runner-stat-value" id="runner-stat-steps">0</div>
             </div>
             <div class="runner-stat">
@@ -227,11 +227,11 @@
 
           <div class="logic-summary" id="runner-summary">
             <span class="runner-summary-ico">💡</span>
-            <span>아직 로드된 파일과 로직이 없습니다. 위 4단계를 순서대로 채워주세요.</span>
+            <span>아직 로드된 파일과 스킬이 없습니다. 위 4단계를 순서대로 채워주세요.</span>
           </div>
 
           <div class="workflow-actions">
-            <button class="btn-secondary" id="runner-load-btn" type="button">📂 로직 불러오기</button>
+            <button class="btn-secondary" id="runner-load-btn" type="button">📂 스킬 불러오기</button>
             <button class="btn-secondary" id="runner-open-generator" type="button">🧩 생성기로 이동</button>
             <button class="btn-primary" id="runner-download-btn" type="button" disabled="">📥 출력 xlsx 다운로드</button>
           </div>
@@ -270,7 +270,7 @@
       <div class="excel-viewer" id="runner-excel-viewer">
         <div class="excel-empty">
           <div class="big-ico">🧪</div>
-          <div>로직을 실행하면</div>
+          <div>스킬을 실행하면</div>
           <div>여기에 결과 시뮬레이터가 표시됩니다</div>
         </div>
       </div>

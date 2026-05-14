@@ -11,7 +11,7 @@ function refreshChatState() {
     const targetLabel = state.output
       ? `출력 템플릿 "${state.output.name}" 이 로드되었습니다.`
       : `입력 파일 ${state.inputs.length}개가 로드되었습니다.`;
-    addMessage("system", `${targetLabel} 입력/출력 파일을 함께 수정하는 로직을 만들어보세요.`);
+    addMessage("system", `${targetLabel} 입력/출력 파일을 함께 수정하는 스킬을 만들어보세요.`);
   }
   renderEditingBanner();
   refreshRunButton();
@@ -63,15 +63,35 @@ function addMessage(role, text, opts) {
   return div;
 }
 
+function scrollChatToBottom() {
+  const container = $("chat-messages");
+  if (!container) return;
+  requestAnimationFrame(() => {
+    container.scrollTop = container.scrollHeight;
+  });
+}
+
+function clearViewerDragSelection() {
+  state.selectedCell = null;
+  state.selectedRange = null;
+  state.selectedRanges = [];
+  state.selectionAnchor = null;
+  document.querySelectorAll(".selected-cell,.selected-range").forEach(el => {
+    el.classList.remove("selected-cell", "selected-range");
+  });
+}
+
 function addAssistantReply(fullText, replyContext) {
   const code = extractCode(fullText);
   const desc = extractDescription(fullText);
   const stripped = fullText.replace(/```[\s\S]*?```/g, "").trim();
   const editTargetId = replyContext && replyContext.editTargetId;
+  const reasoning = replyContext && replyContext.reasoning;
 
   const div = document.createElement("div");
   div.className = "msg assistant";
   div.innerHTML = `<div>${escapeHtml(stripped)}</div>`;
+  if (reasoning) div.insertBefore(createReasoningBox(reasoning), div.firstChild);
   if (code) {
     const codeBlk = document.createElement("pre");
     codeBlk.className = "code-block";
@@ -142,6 +162,25 @@ function addAssistantReply(fullText, replyContext) {
   $("chat-messages").scrollTop = $("chat-messages").scrollHeight;
 }
 
+function createReasoningBox(text) {
+  const box = document.createElement("div");
+  box.className = "reasoning-box";
+  const toggle = document.createElement("button");
+  toggle.className = "reasoning-toggle";
+  toggle.type = "button";
+  toggle.textContent = "생각 펼치기";
+  const content = document.createElement("div");
+  content.className = "reasoning-content";
+  content.textContent = text;
+  toggle.onclick = () => {
+    const open = box.classList.toggle("open");
+    toggle.textContent = open ? "생각 접기" : "생각 펼치기";
+  };
+  box.appendChild(toggle);
+  box.appendChild(content);
+  return box;
+}
+
 function openInsertPositionDialog(currentCount, onConfirm) {
   const modal = $("modal");
   const maxPos = currentCount + 1;
@@ -177,6 +216,149 @@ function openInsertPositionDialog(currentCount, onConfirm) {
   });
 }
 
+function setupStreamingAssistantMessage(container, modeLabel, aiName) {
+  container.innerHTML = `
+    <div class="reasoning-box" hidden>
+      <button class="reasoning-toggle" type="button">생각 펼치기</button>
+      <div class="reasoning-content"></div>
+    </div>
+    <div class="assistant-stream">
+      <div class="assistant-stream-text"><span class="loader"></span> ${modeLabel}${aiName}에게 전송 중...</div>
+      <pre class="code-block assistant-stream-code" hidden></pre>
+    </div>
+  `;
+  const reasoningBox = container.querySelector(".reasoning-box");
+  const reasoningToggle = container.querySelector(".reasoning-toggle");
+  const reasoningContent = container.querySelector(".reasoning-content");
+  const answerText = container.querySelector(".assistant-stream-text");
+  const codeBlock = container.querySelector(".assistant-stream-code");
+  const answerRenderer = createSmoothStructuredRenderer(
+    answerText,
+    codeBlock,
+    `${modeLabel}${aiName} 응답 수신 중...`,
+  );
+  const reasoningRenderer = createSmoothTextRenderer(reasoningContent, "");
+
+  reasoningToggle.onclick = () => {
+    const open = reasoningBox.classList.toggle("open");
+    reasoningToggle.textContent = open ? "생각 접기" : "생각 펼치기";
+  };
+
+  return {
+    setAnswer(text) {
+      answerRenderer.setTarget(text);
+      scrollChatToBottom();
+    },
+    setReasoning(text) {
+      if (!text) return;
+      reasoningBox.hidden = false;
+      reasoningRenderer.setTarget(text);
+      if (!reasoningBox.classList.contains("open")) reasoningToggle.textContent = "생각 펼치기";
+      scrollChatToBottom();
+    },
+    flush() {
+      answerRenderer.flush();
+      reasoningRenderer.flush();
+    },
+  };
+}
+
+function createSmoothStructuredRenderer(textEl, codeEl, emptyText) {
+  const textRenderer = createSmoothTextRenderer(textEl, emptyText);
+  const codeRenderer = createSmoothTextRenderer(codeEl, "");
+
+  return {
+    setTarget(text) {
+      const parsed = splitStreamingReply(text);
+      textRenderer.setTarget(parsed.text);
+      codeEl.hidden = !parsed.hasCode;
+      codeRenderer.setTarget(parsed.code);
+    },
+    flush() {
+      textRenderer.flush();
+      codeRenderer.flush();
+    },
+  };
+}
+
+function splitStreamingReply(text) {
+  const value = String(text || "");
+  const fenceStart = value.indexOf("```");
+  if (fenceStart < 0) {
+    return { text: value, code: "", hasCode: false };
+  }
+
+  const before = value.slice(0, fenceStart).trim();
+  let rest = value.slice(fenceStart + 3);
+  rest = rest.replace(/^(javascript|js)\s*\n/i, "");
+  const fenceEnd = rest.indexOf("```");
+  const code = fenceEnd >= 0 ? rest.slice(0, fenceEnd).trimEnd() : rest;
+  const after = fenceEnd >= 0 ? rest.slice(fenceEnd + 3).trim() : "";
+  return {
+    text: [before, after].filter(Boolean).join("\n\n") || "코드 작성 중...",
+    code,
+    hasCode: true,
+  };
+}
+
+function createSmoothTextRenderer(el, emptyText) {
+  let target = "";
+  let shown = "";
+  let rafId = null;
+  let lastTs = performance.now();
+
+  function render(ts) {
+    rafId = null;
+    if (!target) {
+      shown = "";
+      el.textContent = emptyText || "";
+      return;
+    }
+    const elapsed = lastTs ? Math.max(0, ts - lastTs) : 16;
+    lastTs = ts;
+    const remaining = target.length - shown.length;
+    if (remaining <= 0) {
+      schedule();
+      return;
+    }
+    const charsPerFrame = getSmoothCharsPerFrame(remaining, elapsed);
+    shown = target.slice(0, shown.length + Math.min(remaining, charsPerFrame));
+    el.textContent = shown;
+    schedule();
+  }
+
+  function schedule() {
+    if (rafId === null) rafId = requestAnimationFrame(render);
+  }
+
+  return {
+    setTarget(text) {
+      target = String(text || "");
+      if (!target) {
+        shown = "";
+        el.textContent = emptyText || "";
+        return;
+      }
+      if (!target.startsWith(shown)) shown = "";
+      schedule();
+    },
+    flush() {
+      if (rafId !== null) {
+        cancelAnimationFrame(rafId);
+        rafId = null;
+      }
+      shown = target;
+      el.textContent = target || emptyText || "";
+    },
+  };
+}
+
+function getSmoothCharsPerFrame(remaining, elapsed) {
+  if (remaining > 240) return Math.max(3, Math.min(12, Math.ceil(elapsed / 8)));
+  if (remaining > 80) return Math.max(2, Math.min(6, Math.ceil(elapsed / 12)));
+  return 1;
+}
+
 async function sendChat() {
   const input = $("chat-text");
   const msg = input.value.trim();
@@ -186,29 +368,44 @@ async function sendChat() {
   const editTargetId = state.editingStepId || null;
   input.value = "";
   addMessage("user", msg);
+  clearViewerDragSelection();
   const loading = addMessage("assistant", "", {});
   // 외부 노출 시엔 내부 모델명을 표시하지 않고 LLM 으로 통일
   const aiName = settings.provider === "openai-compat" ? "Qwen 로컬" : "LLM";
   const modeLabel = editTargetId ? "(수정 모드) " : "";
-  loading.innerHTML = `<span class="loader"></span> ${modeLabel}${aiName}에게 전송 중...`;
+  const thinkMode = typeof isThinkModeEnabled === "function" && isThinkModeEnabled();
+  const streamView = setupStreamingAssistantMessage(loading, modeLabel, aiName);
   $("chat-send").disabled = true;
+  let reasoningText = "";
   try {
     const prompt = typeof augmentUserPromptWithMentions === "function"
       ? augmentUserPromptWithMentions(msg)
       : msg;
-    const reply = await callLLM(prompt, {
+    const requestOptions = {
       editTargetId,
+      thinkMode,
       onDelta: (delta, full) => {
-        loading.textContent = full || `${modeLabel}${aiName} 응답 수신 중...`;
-        $("chat-messages").scrollTop = $("chat-messages").scrollHeight;
+        streamView.setAnswer(full);
+        scrollChatToBottom();
       },
-    });
+    };
+    if (thinkMode) {
+      requestOptions.onReasoningDelta = (delta, full) => {
+        reasoningText = full;
+        streamView.setReasoning(full);
+        scrollChatToBottom();
+      };
+    }
+    const reply = await callLLM(prompt, requestOptions);
+    streamView.flush();
     loading.remove();
-    addAssistantReply(reply, { editTargetId });
+    addAssistantReply(reply, { editTargetId, reasoning: reasoningText });
+    scrollChatToBottom();
   } catch (err) {
     loading.innerHTML = "❌ " + escapeHtml(err.message);
     loading.classList.remove("assistant");
     loading.classList.add("system");
+    scrollChatToBottom();
   } finally {
     $("chat-send").disabled = false;
   }

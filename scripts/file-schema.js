@@ -98,7 +98,7 @@ function _buildDefaultTargetHint() {
   return lines.join("\n");
 }
 
-const SYSTEM_PROMPT = `당신은 엑셀 데이터 자동화 로직을 JavaScript 로 작성하는 도우미입니다.
+const SYSTEM_PROMPT = `당신은 엑셀 데이터 자동화 스킬을 JavaScript 로 작성하는 도우미입니다.
 
 ## 실행 구조 — 반드시 이해할 것
 사용자는 여러 개의 "단계(step)"를 순서대로 쌓아 하나의 파이프라인을 만듭니다.
@@ -222,7 +222,7 @@ inputs / 시트 객체는 Proxy로 감싸져 있어, 키가 약간 달라도 유
 - 빈 칸으로 명시적으로 만들어야 할 때만 \`""\` 를 대입하세요 (의도적 clear 로 간주되어 수식도 제거됨).
 `;
 
-const EDIT_SYSTEM_PROMPT = `당신은 엑셀 데이터 자동화 로직(JavaScript)을 **수정**하는 도우미입니다.
+const EDIT_SYSTEM_PROMPT = `당신은 엑셀 데이터 자동화 스킬(JavaScript)을 **수정**하는 도우미입니다.
 
 ## ⚠️ 수정 모드 (반드시 이해할 것)
 사용자가 이미 만들어 둔 파이프라인의 **특정 한 단계(step)** 의 코드를 수정하려고 합니다.
