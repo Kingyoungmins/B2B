@@ -676,6 +676,7 @@ function paintViewerSelections(viewer) {
         state.selectedCell.sheet === hit.sheet &&
         state.selectedCell.r === r &&
         state.selectedCell.c === c;
+      td.classList.remove("flash");
       td.classList.add(isPrimaryCell ? "selected-cell" : "selected-range");
     }
   });

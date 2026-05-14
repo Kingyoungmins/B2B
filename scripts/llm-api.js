@@ -3,12 +3,16 @@
    =================================================================== */
 const LLM_HISTORY_MAX_MESSAGES = 18;
 const LLM_HISTORY_MAX_CHARS = 32000;
+const LLM_REASONING_RUNAWAY_CHARS = 7000;
+const LLM_REASONING_RUNAWAY_MS = 45000;
 
 async function callLLM(userMessage, options) {
   options = options || {};
   const thinkMode = settings.provider === "openai-compat"
     && (options.thinkMode === true || (options.thinkMode == null && isThinkModeEnabled()));
-  state.chatHistory.push({ role: "user", content: userMessage });
+  if (!options.skipHistoryPush) {
+    state.chatHistory.push({ role: "user", content: userMessage });
+  }
   const editTargetId = options.editTargetId;
   const editIdx = editTargetId
     ? state.pipeline.findIndex(s => s.id === editTargetId)
@@ -21,11 +25,26 @@ async function callLLM(userMessage, options) {
   if (settings.provider === "anthropic") {
     return await callAnthropic(fullSystem);
   }
-  return await callOpenAICompat(fullSystem, {
+  const requestOptions = {
     ...options,
     enableReasoning: thinkMode,
     thinkMode,
-  });
+  };
+  try {
+    return await callOpenAICompat(fullSystem, requestOptions);
+  } catch (err) {
+    if (thinkMode && err && err.name === "ReasoningRunawayError" && !(options.signal && options.signal.aborted)) {
+      if (typeof options.onThinkFallback === "function") options.onThinkFallback(err);
+      return await callOpenAICompat(fullSystem, {
+        ...options,
+        enableReasoning: false,
+        thinkMode: false,
+        skipHistoryPush: true,
+        onReasoningDelta: null,
+      });
+    }
+    throw err;
+  }
 }
 
 async function callAnthropic(system) {
@@ -77,6 +96,7 @@ async function callOpenAICompat(system, options) {
       "Content-Type": "application/json",
       "Api-Key": settings.apiKey || DEFAULTS["openai-compat"].apiKey,
     },
+    signal: options.signal,
     body: JSON.stringify(payload),
   });
   if (!resp.ok) {
@@ -86,12 +106,18 @@ async function callOpenAICompat(system, options) {
   const contentType = resp.headers.get("content-type") || "";
   if (resp.body && contentType.includes("text/event-stream")) {
     const content = await readOpenAICompatStream(resp, options);
+    if (!content.trim() && options.thinkMode === true) {
+      throw createReasoningRunawayError("thinking만 생성되고 답변 본문이 비어 있습니다.");
+    }
     state.chatHistory.push({ role: "assistant", content });
     return content;
   }
 
   const data = await resp.json();
   const content = data.choices?.[0]?.message?.content || "";
+  if (!content.trim() && options.thinkMode === true) {
+    throw createReasoningRunawayError("thinking만 생성되고 답변 본문이 비어 있습니다.");
+  }
   state.chatHistory.push({ role: "assistant", content });
   return content;
 }
@@ -124,6 +150,7 @@ async function readOpenAICompatStream(resp, options) {
   let buffer = "";
   let full = "";
   let reasoningFull = "";
+  let reasoningStartedAt = 0;
 
   while (true) {
     const { value, done } = await reader.read();
@@ -151,9 +178,17 @@ async function readOpenAICompatStream(resp, options) {
         ?? choice.reasoning
         ?? "";
       if (allowReasoning && reasoningDelta) {
+        if (!reasoningStartedAt) reasoningStartedAt = performance.now();
         reasoningFull += reasoningDelta;
         if (typeof options.onReasoningDelta === "function") {
           options.onReasoningDelta(reasoningDelta, reasoningFull);
+        }
+        if (!full.trim()) {
+          const elapsed = performance.now() - reasoningStartedAt;
+          if (reasoningFull.length >= LLM_REASONING_RUNAWAY_CHARS || elapsed >= LLM_REASONING_RUNAWAY_MS) {
+            try { await reader.cancel(); } catch {}
+            throw createReasoningRunawayError("thinking이 길어져 답변 본문으로 넘어오지 않았습니다.");
+          }
         }
       }
 
@@ -167,6 +202,12 @@ async function readOpenAICompatStream(resp, options) {
   }
 
   return full;
+}
+
+function createReasoningRunawayError(message) {
+  const err = new Error(message);
+  err.name = "ReasoningRunawayError";
+  return err;
 }
 
 function applyQwenThinkControl(payload, thinkMode) {
@@ -194,9 +235,12 @@ function applyQwenThinkDirective(messages, thinkMode) {
 }
 
 async function fetchOpenAICompat(path, preferredBase, options = {}) {
+  const networkFallbacks = settings.network === "dev-vllm"
+    ? (DEFAULTS.devVllm.fallbackBaseUrls || [])
+    : OPENAI_COMPAT_FALLBACK_BASE_URLS;
   const bases = [
     preferredBase,
-    ...OPENAI_COMPAT_FALLBACK_BASE_URLS,
+    ...networkFallbacks,
   ]
     .filter(Boolean)
     .map(base => base.replace(/\/$/, ""))
@@ -226,6 +270,12 @@ function extractCode(text) {
 
 function extractDescription(text) {
   const stripped = text.replace(/```[\s\S]*?```/g, "").trim();
-  const firstLine = stripped.split("\n").find(l => l.trim()) || "스킬 생성";
+  const titleLine = stripped
+    .split("\n")
+    .map(l => l.trim())
+    .find(l => /^제목\s*[:：]/.test(l));
+  const firstLine = titleLine
+    ? titleLine.replace(/^제목\s*[:：]\s*/, "")
+    : stripped.split("\n").find(l => l.trim()) || "스킬 생성";
   return firstLine.trim().slice(0, 100);
 }

@@ -3,6 +3,7 @@
    =================================================================== */
 let viewerPopout = null;
 let viewerPopoutScrollTimer = null;
+let chatDockPlaceholder = null;
 
 function getActiveRightPage() {
   return document.querySelector(".right-page.active") || $("right-generator");
@@ -36,6 +37,7 @@ function openViewerPopout() {
 
   viewerPopout = nextPopout;
   document.body.classList.add("viewer-popped-out");
+  dockChatPanelToViewerSlot();
 
   const cssLinks = Array.from(document.querySelectorAll('link[rel="stylesheet"]'))
     .map(link => `<link rel="stylesheet" href="${link.href}">`)
@@ -79,6 +81,7 @@ function openViewerPopout() {
   viewerPopout.document.getElementById("popout-restore").onclick = restoreViewerPopout;
   viewerPopout.addEventListener("beforeunload", () => {
     document.body.classList.remove("viewer-popped-out");
+    restoreChatPanelFromViewerSlot();
     viewerPopout = null;
   });
   syncViewerPopout();
@@ -87,10 +90,34 @@ function openViewerPopout() {
 function restoreViewerPopout() {
   const popout = viewerPopout;
   document.body.classList.remove("viewer-popped-out");
+  restoreChatPanelFromViewerSlot();
   viewerPopout = null;
   if (popout && !popout.closed) popout.close();
   refreshTabs();
   renderExcelViewer();
+}
+
+function dockChatPanelToViewerSlot() {
+  const chat = $("panel-chat");
+  const right = document.querySelector(".right");
+  if (!chat || !right || chat.classList.contains("viewer-docked-chat")) return;
+  chatDockPlaceholder = document.createComment("panel-chat-original-position");
+  chat.parentNode.insertBefore(chatDockPlaceholder, chat);
+  chat.classList.add("viewer-docked-chat");
+  right.appendChild(chat);
+  document.body.classList.add("chat-docked-to-viewer");
+  scrollChatToBottom();
+}
+
+function restoreChatPanelFromViewerSlot() {
+  const chat = $("panel-chat");
+  if (!chat || !chatDockPlaceholder || !chatDockPlaceholder.parentNode) return;
+  chat.classList.remove("viewer-docked-chat");
+  chatDockPlaceholder.parentNode.insertBefore(chat, chatDockPlaceholder);
+  chatDockPlaceholder.remove();
+  chatDockPlaceholder = null;
+  document.body.classList.remove("chat-docked-to-viewer");
+  scrollChatToBottom();
 }
 
 function syncViewerPopout() {

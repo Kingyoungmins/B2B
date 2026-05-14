@@ -74,6 +74,13 @@ function scrollChatToBottom() {
   });
 }
 
+function scrollReasoningToBottom(el) {
+  if (!el) return;
+  requestAnimationFrame(() => {
+    el.scrollTop = el.scrollHeight;
+  });
+}
+
 function clearViewerDragSelection() {
   state.selectedCell = null;
   state.selectedRange = null;
@@ -178,6 +185,10 @@ function createReasoningBox(text) {
   toggle.onclick = () => {
     const open = box.classList.toggle("open");
     toggle.textContent = open ? "생각 접기" : "생각 펼치기";
+    if (open) {
+      scrollReasoningToBottom(content);
+      scrollChatToBottom();
+    }
   };
   box.appendChild(toggle);
   box.appendChild(content);
@@ -219,18 +230,32 @@ function openInsertPositionDialog(currentCount, onConfirm) {
   });
 }
 
-function setupStreamingAssistantMessage(container, modeLabel, aiName) {
+function setupStreamingAssistantMessage(container, modeLabel, aiName, onStop) {
   let initialized = false;
   let reasoningBox;
   let reasoningToggle;
   let reasoningContent;
+  let stopBtn;
   let answerText;
   let codeBlock;
   let answerRenderer;
   let reasoningRenderer;
 
   container.classList.add("loading");
-  container.innerHTML = `<span class="loader"></span> ${escapeHtml(modeLabel)}${escapeHtml(aiName)}에게 전송 중...`;
+  container.innerHTML = `
+    <div class="streaming-topbar">
+      <span><span class="loader"></span> ${escapeHtml(modeLabel)}${escapeHtml(aiName)}에게 전송 중...</span>
+      ${onStop ? '<button class="stream-stop-btn" type="button">중단</button>' : ""}
+    </div>
+  `;
+  stopBtn = container.querySelector(".stream-stop-btn");
+  if (stopBtn && onStop) {
+    stopBtn.onclick = () => {
+      stopBtn.disabled = true;
+      stopBtn.textContent = "중단 중...";
+      onStop();
+    };
+  }
   scrollChatToBottom();
 
   function initialize() {
@@ -238,6 +263,7 @@ function setupStreamingAssistantMessage(container, modeLabel, aiName) {
     initialized = true;
     container.classList.remove("loading");
     container.innerHTML = `
+      ${onStop ? '<div class="streaming-topbar"><span></span><button class="stream-stop-btn" type="button">중단</button></div>' : ""}
       <div class="reasoning-box" hidden>
         <button class="reasoning-toggle" type="button">생각 펼치기</button>
         <div class="reasoning-content"></div>
@@ -250,18 +276,35 @@ function setupStreamingAssistantMessage(container, modeLabel, aiName) {
     reasoningBox = container.querySelector(".reasoning-box");
     reasoningToggle = container.querySelector(".reasoning-toggle");
     reasoningContent = container.querySelector(".reasoning-content");
+    stopBtn = container.querySelector(".stream-stop-btn");
     answerText = container.querySelector(".assistant-stream-text");
     codeBlock = container.querySelector(".assistant-stream-code");
+    if (stopBtn && onStop) {
+      stopBtn.onclick = () => {
+        stopBtn.disabled = true;
+        stopBtn.textContent = "중단 중...";
+        onStop();
+      };
+    }
     answerRenderer = createSmoothStructuredRenderer(
       answerText,
       codeBlock,
       `${modeLabel}${aiName} 응답 수신 중...`,
     );
-    reasoningRenderer = createSmoothTextRenderer(reasoningContent, "");
+    reasoningRenderer = createSmoothTextRenderer(reasoningContent, "", () => {
+      if (reasoningBox && reasoningBox.classList.contains("open")) {
+        scrollReasoningToBottom(reasoningContent);
+      }
+      scrollChatToBottom();
+    });
 
     reasoningToggle.onclick = () => {
       const open = reasoningBox.classList.toggle("open");
       reasoningToggle.textContent = open ? "생각 접기" : "생각 펼치기";
+      if (open) {
+        scrollReasoningToBottom(reasoningContent);
+        scrollChatToBottom();
+      }
     };
   }
 
@@ -277,26 +320,35 @@ function setupStreamingAssistantMessage(container, modeLabel, aiName) {
       reasoningBox.hidden = false;
       reasoningRenderer.setTarget(text);
       if (!reasoningBox.classList.contains("open")) reasoningToggle.textContent = "생각 펼치기";
+      if (reasoningBox.classList.contains("open")) scrollReasoningToBottom(reasoningContent);
       scrollChatToBottom();
     },
     flush() {
       if (!initialized) initialize();
       answerRenderer.flush();
       reasoningRenderer.flush();
+      if (reasoningBox && reasoningBox.classList.contains("open")) scrollReasoningToBottom(reasoningContent);
+      if (stopBtn) stopBtn.remove();
+    },
+    stopped() {
+      if (stopBtn) {
+        stopBtn.disabled = true;
+        stopBtn.textContent = "중단됨";
+      }
     },
   };
 }
 
 function createSmoothStructuredRenderer(textEl, codeEl, emptyText) {
-  const textRenderer = createSmoothTextRenderer(textEl, emptyText);
+  const textRenderer = createSmoothTextRenderer(textEl, emptyText, scrollChatToBottom);
   const codeRenderer = createSmoothTextRenderer(codeEl, "", () => {
     codeEl.scrollTop = codeEl.scrollHeight;
+    scrollChatToBottom();
   });
 
   return {
     setTarget(text) {
       const parsed = splitStreamingReply(text);
-      codeEl.closest(".msg")?.classList.toggle("has-code", parsed.hasCode);
       textRenderer.setTarget(parsed.text);
       codeEl.hidden = !parsed.hasCode;
       codeRenderer.setTarget(parsed.code);
@@ -306,6 +358,93 @@ function createSmoothStructuredRenderer(textEl, codeEl, emptyText) {
       codeRenderer.flush();
     },
   };
+}
+
+async function requestErrorRecovery(stepIdx, errorInfo) {
+  const existingStep = state.pipeline[stepIdx] || null;
+  const failedStep = existingStep || {
+    id: errorInfo && errorInfo.stepId,
+    description: errorInfo && errorInfo.description,
+    code: errorInfo && errorInfo.code,
+  };
+  if (!failedStep || !failedStep.code) {
+    toast("복구에 사용할 스킬 코드를 찾지 못했습니다.", "error");
+    return;
+  }
+  const isExistingStep = !!existingStep;
+
+  const prompt = [
+    `Step ${stepIdx + 1} 실행 중 오류가 발생했습니다.`,
+    isExistingStep
+      ? "대화 히스토리의 사용자 의도, 현재 파일 스키마, 수정 대상 코드, 아래 오류를 함께 분석해서 이 Step을 교체할 수정 코드를 다시 작성하세요."
+      : "이 Step은 아직 파이프라인에 적용되지 못했습니다. 대화 히스토리의 사용자 의도, 현재 파일 스키마, 실패한 코드, 아래 오류를 함께 분석해서 적용 가능한 새 스킬 코드를 다시 작성하세요.",
+    "응답은 짧은 설명과 하나의 javascript 코드블록으로 작성하세요.",
+    "",
+    "## 실패한 Step",
+    `설명: ${failedStep.description || ""}`,
+    "",
+    "## 실패한 코드",
+    "```javascript",
+    failedStep.code || "",
+    "```",
+    "",
+    "## 상세 오류",
+    `메시지: ${(errorInfo && errorInfo.message) || ""}`,
+    errorInfo && errorInfo.stack ? `\n스택:\n${errorInfo.stack}` : "",
+  ].filter(Boolean).join("\n");
+
+  addMessage("system", `Step ${stepIdx + 1} 에러 복구를 요청합니다.`);
+  const loading = addMessage("assistant", "", {});
+  loading.classList.add("streaming");
+
+  const aiName = settings.provider === "openai-compat" ? "ixi 모델" : "LLM";
+  const thinkMode = typeof isThinkModeEnabled === "function" && isThinkModeEnabled();
+  const abortController = new AbortController();
+  const streamView = setupStreamingAssistantMessage(loading, "(에러 복구) ", aiName, () => abortController.abort());
+  $("chat-send").disabled = true;
+  let reasoningText = "";
+
+  try {
+    const requestOptions = {
+      editTargetId: isExistingStep ? failedStep.id : null,
+      thinkMode,
+      signal: abortController.signal,
+      onDelta: (delta, full) => {
+        streamView.setAnswer(full);
+        scrollChatToBottom();
+      },
+    };
+    if (thinkMode) {
+      requestOptions.onReasoningDelta = (delta, full) => {
+        reasoningText = full;
+        streamView.setReasoning(full);
+        scrollChatToBottom();
+      };
+      requestOptions.onThinkFallback = () => {
+        streamView.setAnswer("생각이 길어져 Think 모드를 끄고 다시 요청합니다...");
+        toast("Think 응답이 길어져 자동으로 다시 요청합니다.", "success");
+      };
+    }
+    const reply = await callLLM(prompt, requestOptions);
+    streamView.flush();
+    loading.remove();
+    addAssistantReply(reply, { editTargetId: isExistingStep ? failedStep.id : null, reasoning: reasoningText });
+    scrollChatToBottom();
+  } catch (err) {
+    loading.classList.remove("streaming");
+    loading.classList.remove("loading");
+    if (err && err.name === "AbortError") {
+      streamView.stopped();
+      loading.textContent = "에러 복구 요청이 중단되었습니다.";
+    } else {
+      loading.innerHTML = "복구 요청 실패: " + escapeHtml(err.message);
+      loading.classList.remove("assistant");
+      loading.classList.add("system", "error");
+    }
+    scrollChatToBottom();
+  } finally {
+    $("chat-send").disabled = false;
+  }
 }
 
 function splitStreamingReply(text) {
@@ -406,7 +545,8 @@ async function sendChat() {
   const aiName = settings.provider === "openai-compat" ? "ixi 모델" : "LLM";
   const modeLabel = editTargetId ? "(수정 모드) " : "";
   const thinkMode = typeof isThinkModeEnabled === "function" && isThinkModeEnabled();
-  const streamView = setupStreamingAssistantMessage(loading, modeLabel, aiName);
+  const abortController = new AbortController();
+  const streamView = setupStreamingAssistantMessage(loading, modeLabel, aiName, () => abortController.abort());
   $("chat-send").disabled = true;
   let reasoningText = "";
   try {
@@ -416,6 +556,7 @@ async function sendChat() {
     const requestOptions = {
       editTargetId,
       thinkMode,
+      signal: abortController.signal,
       onDelta: (delta, full) => {
         streamView.setAnswer(full);
         scrollChatToBottom();
@@ -427,6 +568,10 @@ async function sendChat() {
         streamView.setReasoning(full);
         scrollChatToBottom();
       };
+      requestOptions.onThinkFallback = () => {
+        streamView.setAnswer("생각이 길어져 Think 모드를 끄고 다시 요청합니다...");
+        toast("Think 응답이 길어져 자동으로 다시 요청합니다.", "success");
+      };
     }
     const reply = await callLLM(prompt, requestOptions);
     streamView.flush();
@@ -436,9 +581,14 @@ async function sendChat() {
   } catch (err) {
     loading.classList.remove("streaming");
     loading.classList.remove("loading");
-    loading.innerHTML = "❌ " + escapeHtml(err.message);
-    loading.classList.remove("assistant");
-    loading.classList.add("system");
+    if (err && err.name === "AbortError") {
+      streamView.stopped();
+      loading.textContent = "요청이 중단되었습니다.";
+    } else {
+      loading.innerHTML = "❌ " + escapeHtml(err.message);
+      loading.classList.remove("assistant");
+      loading.classList.add("system");
+    }
     scrollChatToBottom();
   } finally {
     $("chat-send").disabled = false;

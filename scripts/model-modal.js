@@ -22,16 +22,18 @@ function openSettingsModal(devMode) {
   const modal = $("modal");
   const activeProvider = devMode ? (settings.provider || "openai-compat") : "openai-compat";
   const activeClaude = activeProvider === "anthropic";
+  const activeDevVllm = !activeClaude && settings.network === "dev-vllm";
 
+  const openaiDefaults = activeDevVllm ? DEFAULTS.devVllm : DEFAULTS["openai-compat"];
   const ixiUrl = settings.provider === "openai-compat"
     ? (settings.baseUrl || DEFAULTS["openai-compat"].baseUrl)
-    : DEFAULTS["openai-compat"].baseUrl;
+    : openaiDefaults.baseUrl;
   const ixiKey = settings.provider === "openai-compat"
     ? (settings.apiKey || DEFAULTS["openai-compat"].apiKey)
-    : DEFAULTS["openai-compat"].apiKey;
+    : openaiDefaults.apiKey;
   const ixiThinkControlMode = settings.provider === "openai-compat"
     ? (settings.thinkControlMode || DEFAULTS["openai-compat"].thinkControlMode)
-    : DEFAULTS["openai-compat"].thinkControlMode;
+    : openaiDefaults.thinkControlMode;
 
   const claudeKey = settings.provider === "anthropic"
     ? (settings.apiKey || DEFAULTS.anthropic.apiKey)
@@ -46,14 +48,18 @@ function openSettingsModal(devMode) {
   modal.innerHTML = `
     <h3>AI 연결 설정${devMode ? ' <span style="font-size:11px;color:#FF0080;background:#FFE0F2;padding:2px 8px;border-radius:8px;font-weight:600;margin-left:6px;">DEV</span>' : ''}</h3>
     <div style="font-size:12px; color:#666; margin-bottom:12px">
-      ${devMode ? '개발자 옵션입니다. 기본 연결은 내부망 ixi이며, 필요할 때 Claude Opus 4.7로 전환할 수 있습니다.' : '내부망 ixi 호환 서버와 연결합니다.'}
+      ${devMode ? '개발자 옵션입니다. 기본 연결은 내부망 ixi이며, 필요할 때 개발망 vLLM 또는 Claude Opus 4.7로 전환할 수 있습니다.' : '내부망 ixi 호환 서버와 연결합니다.'}
     </div>
 
     ${devMode ? `
     <div class="row" style="gap:16px; margin-bottom:14px">
       <label style="display:flex; align-items:center; gap:6px; cursor:pointer">
-        <input type="radio" name="provider" value="openai-compat" ${!activeClaude ? "checked" : ""}>
+        <input type="radio" name="provider" value="openai-compat" data-network="ixi" ${!activeClaude && !activeDevVllm ? "checked" : ""}>
         <span>ixi 모델</span>
+      </label>
+      <label style="display:flex; align-items:center; gap:6px; cursor:pointer">
+        <input type="radio" name="provider" value="openai-compat" data-network="dev-vllm" ${activeDevVllm ? "checked" : ""}>
+        <span>개발망 vLLM</span>
       </label>
       <label style="display:flex; align-items:center; gap:6px; cursor:pointer">
         <input type="radio" name="provider" value="anthropic" ${activeClaude ? "checked" : ""}>
@@ -63,8 +69,11 @@ function openSettingsModal(devMode) {
     ` : ""}
 
     <div id="group-openai" style="${devMode && activeClaude ? "display:none" : ""}">
-      <label style="font-size:11.5px; color:#666">Base URL (exe 로컬 프록시 /v1)</label>
+      <label style="font-size:11.5px; color:#666">Base URL (ixi 프록시 또는 개발망 vLLM /v1)</label>
       <input type="text" id="set-o-url" value="${escapeHtml(ixiUrl)}" />
+      ${devMode ? `<div style="font-size:11px; color:#777; margin:-6px 0 8px">
+        개발망 vLLM은 Windows에서 <code>http://localhost:8016/v1</code>을 먼저 사용하고, 실패하면 <code>http://192.168.219.105:8016/v1</code>을 자동 시도합니다.
+      </div>` : ""}
       <label style="font-size:11.5px; color:#666">API Key</label>
       <input type="text" id="set-o-key" value="${escapeHtml(ixiKey)}" />
       <label style="font-size:11.5px; color:#666">Think 제어 방식</label>
@@ -103,6 +112,15 @@ function openSettingsModal(devMode) {
         const isClaude = r.value === "anthropic";
         $("group-openai").style.display = isClaude ? "none" : "";
         $("group-claude").style.display = isClaude ? "" : "none";
+        if (!isClaude && r.dataset.network === "dev-vllm") {
+          $("set-o-url").value = DEFAULTS.devVllm.baseUrl;
+          $("set-o-key").value = DEFAULTS.devVllm.apiKey;
+          $("set-o-think-control").value = DEFAULTS.devVllm.thinkControlMode;
+        } else if (!isClaude && r.dataset.network !== "dev-vllm") {
+          $("set-o-url").value = DEFAULTS["openai-compat"].baseUrl;
+          $("set-o-key").value = DEFAULTS["openai-compat"].apiKey;
+          $("set-o-think-control").value = DEFAULTS["openai-compat"].thinkControlMode;
+        }
       };
     });
   }
@@ -111,6 +129,9 @@ function openSettingsModal(devMode) {
     const provider = devMode
       ? (document.querySelector('input[name="provider"]:checked')?.value || "openai-compat")
       : "openai-compat";
+    const network = devMode
+      ? (document.querySelector('input[name="provider"]:checked')?.dataset.network || "ixi")
+      : "ixi";
     if (provider === "anthropic") {
       return {
         provider: "anthropic",
@@ -122,9 +143,10 @@ function openSettingsModal(devMode) {
     }
     return {
       provider: "openai-compat",
-      baseUrl: $("set-o-url").value.trim() || DEFAULTS["openai-compat"].baseUrl,
-      apiKey: $("set-o-key").value.trim() || DEFAULTS["openai-compat"].apiKey,
-      model: DEFAULTS["openai-compat"].model,
+      network,
+      baseUrl: $("set-o-url").value.trim() || (network === "dev-vllm" ? DEFAULTS.devVllm.baseUrl : DEFAULTS["openai-compat"].baseUrl),
+      apiKey: $("set-o-key").value.trim() || (network === "dev-vllm" ? DEFAULTS.devVllm.apiKey : DEFAULTS["openai-compat"].apiKey),
+      model: network === "dev-vllm" ? DEFAULTS.devVllm.model : DEFAULTS["openai-compat"].model,
       thinkMode: settings.thinkMode === true,
       thinkControlMode: normalizeThinkControlMode($("set-o-think-control").value),
     };

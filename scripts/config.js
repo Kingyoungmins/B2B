@@ -15,6 +15,14 @@ const DEFAULTS = {
       : "http://127.0.0.1:8090/v1",
     thinkMode: false,
     thinkControlMode: "soft_switch",
+    network: "ixi",
+  },
+  devVllm: {
+    apiKey: "7365676d",
+    model: "Qwen3.5-27B-FP8",
+    baseUrl: "http://localhost:8016/v1",
+    fallbackBaseUrls: ["http://192.168.219.105:8016/v1"],
+    thinkControlMode: "chat_template_kwargs",
   },
 };
 
@@ -50,6 +58,7 @@ function normalizeSettings(parsed) {
       apiKey: parsed.apiKey || DEFAULTS["openai-compat"].apiKey,
       thinkMode: parsed.thinkMode === true,
       thinkControlMode: normalizeThinkControlMode(parsed.thinkControlMode),
+      network: parsed.network === "dev-vllm" ? "dev-vllm" : "ixi",
     };
   }
   return null;
@@ -96,7 +105,7 @@ function updateModelLabel() {
     el.textContent = "AI: Claude";
     el.style.color = "#777";
   } else {
-    el.textContent = "AI: ixi 모델";
+    el.textContent = settings.network === "dev-vllm" ? "AI: 개발망 vLLM" : "AI: ixi 모델";
     el.style.color = "#28a745";
   }
 }

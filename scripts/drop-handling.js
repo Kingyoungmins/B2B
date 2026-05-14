@@ -195,6 +195,52 @@ setupNodeDrop($("runner-logic-node"), $("logic-files"), async (files) => {
   }
 });
 
+function removeInputFileAt(idx) {
+  if (typeof pushHistory === "function") pushHistory("입력 파일 삭제");
+  const removed = state.inputs.splice(idx, 1)[0];
+  state.inputsOriginal.splice(idx, 1);
+  if (removed && state.currentFileId === "input:" + removed.name) {
+    state.currentFileId = null;
+    state.currentSheet = null;
+    state.selectedCell = null;
+    state.selectedRange = null;
+    state.selectedRanges = [];
+    state.selectionAnchor = null;
+  }
+  renderInputList();
+  refreshTabs();
+  refreshChatState();
+  renderExcelViewer();
+}
+
+function removeOutputTemplateAt(idx) {
+  if (typeof pushHistory === "function") pushHistory("출력 템플릿 삭제");
+  state.outputTemplates.splice(idx, 1);
+  if (!state.outputTemplates.length) {
+    state.output = null;
+    state.outputOriginal = null;
+    state.activeOutputIndex = -1;
+    if (state.currentFileId === "output" || (state.currentFileId && state.currentFileId.startsWith("output:"))) {
+      state.currentFileId = null;
+      state.currentSheet = null;
+      state.selectedCell = null;
+      state.selectedRange = null;
+      state.selectedRanges = [];
+      state.selectionAnchor = null;
+    }
+  } else {
+    activateOutputTemplate(0);
+    if (state.currentFileId && state.currentFileId.startsWith("output:")) {
+      const nextIdx = Math.min(idx, state.outputTemplates.length - 1);
+      state.currentFileId = "output:" + nextIdx;
+    }
+  }
+  renderOutputChip();
+  refreshTabs();
+  refreshChatState();
+  renderExcelViewer();
+}
+
 function renderInputList() {
   const list = $("input-list");
   if (!list) return;
@@ -222,22 +268,7 @@ function renderInputList() {
   });
   list.querySelectorAll(".chip-remove").forEach(btn => {
     btn.onclick = () => {
-      if (typeof pushHistory === "function") pushHistory("입력 파일 삭제");
-      const idx = Number(btn.dataset.idx);
-      const removed = state.inputs.splice(idx, 1)[0];
-      state.inputsOriginal.splice(idx, 1);
-      if (state.currentFileId === "input:" + removed.name) {
-        state.currentFileId = null;
-        state.currentSheet = null;
-        state.selectedCell = null;
-        state.selectedRange = null;
-        state.selectedRanges = [];
-        state.selectionAnchor = null;
-      }
-      renderInputList();
-      refreshTabs();
-      refreshChatState();
-      renderExcelViewer();
+      removeInputFileAt(Number(btn.dataset.idx));
     };
   });
   renderRunnerWorkflow();
@@ -274,35 +305,62 @@ function renderOutputChip() {
   });
   el.querySelectorAll(".chip-remove").forEach(btn => {
     btn.onclick = () => {
-      if (typeof pushHistory === "function") pushHistory("출력 템플릿 삭제");
-      const idx = Number(btn.dataset.idx);
-      state.outputTemplates.splice(idx, 1);
-      if (!state.outputTemplates.length) {
-        state.output = null;
-        state.outputOriginal = null;
-        state.activeOutputIndex = -1;
-        if (state.currentFileId === "output" || (state.currentFileId && state.currentFileId.startsWith("output:"))) {
-          state.currentFileId = null;
-          state.currentSheet = null;
-          state.selectedCell = null;
-          state.selectedRange = null;
-          state.selectedRanges = [];
-          state.selectionAnchor = null;
-        }
-      } else {
-        activateOutputTemplate(0);
-        if (state.currentFileId && state.currentFileId.startsWith("output:")) {
-          const nextIdx = Math.min(idx, state.outputTemplates.length - 1);
-          state.currentFileId = "output:" + nextIdx;
-        }
-      }
-      renderOutputChip();
-      refreshTabs();
-      refreshChatState();
-      renderExcelViewer();
+      removeOutputTemplateAt(Number(btn.dataset.idx));
     };
   });
   renderRunnerWorkflow();
+}
+
+function openRunnerFileEditor(role) {
+  const isOutput = role === "output";
+  const files = isOutput ? state.outputTemplates.map(t => t.file) : state.inputs;
+  const modal = $("modal");
+  if (!modal) return;
+  const title = isOutput ? "출력 템플릿 수정" : "입력 파일 수정";
+  const emptyText = isOutput ? "업로드된 출력 템플릿이 없습니다." : "업로드된 입력 파일이 없습니다.";
+  modal.innerHTML = `
+    <h3>${title}</h3>
+    <p style="font-size:12px; color:#666; margin-bottom:10px">실행기에 연결된 파일을 확인하고 필요 없는 파일을 제거할 수 있습니다.</p>
+    <div class="runner-file-editor-list">
+      ${files.length ? files.map((f, idx) => {
+        const kb = (f.size / 1024).toFixed(1);
+        const totalRows = Object.values(f.sheets || {}).reduce((a, s) => a + s.length, 0);
+        return `
+          <div class="file-chip ${isOutput ? "output" : ""}">
+            <div class="chip-icon">XLSX</div>
+            <div class="chip-body">
+              <div class="chip-name" title="${escapeHtml(f.name)}">${escapeHtml(f.name)}</div>
+              <div class="chip-meta">${kb} KB · 시트 ${f.sheetNames.length}개 · 행 ${totalRows}</div>
+            </div>
+            <button class="chip-view" data-idx="${idx}" type="button">보기</button>
+            <button class="chip-remove" data-idx="${idx}" type="button" title="삭제">×</button>
+          </div>
+        `;
+      }).join("") : `<div class="pipeline-empty">${emptyText}</div>`}
+    </div>
+    <div class="row" style="margin-top:14px">
+      <button class="btn-secondary" id="modal-cancel" type="button">닫기</button>
+    </div>
+  `;
+  $("modal-bg").classList.add("show");
+  $("modal-cancel").onclick = () => $("modal-bg").classList.remove("show");
+  modal.querySelectorAll(".chip-view").forEach(btn => {
+    btn.onclick = (e) => {
+      e.stopPropagation();
+      const idx = Number(btn.dataset.idx);
+      setCurrentView(isOutput ? "output:" + idx : "input:" + state.inputs[idx].name);
+      $("modal-bg").classList.remove("show");
+    };
+  });
+  modal.querySelectorAll(".chip-remove").forEach(btn => {
+    btn.onclick = (e) => {
+      e.stopPropagation();
+      const idx = Number(btn.dataset.idx);
+      if (isOutput) removeOutputTemplateAt(idx);
+      else removeInputFileAt(idx);
+      openRunnerFileEditor(role);
+    };
+  });
 }
 
 function renderRunnerWorkflow() {
@@ -317,6 +375,21 @@ function renderRunnerWorkflow() {
   const summary = $("runner-summary");
   const runBtn = $("runner-run-btn");
   const downloadBtn = $("runner-download-btn");
+  const setNodeStatus = (node, filled, label, onClick) => {
+    if (!node) return;
+    const status = node.querySelector(".runner-circle-status");
+    if (!status) return;
+    status.textContent = filled ? label : "비어있음";
+    status.dataset.status = filled ? "ok" : "empty";
+    status.classList.toggle("editable", !!filled);
+    status.onclick = filled
+      ? (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          onClick();
+        }
+      : null;
+  };
 
   if (inputList) {
     inputList.innerHTML = state.inputs.map(f => `<div class="workflow-pill" title="${escapeHtml(f.name)}">${escapeHtml(f.name)}</div>`).join("");
@@ -341,6 +414,11 @@ function renderRunnerWorkflow() {
   if (outputNode) outputNode.classList.toggle("filled", !!state.output);
   if (logicNode) logicNode.classList.toggle("filled", state.pipeline.length > 0);
   if (resultNode) resultNode.classList.toggle("filled", !!state.output && state.pipeline.length > 0);
+  setNodeStatus(inputNode, state.inputs.length > 0, "파일 수정", () => openRunnerFileEditor("input"));
+  setNodeStatus(outputNode, state.outputTemplates.length > 0, "파일 수정", () => openRunnerFileEditor("output"));
+  setNodeStatus(logicNode, state.pipeline.length > 0, "스킬 수정", () => {
+    if (typeof setPage === "function") setPage("generator");
+  });
 
   const setCount = (id, val) => { const el = $(id); if (el) el.textContent = val; };
   setCount("runner-input-count", state.inputs.length);

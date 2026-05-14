@@ -33,6 +33,15 @@ function replaceNormalizedText(value, from, to) {
   return regex ? source.replace(regex, String(to ?? "")) : source;
 }
 
+function includesNormalizedText(value, search) {
+  const needle = normalizeText(search);
+  return !!needle && normalizeText(value).includes(needle);
+}
+
+function equalsNormalizedText(value, search) {
+  return normalizeText(value) === normalizeText(search);
+}
+
 function levenshtein(a, b) {
   if (a === b) return 0;
   const al = a.length, bl = b.length;
@@ -149,6 +158,20 @@ function detectHeaderRow(aoa) {
     if (nonEmpty >= 2) return r;
   }
   return 0;
+}
+
+function headerRowIndex(sheetAoA) {
+  return detectHeaderRow(sheetAoA);
+}
+
+function dataStartRowIndex(sheetAoA) {
+  const headerRow = detectHeaderRow(sheetAoA);
+  return headerRow >= 0 ? headerRow + 1 : 0;
+}
+
+function excelRowToIndex(rowNumber) {
+  const n = Number(rowNumber);
+  return Number.isFinite(n) && n > 0 ? n - 1 : 0;
 }
 
 // step 코드에서 호출 가능한 헬퍼: col(sheetAoA, "회사명") → 컬럼 인덱스

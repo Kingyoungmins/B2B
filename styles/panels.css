@@ -264,6 +264,10 @@
     display: none;
   }
 
+  body.viewer-popped-out.chat-docked-to-viewer .right::before {
+    display: none;
+  }
+
   body.viewer-popped-out .right::before {
     content: '엑셀 시뮬레이터가 별도 창으로 분리되었습니다.';
     display: flex;
@@ -275,6 +279,36 @@
     font-size: 13px;
     font-weight: 700;
     background: #fff;
+  }
+
+  .right > .viewer-docked-chat {
+    flex: 1 1 auto;
+    min-height: 0;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    background: var(--card);
+  }
+  .right > .viewer-docked-chat:hover {
+    border-color: transparent;
+  }
+  .right > .viewer-docked-chat > .panel-head {
+    flex: 0 0 auto;
+    border-bottom: 1px solid var(--border);
+  }
+  .right > .viewer-docked-chat > .panel-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    padding: 12px 14px 14px;
+  }
+  .right > .viewer-docked-chat .chat-messages {
+    flex: 1 1 auto;
+    height: auto;
+    min-height: 0;
+    resize: none;
+  }
+  .right > .viewer-docked-chat .chat-input-row {
+    flex: 0 0 auto;
   }
 
   .file-tabs {
@@ -463,6 +497,10 @@
     background: #E8F4FF !important;
     outline: 1px solid rgba(33, 115, 70, 0.35);
     outline-offset: -1px;
+  }
+  table.excel-sheet td.selected-cell.flash,
+  table.excel-sheet td.selected-range.flash {
+    animation: none !important;
   }
   .excel-scroll-sentinel { height: 1px; }
   .excel-preview-note {

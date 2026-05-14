@@ -143,6 +143,20 @@
     color: white;
     border-color: var(--m-500);
   }
+  .runner-circle-status.editable {
+    cursor: pointer;
+  }
+  .runner-circle-status.editable:hover {
+    transform: translateX(-50%) translateY(-1px);
+    box-shadow: var(--shadow-mag);
+  }
+  .runner-file-editor-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: 360px;
+    overflow: auto;
+  }
 
   /* Triangle positions — wider & taller */
   .runner-pos-1 { top: 2%;  left: 2%; }

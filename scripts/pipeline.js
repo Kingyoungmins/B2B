@@ -141,7 +141,8 @@ function computeStateBeforeStep(stepIdx) {
     const step = state.pipeline[i];
     if (!isStepEnabled(step)) continue;
     try {
-      const fn = new Function("inputs", "output", "col", "findColumnGlobal", "similarity", "normalizeText", "replaceNormalizedText",
+      const fn = new Function("inputs", "output", "col", "findColumnGlobal", "similarity", "normalizeText", "replaceNormalizedText", "includesNormalizedText", "equalsNormalizedText",
+        "headerRowIndex", "dataStartRowIndex", "excelRowToIndex",
         "insertColumns", "copyColumns", "deleteColumns", "shiftFormulaText",
         step.code +
         "\nreturn typeof transform === 'function' ? transform(inputs, output) : { inputs, output };"
@@ -149,6 +150,11 @@ function computeStateBeforeStep(stepIdx) {
       const result = fn(proxiedInputs, proxiedOutput, col, findColumnGlobal, similarity,
         typeof normalizeText === "function" ? normalizeText : ((v) => String(v || "").trim().toLowerCase().replace(/\s+/g, "")),
         typeof replaceNormalizedText === "function" ? replaceNormalizedText : ((v) => String(v ?? "")),
+        typeof includesNormalizedText === "function" ? includesNormalizedText : ((v, s) => String(v || "").trim().toLowerCase().replace(/\s+/g, "").includes(String(s || "").trim().toLowerCase().replace(/\s+/g, ""))),
+        typeof equalsNormalizedText === "function" ? equalsNormalizedText : ((v, s) => String(v || "").trim().toLowerCase().replace(/\s+/g, "") === String(s || "").trim().toLowerCase().replace(/\s+/g, "")),
+        typeof headerRowIndex === "function" ? headerRowIndex : (() => 0),
+        typeof dataStartRowIndex === "function" ? dataStartRowIndex : (() => 1),
+        typeof excelRowToIndex === "function" ? excelRowToIndex : ((n) => Math.max(0, Number(n) - 1)),
         typeof insertColumns === "function" ? insertColumns : null,
         typeof copyColumns === "function" ? copyColumns : null,
         typeof deleteColumns === "function" ? deleteColumns : null,
@@ -264,6 +270,11 @@ function runPipeline(steps) {
     similarity: typeof similarity === "function" ? similarity : null,
     normalizeText: typeof normalizeText === "function" ? normalizeText : ((v) => String(v || "").trim().toLowerCase().replace(/\s+/g, "")),
     replaceNormalizedText: typeof replaceNormalizedText === "function" ? replaceNormalizedText : ((v) => String(v ?? "")),
+    includesNormalizedText: typeof includesNormalizedText === "function" ? includesNormalizedText : ((v, s) => String(v || "").trim().toLowerCase().replace(/\s+/g, "").includes(String(s || "").trim().toLowerCase().replace(/\s+/g, ""))),
+    equalsNormalizedText: typeof equalsNormalizedText === "function" ? equalsNormalizedText : ((v, s) => String(v || "").trim().toLowerCase().replace(/\s+/g, "") === String(s || "").trim().toLowerCase().replace(/\s+/g, "")),
+    headerRowIndex: typeof headerRowIndex === "function" ? headerRowIndex : (() => 0),
+    dataStartRowIndex: typeof dataStartRowIndex === "function" ? dataStartRowIndex : (() => 1),
+    excelRowToIndex: typeof excelRowToIndex === "function" ? excelRowToIndex : ((n) => Math.max(0, Number(n) - 1)),
   };
 
   state.lastError = null;
@@ -272,7 +283,8 @@ function runPipeline(steps) {
     if (step.manualEdit && applyManualEditForPipeline(step.manualEdit, inputsMap, outputSheets)) return;
     let fn;
     try {
-      fn = new Function("inputs", "output", "col", "findColumnGlobal", "similarity", "normalizeText", "replaceNormalizedText",
+      fn = new Function("inputs", "output", "col", "findColumnGlobal", "similarity", "normalizeText", "replaceNormalizedText", "includesNormalizedText", "equalsNormalizedText",
+        "headerRowIndex", "dataStartRowIndex", "excelRowToIndex",
         "insertColumns", "copyColumns", "deleteColumns", "shiftFormulaText",
         step.code +
         "\nreturn typeof transform === 'function' ? transform(inputs, output) : { inputs, output };"
@@ -280,6 +292,8 @@ function runPipeline(steps) {
     } catch (err) {
       state.lastError = {
         stepIdx, description: step.description || `Step ${stepIdx + 1}`,
+        stepId: step.id || null,
+        code: step.code || "",
         message: "코드 컴파일 오류: " + err.message, stack: err.stack || "",
       };
       throw _stepError(state.lastError);
@@ -287,7 +301,8 @@ function runPipeline(steps) {
     let result;
     try {
       result = fn(proxiedInputs, proxiedOutput,
-        helpers.col, helpers.findColumnGlobal, helpers.similarity, helpers.normalizeText, helpers.replaceNormalizedText,
+        helpers.col, helpers.findColumnGlobal, helpers.similarity, helpers.normalizeText, helpers.replaceNormalizedText, helpers.includesNormalizedText, helpers.equalsNormalizedText,
+        helpers.headerRowIndex, helpers.dataStartRowIndex, helpers.excelRowToIndex,
         typeof insertColumns === "function" ? insertColumns : null,
         typeof copyColumns === "function" ? copyColumns : null,
         typeof deleteColumns === "function" ? deleteColumns : null,
@@ -295,6 +310,8 @@ function runPipeline(steps) {
     } catch (err) {
       state.lastError = {
         stepIdx, description: step.description || `Step ${stepIdx + 1}`,
+        stepId: step.id || null,
+        code: step.code || "",
         message: err.message || String(err), stack: err.stack || "",
       };
       throw _stepError(state.lastError);
@@ -422,7 +439,9 @@ function flashFilled() {
         const o = orig[r] && orig[r][c];
         const n = cur[r] && cur[r][c];
         if (String(o || "") !== String(n || "")) {
-          td.classList.add("flash");
+          if (!td.classList.contains("selected-cell") && !td.classList.contains("selected-range")) {
+            td.classList.add("flash");
+          }
         }
       });
     });
@@ -506,21 +525,43 @@ $("btn-run").onclick = () => {
 // item 9: 어느 단계에서 어떤 사유로 실패했는지 토스트 + 채팅 panel 에 모두 노출.
 function reportPipelineError(err) {
   const info = err && err._stepInfo;
-  const head = info
-    ? `Step ${info.stepIdx + 1} 실행 오류 — ${info.description}`
-    : "실행 오류";
-  toast(`${head}: ${err.message}`, "error");
+  const stepLabel = info ? `Step ${info.stepIdx + 1}` : "스킬";
+  toast(`${stepLabel}을 적용하지 못했습니다. 안내 메시지를 확인하세요.`, "error");
   // 채팅 영역에도 시스템 메시지로 남긴다 (chat 가 활성일 때만).
   const chatBox = document.getElementById("chat-messages");
   if (chatBox && info) {
     const div = document.createElement("div");
     div.className = "msg system error";
     div.innerHTML = `
-      <div><b>❌ Step ${info.stepIdx + 1} 실행 실패</b> — ${escapeHtml(info.description || "")}</div>
-      <div style="margin-top:6px; font-size:11.5px; color:#dc2626; white-space:pre-wrap; text-align:left;">${escapeHtml(info.message)}</div>
-      ${info.stack ? `<details style="margin-top:6px; text-align:left;"><summary style="cursor:pointer; font-size:11px; color:#888;">스택 트레이스</summary><pre style="font-size:10.5px; color:#666; white-space:pre-wrap;">${escapeHtml(info.stack)}</pre></details>` : ""}
+      <div class="error-title"><b>스킬을 적용하지 못했습니다</b></div>
+      <div class="error-desc">Step ${info.stepIdx + 1}${info.description ? ` · ${escapeHtml(info.description)}` : ""}</div>
+      <div class="error-help">입력 파일, 시트명, 선택 범위가 요청과 맞는지 확인한 뒤 스킬을 수정하거나 다시 생성해 주세요.</div>
+      <button class="error-recover-btn" type="button">에러 복구 시도</button>
+      <details class="error-details">
+        <summary>상세 오류 보기</summary>
+        <pre>${escapeHtml(info.message || err.message || String(err))}${info.stack ? "\n\n" + escapeHtml(info.stack) : ""}</pre>
+      </details>
     `;
     chatBox.appendChild(div);
+    const recoverBtn = div.querySelector(".error-recover-btn");
+    if (recoverBtn) {
+      recoverBtn.onclick = () => {
+        recoverBtn.disabled = true;
+        recoverBtn.textContent = "복구 요청 중...";
+        if (typeof requestErrorRecovery === "function") {
+          requestErrorRecovery(info.stepIdx, {
+            stepId: info.stepId || null,
+            description: info.description || "",
+            code: info.code || "",
+            message: info.message || err.message || String(err),
+            stack: info.stack || "",
+          }).finally(() => {
+            recoverBtn.textContent = "에러 복구 시도";
+            recoverBtn.disabled = false;
+          });
+        }
+      };
+    }
     chatBox.scrollTop = chatBox.scrollHeight;
   }
 }
