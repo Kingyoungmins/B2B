@@ -2,6 +2,57 @@
    FILE PARSING
    =================================================================== */
 async function parseFile(file) {
+  if (canUseParseWorker()) {
+    try {
+      return await parseFileInWorker(file);
+    } catch (err) {
+      console.warn("Worker 파싱 실패, 메인 스레드 파싱으로 전환:", err);
+    }
+  }
+  return await parseFileOnMainThread(file);
+}
+
+function canUseParseWorker() {
+  return typeof Worker !== "undefined" && (location.protocol === "http:" || location.protocol === "https:");
+}
+
+function parseFileInWorker(file) {
+  return new Promise((resolve, reject) => {
+    const worker = new Worker("scripts/parse-worker.js");
+    const id = uid();
+    let settled = false;
+    const finish = (fn, value) => {
+      if (settled) return;
+      settled = true;
+      worker.terminate();
+      fn(value);
+    };
+    worker.onmessage = (event) => {
+      const data = event.data || {};
+      if (data.id !== id) return;
+      if (!data.ok) {
+        finish(reject, new Error(data.error || "Worker parse failed"));
+        return;
+      }
+      finish(resolve, data.parsed);
+    };
+    worker.onerror = (err) => {
+      finish(reject, new Error(err.message || "Worker error"));
+    };
+    file.arrayBuffer()
+      .then(buffer => {
+        worker.postMessage({
+          id,
+          name: file.name,
+          size: file.size,
+          buffer,
+        }, [buffer]);
+      })
+      .catch(err => finish(reject, err));
+  });
+}
+
+async function parseFileOnMainThread(file) {
   const ext = file.name.split('.').pop().toLowerCase();
   const buf = await file.arrayBuffer();
   const LARGE_FILE_BYTES = 8 * 1024 * 1024;
