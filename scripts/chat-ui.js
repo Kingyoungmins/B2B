@@ -11,7 +11,7 @@ function refreshChatState() {
     const targetLabel = state.output
       ? `출력 템플릿 "${state.output.name}" 이 로드되었습니다.`
       : `입력 파일 ${state.inputs.length}개가 로드되었습니다.`;
-    addMessage("system", `${targetLabel} 입력/출력 파일을 함께 수정하는 로직을 만들어보세요.`);
+    addMessage("system", `${targetLabel} 입력/출력 파일을 함께 수정하는 스킬을 만들어보세요.`);
   }
   renderEditingBanner();
   refreshRunButton();
@@ -204,14 +204,19 @@ function setupStreamingAssistantMessage(container, modeLabel, aiName) {
       <button class="reasoning-toggle" type="button">생각 펼치기</button>
       <div class="reasoning-content"></div>
     </div>
-    <div class="assistant-stream"><span class="loader"></span> ${modeLabel}${aiName}에게 전송 중...</div>
+    <div class="assistant-stream">
+      <div class="assistant-stream-text"><span class="loader"></span> ${modeLabel}${aiName}에게 전송 중...</div>
+      <pre class="code-block assistant-stream-code" hidden></pre>
+    </div>
   `;
   const reasoningBox = container.querySelector(".reasoning-box");
   const reasoningToggle = container.querySelector(".reasoning-toggle");
   const reasoningContent = container.querySelector(".reasoning-content");
-  const answer = container.querySelector(".assistant-stream");
-  const answerRenderer = createSmoothTextRenderer(
-    answer,
+  const answerText = container.querySelector(".assistant-stream-text");
+  const codeBlock = container.querySelector(".assistant-stream-code");
+  const answerRenderer = createSmoothStructuredRenderer(
+    answerText,
+    codeBlock,
     `${modeLabel}${aiName} 응답 수신 중...`,
   );
   const reasoningRenderer = createSmoothTextRenderer(reasoningContent, "");
@@ -235,6 +240,44 @@ function setupStreamingAssistantMessage(container, modeLabel, aiName) {
       answerRenderer.flush();
       reasoningRenderer.flush();
     },
+  };
+}
+
+function createSmoothStructuredRenderer(textEl, codeEl, emptyText) {
+  const textRenderer = createSmoothTextRenderer(textEl, emptyText);
+  const codeRenderer = createSmoothTextRenderer(codeEl, "");
+
+  return {
+    setTarget(text) {
+      const parsed = splitStreamingReply(text);
+      textRenderer.setTarget(parsed.text);
+      codeEl.hidden = !parsed.hasCode;
+      codeRenderer.setTarget(parsed.code);
+    },
+    flush() {
+      textRenderer.flush();
+      codeRenderer.flush();
+    },
+  };
+}
+
+function splitStreamingReply(text) {
+  const value = String(text || "");
+  const fenceStart = value.indexOf("```");
+  if (fenceStart < 0) {
+    return { text: value, code: "", hasCode: false };
+  }
+
+  const before = value.slice(0, fenceStart).trim();
+  let rest = value.slice(fenceStart + 3);
+  rest = rest.replace(/^(javascript|js)\s*\n/i, "");
+  const fenceEnd = rest.indexOf("```");
+  const code = fenceEnd >= 0 ? rest.slice(0, fenceEnd).trimEnd() : rest;
+  const after = fenceEnd >= 0 ? rest.slice(fenceEnd + 3).trim() : "";
+  return {
+    text: [before, after].filter(Boolean).join("\n\n") || "코드 작성 중...",
+    code,
+    hasCode: true,
   };
 }
 

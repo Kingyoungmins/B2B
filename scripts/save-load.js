@@ -43,7 +43,7 @@ function openSaveModal() {
   const modal = $("modal");
   const defaultName = "logic_" + new Date().toISOString().slice(0,16).replace(/[T:]/g,"-");
   modal.innerHTML = `
-    <h3>로직 저장 (ZIP 다운로드)</h3>
+    <h3>스킬 저장 (ZIP 다운로드)</h3>
     <p style="font-size:12px; color:#666; margin-bottom:10px">
       아래 파일들을 ZIP 하나로 묶어 다운로드합니다:
     </p>
@@ -100,7 +100,7 @@ function openSaveModal() {
         `// 생성: ${new Date().toISOString()}\n` +
         `// ──────────────────────────────────────────────────────────\n` +
         `// 이 파일은 자동 생성되었습니다. 직접 수정 후 저장한 뒤\n` +
-        `// "로직 불러오기" 에서 .logic.json 과 함께 선택하면 반영됩니다.\n` +
+        `// "스킬 불러오기" 에서 .logic.json 과 함께 선택하면 반영됩니다.\n` +
         `// 함수 시그니처: function transform(inputs, output) { ... return { inputs, output }; }\n` +
         `// ──────────────────────────────────────────────────────────\n\n`;
       zipEntries.push({
@@ -288,7 +288,7 @@ async function loadLogicFiles(files) {
     }
   }
   if (!manifestFile) {
-    throw new Error("유효한 로직 매니페스트(.logic.json)를 찾지 못했습니다 — pipeline 필드 있는 JSON이 필요합니다");
+    throw new Error("유효한 스킬 매니페스트(.logic.json)를 찾지 못했습니다 — pipeline 필드 있는 JSON이 필요합니다");
   }
   const data = manifestData;
 
@@ -412,8 +412,8 @@ function renderChatFromHistory() {
   container.innerHTML = "";
   if (state.chatHistory.length === 0) {
     const text = state.output
-      ? `출력 템플릿 "${state.output.name}" 이 로드되었습니다. 로직을 만들어보세요.`
-      : (state.inputs.length > 0 ? `입력 파일 ${state.inputs.length}개가 로드되었습니다. 로직을 만들어보세요.` : "입력 또는 출력 파일 업로드 후 활성화됩니다.");
+      ? `출력 템플릿 "${state.output.name}" 이 로드되었습니다. 스킬을 만들어보세요.`
+      : (state.inputs.length > 0 ? `입력 파일 ${state.inputs.length}개가 로드되었습니다. 스킬을 만들어보세요.` : "입력 또는 출력 파일 업로드 후 활성화됩니다.");
     addMessage("system", text);
     return;
   }

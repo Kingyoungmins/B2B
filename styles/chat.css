@@ -126,7 +126,9 @@
     white-space: pre-wrap;
   }
   .msg .reasoning-box.open .reasoning-content { display: block; }
-  .msg .assistant-stream { white-space: pre-wrap; }
+  .msg .assistant-stream { white-space: normal; }
+  .msg .assistant-stream-text { white-space: pre-wrap; }
+  .msg .assistant-stream-code { margin-top: 8px; }
 
   /* Edit mode banner above chat input */
   .chat-edit-banner {

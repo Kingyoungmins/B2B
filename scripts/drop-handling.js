@@ -354,8 +354,8 @@ function renderRunnerWorkflow() {
   if (summary) {
     const current = state.currentFileId ? (getFile(state.currentFileId)?.name || "") + " / " + (state.currentSheet || "-") : "미리보기 없음";
     summary.innerHTML = state.inputs.length || state.output || state.pipeline.length
-      ? `<span class="runner-summary-ico">●</span><span>입력 <b>${state.inputs.length}개</b> · 출력 템플릿 <b>${state.outputTemplates.length}개</b> · 로직 단계 <b>${state.pipeline.length}개</b> · 현재 미리보기: ${escapeHtml(current)}</span>`
-      : `<span class="runner-summary-ico">●</span><span>아직 로드된 파일과 로직이 없습니다.</span>`;
+      ? `<span class="runner-summary-ico">●</span><span>입력 <b>${state.inputs.length}개</b> · 출력 템플릿 <b>${state.outputTemplates.length}개</b> · 스킬 단계 <b>${state.pipeline.length}개</b> · 현재 미리보기: ${escapeHtml(current)}</span>`
+      : `<span class="runner-summary-ico">●</span><span>아직 로드된 파일과 스킬이 없습니다.</span>`;
   }
 
   if (runBtn) runBtn.disabled = !runnable;

@@ -81,9 +81,18 @@ function _buildDefaultTargetHint() {
     ? state.selectedSheets
     : (state.currentSheet ? [state.currentSheet] : []);
   const tag = (typeof isOutputFileId === "function" && isOutputFileId(state.currentFileId)) ? "[출력]" : "[입력]";
+  const isOutputTarget = tag === "[출력]";
   const multi = sheets.length > 1;
   const lines = [];
   lines.push(`${tag} 파일: "${file.name}"`);
+  lines.push(`기본 수정 대상 객체: ${isOutputTarget ? "output" : `inputs[${JSON.stringify(file.name)}]`}`);
+  if (isOutputTarget) {
+    lines.push("→ 사용자가 파일/시트를 명시하지 않으면 output 객체의 현재 파일/시트를 수정하세요.");
+  } else {
+    lines.push("→ 사용자가 파일/시트를 명시하지 않으면 이 입력 파일 객체를 수정하세요. 새 시트/열/셀 추가도 output이 아니라 이 inputs 파일 안에 작성하세요.");
+    lines.push(`→ insertColumns/copyColumns/deleteColumns 헬퍼를 쓸 때 target은 ${JSON.stringify("input:" + file.name)} 입니다.`);
+    lines.push("→ 사용자가 'output', '출력 템플릿', '결과 파일'을 명시한 경우에만 output 객체를 수정하세요.");
+  }
   if (multi) {
     lines.push(`사용자가 **직접 선택한 시트 ${sheets.length}개** (Ctrl+click 으로 명시적으로 고름):`);
     sheets.forEach(s => lines.push(`  - "${s}"`));
@@ -98,7 +107,7 @@ function _buildDefaultTargetHint() {
   return lines.join("\n");
 }
 
-const SYSTEM_PROMPT = `당신은 엑셀 데이터 자동화 로직을 JavaScript 로 작성하는 도우미입니다.
+const SYSTEM_PROMPT = `당신은 엑셀 데이터 자동화 스킬을 JavaScript 로 작성하는 도우미입니다.
 
 ## 실행 구조 — 반드시 이해할 것
 사용자는 여러 개의 "단계(step)"를 순서대로 쌓아 하나의 파이프라인을 만듭니다.
@@ -196,6 +205,8 @@ inputs / 시트 객체는 Proxy로 감싸져 있어, 키가 약간 달라도 유
 
 ## 기본 대상 — **반드시 우선**
 사용자가 명령에 파일/시트를 지정하지 않으면, 위의 "사용자가 현재 보고 있는 탭" 정보를 기본 대상으로 간주합니다.
+- 기본 대상이 [입력] 파일이면 새 열/새 시트/집계 결과도 반드시 \`inputs["파일명.xlsx"]\` 안에 작성하세요. \`output\`에 쓰지 마세요.
+- 기본 대상이 [출력] 파일이거나 사용자가 "출력", "output", "결과 파일"을 명시한 경우에만 \`output\`을 수정하세요.
 - **사용자가 직접 선택한 시트가 ≥ 2개** 라고 표시돼 있다면 그것은 사용자의 명시적 선택입니다.
   - "이 시트들", "여기", "선택한 탭", "이거" 같은 지시어 = 그 선택된 시트들.
   - 다른 파일에 같은 컬럼명이 있어도 묻지 말고 선택된 시트들만 다루세요. 비교 대상이 명백합니다.
@@ -222,7 +233,7 @@ inputs / 시트 객체는 Proxy로 감싸져 있어, 키가 약간 달라도 유
 - 빈 칸으로 명시적으로 만들어야 할 때만 \`""\` 를 대입하세요 (의도적 clear 로 간주되어 수식도 제거됨).
 `;
 
-const EDIT_SYSTEM_PROMPT = `당신은 엑셀 데이터 자동화 로직(JavaScript)을 **수정**하는 도우미입니다.
+const EDIT_SYSTEM_PROMPT = `당신은 엑셀 데이터 자동화 스킬(JavaScript)을 **수정**하는 도우미입니다.
 
 ## ⚠️ 수정 모드 (반드시 이해할 것)
 사용자가 이미 만들어 둔 파이프라인의 **특정 한 단계(step)** 의 코드를 수정하려고 합니다.

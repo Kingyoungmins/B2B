@@ -12,7 +12,7 @@ function setPage(page) {
   document.querySelectorAll(".menu-item").forEach(el => {
     el.classList.toggle("active", el.dataset.page === page);
   });
-  $("page-title").textContent = page === "runner" ? "로직 실행기" : "B2B 빌링 Agent ver3.5";
+  $("page-title").textContent = page === "runner" ? "스킬 실행기" : "B2B 빌링 Agent ver3.5";
   closeMenu();
   refreshTabs();
   renderExcelViewer();

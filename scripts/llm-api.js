@@ -226,6 +226,6 @@ function extractCode(text) {
 
 function extractDescription(text) {
   const stripped = text.replace(/```[\s\S]*?```/g, "").trim();
-  const firstLine = stripped.split("\n").find(l => l.trim()) || "로직 생성";
+  const firstLine = stripped.split("\n").find(l => l.trim()) || "스킬 생성";
   return firstLine.trim().slice(0, 100);
 }
