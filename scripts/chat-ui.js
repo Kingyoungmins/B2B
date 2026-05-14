@@ -370,6 +370,7 @@ async function sendChat() {
   addMessage("user", msg);
   clearViewerDragSelection();
   const loading = addMessage("assistant", "", {});
+  loading.classList.add("streaming");
   // 외부 노출 시엔 내부 모델명을 표시하지 않고 LLM 으로 통일
   const aiName = settings.provider === "openai-compat" ? "ixi 모델" : "LLM";
   const modeLabel = editTargetId ? "(수정 모드) " : "";
@@ -402,6 +403,7 @@ async function sendChat() {
     addAssistantReply(reply, { editTargetId, reasoning: reasoningText });
     scrollChatToBottom();
   } catch (err) {
+    loading.classList.remove("streaming");
     loading.innerHTML = "❌ " + escapeHtml(err.message);
     loading.classList.remove("assistant");
     loading.classList.add("system");

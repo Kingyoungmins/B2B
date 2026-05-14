@@ -39,6 +39,16 @@
     border-bottom-left-radius: 4px;
     box-shadow: var(--shadow-sm);
   }
+  .msg.assistant.streaming {
+    display: inline-block;
+    width: fit-content;
+    max-width: 92%;
+    box-sizing: border-box;
+    padding: 6px 10px;
+    line-height: 1.35;
+    min-height: 0;
+    white-space: normal;
+  }
   .msg.system {
     background: transparent;
     color: var(--ink-400);
@@ -126,9 +136,29 @@
     white-space: pre-wrap;
   }
   .msg .reasoning-box.open .reasoning-content { display: block; }
-  .msg .assistant-stream { white-space: normal; }
-  .msg .assistant-stream-text { white-space: pre-wrap; }
+  .msg .assistant-stream {
+    white-space: normal;
+    min-height: 0;
+  }
+  .msg .assistant-stream-text {
+    white-space: pre-wrap;
+    min-height: 0;
+    line-height: inherit;
+  }
   .msg .assistant-stream-code { margin-top: 8px; }
+  .msg.assistant.streaming .assistant-stream,
+  .msg.assistant.streaming .assistant-stream-text {
+    width: fit-content;
+    max-width: 100%;
+  }
+  .msg.assistant.streaming .assistant-stream { display: block; }
+  .msg.assistant.streaming .assistant-stream-text { display: inline; }
+  .msg.assistant.streaming .assistant-stream-code {
+    margin-top: 6px;
+  }
+  .msg.assistant.streaming .loader {
+    vertical-align: -2px;
+  }
 
   /* Edit mode banner above chat input */
   .chat-edit-banner {
