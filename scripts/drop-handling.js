@@ -80,6 +80,11 @@ function prepareMemoryForFileUpload(files) {
   if (typeof refreshHistoryButtons === "function") refreshHistoryButtons();
 }
 
+function forceViewerPreviewAfterUpload() {
+  state.viewerPreviewMode = true;
+  if (typeof refreshViewerPreviewButtons === "function") refreshViewerPreviewButtons();
+}
+
 function activateOutputTemplate(index) {
   const tpl = state.outputTemplates[index];
   if (!tpl) return false;
@@ -130,6 +135,7 @@ async function loadInputFiles(files) {
     return;
   }
   state.fuzzyResolution = {};
+  forceViewerPreviewAfterUpload();
   renderInputList();
   refreshTabs();
   refreshChatState();
@@ -172,6 +178,7 @@ async function loadOutputTemplates(files) {
     return;
   }
   if (state.outputTemplates.length > startIndex) {
+    forceViewerPreviewAfterUpload();
     if (state.activeOutputIndex < 0 || !state.output) activateOutputTemplate(0);
     renderOutputChip();
     refreshTabs();

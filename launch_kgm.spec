@@ -1,4 +1,4 @@
-# -*- mode: python ; coding: utf-8 -*-
+﻿# -*- mode: python ; coding: utf-8 -*-
 from pathlib import Path
 
 ROOT = Path(SPECPATH)
@@ -33,7 +33,7 @@ exe = EXE(
     a.binaries,
     a.datas,
     [],
-    name='KGM_B2B_ver3.6',
+    name='KGM_B2B_ver3.7',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,

@@ -1,4 +1,4 @@
-/* ===================================================================
+﻿/* ===================================================================
    EXCEL VIEWER POPOUT
    =================================================================== */
 let viewerPopout = null;
@@ -49,7 +49,7 @@ function openViewerPopout() {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>B2B 빌링 Agent ver3.6 - 엑셀 시뮬레이터</title>
+  <title>B2B 빌링 Agent ver3.7 - 엑셀 시뮬레이터</title>
   ${cssLinks}
   <style>
     html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; background: #f8f9fb; }

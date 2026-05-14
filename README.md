@@ -1,10 +1,17 @@
-# B2B 빌링 Agent ver3.6
+﻿# B2B 빌링 Agent ver3.7
 
 엑셀 입력 파일과 출력 템플릿을 업로드한 뒤, AI가 생성한 JavaScript 스킬을 단계별 파이프라인으로 실행해 결과 xlsx를 만드는 로컬 웹앱입니다.
 
 브라우저에서 동작하는 SPA와 로컬 Python HTTP 서버로 구성되어 있으며, `/v1/*` 요청은 사내 OpenAI-compatible ixi 모델 서버로 프록시됩니다. F9 개발자 모드에서는 Claude API를 선택해 테스트할 수 있습니다.
 
 ## 최근 변경사항
+
+### ver3.7
+- 업로드 완료 직후 엑셀 시뮬레이터를 자동으로 `미리보기` 모드로 전환합니다.
+- 사용자가 이전에 `전체보기`를 켜둔 상태라도 새 입력 파일/출력 템플릿 업로드 후에는 500행/40열 경량 렌더링으로 시작해, 대용량 파일 업로드 직후 브라우저 DOM 부하를 줄입니다.
+- 파일 데이터와 파이프라인 실행 대상은 그대로 유지되며, 최적화는 화면 렌더링 범위에만 적용됩니다.
+- UI 제목과 EXE 빌드 이름을 ver3.7로 갱신했습니다.
+- EXE 빌드 결과 파일명은 `KGM_B2B_ver3.7.exe`입니다.
 
 ### ver3.6
 - 엑셀 시뮬레이터에 `미리보기/전체보기` 토글을 추가했습니다.
@@ -110,7 +117,7 @@ build_exe.bat
 빌드 결과:
 
 ```text
-dist\KGM_B2B_ver3.6.exe
+dist\KGM_B2B_ver3.7.exe
 ```
 
 `dist/`와 `build/`는 git 추적 대상이 아닙니다.
@@ -174,7 +181,7 @@ normalizeText(cell).includes(normalizeText("안전제일"))
 ## 디렉터리 구조
 
 ```text
-B2B_ver3.6/
+B2B_ver3.7/
 ├─ index.html
 ├─ styles/
 │  ├─ base.css
