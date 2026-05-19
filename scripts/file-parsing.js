@@ -283,6 +283,11 @@ function cloneFileRecord(file) {
     formulas: file.formulas || {},
     originalFormulaValues: file.originalFormulaValues || {},
     tables: file.tables || {},
+    backendWorkbookId: file.backendWorkbookId || null,
+    backendWorkbookMeta: file.backendWorkbookMeta || null,
+    backendPreviewDimensions: file.backendPreviewDimensions || null,
+    backendOnly: !!file.backendOnly,
+    backendDownloadUrl: file.backendDownloadUrl || null,
     originalBuffer: null,
   });
 }

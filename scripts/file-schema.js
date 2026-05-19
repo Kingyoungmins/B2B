@@ -1,11 +1,18 @@
 /* ===================================================================
    FILE SCHEMA FOR CLAUDE
    =================================================================== */
+function _sheetTotalRowsForSchema(file, sheetName, aoa) {
+  const dim = file && file.backendPreviewDimensions && file.backendPreviewDimensions[sheetName];
+  return Math.max(Number(dim && dim.maxRow) || 0, (aoa || []).length || 0);
+}
+
 function _describeFile(f, headPreview, lines) {
   lines.push(`\n### ${f.name}`);
   f.sheetNames.forEach(sn => {
     const aoa = f.sheets[sn] || [];
-    lines.push(`시트 "${sn}": ${aoa.length}행`);
+    const totalRows = _sheetTotalRowsForSchema(f, sn, aoa);
+    const previewNote = totalRows > aoa.length ? ` (현재 미리보기 ${aoa.length}행)` : "";
+    lines.push(`시트 "${sn}": 전체 ${totalRows}행${previewNote}`);
     // 표 후보 (item 5)
     const tables = (f.tables || {})[sn] || [];
     if (tables.length > 1) {
@@ -22,9 +29,9 @@ function _describeFile(f, headPreview, lines) {
     }
     const preview = aoa.slice(0, headPreview);
     preview.forEach((row, i) => {
-      lines.push(`  행${i+1}: [${row.slice(0,15).map(v => JSON.stringify(v)).join(", ")}]`);
+      lines.push(`  행${i+1}: [${row.map(v => JSON.stringify(v)).join(", ")}]`);
     });
-    if (aoa.length > headPreview) lines.push(`  ... (${aoa.length - headPreview}행 생략)`);
+    if (totalRows > headPreview) lines.push(`  ... (${totalRows - headPreview}행 생략)`);
   });
 }
 
@@ -135,6 +142,7 @@ function transform(inputs, output) {
 ## 사용 가능한 헬퍼 (전역으로 주입됨)
 - \`col(sheetAoA, "회사명")\` → 헤더 행에서 컬럼명을 유사도 기반으로 찾아 인덱스 반환. 없으면 -1.
 - \`findColumnGlobal(inputs, "회사명")\` → 모든 inputs 안에서 해당 컬럼이 있는 [{file, sheet, colIdx}] 배열 반환.
+- \`findInputBySheet(inputs, "빈시트")\` → 입력 파일 전체에서 해당 시트명을 찾아 {fileName, file, sheetName, sheet} 반환. 날짜/월이 들어간 파일명을 하드코딩하지 않고 재사용 가능한 스킬을 만들 때 사용하세요.
 - \`similarity("a", "b")\` → 0~1 유사도 점수.
 - \`normalizeText(value)\` → 문자열 비교용 정규화. 앞뒤 공백, 중간 공백, 대소문자 차이를 제거합니다. 예: \`normalizeText("안전 제일") === normalizeText("안전제일")\`.
 - \`replaceNormalizedText(value, from, to)\` → 공백 차이를 무시해 문자열을 치환합니다. 예: \`replaceNormalizedText("2월 데이터", "2 월", "3월")\` 는 \`"3월 데이터"\` 를 반환합니다.
@@ -204,6 +212,7 @@ inputs / 시트 객체는 Proxy로 감싸져 있어, 키가 약간 달라도 유
 - 요청받은 작업만 수행하세요. 이전 단계의 작업이나 사용자가 요청하지 않은 기능을 추가하지 마세요.
 - 가능한 가장 단순한 코드로 작성하세요. 단일 작업에 불필요한 추상화, 설정, 범용 헬퍼를 만들지 마세요.
 - 기존 데이터 구조와 스타일을 따르세요. 관련 없는 코드, 주석, 서식은 건드리지 마세요.
+- 파일명이 날짜/월/버전/배치번호를 포함하면 전체 파일명을 코드에 고정하지 마세요. 다음 달 파일에서도 재사용되어야 하는 스킬은 \`findInputBySheet(inputs, "시트명")\` 또는 시트명/컬럼명 탐색으로 대상 파일을 찾으세요.
 - 전체 시트를 순회해야 할 때만 순회하고, 먼저 대상 시트/헤더/행/열을 좁히세요.
 - 데이터 행 루프는 \`dataStartRowIndex(sheet)\` 부터 시작하세요. Excel 행 번호를 그대로 JS 배열 인덱스로 쓰지 마세요.
 - 파일/시트/범위가 명확하지 않으면 현재 선택된 파일/시트/범위를 기본 대상으로 사용하세요. 기본 대상 규칙으로도 해소되지 않는 모호함만 질문하세요.
@@ -274,6 +283,7 @@ function transform(inputs, output) {
 - 가능한 가장 단순한 코드로 작성하세요. 단일 작업에 불필요한 추상화, 설정, 범용 헬퍼를 만들지 마세요.
 - 기존 코드 스타일과 데이터 구조를 따르세요.
 - 전체 시트를 순회해야 할 때만 순회하고, 먼저 대상 시트/헤더/행/열을 좁히세요.
+- 파일명이 날짜/월/버전/배치번호를 포함하면 전체 파일명을 코드에 고정하지 마세요. 다음 달 파일에서도 재사용되어야 하는 스킬은 \`findInputBySheet(inputs, "시트명")\` 또는 시트명/컬럼명 탐색으로 대상 파일을 찾으세요.
 - 데이터 행 루프는 \`dataStartRowIndex(sheet)\` 부터 시작하세요. Excel 행 번호를 그대로 JS 배열 인덱스로 쓰지 마세요.
 - 현재 코드와 직전 데이터 상태로도 모호함이 해소되지 않을 때만 짧게 질문하세요.
 
@@ -303,7 +313,7 @@ function previewSheets(sheets, headRows) {
     const limit = headRows || 5;
     const preview = aoa.slice(0, limit);
     preview.forEach((row, i) => {
-      lines.push(`  행${i+1}: [${(row || []).slice(0,15).map(v => JSON.stringify(v)).join(", ")}]`);
+      lines.push(`  행${i+1}: [${(row || []).map(v => JSON.stringify(v)).join(", ")}]`);
     });
     if (aoa.length > limit) lines.push(`  ... (${aoa.length - limit}행 생략)`);
   });

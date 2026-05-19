@@ -114,7 +114,9 @@ async function loadInputFiles(files) {
       updateUpload(job, i, f.name);
       await new Promise(requestAnimationFrame);
       try {
-        const parsed = await parseFile(f);
+        const parsed = typeof parseFileWithBackendPreview === "function"
+          ? await parseFileWithBackendPreview(f)
+          : await parseFile(f);
         if (job.cancelled) break;
         parsed.originalBuffer = null;
         state.inputs.push(parsed);
@@ -157,7 +159,9 @@ async function loadOutputTemplates(files) {
       updateUpload(job, i, f.name);
       await new Promise(requestAnimationFrame);
       try {
-        const parsed = await parseFile(f);
+        const parsed = typeof parseFileWithBackendPreview === "function"
+          ? await parseFileWithBackendPreview(f)
+          : await parseFile(f);
         if (job.cancelled) break;
         state.outputTemplates.push(makeOutputTemplate(parsed));
       } catch (err) {
@@ -258,12 +262,12 @@ function renderInputList() {
     const div = document.createElement("div");
     div.className = "file-chip" + (state.currentFileId === "input:" + f.name ? " active" : "");
     const kb = (f.size / 1024).toFixed(1);
-    const totalRows = Object.values(f.sheets).reduce((a, s) => a + s.length, 0);
+    const totalRows = getTotalWorkbookRows(f).toLocaleString("ko-KR");
     div.innerHTML = `
       <div class="chip-icon">XLSX</div>
       <div class="chip-body">
         <div class="chip-name" title="${escapeHtml(f.name)}">${escapeHtml(f.name)}</div>
-        <div class="chip-meta">${kb} KB · 시트 ${f.sheetNames.length}개 · 행 ${totalRows}</div>
+        <div class="chip-meta">${kb} KB \u00B7 \uC2DC\uD2B8 ${f.sheetNames.length}\uAC1C \u00B7 \uC804\uCCB4 ${totalRows}\uD589</div>
       </div>
       <button class="chip-view" data-idx="${idx}">보기</button>
       <button class="chip-remove" data-idx="${idx}" title="삭제">×</button>
@@ -279,6 +283,18 @@ function renderInputList() {
     };
   });
   renderRunnerWorkflow();
+}
+
+function getTotalWorkbookRows(file) {
+  const dims = (file && file.backendPreviewDimensions) || {};
+  const metaSheets = (file && file.backendWorkbookMeta && file.backendWorkbookMeta.sheets) || {};
+  const names = file && file.sheetNames ? file.sheetNames : Object.keys((file && file.sheets) || {});
+  return names.reduce((total, sheetName) => {
+    const dimRows = Number((dims[sheetName] && dims[sheetName].maxRow) ||
+      (metaSheets[sheetName] && metaSheets[sheetName].maxRow)) || 0;
+    const sheetRows = ((file.sheets || {})[sheetName] || []).length || 0;
+    return total + Math.max(dimRows, sheetRows);
+  }, 0);
 }
 
 function renderOutputChip() {
@@ -297,14 +313,14 @@ function renderOutputChip() {
   state.outputTemplates.forEach((tpl, idx) => {
     const f = tpl.file;
     const kb = (f.size / 1024).toFixed(1);
-    const totalRows = Object.values(f.sheets).reduce((a, s) => a + s.length, 0);
+    const totalRows = getTotalWorkbookRows(f).toLocaleString("ko-KR");
     const div = document.createElement("div");
     div.className = "file-chip output";
     div.innerHTML = `
       <div class="chip-icon">XLSX</div>
       <div class="chip-body">
         <div class="chip-name" title="${escapeHtml(f.name)}">${escapeHtml(f.name)}</div>
-        <div class="chip-meta">${kb} KB · 시트 ${f.sheetNames.length}개 · 행 ${totalRows}</div>
+        <div class="chip-meta">${kb} KB \u00B7 \uC2DC\uD2B8 ${f.sheetNames.length}\uAC1C \u00B7 \uC804\uCCB4 ${totalRows}\uD589</div>
       </div>
       <button class="chip-remove" data-idx="${idx}" title="삭제">×</button>
     `;
@@ -331,13 +347,13 @@ function openRunnerFileEditor(role) {
     <div class="runner-file-editor-list">
       ${files.length ? files.map((f, idx) => {
         const kb = (f.size / 1024).toFixed(1);
-        const totalRows = Object.values(f.sheets || {}).reduce((a, s) => a + s.length, 0);
+        const totalRows = getTotalWorkbookRows(f).toLocaleString("ko-KR");
         return `
           <div class="file-chip ${isOutput ? "output" : ""}">
             <div class="chip-icon">XLSX</div>
             <div class="chip-body">
               <div class="chip-name" title="${escapeHtml(f.name)}">${escapeHtml(f.name)}</div>
-              <div class="chip-meta">${kb} KB · 시트 ${f.sheetNames.length}개 · 행 ${totalRows}</div>
+              <div class="chip-meta">${kb} KB \u00B7 \uC2DC\uD2B8 ${f.sheetNames.length}\uAC1C \u00B7 \uC804\uCCB4 ${totalRows}\uD589</div>
             </div>
             <button class="chip-view" data-idx="${idx}" type="button">보기</button>
             <button class="chip-remove" data-idx="${idx}" type="button" title="삭제">×</button>
@@ -461,7 +477,10 @@ function renderRunnerWorkflow() {
   }
 
   if (runBtn) runBtn.disabled = !runnable;
-  if (downloadBtn) downloadBtn.disabled = !state.output;
+  if (downloadBtn) {
+    const currentFile = state.currentFileId ? getFile(state.currentFileId) : null;
+    downloadBtn.disabled = !state.output && !(currentFile && currentFile.backendDownloadUrl);
+  }
 }
 
 window.runnerSetRunning = function(running) {
@@ -471,6 +490,15 @@ window.runnerSetRunning = function(running) {
   node.classList.toggle("running", !!running);
   if (running) node.classList.remove("done");
   if (sub && running) sub.textContent = "실행 중...";
+};
+
+window.runnerSetProgress = function(text) {
+  const sub = document.getElementById("runner-center-sub");
+  const statState = document.getElementById("runner-stat-state");
+  const badge = document.getElementById("runner-hero-badge");
+  if (sub) sub.textContent = text || "실행 중...";
+  if (statState) statState.textContent = text || "실행 중";
+  if (badge) badge.textContent = text || "실행 중";
 };
 
 window.runnerSetDone = function() {

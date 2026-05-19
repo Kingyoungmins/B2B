@@ -167,6 +167,12 @@
   }
   .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
   .toast.error { background: #DC2626; }
+
+  .btn-primary.running {
+    cursor: progress;
+    filter: saturate(0.9);
+    opacity: 0.9;
+  }
   .toast.success { background: #10B981; }
 
   /* ============ MODAL ============ */

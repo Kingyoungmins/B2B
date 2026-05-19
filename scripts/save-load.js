@@ -81,6 +81,7 @@ function openSaveModal() {
       pipeline: state.pipeline.map((s, idx) => ({
         id: s.id,
         description: s.description,
+        enabled: isStepEnabled(s),
         stepFile: stepFiles[idx],
         code: s.code, // .js 파일이 누락되어도 동작하도록 임베딩 fallback 유지
       })),
@@ -357,6 +358,7 @@ async function loadLogicFiles(files) {
     return {
       id: s.id || uid(),
       description: s.description || `Step ${idx + 1}`,
+      enabled: s.enabled !== false,
       code,
     };
   });
@@ -389,6 +391,7 @@ function openLoadDialog() {
 function loadLogic(data, filename, meta) {
   // 파이프라인 복원. 자동 실행 X (사용자가 "전체 실행" 을 눌러야 적용됨).
   state.pipeline = deepClone(data.pipeline || []);
+  if (typeof ensurePipelineStepIds === "function") ensurePipelineStepIds();
   // 채팅 히스토리도 함께 복원 (있으면)
   state.chatHistory = Array.isArray(data.chatHistory) ? deepClone(data.chatHistory) : [];
   state.editingStepId = null;

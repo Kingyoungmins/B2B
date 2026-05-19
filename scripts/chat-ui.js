@@ -91,6 +91,36 @@ function clearViewerDragSelection() {
   });
 }
 
+function setActionButtonPending(button, pendingText) {
+  if (!button) return;
+  button.textContent = pendingText || "\uC791\uC5C5 \uC911...";
+  button.classList.add("pending");
+}
+
+function finalizeActionButtonFromResult(button, result, doneText) {
+  if (!button) return;
+  if (result && result.pending && result.promise) {
+    setActionButtonPending(button);
+    result.promise
+      .then(() => {
+        button.textContent = doneText || "\u2713 \uC801\uC6A9\uB428";
+        button.classList.remove("pending");
+      })
+      .catch(() => {
+        button.textContent = "\uC801\uC6A9 \uC2E4\uD328";
+        button.classList.remove("pending");
+        button.classList.add("error");
+      });
+    return;
+  }
+  if (result && result.error) {
+    button.textContent = "\uC801\uC6A9 \uC2E4\uD328";
+    button.classList.add("error");
+    return;
+  }
+  button.textContent = doneText || "\u2713 \uC801\uC6A9\uB428";
+}
+
 function addAssistantReply(fullText, replyContext) {
   const code = extractCode(fullText);
   const desc = extractDescription(fullText);
@@ -165,6 +195,93 @@ function addAssistantReply(fullText, replyContext) {
       rejectBtn.onclick = () => {
         applyBtn.disabled = true; insertBtn.disabled = true; rejectBtn.disabled = true;
         rejectBtn.textContent = "거절됨";
+      };
+    }
+  }
+  $("chat-messages").appendChild(div);
+  scrollChatToBottom();
+}
+
+function addAssistantReply(fullText, replyContext) {
+  const code = extractCode(fullText);
+  const desc = extractDescription(fullText);
+  const stripped = fullText.replace(/```[\s\S]*?```/g, "").trim();
+  const editTargetId = replyContext && replyContext.editTargetId;
+  const reasoning = replyContext && replyContext.reasoning;
+
+  const div = document.createElement("div");
+  div.className = "msg assistant";
+  div.innerHTML = `<div>${escapeHtml(stripped)}</div>`;
+  if (reasoning) div.insertBefore(createReasoningBox(reasoning), div.firstChild);
+  if (code) {
+    const codeBlk = document.createElement("pre");
+    codeBlk.className = "code-block";
+    codeBlk.textContent = code;
+    div.appendChild(codeBlk);
+
+    const actions = document.createElement("div");
+    actions.className = "action-btns";
+
+    if (editTargetId) {
+      const editApplyBtn = document.createElement("button");
+      editApplyBtn.className = "action-btn";
+      editApplyBtn.textContent = "\u2713 \uC218\uC815 \uC801\uC6A9";
+      const rejectBtn = document.createElement("button");
+      rejectBtn.className = "action-btn reject";
+      rejectBtn.textContent = "\u2715 \uAC70\uC808";
+      actions.appendChild(editApplyBtn);
+      actions.appendChild(rejectBtn);
+      div.appendChild(actions);
+
+      editApplyBtn.onclick = () => {
+        const result = replaceLogicAt(editTargetId, code, desc);
+        if (!result || !result.error) {
+          editApplyBtn.disabled = true;
+          rejectBtn.disabled = true;
+          finalizeActionButtonFromResult(editApplyBtn, result, "\u2713 \uC218\uC815 \uC801\uC6A9\uB428");
+        }
+      };
+      rejectBtn.onclick = () => {
+        editApplyBtn.disabled = true;
+        rejectBtn.disabled = true;
+        rejectBtn.textContent = "\uAC70\uC808\uB428";
+      };
+    } else {
+      const applyBtn = document.createElement("button");
+      applyBtn.className = "action-btn";
+      applyBtn.textContent = "\u2713 \uC801\uC6A9";
+      const insertBtn = document.createElement("button");
+      insertBtn.className = "action-btn insert";
+      insertBtn.textContent = "\u21B3 \uC0BD\uC785";
+      const rejectBtn = document.createElement("button");
+      rejectBtn.className = "action-btn reject";
+      rejectBtn.textContent = "\u2715 \uAC70\uC808";
+      actions.appendChild(applyBtn);
+      actions.appendChild(insertBtn);
+      actions.appendChild(rejectBtn);
+      div.appendChild(actions);
+
+      applyBtn.onclick = () => {
+        const result = applyLogic({ id: uid(), prompt: "", code, description: desc });
+        applyBtn.disabled = true;
+        insertBtn.disabled = true;
+        rejectBtn.disabled = true;
+        finalizeActionButtonFromResult(applyBtn, result, "\u2713 \uC801\uC6A9\uB428");
+      };
+      insertBtn.onclick = () => {
+        openInsertPositionDialog(state.pipeline.length, (position) => {
+          const result = insertLogic({ id: uid(), prompt: "", code, description: desc }, position);
+          applyBtn.disabled = true;
+          insertBtn.disabled = true;
+          rejectBtn.disabled = true;
+          finalizeActionButtonFromResult(insertBtn, result, `${position}\uBC88\uC5D0 \uC0BD\uC785\uB428`);
+        });
+      };
+      rejectBtn.onclick = () => {
+        applyBtn.disabled = true;
+        insertBtn.disabled = true;
+        rejectBtn.disabled = true;
+        rejectBtn.textContent = "\uAC70\uC808\uB428";
       };
     }
   }
@@ -360,8 +477,27 @@ function createSmoothStructuredRenderer(textEl, codeEl, emptyText) {
   };
 }
 
+function resolveErrorRecoveryStepIndex(stepIdx, errorInfo) {
+  const numeric = Number(stepIdx);
+  if (Number.isInteger(numeric) && numeric >= 0 && state.pipeline[numeric]) return numeric;
+  if (errorInfo && errorInfo.stepId) {
+    const byId = state.pipeline.findIndex(step => step && step.id === errorInfo.stepId);
+    if (byId >= 0) return byId;
+  }
+  if (errorInfo && errorInfo.code) {
+    const byCode = state.pipeline.findIndex(step => step && step.code === errorInfo.code);
+    if (byCode >= 0) return byCode;
+  }
+  if (errorInfo && errorInfo.description) {
+    const byDesc = state.pipeline.findIndex(step => step && step.description === errorInfo.description);
+    if (byDesc >= 0) return byDesc;
+  }
+  return -1;
+}
+
 async function requestErrorRecovery(stepIdx, errorInfo) {
-  const existingStep = state.pipeline[stepIdx] || null;
+  stepIdx = resolveErrorRecoveryStepIndex(stepIdx, errorInfo);
+  const existingStep = stepIdx >= 0 ? (state.pipeline[stepIdx] || null) : null;
   const failedStep = existingStep || {
     id: errorInfo && errorInfo.stepId,
     description: errorInfo && errorInfo.description,
@@ -372,6 +508,40 @@ async function requestErrorRecovery(stepIdx, errorInfo) {
     return;
   }
   const isExistingStep = !!existingStep;
+  const useCompatibilityCheck = !!(errorInfo && errorInfo.compatibilityCheck);
+  const schemaSummary = useCompatibilityCheck && typeof buildSchemaSummary === "function" ? buildSchemaSummary() : "";
+  const recentHistory = useCompatibilityCheck ? (state.chatHistory || [])
+    .slice(-8)
+    .map(msg => {
+      const role = msg && msg.role ? msg.role : "unknown";
+      const content = msg && (msg.content || msg.text || msg.message) ? (msg.content || msg.text || msg.message) : "";
+      return `${role}: ${String(content).slice(0, 1200)}`;
+    })
+    .filter(Boolean)
+    .join("\n") : "";
+  const compatibilityPrompt = useCompatibilityCheck ? [
+    "",
+    "## 복구 방식",
+    "- 코드는 자동 교체하지 않습니다. 사용자가 '수정 적용' 버튼을 눌러 적용할 수 있도록 수정 후보만 제안하세요.",
+    "- 실패한 Step 하나만 고치세요. 이전/다음 Step의 작업을 반복하거나 새 기능을 추가하지 마세요.",
+    "- 먼저 호환성 검사를 수행한 뒤, 그 결과를 반영한 javascript 코드블록 하나를 작성하세요.",
+    "",
+    "## 실행기 호환성 검사 순서",
+    "1. inputs[\"정확한_파일명.xlsx\"]처럼 파일명을 하드코딩해서 새 실행 파일명과 맞지 않는지 확인하세요.",
+    "2. 날짜/월/버전/배치번호만 다른 파일이면 전체 파일명을 고정하지 말고 시트명/컬럼명 기준으로 찾으세요.",
+    "3. 시트명이 기준이면 findInputBySheet(inputs, \"시트명\")을 사용하세요. 반환값은 {fileName, file, sheetName, sheet} 입니다.",
+    "4. 컬럼은 고정 인덱스보다 col(sheet, \"컬럼명\")으로 다시 찾으세요.",
+    "5. 회사명/월/날짜처럼 공백 차이가 날 수 있는 값은 equalsNormalizedText/includesNormalizedText/replaceNormalizedText를 사용하세요.",
+    "6. 시트명이 여러 파일에 있을 수 있으면 사용자 의도와 현재 스키마를 기준으로 가장 맞는 파일을 선택하세요.",
+    "",
+    "## findInputBySheet 사용 예시",
+    "```javascript",
+    "const found = findInputBySheet(inputs, \"빈시트\");",
+    "if (!found) return { inputs, output };",
+    "const file = found.file;",
+    "const sheet = found.sheet;",
+    "```",
+  ] : [];
 
   const prompt = [
     `Step ${stepIdx + 1} 실행 중 오류가 발생했습니다.`,
@@ -379,6 +549,7 @@ async function requestErrorRecovery(stepIdx, errorInfo) {
       ? "대화 히스토리의 사용자 의도, 현재 파일 스키마, 수정 대상 코드, 아래 오류를 함께 분석해서 이 Step을 교체할 수정 코드를 다시 작성하세요."
       : "이 Step은 아직 파이프라인에 적용되지 못했습니다. 대화 히스토리의 사용자 의도, 현재 파일 스키마, 실패한 코드, 아래 오류를 함께 분석해서 적용 가능한 새 스킬 코드를 다시 작성하세요.",
     "응답은 짧은 설명과 하나의 javascript 코드블록으로 작성하세요.",
+    ...compatibilityPrompt,
     "",
     "## 실패한 Step",
     `설명: ${failedStep.description || ""}`,
@@ -391,6 +562,8 @@ async function requestErrorRecovery(stepIdx, errorInfo) {
     "## 상세 오류",
     `메시지: ${(errorInfo && errorInfo.message) || ""}`,
     errorInfo && errorInfo.stack ? `\n스택:\n${errorInfo.stack}` : "",
+    recentHistory ? "\n## 최근 대화/사용자 의도\n" + recentHistory : "",
+    schemaSummary ? "\n## 현재 업로드 파일/시트/컬럼 스키마\n" + schemaSummary : "",
   ].filter(Boolean).join("\n");
 
   addMessage("system", `Step ${stepIdx + 1} 에러 복구를 요청합니다.`);

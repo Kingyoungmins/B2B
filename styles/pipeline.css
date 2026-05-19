@@ -36,6 +36,36 @@
     box-shadow: var(--shadow-mag);
   }
   .pipeline-item .step-label { flex: 1; color: var(--ink-700); font-weight: 500; }
+  .pipeline-item .step-runtime {
+    display: inline-flex;
+    align-items: center;
+    margin-left: 8px;
+    padding: 2px 7px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    background: var(--ink-50);
+    color: var(--ink-500);
+    font-size: 10px;
+    font-weight: 800;
+    line-height: 1.2;
+    vertical-align: middle;
+    white-space: nowrap;
+  }
+  .pipeline-item .step-runtime.running {
+    background: #FEF3C7;
+    border-color: #FDE68A;
+    color: #92400E;
+  }
+  .pipeline-item .step-runtime.applied {
+    background: #D1FAE5;
+    border-color: #A7F3D0;
+    color: #065F46;
+  }
+  .pipeline-item .step-runtime.error {
+    background: #FEE2E2;
+    border-color: #FECACA;
+    color: #991B1B;
+  }
   .pipeline-item .step-edit,
   .pipeline-item .step-toggle,
   .pipeline-item .step-del {

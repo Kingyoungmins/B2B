@@ -5,7 +5,7 @@ $("btn-download").onclick = () => openDownloadModal();
 
 function openDownloadModal() {
   const target = getDownloadOutputTarget();
-  if (!target.file) { toast("출력 템플릿이 없습니다", "error"); return; }
+  if (!target.file) { toast("다운로드할 결과 파일이 없습니다", "error"); return; }
   const baseName = target.file.name.replace(/\.(xlsx|xls)$/i, "");
   const today = new Date().toISOString().slice(0, 10);
   const defaultName = `${baseName}_결과_${today}`;
@@ -29,7 +29,11 @@ function openDownloadModal() {
     const name = $("dl-name").value.trim();
     if (!name) { toast("파일명을 입력하세요", "error"); return; }
     try {
-      exportOutputXlsx(name + ".xlsx", target.file, target.original);
+      if (target.file && target.file.backendDownloadUrl) {
+        downloadBackendOutput(target.file.backendDownloadUrl, name + ".xlsx");
+      } else {
+        exportOutputXlsx(name + ".xlsx", target.file, target.original);
+      }
       $("modal-bg").classList.remove("show");
       toast(`"${name}.xlsx" 다운로드 시작`, "success");
     } catch (err) {
@@ -40,12 +44,25 @@ function openDownloadModal() {
 }
 
 function getDownloadOutputTarget() {
+  if (state.currentFileId && state.currentFileId.startsWith("input:")) {
+    const file = getFile(state.currentFileId);
+    if (file && file.backendDownloadUrl) return { file, original: getOriginalFile(state.currentFileId) };
+  }
   if (state.currentFileId && state.currentFileId.startsWith("output:")) {
     const idx = outputTemplateIndexFromFileId(state.currentFileId);
     const tpl = state.outputTemplates && state.outputTemplates[idx];
     if (tpl) return { file: tpl.file, original: tpl.original };
   }
   return { file: state.output, original: state.outputOriginal };
+}
+
+function downloadBackendOutput(url, filename) {
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
 }
 
 function exportOutputXlsx(filename, fileArg, originalArg) {

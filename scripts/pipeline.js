@@ -9,6 +9,84 @@ function normalizeStep(step) {
   return { enabled: true, ...step };
 }
 
+function ensurePipelineStepIds() {
+  const seen = new Set();
+  let changed = false;
+  state.pipeline = (state.pipeline || []).map(step => {
+    const next = normalizeStep(step || {});
+    if (!next.id || seen.has(next.id)) {
+      next.id = uid();
+      changed = true;
+    }
+    seen.add(next.id);
+    return next;
+  });
+  return changed;
+}
+
+function shouldDeferImmediatePipelineRun() {
+  return typeof hasBackendOnlyWorkbooks === "function" && hasBackendOnlyWorkbooks();
+}
+
+function stepRequiresFullWorkbookExecution(step) {
+  if (!step || !isStepEnabled(step)) return false;
+  if (step.manual || step.manualEdit) return false;
+
+  const code = String(step.code || "");
+  const text = [
+    step.description || "",
+    step.prompt || "",
+    step.title || "",
+    code,
+  ].join("\n");
+
+  const fullCodePatterns = [
+    /\bdataStartRowIndex\s*\(/,
+    /\bheaderRowIndex\s*\(/,
+    /for\s*\([^;]*;[^;]*<[^;]*\.length\s*;/,
+    /\.(?:sort|filter|reduce)\s*\(/,
+    /\bnew\s+Map\s*\(/,
+    /\bObject\.(?:entries|keys|values)\s*\(/,
+    /\brows\.push\s*\(/,
+    /\.push\s*\(\s*row(?:\.slice\s*\(\s*\))?\s*\)/,
+    /\b(?:inputs|output)\s*\[[\s\S]{0,120}\]\s*\[[\s\S]{0,120}\]\s*=\s*\[/,
+  ];
+  if (/\b[a-zA-Z_$][\w$]*\s*\[[\s\S]{0,120}\]\s*=\s*\[/.test(code)) return true;
+  if (fullCodePatterns.some(pattern => pattern.test(code))) return true;
+
+  const koreanFullIntentPattern = /(\uC804\uCCB4|\uC0C8\s*\uC2DC\uD2B8|\uC0C8\uD0ED|\uC0C8\s*\uD0ED|\uC815\uB82C|\uC624\uB984\uCC28\uC21C|\uB0B4\uB9BC\uCC28\uC21C|\uD544\uD130|\uCD94\uCD9C|\uC911\uBCF5|\uC9D1\uACC4|\uD569\uACC4|\uC6D4\uBCC4|\uD68C\uC0AC\uBCC4|\uADF8\uB8F9|\uD589\uB9CC|\uC870\uAC74|\uBAA9\uB85D)/;
+  if (koreanFullIntentPattern.test(text)) return true;
+
+  const fullIntentPattern = koreanFullIntentPattern;
+  const scansRows = /(?:sheet|rows?|data|range|시트|행)\.length|dataStartRowIndex|headerRowIndex|for\s*\(/.test(code);
+  return fullIntentPattern.test(text) && scansRows;
+}
+
+function shouldUseFastPreviewPipelineRun(steps = state.pipeline) {
+  return !(steps || []).some(stepRequiresFullWorkbookExecution);
+}
+
+function getPipelineRuntimeStatus(stepId) {
+  const map = window.pipelineStepRuntimeStatus || {};
+  return stepId ? map[stepId] : null;
+}
+
+function setPipelineRuntimeStatus(stepIds, status, label) {
+  window.pipelineStepRuntimeStatus = window.pipelineStepRuntimeStatus || {};
+  (stepIds || []).forEach(stepId => {
+    if (!stepId) return;
+    if (!status) delete window.pipelineStepRuntimeStatus[stepId];
+    else window.pipelineStepRuntimeStatus[stepId] = { status, label };
+  });
+  if (typeof renderPipeline === "function") renderPipeline();
+}
+
+function canUseBackendCurrentCacheForAppend() {
+  return typeof hasBackendOnlyWorkbooks === "function" &&
+    hasBackendOnlyWorkbooks() &&
+    !window.backendCurrentCacheDirty;
+}
+
 function toJsLiteral(value) {
   return JSON.stringify(value === undefined ? "" : value);
 }
@@ -65,9 +143,37 @@ function createManualEditStepV3(fileId, sheet, r, c, value) {
 createManualEditStep = createManualEditStepV3;
 
 function applyLogic(step) {
+  step = normalizeStep(step);
+  const next = [...state.pipeline, step];
+  if (shouldDeferImmediatePipelineRun()) {
+    if (typeof pushHistory === "function") pushHistory("?④퀎 異붽?");
+    state.pipeline.push(step);
+    setPipelineRuntimeStatus([step.id], "running", "\uC791\uC5C5 \uC911");
+    renderPipeline();
+    refreshRunButton();
+    const useCurrentCache = canUseBackendCurrentCacheForAppend();
+    const promise = reconcilePipelineSimulationAfterEdit({
+      forceBackend: true,
+      steps: useCurrentCache ? [step] : state.pipeline,
+      backendBaseMode: useCurrentCache ? "current" : "original",
+    })
+      .then(() => {
+        setPipelineRuntimeStatus([step.id], "applied", "\uC801\uC6A9\uB428");
+        return true;
+      })
+      .catch(err => {
+        setPipelineRuntimeStatus([step.id], "error", "\uC624\uB958");
+        reportPipelineError(err);
+        throw err;
+      });
+    toast(`"${step.description}" 단계가 추가되었습니다. 시뮬레이터에 반영 중입니다.`, "success");
+    return { pending: true, promise };
+  }
   try {
-    step = normalizeStep(step);
-    runPipeline([...state.pipeline, step]);
+    runPipeline(next);
+    if (typeof hasBackendOnlyWorkbooks === "function" && hasBackendOnlyWorkbooks()) {
+      window.backendCurrentCacheDirty = true;
+    }
     if (typeof pushHistory === "function") pushHistory("단계 추가");
     state.pipeline.push(step);
     renderPipeline();
@@ -86,8 +192,30 @@ function insertLogic(step, position) {
   const idx = Math.max(0, Math.min(total, (position | 0) - 1));
   const next = state.pipeline.slice();
   next.splice(idx, 0, step);
+  if (shouldDeferImmediatePipelineRun()) {
+    if (typeof pushHistory === "function") pushHistory("?④퀎 ?쎌엯");
+    state.pipeline = next;
+    setPipelineRuntimeStatus([step.id], "running", "\uC791\uC5C5 \uC911");
+    renderPipeline();
+    refreshRunButton();
+    const promise = reconcilePipelineSimulationAfterEdit({ forceBackend: true })
+      .then(() => {
+        setPipelineRuntimeStatus([step.id], "applied", "\uC801\uC6A9\uB428");
+        return true;
+      })
+      .catch(err => {
+        setPipelineRuntimeStatus([step.id], "error", "\uC624\uB958");
+        reportPipelineError(err);
+        throw err;
+      });
+    toast(`"${step.description}" 단계가 ${idx + 1}번째에 삽입되었습니다. 시뮬레이터에 반영 중입니다.`, "success");
+    return { pending: true, promise };
+  }
   try {
     runPipeline(next);
+    if (typeof hasBackendOnlyWorkbooks === "function" && hasBackendOnlyWorkbooks()) {
+      window.backendCurrentCacheDirty = true;
+    }
     if (typeof pushHistory === "function") pushHistory("단계 삽입");
     state.pipeline = next;
     renderPipeline();
@@ -107,8 +235,30 @@ function replaceLogicAt(stepId, newCode, newDescription) {
   }
   const next = state.pipeline.slice();
   next[idx] = { ...next[idx], code: newCode, description: newDescription || next[idx].description };
+  if (shouldDeferImmediatePipelineRun()) {
+    if (typeof pushHistory === "function") pushHistory("?④퀎 ?섏젙");
+    state.pipeline = next;
+    setPipelineRuntimeStatus([stepId], "running", "\uC791\uC5C5 \uC911");
+    renderPipeline();
+    refreshRunButton();
+    const promise = reconcilePipelineSimulationAfterEdit({ forceBackend: true })
+      .then(() => {
+        setPipelineRuntimeStatus([stepId], "applied", "\uC801\uC6A9\uB428");
+        return true;
+      })
+      .catch(err => {
+        setPipelineRuntimeStatus([stepId], "error", "\uC624\uB958");
+        reportPipelineError(err);
+        throw err;
+      });
+    toast(`Step ${idx + 1} 코드가 수정되었습니다. 시뮬레이터에 반영 중입니다.`, "success");
+    return { pending: true, promise };
+  }
   try {
     runPipeline(next);
+    if (typeof hasBackendOnlyWorkbooks === "function" && hasBackendOnlyWorkbooks()) {
+      window.backendCurrentCacheDirty = true;
+    }
     if (typeof pushHistory === "function") pushHistory("단계 수정");
     state.pipeline = next;
     renderPipeline();
@@ -141,13 +291,13 @@ function computeStateBeforeStep(stepIdx) {
     const step = state.pipeline[i];
     if (!isStepEnabled(step)) continue;
     try {
-      const fn = new Function("inputs", "output", "col", "findColumnGlobal", "similarity", "normalizeText", "replaceNormalizedText", "includesNormalizedText", "equalsNormalizedText",
+      const fn = new Function("inputs", "output", "col", "findColumnGlobal", "findInputBySheet", "similarity", "normalizeText", "replaceNormalizedText", "includesNormalizedText", "equalsNormalizedText",
         "headerRowIndex", "dataStartRowIndex", "excelRowToIndex",
         "insertColumns", "copyColumns", "deleteColumns", "shiftFormulaText",
         step.code +
         "\nreturn typeof transform === 'function' ? transform(inputs, output) : { inputs, output };"
       );
-      const result = fn(proxiedInputs, proxiedOutput, col, findColumnGlobal, similarity,
+      const result = fn(proxiedInputs, proxiedOutput, col, findColumnGlobal, findInputBySheet, similarity,
         typeof normalizeText === "function" ? normalizeText : ((v) => String(v || "").trim().toLowerCase().replace(/\s+/g, "")),
         typeof replaceNormalizedText === "function" ? replaceNormalizedText : ((v) => String(v ?? "")),
         typeof includesNormalizedText === "function" ? includesNormalizedText : ((v, s) => String(v || "").trim().toLowerCase().replace(/\s+/g, "").includes(String(s || "").trim().toLowerCase().replace(/\s+/g, ""))),
@@ -212,7 +362,7 @@ function applyManualEditForPipeline(edit, inputsMap, outputSheets) {
   return true;
 }
 
-function runPipeline(steps) {
+function runPipeline(steps, options = {}) {
   steps = steps || state.pipeline;
   if (!state.outputOriginal && state.inputsOriginal.length === 0) {
     throw new Error("실행할 입력 또는 출력 파일이 없습니다");
@@ -270,6 +420,7 @@ function runPipeline(steps) {
   const helpers = {
     col: typeof col === "function" ? col : null,
     findColumnGlobal: typeof findColumnGlobal === "function" ? findColumnGlobal : null,
+    findInputBySheet: typeof findInputBySheet === "function" ? findInputBySheet : null,
     similarity: typeof similarity === "function" ? similarity : null,
     normalizeText: typeof normalizeText === "function" ? normalizeText : ((v) => String(v || "").trim().toLowerCase().replace(/\s+/g, "")),
     replaceNormalizedText: typeof replaceNormalizedText === "function" ? replaceNormalizedText : ((v) => String(v ?? "")),
@@ -283,10 +434,17 @@ function runPipeline(steps) {
   state.lastError = null;
   steps.forEach((step, stepIdx) => {
     if (!isStepEnabled(step)) return;
-    if (step.manualEdit && applyManualEditForPipeline(step.manualEdit, inputsMap, outputSheets)) return;
+    const beforeStep = options.onBeforeStep ? options.onBeforeStep({ step, stepIdx }) : null;
+    if (step.manualEdit && applyManualEditForPipeline(step.manualEdit, inputsMap, outputSheets)) {
+      if (options.onStepApplied) {
+        syncRuntimeFileRecords(inputsMap);
+        options.onStepApplied({ step, stepIdx, beforeStep });
+      }
+      return;
+    }
     let fn;
     try {
-      fn = new Function("inputs", "output", "col", "findColumnGlobal", "similarity", "normalizeText", "replaceNormalizedText", "includesNormalizedText", "equalsNormalizedText",
+      fn = new Function("inputs", "output", "col", "findColumnGlobal", "findInputBySheet", "similarity", "normalizeText", "replaceNormalizedText", "includesNormalizedText", "equalsNormalizedText",
         "headerRowIndex", "dataStartRowIndex", "excelRowToIndex",
         "insertColumns", "copyColumns", "deleteColumns", "shiftFormulaText",
         step.code +
@@ -304,7 +462,7 @@ function runPipeline(steps) {
     let result;
     try {
       result = fn(proxiedInputs, proxiedOutput,
-        helpers.col, helpers.findColumnGlobal, helpers.similarity, helpers.normalizeText, helpers.replaceNormalizedText, helpers.includesNormalizedText, helpers.equalsNormalizedText,
+        helpers.col, helpers.findColumnGlobal, helpers.findInputBySheet, helpers.similarity, helpers.normalizeText, helpers.replaceNormalizedText, helpers.includesNormalizedText, helpers.equalsNormalizedText,
         helpers.headerRowIndex, helpers.dataStartRowIndex, helpers.excelRowToIndex,
         typeof insertColumns === "function" ? insertColumns : null,
         typeof copyColumns === "function" ? copyColumns : null,
@@ -333,12 +491,13 @@ function runPipeline(steps) {
         Object.keys(result).forEach(k => { state.output.sheets[k] = result[k]; });
       }
     }
+    if (options.onStepApplied) {
+      syncRuntimeFileRecords(inputsMap);
+      options.onStepApplied({ step, stepIdx, beforeStep });
+    }
   });
 
-  state.inputs.forEach(file => {
-    file.sheets = inputsMap[file.name] || {};
-    syncFileMetadata(file);
-  });
+  syncRuntimeFileRecords(inputsMap);
 
   if (state.output) {
     syncFileMetadata(state.output);
@@ -381,7 +540,129 @@ function runPipeline(steps) {
   flashFilled();
 }
 
-function clearPipelineExecutionMemory() {
+function runPipelineRealtime(steps) {
+  steps = steps || state.pipeline;
+  const changedByStep = [];
+  runPipeline(steps, {
+    onBeforeStep: ({ stepIdx }) => captureCurrentViewSnapshot(`before-${stepIdx}`),
+    onStepApplied: ({ step, stepIdx, beforeStep }) => {
+      const afterStep = captureCurrentViewSnapshot(`after-${stepIdx}`);
+      const localChanges = diffViewSnapshots(beforeStep, afterStep);
+      changedByStep.push({ stepIdx, count: localChanges.length });
+      renderExcelViewer();
+      flashChangedViewCells(localChanges);
+      requestBackendViewDiff(beforeStep, afterStep, step, stepIdx);
+    },
+  });
+  return changedByStep;
+}
+
+function captureCurrentViewSnapshot(label) {
+  const file = getFile(state.currentFileId);
+  const sheet = state.currentSheet;
+  if (!file || !sheet) return { label, fileId: state.currentFileId, sheet, cells: [] };
+  const aoa = (file.sheets && file.sheets[sheet]) || [];
+  const viewer = document.querySelector(".right-page.active .excel-viewer") || $("excel-viewer") || $("runner-excel-viewer");
+  const cells = [];
+  const seen = new Set();
+  const addCell = (r, c) => {
+    const key = r + ":" + c;
+    if (seen.has(key)) return;
+    seen.add(key);
+    cells.push({ r, c, value: aoa[r] && aoa[r][c] !== undefined ? aoa[r][c] : "" });
+  };
+  if (viewer) {
+    viewer.querySelectorAll("td[data-r][data-c]").forEach(td => {
+      addCell(Number(td.dataset.r), Number(td.dataset.c));
+    });
+  }
+  if (!cells.length) {
+    const rows = Math.min(120, aoa.length);
+    for (let r = 0; r < rows; r++) {
+      const cols = Math.min(40, aoa[r] ? aoa[r].length : 0);
+      for (let c = 0; c < cols; c++) addCell(r, c);
+    }
+  }
+  return { label, fileId: state.currentFileId, sheet, cells };
+}
+
+function diffViewSnapshots(before, after) {
+  if (!before || !after || before.fileId !== after.fileId || before.sheet !== after.sheet) return [];
+  const prev = new Map((before.cells || []).map(cell => [cell.r + ":" + cell.c, normalizeDiffValue(cell.value)]));
+  return (after.cells || []).filter(cell => prev.get(cell.r + ":" + cell.c) !== normalizeDiffValue(cell.value));
+}
+
+function normalizeDiffValue(value) {
+  if (value instanceof Date) return value.toISOString();
+  if (value === undefined || value === null) return "";
+  return String(value);
+}
+
+function flashChangedViewCells(changes) {
+  if (!changes || !changes.length) return;
+  ["excel-viewer", "runner-excel-viewer"].forEach(id => {
+    const viewer = $(id);
+    if (!viewer) return;
+    changes.forEach(cell => {
+      const td = viewer.querySelector(`td[data-r="${cell.r}"][data-c="${cell.c}"]`);
+      if (td) {
+        td.classList.add("flash");
+        setTimeout(() => td.classList.remove("flash"), 1400);
+      }
+    });
+  });
+}
+
+function requestBackendViewDiff(before, after, step, stepIdx) {
+  if (!before || !after || !window.fetch || location.protocol === "file:") return;
+  fetch("/api/diff/current-view", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      stepIdx,
+      description: step && step.description,
+      before,
+      after,
+    }),
+  }).catch(() => {});
+}
+
+async function runPipelinePreferBackend(options = {}) {
+  if (typeof canRunPipelineOnBackend === "function" && canRunPipelineOnBackend()) {
+    try {
+      const result = await runPipelineOnBackend(options);
+      toast("백엔드 실행 결과를 현재 화면에 반영했습니다", "success");
+      return result;
+    } catch (err) {
+      console.warn("Backend pipeline failed, falling back to browser execution:", err);
+      if (typeof hasBackendOnlyWorkbooks === "function" && hasBackendOnlyWorkbooks()) {
+        throw err;
+      }
+      toast("백엔드 실행이 실패해 기존 방식으로 실행합니다", "error");
+    }
+  }
+  return runPipelineRealtime(options.pipeline);
+}
+
+function syncRuntimeFileRecords(inputsMap) {
+  state.inputs.forEach(file => {
+    file.sheets = inputsMap[file.name] || {};
+    syncFileMetadata(file);
+  });
+
+  if (state.output) {
+    syncFileMetadata(state.output);
+    if (state.outputTemplates && state.activeOutputIndex >= 0 && state.outputTemplates[state.activeOutputIndex]) {
+      state.outputTemplates[state.activeOutputIndex].file = state.output;
+      state.outputTemplates[state.activeOutputIndex].original = state.outputOriginal;
+    }
+  }
+  (state.outputTemplates || []).forEach(tpl => {
+    if (tpl && tpl.file) syncFileMetadata(tpl.file);
+  });
+}
+
+function clearPipelineExecutionMemory(options = {}) {
   if (state.history) {
     state.history.undo = [];
     state.history.redo = [];
@@ -389,7 +670,7 @@ function clearPipelineExecutionMemory() {
   }
   state.viewerPreviewMode = true;
   if (typeof refreshViewerPreviewButtons === "function") refreshViewerPreviewButtons();
-  clearViewerDomForPipelineRun();
+  if (!options.keepViewer) clearViewerDomForPipelineRun();
 }
 
 function clearViewerDomForPipelineRun() {
@@ -476,6 +757,7 @@ function flashFilled() {
 
 function renderPipeline() {
   const list = $("pipeline-list");
+  ensurePipelineStepIds();
   $("pipe-count").textContent = state.pipeline.length + " 단계";
   if (state.pipeline.length === 0) {
     list.innerHTML = `<div class="pipeline-empty">아직 단계가 없습니다. AI가 생성한 코드를 "적용"하면 추가됩니다.</div>`;
@@ -495,32 +777,44 @@ function renderPipeline() {
     if (!isStepEnabled(step)) item.classList.add("disabled");
     if (state.editingStepId === step.id) item.classList.add("editing");
     const editing = state.editingStepId === step.id;
+    const runtime = getPipelineRuntimeStatus(step.id);
+    if (runtime && runtime.status) item.classList.add(`runtime-${runtime.status}`);
+    const runtimeBadge = runtime && runtime.label
+      ? `<span class="step-runtime ${escapeHtml(runtime.status || "")}">${escapeHtml(runtime.label)}</span>`
+      : "";
     item.innerHTML = `
       <div class="step-n">${idx+1}</div>
-      <div class="step-label" title="${escapeHtml(step.description)}">${escapeHtml(step.description)}</div>
+      <div class="step-label" title="${escapeHtml(step.description)}">${escapeHtml(step.description)}${runtimeBadge}</div>
       <button class="step-toggle ${isStepEnabled(step) ? 'active' : ''}" title="계산 반영 여부">${isStepEnabled(step) ? 'ON' : 'OFF'}</button>
       <button class="step-edit ${editing ? 'active' : ''}" title="${editing ? '수정 모드 해제' : '수정'}">✎</button>
       <button class="step-del" title="삭제">✕</button>
     `;
     item.querySelector(".step-toggle").onclick = (e) => {
       e.stopPropagation();
+      const stepId = step.id;
+      const currentIdx = state.pipeline.findIndex(s => s.id === stepId);
+      if (currentIdx < 0) return;
       if (typeof pushHistory === "function") pushHistory("단계 적용 여부 변경");
-      state.pipeline[idx] = { ...state.pipeline[idx], enabled: !isStepEnabled(step) };
-      try { runPipeline(); } catch (err) { reportPipelineError(err); }
+      state.pipeline[currentIdx] = { ...state.pipeline[currentIdx], enabled: !isStepEnabled(state.pipeline[currentIdx]) };
       renderPipeline();
       refreshRunButton();
+      reconcilePipelineSimulationAfterEdit().catch(err => reportPipelineError(err));
     };
     item.querySelector(".step-edit").onclick = (e) => {
       e.stopPropagation();
       toggleEditStep(step.id);
     };
-    item.querySelector(".step-del").onclick = () => {
+    item.querySelector(".step-del").onclick = (e) => {
+      e.stopPropagation();
+      const stepId = step.id;
+      const currentIdx = state.pipeline.findIndex(s => s.id === stepId);
+      if (currentIdx < 0) return;
       if (typeof pushHistory === "function") pushHistory("단계 삭제");
-      if (state.editingStepId === step.id) state.editingStepId = null;
-      state.pipeline.splice(idx, 1);
-      try { runPipeline(); } catch {}
+      if (state.editingStepId === stepId) state.editingStepId = null;
+      state.pipeline.splice(currentIdx, 1);
       renderPipeline();
       refreshRunButton();
+      reconcilePipelineSimulationAfterEdit().catch(err => reportPipelineError(err));
     };
     list.appendChild(item);
   });
@@ -528,40 +822,135 @@ function renderPipeline() {
   renderRunnerWorkflow();
 }
 
+async function reconcilePipelineSimulationAfterEdit(options = {}) {
+  const steps = options.steps || state.pipeline;
+  const hasAnyOriginal = !!state.outputOriginal || ((state.inputsOriginal || []).length > 0);
+  if (!hasAnyOriginal) return;
+  const mustUseBackend = typeof shouldDeferImmediatePipelineRun === "function" && shouldDeferImmediatePipelineRun();
+  if (!state.pipeline.length) {
+    if (mustUseBackend) {
+      if (window.runnerSetRunning) window.runnerSetRunning(true);
+      clearPipelineExecutionMemory({ keepViewer: true });
+      try {
+        await runPipelinePreferBackend({
+          pipeline: [],
+          baseMode: "original",
+        });
+        if (window.runnerSetDone) window.runnerSetDone();
+      } catch (err) {
+        if (window.runnerSetRunning) window.runnerSetRunning(false);
+        throw err;
+      }
+      return;
+    }
+    runPipeline([]);
+    refreshTabs();
+    renderExcelViewer();
+    return;
+  }
+  if (!mustUseBackend && !options.forceBackend && shouldUseFastPreviewPipelineRun(steps)) {
+    runPipeline(steps);
+    if (typeof hasBackendOnlyWorkbooks === "function" && hasBackendOnlyWorkbooks()) {
+      window.backendCurrentCacheDirty = true;
+    }
+    return;
+  }
+  if (mustUseBackend) {
+    if (window.runnerSetRunning) window.runnerSetRunning(true);
+    clearPipelineExecutionMemory({ keepViewer: true });
+    try {
+      await runPipelinePreferBackend({
+        pipeline: steps,
+        baseMode: options.backendBaseMode || "original",
+      });
+      toast("스킬 변경 사항을 시뮬레이터에 다시 반영했습니다", "success");
+      if (window.runnerSetDone) window.runnerSetDone();
+    } catch (err) {
+      if (window.runnerSetRunning) window.runnerSetRunning(false);
+      throw err;
+    }
+    return;
+  }
+  runPipeline(steps);
+}
+
 function refreshRunButton() {
   const hasAnyFile = !!state.output || state.inputs.length > 0;
   const hasOutput = !!state.output;
+  const hasDownloadableCurrentFile = !!(state.currentFileId && getFile(state.currentFileId) && getFile(state.currentFileId).backendDownloadUrl);
   const hasSteps = state.pipeline.length > 0;
   $("btn-run").disabled = !(hasAnyFile && hasSteps);
   $("btn-save").disabled = !hasSteps;
-  $("btn-download").disabled = !hasOutput;
+  $("btn-download").disabled = !(hasOutput || hasDownloadableCurrentFile);
   renderRunnerWorkflow();
 }
 
-$("btn-run").onclick = () => {
+function getActivePipelineStepIds() {
+  return (state.pipeline || []).filter(isStepEnabled).map(step => step && step.id).filter(Boolean);
+}
+
+function setGeneratorRunLoading(running, text) {
+  const btn = $("btn-run");
+  if (!btn) return;
+  if (running) {
+    if (!btn.dataset.defaultText) btn.dataset.defaultText = btn.textContent || "\u25B6 \uC804\uCCB4 \uC2E4\uD589";
+    btn.disabled = true;
+    btn.classList.add("running");
+    btn.textContent = text || "\uC2E4\uD589 \uC911...";
+    return;
+  }
+  btn.classList.remove("running");
+  btn.textContent = btn.dataset.defaultText || "\u25B6 \uC804\uCCB4 \uC2E4\uD589";
+  refreshRunButton();
+}
+
+window.generatorSetProgress = function(text) {
+  const btn = $("btn-run");
+  if (!btn || !btn.classList.contains("running")) return;
+  btn.textContent = text || "\uC2E4\uD589 \uC911...";
+};
+
+$("btn-run").onclick = async () => {
+  const activeStepIds = getActivePipelineStepIds();
+  setGeneratorRunLoading(true, "\uC2E4\uD589 \uC900\uBE44 \uC911...");
+  setPipelineRuntimeStatus(activeStepIds, "running", "\uC2E4\uD589 \uC911");
   try {
-    clearPipelineExecutionMemory();
-    runPipeline();
+    clearPipelineExecutionMemory({ keepViewer: true });
+    await runPipelinePreferBackend();
+    setPipelineRuntimeStatus(activeStepIds, "applied", "\uC801\uC6A9\uB428");
     toast(`${state.pipeline.length}개 단계 실행 완료`, "success");
   } catch (err) {
+    setPipelineRuntimeStatus(activeStepIds, "error", "\uC624\uB958");
     renderExcelViewer();
     reportPipelineError(err);
+  } finally {
+    setGeneratorRunLoading(false);
   }
 };
 
 // item 9: 어느 단계에서 어떤 사유로 실패했는지 토스트 + 채팅 panel 에 모두 노출.
-function reportPipelineError(err) {
-  const info = err && err._stepInfo;
-  const stepLabel = info ? `Step ${info.stepIdx + 1}` : "스킬";
+function reportPipelineError(err, options) {
+  options = options || {};
+  const info = (err && err._stepInfo) || {
+    stepIdx: -1,
+    stepId: null,
+    description: "",
+    code: "",
+    message: (err && err.message) || String(err || ""),
+    stack: (err && err.stack) || "",
+    recoverable: false,
+  };
+  const stepLabel = Number(info.stepIdx) >= 0 ? `Step ${info.stepIdx + 1}` : "\uC2A4\uD0AC";
   toast(`${stepLabel}을 적용하지 못했습니다. 안내 메시지를 확인하세요.`, "error");
+  if (options.runner) showRunnerPipelineError(err, options);
   // 채팅 영역에도 시스템 메시지로 남긴다 (chat 가 활성일 때만).
   const chatBox = document.getElementById("chat-messages");
-  if (chatBox && info) {
+  if (chatBox) {
     const div = document.createElement("div");
     div.className = "msg system error";
     div.innerHTML = `
       <div class="error-title"><b>스킬을 적용하지 못했습니다</b></div>
-      <div class="error-desc">Step ${info.stepIdx + 1}${info.description ? ` · ${escapeHtml(info.description)}` : ""}</div>
+      <div class="error-desc">${Number(info.stepIdx) >= 0 ? `Step ${info.stepIdx + 1}${info.description ? ` · ${escapeHtml(info.description)}` : ""}` : "backend/runner stage"}</div>
       <div class="error-help">입력 파일, 시트명, 선택 범위가 요청과 맞는지 확인한 뒤 스킬을 수정하거나 다시 생성해 주세요.</div>
       <button class="error-recover-btn" type="button">에러 복구 시도</button>
       <details class="error-details">
@@ -572,7 +961,11 @@ function reportPipelineError(err) {
     chatBox.appendChild(div);
     const recoverBtn = div.querySelector(".error-recover-btn");
     if (recoverBtn) {
+      const canRecover = typeof requestErrorRecovery === "function" &&
+        (Number(info.stepIdx) >= 0 || !!info.stepId || !!info.code || !!info.description);
+      recoverBtn.disabled = !canRecover;
       recoverBtn.onclick = () => {
+        if (recoverBtn.disabled) return;
         recoverBtn.disabled = true;
         recoverBtn.textContent = "복구 요청 중...";
         if (typeof requestErrorRecovery === "function") {
@@ -582,6 +975,7 @@ function reportPipelineError(err) {
             code: info.code || "",
             message: info.message || err.message || String(err),
             stack: info.stack || "",
+            compatibilityCheck: !!options.compatibilityCheck,
           }).finally(() => {
             recoverBtn.textContent = "에러 복구 시도";
             recoverBtn.disabled = false;
@@ -592,19 +986,82 @@ function reportPipelineError(err) {
     chatBox.scrollTop = chatBox.scrollHeight;
   }
 }
+
+function clearRunnerPipelineError() {
+  const panel = document.getElementById("runner-error-panel");
+  if (!panel) return;
+  panel.hidden = true;
+  panel.innerHTML = "";
+}
+
+function showRunnerPipelineError(err, options) {
+  options = options || {};
+  const panel = document.getElementById("runner-error-panel");
+  if (!panel) return;
+  const info = (err && err._stepInfo) || null;
+  const title = info ? "스킬을 적용하지 못했습니다" : "스킬 실행 중 오류가 발생했습니다";
+  const stepText = info
+    ? `Step ${info.stepIdx + 1}${info.description ? ` · ${info.description}` : ""}`
+    : "실행기 백엔드 또는 스킬 실행 단계";
+  const message = (info && info.message) || (err && err.message) || String(err || "");
+  const stack = (info && info.stack) || (err && err.stack) || "";
+  panel.hidden = false;
+  panel.innerHTML = `
+    <div class="runner-error-title">
+      <span>${escapeHtml(title)}</span>
+      <span>확인 필요</span>
+    </div>
+    <div class="runner-error-step">${escapeHtml(stepText)}</div>
+    <div class="runner-error-help">입력 파일명, 시트명, 선택 범위 또는 불러온 스킬의 대상이 현재 파일과 맞는지 확인하세요. 상세 오류를 펼치면 실제 실패 원인을 볼 수 있습니다.</div>
+    <div class="runner-error-actions">
+      <button class="runner-error-recover" type="button">에러 복구 시도</button>
+      <button class="runner-error-open-generator" type="button">생성기에서 보기</button>
+    </div>
+    <details class="runner-error-details" open>
+      <summary>상세 오류 보기</summary>
+      <pre>${escapeHtml(message)}${stack ? "\n\n" + escapeHtml(stack) : ""}</pre>
+    </details>
+  `;
+  const recoverBtn = panel.querySelector(".runner-error-recover");
+  if (recoverBtn) {
+    const canRecover = !!info && typeof requestErrorRecovery === "function" &&
+      (Number(info.stepIdx) >= 0 || !!info.stepId || !!info.code || !!info.description);
+    recoverBtn.disabled = !canRecover;
+    recoverBtn.onclick = () => {
+      if (!canRecover) return;
+      recoverBtn.disabled = true;
+      recoverBtn.textContent = "복구 요청 중...";
+      requestErrorRecovery(info.stepIdx, {
+        stepId: info.stepId || null,
+        description: info.description || "",
+        code: info.code || "",
+        message,
+        stack,
+        compatibilityCheck: !!options.compatibilityCheck,
+      }).finally(() => {
+        recoverBtn.textContent = "에러 복구 시도";
+        recoverBtn.disabled = false;
+      });
+    };
+  }
+  const openBtn = panel.querySelector(".runner-error-open-generator");
+  if (openBtn) openBtn.onclick = () => { if (typeof setPage === "function") setPage("generator"); };
+}
+
 $("runner-run-btn").onclick = () => {
   if ($("runner-run-btn").disabled) return;
+  clearRunnerPipelineError();
   if (window.runnerSetRunning) window.runnerSetRunning(true);
   // Give the UI a tick to paint the ring, then execute
-  setTimeout(() => {
+  setTimeout(async () => {
     try {
-      clearPipelineExecutionMemory();
-      runPipeline();
+      clearPipelineExecutionMemory({ keepViewer: true });
+      await runPipelinePreferBackend();
       toast(`${state.pipeline.length}개 단계 실행 완료`, "success");
       if (window.runnerSetDone) window.runnerSetDone();
     } catch (err) {
       renderExcelViewer();
-      reportPipelineError(err);
+      reportPipelineError(err, { compatibilityCheck: true, runner: true });
       if (window.runnerSetRunning) window.runnerSetRunning(false);
     }
   }, 650);

@@ -18,7 +18,11 @@
     }
   }
 
+  let closed = false;
+
   function close() {
+    if (closed) return;
+    closed = true;
     try {
       navigator.sendBeacon("/__kgm_close", sessionId);
     } catch {
@@ -29,4 +33,6 @@
   post("/__kgm_ping", false);
   setInterval(() => post("/__kgm_ping", false), 5000);
   window.addEventListener("pagehide", close);
+  window.addEventListener("beforeunload", close);
+  window.addEventListener("unload", close);
 })();

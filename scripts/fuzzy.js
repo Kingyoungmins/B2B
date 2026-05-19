@@ -127,7 +127,7 @@ function fuzzyProxy(target, options) {
       }
       const keys = Object.keys(t);
       const result = fuzzyMatch(cacheKey, keys);
-      if (result && !result.ambiguous) {
+      if (result && !result.ambiguous && _normalize(cacheKey) === _normalize(result.match)) {
         t[result.match] = value;
         cache[cacheKey] = result.match;
       } else {
@@ -202,4 +202,25 @@ function findColumnGlobal(inputsMap, name) {
     });
   });
   return hits;
+}
+
+function findInputBySheet(inputsMap, sheetName, options) {
+  options = options || {};
+  const target = normalizeText(sheetName);
+  const preferredFile = options.preferredFile ? normalizeText(options.preferredFile) : "";
+  const matches = [];
+  Object.keys(inputsMap || {}).forEach(fileName => {
+    const sheets = inputsMap[fileName] || {};
+    Object.keys(sheets).forEach(sn => {
+      if (normalizeText(sn) === target) {
+        matches.push({ fileName, file: sheets, sheetName: sn, sheet: sheets[sn] });
+      }
+    });
+  });
+  if (!matches.length) return null;
+  if (preferredFile) {
+    const preferred = matches.find(item => normalizeText(item.fileName).includes(preferredFile) || preferredFile.includes(normalizeText(item.fileName)));
+    if (preferred) return preferred;
+  }
+  return matches[0];
 }

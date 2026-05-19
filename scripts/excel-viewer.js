@@ -141,6 +141,24 @@ function getOriginalFile(fileId) {
   return null;
 }
 
+function getSheetDimension(file, sheet) {
+  const dims = (file && file.backendPreviewDimensions && file.backendPreviewDimensions[sheet]) ||
+    (file && file.backendWorkbookMeta && file.backendWorkbookMeta.sheets && file.backendWorkbookMeta.sheets[sheet]) ||
+    null;
+  const aoa = (file && file.sheets && file.sheets[sheet]) || [];
+  const formulas = ((file && file.formulas) || {})[sheet] || {};
+  let maxCols = Math.max(0, ...aoa.map(row => (row || []).length));
+  Object.keys(formulas).forEach(addr => {
+    const rc = _addrToRC(addr);
+    if (rc && rc.c + 1 > maxCols) maxCols = rc.c + 1;
+  });
+  return {
+    maxRow: Math.max(Number(dims && dims.maxRow) || 0, aoa.length || 0, _maxRowFromFormulas(formulas)),
+    maxCol: Math.max(Number(dims && dims.maxCol) || 0, maxCols || 0),
+    previewRows: Number(dims && dims.previewRows) || aoa.length || 0,
+  };
+}
+
 function _toggleSheetSelection(sn, multi) {
   if (!multi) {
     state.currentSheet = sn;
@@ -231,8 +249,10 @@ function refreshTabs() {
         if (multiMode && isSelected) cls.push("selected");
         t.className = cls.join(" ");
         t.dataset.sheetName = sn;
+        const sheetDim = getSheetDimension(cur, sn);
         t.textContent = sn;
         t.title = "Ctrl/Cmd+click 로 다중 선택";
+        t.title = `${sn} \u00B7 \uC804\uCCB4 ${Number(sheetDim.maxRow || 0).toLocaleString("ko-KR")}\uD589 \u00B7 Ctrl/Cmd+click`;
         t.onclick = (e) => {
           const multi = e.ctrlKey || e.metaKey;
           _toggleSheetSelection(sn, multi);
@@ -244,7 +264,10 @@ function refreshTabs() {
       const selLabel = state.selectedSheets && state.selectedSheets.length > 1
         ? ` (${state.selectedSheets.length}개 시트 선택)`
         : "";
-      info.textContent = `${cur.name} · ${state.currentSheet || ""}${selLabel}`;
+      const dim = state.currentSheet ? getSheetDimension(cur, state.currentSheet) : null;
+      const rowLabel = dim ? ` \u00B7 \uC804\uCCB4 ${Number(dim.maxRow || 0).toLocaleString("ko-KR")}\uD589` : "";
+      const colLabel = dim ? ` \u00B7 ${Number(dim.maxCol || 0).toLocaleString("ko-KR")}\uC5F4` : "";
+      info.textContent = `${cur.name} \u00B7 ${state.currentSheet || ""}${selLabel}${rowLabel}${colLabel}`;
     } else {
       info.textContent = empty;
     }
@@ -346,12 +369,14 @@ function _renderViewerInitial(viewer, file) {
   });
 
   const fullMode = state.viewerPreviewMode === false;
-  const sourceRows = Math.max(aoa.length, _maxRowFromFormulas(formulas));
-  const sourceCols = maxCols;
+  const dimensions = getSheetDimension(file, sheet);
+  const sourceRows = Math.max(aoa.length, _maxRowFromFormulas(formulas), dimensions.maxRow || 0);
+  const sourceCols = Math.max(maxCols, dimensions.maxCol || 0);
+  const renderableRows = file.backendOnly ? aoa.length : sourceRows;
   const visibleCols = fullMode
     ? Math.min(sourceCols, VIEWER_MAX_COLS)
     : Math.min(sourceCols, VIEWER_PREVIEW_COLS);
-  const totalRows = fullMode ? sourceRows : Math.min(sourceRows, VIEWER_PREVIEW_ROWS);
+  const totalRows = fullMode ? renderableRows : Math.min(renderableRows, VIEWER_PREVIEW_ROWS);
   const initialRows = Math.min(totalRows, fullMode ? VIEWER_INITIAL_ROWS : VIEWER_PREVIEW_ROWS);
 
   const ctx = {
@@ -370,11 +395,11 @@ function _renderViewerInitial(viewer, file) {
   const truncatedRows = totalRows < sourceRows;
   if (state.viewerPreviewMode !== false) {
     const parts = [];
-    if (truncatedRows) parts.push(`행 ${totalRows}/${sourceRows}`);
-    if (truncatedCols) parts.push(`열 ${visibleCols}/${sourceCols}`);
+    if (truncatedRows) parts.push(`행 ${totalRows.toLocaleString("ko-KR")}/${sourceRows.toLocaleString("ko-KR")}`);
+    if (truncatedCols) parts.push(`열 ${visibleCols.toLocaleString("ko-KR")}/${sourceCols.toLocaleString("ko-KR")}`);
     html += `<div class="excel-preview-note">미리보기 모드${parts.length ? " · " + parts.join(" · ") : ""}</div>`;
   }
-  if (truncatedCols && fullMode) html += `<div class="excel-preview-note">열 ${visibleCols}/${sourceCols} (오른쪽 ${sourceCols - visibleCols}열 생략)</div>`;
+  if (truncatedCols && fullMode) html += `<div class="excel-preview-note">열 ${visibleCols.toLocaleString("ko-KR")}/${sourceCols.toLocaleString("ko-KR")} (오른쪽 ${(sourceCols - visibleCols).toLocaleString("ko-KR")}열 생략)</div>`;
   if (file.lightweightPreview) html += `<div class="excel-preview-note">대용량 파일 경량 미리보기</div>`;
 
   let tableHtml = '<table class="excel-sheet"><thead><tr><th class="col-header"></th>';
@@ -775,6 +800,30 @@ function commitCellEdit(fileId, sheet, r, c, value) {
     if (typeof pushHistory === "function") pushHistory("셀 직접 편집");
     const step = createManualEditStep(fileId, sheet, r, c, value);
     const next = [...state.pipeline, step];
+    const canUpdateBackendCache = typeof hasBackendOnlyWorkbooks === "function" &&
+      hasBackendOnlyWorkbooks() &&
+      typeof reconcilePipelineSimulationAfterEdit === "function";
+    if (canUpdateBackendCache) {
+      applyManualEditToFile(file, sheet, r, c, value);
+      state.pipeline = next;
+      setPipelineRuntimeStatus([step.id], "running", "\uC791\uC5C5 \uC911");
+      reconcilePipelineSimulationAfterEdit({
+        forceBackend: true,
+        steps: [step],
+        backendBaseMode: "current",
+      }).then(() => {
+        setPipelineRuntimeStatus([step.id], "applied", "\uC801\uC6A9\uB428");
+      }).catch(err => {
+        setPipelineRuntimeStatus([step.id], "error", "\uC624\uB958");
+        reportPipelineError(err);
+      });
+      if (typeof syncFileMetadata === "function") syncFileMetadata(file);
+      if (typeof recomputeAllFormulas === "function") recomputeAllFormulas();
+      renderInputList();
+      renderOutputChip();
+      refreshTabs();
+      renderExcelViewer();
+    } else
     if (fileId && fileId.startsWith("output:")) {
       applyManualEditToFile(file, sheet, r, c, value);
       if (typeof syncFileMetadata === "function") syncFileMetadata(file);
@@ -786,6 +835,9 @@ function commitCellEdit(fileId, sheet, r, c, value) {
       renderExcelViewer();
     } else {
       runPipeline(next);
+      if (typeof hasBackendOnlyWorkbooks === "function" && hasBackendOnlyWorkbooks()) {
+        window.backendCurrentCacheDirty = true;
+      }
       state.pipeline = next;
     }
     state.selectedCell = { fileId, sheet, r, c };
