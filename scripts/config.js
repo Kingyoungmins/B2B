@@ -1,7 +1,7 @@
 /* ===================================================================
    CONFIG
    =================================================================== */
-const KGM_BUILD_STAMP = "run-adapter-20260526-6";
+const KGM_BUILD_STAMP = "csv-popout-20260526-1";
 window.KGM_BUILD_STAMP = KGM_BUILD_STAMP;
 
 const DEFAULTS = {

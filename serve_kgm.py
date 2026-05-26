@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import http.server
+import csv
 import json
 import os
 from pathlib import Path
@@ -41,7 +42,7 @@ NODE_WORKER_READY = set()
 PREVIEW_ROWS = 500
 PREVIEW_COLS = None
 MAX_DIFF_CELLS_PER_SHEET = 5000
-APP_BUILD_STAMP = "run-adapter-20260526-6"
+APP_BUILD_STAMP = "csv-popout-20260526-1"
 
 
 def app_base_dir():
@@ -194,13 +195,13 @@ class KGMHandler(http.server.SimpleHTTPRequestHandler):
         self.send_json({"ok": True, **diff})
 
     def handle_workbook_upload(self):
-        if openpyxl is None:
-            self.send_json({"ok": False, "error": "openpyxl is not available"}, status=500)
-            return
         parsed = urlparse(self.path)
         qs = parse_qs(parsed.query)
         raw_name = qs.get("name", ["workbook.xlsx"])[0]
         name = Path(unquote(raw_name)).name or "workbook.xlsx"
+        if openpyxl is None and not is_csv_path(name):
+            self.send_json({"ok": False, "error": "openpyxl is not available"}, status=500)
+            return
         length = int(self.headers.get("content-length") or 0)
         if length <= 0:
             self.send_json({"ok": False, "error": "empty upload"}, status=400)
@@ -314,7 +315,10 @@ class KGMHandler(http.server.SimpleHTTPRequestHandler):
             return
         data = path.read_bytes()
         self.send_response(200)
-        self.send_header("content-type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+        if path.suffix.lower() == ".csv":
+            self.send_header("content-type", "text/csv; charset=utf-8")
+        else:
+            self.send_header("content-type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
         self.send_header("content-disposition", content_disposition_attachment(path.name))
         self.send_header("content-length", str(len(data)))
         self.end_headers()
@@ -473,6 +477,8 @@ def run_backend_pipeline_payload(payload, job_id=None):
 
 
 def inspect_workbook(path):
+    if is_csv_path(path):
+        return inspect_csv_workbook(path)
     wb = openpyxl.load_workbook(path, read_only=True, data_only=False)
     cached_wb = openpyxl.load_workbook(path, read_only=True, data_only=True)
     try:
@@ -519,6 +525,8 @@ def inspect_workbook(path):
 
 
 def load_workbook_aoa(path):
+    if is_csv_path(path):
+        return load_csv_aoa(path)
     wb = openpyxl.load_workbook(path, read_only=True, data_only=False)
     try:
         data = {}
@@ -533,6 +541,84 @@ def load_workbook_aoa(path):
         return data
     finally:
         wb.close()
+
+
+def is_csv_path(path):
+    return Path(path).suffix.lower() in (".csv", ".tsv")
+
+
+def csv_sheet_name(path):
+    stem = Path(path).stem or "Sheet1"
+    if len(stem) > 33 and stem[32] == "_":
+        prefix = stem[:32]
+        if all(ch in "0123456789abcdefABCDEF" for ch in prefix):
+            stem = stem[33:] or stem
+    return stem
+
+
+def read_csv_text(path):
+    raw = Path(path).read_bytes()
+    for enc in ("utf-8-sig", "cp949", "euc-kr", "utf-8"):
+        try:
+            return raw.decode(enc)
+        except UnicodeDecodeError:
+            continue
+    return raw.decode("utf-8", errors="replace")
+
+
+def read_csv_rows(path, max_rows=None):
+    text = read_csv_text(path)
+    sample = text[:4096]
+    delimiter = "\t" if Path(path).suffix.lower() == ".tsv" else ","
+    try:
+        dialect = csv.Sniffer().sniff(sample, delimiters=",\t;|")
+    except csv.Error:
+        dialect = csv.excel_tab if delimiter == "\t" else csv.excel
+    rows = []
+    for idx, row in enumerate(csv.reader(text.splitlines(), dialect)):
+        if max_rows is not None and idx >= max_rows:
+            break
+        rows.append(["" if value is None else value for value in row])
+    return rows
+
+
+def inspect_csv_workbook(path):
+    rows = read_csv_rows(path, PREVIEW_ROWS)
+    sheet = csv_sheet_name(path)
+    max_col = max((len(row or []) for row in rows), default=0)
+    total_rows = 0
+    try:
+        with Path(path).open("rb") as f:
+            for _ in f:
+                total_rows += 1
+    except OSError:
+        total_rows = len(rows)
+    return {
+        "sheetNames": [sheet],
+        "sheets": {
+            sheet: {
+                "rows": rows,
+                "formulas": {},
+                "originalFormulaValues": {},
+                "formats": [],
+                "maxRow": total_rows or len(rows),
+                "maxCol": max_col,
+            }
+        },
+    }
+
+
+def load_csv_aoa(path):
+    return {csv_sheet_name(path): read_csv_rows(path)}
+
+
+def write_result_csv(result_path, sheets):
+    sheet_name = next(iter((sheets or {}).keys()), csv_sheet_name(result_path))
+    rows = (sheets or {}).get(sheet_name) or []
+    with Path(result_path).open("w", encoding="utf-8-sig", newline="") as f:
+        writer = csv.writer(f)
+        for row in rows:
+            writer.writerow(["" if value is None else value for value in (row or [])])
 
 
 def get_workbook_aoa_for_run(wb_record, base_mode="original"):
@@ -572,6 +658,9 @@ def update_workbook_current_cache(wb_record, sheets):
 
 
 def write_result_workbook(template_path, result_path, sheets, forced_value_cells=None):
+    if is_csv_path(template_path):
+        write_result_csv(result_path, sheets)
+        return
     forced_cells = {
         (str(cell.get("sheetName") or ""), int(cell.get("r") or 0) + 1, int(cell.get("c") or 0) + 1)
         for cell in (forced_value_cells or [])

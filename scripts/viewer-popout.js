@@ -146,11 +146,7 @@ function syncViewerPopout() {
     newViewer.addEventListener("scroll", () => {
       const sourceViewer = getActiveRightPage()?.querySelector(".excel-viewer");
       if (!sourceViewer) return;
-      extendSourceViewerRowsForPopout(sourceViewer, newViewer);
-      sourceViewer.scrollTop = newViewer.scrollTop;
-      sourceViewer.scrollLeft = newViewer.scrollLeft;
-      clearTimeout(viewerPopoutScrollTimer);
-      viewerPopoutScrollTimer = setTimeout(syncViewerPopout, 160);
+      appendPopoutRowsFromSource(sourceViewer, newViewer, extendSourceViewerRowsForPopout(sourceViewer, newViewer));
     });
   }
 
@@ -173,12 +169,22 @@ function syncViewerPopout() {
 
 function extendSourceViewerRowsForPopout(sourceViewer, popoutViewer) {
   const ctx = _viewerState.get(sourceViewer);
-  if (!ctx || ctx.rendered >= ctx.totalRows) return;
+  if (!ctx || ctx.rendered >= ctx.totalRows) return null;
   const nearBottom = popoutViewer.scrollTop + popoutViewer.clientHeight >= popoutViewer.scrollHeight - 160;
-  if (!nearBottom) return;
+  if (!nearBottom) return null;
+  const from = ctx.rendered;
   const next = Math.min(ctx.totalRows, ctx.rendered + VIEWER_ROW_INCREMENT);
   _appendRows(sourceViewer, ctx, ctx.rendered, next);
   ctx.rendered = next;
+  return { from, to: next };
+}
+
+function appendPopoutRowsFromSource(sourceViewer, popoutViewer, range) {
+  if (!range || range.to <= range.from) return;
+  const sourceRows = Array.from(sourceViewer.querySelectorAll("tbody.excel-tbody > tr")).slice(range.from, range.to);
+  const popoutBody = popoutViewer.querySelector("tbody.excel-tbody");
+  if (!sourceRows.length || !popoutBody) return;
+  popoutBody.insertAdjacentHTML("beforeend", sourceRows.map(row => row.outerHTML).join(""));
 }
 
 function setupPopoutCellEditing(viewer) {

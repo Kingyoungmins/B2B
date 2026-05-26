@@ -6,7 +6,9 @@ $("btn-download").onclick = () => openDownloadModal();
 function openDownloadModal() {
   const target = getDownloadOutputTarget();
   if (!target.file) { toast("다운로드할 결과 파일이 없습니다", "error"); return; }
-  const baseName = target.file.name.replace(/\.(xlsx|xls)$/i, "");
+  const isCsv = /\.csv$/i.test(target.file.name || "");
+  const ext = isCsv ? ".csv" : ".xlsx";
+  const baseName = target.file.name.replace(/\.(xlsx|xls|csv)$/i, "");
   const today = new Date().toISOString().slice(0, 10);
   const defaultName = `${baseName}_결과_${today}`;
   const modal = $("modal");
@@ -30,9 +32,11 @@ function openDownloadModal() {
     if (!name) { toast("파일명을 입력하세요", "error"); return; }
     try {
       if (target.file && target.file.backendDownloadUrl) {
-        downloadBackendOutput(target.file.backendDownloadUrl, name + ".xlsx");
+        downloadBackendOutput(target.file.backendDownloadUrl, name + ext);
+      } else if (isCsv) {
+        exportOutputCsv(name + ext, target.file);
       } else {
-        exportOutputXlsx(name + ".xlsx", target.file, target.original);
+        exportOutputXlsx(name + ext, target.file, target.original);
       }
       $("modal-bg").classList.remove("show");
       toast(`"${name}.xlsx" 다운로드 시작`, "success");
@@ -63,6 +67,26 @@ function downloadBackendOutput(url, filename) {
   document.body.appendChild(a);
   a.click();
   a.remove();
+}
+
+function exportOutputCsv(filename, fileArg) {
+  const outputFile = fileArg || state.output;
+  if (!outputFile || !outputFile.sheets) throw new Error("CSV로 저장할 데이터가 없습니다");
+  const sheetName = (outputFile.sheetNames && outputFile.sheetNames[0]) || Object.keys(outputFile.sheets)[0];
+  const rows = outputFile.sheets[sheetName] || [];
+  const csv = rows.map(row => (row || []).map(value => {
+    const text = value === null || value === undefined ? "" : String(value);
+    return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+  }).join(",")).join("\r\n");
+  const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 function exportOutputXlsx(filename, fileArg, originalArg) {
