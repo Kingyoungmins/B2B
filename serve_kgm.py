@@ -42,7 +42,7 @@ NODE_WORKER_READY = set()
 PREVIEW_ROWS = 500
 PREVIEW_COLS = None
 MAX_DIFF_CELLS_PER_SHEET = 5000
-APP_BUILD_STAMP = "csv-popout-20260526-1"
+APP_BUILD_STAMP = "csv-popout-20260526-2"
 
 
 def app_base_dir():
@@ -55,6 +55,18 @@ def node_executable():
         return str(bundled)
     found = shutil.which("node")
     return found or None
+
+
+def hidden_subprocess_kwargs():
+    if os.name != "nt":
+        return {}
+    startupinfo = subprocess.STARTUPINFO()
+    startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+    startupinfo.wShowWindow = 0
+    return {
+        "startupinfo": startupinfo,
+        "creationflags": subprocess.CREATE_NO_WINDOW,
+    }
 
 
 class PipelineExecutionError(RuntimeError):
@@ -1029,6 +1041,7 @@ process.stdout.write(JSON.stringify({ inputs, output, forcedValueCells: Object.v
         stderr=stderr_handle,
         text=True,
         encoding="utf-8",
+        **hidden_subprocess_kwargs(),
     )
     stdout = ""
     stderr = ""
@@ -1232,6 +1245,7 @@ def ensure_node_worker():
         text=True,
         encoding="utf-8",
         bufsize=1,
+        **hidden_subprocess_kwargs(),
     )
     NODE_WORKER_SCRIPT_MTIME = worker_mtime
     NODE_WORKER_READY.clear()
