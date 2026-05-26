@@ -92,7 +92,9 @@ function toJsLiteral(value) {
 }
 
 function createManualEditStep(fileId, sheet, r, c, value) {
-  const target = fileId === "output" ? "output" : `inputs[${toJsLiteral(fileId.slice(6))}]`;
+  const isOutputTarget = fileId === "output";
+  const inputName = !isOutputTarget && fileId && fileId.startsWith("input:") ? fileId.slice(6) : "";
+  const target = isOutputTarget ? "output" : `inputs[${toJsLiteral(inputName)}]`;
   const sheetKey = toJsLiteral(sheet);
   const valueLiteral = toJsLiteral(value);
   const descTarget = `${fileId === "output" ? "출력" : fileId.slice(6)} / ${sheet}!${_excelCol(c)}${r + 1}`;
@@ -103,10 +105,14 @@ function createManualEditStep(fileId, sheet, r, c, value) {
     enabled: true,
     manual: true,
     code: `function transform(inputs, output) {
-  const target = ${target};
-  if (!target[${sheetKey}]) target[${sheetKey}] = [];
-  if (!target[${sheetKey}][${r}]) target[${sheetKey}][${r}] = [];
-  target[${sheetKey}][${r}][${c}] = ${valueLiteral};
+  if (typeof setCellValue === "function") {
+    setCellValue(${isOutputTarget ? toJsLiteral("output") : toJsLiteral("input:" + inputName)}, ${sheetKey}, ${r}, ${c}, ${valueLiteral});
+  } else {
+    const target = ${target};
+    if (!target[${sheetKey}]) target[${sheetKey}] = [];
+    if (!target[${sheetKey}][${r}]) target[${sheetKey}][${r}] = [];
+    target[${sheetKey}][${r}][${c}] = ${valueLiteral};
+  }
   return { inputs, output };
 }`,
   };
@@ -131,10 +137,14 @@ function createManualEditStepV3(fileId, sheet, r, c, value) {
     manual: true,
     manualEdit: { fileId, sheet, r, c, value },
     code: `function transform(inputs, output) {
-  const target = ${target};
-  if (!target[${sheetKey}]) target[${sheetKey}] = [];
-  if (!target[${sheetKey}][${r}]) target[${sheetKey}][${r}] = [];
-  target[${sheetKey}][${r}][${c}] = ${valueLiteral};
+  if (typeof setCellValue === "function") {
+    setCellValue(${isOutputTarget ? toJsLiteral("output") : toJsLiteral("input:" + inputName)}, ${sheetKey}, ${r}, ${c}, ${valueLiteral});
+  } else {
+    const target = ${target};
+    if (!target[${sheetKey}]) target[${sheetKey}] = [];
+    if (!target[${sheetKey}][${r}]) target[${sheetKey}][${r}] = [];
+    target[${sheetKey}][${r}][${c}] = ${valueLiteral};
+  }
   return { inputs, output };
 }`,
   };
@@ -287,13 +297,30 @@ function computeStateBeforeStep(stepIdx) {
   Object.keys(inputsMap).forEach(name => { wrappedInputs[name] = wrapSheets(inputsMap[name]); });
   const proxiedInputs = wrapSheets(wrappedInputs);
   const proxiedOutput = wrapSheets(outputSheets);
+  const localSetCellValue = (fileRef, sheetName, r, c, value) => {
+    let target = null;
+    if (fileRef === "output") {
+      target = outputSheets;
+    } else {
+      let name = String(fileRef || "");
+      if (name.startsWith("input:")) name = name.slice(6);
+      target = inputsMap[name];
+    }
+    if (!target) throw new Error(`setCellValue: file not found: ${fileRef}`);
+    if (!target[sheetName]) target[sheetName] = [];
+    const rowIdx = Math.max(0, Number(r) || 0);
+    const colIdx = Math.max(0, Number(c) || 0);
+    if (!target[sheetName][rowIdx]) target[sheetName][rowIdx] = [];
+    target[sheetName][rowIdx][colIdx] = value;
+    return value;
+  };
   for (let i = 0; i < stepIdx && i < state.pipeline.length; i++) {
     const step = state.pipeline[i];
     if (!isStepEnabled(step)) continue;
     try {
       const fn = new Function("inputs", "output", "col", "findColumnGlobal", "findInputBySheet", "similarity", "normalizeText", "replaceNormalizedText", "includesNormalizedText", "equalsNormalizedText",
         "headerRowIndex", "dataStartRowIndex", "excelRowToIndex",
-        "insertColumns", "copyColumns", "deleteColumns", "shiftFormulaText",
+        "insertColumns", "copyColumns", "deleteColumns", "shiftFormulaText", "setCellValue",
         step.code +
         "\nreturn typeof transform === 'function' ? transform(inputs, output) : { inputs, output };"
       );
@@ -308,7 +335,8 @@ function computeStateBeforeStep(stepIdx) {
         typeof insertColumns === "function" ? insertColumns : null,
         typeof copyColumns === "function" ? copyColumns : null,
         typeof deleteColumns === "function" ? deleteColumns : null,
-        typeof shiftFormulaText === "function" ? shiftFormulaText : null);
+        typeof shiftFormulaText === "function" ? shiftFormulaText : null,
+        localSetCellValue);
       if (result && typeof result === "object" && !Array.isArray(result)) {
         if (result.inputs && typeof result.inputs === "object") {
           Object.keys(result.inputs).forEach(name => { inputsMap[name] = result.inputs[name]; });
@@ -359,11 +387,39 @@ function applyManualEditForPipeline(edit, inputsMap, outputSheets) {
   if (!targetSheets[edit.sheet]) targetSheets[edit.sheet] = [];
   if (!targetSheets[edit.sheet][edit.r]) targetSheets[edit.sheet][edit.r] = [];
   targetSheets[edit.sheet][edit.r][edit.c] = edit.value;
+  clearManualEditFormulaMetadata(edit);
   return true;
+}
+
+function clearManualEditFormulaMetadata(edit) {
+  if (!edit) return;
+  clearFormulaCellMetadataForFileId(edit.fileId, edit.sheet, edit.r, edit.c);
+}
+
+function clearFormulaCellMetadataForFileId(fileId, sheetName, r, c) {
+  const file = typeof getFile === "function" ? getFile(fileId) : null;
+  if (!file) return;
+  const addr = _excelCol(c) + (r + 1);
+  file.formulaSuppressions = file.formulaSuppressions || {};
+  file.formulaSuppressions[sheetName] = file.formulaSuppressions[sheetName] || {};
+  file.formulaSuppressions[sheetName][addr] = true;
+  if (file.formulas && file.formulas[sheetName]) delete file.formulas[sheetName][addr];
+  if (file.originalFormulaValues && file.originalFormulaValues[sheetName]) {
+    delete file.originalFormulaValues[sheetName][addr];
+  }
+  if (file.displays && file.displays[sheetName] && file.displays[sheetName][r]) {
+    delete file.displays[sheetName][r][c];
+  }
+  if (state.formulaResults && state.formulaResults[fileId] && state.formulaResults[fileId][sheetName]) {
+    delete state.formulaResults[fileId][sheetName][addr];
+  }
 }
 
 function runPipeline(steps, options = {}) {
   steps = steps || state.pipeline;
+  if (!options.skipRunAdaptation && typeof adaptPipelineForRun === "function") {
+    steps = adaptPipelineForRun(steps);
+  }
   if (!state.outputOriginal && state.inputsOriginal.length === 0) {
     throw new Error("실행할 입력 또는 출력 파일이 없습니다");
   }
@@ -400,6 +456,89 @@ function runPipeline(steps, options = {}) {
   const inputsMap = {};
   state.inputs.forEach(f => { inputsMap[f.name] = f.sheets; });
   const outputSheets = state.output ? state.output.sheets : {};
+  const outputFileId = state.outputTemplates && state.outputTemplates.length ? "output:" + state.activeOutputIndex : "output";
+  const rowProxyCache = new WeakMap();
+  const sheetProxyCache = new WeakMap();
+  const clearedValueCells = {};
+  const clearThenSetKey = (fileId, sheetName, r, c) => `${fileId}\u0000${sheetName}\u0000${r}\u0000${c}`;
+  const trackClearThenSet = (fileId, sheetName, r, c, value) => {
+    if (!fileId || !sheetName) return;
+    const key = clearThenSetKey(fileId, sheetName, r, c);
+    if (value === "") {
+      clearedValueCells[key] = true;
+      return;
+    }
+    if (clearedValueCells[key]) {
+      delete clearedValueCells[key];
+      clearFormulaCellMetadataForFileId(fileId, sheetName, r, c);
+    }
+  };
+  const trackedRowProxy = (row, fileId, sheetName, r) => {
+    if (!row || typeof row !== "object") return row;
+    const key = `${fileId}\u0000${sheetName}\u0000${r}`;
+    let cached = rowProxyCache.get(row);
+    if (cached && cached[key]) return cached[key];
+    if (!cached) {
+      cached = {};
+      rowProxyCache.set(row, cached);
+    }
+    cached[key] = new Proxy(row, {
+      set(target, prop, value) {
+        target[prop] = value;
+        const c = Number(prop);
+        if (Number.isInteger(c) && c >= 0) trackClearThenSet(fileId, sheetName, r, c, value);
+        return true;
+      },
+    });
+    return cached[key];
+  };
+  const trackedSheetRowsProxy = (sheet, fileId, sheetName) => {
+    if (!sheet || typeof sheet !== "object") return sheet;
+    return new Proxy(sheet, {
+      get(target, prop) {
+        const value = target[prop];
+        const r = Number(prop);
+        if (Number.isInteger(r) && r >= 0 && Array.isArray(value)) {
+          return trackedRowProxy(value, fileId, sheetName, r);
+        }
+        return value;
+      },
+      set(target, prop, value) {
+        target[prop] = value;
+        return true;
+      },
+    });
+  };
+  const trackedSheetsProxy = (sheetsObj, fileId) => {
+    if (!sheetsObj || typeof sheetsObj !== "object") return sheetsObj;
+    let cached = sheetProxyCache.get(sheetsObj);
+    if (cached && cached[fileId]) return cached[fileId];
+    if (!cached) {
+      cached = {};
+      sheetProxyCache.set(sheetsObj, cached);
+    }
+    cached[fileId] = new Proxy(sheetsObj, {
+      get(target, prop) {
+        if (typeof prop === "symbol") return target[prop];
+        const key = Object.prototype.hasOwnProperty.call(target, prop) ? prop :
+          (typeof fuzzyGetKey === "function" ? fuzzyGetKey(target, String(prop)) : null);
+        if (!key) return undefined;
+        const sheet = target[key];
+        return Array.isArray(sheet) ? trackedSheetRowsProxy(sheet, fileId, String(key)) : sheet;
+      },
+      set(target, prop, value) {
+        target[prop] = value;
+        return true;
+      },
+      ownKeys(target) {
+        return Reflect.ownKeys(target);
+      },
+      getOwnPropertyDescriptor(target, prop) {
+        return Object.getOwnPropertyDescriptor(target, prop) || { configurable: true, enumerable: true, writable: true, value: target[prop] };
+      },
+    });
+    return cached[fileId];
+  };
 
   // 유사도 매칭 Proxy로 감싸기 (item 1).
   // 각 시트 객체도 fuzzy proxy 로 감싸서 시트명/컬럼명 모두 관용적으로 처리.
@@ -409,12 +548,12 @@ function runPipeline(steps, options = {}) {
   };
   const wrappedInputs = {};
   Object.keys(inputsMap).forEach(fileName => {
-    wrappedInputs[fileName] = wrapSheets(inputsMap[fileName]);
+    wrappedInputs[fileName] = wrapSheets(trackedSheetsProxy(inputsMap[fileName], "input:" + fileName));
   });
   const proxiedInputs = (typeof fuzzyProxy === "function")
     ? fuzzyProxy(wrappedInputs, { cache: state.fuzzyResolution })
     : wrappedInputs;
-  const proxiedOutput = wrapSheets(outputSheets);
+  const proxiedOutput = wrapSheets(trackedSheetsProxy(outputSheets, outputFileId));
 
   // 사용자 코드에서 쓸 수 있는 헬퍼 — `col(sheet, "이름")` 등.
   const helpers = {
@@ -446,7 +585,7 @@ function runPipeline(steps, options = {}) {
     try {
       fn = new Function("inputs", "output", "col", "findColumnGlobal", "findInputBySheet", "similarity", "normalizeText", "replaceNormalizedText", "includesNormalizedText", "equalsNormalizedText",
         "headerRowIndex", "dataStartRowIndex", "excelRowToIndex",
-        "insertColumns", "copyColumns", "deleteColumns", "shiftFormulaText",
+        "insertColumns", "copyColumns", "deleteColumns", "shiftFormulaText", "setCellValue",
         step.code +
         "\nreturn typeof transform === 'function' ? transform(inputs, output) : { inputs, output };"
       );
@@ -467,7 +606,8 @@ function runPipeline(steps, options = {}) {
         typeof insertColumns === "function" ? insertColumns : null,
         typeof copyColumns === "function" ? copyColumns : null,
         typeof deleteColumns === "function" ? deleteColumns : null,
-        typeof shiftFormulaText === "function" ? shiftFormulaText : null);
+        typeof shiftFormulaText === "function" ? shiftFormulaText : null,
+        typeof setCellValue === "function" ? setCellValue : null);
     } catch (err) {
       state.lastError = {
         stepIdx, description: step.description || `Step ${stepIdx + 1}`,
@@ -987,6 +1127,57 @@ function reportPipelineError(err, options) {
   }
 }
 
+function resolveRunnerRecoveryStepIndex(errorInfo) {
+  if (typeof resolveErrorRecoveryStepIndex === "function") {
+    return resolveErrorRecoveryStepIndex(errorInfo && errorInfo.stepIdx, errorInfo || {});
+  }
+  const idx = Number(errorInfo && errorInfo.stepIdx);
+  if (Number.isInteger(idx) && idx >= 0 && state.pipeline[idx]) return idx;
+  const stepId = errorInfo && errorInfo.stepId;
+  if (stepId) {
+    const byId = (state.pipeline || []).findIndex(step => step && step.id === stepId);
+    if (byId >= 0) return byId;
+  }
+  const code = String((errorInfo && errorInfo.code) || "");
+  if (code) {
+    const byCode = (state.pipeline || []).findIndex(step => String((step && step.code) || "") === code);
+    if (byCode >= 0) return byCode;
+  }
+  return -1;
+}
+
+async function attemptRunnerAutoRecovery(errorInfo) {
+  const stepIdx = resolveRunnerRecoveryStepIndex(errorInfo || {});
+  if (!Number.isInteger(stepIdx) || stepIdx < 0 || !state.pipeline[stepIdx]) {
+    throw new Error("자동 복구할 스킬 단계를 찾지 못했습니다.");
+  }
+
+  const originalStep = state.pipeline[stepIdx];
+  const adaptedStep = typeof adaptPipelineForRun === "function"
+    ? (adaptPipelineForRun([originalStep]) || [originalStep])[0]
+    : originalStep;
+
+  if (adaptedStep && adaptedStep.code && adaptedStep.code !== originalStep.code) {
+    state.pipeline[stepIdx] = { ...originalStep, code: adaptedStep.code, adaptedForRun: true };
+    ensurePipelineStepIds();
+    renderPipeline();
+    if (typeof renderRunnerWorkflow === "function") renderRunnerWorkflow();
+  }
+
+  clearRunnerPipelineError();
+  if (window.runnerSetRunning) window.runnerSetRunning(true);
+  clearPipelineExecutionMemory({ keepViewer: true });
+  try {
+    await runPipelinePreferBackend();
+    toast("자동 복구 후 실행을 완료했습니다.", "success");
+    if (window.runnerSetDone) window.runnerSetDone();
+  } catch (err) {
+    renderExcelViewer();
+    if (window.runnerSetRunning) window.runnerSetRunning(false);
+    throw err;
+  }
+}
+
 function clearRunnerPipelineError() {
   const panel = document.getElementById("runner-error-panel");
   if (!panel) return;
@@ -1024,12 +1215,31 @@ function showRunnerPipelineError(err, options) {
   `;
   const recoverBtn = panel.querySelector(".runner-error-recover");
   if (recoverBtn) {
-    const canRecover = !!info && typeof requestErrorRecovery === "function" &&
+    const canRecover = !!info &&
       (Number(info.stepIdx) >= 0 || !!info.stepId || !!info.code || !!info.description);
     recoverBtn.disabled = !canRecover;
-    recoverBtn.onclick = () => {
+    recoverBtn.onclick = async () => {
       if (!canRecover) return;
       recoverBtn.disabled = true;
+      const originalText = recoverBtn.textContent;
+      recoverBtn.textContent = "자동 복구 중...";
+      try {
+        await attemptRunnerAutoRecovery({
+          stepIdx: info.stepIdx,
+          stepId: info.stepId || null,
+          description: info.description || "",
+          code: info.code || "",
+          message,
+          stack,
+          compatibilityCheck: !!options.compatibilityCheck,
+        });
+      } catch (recoverErr) {
+        reportPipelineError(recoverErr, { compatibilityCheck: true, runner: true });
+      } finally {
+        recoverBtn.textContent = originalText;
+        recoverBtn.disabled = false;
+      }
+      return;
       recoverBtn.textContent = "복구 요청 중...";
       requestErrorRecovery(info.stepIdx, {
         stepId: info.stepId || null,

@@ -87,7 +87,8 @@ function exportOutputXlsx(filename, fileArg, originalArg) {
       ? outputOriginal.sheets[sheetName]
       : null;
     if (wb.Sheets[sheetName]) {
-      updateSheetCells(wb.Sheets[sheetName], aoa, origAoa);
+      const formulaMap = outputFile.formulas && outputFile.formulas[sheetName];
+      updateSheetCells(wb.Sheets[sheetName], aoa, origAoa, formulaMap);
     } else {
       // 파이프라인이 새로 만든 시트 (피벗 등)
       const ws = XLSX.utils.aoa_to_sheet(aoa);
@@ -98,7 +99,7 @@ function exportOutputXlsx(filename, fileArg, originalArg) {
   XLSX.writeFile(wb, filename);
 }
 
-function updateSheetCells(ws, aoa, origAoa) {
+function updateSheetCells(ws, aoa, origAoa, formulaMap) {
   const maxRows = Math.max(
     aoa.length,
     origAoa ? origAoa.length : 0
@@ -125,10 +126,11 @@ function updateSheetCells(ws, aoa, origAoa) {
       newVal = resolveFormulaStringValue(newVal, aoa, r, c);
       const oldVal = (origAoa && origAoa[r] && origAoa[r][c] !== undefined) ? origAoa[r][c] : "";
       const existing = ws[addr];
+      const formulaWasRemoved = !!(existing && existing.f && (!formulaMap || !formulaMap[addr]));
 
       // ★ 값이 원본과 동일하면 셀 자체를 건드리지 않음
       //    → 기존 수식(.f), 스타일(.s), 숫자서식(.z) 모두 보존
-      if (sameVal(newVal, oldVal)) continue;
+      if (!formulaWasRemoved && sameVal(newVal, oldVal)) continue;
 
       // 빈 값으로 변경
       if (newVal === "" || newVal === null || newVal === undefined) {

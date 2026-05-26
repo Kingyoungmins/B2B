@@ -5,10 +5,70 @@ const readline = require("readline");
 const PREVIEW_ROWS = 500;
 const PREVIEW_COLS = null;
 const MAX_DIFF_CELLS_PER_SHEET = 5000;
+const PIPELINE_CACHE_LIMIT = Math.max(0, Number(process.env.KGM_WORKER_PIPELINE_CACHE_ENTRIES || 3) || 0);
 const workbooks = new Map();
+const pipelineCache = new Map();
 
 function deepClone(value) {
-  return value == null ? value : JSON.parse(JSON.stringify(value));
+  if (value == null) return value;
+  if (typeof structuredClone === "function") return structuredClone(value);
+  return JSON.parse(JSON.stringify(value));
+}
+
+function stableStringify(value) {
+  if (value == null || typeof value !== "object") return JSON.stringify(value);
+  if (Array.isArray(value)) return "[" + value.map(stableStringify).join(",") + "]";
+  return "{" + Object.keys(value).sort().map(key => JSON.stringify(key) + ":" + stableStringify(value[key])).join(",") + "}";
+}
+
+function activePipelineSignature(pipeline) {
+  return (pipeline || [])
+    .filter(step => !(step && step.enabled === false))
+    .map(step => ({
+      id: step && step.id || "",
+      description: step && step.description || "",
+      code: step && step.code || "",
+      manualEdit: step && step.manualEdit || null,
+    }));
+}
+
+function cacheKeyForPayload(payload) {
+  if (!PIPELINE_CACHE_LIMIT) return "";
+  if ((payload.baseMode || "original") !== "original") return "";
+  return stableStringify({
+    baseMode: "original",
+    inputs: (payload.inputs || []).map(item => ({
+      name: item.name || "",
+      id: item.backendWorkbookId || "",
+    })),
+    output: payload.output ? {
+      name: payload.output.name || "",
+      id: payload.output.backendWorkbookId || "",
+    } : null,
+    pipeline: activePipelineSignature(payload.pipeline),
+  });
+}
+
+function rememberPipelineCache(key, entry) {
+  if (!key || !PIPELINE_CACHE_LIMIT) return;
+  if (pipelineCache.has(key)) pipelineCache.delete(key);
+  pipelineCache.set(key, entry);
+  while (pipelineCache.size > PIPELINE_CACHE_LIMIT) {
+    const oldest = pipelineCache.keys().next().value;
+    pipelineCache.delete(oldest);
+  }
+}
+
+function restorePipelineCache(key) {
+  if (!key || !pipelineCache.has(key)) return null;
+  const entry = pipelineCache.get(key);
+  pipelineCache.delete(key);
+  pipelineCache.set(key, entry);
+  for (const item of entry.workbooks || []) {
+    const wb = workbooks.get(item.workbookId);
+    if (wb) wb.current = deepClone(item.sheets || {});
+  }
+  return deepClone(entry.result || {});
 }
 
 function normalizeText(v) { return String(v ?? "").trim().toLowerCase().replace(/\s+/g, ""); }
@@ -61,9 +121,11 @@ function findColumnGlobal(inputsMap, name) {
 function fuzzyGetKey(target, prop) {
   if (!target || typeof target !== "object") return null;
   if (Object.prototype.hasOwnProperty.call(target, prop)) return prop;
+  const keys = Object.keys(target);
+  if (keys.length === 1) return keys[0];
   const wanted = normalizeText(prop);
   let best = null;
-  for (const key of Object.keys(target)) {
+  for (const key of keys) {
     const cur = normalizeText(key);
     if (cur === wanted || (cur && wanted && (cur.includes(wanted) || wanted.includes(cur)))) {
       best = key;
@@ -94,6 +156,73 @@ function fuzzyProxy(target) {
   });
 }
 
+function trackedRowProxy(row, fileId, sheetName, r) {
+  if (!row || typeof row !== "object") return row;
+  const key = `${fileId}\u0000${sheetName}\u0000${r}`;
+  let cached = activeRowProxyCache.get(row);
+  if (cached && cached[key]) return cached[key];
+  if (!cached) {
+    cached = {};
+    activeRowProxyCache.set(row, cached);
+  }
+  cached[key] = new Proxy(row, {
+    set(target, prop, value) {
+      target[prop] = value;
+      const c = Number(prop);
+      if (Number.isInteger(c) && c >= 0) trackClearThenSet(fileId, sheetName, r, c, value);
+      return true;
+    },
+  });
+  return cached[key];
+}
+
+function trackedSheetProxy(sheet, fileId, sheetName) {
+  if (!sheet || typeof sheet !== "object") return sheet;
+  const key = `${fileId}\u0000${sheetName}`;
+  let cached = activeSheetProxyCache.get(sheet);
+  if (cached && cached[key]) return cached[key];
+  if (!cached) {
+    cached = {};
+    activeSheetProxyCache.set(sheet, cached);
+  }
+  cached[key] = new Proxy(sheet, {
+    get(target, prop) {
+      const value = target[prop];
+      const r = Number(prop);
+      if (Number.isInteger(r) && r >= 0 && Array.isArray(value)) {
+        return trackedRowProxy(value, fileId, sheetName, r);
+      }
+      return value;
+    },
+    set(target, prop, value) {
+      target[prop] = value;
+      return true;
+    },
+  });
+  return cached[key];
+}
+
+function trackedSheetsProxy(sheets, fileId) {
+  if (!sheets || typeof sheets !== "object") return sheets;
+  return new Proxy(sheets, {
+    get(target, prop) {
+      if (typeof prop === "symbol") return target[prop];
+      const key = Object.prototype.hasOwnProperty.call(target, prop) ? prop : fuzzyGetKey(target, String(prop));
+      return key ? trackedSheetProxy(target[key], fileId, String(key)) : undefined;
+    },
+    set(target, prop, value) {
+      if (typeof prop === "symbol" || Object.prototype.hasOwnProperty.call(target, prop)) {
+        target[prop] = value;
+      } else {
+        const key = fuzzyGetKey(target, String(prop));
+        if (key && normalizeText(key) === normalizeText(prop)) target[key] = value;
+        else target[prop] = value;
+      }
+      return true;
+    },
+  });
+}
+
 function findInputBySheet(inputsMap, sheetName, options) {
   options = options || {};
   const target = normalizeText(sheetName);
@@ -116,12 +245,19 @@ let activeInputs = {};
 let activeOutput = {};
 let activeProxiedInputs = {};
 let activeProxiedOutput = {};
+let activeOutputFileId = "output:0";
+let activeForcedValueCells = {};
+let activeClearedValueCells = {};
+let activeSheetProxyCache = new WeakMap();
+let activeRowProxyCache = new WeakMap();
 
 function resolveTargetSheets(fileRef) {
-  if (fileRef === "output") return activeProxiedOutput;
+  if (fileRef === "output") return activeOutput;
   let key = String(fileRef || "");
   if (key.startsWith("input:")) key = key.slice(6);
-  return activeProxiedInputs[key] || activeInputs[key] || null;
+  if (Object.prototype.hasOwnProperty.call(activeInputs, key)) return activeInputs[key];
+  const fuzzyKey = fuzzyGetKey(activeInputs, key);
+  return fuzzyKey ? activeInputs[fuzzyKey] : null;
 }
 
 function insertColumns(fileRef, sheetName, atColIdx, count) {
@@ -170,6 +306,49 @@ function deleteColumns(fileRef, sheetName, atColIdx, count) {
   }
 }
 function shiftFormulaText(v) { return v; }
+
+function forcedCellKey(fileId, sheetName, r, c) {
+  return `${fileId}\u0000${sheetName}\u0000${r}\u0000${c}`;
+}
+
+function addForcedValueCell(fileId, sheetName, r, c, value) {
+  if (!fileId || !sheetName) return;
+  activeForcedValueCells[forcedCellKey(fileId, sheetName, r, c)] = { fileId, sheetName, r, c, value };
+}
+
+function trackClearThenSet(fileId, sheetName, r, c, value) {
+  if (!fileId || !sheetName) return;
+  const key = forcedCellKey(fileId, sheetName, r, c);
+  if (value === "") {
+    activeClearedValueCells[key] = true;
+    return;
+  }
+  if (activeClearedValueCells[key]) {
+    delete activeClearedValueCells[key];
+    addForcedValueCell(fileId, sheetName, r, c, value);
+  }
+}
+
+function fileIdForSetCellTarget(fileRef) {
+  if (fileRef === "output") return activeOutputFileId || "output:0";
+  if (typeof fileRef === "string" && fileRef.startsWith("output:")) return fileRef;
+  let key = String(fileRef || "");
+  if (key.startsWith("input:")) return key;
+  if (Object.prototype.hasOwnProperty.call(activeInputs, key)) return `input:${key}`;
+  return "";
+}
+
+function setCellValue(fileRef, sheetName, r, c, value) {
+  const file = resolveTargetSheets(fileRef);
+  if (!file) throw new Error(`setCellValue: file not found: ${fileRef}`);
+  if (!file[sheetName]) file[sheetName] = [];
+  const rowIdx = Math.max(0, Number(r) || 0);
+  const colIdx = Math.max(0, Number(c) || 0);
+  if (!file[sheetName][rowIdx]) file[sheetName][rowIdx] = [];
+  file[sheetName][rowIdx][colIdx] = value;
+  addForcedValueCell(fileIdForSetCellTarget(fileRef), sheetName, rowIdx, colIdx, value);
+  return value;
+}
 
 function sheetDimensions(sheets) {
   const dimensions = {};
@@ -253,6 +432,32 @@ function computeWorkbookDiff(beforeSheets, afterSheets) {
   return { sheets, changedCount, truncated };
 }
 
+function mergeForcedCellsIntoDiff(diff, fileId, forcedCells, afterSheets) {
+  diff = diff || { sheets: {}, changedCount: 0, truncated: false };
+  diff.sheets = diff.sheets || {};
+  for (const cell of forcedCells || []) {
+    if (!cell || cell.fileId !== fileId) continue;
+    const sheetName = cell.sheetName;
+    if (!diff.sheets[sheetName]) diff.sheets[sheetName] = { cells: [], changedCount: 0, truncated: false };
+    const sheetDiff = diff.sheets[sheetName];
+    const exists = (sheetDiff.cells || []).some(item => item.r === cell.r && item.c === cell.c);
+    if (!exists) {
+      const rows = (afterSheets || {})[sheetName] || [];
+      const row = rows[cell.r] || [];
+      sheetDiff.cells = sheetDiff.cells || [];
+      if (sheetDiff.cells.length < MAX_DIFF_CELLS_PER_SHEET) {
+        sheetDiff.cells.push({ r: cell.r, c: cell.c, value: row[cell.c] ?? cell.value ?? "" });
+      } else {
+        sheetDiff.truncated = true;
+        diff.truncated = true;
+      }
+      sheetDiff.changedCount = Number(sheetDiff.changedCount || 0) + 1;
+      diff.changedCount = Number(diff.changedCount || 0) + 1;
+    }
+  }
+  return diff;
+}
+
 function getWorkbook(id) {
   const wb = workbooks.get(id);
   if (!wb) throw new Error(`worker workbook not found: ${id}`);
@@ -299,13 +504,21 @@ function prepareRun(payload) {
   return { inputs, output, beforeInputs, beforeOutput, inputTargets, outputTarget };
 }
 
-function runSteps(inputs, output, pipeline, progress) {
+function runSteps(inputs, output, pipeline, progress, options) {
+  options = options || {};
   activeInputs = inputs;
   activeOutput = output;
+  activeOutputFileId = options.outputFileId || "output:0";
+  activeForcedValueCells = {};
+  activeClearedValueCells = {};
+  activeSheetProxyCache = new WeakMap();
+  activeRowProxyCache = new WeakMap();
   const wrappedInputs = {};
-  Object.entries(inputs).forEach(([fileName, sheets]) => { wrappedInputs[fileName] = fuzzyProxy(sheets); });
+  Object.entries(inputs).forEach(([fileName, sheets]) => {
+    wrappedInputs[fileName] = trackedSheetsProxy(sheets, `input:${fileName}`);
+  });
   activeProxiedInputs = fuzzyProxy(wrappedInputs);
-  activeProxiedOutput = fuzzyProxy(output);
+  activeProxiedOutput = trackedSheetsProxy(output, activeOutputFileId);
 
   let activeStepIndex = 0;
   const totalSteps = (pipeline || []).filter(step => !(step && step.enabled === false)).length;
@@ -320,12 +533,16 @@ function runSteps(inputs, output, pipeline, progress) {
     });
     try {
       const code = String((step && step.code) || "");
-      const fn = new Function("inputs", "output", "col", "findColumnGlobal", "findInputBySheet", "similarity", "normalizeText", "replaceNormalizedText", "includesNormalizedText", "equalsNormalizedText", "headerRowIndex", "dataStartRowIndex", "excelRowToIndex", "insertColumns", "copyColumns", "deleteColumns", "shiftFormulaText",
+      const fn = new Function("inputs", "output", "col", "findColumnGlobal", "findInputBySheet", "similarity", "normalizeText", "replaceNormalizedText", "includesNormalizedText", "equalsNormalizedText", "headerRowIndex", "dataStartRowIndex", "excelRowToIndex", "insertColumns", "copyColumns", "deleteColumns", "shiftFormulaText", "setCellValue",
         code + "\nreturn typeof transform === 'function' ? transform(inputs, output) : { inputs, output };");
-      const result = fn(activeProxiedInputs, activeProxiedOutput, col, findColumnGlobal, findInputBySheet, similarity, normalizeText, replaceNormalizedText, includesNormalizedText, equalsNormalizedText, headerRowIndex, dataStartRowIndex, excelRowToIndex, insertColumns, copyColumns, deleteColumns, shiftFormulaText);
+      const result = fn(activeProxiedInputs, activeProxiedOutput, col, findColumnGlobal, findInputBySheet, similarity, normalizeText, replaceNormalizedText, includesNormalizedText, equalsNormalizedText, headerRowIndex, dataStartRowIndex, excelRowToIndex, insertColumns, copyColumns, deleteColumns, shiftFormulaText, setCellValue);
       if (result && typeof result === "object" && !Array.isArray(result)) {
-        if (result.inputs && typeof result.inputs === "object") Object.assign(inputs, result.inputs);
-        if (result.output && typeof result.output === "object") Object.assign(output, result.output);
+        if (result.inputs && result.inputs !== activeProxiedInputs && typeof result.inputs === "object") {
+          Object.assign(inputs, result.inputs);
+        }
+        if (result.output && result.output !== activeProxiedOutput && typeof result.output === "object") {
+          Object.assign(output, result.output);
+        }
       }
     } catch (err) {
       const info = {
@@ -347,20 +564,36 @@ function runSteps(inputs, output, pipeline, progress) {
       stepDescription: (step && step.description) || `Step ${activeStepIndex}`,
     });
   }
+  return Object.values(activeForcedValueCells);
 }
 
 function runPipeline(payload) {
+  const cacheKey = cacheKeyForPayload(payload || {});
+  const cached = restorePipelineCache(cacheKey);
+  if (cached) {
+    cached.cacheHit = true;
+    return cached;
+  }
+
   const prepared = prepareRun(payload);
-  runSteps(prepared.inputs, prepared.output, payload.pipeline || []);
+  const outputFileId = (payload.current && payload.current.outputFileId) || "output:0";
+  const forcedCells = runSteps(prepared.inputs, prepared.output, payload.pipeline || [], null, { outputFileId });
 
   const files = [];
   const diffs = {};
+  const cacheWorkbooks = [];
   const current = payload.current || {};
   for (const target of prepared.inputTargets) {
     target.wb.current = target.working;
+    cacheWorkbooks.push({ workbookId: target.workbookId, sheets: deepClone(target.working) });
     const fileId = `input:${target.name}`;
     const afterPreview = previewSheets(target.working);
-    const diff = computeWorkbookDiff(prepared.beforeInputs[target.name], afterPreview);
+    const diff = mergeForcedCellsIntoDiff(
+      computeWorkbookDiff(prepared.beforeInputs[target.name], afterPreview),
+      fileId,
+      forcedCells,
+      target.working,
+    );
     const changedSheets = new Set(Object.keys(diff.sheets || {}));
     if (current.fileId === fileId && current.sheet) changedSheets.add(current.sheet);
     diffs[fileId] = diff;
@@ -369,6 +602,7 @@ function runPipeline(payload) {
       name: target.name,
       sheetNames: Object.keys(target.working || {}),
       sheets: pickPreviewSheets(afterPreview, changedSheets),
+      forcedValueCells: forcedCells.filter(cell => cell.fileId === fileId),
       formulas: {},
       formats: {},
       dimensions: sheetDimensions(target.working),
@@ -378,9 +612,15 @@ function runPipeline(payload) {
   }
   if (prepared.outputTarget) {
     prepared.outputTarget.wb.current = prepared.outputTarget.working;
-    const fileId = (payload.current && payload.current.outputFileId) || "output:0";
+    cacheWorkbooks.push({ workbookId: prepared.outputTarget.workbookId, sheets: deepClone(prepared.outputTarget.working) });
+    const fileId = outputFileId;
     const afterPreview = previewSheets(prepared.outputTarget.working);
-    const diff = computeWorkbookDiff(prepared.beforeOutput, afterPreview);
+    const diff = mergeForcedCellsIntoDiff(
+      computeWorkbookDiff(prepared.beforeOutput, afterPreview),
+      fileId,
+      forcedCells,
+      prepared.outputTarget.working,
+    );
     const changedSheets = new Set(Object.keys(diff.sheets || {}));
     if (current.outputFileId === fileId && current.sheet) changedSheets.add(current.sheet);
     diffs[fileId] = diff;
@@ -389,6 +629,7 @@ function runPipeline(payload) {
       name: "output",
       sheetNames: Object.keys(prepared.outputTarget.working || {}),
       sheets: pickPreviewSheets(afterPreview, changedSheets),
+      forcedValueCells: forcedCells.filter(cell => cell.fileId === fileId),
       formulas: {},
       formats: {},
       dimensions: sheetDimensions(prepared.outputTarget.working),
@@ -396,7 +637,12 @@ function runPipeline(payload) {
       workerWorkbookId: prepared.outputTarget.workbookId,
     });
   }
-  return { files, diffs };
+  const result = { files, diffs, forcedValueCells: forcedCells, cacheHit: false };
+  rememberPipelineCache(cacheKey, {
+    result: deepClone(result),
+    workbooks: cacheWorkbooks,
+  });
+  return result;
 }
 
 function exportWorkbook(payload) {
@@ -408,6 +654,7 @@ function handleCommand(cmd) {
   if (cmd.type === "ping") return { ok: true };
   if (cmd.type === "initWorkbook") {
     setWorkbook(cmd.workbookId, cmd.sheets || {}, cmd.currentSheets || null);
+    pipelineCache.clear();
     return { ok: true };
   }
   if (cmd.type === "runPipeline") {

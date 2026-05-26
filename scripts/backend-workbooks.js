@@ -99,12 +99,152 @@ function hasBackendOnlyWorkbooks() {
     !!(state.outputOriginal && state.outputOriginal.backendOnly);
 }
 
+function adaptPipelineForRun(steps) {
+  const context = buildPipelineRunAdaptContext();
+  return (steps || []).map(step => {
+    if (!step || !step.code || !context) return step;
+    const code = adaptPipelineCodeForRun(String(step.code), context);
+    return code === step.code ? step : { ...step, code, adaptedForRun: true };
+  });
+}
+
+function buildPipelineRunAdaptContext() {
+  const inputFiles = state.inputsOriginal || [];
+  const outputTarget = typeof getBackendOutputTarget === "function" ? getBackendOutputTarget() : null;
+  const outputFile = (outputTarget && outputTarget.original) || state.outputOriginal || null;
+  const allInputText = inputFiles.map(file => [
+    file.name,
+    ...(file.sheetNames || []),
+  ].join("\n")).join("\n");
+  const runInputYm = firstYmToken(allInputText);
+  if (!runInputYm) return null;
+  const inputYear = Number(runInputYm.slice(0, 4));
+  const inputMonth = Number(runInputYm.slice(4, 6));
+  if (!inputYear || !inputMonth) return null;
+  const runOutput = inferOutputMonth(outputFile, inputYear, inputMonth);
+  return {
+    runInputYm,
+    runInputMM: String(inputMonth).padStart(2, "0"),
+    runInputM: String(inputMonth),
+    runOutputYear: runOutput.year,
+    runOutputMM: String(runOutput.month).padStart(2, "0"),
+    runOutputM: String(runOutput.month),
+    inputFiles,
+  };
+}
+
+function firstYmToken(text) {
+  const match = String(text || "").match(/20\d{2}(0[1-9]|1[0-2])/);
+  return match ? match[0] : "";
+}
+
+function inferOutputMonth(outputFile, inputYear, inputMonth) {
+  const text = outputFile ? [outputFile.name, ...(outputFile.sheetNames || [])].join("\n") : "";
+  const explicit = String(text || "").match(/(?:^|[^0-9])(0?[1-9]|1[0-2])\s*월/);
+  if (explicit) {
+    const month = Number(explicit[1]);
+    if (month !== inputMonth) return { year: inputYear, month };
+  }
+  const next = inputMonth === 12 ? { year: inputYear + 1, month: 1 } : { year: inputYear, month: inputMonth + 1 };
+  return next;
+}
+
+function adaptPipelineCodeForRun(code, context) {
+  const oldInputYm = firstYmToken(code);
+  let out = code;
+  if (oldInputYm && oldInputYm !== context.runInputYm) {
+    const oldInputMonth = Number(oldInputYm.slice(4, 6));
+    const oldInputMM = String(oldInputMonth).padStart(2, "0");
+    const oldInputM = String(oldInputMonth);
+    const oldOutput = oldInputMonth === 12 ? { month: 1 } : { month: oldInputMonth + 1 };
+    const oldOutputMM = String(oldOutput.month).padStart(2, "0");
+    const oldOutputM = String(oldOutput.month);
+    out = out.replaceAll(oldInputYm, context.runInputYm);
+    out = replaceYearMonthDateLiteral(out, oldInputYm, context.runInputYm);
+    out = replaceMonthLiteral(out, oldOutputMM, context.runOutputMM);
+    out = replaceStandaloneMonthLiteral(out, oldOutputM, context.runOutputM);
+    out = replaceMonthLiteral(out, oldInputMM, context.runInputMM);
+    out = replaceStandaloneMonthLiteral(out, oldInputM, context.runInputM);
+  }
+  out = adaptInputSheetStringLiterals(out, context.inputFiles);
+  return out;
+}
+
+function replaceMonthLiteral(code, fromMM, toMM) {
+  if (!fromMM || !toMM || fromMM === toMM) return code;
+  return code.replace(new RegExp(`${escapeRegExpText(fromMM)}\\s*월`, "g"), `${toMM}월`);
+}
+
+function replaceStandaloneMonthLiteral(code, fromM, toM) {
+  if (!fromM || !toM || fromM === toM) return code;
+  return code.replace(new RegExp(`(^|[^0-9])${escapeRegExpText(fromM)}\\s*월`, "g"), `$1${toM}월`);
+}
+
+function replaceYearMonthDateLiteral(code, oldYm, runYm) {
+  if (!oldYm || !runYm || oldYm === runYm) return code;
+  const oldYear = oldYm.slice(0, 4);
+  const oldMM = oldYm.slice(4, 6);
+  const runYear = runYm.slice(0, 4);
+  const runMM = runYm.slice(4, 6);
+  return code
+    .replace(new RegExp(`${escapeRegExpText(oldYear)}-${escapeRegExpText(oldMM)}`, "g"), `${runYear}-${runMM}`)
+    .replace(new RegExp(`${escapeRegExpText(oldYear)}_${escapeRegExpText(oldMM)}`, "g"), `${runYear}_${runMM}`);
+}
+
+function adaptInputSheetStringLiterals(code, inputFiles) {
+  let out = code;
+  const re = /inputs\[(["'`])([^"'`]+)\1\]\[(["'`])([^"'`]+)\3\]/g;
+  const replacements = [];
+  let match;
+  while ((match = re.exec(code)) !== null) {
+    const full = match[0];
+    const fileRef = match[2];
+    const sheetRef = match[4];
+    const file = resolveRunInputFile(fileRef, inputFiles);
+    if (!file || !file.sheetNames || file.sheetNames.includes(sheetRef)) continue;
+    const sheet = resolveRunSheetName(sheetRef, file.sheetNames);
+    if (!sheet || sheet === sheetRef) continue;
+    replacements.push([full, `inputs[${match[1]}${fileRef}${match[1]}][${match[3]}${sheet}${match[3]}]`]);
+  }
+  replacements.forEach(([from, to]) => { out = out.replaceAll(from, to); });
+  return out;
+}
+
+function resolveRunInputFile(fileRef, inputFiles) {
+  if (!fileRef || !inputFiles || !inputFiles.length) return null;
+  const exact = inputFiles.find(file => file.name === fileRef);
+  if (exact) return exact;
+  const result = typeof fuzzyMatch === "function" ? fuzzyMatch(fileRef, inputFiles.map(file => file.name), 0.7) : null;
+  if (!result || result.ambiguous) {
+    const normalizedRef = typeof normalizeText === "function" ? normalizeText(fileRef) : String(fileRef || "").toLowerCase();
+    const refHasCcu = normalizedRef.includes("ccu");
+    const refHasReplace = normalizedRef.includes("교체");
+    const fallback = inputFiles.filter(file => {
+      const name = typeof normalizeText === "function" ? normalizeText(file.name) : String(file.name || "").toLowerCase();
+      return (refHasCcu && name.includes("ccu")) || (refHasReplace && name.includes("교체"));
+    });
+    if (fallback.length === 1) return fallback[0];
+    return null;
+  }
+  return inputFiles.find(file => file.name === result.match) || null;
+}
+
+function resolveRunSheetName(sheetRef, sheetNames) {
+  if (!sheetRef || !sheetNames || !sheetNames.length) return "";
+  if (sheetNames.length === 1) return sheetNames[0];
+  const result = typeof fuzzyMatch === "function" ? fuzzyMatch(sheetRef, sheetNames, 0.7) : null;
+  return result && !result.ambiguous ? result.match : "";
+}
+
 async function runPipelineOnBackend(options = {}) {
   if (!canRunPipelineOnBackend()) throw new Error("backend workbook ids are not ready");
   window.backendPipelineRunToken = (window.backendPipelineRunToken || 0) + 1;
   const runToken = window.backendPipelineRunToken;
   const outputTarget = getBackendOutputTarget();
-  const activeSteps = (state.pipeline || []).filter(isStepEnabled).length;
+  const pipelineForRun = typeof adaptPipelineForRun === "function"
+    ? adaptPipelineForRun(options.pipeline || state.pipeline)
+    : (options.pipeline || state.pipeline);
+  const activeSteps = (pipelineForRun || []).filter(isStepEnabled).length;
   const startedAt = Date.now();
   let tick = 0;
   const setProgress = (text) => {
@@ -132,7 +272,7 @@ async function runPipelineOnBackend(options = {}) {
           name: outputTarget.original.name,
           backendWorkbookId: outputTarget.original.backendWorkbookId,
         } : null,
-        pipeline: state.pipeline,
+        pipeline: pipelineForRun,
         current: {
           fileId: state.currentFileId,
           outputFileId: outputTarget ? outputTarget.fileId : null,
@@ -203,6 +343,8 @@ function applyBackendPipelineResult(result) {
         file.formats[sheet] = fileResult.formats[sheet] || [];
       });
     }
+    clearFormulaMetadataForBackendChanges(file, fileResult, resultDiffs[fileResult.fileId], result.forcedValueCells || []);
+    applyForcedValueCellsToFile(file, fileResult, result.forcedValueCells || []);
     const fileDownloadUrl = downloadUrls[fileResult.fileId] ||
       ((fileResult.fileId === "output" || fileResult.fileId.startsWith("output:")) ? result.downloadUrl : null);
     if (fileDownloadUrl) {
@@ -245,6 +387,64 @@ function applyBackendPipelineResult(result) {
   window.backendCurrentCacheDirty = false;
 }
 
+function clearFormulaMetadataForBackendChanges(file, fileResult, fallbackDiff, allForcedValueCells) {
+  if (!file) return;
+  const fileId = fileResult && fileResult.fileId;
+  const forcedCells = [
+    ...(fileResult.forcedValueCells || []),
+    ...(allForcedValueCells || []).filter(cell => cell && cell.fileId === fileId),
+  ];
+  forcedCells.forEach(cell => {
+    const sheetName = cell && cell.sheetName;
+    if (!sheetName) return;
+    const r = Number(cell.r);
+    const c = Number(cell.c);
+    if (!Number.isFinite(r) || !Number.isFinite(c)) return;
+    clearCellFormulaDisplayMetadata(file, fileId, sheetName, r, c);
+  });
+}
+
+function clearCellFormulaDisplayMetadata(file, fileId, sheetName, r, c) {
+  const addr = _excelCol(c) + (r + 1);
+  markFormulaSuppressed(file, sheetName, addr);
+  if (file.formulas && file.formulas[sheetName]) delete file.formulas[sheetName][addr];
+  if (file.originalFormulaValues && file.originalFormulaValues[sheetName]) {
+    delete file.originalFormulaValues[sheetName][addr];
+  }
+  if (file.displays && file.displays[sheetName] && file.displays[sheetName][r]) {
+    delete file.displays[sheetName][r][c];
+  }
+  if (fileId && state.formulaResults && state.formulaResults[fileId] && state.formulaResults[fileId][sheetName]) {
+    delete state.formulaResults[fileId][sheetName][addr];
+  }
+}
+
+function markFormulaSuppressed(file, sheetName, addr) {
+  if (!file || !sheetName || !addr) return;
+  file.formulaSuppressions = file.formulaSuppressions || {};
+  file.formulaSuppressions[sheetName] = file.formulaSuppressions[sheetName] || {};
+  file.formulaSuppressions[sheetName][addr] = true;
+}
+
+function applyForcedValueCellsToFile(file, fileResult, allForcedValueCells) {
+  const fileId = fileResult && fileResult.fileId;
+  const forcedCells = [
+    ...(fileResult.forcedValueCells || []),
+    ...(allForcedValueCells || []).filter(cell => cell && cell.fileId === fileId),
+  ];
+  forcedCells.forEach(cell => {
+    const sheetName = cell && cell.sheetName;
+    if (!sheetName) return;
+    const r = Number(cell.r);
+    const c = Number(cell.c);
+    if (!Number.isFinite(r) || !Number.isFinite(c)) return;
+    if (!file.sheets[sheetName]) file.sheets[sheetName] = [];
+    if (!file.sheets[sheetName][r]) file.sheets[sheetName][r] = [];
+    file.sheets[sheetName][r][c] = cell.value ?? "";
+    clearCellFormulaDisplayMetadata(file, fileResult.fileId, sheetName, r, c);
+  });
+}
+
 function flashBackendDiff(result) {
   const file = getFile(state.currentFileId);
   if (!file || !file.backendLastDiff || !state.currentSheet) return;
@@ -261,10 +461,16 @@ async function runPipelineOnBackend(options = {}) {
   const runToken = window.backendPipelineRunToken;
   const outputTarget = getBackendOutputTarget();
   const startedAt = Date.now();
+  const perfStartedAt = performance.now();
+  let pollCount = 0;
+  let startRequestMs = 0;
   const setProgress = (text) => {
     if (typeof window.runnerSetProgress === "function") window.runnerSetProgress(text);
     if (typeof window.generatorSetProgress === "function") window.generatorSetProgress(text);
   };
+  const pipelineForRun = typeof adaptPipelineForRun === "function"
+    ? adaptPipelineForRun(options.pipeline || state.pipeline)
+    : (options.pipeline || state.pipeline);
   const payload = {
     inputs: (state.inputsOriginal || []).map(f => ({
       name: f.name,
@@ -274,7 +480,7 @@ async function runPipelineOnBackend(options = {}) {
       name: outputTarget.original.name,
       backendWorkbookId: outputTarget.original.backendWorkbookId,
     } : null,
-    pipeline: options.pipeline || state.pipeline,
+    pipeline: pipelineForRun,
     baseMode: options.baseMode || "original",
     current: {
       fileId: state.currentFileId,
@@ -284,20 +490,28 @@ async function runPipelineOnBackend(options = {}) {
   };
 
   setProgress("파일 읽는 중...");
+  let stageStarted = performance.now();
   const startResp = await fetch("/api/pipeline/start", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(payload),
   });
   const startData = await startResp.json();
+  startRequestMs = performance.now() - stageStarted;
   if (!startResp.ok || !startData.ok || !startData.jobId) {
     throw new Error(startData.error || `HTTP ${startResp.status}`);
   }
 
   while (true) {
     await new Promise(resolve => setTimeout(resolve, 120));
+    pollCount += 1;
+    stageStarted = performance.now();
     const statusResp = await fetch(`/api/pipeline/status/${encodeURIComponent(startData.jobId)}`);
-    const status = await statusResp.json();
+    const statusText = await statusResp.text();
+    const receiveMs = performance.now() - stageStarted;
+    const parseStarted = performance.now();
+    const status = JSON.parse(statusText);
+    const parseMs = performance.now() - parseStarted;
     if (!statusResp.ok) throw new Error(status.error || `HTTP ${statusResp.status}`);
 
     setProgress(formatBackendProgress(status, startedAt));
@@ -318,9 +532,26 @@ async function runPipelineOnBackend(options = {}) {
 
     if (status.status === "done") {
       if (runToken !== window.backendPipelineRunToken) return status;
+      const applyStarted = performance.now();
       applyBackendPipelineResult(status);
+      const applyRenderMs = performance.now() - applyStarted;
       window.backendCurrentCacheDirty = false;
       setProgress("완료");
+      if (typeof window.recordBackendDebugTiming === "function") {
+        window.recordBackendDebugTiming({
+          worker: !!status.worker,
+          baseMode: payload.baseMode,
+          steps: (payload.pipeline || []).filter(step => !(step && step.enabled === false)).length,
+          startRequestMs,
+          polls: pollCount,
+          receiveMs,
+          parseMs,
+          receiveBytes: statusText.length,
+          applyRenderMs,
+          totalClientMs: performance.now() - perfStartedAt,
+          server: status.debugTimings || {},
+        });
+      }
       return status;
     }
     if (status.status === "error") {

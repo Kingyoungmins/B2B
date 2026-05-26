@@ -417,3 +417,82 @@
     .excel-viewer { min-height: 400px; }
     .resizer { display: none; }
   }
+.debug-panel {
+  position: fixed;
+  right: 14px;
+  bottom: 14px;
+  z-index: 9000;
+  width: min(520px, calc(100vw - 28px));
+  max-height: min(520px, calc(100vh - 28px));
+  overflow: auto;
+  background: rgba(18, 18, 24, 0.94);
+  color: #f7f7fb;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 8px;
+  box-shadow: 0 18px 48px rgba(20, 16, 28, 0.34);
+  font-size: 12px;
+}
+
+.debug-panel[hidden] {
+  display: none;
+}
+
+.debug-panel-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.debug-panel-head span {
+  color: #c9c5d4;
+  flex: 1;
+}
+
+.debug-panel-head button {
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  border-radius: 5px;
+  padding: 3px 8px;
+  cursor: pointer;
+}
+
+.debug-panel-body {
+  padding: 8px;
+}
+
+.debug-empty {
+  color: #c9c5d4;
+  padding: 8px;
+}
+
+.debug-row {
+  padding: 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.debug-row:last-child {
+  border-bottom: 0;
+}
+
+.debug-title {
+  font-weight: 700;
+  margin-bottom: 7px;
+}
+
+.debug-grid {
+  display: grid;
+  grid-template-columns: 70px 1fr 70px 1fr;
+  gap: 5px 8px;
+}
+
+.debug-grid span {
+  color: #bdb7c9;
+}
+
+.debug-grid b {
+  font-weight: 650;
+  color: #ffffff;
+}

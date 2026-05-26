@@ -28,6 +28,10 @@ function _addrToRC(addr) {
   return { c: _colLettersToIdx(m[1]), r: parseInt(m[2], 10) - 1 };
 }
 
+function _cellAddr(r, c) {
+  return _idxToColLetters(c) + (r + 1);
+}
+
 // 파일 레퍼런스 ("output" / "input:파일명" / 파일명 / 파일 record) 를 실제 파일 객체로 해석
 function _resolveFileForOps(fileRef) {
   if (!fileRef) return null;
@@ -57,6 +61,37 @@ function _resolveFileForOps(fileRef) {
     }
   }
   return null;
+}
+
+function setCellValue(fileRef, sheetName, r, c, value) {
+  const file = _resolveFileForOps(fileRef);
+  if (!file) throw new Error(`setCellValue: 파일을 찾을 수 없음: ${fileRef}`);
+  if (!file.sheets[sheetName]) file.sheets[sheetName] = [];
+  const aoa = file.sheets[sheetName];
+  const rowIdx = Math.max(0, Number(r) || 0);
+  const colIdx = Math.max(0, Number(c) || 0);
+  if (!aoa[rowIdx]) aoa[rowIdx] = [];
+  aoa[rowIdx][colIdx] = value;
+
+  const addr = _cellAddr(rowIdx, colIdx);
+  file.formulaSuppressions = file.formulaSuppressions || {};
+  file.formulaSuppressions[sheetName] = file.formulaSuppressions[sheetName] || {};
+  file.formulaSuppressions[sheetName][addr] = true;
+  if (file.formulas && file.formulas[sheetName]) delete file.formulas[sheetName][addr];
+  if (file.originalFormulaValues && file.originalFormulaValues[sheetName]) {
+    delete file.originalFormulaValues[sheetName][addr];
+  }
+  if (file.displays && file.displays[sheetName] && file.displays[sheetName][rowIdx]) {
+    delete file.displays[sheetName][rowIdx][colIdx];
+  }
+  const fileId = file === state.output ? "output" :
+    ((state.outputTemplates || []).findIndex(tpl => tpl && tpl.file === file) >= 0
+      ? "output:" + (state.outputTemplates || []).findIndex(tpl => tpl && tpl.file === file)
+      : "input:" + (file.name || ""));
+  if (state.formulaResults && state.formulaResults[fileId] && state.formulaResults[fileId][sheetName]) {
+    delete state.formulaResults[fileId][sheetName][addr];
+  }
+  return value;
 }
 
 // 수식 텍스트 안의 셀 참조를 컬럼 방향으로 delta 만큼 이동.

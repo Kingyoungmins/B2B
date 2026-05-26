@@ -449,7 +449,8 @@ function _appendRows(viewer, ctx, fromRow, toRow) {
       const rowspan = m ? (Math.min(m.e.r, ctx.totalRows - 1) - m.s.r + 1) : 1;
       const colspan = m ? (Math.min(m.e.c, visibleCols - 1) - m.s.c + 1) : 1;
       const addr = _excelCol(c) + (r + 1);
-      const hasFormula = !!formulas[addr];
+      const formulaSuppressed = isFormulaSuppressedForCell(ctx, addr, r, c);
+      const hasFormula = !!formulas[addr] && !formulaSuppressed;
       let v = (aoa[r] && aoa[r][c] !== undefined) ? aoa[r][c] : "";
       // 수식 평가 결과가 있으면 우선 사용 (item 10)
       if (hasFormula && formulaResults[addr] !== undefined && formulaResults[addr] !== "") {
@@ -472,7 +473,7 @@ function _appendRows(viewer, ctx, fromRow, toRow) {
       }
       const realStyle = file.styles && file.styles[sheet] && file.styles[sheet][r] && file.styles[sheet][r][c];
       const numFormat = file.formats && file.formats[sheet] && file.formats[sheet][r] && file.formats[sheet][r][c];
-      const sourceDisplay = file.displays && file.displays[sheet] && file.displays[sheet][r] && file.displays[sheet][r][c];
+      const sourceDisplay = !formulaSuppressed && file.displays && file.displays[sheet] && file.displays[sheet][r] && file.displays[sheet][r][c];
       if (!realStyle) {
         const styleCls = classifyCell(aoa[r] && aoa[r][0], r, c, aoa);
         if (styleCls) cls.push(styleCls);
@@ -488,6 +489,21 @@ function _appendRows(viewer, ctx, fromRow, toRow) {
     buf.push("</tr>");
   }
   ctx.tbody.insertAdjacentHTML("beforeend", buf.join(""));
+}
+
+function isFormulaSuppressedForCell(ctx, addr, r, c) {
+  if (!ctx || !ctx.file || !ctx.sheet) return false;
+  const fileId = ctx.fileId;
+  const sheetName = ctx.sheet;
+  if (ctx.file.formulaSuppressions && ctx.file.formulaSuppressions[sheetName] && ctx.file.formulaSuppressions[sheetName][addr]) {
+    return true;
+  }
+  const manual = (state.pipeline || []).some(step => {
+    const edit = step && step.manualEdit;
+    return edit && edit.fileId === fileId && edit.sheet === sheetName && edit.r === r && edit.c === c;
+  });
+  if (manual) return true;
+  return false;
 }
 
 function setupExcelCellEditing(viewer, ctx) {
@@ -805,6 +821,9 @@ function commitCellEdit(fileId, sheet, r, c, value) {
       typeof reconcilePipelineSimulationAfterEdit === "function";
     if (canUpdateBackendCache) {
       applyManualEditToFile(file, sheet, r, c, value);
+      if (typeof clearManualEditFormulaMetadata === "function") {
+        clearManualEditFormulaMetadata({ fileId, sheet, r, c, value });
+      }
       state.pipeline = next;
       setPipelineRuntimeStatus([step.id], "running", "\uC791\uC5C5 \uC911");
       reconcilePipelineSimulationAfterEdit({
@@ -858,6 +877,17 @@ function applyManualEditToFile(file, sheet, r, c, value) {
   if (!file.sheets[sheet]) file.sheets[sheet] = [];
   if (!file.sheets[sheet][r]) file.sheets[sheet][r] = [];
   file.sheets[sheet][r][c] = value;
+  const addr = _excelCol(c) + (r + 1);
+  file.formulaSuppressions = file.formulaSuppressions || {};
+  file.formulaSuppressions[sheet] = file.formulaSuppressions[sheet] || {};
+  file.formulaSuppressions[sheet][addr] = true;
+  if (file.formulas && file.formulas[sheet]) delete file.formulas[sheet][addr];
+  if (file.originalFormulaValues && file.originalFormulaValues[sheet]) {
+    delete file.originalFormulaValues[sheet][addr];
+  }
+  if (file.displays && file.displays[sheet] && file.displays[sheet][r]) {
+    delete file.displays[sheet][r][c];
+  }
 }
 
 function _maxRowFromFormulas(formulas) {

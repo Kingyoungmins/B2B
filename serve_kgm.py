@@ -9,7 +9,7 @@ import subprocess
 import tempfile
 import threading
 import time
-from urllib.parse import parse_qs, unquote, urlparse
+from urllib.parse import parse_qs, quote, unquote, urlparse
 import urllib.error
 import urllib.request
 import uuid
@@ -35,10 +35,12 @@ PIPELINE_JOBS_LOCK = threading.Lock()
 WORKBOOK_CACHE_LOCK = threading.Lock()
 NODE_WORKER_LOCK = threading.Lock()
 NODE_WORKER = None
+NODE_WORKER_SCRIPT_MTIME = None
 NODE_WORKER_READY = set()
 PREVIEW_ROWS = 500
 PREVIEW_COLS = None
 MAX_DIFF_CELLS_PER_SHEET = 5000
+APP_BUILD_STAMP = "run-adapter-20260526-4"
 
 
 class PipelineExecutionError(RuntimeError):
@@ -57,6 +59,7 @@ class KGMHandler(http.server.SimpleHTTPRequestHandler):
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "authorization, content-type, api-key, x-api-key")
         self.send_header("Access-Control-Allow-Private-Network", "true")
+        self.send_header("Cache-Control", "no-store")
         super().end_headers()
 
     def do_OPTIONS(self):
@@ -65,11 +68,32 @@ class KGMHandler(http.server.SimpleHTTPRequestHandler):
 
     def do_GET(self):
         if self.path == "/api/backend/health":
+            app_dir = Path(__file__).resolve().parent
+            def file_info(relative_path):
+                path = app_dir / relative_path
+                if not path.exists():
+                    return None
+                return {
+                    "path": str(path),
+                    "mtime": path.stat().st_mtime,
+                }
             self.send_json({
                 "ok": True,
                 "mode": "python-backend-workbooks",
+                "buildStamp": APP_BUILD_STAMP,
+                "pid": os.getpid(),
+                "cwd": os.getcwd(),
+                "serverFile": str(Path(__file__).resolve()),
+                "appDir": str(app_dir),
                 "openpyxl": bool(openpyxl),
                 "node": bool(shutil.which("node")),
+                "files": {
+                    "index.html": file_info("index.html"),
+                    "scripts/config.js": file_info("scripts/config.js"),
+                    "scripts/excel-viewer.js": file_info("scripts/excel-viewer.js"),
+                    "scripts/backend-workbooks.js": file_info("scripts/backend-workbooks.js"),
+                    "scripts/backend-pipeline-worker.js": file_info("scripts/backend-pipeline-worker.js"),
+                },
             })
             return
         if self.path.startswith("/api/workbooks/download/"):
@@ -263,7 +287,12 @@ class KGMHandler(http.server.SimpleHTTPRequestHandler):
             result["sheets"] = export_node_worker_workbook(result["workerWorkbookId"])
         if "path" not in result:
             result_path = BACKEND_DIR / f"{result_id}_{result.get('name') or 'result.xlsx'}"
-            write_result_workbook(Path(result["template_path"]), result_path, result.get("sheets") or {})
+            write_result_workbook(
+                Path(result["template_path"]),
+                result_path,
+                result.get("sheets") or {},
+                result.get("forced_value_cells") or [],
+            )
             result["path"] = str(result_path)
         path = Path(result["path"])
         if not path.exists():
@@ -272,7 +301,7 @@ class KGMHandler(http.server.SimpleHTTPRequestHandler):
         data = path.read_bytes()
         self.send_response(200)
         self.send_header("content-type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-        self.send_header("content-disposition", f'attachment; filename="{path.name}"')
+        self.send_header("content-disposition", content_disposition_attachment(path.name))
         self.send_header("content-length", str(len(data)))
         self.end_headers()
         self.wfile.write(data)
@@ -337,6 +366,12 @@ def update_pipeline_job(job_id, patch):
         PIPELINE_JOBS[job_id] = current
 
 
+def content_disposition_attachment(filename):
+    safe_ascii = "".join(ch if 32 <= ord(ch) < 127 and ch not in '"\\' else "_" for ch in str(filename))
+    encoded = quote(str(filename), safe="")
+    return f'attachment; filename="{safe_ascii}"; filename*=UTF-8\'\'{encoded}'
+
+
 def run_backend_pipeline_payload(payload, job_id=None):
     update_pipeline_job(job_id, {"stage": "입력 파일 읽는 중", "currentStep": 0})
     inputs = {}
@@ -359,6 +394,7 @@ def run_backend_pipeline_payload(payload, job_id=None):
     }, job_id=job_id)
     result_inputs = result.get("inputs") or inputs
     result_output = result.get("output") or output
+    forced_value_cells = result.get("forcedValueCells") or []
     current = payload.get("current") or {}
 
     update_pipeline_job(job_id, {
@@ -389,6 +425,7 @@ def run_backend_pipeline_payload(payload, job_id=None):
         RESULTS[input_download_id] = {
             "template_path": str(wb["path"]),
             "sheets": result_inputs[input_name],
+            "forced_value_cells": [cell for cell in forced_value_cells if cell.get("fileId") == "input:" + input_name],
             "name": f"result_{wb['name']}",
             "created": time.time(),
         }
@@ -396,22 +433,24 @@ def run_backend_pipeline_payload(payload, job_id=None):
 
     download_id = None
     if output_wb:
+        output_file_id = (payload.get("current") or {}).get("outputFileId") or "output:0"
         download_id = uuid.uuid4().hex
         RESULTS[download_id] = {
             "template_path": str(output_wb["path"]),
             "sheets": result_output,
+            "forced_value_cells": [cell for cell in forced_value_cells if cell.get("fileId") == output_file_id],
             "name": f"result_{output_wb['name']}",
             "created": time.time(),
         }
-        output_file_id = (payload.get("current") or {}).get("outputFileId") or "output:0"
         download_urls[output_file_id] = f"/api/workbooks/download/{download_id}"
 
     update_pipeline_job(job_id, {"stage": "미리보기 생성 중"})
-    previews = build_result_previews(result_inputs, result_output, current, diffs)
+    previews = build_result_previews(result_inputs, result_output, current, diffs, forced_value_cells)
     return {
         "ok": True,
         "diffId": diff_id,
         "diffs": diffs,
+        "forcedValueCells": forced_value_cells,
         "downloadId": download_id,
         "downloadUrl": f"/api/workbooks/download/{download_id}" if download_id else None,
         "downloadUrls": download_urls,
@@ -518,7 +557,12 @@ def update_workbook_current_cache(wb_record, sheets):
         wb_record["current_aoa_cache_created"] = time.time()
 
 
-def write_result_workbook(template_path, result_path, sheets):
+def write_result_workbook(template_path, result_path, sheets, forced_value_cells=None):
+    forced_cells = {
+        (str(cell.get("sheetName") or ""), int(cell.get("r") or 0) + 1, int(cell.get("c") or 0) + 1)
+        for cell in (forced_value_cells or [])
+        if isinstance(cell, dict) and cell.get("sheetName")
+    }
     wb = openpyxl.load_workbook(template_path)
     try:
         for sheet_name, rows in (sheets or {}).items():
@@ -526,7 +570,8 @@ def write_result_workbook(template_path, result_path, sheets):
             for r_idx, row in enumerate(rows or [], start=1):
                 for c_idx, value in enumerate(row or [], start=1):
                     cell = ws.cell(row=r_idx, column=c_idx)
-                    if cell.data_type == "f" and (value == "" or value is None):
+                    force_value = (sheet_name, r_idx, c_idx) in forced_cells
+                    if cell.data_type == "f" and (value == "" or value is None) and not force_value:
                         continue
                     cell.value = value
         wb.save(result_path)
@@ -610,9 +655,11 @@ function findColumnGlobal(inputsMap, name) {
 function fuzzyGetKey(target, prop) {
   if (!target || typeof target !== "object") return null;
   if (Object.prototype.hasOwnProperty.call(target, prop)) return prop;
+  const keys = Object.keys(target);
+  if (keys.length === 1) return keys[0];
   const wanted = normalizeText(prop);
   let best = null;
-  for (const key of Object.keys(target)) {
+  for (const key of keys) {
     const cur = normalizeText(key);
     if (cur === wanted || (cur && wanted && (cur.includes(wanted) || wanted.includes(cur)))) {
       best = key;
@@ -641,10 +688,84 @@ function fuzzyProxy(target) {
     },
   });
 }
+let activeForcedValueCells = {};
+let activeClearedValueCells = {};
+let activeSheetProxyCache = new WeakMap();
+let activeRowProxyCache = new WeakMap();
+const activeOutputFileId = (payload.current && payload.current.outputFileId) || "output:0";
+function forcedCellKey(fileId, sheetName, r, c) { return `${fileId}\u0000${sheetName}\u0000${r}\u0000${c}`; }
+function addForcedValueCell(fileId, sheetName, r, c, value) {
+  if (!fileId || !sheetName) return;
+  activeForcedValueCells[forcedCellKey(fileId, sheetName, r, c)] = { fileId, sheetName, r, c, value };
+}
+function trackClearThenSet(fileId, sheetName, r, c, value) {
+  if (!fileId || !sheetName) return;
+  const key = forcedCellKey(fileId, sheetName, r, c);
+  if (value === "") {
+    activeClearedValueCells[key] = true;
+    return;
+  }
+  if (activeClearedValueCells[key]) {
+    delete activeClearedValueCells[key];
+    addForcedValueCell(fileId, sheetName, r, c, value);
+  }
+}
+function trackedRowProxy(row, fileId, sheetName, r) {
+  if (!row || typeof row !== "object") return row;
+  const key = `${fileId}\u0000${sheetName}\u0000${r}`;
+  let cached = activeRowProxyCache.get(row);
+  if (cached && cached[key]) return cached[key];
+  if (!cached) { cached = {}; activeRowProxyCache.set(row, cached); }
+  cached[key] = new Proxy(row, {
+    set(target, prop, value) {
+      target[prop] = value;
+      const c = Number(prop);
+      if (Number.isInteger(c) && c >= 0) trackClearThenSet(fileId, sheetName, r, c, value);
+      return true;
+    },
+  });
+  return cached[key];
+}
+function trackedSheetProxy(sheet, fileId, sheetName) {
+  if (!sheet || typeof sheet !== "object") return sheet;
+  const key = `${fileId}\u0000${sheetName}`;
+  let cached = activeSheetProxyCache.get(sheet);
+  if (cached && cached[key]) return cached[key];
+  if (!cached) { cached = {}; activeSheetProxyCache.set(sheet, cached); }
+  cached[key] = new Proxy(sheet, {
+    get(target, prop) {
+      const value = target[prop];
+      const r = Number(prop);
+      if (Number.isInteger(r) && r >= 0 && Array.isArray(value)) return trackedRowProxy(value, fileId, sheetName, r);
+      return value;
+    },
+    set(target, prop, value) { target[prop] = value; return true; },
+  });
+  return cached[key];
+}
+function trackedSheetsProxy(sheets, fileId) {
+  if (!sheets || typeof sheets !== "object") return sheets;
+  return new Proxy(sheets, {
+    get(target, prop) {
+      if (typeof prop === "symbol") return target[prop];
+      const key = Object.prototype.hasOwnProperty.call(target, prop) ? prop : fuzzyGetKey(target, String(prop));
+      return key ? trackedSheetProxy(target[key], fileId, String(key)) : undefined;
+    },
+    set(target, prop, value) {
+      if (typeof prop === "symbol" || Object.prototype.hasOwnProperty.call(target, prop)) target[prop] = value;
+      else {
+        const key = fuzzyGetKey(target, String(prop));
+        if (key && normalizeText(key) === normalizeText(prop)) target[key] = value;
+        else target[prop] = value;
+      }
+      return true;
+    },
+  });
+}
 const wrappedInputs = {};
-Object.entries(inputs).forEach(([fileName, sheets]) => { wrappedInputs[fileName] = fuzzyProxy(sheets); });
+Object.entries(inputs).forEach(([fileName, sheets]) => { wrappedInputs[fileName] = trackedSheetsProxy(sheets, `input:${fileName}`); });
 const proxiedInputs = fuzzyProxy(wrappedInputs);
-const proxiedOutput = fuzzyProxy(output);
+const proxiedOutput = trackedSheetsProxy(output, activeOutputFileId);
 function findInputBySheet(inputsMap, sheetName, options) {
   options = options || {};
   const target = normalizeText(sheetName);
@@ -663,10 +784,12 @@ function findInputBySheet(inputsMap, sheetName, options) {
   return matches[0];
 }
 function resolveTargetSheets(fileRef) {
-  if (fileRef === "output") return proxiedOutput;
+  if (fileRef === "output") return output;
   let key = String(fileRef || "");
   if (key.startsWith("input:")) key = key.slice(6);
-  return proxiedInputs[key] || inputs[key] || null;
+  if (Object.prototype.hasOwnProperty.call(inputs, key)) return inputs[key];
+  const fuzzyKey = fuzzyGetKey(inputs, key);
+  return fuzzyKey ? inputs[fuzzyKey] : null;
 }
 function insertColumns(fileRef, sheetName, atColIdx, count) {
   const file = resolveTargetSheets(fileRef);
@@ -712,6 +835,24 @@ function deleteColumns(fileRef, sheetName, atColIdx, count) {
   }
 }
 function shiftFormulaText(v) { return v; }
+function fileIdForSetCellTarget(fileRef) {
+  if (fileRef === "output") return activeOutputFileId;
+  let key = String(fileRef || "");
+  if (key.startsWith("input:")) return key;
+  if (Object.prototype.hasOwnProperty.call(inputs, key)) return `input:${key}`;
+  return "";
+}
+function setCellValue(fileRef, sheetName, r, c, value) {
+  const file = resolveTargetSheets(fileRef);
+  if (!file) throw new Error(`setCellValue: file not found: ${fileRef}`);
+  if (!file[sheetName]) file[sheetName] = [];
+  const rowIdx = Math.max(0, Number(r) || 0);
+  const colIdx = Math.max(0, Number(c) || 0);
+  if (!file[sheetName][rowIdx]) file[sheetName][rowIdx] = [];
+  file[sheetName][rowIdx][colIdx] = value;
+  addForcedValueCell(fileIdForSetCellTarget(fileRef), sheetName, rowIdx, colIdx, value);
+  return value;
+}
 let activeStepIndex = 0;
 const totalSteps = (payload.pipeline || []).filter(step => !(step && step.enabled === false)).length;
 for (const step of payload.pipeline || []) {
@@ -726,12 +867,12 @@ for (const step of payload.pipeline || []) {
   });
   try {
     const code = String((step && step.code) || "");
-    const fn = new Function("inputs", "output", "col", "findColumnGlobal", "findInputBySheet", "similarity", "normalizeText", "replaceNormalizedText", "includesNormalizedText", "equalsNormalizedText", "headerRowIndex", "dataStartRowIndex", "excelRowToIndex", "insertColumns", "copyColumns", "deleteColumns", "shiftFormulaText",
+    const fn = new Function("inputs", "output", "col", "findColumnGlobal", "findInputBySheet", "similarity", "normalizeText", "replaceNormalizedText", "includesNormalizedText", "equalsNormalizedText", "headerRowIndex", "dataStartRowIndex", "excelRowToIndex", "insertColumns", "copyColumns", "deleteColumns", "shiftFormulaText", "setCellValue",
       code + "\nreturn typeof transform === 'function' ? transform(inputs, output) : { inputs, output };");
-    const result = fn(proxiedInputs, proxiedOutput, col, findColumnGlobal, findInputBySheet, similarity, normalizeText, replaceNormalizedText, includesNormalizedText, equalsNormalizedText, headerRowIndex, dataStartRowIndex, excelRowToIndex, insertColumns, copyColumns, deleteColumns, shiftFormulaText);
+    const result = fn(proxiedInputs, proxiedOutput, col, findColumnGlobal, findInputBySheet, similarity, normalizeText, replaceNormalizedText, includesNormalizedText, equalsNormalizedText, headerRowIndex, dataStartRowIndex, excelRowToIndex, insertColumns, copyColumns, deleteColumns, shiftFormulaText, setCellValue);
     if (result && typeof result === "object" && !Array.isArray(result)) {
-      if (result.inputs && typeof result.inputs === "object") Object.assign(inputs, result.inputs);
-      if (result.output && typeof result.output === "object") Object.assign(output, result.output);
+      if (result.inputs && result.inputs !== proxiedInputs && typeof result.inputs === "object") Object.assign(inputs, result.inputs);
+      if (result.output && result.output !== proxiedOutput && typeof result.output === "object") Object.assign(output, result.output);
     }
   } catch (err) {
     const info = {
@@ -765,7 +906,7 @@ for (const step of payload.pipeline || []) {
     stepDescription: (step && step.description) || `Step ${activeStepIndex}`
   });
 }
-process.stdout.write(JSON.stringify({ inputs, output }));
+process.stdout.write(JSON.stringify({ inputs, output, forcedValueCells: Object.values(activeForcedValueCells) }));
 """
     stdout_file = tempfile.NamedTemporaryFile(prefix="kgm_pipeline_stdout_", suffix=".json", delete=False)
     stderr_file = tempfile.NamedTemporaryFile(prefix="kgm_pipeline_stderr_", suffix=".txt", delete=False)
@@ -854,8 +995,9 @@ def sheet_dimensions(sheets):
     return dimensions
 
 
-def build_result_previews(inputs, output, current, diffs=None):
+def build_result_previews(inputs, output, current, diffs=None, forced_value_cells=None):
     diffs = diffs or {}
+    forced_value_cells = forced_value_cells or []
     files = []
     for name, sheets in (inputs or {}).items():
         file_id = "input:" + name
@@ -864,6 +1006,7 @@ def build_result_previews(inputs, output, current, diffs=None):
             "name": name,
             "sheetNames": list((sheets or {}).keys()),
             "sheets": preview_sheets(sheets),
+            "forcedValueCells": [cell for cell in forced_value_cells if cell.get("fileId") == file_id],
             "formulas": {},
             "formats": {},
             "dimensions": sheet_dimensions(sheets),
@@ -876,6 +1019,7 @@ def build_result_previews(inputs, output, current, diffs=None):
             "name": "output",
             "sheetNames": list((output or {}).keys()),
             "sheets": preview_sheets(output),
+            "forcedValueCells": [cell for cell in forced_value_cells if cell.get("fileId") == output_file_id],
             "formulas": {},
             "formats": {},
             "dimensions": sheet_dimensions(output),
@@ -956,9 +1100,18 @@ def build_pipeline_diffs(before_inputs, before_output, after_inputs, after_outpu
 
 
 def ensure_node_worker():
-    global NODE_WORKER
+    global NODE_WORKER, NODE_WORKER_SCRIPT_MTIME
+    worker_path = Path(__file__).with_name("scripts") / "backend-pipeline-worker.js"
+    worker_mtime = worker_path.stat().st_mtime if worker_path.exists() else None
     if NODE_WORKER and NODE_WORKER.poll() is None:
-        return NODE_WORKER
+        if NODE_WORKER_SCRIPT_MTIME == worker_mtime:
+            return NODE_WORKER
+        try:
+            NODE_WORKER.kill()
+        except Exception:
+            pass
+        NODE_WORKER = None
+        NODE_WORKER_READY.clear()
     worker_path = Path(__file__).with_name("scripts") / "backend-pipeline-worker.js"
     if not worker_path.exists():
         raise RuntimeError(f"backend worker not found: {worker_path}")
@@ -971,6 +1124,7 @@ def ensure_node_worker():
         encoding="utf-8",
         bufsize=1,
     )
+    NODE_WORKER_SCRIPT_MTIME = worker_mtime
     NODE_WORKER_READY.clear()
     return NODE_WORKER
 
@@ -1028,22 +1182,28 @@ def export_node_worker_workbook(workbook_id):
 
 
 def run_backend_pipeline_payload_with_worker(payload, job_id=None):
+    debug_started = time.perf_counter()
+    timings = {}
     if os.environ.get("KGM_DISABLE_NODE_WORKER") == "1":
         raise RuntimeError("node worker disabled")
     input_items = payload.get("inputs", [])
     output_item = payload.get("output") or {}
     input_wbs = []
+    stage_started = time.perf_counter()
     for idx, item in enumerate(input_items, start=1):
         wb = get_workbook_or_raise(item.get("backendWorkbookId"))
         update_pipeline_job(job_id, {"stage": f"Node 캐시 준비 중 ({idx}/{len(input_items)})"})
         ensure_worker_workbook(wb)
         input_wbs.append((item, wb))
+    timings["prepareInputsMs"] = round((time.perf_counter() - stage_started) * 1000, 2)
 
     output_wb = None
+    stage_started = time.perf_counter()
     if output_item.get("backendWorkbookId"):
         update_pipeline_job(job_id, {"stage": "Node 출력 캐시 준비 중"})
         output_wb = get_workbook_or_raise(output_item.get("backendWorkbookId"))
         ensure_worker_workbook(output_wb)
+    timings["prepareOutputMs"] = round((time.perf_counter() - stage_started) * 1000, 2)
 
     active_steps = [s for s in payload.get("pipeline", []) if not (s and s.get("enabled") is False)]
     total_steps = len(active_steps)
@@ -1071,10 +1231,13 @@ def run_backend_pipeline_payload_with_worker(payload, job_id=None):
         "baseMode": payload.get("baseMode") or "original",
         "current": payload.get("current") or {},
     }
+    stage_started = time.perf_counter()
     response = node_worker_command({
         "type": "runPipeline",
         "payload": worker_payload,
     })
+    timings["workerRunAndPreviewMs"] = round((time.perf_counter() - stage_started) * 1000, 2)
+    timings["workerCacheHit"] = bool(response.get("cacheHit"))
 
     update_pipeline_job(job_id, {
         "stage": "미리보기 반영 중",
@@ -1086,6 +1249,11 @@ def run_backend_pipeline_payload_with_worker(payload, job_id=None):
 
     files = response.get("files") or []
     diffs = response.get("diffs") or {}
+    forced_value_cells = response.get("forcedValueCells") or []
+    if not forced_value_cells:
+        for file_result in files:
+            forced_value_cells.extend(file_result.get("forcedValueCells") or [])
+    stage_started = time.perf_counter()
     diff_id = uuid.uuid4().hex
     DIFFS[diff_id] = {
         "id": diff_id,
@@ -1093,7 +1261,9 @@ def run_backend_pipeline_payload_with_worker(payload, job_id=None):
         "diffs": diffs,
         "current": payload.get("current") or {},
     }
+    timings["storeDiffMs"] = round((time.perf_counter() - stage_started) * 1000, 2)
 
+    stage_started = time.perf_counter()
     download_urls = {}
     input_wb_by_name = {item.get("name") or wb["name"]: wb for item, wb in input_wbs}
     for file_result in files:
@@ -1109,6 +1279,7 @@ def run_backend_pipeline_payload_with_worker(payload, job_id=None):
             RESULTS[result_id] = {
                 "template_path": str(wb["path"]),
                 "workerWorkbookId": worker_workbook_id,
+                "forced_value_cells": file_result.get("forcedValueCells") or [],
                 "name": f"result_{wb['name']}",
                 "created": time.time(),
             }
@@ -1119,19 +1290,25 @@ def run_backend_pipeline_payload_with_worker(payload, job_id=None):
             RESULTS[result_id] = {
                 "template_path": str(output_wb["path"]),
                 "workerWorkbookId": worker_workbook_id,
+                "forced_value_cells": file_result.get("forcedValueCells") or [],
                 "name": f"result_{output_wb['name']}",
                 "created": time.time(),
             }
             download_urls[file_id] = f"/api/workbooks/download/{result_id}"
+    timings["downloadRegistrationMs"] = round((time.perf_counter() - stage_started) * 1000, 2)
+    timings["totalServerMs"] = round((time.perf_counter() - debug_started) * 1000, 2)
 
     return {
         "ok": True,
         "worker": True,
+        "cacheHit": bool(response.get("cacheHit")),
+        "debugTimings": timings,
         "diffId": diff_id,
         "diffs": diffs,
         "downloadId": None,
         "downloadUrl": None,
         "downloadUrls": download_urls,
+        "forcedValueCells": forced_value_cells,
         "files": files,
     }
 
@@ -1180,6 +1357,7 @@ def run_backend_pipeline_payload(payload, job_id=None):
     }, job_id=job_id)
     result_inputs = result.get("inputs") or inputs
     result_output = result.get("output") or output
+    forced_value_cells = result.get("forcedValueCells") or []
     current = payload.get("current") or {}
 
     update_pipeline_job(job_id, {
@@ -1216,6 +1394,7 @@ def run_backend_pipeline_payload(payload, job_id=None):
         RESULTS[input_download_id] = {
             "template_path": str(wb["path"]),
             "sheets": result_inputs[input_name],
+            "forced_value_cells": [cell for cell in forced_value_cells if cell.get("fileId") == "input:" + input_name],
             "name": f"result_{wb['name']}",
             "created": time.time(),
         }
@@ -1223,15 +1402,16 @@ def run_backend_pipeline_payload(payload, job_id=None):
 
     download_id = None
     if output_wb:
+        output_file_id = (payload.get("current") or {}).get("outputFileId") or "output:0"
         update_workbook_current_cache(output_wb, result_output)
         download_id = uuid.uuid4().hex
         RESULTS[download_id] = {
             "template_path": str(output_wb["path"]),
             "sheets": result_output,
+            "forced_value_cells": [cell for cell in forced_value_cells if cell.get("fileId") == output_file_id],
             "name": f"result_{output_wb['name']}",
             "created": time.time(),
         }
-        output_file_id = (payload.get("current") or {}).get("outputFileId") or "output:0"
         download_urls[output_file_id] = f"/api/workbooks/download/{download_id}"
 
     update_pipeline_job(job_id, {
@@ -1241,11 +1421,12 @@ def run_backend_pipeline_payload(payload, job_id=None):
         "totalSteps": total_steps,
         "stepRunning": False,
     })
-    previews = build_result_previews(result_inputs, result_output, current, diffs)
+    previews = build_result_previews(result_inputs, result_output, current, diffs, forced_value_cells)
     return {
         "ok": True,
         "diffId": diff_id,
         "diffs": diffs,
+        "forcedValueCells": forced_value_cells,
         "downloadId": download_id,
         "downloadUrl": f"/api/workbooks/download/{download_id}" if download_id else None,
         "downloadUrls": download_urls,

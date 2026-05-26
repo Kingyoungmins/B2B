@@ -105,6 +105,11 @@ function fuzzyProxy(target, options) {
         return t[cache[cacheKey]];
       }
       const keys = Object.keys(t);
+      if (keys.length === 1) {
+        cache[cacheKey] = keys[0];
+        if (options.onResolve) options.onResolve(cacheKey, keys[0], 1);
+        return t[keys[0]];
+      }
       const result = fuzzyMatch(cacheKey, keys);
       if (!result) return undefined;
       if (result.ambiguous && options.onAmbiguous) {

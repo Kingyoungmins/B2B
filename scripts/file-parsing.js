@@ -281,6 +281,7 @@ function cloneFileRecord(file) {
     formats: file.formats || {},
     displays: file.displays || {},
     formulas: file.formulas || {},
+    formulaSuppressions: file.formulaSuppressions || {},
     originalFormulaValues: file.originalFormulaValues || {},
     tables: file.tables || {},
     backendWorkbookId: file.backendWorkbookId || null,

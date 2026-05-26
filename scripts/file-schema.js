@@ -1,6 +1,19 @@
 /* ===================================================================
    FILE SCHEMA FOR CLAUDE
    =================================================================== */
+const FORMULA_OVERWRITE_RULE = `
+Formula overwrite and displayed-text edit rule:
+- If the user explicitly asks to ignore/remove an existing formula and write a fixed value into specific cells, use setCellValue(target, sheetName, r, c, value) for each target cell.
+- If the user asks to update/change visible text in an explicitly selected output range, use setCellValue(target, sheetName, r, c, newText) for the changed cells so the simulator and downloaded workbook show the edited text.
+- Do not use sheet[r][c] = ""; sheet[r][c] = value; to remove formulas.
+- Normal sheet[r][c] = value assignments mean data edits only and must not be relied on to remove formulas.
+- For month text updates, handle zero-padded and non-padded forms separately. Example: "02월" -> "03월" and standalone "2월" -> "3월"; do not rely on includesNormalizedText(value, "2월") to match "02월".
+- For month text replacement in Korean labels, prefer:
+  let nv = String(v);
+  nv = nv.replace(/02\s*월/g, "03월");
+  nv = nv.replace(/(^|[^0-9])2\s*월/g, "$1" + "3월");
+`;
+
 function _sheetTotalRowsForSchema(file, sheetName, aoa) {
   const dim = file && file.backendPreviewDimensions && file.backendPreviewDimensions[sheetName];
   return Math.max(Number(dim && dim.maxRow) || 0, (aoa || []).length || 0);
@@ -114,7 +127,9 @@ function _buildDefaultTargetHint() {
   return lines.join("\n");
 }
 
-const SYSTEM_PROMPT = `당신은 엑셀 데이터 자동화 스킬을 JavaScript 로 작성하는 도우미입니다.
+const SYSTEM_PROMPT = `${FORMULA_OVERWRITE_RULE}
+
+당신은 엑셀 데이터 자동화 스킬을 JavaScript 로 작성하는 도우미입니다.
 
 ## 실행 구조 — 반드시 이해할 것
 사용자는 여러 개의 "단계(step)"를 순서대로 쌓아 하나의 파이프라인을 만듭니다.
@@ -151,6 +166,9 @@ function transform(inputs, output) {
 - \`headerRowIndex(sheetAoA)\` → 헤더 행의 **JS 배열 인덱스(0부터 시작)** 를 반환합니다.
 - \`dataStartRowIndex(sheetAoA)\` → 첫 데이터 행의 **JS 배열 인덱스** 를 반환합니다. 데이터 루프는 보통 \`for (let r = dataStartRowIndex(sheet); r < sheet.length; r++)\` 로 시작하세요.
 - \`excelRowToIndex(rowNumber)\` → Excel 화면의 행 번호를 JS 배열 인덱스로 바꿉니다. 예: Excel 4행은 JS 인덱스 3입니다.
+- \`setCellValue(target, sheetName, r, c, value)\` → 셀 값을 고정값으로 덮어씁니다. 대상 셀에 기존 수식이 있으면 수식을 제거하고 값만 남겨야 할 때 반드시 이 헬퍼를 사용하세요.
+  - 예: \`setCellValue("output", "요약", excelRowToIndex(61), 1, total)\` → B61의 기존 수식을 지우고 \`total\` 값을 저장합니다.
+  - 사용자가 "수식을 없애고 값으로 채워줘", "함수를 제거하고 값 자체를 넣어줘", "값으로 덮어써줘"라고 요청하면 \`sheet[r][c] = value\` 대신 \`setCellValue(...)\`를 사용하세요.
 
 문자열을 찾을 때는 \`String(cell).includes("검색어")\`를 바로 쓰지 말고, \`normalizeText(cell).includes(normalizeText("검색어"))\` 패턴을 사용하세요. 사용자가 "안전제일"이라고 말해도 엑셀 값이 "안전 제일"이면 매칭되어야 합니다.
 특히 \`normalizeText(cell).includes("1 월")\` 처럼 한쪽만 정규화한 코드는 금지입니다. 월/날짜/회사명 비교는 \`includesNormalizedText(cell, "1 월")\` 또는 \`equalsNormalizedText(cell, "1월")\` 를 쓰세요.
@@ -262,7 +280,9 @@ inputs / 시트 객체는 Proxy로 감싸져 있어, 키가 약간 달라도 유
 - 빈 칸으로 명시적으로 만들어야 할 때만 \`""\` 를 대입하세요 (의도적 clear 로 간주되어 수식도 제거됨).
 `;
 
-const EDIT_SYSTEM_PROMPT = `당신은 엑셀 데이터 자동화 스킬(JavaScript)을 **수정**하는 도우미입니다.
+const EDIT_SYSTEM_PROMPT = `${FORMULA_OVERWRITE_RULE}
+
+당신은 엑셀 데이터 자동화 스킬(JavaScript)을 **수정**하는 도우미입니다.
 
 ## ⚠️ 수정 모드 (반드시 이해할 것)
 사용자가 이미 만들어 둔 파이프라인의 **특정 한 단계(step)** 의 코드를 수정하려고 합니다.
