@@ -41,7 +41,7 @@ NODE_WORKER_READY = set()
 PREVIEW_ROWS = 500
 PREVIEW_COLS = None
 MAX_DIFF_CELLS_PER_SHEET = 5000
-APP_BUILD_STAMP = "run-adapter-20260526-5"
+APP_BUILD_STAMP = "run-adapter-20260526-6"
 
 
 def app_base_dir():
@@ -81,7 +81,7 @@ class KGMHandler(http.server.SimpleHTTPRequestHandler):
 
     def do_GET(self):
         if self.path == "/api/backend/health":
-            app_dir = Path(__file__).resolve().parent
+            app_dir = app_base_dir()
             def file_info(relative_path):
                 path = app_dir / relative_path
                 if not path.exists():
@@ -1118,7 +1118,7 @@ def build_pipeline_diffs(before_inputs, before_output, after_inputs, after_outpu
 
 def ensure_node_worker():
     global NODE_WORKER, NODE_WORKER_SCRIPT_MTIME
-    worker_path = Path(__file__).with_name("scripts") / "backend-pipeline-worker.js"
+    worker_path = app_base_dir() / "scripts" / "backend-pipeline-worker.js"
     worker_mtime = worker_path.stat().st_mtime if worker_path.exists() else None
     if NODE_WORKER and NODE_WORKER.poll() is None:
         if NODE_WORKER_SCRIPT_MTIME == worker_mtime:
@@ -1129,7 +1129,7 @@ def ensure_node_worker():
             pass
         NODE_WORKER = None
         NODE_WORKER_READY.clear()
-    worker_path = Path(__file__).with_name("scripts") / "backend-pipeline-worker.js"
+    worker_path = app_base_dir() / "scripts" / "backend-pipeline-worker.js"
     if not worker_path.exists():
         raise RuntimeError(f"backend worker not found: {worker_path}")
     node_path = node_executable()
