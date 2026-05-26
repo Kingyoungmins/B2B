@@ -1,7 +1,9 @@
 ﻿# -*- mode: python ; coding: utf-8 -*-
 from pathlib import Path
+import shutil
 
 ROOT = Path(SPECPATH)
+NODE_EXE = shutil.which("node")
 
 def collect(folder: str) -> list:
     return [(str(p), folder) for p in (ROOT / folder).iterdir() if p.is_file()]
@@ -9,7 +11,7 @@ def collect(folder: str) -> list:
 a = Analysis(
     ['launch_kgm.py'],
     pathex=[],
-    binaries=[],
+    binaries=[(NODE_EXE, '.')] if NODE_EXE else [],
     datas=[
         ('index.html', '.'),
         ('serve_kgm.py', '.'),

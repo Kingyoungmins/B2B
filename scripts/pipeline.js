@@ -1178,6 +1178,43 @@ async function attemptRunnerAutoRecovery(errorInfo) {
   }
 }
 
+async function attemptRunnerAutoRecovery(errorInfo) {
+  const stepIdx = resolveRunnerRecoveryStepIndex(errorInfo || {});
+  if (Number.isInteger(stepIdx) && stepIdx >= 0 && state.pipeline[stepIdx]) {
+    const originalStep = state.pipeline[stepIdx];
+    const adaptedStep = typeof adaptPipelineForRun === "function"
+      ? (adaptPipelineForRun([originalStep]) || [originalStep])[0]
+      : originalStep;
+    if (adaptedStep && adaptedStep.code && adaptedStep.code !== originalStep.code) {
+      state.pipeline[stepIdx] = { ...originalStep, code: adaptedStep.code, adaptedForRun: true };
+    }
+  }
+
+  if (!state.pipeline || !state.pipeline.length) {
+    throw new Error("자동 복구할 스킬이 없습니다.");
+  }
+
+  if (typeof adaptPipelineForRun === "function") {
+    state.pipeline = adaptPipelineForRun(state.pipeline || []);
+  }
+  ensurePipelineStepIds();
+  renderPipeline();
+  if (typeof renderRunnerWorkflow === "function") renderRunnerWorkflow();
+
+  clearRunnerPipelineError();
+  if (window.runnerSetRunning) window.runnerSetRunning(true);
+  clearPipelineExecutionMemory({ keepViewer: true });
+  try {
+    await runPipelinePreferBackend();
+    toast("자동 복구 후 실행을 완료했습니다.", "success");
+    if (window.runnerSetDone) window.runnerSetDone();
+  } catch (err) {
+    renderExcelViewer();
+    if (window.runnerSetRunning) window.runnerSetRunning(false);
+    throw err;
+  }
+}
+
 function clearRunnerPipelineError() {
   const panel = document.getElementById("runner-error-panel");
   if (!panel) return;
@@ -1252,6 +1289,67 @@ function showRunnerPipelineError(err, options) {
         recoverBtn.textContent = "에러 복구 시도";
         recoverBtn.disabled = false;
       });
+    };
+  }
+  const openBtn = panel.querySelector(".runner-error-open-generator");
+  if (openBtn) openBtn.onclick = () => { if (typeof setPage === "function") setPage("generator"); };
+}
+
+function showRunnerPipelineError(err, options) {
+  options = options || {};
+  const panel = document.getElementById("runner-error-panel");
+  if (!panel) return;
+  const fallbackInfo = (typeof state !== "undefined" && state.lastError) ? state.lastError : null;
+  const info = (err && err._stepInfo) || (err && err.errorInfo) || fallbackInfo || null;
+  const hasStep = info && Number(info.stepIdx) >= 0;
+  const title = hasStep ? "스킬을 적용하지 못했습니다" : "스킬 실행 중 오류가 발생했습니다";
+  const stepText = hasStep
+    ? `Step ${Number(info.stepIdx) + 1}${info.description ? ` · ${info.description}` : ""}`
+    : "실행기 또는 백엔드 실행 단계";
+  const message = (info && info.message) || (err && err.message) || String(err || "");
+  const stack = (info && info.stack) || (err && err.stack) || "";
+  panel.hidden = false;
+  panel.innerHTML = `
+    <div class="runner-error-title">
+      <span>${escapeHtml(title)}</span>
+      <span>확인 필요</span>
+    </div>
+    <div class="runner-error-step">${escapeHtml(stepText)}</div>
+    <div class="runner-error-help">입력 파일명, 시트명, 선택 범위 또는 불러온 스킬의 대상이 현재 파일과 맞는지 확인하세요. 복구 버튼은 현재 파일 구조에 맞게 스킬 참조를 보정한 뒤 다시 실행합니다.</div>
+    <div class="runner-error-actions">
+      <button class="runner-error-recover" type="button">에러 복구 시도</button>
+      <button class="runner-error-open-generator" type="button">생성기에서 보기</button>
+    </div>
+    <details class="runner-error-details" open>
+      <summary>상세 오류 보기</summary>
+      <pre>${escapeHtml(message)}${stack ? "\n\n" + escapeHtml(stack) : ""}</pre>
+    </details>
+  `;
+  const recoverBtn = panel.querySelector(".runner-error-recover");
+  if (recoverBtn) {
+    const canRecover = !!(state.pipeline && state.pipeline.length);
+    recoverBtn.disabled = !canRecover;
+    recoverBtn.onclick = async () => {
+      if (!canRecover) return;
+      recoverBtn.disabled = true;
+      const originalText = recoverBtn.textContent;
+      recoverBtn.textContent = "자동 복구 중...";
+      try {
+        await attemptRunnerAutoRecovery({
+          stepIdx: info && info.stepIdx,
+          stepId: info && info.stepId || null,
+          description: info && info.description || "",
+          code: info && info.code || "",
+          message,
+          stack,
+          compatibilityCheck: !!options.compatibilityCheck,
+        });
+      } catch (recoverErr) {
+        reportPipelineError(recoverErr, { compatibilityCheck: true, runner: true });
+      } finally {
+        recoverBtn.textContent = originalText;
+        recoverBtn.disabled = false;
+      }
     };
   }
   const openBtn = panel.querySelector(".runner-error-open-generator");

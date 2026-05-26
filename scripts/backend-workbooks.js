@@ -521,7 +521,7 @@ async function runPipelineOnBackend(options = {}) {
       if (status.errorInfo) {
         err._stepInfo = {
           ...status.errorInfo,
-          stepIdx: Number(status.errorInfo.stepIdx || 0),
+          stepIdx: Number(status.errorInfo.stepIdx ?? -1),
           message: status.errorInfo.message || status.error || err.message,
         };
       }

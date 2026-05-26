@@ -6,6 +6,7 @@ from pathlib import Path
 import shutil
 import socketserver
 import subprocess
+import sys
 import tempfile
 import threading
 import time
@@ -40,7 +41,19 @@ NODE_WORKER_READY = set()
 PREVIEW_ROWS = 500
 PREVIEW_COLS = None
 MAX_DIFF_CELLS_PER_SHEET = 5000
-APP_BUILD_STAMP = "run-adapter-20260526-4"
+APP_BUILD_STAMP = "run-adapter-20260526-5"
+
+
+def app_base_dir():
+    return Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
+
+
+def node_executable():
+    bundled = app_base_dir() / ("node.exe" if os.name == "nt" else "node")
+    if bundled.exists():
+        return str(bundled)
+    found = shutil.which("node")
+    return found or None
 
 
 class PipelineExecutionError(RuntimeError):
@@ -86,7 +99,8 @@ class KGMHandler(http.server.SimpleHTTPRequestHandler):
                 "serverFile": str(Path(__file__).resolve()),
                 "appDir": str(app_dir),
                 "openpyxl": bool(openpyxl),
-                "node": bool(shutil.which("node")),
+                "node": bool(node_executable()),
+                "nodePath": node_executable(),
                 "files": {
                     "index.html": file_info("index.html"),
                     "scripts/config.js": file_info("scripts/config.js"),
@@ -219,7 +233,7 @@ class KGMHandler(http.server.SimpleHTTPRequestHandler):
         if openpyxl is None:
             self.send_json({"ok": False, "error": "openpyxl is not available"}, status=500)
             return
-        if not shutil.which("node"):
+        if not node_executable():
             self.send_json({"ok": False, "error": "node runtime is not available"}, status=500)
             return
         payload = self.read_json_body()
@@ -916,8 +930,11 @@ process.stdout.write(JSON.stringify({ inputs, output, forcedValueCells: Object.v
     stderr_file.close()
     stdout_handle = open(stdout_path, "w+", encoding="utf-8")
     stderr_handle = open(stderr_path, "w+", encoding="utf-8")
+    node_path = node_executable()
+    if not node_path:
+        raise RuntimeError("node runtime is not available")
     proc = subprocess.Popen(
-        ["node", "-e", runner],
+        [node_path, "-e", runner],
         stdin=subprocess.PIPE,
         stdout=stdout_handle,
         stderr=stderr_handle,
@@ -1115,8 +1132,11 @@ def ensure_node_worker():
     worker_path = Path(__file__).with_name("scripts") / "backend-pipeline-worker.js"
     if not worker_path.exists():
         raise RuntimeError(f"backend worker not found: {worker_path}")
+    node_path = node_executable()
+    if not node_path:
+        raise RuntimeError("node runtime is not available")
     NODE_WORKER = subprocess.Popen(
-        ["node", str(worker_path)],
+        [node_path, str(worker_path)],
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
         stderr=subprocess.DEVNULL,
