@@ -9,7 +9,7 @@ import webbrowser
 from functools import partial
 from pathlib import Path
 
-from serve_kgm import KGMHandler, PORT as DEFAULT_PORT
+from serve_kgm import KGMHandler, PORT as DEFAULT_PORT, cleanup_node_worker
 
 import socketserver
 
@@ -17,8 +17,8 @@ import socketserver
 LAUNCH_HOST = os.environ.get("KGM_LAUNCH_HOST", "127.0.0.1")
 SERVER_HOST = os.environ.get("KGM_HOST", "127.0.0.1")
 BASE_DIR = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
-HEARTBEAT_TIMEOUT_SECONDS = 120
-EMPTY_CLIENT_GRACE_SECONDS = 5
+HEARTBEAT_TIMEOUT_SECONDS = 20
+EMPTY_CLIENT_GRACE_SECONDS = 1
 
 
 def candidate_ports() -> list[int]:
@@ -231,6 +231,7 @@ def main() -> int:
         if httpd is not None:
             httpd.shutdown()
             httpd.server_close()
+        cleanup_node_worker()
 
 
 if __name__ == "__main__":

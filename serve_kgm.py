@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import http.server
+import atexit
 import csv
 import json
 import os
@@ -42,7 +43,7 @@ NODE_WORKER_READY = set()
 PREVIEW_ROWS = 500
 PREVIEW_COLS = None
 MAX_DIFF_CELLS_PER_SHEET = 5000
-APP_BUILD_STAMP = "csv-popout-20260526-2"
+APP_BUILD_STAMP = "csv-popout-20260526-3"
 
 
 def app_base_dir():
@@ -67,6 +68,26 @@ def hidden_subprocess_kwargs():
         "startupinfo": startupinfo,
         "creationflags": subprocess.CREATE_NO_WINDOW,
     }
+
+
+def cleanup_node_worker():
+    global NODE_WORKER
+    worker = NODE_WORKER
+    NODE_WORKER = None
+    NODE_WORKER_READY.clear()
+    if not worker or worker.poll() is not None:
+        return
+    try:
+        worker.kill()
+        worker.wait(timeout=3)
+    except Exception:
+        try:
+            worker.terminate()
+        except Exception:
+            pass
+
+
+atexit.register(cleanup_node_worker)
 
 
 class PipelineExecutionError(RuntimeError):
