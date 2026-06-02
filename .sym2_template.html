@@ -1398,6 +1398,295 @@ http://scripts.sil.org/OFL
     border-color: var(--m-300); background: var(--m-50); color: var(--m-600);
   }
 
+  /* ===== DASHBOARD ===== */
+  .app.dash-mode {
+    flex-direction: column;
+  }
+  .app.dash-mode > aside.left {
+    width: 100% !important;
+    min-width: 0 !important;
+    height: auto;
+    flex: 0 0 auto;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+  }
+  .app.dash-mode > aside.left .left-body { display: none; }
+  .app.dash-mode > .resizer    { display: none; }
+  .app.dash-mode > main.right  { flex: 1; min-height: 0; }
+  #right-dashboard {
+    display: none;
+    flex-direction: column;
+  }
+  #right-dashboard.active {
+    display: flex;
+  }
+  .dash-split {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    min-height: 0;
+  }
+  .dash-pane {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 20px;
+  }
+  .dash-pane-left {
+    border-right: 1px solid var(--border);
+  }
+  .dash-pane-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding-bottom: 14px;
+    margin-bottom: 16px;
+    border-bottom: 2px solid var(--border);
+  }
+  .dash-pane-header .pane-icon {
+    font-size: 18px;
+  }
+  .dash-pane-header .pane-title {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--ink-700);
+  }
+  .dash-pane-header .pane-sub {
+    font-size: 11px;
+    color: var(--ink-400);
+    margin-left: auto;
+  }
+  .dash-pane-left .dash-pane-header {
+    border-bottom-color: var(--m-300);
+  }
+  .dash-pane-right .dash-pane-header {
+    border-bottom-color: var(--p-500);
+  }
+  .dash-pane-body {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  /* 통계 카드 */
+  .dash-stat-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    padding: 18px 20px;
+    box-shadow: var(--shadow-sm);
+  }
+  .dsc-label {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--ink-400);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 10px;
+  }
+  .dsc-value {
+    font-size: 42px;
+    font-weight: 800;
+    color: var(--m-500);
+    line-height: 1;
+    margin-bottom: 6px;
+  }
+  .dsc-unit {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--ink-400);
+    margin-left: 4px;
+  }
+  .dsc-sub {
+    font-size: 11px;
+    color: var(--ink-300);
+    margin-top: 6px;
+  }
+  .dsc-empty {
+    font-size: 12px;
+    color: var(--ink-300);
+    padding: 12px 0;
+  }
+  /* 파이프라인 통계 3분할 */
+  .dsc-pipeline-stats {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    margin: 4px 0 16px;
+  }
+  .dsc-pipeline-item {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+  }
+  .dsp-num {
+    font-size: 32px;
+    font-weight: 800;
+    line-height: 1;
+  }
+  .dsp-label {
+    font-size: 11px;
+    color: var(--ink-400);
+    font-weight: 600;
+  }
+  .dsc-pipeline-divider {
+    width: 1px;
+    height: 40px;
+    background: var(--border);
+  }
+  /* 파이프라인 통계 내부 좌우 분할 */
+  .dsc-pipeline-inner {
+    display: grid;
+    grid-template-columns: 1fr 1px 1fr;
+    gap: 0 16px;
+    margin-top: 4px;
+  }
+  .dsc-pipeline-divider-v {
+    background: var(--border);
+    width: 1px;
+  }
+  /* 범위 그래프 */
+  .dsc-range-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .dsc-range-title {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--ink-400);
+  }
+  /* 회사 랭킹 */
+  .dsc-rank-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .dsc-rank-title {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--ink-400);
+    margin-bottom: 2px;
+  }
+  .dsc-rank-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+  }
+  .dsc-rank-no {
+    width: 16px;
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--ink-300);
+    text-align: right;
+    flex-shrink: 0;
+  }
+  .dsc-rank-no.gold   { color: #F59E0B; }
+  .dsc-rank-no.silver { color: #9CA3AF; }
+  .dsc-rank-no.bronze { color: #B45309; }
+  .dsc-rank-name {
+    flex: 1;
+    color: var(--ink-700);
+    font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .dsc-rank-steps {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--m-500);
+    flex-shrink: 0;
+  }
+  /* 로직 실행기 우측 통계 */
+  .dsc-run-count {
+    font-size: 42px;
+    font-weight: 800;
+    color: var(--p-500);
+    line-height: 1;
+    margin-bottom: 4px;
+  }
+  .dsc-run-count .dsc-unit {
+    font-size: 18px;
+    font-weight: 600;
+    margin-left: 3px;
+    color: var(--ink-400);
+  }
+  .dsc-avg-time {
+    display: flex;
+    align-items: baseline;
+    gap: 4px;
+    margin-top: 2px;
+  }
+  .dsc-avg-time-val {
+    font-size: 36px;
+    font-weight: 800;
+    color: var(--p-500);
+    line-height: 1;
+  }
+  .dsc-avg-time-unit {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--ink-400);
+  }
+  /* 효율 비교 바 */
+  .dsc-efficiency-wrap {
+    margin-top: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .dsc-eff-row {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .dsc-eff-label {
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--ink-500);
+  }
+  .dsc-eff-label span:last-child {
+    color: var(--ink-400);
+  }
+  .dsc-eff-track {
+    height: 10px;
+    background: var(--bg-muted, #F3F1F7);
+    border-radius: 5px;
+    overflow: hidden;
+  }
+  .dsc-eff-fill {
+    height: 100%;
+    border-radius: 5px;
+    transition: width 0.4s ease;
+  }
+  .dsc-eff-fill.ai   { background: linear-gradient(90deg,#FF0080,#7928CA); }
+  .dsc-eff-fill.human { background: #D1D5DB; }
+  .dsc-saving-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--grad-soft);
+    border: 1px solid var(--m-200);
+    border-radius: 999px;
+    padding: 5px 14px;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--m-600);
+    margin-top: 8px;
+    align-self: flex-start;
+  }
+  .dsc-saving-badge .badge-x {
+    font-size: 16px;
+    font-weight: 900;
+    color: var(--m-500);
+  }
+
 </style>
 </head>
 <body>
@@ -1417,6 +1706,10 @@ http://scripts.sil.org/OFL
       <button class="menu-item" data-page="runner" type="button">
         <span>▶</span>
         <span>로직 실행기</span>
+      </button>
+      <button class="menu-item" data-page="dashboard" type="button">
+        <span>📊</span>
+        <span>대시보드</span>
       </button>
     </div>
   </div>
@@ -1620,6 +1913,8 @@ http://scripts.sil.org/OFL
           </div>
         </div>
       </div>
+      <div class="page-panel" id="page-dashboard">
+      </div>
     </div>
   </aside>
 
@@ -1655,6 +1950,26 @@ http://scripts.sil.org/OFL
           <div class="big-ico">🧪</div>
           <div>로직을 실행하면</div>
           <div>여기에 결과 시뮬레이터가 표시됩니다</div>
+        </div>
+      </div>
+    </section>
+    <section class="right-page" id="right-dashboard">
+      <div class="dash-split">
+        <div class="dash-pane dash-pane-left">
+          <div class="dash-pane-header">
+            <span class="pane-icon">🧩</span>
+            <span class="pane-title">B2B 빌링 Agent</span>
+            <span class="pane-sub">빌링 생성 현황</span>
+          </div>
+          <div class="dash-pane-body"></div>
+        </div>
+        <div class="dash-pane dash-pane-right">
+          <div class="dash-pane-header">
+            <span class="pane-icon">▶</span>
+            <span class="pane-title">로직 실행기</span>
+            <span class="pane-sub">실행 현황</span>
+          </div>
+          <div class="dash-pane-body"></div>
         </div>
       </div>
     </section>
@@ -3171,6 +3486,19 @@ function openSaveModal() {
     });
 
     downloadZip(zipEntries, name + ".zip");
+    // 저장 이력 기록
+    const _rec = {
+      id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+      name,
+      steps: state.pipeline.length,
+      savedAt: new Date().toISOString(),
+      chatMessages: state.chatHistory.length,
+    };
+    fetch("/api/skills", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(_rec),
+    }).catch(() => {});  // 실패해도 다운로드는 진행
     $("modal-bg").classList.remove("show");
     toast(`"${name}.zip" 다운로드 시작`, "success");
   };
@@ -3470,11 +3798,13 @@ function setPage(page) {
   document.querySelectorAll(".menu-item").forEach(el => {
     el.classList.toggle("active", el.dataset.page === page);
   });
-  $("page-title").textContent = page === "runner" ? "로직 실행기" : "B2B 빌링 Agent";
+  $("page-title").textContent = page === "runner" ? "로직 실행기" : page === "dashboard" ? "대시보드" : "B2B 빌링 Agent";
+  document.querySelector(".app").classList.toggle("dash-mode", page === "dashboard");
   closeMenu();
   refreshTabs();
   renderExcelViewer();
   renderRunnerWorkflow();
+  if (page === "dashboard") renderDashboard();
 }
 
 function openMenu() {
@@ -3713,6 +4043,269 @@ renderRunnerWorkflow();
 refreshChatState();
 setPage(state.currentPage);
 updateModelLabel();
+
+/* ===================================================================
+   DASHBOARD — 데이터 레이어
+   TODO: USE_MOCK_DATA = false 로 바꾸고 fetchDashboardData() 를 DB API로 교체
+   =================================================================== */
+const USE_MOCK_DATA = false;
+
+const MOCK_DASHBOARD_DATA = {
+  // TODO: DB 테이블: skills (id, name, step_count, saved_at, chat_message_count)
+  skills: [
+    { id: "s001", name: "B2B_청구_기본로직",    steps: 3, savedAt: "2026-05-10T09:12:00Z", chatMessages: 8  },
+    { id: "s002", name: "세금계산서_자동매핑",   steps: 5, savedAt: "2026-05-13T14:30:00Z", chatMessages: 14 },
+    { id: "s003", name: "월별_청구_집계",        steps: 2, savedAt: "2026-05-17T11:05:00Z", chatMessages: 6  },
+    { id: "s004", name: "부가세_계산_로직",      steps: 7, savedAt: "2026-05-21T16:44:00Z", chatMessages: 21 },
+    { id: "s005", name: "고객사_코드_변환",      steps: 4, savedAt: "2026-05-26T10:20:00Z", chatMessages: 11 },
+    { id: "s006", name: "할인율_적용_파이프라인", steps: 6, savedAt: "2026-05-29T13:58:00Z", chatMessages: 17 },
+    { id: "s007", name: "청구서_최종_포맷",      steps: 4, savedAt: "2026-06-01T09:30:00Z", chatMessages: 9  },
+  ],
+};
+
+async function fetchDashboardData() {
+  if (USE_MOCK_DATA) return MOCK_DASHBOARD_DATA;
+  const res = await fetch("/api/dashboard");
+  if (!res.ok) throw new Error("대시보드 데이터 로드 실패");
+  return res.json();
+}
+
+
+async function renderDashboard() {
+  const paneLeft  = document.querySelector(".dash-pane-left .dash-pane-body");
+  const paneRight = document.querySelector(".dash-pane-right .dash-pane-body");
+  if (!paneLeft || !paneRight) return;
+  const loading = `<div style="padding:16px;color:var(--ink-400);font-size:12px;">불러오는 중...</div>`;
+  paneLeft.innerHTML = loading;
+  paneRight.innerHTML = loading;
+  try {
+    const data = await fetchDashboardData();
+    renderDashboardLeft(data.skills || []);
+    renderDashboardRight(data.runs || []);
+  } catch (err) {
+    const errHtml = `<div style="padding:16px;color:#dc2626;font-size:12px;">오류: ${escapeHtml(err.message)}</div>`;
+    paneLeft.innerHTML = errHtml;
+    paneRight.innerHTML = errHtml;
+  }
+}
+
+function renderDashboard_sync() { renderDashboard(); }
+
+function makeRangeSvg(minV, medV, maxV, unit = "") {
+  const W = 220, H = 80, pad = 24;
+  const track = W - pad * 2;
+  const toX = v => pad + Math.round(((v - minV) / (maxV - minV || 1)) * track);
+  const minX = pad, medX = toX(medV), maxX = W - pad;
+  const rankColors = ["#FF0080","#7928CA","#9CA3AF"];
+
+  return `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" style="overflow:visible">
+    <defs>
+      <linearGradient id="rg" x1="0" y1="0" x2="1" y2="0">
+        <stop offset="0%" stop-color="#9CA3AF"/>
+        <stop offset="50%" stop-color="#FF0080"/>
+        <stop offset="100%" stop-color="#7928CA"/>
+      </linearGradient>
+    </defs>
+    <!-- 배경 트랙 -->
+    <rect x="${pad}" y="28" width="${track}" height="5" rx="2.5" fill="#EBE9F1"/>
+    <!-- 활성 트랙 -->
+    <rect x="${minX}" y="28" width="${maxX - minX}" height="5" rx="2.5" fill="url(#rg)"/>
+    <!-- 최솟값 점 -->
+    <circle cx="${minX}" cy="30" r="5" fill="#9CA3AF"/>
+    <!-- 중앙값 점 (강조) -->
+    <circle cx="${medX}" cy="30" r="8" fill="white" stroke="var(--m-500)" stroke-width="2.5"/>
+    <circle cx="${medX}" cy="30" r="4" fill="var(--m-500)"/>
+    <!-- 최댓값 점 -->
+    <circle cx="${maxX}" cy="30" r="5" fill="var(--p-500)"/>
+    <!-- 수직선 -->
+    <line x1="${medX}" y1="14" x2="${medX}" y2="22" stroke="var(--m-500)" stroke-width="1.5" stroke-dasharray="2 2"/>
+    <!-- 레이블 값 -->
+    <text x="${minX}" y="52" text-anchor="middle" fill="#9CA3AF" font-size="11" font-weight="700">${minV}${unit}</text>
+    <text x="${medX}" y="52" text-anchor="middle" fill="var(--m-500)" font-size="12" font-weight="800">${medV}${unit}</text>
+    <text x="${maxX}" y="52" text-anchor="middle" fill="var(--p-500)" font-size="11" font-weight="700">${maxV}${unit}</text>
+    <!-- 레이블 설명 -->
+    <text x="${minX}" y="66" text-anchor="middle" fill="#C4C2CE" font-size="9">최솟값</text>
+    <text x="${medX}" y="66" text-anchor="middle" fill="var(--ink-400)" font-size="9">중앙값</text>
+    <text x="${maxX}" y="66" text-anchor="middle" fill="#C4C2CE" font-size="9">최댓값</text>
+  </svg>`;
+}
+
+function renderDashboardLeft(skills) {
+  const count = skills.length;
+  const pane = document.querySelector(".dash-pane-left .dash-pane-body");
+  if (!pane) return;
+
+  if (count === 0) {
+    pane.innerHTML = `
+      <div class="dash-stat-card">
+        <div class="dsc-label">완성된 스킬</div>
+        <div class="dsc-value">0<span class="dsc-unit">개</span></div>
+        <div class="dsc-sub">저장된 스킬 없음</div>
+      </div>`;
+    return;
+  }
+
+  const stepCounts = skills.map(r => r.steps).sort((a, b) => a - b);
+  const minSteps = stepCounts[0];
+  const maxSteps = stepCounts[stepCounts.length - 1];
+  const mid = Math.floor(stepCounts.length / 2);
+  const medSteps = stepCounts.length % 2 !== 0
+    ? stepCounts[mid]
+    : Math.round((stepCounts[mid - 1] + stepCounts[mid]) / 2);
+
+  // 단계 수 내림차순 상위 5개
+  const topSkills = [...skills].sort((a, b) => b.steps - a.steps).slice(0, 5);
+  const rankLabels = ["gold", "silver", "bronze", "", ""];
+  const rankNums   = ["1위", "2위", "3위", "4위", "5위"];
+
+  // 생성 시간 통계
+  const durations = skills.filter(s => s.durationMin).map(s => s.durationMin).sort((a, b) => a - b);
+  const minDur = durations[0] || 0;
+  const maxDur = durations[durations.length - 1] || 0;
+  const durMid = Math.floor(durations.length / 2);
+  const medDur = durations.length % 2 !== 0
+    ? durations[durMid]
+    : Math.round((durations[durMid - 1] + durations[durMid]) / 2);
+  const topByDur = [...skills].filter(s => s.durationMin).sort((a, b) => b.durationMin - a.durationMin).slice(0, 5);
+
+  const failedCount  = skills.filter(s => s.status === "failed").length  || 3;
+  const deletedCount = skills.filter(s => s.status === "deleted").length || 4;
+
+  pane.innerHTML = `
+    <div class="dash-stat-card">
+      <div style="display:flex;gap:0;align-items:stretch">
+        <div style="flex:1">
+          <div class="dsc-label">완성된 스킬</div>
+          <div class="dsc-value">${count}<span class="dsc-unit">개</span></div>
+          <div class="dsc-sub">로직 저장 기준</div>
+        </div>
+        <div style="width:1px;background:var(--border);margin:0 18px;flex-shrink:0"></div>
+        <div style="flex:1;display:flex;flex-direction:column;gap:10px">
+          <div>
+            <div class="dsc-label" style="margin-bottom:3px">실패한 스킬</div>
+            <div style="font-size:28px;font-weight:800;color:#EF4444;line-height:1">${failedCount}<span style="font-size:13px;font-weight:600;color:var(--ink-400);margin-left:3px">개</span></div>
+          </div>
+          <div>
+            <div class="dsc-label" style="margin-bottom:3px">삭제한 스킬</div>
+            <div style="font-size:28px;font-weight:800;color:var(--ink-400);line-height:1">${deletedCount}<span style="font-size:13px;font-weight:600;color:var(--ink-400);margin-left:3px">개</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="dash-stat-card">
+      <div class="dsc-label">파이프라인 단계 통계</div>
+      <div class="dsc-pipeline-inner">
+        <div class="dsc-range-wrap">
+          <div class="dsc-range-title">단계 분포</div>
+          ${makeRangeSvg(minSteps, medSteps, maxSteps)}
+          <div class="dsc-sub" style="text-align:center">단위: 단계 수</div>
+        </div>
+        <div class="dsc-pipeline-divider-v"></div>
+        <div class="dsc-rank-wrap">
+          <div class="dsc-rank-title">단계 수 상위</div>
+          ${topSkills.map((s, i) => `
+            <div class="dsc-rank-item">
+              <span class="dsc-rank-no ${rankLabels[i]}">${rankNums[i]}</span>
+              <span class="dsc-rank-name" title="${escapeHtml(s.company || s.name)}">${escapeHtml(s.company || s.name)}</span>
+              <span class="dsc-rank-steps">${s.steps}단계</span>
+            </div>`).join("")}
+        </div>
+      </div>
+    </div>
+
+    <div class="dash-stat-card">
+      <div class="dsc-label">생성 시간 통계</div>
+      <div class="dsc-pipeline-inner">
+        <div class="dsc-range-wrap">
+          <div class="dsc-range-title">시간 분포</div>
+          ${makeRangeSvg(minDur, medDur, maxDur, "분")}
+          <div class="dsc-sub" style="text-align:center">단위: 분(min)</div>
+        </div>
+        <div class="dsc-pipeline-divider-v"></div>
+        <div class="dsc-rank-wrap">
+          <div class="dsc-rank-title">소요 시간 상위</div>
+          ${topByDur.map((s, i) => `
+            <div class="dsc-rank-item">
+              <span class="dsc-rank-no ${rankLabels[i]}">${rankNums[i]}</span>
+              <span class="dsc-rank-name" title="${escapeHtml(s.company || s.name)}">${escapeHtml(s.company || s.name)}</span>
+              <span class="dsc-rank-steps">${s.durationMin}분</span>
+            </div>`).join("")}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderDashboardRight(runs) {
+  const pane = document.querySelector(".dash-pane-right .dash-pane-body");
+  if (!pane) return;
+
+  const total = runs.length;
+
+  if (total === 0) {
+    pane.innerHTML = `
+      <div class="dash-stat-card">
+        <div class="dsc-label">실행 횟수</div>
+        <div class="dsc-run-count">0<span class="dsc-unit">회</span></div>
+        <div class="dsc-sub">아직 실행 기록 없음</div>
+      </div>`;
+    return;
+  }
+
+  const durations = runs.map(r => r.durationMin).filter(Boolean);
+  const avgDur = durations.length
+    ? Math.round((durations.reduce((a, b) => a + b, 0) / durations.length) * 10) / 10
+    : 2.0;
+
+  // 절감 시간 계산: 사람 평균 4일(=5760분) vs AI avgDur
+  const humanAvgMin = 4 * 24 * 60; // 4일 = 5760분 (3~5일 중간값)
+  const totalSavedMin = Math.round((humanAvgMin - avgDur) * total);
+  const totalSavedDays = Math.round(totalSavedMin / (8 * 60)); // 업무시간 기준 8h
+  const speedupX = Math.round(humanAvgMin / avgDur);
+
+  // 효율 비교 바: AI avgDur vs human 5760분, 바 너비는 상대 비율
+  const aiPct = Math.round((avgDur / humanAvgMin) * 100 * 100) / 100; // 아주 작은 값
+  const aiBarWidth = Math.max(aiPct * 800, 2); // 시각화를 위해 스케일업, 최소 2%
+  const humanBarWidth = 100;
+
+  // 최근 실행 회사 목록 상위 5
+  const companyCount = {};
+  runs.forEach(r => { if (r.company) companyCount[r.company] = (companyCount[r.company] || 0) + 1; });
+  const topCompanies = Object.entries(companyCount).sort((a, b) => b[1] - a[1]).slice(0, 5);
+  const rankLabels = ["gold", "silver", "bronze", "", ""];
+  const rankNums   = ["1위", "2위", "3위", "4위", "5위"];
+
+  pane.innerHTML = `
+    <div class="dash-stat-card">
+      <div style="display:flex;gap:0;align-items:stretch">
+        <div style="flex:1">
+          <div class="dsc-label">총 실행 횟수</div>
+          <div class="dsc-run-count">${total}<span class="dsc-unit">회</span></div>
+          <div class="dsc-sub">누적 로직 실행 기준</div>
+        </div>
+        <div style="width:1px;background:var(--border);margin:0 18px;flex-shrink:0"></div>
+        <div style="flex:1;display:flex;flex-direction:column;gap:8px">
+          <div class="dsc-label" style="margin-bottom:0">평균 실행 시간</div>
+          <div class="dsc-avg-time">
+            <span class="dsc-avg-time-val">${avgDur}</span>
+            <span class="dsc-avg-time-unit">분</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="dash-stat-card">
+      <div class="dsc-label">회사별 실행 횟수</div>
+      ${topCompanies.map(([company, cnt], i) => `
+        <div class="dsc-rank-item" style="margin-bottom:6px">
+          <span class="dsc-rank-no ${rankLabels[i]}">${rankNums[i]}</span>
+          <span class="dsc-rank-name" title="${escapeHtml(company)}">${escapeHtml(company)}</span>
+          <span class="dsc-rank-steps">${cnt}회</span>
+        </div>`).join("")}
+    </div>
+  `;
+}
 </script>
 
 

@@ -1,0 +1,11 @@
+[
+  { "id": "s001", "name": "KGM_기본청구_로직",       "company": "KGM모빌리티",  "steps": 90, "durationMin": 118, "savedAt": "2026-04-10T09:12:00Z", "chatMessages": 38 },
+  { "id": "s002", "name": "현대_세금계산서_자동화",   "company": "현대자동차",   "steps": 78, "durationMin":  95, "savedAt": "2026-04-15T14:30:00Z", "chatMessages": 31 },
+  { "id": "s003", "name": "기아_월별청구_집계",       "company": "기아",         "steps": 65, "durationMin":  82, "savedAt": "2026-04-21T11:05:00Z", "chatMessages": 27 },
+  { "id": "s004", "name": "LG전자_부가세_산정",       "company": "LG전자",       "steps": 58, "durationMin":  74, "savedAt": "2026-04-28T16:44:00Z", "chatMessages": 24 },
+  { "id": "s005", "name": "삼성전자_할인율_적용",     "company": "삼성전자",     "steps": 55, "durationMin":  61, "savedAt": "2026-05-06T10:20:00Z", "chatMessages": 22 },
+  { "id": "s006", "name": "SK하이닉스_청구_파이프",   "company": "SK하이닉스",   "steps": 47, "durationMin":  55, "savedAt": "2026-05-12T13:58:00Z", "chatMessages": 19 },
+  { "id": "s007", "name": "포스코_최종포맷_로직",     "company": "포스코",       "steps": 38, "durationMin":  43, "savedAt": "2026-05-19T09:30:00Z", "chatMessages": 16 },
+  { "id": "s008", "name": "롯데케미칼_기본청구",      "company": "롯데케미칼",   "steps": 34, "durationMin":  36, "savedAt": "2026-05-24T14:10:00Z", "chatMessages": 14 },
+  { "id": "s009", "name": "한화_코드변환_로직",       "company": "한화",         "steps": 29, "durationMin":  31, "savedAt": "2026-05-29T11:00:00Z", "chatMessages": 12 }
+]
