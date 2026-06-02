@@ -814,7 +814,7 @@ function stabilizeExcelMirrorZOrder(excelId = currentExcelId()) {
 function scheduleExcelMirrorPosition(force = false) {
   clearTimeout(excelMirror.positionTimer);
   excelMirror.positionTimer = setTimeout(() => {
-    positionExcelMirrorWindow(currentExcelId(), { force: isNativeExcelShell() ? false : force }).catch(err => {
+    positionExcelMirrorWindow(currentExcelId(), { force }).catch(err => {
       if (!isMissingExcelSessionError(err)) console.warn("Excel mirror position failed:", err);
     }).then(() => {
       const excelId = currentExcelId();
@@ -834,6 +834,16 @@ function installExcelMirrorPositionListeners() {
     }
   });
   window.addEventListener("b2bNativeResize", () => scheduleExcelMirrorPosition(true));
+  const restoreOverlayAfterUiFocus = event => {
+    if (!isNativeExcelOverlayShell()) return;
+    const target = event.target;
+    if (target && target.closest && target.closest(".excel-mirror-shell")) return;
+    if (!currentExcelId() && !excelMirror.activeExcelId) return;
+    scheduleExcelMirrorPosition(true);
+    scheduleRestoreActiveExcelMirror(0);
+  };
+  document.addEventListener("pointerdown", restoreOverlayAfterUiFocus, true);
+  document.addEventListener("focusin", restoreOverlayAfterUiFocus, true);
   document.addEventListener("pointerup", event => {
     if (!isNativeExcelOverlayShell()) return;
     const target = event.target;
