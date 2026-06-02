@@ -67,8 +67,11 @@ function replaceSimulatorWithMirrorShell() {
 function updateMirrorShellStatus(text) {
   const target = currentExcelMirrorTarget();
   const excelId = currentExcelId();
+  const targetName = target && typeof workbookDisplayName === "function"
+    ? workbookDisplayName(target.file, "파일")
+    : (target && target.file ? target.file.name : "");
   const msg = text || (target
-    ? (excelId ? `연결됨: ${target.file.name}` : `대기 중: ${target.file.name}`)
+    ? (excelId ? `연결됨: ${targetName}` : `대기 중: ${targetName}`)
     : "파일을 선택한 뒤 보기 버튼을 누르세요.");
   document.querySelectorAll(".excel-mirror-shell [data-role='status']").forEach(el => {
     el.textContent = msg;
@@ -83,11 +86,14 @@ function publishNativeFileTabs() {
   const bridge = window.chrome && window.chrome.webview;
   if (!bridge || typeof bridge.postMessage !== "function") return;
   const files = [
-    ...state.inputs.map(f => ({ id: "input:" + f.name, role: "input", name: f.name })),
+    ...state.inputs.map((f, idx) => {
+      const name = typeof workbookDisplayName === "function" ? workbookDisplayName(f, `입력 파일 ${idx + 1}`) : (f.name || `입력 파일 ${idx + 1}`);
+      return { id: "input:" + name, role: "input", name };
+    }),
     ...(state.outputTemplates || []).map((tpl, idx) => ({
       id: typeof outputTemplateFileId === "function" ? outputTemplateFileId(idx) : "output:" + idx,
       role: "output",
-      name: tpl.file.name,
+      name: typeof workbookDisplayName === "function" ? workbookDisplayName(tpl.file, `출력 파일 ${idx + 1}`) : (tpl.file.name || `출력 파일 ${idx + 1}`),
     })),
   ];
   const enc = value => encodeURIComponent(String(value || ""));
@@ -99,6 +105,26 @@ function publishNativeFileTabs() {
   if (publishNativeFileTabs.lastPayload === payload) return;
   publishNativeFileTabs.lastPayload = payload;
   bridge.postMessage(payload);
+}
+
+function publishNativeExcelLoading(active, message) {
+  const bridge = window.chrome && window.chrome.webview;
+  if (!bridge || typeof bridge.postMessage !== "function") return;
+  const enc = value => encodeURIComponent(String(value || ""));
+  bridge.postMessage(["B2B_EXCEL_LOADING", active ? "1" : "0", enc(message || "")].join("\t"));
+}
+
+function setExcelMirrorOpening(target, active) {
+  const name = target && typeof workbookDisplayName === "function"
+    ? workbookDisplayName(target.file, "파일")
+    : (target && target.file ? target.file.name : "파일");
+  if (active) {
+    const msg = `Excel 여는 중: ${name}`;
+    updateMirrorShellStatus(msg);
+    publishNativeExcelLoading(true, msg);
+  } else {
+    publishNativeExcelLoading(false, "");
+  }
 }
 
 function currentExcelMirrorTarget() {
@@ -148,6 +174,7 @@ async function openCurrentWorkbookInExcel() {
     return;
   }
   try {
+    setExcelMirrorOpening(target, true);
     await hideInactiveExcelMirrorSessions(target.fileId);
     const existingExcelId = excelMirror.sessionsByFileId[target.fileId];
     if (existingExcelId) {
@@ -157,7 +184,7 @@ async function openCurrentWorkbookInExcel() {
         await positionExcelMirrorWindow(existingExcelId, { force: true });
         stabilizeExcelMirrorZOrder(existingExcelId);
         await pollExcelMirrorChanges(existingExcelId, { baselineOnly: true });
-        updateMirrorShellStatus(`Excel 연결됨: ${target.file.name}`);
+        updateMirrorShellStatus(`Excel 연결됨: ${workbookDisplayName(target.file, "파일")}`);
         startExcelMirrorPolling();
         return;
       } catch (err) {
@@ -178,7 +205,7 @@ async function openCurrentWorkbookInExcel() {
     excelMirror.sessionLastUsedByFileId[target.fileId] = Date.now();
     excelMirror.activeExcelId = data.excelId;
     suppressExcelMirrorSelection(1000);
-    updateMirrorShellStatus(`Excel 연결됨: ${target.file.name}`);
+    updateMirrorShellStatus(`Excel 연결됨: ${workbookDisplayName(target.file, "파일")}`);
     toast("실제 Excel 창을 열었습니다.", "success");
     await positionExcelMirrorWindow(data.excelId, { force: true });
     stabilizeExcelMirrorZOrder(data.excelId);
@@ -186,8 +213,11 @@ async function openCurrentWorkbookInExcel() {
     startExcelMirrorPolling();
     await trimExcelMirrorSessionCache(target.fileId);
   } catch (err) {
+    updateMirrorShellStatus("Excel 열기 실패: " + err.message);
     toast("Excel 열기 실패: " + err.message, "error");
     console.error(err);
+  } finally {
+    setExcelMirrorOpening(target, false);
   }
 }
 

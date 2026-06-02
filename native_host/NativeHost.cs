@@ -77,6 +77,7 @@ namespace B2BNativeHost
         private readonly TableLayoutPanel rightLayout;
         private readonly FlowLayoutPanel nativeFileTabs;
         private readonly Panel excelPanel;
+        private readonly Label excelLoadingLabel;
         private Process serverProcess;
         private int port;
         private string appUrl;
@@ -166,6 +167,17 @@ namespace B2BNativeHost
             excelPanel.Dock = DockStyle.Fill;
             excelPanel.BackColor = Color.White;
             rightLayout.Controls.Add(excelPanel, 0, 1);
+
+            excelLoadingLabel = new Label();
+            excelLoadingLabel.Dock = DockStyle.Fill;
+            excelLoadingLabel.Text = "Excel 여는 중...";
+            excelLoadingLabel.TextAlign = ContentAlignment.MiddleCenter;
+            excelLoadingLabel.Font = new Font(Font.FontFamily, 11F, FontStyle.Bold);
+            excelLoadingLabel.ForeColor = Color.FromArgb(96, 96, 112);
+            excelLoadingLabel.BackColor = Color.FromArgb(248, 249, 252);
+            excelLoadingLabel.Visible = false;
+            excelPanel.Controls.Add(excelLoadingLabel);
+
             excelPanel.MouseDown += (s, e) => FocusExcelChild();
             excelPanel.Enter += (s, e) => FocusExcelChild();
             StartExcelFocusAssist();
@@ -301,13 +313,33 @@ namespace B2BNativeHost
         private void HandleWebMessage(string message)
         {
             if (String.IsNullOrEmpty(message)) return;
-            if (!message.StartsWith("B2B_FILE_TABS\t", StringComparison.Ordinal)) return;
             if (InvokeRequired)
             {
                 BeginInvoke(new Action<string>(HandleWebMessage), message);
                 return;
             }
-            UpdateNativeFileTabs(message);
+            if (message.StartsWith("B2B_FILE_TABS\t", StringComparison.Ordinal))
+            {
+                UpdateNativeFileTabs(message);
+                return;
+            }
+            if (message.StartsWith("B2B_EXCEL_LOADING\t", StringComparison.Ordinal))
+            {
+                UpdateExcelLoading(message);
+            }
+        }
+
+        private void UpdateExcelLoading(string message)
+        {
+            string[] parts = message.Split('\t');
+            bool active = parts.Length > 1 && parts[1] == "1";
+            string text = parts.Length > 2 ? DecodeMessagePart(parts[2]) : "";
+            excelLoadingLabel.Text = String.IsNullOrWhiteSpace(text) ? "Excel 여는 중..." : text;
+            excelLoadingLabel.Visible = active;
+            if (active)
+            {
+                excelLoadingLabel.BringToFront();
+            }
         }
 
         private void UpdateNativeFileTabs(string message)
@@ -336,6 +368,10 @@ namespace B2BNativeHost
                     string fileId = DecodeMessagePart(fields[0]);
                     string role = DecodeMessagePart(fields[1]);
                     string name = DecodeMessagePart(fields[2]);
+                    if (String.IsNullOrWhiteSpace(name))
+                    {
+                        name = (String.Equals(role, "output", StringComparison.OrdinalIgnoreCase) ? "출력 파일 " : "입력 파일 ") + (i - 1).ToString();
+                    }
                     Button btn = new Button();
                     btn.Text = (String.Equals(role, "output", StringComparison.OrdinalIgnoreCase) ? "출력 " : "입력 ") + name;
                     btn.Tag = fileId;

@@ -39,6 +39,7 @@ function attachBackendWorkbookMeta(parsed, backendInfo) {
 function createBackendPreviewRecord(file, backendInfo) {
   if (!file || !backendInfo || !backendInfo.workbookId || !backendInfo.meta) return null;
   const meta = backendInfo.meta || {};
+  const displayName = String(backendInfo.name || file.name || "workbook.xlsx").trim() || "workbook.xlsx";
   const sheetNames = Array.isArray(meta.sheetNames) ? meta.sheetNames.slice() : Object.keys(meta.sheets || {});
   const sheets = {};
   const previewDimensions = {};
@@ -62,7 +63,8 @@ function createBackendPreviewRecord(file, backendInfo) {
     formats[sheetName] = Array.isArray(info.formats) ? info.formats : [];
   });
   return {
-    name: backendInfo.name || file.name,
+    name: displayName,
+    originalName: file.name || displayName,
     size: file.size || 0,
     sheetNames,
     sheets,

@@ -3,6 +3,8 @@
    =================================================================== */
 function setupDrop(zone, input, handler) {
   if (!zone || !input) return;
+  input.multiple = true;
+  input.setAttribute("multiple", "multiple");
   zone.addEventListener("click", () => input.click());
   zone.addEventListener("dragover", e => { e.preventDefault(); zone.classList.add("drag-over"); });
   zone.addEventListener("dragleave", () => zone.classList.remove("drag-over"));
@@ -19,6 +21,8 @@ function setupDrop(zone, input, handler) {
 
 function setupNodeDrop(zone, input, handler) {
   if (!zone || !input) return;
+  input.multiple = true;
+  input.setAttribute("multiple", "multiple");
   zone.addEventListener("click", () => input.click());
   zone.addEventListener("dragover", e => {
     e.preventDefault();
@@ -80,6 +84,20 @@ function prepareMemoryForFileUpload(files) {
   if (typeof refreshHistoryButtons === "function") refreshHistoryButtons();
 }
 
+function workbookDisplayName(file, fallback) {
+  const raw = file && (file.name || file.originalName || file.displayName);
+  const name = String(raw || "").trim();
+  return name || fallback || "파일";
+}
+
+function ensureWorkbookDisplayName(parsed, sourceFile, fallback) {
+  if (!parsed) return parsed;
+  const sourceName = sourceFile && sourceFile.name;
+  parsed.name = workbookDisplayName(parsed, sourceName || fallback);
+  parsed.originalName = parsed.originalName || sourceName || parsed.name;
+  return parsed;
+}
+
 function activateOutputTemplate(index) {
   const tpl = state.outputTemplates[index];
   if (!tpl) return false;
@@ -113,6 +131,7 @@ async function loadInputFiles(files) {
           ? await parseFileWithBackendPreview(f)
           : await parseFile(f);
         if (job.cancelled) break;
+        ensureWorkbookDisplayName(parsed, f, `입력 파일 ${startInputCount + i + 1}`);
         parsed.originalBuffer = null;
         state.inputs.push(parsed);
         state.inputsOriginal.push(cloneFileRecord(parsed));
@@ -157,6 +176,7 @@ async function loadOutputTemplates(files) {
           ? await parseFileWithBackendPreview(f)
           : await parseFile(f);
         if (job.cancelled) break;
+        ensureWorkbookDisplayName(parsed, f, `출력 파일 ${startIndex + i + 1}`);
         state.outputTemplates.push(makeOutputTemplate(parsed));
       } catch (err) {
         toast("파일 파싱 실패: " + f.name, "error");
@@ -546,14 +566,15 @@ renderInputList = function() {
   const count = $("input-count");
   if (count) count.textContent = state.inputs.length + "개";
   state.inputs.forEach((f, idx) => {
+    const name = workbookDisplayName(f, `입력 파일 ${idx + 1}`);
     const div = document.createElement("div");
-    div.className = "file-chip" + (state.currentFileId === "input:" + f.name ? " active" : "");
+    div.className = "file-chip" + (state.currentFileId === "input:" + name ? " active" : "");
     const kb = (f.size / 1024).toFixed(1);
     const totalRows = getTotalWorkbookRows(f).toLocaleString("ko-KR");
     div.innerHTML = `
       <div class="chip-icon">XLSX</div>
       <div class="chip-body">
-        <div class="chip-name" title="${escapeHtml(f.name)}">${escapeHtml(f.name)}</div>
+        <div class="chip-name" title="${escapeHtml(name)}">${escapeHtml(name)}</div>
         <div class="chip-meta">${kb} KB · 시트 ${f.sheetNames.length}개 · 전체 ${totalRows}행</div>
       </div>
       <button class="chip-view" data-idx="${idx}" type="button">보기</button>
@@ -563,10 +584,10 @@ renderInputList = function() {
     list.appendChild(div);
   });
   list.querySelectorAll(".chip-view").forEach(btn => {
-    btn.onclick = () => openWorkbookFileFromList("input:" + state.inputs[btn.dataset.idx].name);
+    btn.onclick = () => openWorkbookFileFromList("input:" + workbookDisplayName(state.inputs[btn.dataset.idx], `입력 파일 ${Number(btn.dataset.idx) + 1}`));
   });
   list.querySelectorAll(".chip-download").forEach(btn => {
-    btn.onclick = () => downloadWorkbookFileFromList("input:" + state.inputs[btn.dataset.idx].name);
+    btn.onclick = () => downloadWorkbookFileFromList("input:" + workbookDisplayName(state.inputs[btn.dataset.idx], `입력 파일 ${Number(btn.dataset.idx) + 1}`));
   });
   list.querySelectorAll(".chip-remove").forEach(btn => {
     btn.onclick = () => removeInputFileAt(Number(btn.dataset.idx));
@@ -590,6 +611,7 @@ renderOutputChip = function() {
   if ($("output-status")) $("output-status").textContent = `${state.outputTemplates.length}개`;
   state.outputTemplates.forEach((tpl, idx) => {
     const f = tpl.file;
+    const name = workbookDisplayName(f, `출력 파일 ${idx + 1}`);
     const kb = (f.size / 1024).toFixed(1);
     const totalRows = getTotalWorkbookRows(f).toLocaleString("ko-KR");
     const div = document.createElement("div");
@@ -597,7 +619,7 @@ renderOutputChip = function() {
     div.innerHTML = `
       <div class="chip-icon">XLSX</div>
       <div class="chip-body">
-        <div class="chip-name" title="${escapeHtml(f.name)}">${escapeHtml(f.name)}</div>
+        <div class="chip-name" title="${escapeHtml(name)}">${escapeHtml(name)}</div>
         <div class="chip-meta">${kb} KB · 시트 ${f.sheetNames.length}개 · 전체 ${totalRows}행</div>
       </div>
       <button class="chip-view" data-idx="${idx}" type="button">보기</button>
@@ -631,13 +653,14 @@ openRunnerFileEditor = function(role) {
     <p style="font-size:12px; color:#666; margin-bottom:10px">보기는 실제 Excel로 열고, 다운로드는 현재까지 저장된 상태를 받습니다.</p>
     <div class="runner-file-editor-list">
       ${files.length ? files.map((f, idx) => {
+        const name = workbookDisplayName(f, `${isOutput ? "출력" : "입력"} 파일 ${idx + 1}`);
         const kb = (f.size / 1024).toFixed(1);
         const totalRows = getTotalWorkbookRows(f).toLocaleString("ko-KR");
         return `
           <div class="file-chip ${isOutput ? "output" : ""}">
             <div class="chip-icon">XLSX</div>
             <div class="chip-body">
-              <div class="chip-name" title="${escapeHtml(f.name)}">${escapeHtml(f.name)}</div>
+              <div class="chip-name" title="${escapeHtml(name)}">${escapeHtml(name)}</div>
               <div class="chip-meta">${kb} KB · 시트 ${f.sheetNames.length}개 · 전체 ${totalRows}행</div>
             </div>
             <button class="chip-view" data-idx="${idx}" type="button">보기</button>
@@ -657,7 +680,7 @@ openRunnerFileEditor = function(role) {
     btn.onclick = (e) => {
       e.stopPropagation();
       const idx = Number(btn.dataset.idx);
-      openWorkbookFileFromList(isOutput ? "output:" + idx : "input:" + state.inputs[idx].name);
+      openWorkbookFileFromList(isOutput ? "output:" + idx : "input:" + workbookDisplayName(state.inputs[idx], `입력 파일 ${idx + 1}`));
       $("modal-bg").classList.remove("show");
     };
   });
@@ -665,7 +688,7 @@ openRunnerFileEditor = function(role) {
     btn.onclick = (e) => {
       e.stopPropagation();
       const idx = Number(btn.dataset.idx);
-      downloadWorkbookFileFromList(isOutput ? "output:" + idx : "input:" + state.inputs[idx].name);
+      downloadWorkbookFileFromList(isOutput ? "output:" + idx : "input:" + workbookDisplayName(state.inputs[idx], `입력 파일 ${idx + 1}`));
     };
   });
   modal.querySelectorAll(".chip-remove").forEach(btn => {

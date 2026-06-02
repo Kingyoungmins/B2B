@@ -120,7 +120,12 @@ function getFile(fileId) {
   }
   if (fileId.startsWith("input:")) {
     const name = fileId.slice(6);
-    return state.inputs.find(f => f.name === name);
+    return state.inputs.find((f, idx) => {
+      const displayName = typeof workbookDisplayName === "function"
+        ? workbookDisplayName(f, `입력 파일 ${idx + 1}`)
+        : (f && f.name);
+      return f.name === name || displayName === name;
+    });
   }
   return null;
 }
