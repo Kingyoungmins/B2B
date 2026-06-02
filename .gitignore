@@ -1,0 +1,29 @@
+﻿# PyInstaller build artifacts
+build/
+dist/
+*.spec.bak
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.venv/
+venv/
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/
+
+# Zone.Identifier (Windows download metadata)
+*Zone.Identifier
+
+# Local automatic skill backups
+auto_backups/
+
+# Native host generated files
+native_host/bin/
+native_host/packages/

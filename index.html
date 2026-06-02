@@ -1,0 +1,337 @@
+﻿<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>B2B 빌링 Agent</title>
+  <script>
+    if (new URLSearchParams(location.search).get("nativeShell") === "1") {
+      document.documentElement.classList.add("native-shell");
+    }
+  </script>
+  <script src="vendor/xlsx.full.js"></script>
+  <link rel="stylesheet" href="styles/base.css">
+  <link rel="stylesheet" href="styles/layout.css">
+  <link rel="stylesheet" href="styles/panels.css">
+  <link rel="stylesheet" href="styles/components.css">
+  <link rel="stylesheet" href="styles/chat.css">
+  <link rel="stylesheet" href="styles/pipeline.css">
+  <link rel="stylesheet" href="styles/workflow.css">
+  <link rel="stylesheet" href="styles/runner.css">
+</head>
+<body>
+<body>
+
+<div class="menu-scrim" id="menu-scrim"></div>
+<aside class="menu-drawer" id="menu-drawer">
+  <div class="menu-drawer-inner">
+    <div class="menu-head">
+      <span>메뉴</span>
+      <button class="brand-btn icon" id="menu-close" type="button">✕</button>
+    </div>
+    <div class="menu-list">
+      <button class="menu-item active" data-page="generator" type="button">
+        <span>🧩</span>
+        <span>B2B 빌링 Agent</span>
+      </button>
+      <button class="menu-item" data-page="runner" type="button">
+        <span>▶</span>
+        <span>스킬 실행기</span>
+      </button>
+    </div>
+  </div>
+</aside>
+
+<div class="app">
+  <!-- ============ LEFT ============ -->
+  <aside class="left">
+    <div class="brand">
+      <button class="brand-btn icon" id="btn-menu" title="메뉴">☰</button>
+      <div class="logo">U+</div>
+      <div class="brand-info">
+        <h1 id="page-title">B2B 빌링 Agent</h1>
+        <div class="sub" id="model-label">AI: ixi 모델</div>
+      </div>
+      <button class="think-toggle" id="btn-think-toggle" type="button" aria-pressed="false" title="Think 모드 켜기">
+        <span class="think-toggle-knob"></span>
+        <span class="think-toggle-text">Think</span>
+      </button>
+      <button class="brand-btn" id="btn-settings" title="AI 모델 설정">⚙</button>
+    </div>
+
+    <div class="left-body">
+      <div class="page-panel active" id="page-generator">
+      <section class="panel-section" id="panel-inputs">
+        <div class="panel-head" data-target="panel-inputs">
+          <span class="caret">▼</span>
+          <span>① 입력 파일</span>
+          <span class="hint" id="input-count">0개</span>
+        </div>
+        <div class="panel-body">
+          <div class="dropzone" id="drop-inputs">
+            <span class="ico">📥</span>
+            입력 파일을 드래그해서 놓거나 클릭하여 선택
+            <small>.xlsx / .xls / .csv · 여러 파일 가능</small>
+            <input type="file" id="input-files" accept=".xlsx,.xls,.csv" multiple="" style="display:none">
+          </div>
+          <div id="input-list"></div>
+        </div>
+      </section>
+
+      <section class="panel-section" id="panel-output">
+        <div class="panel-head" data-target="panel-output">
+          <span class="caret">▼</span>
+          <span>② 출력 템플릿</span>
+          <span class="hint" id="output-status">미업로드</span>
+        </div>
+        <div class="panel-body">
+          <div class="dropzone output" id="drop-output">
+            <span class="ico">📤</span>
+            최종 결과 템플릿을 드래그해서 놓거나 클릭
+            <small>.xlsx / .xls / .csv · 여러 파일 가능</small>
+            <input type="file" id="output-file" accept=".xlsx,.xls,.csv" multiple style="display:none">
+          </div>
+          <div id="output-chip"></div>
+        </div>
+      </section>
+
+      <section class="panel-section chat-design-section" id="panel-chat-section">
+        <div class="panel-head" data-target="panel-chat-section">
+          <span class="caret">▼</span>
+          <span>③ 스킬 설계 (AI)</span>
+          <span class="hint">대화</span>
+        </div>
+        <div class="panel-body">
+          <section class="left-chat-panel chat-panel disabled" id="panel-chat">
+            <div class="chat-messages" id="chat-messages">
+              <div class="msg system">입력 또는 출력 파일 업로드 후 활성화됩니다.</div>
+            </div>
+            <div class="chat-input-row">
+              <textarea id="chat-text" placeholder="각 요청은 하나의 단계로 작성됩니다. 예:
+- 입력1에서 상품별 피벗을 새 시트 '피벗'에 만들어줘
+- Sheet1 의 A~E 열 데이터를 G~K 로 이동시켜줘
+- 월 정보를 1개월 증가시켜줘"></textarea>
+              <button class="btn-send" id="chat-send" disabled="">전송</button>
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <section class="panel-section growable" id="panel-pipeline">
+        <div class="panel-head" data-target="panel-pipeline">
+          <span class="caret">▼</span>
+          <span>④ 스킬 파이프라인</span>
+          <span class="hint" id="pipe-count">0 단계</span>
+        </div>
+        <div class="panel-body">
+          <div class="pipeline-list" id="pipeline-list">
+            <div class="pipeline-empty">아직 단계가 없습니다. AI가 생성한 코드를 "적용"하면 추가됩니다.</div>
+          </div>
+        </div>
+      </section>
+
+      <div class="action-row">
+        <button class="btn-primary" id="btn-run" disabled="">▶ 전체 실행</button>
+        <button class="btn-secondary" id="btn-undo" disabled title="Undo">Undo</button>
+        <button class="btn-secondary" id="btn-redo" disabled title="Redo">Redo</button>
+        <button class="btn-primary" id="btn-download" disabled="" style="background:#217346">📥 전체 파일 다운로드</button>
+      </div>
+      <div class="action-row">
+        <button class="btn-secondary" id="btn-save" disabled="">💾 스킬 저장</button>
+        <button class="btn-secondary" id="btn-load">📂 스킬 불러오기</button>
+        <button class="btn-secondary" id="btn-reset">↻ 초기화</button>
+      </div>
+      </div>
+
+      <div class="page-panel" id="page-runner">
+        <div class="workflow-panel">
+          <div class="runner-hero">
+            <div class="runner-hero-icon">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+            </div>
+            <div class="runner-hero-body">
+              <div class="runner-hero-title">스킬 실행 파이프라인</div>
+              <div class="runner-hero-sub">입력 · 템플릿 · 스킬을 연결하고 한 번에 실행합니다</div>
+            </div>
+            <div class="runner-hero-badge" id="runner-hero-badge">대기 중</div>
+          </div>
+
+          <div class="runner-flow">
+            <svg class="runner-triangle-lines" viewBox="0 0 500 460" preserveAspectRatio="none" aria-hidden="true">
+              <defs>
+                <linearGradient id="tri-grad" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0%" stop-color="#FF0080" stop-opacity="0.55"></stop>
+                  <stop offset="100%" stop-color="#7928CA" stop-opacity="0.55"></stop>
+                </linearGradient>
+              </defs>
+              <polygon class="tri-outline" points="80,80 420,80 250,400" fill="none" stroke="url(#tri-grad)" stroke-width="2" stroke-dasharray="5 6" stroke-linejoin="round"></polygon>
+              <line class="tri-spoke" x1="80" y1="80" x2="250" y2="230" stroke="url(#tri-grad)" stroke-width="1.5" stroke-dasharray="3 5"></line>
+              <line class="tri-spoke" x1="420" y1="80" x2="250" y2="230" stroke="url(#tri-grad)" stroke-width="1.5" stroke-dasharray="3 5"></line>
+              <line class="tri-spoke" x1="250" y1="400" x2="250" y2="230" stroke="url(#tri-grad)" stroke-width="1.5" stroke-dasharray="3 5"></line>
+            </svg>
+
+            <div class="runner-circle runner-pos-1 drop-target" id="runner-input-node" data-role="input">
+              <div class="runner-circle-inner">
+                <span class="runner-circle-num">1</span>
+                <span class="runner-circle-label">입력 파일</span>
+                <span class="runner-circle-count" id="runner-input-count">0</span>
+              </div>
+              <span class="runner-circle-status" data-status="empty">비어있음</span>
+            </div>
+
+            <div class="runner-circle runner-pos-2 drop-target" id="runner-output-node" data-role="output">
+              <div class="runner-circle-inner">
+                <span class="runner-circle-num">2</span>
+                <span class="runner-circle-label">출력 템플릿</span>
+                <span class="runner-circle-count" id="runner-output-count">—</span>
+              </div>
+              <span class="runner-circle-status" data-status="empty">비어있음</span>
+            </div>
+
+            <div class="runner-circle runner-pos-3" id="runner-logic-node" data-role="logic">
+              <div class="runner-circle-inner">
+                <span class="runner-circle-num">3</span>
+                <span class="runner-circle-label">스킬</span>
+                <span class="runner-circle-count" id="runner-logic-count">0</span>
+              </div>
+              <span class="runner-circle-status" data-status="empty">비어있음</span>
+              <input type="file" id="logic-files" accept=".zip,.json,.js,.py,text/javascript,application/json" multiple="" style="display:none">
+            </div>
+
+            <div class="runner-circle runner-pos-4 runner-center" id="runner-result-node" data-role="result">
+              <div class="runner-progress-ring" aria-hidden="true"></div>
+              <button class="runner-center-btn" id="runner-run-btn" type="button" disabled="">
+                <span class="runner-circle-num">4</span>
+                <span class="runner-center-label">실행하기</span>
+                <span class="runner-center-sub" id="runner-center-sub">대기 중</span>
+              </button>
+            </div>
+
+            <!-- hidden lists kept for JS compatibility -->
+            <div style="display:none">
+              <div id="runner-input-list"></div>
+              <div id="runner-output-list"></div>
+              <div id="runner-logic-list"></div>
+              <div id="runner-result-list"></div>
+              <div id="drop-logic"></div>
+            </div>
+          </div>
+
+          <div class="runner-stats">
+            <div class="runner-stat">
+              <div class="runner-stat-label">입력 파일</div>
+              <div class="runner-stat-value" id="runner-stat-inputs">0</div>
+            </div>
+            <div class="runner-stat">
+              <div class="runner-stat-label">템플릿</div>
+              <div class="runner-stat-value" id="runner-stat-template">—</div>
+            </div>
+            <div class="runner-stat">
+              <div class="runner-stat-label">스킬 단계</div>
+              <div class="runner-stat-value" id="runner-stat-steps">0</div>
+            </div>
+            <div class="runner-stat">
+              <div class="runner-stat-label">상태</div>
+              <div class="runner-stat-value" id="runner-stat-state">준비</div>
+            </div>
+          </div>
+
+          <div class="logic-summary" id="runner-summary">
+            <span class="runner-summary-ico">💡</span>
+            <span>아직 로드된 파일과 스킬이 없습니다. 위 4단계를 순서대로 채워주세요.</span>
+          </div>
+
+          <div class="runner-error-panel" id="runner-error-panel" hidden></div>
+
+          <div class="workflow-actions">
+            <button class="btn-secondary" id="runner-load-btn" type="button">📂 스킬 불러오기</button>
+            <button class="btn-secondary" id="runner-open-generator" type="button">🧩 생성기로 이동</button>
+            <button class="btn-primary" id="runner-download-btn" type="button" disabled="">📥 출력 xlsx 다운로드</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- 드래그 가능한 세로 구분선 -->
+  <div class="resizer" id="resizer" title="드래그해서 너비 조절"></div>
+
+  <!-- ============ RIGHT ============ -->
+  <main class="right">
+    <section class="right-page active" id="right-generator">
+      <div class="right-header">
+        <h2>Excel 미러링</h2>
+        <span style="font-size:11.5px; color:#666" id="view-info">읽기 전용 실제 Excel 창을 이 영역에 맞춰 표시합니다</span>
+      </div>
+      <div class="file-tabs" id="file-tabs"></div>
+      <div class="sheet-tabs" id="sheet-tabs"></div>
+      <div class="excel-viewer excel-native-mirror" id="excel-viewer">
+        <div class="excel-empty">
+          <div class="big-ico">▦</div>
+          <div>파일 목록의 보기 버튼을 누르면</div>
+          <div>오른쪽 영역에 실제 Excel 창이 읽기 전용으로 맞춰집니다</div>
+        </div>
+      </div>
+    </section>
+    <section class="right-page" id="right-runner">
+      <div class="right-header">
+        <h2>실행 결과</h2>
+        <span style="font-size:11.5px; color:#666" id="runner-view-info">파일 목록의 보기 버튼으로 실제 Excel을 엽니다</span>
+      </div>
+      <div class="file-tabs" id="runner-file-tabs"></div>
+      <div class="sheet-tabs" id="runner-sheet-tabs"></div>
+      <div class="excel-viewer" id="runner-excel-viewer">
+        <div class="excel-empty">
+          <div class="big-ico">🧪</div>
+          <div>파일의 보기 버튼을 누르면</div>
+          <div>실제 Excel 창에서 확인할 수 있습니다</div>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<div class="upload-status" id="upload-status" hidden>
+  <div class="upload-spinner"></div>
+  <div class="upload-text" id="upload-status-text">파일 업로드 중...</div>
+  <button type="button" class="btn-secondary" id="upload-cancel">Cancel</button>
+</div>
+
+<!-- Modal -->
+<div class="modal-bg" id="modal-bg">
+  <div class="modal" id="modal"></div>
+</div>
+
+  <script src="scripts/config.js"></script>
+  <script src="scripts/lifecycle.js"></script>
+  <script src="scripts/debug-panel.js"></script>
+  <script src="scripts/state.js"></script>
+  <script src="scripts/util.js"></script>
+  <script src="scripts/history.js"></script>
+  <script src="scripts/fuzzy.js"></script>
+  <script src="scripts/formula-engine.js"></script>
+  <script src="scripts/table-detect.js"></script>
+  <script src="scripts/sheet-ops.js"></script>
+  <script src="scripts/file-parsing.js"></script>
+  <script src="scripts/backend-workbooks.js"></script>
+  <script src="scripts/drop-handling.js"></script>
+  <script src="scripts/excel-viewer.js"></script>
+  <script src="scripts/excel-mirror.js"></script>
+  <script src="scripts/search.js"></script>
+  <script src="scripts/file-schema.js"></script>
+  <script src="scripts/llm-api.js"></script>
+  <script src="scripts/disambiguate.js"></script>
+  <script src="scripts/chat-ui.js"></script>
+  <script src="scripts/mentions.js"></script>
+  <script src="scripts/pipeline.js"></script>
+  <script src="scripts/output-template.js"></script>
+  <script src="scripts/save-load.js"></script>
+  <script src="scripts/menu.js"></script>
+  <script src="scripts/resizer.js"></script>
+  <script src="scripts/model-modal.js"></script>
+  <script src="scripts/main.js"></script>
+</body>
+</html>
