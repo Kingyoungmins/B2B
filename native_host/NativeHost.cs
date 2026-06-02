@@ -148,7 +148,7 @@ namespace B2BNativeHost
             rightLayout.ColumnCount = 1;
             rightLayout.RowCount = 2;
             rightLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-            rightLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 42F));
+            rightLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 58F));
             rightLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
             rightLayout.Margin = Padding.Empty;
             rightLayout.Padding = Padding.Empty;
@@ -156,7 +156,7 @@ namespace B2BNativeHost
 
             nativeFileTabs = new FlowLayoutPanel();
             nativeFileTabs.Dock = DockStyle.Fill;
-            nativeFileTabs.Padding = new Padding(8, 7, 8, 5);
+            nativeFileTabs.Padding = new Padding(8, 7, 8, 18);
             nativeFileTabs.BackColor = Color.White;
             nativeFileTabs.WrapContents = false;
             nativeFileTabs.AutoScroll = true;
@@ -375,9 +375,10 @@ namespace B2BNativeHost
                     Button btn = new Button();
                     btn.Text = (String.Equals(role, "output", StringComparison.OrdinalIgnoreCase) ? "출력 " : "입력 ") + name;
                     btn.Tag = fileId;
-                    btn.Height = 27;
-                    btn.Width = Math.Max(92, Math.Min(240, TextRenderer.MeasureText(btn.Text, Font).Width + 26));
+                    btn.Height = 28;
+                    btn.Width = Math.Max(128, Math.Min(320, TextRenderer.MeasureText(btn.Text, Font).Width + 34));
                     btn.Margin = new Padding(0, 0, 6, 0);
+                    btn.AutoEllipsis = true;
                     btn.FlatStyle = FlatStyle.Flat;
                     btn.FlatAppearance.BorderSize = 1;
                     btn.FlatAppearance.BorderColor = String.Equals(fileId, currentId, StringComparison.Ordinal)
