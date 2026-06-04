@@ -238,10 +238,20 @@ def transform(ctx):
 - 출력 요청이 "월, 총매출, 거래건수 순서"처럼 열 순서를 지정하면 출력 시트 헤더도 그 순서에 맞추세요.
 - 월 비교는 공백/0패딩 차이를 감안하세요. 예: "1월", "01월", "1 월".
 
-## 필터 요청 처리
-- "OO만 필터해줘", "조건에 맞는 행만 보여줘" 요청은 Excel AutoFilter를 최종 결과로 쓰지 마세요.
-- 새 워크시트를 만들고 헤더와 조건에 맞는 행을 복사하세요.
-- 원본 시트는 변경하지 마세요.
+## 정렬 / 필터 / 피벗 (자주 쓰는 작업 — 헬퍼 우선 사용)
+- 가능하면 아래 ctx 헬퍼를 쓰세요. 직접 COM을 쓰는 것보다 안정적입니다.
+- **정렬**: \`ctx.sort(ws, "컬럼명", ascending=True, header=True)\` — 내부에서 올바른 숫자 상수로 Range.Sort 호출.
+- **필터**: \`ctx.filter_to_sheet(ws, lambda row: 조건, "결과시트명")\` — 헤더+조건에 맞는 행을 새 시트로 복사. 원본은 유지.
+  - 예: \`ctx.filter_to_sheet(ws, lambda r: ctx.normalize(r[ctx.col(ws,"상태")-1]) == ctx.normalize("완료"), "완료건")\`
+- **피벗(그룹 요약)**: \`ctx.pivot(ws, group_by="회사명", value="매출", agg="sum", dest_name="회사별요약")\`
+  - group_by는 문자열 또는 리스트, agg는 "sum"/"count"/"avg"/"max"/"min". 새 시트에 요약 표를 만듭니다.
+- **COM 상수 주의**: 샌드박스에서 \`win32com\` 및 그 상수(xlAscending, xlYes 등)는 import할 수 없습니다.
+  직접 Range.Sort/PivotTable 등을 호출해야 하면 이름 상수 대신 **숫자 값**을 쓰세요(예: 오름차순 1, 내림차순 2, 헤더있음 1).
+- AutoFilter를 최종 결과로 의존하지 마세요(읽기전용 미러에서 on/off 상태가 불안정). 필요하면 ctx.filter_to_sheet로 새 시트를 만드세요.
+
+## import 규칙
+- 표준 라이브러리 import는 허용됩니다(예: re, json, datetime, math, collections, itertools, functools, decimal, statistics, random 등).
+- os, sys, subprocess, shutil, pathlib 등 시스템/파일 접근 모듈은 import할 수 없습니다.
 
 ## 수식 보존 규칙
 - 다운로드 시 값을 바꾸지 않은 셀은 원본 xlsx의 수식과 서식을 유지합니다.

@@ -76,7 +76,7 @@ MAX_DIFF_CELLS_PER_SHEET = 5000
 MAX_PIPELINE_STEP_SNAPSHOTS = 80
 MAX_PIPELINE_JOBS = 40
 PIPELINE_JOB_TTL_SECONDS = 60 * 60
-APP_BUILD_STAMP = "b2b-overlay-shell-20260602-044-17"
+APP_BUILD_STAMP = "b2b-overlay-shell-20260602-044-19"
 EXCEL_MIRROR_PROTECT_PASSWORD = "b2b_mirror_readonly"
 
 
@@ -2989,6 +2989,171 @@ class ExcelSkillContext:
     def data_start_row(self, sheet_or_name, workbook=None, header_rows=20):
         return self.header_row(sheet_or_name, workbook, header_rows) + 1
 
+    # ---- 정렬 / 필터 / 피벗 헬퍼 (자주 쓰는 작업을 안정적으로) ----
+    def _ws_of(self, sheet_or_name, workbook=None):
+        return sheet_or_name if hasattr(sheet_or_name, "UsedRange") else self.sheet(sheet_or_name, workbook)
+
+    def _col0(self, rows, name_or_idx, header_rows=20):
+        # 행 리스트 기준 0-based 열 인덱스. 정수는 1-based 로 간주.
+        if isinstance(name_or_idx, int):
+            return max(0, name_or_idx - 1)
+        target = self.normalize(name_or_idx)
+        scan = rows[:header_rows] if header_rows else rows
+        for row in scan:
+            for i, v in enumerate(row or []):
+                if self.normalize(v) == target:
+                    return i
+        for row in scan:
+            for i, v in enumerate(row or []):
+                if target and target in self.normalize(v):
+                    return i
+        return None
+
+    def add_sheet(self, name, workbook=None):
+        wb = self._unwrap_workbook(workbook or self.workbook)
+        base = (str(name) or "Sheet")[:31]
+        existing = {self.normalize(n) for n in _excel_names(wb.Worksheets)}
+        final = base
+        idx = 1
+        while self.normalize(final) in existing:
+            idx += 1
+            suffix = "_" + str(idx)
+            final = (base[: max(1, 31 - len(suffix))] + suffix)
+        ws = wb.Worksheets.Add(After=wb.Worksheets(wb.Worksheets.Count))
+        ws.Name = final
+        if self._is_output_workbook(wb):
+            self.last_output_sheet = ws.Name
+        return ws
+
+    def _write_grid(self, ws, grid, start_row=1, start_col=1):
+        if not grid:
+            return ws
+        ncol = max((len(r or []) for r in grid), default=0)
+        if ncol <= 0:
+            return ws
+        norm = [list(r or []) + [None] * (ncol - len(r or [])) for r in grid]
+        rng = ws.Range(ws.Cells(start_row, start_col), ws.Cells(start_row + len(norm) - 1, start_col + ncol - 1))
+        rng.Value = norm
+        return ws
+
+    def sort(self, sheet_or_name, by, ascending=True, header=True, workbook=None):
+        # Range.Sort 를 올바른 숫자 상수로 호출(win32com 상수 import 불필요).
+        ws = self._ws_of(sheet_or_name, workbook)
+        rows = self.rows(ws)
+        rel = self._col0(rows, by)
+        if rel is None:
+            raise RuntimeError("sort: column not found: %r" % (by,))
+        used = ws.UsedRange
+        abs_col = int(used.Column) + rel  # rel 은 0-based, used.Column 은 1-based
+        key = ws.Cells(int(used.Row), abs_col)
+        used.Sort(
+            Key1=key,
+            Order1=1 if ascending else 2,  # xlAscending=1 / xlDescending=2
+            Header=1 if header else 2,      # xlYes=1 / xlNo=2
+            Orientation=1,                  # xlTopToBottom=1
+        )
+        if self._is_output_workbook(ws.Parent):
+            self.last_output_sheet = ws.Name
+        return ws
+
+    def filter_to_sheet(self, sheet_or_name, predicate, dest_name, header_rows=1, workbook=None):
+        # AutoFilter 대신 헤더 + 조건에 맞는 행을 새 시트로 복사(읽기전용 미러에서 안정적).
+        ws = self._ws_of(sheet_or_name, workbook)
+        rows = self.rows(ws)
+        hr = max(0, int(header_rows or 0))
+        header = rows[:hr]
+        matched = []
+        for r in rows[hr:]:
+            try:
+                if predicate(r):
+                    matched.append(r)
+            except Exception:
+                continue
+        dest = self.add_sheet(dest_name, workbook=workbook or self.workbook)
+        self._write_grid(dest, list(header) + matched)
+        return dest
+
+    def pivot(self, sheet_or_name, group_by, value=None, agg="sum", dest_name=None, header_rows=1, workbook=None):
+        # Python 집계로 그룹별 요약 표를 새 시트에 만든다(COM PivotTable 보다 안정적).
+        ws = self._ws_of(sheet_or_name, workbook)
+        rows = self.rows(ws)
+        hr = max(1, int(header_rows or 1))
+        header_row = rows[hr - 1] if len(rows) >= hr else []
+        data = rows[hr:]
+        group_cols = list(group_by) if isinstance(group_by, (list, tuple)) else [group_by]
+        gidx = [self._col0(rows, g, hr) for g in group_cols]
+        vidx = self._col0(rows, value, hr) if value is not None else None
+        agg = str(agg or "sum").lower()
+
+        def _num(v):
+            if isinstance(v, bool):
+                return None
+            if isinstance(v, (int, float)):
+                return float(v)
+            if isinstance(v, str):
+                s = v.strip().replace(",", "")
+                try:
+                    return float(s)
+                except ValueError:
+                    return None
+            return None
+
+        groups = {}
+        order = []
+        for r in data:
+            key = tuple((r[i] if (i is not None and i < len(r)) else "") for i in gidx)
+            if key not in groups:
+                groups[key] = []
+                order.append(key)
+            if vidx is not None and vidx < len(r):
+                groups[key].append(r[vidx])
+
+        def _aggregate(vals):
+            nums = [n for n in (_num(v) for v in vals) if n is not None]
+            if agg == "count":
+                return len(vals)
+            if agg in ("avg", "average", "mean"):
+                return (sum(nums) / len(nums)) if nums else 0
+            if agg == "max":
+                return max(nums) if nums else ""
+            if agg == "min":
+                return min(nums) if nums else ""
+            return sum(nums)
+
+        out_header = []
+        for n, i in enumerate(gidx):
+            label = header_row[i] if (i is not None and i < len(header_row)) else ("그룹%d" % (n + 1))
+            out_header.append(label)
+        value_label = (str(value) if value is not None else "값") + "_" + (agg if agg != "average" else "avg")
+        out_header.append(value_label)
+        grid = [out_header]
+        for key in order:
+            grid.append(list(key) + [_aggregate(groups[key])])
+        dest = self.add_sheet(dest_name or "피벗요약", workbook=workbook or self.workbook)
+        self._write_grid(dest, grid)
+        return dest
+
+
+# 스킬에서 import 가능한 안전한 표준 라이브러리만 허용(os/sys/subprocess 등 위험 모듈은 차단).
+_SKILL_ALLOWED_IMPORTS = {
+    "re", "datetime", "math", "json", "collections", "itertools",
+    "functools", "string", "decimal", "statistics", "calendar",
+    "textwrap", "unicodedata", "fractions", "random", "operator", "copy",
+}
+
+
+def _safe_skill_import(name, globals=None, locals=None, fromlist=(), level=0):
+    import importlib
+    if level and level != 0:
+        raise ImportError("relative imports are not allowed in skills")
+    root = str(name or "").split(".")[0]
+    if root not in _SKILL_ALLOWED_IMPORTS:
+        raise ImportError(
+            "import of '%s' is not allowed in skills (allowed: %s)"
+            % (name, ", ".join(sorted(_SKILL_ALLOWED_IMPORTS)))
+        )
+    return importlib.import_module(name)
+
 
 def _safe_python_globals():
     allowed_builtins = {
@@ -2997,10 +3162,13 @@ def _safe_python_globals():
         "max": max, "min": min, "print": print, "range": range, "round": round,
         "set": set, "sorted": sorted, "str": str, "sum": sum, "tuple": tuple,
         "type": type, "zip": zip, "getattr": getattr, "hasattr": hasattr, "iter": iter,
-        "next": next, "repr": repr,
+        "next": next, "repr": repr, "abs": abs, "divmod": divmod, "ord": ord, "chr": chr,
+        "filter": filter, "map": map, "reversed": reversed, "format": format, "frozenset": frozenset,
+        "__import__": _safe_skill_import,
         "Exception": Exception, "RuntimeError": RuntimeError, "ValueError": ValueError,
         "TypeError": TypeError, "KeyError": KeyError, "IndexError": IndexError,
-        "AttributeError": AttributeError,
+        "AttributeError": AttributeError, "ZeroDivisionError": ZeroDivisionError,
+        "StopIteration": StopIteration,
     }
     return {
         "__builtins__": allowed_builtins,

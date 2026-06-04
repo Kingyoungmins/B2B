@@ -1,7 +1,7 @@
 ﻿/* ===================================================================
    CONFIG
    =================================================================== */
-const B2B_BUILD_STAMP = "b2b-overlay-shell-20260602-044-17";
+const B2B_BUILD_STAMP = "b2b-overlay-shell-20260602-044-19";
 window.B2B_BUILD_STAMP = B2B_BUILD_STAMP;
 
 const DEFAULTS = {
