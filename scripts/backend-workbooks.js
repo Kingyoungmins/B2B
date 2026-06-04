@@ -408,6 +408,24 @@ function applyBackendPipelineResult(result) {
       }, 150);
     }
   }
+
+  // 입력 파일을 수정하는 스킬: 열려 있는 입력 미러도 최신 결과로 교체해 변경이 보이게 한다.
+  if (result && result.pythonExcel) {
+    Object.keys(downloadUrls).forEach(fid => {
+      if (!fid || fid.indexOf("input:") !== 0) return;
+      const inputUrl = downloadUrls[fid];
+      if (!inputUrl) return;
+      if (typeof excelMirrorSessionIdForFileId === "function" &&
+          excelMirrorSessionIdForFileId(fid) &&
+          typeof refreshExcelMirrorForFileId === "function") {
+        setTimeout(() => {
+          refreshExcelMirrorForFileId(fid, inputUrl, { openIfMissing: false }).catch(err => {
+            console.warn("Failed to refresh input Excel mirror:", err);
+          });
+        }, 200);
+      }
+    });
+  }
 }
 
 function clearFormulaMetadataForBackendChanges(file, fileResult, fallbackDiff, allForcedValueCells) {

@@ -885,9 +885,44 @@ async function postExcelMirror(path, body) {
   }
 })();
 
+// 앱이 포커스를 잃으면(최소화 / 파일 대화상자 / 다른 앱 전환) overlay Excel 이 위로 튀어나오지
+// 않도록 숨기고, 포커스가 돌아오면 복원한다.
+// 포그라운드가 Excel(사용자가 미러를 클릭)인지 판정은 신뢰된 python 백엔드(/api/excel/hide-inactive)가
+// 수행한다 — Excel 이면 그대로 두고, 아니면 미러를 숨긴다. (C# 포그라운드/프로세스 조회 제거 → AV 회피)
+function installOverlayAutoHide() {
+  if (excelMirror.autoHideInstalled) return;
+  excelMirror.autoHideInstalled = true;
+  let blurTimer = null;
+  const hasSessions = () => Object.keys(excelMirror.sessionsByFileId).length > 0;
+
+  window.addEventListener("blur", () => {
+    if (!hasSessions()) return;
+    clearTimeout(blurTimer);
+    blurTimer = setTimeout(() => {
+      if (document.hasFocus()) return; // 곧바로 포커스가 돌아왔으면 무시
+      postExcelMirror("/api/excel/hide-inactive", {}).catch(err => {
+        if (!isMissingExcelSessionError(err)) console.warn("Excel mirror hide-inactive failed:", err);
+      });
+    }, 180);
+  });
+
+  window.addEventListener("focus", () => {
+    clearTimeout(blurTimer);
+    if (!hasSessions()) return;
+    if (typeof restoreActiveExcelMirrorWindow === "function") {
+      setTimeout(() => {
+        restoreActiveExcelMirrorWindow().catch(err => {
+          if (!isMissingExcelSessionError(err)) console.warn("Excel mirror restore after focus failed:", err);
+        });
+      }, 120);
+    }
+  });
+}
+
 setupExcelMirrorControls = function() {
   installMirrorRenderOverride();
   installExcelMirrorPositionListeners();
+  installOverlayAutoHide();
   replaceSimulatorWithMirrorShell();
   updateMirrorShellStatus();
   scheduleExcelMirrorPosition(true);

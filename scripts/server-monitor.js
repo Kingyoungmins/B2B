@@ -36,7 +36,7 @@
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), timeoutMs || 3000);
     try {
-      const resp = await fetch(HEALTH_URL + "?t=" + Date.now(), {
+      const resp = await fetch(HEALTH_URL, {
         method: "GET",
         signal: ctrl.signal,
         cache: "no-store",
@@ -113,22 +113,16 @@
     reconnecting = true;
     let attempt = 0;
     while (disconnected) {
+      if (!isIxiSelected()) { disconnected = false; hideBanner(); break; }
       attempt++;
       const ok = await pingHealth(2500);
       if (ok) {
         onReconnected();
         return;
       }
-      // 두어 번 실패하면 네이티브 셸에 서버 재시작을 요청한다.
-      if (attempt >= 2 && requestServerRestart()) {
-        setBannerMsg("서버를 재시작하는 중... (" + attempt + "회)");
-      } else {
-        setBannerMsg(
-          isNativeShell()
-            ? "서버 재연결 시도 중... (" + attempt + "회)"
-            : "서버 연결이 끊겼습니다. 서버를 다시 시작한 뒤 [지금 재연결]을 누르세요. (" + attempt + "회)"
-        );
-      }
+      // 자동으로 서버를 재시작하지 않는다(재시작은 메모리 상태를 모두 지우므로).
+      // 일시적 끊김은 폴링으로 자연 복구하고, 진짜 죽었으면 사용자가 [지금 재연결]을 눌러 재시작한다.
+      setBannerMsg("서버 연결이 끊겼습니다. [지금 재연결]을 누르세요. (" + attempt + "회)");
       await new Promise(r => setTimeout(r, 3000));
     }
     reconnecting = false;
@@ -142,7 +136,8 @@
       onReconnected();
       return;
     }
-    requestServerRestart();
+    // 살아 있는 서버를 죽이지 않는다(=메모리 상태 유지). 연결만 재시도한다.
+    // 서버 프로세스가 진짜 종료된 경우에만 네이티브 호스트가 종료를 감지해 재기동한다.
     if (!disconnected) {
       disconnected = true;
       showBanner();

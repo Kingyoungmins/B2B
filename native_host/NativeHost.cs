@@ -115,9 +115,6 @@ namespace B2BNativeHost
         [DllImport("user32.dll")]
         private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
 
-        [DllImport("user32.dll")]
-        private static extern IntPtr GetForegroundWindow();
-
         [DllImport("kernel32.dll")]
         private static extern uint GetCurrentThreadId();
 
@@ -200,7 +197,6 @@ namespace B2BNativeHost
                 PublishNativeBounds();
                 RestoreActiveExcelMirror();
             };
-            Deactivate += (s, e) => HandleHostDeactivated();
             split.SplitterMoved += (s, e) => PublishNativeBounds();
             excelPanel.Resize += (s, e) => PublishNativeBounds();
             lastWindowState = WindowState;
@@ -721,33 +717,6 @@ namespace B2BNativeHost
             ExecuteWebScript("if (typeof restoreActiveExcelMirrorWindow === 'function') restoreActiveExcelMirrorWindow();");
         }
 
-        // 앱이 비활성화될 때(파일 대화상자/다른 앱이 앞으로 옴) overlay Excel 을 숨긴다.
-        // 단, 사용자가 Excel 미러 자체를 클릭해 Excel 이 foreground 가 된 경우는 숨기지 않는다.
-        private void HandleHostDeactivated()
-        {
-            if (ForegroundProcessIsExcel()) return;
-            ExecuteWebScript("if (typeof hideAllExcelMirrorWindows === 'function') hideAllExcelMirrorWindows();");
-        }
-
-        private bool ForegroundProcessIsExcel()
-        {
-            try
-            {
-                IntPtr fg = GetForegroundWindow();
-                if (fg == IntPtr.Zero) return false;
-                uint pid;
-                GetWindowThreadProcessId(fg, out pid);
-                if (pid == 0) return false;
-                using (Process proc = Process.GetProcessById((int)pid))
-                {
-                    return String.Equals(proc.ProcessName, "EXCEL", StringComparison.OrdinalIgnoreCase);
-                }
-            }
-            catch
-            {
-                return false;
-            }
-        }
 
         private void FocusExcelChild()
         {

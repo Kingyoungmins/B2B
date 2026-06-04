@@ -76,7 +76,7 @@ MAX_DIFF_CELLS_PER_SHEET = 5000
 MAX_PIPELINE_STEP_SNAPSHOTS = 80
 MAX_PIPELINE_JOBS = 40
 PIPELINE_JOB_TTL_SECONDS = 60 * 60
-APP_BUILD_STAMP = "b2b-overlay-shell-20260602-044-10"
+APP_BUILD_STAMP = "b2b-overlay-shell-20260602-044-16"
 EXCEL_MIRROR_PROTECT_PASSWORD = "b2b_mirror_readonly"
 
 
@@ -266,7 +266,7 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
         self.end_headers()
 
     def do_GET(self):
-        if self.path == "/api/backend/health":
+        if self.path.split("?")[0] == "/api/backend/health":
             app_dir = app_base_dir()
             def file_info(relative_path):
                 path = app_dir / relative_path
@@ -355,6 +355,9 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
             return
         if self.path == "/api/excel/hide-all":
             self.send_json(hide_all_excel_sessions())
+            return
+        if self.path == "/api/excel/hide-inactive":
+            self.send_json(hide_inactive_excel_sessions())
             return
         if self.path == "/api/excel/save":
             self.handle_excel_save()
@@ -551,7 +554,7 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
 
     def handle_workbook_source_download(self):
         workbook_id = self.path.rsplit("/", 1)[-1]
-        wb = WORKBOOKS.get(workbook_id)
+        wb = recover_workbook_record(workbook_id)
         if not wb:
             self.send_error(404)
             return
@@ -624,7 +627,7 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
     def handle_excel_open(self):
         payload = self.read_json_body()
         workbook_id = payload.get("workbookId")
-        wb_record = WORKBOOKS.get(workbook_id)
+        wb_record = recover_workbook_record(workbook_id)
         if not wb_record:
             self.send_json({"ok": False, "error": "workbook not found"}, status=404)
             return
@@ -2309,6 +2312,27 @@ def _hide_all_excel_sessions_impl():
     return {"ok": True, "hidden": hidden}
 
 
+def _foreground_is_excel_window():
+    if win32gui is None:
+        return False
+    try:
+        hwnd = win32gui.GetForegroundWindow()
+        if not hwnd:
+            return False
+        cls = (win32gui.GetClassName(hwnd) or "").upper()
+        return "XLMAIN" in cls or "XLDESK" in cls or "EXCEL7" in cls
+    except Exception:
+        return False
+
+
+def _hide_inactive_excel_sessions_impl():
+    # 앱이 포커스를 잃었을 때 호출. 포그라운드가 Excel(사용자가 미러를 클릭)이면 그대로 두고,
+    # 그 외(파일 대화상자/다른 앱/최소화)면 미러를 숨겨 Excel 이 위로 튀어나오지 않게 한다.
+    if _foreground_is_excel_window():
+        return {"ok": True, "hidden": 0, "foregroundExcel": True}
+    return _hide_all_excel_sessions_impl()
+
+
 def _close_excel_session_impl(excel_id):
     with EXCEL_LOCK:
         session = EXCEL_SESSIONS.pop(excel_id, None)
@@ -2697,6 +2721,10 @@ def hide_excel_session(excel_id):
 
 def hide_all_excel_sessions():
     return excel_call(_hide_all_excel_sessions_impl, timeout=10)
+
+
+def hide_inactive_excel_sessions():
+    return excel_call(_hide_inactive_excel_sessions_impl, timeout=10)
 
 
 def is_python_pipeline_step(step):
@@ -3416,6 +3444,8 @@ def _run_excel_python_pipeline_impl(payload, job_id=None):
     ctx = None
     active_output_sheet = None
     active_output_address = None
+    input_previews = {}        # 다중 입력 지원: 수정된 입력 파일 미리보기 {name: sheets}
+    input_download_urls = {}   # {"input:<name>": downloadUrl}
     try:
         output_base_path = _snapshot_path(resume_snapshot, "output", "output") or output_wb_record["path"]
         if live_session:
@@ -3524,6 +3554,41 @@ def _run_excel_python_pipeline_impl(payload, job_id=None):
             except Exception as err:
                 _warn_excel_nonfatal("refresh live snapshots", err)
 
+        # 다중 입력 지원: 스킬이 읽거나 수정한 입력 파일도 미리보기/다운로드에 반영한다.
+        # 다운로드 소스는 가능하면 단계 스냅샷(이미 저장됨) 사본을 재사용해 추가 COM 저장을 피한다.
+        input_record_by_name = {}
+        for item, wb_record in zip(input_items, input_wb_records):
+            input_record_by_name[item.get("name") or wb_record["name"]] = wb_record
+        final_snapshot = PIPELINE_STEP_SNAPSHOTS.get(
+            _pipeline_snapshot_key(input_items, input_wb_records, output_item, output_wb_record, python_steps)
+        )
+        for name, wb in input_wb_by_name.items():
+            try:
+                input_previews[name] = _excel_output_preview_sheets(wb)
+            except Exception as err:
+                _warn_excel_nonfatal(f"input preview {name}", err)
+                continue
+            try:
+                rec = input_record_by_name.get(name)
+                if rec is not None:
+                    update_workbook_current_cache(rec, input_previews[name])
+                snap_in = _snapshot_path(final_snapshot, "input", name)
+                if snap_in and Path(snap_in).exists():
+                    src_path = snap_in  # 단계 스냅샷(이미 저장됨) 재사용 → 복사/추가 저장 없음
+                else:
+                    BACKEND_DIR.mkdir(parents=True, exist_ok=True)
+                    safe_in = Path(str(name)).name or "input.xlsx"
+                    if not Path(safe_in).suffix:
+                        safe_in += ".xlsx"
+                    dest = BACKEND_DIR / f"{uuid.uuid4().hex}_result_{safe_in}"
+                    wb.SaveCopyAs(str(dest))
+                    src_path = str(dest)
+                input_result_id = uuid.uuid4().hex
+                RESULTS[input_result_id] = {"path": str(src_path), "name": Path(src_path).name, "created": time.time()}
+                input_download_urls["input:" + name] = f"/api/workbooks/download/{input_result_id}"
+            except Exception as err:
+                _warn_excel_nonfatal(f"input result save {name}", err)
+
         if is_live:
             # 라이브 미러 = 적용된 워크북. 적용 단계 시그니처를 기록해 다음 추가가 빠른 경로를 타게 한다.
             live_session["appliedStepSigs"] = desired_sigs
@@ -3593,7 +3658,7 @@ def _run_excel_python_pipeline_impl(payload, job_id=None):
             _warn_excel_nonfatal("live output preview", err)
             result_output = {}
         update_workbook_current_cache(output_wb_record, result_output)
-        previews = build_result_previews({}, result_output, current, {}, [])
+        previews = build_result_previews(input_previews, result_output, current, {}, [])
         return {
             "ok": True,
             "pythonExcel": True,
@@ -3605,7 +3670,7 @@ def _run_excel_python_pipeline_impl(payload, job_id=None):
             "forcedValueCells": [],
             "downloadId": None,
             "downloadUrl": None,
-            "downloadUrls": {},
+            "downloadUrls": dict(input_download_urls),
             "files": previews,
             "activeSheet": active_output_sheet,
             "activeAddress": active_output_address,
@@ -3622,7 +3687,9 @@ def _run_excel_python_pipeline_impl(payload, job_id=None):
         for sheet_name, sheet in (inspected.get("sheets") or {}).items()
     }
     update_workbook_current_cache(output_wb_record, result_output)
-    previews = build_result_previews({}, result_output, current, {}, [])
+    previews = build_result_previews(input_previews, result_output, current, {}, [])
+    download_urls = dict(input_download_urls)
+    download_urls[output_file_id] = f"/api/workbooks/download/{result_id}"
     return {
         "ok": True,
         "pythonExcel": True,
@@ -3633,7 +3700,7 @@ def _run_excel_python_pipeline_impl(payload, job_id=None):
         "forcedValueCells": [],
         "downloadId": result_id,
         "downloadUrl": f"/api/workbooks/download/{result_id}",
-        "downloadUrls": {output_file_id: f"/api/workbooks/download/{result_id}"},
+        "downloadUrls": download_urls,
         "files": previews,
         "activeSheet": active_output_sheet,
         "activeAddress": active_output_address,
@@ -4113,8 +4180,42 @@ def cell_to_json(value):
     return value
 
 
+def recover_workbook_record(workbook_id):
+    # 서버가 재시작되면 메모리 WORKBOOKS 가 비지만 업로드 파일(BACKEND_DIR/{id}_{name})은 디스크에 남는다.
+    # 프런트의 기존 workbookId 로 요청이 오면 디스크에서 찾아 재등록해 "workbook not found" 를 막는다.
+    if not workbook_id:
+        return None
+    rec = WORKBOOKS.get(workbook_id)
+    if rec:
+        return rec
+    try:
+        matches = sorted(BACKEND_DIR.glob(f"{workbook_id}_*"))
+    except Exception:
+        matches = []
+    for path in matches:
+        try:
+            if not path.is_file():
+                continue
+        except Exception:
+            continue
+        name = path.name[len(workbook_id) + 1:] or path.name
+        rec = {
+            "id": workbook_id,
+            "name": name,
+            "path": str(path),
+            "created": time.time(),
+            "aoa_cache": None,
+            "current_aoa_cache": None,
+            "aoa_cache_created": None,
+            "aoa_cache_hits": 0,
+        }
+        WORKBOOKS[workbook_id] = rec
+        return rec
+    return None
+
+
 def get_workbook_or_raise(workbook_id):
-    wb = WORKBOOKS.get(workbook_id or "")
+    wb = recover_workbook_record(workbook_id)
     if not wb:
         raise ValueError(f"backend workbook not found: {workbook_id}")
     return wb
