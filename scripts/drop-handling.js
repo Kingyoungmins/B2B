@@ -155,6 +155,13 @@ async function loadInputFiles(files) {
   refreshTabs();
   refreshChatState();
   if (typeof recomputeAllFormulas === "function") recomputeAllFormulas();
+  // 업로드 직후 자동으로 미러 열기('보기' 누른 효과). 가장 최근 올린 입력 파일.
+  if (state.inputs.length > startInputCount) {
+    const lastInput = state.inputs[state.inputs.length - 1];
+    if (lastInput && typeof openExcelMirrorForFileId === "function") {
+      openExcelMirrorForFileId("input:" + lastInput.name).catch(err => console.warn("Auto-open input mirror failed:", err));
+    }
+  }
 }
 
 async function loadOutputTemplates(files) {
@@ -200,7 +207,13 @@ async function loadOutputTemplates(files) {
     renderOutputChip();
     refreshTabs();
     refreshChatState();
-    if (!state.currentFileId) setCurrentView("output:" + startIndex);
+    // 업로드 직후 자동으로 미러 열기('보기' 효과). 새로 올린 마지막 출력 템플릿.
+    const lastOutputFileId = "output:" + (state.outputTemplates.length - 1);
+    if (typeof openExcelMirrorForFileId === "function") {
+      openExcelMirrorForFileId(lastOutputFileId).catch(err => console.warn("Auto-open output mirror failed:", err));
+    } else if (!state.currentFileId) {
+      setCurrentView(lastOutputFileId);
+    }
     toast(`${state.outputTemplates.length - startIndex}개 출력 템플릿을 로드했습니다.`, "success");
   }
 }

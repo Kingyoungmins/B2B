@@ -76,7 +76,7 @@ MAX_DIFF_CELLS_PER_SHEET = 5000
 MAX_PIPELINE_STEP_SNAPSHOTS = 80
 MAX_PIPELINE_JOBS = 40
 PIPELINE_JOB_TTL_SECONDS = 60 * 60
-APP_BUILD_STAMP = "b2b-overlay-shell-20260602-044-19"
+APP_BUILD_STAMP = "b2b-overlay-shell-20260602-044-24"
 EXCEL_MIRROR_PROTECT_PASSWORD = "b2b_mirror_readonly"
 
 
@@ -1255,6 +1255,24 @@ def _configure_read_only_mirror_input_block(app):
             pass
 
 
+def _disable_excel_context_menus(app):
+    """오버레이 엑셀에서 마우스 우클릭(컨텍스트) 메뉴를 막는다.
+    msoBarTypePopup(2) CommandBar = 우클릭/컨텍스트 메뉴이므로 모두 비활성화한다.
+    DispatchEx로 만든 전용 인스턴스라 사용자의 일반 엑셀에는 영향이 없다."""
+    try:
+        bars = app.CommandBars
+        count = bars.Count
+    except Exception:
+        return
+    for idx in range(1, count + 1):
+        try:
+            bar = bars.Item(idx)
+            if bar.Type == 2:  # msoBarTypePopup
+                bar.Enabled = False
+        except Exception:
+            continue
+
+
 def _configure_excel_grid_window(app, wb=None):
     try:
         app.DisplayAlerts = False
@@ -1271,6 +1289,7 @@ def _configure_excel_grid_window(app, wb=None):
         app.CommandBars("Ribbon").Visible = False
     except Exception:
         pass
+    _disable_excel_context_menus(app)
     try:
         win = app.ActiveWindow
         win.DisplayHeadings = True
@@ -3538,6 +3557,66 @@ def _excel_output_preview_sheets(wb):
     return data
 
 
+def _result_from_workbook_files(output_path, input_paths_by_name, output_item, output_wb_record, input_wb_records, payload, resume_from):
+    # Excel 실행 없이 저장된 파일(스냅샷/원본)에서 미리보기 + 다운로드를 구성한다.
+    # liveApplied=False 로 반환 → 프런트가 활성 미러를 이 파일로 교체(replace)해 빠르게 반영.
+    current = payload.get("current") or {}
+    output_file_id = current.get("outputFileId") or "output:0"
+    download_urls = {}
+    download_id = None
+
+    out_path = Path(output_path)
+    result_output = {}
+    if out_path.exists():
+        inspected = inspect_workbook(out_path)
+        result_output = {
+            sheet_name: (sheet.get("rows") or [])
+            for sheet_name, sheet in (inspected.get("sheets") or {}).items()
+        }
+        download_id = uuid.uuid4().hex
+        RESULTS[download_id] = {"path": str(out_path), "name": out_path.name, "created": time.time()}
+        download_urls[output_file_id] = f"/api/workbooks/download/{download_id}"
+        update_workbook_current_cache(output_wb_record, result_output)
+
+    rec_by_name = {}
+    for item, rec in zip(payload.get("inputs", []), input_wb_records):
+        rec_by_name[item.get("name") or rec["name"]] = rec
+    input_previews = {}
+    for name, path in (input_paths_by_name or {}).items():
+        ip = Path(path)
+        if not ip.exists():
+            continue
+        inspected_in = inspect_workbook(ip)
+        input_previews[name] = {
+            sheet_name: (sheet.get("rows") or [])
+            for sheet_name, sheet in (inspected_in.get("sheets") or {}).items()
+        }
+        rid = uuid.uuid4().hex
+        RESULTS[rid] = {"path": str(ip), "name": ip.name, "created": time.time()}
+        download_urls["input:" + name] = f"/api/workbooks/download/{rid}"
+        rec = rec_by_name.get(name)
+        if rec is not None:
+            update_workbook_current_cache(rec, input_previews[name])
+
+    previews = build_result_previews(input_previews, result_output, current, {}, [])
+    return {
+        "ok": True,
+        "pythonExcel": True,
+        "liveApplied": False,
+        "snapshotHit": True,
+        "snapshotStep": resume_from,
+        "diffId": None,
+        "diffs": {},
+        "forcedValueCells": [],
+        "downloadId": download_id,
+        "downloadUrl": download_urls.get(output_file_id),
+        "downloadUrls": download_urls,
+        "files": previews,
+        "activeSheet": None,
+        "activeAddress": None,
+    }
+
+
 def _run_excel_python_pipeline_impl(payload, job_id=None):
     if not excel_available():
         raise RuntimeError("Microsoft Excel COM automation is not available. Excel and pywin32 are required.")
@@ -3555,6 +3634,20 @@ def _run_excel_python_pipeline_impl(payload, job_id=None):
     cached_prefix = _find_best_pipeline_snapshot(input_items, input_wb_records, output_item, output_wb_record, python_steps)
     resume_from = cached_prefix[0] if cached_prefix else 0
     resume_snapshot = cached_prefix[2] if cached_prefix else None
+
+    # 빠른 경로: 실행할 단계가 없으면(전부 캐시됨 또는 전부 OFF) Excel을 돌리지 않고
+    # 저장된 스냅샷(없으면 원본) 파일로 결과를 즉시 만들어 반환한다(토글 ON/OFF 속도 개선).
+    if resume_from >= len(python_steps):
+        try:
+            out_path = _snapshot_path(resume_snapshot, "output", "output") or output_wb_record["path"]
+            in_paths = {}
+            for item, rec in zip(input_items, input_wb_records):
+                nm = item.get("name") or rec["name"]
+                in_paths[nm] = _snapshot_path(resume_snapshot, "input", nm) or rec["path"]
+            return _result_from_workbook_files(out_path, in_paths, output_item, output_wb_record, input_wb_records, payload, resume_from)
+        except Exception as err:
+            _warn_excel_nonfatal("snapshot fast result", err)
+
     live_excel_id = (payload.get("current") or {}).get("outputExcelId")
     live_session = None
     if live_excel_id:

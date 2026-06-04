@@ -120,13 +120,16 @@ function muteExcelMirrorForPipeline(outputExcelId, ms = 10 * 60 * 1000) {
 
 function releaseExcelMirrorPipelineMute(outputExcelId) {
   if (!outputExcelId || typeof excelMirror === "undefined") return;
-  excelMirror.mutedUntil = Date.now() + 10000;
-  if (typeof suppressExcelMirrorSelection === "function") suppressExcelMirrorSelection(10000);
+  // 적용 직후 짧게만 억제. 곧바로 사용자의 셀 선택이 채팅에 반영되게 한다.
+  // selectionMutedUntil 은 직접 리셋한다(suppressExcelMirrorSelection 은 Math.max 라 10분 억제를 못 줄임).
+  excelMirror.mutedUntil = Date.now() + 1500;
+  excelMirror.selectionMutedUntil = Date.now() + 1500;
   if (typeof baselineExcelMirrorSession === "function") {
     setTimeout(() => {
       baselineExcelMirrorSession(outputExcelId)
         .then(() => {
-          excelMirror.mutedUntil = Date.now() + 3000;
+          excelMirror.mutedUntil = Date.now() + 300;
+          excelMirror.selectionMutedUntil = Date.now() + 300;
         })
         .catch(err => console.warn("Failed to refresh Excel baseline after pipeline:", err));
     }, 250);
@@ -383,48 +386,49 @@ function applyBackendPipelineResult(result) {
   flashBackendDiff(result);
   flashFilled();
   window.backendCurrentCacheDirty = false;
-  if (result && result.pythonExcel && result.liveApplied) {
-    // 백엔드가 라이브 미러에 직접 적용함 → 결과 파일 replace 불필요. 미러 폴링만 재동기화.
-    const outputFileId = result.clientOutputFileId;
-    if (outputFileId && result.clientOutputExcelId && typeof acknowledgeExcelMirrorApplied === "function") {
-      setTimeout(() => {
-        acknowledgeExcelMirrorApplied(outputFileId).catch(err => {
-          console.warn("Failed to re-baseline live Excel mirror:", err);
-        });
-      }, 150);
-    }
-  } else if (result && result.pythonExcel) {
-    const outputFileId = result.clientOutputFileId ||
-      Object.keys(downloadUrls).find(id => id === "output" || id.startsWith("output:"));
-    if (outputFileId && result.clientOutputExcelId && typeof acknowledgeExcelMirrorApplied === "function") {
-      setTimeout(() => {
-        const outputDownloadUrl = downloadUrls[outputFileId] || result.downloadUrl;
-        const refresh = outputDownloadUrl && typeof refreshExcelMirrorForFileId === "function"
-          ? refreshExcelMirrorForFileId(outputFileId, outputDownloadUrl, { openIfMissing: false })
-          : acknowledgeExcelMirrorApplied(outputFileId);
-        refresh.catch(err => {
-          console.warn("Failed to acknowledge live Excel result:", err);
-        });
-      }, 150);
-    }
-  }
-
-  // 입력 파일을 수정하는 스킬: 열려 있는 입력 미러도 최신 결과로 교체해 변경이 보이게 한다.
+  // 적용 후 미러 반영: "지금 보고 있는 파일" 하나만 즉시 갱신/표시한다.
+  // 나머지 변경된 파일은 숨긴 채 stale 로만 표시해, 그 파일로 전환할 때 갱신한다.
+  // (예전엔 열린 모든 미러를 한꺼번에 갱신해 전부 떠오르는 미관 문제가 있었음)
   if (result && result.pythonExcel) {
-    Object.keys(downloadUrls).forEach(fid => {
-      if (!fid || fid.indexOf("input:") !== 0) return;
-      const inputUrl = downloadUrls[fid];
-      if (!inputUrl) return;
-      if (typeof excelMirrorSessionIdForFileId === "function" &&
-          excelMirrorSessionIdForFileId(fid) &&
-          typeof refreshExcelMirrorForFileId === "function") {
+    const activeId = state.currentFileId;
+    const changed = new Set(Object.keys(downloadUrls));
+    if (result.liveApplied && result.clientOutputFileId) changed.add(result.clientOutputFileId);
+    if (typeof excelMirror !== "undefined") {
+      excelMirror.staleByFileId = excelMirror.staleByFileId || {};
+    }
+    const sessionFor = (fid) => (typeof excelMirrorSessionIdForFileId === "function" ? excelMirrorSessionIdForFileId(fid) : null);
+
+    changed.forEach(fid => {
+      if (!fid || !sessionFor(fid)) return;
+      const isOutput = fid === "output" || fid.indexOf("output:") === 0;
+      if (fid === activeId) {
         setTimeout(() => {
-          refreshExcelMirrorForFileId(fid, inputUrl, { openIfMissing: false }).catch(err => {
-            console.warn("Failed to refresh input Excel mirror:", err);
-          });
-        }, 200);
+          if (isOutput && result.liveApplied) {
+            if (typeof acknowledgeExcelMirrorApplied === "function") {
+              acknowledgeExcelMirrorApplied(fid).catch(() => {});
+            }
+            return;
+          }
+          const url = downloadUrls[fid] || (isOutput ? result.downloadUrl : null);
+          if (url && typeof refreshExcelMirrorForFileId === "function") {
+            refreshExcelMirrorForFileId(fid, url, { openIfMissing: false }).catch(() => {});
+          } else if (typeof acknowledgeExcelMirrorApplied === "function") {
+            acknowledgeExcelMirrorApplied(fid).catch(() => {});
+          }
+        }, 150);
+      } else if (!(isOutput && result.liveApplied)) {
+        // live 출력은 제자리(in-place) 갱신돼 최신 상태이므로 stale 아님.
+        // 입력/비라이브 출력은 전환 시 갱신하도록 stale 표시(지금은 표시하지 않음).
+        if (typeof excelMirror !== "undefined") excelMirror.staleByFileId[fid] = true;
       }
     });
+
+    // 활성 파일 외의 미러는 숨김 상태 유지(한꺼번에 떠오르지 않게).
+    setTimeout(() => {
+      if (typeof hideInactiveExcelMirrorSessions === "function") {
+        hideInactiveExcelMirrorSessions(activeId).catch(() => {});
+      }
+    }, 260);
   }
 }
 

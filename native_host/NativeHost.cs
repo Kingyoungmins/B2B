@@ -195,7 +195,14 @@ namespace B2BNativeHost
             Activated += (s, e) =>
             {
                 PublishNativeBounds();
+                // 호스트 창(웹뷰 + 네이티브 탭 포함)이 활성화됨 → JS에 알림(이벤트만, 시스템 호출 없음).
+                ExecuteWebScript("window.dispatchEvent(new Event('b2bHostActivated'));");
                 RestoreActiveExcelMirror();
+            };
+            Deactivate += (s, e) =>
+            {
+                // 호스트 창이 비활성화됨(엑셀/다른 앱/최소화). 포그라운드 판정은 python(hide-inactive)이 수행.
+                ExecuteWebScript("window.dispatchEvent(new Event('b2bHostDeactivated'));");
             };
             split.SplitterMoved += (s, e) => PublishNativeBounds();
             excelPanel.Resize += (s, e) => PublishNativeBounds();
@@ -248,7 +255,7 @@ namespace B2BNativeHost
                 Program.Log("Initializing WebView2");
                 CoreWebView2Environment env = await CreateWebViewEnvironmentAsync();
                 await webView.EnsureCoreWebView2Async(env);
-                webView.CoreWebView2.Settings.AreDefaultContextMenusEnabled = true;
+                webView.CoreWebView2.Settings.AreDefaultContextMenusEnabled = false;
                 webView.CoreWebView2.Settings.AreDevToolsEnabled =
                     String.Equals(Environment.GetEnvironmentVariable("B2B_NATIVE_DEVTOOLS"), "1", StringComparison.Ordinal);
                 webView.CoreWebView2.ProcessFailed += delegate(object sender, CoreWebView2ProcessFailedEventArgs e)

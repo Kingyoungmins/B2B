@@ -25,6 +25,9 @@ const excelMirror = {
   lastPositionKey: "",
   lastNativePositionKey: "",
   positionListenersInstalled: false,
+  // 호스트 창(웹뷰+네이티브 탭 패널 포함) 활성 여부. C# Activated/Deactivated 이벤트로 갱신.
+  // 기본 true(브라우저 모드처럼 C# 이벤트가 없는 환경에서도 동작).
+  hostActive: true,
 };
 const EXCEL_MIRROR_MAX_CACHED_SESSIONS = 4;
 const EXCEL_MIRROR_MAX_ROWS = 1048576;
@@ -235,6 +238,20 @@ async function switchVisibleExcelMirrorToFileId(fileId) {
     updateMirrorShellStatus();
     return false;
   }
+  // 적용으로 변경됐지만 표시 안 한 입력/출력 미러(stale)는 전환 시 최신 결과로 교체.
+  if (excelMirror.staleByFileId && excelMirror.staleByFileId[fileId]) {
+    delete excelMirror.staleByFileId[fileId];
+    const file = typeof getFile === "function" ? getFile(fileId) : null;
+    const url = file && file.backendDownloadUrl;
+    if (url && isBackendResultDownloadUrl(url) && typeof refreshExcelMirrorForFileId === "function") {
+      try {
+        const refreshed = await refreshExcelMirrorForFileId(fileId, url, { openIfMissing: false });
+        if (refreshed) return true;
+      } catch (err) {
+        if (!isMissingExcelSessionError(err)) console.warn("Excel mirror stale refresh failed:", err);
+      }
+    }
+  }
   excelMirror.activeExcelId = excelId;
   excelMirror.sessionLastUsedByFileId[fileId] = Date.now();
   await hideInactiveExcelMirrorSessions(fileId);
@@ -315,10 +332,14 @@ async function acknowledgeExcelMirrorApplied(fileId) {
   const excelId = excelMirrorSessionIdForFileId(fileId);
   if (!excelId) return false;
   excelMirror.activeExcelId = excelId;
-  excelMirror.mutedUntil = Date.now() + 10000;
-  suppressExcelMirrorSelection(10000);
+  // 적용 직후 짧게만 억제(프로그램적 선택만 건너뜀) → 사용자의 셀 선택이 곧바로 채팅에 반영됨.
+  // selectionMutedUntil 은 직접 리셋(suppressExcelMirrorSelection 은 Math.max 라 이전 10분 억제를 못 줄임).
+  excelMirror.mutedUntil = Date.now() + 1500;
+  excelMirror.selectionMutedUntil = Date.now() + 1500;
   await positionExcelMirrorWindow(excelId, { force: true });
   await baselineExcelMirrorSession(excelId);
+  excelMirror.mutedUntil = Date.now() + 300;
+  excelMirror.selectionMutedUntil = Date.now() + 300;
   updateMirrorShellStatus("열려 있는 Excel 창에 적용되었습니다.");
   startExcelMirrorPolling();
   return true;
@@ -794,6 +815,9 @@ async function positionExcelMirrorWindow(excelId = currentExcelId(), options = {
 async function raiseExcelMirrorWindow(excelId = currentExcelId()) {
   if (isNativeExcelShell() && !isNativeExcelOverlayShell()) return false;
   if (!excelId) return false;
+  // 호스트 창이 비활성(최소화/알트탭/다른 앱)인 동안엔 강제로 최상단에 올리지 않는다.
+  // (document.hasFocus는 웹뷰 포커스만 봐서 네이티브 탭 클릭 시 false가 됨 → 호스트 활성 플래그를 사용.)
+  if (excelMirror.hostActive === false) return false;
   excelMirror.lastRaiseAt = Date.now();
   await postExcelMirror("/api/excel/raise", { excelId });
   return true;
@@ -892,31 +916,55 @@ async function postExcelMirror(path, body) {
 function installOverlayAutoHide() {
   if (excelMirror.autoHideInstalled) return;
   excelMirror.autoHideInstalled = true;
-  let blurTimer = null;
   const hasSessions = () => Object.keys(excelMirror.sessionsByFileId).length > 0;
-
-  window.addEventListener("blur", () => {
+  const hideInactive = () => {
     if (!hasSessions()) return;
-    clearTimeout(blurTimer);
-    blurTimer = setTimeout(() => {
-      if (document.hasFocus()) return; // 곧바로 포커스가 돌아왔으면 무시
-      postExcelMirror("/api/excel/hide-inactive", {}).catch(err => {
-        if (!isMissingExcelSessionError(err)) console.warn("Excel mirror hide-inactive failed:", err);
+    postExcelMirror("/api/excel/hide-inactive", {}).catch(err => {
+      if (!isMissingExcelSessionError(err)) console.warn("Excel mirror hide-inactive failed:", err);
+    });
+  };
+  const restoreSoon = () => {
+    if (!hasSessions() || typeof restoreActiveExcelMirrorWindow !== "function") return;
+    setTimeout(() => {
+      restoreActiveExcelMirrorWindow().catch(err => {
+        if (!isMissingExcelSessionError(err)) console.warn("Excel mirror restore failed:", err);
       });
-    }, 180);
+    }, 120);
+  };
+
+  // 호스트 창(웹뷰 + 네이티브 탭 패널) 활성/비활성은 C# Form.Activated/Deactivated 이벤트로 받는다.
+  //  - 네이티브 우측 상단 탭을 클릭하면 웹뷰는 포커스를 잃지만 호스트 창은 계속 활성 → 안 숨김(탭 전환 정상).
+  //  - 엑셀 미러/다른 앱/최소화/대화상자로 가면 호스트가 비활성 → 숨김(python이 포그라운드=Excel 이면 유지).
+  window.addEventListener("b2bHostActivated", () => {
+    excelMirror.hostActive = true;
+    restoreSoon();
+  });
+  window.addEventListener("b2bHostDeactivated", () => {
+    excelMirror.hostActive = false;
+    hideInactive();
   });
 
-  window.addEventListener("focus", () => {
-    clearTimeout(blurTimer);
+  // 안전망: 호스트가 비활성인 동안 주기적으로 숨김 유지(raise 타이머가 다시 띄우는 것 방지).
+  setInterval(() => {
     if (!hasSessions()) return;
-    if (typeof restoreActiveExcelMirrorWindow === "function") {
-      setTimeout(() => {
-        restoreActiveExcelMirrorWindow().catch(err => {
-          if (!isMissingExcelSessionError(err)) console.warn("Excel mirror restore after focus failed:", err);
-        });
-      }, 120);
-    }
+    if (excelMirror.hostActive !== false) return; // 호스트 활성(네이티브 탭 포함) → 그대로
+    hideInactive();
+  }, 700);
+
+  // 최소화/완전 가려짐 → 즉시 숨김(보조). (엑셀 클릭은 document를 hidden으로 만들지 않으므로 구분됨)
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) hideInactive();
+    else restoreSoon();
   });
+  // 파일 열기 대화상자가 뜰 때 즉시 숨김(파일 input 클릭). 닫혀서 포커스 돌아오면 복원.
+  document.addEventListener("click", (e) => {
+    const t = e.target;
+    if (t && t.tagName === "INPUT" && (t.type === "file" || t.getAttribute("type") === "file")) {
+      hideInactive();
+    }
+  }, true);
+  // 앱이 다시 포커스되면(대화상자 닫힘/복귀/복원) 활성 미러 복원.
+  window.addEventListener("focus", restoreSoon);
 }
 
 setupExcelMirrorControls = function() {
