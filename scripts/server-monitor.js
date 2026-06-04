@@ -175,6 +175,49 @@
     poll();
   };
 
+  // ---- AI 모델 서버(업스트림) 알림 배너 ----
+  // LLM 호출 실패 시 호출됨. 로컬 백엔드가 살아있으면 업스트림(주황) 배너를 띄우고,
+  // 로컬이 죽었으면 로컬(빨강) 배너 경로로 넘긴다. 다음 LLM 성공 시 자동으로 사라진다.
+  let upstreamBanner = null;
+  function ensureUpstreamBanner() {
+    if (upstreamBanner) return upstreamBanner;
+    upstreamBanner = document.createElement("div");
+    upstreamBanner.id = "upstream-monitor-banner";
+    upstreamBanner.style.cssText = [
+      "position:fixed", "top:0", "left:0", "right:0", "z-index:2147483646",
+      "display:none", "align-items:center", "justify-content:center", "gap:14px",
+      "padding:10px 16px", "background:#b26a00", "color:#fff",
+      "font-size:13px", "font-weight:600", "box-shadow:0 2px 10px rgba(0,0,0,.3)",
+    ].join(";");
+    upstreamBanner.innerHTML =
+      '<span data-role="msg">AI 모델 서버에 연결할 수 없습니다.</span>' +
+      '<button type="button" data-role="dismiss" style="background:#fff;color:#b26a00;border:none;border-radius:6px;padding:5px 14px;font-weight:700;cursor:pointer">닫기</button>';
+    (document.body || document.documentElement).appendChild(upstreamBanner);
+    upstreamBanner.querySelector("[data-role='dismiss']").onclick = () => { upstreamBanner.style.display = "none"; };
+    return upstreamBanner;
+  }
+  function showUpstreamBanner(msg) {
+    const b = ensureUpstreamBanner();
+    b.querySelector("[data-role='msg']").textContent = msg || "AI 모델 서버에 연결할 수 없습니다.";
+    b.style.display = "flex";
+  }
+
+  window.b2bReportUpstreamOk = function () {
+    if (upstreamBanner) upstreamBanner.style.display = "none";
+  };
+
+  window.b2bReportUpstreamError = async function (err) {
+    // 로컬 백엔드가 멀쩡한지 먼저 확인 — 로컬이 죽었으면 그건 로컬 배너 경로가 처리.
+    const localOk = await pingHealth(2500);
+    if (!localOk) {
+      if (isIxiSelected()) { failCount = Math.max(failCount, FAIL_THRESHOLD); poll(); }
+      return;
+    }
+    if (disconnected) return; // 로컬 끊김 배너가 떠 있으면 양보
+    const detail = (err && err.message) ? String(err.message).split("\n")[0] : "";
+    showUpstreamBanner("AI 모델 서버에 연결할 수 없습니다. 잠시 후 다시 시도하세요." + (detail ? "  (" + detail.slice(0, 80) + ")" : ""));
+  };
+
   // 네이티브 호스트가 서버를 재시작했음을 알리면 즉시 재확인. (ixi일 때만 배너 표시)
   window.addEventListener("b2bServerReconnected", () => { reconnectNow(); });
   window.addEventListener("b2bServerRestarting", () => {

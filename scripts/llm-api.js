@@ -24,15 +24,28 @@ async function callLLM(userMessage, options) {
     ? EDIT_SYSTEM_PROMPT + "\n\n" + buildEditingContext(editIdx)
     : SYSTEM_PROMPT + "\n\n## 현재 파일 스키마\n" + buildSchemaSummary();
 
-  if (settings.provider === "anthropic") {
-    return await callAnthropic(fullSystem);
+  try {
+    let reply;
+    if (settings.provider === "anthropic") {
+      reply = await callAnthropic(fullSystem);
+    } else {
+      const requestOptions = {
+        ...options,
+        enableReasoning: thinkMode,
+        thinkMode,
+      };
+      reply = await callOpenAICompat(fullSystem, requestOptions);
+    }
+    // AI 모델 서버 정상 응답 → 업스트림 경고 배너 해제
+    if (typeof window.b2bReportUpstreamOk === "function") window.b2bReportUpstreamOk();
+    return reply;
+  } catch (err) {
+    // 사용자가 중단(AbortError)한 경우는 업스트림 실패가 아님
+    if (!(err && err.name === "AbortError") && typeof window.b2bReportUpstreamError === "function") {
+      window.b2bReportUpstreamError(err);
+    }
+    throw err;
   }
-  const requestOptions = {
-    ...options,
-    enableReasoning: thinkMode,
-    thinkMode,
-  };
-  return await callOpenAICompat(fullSystem, requestOptions);
 }
 
 async function callAnthropic(system) {
@@ -300,8 +313,6 @@ async function fetchOpenAICompat(path, preferredBase, options = {}) {
     }
   }
 
-  // 로컬 백엔드가 죽어서 실패한 경우라면 서버 모니터가 즉시 점검/재연결하도록 알림(상위면 health 통과해 무시됨).
-  if (typeof window.b2bReportServerError === "function") window.b2bReportServerError();
   const secureHint = location.protocol === "https:"
     ? "\n현재 페이지가 HTTPS라면 HTTP vLLM 호출이 브라우저에서 차단될 수 있습니다. exe 로컬 프록시 또는 http:// 실행을 사용하세요."
     : "";
