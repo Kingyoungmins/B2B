@@ -53,7 +53,7 @@ VLLM_BASE = os.environ.get(
 ).rstrip("/")
 PROXY_RETRY_ATTEMPTS = int(os.environ.get("B2B_PROXY_RETRY_ATTEMPTS", "3"))
 PROXY_RETRY_BASE_DELAY = float(os.environ.get("B2B_PROXY_RETRY_BASE_DELAY", "0.6"))
-BACKEND_DIR = Path(tempfile.gettempdir()) / "b2b_backend_v043"
+BACKEND_DIR = Path(tempfile.gettempdir()) / "b2b_backend_v044"
 WORKBOOKS = {}
 RESULTS = {}
 DIFFS = {}
@@ -63,6 +63,7 @@ EXCEL_SESSIONS = {}
 EXCEL_LOCK = threading.RLock()
 EXCEL_QUEUE = None
 EXCEL_THREAD = None
+PYTHON_SKILL_APP = None  # 라이브 미러가 없을 때 Python 스킬 실행용으로 재사용하는 숨김 Excel 인스턴스
 PIPELINE_JOBS_LOCK = threading.Lock()
 WORKBOOK_CACHE_LOCK = threading.Lock()
 NODE_WORKER_LOCK = threading.Lock()
@@ -75,7 +76,7 @@ MAX_DIFF_CELLS_PER_SHEET = 5000
 MAX_PIPELINE_STEP_SNAPSHOTS = 80
 MAX_PIPELINE_JOBS = 40
 PIPELINE_JOB_TTL_SECONDS = 60 * 60
-APP_BUILD_STAMP = "b2b-native-shell-20260602-043-1"
+APP_BUILD_STAMP = "b2b-overlay-shell-20260602-044-10"
 EXCEL_MIRROR_PROTECT_PASSWORD = "b2b_mirror_readonly"
 
 
@@ -208,6 +209,7 @@ def excel_call(fn, *args, timeout=60, **kwargs):
 
 
 def _cleanup_excel_sessions_impl():
+    _quit_python_skill_app()
     sessions = list(EXCEL_SESSIONS.values())
     EXCEL_SESSIONS.clear()
     for session in sessions:
@@ -254,7 +256,7 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
     def end_headers(self):
         self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "authorization, content-type, api-key, x-api-key")
+        self.send_header("Access-Control-Allow-Headers", "authorization, content-type, api-key, x-api-key, x-b2b-vllm-base")
         self.send_header("Access-Control-Allow-Private-Network", "true")
         self.send_header("Cache-Control", "no-store")
         super().end_headers()
@@ -781,7 +783,12 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
             length = int(self.headers.get("content-length") or 0)
             body = self.rfile.read(length) if length else None
 
-        target = VLLM_BASE + self.path
+        # 프런트 설정에서 지정한 실제 Violet/vLLM 주소가 있으면 그쪽으로 전달.
+        base = VLLM_BASE
+        upstream = (self.headers.get("x-b2b-vllm-base") or "").strip()
+        if upstream.startswith("http://") or upstream.startswith("https://"):
+            base = upstream.rstrip("/")
+        target = base + self.path
         headers = {}
         for key in ("authorization", "api-key", "content-type", "accept"):
             value = self.headers.get(key)
@@ -1535,8 +1542,10 @@ def _position_excel_window(
                         win32gui.SetWindowLong(hwnd, win32con.GWL_STYLE, desired_style)
                     if current_parent != parent_hwnd:
                         win32gui.SetParent(hwnd, parent_hwnd)
-                    left = int(max(0, float(left or 0)))
-                    top = int(max(0, float(top or 0)))
+                    # SetParent changes Excel into a child window. Coordinates must
+                    # be relative to the native panel, not desktop screen coordinates.
+                    left = 0
+                    top = 0
             except Exception:
                 pass
         elif browser_hwnd:
@@ -1559,7 +1568,7 @@ def _position_excel_window(
             except Exception:
                 pass
         flags = win32con.SWP_NOOWNERZORDER | win32con.SWP_FRAMECHANGED
-        if not (show and (native_parent_hwnd or native_overlay)):
+        if native_parent_hwnd or not (show and native_overlay):
             flags |= win32con.SWP_NOACTIVATE
         if show:
             flags |= win32con.SWP_SHOWWINDOW
@@ -1576,7 +1585,11 @@ def _position_excel_window(
         )
         if show:
             try:
-                win32gui.ShowWindow(hwnd, win32con.SW_SHOWNORMAL)
+                if native_parent_hwnd:
+                    win32gui.ShowWindow(hwnd, getattr(win32con, "SW_SHOWNA", 8))
+                    _focus_excel_grid_child(hwnd)
+                else:
+                    win32gui.ShowWindow(hwnd, win32con.SW_SHOWNORMAL)
             except Exception:
                 pass
         return
@@ -1586,6 +1599,68 @@ def _position_excel_window(
     app.Top = top * 72 / 96
     app.Width = width * 72 / 96
     app.Height = height * 72 / 96
+
+
+def _focus_excel_grid_child(hwnd):
+    if win32gui is None:
+        return
+    try:
+        hwnd = int(hwnd)
+    except Exception:
+        return
+    if not hwnd:
+        return
+    best = hwnd
+    best_score = -1
+
+    def enum_child(child, _param):
+        nonlocal best, best_score
+        try:
+            if not win32gui.IsWindowVisible(child):
+                return True
+            cls = str(win32gui.GetClassName(child) or "")
+            rect = win32gui.GetWindowRect(child)
+            width = max(0, int(rect[2]) - int(rect[0]))
+            height = max(0, int(rect[3]) - int(rect[1]))
+            area = width * height
+            if area <= 0:
+                return True
+            score = area
+            if "EXCEL7" in cls.upper():
+                score += 10**12
+            elif "XLDESK" in cls.upper():
+                score += 10**11
+            elif "XLMAIN" in cls.upper():
+                score += 10**10
+            if score > best_score:
+                best_score = score
+                best = child
+        except Exception:
+            pass
+        return True
+
+    try:
+        win32gui.EnumChildWindows(hwnd, enum_child, None)
+    except Exception:
+        pass
+    try:
+        user32 = ctypes.windll.user32
+        kernel32 = ctypes.windll.kernel32
+        target_thread = user32.GetWindowThreadProcessId(int(best), None)
+        current_thread = kernel32.GetCurrentThreadId()
+        attached = False
+        if target_thread and target_thread != current_thread:
+            attached = bool(user32.AttachThreadInput(current_thread, target_thread, True))
+        try:
+            user32.SetFocus(int(best))
+        finally:
+            if attached:
+                user32.AttachThreadInput(current_thread, target_thread, False)
+    except Exception:
+        try:
+            win32gui.SetFocus(best)
+        except Exception:
+            pass
 
 
 def _raise_excel_window(app):
@@ -1746,7 +1821,7 @@ def _open_excel_session_impl(
                     wb,
                     make_visible=True,
                     activate=False if (native_parent_hwnd or native_overlay) else True,
-                    maximize_workbook=False if (native_parent_hwnd or native_overlay) else True,
+                    maximize_workbook=False if (native_overlay or native_parent_hwnd) else True,
                 )
                 if width and height and (native_parent_hwnd or native_overlay):
                     _position_excel_window(
@@ -1762,7 +1837,13 @@ def _open_excel_session_impl(
                         viewport_height=viewport_height,
                         show=True,
                     )
-                    _ensure_excel_workbook_view(app, wb, make_visible=True, activate=True, maximize_workbook=False)
+                    _ensure_excel_workbook_view(
+                        app,
+                        wb,
+                        make_visible=True,
+                        activate=False if (native_parent_hwnd or native_overlay) else True,
+                        maximize_workbook=False if (native_overlay or native_parent_hwnd) else True,
+                    )
                     _position_excel_window(
                         app,
                         left,
@@ -1792,6 +1873,7 @@ def _open_excel_session_impl(
                 "nativeParentHwnd": None if native_overlay else native_parent_hwnd,
                 "nativeHostHwnd": native_host_hwnd,
                 "nativeOverlay": bool(native_overlay),
+                "hidden": False,
                 "lastNativePositionKey": (
                     f"{'overlay' if native_overlay else native_parent_hwnd}:{int(float(left or 0))}:{int(float(top or 0))}:{int(float(width or 0))}:{int(float(height or 0))}"
                     if read_only_mirror and (native_parent_hwnd or native_overlay) and width and height
@@ -1898,8 +1980,10 @@ def _activate_excel_session_impl(excel_id, sheet=None, address=None):
                     wb,
                     make_visible=True,
                     activate=True,
-                    maximize_workbook=False if (session.get("nativeParentHwnd") or session.get("nativeOverlay")) else True,
+                    maximize_workbook=False if (session.get("nativeOverlay") or session.get("nativeParentHwnd")) else True,
                 )
+                if session.get("nativeParentHwnd"):
+                    _focus_excel_grid_child(app.Hwnd)
                 ws.Activate()
                 try:
                     wb.Windows(1).Activate()
@@ -2025,7 +2109,7 @@ def _replace_excel_session_workbook_impl(excel_id, path, name=None, result_id=No
                 app,
                 new_wb,
                 activate=False if (session.get("nativeParentHwnd") or session.get("nativeOverlay")) else True,
-                maximize_workbook=False if (session.get("nativeParentHwnd") or session.get("nativeOverlay")) else True,
+                maximize_workbook=False if (session.get("nativeOverlay") or session.get("nativeParentHwnd")) else True,
             )
         session["workbook"] = new_wb
         session["path"] = str(path)
@@ -2034,7 +2118,9 @@ def _replace_excel_session_workbook_impl(excel_id, path, name=None, result_id=No
         session["name"] = name or path.name
         session["resultId"] = result_id
         session["readOnlyMirror"] = bool(read_only_mirror)
+        session["hidden"] = False
         session["snapshots"] = {}
+        session["appliedStepSigs"] = None  # 워크북이 외부 결과로 교체됨 → 적용 단계 추적 무효화
         sheets = _excel_collection_names(new_wb.Worksheets)
         if active_sheet and active_sheet in sheets:
             try:
@@ -2046,7 +2132,7 @@ def _replace_excel_session_workbook_impl(excel_id, path, name=None, result_id=No
                 app,
                 new_wb,
                 activate=False if (session.get("nativeParentHwnd") or session.get("nativeOverlay")) else True,
-                maximize_workbook=False if (session.get("nativeParentHwnd") or session.get("nativeOverlay")) else True,
+                maximize_workbook=False if (session.get("nativeOverlay") or session.get("nativeParentHwnd")) else True,
             )
             if session.get("nativeParentHwnd") or session.get("nativeOverlay"):
                 try:
@@ -2110,21 +2196,22 @@ def _position_excel_session_impl(
         native_position_key = None
         if session.get("readOnlyMirror") and (next_native_parent_hwnd or next_native_overlay):
             native_position_key = f"{'overlay' if next_native_overlay else next_native_parent_hwnd}:{int(float(left or 0))}:{int(float(top or 0))}:{int(float(width or 0))}:{int(float(height or 0))}"
-            if session.get("lastNativePositionKey") == native_position_key:
-                _ensure_excel_workbook_view(app, wb, make_visible=True, activate=False, maximize_workbook=False)
-                _position_excel_window(
-                    app,
-                    left,
-                    top,
-                    width,
-                    height,
-                    native_parent_hwnd=None if next_native_overlay else next_native_parent_hwnd,
-                    native_host_hwnd=next_native_host_hwnd,
-                    native_overlay=next_native_overlay,
-                    viewport_width=viewport_width,
-                    viewport_height=viewport_height,
-                    show=True,
-                )
+            if session.get("lastNativePositionKey") == native_position_key and not session.get("hidden"):
+                if next_native_overlay:
+                    _ensure_excel_workbook_view(app, wb, make_visible=True, activate=False, maximize_workbook=False)
+                    _position_excel_window(
+                        app,
+                        left,
+                        top,
+                        width,
+                        height,
+                        native_parent_hwnd=None,
+                        native_host_hwnd=next_native_host_hwnd,
+                        native_overlay=True,
+                        viewport_width=viewport_width,
+                        viewport_height=viewport_height,
+                        show=True,
+                    )
                 return {
                     "ok": True,
                     "excelId": excel_id,
@@ -2168,13 +2255,14 @@ def _position_excel_session_impl(
         )
         if native_position_key:
             session["lastNativePositionKey"] = native_position_key
+        session["hidden"] = False
         if session.get("readOnlyMirror"):
             _ensure_excel_workbook_view(
                 app,
                 wb,
                 make_visible=True,
                 activate=False if (session.get("nativeParentHwnd") or session.get("nativeOverlay")) else True,
-                maximize_workbook=False if (session.get("nativeParentHwnd") or session.get("nativeOverlay")) else True,
+                maximize_workbook=False if (session.get("nativeOverlay") or session.get("nativeParentHwnd")) else True,
             )
         return {
             "ok": True,
@@ -2200,6 +2288,8 @@ def _hide_excel_session_impl(excel_id):
         session = get_excel_session(excel_id)
         app, wb = session_workbook(session)
         _hide_excel_app_window(app)
+        session["hidden"] = True
+        session["lastNativePositionKey"] = ""
         return {"ok": True, "excelId": excel_id, "hidden": True}
 
 
@@ -2211,6 +2301,8 @@ def _hide_all_excel_sessions_impl():
         try:
             app, wb = session_workbook(session)
             _hide_excel_app_window(app)
+            session["hidden"] = True
+            session["lastNativePositionKey"] = ""
             hidden += 1
         except Exception:
             pass
@@ -2898,6 +2990,42 @@ def _open_excel_workbook_for_skill(app, path, read_only=False):
     return wb, temp_path
 
 
+def _get_python_skill_app():
+    # 매 적용마다 Excel 을 새로 띄우고 Quit 하던 비용(콜드스타트 1~3초)을 없애기 위해
+    # 숨김 Excel 인스턴스를 한 번만 만들어 재사용한다. 죽었으면 다시 만든다.
+    # 반드시 EXCEL_QUEUE STA 워커 스레드에서만 호출된다(excel_call 경유).
+    global PYTHON_SKILL_APP
+    app = PYTHON_SKILL_APP
+    if app is not None:
+        try:
+            _ = app.Workbooks.Count  # 살아있는지 확인
+            return app
+        except Exception:
+            PYTHON_SKILL_APP = None
+    app = win32com.client.DispatchEx("Excel.Application")
+    app.Visible = False
+    for attr, value in (("DisplayAlerts", False), ("EnableEvents", False), ("AskToUpdateLinks", False)):
+        try:
+            setattr(app, attr, value)
+        except Exception:
+            pass
+    _hide_excel_app_window(app)
+    PYTHON_SKILL_APP = app
+    return app
+
+
+def _quit_python_skill_app():
+    global PYTHON_SKILL_APP
+    app = PYTHON_SKILL_APP
+    PYTHON_SKILL_APP = None
+    if app is None:
+        return
+    try:
+        app.Quit()
+    except Exception:
+        pass
+
+
 def _workbook_fingerprint(wb_record):
     path = Path(wb_record["path"])
     try:
@@ -3183,6 +3311,37 @@ def _copy_source_workbook_into_target(app, target_wb, source_path):
                 pass
 
 
+def _python_step_sig(step):
+    # 라이브 미러에 이미 적용된 단계와 새 요청을 비교하기 위한 안정적 시그니처.
+    # id + 정규화된 코드가 같으면 같은 단계로 본다(코드 편집 시 시그니처가 달라짐).
+    code = normalize_python_pipeline_code(str((step or {}).get("code") or ""))
+    raw = (str((step or {}).get("id") or "") + "\x00" + code).encode("utf-8")
+    return hashlib.sha1(raw).hexdigest()
+
+
+def _excel_output_preview_sheets(wb):
+    # 라이브 미러 워크북에서 미리보기용 AoA 를 COM 으로 직접 읽는다(결과 파일 저장 없이).
+    data = {}
+    for name in _excel_collection_names(wb.Worksheets):
+        try:
+            ws = wb.Worksheets(name)
+            used = ws.UsedRange
+            rows = min(int(used.Rows.Count), PREVIEW_ROWS)
+            cols = min(int(used.Columns.Count), PREVIEW_COLS or 256)
+        except Exception:
+            data[name] = []
+            continue
+        if rows <= 0 or cols <= 0:
+            data[name] = []
+            continue
+        try:
+            values = _range_matrix(ws.Range(ws.Cells(1, 1), ws.Cells(rows, cols)).Value)
+            data[name] = [[cell_to_json(v) for v in (row or [])] for row in values]
+        except Exception:
+            data[name] = []
+    return data
+
+
 def _run_excel_python_pipeline_impl(payload, job_id=None):
     if not excel_available():
         raise RuntimeError("Microsoft Excel COM automation is not available. Excel and pywin32 are required.")
@@ -3223,10 +3382,20 @@ def _run_excel_python_pipeline_impl(payload, job_id=None):
         except Exception:
             live_session = None
     if not live_session:
-        app = win32com.client.DispatchEx("Excel.Application")
-        app.Visible = False
-        _hide_excel_app_window(app)
+        app = _get_python_skill_app()  # 재사용 (매번 새로 띄우지 않음)
         output_wb = None
+
+    is_live = bool(live_session)
+    # 라이브 미러가 이미 prefix 상태(=resume 지점까지 적용됨)이면 출력 리셋을 생략하고
+    # 새 단계만 그 위에 바로 실행한다(빠른 추가). 편집/삽입/삭제로 prefix 가 어긋나면 리셋+재실행.
+    desired_sigs = [_python_step_sig(s) for s in python_steps]
+    applied_sigs = live_session.get("appliedStepSigs") if is_live else None
+    fast_prefix = (
+        is_live
+        and applied_sigs is not None
+        and len(applied_sigs) == resume_from
+        and list(applied_sigs) == desired_sigs[:resume_from]
+    )
     hide_guard = _start_excel_hide_guard(app, enabled=not live_session)
     live_read_only_mirror = bool(live_session and live_session.get("readOnlyMirror"))
     app.DisplayAlerts = False
@@ -3255,7 +3424,9 @@ def _run_excel_python_pipeline_impl(payload, job_id=None):
                     _protect_workbook_for_read_only_mirror(output_wb, False)
                 except Exception as err:
                     _warn_excel_nonfatal("unprotect read-only mirror before reset", err)
-            _copy_source_workbook_into_target(app, output_wb, output_base_path)
+            if not fast_prefix:
+                # 미러 상태가 요청 prefix 와 다르면 기준 상태로 리셋 후 전체 재실행.
+                _copy_source_workbook_into_target(app, output_wb, output_base_path)
             if live_read_only_mirror:
                 try:
                     _protect_workbook_for_read_only_mirror(output_wb, False)
@@ -3353,24 +3524,24 @@ def _run_excel_python_pipeline_impl(payload, job_id=None):
             except Exception as err:
                 _warn_excel_nonfatal("refresh live snapshots", err)
 
-        update_pipeline_job(job_id, {
-            "stage": "Excel 결과 저장 중",
-            "currentStep": len(python_steps),
-            "completedSteps": len(python_steps),
-            "stepRunning": False,
-        })
-        BACKEND_DIR.mkdir(parents=True, exist_ok=True)
-        original_name = output_item.get("name") or output_wb_record["name"]
-        safe_name = Path(str(original_name)).name
-        if not Path(safe_name).suffix:
-            safe_name += ".xlsx"
-        result_path = BACKEND_DIR / f"{uuid.uuid4().hex}_result_{safe_name}"
-        if live_read_only_mirror:
-            try:
-                _protect_workbook_for_read_only_mirror(output_wb, False)
-            except Exception as err:
-                _warn_excel_nonfatal("unprotect read-only mirror before save copy", err)
-        output_wb.SaveCopyAs(str(result_path))
+        if is_live:
+            # 라이브 미러 = 적용된 워크북. 적용 단계 시그니처를 기록해 다음 추가가 빠른 경로를 타게 한다.
+            live_session["appliedStepSigs"] = desired_sigs
+        result_path = None
+        if not is_live:
+            update_pipeline_job(job_id, {
+                "stage": "Excel 결과 저장 중",
+                "currentStep": len(python_steps),
+                "completedSteps": len(python_steps),
+                "stepRunning": False,
+            })
+            BACKEND_DIR.mkdir(parents=True, exist_ok=True)
+            original_name = output_item.get("name") or output_wb_record["name"]
+            safe_name = Path(str(original_name)).name
+            if not Path(safe_name).suffix:
+                safe_name += ".xlsx"
+            result_path = BACKEND_DIR / f"{uuid.uuid4().hex}_result_{safe_name}"
+            output_wb.SaveCopyAs(str(result_path))
     finally:
         if live_session and live_read_only_mirror:
             try:
@@ -3389,9 +3560,9 @@ def _run_excel_python_pipeline_impl(payload, job_id=None):
                 except Exception:
                     pass
         if not live_session:
+            # Quit 하지 않고 숨긴 채로 재사용. (열린 워크북은 위 opened 루프에서 모두 닫힘)
             try:
                 _hide_excel_app_window(app)
-                app.Quit()
             except Exception:
                 pass
         elif restore_screen_updating is not None:
@@ -3412,20 +3583,45 @@ def _run_excel_python_pipeline_impl(payload, job_id=None):
         if hide_guard:
             hide_guard.set()
 
+    output_file_id = (payload.get("current") or {}).get("outputFileId") or "output:0"
+    current = payload.get("current") or {}
+    if is_live:
+        # 결과 파일을 저장하지 않는다(다운로드 시점에 라이브 미러를 저장). 미리보기는 COM 으로 읽음.
+        try:
+            result_output = _excel_output_preview_sheets(output_wb)
+        except Exception as err:
+            _warn_excel_nonfatal("live output preview", err)
+            result_output = {}
+        update_workbook_current_cache(output_wb_record, result_output)
+        previews = build_result_previews({}, result_output, current, {}, [])
+        return {
+            "ok": True,
+            "pythonExcel": True,
+            "liveApplied": True,
+            "snapshotHit": bool(resume_from),
+            "snapshotStep": resume_from,
+            "diffId": None,
+            "diffs": {},
+            "forcedValueCells": [],
+            "downloadId": None,
+            "downloadUrl": None,
+            "downloadUrls": {},
+            "files": previews,
+            "activeSheet": active_output_sheet,
+            "activeAddress": active_output_address,
+        }
     result_id = uuid.uuid4().hex
     RESULTS[result_id] = {
         "path": str(result_path),
         "name": result_path.name,
         "created": time.time(),
     }
-    output_file_id = (payload.get("current") or {}).get("outputFileId") or "output:0"
     inspected = inspect_workbook(result_path)
     result_output = {
         sheet_name: (sheet.get("rows") or [])
         for sheet_name, sheet in (inspected.get("sheets") or {}).items()
     }
     update_workbook_current_cache(output_wb_record, result_output)
-    current = payload.get("current") or {}
     previews = build_result_previews({}, result_output, current, {}, [])
     return {
         "ok": True,

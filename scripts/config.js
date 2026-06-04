@@ -1,7 +1,7 @@
 ﻿/* ===================================================================
    CONFIG
    =================================================================== */
-const B2B_BUILD_STAMP = "b2b-native-shell-20260602-043-1";
+const B2B_BUILD_STAMP = "b2b-overlay-shell-20260602-044-10";
 window.B2B_BUILD_STAMP = B2B_BUILD_STAMP;
 
 const DEFAULTS = {
@@ -16,6 +16,8 @@ const DEFAULTS = {
     baseUrl: location.protocol === "http:" || location.protocol === "https:"
       ? `${location.origin}/v1`
       : "http://127.0.0.1:8090/v1",
+    // ixi 프록시(/v1/*)가 실제로 전달할 Violet/vLLM 상위 주소. 설정에서 변경 가능.
+    proxyUpstream: "http://canvas-ns-1727666527880704.mng.ip.violet.uplus.co.kr",
     thinkMode: false,
     thinkControlMode: "soft_switch",
     network: "ixi",
@@ -58,6 +60,7 @@ function normalizeSettings(parsed) {
       provider: "openai-compat",
       model: parsed.model || DEFAULTS["openai-compat"].model,
       baseUrl: parsed.baseUrl || DEFAULTS["openai-compat"].baseUrl,
+      proxyUpstream: parsed.proxyUpstream || DEFAULTS["openai-compat"].proxyUpstream,
       apiKey: parsed.apiKey || DEFAULTS["openai-compat"].apiKey,
       thinkMode: parsed.thinkMode === true,
       thinkControlMode: normalizeThinkControlMode(parsed.thinkControlMode),

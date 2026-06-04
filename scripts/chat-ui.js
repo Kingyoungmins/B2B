@@ -382,6 +382,7 @@ function setupStreamingAssistantMessage(container, modeLabel, aiName, onStop) {
   let stopBtn;
   let answerText;
   let codeBlock;
+  let statusText;
   let answerRenderer;
   let reasoningRenderer;
 
@@ -407,7 +408,7 @@ function setupStreamingAssistantMessage(container, modeLabel, aiName, onStop) {
     initialized = true;
     container.classList.remove("loading");
     container.innerHTML = `
-      ${onStop ? '<div class="streaming-topbar"><span></span><button class="stream-stop-btn" type="button">중단</button></div>' : ""}
+      ${onStop ? '<div class="streaming-topbar"><span class="stream-status"></span><button class="stream-stop-btn" type="button">중단</button></div>' : ""}
       <div class="reasoning-box" hidden>
         <button class="reasoning-toggle" type="button">생각 펼치기</button>
         <div class="reasoning-content"></div>
@@ -423,6 +424,8 @@ function setupStreamingAssistantMessage(container, modeLabel, aiName, onStop) {
     stopBtn = container.querySelector(".stream-stop-btn");
     answerText = container.querySelector(".assistant-stream-text");
     codeBlock = container.querySelector(".assistant-stream-code");
+    statusText = container.querySelector(".stream-status");
+    if (statusText) statusText.textContent = `${modeLabel}${aiName} 응답 수신 중...`;
     if (stopBtn && onStop) {
       stopBtn.onclick = () => {
         stopBtn.disabled = true;
@@ -467,6 +470,11 @@ function setupStreamingAssistantMessage(container, modeLabel, aiName, onStop) {
       if (reasoningBox.classList.contains("open")) scrollReasoningToBottom(reasoningContent);
       scrollChatToBottom();
     },
+    setStatus(text) {
+      initialize();
+      if (statusText) statusText.textContent = text || "";
+      scrollChatToBottom();
+    },
     flush() {
       if (!initialized) initialize();
       answerRenderer.flush();
@@ -489,11 +497,13 @@ function showThinkRetryPrompt(container, context) {
   const editTargetId = context.editTargetId || null;
   const modeLabel = context.modeLabel || "";
   const aiName = context.aiName || "LLM";
+  const message = context.message || "Think 요청이 중단되었습니다.";
+  const detail = context.detail || "Think 없이 다시 요청할 수 있습니다.";
   container.classList.remove("streaming", "loading");
   container.classList.add("think-retry");
   container.innerHTML = `
-    <div>Think 응답이 길어져 중단했습니다.</div>
-    <div style="font-size:12px; color:#666; margin-top:4px">자동으로 다시 요청하지 않았습니다.</div>
+    <div>${escapeHtml(message)}</div>
+    <div style="font-size:12px; color:#666; margin-top:4px">${escapeHtml(detail)}</div>
     <div class="action-btns" style="margin-top:8px">
       <button class="action-btn" type="button">Think 없이 재요청</button>
     </div>
@@ -689,9 +699,10 @@ async function requestErrorRecovery(stepIdx, errorInfo) {
         streamView.setReasoning(full);
         scrollChatToBottom();
       };
-      requestOptions.onThinkFallback = () => {
-        streamView.setAnswer("생각이 길어져 Think 모드를 끄고 다시 요청합니다...");
-        toast("Think 응답이 길어져 자동으로 다시 요청합니다.", "success");
+      requestOptions.onReasoningWarning = () => {
+        const warning = "정확한 동작을 위해 생각이 길어지고 있습니다. 다만, 같은 말을 여러 번 반복할 경우 중단해주세요.";
+        streamView.setStatus(warning);
+        toast(warning, "success");
       };
     }
     const reply = await callLLM(prompt, requestOptions);
@@ -702,12 +713,14 @@ async function requestErrorRecovery(stepIdx, errorInfo) {
   } catch (err) {
     loading.classList.remove("streaming");
     loading.classList.remove("loading");
-    if (err && err.name === "ReasoningRunawayError" && thinkMode) {
+    if (err && err.name === "AbortError" && thinkMode) {
       showThinkRetryPrompt(loading, {
         prompt,
         editTargetId: isExistingStep ? failedStep.id : null,
         modeLabel: "(에러 복구) ",
         aiName,
+        message: "Think 요청을 중단했습니다.",
+        detail: "필요하면 Think 없이 같은 복구 요청을 다시 보낼 수 있습니다.",
       });
       scrollChatToBottom();
       return;
@@ -852,9 +865,10 @@ async function sendChat() {
         streamView.setReasoning(full);
         scrollChatToBottom();
       };
-      requestOptions.onThinkFallback = () => {
-        streamView.setAnswer("생각이 길어져 Think 모드를 끄고 다시 요청합니다...");
-        toast("Think 응답이 길어져 자동으로 다시 요청합니다.", "success");
+      requestOptions.onReasoningWarning = () => {
+        const warning = "정확한 동작을 위해 생각이 길어지고 있습니다. 다만, 같은 말을 여러 번 반복할 경우 중단해주세요.";
+        streamView.setStatus(warning);
+        toast(warning, "success");
       };
     }
     const reply = await callLLM(prompt, requestOptions);
@@ -865,12 +879,14 @@ async function sendChat() {
   } catch (err) {
     loading.classList.remove("streaming");
     loading.classList.remove("loading");
-    if (err && err.name === "ReasoningRunawayError" && thinkMode) {
+    if (err && err.name === "AbortError" && thinkMode) {
       showThinkRetryPrompt(loading, {
         prompt,
         editTargetId,
         modeLabel,
         aiName,
+        message: "Think 요청을 중단했습니다.",
+        detail: "필요하면 Think 없이 같은 요청을 다시 보낼 수 있습니다.",
       });
       scrollChatToBottom();
       return;

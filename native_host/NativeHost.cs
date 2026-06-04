@@ -85,7 +85,12 @@ namespace B2BNativeHost
         private string lastNativeBoundsKey = "";
         private string webViewUserDataDir = "";
         private System.Windows.Forms.Timer excelFocusTimer;
+        private bool excelMouseDownFocused;
         private FormWindowState lastWindowState;
+        private bool shuttingDown;
+        private bool restartingServer;
+        private DateTime lastServerRestartUtc = DateTime.MinValue;
+        private int recentRestartCount;
 
         private delegate bool EnumWindowProc(IntPtr hwnd, IntPtr lParam);
 
@@ -109,6 +114,9 @@ namespace B2BNativeHost
 
         [DllImport("user32.dll")]
         private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
+
+        [DllImport("user32.dll")]
+        private static extern IntPtr GetForegroundWindow();
 
         [DllImport("kernel32.dll")]
         private static extern uint GetCurrentThreadId();
@@ -192,6 +200,7 @@ namespace B2BNativeHost
                 PublishNativeBounds();
                 RestoreActiveExcelMirror();
             };
+            Deactivate += (s, e) => HandleHostDeactivated();
             split.SplitterMoved += (s, e) => PublishNativeBounds();
             excelPanel.Resize += (s, e) => PublishNativeBounds();
             lastWindowState = WindowState;
@@ -287,7 +296,7 @@ namespace B2BNativeHost
             try
             {
                 Directory.CreateDirectory(baseDir);
-                foreach (string dir in Directory.GetDirectories(baseDir, "ver043_*"))
+                foreach (string dir in Directory.GetDirectories(baseDir, "ver044_*"))
                 {
                     try
                     {
@@ -305,7 +314,7 @@ namespace B2BNativeHost
             catch
             {
             }
-            webViewUserDataDir = Path.Combine(baseDir, "ver043_" + Process.GetCurrentProcess().Id);
+            webViewUserDataDir = Path.Combine(baseDir, "ver044_" + Process.GetCurrentProcess().Id);
             Directory.CreateDirectory(webViewUserDataDir);
             return await CoreWebView2Environment.CreateAsync(null, webViewUserDataDir);
         }
@@ -326,6 +335,12 @@ namespace B2BNativeHost
             if (message.StartsWith("B2B_EXCEL_LOADING\t", StringComparison.Ordinal))
             {
                 UpdateExcelLoading(message);
+                return;
+            }
+            if (message == "B2B_RESTART_SERVER")
+            {
+                Task ignore = RestartPythonServerAsync(false);
+                return;
             }
         }
 
@@ -488,15 +503,20 @@ namespace B2BNativeHost
             {
                 if (!String.IsNullOrEmpty(e.Data)) Program.Log("[server:err] " + e.Data);
             };
-            serverProcess.Exited += delegate
+            serverProcess.Exited += (s, e) =>
             {
+                Process exited = s as Process;
                 try
                 {
-                    Program.Log("Python server exited code=" + serverProcess.ExitCode);
+                    Program.Log("Python server exited code=" + (exited != null ? exited.ExitCode.ToString() : "?"));
                 }
                 catch
                 {
                     Program.Log("Python server exited");
+                }
+                if (!shuttingDown && !restartingServer && ReferenceEquals(exited, serverProcess))
+                {
+                    HandleServerCrash();
                 }
             };
             serverProcess.BeginOutputReadLine();
@@ -552,6 +572,66 @@ namespace B2BNativeHost
                 await Task.Delay(250);
             }
             throw new TimeoutException("Local server did not respond: " + (last == null ? "" : last.Message));
+        }
+
+        // 서버 프로세스가 예기치 않게 종료되면 자동 재시작(짧은 시간 내 반복 크래시는 중단).
+        private void HandleServerCrash()
+        {
+            if (shuttingDown || restartingServer) return;
+            DateTime now = DateTime.UtcNow;
+            if ((now - lastServerRestartUtc).TotalSeconds > 60) recentRestartCount = 0;
+            if (recentRestartCount >= 3)
+            {
+                Program.Log("Python server crashed repeatedly; auto-restart paused.");
+                ExecuteWebScript("window.dispatchEvent(new Event('b2bServerCrashedFatal'));");
+                return;
+            }
+            recentRestartCount++;
+            lastServerRestartUtc = now;
+            try
+            {
+                BeginInvoke(new Action(async delegate { await RestartPythonServerAsync(true); }));
+            }
+            catch
+            {
+            }
+        }
+
+        // 죽었거나 멈춘 서버를 강제 종료 후 같은 포트로 다시 띄운다. 웹 페이지는 그대로 유지.
+        private async Task RestartPythonServerAsync(bool fromCrash)
+        {
+            if (restartingServer || shuttingDown) return;
+            restartingServer = true;
+            try
+            {
+                Program.Log("Restarting Python server (fromCrash=" + fromCrash + ")");
+                ExecuteWebScript("window.dispatchEvent(new Event('b2bServerRestarting'));");
+                try
+                {
+                    if (serverProcess != null && !serverProcess.HasExited)
+                    {
+                        serverProcess.Kill();
+                        serverProcess.WaitForExit(3000);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Program.Log("Kill old server failed: " + ex.Message);
+                }
+                StartPythonServer();
+                await WaitForServerAsync(appUrl, TimeSpan.FromSeconds(20));
+                Program.Log("Python server restarted OK.");
+                ExecuteWebScript("window.dispatchEvent(new Event('b2bServerReconnected'));");
+            }
+            catch (Exception ex)
+            {
+                Program.Log("Restart failed: " + ex);
+                ExecuteWebScript("window.dispatchEvent(new Event('b2bServerCrashedFatal'));");
+            }
+            finally
+            {
+                restartingServer = false;
+            }
         }
 
         private void PublishNativeBounds()
@@ -641,6 +721,34 @@ namespace B2BNativeHost
             ExecuteWebScript("if (typeof restoreActiveExcelMirrorWindow === 'function') restoreActiveExcelMirrorWindow();");
         }
 
+        // 앱이 비활성화될 때(파일 대화상자/다른 앱이 앞으로 옴) overlay Excel 을 숨긴다.
+        // 단, 사용자가 Excel 미러 자체를 클릭해 Excel 이 foreground 가 된 경우는 숨기지 않는다.
+        private void HandleHostDeactivated()
+        {
+            if (ForegroundProcessIsExcel()) return;
+            ExecuteWebScript("if (typeof hideAllExcelMirrorWindows === 'function') hideAllExcelMirrorWindows();");
+        }
+
+        private bool ForegroundProcessIsExcel()
+        {
+            try
+            {
+                IntPtr fg = GetForegroundWindow();
+                if (fg == IntPtr.Zero) return false;
+                uint pid;
+                GetWindowThreadProcessId(fg, out pid);
+                if (pid == 0) return false;
+                using (Process proc = Process.GetProcessById((int)pid))
+                {
+                    return String.Equals(proc.ProcessName, "EXCEL", StringComparison.OrdinalIgnoreCase);
+                }
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
         private void FocusExcelChild()
         {
             try
@@ -661,9 +769,16 @@ namespace B2BNativeHost
             {
                 try
                 {
-                    if ((Control.MouseButtons & MouseButtons.Left) != MouseButtons.Left) return;
+                    bool leftDown = (Control.MouseButtons & MouseButtons.Left) == MouseButtons.Left;
+                    if (!leftDown)
+                    {
+                        excelMouseDownFocused = false;
+                        return;
+                    }
+                    if (excelMouseDownFocused) return;
                     Point local = excelPanel.PointToClient(Cursor.Position);
                     if (!excelPanel.ClientRectangle.Contains(local)) return;
+                    excelMouseDownFocused = true;
                     FocusExcelChild();
                 }
                 catch
@@ -753,6 +868,7 @@ namespace B2BNativeHost
 
         private void Cleanup()
         {
+            shuttingDown = true;
             try
             {
                 Program.Log("Cleanup starting");

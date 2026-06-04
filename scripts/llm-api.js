@@ -3,8 +3,8 @@
    =================================================================== */
 const LLM_HISTORY_MAX_MESSAGES = 18;
 const LLM_HISTORY_MAX_CHARS = 32000;
-const LLM_REASONING_RUNAWAY_CHARS = 7000;
-const LLM_REASONING_RUNAWAY_MS = 45000;
+const LLM_REASONING_WARNING_CHARS = 7000;
+const LLM_REASONING_WARNING_MS = 45000;
 const OPENAI_COMPAT_MAX_ATTEMPTS = 3;
 const OPENAI_COMPAT_RETRY_BASE_MS = 700;
 
@@ -118,18 +118,12 @@ async function callOpenAICompatOnce(system, options) {
   const contentType = resp.headers.get("content-type") || "";
   if (resp.body && contentType.includes("text/event-stream")) {
     const content = await readOpenAICompatStream(resp, options);
-    if (!content.trim() && options.thinkMode === true) {
-      throw createReasoningRunawayError("thinking만 생성되고 답변 본문이 비어 있습니다.");
-    }
     state.chatHistory.push({ role: "assistant", content });
     return content;
   }
 
   const data = await resp.json();
   const content = data.choices?.[0]?.message?.content || "";
-  if (!content.trim() && options.thinkMode === true) {
-    throw createReasoningRunawayError("thinking만 생성되고 답변 본문이 비어 있습니다.");
-  }
   state.chatHistory.push({ role: "assistant", content });
   return content;
 }
@@ -163,6 +157,7 @@ async function readOpenAICompatStream(resp, options) {
   let full = "";
   let reasoningFull = "";
   let reasoningStartedAt = 0;
+  let reasoningWarningShown = false;
 
   while (true) {
     const { value, done } = await reader.read();
@@ -197,9 +192,15 @@ async function readOpenAICompatStream(resp, options) {
         }
         if (!full.trim()) {
           const elapsed = performance.now() - reasoningStartedAt;
-          if (reasoningFull.length >= LLM_REASONING_RUNAWAY_CHARS || elapsed >= LLM_REASONING_RUNAWAY_MS) {
-            try { await reader.cancel(); } catch {}
-            throw createReasoningRunawayError("thinking이 길어져 답변 본문으로 넘어오지 않았습니다.");
+          if (!reasoningWarningShown
+            && (reasoningFull.length >= LLM_REASONING_WARNING_CHARS || elapsed >= LLM_REASONING_WARNING_MS)) {
+            reasoningWarningShown = true;
+            if (typeof options.onReasoningWarning === "function") {
+              options.onReasoningWarning(reasoningFull, {
+                chars: reasoningFull.length,
+                elapsedMs: elapsed,
+              });
+            }
           }
         }
       }
@@ -216,19 +217,13 @@ async function readOpenAICompatStream(resp, options) {
   return full;
 }
 
-function createReasoningRunawayError(message) {
-  const err = new Error(message);
-  err.name = "ReasoningRunawayError";
-  return err;
-}
-
 function isRetryableOpenAICompatStatus(status) {
   return [408, 429, 500, 502, 503, 504].includes(Number(status));
 }
 
 function shouldRetryOpenAICompatError(err) {
   if (!err) return false;
-  if (err.name === "AbortError" || err.name === "ReasoningRunawayError") return false;
+  if (err.name === "AbortError") return false;
   if (err.retryable === true) return true;
   if (err.status && isRetryableOpenAICompatStatus(err.status)) return true;
   const message = String(err.message || err).toLowerCase();
@@ -277,6 +272,12 @@ function applyQwenThinkDirective(messages, thinkMode) {
 }
 
 async function fetchOpenAICompat(path, preferredBase, options = {}) {
+  // 로컬 ixi 프록시(/v1)가 전달할 실제 Violet/vLLM 주소를 헤더로 알려준다.
+  // 프록시(서버)만 이 헤더를 읽으며, 개발망 vLLM 직접 연결 시에는 무시된다.
+  const upstream = settings.provider === "openai-compat" ? (settings.proxyUpstream || "") : "";
+  if (upstream) {
+    options = { ...options, headers: { ...(options.headers || {}), "X-B2B-Vllm-Base": upstream } };
+  }
   const networkFallbacks = settings.network === "dev-vllm"
     ? (DEFAULTS.devVllm.fallbackBaseUrls || [])
     : OPENAI_COMPAT_FALLBACK_BASE_URLS;
@@ -299,6 +300,8 @@ async function fetchOpenAICompat(path, preferredBase, options = {}) {
     }
   }
 
+  // 로컬 백엔드가 죽어서 실패한 경우라면 서버 모니터가 즉시 점검/재연결하도록 알림(상위면 health 통과해 무시됨).
+  if (typeof window.b2bReportServerError === "function") window.b2bReportServerError();
   const secureHint = location.protocol === "https:"
     ? "\n현재 페이지가 HTTPS라면 HTTP vLLM 호출이 브라우저에서 차단될 수 있습니다. exe 로컬 프록시 또는 http:// 실행을 사용하세요."
     : "";

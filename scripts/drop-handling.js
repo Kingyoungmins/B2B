@@ -219,21 +219,43 @@ setupNodeDrop($("runner-logic-node"), $("logic-files"), async (files) => {
   }
 });
 
+function firstAvailableFileId() {
+  if (state.inputs && state.inputs.length) return "input:" + state.inputs[0].name;
+  if (state.outputTemplates && state.outputTemplates.length) return "output:0";
+  if (state.output) return "output";
+  return null;
+}
+
+// 현재 보던 파일을 닫은 뒤, 남은 파일로 전환해 그 미러를 즉시 표시한다.
+// 남은 파일이 없으면 선택을 비우고 모든 Excel 미러를 숨긴다.
+function selectFallbackFileAfterRemoval() {
+  const fallbackId = firstAvailableFileId();
+  if (fallbackId && typeof setCurrentView === "function") {
+    setCurrentView(fallbackId);
+    return;
+  }
+  state.currentFileId = null;
+  state.currentSheet = null;
+  state.selectedCell = null;
+  state.selectedRange = null;
+  state.selectedRanges = [];
+  state.selectionAnchor = null;
+  if (typeof hideAllExcelMirrorWindows === "function") {
+    hideAllExcelMirrorWindows().catch(() => {});
+  }
+}
+
 function removeInputFileAt(idx) {
   if (typeof pushHistory === "function") pushHistory("입력 파일 삭제");
   const removed = state.inputs.splice(idx, 1)[0];
   state.inputsOriginal.splice(idx, 1);
   const removedFileId = removed ? "input:" + removed.name : "";
+  const wasCurrent = removed && state.currentFileId === removedFileId;
   if (removedFileId && typeof closeExcelMirrorForFileId === "function") {
     closeExcelMirrorForFileId(removedFileId).catch(err => console.warn("Failed to close removed input Excel mirror:", err));
   }
-  if (removed && state.currentFileId === "input:" + removed.name) {
-    state.currentFileId = null;
-    state.currentSheet = null;
-    state.selectedCell = null;
-    state.selectedRange = null;
-    state.selectedRanges = [];
-    state.selectionAnchor = null;
+  if (wasCurrent) {
+    selectFallbackFileAfterRemoval();
   }
   renderInputList();
   refreshTabs();
@@ -243,6 +265,8 @@ function removeInputFileAt(idx) {
 
 function removeOutputTemplateAt(idx) {
   if (typeof pushHistory === "function") pushHistory("출력 템플릿 삭제");
+  const wasCurrentOutput = state.currentFileId === "output" ||
+    (state.currentFileId && state.currentFileId.startsWith("output:"));
   if (typeof closeExcelMirrorForFileId === "function") {
     for (let i = idx; i < state.outputTemplates.length; i++) {
       closeExcelMirrorForFileId("output:" + i).catch(err => console.warn("Failed to close removed output Excel mirror:", err));
@@ -253,19 +277,15 @@ function removeOutputTemplateAt(idx) {
     state.output = null;
     state.outputOriginal = null;
     state.activeOutputIndex = -1;
-    if (state.currentFileId === "output" || (state.currentFileId && state.currentFileId.startsWith("output:"))) {
-      state.currentFileId = null;
-      state.currentSheet = null;
-      state.selectedCell = null;
-      state.selectedRange = null;
-      state.selectedRanges = [];
-      state.selectionAnchor = null;
+    if (wasCurrentOutput) {
+      selectFallbackFileAfterRemoval();
     }
   } else {
     activateOutputTemplate(0);
-    if (state.currentFileId && state.currentFileId.startsWith("output:")) {
+    if (wasCurrentOutput) {
       const nextIdx = Math.min(idx, state.outputTemplates.length - 1);
-      state.currentFileId = "output:" + nextIdx;
+      if (typeof setCurrentView === "function") setCurrentView("output:" + nextIdx);
+      else state.currentFileId = "output:" + nextIdx;
     }
   }
   renderOutputChip();

@@ -38,14 +38,45 @@ ver4.x execution rule:
 - Do not use sheet[r][c] JavaScript-style array code for Excel workbooks.
 `;
 
+// 스키마가 모델 컨텍스트를 잡아먹어 max length(예: 20만)를 넘기지 않도록 하는 예산/상한.
+const SCHEMA_TOKEN_BUDGET = 60000;        // 파일 스키마가 차지할 최대 추정 토큰
+const SCHEMA_CHARS_PER_TOKEN = 2;         // 한/영/JSON 혼합 보수적 추정(토큰을 과대평가 → 안전)
+const EDIT_CONTEXT_TOKEN_BUDGET = 70000;  // 수정 모드 컨텍스트(코드 포함) 상한
+
+function _estimateSchemaTokens(text) {
+  return Math.ceil(String(text || "").length / SCHEMA_CHARS_PER_TOKEN);
+}
+
+function _truncSchemaCell(value, maxLen) {
+  let s = JSON.stringify(value);
+  if (s === undefined) s = "\"\"";
+  if (maxLen && s.length > maxLen) s = s.slice(0, Math.max(1, maxLen - 1)) + "…";
+  return s;
+}
+
+// 강한 순서대로: 토큰 예산을 넘으면 다음 단계로 더 줄여 다시 빌드한다.
+const SCHEMA_LEVELS = [
+  { inputRows: 5, outputRows: 30, maxCols: 40, maxCellLen: 80, maxSheets: 20 },
+  { inputRows: 4, outputRows: 15, maxCols: 25, maxCellLen: 48, maxSheets: 12 },
+  { inputRows: 3, outputRows: 8,  maxCols: 16, maxCellLen: 32, maxSheets: 8 },
+  { inputRows: 2, outputRows: 4,  maxCols: 10, maxCellLen: 24, maxSheets: 5 },
+  { inputRows: 1, outputRows: 2,  maxCols: 6,  maxCellLen: 16, maxSheets: 3 },
+];
+
 function _sheetTotalRowsForSchema(file, sheetName, aoa) {
   const dim = file && file.backendPreviewDimensions && file.backendPreviewDimensions[sheetName];
   return Math.max(Number(dim && dim.maxRow) || 0, (aoa || []).length || 0);
 }
 
-function _describeFile(f, headPreview, lines) {
+function _describeFile(f, opts, lines) {
+  const headPreview = opts.headPreview || 5;
+  const maxCols = opts.maxCols || 40;
+  const maxCellLen = opts.maxCellLen || 80;
+  const maxSheets = opts.maxSheets || 20;
   lines.push(`\n### ${f.name}`);
-  f.sheetNames.forEach(sn => {
+  const sheetNames = f.sheetNames || [];
+  const shownSheets = sheetNames.slice(0, maxSheets);
+  shownSheets.forEach(sn => {
     const aoa = f.sheets[sn] || [];
     const totalRows = _sheetTotalRowsForSchema(f, sn, aoa);
     const previewNote = totalRows > aoa.length ? ` (현재 미리보기 ${aoa.length}행)` : "";
@@ -54,7 +85,7 @@ function _describeFile(f, headPreview, lines) {
     const tables = (f.tables || {})[sn] || [];
     if (tables.length > 1) {
       lines.push(`  감지된 표 후보 ${tables.length}개`);
-      tables.forEach((t, i) => {
+      tables.slice(0, 5).forEach((t, i) => {
         lines.push(`     ${i + 1}) "${t.label}" 범위 ${t.range}, 헤더 행 ${t.headerRow + 1}`);
       });
     }
@@ -67,16 +98,42 @@ function _describeFile(f, headPreview, lines) {
 
     const preview = aoa.slice(0, headPreview);
     preview.forEach((row, i) => {
-      lines.push(`  행 ${i + 1}: [${row.map(v => JSON.stringify(v)).join(", ")}]`);
+      const full = row || [];
+      const cells = full.slice(0, maxCols).map(v => _truncSchemaCell(v, maxCellLen));
+      const omittedCols = full.length > maxCols ? ` …(${full.length - maxCols}열 생략)` : "";
+      lines.push(`  행 ${i + 1}: [${cells.join(", ")}]${omittedCols}`);
     });
     if (totalRows > headPreview) lines.push(`  ... (${totalRows - headPreview}행 생략)`);
   });
+  if (sheetNames.length > shownSheets.length) {
+    const rest = sheetNames.slice(shownSheets.length).join(", ");
+    lines.push(`  ... (시트 ${sheetNames.length - shownSheets.length}개 더: ${rest.length > 200 ? rest.slice(0, 200) + "…" : rest})`);
+  }
 }
 
 function buildSchemaSummary() {
+  let out = "";
+  for (let i = 0; i < SCHEMA_LEVELS.length; i++) {
+    out = _buildSchemaSummaryAtLevel(SCHEMA_LEVELS[i]);
+    if (_estimateSchemaTokens(out) <= SCHEMA_TOKEN_BUDGET) {
+      if (i > 0) out += `\n\n(참고: 파일이 커서 스키마 미리보기를 ${i + 1}단계로 축소했습니다. 필요한 행/열은 코드로 직접 읽으세요.)`;
+      return out;
+    }
+  }
+  // 가장 축소한 단계도 예산을 넘으면 문자 단위로 하드 컷.
+  const maxChars = SCHEMA_TOKEN_BUDGET * SCHEMA_CHARS_PER_TOKEN;
+  if (out.length > maxChars) {
+    out = out.slice(0, maxChars) + "\n... (스키마가 토큰 한도를 넘어 일부 생략됨)";
+  }
+  return out;
+}
+
+function _buildSchemaSummaryAtLevel(lvl) {
+  const inputOpts = { headPreview: lvl.inputRows, maxCols: lvl.maxCols, maxCellLen: lvl.maxCellLen, maxSheets: lvl.maxSheets };
+  const outputOpts = { headPreview: lvl.outputRows, maxCols: lvl.maxCols, maxCellLen: lvl.maxCellLen, maxSheets: lvl.maxSheets };
   const lines = [];
   lines.push("## 입력 파일 목록 (수정 가능)");
-  state.inputs.forEach(f => _describeFile(f, 5, lines));
+  state.inputs.forEach(f => _describeFile(f, inputOpts, lines));
 
   const targetHint = _buildDefaultTargetHint();
   if (targetHint) {
@@ -98,14 +155,14 @@ function buildSchemaSummary() {
     lines.push("\n## 현재 출력 템플릿 목록");
     state.outputTemplates.forEach((tpl, idx) => {
       lines.push(`\n#### 출력 템플릿 ${idx + 1}: ${tpl.file.name}`);
-      _describeFile(tpl.file, 30, lines);
+      _describeFile(tpl.file, outputOpts, lines);
     });
   } else if (state.output) {
     const label = state.pipeline.length > 0
       ? "## 현재 출력 상태 (이전 단계들이 적용된 결과, 수정 가능)"
       : `## 출력 템플릿 (원본, 수정 가능): ${state.output.name}`;
     lines.push("\n" + label);
-    _describeFile(state.output, 30, lines);
+    _describeFile(state.output, outputOpts, lines);
   }
 
   if (state.selectedCell && state.selectedCell.fileId === state.currentFileId && state.selectedCell.sheet) {
@@ -223,17 +280,27 @@ def transform(ctx):
 `;
 
 function previewSheets(sheets, headRows) {
+  const EDIT_MAX_COLS = 24;
+  const EDIT_MAX_CELL_LEN = 48;
+  const EDIT_MAX_SHEETS = 12;
   const lines = [];
-  Object.keys(sheets || {}).forEach(sn => {
+  const sheetNames = Object.keys(sheets || {});
+  sheetNames.slice(0, EDIT_MAX_SHEETS).forEach(sn => {
     const aoa = sheets[sn] || [];
     lines.push(`sheet "${sn}": ${aoa.length} rows`);
     const limit = headRows || 5;
     const preview = aoa.slice(0, limit);
     preview.forEach((row, i) => {
-      lines.push(`  ${i + 1}: [${(row || []).map(v => JSON.stringify(v)).join(", ")}]`);
+      const full = row || [];
+      const cells = full.slice(0, EDIT_MAX_COLS).map(v => _truncSchemaCell(v, EDIT_MAX_CELL_LEN));
+      const omitted = full.length > EDIT_MAX_COLS ? ` …(${full.length - EDIT_MAX_COLS}열 생략)` : "";
+      lines.push(`  ${i + 1}: [${cells.join(", ")}]${omitted}`);
     });
     if (aoa.length > limit) lines.push(`  ... (${aoa.length - limit}행 생략)`);
   });
+  if (sheetNames.length > EDIT_MAX_SHEETS) {
+    lines.push(`  ... (시트 ${sheetNames.length - EDIT_MAX_SHEETS}개 더 생략)`);
+  }
   return lines;
 }
 
@@ -290,5 +357,10 @@ function buildEditingContext(editIdx) {
     }
   }
 
-  return lines.join("\n");
+  const text = lines.join("\n");
+  const maxChars = EDIT_CONTEXT_TOKEN_BUDGET * SCHEMA_CHARS_PER_TOKEN;
+  if (text.length > maxChars) {
+    return text.slice(0, maxChars) + "\n... (수정 컨텍스트가 토큰 한도를 넘어 일부 생략됨)";
+  }
+  return text;
 }

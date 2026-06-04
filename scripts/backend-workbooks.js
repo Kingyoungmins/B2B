@@ -383,7 +383,17 @@ function applyBackendPipelineResult(result) {
   flashBackendDiff(result);
   flashFilled();
   window.backendCurrentCacheDirty = false;
-  if (result && result.pythonExcel) {
+  if (result && result.pythonExcel && result.liveApplied) {
+    // 백엔드가 라이브 미러에 직접 적용함 → 결과 파일 replace 불필요. 미러 폴링만 재동기화.
+    const outputFileId = result.clientOutputFileId;
+    if (outputFileId && result.clientOutputExcelId && typeof acknowledgeExcelMirrorApplied === "function") {
+      setTimeout(() => {
+        acknowledgeExcelMirrorApplied(outputFileId).catch(err => {
+          console.warn("Failed to re-baseline live Excel mirror:", err);
+        });
+      }, 150);
+    }
+  } else if (result && result.pythonExcel) {
     const outputFileId = result.clientOutputFileId ||
       Object.keys(downloadUrls).find(id => id === "output" || id.startsWith("output:"));
     if (outputFileId && result.clientOutputExcelId && typeof acknowledgeExcelMirrorApplied === "function") {
@@ -490,7 +500,9 @@ async function runPipelineOnBackend(options = {}) {
   const liveOutputExcelId = outputTarget && typeof excelMirrorSessionIdForFileId === "function"
     ? excelMirrorSessionIdForFileId(outputTarget.fileId)
     : null;
-  const shouldUseLiveExcel = !!liveOutputExcelId && !usesPythonExcel && !hasActiveJavaScriptStep;
+  // Python(전부 Python 단계) 파이프라인도 라이브 미러에 직접 적용한다(2단계 최적화: 라이브 추가).
+  // JS 단계가 섞이면 기존처럼 라이브를 쓰지 않는다.
+  const shouldUseLiveExcel = !!liveOutputExcelId && !hasActiveJavaScriptStep;
   let outputExcelId = null;
   if (shouldUseLiveExcel) {
     setProgress("Excel 창 준비 중...");

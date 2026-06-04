@@ -27,3 +27,6 @@ auto_backups/
 # Native host generated files
 native_host/bin/
 native_host/packages/
+
+# Embed prototype build output
+embed_proto/bin/

@@ -34,6 +34,9 @@ function openSettingsModal(devMode) {
   const ixiThinkControlMode = settings.provider === "openai-compat"
     ? (settings.thinkControlMode || DEFAULTS["openai-compat"].thinkControlMode)
     : openaiDefaults.thinkControlMode;
+  const ixiUpstream = (settings.provider === "openai-compat" && settings.proxyUpstream)
+    ? settings.proxyUpstream
+    : DEFAULTS["openai-compat"].proxyUpstream;
 
   const claudeKey = settings.provider === "anthropic"
     ? (settings.apiKey || DEFAULTS.anthropic.apiKey)
@@ -74,6 +77,11 @@ function openSettingsModal(devMode) {
       ${devMode ? `<div style="font-size:11px; color:#777; margin:-6px 0 8px">
         개발망 vLLM은 Windows에서 <code>http://localhost:8016/v1</code>을 먼저 사용하고, 실패하면 <code>http://192.168.219.105:8016/v1</code>을 자동 시도합니다.
       </div>` : ""}
+      <label style="font-size:11.5px; color:#666">Violet/vLLM 실제 주소 (ixi 프록시 전달 대상)</label>
+      <input type="text" id="set-o-upstream" value="${escapeHtml(ixiUpstream)}" placeholder="http://...violet.uplus.co.kr" />
+      <div style="font-size:11px; color:#777; margin:-6px 0 8px">
+        Base URL이 로컬 프록시(<code>/v1</code>)일 때, 서버가 이 주소로 요청을 전달합니다. 개발망 vLLM 직접 연결 시에는 무시됩니다.
+      </div>
       <label style="font-size:11.5px; color:#666">API Key</label>
       <input type="text" id="set-o-key" value="${escapeHtml(ixiKey)}" />
       <label style="font-size:11.5px; color:#666">Think 제어 방식</label>
@@ -145,6 +153,7 @@ function openSettingsModal(devMode) {
       provider: "openai-compat",
       network,
       baseUrl: $("set-o-url").value.trim() || (network === "dev-vllm" ? DEFAULTS.devVllm.baseUrl : DEFAULTS["openai-compat"].baseUrl),
+      proxyUpstream: ($("set-o-upstream") ? $("set-o-upstream").value.trim() : "") || DEFAULTS["openai-compat"].proxyUpstream,
       apiKey: $("set-o-key").value.trim() || (network === "dev-vllm" ? DEFAULTS.devVllm.apiKey : DEFAULTS["openai-compat"].apiKey),
       model: network === "dev-vllm" ? DEFAULTS.devVllm.model : DEFAULTS["openai-compat"].model,
       thinkMode: settings.thinkMode === true,
