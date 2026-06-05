@@ -79,7 +79,7 @@ MAX_PIPELINE_JOBS = 40
 # 이 크기를 넘으면 중간 단계 스냅샷을 건너뛰고 "마지막 단계"만 저장한다(동일 파이프라인 재적용은 여전히 즉시).
 SNAPSHOT_INTERMEDIATE_MAX_BYTES = 8 * 1024 * 1024
 PIPELINE_JOB_TTL_SECONDS = 60 * 60
-APP_BUILD_STAMP = "b2b-overlay-shell-20260605-046-07"
+APP_BUILD_STAMP = "b2b-overlay-shell-20260605-046-08"
 EXCEL_MIRROR_PROTECT_PASSWORD = "b2b_mirror_readonly"
 
 
@@ -4298,6 +4298,10 @@ def _run_excel_python_pipeline_impl(payload, job_id=None):
         except Exception as err:
             _warn_excel_nonfatal("snapshot fast result", err)
 
+    # 단계별 서버 타이밍(F8 디버그 표시용)
+    _t0 = time.perf_counter()
+    _perf = {"resetMs": 0.0, "openMs": 0.0, "stepsMs": 0.0}
+
     live_excel_id = (payload.get("current") or {}).get("outputExcelId")
     live_session = None
     if live_excel_id:
@@ -4376,7 +4380,9 @@ def _run_excel_python_pipeline_impl(payload, job_id=None):
                     _warn_excel_nonfatal("unprotect read-only mirror before reset", err)
             if not fast_prefix:
                 # 미러 상태가 요청 prefix 와 다르면 기준 상태로 리셋 후 전체 재실행.
+                _t_reset = time.perf_counter()
                 _copy_source_workbook_into_target(app, output_wb, output_base_path)
+                _perf["resetMs"] = (time.perf_counter() - _t_reset) * 1000
             if live_read_only_mirror:
                 try:
                     _protect_workbook_for_read_only_mirror(output_wb, False)
@@ -4427,6 +4433,10 @@ def _run_excel_python_pipeline_impl(payload, job_id=None):
             except Exception:
                 restore_calculation = None
 
+        # 워크북 열기/리셋까지 걸린 시간(리셋 제외분 = 순수 open).
+        _perf["openMs"] = max(0.0, (time.perf_counter() - _t0) * 1000 - _perf["resetMs"])
+        _t_steps = time.perf_counter()
+
         ctx = ExcelSkillContext(app, output_wb, input_wbs)
         for idx, step in enumerate(python_steps[resume_from:], start=resume_from + 1):
             update_pipeline_job(job_id, {
@@ -4476,6 +4486,7 @@ def _run_excel_python_pipeline_impl(payload, job_id=None):
                 except Exception as err:
                     _warn_excel_nonfatal("pipeline snapshot", err)
 
+        _perf["stepsMs"] = (time.perf_counter() - _t_steps) * 1000
         active_output_sheet = ctx.last_output_sheet if ctx else None
         active_output_address = ctx.last_output_address if ctx else None
         if active_output_sheet:
@@ -4546,7 +4557,9 @@ def _run_excel_python_pipeline_impl(payload, job_id=None):
             if not Path(safe_name).suffix:
                 safe_name += ".xlsx"
             result_path = BACKEND_DIR / f"{uuid.uuid4().hex}_result_{safe_name}"
+            _t_save = time.perf_counter()
             output_wb.SaveCopyAs(str(result_path))
+            _perf["saveResultMs"] = (time.perf_counter() - _t_save) * 1000
     finally:
         if live_session and live_read_only_mirror:
             try:
@@ -4609,6 +4622,9 @@ def _run_excel_python_pipeline_impl(payload, job_id=None):
             result_output = {}
         update_workbook_current_cache(output_wb_record, result_output)
         previews = build_result_previews(input_previews, result_output, current, {}, [])
+        _perf["totalServerMs"] = (time.perf_counter() - _t0) * 1000
+        _perf["finalizeMs"] = max(0.0, _perf["totalServerMs"] - _perf["openMs"] - _perf["resetMs"] - _perf["stepsMs"])
+        _perf["mode"] = "live"
         return {
             "ok": True,
             "pythonExcel": True,
@@ -4624,6 +4640,7 @@ def _run_excel_python_pipeline_impl(payload, job_id=None):
             "files": previews,
             "activeSheet": active_output_sheet,
             "activeAddress": active_output_address,
+            "debugTimings": _perf,
         }
     result_id = uuid.uuid4().hex
     RESULTS[result_id] = {
@@ -4631,7 +4648,9 @@ def _run_excel_python_pipeline_impl(payload, job_id=None):
         "name": result_path.name,
         "created": time.time(),
     }
+    _t_inspect = time.perf_counter()
     inspected = inspect_workbook(result_path)
+    _perf["inspectMs"] = (time.perf_counter() - _t_inspect) * 1000
     result_output = {
         sheet_name: (sheet.get("rows") or [])
         for sheet_name, sheet in (inspected.get("sheets") or {}).items()
@@ -4640,11 +4659,15 @@ def _run_excel_python_pipeline_impl(payload, job_id=None):
     previews = build_result_previews(input_previews, result_output, current, {}, [])
     download_urls = dict(input_download_urls)
     download_urls[output_file_id] = f"/api/workbooks/download/{result_id}"
+    _perf["totalServerMs"] = (time.perf_counter() - _t0) * 1000
+    _perf["finalizeMs"] = max(0.0, _perf["totalServerMs"] - _perf["openMs"] - _perf["resetMs"] - _perf["stepsMs"])
+    _perf["mode"] = "worker-hidden"
     return {
         "ok": True,
         "pythonExcel": True,
         "snapshotHit": bool(resume_from),
         "snapshotStep": resume_from,
+        "debugTimings": _perf,
         "diffId": None,
         "diffs": {},
         "forcedValueCells": [],
