@@ -79,7 +79,7 @@ MAX_PIPELINE_JOBS = 40
 # 이 크기를 넘으면 중간 단계 스냅샷을 건너뛰고 "마지막 단계"만 저장한다(동일 파이프라인 재적용은 여전히 즉시).
 SNAPSHOT_INTERMEDIATE_MAX_BYTES = 8 * 1024 * 1024
 PIPELINE_JOB_TTL_SECONDS = 60 * 60
-APP_BUILD_STAMP = "b2b-overlay-shell-20260605-046-08"
+APP_BUILD_STAMP = "b2b-overlay-shell-20260605-046-09"
 EXCEL_MIRROR_PROTECT_PASSWORD = "b2b_mirror_readonly"
 
 
@@ -2413,20 +2413,41 @@ def _excel_address(obj):
     return str(address or "")
 
 
+def _col_letter(n):
+    # 1-based 열 번호 → 엑셀 열 문자(A, B, ..., AA ...). COM 호출 없이 Python 으로 계산.
+    s = ""
+    n = int(n)
+    while n > 0:
+        n, r = divmod(n - 1, 26)
+        s = chr(65 + r) + s
+    return s or "A"
+
+
+# 스냅샷이 읽을 최대 범위(거대/부풀린 UsedRange 방어). 변경 감지용이라 이 정도면 충분.
+_SNAPSHOT_MAX_ROWS = 20000
+_SNAPSHOT_MAX_COLS = 256
+
+
 def _sheet_snapshot(ws):
     used = ws.UsedRange
     start_row = int(used.Row)
     start_col = int(used.Column)
-    values = _range_matrix(used.Value)
-    formulas = _range_matrix(used.Formula)
+    # 범위를 한정해 읽는다(전체 UsedRange 가 시트 끝까지 부풀어 있어도 안전).
+    n_rows = min(int(used.Rows.Count), _SNAPSHOT_MAX_ROWS)
+    n_cols = min(int(used.Columns.Count), _SNAPSHOT_MAX_COLS)
+    if n_rows <= 0 or n_cols <= 0:
+        return {}
+    rng = ws.Range(ws.Cells(start_row, start_col), ws.Cells(start_row + n_rows - 1, start_col + n_cols - 1))
+    values = _range_matrix(rng.Value)       # 1회 COM 호출
+    formulas = _range_matrix(rng.Formula)   # 1회 COM 호출
     cells = {}
     for r_offset, row in enumerate(values):
         formula_row = formulas[r_offset] if r_offset < len(formulas) else []
+        row_num = start_row + r_offset
         for c_offset, value in enumerate(row):
             formula = formula_row[c_offset] if c_offset < len(formula_row) else value
-            row_num = start_row + r_offset
             col_num = start_col + c_offset
-            address = _excel_address(ws.Cells(row_num, col_num)).replace("$", "")
+            address = f"{_col_letter(col_num)}{row_num}"  # ← Python 계산(셀당 COM 호출 제거)
             formula_text = _com_scalar(formula)
             value_text = _com_scalar(value)
             is_formula = isinstance(formula_text, str) and formula_text.startswith("=")
