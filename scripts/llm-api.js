@@ -20,9 +20,10 @@ async function callLLM(userMessage, options) {
     ? state.pipeline.findIndex(s => s.id === editTargetId)
     : -1;
 
-  const fullSystem = editIdx >= 0
+  const engineNote = typeof skillEnginePromptNote === "function" ? skillEnginePromptNote() : "";
+  const fullSystem = (editIdx >= 0
     ? EDIT_SYSTEM_PROMPT + "\n\n" + buildEditingContext(editIdx)
-    : SYSTEM_PROMPT + "\n\n## 현재 파일 스키마\n" + buildSchemaSummary();
+    : SYSTEM_PROMPT + "\n\n## 현재 파일 스키마\n" + buildSchemaSummary()) + engineNote;
 
   try {
     let reply;

@@ -531,9 +531,11 @@ async function runPipelineOnBackend(options = {}) {
   const liveOutputExcelId = outputTarget && typeof excelMirrorSessionIdForFileId === "function"
     ? excelMirrorSessionIdForFileId(outputTarget.fileId)
     : null;
+  // 스킬 실행 엔진 선택: "python"(openpyxl, COM 없이 인프로세스 — 빠름) / "excel"(COM, 라이브 미러).
+  const skillEngine = typeof getSkillEngine === "function" ? getSkillEngine() : "excel";
   // Python(전부 Python 단계) 파이프라인도 라이브 미러에 직접 적용한다(2단계 최적화: 라이브 추가).
-  // JS 단계가 섞이면 기존처럼 라이브를 쓰지 않는다.
-  const shouldUseLiveExcel = !!liveOutputExcelId && !hasActiveJavaScriptStep;
+  // JS 단계가 섞이거나 openpyxl 엔진이면 라이브를 쓰지 않는다(openpyxl 은 결과 파일로 미러를 교체).
+  const shouldUseLiveExcel = !!liveOutputExcelId && !hasActiveJavaScriptStep && skillEngine !== "python";
   let outputExcelId = null;
   if (shouldUseLiveExcel) {
     setProgress("Excel 창 준비 중...");
@@ -553,6 +555,7 @@ async function runPipelineOnBackend(options = {}) {
     } : null,
     pipeline: pipelineForRun,
     baseMode: options.baseMode || "original",
+    engine: skillEngine,
     current: {
       fileId: state.currentFileId,
       outputFileId: outputTarget ? outputTarget.fileId : null,

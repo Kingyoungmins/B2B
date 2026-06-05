@@ -79,7 +79,7 @@ MAX_PIPELINE_JOBS = 40
 # 이 크기를 넘으면 중간 단계 스냅샷을 건너뛰고 "마지막 단계"만 저장한다(동일 파이프라인 재적용은 여전히 즉시).
 SNAPSHOT_INTERMEDIATE_MAX_BYTES = 8 * 1024 * 1024
 PIPELINE_JOB_TTL_SECONDS = 60 * 60
-APP_BUILD_STAMP = "b2b-overlay-shell-20260605-045-03"
+APP_BUILD_STAMP = "b2b-overlay-shell-20260605-046-01"
 EXCEL_MIRROR_PROTECT_PASSWORD = "b2b_mirror_readonly"
 
 
@@ -3200,6 +3200,611 @@ def _safe_python_globals():
     }
 
 
+# =====================================================================
+#  순수 Python(openpyxl) 스킬 엔진 — COM/Excel 없이 인프로세스로 실행(빠름).
+#  COM 스킬과 동일한 ctx API + ws.Range/Cells/UsedRange/.Value 호환 shim을 제공해
+#  기존 스킬 코드/프롬프트가 대부분 그대로 동작하게 한다.
+#  주의: 수식 셀을 다시 읽으면 계산값이 아니라 수식 문자열이 나온다(openpyxl 한계).
+#       값은 Python에서 계산해 셀에 직접 쓰는 것을 권장.
+# =====================================================================
+def _opxl_coord(token):
+    from openpyxl.utils.cell import coordinate_to_tuple
+    row, col = coordinate_to_tuple(str(token).replace("$", "").strip())
+    return int(row), int(col)
+
+
+class _OpxlCount:
+    def __init__(self, count):
+        self.Count = int(count)
+
+
+class _OpxlRange:
+    """openpyxl 워크시트 위의 직사각 범위(또는 단일 셀). COM Range.Value 시맨틱을 흉내낸다."""
+    def __init__(self, ws, r1, c1, r2, c2):
+        self._ws = ws
+        self._r1, self._c1 = int(r1), int(c1)
+        self._r2, self._c2 = int(r2), int(c2)
+
+    @property
+    def _single(self):
+        return self._r1 == self._r2 and self._c1 == self._c2
+
+    def _get_value(self):
+        if self._single:
+            return self._ws.cell(row=self._r1, column=self._c1).value
+        out = []
+        for r in range(self._r1, self._r2 + 1):
+            out.append(tuple(self._ws.cell(row=r, column=c).value for c in range(self._c1, self._c2 + 1)))
+        return tuple(out)
+
+    def _set_value(self, value):
+        if self._single and not isinstance(value, (list, tuple)):
+            self._ws.cell(row=self._r1, column=self._c1, value=value)
+            return
+        if isinstance(value, (list, tuple)) and value and not isinstance(value[0], (list, tuple)):
+            value = [value]  # 1행 그리드로 취급
+        rows = list(value) if isinstance(value, (list, tuple)) else [[value]]
+        for i, r in enumerate(range(self._r1, self._r2 + 1)):
+            row = rows[i] if i < len(rows) else None
+            if row is None:
+                if self._single or not isinstance(value, (list, tuple)):
+                    self._ws.cell(row=r, column=self._c1, value=value)
+                continue
+            if not isinstance(row, (list, tuple)):
+                row = [row]
+            for j, c in enumerate(range(self._c1, self._c2 + 1)):
+                if j < len(row):
+                    self._ws.cell(row=r, column=c, value=row[j])
+
+    Value = property(_get_value, _set_value)
+    Value2 = property(_get_value, _set_value)
+
+    @property
+    def Row(self):
+        return self._r1
+
+    @property
+    def Column(self):
+        return self._c1
+
+    @property
+    def Rows(self):
+        return _OpxlCount(self._r2 - self._r1 + 1)
+
+    @property
+    def Columns(self):
+        return _OpxlCount(self._c2 - self._c1 + 1)
+
+    def Select(self):
+        return self
+
+
+class OpenpyxlWorksheetProxy:
+    """openpyxl Worksheet 래퍼. COM 풍의 Range/Cells/UsedRange/.Name 을 제공하고
+    그 외 속성/메서드(cell, insert_cols, append, max_row 등)는 openpyxl 로 위임한다."""
+    def __init__(self, ws):
+        object.__setattr__(self, "_ws", ws)
+
+    def __getattr__(self, name):
+        return getattr(object.__getattribute__(self, "_ws"), name)
+
+    def __setattr__(self, key, value):
+        if key == "_ws":
+            object.__setattr__(self, key, value)
+        elif key == "Name":
+            self._ws.title = value
+        else:
+            setattr(self._ws, key, value)
+
+    @property
+    def Name(self):
+        return self._ws.title
+
+    @property
+    def Parent(self):
+        return self._ws.parent
+
+    def Cells(self, r, c):
+        return _OpxlRange(self._ws, r, c, r, c)
+
+    @property
+    def UsedRange(self):
+        mr = self._ws.max_row or 1
+        mc = self._ws.max_column or 1
+        return _OpxlRange(self._ws, 1, 1, mr, mc)
+
+    def Range(self, a1, a2=None):
+        if a2 is not None:
+            r1, c1 = a1._r1, a1._c1
+            r2, c2 = a2._r1, a2._c1
+            return _OpxlRange(self._ws, min(r1, r2), min(c1, c2), max(r1, r2), max(c1, c2))
+        s = str(a1).replace("$", "").strip()
+        if ":" in s:
+            left, right = s.split(":", 1)
+            r1, c1 = _opxl_coord(left)
+            r2, c2 = _opxl_coord(right)
+            return _OpxlRange(self._ws, min(r1, r2), min(c1, c2), max(r1, r2), max(c1, c2))
+        r, c = _opxl_coord(s)
+        return _OpxlRange(self._ws, r, c, r, c)
+
+
+class OpenpyxlWorkbookProxy:
+    def __init__(self, ctx, workbook, name=None):
+        self._ctx = ctx
+        self._workbook = workbook
+        self.name = name or ""
+
+    @property
+    def raw(self):
+        return self._workbook
+
+    def __getattr__(self, name):
+        return getattr(self._workbook, name)
+
+    def sheet(self, name=None):
+        return self._ctx.sheet(name, workbook=self)
+
+    def sheet_like(self, name=None):
+        return self._ctx.sheet_like(name, workbook=self)
+
+    def range(self, sheet_or_name, address):
+        return self._ctx.range(sheet_or_name, address, workbook=self)
+
+    def rows(self, sheet_or_name=None):
+        return self._ctx.rows(sheet_or_name, workbook=self)
+
+    def col(self, sheet_or_name, header, header_rows=20):
+        return self._ctx.col(sheet_or_name, header, workbook=self, header_rows=header_rows)
+
+    def header_row(self, sheet_or_name=None, header_rows=20):
+        return self._ctx.header_row(sheet_or_name, workbook=self, header_rows=header_rows)
+
+
+class OpenpyxlSkillContext:
+    """COM ExcelSkillContext 와 동일한 API를 openpyxl 위에서 제공한다."""
+    def __init__(self, output_wb, input_wbs):
+        self.excel = None
+        self._workbook = output_wb
+        self.workbook = OpenpyxlWorkbookProxy(self, output_wb, "output")
+        self.output = self.workbook
+        self.last_output_sheet = None
+        self.last_output_address = None
+        self.inputs = {
+            name: OpenpyxlWorkbookProxy(self, wb, name)
+            for name, wb in (input_wbs or {}).items()
+        }
+
+    def _unwrap_workbook(self, wb):
+        return wb.raw if isinstance(wb, OpenpyxlWorkbookProxy) else wb
+
+    def _is_output_workbook(self, wb):
+        return self._unwrap_workbook(wb) is self._workbook
+
+    def normalize(self, value):
+        return normalize_text(value)
+
+    def _sheet_names(self, wb):
+        return list(self._unwrap_workbook(wb).sheetnames)
+
+    def workbook_like(self, hint=None):
+        if not hint:
+            return self.workbook
+        norm = self.normalize(hint)
+        candidates = [(name, wb) for name, wb in self.inputs.items()]
+        candidates.append(("output", self.workbook))
+        for name, wb in candidates:
+            if self.normalize(name) == norm:
+                return wb
+        for name, wb in candidates:
+            if norm in self.normalize(name) or self.normalize(name) in norm:
+                return wb
+        for _, wb in candidates:
+            if self._find_sheet_name(wb, hint, allow_single=False):
+                return wb
+        if len(self.inputs) == 1:
+            return next(iter(self.inputs.values()))
+        raise RuntimeError(f"workbook not found: {hint}")
+
+    def input(self, hint=None):
+        if hint is None:
+            if len(self.inputs) == 1:
+                return next(iter(self.inputs.values()))
+            raise RuntimeError("input workbook hint is required when multiple input files exist")
+        return self.workbook_like(hint)
+
+    def _find_sheet_name(self, wb, name=None, allow_single=True):
+        raw = self._unwrap_workbook(wb)
+        names = list(raw.sheetnames)
+        if not names:
+            return None
+        if not name:
+            try:
+                return raw.active.title
+            except Exception:
+                return names[0]
+        norm = self.normalize(name)
+        for sheet_name in names:
+            if self.normalize(sheet_name) == norm:
+                return sheet_name
+        for sheet_name in names:
+            sheet_norm = self.normalize(sheet_name)
+            if norm in sheet_norm or sheet_norm in norm:
+                return sheet_name
+        if allow_single and len(names) == 1:
+            return names[0]
+        return None
+
+    def sheet(self, name=None, workbook=None):
+        raw = self._unwrap_workbook(workbook or self.workbook)
+        sheet_name = self._find_sheet_name(workbook or self.workbook, name)
+        if not sheet_name:
+            raise RuntimeError(f"sheet not found: {name}")
+        ws = OpenpyxlWorksheetProxy(raw[sheet_name])
+        if self._is_output_workbook(raw):
+            self.last_output_sheet = ws.Name
+        return ws
+
+    def sheet_like(self, name=None, workbook=None):
+        return self.sheet(name, workbook)
+
+    def input_sheet(self, sheet_hint=None, file_hint=None):
+        workbooks = []
+        if file_hint:
+            workbooks.append(self.workbook_like(file_hint))
+        else:
+            workbooks.extend(self.inputs.values())
+        for wb in workbooks:
+            sheet_name = self._find_sheet_name(wb, sheet_hint, allow_single=True)
+            if sheet_name:
+                return OpenpyxlWorksheetProxy(self._unwrap_workbook(wb)[sheet_name])
+        raise RuntimeError(f"input sheet not found: {sheet_hint}")
+
+    def range(self, sheet_or_name, address, workbook=None):
+        ws = sheet_or_name if hasattr(sheet_or_name, "Range") else self.sheet(sheet_or_name, workbook)
+        try:
+            if self._is_output_workbook(ws.Parent):
+                self.last_output_sheet = ws.Name
+                self.last_output_address = str(address)
+        except Exception:
+            pass
+        return ws.Range(str(address))
+
+    def _ws_of(self, sheet_or_name, workbook=None):
+        return sheet_or_name if hasattr(sheet_or_name, "UsedRange") else self.sheet(sheet_or_name, workbook)
+
+    def rows(self, sheet_or_name, workbook=None):
+        ws = self._ws_of(sheet_or_name, workbook)
+        raw = getattr(ws, "_ws", ws)
+        out = []
+        for row in raw.iter_rows(values_only=True):
+            out.append(list(row))
+        # 끝쪽 완전 빈 행 제거(openpyxl max_row 가 과대평가될 수 있음)
+        while out and all(v is None or v == "" for v in out[-1]):
+            out.pop()
+        return out
+
+    def col(self, sheet_or_name, header, workbook=None, header_rows=20):
+        rows = self.rows(sheet_or_name, workbook)
+        target = self.normalize(header)
+        for row in rows[:header_rows]:
+            for c_idx, value in enumerate(row, start=1):
+                if self.normalize(value) == target:
+                    return c_idx
+        for row in rows[:header_rows]:
+            for c_idx, value in enumerate(row, start=1):
+                if target and target in self.normalize(value):
+                    return c_idx
+        return -1
+
+    def header_row(self, sheet_or_name=None, workbook=None, header_rows=20):
+        rows = self.rows(sheet_or_name, workbook)
+        best_idx = 1
+        best_score = -1
+        for idx, row in enumerate(rows[:header_rows], start=1):
+            score = sum(1 for value in row if value not in (None, ""))
+            if score > best_score:
+                best_idx, best_score = idx, score
+        return best_idx
+
+    def data_start_row(self, sheet_or_name=None, workbook=None, header_rows=20):
+        return self.header_row(sheet_or_name, workbook, header_rows) + 1
+
+    def _col0(self, rows, name_or_idx, header_rows=20):
+        if isinstance(name_or_idx, int):
+            return max(0, name_or_idx - 1)
+        target = self.normalize(name_or_idx)
+        scan = rows[:header_rows] if header_rows else rows
+        for row in scan:
+            for i, v in enumerate(row or []):
+                if self.normalize(v) == target:
+                    return i
+        for row in scan:
+            for i, v in enumerate(row or []):
+                if target and target in self.normalize(v):
+                    return i
+        return None
+
+    def add_sheet(self, name, workbook=None):
+        wb = self._unwrap_workbook(workbook or self.workbook)
+        base = (str(name) or "Sheet")[:31]
+        existing = {self.normalize(n) for n in wb.sheetnames}
+        final = base
+        idx = 1
+        while self.normalize(final) in existing:
+            idx += 1
+            suffix = "_" + str(idx)
+            final = (base[: max(1, 31 - len(suffix))] + suffix)
+        raw_ws = wb.create_sheet(title=final)
+        ws = OpenpyxlWorksheetProxy(raw_ws)
+        if self._is_output_workbook(wb):
+            self.last_output_sheet = ws.Name
+        return ws
+
+    def _write_grid(self, ws, grid, start_row=1, start_col=1):
+        if not grid:
+            return ws
+        raw = getattr(ws, "_ws", ws)
+        for i, row in enumerate(grid):
+            for j, value in enumerate(row or []):
+                raw.cell(row=start_row + i, column=start_col + j, value=value)
+        return ws
+
+    def sort(self, sheet_or_name, by, ascending=True, header=True, workbook=None):
+        ws = self._ws_of(sheet_or_name, workbook)
+        rows = self.rows(ws)
+        rel = self._col0(rows, by)
+        if rel is None:
+            raise RuntimeError("sort: column not found: %r" % (by,))
+        hdr_count = 1 if header else 0
+        head = rows[:hdr_count]
+        body = rows[hdr_count:]
+
+        def _key(r):
+            v = r[rel] if rel < len(r) else None
+            num = self._num(v)
+            return (0, num) if num is not None else (1, self.normalize(v))
+
+        body.sort(key=_key, reverse=not ascending)
+        # 기존 영역을 지우고 다시 쓴다.
+        raw = getattr(ws, "_ws", ws)
+        max_col = max((len(r) for r in rows), default=0)
+        for r_idx in range(1, (raw.max_row or 0) + 1):
+            for c_idx in range(1, max_col + 1):
+                raw.cell(row=r_idx, column=c_idx, value=None)
+        self._write_grid(ws, list(head) + body)
+        if self._is_output_workbook(ws.Parent):
+            self.last_output_sheet = ws.Name
+        return ws
+
+    def filter_to_sheet(self, sheet_or_name, predicate, dest_name, header_rows=1, workbook=None):
+        ws = self._ws_of(sheet_or_name, workbook)
+        rows = self.rows(ws)
+        hr = max(0, int(header_rows or 0))
+        header = rows[:hr]
+        matched = []
+        for r in rows[hr:]:
+            try:
+                if predicate(r):
+                    matched.append(r)
+            except Exception:
+                continue
+        dest = self.add_sheet(dest_name, workbook=workbook or self.workbook)
+        self._write_grid(dest, list(header) + matched)
+        return dest
+
+    @staticmethod
+    def _num(v):
+        if isinstance(v, bool):
+            return None
+        if isinstance(v, (int, float)):
+            return float(v)
+        if isinstance(v, str):
+            s = v.strip().replace(",", "")
+            try:
+                return float(s)
+            except ValueError:
+                return None
+        return None
+
+    def pivot(self, sheet_or_name, group_by, value=None, agg="sum", dest_name=None, header_rows=1, workbook=None):
+        ws = self._ws_of(sheet_or_name, workbook)
+        rows = self.rows(ws)
+        hr = max(1, int(header_rows or 1))
+        header_row = rows[hr - 1] if len(rows) >= hr else []
+        data = rows[hr:]
+        group_cols = list(group_by) if isinstance(group_by, (list, tuple)) else [group_by]
+        gidx = [self._col0(rows, g, hr) for g in group_cols]
+        vidx = self._col0(rows, value, hr) if value is not None else None
+        agg = str(agg or "sum").lower()
+
+        groups = {}
+        order = []
+        for r in data:
+            key = tuple((r[i] if (i is not None and i < len(r)) else "") for i in gidx)
+            if key not in groups:
+                groups[key] = []
+                order.append(key)
+            if vidx is not None and vidx < len(r):
+                groups[key].append(r[vidx])
+
+        def _aggregate(vals):
+            nums = [n for n in (self._num(v) for v in vals) if n is not None]
+            if agg == "count":
+                return len(vals)
+            if agg in ("avg", "average", "mean"):
+                return (sum(nums) / len(nums)) if nums else 0
+            if agg == "max":
+                return max(nums) if nums else ""
+            if agg == "min":
+                return min(nums) if nums else ""
+            return sum(nums)
+
+        out_header = []
+        for n, i in enumerate(gidx):
+            label = header_row[i] if (i is not None and i < len(header_row)) else ("그룹%d" % (n + 1))
+            out_header.append(label)
+        value_label = (str(value) if value is not None else "값") + "_" + (agg if agg != "average" else "avg")
+        out_header.append(value_label)
+        grid = [out_header]
+        for key in order:
+            grid.append(list(key) + [_aggregate(groups[key])])
+        dest = self.add_sheet(dest_name or "피벗요약", workbook=workbook or self.workbook)
+        self._write_grid(dest, grid)
+        return dest
+
+
+def _run_openpyxl_python_pipeline_impl(payload, job_id=None):
+    if openpyxl is None:
+        raise RuntimeError("openpyxl 이 설치되어 있지 않습니다(순수 Python 엔진 사용 불가).")
+    output_item = payload.get("output") or {}
+    if not output_item.get("backendWorkbookId"):
+        raise RuntimeError("Python Excel skills require an output workbook.")
+    input_items = payload.get("inputs", [])
+    output_wb_record = get_workbook_or_raise(output_item.get("backendWorkbookId"))
+    input_wb_records = [get_workbook_or_raise(item.get("backendWorkbookId")) for item in input_items]
+    active_steps = [s for s in (payload.get("pipeline") or []) if not (s and s.get("enabled") is False)]
+    python_steps = [s for s in active_steps if is_python_pipeline_step(s)]
+    if len(python_steps) != len(active_steps):
+        raise RuntimeError("순수 Python 엔진은 한 실행에서 JavaScript 단계와 섞을 수 없습니다.")
+
+    update_pipeline_job(job_id, {
+        "stage": "openpyxl 엔진 준비 중",
+        "currentStep": 0,
+        "completedSteps": 0,
+        "totalSteps": len(python_steps),
+        "stepRunning": True,
+    })
+
+    output_path = output_wb_record["path"]
+    output_path_norm = str(Path(output_path).resolve()).lower()
+    output_wb = openpyxl_load_workbook_compatible(Path(output_path), data_only=False)
+
+    input_wbs = {}
+    input_wb_by_name = {}
+    for item, rec in zip(input_items, input_wb_records):
+        name = item.get("name") or rec["name"]
+        path_norm = str(Path(rec["path"]).resolve()).lower()
+        if path_norm == output_path_norm:
+            input_wbs[name] = output_wb
+            input_wb_by_name[name] = output_wb
+            continue
+        wb = openpyxl_load_workbook_compatible(Path(rec["path"]), data_only=False)
+        input_wbs[name] = wb
+        input_wb_by_name[name] = wb
+
+    ctx = OpenpyxlSkillContext(output_wb, input_wbs)
+    for idx, step in enumerate(python_steps, start=1):
+        update_pipeline_job(job_id, {
+            "stage": f"Python(openpyxl) Step {idx}/{len(python_steps)} 실행 중",
+            "currentStep": idx,
+            "completedSteps": idx - 1,
+            "stepRunning": True,
+            "errorInfo": None,
+        })
+        original_code = str(step.get("code") or "")
+        code = normalize_python_pipeline_code(original_code)
+        namespace = _safe_python_globals()
+        try:
+            stage_label = "compile"
+            exec(compile(code, f"<pipeline_step_{idx}>", "exec"), namespace, namespace)
+            stage_label = "lookup transform"
+            transform = namespace.get("transform")
+            if not callable(transform):
+                raise RuntimeError("Python step must define def transform(ctx):")
+            stage_label = "transform"
+            transform(ctx)
+        except Exception as err:
+            raise PipelineExecutionError({
+                "stepIdx": idx - 1,
+                "stepId": step.get("id"),
+                "description": step.get("description"),
+                "code": original_code,
+                "normalizedCode": code,
+                "language": step.get("language") or "python",
+                "message": f"{stage_label}: {err}",
+                "stack": repr(err),
+            })
+
+    update_pipeline_job(job_id, {
+        "stage": "결과 저장 중",
+        "currentStep": len(python_steps),
+        "completedSteps": len(python_steps),
+        "stepRunning": False,
+    })
+    BACKEND_DIR.mkdir(parents=True, exist_ok=True)
+
+    # 출력 저장
+    original_name = output_item.get("name") or output_wb_record["name"]
+    safe_name = Path(str(original_name)).name
+    if not Path(safe_name).suffix:
+        safe_name += ".xlsx"
+    result_path = BACKEND_DIR / f"{uuid.uuid4().hex}_result_{safe_name}"
+    output_wb.save(str(result_path))
+
+    # 입력 미리보기/다운로드(출력과 동일 파일인 입력은 제외)
+    input_previews = {}
+    input_download_urls = {}
+    for name, wb in input_wb_by_name.items():
+        if wb is output_wb:
+            continue
+        try:
+            safe_in = Path(str(name)).name or "input.xlsx"
+            if not Path(safe_in).suffix:
+                safe_in += ".xlsx"
+            in_path = BACKEND_DIR / f"{uuid.uuid4().hex}_result_{safe_in}"
+            wb.save(str(in_path))
+            inspected_in = inspect_workbook(in_path)
+            input_previews[name] = {
+                sheet_name: (sheet.get("rows") or [])
+                for sheet_name, sheet in (inspected_in.get("sheets") or {}).items()
+            }
+            rec = next((r for it, r in zip(input_items, input_wb_records) if (it.get("name") or r["name"]) == name), None)
+            if rec is not None:
+                update_workbook_current_cache(rec, input_previews[name])
+            input_result_id = uuid.uuid4().hex
+            RESULTS[input_result_id] = {"path": str(in_path), "name": in_path.name, "created": time.time()}
+            input_download_urls["input:" + name] = f"/api/workbooks/download/{input_result_id}"
+        except Exception as err:
+            _warn_excel_nonfatal(f"openpyxl input save {name}", err)
+
+    current = payload.get("current") or {}
+    output_file_id = current.get("outputFileId") or "output:0"
+    result_id = uuid.uuid4().hex
+    RESULTS[result_id] = {"path": str(result_path), "name": result_path.name, "created": time.time()}
+    inspected = inspect_workbook(result_path)
+    result_output = {
+        sheet_name: (sheet.get("rows") or [])
+        for sheet_name, sheet in (inspected.get("sheets") or {}).items()
+    }
+    update_workbook_current_cache(output_wb_record, result_output)
+    previews = build_result_previews(input_previews, result_output, current, {}, [])
+    download_urls = dict(input_download_urls)
+    download_urls[output_file_id] = f"/api/workbooks/download/{result_id}"
+    active_output_sheet = ctx.last_output_sheet
+    active_output_address = ctx.last_output_address
+    return {
+        "ok": True,
+        "pythonExcel": True,
+        "engine": "openpyxl",
+        "snapshotHit": False,
+        "snapshotStep": 0,
+        "diffId": None,
+        "diffs": {},
+        "forcedValueCells": [],
+        "downloadId": result_id,
+        "downloadUrl": f"/api/workbooks/download/{result_id}",
+        "downloadUrls": download_urls,
+        "files": previews,
+        "activeSheet": active_output_sheet,
+        "activeAddress": active_output_address,
+    }
+
+
+def run_openpyxl_python_pipeline_payload(payload, job_id=None):
+    # COM/STA 가 필요 없으므로 잡 스레드에서 바로 실행한다.
+    return _run_openpyxl_python_pipeline_impl(payload, job_id=job_id)
+
+
 def _open_excel_workbook_for_skill(app, path, read_only=False):
     _park_excel_app_offscreen(app)
     wb, temp_path = excel_workbooks_open(app, path, read_only=read_only)
@@ -5265,8 +5870,31 @@ def run_backend_pipeline_payload_with_worker(payload, job_id=None):
     }
 
 
+def _pipeline_payload_has_csv(payload):
+    try:
+        items = list(payload.get("inputs", []) or [])
+        out = payload.get("output") or {}
+        if out.get("backendWorkbookId"):
+            items.append(out)
+        for it in items:
+            wid = it.get("backendWorkbookId")
+            if not wid:
+                continue
+            rec = get_workbook_or_raise(wid)
+            if is_csv_path(rec["path"]):
+                return True
+    except Exception:
+        return False
+    return False
+
+
 def run_backend_pipeline_payload(payload, job_id=None):
     if pipeline_has_python(payload):
+        # 엔진 선택: "python"(openpyxl, COM 없이 인프로세스 — 빠름) vs 기본 "excel"(COM, 라이브 미러).
+        # CSV는 openpyxl로 열 수 없으므로 그 경우 COM 엔진으로 자동 폴백한다.
+        engine = str(payload.get("engine") or "excel").lower()
+        if engine in ("python", "openpyxl") and openpyxl is not None and not _pipeline_payload_has_csv(payload):
+            return run_openpyxl_python_pipeline_payload(payload, job_id=job_id)
         return run_excel_python_pipeline_payload(payload, job_id=job_id)
     try:
         return run_backend_pipeline_payload_with_worker(payload, job_id=job_id)

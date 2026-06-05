@@ -38,6 +38,23 @@ ver4.x execution rule:
 - Do not use sheet[r][c] JavaScript-style array code for Excel workbooks.
 `;
 
+// 스킬 실행 엔진(Python/openpyxl)이 선택됐을 때 프롬프트에 덧붙이는 안내.
+// Excel(COM) 엔진이면 빈 문자열(기본 프롬프트가 COM 기준이라 그대로 사용).
+function skillEnginePromptNote() {
+  const engine = typeof getSkillEngine === "function" ? getSkillEngine() : "excel";
+  if (engine !== "python") return "";
+  return `
+## 실행 엔진: 순수 Python(openpyxl) — 현재 선택됨
+- 코드는 실제 Excel(COM)이 아니라 openpyxl 워크북 위에서 인프로세스로 실행됩니다(빠름).
+- 기존 ctx API와 \`ws.Range("B61").Value\` / \`ws.Cells(r, c).Value\` (읽기·쓰기)는 그대로 사용할 수 있습니다.
+- ctx 헬퍼 우선: ctx.sheet, ctx.input, ctx.rows, ctx.col, ctx.header_row, ctx.data_start_row, ctx.add_sheet, ctx.sort, ctx.filter_to_sheet, ctx.pivot, ctx.normalize.
+- openpyxl 워크시트 메서드도 사용 가능: \`ws.cell(row=r, column=c).value\`, \`ws.insert_cols(idx, amount)\`, \`ws.insert_rows(idx, amount)\`, \`ws.delete_cols(idx, amount)\`, \`ws.delete_rows(idx, amount)\`, \`ws.append([...])\`, \`ws.max_row\`, \`ws.max_column\`.
+- 사용 불가(COM 전용 — 호출하지 마세요): AutoFilter, Range.End, Range.Offset, Worksheet.Copy, Columns(i).Insert(), ctx.excel(=None).
+- 중요: 수식 셀을 다시 읽으면 계산값이 아니라 수식 문자열이 반환됩니다. 필요한 값은 **Python에서 직접 계산해 셀에 값으로 쓰세요**(수식을 쓴 뒤 그 결과를 다시 읽지 마세요).
+- 열/행 삽입·삭제는 openpyxl의 ws.insert_cols/insert_rows/delete_cols/delete_rows 를 사용하세요(COM Insert/Delete 대신).
+`;
+}
+
 // 스키마가 모델 컨텍스트를 잡아먹어 max length(예: 20만)를 넘기지 않도록 하는 예산/상한.
 const SCHEMA_TOKEN_BUDGET = 60000;        // 파일 스키마가 차지할 최대 추정 토큰
 const SCHEMA_CHARS_PER_TOKEN = 2;         // 한/영/JSON 혼합 보수적 추정(토큰을 과대평가 → 안전)

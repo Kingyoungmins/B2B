@@ -1,7 +1,7 @@
 ﻿/* ===================================================================
    CONFIG
    =================================================================== */
-const B2B_BUILD_STAMP = "b2b-overlay-shell-20260605-045-03";
+const B2B_BUILD_STAMP = "b2b-overlay-shell-20260605-046-01";
 window.B2B_BUILD_STAMP = B2B_BUILD_STAMP;
 
 // 마우스 우클릭(컨텍스트 메뉴) 전역 차단. (네이티브 셸은 WebView 설정으로도 막지만 브라우저 모드 대비)
@@ -149,4 +149,53 @@ function setupThinkToggle() {
     toast(`Think 모드 ${settings.thinkMode ? "켜짐" : "꺼짐"}`, "success");
   };
   updateThinkToggle();
+}
+
+/* ===================================================================
+   스킬 실행 엔진: "excel"(COM, 라이브 미러) / "python"(openpyxl, 인프로세스·빠름)
+   provider 와 무관한 전역 설정이라 별도 키로 저장한다.
+   =================================================================== */
+const SKILL_ENGINE_KEY = "b2b_skill_engine";
+
+function getSkillEngine() {
+  try {
+    return localStorage.getItem(SKILL_ENGINE_KEY) === "python" ? "python" : "excel";
+  } catch {
+    return "excel";
+  }
+}
+
+function setSkillEngine(engine) {
+  const value = engine === "python" ? "python" : "excel";
+  try { localStorage.setItem(SKILL_ENGINE_KEY, value); } catch {}
+  updateEngineToggle();
+  return value;
+}
+
+function updateEngineToggle() {
+  const btn = document.getElementById("btn-engine-toggle");
+  if (!btn) return;
+  const isPython = getSkillEngine() === "python";
+  btn.classList.toggle("on", isPython);
+  btn.setAttribute("aria-pressed", isPython ? "true" : "false");
+  const txt = btn.querySelector(".think-toggle-text");
+  if (txt) txt.textContent = isPython ? "Python" : "Excel";
+  btn.title = isPython
+    ? "스킬 실행 엔진: Python(openpyxl, 빠름). 라이브 미러 대신 결과 파일로 미러를 교체합니다. 클릭하면 Excel(COM)로 전환"
+    : "스킬 실행 엔진: Excel(COM, 라이브 미러). 클릭하면 Python(openpyxl, 빠름)로 전환";
+}
+
+function setupEngineToggle() {
+  const btn = document.getElementById("btn-engine-toggle");
+  if (!btn) return;
+  btn.onclick = () => {
+    const next = getSkillEngine() === "python" ? "excel" : "python";
+    setSkillEngine(next);
+    if (typeof toast === "function") {
+      toast(next === "python"
+        ? "스킬 엔진: Python(openpyxl) — 빠르지만 결과 파일로 미러 교체"
+        : "스킬 엔진: Excel(COM) — 라이브 미러", "success");
+    }
+  };
+  updateEngineToggle();
 }
