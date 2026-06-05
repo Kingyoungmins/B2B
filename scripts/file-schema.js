@@ -47,6 +47,13 @@ PERFORMANCE — bulk read/write (VERY IMPORTANT, Excel COM is slow per-cell):
 - DO NOT loop cell-by-cell to write many cells (for r..: ws.Cells(r,c).Value = ...). Writing thousands of cells one at a time is extremely slow. Collect into a grid and write once.
 - Per-cell assignment is ONLY acceptable for a few explicit cells (e.g. overwriting one selected cell B61).
 - ctx.sort / ctx.filter_to_sheet / ctx.pivot already work in bulk — prefer them for those tasks.
+
+PERFORMANCE — avoid whole-column / whole-row operations (CRITICAL):
+- NEVER operate on entire columns/rows like ws.Range("A:F"), ws.Range("G:L").Copy(...), ws.Columns(...), ws.Rows(...). A whole column is ~1,048,576 rows; these process millions of cells and are extremely slow (this is the #1 cause of multi-second runs).
+- Always bound work to the ACTUAL data extent. Get the real last row/col from ctx.rows(ws) (len(rows)) or UsedRange, and build ranges with ws.Cells(r, c).
+- IMPORTANT: structural edits (inserting/copying whole columns or rows) can bloat UsedRange to the whole sheet. So capture the real data range and read the data you need with ONE ctx.rows(ws) / Range(...).Value BEFORE doing structural edits, then write back bounded to the real size.
+- To insert N blank columns at the front: ws.Range(ws.Cells(1,1), ws.Cells(1,N)).EntireColumn.Insert() (one call). Inserting already SHIFTS existing data to the right — you do NOT need a separate whole-column Copy. If you need the original values too, read them into Python first, then write the transformed copy back into the bounded target range.
+- Same for rows: ws.Range(ws.Cells(1,1), ws.Cells(N,1)).EntireRow.Insert().
 `;
 
 // 스킬 실행 엔진(Python/openpyxl)이 선택됐을 때 프롬프트에 덧붙이는 안내.
