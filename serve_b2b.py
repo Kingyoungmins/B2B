@@ -79,7 +79,7 @@ MAX_PIPELINE_JOBS = 40
 # 이 크기를 넘으면 중간 단계 스냅샷을 건너뛰고 "마지막 단계"만 저장한다(동일 파이프라인 재적용은 여전히 즉시).
 SNAPSHOT_INTERMEDIATE_MAX_BYTES = 8 * 1024 * 1024
 PIPELINE_JOB_TTL_SECONDS = 60 * 60
-APP_BUILD_STAMP = "b2b-overlay-shell-20260605-046-01"
+APP_BUILD_STAMP = "b2b-overlay-shell-20260605-046-02"
 EXCEL_MIRROR_PROTECT_PASSWORD = "b2b_mirror_readonly"
 
 
@@ -5870,30 +5870,85 @@ def run_backend_pipeline_payload_with_worker(payload, job_id=None):
     }
 
 
-def _pipeline_payload_has_csv(payload):
+# openpyxl 저장/읽기로 손상·오작동할 수 있는 요소의 zip 내부 경로.
+_OPXL_UNSAFE_OBJECT_LABELS = {
+    "xl/charts/": "차트",
+    "xl/drawings/": "도형/이미지",
+    "xl/media/": "이미지",
+    "xl/pivotTables/": "피벗테이블",
+    "xl/slicers/": "슬라이서",
+    "xl/timelines/": "타임라인",
+}
+
+
+def _xlsx_needs_com_reason(path):
+    """openpyxl 엔진에서 문제가 되는 요소가 있으면 사유(문자열), 없으면 빈 문자열.
+    - 차트/이미지/피벗/슬라이서/매크로: openpyxl 저장 시 유실됨.
+    - 수식 셀: openpyxl 은 계산하지 못함(읽기·미리보기 부정확) → COM 으로 처리.
+    .xlsx(zip) 내부 경로/시트 XML 을 가볍게 검사한다."""
+    p = Path(path)
+    if is_csv_path(p):
+        return "CSV"
     try:
-        items = list(payload.get("inputs", []) or [])
-        out = payload.get("output") or {}
-        if out.get("backendWorkbookId"):
-            items.append(out)
-        for it in items:
-            wid = it.get("backendWorkbookId")
-            if not wid:
-                continue
-            rec = get_workbook_or_raise(wid)
-            if is_csv_path(rec["path"]):
-                return True
+        if not zipfile.is_zipfile(p):
+            return ""  # 알 수 없는 형식은 openpyxl 가 처리하다 실패하면 그때 대응
+        with zipfile.ZipFile(p) as z:
+            names = z.namelist()
+            for n in names:
+                if n == "xl/vbaProject.bin":
+                    return "매크로(VBA)"
+                for prefix, label in _OPXL_UNSAFE_OBJECT_LABELS.items():
+                    if n.startswith(prefix):
+                        return label
+            for n in names:
+                if n.startswith("xl/worksheets/") and n.endswith(".xml"):
+                    try:
+                        data = z.read(n)
+                    except Exception:
+                        continue
+                    if b"<f>" in data or b"<f " in data or b"<f/>" in data:
+                        return "수식"
     except Exception:
-        return False
-    return False
+        return ""
+    return ""
+
+
+def _pipeline_payload_needs_com(payload):
+    """openpyxl 엔진이 안전하지 않은 워크북(출력/입력)이 있으면 사유 문자열을 반환."""
+    items = list(payload.get("inputs", []) or [])
+    out = payload.get("output") or {}
+    if out.get("backendWorkbookId"):
+        items.append(out)
+    for it in items:
+        wid = it.get("backendWorkbookId")
+        if not wid:
+            continue
+        try:
+            rec = get_workbook_or_raise(wid)
+        except Exception:
+            continue
+        reason = _xlsx_needs_com_reason(rec["path"])
+        if reason:
+            name = it.get("name") or rec.get("name") or ""
+            return f"{name}: {reason}" if name else reason
+    return ""
 
 
 def run_backend_pipeline_payload(payload, job_id=None):
     if pipeline_has_python(payload):
         # 엔진 선택: "python"(openpyxl, COM 없이 인프로세스 — 빠름) vs 기본 "excel"(COM, 라이브 미러).
-        # CSV는 openpyxl로 열 수 없으므로 그 경우 COM 엔진으로 자동 폴백한다.
         engine = str(payload.get("engine") or "excel").lower()
-        if engine in ("python", "openpyxl") and openpyxl is not None and not _pipeline_payload_has_csv(payload):
+        if engine in ("python", "openpyxl") and openpyxl is not None:
+            # 안전장치: 차트/이미지/피벗/매크로/수식/CSV 가 있으면 객체 유실·계산오류를 막기 위해
+            # 이 실행만 자동으로 Excel(COM) 엔진으로 전환한다.
+            com_reason = _pipeline_payload_needs_com(payload)
+            if com_reason:
+                update_pipeline_job(job_id, {"stage": f"호환성 보호: Excel 엔진으로 전환 ({com_reason})"})
+                res = run_excel_python_pipeline_payload(payload, job_id=job_id)
+                if isinstance(res, dict):
+                    res["engineFallback"] = "excel"
+                    res["engineFallbackReason"] = com_reason
+                return res
             return run_openpyxl_python_pipeline_payload(payload, job_id=job_id)
         return run_excel_python_pipeline_payload(payload, job_id=job_id)
     try:

@@ -615,6 +615,11 @@ async function runPipelineOnBackend(options = {}) {
         const applyRenderMs = performance.now() - applyStarted;
         window.backendCurrentCacheDirty = false;
         setProgress("완료");
+        // 안전장치 알림: Python 엔진을 골랐지만 호환성(차트/이미지/피벗/매크로/수식/CSV) 때문에
+        // 이번 실행만 Excel(COM) 엔진으로 전환된 경우 사용자에게 사유를 알린다.
+        if (status.engineFallback === "excel" && skillEngine === "python" && typeof toast === "function") {
+          toast(`호환성 보호로 이번 적용은 Excel 엔진으로 실행했습니다 (${status.engineFallbackReason || "차트/수식 등"}). 객체·수식이 유지됩니다.`, "success");
+        }
         if (typeof window.recordBackendDebugTiming === "function") {
           window.recordBackendDebugTiming({
             worker: !!status.worker,
