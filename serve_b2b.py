@@ -79,7 +79,7 @@ MAX_PIPELINE_JOBS = 40
 # 이 크기를 넘으면 중간 단계 스냅샷을 건너뛰고 "마지막 단계"만 저장한다(동일 파이프라인 재적용은 여전히 즉시).
 SNAPSHOT_INTERMEDIATE_MAX_BYTES = 8 * 1024 * 1024
 PIPELINE_JOB_TTL_SECONDS = 60 * 60
-APP_BUILD_STAMP = "b2b-overlay-shell-20260605-046-03"
+APP_BUILD_STAMP = "b2b-overlay-shell-20260605-046-04"
 EXCEL_MIRROR_PROTECT_PASSWORD = "b2b_mirror_readonly"
 
 
@@ -3058,6 +3058,33 @@ class ExcelSkillContext:
         rng.Value = norm
         return ws
 
+    # ---- 벌크 입출력(성능): 범위 전체를 한 번에 읽고/쓴다(COM 호출 최소화). ----
+    def write_grid(self, ws, grid, start_row=1, start_col=1):
+        """2D 리스트(grid)를 start_row/start_col 부터 한 번의 COM 호출로 쓴다."""
+        ws = self._ws_of(ws)
+        self._write_grid(ws, grid, start_row, start_col)
+        if self._is_output_workbook(ws.Parent):
+            self.last_output_sheet = ws.Name
+        return ws
+
+    def set_range(self, sheet_or_name, address, grid, workbook=None):
+        """주소(예 'A2' 또는 'A2:F100')의 좌상단부터 2D 리스트를 한 번에 쓴다(1회 COM 호출)."""
+        ws = self._ws_of(sheet_or_name, workbook)
+        if not grid:
+            return ws
+        ncol = max((len(r or []) for r in grid), default=0)
+        if ncol <= 0:
+            return ws
+        norm = [list(r or []) + [None] * (ncol - len(r or [])) for r in grid]
+        anchor = ws.Range(str(address)).Cells(1, 1)
+        r0, c0 = int(anchor.Row), int(anchor.Column)
+        rng = ws.Range(ws.Cells(r0, c0), ws.Cells(r0 + len(norm) - 1, c0 + ncol - 1))
+        rng.Value = norm
+        if self._is_output_workbook(ws.Parent):
+            self.last_output_sheet = ws.Name
+            self.last_output_address = str(address)
+        return ws
+
     def sort(self, sheet_or_name, by, ascending=True, header=True, workbook=None):
         # Range.Sort 를 올바른 숫자 상수로 호출(win32com 상수 import 불필요).
         ws = self._ws_of(sheet_or_name, workbook)
@@ -3547,6 +3574,24 @@ class OpenpyxlSkillContext:
         for i, row in enumerate(grid):
             for j, value in enumerate(row or []):
                 raw.cell(row=start_row + i, column=start_col + j, value=value)
+        return ws
+
+    def write_grid(self, ws, grid, start_row=1, start_col=1):
+        ws = self._ws_of(ws)
+        self._write_grid(ws, grid, start_row, start_col)
+        if self._is_output_workbook(ws.Parent):
+            self.last_output_sheet = ws.Name
+        return ws
+
+    def set_range(self, sheet_or_name, address, grid, workbook=None):
+        ws = self._ws_of(sheet_or_name, workbook)
+        if not grid:
+            return ws
+        r0, c0 = _opxl_coord(str(address).split(":")[0])
+        self._write_grid(ws, grid, start_row=r0, start_col=c0)
+        if self._is_output_workbook(ws.Parent):
+            self.last_output_sheet = ws.Name
+            self.last_output_address = str(address)
         return ws
 
     def sort(self, sheet_or_name, by, ascending=True, header=True, workbook=None):

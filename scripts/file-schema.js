@@ -36,6 +36,17 @@ ver4.x execution rule:
 - When the user asks to filter/show only rows matching a condition, do not use Excel AutoFilter as the final output. Create a new worksheet/tab, copy the header and matching rows into that sheet, and name it clearly from the filter condition. Keep the original sheet unchanged because filter on/off state is not reliable in the read-only mirror workflow.
 - For sheet names that may change, use ctx.sheet_like(...) or ctx.input_sheet(...). If only one sheet exists, those helpers may return it.
 - Do not use sheet[r][c] JavaScript-style array code for Excel workbooks.
+
+PERFORMANCE — bulk read/write (VERY IMPORTANT, Excel COM is slow per-cell):
+- READ the whole used range ONCE: rows = ctx.rows(ws). Do not read cells one-by-one in a loop (each ws.Cells(r,c).Value / ws.Range(addr).Value read is a separate slow COM round-trip).
+- COMPUTE everything in Python on the rows list.
+- WRITE the whole result in ONE call. Build a 2D Python list (grid) and write it at once:
+    ctx.write_grid(ws, grid, start_row, start_col)   # writes the whole grid in a single COM call
+    # or: ctx.set_range(ws, "A2", grid)              # writes grid starting at an address, single call
+    # or: ws.Range("A2:F100").Value = grid           # direct bulk assignment of a 2D list
+- DO NOT loop cell-by-cell to write many cells (for r..: ws.Cells(r,c).Value = ...). Writing thousands of cells one at a time is extremely slow. Collect into a grid and write once.
+- Per-cell assignment is ONLY acceptable for a few explicit cells (e.g. overwriting one selected cell B61).
+- ctx.sort / ctx.filter_to_sheet / ctx.pivot already work in bulk — prefer them for those tasks.
 `;
 
 // 스킬 실행 엔진(Python/openpyxl)이 선택됐을 때 프롬프트에 덧붙이는 안내.
