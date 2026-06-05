@@ -296,6 +296,10 @@ async function preopenAllExcelMirrors(selectedFileId) {
   const selected = selectedFileId || state.currentFileId || ids[ids.length - 1];
   // 선택된 파일을 마지막에 열어 자연스럽게 최상단이 되도록(끝에서 churn 최소화).
   const ordered = [...ids.filter(id => id !== selected), selected];
+  // 업로드는 명시적 사용자 동작 → preopen 동안 호스트를 활성으로 간주해
+  // 자동숨김(periodic)이 방금 연 미러들을 park(숨김) 하지 못하게 한다.
+  // (park 되면 그 탭 첫 전환이 무거운 재배치가 되어 "보기 눌러야 매끄러운" 증상이 생김)
+  excelMirror.hostActive = true;
   publishNativeExcelLoading(true, "Excel 미러 준비 중...");
   try {
     for (const fid of ordered) {
@@ -306,13 +310,17 @@ async function preopenAllExcelMirrors(selectedFileId) {
       }
     }
     if (typeof setCurrentView === "function") setCurrentView(selected);
-    await switchVisibleExcelMirrorToFileId(selected);
-    // 업로드는 명시적 동작 → 호스트가 잠깐 비활성(드롭/대화상자 직후)이어도 선택 미러를 강제로 보이게 한다.
+    // 모든 세션을 같은 위치에 스택(=모든 탭을 '보기 누른 상태'로). 혹시 park 된 게 있어도 여기서 복구된다.
+    // 이렇게 해두면 이후 전환은 raise 만으로 처리되어 매끄럽다.
     const selExcelId = excelMirror.sessionsByFileId[selected];
+    for (const [fid, exId] of Object.entries(excelMirror.sessionsByFileId)) {
+      if (!exId || exId === selExcelId) continue;
+      try { await positionExcelMirrorWindow(exId, { force: true }); } catch (_) {}
+    }
+    // 선택 미러를 맨 위로(가드 우회 — 업로드는 명시적 동작).
     if (selExcelId) {
       await positionExcelMirrorWindow(selExcelId, { force: true });
       await raiseExcelMirrorWindow(selExcelId, { force: true });
-      // 창 준비/포커스 전환 레이스 대비 한 번 더(약간 지연).
       setTimeout(() => { raiseExcelMirrorWindow(selExcelId, { force: true }).catch(() => {}); }, 300);
     }
     startExcelMirrorPolling();
