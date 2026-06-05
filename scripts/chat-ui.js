@@ -510,18 +510,29 @@ async function requestErrorRecovery(stepIdx, errorInfo) {
   const displayStepNumber = Number.isInteger(reportedStepIdx) && reportedStepIdx >= 0
     ? reportedStepIdx + 1
     : (stepIdx >= 0 ? stepIdx + 1 : (state.pipeline || []).length + 1);
-  const existingStep = stepIdx >= 0 ? (state.pipeline[stepIdx] || null) : null;
-  const failedStep = existingStep || {
-    id: errorInfo && errorInfo.stepId,
-    description: errorInfo && errorInfo.description,
-    code: errorInfo && errorInfo.code,
-    language: errorInfo && errorInfo.language,
-  };
+  let failedStep = stepIdx >= 0 ? (state.pipeline[stepIdx] || null) : null;
+  if (!failedStep || !failedStep.code) {
+    failedStep = failedStep || {
+      id: errorInfo && errorInfo.stepId,
+      description: errorInfo && errorInfo.description,
+      code: errorInfo && errorInfo.code,
+      language: errorInfo && errorInfo.language,
+    };
+  }
+  if (!failedStep || !failedStep.code) {
+    // 특정 step을 못 짚었으면 적용 가능한 마지막 단계를 복구 대상으로 추정한다.
+    const enabledSteps = (state.pipeline || []).filter(s => s && s.enabled !== false && s.code);
+    const guess = enabledSteps[enabledSteps.length - 1];
+    if (guess) {
+      failedStep = guess;
+      stepIdx = state.pipeline.indexOf(guess);
+    }
+  }
   if (!failedStep || !failedStep.code) {
     toast("복구에 사용할 스킬 코드를 찾지 못했습니다.", "error");
     return;
   }
-  const isExistingStep = !!existingStep;
+  const isExistingStep = stepIdx >= 0 && state.pipeline[stepIdx] === failedStep;
   const recoveryLanguage = failedStep.language ||
     (typeof inferPipelineStepLanguage === "function" ? inferPipelineStepLanguage(failedStep) : "python");
   const isPythonRecovery = recoveryLanguage === "python";

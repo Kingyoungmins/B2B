@@ -1117,8 +1117,10 @@ $("btn-run").onclick = async () => {
 
 // item 9: 어느 단계에서 어떤 사유로 실패했는지 토스트 + 채팅 panel 에 모두 노출.
 function hasErrorRecoverySeed(info) {
-  if (!info) return false;
-  return Number(info.stepIdx) >= 0 || !!info.stepId || !!info.code || !!info.description;
+  if (info && (Number(info.stepIdx) >= 0 || !!info.stepId || !!info.code || !!info.description)) return true;
+  // 에러가 특정 step을 못 짚었더라도(백엔드 비-스텝 오류 등) 파이프라인에 적용 가능한 스킬이 있으면
+  // 마지막 단계를 기준으로 복구를 시도할 수 있게 버튼을 활성화한다.
+  return Array.isArray(state.pipeline) && state.pipeline.some(s => s && s.enabled !== false && s.code);
 }
 
 function reportPipelineError(err, options) {
