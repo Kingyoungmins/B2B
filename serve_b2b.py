@@ -79,7 +79,7 @@ MAX_PIPELINE_JOBS = 40
 # 이 크기를 넘으면 중간 단계 스냅샷을 건너뛰고 "마지막 단계"만 저장한다(동일 파이프라인 재적용은 여전히 즉시).
 SNAPSHOT_INTERMEDIATE_MAX_BYTES = 8 * 1024 * 1024
 PIPELINE_JOB_TTL_SECONDS = 60 * 60
-APP_BUILD_STAMP = "b2b-overlay-shell-20260605-046-13"
+APP_BUILD_STAMP = "b2b-overlay-shell-20260605-046-14"
 EXCEL_MIRROR_PROTECT_PASSWORD = "b2b_mirror_readonly"
 
 
@@ -205,7 +205,10 @@ def excel_call(fn, *args, timeout=60, **kwargs):
     try:
         ok, result = done.get(timeout=timeout)
     except queue.Empty:
-        raise TimeoutError(f"Excel COM 작업이 {timeout}초 안에 끝나지 않았습니다.")
+        raise TimeoutError(
+            f"Excel COM 작업이 {timeout}초 안에 끝나지 않았습니다. "
+            "컴퓨터 성능에 따라 Excel 작업이 지연될 수 있습니다. 잠시 후 다시 시도해 주세요."
+        )
     if ok:
         return result
     raise result
@@ -2648,11 +2651,11 @@ def _get_excel_hover_info_impl(excel_id):
 
 
 def poll_excel_session_changes(excel_id):
-    return excel_call(_poll_excel_session_changes_impl, excel_id, timeout=30)
+    return excel_call(_poll_excel_session_changes_impl, excel_id, timeout=60)
 
 
 def get_excel_hover_info(excel_id):
-    return excel_call(_get_excel_hover_info_impl, excel_id, timeout=10)
+    return excel_call(_get_excel_hover_info_impl, excel_id, timeout=60)
 
 
 def open_excel_session(
@@ -2697,6 +2700,7 @@ def open_excel_session(
         native_parent_hwnd=native_parent_hwnd,
         native_host_hwnd=native_host_hwnd,
         native_overlay=native_overlay,
+        timeout=180,  # 느린 PC/대용량 파일에서 Excel 열기가 길어질 수 있음
     )
 
 
@@ -2750,24 +2754,24 @@ def position_excel_session(
         native_parent_hwnd=native_parent_hwnd,
         native_host_hwnd=native_host_hwnd,
         native_overlay=native_overlay,
-        timeout=10,
+        timeout=60,
     )
 
 
 def raise_excel_session(excel_id):
-    return excel_call(_raise_excel_session_impl, excel_id, timeout=10)
+    return excel_call(_raise_excel_session_impl, excel_id, timeout=60)
 
 
 def hide_excel_session(excel_id):
-    return excel_call(_hide_excel_session_impl, excel_id, timeout=10)
+    return excel_call(_hide_excel_session_impl, excel_id, timeout=60)
 
 
 def hide_all_excel_sessions():
-    return excel_call(_hide_all_excel_sessions_impl, timeout=10)
+    return excel_call(_hide_all_excel_sessions_impl, timeout=60)
 
 
 def hide_inactive_excel_sessions():
-    return excel_call(_hide_inactive_excel_sessions_impl, timeout=10)
+    return excel_call(_hide_inactive_excel_sessions_impl, timeout=60)
 
 
 def is_python_pipeline_step(step):
