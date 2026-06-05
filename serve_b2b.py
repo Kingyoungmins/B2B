@@ -79,7 +79,7 @@ MAX_PIPELINE_JOBS = 40
 # 이 크기를 넘으면 중간 단계 스냅샷을 건너뛰고 "마지막 단계"만 저장한다(동일 파이프라인 재적용은 여전히 즉시).
 SNAPSHOT_INTERMEDIATE_MAX_BYTES = 8 * 1024 * 1024
 PIPELINE_JOB_TTL_SECONDS = 60 * 60
-APP_BUILD_STAMP = "b2b-overlay-shell-20260605-046-02"
+APP_BUILD_STAMP = "b2b-overlay-shell-20260605-046-03"
 EXCEL_MIRROR_PROTECT_PASSWORD = "b2b_mirror_readonly"
 
 
@@ -3677,20 +3677,20 @@ def _run_openpyxl_python_pipeline_impl(payload, job_id=None):
 
     output_path = output_wb_record["path"]
     output_path_norm = str(Path(output_path).resolve()).lower()
+    # 출력: data_only=False 로 열어 수식을 보존하고 값을 쓴다. 읽기는 쓴 값이 그대로 반영된다(read-after-write).
     output_wb = openpyxl_load_workbook_compatible(Path(output_path), data_only=False)
 
+    # 입력: data_only=True 로 열어 수식의 "계산된 값"을 읽는다(Excel 이 저장해둔 캐시값).
+    # openpyxl 엔진에서 입력은 읽기 전용으로 취급한다(저장하면 수식이 사라지므로). 입력 편집은 Excel 엔진 사용.
     input_wbs = {}
-    input_wb_by_name = {}
     for item, rec in zip(input_items, input_wb_records):
         name = item.get("name") or rec["name"]
         path_norm = str(Path(rec["path"]).resolve()).lower()
         if path_norm == output_path_norm:
             input_wbs[name] = output_wb
-            input_wb_by_name[name] = output_wb
             continue
-        wb = openpyxl_load_workbook_compatible(Path(rec["path"]), data_only=False)
+        wb = openpyxl_load_workbook_compatible(Path(rec["path"]), data_only=True)
         input_wbs[name] = wb
-        input_wb_by_name[name] = wb
 
     ctx = OpenpyxlSkillContext(output_wb, input_wbs)
     for idx, step in enumerate(python_steps, start=1):
@@ -3733,7 +3733,12 @@ def _run_openpyxl_python_pipeline_impl(payload, job_id=None):
     })
     BACKEND_DIR.mkdir(parents=True, exist_ok=True)
 
-    # 출력 저장
+    # 출력 저장. openpyxl 은 수식을 계산하지 않으므로(셀에 캐시값 없음), Excel 이 열 때 전체 재계산하도록
+    # fullCalcOnLoad 를 켠다. → 미러(실제 Excel)와 다운로드 파일에서 수식이 새 값으로 보인다.
+    try:
+        output_wb.calculation.fullCalcOnLoad = True
+    except Exception:
+        pass
     original_name = output_item.get("name") or output_wb_record["name"]
     safe_name = Path(str(original_name)).name
     if not Path(safe_name).suffix:
@@ -3741,31 +3746,9 @@ def _run_openpyxl_python_pipeline_impl(payload, job_id=None):
     result_path = BACKEND_DIR / f"{uuid.uuid4().hex}_result_{safe_name}"
     output_wb.save(str(result_path))
 
-    # 입력 미리보기/다운로드(출력과 동일 파일인 입력은 제외)
+    # 입력은 읽기 전용(편집/저장하지 않음) → 미리보기/다운로드 없음(변경 없음).
     input_previews = {}
     input_download_urls = {}
-    for name, wb in input_wb_by_name.items():
-        if wb is output_wb:
-            continue
-        try:
-            safe_in = Path(str(name)).name or "input.xlsx"
-            if not Path(safe_in).suffix:
-                safe_in += ".xlsx"
-            in_path = BACKEND_DIR / f"{uuid.uuid4().hex}_result_{safe_in}"
-            wb.save(str(in_path))
-            inspected_in = inspect_workbook(in_path)
-            input_previews[name] = {
-                sheet_name: (sheet.get("rows") or [])
-                for sheet_name, sheet in (inspected_in.get("sheets") or {}).items()
-            }
-            rec = next((r for it, r in zip(input_items, input_wb_records) if (it.get("name") or r["name"]) == name), None)
-            if rec is not None:
-                update_workbook_current_cache(rec, input_previews[name])
-            input_result_id = uuid.uuid4().hex
-            RESULTS[input_result_id] = {"path": str(in_path), "name": in_path.name, "created": time.time()}
-            input_download_urls["input:" + name] = f"/api/workbooks/download/{input_result_id}"
-        except Exception as err:
-            _warn_excel_nonfatal(f"openpyxl input save {name}", err)
 
     current = payload.get("current") or {}
     output_file_id = current.get("outputFileId") or "output:0"
@@ -5881,56 +5864,53 @@ _OPXL_UNSAFE_OBJECT_LABELS = {
 }
 
 
-def _xlsx_needs_com_reason(path):
-    """openpyxl 엔진에서 문제가 되는 요소가 있으면 사유(문자열), 없으면 빈 문자열.
-    - 차트/이미지/피벗/슬라이서/매크로: openpyxl 저장 시 유실됨.
-    - 수식 셀: openpyxl 은 계산하지 못함(읽기·미리보기 부정확) → COM 으로 처리.
-    .xlsx(zip) 내부 경로/시트 XML 을 가볍게 검사한다."""
+def _xlsx_object_reason(path):
+    """openpyxl 로 다시 저장하면 유실되는 '객체'가 있으면 사유, 없으면 빈 문자열.
+    (차트/이미지/피벗/슬라이서/타임라인/매크로) — 출력 저장 시에만 문제가 된다.
+    수식은 트리거가 아니다: 입력은 계산값으로 읽고, 출력은 수식을 보존(Excel 이 재계산)하기 때문."""
     p = Path(path)
-    if is_csv_path(p):
-        return "CSV"
     try:
         if not zipfile.is_zipfile(p):
-            return ""  # 알 수 없는 형식은 openpyxl 가 처리하다 실패하면 그때 대응
+            return ""
         with zipfile.ZipFile(p) as z:
-            names = z.namelist()
-            for n in names:
+            for n in z.namelist():
                 if n == "xl/vbaProject.bin":
                     return "매크로(VBA)"
                 for prefix, label in _OPXL_UNSAFE_OBJECT_LABELS.items():
                     if n.startswith(prefix):
                         return label
-            for n in names:
-                if n.startswith("xl/worksheets/") and n.endswith(".xml"):
-                    try:
-                        data = z.read(n)
-                    except Exception:
-                        continue
-                    if b"<f>" in data or b"<f " in data or b"<f/>" in data:
-                        return "수식"
     except Exception:
         return ""
     return ""
 
 
 def _pipeline_payload_needs_com(payload):
-    """openpyxl 엔진이 안전하지 않은 워크북(출력/입력)이 있으면 사유 문자열을 반환."""
-    items = list(payload.get("inputs", []) or [])
+    """openpyxl 엔진이 안전하지 않으면 사유 문자열을 반환(없으면 "").
+    - 출력에 객체(차트/이미지/피벗/매크로)가 있으면 저장 시 유실 → COM.
+    - 출력/입력 중 CSV 가 있으면 openpyxl 로 못 여므로 → COM.
+    - 수식은 트리거 아님(입력=계산값 읽기, 출력=수식 보존+Excel 재계산)."""
     out = payload.get("output") or {}
-    if out.get("backendWorkbookId"):
-        items.append(out)
-    for it in items:
+    out_wid = out.get("backendWorkbookId")
+    if out_wid:
+        try:
+            rec = get_workbook_or_raise(out_wid)
+            if is_csv_path(rec["path"]):
+                return f"{out.get('name') or rec.get('name') or '출력'}: CSV"
+            reason = _xlsx_object_reason(rec["path"])
+            if reason:
+                return f"{out.get('name') or rec.get('name') or '출력'}: {reason}"
+        except Exception:
+            pass
+    for it in (payload.get("inputs") or []):
         wid = it.get("backendWorkbookId")
         if not wid:
             continue
         try:
             rec = get_workbook_or_raise(wid)
+            if is_csv_path(rec["path"]):
+                return f"{it.get('name') or rec.get('name') or '입력'}: CSV"
         except Exception:
             continue
-        reason = _xlsx_needs_com_reason(rec["path"])
-        if reason:
-            name = it.get("name") or rec.get("name") or ""
-            return f"{name}: {reason}" if name else reason
     return ""
 
 

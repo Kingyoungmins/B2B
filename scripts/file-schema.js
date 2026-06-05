@@ -50,7 +50,10 @@ function skillEnginePromptNote() {
 - ctx 헬퍼 우선: ctx.sheet, ctx.input, ctx.rows, ctx.col, ctx.header_row, ctx.data_start_row, ctx.add_sheet, ctx.sort, ctx.filter_to_sheet, ctx.pivot, ctx.normalize.
 - openpyxl 워크시트 메서드도 사용 가능: \`ws.cell(row=r, column=c).value\`, \`ws.insert_cols(idx, amount)\`, \`ws.insert_rows(idx, amount)\`, \`ws.delete_cols(idx, amount)\`, \`ws.delete_rows(idx, amount)\`, \`ws.append([...])\`, \`ws.max_row\`, \`ws.max_column\`.
 - 사용 불가(COM 전용 — 호출하지 마세요): AutoFilter, Range.End, Range.Offset, Worksheet.Copy, Columns(i).Insert(), ctx.excel(=None).
-- 중요: 수식 셀을 다시 읽으면 계산값이 아니라 수식 문자열이 반환됩니다. 필요한 값은 **Python에서 직접 계산해 셀에 값으로 쓰세요**(수식을 쓴 뒤 그 결과를 다시 읽지 마세요).
+- 입력 파일 읽기: 수식이 있어도 ctx.rows / ws.Range().Value 는 **계산된 값**을 돌려줍니다(파일에 저장된 계산 결과). 그대로 읽으면 됩니다.
+- 출력 파일 수식: 기존 수식은 **보존**되며, 빈칸을 채우면 그 수식들은 파일을 Excel에서 열 때 **자동 재계산**되어 새 값이 보입니다. 즉 수식 셀을 직접 덮어쓸 필요 없이 입력 셀(예: 빈칸)만 채우면 됩니다.
+- 단, **이번 단계에서 쓴 값으로 계산되는 수식의 결과를 같은 코드 안에서 다시 읽지는 마세요**(openpyxl 은 그 자리에서 계산하지 않습니다). 결과 값이 필요하면 Python 에서 직접 계산하세요.
+- 입력 파일은 **읽기 전용**입니다(이 엔진에서 입력 파일 자체를 수정·저장하지 않음). 입력 파일을 편집해야 하면 상단 토글을 **Excel** 엔진으로 바꾸세요.
 - 열/행 삽입·삭제는 openpyxl의 ws.insert_cols/insert_rows/delete_cols/delete_rows 를 사용하세요(COM Insert/Delete 대신).
 `;
 }
