@@ -307,6 +307,14 @@ async function preopenAllExcelMirrors(selectedFileId) {
     }
     if (typeof setCurrentView === "function") setCurrentView(selected);
     await switchVisibleExcelMirrorToFileId(selected);
+    // 업로드는 명시적 동작 → 호스트가 잠깐 비활성(드롭/대화상자 직후)이어도 선택 미러를 강제로 보이게 한다.
+    const selExcelId = excelMirror.sessionsByFileId[selected];
+    if (selExcelId) {
+      await positionExcelMirrorWindow(selExcelId, { force: true });
+      await raiseExcelMirrorWindow(selExcelId, { force: true });
+      // 창 준비/포커스 전환 레이스 대비 한 번 더(약간 지연).
+      setTimeout(() => { raiseExcelMirrorWindow(selExcelId, { force: true }).catch(() => {}); }, 300);
+    }
     startExcelMirrorPolling();
     await trimExcelMirrorSessionCache(selected);
   } finally {
@@ -928,12 +936,13 @@ async function positionExcelMirrorWindow(excelId = currentExcelId(), options = {
   return true;
 }
 
-async function raiseExcelMirrorWindow(excelId = currentExcelId()) {
+async function raiseExcelMirrorWindow(excelId = currentExcelId(), options = {}) {
   if (isNativeExcelShell() && !isNativeExcelOverlayShell()) return false;
   if (!excelId) return false;
   // 호스트 창이 비활성(최소화/알트탭/다른 앱)인 동안엔 강제로 최상단에 올리지 않는다.
   // (document.hasFocus는 웹뷰 포커스만 봐서 네이티브 탭 클릭 시 false가 됨 → 호스트 활성 플래그를 사용.)
-  if (excelMirror.hostActive === false) return false;
+  // 단, force=true(업로드 직후 자동 보기 등 명시적 동작)는 가드를 우회한다.
+  if (!options.force && excelMirror.hostActive === false) return false;
   excelMirror.lastRaiseAt = Date.now();
   await postExcelMirror("/api/excel/raise", { excelId });
   return true;
