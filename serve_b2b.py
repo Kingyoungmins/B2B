@@ -79,7 +79,7 @@ MAX_PIPELINE_JOBS = 40
 # 이 크기를 넘으면 중간 단계 스냅샷을 건너뛰고 "마지막 단계"만 저장한다(동일 파이프라인 재적용은 여전히 즉시).
 SNAPSHOT_INTERMEDIATE_MAX_BYTES = 8 * 1024 * 1024
 PIPELINE_JOB_TTL_SECONDS = 60 * 60
-APP_BUILD_STAMP = "b2b-overlay-shell-20260605-045-01"
+APP_BUILD_STAMP = "b2b-overlay-shell-20260605-045-02"
 EXCEL_MIRROR_PROTECT_PASSWORD = "b2b_mirror_readonly"
 
 
@@ -3684,7 +3684,8 @@ def _run_excel_python_pipeline_impl(payload, job_id=None):
     if live_session:
         try:
             app, output_wb = session_workbook(live_session)
-            app.Visible = True
+            # 적용 중에는 미러 창을 보이게 하지 않는다(프런트가 미러를 숨기고 로딩을 표시).
+            # 보이게/활성화하면 여러 Excel 창이 적용 중에 앞으로 튀어나온다. 완료 후 프런트가 재배치/표시.
         except Exception:
             live_session = None
     if not live_session:
@@ -3851,8 +3852,7 @@ def _run_excel_python_pipeline_impl(payload, job_id=None):
                 ws.Activate()
                 if active_output_address:
                     ws.Range(str(active_output_address)).Select()
-                if live_session:
-                    _safe_activate_excel_app(app)
+                # 미러 앱을 보이게/활성화하지 않는다(적용 중 창 튀어나옴 방지). 완료 후 프런트가 표시.
             except Exception as err:
                 _warn_excel_nonfatal("activate output sheet", err)
         if live_session:
@@ -3959,7 +3959,7 @@ def _run_excel_python_pipeline_impl(payload, job_id=None):
                 ws.Activate()
                 if active_output_address:
                     ws.Range(str(active_output_address)).Select()
-                _safe_activate_excel_app(app)
+                # 미러 앱을 보이게/활성화하지 않는다(적용 중 창 튀어나옴 방지). 완료 후 프런트가 표시.
             except Exception as err:
                 _warn_excel_nonfatal("restore active output sheet", err)
         if hide_guard:

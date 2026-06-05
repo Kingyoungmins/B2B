@@ -398,39 +398,46 @@ function applyBackendPipelineResult(result) {
     }
     const sessionFor = (fid) => (typeof excelMirrorSessionIdForFileId === "function" ? excelMirrorSessionIdForFileId(fid) : null);
 
+    let activeRestoreScheduled = false;
     changed.forEach(fid => {
       if (!fid || !sessionFor(fid)) return;
       const isOutput = fid === "output" || fid.indexOf("output:") === 0;
       if (fid === activeId) {
-        setTimeout(() => {
-          if (isOutput && result.liveApplied) {
-            if (typeof acknowledgeExcelMirrorApplied === "function") {
-              acknowledgeExcelMirrorApplied(fid).catch(() => {});
+        activeRestoreScheduled = true;
+        // 적용 중 숨겨둔 활성 미러를 복원(재배치) → 최상단으로 올린 뒤 → 로딩 애니메이션 종료.
+        // 순서를 지켜야 패널이 빈 채로 깜빡이는 구간이 없다.
+        setTimeout(async () => {
+          try {
+            if (isOutput && result.liveApplied) {
+              if (typeof acknowledgeExcelMirrorApplied === "function") await acknowledgeExcelMirrorApplied(fid);
+            } else {
+              const url = downloadUrls[fid] || (isOutput ? result.downloadUrl : null);
+              if (url && typeof refreshExcelMirrorForFileId === "function") {
+                await refreshExcelMirrorForFileId(fid, url, { openIfMissing: false });
+              } else if (typeof acknowledgeExcelMirrorApplied === "function") {
+                await acknowledgeExcelMirrorApplied(fid);
+              }
             }
-            return;
+          } catch (_) {}
+          const aid = sessionFor(activeId);
+          if (aid && typeof raiseExcelMirrorWindow === "function") {
+            try { await raiseExcelMirrorWindow(aid); } catch (_) {}
           }
-          const url = downloadUrls[fid] || (isOutput ? result.downloadUrl : null);
-          if (url && typeof refreshExcelMirrorForFileId === "function") {
-            refreshExcelMirrorForFileId(fid, url, { openIfMissing: false }).catch(() => {});
-          } else if (typeof acknowledgeExcelMirrorApplied === "function") {
-            acknowledgeExcelMirrorApplied(fid).catch(() => {});
-          }
+          if (typeof endExcelMirrorApplyLoading === "function") endExcelMirrorApplyLoading();
         }, 150);
       } else if (!(isOutput && result.liveApplied)) {
-        // live 출력은 제자리(in-place) 갱신돼 최신 상태이므로 stale 아님.
-        // 입력/비라이브 출력은 전환 시 갱신하도록 stale 표시(지금은 표시하지 않음).
+        // 스택 모델: 비활성 미러는 숨겨둔 채 stale 로만 표시 → 그 파일로 전환할 때 갱신한다.
         if (typeof excelMirror !== "undefined") excelMirror.staleByFileId[fid] = true;
       }
     });
 
-    // 스택 모델: 활성 미러만 최상단으로 올린다(나머지는 가려진 채 스택 유지 → 전환 깜빡임 없음).
-    // 비활성 미러를 숨기지(park) 않으므로 "모든 파일이 한꺼번에 떠오르는" 문제도 z-order 로 자연히 방지된다.
-    setTimeout(() => {
-      const aid = sessionFor(activeId);
-      if (aid && typeof raiseExcelMirrorWindow === "function") {
-        raiseExcelMirrorWindow(aid).catch(() => {});
-      }
-    }, 260);
+    // 활성 파일에 열린 미러 세션이 없으면(복원 스케줄 안 됨) 로딩만 종료하고 활성 미러를 복원한다.
+    if (!activeRestoreScheduled) {
+      setTimeout(() => {
+        if (typeof endExcelMirrorApplyLoading === "function") endExcelMirrorApplyLoading();
+        if (typeof restoreActiveExcelMirrorWindow === "function") restoreActiveExcelMirrorWindow().catch(() => {});
+      }, 150);
+    }
   }
 }
 
@@ -533,6 +540,8 @@ async function runPipelineOnBackend(options = {}) {
     outputExcelId = liveOutputExcelId;
   }
   muteExcelMirrorForPipeline(outputExcelId);
+  // 적용 중에는 미러 창을 숨기고 엑셀 영역에 로딩 애니메이션을 표시한다(창 튀어나옴 방지 + 진행 표시).
+  if (typeof beginExcelMirrorApplyLoading === "function") beginExcelMirrorApplyLoading("적용 반영 중...");
   const payload = {
     inputs: (state.inputsOriginal || []).map(f => ({
       name: f.name,
@@ -626,6 +635,16 @@ async function runPipelineOnBackend(options = {}) {
     }
   } finally {
     releaseExcelMirrorPipelineMute(outputExcelId);
+    // 안전망: 적용 결과 반영(applyBackendPipelineResult)이 로딩을 끄지만,
+    // 오류/중복실행 등으로 끄지 못한 경우를 대비해 잠시 후 로딩 종료 + 활성 미러 복원.
+    setTimeout(() => {
+      if (typeof excelMirror !== "undefined" && excelMirror.applying) {
+        if (typeof endExcelMirrorApplyLoading === "function") endExcelMirrorApplyLoading();
+        if (typeof restoreActiveExcelMirrorWindow === "function") {
+          restoreActiveExcelMirrorWindow().catch(() => {});
+        }
+      }
+    }, 1200);
   }
 }
 

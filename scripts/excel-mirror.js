@@ -28,6 +28,9 @@ const excelMirror = {
   // 호스트 창(웹뷰+네이티브 탭 패널 포함) 활성 여부. C# Activated/Deactivated 이벤트로 갱신.
   // 기본 true(브라우저 모드처럼 C# 이벤트가 없는 환경에서도 동작).
   hostActive: true,
+  // 파이프라인 적용 중 표시(이 동안 미러를 숨기고 로딩 애니메이션을 보여준다).
+  applying: false,
+  applyLoadingTimer: null,
 };
 // 업로드한 모든 파일(보통 입력 여러 개 + 출력)을 미리 열어 스택해 두므로 캐시 한도를 넉넉히.
 const EXCEL_MIRROR_MAX_CACHED_SESSIONS = 10;
@@ -502,6 +505,38 @@ async function restoreActiveExcelMirrorWindow() {
   await positionExcelMirrorWindow(excelId, { force: true });
   await raiseExcelMirrorWindow(excelId);
   return true;
+}
+
+// ---- 적용 중 로딩 애니메이션 (이슈: 적용 중엔 미러가 안 보이므로 엑셀 영역에 로딩 표시) ----
+const EXCEL_MIRROR_SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+
+// 적용 시작: 모든 미러 창을 숨기고(park) 네이티브 패널의 로딩 애니메이션을 돌린다.
+// (미러를 숨겨야 적용 중 여러 Excel 창이 앞으로 튀어나오지 않고, 패널의 로딩 표시가 보인다.)
+function beginExcelMirrorApplyLoading(message) {
+  excelMirror.applying = true;
+  const label = message || "적용 반영 중...";
+  if (typeof hideAllExcelMirrorWindows === "function") {
+    hideAllExcelMirrorWindows().catch(() => {});
+  }
+  let i = 0;
+  const tick = () => {
+    const frame = EXCEL_MIRROR_SPINNER_FRAMES[i % EXCEL_MIRROR_SPINNER_FRAMES.length];
+    i += 1;
+    const text = `${frame}  ${label}`;
+    if (typeof publishNativeExcelLoading === "function") publishNativeExcelLoading(true, text);
+    if (typeof updateMirrorShellStatus === "function") updateMirrorShellStatus(text);
+  };
+  tick();
+  clearInterval(excelMirror.applyLoadingTimer);
+  excelMirror.applyLoadingTimer = setInterval(tick, 320);
+}
+
+function endExcelMirrorApplyLoading() {
+  if (!excelMirror.applying && !excelMirror.applyLoadingTimer) return;
+  excelMirror.applying = false;
+  clearInterval(excelMirror.applyLoadingTimer);
+  excelMirror.applyLoadingTimer = null;
+  if (typeof publishNativeExcelLoading === "function") publishNativeExcelLoading(false, "");
 }
 
 function scheduleRestoreActiveExcelMirror(delay = 120) {
