@@ -79,7 +79,7 @@ MAX_PIPELINE_JOBS = 40
 # 이 크기를 넘으면 중간 단계 스냅샷을 건너뛰고 "마지막 단계"만 저장한다(동일 파이프라인 재적용은 여전히 즉시).
 SNAPSHOT_INTERMEDIATE_MAX_BYTES = 8 * 1024 * 1024
 PIPELINE_JOB_TTL_SECONDS = 60 * 60
-APP_BUILD_STAMP = "b2b-overlay-shell-20260605-046-12"
+APP_BUILD_STAMP = "b2b-overlay-shell-20260605-046-13"
 EXCEL_MIRROR_PROTECT_PASSWORD = "b2b_mirror_readonly"
 
 
