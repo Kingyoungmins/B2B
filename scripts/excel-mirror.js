@@ -675,12 +675,13 @@ async function closeCurrentExcelMirror() {
 
 function startExcelMirrorPolling() {
   if (excelMirror.pollTimer) return;
+  // 선택 범위가 채팅에 빠르게 뜨도록 폴링 간격을 짧게(활성 미러 1개만 폴링하므로 COM 부담 적음).
   excelMirror.pollTimer = setInterval(() => {
     const excelId = currentExcelId();
     if (excelId) {
       pollExcelMirrorChanges(excelId).catch(err => console.warn("Excel mirror poll failed:", err));
     }
-  }, isNativeExcelShell() ? 1800 : 1500);
+  }, isNativeExcelShell() ? 450 : 400);
   if (!excelMirror.formulaInfoTimer) {
     excelMirror.formulaInfoTimer = setInterval(() => {
       const excelId = currentExcelId();
@@ -766,12 +767,13 @@ function syncSelectionFromExcel(sheet, address, options = {}) {
 function queueExcelSelectionChatReference(range) {
   excelMirror.pendingChatRange = range;
   clearTimeout(excelMirror.selectionChatTimer);
+  // 드래그 중 과도한 갱신만 막을 정도로 짧게(채팅 반영이 바로바로 보이도록).
   excelMirror.selectionChatTimer = setTimeout(() => {
     const pending = excelMirror.pendingChatRange;
     excelMirror.pendingChatRange = null;
     if (!pending || typeof updateChatRangeReference !== "function") return;
     updateChatRangeReference(pending, { preserveFocus: true });
-  }, 700);
+  }, 180);
 }
 
 function parseExcelSelectionAddress(address, fileId, sheet) {
