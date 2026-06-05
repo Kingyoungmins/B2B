@@ -128,7 +128,8 @@ function setExcelMirrorOpening(target, active) {
   if (active) {
     const msg = `Excel 여는 중: ${name}`;
     updateMirrorShellStatus(msg);
-    publishNativeExcelLoading(true, msg);
+    // 컴퓨터 성능에 따라 첫 열기/준비가 다소 지연될 수 있음을 안내(특히 사양 낮은 PC).
+    publishNativeExcelLoading(true, `${msg}\n컴퓨터 성능에 따라 다소 지연될 수 있습니다`);
   } else {
     publishNativeExcelLoading(false, "");
   }
@@ -300,7 +301,7 @@ async function preopenAllExcelMirrors(selectedFileId) {
   // 자동숨김(periodic)이 방금 연 미러들을 park(숨김) 하지 못하게 한다.
   // (park 되면 그 탭 첫 전환이 무거운 재배치가 되어 "보기 눌러야 매끄러운" 증상이 생김)
   excelMirror.hostActive = true;
-  publishNativeExcelLoading(true, "Excel 미러 준비 중...");
+  publishNativeExcelLoading(true, "Excel 미러 준비 중...\n컴퓨터 성능에 따라 다소 지연될 수 있습니다");
   try {
     for (const fid of ordered) {
       try {
