@@ -18,6 +18,10 @@
   let banner = null;
   let restartRequestedAt = 0;
 
+  // 자동 재연결은 내부적으로 계속 동작하지만, 사용자에게는 일상적인 끊김/재연결 안내를 숨긴다.
+  // (너무 자주 떠서 정신없다는 피드백) 진짜 죽어서 사용자 조치가 필요한 "반복 종료"만 노출한다.
+  const SILENT_RECONNECT = true;
+
   function isNativeShell() {
     return !!(window.chrome && window.chrome.webview && typeof window.chrome.webview.postMessage === "function");
   }
@@ -67,7 +71,9 @@
     return banner;
   }
 
-  function showBanner(msg) {
+  function showBanner(msg, force) {
+    // 조용한 모드에서는 치명적(force) 알림만 노출하고, 일상적 재연결 안내는 띄우지 않는다.
+    if (SILENT_RECONNECT && !force) return;
     const b = ensureBanner();
     if (msg) b.querySelector("[data-role='msg']").textContent = msg;
     b.style.display = "flex";
@@ -92,7 +98,7 @@
     disconnected = false;
     reconnecting = false;
     hideBanner();
-    if (typeof toast === "function") toast("서버에 다시 연결되었습니다.", "success");
+    if (!SILENT_RECONNECT && typeof toast === "function") toast("서버에 다시 연결되었습니다.", "success");
   }
 
   function requestServerRestart() {
@@ -227,6 +233,7 @@
   });
   window.addEventListener("b2bServerCrashedFatal", () => {
     if (!isIxiSelected()) return;
-    showBanner("서버가 반복적으로 종료되었습니다. 앱을 재시작해 주세요. [지금 재연결]로 한 번 더 시도할 수 있습니다.");
+    // 치명적: 반복 종료라 사용자 조치가 필요 → 조용한 모드에서도 노출(force).
+    showBanner("서버가 반복적으로 종료되었습니다. 앱을 재시작해 주세요. [지금 재연결]로 한 번 더 시도할 수 있습니다.", true);
   });
 })();

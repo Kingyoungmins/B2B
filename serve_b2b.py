@@ -75,8 +75,11 @@ PREVIEW_COLS = None
 MAX_DIFF_CELLS_PER_SHEET = 5000
 MAX_PIPELINE_STEP_SNAPSHOTS = 80
 MAX_PIPELINE_JOBS = 40
+# 큰 출력 워크북은 단계마다 전체를 디스크에 저장(SaveCopyAs)하면 매우 느리다.
+# 이 크기를 넘으면 중간 단계 스냅샷을 건너뛰고 "마지막 단계"만 저장한다(동일 파이프라인 재적용은 여전히 즉시).
+SNAPSHOT_INTERMEDIATE_MAX_BYTES = 8 * 1024 * 1024
 PIPELINE_JOB_TTL_SECONDS = 60 * 60
-APP_BUILD_STAMP = "b2b-overlay-shell-20260602-044-24"
+APP_BUILD_STAMP = "b2b-overlay-shell-20260605-045-01"
 EXCEL_MIRROR_PROTECT_PASSWORD = "b2b_mirror_readonly"
 
 
@@ -3315,25 +3318,39 @@ def _find_best_pipeline_snapshot(input_items, input_wbs, output_item, output_wb_
 def _cleanup_pipeline_step_snapshots():
     if len(PIPELINE_STEP_SNAPSHOTS) <= MAX_PIPELINE_STEP_SNAPSHOTS:
         return
+    snapshots_root = (BACKEND_DIR / "pipeline_step_snapshots").resolve()
     ordered = sorted(PIPELINE_STEP_SNAPSHOTS.items(), key=lambda item: item[1].get("created", 0))
     while len(ordered) > MAX_PIPELINE_STEP_SNAPSHOTS:
         key, snapshot = ordered.pop(0)
         PIPELINE_STEP_SNAPSHOTS.pop(key, None)
         for path in (snapshot.get("files") or {}).values():
             try:
-                Path(path).unlink(missing_ok=True)
+                # 스냅샷 디렉터리 내부 파일만 삭제. (미수정 입력은 원본을 참조하므로 절대 삭제 금지)
+                if snapshots_root in Path(path).resolve().parents:
+                    Path(path).unlink(missing_ok=True)
             except Exception:
                 pass
 
 
-def _save_pipeline_step_snapshot(key, step_idx, app, output_wb, input_wb_by_name):
+def _save_pipeline_step_snapshot(key, step_idx, app, output_wb, input_wb_by_name, input_stable_src=None):
     snapshot_dir = BACKEND_DIR / "pipeline_step_snapshots" / key
     snapshot_dir.mkdir(parents=True, exist_ok=True)
     files = {}
     output_path = snapshot_dir / "output.xlsx"
     output_wb.SaveCopyAs(str(output_path))
     files["output:output"] = str(output_path)
+    input_stable_src = input_stable_src or {}
     for name, wb in input_wb_by_name.items():
+        # 스킬이 수정하지 않은 입력(wb.Saved == True)은 안정적인 원본 경로를 그대로 참조해
+        # 전체 복사를 건너뛴다(여러 입력 파일일 때 큰 속도 차이).
+        stable = input_stable_src.get(name)
+        try:
+            unmodified = bool(stable) and bool(wb.Saved) and Path(stable).exists()
+        except Exception:
+            unmodified = False
+        if unmodified:
+            files[f"input:{name}"] = str(stable)
+            continue
         safe_name = re.sub(r"[^0-9A-Za-z_.-]+", "_", str(name))[:80] or "input"
         input_path = snapshot_dir / f"input_{safe_name}.xlsx"
         wb.SaveCopyAs(str(input_path))
@@ -3690,7 +3707,15 @@ def _run_excel_python_pipeline_impl(payload, job_id=None):
     app.DisplayAlerts = False
     app.EnableEvents = False
     restore_screen_updating = None
+    restore_calculation = None
     if live_session:
+        try:
+            restore_screen_updating = bool(app.ScreenUpdating)
+            app.ScreenUpdating = False
+        except Exception:
+            restore_screen_updating = None
+    else:
+        # 워커(숨김) 경로 속도 개선: 화면 갱신을 끈다. (계산 모드는 워크북 오픈 후 설정)
         try:
             restore_screen_updating = bool(app.ScreenUpdating)
             app.ScreenUpdating = False
@@ -3729,6 +3754,9 @@ def _run_excel_python_pipeline_impl(payload, job_id=None):
 
         input_wbs = {}
         input_wb_by_name = {}
+        # 스냅샷 저장 시, 스킬이 수정하지 않은 입력은 안정적인 원본 경로를 그대로 참조해
+        # 전체 복사(SaveCopyAs)를 건너뛴다(여러 입력 파일일 때 큰 속도 차이). {name: 원본경로}
+        input_stable_src = {}
         output_path_norm = str(Path(output_wb_record["path"]).resolve()).lower()
         for item, wb_record in zip(input_items, input_wb_records):
             name = item.get("name") or wb_record["name"]
@@ -3748,6 +3776,22 @@ def _run_excel_python_pipeline_impl(payload, job_id=None):
             opened.append((wb, temp_path))
             input_wbs[name] = wb
             input_wb_by_name[name] = wb
+            input_stable_src[name] = wb_record["path"]  # 원본(업로드 파일) = 안정적, 미수정 시 참조 가능
+
+        # 큰 출력은 중간 단계 스냅샷을 건너뛰고 마지막 단계만 저장한다(속도).
+        try:
+            _out_size = Path(output_wb_record["path"]).stat().st_size
+        except OSError:
+            _out_size = 0
+        snapshot_intermediate = _out_size < SNAPSHOT_INTERMEDIATE_MAX_BYTES
+
+        # 워크북이 모두 열린 뒤 자동 재계산을 끈다(워커 경로). 단계마다 명시적으로 계산. (finally 복구)
+        if not live_session:
+            try:
+                restore_calculation = app.Calculation
+                app.Calculation = -4135  # xlCalculationManual
+            except Exception:
+                restore_calculation = None
 
         ctx = ExcelSkillContext(app, output_wb, input_wbs)
         for idx, step in enumerate(python_steps[resume_from:], start=resume_from + 1):
@@ -3784,17 +3828,19 @@ def _run_excel_python_pipeline_impl(payload, job_id=None):
             _safe_excel_calculate(app)
             if not live_session:
                 _hide_excel_app_window(app)
-            try:
-                snapshot_key = _pipeline_snapshot_key(
-                    input_items,
-                    input_wb_records,
-                    output_item,
-                    output_wb_record,
-                    python_steps[:idx],
-                )
-                _save_pipeline_step_snapshot(snapshot_key, idx, app, output_wb, input_wb_by_name)
-            except Exception as err:
-                _warn_excel_nonfatal("pipeline snapshot", err)
+            is_last_step = (idx == len(python_steps))
+            if is_last_step or snapshot_intermediate:
+                try:
+                    snapshot_key = _pipeline_snapshot_key(
+                        input_items,
+                        input_wb_records,
+                        output_item,
+                        output_wb_record,
+                        python_steps[:idx],
+                    )
+                    _save_pipeline_step_snapshot(snapshot_key, idx, app, output_wb, input_wb_by_name, input_stable_src)
+                except Exception as err:
+                    _warn_excel_nonfatal("pipeline snapshot", err)
 
         active_output_sheet = ctx.last_output_sheet if ctx else None
         active_output_address = ctx.last_output_address if ctx else None
@@ -3886,7 +3932,17 @@ def _run_excel_python_pipeline_impl(payload, job_id=None):
                 except Exception:
                     pass
         if not live_session:
-            # Quit 하지 않고 숨긴 채로 재사용. (열린 워크북은 위 opened 루프에서 모두 닫힘)
+            # 워커 설정 복구(다음 재사용 대비) 후 숨긴 채로 유지. (열린 워크북은 위 opened 루프에서 모두 닫힘)
+            if restore_calculation is not None:
+                try:
+                    app.Calculation = restore_calculation
+                except Exception:
+                    pass
+            if restore_screen_updating is not None:
+                try:
+                    app.ScreenUpdating = restore_screen_updating
+                except Exception:
+                    pass
             try:
                 _hide_excel_app_window(app)
             except Exception:

@@ -29,7 +29,8 @@ const excelMirror = {
   // 기본 true(브라우저 모드처럼 C# 이벤트가 없는 환경에서도 동작).
   hostActive: true,
 };
-const EXCEL_MIRROR_MAX_CACHED_SESSIONS = 4;
+// 업로드한 모든 파일(보통 입력 여러 개 + 출력)을 미리 열어 스택해 두므로 캐시 한도를 넉넉히.
+const EXCEL_MIRROR_MAX_CACHED_SESSIONS = 10;
 const EXCEL_MIRROR_MAX_ROWS = 1048576;
 const EXCEL_MIRROR_MAX_COLS = 16384;
 
@@ -178,7 +179,8 @@ async function openCurrentWorkbookInExcel() {
   }
   try {
     setExcelMirrorOpening(target, true);
-    await hideInactiveExcelMirrorSessions(target.fileId);
+    // 미러들을 같은 위치에 스택해 두고 선택된 것만 z-order 최상단으로 올린다(전환 깜빡임 제거).
+    // 따라서 다른 미러를 숨기지(park) 않는다 — 가려져서 안 보일 뿐이라 다시 보일 때 재배치 깜빡임이 없다.
     const existingExcelId = excelMirror.sessionsByFileId[target.fileId];
     if (existingExcelId) {
       excelMirror.activeExcelId = existingExcelId;
@@ -231,6 +233,84 @@ async function openExcelMirrorForFileId(fileId) {
   await openCurrentWorkbookInExcel();
 }
 
+// 업로드된 모든 파일의 fileId 목록(입력 + 출력). publishNativeFileTabs 와 동일한 규칙.
+function listAllWorkbookFileIds() {
+  const ids = [];
+  (state.inputs || []).forEach((f, idx) => {
+    const name = typeof workbookDisplayName === "function"
+      ? workbookDisplayName(f, `입력 파일 ${idx + 1}`)
+      : (f.name || `입력 파일 ${idx + 1}`);
+    ids.push("input:" + name);
+  });
+  (state.outputTemplates || []).forEach((tpl, idx) => {
+    ids.push(typeof outputTemplateFileId === "function" ? outputTemplateFileId(idx) : "output:" + idx);
+  });
+  return ids;
+}
+
+// 지정한 파일의 미러 세션을 보장(없으면 연다). 활성화/최상단 올리기는 makeActive 일 때만.
+// 다른 미러를 숨기지 않으므로 모두 같은 위치에 스택된다.
+async function ensureExcelMirrorSession(fileId, { makeActive = false } = {}) {
+  if (!fileId) return null;
+  const file = typeof getFile === "function" ? getFile(fileId) : null;
+  if (!file) return null;
+  let excelId = excelMirror.sessionsByFileId[fileId];
+  if (excelId) {
+    if (makeActive) {
+      excelMirror.activeExcelId = excelId;
+      excelMirror.sessionLastUsedByFileId[fileId] = Date.now();
+      await positionExcelMirrorWindow(excelId, { force: true });
+      stabilizeExcelMirrorZOrder(excelId);
+      await pollExcelMirrorChanges(excelId, { baselineOnly: true });
+    }
+    return excelId;
+  }
+  const mirrorRect = excelMirrorScreenRect() || {};
+  let data;
+  if (file.backendDownloadUrl && isBackendResultDownloadUrl(file.backendDownloadUrl)) {
+    const resultId = extractResultIdFromDownloadUrl(file.backendDownloadUrl);
+    data = await postExcelMirror("/api/excel/open-result", { resultId, readOnlyMirror: true, ...mirrorRect });
+  } else {
+    if (!file.backendWorkbookId) throw new Error("백엔드 workbookId가 없습니다.");
+    data = await postExcelMirror("/api/excel/open", { workbookId: file.backendWorkbookId, readOnlyMirror: true, ...mirrorRect });
+  }
+  excelMirror.sessionsByFileId[fileId] = data.excelId;
+  excelMirror.sessionLastUsedByFileId[fileId] = Date.now();
+  await positionExcelMirrorWindow(data.excelId, { force: true });
+  await pollExcelMirrorChanges(data.excelId, { baselineOnly: true });
+  if (makeActive) {
+    excelMirror.activeExcelId = data.excelId;
+    stabilizeExcelMirrorZOrder(data.excelId);
+  }
+  return data.excelId;
+}
+
+// 업로드 직후: 모든 파일의 미러를 미리 열어 같은 위치에 스택해 둔다.
+// 이후 탭/보기 전환은 선택된 미러를 z-order 최상단으로 올리기만 하면 되어 깜빡임이 없다.
+async function preopenAllExcelMirrors(selectedFileId) {
+  const ids = listAllWorkbookFileIds();
+  if (!ids.length) return;
+  const selected = selectedFileId || state.currentFileId || ids[ids.length - 1];
+  // 선택된 파일을 마지막에 열어 자연스럽게 최상단이 되도록(끝에서 churn 최소화).
+  const ordered = [...ids.filter(id => id !== selected), selected];
+  publishNativeExcelLoading(true, "Excel 미러 준비 중...");
+  try {
+    for (const fid of ordered) {
+      try {
+        await ensureExcelMirrorSession(fid, { makeActive: fid === selected });
+      } catch (err) {
+        if (!isMissingExcelSessionError(err)) console.warn("Excel mirror preopen failed:", fid, err);
+      }
+    }
+    if (typeof setCurrentView === "function") setCurrentView(selected);
+    await switchVisibleExcelMirrorToFileId(selected);
+    startExcelMirrorPolling();
+    await trimExcelMirrorSessionCache(selected);
+  } finally {
+    publishNativeExcelLoading(false, "");
+  }
+}
+
 async function switchVisibleExcelMirrorToFileId(fileId) {
   if (!fileId) return false;
   const excelId = excelMirror.sessionsByFileId[fileId];
@@ -254,7 +334,7 @@ async function switchVisibleExcelMirrorToFileId(fileId) {
   }
   excelMirror.activeExcelId = excelId;
   excelMirror.sessionLastUsedByFileId[fileId] = Date.now();
-  await hideInactiveExcelMirrorSessions(fileId);
+  // 숨기지 않고(스택 유지) 선택된 미러만 최상단으로 올린다 → 전환 깜빡임 없음.
   await positionExcelMirrorWindow(excelId, { force: true });
   stabilizeExcelMirrorZOrder(excelId);
   await pollExcelMirrorChanges(excelId, { baselineOnly: true });
@@ -267,7 +347,6 @@ async function openExcelMirrorResultForFileId(fileId, downloadUrl) {
   const resultId = extractResultIdFromDownloadUrl(downloadUrl);
   if (!fileId || !resultId) return false;
   if (typeof setCurrentView === "function") setCurrentView(fileId);
-  await hideInactiveExcelMirrorSessions(fileId);
   const data = await postExcelMirror("/api/excel/open-result", { resultId, readOnlyMirror: true, ...(excelMirrorScreenRect() || {}) });
   excelMirror.sessionsByFileId[fileId] = data.excelId;
   excelMirror.sessionLastUsedByFileId[fileId] = Date.now();

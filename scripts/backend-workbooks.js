@@ -423,10 +423,12 @@ function applyBackendPipelineResult(result) {
       }
     });
 
-    // 활성 파일 외의 미러는 숨김 상태 유지(한꺼번에 떠오르지 않게).
+    // 스택 모델: 활성 미러만 최상단으로 올린다(나머지는 가려진 채 스택 유지 → 전환 깜빡임 없음).
+    // 비활성 미러를 숨기지(park) 않으므로 "모든 파일이 한꺼번에 떠오르는" 문제도 z-order 로 자연히 방지된다.
     setTimeout(() => {
-      if (typeof hideInactiveExcelMirrorSessions === "function") {
-        hideInactiveExcelMirrorSessions(activeId).catch(() => {});
+      const aid = sessionFor(activeId);
+      if (aid && typeof raiseExcelMirrorWindow === "function") {
+        raiseExcelMirrorWindow(aid).catch(() => {});
       }
     }, 260);
   }

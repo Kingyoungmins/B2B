@@ -155,11 +155,14 @@ async function loadInputFiles(files) {
   refreshTabs();
   refreshChatState();
   if (typeof recomputeAllFormulas === "function") recomputeAllFormulas();
-  // 업로드 직후 자동으로 미러 열기('보기' 누른 효과). 가장 최근 올린 입력 파일.
+  // 업로드 직후 모든 파일의 미러를 미리 열어 스택해 둔다(전환 깜빡임 제거). 방금 올린 입력을 선택.
   if (state.inputs.length > startInputCount) {
     const lastInput = state.inputs[state.inputs.length - 1];
-    if (lastInput && typeof openExcelMirrorForFileId === "function") {
-      openExcelMirrorForFileId("input:" + lastInput.name).catch(err => console.warn("Auto-open input mirror failed:", err));
+    const selected = lastInput ? "input:" + lastInput.name : null;
+    if (typeof preopenAllExcelMirrors === "function") {
+      preopenAllExcelMirrors(selected).catch(err => console.warn("Preopen mirrors failed:", err));
+    } else if (selected && typeof openExcelMirrorForFileId === "function") {
+      openExcelMirrorForFileId(selected).catch(err => console.warn("Auto-open input mirror failed:", err));
     }
   }
 }
@@ -207,9 +210,11 @@ async function loadOutputTemplates(files) {
     renderOutputChip();
     refreshTabs();
     refreshChatState();
-    // 업로드 직후 자동으로 미러 열기('보기' 효과). 새로 올린 마지막 출력 템플릿.
+    // 업로드 직후 모든 파일의 미러를 미리 열어 스택해 둔다(전환 깜빡임 제거). 새 출력 템플릿을 선택.
     const lastOutputFileId = "output:" + (state.outputTemplates.length - 1);
-    if (typeof openExcelMirrorForFileId === "function") {
+    if (typeof preopenAllExcelMirrors === "function") {
+      preopenAllExcelMirrors(lastOutputFileId).catch(err => console.warn("Preopen mirrors failed:", err));
+    } else if (typeof openExcelMirrorForFileId === "function") {
       openExcelMirrorForFileId(lastOutputFileId).catch(err => console.warn("Auto-open output mirror failed:", err));
     } else if (!state.currentFileId) {
       setCurrentView(lastOutputFileId);
