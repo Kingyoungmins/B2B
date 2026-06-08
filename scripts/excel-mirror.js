@@ -373,9 +373,9 @@ async function switchVisibleExcelMirrorToFileId(fileId) {
   }
   excelMirror.activeExcelId = excelId;
   excelMirror.sessionLastUsedByFileId[fileId] = Date.now();
-  // 이미 열린 미러로의 전환: 강제 재배치(force) 없이 위치가 같으면 건너뛰고 raise만 → 저사양에서도 즉시 전환.
-  // (창이 실제로 이동/숨겨졌을 때만 lastNativePositionKey 가 달라져 재배치된다.)
-  await positionExcelMirrorWindow(excelId);
+  // 전환 시 강제 재배치(force): 최소화/숨김 등으로 그 창이 안 보이게 됐을 수 있으므로
+  // 위치 캐시를 무시하고 다시 보이게(SetWindowPos show) 한다. (공유 인스턴스에서 전환 누락 방지)
+  await positionExcelMirrorWindow(excelId, { force: true });
   stabilizeExcelMirrorZOrder(excelId);
   await pollExcelMirrorChanges(excelId, { baselineOnly: true });
   startExcelMirrorPolling();

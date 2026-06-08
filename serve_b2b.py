@@ -2735,9 +2735,18 @@ def _inject_and_run_vba(app, wb, code, entry):
         module_name = module.Name
         module.CodeModule.AddFromString(code)
         try:
-            app.Run("%s.%s" % (module_name, entry))
+            # 워크북명으로 한정 실행(공유 인스턴스에서 여러 워크북이 있어도 정확히 이 워크북의 매크로 실행).
+            try:
+                qualified = "'%s'!%s.%s" % (wb.Name, module_name, entry)
+                app.Run(qualified)
+            except Exception:
+                app.Run("%s.%s" % (module_name, entry))  # 폴백
         except Exception as err:
-            raise RuntimeError("VBA 실행 실패: %s" % err)
+            try:
+                open_wbs = [str(w.Name) for w in app.Workbooks]
+            except Exception:
+                open_wbs = ["?"]
+            raise RuntimeError("VBA 실행 실패: %s | 열린 워크북: %s" % (err, ", ".join(open_wbs)))
     finally:
         if module is not None:
             try:
