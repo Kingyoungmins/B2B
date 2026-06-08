@@ -137,6 +137,9 @@ namespace B2BNativeHost
             Text = "B2B 빌링 Agent";
             StartPosition = FormStartPosition.CenterScreen;
             WindowState = FormWindowState.Maximized;
+            // 창 크기 조절 부담을 없앤다: 최대화로 고정하고 최소화만 허용(복원/리사이즈는 HandleHostResize 에서 되돌림).
+            MaximizeBox = false;
+            MinimizeBox = true;
             MinimumSize = new Size(1280, 760);
 
             split = new SplitContainer();
@@ -685,6 +688,12 @@ namespace B2BNativeHost
                     HideAllExcelMirrors();
                 }
                 lastWindowState = WindowState;
+                return;
+            }
+            // 최대화 고정: 복원/리사이즈로 Normal 이 되면 즉시 다시 최대화한다(최소화만 허용).
+            if (WindowState == FormWindowState.Normal)
+            {
+                WindowState = FormWindowState.Maximized;  // 다시 Resize 발생 → Maximized 분기로 진행
                 return;
             }
             bool restoredFromMinimized = lastWindowState == FormWindowState.Minimized;
