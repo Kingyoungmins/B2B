@@ -37,6 +37,8 @@ ver4.x execution rule:
 - When the user asks to filter/show only rows matching a condition, do not use Excel AutoFilter as the final output. Create a new worksheet/tab, copy the header and matching rows into that sheet, and name it clearly from the filter condition. Keep the original sheet unchanged because filter on/off state is not reliable in the read-only mirror workflow.
 - For sheet names that may change, use ctx.sheet_like(...) or ctx.input_sheet(...). If only one sheet exists, those helpers may return it.
 - Do not use sheet[r][c] JavaScript-style array code for Excel workbooks.
+- [정확 참조], 현재 활성 파일/시트, 현재 선택 범위가 최근 대화와 기존 파이프라인 단계보다 우선입니다.
+- 기존 Step에 등장한 파일명/시트명을 새 요청의 기본 대상으로 재사용하지 마세요. 새 요청에 @파일/@시트/@범위가 있으면 그 참조만 기준으로 삼으세요.
 
 PERFORMANCE — bulk read/write (VERY IMPORTANT, Excel COM is slow per-cell):
 - READ the whole used range ONCE: rows = ctx.rows(ws). Do not read cells one-by-one in a loop (each ws.Cells(r,c).Value / ws.Range(addr).Value read is a separate slow COM round-trip).
@@ -158,6 +160,43 @@ function _describeFile(f, opts, lines) {
   }
 }
 
+function _schemaRangeAddress(range) {
+  if (!range) return "";
+  if (range.address) {
+    return String(range.address).replace(/\$/g, "").split(",")[0].trim();
+  }
+  const r1 = Math.min(Number(range.r1) || 0, Number(range.r2) || 0);
+  const r2 = Math.max(Number(range.r1) || 0, Number(range.r2) || 0);
+  const c1 = Math.min(Number(range.c1) || 0, Number(range.c2) || 0);
+  const c2 = Math.max(Number(range.c1) || 0, Number(range.c2) || 0);
+  if (range.type === "col") return `${_excelCol(c1)}:${_excelCol(c2)}`;
+  if (range.type === "row") return `${r1 + 1}:${r2 + 1}`;
+  const a = `${_excelCol(c1)}${r1 + 1}`;
+  const b = `${_excelCol(c2)}${r2 + 1}`;
+  return a === b ? a : `${a}:${b}`;
+}
+
+function _schemaRangeLabel(range) {
+  const file = range && typeof getFile === "function" ? getFile(range.fileId) : null;
+  const name = file ? file.name : (range && range.fileId) || "";
+  return `${name}/${(range && range.sheet) || ""}!${_schemaRangeAddress(range)}`;
+}
+
+function _schemaSelectedRanges() {
+  const ranges = [];
+  const seen = new Set();
+  const add = (range) => {
+    if (!range) return;
+    const key = `${range.fileId || ""}|${range.sheet || ""}|${_schemaRangeAddress(range)}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    ranges.push(range);
+  };
+  add(state.selectedRange);
+  (state.selectedRanges || []).forEach(add);
+  return ranges;
+}
+
 function buildSchemaSummary() {
   let out = "";
   for (let i = 0; i < SCHEMA_LEVELS.length; i++) {
@@ -246,6 +285,12 @@ function _buildDefaultTargetHint() {
     lines.push(`현재 활성 시트: "${sheets[0]}"`);
     lines.push("사용자가 파일/시트를 명시하지 않으면 이 시트를 기본 대상으로 사용하세요.");
   }
+  const selectedRanges = _schemaSelectedRanges();
+  if (selectedRanges.length) {
+    lines.push("현재 선택 범위(최우선):");
+    selectedRanges.forEach(range => lines.push(`  - "${_schemaRangeLabel(range)}"`));
+    lines.push("사용자가 @범위 또는 선택 범위를 언급하면 위 파일/시트/범위를 이전 대화와 기존 Step의 파일/시트명보다 우선하세요.");
+  }
   return lines.join("\n");
 }
 
@@ -258,6 +303,7 @@ ${FORMULA_OVERWRITE_RULE}
 사용자는 여러 개의 단계(step)를 순서대로 쌓아 하나의 파이프라인을 만듭니다.
 각 단계는 이전 단계가 이미 모두 적용된 workbook 상태에서 시작합니다.
 지금 작성하는 코드는 이번 요청 하나만 처리해야 하며, 이전 단계의 작업을 반복하거나 합쳐 넣으면 안 됩니다.
+현재 활성 파일/시트/선택 범위와 [정확 참조]가 새 요청의 기준입니다. 이전 단계의 파일명/시트명은 참고 정보일 뿐 기본 대상이 아닙니다.
 
 예를 들어 사용자가 이전에 "고객정보 수정"을 요청했고 이번에는 "월별 테이블 만들기"를 요청했다면,
 이번 코드는 월별 테이블을 만드는 작업만 작성하세요.

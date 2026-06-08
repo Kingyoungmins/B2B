@@ -138,6 +138,7 @@ function addAssistantReply(fullText, replyContext) {
   const desc = extractDescription(fullText);
   const stripped = fullText.replace(/```[\s\S]*?```/g, "").trim();
   const editTargetId = replyContext && replyContext.editTargetId;
+  const errorFollowupEdit = !!(replyContext && replyContext.errorFollowupEdit);
   const reasoning = replyContext && replyContext.reasoning;
 
   const div = document.createElement("div");
@@ -156,7 +157,7 @@ function addAssistantReply(fullText, replyContext) {
     if (editTargetId) {
       const editApplyBtn = document.createElement("button");
       editApplyBtn.className = "action-btn";
-      editApplyBtn.textContent = "\u2713 \uC218\uC815 \uC801\uC6A9";
+      editApplyBtn.textContent = errorFollowupEdit ? "\u2713 \uC2E4\uD328 Step \uAD50\uCCB4 \uC801\uC6A9" : "\u2713 \uC218\uC815 \uC801\uC6A9";
       const rejectBtn = document.createElement("button");
       rejectBtn.className = "action-btn reject";
       rejectBtn.textContent = "\u2715 \uAC70\uC808";
@@ -172,8 +173,12 @@ function addAssistantReply(fullText, replyContext) {
           finalizeActionButtonFromResult(
             editApplyBtn,
             result,
-            "\u2713 \uC218\uC815 \uC801\uC6A9\uB428",
-            () => restoreActionButtonsAfterFailure([editApplyBtn, rejectBtn], editApplyBtn, "\u2713 \uB2E4\uC2DC \uC218\uC815 \uC801\uC6A9")
+            errorFollowupEdit ? "\u2713 \uC2E4\uD328 Step \uAD50\uCCB4\uB428" : "\u2713 \uC218\uC815 \uC801\uC6A9\uB428",
+            () => restoreActionButtonsAfterFailure(
+              [editApplyBtn, rejectBtn],
+              editApplyBtn,
+              errorFollowupEdit ? "\u2713 \uB2E4\uC2DC \uAD50\uCCB4 \uC801\uC6A9" : "\u2713 \uB2E4\uC2DC \uC218\uC815 \uC801\uC6A9"
+            )
           );
         }
       };
@@ -414,6 +419,8 @@ function showThinkRetryPrompt(container, context) {
   context = context || {};
   const prompt = context.prompt || "";
   const editTargetId = context.editTargetId || null;
+  const actionEditTargetId = context.actionEditTargetId || editTargetId;
+  const errorFollowupEdit = !!context.errorFollowupEdit;
   const modeLabel = context.modeLabel || "";
   const aiName = context.aiName || "LLM";
   const message = context.message || "Think 요청이 중단되었습니다.";
@@ -446,7 +453,7 @@ function showThinkRetryPrompt(container, context) {
       });
       streamView.flush();
       container.remove();
-      addAssistantReply(reply, { editTargetId, reasoning: "" });
+      addAssistantReply(reply, { editTargetId: actionEditTargetId, errorFollowupEdit, reasoning: "" });
       scrollChatToBottom();
     } catch (err) {
       container.classList.remove("streaming", "loading");
@@ -502,6 +509,18 @@ function resolveErrorRecoveryStepIndex(stepIdx, errorInfo) {
     if (byDesc >= 0) return byDesc;
   }
   return -1;
+}
+
+function getPendingFailedStepEditTargetId() {
+  const info = state.lastError || null;
+  if (!info) return null;
+  const createdAt = Number(info.createdAt || 0);
+  if (createdAt && Date.now() - createdAt > 30 * 60 * 1000) return null;
+  const idx = resolveErrorRecoveryStepIndex(info.stepIdx, info);
+  if (idx < 0) return null;
+  const step = state.pipeline[idx];
+  if (!step || step.enabled === false || !step.code) return null;
+  return step.id || null;
 }
 
 async function requestErrorRecovery(stepIdx, errorInfo) {
@@ -758,14 +777,16 @@ async function sendChat() {
   if (!state.output && state.inputs.length === 0) { toast("입력 또는 출력 파일을 먼저 업로드하세요", "error"); return; }
   // 전송 시점의 수정 대상 step을 캡처해두면, 이후 사용자가 수정 모드를 토글해도 응답 버튼은 올바른 step을 가리킨다.
   const editTargetId = state.editingStepId || null;
+  const pendingFailedStepId = editTargetId ? null : getPendingFailedStepEditTargetId();
+  const actionEditTargetId = editTargetId || pendingFailedStepId || null;
+  const errorFollowupEdit = !editTargetId && !!pendingFailedStepId;
   input.value = "";
   addMessage("user", msg);
-  clearViewerDragSelection();
   const loading = addMessage("assistant", "", {});
   loading.classList.add("streaming");
   // 외부 노출 시엔 내부 모델명을 표시하지 않고 LLM 으로 통일
   const aiName = settings.provider === "openai-compat" ? "ixi 모델" : "LLM";
-  const modeLabel = editTargetId ? "(수정 모드) " : "";
+  const modeLabel = editTargetId ? "(수정 모드) " : (errorFollowupEdit ? "(실패 Step 교체 후보) " : "");
   const thinkMode = typeof isThinkModeEnabled === "function" && isThinkModeEnabled();
   const abortController = new AbortController();
   const streamView = setupStreamingAssistantMessage(loading, modeLabel, aiName, () => abortController.abort());
@@ -804,7 +825,8 @@ async function sendChat() {
     const reply = await callLLM(prompt, requestOptions);
     streamView.flush();
     loading.remove();
-    addAssistantReply(reply, { editTargetId, reasoning: reasoningText });
+    addAssistantReply(reply, { editTargetId: actionEditTargetId, errorFollowupEdit, reasoning: reasoningText });
+    clearViewerDragSelection();
     scrollChatToBottom();
   } catch (err) {
     loading.classList.remove("streaming");
@@ -813,6 +835,8 @@ async function sendChat() {
       showThinkRetryPrompt(loading, {
         prompt,
         editTargetId,
+        actionEditTargetId,
+        errorFollowupEdit,
         modeLabel,
         aiName,
         message: "Think 요청을 중단했습니다.",

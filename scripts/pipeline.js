@@ -184,6 +184,57 @@ function restorePipelineStep(stepId, originalStep) {
   refreshRunButton();
 }
 
+function normalizePipelineErrorInfo(err) {
+  const raw = (err && (err._stepInfo || err.errorInfo)) || {};
+  const rawIdx = Number(raw.stepIdx);
+  let stepIdx = Number.isInteger(rawIdx) ? rawIdx : -1;
+  let step = (stepIdx >= 0 && state.pipeline && state.pipeline[stepIdx]) ? state.pipeline[stepIdx] : null;
+
+  if (!step && raw.stepId) {
+    const byId = (state.pipeline || []).findIndex(s => s && s.id === raw.stepId);
+    if (byId >= 0) {
+      stepIdx = byId;
+      step = state.pipeline[byId];
+    }
+  }
+  if (!step && raw.code) {
+    const byCode = (state.pipeline || []).findIndex(s => s && s.code === raw.code);
+    if (byCode >= 0) {
+      stepIdx = byCode;
+      step = state.pipeline[byCode];
+    }
+  }
+  if (!step && raw.description) {
+    const byDesc = (state.pipeline || []).findIndex(s => s && s.description === raw.description);
+    if (byDesc >= 0) {
+      stepIdx = byDesc;
+      step = state.pipeline[byDesc];
+    }
+  }
+
+  return {
+    stepIdx,
+    stepId: raw.stepId || (step && step.id) || null,
+    description: raw.description || (step && step.description) || "",
+    code: raw.code || (step && step.code) || "",
+    language: raw.language || (step && step.language) || "",
+    message: raw.message || (err && err.message) || String(err || ""),
+    stack: raw.stack || (err && err.stack) || "",
+    recoverable: raw.recoverable !== false,
+    createdAt: raw.createdAt || Date.now(),
+  };
+}
+
+function clearPipelineLastError(stepId) {
+  if (!state.lastError) return;
+  if (!stepId || state.lastError.stepId === stepId) {
+    state.lastError = null;
+    return;
+  }
+  const idx = (state.pipeline || []).findIndex(step => step && step.id === stepId);
+  if (idx >= 0 && Number(state.lastError.stepIdx) === idx) state.lastError = null;
+}
+
 function applyLogic(step) {
   step = normalizeStep(step);
   const next = [...state.pipeline, step];
@@ -203,6 +254,7 @@ function applyLogic(step) {
     })
       .then(() => {
         setPipelineRuntimeStatus([step.id], "applied", "\uC801\uC6A9\uB428");
+        clearPipelineLastError();
         return true;
       })
       .catch(err => {
@@ -219,6 +271,7 @@ function applyLogic(step) {
     if (typeof hasBackendOnlyWorkbooks === "function" && hasBackendOnlyWorkbooks()) {
       window.backendCurrentCacheDirty = true;
     }
+    clearPipelineLastError();
     if (typeof pushHistory === "function") pushHistory("단계 추가");
     state.pipeline.push(step);
     renderPipeline();
@@ -251,6 +304,7 @@ function insertLogic(step, position) {
     const promise = reconcilePipelineSimulationAfterEdit({ forceBackend: true })
       .then(() => {
         setPipelineRuntimeStatus([step.id], "applied", "\uC801\uC6A9\uB428");
+        clearPipelineLastError();
         return true;
       })
       .catch(err => {
@@ -267,6 +321,7 @@ function insertLogic(step, position) {
     if (typeof hasBackendOnlyWorkbooks === "function" && hasBackendOnlyWorkbooks()) {
       window.backendCurrentCacheDirty = true;
     }
+    clearPipelineLastError();
     if (typeof pushHistory === "function") pushHistory("단계 삽입");
     state.pipeline = next;
     renderPipeline();
@@ -301,6 +356,7 @@ function replaceLogicAt(stepId, newCode, newDescription, language) {
     const promise = reconcilePipelineSimulationAfterEdit({ forceBackend: true })
       .then(() => {
         setPipelineRuntimeStatus([stepId], "applied", "\uC801\uC6A9\uB428");
+        clearPipelineLastError(stepId);
         return true;
       })
       .catch(err => {
@@ -317,6 +373,7 @@ function replaceLogicAt(stepId, newCode, newDescription, language) {
     if (typeof hasBackendOnlyWorkbooks === "function" && hasBackendOnlyWorkbooks()) {
       window.backendCurrentCacheDirty = true;
     }
+    clearPipelineLastError(stepId);
     if (typeof pushHistory === "function") pushHistory("단계 수정");
     state.pipeline = next;
     renderPipeline();
@@ -821,6 +878,7 @@ async function runPipelinePreferBackend(options = {}) {
     try {
       const result = await runPipelineOnBackend(options);
       toast("백엔드 실행 결과를 현재 화면에 반영했습니다", "success");
+      clearPipelineLastError();
       return result;
     } catch (err) {
       console.warn("Backend pipeline failed, falling back to browser execution:", err);
@@ -1125,15 +1183,8 @@ function hasErrorRecoverySeed(info) {
 
 function reportPipelineError(err, options) {
   options = options || {};
-  const info = (err && err._stepInfo) || {
-    stepIdx: -1,
-    stepId: null,
-    description: "",
-    code: "",
-    message: (err && err.message) || String(err || ""),
-    stack: (err && err.stack) || "",
-    recoverable: false,
-  };
+  const info = normalizePipelineErrorInfo(err);
+  state.lastError = info;
   const stepLabel = Number(info.stepIdx) >= 0 ? `Step ${info.stepIdx + 1}` : "\uC2A4\uD0AC";
   toast(`${stepLabel}을 적용하지 못했습니다. 안내 메시지를 확인하세요.`, "error");
   if (options.runner) showRunnerPipelineError(err, options);
