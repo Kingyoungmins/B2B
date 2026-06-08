@@ -141,29 +141,31 @@ async function loadInputFiles(files) {
       }
       updateUpload(job, i + 1, f.name);
     }
+    if (job.cancelled) {
+      state.inputs.splice(startInputCount);
+      state.inputsOriginal.splice(startOriginalCount);
+      toast("파일 업로드를 중단하고 이전 상태로 복귀했습니다.", "success");
+      return;
+    }
+    state.fuzzyResolution = {};
+    renderInputList();
+    refreshTabs();
+    refreshChatState();
+    if (typeof recomputeAllFormulas === "function") recomputeAllFormulas();
+    if (state.inputs.length > startInputCount) {
+      const lastInput = state.inputs[state.inputs.length - 1];
+      const selected = lastInput ? "input:" + lastInput.name : null;
+      if (selected) {
+        updateUpload(job, files.length, "실제 Excel 창 여는 중...");
+        if (typeof preopenAllExcelMirrors === "function") {
+          await preopenAllExcelMirrors(selected);
+        } else if (typeof openExcelMirrorForFileId === "function") {
+          await openExcelMirrorForFileId(selected);
+        }
+      }
+    }
   } finally {
     finishUpload(job);
-  }
-  if (job.cancelled) {
-    state.inputs.splice(startInputCount);
-    state.inputsOriginal.splice(startOriginalCount);
-    toast("파일 업로드를 중단하고 이전 상태로 복귀했습니다.", "success");
-    return;
-  }
-  state.fuzzyResolution = {};
-  renderInputList();
-  refreshTabs();
-  refreshChatState();
-  if (typeof recomputeAllFormulas === "function") recomputeAllFormulas();
-  // 업로드 직후 방금 올린 입력 파일의 미러만 연다(저사양 PC 대비: 전부 미리 열지 않음).
-  if (state.inputs.length > startInputCount) {
-    const lastInput = state.inputs[state.inputs.length - 1];
-    const selected = lastInput ? "input:" + lastInput.name : null;
-    if (selected && typeof autoOpenMirrorAfterUpload === "function") {
-      autoOpenMirrorAfterUpload(selected).catch(err => console.warn("Auto-open input mirror failed:", err));
-    } else if (selected && typeof openExcelMirrorForFileId === "function") {
-      openExcelMirrorForFileId(selected).catch(err => console.warn("Auto-open input mirror failed:", err));
-    }
   }
 }
 
@@ -194,32 +196,32 @@ async function loadOutputTemplates(files) {
       }
       updateUpload(job, i + 1, f.name);
     }
+    if (job.cancelled) {
+      state.outputTemplates.splice(startIndex);
+      state.activeOutputIndex = previousActiveOutputIndex;
+      state.output = previousOutput;
+      state.outputOriginal = previousOutputOriginal;
+      toast("출력 템플릿 업로드를 중단하고 이전 상태로 복귀했습니다.", "success");
+      return;
+    }
+    if (state.outputTemplates.length > startIndex) {
+      if (state.activeOutputIndex < 0 || !state.output) activateOutputTemplate(0);
+      renderOutputChip();
+      refreshTabs();
+      refreshChatState();
+      const lastOutputFileId = "output:" + (state.outputTemplates.length - 1);
+      updateUpload(job, files.length, "실제 Excel 창 여는 중...");
+      if (typeof preopenAllExcelMirrors === "function") {
+        await preopenAllExcelMirrors(lastOutputFileId);
+      } else if (typeof openExcelMirrorForFileId === "function") {
+        await openExcelMirrorForFileId(lastOutputFileId);
+      } else if (!state.currentFileId) {
+        setCurrentView(lastOutputFileId);
+      }
+      toast(`${state.outputTemplates.length - startIndex}개 출력 템플릿을 로드했습니다.`, "success");
+    }
   } finally {
     finishUpload(job);
-  }
-  if (job.cancelled) {
-    state.outputTemplates.splice(startIndex);
-    state.activeOutputIndex = previousActiveOutputIndex;
-    state.output = previousOutput;
-    state.outputOriginal = previousOutputOriginal;
-    toast("출력 템플릿 업로드를 중단하고 이전 상태로 복귀했습니다.", "success");
-    return;
-  }
-  if (state.outputTemplates.length > startIndex) {
-    if (state.activeOutputIndex < 0 || !state.output) activateOutputTemplate(0);
-    renderOutputChip();
-    refreshTabs();
-    refreshChatState();
-    // 업로드 직후 새 출력 템플릿의 미러만 연다(저사양 PC 대비: 전부 미리 열지 않음).
-    const lastOutputFileId = "output:" + (state.outputTemplates.length - 1);
-    if (typeof autoOpenMirrorAfterUpload === "function") {
-      autoOpenMirrorAfterUpload(lastOutputFileId).catch(err => console.warn("Auto-open output mirror failed:", err));
-    } else if (typeof openExcelMirrorForFileId === "function") {
-      openExcelMirrorForFileId(lastOutputFileId).catch(err => console.warn("Auto-open output mirror failed:", err));
-    } else if (!state.currentFileId) {
-      setCurrentView(lastOutputFileId);
-    }
-    toast(`${state.outputTemplates.length - startIndex}개 출력 템플릿을 로드했습니다.`, "success");
   }
 }
 
@@ -576,9 +578,6 @@ window.runnerSetDone = function() {
 
 function openWorkbookFileFromList(fileId) {
   setCurrentView(fileId);
-  if (typeof openExcelMirrorForFileId === "function") {
-    openExcelMirrorForFileId(fileId);
-  }
 }
 
 function downloadWorkbookFileFromList(fileId) {
@@ -688,7 +687,7 @@ openRunnerFileEditor = function(role) {
   const emptyText = isOutput ? "업로드된 출력 파일이 없습니다." : "업로드된 입력 파일이 없습니다.";
   modal.innerHTML = `
     <h3>${title}</h3>
-    <p style="font-size:12px; color:#666; margin-bottom:10px">보기는 실제 Excel로 열고, 다운로드는 현재까지 저장된 상태를 받습니다.</p>
+    <p style="font-size:12px; color:#666; margin-bottom:10px">보기는 이미 열린 Excel 미러로 전환하고, 다운로드는 현재까지 저장된 상태를 받습니다.</p>
     <div class="runner-file-editor-list">
       ${files.length ? files.map((f, idx) => {
         const name = workbookDisplayName(f, `${isOutput ? "출력" : "입력"} 파일 ${idx + 1}`);

@@ -25,6 +25,7 @@ const excelMirror = {
   lastPositionKey: "",
   lastNativePositionKey: "",
   positionListenersInstalled: false,
+  hideTimer: null,
   // 호스트 창(웹뷰+네이티브 탭 패널 포함) 활성 여부. C# Activated/Deactivated 이벤트로 갱신.
   // 기본 true(브라우저 모드처럼 C# 이벤트가 없는 환경에서도 동작).
   hostActive: true,
@@ -32,7 +33,7 @@ const excelMirror = {
   applying: false,
   applyLoadingTimer: null,
 };
-// 업로드한 모든 파일(보통 입력 여러 개 + 출력)을 미리 열어 스택해 두므로 캐시 한도를 넉넉히.
+// 업로드한 모든 파일(보통 입력 여러 개 + 출력)을 미리 열어 스택해 둔다.
 const EXCEL_MIRROR_MAX_CACHED_SESSIONS = 10;
 const EXCEL_MIRROR_MAX_ROWS = 1048576;
 const EXCEL_MIRROR_MAX_COLS = 16384;
@@ -64,7 +65,7 @@ function replaceSimulatorWithMirrorShell() {
     el.innerHTML = `
       <div class="mirror-card">
         <div class="mirror-title">Excel 읽기 전용 미러</div>
-        <div class="mirror-status" data-role="status">파일 목록의 보기 버튼을 누르면 실제 Excel 창이 이 영역에 맞춰집니다.</div>
+        <div class="mirror-status" data-role="status">업로드가 완료되면 실제 Excel 창이 이 영역에 맞춰집니다.</div>
         <div class="mirror-note">셀/범위 선택은 채팅에 남고, 직접 편집은 막힙니다.</div>
       </div>
     `;
@@ -79,7 +80,7 @@ function updateMirrorShellStatus(text) {
     : (target && target.file ? target.file.name : "");
   const msg = text || (target
     ? (excelId ? `연결됨: ${targetName}` : `대기 중: ${targetName}`)
-    : "파일을 선택한 뒤 보기 버튼을 누르세요.");
+    : "파일을 업로드하면 실제 Excel 창이 열립니다.");
   document.querySelectorAll(".excel-mirror-shell [data-role='status']").forEach(el => {
     el.textContent = msg;
   });
@@ -297,6 +298,7 @@ async function preopenAllExcelMirrors(selectedFileId) {
   const selected = selectedFileId || state.currentFileId || ids[ids.length - 1];
   // 선택된 파일을 마지막에 열어 자연스럽게 최상단이 되도록(끝에서 churn 최소화).
   const ordered = [...ids.filter(id => id !== selected), selected];
+  const failures = [];
   // 업로드는 명시적 사용자 동작 → preopen 동안 호스트를 활성으로 간주해
   // 자동숨김(periodic)이 방금 연 미러들을 park(숨김) 하지 못하게 한다.
   // (park 되면 그 탭 첫 전환이 무거운 재배치가 되어 "보기 눌러야 매끄러운" 증상이 생김)
@@ -307,6 +309,7 @@ async function preopenAllExcelMirrors(selectedFileId) {
       try {
         await ensureExcelMirrorSession(fid, { makeActive: fid === selected });
       } catch (err) {
+        failures.push({ fileId: fid, error: err });
         if (!isMissingExcelSessionError(err)) console.warn("Excel mirror preopen failed:", fid, err);
       }
     }
@@ -325,30 +328,20 @@ async function preopenAllExcelMirrors(selectedFileId) {
       setTimeout(() => { raiseExcelMirrorWindow(selExcelId, { force: true }).catch(() => {}); }, 300);
     }
     startExcelMirrorPolling();
-    await trimExcelMirrorSessionCache(selected);
+    if (failures.length) {
+      const msg = `${failures.length}개 파일의 Excel 창을 열지 못했습니다. 파일 목록에서 다시 확인해 주세요.`;
+      updateMirrorShellStatus(msg);
+      if (typeof toast === "function") toast(msg, "error");
+    }
+    return { opened: ordered.length - failures.length, failed: failures.length, failures };
   } finally {
     publishNativeExcelLoading(false, "");
   }
 }
 
-// 업로드 직후: 선택한 파일 1개의 미러만 연다(저사양 PC 대비 — 전부 미리 열면 매우 느리고 메모리 부족).
-// 나머지 파일은 그 탭으로 전환할 때 지연 로딩으로 열린다(setCurrentView 래퍼).
+// 호환용 진입점: 업로드는 이제 완료 전에 모든 파일의 실제 Excel 미러를 연다.
 async function autoOpenMirrorAfterUpload(selectedFileId) {
-  const selected = selectedFileId || state.currentFileId;
-  if (!selected) return;
-  // 업로드는 명시적 동작 → 호스트를 활성으로 간주해 자동숨김이 방금 연 미러를 park 하지 못하게 한다.
-  excelMirror.hostActive = true;
-  if (typeof setCurrentView === "function") setCurrentView(selected);
-  try {
-    await openCurrentWorkbookInExcel();  // 선택 파일만 (로딩 표시 포함)
-    const exId = excelMirror.sessionsByFileId[selected];
-    if (exId) {
-      await raiseExcelMirrorWindow(exId, { force: true });
-      setTimeout(() => { raiseExcelMirrorWindow(exId, { force: true }).catch(() => {}); }, 300);
-    }
-  } catch (err) {
-    if (!isMissingExcelSessionError(err)) console.warn("Auto-open mirror after upload failed:", err);
-  }
+  return preopenAllExcelMirrors(selectedFileId);
 }
 
 async function switchVisibleExcelMirrorToFileId(fileId) {
@@ -1084,10 +1077,7 @@ async function postExcelMirror(path, body, attempt = 0) {
             if (!isMissingExcelSessionError(err)) console.warn("Excel mirror switch failed:", err);
           });
         } else if (fileId === state.currentFileId) {
-          // 지연 로딩: 아직 안 열린 파일로 전환하면 그때 연다(저사양 대비 — 업로드 시 전부 안 엶).
-          openCurrentWorkbookInExcel().catch(err => {
-            if (!isMissingExcelSessionError(err)) console.warn("Excel mirror lazy open failed:", err);
-          });
+          updateMirrorShellStatus("Excel 창을 준비 중입니다. 업로드가 완료될 때까지 기다려 주세요.");
         }
       }, 0);
       return result;
@@ -1103,6 +1093,10 @@ function installOverlayAutoHide() {
   if (excelMirror.autoHideInstalled) return;
   excelMirror.autoHideInstalled = true;
   const hasSessions = () => Object.keys(excelMirror.sessionsByFileId).length > 0;
+  const clearHideTimer = () => {
+    clearTimeout(excelMirror.hideTimer);
+    excelMirror.hideTimer = null;
+  };
   const hideInactive = () => {
     if (!hasSessions()) return;
     // 백엔드가 (포그라운드가 Excel 이 아니면) 전부 숨길 수 있으므로 위치 추적을 전체 무효화.
@@ -1111,8 +1105,18 @@ function installOverlayAutoHide() {
       if (!isMissingExcelSessionError(err)) console.warn("Excel mirror hide-inactive failed:", err);
     });
   };
+  const scheduleHideInactive = (delay = 180) => {
+    clearHideTimer();
+    excelMirror.hideTimer = setTimeout(() => {
+      excelMirror.hideTimer = null;
+      if (excelMirror.hostActive !== false && !document.hidden) return;
+      hideInactive();
+    }, delay);
+  };
   const restoreSoon = () => {
     if (!hasSessions() || typeof restoreActiveExcelMirrorWindow !== "function") return;
+    excelMirror.hostActive = true;
+    clearHideTimer();
     setTimeout(() => {
       restoreActiveExcelMirrorWindow().catch(err => {
         if (!isMissingExcelSessionError(err)) console.warn("Excel mirror restore failed:", err);
@@ -1125,11 +1129,12 @@ function installOverlayAutoHide() {
   //  - 엑셀 미러/다른 앱/최소화/대화상자로 가면 호스트가 비활성 → 숨김(python이 포그라운드=Excel 이면 유지).
   window.addEventListener("b2bHostActivated", () => {
     excelMirror.hostActive = true;
+    clearHideTimer();
     restoreSoon();
   });
   window.addEventListener("b2bHostDeactivated", () => {
     excelMirror.hostActive = false;
-    hideInactive();
+    scheduleHideInactive(180);
   });
 
   // 안전망: 호스트가 비활성인 동안 주기적으로 숨김 유지(raise 타이머가 다시 띄우는 것 방지).
@@ -1141,7 +1146,11 @@ function installOverlayAutoHide() {
 
   // 최소화/완전 가려짐 → 즉시 숨김(보조). (엑셀 클릭은 document를 hidden으로 만들지 않으므로 구분됨)
   document.addEventListener("visibilitychange", () => {
-    if (document.hidden) hideInactive();
+    if (document.hidden) {
+      excelMirror.hostActive = false;
+      clearHideTimer();
+      hideInactive();
+    }
     else restoreSoon();
   });
   // 파일 열기 대화상자가 뜰 때 즉시 숨김(파일 input 클릭). 닫혀서 포커스 돌아오면 복원.
@@ -1151,6 +1160,8 @@ function installOverlayAutoHide() {
       hideInactive();
     }
   }, true);
+  document.addEventListener("pointerdown", restoreSoon, true);
+  document.addEventListener("focusin", restoreSoon, true);
   // 앱이 다시 포커스되면(대화상자 닫힘/복귀/복원) 활성 미러 복원.
   window.addEventListener("focus", restoreSoon);
 }

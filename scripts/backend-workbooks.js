@@ -413,8 +413,7 @@ function applyBackendPipelineResult(result) {
             } else {
               const url = downloadUrls[fid] || (isOutput ? result.downloadUrl : null);
               if (url && typeof refreshExcelMirrorForFileId === "function") {
-                // 활성 파일은 미러가 닫혀 있어도(지연 로딩) 결과를 열어 보여준다(openIfMissing:true).
-                // (예전엔 false 라 "적용됨인데 엑셀이 안 열림" 발생)
+                // 활성 파일의 미러 세션이 없어진 예외 상황에서도 결과는 다시 열어 보여준다(openIfMissing:true).
                 await refreshExcelMirrorForFileId(fid, url, { openIfMissing: true });
               } else if (typeof openExcelMirrorForFileId === "function" && !sessionFor(fid)) {
                 await openExcelMirrorForFileId(fid);
