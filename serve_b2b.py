@@ -2707,48 +2707,79 @@ def _restore_live_window(session, app, wb):
     _set_excel_window_owner(app, session.get("nativeHostHwnd"))
 
 
-def _ensure_companion_workbooks(session, app, current_wb):
-    """라이브 VBA 실행 인스턴스에 '다른 업로드 파일들'을 원본 이름 그대로(읽기전용, 창 숨김) 열어 둔다.
-    그래야 VBA 가 Workbooks("입력파일명").Worksheets("시트명") 으로 교차 파일 데이터를 읽을 수 있다
-    (입력은 한 파일, 출력 시트는 다른 파일 → 한 ActiveWorkbook 으로는 불가능하므로).
-    이미 열린 건 건너뛰고, 임시본 폴더는 세션에 모아 종료 시 정리한다. (한 번 열면 재사용)"""
+def _close_companion_workbooks(session, app):
+    """이전에 동반 오픈한 워크북을 닫고 임시본 폴더를 정리한다(다음 스냅샷 전에 호출)."""
+    for nm in list(session.get("companionNames") or []):
+        try:
+            for w in list(app.Workbooks):
+                if str(w.Name).lower() == str(nm).lower():
+                    try:
+                        w.Close(SaveChanges=False)
+                    except Exception:
+                        pass
+                    break
+        except Exception:
+            pass
+    session["companionNames"] = []
+    for cdir in session.get("companionTemps") or []:
+        try:
+            shutil.rmtree(cdir, ignore_errors=True)
+        except Exception:
+            pass
+    session["companionTemps"] = []
+
+
+def _ensure_companion_workbooks(session, excel_id, app, current_wb):
+    """다른 라이브 세션들의 '현재(편집 반영된) 상태'를 스냅샷해서 이 인스턴스에 읽기전용으로 동반 오픈한다.
+    원본 업로드 파일이 아니라 라이브 임시 워크북의 최신 상태(SaveCopyAs)를 읽으므로,
+    사용자가 입력 파일을 먼저 스킬로 수정한 뒤 그 값을 출력 스킬에서 활용할 수 있다.
+    매 실행마다 이전 동반본을 닫고 새로 스냅샷한다(항상 최신). VBA 는 Workbooks("파일명") 으로 교차 접근."""
+    _close_companion_workbooks(session, app)
     try:
         current_name = str(current_wb.Name).lower()
     except Exception:
         current_name = ""
-    try:
-        open_names = set(str(w.Name).lower() for w in app.Workbooks)
-    except Exception:
-        open_names = set()
-    temps = session.setdefault("companionTemps", [])
+    opened = {current_name} if current_name else set()
+    names, temps = [], []
     try:
         app.ScreenUpdating = False
     except Exception:
         pass
-    for wid, rec in list(WORKBOOKS.items()):
-        clean = Path(str(rec.get("name") or "")).name
-        if not clean or clean.lower() == current_name or clean.lower() in open_names:
+    for other_id, other in list(EXCEL_SESSIONS.items()):
+        if other_id == excel_id or not other.get("liveEditable"):
             continue
-        src = rec.get("path")
-        if not src or not Path(src).exists():
+        try:
+            _o_app, o_wb = session_workbook(other)
+        except Exception:
+            continue
+        clean = Path(str(other.get("name") or "")).name
+        if not clean:
+            try:
+                clean = Path(str(o_wb.Name)).name
+            except Exception:
+                clean = ""
+        if not clean or clean.lower() in opened:
             continue
         cdir = BACKEND_DIR / f"companion_{uuid.uuid4().hex}"
         try:
             cdir.mkdir(parents=True, exist_ok=True)
             cpath = cdir / clean
-            shutil.copy2(src, cpath)
+            o_wb.SaveCopyAs(str(cpath))   # 라이브 최신 상태(편집 반영)를 스냅샷
             wb2, _t = excel_workbooks_open(app, cpath, read_only=True)
             try:
                 wb2.Windows(1).Visible = False  # 동반 워크북 창은 숨김(표시는 활성 세션만)
             except Exception:
                 pass
-            open_names.add(clean.lower())
+            opened.add(clean.lower())
+            names.append(clean)
             temps.append(str(cdir))
         except Exception:
             try:
                 shutil.rmtree(cdir, ignore_errors=True)
             except Exception:
                 pass
+    session["companionNames"] = names
+    session["companionTemps"] = temps
     # 동반 워크북을 열면 ActiveWorkbook 이 바뀔 수 있으니 현재 세션 워크북을 다시 활성화.
     try:
         current_wb.Activate()
@@ -2770,7 +2801,7 @@ def _run_vba_on_session_impl(excel_id, code, entry=None):
         session = get_excel_session(excel_id)
         app, wb = session_workbook(session)
         # 교차 파일 접근: 다른 업로드 파일들을 같은 인스턴스에 동반 오픈(읽기전용, 숨김).
-        _ensure_companion_workbooks(session, app, wb)
+        _ensure_companion_workbooks(session, excel_id, app, wb)
         prev_calc = None
         try:
             prev_calc = app.Calculation
@@ -2806,7 +2837,7 @@ def _run_vba_pipeline_on_session_impl(excel_id, steps, reset=True, entry=None):
         session = get_excel_session(excel_id)
         app, wb = session_workbook(session)
         # 교차 파일 접근: 다른 업로드 파일들을 같은 인스턴스에 동반 오픈(읽기전용, 숨김).
-        _ensure_companion_workbooks(session, app, wb)
+        _ensure_companion_workbooks(session, excel_id, app, wb)
         if reset:
             source = session.get("sourcePath") or session.get("path")
             try:

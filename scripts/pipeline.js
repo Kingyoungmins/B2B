@@ -184,16 +184,10 @@ function restorePipelineStep(stepId, originalStep) {
   refreshRunButton();
 }
 
-// VBA 스킬은 결과를 출력 워크북에 쓰므로 '출력 세션'을 대상으로 실행한다(입력은 읽기전용 동반 오픈).
-// 출력 세션이 없으면 현재 보고 있는 세션으로 폴백.
+// VBA 스킬은 '사용자가 보고 있는 파일'(현재 세션)을 대상으로 실행한다 — 그 워크북에 결과를 쓴다.
+// 다른 파일들은 라이브 최신 상태로 읽기전용 동반 오픈된다. 따라서 출력을 보며 적용하면 출력에 쓰고,
+// 입력을 보며 적용하면 그 입력을 수정한다(입력 선작업 → 출력 활용 워크플로 지원).
 function vbaTargetExcelId() {
-  try {
-    if (typeof getBackendOutputTarget === "function" && typeof excelMirrorSessionIdForFileId === "function") {
-      const t = getBackendOutputTarget();
-      const id = t && t.fileId ? excelMirrorSessionIdForFileId(t.fileId) : null;
-      if (id) return id;
-    }
-  } catch (_) {}
   return typeof currentExcelId === "function" ? currentExcelId() : null;
 }
 
