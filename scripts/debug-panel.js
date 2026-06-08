@@ -5,6 +5,7 @@
   const records = [];
   let panel = null;
   let body = null;
+  let lastToggleAt = 0;
 
   function ms(value) {
     const n = Number(value);
@@ -21,7 +22,7 @@
     panel.innerHTML = `
       <div class="debug-panel-head">
         <strong>F8 Debug</strong>
-        <span>backend timing</span>
+        <span>backend / VBA timing</span>
         <button type="button" id="debug-panel-clear">clear</button>
       </div>
       <div class="debug-panel-body" id="debug-panel-body"></div>
@@ -39,16 +40,19 @@
   function render() {
     if (!body) return;
     if (!records.length) {
-      body.innerHTML = `<div class="debug-empty">No backend runs yet.</div>`;
+      body.innerHTML = `<div class="debug-empty">No backend/VBA runs yet.</div>`;
       return;
     }
     body.innerHTML = records.map((record, idx) => {
       const server = record.server || {};
       const mode = record.baseMode || "original";
       const steps = record.steps || 0;
+      const kind = record.kind || (record.worker ? "worker" : "fallback");
       // Excel(COM) 파이프라인 단계별 타이밍(있으면 표시). 어디서 느린지 바로 보인다.
       const stageKeys = [
-        ["reset", server.resetMs], ["open", server.openMs], ["steps", server.stepsMs],
+        ["hide", record.prehideMs], ["session", server.sessionMs], ["companion", server.companionMs],
+        ["unprotect", server.unprotectMs], ["reset", server.resetMs], ["open", server.openMs],
+        ["inject", server.injectRunMs], ["steps", server.stepsMs], ["restore", server.restoreMs],
         ["saveResult", server.saveResultMs], ["inspect", server.inspectMs], ["finalize", server.finalizeMs],
       ].filter(([, v]) => v !== undefined && v !== null);
       const stageLine = stageKeys.length
@@ -56,10 +60,10 @@
         : "";
       return `
         <div class="debug-row">
-          <div class="debug-title">#${records.length - idx} ${record.worker ? "worker" : "fallback"} · ${mode} · ${steps} step</div>
+          <div class="debug-title">#${records.length - idx} ${kind} · ${mode} · ${steps} step</div>
           <div class="debug-grid">
             <span>total</span><b>${ms(record.totalClientMs)}</b>
-            <span>start</span><b>${ms(record.startRequestMs)}</b>
+            <span>request</span><b>${ms(record.startRequestMs)}</b>
             <span>polls</span><b>${record.polls || 0}</b>
             <span>recv</span><b>${ms(record.receiveMs)} / ${formatBytes(record.receiveBytes)}</b>
             <span>apply</span><b>${ms(record.applyRenderMs)}</b>
@@ -88,17 +92,24 @@
   };
 
   window.toggleDebugPanel = function() {
+    const now = Date.now();
+    if (now - lastToggleAt < 120) return;
+    lastToggleAt = now;
     ensurePanel();
     panel.hidden = !panel.hidden;
     localStorage.setItem(stateKey, panel.hidden ? "0" : "1");
   };
 
-  document.addEventListener("keydown", e => {
-    if (e.key === "F8") {
+  function handleDebugHotkey(e) {
+    if (e.key === "F8" || e.code === "F8" || e.keyCode === 119) {
       e.preventDefault();
+      e.stopPropagation();
       window.toggleDebugPanel();
     }
-  });
+  }
+
+  document.addEventListener("keydown", handleDebugHotkey, true);
+  window.addEventListener("keydown", handleDebugHotkey, true);
 
   if (localStorage.getItem(stateKey) === "1") {
     if (document.readyState === "loading") {

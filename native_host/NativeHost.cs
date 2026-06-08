@@ -92,6 +92,9 @@ namespace B2BNativeHost
         private bool restartingServer;
         private DateTime lastServerRestartUtc = DateTime.MinValue;
         private int recentRestartCount;
+        private bool debugHotkeyRegistered;
+        private const int DEBUG_HOTKEY_ID = 0xB2B8;
+        private const int WM_HOTKEY = 0x0312;
 
         private delegate bool EnumWindowProc(IntPtr hwnd, IntPtr lParam);
 
@@ -122,6 +125,12 @@ namespace B2BNativeHost
         [DllImport("user32.dll")]
         private static extern bool AttachThreadInput(uint idAttach, uint idAttachTo, bool fAttach);
 
+        [DllImport("user32.dll", SetLastError = true)]
+        private static extern bool RegisterHotKey(IntPtr hWnd, int id, uint fsModifiers, uint vk);
+
+        [DllImport("user32.dll", SetLastError = true)]
+        private static extern bool UnregisterHotKey(IntPtr hWnd, int id);
+
         [StructLayout(LayoutKind.Sequential)]
         private struct RECT
         {
@@ -136,6 +145,7 @@ namespace B2BNativeHost
             rootDir = FindRootDir();
             Text = "B2B 빌링 Agent";
             StartPosition = FormStartPosition.CenterScreen;
+            KeyPreview = true;
             // 최대화 시 작업영역(작업표시줄 제외)으로 제한 → 작업표시줄을 덮지 않음.
             MaximizedBounds = Screen.PrimaryScreen.WorkingArea;
             WindowState = FormWindowState.Maximized;
@@ -224,6 +234,70 @@ namespace B2BNativeHost
             split.SplitterMoved += (s, e) => PublishNativeBounds();
             excelPanel.Resize += (s, e) => PublishNativeBounds();
             lastWindowState = WindowState;
+        }
+
+        protected override void OnHandleCreated(EventArgs e)
+        {
+            base.OnHandleCreated(e);
+            RegisterDebugHotkey();
+        }
+
+        protected override void OnHandleDestroyed(EventArgs e)
+        {
+            UnregisterDebugHotkey();
+            base.OnHandleDestroyed(e);
+        }
+
+        protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
+        {
+            if (keyData == Keys.F8)
+            {
+                ToggleDebugPanel();
+                return true;
+            }
+            return base.ProcessCmdKey(ref msg, keyData);
+        }
+
+        protected override void WndProc(ref Message m)
+        {
+            if (m.Msg == WM_HOTKEY && m.WParam.ToInt32() == DEBUG_HOTKEY_ID)
+            {
+                ToggleDebugPanel();
+                return;
+            }
+            base.WndProc(ref m);
+        }
+
+        private void RegisterDebugHotkey()
+        {
+            if (debugHotkeyRegistered || Handle == IntPtr.Zero) return;
+            try
+            {
+                debugHotkeyRegistered = RegisterHotKey(Handle, DEBUG_HOTKEY_ID, 0, (uint)Keys.F8);
+                if (!debugHotkeyRegistered) Program.Log("F8 debug hotkey registration failed");
+            }
+            catch (Exception ex)
+            {
+                Program.Log("F8 debug hotkey registration failed: " + ex.Message);
+            }
+        }
+
+        private void UnregisterDebugHotkey()
+        {
+            if (!debugHotkeyRegistered || Handle == IntPtr.Zero) return;
+            try
+            {
+                UnregisterHotKey(Handle, DEBUG_HOTKEY_ID);
+            }
+            catch
+            {
+            }
+            debugHotkeyRegistered = false;
+        }
+
+        private void ToggleDebugPanel()
+        {
+            ExecuteWebScript("if (typeof toggleDebugPanel === 'function') toggleDebugPanel();");
         }
 
         private void ApplyInitialSplitterLayout()

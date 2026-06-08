@@ -193,9 +193,26 @@ function vbaTargetExcelId() {
   return typeof currentExcelId === "function" ? currentExcelId() : null;
 }
 
+function recordVbaDebugTiming(record) {
+  if (typeof window.recordBackendDebugTiming !== "function") return;
+  window.recordBackendDebugTiming({
+    kind: "vba",
+    worker: false,
+    baseMode: "live",
+    polls: 0,
+    receiveMs: 0,
+    receiveBytes: 0,
+    applyRenderMs: 0,
+    ...record,
+  });
+}
+
 // 0.4.9 리모콘 모델: 생성된 VBA를 라이브 워크북에 즉시 주입 실행한다.
 // 파이프라인 재실행/시뮬레이터를 거치지 않으므로 초저지연이고, 결과는 우측 라이브 엑셀에 바로 보인다.
 function applyVbaStepToLiveExcel(step, excelId) {
+  const perfStartedAt = performance.now();
+  let prehideMs = 0;
+  let requestMs = 0;
   if (typeof pushHistory === "function") pushHistory("단계 추가");
   state.pipeline.push(step);
   setPipelineRuntimeStatus([step.id], "running", "작업 중");
@@ -205,15 +222,38 @@ function applyVbaStepToLiveExcel(step, excelId) {
   if (typeof muteExcelMirrorForPipeline === "function") muteExcelMirrorForPipeline(excelId);
   if (typeof beginExcelMirrorApplyLoading === "function") beginExcelMirrorApplyLoading("VBA 적용 중...");
   const prehide = typeof hideAllExcelMirrorWindows === "function"
-    ? hideAllExcelMirrorWindows().catch(() => {})
+    ? (async () => {
+        const started = performance.now();
+        try {
+          await hideAllExcelMirrorWindows();
+        } catch (_) {
+        } finally {
+          prehideMs = performance.now() - started;
+        }
+      })()
     : Promise.resolve();
   const promise = prehide
-    .then(() => postExcelMirror("/api/excel/run-vba", { excelId, code: step.code }))
     .then(() => {
+      const requestStarted = performance.now();
+      return postExcelMirror("/api/excel/run-vba", { excelId, code: step.code })
+        .then(data => {
+          requestMs = performance.now() - requestStarted;
+          return data;
+        });
+    })
+    .then((data) => {
       setPipelineRuntimeStatus([step.id], "applied", "적용됨");
       if (typeof endExcelMirrorApplyLoading === "function") endExcelMirrorApplyLoading();
       if (typeof releaseExcelMirrorPipelineMute === "function") releaseExcelMirrorPipelineMute(excelId);
       if (typeof scheduleRestoreActiveExcelMirror === "function") scheduleRestoreActiveExcelMirror(180);
+      recordVbaDebugTiming({
+        action: "append",
+        steps: 1,
+        prehideMs,
+        startRequestMs: requestMs,
+        totalClientMs: performance.now() - perfStartedAt,
+        server: (data && data.debugTimings) || {},
+      });
       toast(`"${step.description}" 적용됨`, "success");
       return true;
     })
@@ -1082,6 +1122,9 @@ function renderPipeline() {
 // 0.4.9 리모콘 모델: VBA 엔진에서 토글/삭제/편집/순서변경 등으로 파이프라인이 바뀌면
 // 라이브 워크북을 원본으로 리셋한 뒤 enabled VBA 스텝을 순서대로 다시 적용한다.
 async function reapplyVbaPipelineToLive(excelId) {
+  const perfStartedAt = performance.now();
+  let prehideMs = 0;
+  let requestMs = 0;
   const steps = (state.pipeline || [])
     .filter(s => isStepEnabled(s) && (s.language === "vba" || (typeof inferPipelineStepLanguage === "function" && inferPipelineStepLanguage(s) === "vba")))
     .map(s => ({ code: s.code }));
@@ -1090,15 +1133,31 @@ async function reapplyVbaPipelineToLive(excelId) {
   if (typeof beginExcelMirrorApplyLoading === "function") beginExcelMirrorApplyLoading("VBA 재적용 중...");
   try {
     if (typeof hideAllExcelMirrorWindows === "function") {
-      await hideAllExcelMirrorWindows().catch(() => {});
+      const started = performance.now();
+      try {
+        await hideAllExcelMirrorWindows();
+      } catch (_) {
+      } finally {
+        prehideMs = performance.now() - started;
+      }
     }
+    const requestStarted = performance.now();
     const data = await postExcelMirror("/api/excel/run-vba-pipeline", { excelId, steps, reset: true });
+    requestMs = performance.now() - requestStarted;
     if (typeof endExcelMirrorApplyLoading === "function") endExcelMirrorApplyLoading();
     if (typeof releaseExcelMirrorPipelineMute === "function") releaseExcelMirrorPipelineMute(excelId);
     // 리셋 과정에서 창이 잠깐 offscreen 으로 갔다 오므로 위치/최상단 보정.
     try { await positionExcelMirrorWindow(excelId, { force: true }); } catch (_) {}
     try { stabilizeExcelMirrorZOrder(excelId); } catch (_) {}
     if (window.runnerSetDone) window.runnerSetDone();
+    recordVbaDebugTiming({
+      action: "reapply",
+      steps: steps.length,
+      prehideMs,
+      startRequestMs: requestMs,
+      totalClientMs: performance.now() - perfStartedAt,
+      server: (data && data.debugTimings) || {},
+    });
     return data;
   } catch (err) {
     if (typeof endExcelMirrorApplyLoading === "function") endExcelMirrorApplyLoading();

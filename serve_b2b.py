@@ -2798,24 +2798,35 @@ def _run_vba_on_session_impl(excel_id, code, entry=None):
     entry = (str(entry).strip() if entry else "") or VBA_SKILL_ENTRY
     if not (code or "").strip():
         raise RuntimeError("VBA 코드가 비어 있습니다.")
+    _t0 = time.perf_counter()
+    timings = {"mode": "vba-single", "steps": 1}
     with EXCEL_LOCK:
+        _t = time.perf_counter()
         session = get_excel_session(excel_id)
         app, wb = session_workbook(session)
+        timings["sessionMs"] = round((time.perf_counter() - _t) * 1000, 2)
         # 교차 파일 접근: 다른 업로드 파일들을 같은 인스턴스에 동반 오픈(읽기전용, 숨김).
+        _t = time.perf_counter()
         _ensure_companion_workbooks(session, excel_id, app, wb)
+        timings["companionMs"] = round((time.perf_counter() - _t) * 1000, 2)
         prev_calc = None
         try:
             prev_calc = app.Calculation
         except Exception:
             prev_calc = None
         # VBA 실행 동안에는 시트 보호를 풀어 둔다(보호로 인한 1004 류 실패 방지). 끝나면 다시 보호.
+        _t = time.perf_counter()
         try:
             _protect_workbook_for_read_only_mirror(wb, False)
         except Exception:
             pass
+        timings["unprotectMs"] = round((time.perf_counter() - _t) * 1000, 2)
         try:
+            _t = time.perf_counter()
             _inject_and_run_vba(app, wb, code, entry)
+            timings["injectRunMs"] = round((time.perf_counter() - _t) * 1000, 2)
         finally:
+            _t = time.perf_counter()
             try:
                 _restore_live_protected_view(app, wb)
             except Exception:
@@ -2830,7 +2841,9 @@ def _run_vba_on_session_impl(excel_id, code, entry=None):
                     app.Calculation = prev_calc
             except Exception:
                 pass
-        return {"ok": True, "excelId": excel_id, "entry": entry}
+            timings["restoreMs"] = round((time.perf_counter() - _t) * 1000, 2)
+        timings["totalServerMs"] = round((time.perf_counter() - _t0) * 1000, 2)
+        return {"ok": True, "excelId": excel_id, "entry": entry, "debugTimings": timings}
 
 
 def _run_vba_pipeline_on_session_impl(excel_id, steps, reset=True, entry=None):
@@ -2839,11 +2852,17 @@ def _run_vba_pipeline_on_session_impl(excel_id, steps, reset=True, entry=None):
     (토글/삭제/순서변경/편집 후 재동기화에 사용). reset=False: 주어진 스텝만 현재 상태에 이어서 실행."""
     entry = (str(entry).strip() if entry else "") or VBA_SKILL_ENTRY
     steps = steps or []
+    _t0 = time.perf_counter()
+    timings = {"mode": "vba-pipeline", "steps": len(steps), "reset": bool(reset)}
     with EXCEL_LOCK:
+        _t = time.perf_counter()
         session = get_excel_session(excel_id)
         app, wb = session_workbook(session)
+        timings["sessionMs"] = round((time.perf_counter() - _t) * 1000, 2)
         # 교차 파일 접근: 다른 업로드 파일들을 같은 인스턴스에 동반 오픈(읽기전용, 숨김).
+        _t = time.perf_counter()
         _ensure_companion_workbooks(session, excel_id, app, wb)
+        timings["companionMs"] = round((time.perf_counter() - _t) * 1000, 2)
         if reset:
             source = session.get("sourcePath") or session.get("path")
             try:
@@ -2854,21 +2873,32 @@ def _run_vba_pipeline_on_session_impl(excel_id, steps, reset=True, entry=None):
                 app.ScreenUpdating = False
             except Exception:
                 pass
+            _t = time.perf_counter()
             _copy_source_workbook_into_target(app, wb, source)
+            timings["resetMs"] = round((time.perf_counter() - _t) * 1000, 2)
         else:
             # 비리셋(append): 현재 보호 상태를 풀고 실행(보호로 인한 1004 류 방지).
+            _t = time.perf_counter()
             try:
                 _protect_workbook_for_read_only_mirror(wb, False)
             except Exception:
                 pass
+            timings["unprotectMs"] = round((time.perf_counter() - _t) * 1000, 2)
+        _t_steps = time.perf_counter()
+        applied = 0
         for st in steps:
             code = (st.get("code") if isinstance(st, dict) else str(st)) or ""
             if code.strip():
                 _inject_and_run_vba(app, wb, code, entry)
+                applied += 1
+        timings["stepsMs"] = round((time.perf_counter() - _t_steps) * 1000, 2)
+        _t = time.perf_counter()
         _restore_live_protected_view(app, wb)
         # 동반 워크북/리셋으로 흐트러진 대상 창을 항상 복원(회색 빈 오버레이 방지).
         _restore_live_window(session, app, wb)
-        return {"ok": True, "excelId": excel_id, "applied": len(steps)}
+        timings["restoreMs"] = round((time.perf_counter() - _t) * 1000, 2)
+        timings["totalServerMs"] = round((time.perf_counter() - _t0) * 1000, 2)
+        return {"ok": True, "excelId": excel_id, "applied": applied, "debugTimings": timings}
 
 
 def run_vba_on_session(excel_id, code, entry=None):
