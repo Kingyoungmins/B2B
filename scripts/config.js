@@ -1,7 +1,7 @@
 ﻿/* ===================================================================
    CONFIG
    =================================================================== */
-const B2B_BUILD_STAMP = "b2b-overlay-shell-20260605-047-01";
+const B2B_BUILD_STAMP = "b2b-overlay-shell-20260605-047-02";
 window.B2B_BUILD_STAMP = B2B_BUILD_STAMP;
 
 // 마우스 우클릭(컨텍스트 메뉴) 전역 차단. (네이티브 셸은 WebView 설정으로도 막지만 브라우저 모드 대비)
@@ -29,7 +29,8 @@ const DEFAULTS = {
     apiKey: "7365676d",
     model: "Qwen3.5-27B-FP8",
     baseUrl: "http://localhost:8016/v1",
-    fallbackBaseUrls: ["http://192.168.219.105:8016/v1"],
+    // WSL의 vLLM은 NAT + localhostForwarding 으로 localhost 로 접근(권장). 죽은 LAN IP fallback 제거.
+    fallbackBaseUrls: ["http://127.0.0.1:8016/v1"],
     thinkControlMode: "chat_template_kwargs",
   },
 };
