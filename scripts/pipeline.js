@@ -200,14 +200,26 @@ function applyVbaStepToLiveExcel(step, excelId) {
   renderPipeline();
   refreshRunButton();
   if (typeof scheduleLogicAutoBackup === "function") scheduleLogicAutoBackup("step-added");
-  const promise = postExcelMirror("/api/excel/run-vba", { excelId, code: step.code })
+  if (typeof muteExcelMirrorForPipeline === "function") muteExcelMirrorForPipeline(excelId);
+  if (typeof beginExcelMirrorApplyLoading === "function") beginExcelMirrorApplyLoading("VBA 적용 중...");
+  const prehide = typeof hideAllExcelMirrorWindows === "function"
+    ? hideAllExcelMirrorWindows().catch(() => {})
+    : Promise.resolve();
+  const promise = prehide
+    .then(() => postExcelMirror("/api/excel/run-vba", { excelId, code: step.code }))
     .then(() => {
       setPipelineRuntimeStatus([step.id], "applied", "적용됨");
+      if (typeof endExcelMirrorApplyLoading === "function") endExcelMirrorApplyLoading();
+      if (typeof releaseExcelMirrorPipelineMute === "function") releaseExcelMirrorPipelineMute(excelId);
+      if (typeof scheduleRestoreActiveExcelMirror === "function") scheduleRestoreActiveExcelMirror(180);
       toast(`"${step.description}" 적용됨`, "success");
       return true;
     })
     .catch(err => {
       setPipelineRuntimeStatus([step.id], "error", "오류");
+      if (typeof endExcelMirrorApplyLoading === "function") endExcelMirrorApplyLoading();
+      if (typeof releaseExcelMirrorPipelineMute === "function") releaseExcelMirrorPipelineMute(excelId);
+      if (typeof scheduleRestoreActiveExcelMirror === "function") scheduleRestoreActiveExcelMirror(180);
       if (typeof rollbackAddedPipelineStep === "function") rollbackAddedPipelineStep(step.id);
       reportPipelineError(err);
       throw err;
@@ -1072,14 +1084,24 @@ async function reapplyVbaPipelineToLive(excelId) {
     .filter(s => isStepEnabled(s) && (s.language === "vba" || (typeof inferPipelineStepLanguage === "function" && inferPipelineStepLanguage(s) === "vba")))
     .map(s => ({ code: s.code }));
   if (window.runnerSetRunning) window.runnerSetRunning(true);
+  if (typeof muteExcelMirrorForPipeline === "function") muteExcelMirrorForPipeline(excelId);
+  if (typeof beginExcelMirrorApplyLoading === "function") beginExcelMirrorApplyLoading("VBA 재적용 중...");
   try {
+    if (typeof hideAllExcelMirrorWindows === "function") {
+      await hideAllExcelMirrorWindows().catch(() => {});
+    }
     const data = await postExcelMirror("/api/excel/run-vba-pipeline", { excelId, steps, reset: true });
+    if (typeof endExcelMirrorApplyLoading === "function") endExcelMirrorApplyLoading();
+    if (typeof releaseExcelMirrorPipelineMute === "function") releaseExcelMirrorPipelineMute(excelId);
     // 리셋 과정에서 창이 잠깐 offscreen 으로 갔다 오므로 위치/최상단 보정.
     try { await positionExcelMirrorWindow(excelId, { force: true }); } catch (_) {}
     try { stabilizeExcelMirrorZOrder(excelId); } catch (_) {}
     if (window.runnerSetDone) window.runnerSetDone();
     return data;
   } catch (err) {
+    if (typeof endExcelMirrorApplyLoading === "function") endExcelMirrorApplyLoading();
+    if (typeof releaseExcelMirrorPipelineMute === "function") releaseExcelMirrorPipelineMute(excelId);
+    if (typeof scheduleRestoreActiveExcelMirror === "function") scheduleRestoreActiveExcelMirror(180);
     if (window.runnerSetRunning) window.runnerSetRunning(false);
     throw err;
   }

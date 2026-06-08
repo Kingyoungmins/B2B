@@ -2680,6 +2680,7 @@ def _restore_live_protected_view(app, wb):
 def _restore_live_window(session, app, wb):
     """리셋(_copy_source_workbook_into_target)으로 offscreen park 된 라이브 창을 owner 모드 방식으로
     다시 보이게+제자리로 되돌린다(plain 위치맞춤 + owner + 워크북 뷰 채움)."""
+    _hide_non_target_workbook_windows(app, wb)
     try:
         app.Visible = True
     except Exception:
@@ -2704,6 +2705,7 @@ def _restore_live_window(session, app, wb):
         _ensure_excel_workbook_view(app, wb, make_visible=True, activate=False, maximize_workbook=False)
     except Exception:
         pass
+    _hide_non_target_workbook_windows(app, wb)
     _set_excel_window_owner(app, session.get("nativeHostHwnd"))
 
 
@@ -2767,14 +2769,7 @@ def _ensure_companion_workbooks(session, excel_id, app, current_wb):
             o_wb.SaveCopyAs(str(cpath))   # 라이브 최신 상태(편집 반영)를 스냅샷
             wb2, _t = excel_workbooks_open(app, cpath, read_only=True)
             # 동반 워크북 창은 화면에 안 나오게 확실히 숨긴다(Visible=False + 오프스크린 park).
-            try:
-                wb2.Windows(1).Visible = False
-            except Exception:
-                pass
-            try:
-                _hide_excel_hwnd(int(wb2.Windows(1).Hwnd))
-            except Exception:
-                pass
+            _hide_workbook_windows(wb2)
             opened.add(clean.lower())
             names.append(clean)
             temps.append(str(cdir))
@@ -2790,6 +2785,7 @@ def _ensure_companion_workbooks(session, excel_id, app, current_wb):
         current_wb.Activate()
     except Exception:
         pass
+    _hide_non_target_workbook_windows(app, current_wb)
     try:
         app.ScreenUpdating = True
     except Exception:
@@ -4576,6 +4572,51 @@ def _hide_excel_hwnd(hwnd):
         win32gui.ShowWindow(hwnd, getattr(win32con, "SW_HIDE", 0))
     except Exception:
         pass
+
+
+def _workbook_identity(wb):
+    try:
+        return str(Path(wb.FullName).resolve()).lower()
+    except Exception:
+        try:
+            return str(wb.FullName).lower()
+        except Exception:
+            try:
+                return str(wb.Name).lower()
+            except Exception:
+                return ""
+
+
+def _hide_workbook_windows(wb):
+    try:
+        count = int(wb.Windows.Count)
+    except Exception:
+        count = 0
+    for idx in range(1, count + 1):
+        try:
+            win = wb.Windows(idx)
+        except Exception:
+            continue
+        try:
+            win.Visible = False
+        except Exception:
+            pass
+        try:
+            _hide_excel_hwnd(int(win.Hwnd))
+        except Exception:
+            pass
+
+
+def _hide_non_target_workbook_windows(app, target_wb):
+    target_id = _workbook_identity(target_wb)
+    try:
+        workbooks = list(app.Workbooks)
+    except Exception:
+        workbooks = []
+    for wb in workbooks:
+        if target_id and _workbook_identity(wb) == target_id:
+            continue
+        _hide_workbook_windows(wb)
 
 
 def _park_excel_app_offscreen(app):
