@@ -5,6 +5,9 @@ const FORMULA_OVERWRITE_RULE = `
 Formula overwrite and displayed-text edit rule:
 - Generate Python Excel automation, not JavaScript array edits.
 - If the user explicitly asks to ignore/remove an existing formula and write a fixed value into specific cells, assign the target Excel Range.Value directly. Example: ws.Range("B61").Value = value.
+- Words like "채워", "입력", "업데이트", "반영", "계산해" do NOT mean formula removal. They mean preserve the workbook structure and fill only intended input/blank/result cells.
+- Never add phrases or code behavior such as "수식 제거", "수식 제거하고 값으로 덮어쓰기", or "formula overwrite" unless the user's latest request explicitly says to remove/replace formulas.
+- Before writing to a target column/range that may already contain formulas, check whether the target cells are blank/input cells or formula cells. If they are formula cells and the user did not explicitly ask to remove formulas, do not overwrite them; write to the proper input cells, skip them, or ask for clarification.
 - If the user asks to update/change visible text in an explicitly selected output range, write the changed cells through the Excel ctx APIs so the Excel mirror and downloaded workbook show the edited text.
 - Do not use sheet[r][c] = ""; sheet[r][c] = value; this is old simulator-style code and does not apply to ver4.x.
 - For month text updates, handle zero-padded and non-padded forms separately. Example: replace "02월" with "03월" and standalone "2월" with "3월"; do not assume a fuzzy helper will match both.
@@ -34,6 +37,7 @@ ver4.x execution rule:
       ...
 - Excel uses 1-based addresses. Prefer ws.Range("B61").Value = value for explicit selected ranges.
 - When the user asks to overwrite a formula with a value, assign the value directly to that Excel Range. This removes the formula in Excel.
+- Do not use ws.Range(ws.Cells(r, c)).Value. That single-Cell Range construction is invalid/unstable in COM. For one cell use ws.Cells(r, c).Value; for a rectangle use ws.Range(ws.Cells(r1, c1), ws.Cells(r2, c2)).
 - When the user asks to filter/show only rows matching a condition, do not use Excel AutoFilter as the final output. Create a new worksheet/tab, copy the header and matching rows into that sheet, and name it clearly from the filter condition. Keep the original sheet unchanged because filter on/off state is not reliable in the read-only mirror workflow.
 - For sheet names that may change, use ctx.sheet_like(...) or ctx.input_sheet(...). If only one sheet exists, those helpers may return it.
 - Do not use sheet[r][c] JavaScript-style array code for Excel workbooks.
@@ -59,10 +63,12 @@ PERFORMANCE — avoid whole-column / whole-row operations (CRITICAL):
 - Same for rows: ws.Range(ws.Cells(1,1), ws.Cells(N,1)).EntireRow.Insert().
 
 COPY / PASTE — preserve formatting (IMPORTANT):
+- "복사", "붙여넣기", "복붙", "copy/paste"는 기본적으로 값만 복사가 아닙니다. 원본 범위의 수식(.Formula)과 서식이 원본과 붙여넣은 표 양쪽에서 유지되어야 합니다.
 - "복사해서 붙여넣기"처럼 서식(글꼴/색/테두리/숫자서식)까지 그대로 옮겨야 하면 src.Copy(dest) 를 쓰세요. 예: ws.Range(ws.Cells(1,7), ws.Cells(n,12)).Copy(ws.Range(ws.Cells(1,1), ws.Cells(n,6))). 이것은 값+서식+수식을 모두 복사합니다.
 - 열/행을 먼저 삽입한 뒤 복사해야 하는 경우, 삽입으로 밀려난 원본 범위를 다시 잡아서 src.Copy(dest) 를 호출하세요. 예: A:F 를 맨 앞에 복제하려면 먼저 6열 삽입 → 원본은 G:L 로 이동 → ws.Range(ws.Cells(1,7), ws.Cells(n,12)).Copy(ws.Range(ws.Cells(1,1), ws.Cells(n,6))).
 - src.Copy(); ... Insert(); dest.PasteSpecial() 처럼 클립보드 상태에 의존하는 순서는 사용하지 마세요. 구조 변경 뒤에는 수식/서식 보존이 불안정하므로 Range.Copy(destination) 을 쓰세요.
-- dest.Value = src.Value 는 '값만' 복사하고 서식은 복사하지 않습니다 — 서식을 유지해야 하는 복사/붙여넣기에는 쓰지 마세요.
+- dest.Value = src.Value, ctx.write_grid(...ctx.rows(...)), PasteSpecial(-4163/xlPasteValues) 는 '값만' 복사하므로 수식을 제거합니다. 사용자가 "값만 붙여넣기"를 명시하지 않은 복사/붙여넣기에는 절대 쓰지 마세요.
+- 원본 범위는 읽기만 해야 합니다. 복사/붙여넣기 과정에서 원본 범위의 .Value 를 다시 대입하거나 원본 수식을 값으로 바꾸지 마세요.
 - Copy 도 전체 열/행(A:F)이 아니라 실제 데이터 범위(Cells(1,c1):Cells(n,c2))로 한정하세요(전체 열 Copy 는 매우 느림).
 - 값만 바꾸는 편집(예: 텍스트 치환, 특정 셀 값 변경)은 .Value 로 해도 그 셀의 기존 서식은 그대로 유지됩니다(값만 바뀜).
 `;
@@ -370,6 +376,9 @@ ${FORMULA_OVERWRITE_RULE}
 - 이전/이후 단계는 그대로 유지됩니다.
 - 수정 요청과 직접 관련된 부분만 바꾸고, 기존 동작을 임의로 리팩터링하지 마세요.
 - 현재 코드가 하던 핵심 작업은 유지하되, 사용자의 수정 의도를 반영하세요.
+- COM 오류를 고친다는 이유로 사용자 요청에 없던 수식 제거/값 덮어쓰기를 추가하지 마세요.
+- 기존 코드에 "수식 제거", "값으로 덮어쓰기" 같은 주석이나 동작이 있더라도 최신 사용자 요청이 명시하지 않았다면 제거하고 수식 보존 기준으로 수정하세요.
+- 단일 셀 COM 쓰기는 ws.Cells(r, c).Value 를 쓰고, ws.Range(ws.Cells(r, c)).Value 형태는 사용하지 마세요.
 
 ## 함수 시그니처
 def transform(ctx):

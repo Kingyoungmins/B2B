@@ -132,6 +132,70 @@ function restoreActionButtonsAfterFailure(buttons, primaryButton, retryText) {
   if (primaryButton) primaryButton.textContent = retryText || "\uC7AC\uC2DC\uB3C4";
 }
 
+function userExplicitlyRequestsFormulaOverwrite(text) {
+  return /수식\s*(제거|삭제|지워|없애|값으로|대체|덮어)|기존\s*수식.*(제거|삭제|지워|없애|값)|formula\s*(remove|delete|overwrite|replace)|값으로\s*(덮어|대체|바꿔)/i.test(String(text || ""));
+}
+
+function codeMentionsFormulaOverwrite(code) {
+  return /수식\s*(제거|삭제|지워|없애)|수식을?\s*값으로|값으로\s*덮어쓰기|formula\s*(remove|delete|overwrite|replace)/i.test(String(code || ""));
+}
+
+function codeHasUnsafeSingleCellRange(code) {
+  return /\.Range\s*\(\s*[^,\n\r]*\.Cells\s*\([^)]*\)\s*\)/.test(String(code || ""));
+}
+
+function userRequestsCopyPaste(text) {
+  return /(복사|붙여\s*넣|붙여넣|복붙|copy|paste)/i.test(String(text || ""));
+}
+
+function userRequestsValuesOnly(text) {
+  return /(값만|값\s*복사|값\s*붙여|수식\s*(빼고|제외|없이)|values?\s*only|paste\s*values?)/i.test(String(text || ""));
+}
+
+function codeCopiesValuesOnly(code) {
+  const text = String(code || "");
+  return /\.Value\s*=\s*[^#\n\r;]+\.Value\b/i.test(text)
+    || /PasteSpecial\s*\([^)]*(xlPasteValues|-4163|Paste\s*=\s*-4163)/i.test(text)
+    || /ctx\.(write_grid|set_range)\s*\([^)]*ctx\.rows\s*\(/i.test(text);
+}
+
+function validateAssistantCodeBeforeApply(code, context) {
+  context = context || {};
+  const sourceUserMessage = context.sourceUserMessage || "";
+  if (codeHasUnsafeSingleCellRange(code)) {
+    const message = "COM 단일 셀 Range 생성 오류 가능성이 있어 적용을 막았습니다. 단일 셀은 ws.Cells(r, c).Value, 범위는 ws.Range(ws.Cells(r1,c1), ws.Cells(r2,c2)) 형태로 다시 생성해 주세요.";
+    toast(message, "error");
+    addMessage("system", message);
+    return false;
+  }
+  if (codeMentionsFormulaOverwrite(code) && !userExplicitlyRequestsFormulaOverwrite(sourceUserMessage)) {
+    const message = "사용자가 수식 제거를 명시하지 않았는데 생성 코드에 수식 제거/값 덮어쓰기 의도가 포함되어 적용을 막았습니다. 수식을 보존하는 코드로 다시 생성해 주세요.";
+    toast(message, "error");
+    addMessage("system", message);
+    return false;
+  }
+  if (userRequestsCopyPaste(sourceUserMessage) && !userRequestsValuesOnly(sourceUserMessage) && codeCopiesValuesOnly(code)) {
+    const message = "복사/붙여넣기 요청에서 값만 복사하는 코드가 감지되어 적용을 막았습니다. 수식과 서식이 유지되도록 Range.Copy(destination) 방식으로 다시 생성해 주세요.";
+    toast(message, "error");
+    addMessage("system", message);
+    return false;
+  }
+  return true;
+}
+
+function latestUserRequestForSafety() {
+  const history = state.chatHistory || [];
+  for (let i = history.length - 1; i >= 0; i--) {
+    const item = history[i] || {};
+    if (item.role !== "user") continue;
+    const content = String(item.content || item.text || item.message || "");
+    if (!content) continue;
+    if (content.includes("## 실패한 코드") || content.includes("## 상세 오류")) continue;
+    return content;
+  }
+  return "";
+}
+
 function addAssistantReply(fullText, replyContext) {
   const code = extractCode(fullText);
   const language = typeof inferCodeLanguage === "function" ? inferCodeLanguage(code, fullText) : "javascript";
@@ -166,6 +230,7 @@ function addAssistantReply(fullText, replyContext) {
       div.appendChild(actions);
 
       editApplyBtn.onclick = () => {
+        if (!validateAssistantCodeBeforeApply(code, replyContext)) return;
         const result = replaceLogicAt(editTargetId, code, desc, language);
         if (result && !result.error) {
           editApplyBtn.disabled = true;
@@ -203,6 +268,7 @@ function addAssistantReply(fullText, replyContext) {
       div.appendChild(actions);
 
       applyBtn.onclick = () => {
+        if (!validateAssistantCodeBeforeApply(code, replyContext)) return;
         const result = applyLogic({ id: uid(), prompt: "", code, description: desc, language });
         applyBtn.disabled = true;
         insertBtn.disabled = true;
@@ -215,6 +281,7 @@ function addAssistantReply(fullText, replyContext) {
         );
       };
       insertBtn.onclick = () => {
+        if (!validateAssistantCodeBeforeApply(code, replyContext)) return;
         openInsertPositionDialog(state.pipeline.length, (position) => {
           const result = insertLogic({ id: uid(), prompt: "", code, description: desc, language }, position);
           applyBtn.disabled = true;
@@ -453,7 +520,12 @@ function showThinkRetryPrompt(container, context) {
       });
       streamView.flush();
       container.remove();
-      addAssistantReply(reply, { editTargetId: actionEditTargetId, errorFollowupEdit, reasoning: "" });
+      addAssistantReply(reply, {
+        editTargetId: actionEditTargetId,
+        errorFollowupEdit,
+        sourceUserMessage: context.sourceUserMessage || latestUserRequestForSafety(),
+        reasoning: "",
+      });
       scrollChatToBottom();
     } catch (err) {
       container.classList.remove("streaming", "loading");
@@ -559,6 +631,7 @@ async function requestErrorRecovery(stepIdx, errorInfo) {
     ? "Return exactly one Python code block that defines def transform(ctx):. Do not return JavaScript."
     : "Return exactly one JavaScript code block that defines function transform(inputs, output).";
   const useCompatibilityCheck = !!(errorInfo && errorInfo.compatibilityCheck);
+  const sourceUserMessage = latestUserRequestForSafety();
   const schemaSummary = useCompatibilityCheck && typeof buildSchemaSummary === "function" ? buildSchemaSummary() : "";
   const recentHistory = useCompatibilityCheck ? (state.chatHistory || [])
     .slice(-8)
@@ -599,6 +672,9 @@ async function requestErrorRecovery(stepIdx, errorInfo) {
       ? "대화 히스토리의 사용자 의도, 현재 파일 스키마, 수정 대상 코드, 아래 오류를 함께 분석해서 이 Step을 교체할 수정 코드를 다시 작성하세요."
       : "이 Step은 아직 파이프라인에 적용되지 못했습니다. 대화 히스토리의 사용자 의도, 현재 파일 스키마, 실패한 코드, 아래 오류를 함께 분석해서 적용 가능한 새 스킬 코드를 다시 작성하세요.",
     recoveryCodeRule,
+    "오류 복구는 실패 원인만 고치는 작업입니다. 사용자의 최신 요청에 없는 수식 제거, 값 덮어쓰기, 대상 파일/시트 변경을 새로 추가하지 마세요.",
+    "\"채워\", \"입력\", \"업데이트\", \"반영\"은 수식 제거 지시가 아닙니다. 수식 셀을 값으로 바꾸는 코드는 사용자가 명시적으로 수식 제거/값 대체를 요청했을 때만 작성하세요.",
+    "Python Excel COM 코드에서 단일 셀은 ws.Cells(r, c).Value 를 사용하고, ws.Range(ws.Cells(r, c)).Value 형태는 사용하지 마세요.",
     ...compatibilityPrompt,
     recoveryCodeRule,
     "",
@@ -657,7 +733,11 @@ async function requestErrorRecovery(stepIdx, errorInfo) {
     const reply = await callLLM(prompt, requestOptions);
     streamView.flush();
     loading.remove();
-    addAssistantReply(reply, { editTargetId: isExistingStep ? failedStep.id : null, reasoning: reasoningText });
+    addAssistantReply(reply, {
+      editTargetId: isExistingStep ? failedStep.id : null,
+      sourceUserMessage,
+      reasoning: reasoningText,
+    });
     scrollChatToBottom();
   } catch (err) {
     loading.classList.remove("streaming");
@@ -666,6 +746,7 @@ async function requestErrorRecovery(stepIdx, errorInfo) {
       showThinkRetryPrompt(loading, {
         prompt,
         editTargetId: isExistingStep ? failedStep.id : null,
+        sourceUserMessage,
         modeLabel: "(에러 복구) ",
         aiName,
         message: "Think 요청을 중단했습니다.",
@@ -825,7 +906,12 @@ async function sendChat() {
     const reply = await callLLM(prompt, requestOptions);
     streamView.flush();
     loading.remove();
-    addAssistantReply(reply, { editTargetId: actionEditTargetId, errorFollowupEdit, reasoning: reasoningText });
+    addAssistantReply(reply, {
+      editTargetId: actionEditTargetId,
+      errorFollowupEdit,
+      sourceUserMessage: msg,
+      reasoning: reasoningText,
+    });
     clearViewerDragSelection();
     scrollChatToBottom();
   } catch (err) {
@@ -837,6 +923,7 @@ async function sendChat() {
         editTargetId,
         actionEditTargetId,
         errorFollowupEdit,
+        sourceUserMessage: msg,
         modeLabel,
         aiName,
         message: "Think 요청을 중단했습니다.",
