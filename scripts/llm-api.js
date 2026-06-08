@@ -20,10 +20,19 @@ async function callLLM(userMessage, options) {
     ? state.pipeline.findIndex(s => s.id === editTargetId)
     : -1;
 
-  const engineNote = typeof skillEnginePromptNote === "function" ? skillEnginePromptNote() : "";
-  const fullSystem = (editIdx >= 0
-    ? EDIT_SYSTEM_PROMPT + "\n\n" + buildEditingContext(editIdx)
-    : SYSTEM_PROMPT + "\n\n## 현재 파일 스키마\n" + buildSchemaSummary()) + engineNote;
+  const engine = typeof getSkillEngine === "function" ? getSkillEngine() : "excel";
+  let fullSystem;
+  if (engine === "vba" && typeof VBA_SYSTEM_PROMPT === "string") {
+    // 0.4.9 리모콘 모델: VBA 매크로 생성. (편집 시에도 현재 코드 컨텍스트를 붙여 VBA로 수정.)
+    fullSystem = VBA_SYSTEM_PROMPT + (editIdx >= 0
+      ? "\n\n" + buildEditingContext(editIdx)
+      : "\n\n## 현재 파일 스키마\n" + buildSchemaSummary());
+  } else {
+    const engineNote = typeof skillEnginePromptNote === "function" ? skillEnginePromptNote() : "";
+    fullSystem = (editIdx >= 0
+      ? EDIT_SYSTEM_PROMPT + "\n\n" + buildEditingContext(editIdx)
+      : SYSTEM_PROMPT + "\n\n## 현재 파일 스키마\n" + buildSchemaSummary()) + engineNote;
+  }
 
   try {
     let reply;
@@ -332,9 +341,11 @@ function extractCodeBlock(text) {
 function inferCodeLanguage(code, fullText) {
   const block = extractCodeBlock(fullText || "");
   const hinted = block && block.language;
+  if (hinted === "vba" || hinted === "vb" || hinted === "vbscript") return "vba";
   if (hinted === "python" || hinted === "py") return "python";
   if (hinted === "javascript" || hinted === "js") return "javascript";
   const src = String(code || "");
+  if (/^\s*sub\s+\w+\s*\(/im.test(src) && /\bend\s+sub\b/i.test(src)) return "vba";
   if (/^\s*def\s+transform\s*\(\s*ctx\s*\)\s*:/m.test(src)) return "python";
   if (/^\s*def\s+transform\s*\(/m.test(src) || /\bctx\.(?:sheet|input|output|workbook|excel)\b/.test(src)) return "python";
   return "javascript";

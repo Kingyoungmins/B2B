@@ -32,6 +32,9 @@ const excelMirror = {
   // 파이프라인 적용 중 표시(이 동안 미러를 숨기고 로딩 애니메이션을 보여준다).
   applying: false,
   applyLoadingTimer: null,
+  // 0.4.9 owner 모드: 라이브 Excel 창을 호스트의 owner 로 띄운다 → z-order/최소화를 OS가 자동 처리.
+  // 따라서 주기적 raise / hide-inactive / 포커스 기반 재배치를 끈다(드래그 선택을 깨는 주범).
+  ownerMode: true,
 };
 // 업로드한 모든 파일(보통 입력 여러 개 + 출력)을 미리 열어 스택해 둔다.
 const EXCEL_MIRROR_MAX_CACHED_SESSIONS = 10;
@@ -206,10 +209,12 @@ async function openCurrentWorkbookInExcel() {
     let data;
     if (target.file.backendDownloadUrl && isBackendResultDownloadUrl(target.file.backendDownloadUrl)) {
       const resultId = extractResultIdFromDownloadUrl(target.file.backendDownloadUrl);
-      data = await postExcelMirror("/api/excel/open-result", { resultId, readOnlyMirror: true, ...mirrorRect });
+      // 리모콘 모델(0.4.9): 읽기전용 미러 대신 작업용 복사본을 편집가능 라이브로 연다.
+      data = await postExcelMirror("/api/excel/open-result", { resultId, liveEditable: true, ...mirrorRect });
     } else {
       if (!target.file.backendWorkbookId) throw new Error("백엔드 workbookId가 없습니다.");
-      data = await postExcelMirror("/api/excel/open", { workbookId: target.file.backendWorkbookId, readOnlyMirror: true, ...mirrorRect });
+      // 리모콘 모델(0.4.9): 업로드된 실제 파일의 작업용 복사본을 편집가능 라이브로 연다.
+      data = await postExcelMirror("/api/excel/open", { workbookId: target.file.backendWorkbookId, liveEditable: true, ...mirrorRect });
     }
     excelMirror.sessionsByFileId[target.fileId] = data.excelId;
     excelMirror.sessionLastUsedByFileId[target.fileId] = Date.now();
@@ -274,10 +279,11 @@ async function ensureExcelMirrorSession(fileId, { makeActive = false } = {}) {
   let data;
   if (file.backendDownloadUrl && isBackendResultDownloadUrl(file.backendDownloadUrl)) {
     const resultId = extractResultIdFromDownloadUrl(file.backendDownloadUrl);
-    data = await postExcelMirror("/api/excel/open-result", { resultId, readOnlyMirror: true, ...mirrorRect });
+    // 리모콘 모델(0.4.9): 업로드 자동 열기도 작업용 복사본을 편집가능 라이브로 연다.
+    data = await postExcelMirror("/api/excel/open-result", { resultId, liveEditable: true, ...mirrorRect });
   } else {
     if (!file.backendWorkbookId) throw new Error("백엔드 workbookId가 없습니다.");
-    data = await postExcelMirror("/api/excel/open", { workbookId: file.backendWorkbookId, readOnlyMirror: true, ...mirrorRect });
+    data = await postExcelMirror("/api/excel/open", { workbookId: file.backendWorkbookId, liveEditable: true, ...mirrorRect });
   }
   excelMirror.sessionsByFileId[fileId] = data.excelId;
   excelMirror.sessionLastUsedByFileId[fileId] = Date.now();
@@ -381,7 +387,7 @@ async function openExcelMirrorResultForFileId(fileId, downloadUrl) {
   const resultId = extractResultIdFromDownloadUrl(downloadUrl);
   if (!fileId || !resultId) return false;
   if (typeof setCurrentView === "function") setCurrentView(fileId);
-  const data = await postExcelMirror("/api/excel/open-result", { resultId, readOnlyMirror: true, ...(excelMirrorScreenRect() || {}) });
+  const data = await postExcelMirror("/api/excel/open-result", { resultId, liveEditable: true, ...(excelMirrorScreenRect() || {}) });
   excelMirror.sessionsByFileId[fileId] = data.excelId;
   excelMirror.sessionLastUsedByFileId[fileId] = Date.now();
   excelMirror.activeExcelId = data.excelId;
@@ -988,6 +994,14 @@ function stabilizeExcelMirrorZOrder(excelId = currentExcelId()) {
   if (isNativeExcelShell() && !isNativeExcelOverlayShell()) return;
   if (!excelId) return;
   excelMirror.zOrderTimers.forEach(timer => clearTimeout(timer));
+  excelMirror.zOrderTimers = [];
+  if (excelMirror.ownerMode) {
+    // owner 모드: 형제 스택 중 선택본만 한 번 위로. 주기적 raise 는 드래그 선택을 깨므로 하지 않는다.
+    raiseExcelMirrorWindow(excelId).catch(err => {
+      if (!isMissingExcelSessionError(err)) console.warn("Excel mirror raise failed:", err);
+    });
+    return;
+  }
   excelMirror.zOrderTimers = [250, 800, 1600, 3200, 5200, 8000].map(delay => setTimeout(() => {
     if (currentExcelId() !== excelId) return;
     raiseExcelMirrorWindow(excelId).catch(err => {
@@ -996,12 +1010,21 @@ function stabilizeExcelMirrorZOrder(excelId = currentExcelId()) {
   }, delay));
 }
 
+// 열려 있는 모든 Excel 세션을 현재 영역 크기/위치로 재정렬한다(창 최소화·최대화·리사이즈 대응).
+// 같은 위치에 스택돼 있으므로 활성 세션을 마지막에 올려 최상단이 되게 한다.
+function repositionAllExcelMirrorWindows(force = false) {
+  const active = currentExcelId();
+  const ids = Array.from(new Set(Object.values(excelMirror.sessionsByFileId || {}).filter(Boolean)));
+  ids.sort((a, b) => (a === active ? 1 : 0) - (b === active ? 1 : 0)); // 활성을 마지막에
+  return Promise.all(ids.map(id => positionExcelMirrorWindow(id, { force: !!force }).catch(err => {
+    if (!isMissingExcelSessionError(err)) console.warn("Excel mirror position failed:", err);
+  })));
+}
+
 function scheduleExcelMirrorPosition(force = false) {
   clearTimeout(excelMirror.positionTimer);
   excelMirror.positionTimer = setTimeout(() => {
-    positionExcelMirrorWindow(currentExcelId(), { force }).catch(err => {
-      if (!isMissingExcelSessionError(err)) console.warn("Excel mirror position failed:", err);
-    }).then(() => {
+    repositionAllExcelMirrorWindows(force).then(() => {
       const excelId = currentExcelId();
       if (excelId) stabilizeExcelMirrorZOrder(excelId);
     });
@@ -1019,6 +1042,9 @@ function installExcelMirrorPositionListeners() {
     }
   });
   window.addEventListener("b2bNativeResize", () => scheduleExcelMirrorPosition(true));
+  // owner 모드: 포커스 기반 재배치/복원(pointerdown/focusin/pointerup)은 불필요하고
+  // 드래그 중 SetWindowPos 로 선택을 깰 수 있으므로 설치하지 않는다. 리사이즈 추종만 유지.
+  if (excelMirror.ownerMode) return;
   const restoreOverlayAfterUiFocus = event => {
     if (!isNativeExcelOverlayShell()) return;
     const target = event.target;
@@ -1091,6 +1117,12 @@ async function postExcelMirror(path, body, attempt = 0) {
 // 수행한다 — Excel 이면 그대로 두고, 아니면 미러를 숨긴다. (C# 포그라운드/프로세스 조회 제거 → AV 회피)
 function installOverlayAutoHide() {
   if (excelMirror.autoHideInstalled) return;
+  // owner 모드: 호스트가 비활성(엑셀 클릭 등) 될 때마다 숨기던 로직이 드래그 선택을 끊으므로 설치하지 않는다.
+  // 최소화 시 숨김/복원은 owner 관계로 OS 가 자동 처리한다.
+  if (excelMirror.ownerMode) {
+    excelMirror.autoHideInstalled = true;
+    return;
+  }
   excelMirror.autoHideInstalled = true;
   const hasSessions = () => Object.keys(excelMirror.sessionsByFileId).length > 0;
   const clearHideTimer = () => {

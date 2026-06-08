@@ -371,6 +371,12 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
         if self.path == "/api/excel/changes":
             self.handle_excel_changes()
             return
+        if self.path == "/api/excel/run-vba":
+            self.handle_excel_run_vba()
+            return
+        if self.path == "/api/excel/run-vba-pipeline":
+            self.handle_excel_run_vba_pipeline()
+            return
         if self.path == "/api/excel/hover-info":
             self.handle_excel_hover_info()
             return
@@ -643,6 +649,7 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
                 name=wb_record.get("name"),
                 workbook_id=workbook_id,
                 read_only_mirror=bool(payload.get("readOnlyMirror")),
+                live_editable=bool(payload.get("liveEditable")),
                 left=payload.get("left"),
                 top=payload.get("top"),
                 width=payload.get("width"),
@@ -674,6 +681,7 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
                 name=path.name,
                 result_id=result_id,
                 read_only_mirror=bool(payload.get("readOnlyMirror")),
+                live_editable=bool(payload.get("liveEditable")),
                 left=payload.get("left"),
                 top=payload.get("top"),
                 width=payload.get("width"),
@@ -706,6 +714,30 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
                 name=path.name,
                 result_id=result_id,
                 read_only_mirror=bool(payload.get("readOnlyMirror")),
+            ))
+        except Exception as err:
+            self.send_json({"ok": False, "error": str(err)}, status=500)
+
+    def handle_excel_run_vba(self):
+        payload = self.read_json_body()
+        try:
+            self.send_json(run_vba_on_session(
+                payload.get("excelId"),
+                payload.get("code") or payload.get("vba") or "",
+                entry=payload.get("entry"),
+            ))
+        except Exception as err:
+            self.send_json({"ok": False, "error": str(err)}, status=500)
+
+    def handle_excel_run_vba_pipeline(self):
+        payload = self.read_json_body()
+        reset = payload.get("reset")
+        try:
+            self.send_json(run_vba_pipeline_on_session(
+                payload.get("excelId"),
+                payload.get("steps") or [],
+                reset=True if reset is None else bool(reset),
+                entry=payload.get("entry"),
             ))
         except Exception as err:
             self.send_json({"ok": False, "error": str(err)}, status=500)
@@ -1691,6 +1723,69 @@ def _focus_excel_grid_child(hwnd):
             pass
 
 
+def _set_excel_window_owner(app, owner_hwnd):
+    """Excel 최상위 창의 소유자(owner)를 지정/해제한다.
+    owner_hwnd가 유효하면 그 창 위에 항상 표시되고(가려지지 않음), None/0이면 소유자 해제.
+    SetParent(자식화, WS_CHILD)와 달리 owner 관계는 top-level 창을 유지하므로 셀 입력/선택이 정상 동작."""
+    if win32gui is None or win32con is None:
+        return False
+    try:
+        hwnd = int(app.Hwnd)
+    except Exception:
+        return False
+    try:
+        if not win32gui.IsWindow(hwnd):
+            return False
+    except Exception:
+        return False
+    try:
+        owner = int(owner_hwnd) if owner_hwnd else 0
+    except Exception:
+        owner = 0
+    if owner:
+        try:
+            if not win32gui.IsWindow(owner):
+                owner = 0
+        except Exception:
+            owner = 0
+    try:
+        win32gui.SetWindowLong(hwnd, getattr(win32con, "GWL_HWNDPARENT", -8), owner)
+        return True
+    except Exception:
+        return False
+
+
+def _style_live_overlay_window(app):
+    """라이브 창을 프레임리스(제목줄/테두리/최소·최대화 버튼 제거)로 만든다.
+    미러 overlay 스타일과 동일하되 owner(GWL_HWNDPARENT)는 건드리지 않는다 — owner 는 따로 지정해 무깜빡임 유지."""
+    if win32gui is None or win32con is None:
+        return
+    try:
+        hwnd = int(app.Hwnd)
+        style = win32gui.GetWindowLong(hwnd, win32con.GWL_STYLE)
+        desired = style & ~(
+            win32con.WS_CAPTION |
+            win32con.WS_THICKFRAME |
+            win32con.WS_MINIMIZEBOX |
+            win32con.WS_MAXIMIZEBOX |
+            win32con.WS_SYSMENU |
+            win32con.WS_CHILD |
+            win32con.WS_DISABLED
+        )
+        desired |= win32con.WS_POPUP | win32con.WS_CLIPSIBLINGS | win32con.WS_CLIPCHILDREN | win32con.WS_VISIBLE
+        if desired != style:
+            win32gui.SetWindowLong(hwnd, win32con.GWL_STYLE, desired)
+        try:
+            ex = win32gui.GetWindowLong(hwnd, win32con.GWL_EXSTYLE)
+            desired_ex = (ex | getattr(win32con, "WS_EX_TOOLWINDOW", 0)) & ~getattr(win32con, "WS_EX_APPWINDOW", 0)
+            if desired_ex != ex:
+                win32gui.SetWindowLong(hwnd, win32con.GWL_EXSTYLE, desired_ex)
+        except Exception:
+            pass
+    except Exception:
+        pass
+
+
 def _raise_excel_window(app):
     if win32gui is None or win32con is None:
         return
@@ -1758,6 +1853,32 @@ def _is_pid_alive(pid):
         return False
 
 
+def _ensure_vbom_access():
+    """'VBA 프로젝트 개체 모델에 대한 액세스 신뢰'(AccessVBOM) 레지스트리 플래그를 켠다(HKCU).
+    이게 꺼져 있으면 wb.VBProject 접근이 막혀 VBA 주입이 불가능하다.
+    설치된 Office 버전 폴더 모두에 1을 써 둔다. 이 플래그는 '이후 새로 띄우는' Excel 인스턴스에 적용되므로
+    라이브 Excel을 DispatchEx 하기 직전에 호출해야 그 인스턴스가 VBProject 접근을 허용한다."""
+    try:
+        import winreg
+    except Exception:
+        return False
+    enabled = False
+    for ver in ("16.0", "15.0", "14.0", "12.0"):
+        try:
+            key = winreg.CreateKey(
+                winreg.HKEY_CURRENT_USER,
+                r"Software\Microsoft\Office\%s\Excel\Security" % ver,
+            )
+            try:
+                winreg.SetValueEx(key, "AccessVBOM", 0, winreg.REG_DWORD, 1)
+                enabled = True
+            finally:
+                winreg.CloseKey(key)
+        except Exception:
+            pass
+    return enabled
+
+
 def _open_excel_session_impl(
     path,
     name=None,
@@ -1778,19 +1899,35 @@ def _open_excel_session_impl(
     native_parent_hwnd=None,
     native_host_hwnd=None,
     native_overlay=False,
+    live_editable=False,
 ):
     if not excel_available():
         raise RuntimeError("Microsoft Excel COM automation is not available. Excel and pywin32 are required.")
     path = Path(path)
     if not path.exists():
         raise RuntimeError(f"file not found: {path}")
+    source_path = path
+    working_copy_path = None
+    if live_editable:
+        # 리모콘 모델: 원본은 절대 건드리지 않는다 — 항상 작업용 복사본을 만들어
+        # 그 위에서 라이브 실행/스킬(VBA) 적용을 한다. 다운로드는 이 복사본을 저장.
+        BACKEND_DIR.mkdir(parents=True, exist_ok=True)
+        working_copy_path = BACKEND_DIR / f"live_{uuid.uuid4().hex}_{source_path.name}"
+        shutil.copy2(source_path, working_copy_path)
+        path = working_copy_path
+        # VBA 주입(스킬 적용)이 가능하도록, 이 라이브 인스턴스를 띄우기 전에 AccessVBOM 을 켠다.
+        _ensure_vbom_access()
+    # read_only_mirror(읽기전용 보호 미러)와 live_editable(편집가능 라이브) 모두
+    # 우측 영역에 오버레이로 위치/사이즈를 맞춰 관리한다. 차이는 편집 가능 여부뿐.
+    manage_overlay = bool(read_only_mirror) or bool(live_editable)
+    open_read_only = bool(read_only_mirror) and not bool(live_editable)
     with EXCEL_LOCK:
         browser_hwnd = None if (native_parent_hwnd or native_overlay) else (_capture_browser_hwnd(browser_title) if read_only_mirror else None)
         app = win32com.client.DispatchEx("Excel.Application")
-        app.Visible = False if read_only_mirror else True
+        app.Visible = False if manage_overlay else True
         app.DisplayAlerts = False
         app.EnableEvents = False
-        if read_only_mirror:
+        if manage_overlay:
             try:
                 app.ScreenUpdating = False
             except Exception:
@@ -1806,11 +1943,81 @@ def _open_excel_session_impl(
         wb = None
         open_temp_path = None
         try:
-            wb, open_temp_path = excel_workbooks_open(app, path, read_only=bool(read_only_mirror))
+            wb, open_temp_path = excel_workbooks_open(app, path, read_only=open_read_only)
             app_pid = _excel_process_id(app)
             excel_id = uuid.uuid4().hex
             sheets = _excel_collection_names(wb.Worksheets)
-            if read_only_mirror:
+            if live_editable:
+                # 리모콘 모델: 리본/제목줄 등 엑셀 크롬을 숨긴 "임베드된" 모습으로 띄우되,
+                # 편집은 막고 선택은 허용, host를 owner로 두어 안 가리고 깜빡임 없게 한다.
+                try:
+                    wb.Activate()
+                except Exception:
+                    pass
+                # 편집 차단 + 선택 허용: 시트 보호(UserInterfaceOnly=True)로 사용자는 직접 못 고치되
+                # 셀/범위 선택(드래그)은 가능(EnableSelection=xlNoRestrictions, 채팅에서 범위 참조용).
+                # UserInterfaceOnly라 VBA/COM(스킬)은 보호와 무관하게 수정 가능.
+                try:
+                    _protect_workbook_for_read_only_mirror(wb, True)
+                except Exception:
+                    pass
+                # 리본/수식줄/컨텍스트메뉴 숨김 + 입력키 차단(미러와 동일한 임베드 모양).
+                try:
+                    _configure_excel_grid_window(app, wb)
+                except Exception:
+                    pass
+                try:
+                    app.WindowState = -4143  # xlNormal: 최대화/최소화 해제(이동 가능 상태)
+                except Exception:
+                    pass
+                # 창 프레임(제목줄/테두리) 제거 → 영역에 꽉 찬 임베드 모양.
+                _style_live_overlay_window(app)
+                # 호스트 창을 소유자(owner)로 지정 → Excel이 항상 호스트 위에 표시되어
+                # 메인 프로그램에 가려지지 않고, 채팅 클릭 시에도 재-raise가 필요 없어 깜빡임이 없다.
+                # SetParent(자식창)와 달리 owner 관계는 top-level 창을 유지하므로 셀 클릭/선택 입력은 정상.
+                _set_excel_window_owner(app, native_host_hwnd)
+                if width and height:
+                    # 숨김 상태에서 먼저 위치/크기를 잡아 둔다(SWP_FRAMECHANGED 로 프레임 제거 반영). → 표시 시 플래시 방지.
+                    _position_excel_window(
+                        app,
+                        left,
+                        top,
+                        width,
+                        height,
+                        client_left=client_left,
+                        client_top=client_top,
+                        client_width=client_width,
+                        client_height=client_height,
+                        viewport_width=viewport_width,
+                        viewport_height=viewport_height,
+                        show=False,
+                    )
+                try:
+                    app.Visible = True
+                except Exception:
+                    pass
+                try:
+                    app.ScreenUpdating = True
+                except Exception:
+                    pass
+                # 워크북(그리드) 내부 창이 Excel 창 전체를 채우도록 보정. 이걸 빼먹으면
+                # 바깥 창은 패널 크기여도 안쪽 그리드가 좌상단에만 작게 뜬다(미러와 동일 처리).
+                _ensure_excel_workbook_view(app, wb, make_visible=True, activate=False, maximize_workbook=True)
+                if width and height:
+                    # 잡아둔 위치 그대로 표시(show=True). owner 덕분에 호스트 위에 나타남.
+                    _position_excel_window(
+                        app,
+                        left,
+                        top,
+                        width,
+                        height,
+                        viewport_width=viewport_width,
+                        viewport_height=viewport_height,
+                        show=True,
+                    )
+                # 위치/표시 후 owner 를 한 번 더 보정(프레임 변경 과정에서 풀렸을 수 있음).
+                _set_excel_window_owner(app, native_host_hwnd)
+            elif read_only_mirror:
                 try:
                     wb.Activate()
                 except Exception:
@@ -1897,10 +2104,18 @@ def _open_excel_session_impl(
                 "workbookId": workbook_id,
                 "resultId": result_id,
                 "readOnlyMirror": bool(read_only_mirror),
+                "liveEditable": bool(live_editable),
+                "sourcePath": str(source_path),
+                "workingCopyPath": str(working_copy_path) if working_copy_path else "",
+                "liveRect": (
+                    {"left": int(float(left or 0)), "top": int(float(top or 0)),
+                     "width": int(float(width or 0)), "height": int(float(height or 0))}
+                    if live_editable and width and height else None
+                ),
                 "browserHwnd": browser_hwnd,
-                "nativeParentHwnd": None if native_overlay else native_parent_hwnd,
+                "nativeParentHwnd": None if (native_overlay or live_editable) else native_parent_hwnd,
                 "nativeHostHwnd": native_host_hwnd,
-                "nativeOverlay": bool(native_overlay),
+                "nativeOverlay": False if live_editable else bool(native_overlay),
                 "hidden": False,
                 "lastNativePositionKey": (
                     f"{'overlay' if native_overlay else native_parent_hwnd}:{int(float(left or 0))}:{int(float(top or 0))}:{int(float(width or 0))}:{int(float(height or 0))}"
@@ -1909,7 +2124,7 @@ def _open_excel_session_impl(
                 ),
                 "created": time.time(),
             }
-            if not read_only_mirror:
+            if not manage_overlay:
                 try:
                     app.WindowState = -4143  # xlNormal
                     _safe_activate_excel_app(app)
@@ -1922,6 +2137,7 @@ def _open_excel_session_impl(
                 "path": str(path),
                 "sheetNames": sheets,
                 "readOnlyMirror": bool(read_only_mirror),
+                "liveEditable": bool(live_editable),
             }
         except Exception:
             try:
@@ -1936,6 +2152,11 @@ def _open_excel_session_impl(
             if open_temp_path:
                 try:
                     Path(open_temp_path).unlink(missing_ok=True)
+                except Exception:
+                    pass
+            if working_copy_path:
+                try:
+                    Path(working_copy_path).unlink(missing_ok=True)
                 except Exception:
                     pass
             raise
@@ -2045,7 +2266,9 @@ def _save_excel_session_impl(excel_id, name=None):
         session = get_excel_session(excel_id)
         app, wb = session_workbook(session)
         read_only_mirror = bool(session.get("readOnlyMirror"))
-        if read_only_mirror:
+        live_protected = bool(session.get("liveEditable"))
+        if read_only_mirror or live_protected:
+            # 저장(다운로드)본은 보호 없는 깨끗한 파일이 되도록 먼저 보호 해제.
             try:
                 _protect_workbook_for_read_only_mirror(wb, False)
             except Exception:
@@ -2071,6 +2294,14 @@ def _save_excel_session_impl(excel_id, name=None):
             try:
                 _protect_workbook_for_read_only_mirror(wb, True)
                 _configure_excel_grid_window(app, wb)
+            except Exception:
+                pass
+        elif live_protected:
+            # 라이브: 저장 후 화면 보호 복구(편집 차단 + 선택 허용). 단 리본/프레임은 평범하게 유지.
+            try:
+                _protect_workbook_for_read_only_mirror(wb, True)
+                _configure_read_only_mirror_input_block(app)
+                _disable_excel_context_menus(app)
             except Exception:
                 pass
         result_id = uuid.uuid4().hex
@@ -2283,6 +2514,12 @@ def _position_excel_session_impl(
         )
         if native_position_key:
             session["lastNativePositionKey"] = native_position_key
+        if session.get("liveEditable") and width and height:
+            # 리셋(시트 교체) 후 창 복원에 쓰도록 최신 rect 보관.
+            session["liveRect"] = {
+                "left": int(float(left or 0)), "top": int(float(top or 0)),
+                "width": int(float(width or 0)), "height": int(float(height or 0)),
+            }
         session["hidden"] = False
         if session.get("readOnlyMirror"):
             _ensure_excel_workbook_view(
@@ -2306,7 +2543,10 @@ def _raise_excel_session_impl(excel_id):
     with EXCEL_LOCK:
         session = get_excel_session(excel_id)
         app, wb = session_workbook(session)
-        if session.get("readOnlyMirror"):
+        if session.get("readOnlyMirror") or session.get("liveEditable"):
+            # 라이브: owner(호스트)로 항상 위에 있지만, 혹시 소유자가 풀렸으면 복구 후 raise.
+            if session.get("liveEditable"):
+                _set_excel_window_owner(app, session.get("nativeHostHwnd"))
             _raise_excel_window(app)
         return {"ok": True, "excelId": excel_id}
 
@@ -2377,13 +2617,160 @@ def _close_excel_session_impl(excel_id):
             time.sleep(0.1)
         if _is_pid_alive(pid):
             _force_kill_pid(pid)
-    temp_path = session.get("openTempPath")
-    if temp_path:
+    for key in ("openTempPath", "workingCopyPath"):
+        temp_path = session.get(key)
+        if temp_path:
+            try:
+                Path(temp_path).unlink(missing_ok=True)
+            except Exception:
+                pass
+    return {"ok": True, "closed": True}
+
+
+VBA_SKILL_ENTRY = "B2BSkill"
+
+
+def _inject_and_run_vba(app, wb, code, entry):
+    """워크북에 VBA 모듈을 임시로 추가해 entry Sub를 실행하고, 끝나면 모듈을 제거한다.
+    AccessVBOM 이 꺼져 있으면 wb.VBProject 접근에서 예외 → 명확한 안내로 변환."""
+    code = code or ""
+    if not code.strip():
+        return
+    try:
+        vbproj = wb.VBProject
+    except Exception as err:
+        raise RuntimeError(
+            "VBA 프로젝트에 접근할 수 없습니다. Excel 옵션 > 보안 센터 > 매크로 설정에서 "
+            "'VBA 프로젝트 개체 모델에 대한 액세스 신뢰'를 켠 뒤 파일을 다시 여세요. (" + str(err) + ")"
+        )
+    module = None
+    try:
+        module = vbproj.VBComponents.Add(1)  # 1 = vbext_ct_StdModule
+        module_name = module.Name
+        module.CodeModule.AddFromString(code)
         try:
-            Path(temp_path).unlink(missing_ok=True)
+            app.Run("%s.%s" % (module_name, entry))
+        except Exception as err:
+            raise RuntimeError("VBA 실행 실패: %s" % err)
+    finally:
+        if module is not None:
+            try:
+                vbproj.VBComponents.Remove(module)
+            except Exception:
+                pass
+
+
+def _restore_live_protected_view(app, wb):
+    """VBA 실행 후 라이브 보기 상태(편집 차단+선택 허용, 리본/우클릭 숨김, 화면갱신)를 복구."""
+    try:
+        _protect_workbook_for_read_only_mirror(wb, True)
+    except Exception:
+        pass
+    try:
+        _configure_excel_grid_window(app, wb)  # 리본 숨김 + 입력키 차단 + 우클릭 차단
+    except Exception:
+        pass
+    try:
+        app.ScreenUpdating = True
+    except Exception:
+        pass
+    try:
+        app.Calculation = -4105  # xlCalculationAutomatic
+    except Exception:
+        pass
+
+
+def _restore_live_window(session, app, wb):
+    """리셋(_copy_source_workbook_into_target)으로 offscreen park 된 라이브 창을 다시 보이게+제자리로."""
+    try:
+        app.Visible = True
+    except Exception:
+        pass
+    try:
+        wb.Activate()
+    except Exception:
+        pass
+    _style_live_overlay_window(app)  # 프레임리스 재적용
+    _set_excel_window_owner(app, session.get("nativeHostHwnd"))
+    try:
+        _ensure_excel_workbook_view(app, wb, make_visible=True, activate=False, maximize_workbook=True)
+    except Exception:
+        pass
+    rect = session.get("liveRect") or {}
+    left, top, width, height = rect.get("left"), rect.get("top"), rect.get("width"), rect.get("height")
+    if width and height:
+        try:
+            _position_excel_window(app, left, top, width, height, show=True)
         except Exception:
             pass
-    return {"ok": True, "closed": True}
+    _set_excel_window_owner(app, session.get("nativeHostHwnd"))
+
+
+def _run_vba_on_session_impl(excel_id, code, entry=None):
+    """라이브 세션에 떠 있는 실제 워크북에 VBA 매크로를 주입해 즉시 실행한다(저지연 리모콘, 단일 단계 append).
+    시트는 UserInterfaceOnly=True 보호라 사용자는 직접 편집 못 해도 VBA/COM 은 수정 가능."""
+    entry = (str(entry).strip() if entry else "") or VBA_SKILL_ENTRY
+    if not (code or "").strip():
+        raise RuntimeError("VBA 코드가 비어 있습니다.")
+    with EXCEL_LOCK:
+        session = get_excel_session(excel_id)
+        app, wb = session_workbook(session)
+        prev_calc = None
+        try:
+            prev_calc = app.Calculation
+        except Exception:
+            prev_calc = None
+        try:
+            _inject_and_run_vba(app, wb, code, entry)
+        finally:
+            try:
+                app.ScreenUpdating = True
+            except Exception:
+                pass
+            try:
+                if prev_calc is not None:
+                    app.Calculation = prev_calc
+            except Exception:
+                pass
+        return {"ok": True, "excelId": excel_id, "entry": entry}
+
+
+def _run_vba_pipeline_on_session_impl(excel_id, steps, reset=True, entry=None):
+    """VBA 스킬 파이프라인을 라이브 워크북에 적용한다.
+    reset=True: 원본으로 되돌린 뒤(_copy_source_workbook_into_target) enabled 스텝을 순서대로 재적용
+    (토글/삭제/순서변경/편집 후 재동기화에 사용). reset=False: 주어진 스텝만 현재 상태에 이어서 실행."""
+    entry = (str(entry).strip() if entry else "") or VBA_SKILL_ENTRY
+    steps = steps or []
+    with EXCEL_LOCK:
+        session = get_excel_session(excel_id)
+        app, wb = session_workbook(session)
+        if reset:
+            source = session.get("sourcePath") or session.get("path")
+            try:
+                _protect_workbook_for_read_only_mirror(wb, False)  # 시트 교체 전 보호 해제
+            except Exception:
+                pass
+            try:
+                app.ScreenUpdating = False
+            except Exception:
+                pass
+            _copy_source_workbook_into_target(app, wb, source)
+        for st in steps:
+            code = (st.get("code") if isinstance(st, dict) else str(st)) or ""
+            if code.strip():
+                _inject_and_run_vba(app, wb, code, entry)
+        _restore_live_protected_view(app, wb)
+        if reset:
+            _restore_live_window(session, app, wb)
+        return {"ok": True, "excelId": excel_id, "applied": len(steps)}
+
+
+def run_vba_on_session(excel_id, code, entry=None):
+    return excel_call(_run_vba_on_session_impl, excel_id, code, entry=entry, timeout=180)
+
+
+def run_vba_pipeline_on_session(excel_id, steps, reset=True, entry=None):
+    return excel_call(_run_vba_pipeline_on_session_impl, excel_id, steps, reset=reset, entry=entry, timeout=600)
 
 
 def _com_scalar(value):
@@ -2678,6 +3065,7 @@ def open_excel_session(
     native_parent_hwnd=None,
     native_host_hwnd=None,
     native_overlay=False,
+    live_editable=False,
 ):
     return excel_call(
         _open_excel_session_impl,
@@ -2700,6 +3088,7 @@ def open_excel_session(
         native_parent_hwnd=native_parent_hwnd,
         native_host_hwnd=native_host_hwnd,
         native_overlay=native_overlay,
+        live_editable=live_editable,
         timeout=180,  # 느린 PC/대용량 파일에서 Excel 열기가 길어질 수 있음
     )
 

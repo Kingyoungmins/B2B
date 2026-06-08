@@ -184,8 +184,39 @@ function restorePipelineStep(stepId, originalStep) {
   refreshRunButton();
 }
 
+// 0.4.9 리모콘 모델: 생성된 VBA를 라이브 워크북에 즉시 주입 실행한다.
+// 파이프라인 재실행/시뮬레이터를 거치지 않으므로 초저지연이고, 결과는 우측 라이브 엑셀에 바로 보인다.
+function applyVbaStepToLiveExcel(step, excelId) {
+  if (typeof pushHistory === "function") pushHistory("단계 추가");
+  state.pipeline.push(step);
+  setPipelineRuntimeStatus([step.id], "running", "작업 중");
+  renderPipeline();
+  refreshRunButton();
+  if (typeof scheduleLogicAutoBackup === "function") scheduleLogicAutoBackup("step-added");
+  const promise = postExcelMirror("/api/excel/run-vba", { excelId, code: step.code })
+    .then(() => {
+      setPipelineRuntimeStatus([step.id], "applied", "적용됨");
+      toast(`"${step.description}" 적용됨`, "success");
+      return true;
+    })
+    .catch(err => {
+      setPipelineRuntimeStatus([step.id], "error", "오류");
+      if (typeof rollbackAddedPipelineStep === "function") rollbackAddedPipelineStep(step.id);
+      reportPipelineError(err);
+      throw err;
+    });
+  toast(`"${step.description}" 단계를 라이브 Excel에 적용 중...`, "success");
+  return { pending: true, promise };
+}
+
 function applyLogic(step) {
   step = normalizeStep(step);
+  // 0.4.9 리모콘 모델: VBA 스킬은 파이프라인/시뮬레이터를 우회해 라이브 엑셀에 즉시 주입 실행.
+  if (((typeof getSkillEngine === "function" && getSkillEngine() === "vba") || step.language === "vba")) {
+    const liveExcelId = typeof currentExcelId === "function" ? currentExcelId() : null;
+    if (liveExcelId) return applyVbaStepToLiveExcel(step, liveExcelId);
+    // 라이브 세션이 없으면 아래 기존 경로로 폴백.
+  }
   const next = [...state.pipeline, step];
   const mustUseExcelBackend = pipelineUsesPython(next) || shouldDeferImmediatePipelineRun();
   if (mustUseExcelBackend) {
@@ -240,6 +271,27 @@ function insertLogic(step, position) {
   const idx = Math.max(0, Math.min(total, (position | 0) - 1));
   const next = state.pipeline.slice();
   next.splice(idx, 0, step);
+  // 0.4.9 VBA: 중간 삽입은 순서가 바뀌므로 라이브를 리셋하고 enabled 스텝을 처음부터 재적용.
+  if ((typeof getSkillEngine === "function" && getSkillEngine() === "vba") || step.language === "vba") {
+    const liveExcelId = typeof currentExcelId === "function" ? currentExcelId() : null;
+    if (liveExcelId) {
+      if (typeof pushHistory === "function") pushHistory("단계 삽입");
+      state.pipeline = next;
+      setPipelineRuntimeStatus([step.id], "running", "작업 중");
+      renderPipeline();
+      refreshRunButton();
+      if (typeof scheduleLogicAutoBackup === "function") scheduleLogicAutoBackup("step-inserted");
+      const promise = reapplyVbaPipelineToLive(liveExcelId)
+        .then(() => { setPipelineRuntimeStatus([step.id], "applied", "적용됨"); return true; })
+        .catch(err => {
+          setPipelineRuntimeStatus([step.id], "error", "오류");
+          if (typeof rollbackAddedPipelineStep === "function") rollbackAddedPipelineStep(step.id);
+          reportPipelineError(err);
+          throw err;
+        });
+      return { pending: true, promise };
+    }
+  }
   const mustUseExcelBackend = pipelineUsesPython(next) || shouldDeferImmediatePipelineRun();
   if (mustUseExcelBackend) {
     if (typeof pushHistory === "function") pushHistory("단계 삽입");
@@ -1006,7 +1058,32 @@ function renderPipeline() {
   renderRunnerWorkflow();
 }
 
+// 0.4.9 리모콘 모델: VBA 엔진에서 토글/삭제/편집/순서변경 등으로 파이프라인이 바뀌면
+// 라이브 워크북을 원본으로 리셋한 뒤 enabled VBA 스텝을 순서대로 다시 적용한다.
+async function reapplyVbaPipelineToLive(excelId) {
+  const steps = (state.pipeline || [])
+    .filter(s => isStepEnabled(s) && (s.language === "vba" || (typeof inferPipelineStepLanguage === "function" && inferPipelineStepLanguage(s) === "vba")))
+    .map(s => ({ code: s.code }));
+  if (window.runnerSetRunning) window.runnerSetRunning(true);
+  try {
+    const data = await postExcelMirror("/api/excel/run-vba-pipeline", { excelId, steps, reset: true });
+    // 리셋 과정에서 창이 잠깐 offscreen 으로 갔다 오므로 위치/최상단 보정.
+    try { await positionExcelMirrorWindow(excelId, { force: true }); } catch (_) {}
+    try { stabilizeExcelMirrorZOrder(excelId); } catch (_) {}
+    if (window.runnerSetDone) window.runnerSetDone();
+    return data;
+  } catch (err) {
+    if (window.runnerSetRunning) window.runnerSetRunning(false);
+    throw err;
+  }
+}
+
 async function reconcilePipelineSimulationAfterEdit(options = {}) {
+  // VBA 엔진 + 라이브 세션이면 파이프라인 재동기화를 라이브 리셋+재적용으로 처리.
+  if (typeof getSkillEngine === "function" && getSkillEngine() === "vba") {
+    const liveExcelId = typeof currentExcelId === "function" ? currentExcelId() : null;
+    if (liveExcelId) return reapplyVbaPipelineToLive(liveExcelId);
+  }
   const steps = options.steps || state.pipeline;
   const hasAnyOriginal = !!state.outputOriginal || ((state.inputsOriginal || []).length > 0);
   if (!hasAnyOriginal) return;
