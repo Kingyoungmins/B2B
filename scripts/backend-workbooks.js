@@ -322,13 +322,19 @@ function applyBackendPipelineResult(result) {
     Object.keys(fileResult.sheets).forEach(sheet => {
       file.sheets[sheet] = fileResult.sheets[sheet];
     });
-    if (fileResult.formulas && Object.keys(fileResult.formulas).length) {
+    if (fileResult.formulas) {
       file.formulas = file.formulas || {};
       Object.keys(fileResult.formulas).forEach(sheet => {
         file.formulas[sheet] = fileResult.formulas[sheet] || {};
       });
     }
-    if (fileResult.formats && Object.keys(fileResult.formats).length) {
+    if (fileResult.originalFormulaValues) {
+      file.originalFormulaValues = file.originalFormulaValues || {};
+      Object.keys(fileResult.originalFormulaValues).forEach(sheet => {
+        file.originalFormulaValues[sheet] = fileResult.originalFormulaValues[sheet] || {};
+      });
+    }
+    if (fileResult.formats) {
       file.formats = file.formats || {};
       Object.keys(fileResult.formats).forEach(sheet => {
         file.formats[sheet] = fileResult.formats[sheet] || [];

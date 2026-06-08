@@ -58,6 +58,8 @@ PERFORMANCE — avoid whole-column / whole-row operations (CRITICAL):
 
 COPY / PASTE — preserve formatting (IMPORTANT):
 - "복사해서 붙여넣기"처럼 서식(글꼴/색/테두리/숫자서식)까지 그대로 옮겨야 하면 src.Copy(dest) 를 쓰세요. 예: ws.Range(ws.Cells(1,7), ws.Cells(n,12)).Copy(ws.Range(ws.Cells(1,1), ws.Cells(n,6))). 이것은 값+서식+수식을 모두 복사합니다.
+- 열/행을 먼저 삽입한 뒤 복사해야 하는 경우, 삽입으로 밀려난 원본 범위를 다시 잡아서 src.Copy(dest) 를 호출하세요. 예: A:F 를 맨 앞에 복제하려면 먼저 6열 삽입 → 원본은 G:L 로 이동 → ws.Range(ws.Cells(1,7), ws.Cells(n,12)).Copy(ws.Range(ws.Cells(1,1), ws.Cells(n,6))).
+- src.Copy(); ... Insert(); dest.PasteSpecial() 처럼 클립보드 상태에 의존하는 순서는 사용하지 마세요. 구조 변경 뒤에는 수식/서식 보존이 불안정하므로 Range.Copy(destination) 을 쓰세요.
 - dest.Value = src.Value 는 '값만' 복사하고 서식은 복사하지 않습니다 — 서식을 유지해야 하는 복사/붙여넣기에는 쓰지 마세요.
 - Copy 도 전체 열/행(A:F)이 아니라 실제 데이터 범위(Cells(1,c1):Cells(n,c2))로 한정하세요(전체 열 Copy 는 매우 느림).
 - 값만 바꾸는 편집(예: 텍스트 치환, 특정 셀 값 변경)은 .Value 로 해도 그 셀의 기존 서식은 그대로 유지됩니다(값만 바뀜).
