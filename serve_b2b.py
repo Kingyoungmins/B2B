@@ -1916,8 +1916,13 @@ def _open_excel_session_impl(
     if live_editable:
         # 리모콘 모델: 원본은 절대 건드리지 않는다 — 항상 작업용 복사본을 만들어
         # 그 위에서 라이브 실행/스킬(VBA) 적용을 한다. 다운로드는 이 복사본을 저장.
+        # 워크북 이름이 원본과 동일해야 VBA 의 Workbooks("원본명")/ActiveWorkbook 와 @파일 참조가 일치하고
+        # 제목줄도 깔끔하다 → 고유 하위폴더 안에 '원본 이름 그대로' 복사한다.
         BACKEND_DIR.mkdir(parents=True, exist_ok=True)
-        working_copy_path = BACKEND_DIR / f"live_{uuid.uuid4().hex}_{source_path.name}"
+        clean_name = Path(name).name if name else source_path.name
+        live_dir = BACKEND_DIR / f"live_{uuid.uuid4().hex}"
+        live_dir.mkdir(parents=True, exist_ok=True)
+        working_copy_path = live_dir / clean_name
         shutil.copy2(source_path, working_copy_path)
         path = working_copy_path
         # VBA 주입(스킬 적용)이 가능하도록, 이 라이브 인스턴스를 띄우기 전에 AccessVBOM 을 켠다.
