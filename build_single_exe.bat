@@ -2,18 +2,18 @@
 setlocal
 cd /d "%~dp0"
 
-set "PACKAGE_DIR=dist\B2B_ver0.4.8"
-set "PAYLOAD=build\b2b_ver048_single_payload.zip"
-set "OUT_EXE=dist\B2B_ver0.4.8_single.exe"
+set "PACKAGE_DIR=dist\B2B_ver0.4.9"
+set "PAYLOAD=build\b2b_ver049_single_payload.zip"
+set "OUT_EXE=dist\B2B_ver0.4.9_single.exe"
 set "CSC=%WINDIR%\Microsoft.NET\Framework64\v4.0.30319\csc.exe"
 
 echo ============================================
-echo  B2B ver0.4.8 single EXE wrapper build
+echo  B2B ver0.4.9 single EXE wrapper build
 echo ============================================
 echo.
 
-if not exist "%PACKAGE_DIR%\B2B_ver0.4.8.exe" (
-    echo [ERROR] Missing %PACKAGE_DIR%\B2B_ver0.4.8.exe
+if not exist "%PACKAGE_DIR%\B2B_ver0.4.9.exe" (
+    echo [ERROR] Missing %PACKAGE_DIR%\B2B_ver0.4.9.exe
     echo Run build_exe.bat first.
     exit /b 1
 )
