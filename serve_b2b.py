@@ -2766,8 +2766,13 @@ def _ensure_companion_workbooks(session, excel_id, app, current_wb):
             cpath = cdir / clean
             o_wb.SaveCopyAs(str(cpath))   # 라이브 최신 상태(편집 반영)를 스냅샷
             wb2, _t = excel_workbooks_open(app, cpath, read_only=True)
+            # 동반 워크북 창은 화면에 안 나오게 확실히 숨긴다(Visible=False + 오프스크린 park).
             try:
-                wb2.Windows(1).Visible = False  # 동반 워크북 창은 숨김(표시는 활성 세션만)
+                wb2.Windows(1).Visible = False
+            except Exception:
+                pass
+            try:
+                _hide_excel_hwnd(int(wb2.Windows(1).Hwnd))
             except Exception:
                 pass
             opened.add(clean.lower())
@@ -2819,6 +2824,11 @@ def _run_vba_on_session_impl(excel_id, code, entry=None):
                 _restore_live_protected_view(app, wb)
             except Exception:
                 pass
+            # 동반 워크북을 열며 흐트러진 대상 창을 다시 보이게+제자리로(회색 빈 오버레이 방지).
+            try:
+                _restore_live_window(session, app, wb)
+            except Exception:
+                pass
             try:
                 if prev_calc is not None:
                     app.Calculation = prev_calc
@@ -2860,8 +2870,8 @@ def _run_vba_pipeline_on_session_impl(excel_id, steps, reset=True, entry=None):
             if code.strip():
                 _inject_and_run_vba(app, wb, code, entry)
         _restore_live_protected_view(app, wb)
-        if reset:
-            _restore_live_window(session, app, wb)
+        # 동반 워크북/리셋으로 흐트러진 대상 창을 항상 복원(회색 빈 오버레이 방지).
+        _restore_live_window(session, app, wb)
         return {"ok": True, "excelId": excel_id, "applied": len(steps)}
 
 

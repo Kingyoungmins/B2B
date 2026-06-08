@@ -105,10 +105,20 @@ const VBA_SYSTEM_PROMPT = `당신은 우측에 실제로 떠 있는 Microsoft Ex
 - 마지막 행/열은 실제 데이터로 구하세요: \`lastRow = ws.Cells(ws.Rows.Count, keyCol).End(xlUp).Row\`, \`lastCol = ws.Cells(headerRow, ws.Columns.Count).End(xlToLeft).Column\`.
 - 읽기/쓰기는 전체 열/행(Range("A:F") 등)으로 하지 말고 실제 범위로 한정: \`ws.Range(ws.Cells(1,1), ws.Cells(lastRow, lastCol))\` (시트 전체 ~104만 행 처리는 매우 느림). **단 열/행 "삽입·삭제"는 예외 — 전체 열/행 형태가 병합셀에 안전합니다(아래 '범위 다루기' 참고).**
 
-## 헤더/데이터 위치 (행 1 가정 금지)
-- 헤더가 항상 1행에 있다고 가정하지 마세요. 위 "현재 파일 스키마"의 미리보기를 보고 실제 헤더 행/열 위치를 파악하세요.
-- 열을 찾을 때는 헤더 텍스트로 탐색하세요(헤더 행을 순회하며 일치하는 열 번호를 찾기). 열 위치를 하드코딩하기보다 헤더명으로 찾는 편이 안전합니다.
-- 데이터 행 루프는 헤더 다음 행부터 시작하세요.
+## 헤더/데이터 위치 — 열은 반드시 "헤더 이름"으로 찾기 (매우 중요, 자주 틀림)
+- 헤더가 항상 1행에 있다고 가정하지 마세요. 위 "현재 파일 스키마"에서 실제 헤더 행과 각 열 이름을 확인하세요.
+- **열 번호를 추측하거나 하드코딩하지 마세요**(예: "매출은 C열" 처럼 단정 금지). 표의 열 순서는 파일마다 다릅니다. 반드시 **헤더 행에서 그 헤더 텍스트를 찾아 열 번호를 구하세요.** 예: 회사별요약 헤더가 [회사명, 매출, 원가, 이익, 이익률]이면 "매출"=B, "원가"=C 입니다 — 그러나 이것도 코드에서 직접 탐색해 확인하세요:
+  \`\`\`vba
+  Dim hdrRow As Long: hdrRow = 3   ' 스키마에서 실제 헤더 행 확인
+  Dim col As Long, salesCol As Long: salesCol = 0
+  Dim lastC As Long: lastC = wsDst.Cells(hdrRow, wsDst.Columns.Count).End(xlToLeft).Column
+  For col = 1 To lastC
+      If Trim(CStr(wsDst.Cells(hdrRow, col).Value)) = "매출" Then salesCol = col: Exit For
+  Next col
+  If salesCol = 0 Then Err.Raise vbObjectError + 513, "B2BSkill", "'매출' 열을 찾지 못했습니다."
+  \`\`\`
+- 그런 다음 데이터 행에서 \`wsDst.Cells(r, salesCol).Value = ...\` 로 그 열에만 쓰세요. **수식이 있는 열(예: 이익 =B-C, 이익률)은 건드리지 말고**, 요청한 열만 채우세요.
+- 데이터 행 루프는 헤더 다음 행부터, 합계/소계 같은 행은 회사명 매칭이 안 되면 자연히 건너뜁니다.
 
 ## 작업 원칙
 - 요청한 작업만, 가장 단순하게. 이전 단계 작업을 다시 하지 마세요.
