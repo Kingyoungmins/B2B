@@ -2,10 +2,10 @@
 setlocal
 cd /d "%~dp0"
 
-set "APP_VERSION=0.4.6"
+set "APP_VERSION=0.4.7"
 set "SERVER_EXE=B2B_Server.exe"
-set "PACKAGE_DIR=dist\B2B_ver0.4.6"
-set "PACKAGE_ZIP=dist\B2B_ver0.4.6_portable.zip"
+set "PACKAGE_DIR=dist\B2B_ver0.4.7"
+set "PACKAGE_ZIP=dist\B2B_ver0.4.7_portable.zip"
 
 echo ============================================
 echo  B2B ver%APP_VERSION% portable EXE build
@@ -61,13 +61,13 @@ if not exist "dist\%SERVER_EXE%" (
 echo.
 echo [INFO] Creating portable package...
 mkdir "%PACKAGE_DIR%"
-copy /y "native_host\bin\B2B_NativeHost.exe" "%PACKAGE_DIR%\B2B_ver0.4.6.exe" >nul
+copy /y "native_host\bin\B2B_NativeHost.exe" "%PACKAGE_DIR%\B2B_ver0.4.7.exe" >nul
 copy /y "native_host\bin\Microsoft.Web.WebView2.Core.dll" "%PACKAGE_DIR%\" >nul
 copy /y "native_host\bin\Microsoft.Web.WebView2.WinForms.dll" "%PACKAGE_DIR%\" >nul
 copy /y "native_host\bin\WebView2Loader.dll" "%PACKAGE_DIR%\" >nul
 copy /y "dist\%SERVER_EXE%" "%PACKAGE_DIR%\" >nul
 
-if not exist "%PACKAGE_DIR%\B2B_ver0.4.6.exe" (
+if not exist "%PACKAGE_DIR%\B2B_ver0.4.7.exe" (
     echo [ERROR] Missing packaged native host.
     exit /b 1
 )
@@ -89,7 +89,7 @@ if errorlevel 1 (
 echo.
 echo ============================================
 echo  Build complete
-echo  EXE: %PACKAGE_DIR%\B2B_ver0.4.6.exe
+echo  EXE: %PACKAGE_DIR%\B2B_ver0.4.7.exe
 echo  ZIP: %PACKAGE_ZIP%
 echo ============================================
 echo.

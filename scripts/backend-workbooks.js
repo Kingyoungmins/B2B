@@ -413,7 +413,11 @@ function applyBackendPipelineResult(result) {
             } else {
               const url = downloadUrls[fid] || (isOutput ? result.downloadUrl : null);
               if (url && typeof refreshExcelMirrorForFileId === "function") {
-                await refreshExcelMirrorForFileId(fid, url, { openIfMissing: false });
+                // 활성 파일은 미러가 닫혀 있어도(지연 로딩) 결과를 열어 보여준다(openIfMissing:true).
+                // (예전엔 false 라 "적용됨인데 엑셀이 안 열림" 발생)
+                await refreshExcelMirrorForFileId(fid, url, { openIfMissing: true });
+              } else if (typeof openExcelMirrorForFileId === "function" && !sessionFor(fid)) {
+                await openExcelMirrorForFileId(fid);
               } else if (typeof acknowledgeExcelMirrorApplied === "function") {
                 await acknowledgeExcelMirrorApplied(fid);
               }
@@ -421,7 +425,7 @@ function applyBackendPipelineResult(result) {
           } catch (_) {}
           const aid = sessionFor(activeId);
           if (aid && typeof raiseExcelMirrorWindow === "function") {
-            try { await raiseExcelMirrorWindow(aid); } catch (_) {}
+            try { await raiseExcelMirrorWindow(aid, { force: true }); } catch (_) {}
           }
           if (typeof endExcelMirrorApplyLoading === "function") endExcelMirrorApplyLoading();
         }, 150);

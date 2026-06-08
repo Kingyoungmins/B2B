@@ -374,8 +374,9 @@ async function switchVisibleExcelMirrorToFileId(fileId) {
   }
   excelMirror.activeExcelId = excelId;
   excelMirror.sessionLastUsedByFileId[fileId] = Date.now();
-  // 숨기지 않고(스택 유지) 선택된 미러만 최상단으로 올린다 → 전환 깜빡임 없음.
-  await positionExcelMirrorWindow(excelId, { force: true });
+  // 이미 열린 미러로의 전환: 강제 재배치(force) 없이 위치가 같으면 건너뛰고 raise만 → 저사양에서도 즉시 전환.
+  // (창이 실제로 이동/숨겨졌을 때만 lastNativePositionKey 가 달라져 재배치된다.)
+  await positionExcelMirrorWindow(excelId);
   stabilizeExcelMirrorZOrder(excelId);
   await pollExcelMirrorChanges(excelId, { baselineOnly: true });
   startExcelMirrorPolling();
@@ -516,6 +517,7 @@ async function hideInactiveExcelMirrorSessions(activeFileId) {
   const entries = Object.entries(excelMirror.sessionsByFileId);
   await Promise.all(entries.map(async ([fileId, excelId]) => {
     if (!excelId || fileId === activeFileId) return;
+    invalidateExcelMirrorPositionTracking(excelId);  // 숨겨지므로 위치 추적 무효화 → 다음 전환 시 재배치
     try {
       await postExcelMirror("/api/excel/hide", { excelId });
     } catch (err) {
@@ -525,6 +527,7 @@ async function hideInactiveExcelMirrorSessions(activeFileId) {
 }
 
 async function hideAllExcelMirrorWindows() {
+  invalidateExcelMirrorPositionTracking();  // 전부 숨김 → 위치 추적 전체 무효화
   const entries = Object.entries(excelMirror.sessionsByFileId);
   await Promise.all(entries.map(async ([fileId, excelId]) => {
     if (!excelId) return;
@@ -958,14 +961,22 @@ async function positionExcelMirrorWindow(excelId = currentExcelId(), options = {
   const rect = excelMirrorScreenRect();
   if (!rect) return false;
   const key = `${excelId}:${rect.left}:${rect.top}:${rect.width}:${rect.height}`;
-  if (rect.nativeShell) {
-    if (!options.force && excelMirror.lastNativePositionKey === key) return true;
-    excelMirror.lastNativePositionKey = key;
-  }
-  if (!options.force && excelMirror.lastPositionKey === key) return true;
-  excelMirror.lastPositionKey = key;
+  excelMirror.positionedKeyByExcelId = excelMirror.positionedKeyByExcelId || {};
+  // 세션별 추적: 이 미러가 이미 이 위치에 배치돼 있으면(=숨겨지지 않았음) 재배치를 건너뛴다.
+  // 전역 키가 아니라 세션별이라, 다른 파일로 전환해도 그 파일이 제자리면 재배치 COM 을 생략 → 저사양에서 즉시 전환.
+  if (!options.force && excelMirror.positionedKeyByExcelId[excelId] === key) return true;
   await postExcelMirror("/api/excel/position", { excelId, ...rect });
+  excelMirror.positionedKeyByExcelId[excelId] = key;
+  if (rect.nativeShell) excelMirror.lastNativePositionKey = key;
+  excelMirror.lastPositionKey = key;
   return true;
+}
+
+// 미러를 숨기면(park) 위치 추적을 무효화해, 다음 전환 시 다시 배치되도록 한다.
+function invalidateExcelMirrorPositionTracking(excelId) {
+  if (!excelMirror.positionedKeyByExcelId) return;
+  if (excelId) delete excelMirror.positionedKeyByExcelId[excelId];
+  else excelMirror.positionedKeyByExcelId = {};
 }
 
 async function raiseExcelMirrorWindow(excelId = currentExcelId(), options = {}) {
@@ -1033,12 +1044,23 @@ function installExcelMirrorPositionListeners() {
   }, true);
 }
 
-async function postExcelMirror(path, body) {
-  const resp = await fetch(path, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(body || {}),
-  });
+async function postExcelMirror(path, body, attempt = 0) {
+  let resp;
+  try {
+    resp = await fetch(path, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body || {}),
+    });
+  } catch (err) {
+    // 네트워크 수준 실패("Failed to fetch") — 저사양 PC 에서 서버가 COM 으로 잠깐 바빠 응답을 못 한 경우.
+    // 짧게 2회까지 재시도한 뒤에도 실패하면 성능 안내를 붙여 던진다.
+    if (attempt < 2) {
+      await new Promise(r => setTimeout(r, 500 * (attempt + 1)));
+      return postExcelMirror(path, body, attempt + 1);
+    }
+    throw new Error("서버와 통신하지 못했습니다(컴퓨터 성능에 따라 지연될 수 있습니다). 잠시 후 다시 시도해 주세요.");
+  }
   const data = await resp.json().catch(() => ({}));
   if (!resp.ok || !data.ok) throw new Error(data.error || `HTTP ${resp.status}`);
   return data;
@@ -1083,6 +1105,8 @@ function installOverlayAutoHide() {
   const hasSessions = () => Object.keys(excelMirror.sessionsByFileId).length > 0;
   const hideInactive = () => {
     if (!hasSessions()) return;
+    // 백엔드가 (포그라운드가 Excel 이 아니면) 전부 숨길 수 있으므로 위치 추적을 전체 무효화.
+    invalidateExcelMirrorPositionTracking();
     postExcelMirror("/api/excel/hide-inactive", {}).catch(err => {
       if (!isMissingExcelSessionError(err)) console.warn("Excel mirror hide-inactive failed:", err);
     });
