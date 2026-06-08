@@ -16,6 +16,7 @@ Formula overwrite and displayed-text edit rule:
 
 const PYTHON_EXCEL_SKILL_RULE = `
 ver4.x execution rule:
+- 생각(reasoning)은 짧고 간결하게. 결론에 필요한 핵심 판단만 적고, 같은 말을 반복하거나 코드를 통째로 미리 적어보지 마세요. 보통 3~5문장 이내로 생각을 마치고 바로 코드를 작성하세요.
 - Generate Python for real Microsoft Excel automation. Do not generate JavaScript or array-only simulator code.
 - Return exactly one fenced \`\`\`python code block.
 - Required signature:

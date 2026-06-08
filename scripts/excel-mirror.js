@@ -331,6 +331,26 @@ async function preopenAllExcelMirrors(selectedFileId) {
   }
 }
 
+// 업로드 직후: 선택한 파일 1개의 미러만 연다(저사양 PC 대비 — 전부 미리 열면 매우 느리고 메모리 부족).
+// 나머지 파일은 그 탭으로 전환할 때 지연 로딩으로 열린다(setCurrentView 래퍼).
+async function autoOpenMirrorAfterUpload(selectedFileId) {
+  const selected = selectedFileId || state.currentFileId;
+  if (!selected) return;
+  // 업로드는 명시적 동작 → 호스트를 활성으로 간주해 자동숨김이 방금 연 미러를 park 하지 못하게 한다.
+  excelMirror.hostActive = true;
+  if (typeof setCurrentView === "function") setCurrentView(selected);
+  try {
+    await openCurrentWorkbookInExcel();  // 선택 파일만 (로딩 표시 포함)
+    const exId = excelMirror.sessionsByFileId[selected];
+    if (exId) {
+      await raiseExcelMirrorWindow(exId, { force: true });
+      setTimeout(() => { raiseExcelMirrorWindow(exId, { force: true }).catch(() => {}); }, 300);
+    }
+  } catch (err) {
+    if (!isMissingExcelSessionError(err)) console.warn("Auto-open mirror after upload failed:", err);
+  }
+}
+
 async function switchVisibleExcelMirrorToFileId(fileId) {
   if (!fileId) return false;
   const excelId = excelMirror.sessionsByFileId[fileId];
@@ -519,7 +539,10 @@ async function hideAllExcelMirrorWindows() {
 async function restoreActiveExcelMirrorWindow() {
   const excelId = currentExcelId() || excelMirror.activeExcelId;
   if (!excelId) return false;
-  await positionExcelMirrorWindow(excelId, { force: true });
+  // 엑셀↔채팅 토글 복귀 시 강제 재배치(force)를 하면 저사양 PC에서 재배치가 느려 3초가량 깜빡인다.
+  // 위치가 그대로면(force 없이) position 은 건너뛰고 raise 만 → 깜빡임 없이 즉시 올라온다.
+  // (창이 실제로 이동/숨겨졌으면 lastNativePositionKey 가 달라져 자동으로 재배치된다.)
+  await positionExcelMirrorWindow(excelId);
   await raiseExcelMirrorWindow(excelId);
   return true;
 }
@@ -1032,9 +1055,16 @@ async function postExcelMirror(path, body) {
       const fileId = args[0];
       clearTimeout(excelMirror.switchTimer);
       excelMirror.switchTimer = setTimeout(() => {
-        if (fileId && excelMirror.sessionsByFileId[fileId]) {
+        if (!fileId) return;
+        if (excelMirror.sessionsByFileId[fileId]) {
+          // 이미 열린 미러 → 빠른 전환(raise만).
           switchVisibleExcelMirrorToFileId(fileId).catch(err => {
             if (!isMissingExcelSessionError(err)) console.warn("Excel mirror switch failed:", err);
+          });
+        } else if (fileId === state.currentFileId) {
+          // 지연 로딩: 아직 안 열린 파일로 전환하면 그때 연다(저사양 대비 — 업로드 시 전부 안 엶).
+          openCurrentWorkbookInExcel().catch(err => {
+            if (!isMissingExcelSessionError(err)) console.warn("Excel mirror lazy open failed:", err);
           });
         }
       }, 0);

@@ -78,6 +78,7 @@ namespace B2BNativeHost
         private readonly FlowLayoutPanel nativeFileTabs;
         private readonly Panel excelPanel;
         private readonly Label excelLoadingLabel;
+        private readonly Label startupSplash;
         private Process serverProcess;
         private int port;
         private string appUrl;
@@ -147,6 +148,17 @@ namespace B2BNativeHost
             webView = new WebView2();
             webView.Dock = DockStyle.Fill;
             split.Panel1.Controls.Add(webView);
+
+            // 초기 실행 스플래시: 서버 부팅+WebView 로드까지 빈 화면 대신 안내를 보여준다(저사양 PC 첫 실행 10~20초).
+            startupSplash = new Label();
+            startupSplash.Dock = DockStyle.Fill;
+            startupSplash.Text = "B2B 빌링 Agent 준비 중입니다...\n\n처음 실행은 컴퓨터 성능에 따라 10~20초 정도 걸릴 수 있습니다.";
+            startupSplash.TextAlign = ContentAlignment.MiddleCenter;
+            startupSplash.Font = new Font(Font.FontFamily, 12F, FontStyle.Bold);
+            startupSplash.ForeColor = Color.FromArgb(80, 80, 96);
+            startupSplash.BackColor = Color.FromArgb(248, 249, 252);
+            split.Panel1.Controls.Add(startupSplash);
+            startupSplash.BringToFront();
 
             rightLayout = new TableLayoutPanel();
             rightLayout.Dock = DockStyle.Fill;
@@ -280,6 +292,7 @@ namespace B2BNativeHost
                 webView.CoreWebView2.NavigationCompleted += delegate
                 {
                     webReady = true;
+                    if (startupSplash != null) startupSplash.Visible = false;  // 준비 완료 → 스플래시 숨김
                     PublishNativeBounds();
                 };
                 webView.CoreWebView2.Navigate(appUrl);

@@ -1155,9 +1155,9 @@ function reportPipelineError(err, options) {
     chatBox.appendChild(div);
     const recoverBtn = div.querySelector(".error-recover-btn");
     if (recoverBtn) {
-      const canRecover = typeof requestErrorRecovery === "function" &&
-        hasErrorRecoverySeed(info);
-      recoverBtn.disabled = !canRecover;
+      // 복구 버튼은 항상 활성화한다(사용자 요구). 시드가 없으면 requestErrorRecovery 가
+      // 마지막 적용 가능한 단계로 폴백하거나 안내 토스트를 띄운다.
+      recoverBtn.disabled = false;
       recoverBtn.onclick = () => {
         if (recoverBtn.disabled) return;
         recoverBtn.disabled = true;
@@ -1278,11 +1278,9 @@ function showRunnerPipelineError(err, options) {
   if (recoverBtn) {
     const runnerStepIdx = resolveRunnerRecoveryStepIndex(info || {});
     const canAutoRecover = Number.isInteger(runnerStepIdx) && runnerStepIdx >= 0 && !!state.pipeline[runnerStepIdx];
-    const canRequestRecovery = typeof requestErrorRecovery === "function" && hasErrorRecoverySeed(info);
-    const canRecover = canAutoRecover || canRequestRecovery;
-    recoverBtn.disabled = !canRecover;
+    // 복구 버튼은 항상 활성화한다(사용자 요구). 자동 복구 불가하면 LLM 복구 요청으로 폴백.
+    recoverBtn.disabled = false;
     recoverBtn.onclick = async () => {
-      if (!canRecover) return;
       recoverBtn.disabled = true;
       const originalText = recoverBtn.textContent;
       recoverBtn.textContent = "자동 복구 중...";
