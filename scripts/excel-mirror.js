@@ -1010,23 +1010,17 @@ function stabilizeExcelMirrorZOrder(excelId = currentExcelId()) {
   }, delay));
 }
 
-// 열려 있는 모든 Excel 세션을 현재 영역 크기/위치로 재정렬한다(창 최소화·최대화·리사이즈 대응).
-// 같은 위치에 스택돼 있으므로 활성 세션을 마지막에 올려 최상단이 되게 한다.
-function repositionAllExcelMirrorWindows(force = false) {
-  const active = currentExcelId();
-  const ids = Array.from(new Set(Object.values(excelMirror.sessionsByFileId || {}).filter(Boolean)));
-  ids.sort((a, b) => (a === active ? 1 : 0) - (b === active ? 1 : 0)); // 활성을 마지막에
-  return Promise.all(ids.map(id => positionExcelMirrorWindow(id, { force: !!force }).catch(err => {
-    if (!isMissingExcelSessionError(err)) console.warn("Excel mirror position failed:", err);
-  })));
-}
-
+// 활성 세션만 재배치한다. (모든 세션을 재배치하면 각 창이 HWND_TOP 으로 올라오며
+// 파일들이 차례로 위로 튀어나와 "순회"처럼 보이는 사이드이펙트가 생김 — 비활성은 전환 시 재배치됨.)
 function scheduleExcelMirrorPosition(force = false) {
   clearTimeout(excelMirror.positionTimer);
   excelMirror.positionTimer = setTimeout(() => {
-    repositionAllExcelMirrorWindows(force).then(() => {
-      const excelId = currentExcelId();
-      if (excelId) stabilizeExcelMirrorZOrder(excelId);
+    const excelId = currentExcelId();
+    if (!excelId) return;
+    positionExcelMirrorWindow(excelId, { force }).catch(err => {
+      if (!isMissingExcelSessionError(err)) console.warn("Excel mirror position failed:", err);
+    }).then(() => {
+      if (currentExcelId()) stabilizeExcelMirrorZOrder(currentExcelId());
     });
   }, 80);
 }
