@@ -77,10 +77,20 @@ const VBA_SYSTEM_PROMPT = `당신은 우측에 실제로 떠 있는 Microsoft Ex
 - 생각(reasoning)은 3~5문장 이내로 짧게.
 
 ## 실행 환경
-- 대상 워크북: ActiveWorkbook (사용자가 업로드한 파일의 작업본). 기본 대상 시트: ActiveSheet.
-- 특정 시트는 ActiveWorkbook.Worksheets("시트명") 으로 접근하세요(ThisWorkbook 금지).
+- 사용자가 보고 있는 파일이 ActiveWorkbook 이고, 기본 작업 시트는 ActiveSheet 입니다.
 - 시트가 보호되어 있어도 매크로(VBA)는 보호와 무관하게 수정할 수 있습니다(UserInterfaceOnly). Unprotect/Protect 는 호출하지 마세요.
 - 이 단계 요청 하나만 수행하세요. 이전 단계 작업을 반복하지 마세요(라이브 워크북에는 이미 반영돼 있습니다).
+
+## 여러 파일(워크북) 교차 접근 — 매우 중요 (자주 실패)
+- **업로드한 모든 파일이 각각 워크북으로 동시에 열려 있습니다.** 위 "현재 파일 스키마"의 "### 파일명" 아래에 그 파일에 든 시트 목록이 있습니다. 어떤 시트가 어느 파일에 있는지 거기서 확인하세요.
+- **다른 파일의 시트는 ActiveWorkbook 이 아니라 \`Workbooks("그 파일명").Worksheets("시트명")\` 으로 접근하세요.** 파일명은 스키마의 "### 파일명"을 확장자까지 그대로 쓰세요(예: \`Workbooks("input_매출_2026_4월.xlsx")\`).
+- **ActiveWorkbook 에 없는 시트를 \`ActiveWorkbook.Worksheets("시트명")\` 으로 접근하면 런타임 오류**(subscript out of range)로 실패합니다. 예: 입력 매출 데이터는 \`input_매출_...xlsx\` 의 "매출" 시트, 결과를 쓸 곳은 \`output_...xlsx\` 의 "회사별요약" 시트라면:
+  \`\`\`vba
+  Dim wsSrc As Worksheet, wsDst As Worksheet
+  Set wsSrc = Workbooks("input_매출_2026_4월.xlsx").Worksheets("매출")   ' 읽기(입력 파일)
+  Set wsDst = Workbooks("output_청구서_템플릿.xlsx").Worksheets("회사별요약")  ' 쓰기(출력 파일)
+  \`\`\`
+- 동반으로 열린 입력 파일들은 읽기 전용입니다(값만 읽으세요). 결과는 출력 파일 워크북에 쓰세요.
 
 ## 작업 대상(파일/시트/범위) 결정 — 매우 중요
 - 우선순위(위가 더 강함): ① 이번 요청의 @파일 / @시트 / @범위 명시, 그리고 사용자가 지금 선택해 둔 "현재 선택 범위" → ② 명시가 전혀 없으면 현재 활성 파일 + 활성 시트(ActiveWorkbook.ActiveSheet) 가 기본 작업공간.

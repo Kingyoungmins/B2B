@@ -184,6 +184,19 @@ function restorePipelineStep(stepId, originalStep) {
   refreshRunButton();
 }
 
+// VBA 스킬은 결과를 출력 워크북에 쓰므로 '출력 세션'을 대상으로 실행한다(입력은 읽기전용 동반 오픈).
+// 출력 세션이 없으면 현재 보고 있는 세션으로 폴백.
+function vbaTargetExcelId() {
+  try {
+    if (typeof getBackendOutputTarget === "function" && typeof excelMirrorSessionIdForFileId === "function") {
+      const t = getBackendOutputTarget();
+      const id = t && t.fileId ? excelMirrorSessionIdForFileId(t.fileId) : null;
+      if (id) return id;
+    }
+  } catch (_) {}
+  return typeof currentExcelId === "function" ? currentExcelId() : null;
+}
+
 // 0.4.9 리모콘 모델: 생성된 VBA를 라이브 워크북에 즉시 주입 실행한다.
 // 파이프라인 재실행/시뮬레이터를 거치지 않으므로 초저지연이고, 결과는 우측 라이브 엑셀에 바로 보인다.
 function applyVbaStepToLiveExcel(step, excelId) {
@@ -213,7 +226,7 @@ function applyLogic(step) {
   step = normalizeStep(step);
   // 0.4.9 리모콘 모델: VBA 스킬은 파이프라인/시뮬레이터를 우회해 라이브 엑셀에 즉시 주입 실행.
   if (((typeof getSkillEngine === "function" && getSkillEngine() === "vba") || step.language === "vba")) {
-    const liveExcelId = typeof currentExcelId === "function" ? currentExcelId() : null;
+    const liveExcelId = vbaTargetExcelId();
     if (liveExcelId) return applyVbaStepToLiveExcel(step, liveExcelId);
     // 라이브 세션이 없으면 아래 기존 경로로 폴백.
   }
@@ -273,7 +286,7 @@ function insertLogic(step, position) {
   next.splice(idx, 0, step);
   // 0.4.9 VBA: 중간 삽입은 순서가 바뀌므로 라이브를 리셋하고 enabled 스텝을 처음부터 재적용.
   if ((typeof getSkillEngine === "function" && getSkillEngine() === "vba") || step.language === "vba") {
-    const liveExcelId = typeof currentExcelId === "function" ? currentExcelId() : null;
+    const liveExcelId = vbaTargetExcelId();
     if (liveExcelId) {
       if (typeof pushHistory === "function") pushHistory("단계 삽입");
       state.pipeline = next;
@@ -1081,7 +1094,7 @@ async function reapplyVbaPipelineToLive(excelId) {
 async function reconcilePipelineSimulationAfterEdit(options = {}) {
   // VBA 엔진 + 라이브 세션이면 파이프라인 재동기화를 라이브 리셋+재적용으로 처리.
   if (typeof getSkillEngine === "function" && getSkillEngine() === "vba") {
-    const liveExcelId = typeof currentExcelId === "function" ? currentExcelId() : null;
+    const liveExcelId = vbaTargetExcelId();
     if (liveExcelId) return reapplyVbaPipelineToLive(liveExcelId);
   }
   const steps = options.steps || state.pipeline;

@@ -2616,6 +2616,11 @@ def _close_excel_session_impl(excel_id):
                 Path(temp_path).unlink(missing_ok=True)
             except Exception:
                 pass
+    for cdir in session.get("companionTemps") or []:
+        try:
+            shutil.rmtree(cdir, ignore_errors=True)
+        except Exception:
+            pass
     return {"ok": True, "closed": True}
 
 
@@ -2702,6 +2707,59 @@ def _restore_live_window(session, app, wb):
     _set_excel_window_owner(app, session.get("nativeHostHwnd"))
 
 
+def _ensure_companion_workbooks(session, app, current_wb):
+    """라이브 VBA 실행 인스턴스에 '다른 업로드 파일들'을 원본 이름 그대로(읽기전용, 창 숨김) 열어 둔다.
+    그래야 VBA 가 Workbooks("입력파일명").Worksheets("시트명") 으로 교차 파일 데이터를 읽을 수 있다
+    (입력은 한 파일, 출력 시트는 다른 파일 → 한 ActiveWorkbook 으로는 불가능하므로).
+    이미 열린 건 건너뛰고, 임시본 폴더는 세션에 모아 종료 시 정리한다. (한 번 열면 재사용)"""
+    try:
+        current_name = str(current_wb.Name).lower()
+    except Exception:
+        current_name = ""
+    try:
+        open_names = set(str(w.Name).lower() for w in app.Workbooks)
+    except Exception:
+        open_names = set()
+    temps = session.setdefault("companionTemps", [])
+    try:
+        app.ScreenUpdating = False
+    except Exception:
+        pass
+    for wid, rec in list(WORKBOOKS.items()):
+        clean = Path(str(rec.get("name") or "")).name
+        if not clean or clean.lower() == current_name or clean.lower() in open_names:
+            continue
+        src = rec.get("path")
+        if not src or not Path(src).exists():
+            continue
+        cdir = BACKEND_DIR / f"companion_{uuid.uuid4().hex}"
+        try:
+            cdir.mkdir(parents=True, exist_ok=True)
+            cpath = cdir / clean
+            shutil.copy2(src, cpath)
+            wb2, _t = excel_workbooks_open(app, cpath, read_only=True)
+            try:
+                wb2.Windows(1).Visible = False  # 동반 워크북 창은 숨김(표시는 활성 세션만)
+            except Exception:
+                pass
+            open_names.add(clean.lower())
+            temps.append(str(cdir))
+        except Exception:
+            try:
+                shutil.rmtree(cdir, ignore_errors=True)
+            except Exception:
+                pass
+    # 동반 워크북을 열면 ActiveWorkbook 이 바뀔 수 있으니 현재 세션 워크북을 다시 활성화.
+    try:
+        current_wb.Activate()
+    except Exception:
+        pass
+    try:
+        app.ScreenUpdating = True
+    except Exception:
+        pass
+
+
 def _run_vba_on_session_impl(excel_id, code, entry=None):
     """라이브 세션에 떠 있는 실제 워크북에 VBA 매크로를 주입해 즉시 실행한다(저지연 리모콘, 단일 단계 append).
     시트는 UserInterfaceOnly=True 보호라 사용자는 직접 편집 못 해도 VBA/COM 은 수정 가능."""
@@ -2711,6 +2769,8 @@ def _run_vba_on_session_impl(excel_id, code, entry=None):
     with EXCEL_LOCK:
         session = get_excel_session(excel_id)
         app, wb = session_workbook(session)
+        # 교차 파일 접근: 다른 업로드 파일들을 같은 인스턴스에 동반 오픈(읽기전용, 숨김).
+        _ensure_companion_workbooks(session, app, wb)
         prev_calc = None
         try:
             prev_calc = app.Calculation
@@ -2745,6 +2805,8 @@ def _run_vba_pipeline_on_session_impl(excel_id, steps, reset=True, entry=None):
     with EXCEL_LOCK:
         session = get_excel_session(excel_id)
         app, wb = session_workbook(session)
+        # 교차 파일 접근: 다른 업로드 파일들을 같은 인스턴스에 동반 오픈(읽기전용, 숨김).
+        _ensure_companion_workbooks(session, app, wb)
         if reset:
             source = session.get("sourcePath") or session.get("path")
             try:
