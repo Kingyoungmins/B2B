@@ -4322,11 +4322,8 @@ def _run_openpyxl_python_pipeline_impl(payload, job_id=None):
     result_id = uuid.uuid4().hex
     RESULTS[result_id] = {"path": str(result_path), "name": result_path.name, "created": time.time()}
     inspected = inspect_workbook(result_path)
-    result_output = {
-        sheet_name: (sheet.get("rows") or [])
-        for sheet_name, sheet in (inspected.get("sheets") or {}).items()
-    }
-    update_workbook_current_cache(output_wb_record, result_output)
+    result_output = inspected.get("sheets") or {}
+    update_workbook_current_cache(output_wb_record, rows_only_sheets(result_output))
     previews = build_result_previews(input_previews, result_output, current, {}, [])
     download_urls = dict(input_download_urls)
     download_urls[output_file_id] = f"/api/workbooks/download/{result_id}"
@@ -4752,25 +4749,82 @@ def _python_step_sig(step):
 
 
 def _excel_output_preview_sheets(wb):
-    # 라이브 미러 워크북에서 미리보기용 AoA 를 COM 으로 직접 읽는다(결과 파일 저장 없이).
+    # 라이브 미러 워크북에서 미리보기+수식 메타데이터를 COM 으로 직접 읽는다(결과 파일 저장 없이).
     data = {}
     for name in _excel_collection_names(wb.Worksheets):
         try:
             ws = wb.Worksheets(name)
             used = ws.UsedRange
-            rows = min(int(used.Rows.Count), PREVIEW_ROWS)
-            cols = min(int(used.Columns.Count), PREVIEW_COLS or 256)
+            max_row = max(0, int(used.Rows.Count))
+            max_col = max(0, int(used.Columns.Count))
+            rows = min(max_row, PREVIEW_ROWS)
+            cols = min(max_col, PREVIEW_COLS or 256)
         except Exception:
-            data[name] = []
+            data[name] = {
+                "rows": [],
+                "formulas": {},
+                "originalFormulaValues": {},
+                "formats": [],
+                "maxRow": 0,
+                "maxCol": 0,
+            }
             continue
         if rows <= 0 or cols <= 0:
-            data[name] = []
+            data[name] = {
+                "rows": [],
+                "formulas": {},
+                "originalFormulaValues": {},
+                "formats": [],
+                "maxRow": max_row,
+                "maxCol": max_col,
+            }
             continue
         try:
-            values = _range_matrix(ws.Range(ws.Cells(1, 1), ws.Cells(rows, cols)).Value)
-            data[name] = [[cell_to_json(v) for v in (row or [])] for row in values]
+            rng = ws.Range(ws.Cells(1, 1), ws.Cells(rows, cols))
+            values = _range_matrix(rng.Value)
+            formulas_matrix = _range_matrix(rng.Formula)
+            formats_matrix = _range_matrix(rng.NumberFormat)
+            out_rows = []
+            formulas = {}
+            original_formula_values = {}
+            formats = []
+            for r_idx in range(rows):
+                value_row = values[r_idx] if r_idx < len(values) else []
+                formula_row = formulas_matrix[r_idx] if r_idx < len(formulas_matrix) else []
+                format_row = formats_matrix[r_idx] if r_idx < len(formats_matrix) else []
+                out_row = []
+                out_format_row = []
+                for c_idx in range(cols):
+                    value = value_row[c_idx] if c_idx < len(value_row) else ""
+                    formula_value = formula_row[c_idx] if c_idx < len(formula_row) else value
+                    formula_text = _com_scalar(formula_value)
+                    json_value = cell_to_json(value)
+                    out_row.append(json_value)
+                    fmt = format_row[c_idx] if c_idx < len(format_row) else ""
+                    out_format_row.append(str(fmt or ""))
+                    if isinstance(formula_text, str) and formula_text.startswith("="):
+                        address = f"{_col_letter(c_idx + 1)}{r_idx + 1}"
+                        formulas[address] = formula_text
+                        original_formula_values[address] = json_value
+                out_rows.append(out_row)
+                formats.append(out_format_row)
+            data[name] = {
+                "rows": out_rows,
+                "formulas": formulas,
+                "originalFormulaValues": original_formula_values,
+                "formats": formats,
+                "maxRow": max_row,
+                "maxCol": max_col,
+            }
         except Exception:
-            data[name] = []
+            data[name] = {
+                "rows": [],
+                "formulas": {},
+                "originalFormulaValues": {},
+                "formats": [],
+                "maxRow": max_row,
+                "maxCol": max_col,
+            }
     return data
 
 
@@ -4786,14 +4840,11 @@ def _result_from_workbook_files(output_path, input_paths_by_name, output_item, o
     result_output = {}
     if out_path.exists():
         inspected = inspect_workbook(out_path)
-        result_output = {
-            sheet_name: (sheet.get("rows") or [])
-            for sheet_name, sheet in (inspected.get("sheets") or {}).items()
-        }
+        result_output = inspected.get("sheets") or {}
         download_id = uuid.uuid4().hex
         RESULTS[download_id] = {"path": str(out_path), "name": out_path.name, "created": time.time()}
         download_urls[output_file_id] = f"/api/workbooks/download/{download_id}"
-        update_workbook_current_cache(output_wb_record, result_output)
+        update_workbook_current_cache(output_wb_record, rows_only_sheets(result_output))
 
     rec_by_name = {}
     for item, rec in zip(payload.get("inputs", []), input_wb_records):
@@ -4804,16 +4855,13 @@ def _result_from_workbook_files(output_path, input_paths_by_name, output_item, o
         if not ip.exists():
             continue
         inspected_in = inspect_workbook(ip)
-        input_previews[name] = {
-            sheet_name: (sheet.get("rows") or [])
-            for sheet_name, sheet in (inspected_in.get("sheets") or {}).items()
-        }
+        input_previews[name] = inspected_in.get("sheets") or {}
         rid = uuid.uuid4().hex
         RESULTS[rid] = {"path": str(ip), "name": ip.name, "created": time.time()}
         download_urls["input:" + name] = f"/api/workbooks/download/{rid}"
         rec = rec_by_name.get(name)
         if rec is not None:
-            update_workbook_current_cache(rec, input_previews[name])
+            update_workbook_current_cache(rec, rows_only_sheets(input_previews[name]))
 
     previews = build_result_previews(input_previews, result_output, current, {}, [])
     return {
@@ -5089,7 +5137,7 @@ def _run_excel_python_pipeline_impl(payload, job_id=None):
             try:
                 rec = input_record_by_name.get(name)
                 if rec is not None:
-                    update_workbook_current_cache(rec, input_previews[name])
+                    update_workbook_current_cache(rec, rows_only_sheets(input_previews[name]))
                 snap_in = _snapshot_path(final_snapshot, "input", name)
                 if snap_in and Path(snap_in).exists():
                     src_path = snap_in  # 단계 스냅샷(이미 저장됨) 재사용 → 복사/추가 저장 없음
@@ -5187,7 +5235,7 @@ def _run_excel_python_pipeline_impl(payload, job_id=None):
         except Exception as err:
             _warn_excel_nonfatal("live output preview", err)
             result_output = {}
-        update_workbook_current_cache(output_wb_record, result_output)
+        update_workbook_current_cache(output_wb_record, rows_only_sheets(result_output))
         previews = build_result_previews(input_previews, result_output, current, {}, [])
         _perf["totalServerMs"] = (time.perf_counter() - _t0) * 1000
         _perf["finalizeMs"] = max(0.0, _perf["totalServerMs"] - _perf["openMs"] - _perf["resetMs"] - _perf["stepsMs"])
@@ -5218,11 +5266,8 @@ def _run_excel_python_pipeline_impl(payload, job_id=None):
     _t_inspect = time.perf_counter()
     inspected = inspect_workbook(result_path)
     _perf["inspectMs"] = (time.perf_counter() - _t_inspect) * 1000
-    result_output = {
-        sheet_name: (sheet.get("rows") or [])
-        for sheet_name, sheet in (inspected.get("sheets") or {}).items()
-    }
-    update_workbook_current_cache(output_wb_record, result_output)
+    result_output = inspected.get("sheets") or {}
+    update_workbook_current_cache(output_wb_record, rows_only_sheets(result_output))
     previews = build_result_previews(input_previews, result_output, current, {}, [])
     download_urls = dict(input_download_urls)
     download_urls[output_file_id] = f"/api/workbooks/download/{result_id}"
@@ -5685,6 +5730,39 @@ def update_workbook_current_cache(wb_record, sheets):
     with WORKBOOK_CACHE_LOCK:
         wb_record["current_aoa_cache"] = sheets
         wb_record["current_aoa_cache_created"] = time.time()
+
+
+def _sheet_payload_rows(sheet_payload):
+    if isinstance(sheet_payload, dict) and "rows" in sheet_payload:
+        return sheet_payload.get("rows") or []
+    return sheet_payload or []
+
+
+def rows_only_sheets(sheets):
+    return {
+        name: _sheet_payload_rows(sheet_payload)
+        for name, sheet_payload in (sheets or {}).items()
+    }
+
+
+def sheet_formula_maps(sheets, key):
+    out = {}
+    for name, sheet_payload in (sheets or {}).items():
+        if isinstance(sheet_payload, dict) and key in sheet_payload:
+            out[name] = sheet_payload.get(key) or {}
+        else:
+            out[name] = {}
+    return out
+
+
+def sheet_format_maps(sheets):
+    out = {}
+    for name, sheet_payload in (sheets or {}).items():
+        if isinstance(sheet_payload, dict) and "formats" in sheet_payload:
+            out[name] = sheet_payload.get("formats") or []
+        else:
+            out[name] = []
+    return out
 
 
 def write_result_workbook(template_path, result_path, sheets, forced_value_cells=None):
@@ -6156,7 +6234,20 @@ process.stdout.write(JSON.stringify({ inputs, output, forcedValueCells: Object.v
 
 def sheet_dimensions(sheets):
     dimensions = {}
-    for name, rows in (sheets or {}).items():
+    for name, sheet_payload in (sheets or {}).items():
+        rows = _sheet_payload_rows(sheet_payload)
+        if isinstance(sheet_payload, dict) and "rows" in sheet_payload:
+            max_row = int(sheet_payload.get("maxRow") or len(rows or []))
+            max_col = int(sheet_payload.get("maxCol") or max((len(row or []) for row in (rows or [])), default=0))
+            preview_rows = min(len(rows or []), PREVIEW_ROWS)
+            preview_cols = max((len(row or []) for row in (rows or [])[:PREVIEW_ROWS]), default=0)
+            dimensions[name] = {
+                "maxRow": max_row,
+                "maxCol": max_col,
+                "previewRows": preview_rows,
+                "previewCols": preview_cols,
+            }
+            continue
         dimensions[name] = {
             "maxRow": len(rows or []),
             "maxCol": max((len(row or []) for row in (rows or [])), default=0),
@@ -6178,8 +6269,9 @@ def build_result_previews(inputs, output, current, diffs=None, forced_value_cell
             "sheetNames": list((sheets or {}).keys()),
             "sheets": preview_sheets(sheets),
             "forcedValueCells": [cell for cell in forced_value_cells if cell.get("fileId") == file_id],
-            "formulas": {},
-            "formats": {},
+            "formulas": sheet_formula_maps(sheets, "formulas"),
+            "originalFormulaValues": sheet_formula_maps(sheets, "originalFormulaValues"),
+            "formats": sheet_format_maps(sheets),
             "dimensions": sheet_dimensions(sheets),
             "diff": diffs.get(file_id),
         })
@@ -6191,8 +6283,9 @@ def build_result_previews(inputs, output, current, diffs=None, forced_value_cell
             "sheetNames": list((output or {}).keys()),
             "sheets": preview_sheets(output),
             "forcedValueCells": [cell for cell in forced_value_cells if cell.get("fileId") == output_file_id],
-            "formulas": {},
-            "formats": {},
+            "formulas": sheet_formula_maps(output, "formulas"),
+            "originalFormulaValues": sheet_formula_maps(output, "originalFormulaValues"),
+            "formats": sheet_format_maps(output),
             "dimensions": sheet_dimensions(output),
             "diff": diffs.get(output_file_id),
         })
@@ -6204,8 +6297,8 @@ def preview_sheets(sheets):
         values = list(row or [])
         return values if PREVIEW_COLS is None else values[:PREVIEW_COLS]
     return {
-        name: [preview_row(row) for row in (rows or [])[:PREVIEW_ROWS]]
-        for name, rows in (sheets or {}).items()
+        name: [preview_row(row) for row in _sheet_payload_rows(sheet_payload)[:PREVIEW_ROWS]]
+        for name, sheet_payload in (sheets or {}).items()
     }
 
 

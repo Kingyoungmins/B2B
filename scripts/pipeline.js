@@ -6,10 +6,12 @@ function isStepEnabled(step) {
 }
 
 function inferPipelineStepLanguage(step) {
-  if (step && (step.language === "python" || step.language === "javascript")) return step.language;
+  if (step && (step.language === "python" || step.language === "javascript" || step.language === "vba")) return step.language;
   const code = String((step && step.code) || "");
+  if (/^\s*sub\s+\w+\s*\(/im.test(code) && /\bend\s+sub\b/i.test(code)) return "vba";
   if (/^\s*def\s+transform\s*\(\s*ctx\s*\)\s*:/m.test(code)) return "python";
   if (/^\s*def\s+transform\s*\(/m.test(code) || /\bctx\.(?:sheet|input|output|workbook|excel)\b/.test(code)) return "python";
+  if (/^\s*function\s+transform\s*\(\s*inputs\s*,\s*output\s*\)/m.test(code)) return "javascript";
   return "javascript";
 }
 

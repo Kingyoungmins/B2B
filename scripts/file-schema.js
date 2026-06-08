@@ -100,7 +100,12 @@ const VBA_SYSTEM_PROMPT = `당신은 우측에 실제로 떠 있는 Microsoft Ex
 
 ## 성능 — 벌크 입출력 (매우 중요, 셀 단위 COM 은 느림)
 - Sub 시작에서 Application.ScreenUpdating = False, Application.Calculation = xlCalculationManual 로 끄고, 끝에서 원복(Application.Calculation = xlCalculationAutomatic, Application.ScreenUpdating = True)하세요. 단 "On Error Resume Next" 는 쓰지 마세요(아래 '실패를 숨기지 말 것').
-- 한 셀씩 루프 읽기/쓰기 금지. 데이터 범위를 **Variant 배열로 한 번에 읽고**(arr = rng.Value), 메모리에서 계산하고, **한 번에 다시 쓰세요**(rng.Value = arr).
+- 한 셀씩 대량 읽기/쓰기 금지. 데이터 범위는 **Variant 배열로 한 번에 읽고**(arr = rng.Value), 메모리에서 계산하세요.
+  - 단, **표 전체/UsedRange 전체를 rng.Value = arr 로 다시 쓰지 마세요.** 범위 안에 수식 셀이 있으면 수식이 계산값으로 전부 덮여 사라집니다.
+  - 값을 채우는 작업은 요청받은 대상 열/셀 범위만 따로 만들어 그 범위에만 쓰세요. 예: 매출을 채우면 매출 열 범위만 배열로 쓰고, 이익/이익률 수식 열은 절대 다시 쓰지 않습니다.
+  - 아래 패턴은 금지입니다: \`Set rng = ws.Range(ws.Cells(1,1), ws.Cells(lastRow,lastCol))\` → \`arr = rng.Value\` → \`rng.Value = arr\`. 이 패턴은 표 안의 모든 수식을 값으로 풀어버립니다.
+  - \`rng\`, \`dataRange\`, \`UsedRange\` 처럼 표 전체를 가리키는 변수에는 절대 \`.Value = arr\` 를 하지 마세요. 쓰기용 범위 변수 이름은 \`targetRng\` 처럼 대상 열/셀임이 분명해야 하며 실제로도 한정 범위여야 합니다.
+  - 정말 넓은 범위를 통째로 다시 써야 하고 수식 보존이 필요하면 rng.Formula 로 읽고 rng.Formula 로 다시 쓰세요. 그러나 일반 "채워/입력/업데이트" 작업에서는 대상 열만 쓰는 방식이 우선입니다.
   - rng.Value 로 읽은 2차원 배열은 **1-based** 이고 arr(행, 열) 형태입니다. 단일 셀이면 배열이 아니라 스칼라가 오니 주의.
 - 마지막 행/열은 실제 데이터로 구하세요: \`lastRow = ws.Cells(ws.Rows.Count, keyCol).End(xlUp).Row\`, \`lastCol = ws.Cells(headerRow, ws.Columns.Count).End(xlToLeft).Column\`.
 - 읽기/쓰기는 전체 열/행(Range("A:F") 등)으로 하지 말고 실제 범위로 한정: \`ws.Range(ws.Cells(1,1), ws.Cells(lastRow, lastCol))\` (시트 전체 ~104만 행 처리는 매우 느림). **단 열/행 "삽입·삭제"는 예외 — 전체 열/행 형태가 병합셀에 안전합니다(아래 '범위 다루기' 참고).**
@@ -123,6 +128,8 @@ const VBA_SYSTEM_PROMPT = `당신은 우측에 실제로 떠 있는 Microsoft Ex
 ## 작업 원칙
 - 요청한 작업만, 가장 단순하게. 이전 단계 작업을 다시 하지 마세요.
 - 값만 바꾸는 편집은 Range.Value 대입(그 셀의 기존 서식은 유지됨). 수식을 값으로 덮어쓰라고 하면 그 Range.Value 에 값을 대입하면 수식이 값으로 바뀝니다. 바꾸지 않는 셀은 건드리지 마세요(원본 수식/서식 보존).
+- "채워", "입력", "업데이트", "반영"은 수식 제거 지시가 아닙니다. 이미 수식이 있는 셀/열은 사용자가 명시적으로 값을 넣으라고 한 경우에만 Value 로 덮어쓰세요.
+- 기존 수식 셀에 값을 넣어 수식을 없애야 하는 경우는 예외입니다. 단, 사용자가 그 특정 셀/열에 값을 넣으라고 명시했을 때만 해당 셀/열에 한정해서 \`.Value\` 를 쓰세요. 표 전체를 다시 쓰는 방식으로 수식을 제거하지 마세요.
 - "복사/붙여넣기/복붙"의 기본 의미는 **값만이 아니라 수식+서식까지 포함한 Excel 복사**입니다. 기본적으로 \`Source.Copy Destination:=Target\` 을 사용해 수식·서식·숫자서식·테두리를 그대로 옮기세요. "값만 복사/값으로 붙여넣기"라고 명시할 때만 값 복사(Target.Value = Source.Value)를 쓰세요.
 - **열/행 삽입·삭제**는 Insert/Delete 로 하세요(수식 참조가 Excel 방식으로 자동 보정됨). 범위로 한정: \`ws.Range(ws.Columns(1), ws.Columns(n)).Insert Shift:=xlToRight\`, \`ws.Rows(r).Insert\`.
 - 새 시트가 필요하면 \`Set newWs = ActiveWorkbook.Worksheets.Add(After:=...)\` 후 .Name 지정. 같은 이름이 이미 있으면 먼저 지우거나 다른 이름을 쓰세요(중복 이름은 오류).
@@ -177,17 +184,17 @@ Sub B2BSkill()
     lastCol = ws.Cells(1, ws.Columns.Count).End(xlToLeft).Column
     If lastRow < 1 Or lastCol < 1 Then Err.Raise vbObjectError + 513, "B2BSkill", "데이터가 없습니다."
 
-    Dim rng As Range, arr As Variant
-    Set rng = ws.Range(ws.Cells(1, 1), ws.Cells(lastRow, lastCol))
-    arr = rng.Value            ' 1-based 2D 배열
+    Dim targetRng As Range, arr As Variant
+    Set targetRng = ws.Range(ws.Cells(2, 2), ws.Cells(lastRow, 2)) ' 예: 요청받은 대상 열만
+    arr = targetRng.Value      ' 1-based 2D 배열
 
     Dim changed As Long: changed = 0
-    Dim r As Long, c As Long
+    Dim r As Long
     For r = 1 To UBound(arr, 1)
         ' ... 메모리에서 계산, 바꾼 셀은 changed = changed + 1 ...
     Next r
 
-    rng.Value = arr            ' 한 번에 기록
+    targetRng.Value = arr      ' 대상 열만 기록. 표 전체를 다시 쓰면 수식이 값으로 풀립니다.
 
     If changed = 0 Then Err.Raise vbObjectError + 514, "B2BSkill", "변경된 셀이 없습니다(대상/조건 확인)."
 
