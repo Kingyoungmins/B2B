@@ -32,9 +32,8 @@ const excelMirror = {
   // 파이프라인 적용 중 표시(이 동안 미러를 숨기고 로딩 애니메이션을 보여준다).
   applying: false,
   applyLoadingTimer: null,
-  // 0.4.9 owner 모드: 라이브 Excel 창을 호스트의 owner 로 띄운다 → z-order/최소화를 OS가 자동 처리.
-  // 따라서 주기적 raise / hide-inactive / 포커스 기반 재배치를 끈다(드래그 선택을 깨는 주범).
-  ownerMode: true,
+  // owner 방식은 선택/사이즈를 깨서 폐기 → 검증된 미러 머신러리(owner-less overlay + raise/hide)를 그대로 사용.
+  ownerMode: false,
 };
 // 업로드한 모든 파일(보통 입력 여러 개 + 출력)을 미리 열어 스택해 둔다.
 const EXCEL_MIRROR_MAX_CACHED_SESSIONS = 10;

@@ -1917,10 +1917,13 @@ def _open_excel_session_impl(
         path = working_copy_path
         # VBA 주입(스킬 적용)이 가능하도록, 이 라이브 인스턴스를 띄우기 전에 AccessVBOM 을 켠다.
         _ensure_vbom_access()
-    # read_only_mirror(읽기전용 보호 미러)와 live_editable(편집가능 라이브) 모두
-    # 우측 영역에 오버레이로 위치/사이즈를 맞춰 관리한다. 차이는 편집 가능 여부뿐.
+    # read_only_mirror(읽기전용 보호 미러)와 live_editable(라이브) 모두 검증된 미러 표시 경로를 그대로 쓴다
+    # (owner/프레임리스 커스텀은 선택/사이즈를 깨서 폐기). 라이브 차이는 작업복사본·VBA·저장뿐.
+    # 작업복사본을 read-only 로 열어도 VBA/COM 은 메모리에서 수정 가능하고, 다운로드는 SaveCopyAs 로 저장.
     manage_overlay = bool(read_only_mirror) or bool(live_editable)
-    open_read_only = bool(read_only_mirror) and not bool(live_editable)
+    # 라이브는 작업복사본을 편집가능(read_only=False)으로 연다(VBA 삽입/리셋 등 인메모리 변경 보장).
+    # 사용자 직접 편집은 시트 보호(UserInterfaceOnly)로 막으므로 화면 동작은 미러와 동일.
+    open_read_only = bool(read_only_mirror)
     with EXCEL_LOCK:
         browser_hwnd = None if (native_parent_hwnd or native_overlay) else (_capture_browser_hwnd(browser_title) if read_only_mirror else None)
         app = win32com.client.DispatchEx("Excel.Application")
@@ -1947,77 +1950,7 @@ def _open_excel_session_impl(
             app_pid = _excel_process_id(app)
             excel_id = uuid.uuid4().hex
             sheets = _excel_collection_names(wb.Worksheets)
-            if live_editable:
-                # 리모콘 모델: 리본/제목줄 등 엑셀 크롬을 숨긴 "임베드된" 모습으로 띄우되,
-                # 편집은 막고 선택은 허용, host를 owner로 두어 안 가리고 깜빡임 없게 한다.
-                try:
-                    wb.Activate()
-                except Exception:
-                    pass
-                # 편집 차단 + 선택 허용: 시트 보호(UserInterfaceOnly=True)로 사용자는 직접 못 고치되
-                # 셀/범위 선택(드래그)은 가능(EnableSelection=xlNoRestrictions, 채팅에서 범위 참조용).
-                # UserInterfaceOnly라 VBA/COM(스킬)은 보호와 무관하게 수정 가능.
-                try:
-                    _protect_workbook_for_read_only_mirror(wb, True)
-                except Exception:
-                    pass
-                # 리본/수식줄/컨텍스트메뉴 숨김 + 입력키 차단(미러와 동일한 임베드 모양).
-                try:
-                    _configure_excel_grid_window(app, wb)
-                except Exception:
-                    pass
-                try:
-                    app.WindowState = -4143  # xlNormal: 최대화/최소화 해제(이동 가능 상태)
-                except Exception:
-                    pass
-                # 창 프레임(제목줄/테두리) 제거 → 영역에 꽉 찬 임베드 모양.
-                _style_live_overlay_window(app)
-                # 호스트 창을 소유자(owner)로 지정 → Excel이 항상 호스트 위에 표시되어
-                # 메인 프로그램에 가려지지 않고, 채팅 클릭 시에도 재-raise가 필요 없어 깜빡임이 없다.
-                # SetParent(자식창)와 달리 owner 관계는 top-level 창을 유지하므로 셀 클릭/선택 입력은 정상.
-                _set_excel_window_owner(app, native_host_hwnd)
-                if width and height:
-                    # 숨김 상태에서 먼저 위치/크기를 잡아 둔다(SWP_FRAMECHANGED 로 프레임 제거 반영). → 표시 시 플래시 방지.
-                    _position_excel_window(
-                        app,
-                        left,
-                        top,
-                        width,
-                        height,
-                        client_left=client_left,
-                        client_top=client_top,
-                        client_width=client_width,
-                        client_height=client_height,
-                        viewport_width=viewport_width,
-                        viewport_height=viewport_height,
-                        show=False,
-                    )
-                try:
-                    app.Visible = True
-                except Exception:
-                    pass
-                try:
-                    app.ScreenUpdating = True
-                except Exception:
-                    pass
-                # 워크북(그리드) 내부 창이 Excel 창 전체를 채우도록 보정. 이걸 빼먹으면
-                # 바깥 창은 패널 크기여도 안쪽 그리드가 좌상단에만 작게 뜬다(미러와 동일 처리).
-                _ensure_excel_workbook_view(app, wb, make_visible=True, activate=False, maximize_workbook=True)
-                if width and height:
-                    # 잡아둔 위치 그대로 표시(show=True). owner 덕분에 호스트 위에 나타남.
-                    _position_excel_window(
-                        app,
-                        left,
-                        top,
-                        width,
-                        height,
-                        viewport_width=viewport_width,
-                        viewport_height=viewport_height,
-                        show=True,
-                    )
-                # 위치/표시 후 owner 를 한 번 더 보정(프레임 변경 과정에서 풀렸을 수 있음).
-                _set_excel_window_owner(app, native_host_hwnd)
-            elif read_only_mirror:
+            if read_only_mirror or live_editable:
                 try:
                     wb.Activate()
                 except Exception:
@@ -2103,23 +2036,26 @@ def _open_excel_session_impl(
                 "name": name or path.name,
                 "workbookId": workbook_id,
                 "resultId": result_id,
-                "readOnlyMirror": bool(read_only_mirror),
+                # 라이브도 표시 동작은 미러와 동일하므로 readOnlyMirror=True 로 두어 모든 표시 로직
+                # (_position/_activate/_raise/_save 의 readOnlyMirror 분기)을 그대로 탄다.
+                # VBA/저장/리셋 라우팅은 별도 liveEditable 플래그로 구분한다.
+                "readOnlyMirror": bool(read_only_mirror) or bool(live_editable),
                 "liveEditable": bool(live_editable),
                 "sourcePath": str(source_path),
                 "workingCopyPath": str(working_copy_path) if working_copy_path else "",
                 "liveRect": (
                     {"left": int(float(left or 0)), "top": int(float(top or 0)),
                      "width": int(float(width or 0)), "height": int(float(height or 0))}
-                    if live_editable and width and height else None
+                    if (live_editable or read_only_mirror) and width and height else None
                 ),
                 "browserHwnd": browser_hwnd,
-                "nativeParentHwnd": None if (native_overlay or live_editable) else native_parent_hwnd,
+                "nativeParentHwnd": None if native_overlay else native_parent_hwnd,
                 "nativeHostHwnd": native_host_hwnd,
-                "nativeOverlay": False if live_editable else bool(native_overlay),
+                "nativeOverlay": bool(native_overlay),
                 "hidden": False,
                 "lastNativePositionKey": (
                     f"{'overlay' if native_overlay else native_parent_hwnd}:{int(float(left or 0))}:{int(float(top or 0))}:{int(float(width or 0))}:{int(float(height or 0))}"
-                    if read_only_mirror and (native_parent_hwnd or native_overlay) and width and height
+                    if manage_overlay and (native_parent_hwnd or native_overlay) and width and height
                     else ""
                 ),
                 "created": time.time(),
@@ -2543,10 +2479,7 @@ def _raise_excel_session_impl(excel_id):
     with EXCEL_LOCK:
         session = get_excel_session(excel_id)
         app, wb = session_workbook(session)
-        if session.get("readOnlyMirror") or session.get("liveEditable"):
-            # 라이브: owner(호스트)로 항상 위에 있지만, 혹시 소유자가 풀렸으면 복구 후 raise.
-            if session.get("liveEditable"):
-                _set_excel_window_owner(app, session.get("nativeHostHwnd"))
+        if session.get("readOnlyMirror"):
             _raise_excel_window(app)
         return {"ok": True, "excelId": excel_id}
 
@@ -2681,7 +2614,8 @@ def _restore_live_protected_view(app, wb):
 
 
 def _restore_live_window(session, app, wb):
-    """리셋(_copy_source_workbook_into_target)으로 offscreen park 된 라이브 창을 다시 보이게+제자리로."""
+    """리셋(_copy_source_workbook_into_target)으로 offscreen park 된 라이브 창을 미러와 동일한 방식으로
+    다시 보이게+제자리로 되돌린다(owner/프레임리스 커스텀 없이 native_overlay 위치맞춤 + 워크북 뷰 + raise)."""
     try:
         app.Visible = True
     except Exception:
@@ -2690,20 +2624,34 @@ def _restore_live_window(session, app, wb):
         wb.Activate()
     except Exception:
         pass
-    _style_live_overlay_window(app)  # 프레임리스 재적용
-    _set_excel_window_owner(app, session.get("nativeHostHwnd"))
-    try:
-        _ensure_excel_workbook_view(app, wb, make_visible=True, activate=False, maximize_workbook=True)
-    except Exception:
-        pass
+    native_overlay = bool(session.get("nativeOverlay"))
+    native_parent_hwnd = session.get("nativeParentHwnd")
+    native_host_hwnd = session.get("nativeHostHwnd")
     rect = session.get("liveRect") or {}
     left, top, width, height = rect.get("left"), rect.get("top"), rect.get("width"), rect.get("height")
     if width and height:
         try:
-            _position_excel_window(app, left, top, width, height, show=True)
+            _position_excel_window(
+                app, left, top, width, height,
+                native_parent_hwnd=None if native_overlay else native_parent_hwnd,
+                native_host_hwnd=native_host_hwnd,
+                native_overlay=native_overlay,
+                show=True,
+            )
         except Exception:
             pass
-    _set_excel_window_owner(app, session.get("nativeHostHwnd"))
+    try:
+        _ensure_excel_workbook_view(
+            app, wb, make_visible=True,
+            activate=False if (native_parent_hwnd or native_overlay) else True,
+            maximize_workbook=False if (native_overlay or native_parent_hwnd) else True,
+        )
+    except Exception:
+        pass
+    try:
+        _raise_excel_window(app)
+    except Exception:
+        pass
 
 
 def _run_vba_on_session_impl(excel_id, code, entry=None):
