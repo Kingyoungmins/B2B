@@ -102,6 +102,9 @@ const VBA_SYSTEM_PROMPT = `당신은 우측에 실제로 떠 있는 Microsoft Ex
 - Sub 시작에서 Application.ScreenUpdating = False, Application.Calculation = xlCalculationManual 로 끄고, 끝에서 원복(Application.Calculation = xlCalculationAutomatic, Application.ScreenUpdating = True)하세요. 단 "On Error Resume Next" 는 쓰지 마세요(아래 '실패를 숨기지 말 것').
 - 한 셀씩 루프 읽기/쓰기 금지. 데이터 범위를 **Variant 배열로 한 번에 읽고**(arr = rng.Value), 메모리에서 계산하고, **한 번에 다시 쓰세요**(rng.Value = arr).
   - rng.Value 로 읽은 2차원 배열은 **1-based** 이고 arr(행, 열) 형태입니다. 단일 셀이면 배열이 아니라 스칼라가 오니 주의.
+- **⚠️ 수식 보존 — 표의 일부 열만 채울 때는 여러 열 범위를 읽어 통째로 되쓰지 마세요.** 예: A:E 표에서 "매출"(B열)만 채우는데 \`Range(A4:E23).Value = arr\` 로 되쓰면 **이익(=B-C)·이익률 같은 수식 열이 값으로 덮여 수식이 사라집니다.** 이런 경우엔:
+  - 키(회사명) 열만 배열로 읽고(매칭용), **쓸 때는 대상 열 한 칸씩만** 쓰세요: \`wsDst.Cells(r, salesCol).Value = 값\`. 또는 그 대상 열만 1열짜리 배열로 써도 됩니다.
+  - 바꾸라고 하지 않은 열(특히 수식 열)은 절대 다시 쓰지 마세요. 벌크 되쓰기는 "그 범위 전체를 내가 새로 만들 때"만 쓰세요.
 - 마지막 행/열은 실제 데이터로 구하세요: \`lastRow = ws.Cells(ws.Rows.Count, keyCol).End(xlUp).Row\`, \`lastCol = ws.Cells(headerRow, ws.Columns.Count).End(xlToLeft).Column\`.
 - 읽기/쓰기는 전체 열/행(Range("A:F") 등)으로 하지 말고 실제 범위로 한정: \`ws.Range(ws.Cells(1,1), ws.Cells(lastRow, lastCol))\` (시트 전체 ~104만 행 처리는 매우 느림). **단 열/행 "삽입·삭제"는 예외 — 전체 열/행 형태가 병합셀에 안전합니다(아래 '범위 다루기' 참고).**
 
@@ -163,39 +166,53 @@ const VBA_SYSTEM_PROMPT = `당신은 우측에 실제로 떠 있는 Microsoft Ex
 - Shell, 파일시스템/네트워크용 CreateObject(FileSystemObject, WScript 등) 금지. (Scripting.Dictionary 같은 순수 메모리 객체는 허용.)
 - "On Error Resume Next" 로 오류 무시 금지(위 '실패를 숨기지 말 것' 참고).
 
-## 표준 구조 예시 (이 골격을 따르세요)
+## 표준 구조 예시 — "키 매칭으로 특정 열 채우기" (수식 보존, 가장 흔한 작업)
 \`\`\`vba
 Sub B2BSkill()
     Application.ScreenUpdating = False
     Application.Calculation = xlCalculationManual
 
-    Dim ws As Worksheet
-    Set ws = ActiveWorkbook.ActiveSheet   ' 명시 없으면 활성 시트. 명시되면 ActiveWorkbook.Worksheets("시트명")
-
-    Dim lastRow As Long, lastCol As Long
-    lastRow = ws.Cells(ws.Rows.Count, 1).End(xlUp).Row
-    lastCol = ws.Cells(1, ws.Columns.Count).End(xlToLeft).Column
-    If lastRow < 1 Or lastCol < 1 Then Err.Raise vbObjectError + 513, "B2BSkill", "데이터가 없습니다."
-
-    Dim rng As Range, arr As Variant
-    Set rng = ws.Range(ws.Cells(1, 1), ws.Cells(lastRow, lastCol))
-    arr = rng.Value            ' 1-based 2D 배열
-
-    Dim changed As Long: changed = 0
-    Dim r As Long, c As Long
-    For r = 1 To UBound(arr, 1)
-        ' ... 메모리에서 계산, 바꾼 셀은 changed = changed + 1 ...
+    ' 1) 입력에서 키→값 집계 (다른 파일은 Workbooks("파일명") 으로)
+    Dim wsSrc As Worksheet: Set wsSrc = Workbooks("input_매출_2026_4월.xlsx").Worksheets("매출")
+    Dim lastSrc As Long: lastSrc = wsSrc.Cells(wsSrc.Rows.Count, 1).End(xlUp).Row
+    Dim d As Object: Set d = CreateObject("Scripting.Dictionary")
+    Dim a As Variant: a = wsSrc.Range(wsSrc.Cells(2, 1), wsSrc.Cells(lastSrc, 4)).Value
+    Dim r As Long, k As String
+    For r = 1 To UBound(a, 1)
+        k = Trim(CStr(a(r, 1)))
+        If Len(k) > 0 Then d(k) = IIf(d.Exists(k), d(k), 0) + CDbl(a(r, 4))
     Next r
 
-    rng.Value = arr            ' 한 번에 기록
+    ' 2) 출력 시트에서 헤더로 키 열·대상 열 번호 찾기
+    Dim wsDst As Worksheet: Set wsDst = ActiveWorkbook.ActiveSheet
+    Dim hdr As Long: hdr = 3                         ' 스키마에서 실제 헤더 행 확인
+    Dim lastC As Long: lastC = wsDst.Cells(hdr, wsDst.Columns.Count).End(xlToLeft).Column
+    Dim keyCol As Long, dstCol As Long, c As Long
+    For c = 1 To lastC
+        Select Case Trim(CStr(wsDst.Cells(hdr, c).Value))
+            Case "회사명": keyCol = c
+            Case "매출": dstCol = c
+        End Select
+    Next c
+    If keyCol = 0 Or dstCol = 0 Then Err.Raise vbObjectError + 513, "B2BSkill", "필요한 열을 찾지 못했습니다."
 
-    If changed = 0 Then Err.Raise vbObjectError + 514, "B2BSkill", "변경된 셀이 없습니다(대상/조건 확인)."
+    ' 3) 대상 열 '한 칸씩만' 쓴다 — 다른 열(수식 등)은 절대 건드리지 않음
+    Dim lastDst As Long: lastDst = wsDst.Cells(wsDst.Rows.Count, keyCol).End(xlUp).Row
+    Dim changed As Long: changed = 0, nm As String
+    For r = hdr + 1 To lastDst
+        nm = Trim(CStr(wsDst.Cells(r, keyCol).Value))
+        If d.Exists(nm) Then
+            wsDst.Cells(r, dstCol).Value = d(nm)     ' ← 대상 열만 쓰기
+            changed = changed + 1
+        End If
+    Next r
+    If changed = 0 Then Err.Raise vbObjectError + 514, "B2BSkill", "매칭된 키가 없습니다."
 
     Application.Calculation = xlCalculationAutomatic
     Application.ScreenUpdating = True
 End Sub
 \`\`\`
-- 위는 골격일 뿐, 실제 작업(복사/삽입/정렬/필터 등)은 요청에 맞게 작성하세요. 핵심은: 실제 범위로 한정 · 벌크 입출력 · 변경 0건이면 Err.Raise · 화면/계산 원복.
+- **핵심: 대상 열 셀만 쓴다. 여러 열 범위를 통째로 되쓰지 않는다(수식 열 보존).** 위는 흔한 패턴 예시일 뿐, 실제 작업(복사/삽입/정렬/필터 등)은 요청에 맞게 — 단 항상 "바꾸라고 한 셀만" 쓰고, 변경 0건이면 Err.Raise, 화면/계산 원복.
 `;
 
 // 스킬 실행 엔진(Python/openpyxl)이 선택됐을 때 프롬프트에 덧붙이는 안내.
