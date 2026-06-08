@@ -772,6 +772,7 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
                 native_parent_hwnd=payload.get("nativeParentHwnd"),
                 native_host_hwnd=payload.get("nativeHostHwnd"),
                 native_overlay=bool(payload.get("nativeOverlay")),
+                keep_zorder=bool(payload.get("keepZorder")),
             ))
         except Exception as err:
             self.send_json({"ok": False, "error": str(err)}, status=400)
@@ -1525,6 +1526,7 @@ def _position_excel_window(
     viewport_width=None,
     viewport_height=None,
     show=True,
+    keep_zorder=False,
 ):
     left, top, width, height = _resolve_excel_mirror_rect(
         left,
@@ -1630,6 +1632,9 @@ def _position_excel_window(
         flags = win32con.SWP_NOOWNERZORDER | win32con.SWP_FRAMECHANGED
         if native_parent_hwnd or not (show and native_overlay):
             flags |= win32con.SWP_NOACTIVATE
+        if keep_zorder:
+            # z-order 를 바꾸지 않고 위치/크기만 변경(비활성 창이 위로 튀어나오는 순회 방지).
+            flags |= win32con.SWP_NOZORDER
         if show:
             flags |= win32con.SWP_SHOWWINDOW
         else:
@@ -2419,6 +2424,7 @@ def _position_excel_session_impl(
     native_parent_hwnd=None,
     native_host_hwnd=None,
     native_overlay=False,
+    keep_zorder=False,
 ):
     with EXCEL_LOCK:
         session = get_excel_session(excel_id)
@@ -2485,6 +2491,7 @@ def _position_excel_session_impl(
             client_height=client_height,
             viewport_width=viewport_width,
             viewport_height=viewport_height,
+            keep_zorder=keep_zorder,
         )
         if native_position_key:
             session["lastNativePositionKey"] = native_position_key
@@ -2704,11 +2711,16 @@ def _run_vba_on_session_impl(excel_id, code, entry=None):
             prev_calc = app.Calculation
         except Exception:
             prev_calc = None
+        # VBA 실행 동안에는 시트 보호를 풀어 둔다(보호로 인한 1004 류 실패 방지). 끝나면 다시 보호.
+        try:
+            _protect_workbook_for_read_only_mirror(wb, False)
+        except Exception:
+            pass
         try:
             _inject_and_run_vba(app, wb, code, entry)
         finally:
             try:
-                app.ScreenUpdating = True
+                _restore_live_protected_view(app, wb)
             except Exception:
                 pass
             try:
@@ -2739,6 +2751,12 @@ def _run_vba_pipeline_on_session_impl(excel_id, steps, reset=True, entry=None):
             except Exception:
                 pass
             _copy_source_workbook_into_target(app, wb, source)
+        else:
+            # 비리셋(append): 현재 보호 상태를 풀고 실행(보호로 인한 1004 류 방지).
+            try:
+                _protect_workbook_for_read_only_mirror(wb, False)
+            except Exception:
+                pass
         for st in steps:
             code = (st.get("code") if isinstance(st, dict) else str(st)) or ""
             if code.strip():
@@ -3109,6 +3127,7 @@ def position_excel_session(
     native_parent_hwnd=None,
     native_host_hwnd=None,
     native_overlay=False,
+    keep_zorder=False,
 ):
     return excel_call(
         _position_excel_session_impl,
@@ -3127,6 +3146,7 @@ def position_excel_session(
         native_parent_hwnd=native_parent_hwnd,
         native_host_hwnd=native_host_hwnd,
         native_overlay=native_overlay,
+        keep_zorder=keep_zorder,
         timeout=60,
     )
 

@@ -964,7 +964,8 @@ async function positionExcelMirrorWindow(excelId = currentExcelId(), options = {
   // 세션별 추적: 이 미러가 이미 이 위치에 배치돼 있으면(=숨겨지지 않았음) 재배치를 건너뛴다.
   // 전역 키가 아니라 세션별이라, 다른 파일로 전환해도 그 파일이 제자리면 재배치 COM 을 생략 → 저사양에서 즉시 전환.
   if (!options.force && excelMirror.positionedKeyByExcelId[excelId] === key) return true;
-  await postExcelMirror("/api/excel/position", { excelId, ...rect });
+  // keepZorder: z-order 를 바꾸지 않고 위치/크기만(비활성 창 재배치 시 위로 안 튀어나오게).
+  await postExcelMirror("/api/excel/position", { excelId, ...rect, keepZorder: !!options.keepZorder });
   excelMirror.positionedKeyByExcelId[excelId] = key;
   if (rect.nativeShell) excelMirror.lastNativePositionKey = key;
   excelMirror.lastPositionKey = key;
@@ -1010,17 +1011,20 @@ function stabilizeExcelMirrorZOrder(excelId = currentExcelId()) {
   }, delay));
 }
 
-// 활성 세션만 재배치한다. (모든 세션을 재배치하면 각 창이 HWND_TOP 으로 올라오며
-// 파일들이 차례로 위로 튀어나와 "순회"처럼 보이는 사이드이펙트가 생김 — 비활성은 전환 시 재배치됨.)
+// 열려 있는 모든 Excel 세션을 현재 영역 크기/위치로 재배치한다(스플리터/리사이즈 시 전부 함께 이동).
+// keepZorder:true 로 z-order 를 안 바꾸므로 비활성 창이 위로 튀어나오는 "순회" 없이 같이 리사이즈된다.
+// 활성 세션은 z-order 유지로 그대로 최상단.
 function scheduleExcelMirrorPosition(force = false) {
   clearTimeout(excelMirror.positionTimer);
   excelMirror.positionTimer = setTimeout(() => {
-    const excelId = currentExcelId();
-    if (!excelId) return;
-    positionExcelMirrorWindow(excelId, { force }).catch(err => {
+    const active = currentExcelId();
+    const ids = Array.from(new Set(Object.values(excelMirror.sessionsByFileId || {}).filter(Boolean)));
+    if (!ids.length) return;
+    Promise.all(ids.map(id => positionExcelMirrorWindow(id, { force, keepZorder: true }).catch(err => {
       if (!isMissingExcelSessionError(err)) console.warn("Excel mirror position failed:", err);
-    }).then(() => {
-      if (currentExcelId()) stabilizeExcelMirrorZOrder(currentExcelId());
+    }))).then(() => {
+      // 활성 1개만 보정 raise(다른 창은 건드리지 않음 → 순회 없음).
+      if (active && currentExcelId() === active) stabilizeExcelMirrorZOrder(active);
     });
   }, 80);
 }

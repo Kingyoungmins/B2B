@@ -121,10 +121,15 @@ const VBA_SYSTEM_PROMPT = `당신은 우측에 실제로 떠 있는 Microsoft Ex
 - 비교/치환 문자열은 위 "현재 파일 스키마"에 보이는 실제 셀 텍스트를 그대로 사용하세요. 0패딩/비패딩 모두 처리하려면 "02월"과 "2월"을 각각 따로 치환하세요.
 - 부분 일치가 필요하면 InStr 로 실제 텍스트 형태를 그대로 검사하세요.
 
-## 범위 다루기 (조용한 no-op 방지)
-- 읽기/복사 대상으로 전체 열·행(Range("A:F"), Columns, Rows)을 쓰지 마세요. 실제 데이터 끝을 구해 한정하세요:
-  \`lastRow = ws.Cells(ws.Rows.Count, 1).End(xlUp).Row\`, \`lastCol = ws.Cells(1, ws.Columns.Count).End(xlToLeft).Column\`.
-- "맨 앞에 붙여넣기/삽입"은 자기 자신 위에 덮어쓰는 게 아니라 **앞에 빈 공간을 만들어 밀어넣는 것**입니다. 예: 원본을 메모리에 읽거나, 먼저 \`ws.Range(ws.Columns(1), ws.Columns(n)).Insert Shift:=xlToRight\` 로 빈 열을 만든 뒤 거기에 \`Source.Copy Destination:=...\` 로 붙여넣으세요. 절대 \`Range("A:F").Copy Destination:=Range("A1")\` 처럼 같은 위치에 복사하지 마세요.
+## 범위 다루기 (1004 오류 / 조용한 no-op 방지) — 매우 중요
+- **전체 열·행 연산 절대 금지**: \`Range("A:F")\`, \`Columns("A:F")\`, \`Range("G:L").Copy\`, \`Columns.Insert\`, \`Rows\` 등을 Copy/Insert/Delete/PasteSpecial 대상으로 쓰지 마세요. 시트에 **병합 셀(예: 제목 행 "■ 2026년 02월 ...")**이 있으면 전체 열 Insert/Copy 는 런타임 오류 1004("병합된 셀 일부를 변경할 수 없습니다")로 **반드시 실패**합니다.
+- **@범위가 "A:F"처럼 전체 열로 와도** 그대로 쓰지 말고 실제 데이터 범위로 환산하세요:
+  \`lastRow = ws.Cells(ws.Rows.Count, 1).End(xlUp).Row\`, 대상 = \`ws.Range(ws.Cells(1, 1), ws.Cells(lastRow, 6))\` (A~F = 1~6열).
+- **"맨 앞에 N열 삽입 + 복사 붙여넣기"** 패턴(예: A:F를 복사해 맨 앞에 6열 삽입):
+  1) \`lastRow\` 계산 → 원본 영역 \`Set src = ws.Range(ws.Cells(1,1), ws.Cells(lastRow,6))\`
+  2) 맨 앞에 6열 삽입(데이터 범위만 영향): \`ws.Range(ws.Cells(1,1), ws.Cells(lastRow,6)).Insert Shift:=xlToRight, CopyOrigin:=xlFormatFromLeftOrAbove\` — 단 병합셀이 행 전체를 가로지르면 이 방법도 실패할 수 있으니, 차라리 원본을 메모리로 읽고 새 위치에 다시 쓰는 방식을 우선 고려.
+  3) 삽입으로 원본이 G~L(7~12열)로 밀렸으면 \`ws.Range(ws.Cells(1,7), ws.Cells(lastRow,12)).Copy Destination:=ws.Range(ws.Cells(1,1), ws.Cells(lastRow,1))\` (Destination 은 좌상단 한 셀만 줘도 크기에 맞춰 붙음).
+- 절대 \`Range("A:F").Copy Destination:=Range("A1")\` 처럼 같은 위치에 복사하지 마세요(변화 0).
 
 ## 금지
 - MsgBox, InputBox 등 사용자 입력/대화상자를 띄우지 마세요(자동 실행이라 멈춥니다).

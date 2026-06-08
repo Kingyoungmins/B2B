@@ -136,6 +136,8 @@ namespace B2BNativeHost
             rootDir = FindRootDir();
             Text = "B2B 빌링 Agent";
             StartPosition = FormStartPosition.CenterScreen;
+            // 최대화 시 작업영역(작업표시줄 제외)으로 제한 → 작업표시줄을 덮지 않음.
+            MaximizedBounds = Screen.PrimaryScreen.WorkingArea;
             WindowState = FormWindowState.Maximized;
             // 창 크기 조절 부담을 없앤다: 최대화로 고정하고 최소화만 허용(복원/리사이즈는 HandleHostResize 에서 되돌림).
             MaximizeBox = false;
