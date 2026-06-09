@@ -86,6 +86,7 @@ namespace B2BNativeHost
         private string lastNativeBoundsKey = "";
         private string webViewUserDataDir = "";
         private System.Windows.Forms.Timer excelFocusTimer;
+        private System.Windows.Forms.Timer vbaDebugSuppressTimer;
         private bool excelMouseDownFocused;
         private FormWindowState lastWindowState;
         private bool shuttingDown;
@@ -95,8 +96,13 @@ namespace B2BNativeHost
         private bool debugHotkeyRegistered;
         private const int DEBUG_HOTKEY_ID = 0xB2B8;
         private const int WM_HOTKEY = 0x0312;
+        private const int WM_CLOSE = 0x0010;
+        private const int SW_HIDE = 0;
 
         private delegate bool EnumWindowProc(IntPtr hwnd, IntPtr lParam);
+
+        [DllImport("user32.dll")]
+        private static extern bool EnumWindows(EnumWindowProc lpEnumFunc, IntPtr lParam);
 
         [DllImport("user32.dll")]
         private static extern bool EnumChildWindows(IntPtr hwndParent, EnumWindowProc lpEnumFunc, IntPtr lParam);
@@ -109,6 +115,12 @@ namespace B2BNativeHost
 
         [DllImport("user32.dll", CharSet = CharSet.Auto)]
         private static extern int GetClassName(IntPtr hWnd, StringBuilder lpClassName, int nMaxCount);
+
+        [DllImport("user32.dll", CharSet = CharSet.Auto)]
+        private static extern int GetWindowText(IntPtr hWnd, StringBuilder lpString, int nMaxCount);
+
+        [DllImport("user32.dll")]
+        private static extern bool PostMessage(IntPtr hWnd, int msg, IntPtr wParam, IntPtr lParam);
 
         [DllImport("user32.dll")]
         private static extern bool IsWindowVisible(IntPtr hWnd);
@@ -213,6 +225,7 @@ namespace B2BNativeHost
             excelPanel.MouseDown += (s, e) => FocusExcelChild();
             excelPanel.Enter += (s, e) => FocusExcelChild();
             StartExcelFocusAssist();
+            StartVbaDebugSuppressor();
 
             Load += async (s, e) => await InitializeAsync();
             Shown += (s, e) => ApplyInitialSplitterLayout();
@@ -286,6 +299,58 @@ namespace B2BNativeHost
         private void ToggleDebugPanel()
         {
             ExecuteWebScript("if (typeof toggleDebugPanel === 'function') toggleDebugPanel();");
+        }
+
+        private void StartVbaDebugSuppressor()
+        {
+            if (vbaDebugSuppressTimer != null) return;
+            vbaDebugSuppressTimer = new System.Windows.Forms.Timer();
+            vbaDebugSuppressTimer.Interval = 80;
+            vbaDebugSuppressTimer.Tick += (s, e) => SuppressVbaDebugWindows();
+            vbaDebugSuppressTimer.Start();
+        }
+
+        private static string WindowText(IntPtr hwnd)
+        {
+            StringBuilder sb = new StringBuilder(512);
+            try { GetWindowText(hwnd, sb, sb.Capacity); } catch { }
+            return sb.ToString();
+        }
+
+        private void SuppressVbaDebugWindows()
+        {
+            try
+            {
+                EnumWindows(delegate(IntPtr hwnd, IntPtr lParam)
+                {
+                    string title = WindowText(hwnd);
+                    string cls = WindowClass(hwnd);
+                    string probe = ((title ?? "") + " " + (cls ?? "")).ToLowerInvariant();
+                    bool isVbe = probe.Contains("visual basic for applications") ||
+                        probe.Contains("microsoft visual basic") ||
+                        probe.Contains("wndclass_desked");
+                    if (!isVbe) return true;
+
+                    try
+                    {
+                        if (String.Equals(cls, "#32770", StringComparison.OrdinalIgnoreCase))
+                        {
+                            PostMessage(hwnd, WM_CLOSE, IntPtr.Zero, IntPtr.Zero);
+                        }
+                        else
+                        {
+                            ShowWindow(hwnd, SW_HIDE);
+                        }
+                    }
+                    catch
+                    {
+                    }
+                    return true;
+                }, IntPtr.Zero);
+            }
+            catch
+            {
+            }
         }
 
         private void ApplyInitialSplitterLayout()

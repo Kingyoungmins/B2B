@@ -2689,6 +2689,16 @@ def _strip_vba_comment(line):
 def _validate_vba_source_before_inject(code):
     """VBE 디버거를 띄우는 명백한 컴파일 오류는 Excel에 주입하기 전에 차단한다."""
     lines = str(code or "").splitlines()
+    block_stack = []
+
+    def push(kind, line_no, expected):
+        block_stack.append((kind, line_no, expected))
+
+    def pop(expected_kind, end_text, line_no):
+        if not block_stack or block_stack[-1][0] != expected_kind:
+            raise RuntimeError("VBA 문법 오류(%d행): 대응되는 %s 블록이 없습니다." % (line_no, end_text))
+        block_stack.pop()
+
     for idx, raw in enumerate(lines, 1):
         line = _strip_vba_comment(raw).strip()
         if not line or line.endswith("_"):
@@ -2697,6 +2707,51 @@ def _validate_vba_source_before_inject(code):
             raise RuntimeError("VBA 문법 오류(%d행): As 뒤의 자료형이 비어 있습니다." % idx)
         if re.search(r"(?:,|\+|-|\*|/|&|=|<>|<=|>=|<|>|And|Or|Xor|Mod)\s*$", line, re.IGNORECASE):
             raise RuntimeError("VBA 문법 오류(%d행): 줄 끝의 식이 완성되지 않았습니다." % idx)
+        if re.match(r"^End\s+Sub\b", line, re.IGNORECASE):
+            pop("Sub", "Sub", idx)
+            continue
+        if re.match(r"^End\s+Function\b", line, re.IGNORECASE):
+            pop("Function", "Function", idx)
+            continue
+        if re.match(r"^End\s+If\b", line, re.IGNORECASE):
+            pop("If", "If", idx)
+            continue
+        if re.match(r"^End\s+With\b", line, re.IGNORECASE):
+            pop("With", "With", idx)
+            continue
+        if re.match(r"^End\s+Select\b", line, re.IGNORECASE):
+            pop("Select", "Select", idx)
+            continue
+        if re.match(r"^Next\b", line, re.IGNORECASE):
+            pop("For", "For", idx)
+            continue
+        if re.match(r"^Loop\b", line, re.IGNORECASE):
+            pop("Do", "Do", idx)
+            continue
+        if re.match(r"^(?:(?:Public|Private|Friend|Static)\s+)?Sub\b", line, re.IGNORECASE):
+            push("Sub", idx, "End Sub")
+            continue
+        if re.match(r"^(?:(?:Public|Private|Friend|Static)\s+)?Function\b", line, re.IGNORECASE):
+            push("Function", idx, "End Function")
+            continue
+        if re.match(r"^If\b", line, re.IGNORECASE) and re.search(r"\bThen\s*$", line, re.IGNORECASE):
+            push("If", idx, "End If")
+            continue
+        if re.match(r"^For\b", line, re.IGNORECASE):
+            push("For", idx, "Next")
+            continue
+        if re.match(r"^Do\b", line, re.IGNORECASE):
+            push("Do", idx, "Loop")
+            continue
+        if re.match(r"^With\b", line, re.IGNORECASE):
+            push("With", idx, "End With")
+            continue
+        if re.match(r"^Select\s+Case\b", line, re.IGNORECASE):
+            push("Select", idx, "End Select")
+            continue
+    if block_stack:
+        kind, line_no, expected = block_stack[-1]
+        raise RuntimeError("VBA 문법 오류(%d행): %s가 없습니다." % (line_no, expected))
 
 
 def _vba_pipeline_step_info(step, fallback_idx, err):

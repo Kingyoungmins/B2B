@@ -317,7 +317,10 @@ function applyVbaStepToLiveExcel(step, excelId) {
   const promise = prehide
     .then(() => {
       const requestStarted = performance.now();
-      return postExcelMirror("/api/excel/run-vba", { excelId, code: step.code })
+      return postExcelMirror("/api/excel/run-vba", { excelId, code: step.code }, 0, {
+        timeoutMs: 20000,
+        timeoutMessage: "VBA 실행 응답이 지연되어 중단했습니다. 디버거/오류 창을 닫고 다시 시도해 주세요.",
+      })
         .then(data => {
           requestMs = performance.now() - requestStarted;
           return data;
@@ -1284,7 +1287,10 @@ async function reapplyVbaPipelineToLive(excelId, options = {}) {
       }
     }
     const requestStarted = performance.now();
-    const data = await postExcelMirror("/api/excel/run-vba-pipeline", { excelId, steps, reset: true });
+    const data = await postExcelMirror("/api/excel/run-vba-pipeline", { excelId, steps, reset: true }, 0, {
+      timeoutMs: Math.max(25000, Math.min(120000, steps.length * 20000)),
+      timeoutMessage: "VBA 파이프라인 실행 응답이 지연되어 중단했습니다. 디버거/오류 창을 닫고 다시 시도해 주세요.",
+    });
     requestMs = performance.now() - requestStarted;
     if (typeof endExcelMirrorApplyLoading === "function") endExcelMirrorApplyLoading();
     if (typeof releaseExcelMirrorPipelineMute === "function") releaseExcelMirrorPipelineMute(excelId);

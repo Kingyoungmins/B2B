@@ -1061,22 +1061,33 @@ function installExcelMirrorPositionListeners() {
   }, true);
 }
 
-async function postExcelMirror(path, body, attempt = 0) {
+async function postExcelMirror(path, body, attempt = 0, options = {}) {
   let resp;
+  let timeoutId = null;
+  const controller = options.timeoutMs ? new AbortController() : null;
+  if (controller) {
+    timeoutId = setTimeout(() => controller.abort(), Math.max(1000, Number(options.timeoutMs) || 0));
+  }
   try {
     resp = await fetch(path, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(body || {}),
+      signal: controller ? controller.signal : undefined,
     });
   } catch (err) {
+    if (err && err.name === "AbortError") {
+      throw new Error(options.timeoutMessage || "Excel VBA 실행이 응답하지 않아 중단했습니다.");
+    }
     // 네트워크 수준 실패("Failed to fetch") — 저사양 PC 에서 서버가 COM 으로 잠깐 바빠 응답을 못 한 경우.
     // 짧게 2회까지 재시도한 뒤에도 실패하면 성능 안내를 붙여 던진다.
     if (attempt < 2) {
       await new Promise(r => setTimeout(r, 500 * (attempt + 1)));
-      return postExcelMirror(path, body, attempt + 1);
+      return postExcelMirror(path, body, attempt + 1, options);
     }
     throw new Error("서버와 통신하지 못했습니다(컴퓨터 성능에 따라 지연될 수 있습니다). 잠시 후 다시 시도해 주세요.");
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
   }
   const data = await resp.json().catch(() => ({}));
   if (!resp.ok || !data.ok) {
