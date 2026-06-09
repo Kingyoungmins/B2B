@@ -2713,10 +2713,17 @@ def _wrap_vba_skill_code(code, entry):
         call_line = "%s" % entry
     else:
         call_line = "%s" % impl_name
+    declarations = """
+Private B2B_LastErrNumber As Long
+Private B2B_LastErrDescription As String
+"""
+    option_match = re.match(r"(?is)^((?:\s*Option\s+[^\r\n]+\r?\n)+)", wrapped_user_code)
+    if option_match:
+        pos = option_match.end(1)
+        wrapped_user_code = wrapped_user_code[:pos] + declarations + wrapped_user_code[pos:]
+    else:
+        wrapped_user_code = declarations + wrapped_user_code
     wrapper = f"""
-
-Public B2B_LastErrNumber As Long
-Public B2B_LastErrDescription As String
 
 Public Sub {runner_name}()
     On Error GoTo B2B_Err
@@ -2737,7 +2744,7 @@ Public Function {err_desc_name}() As String
     {err_desc_name} = B2B_LastErrDescription
 End Function
 """
-    return wrapped_user_code + wrapper, runner_name, err_num_name, err_desc_name
+    return wrapped_user_code + "\n" + wrapper, runner_name, err_num_name, err_desc_name
 
 
 def _hide_vba_editor(app):
