@@ -325,7 +325,8 @@ function applyVbaStepToLiveExcel(step, excelId) {
       if (typeof endExcelMirrorApplyLoading === "function") endExcelMirrorApplyLoading();
       if (typeof releaseExcelMirrorPipelineMute === "function") releaseExcelMirrorPipelineMute(excelId);
       if (typeof scheduleRestoreActiveExcelMirror === "function") scheduleRestoreActiveExcelMirror(180);
-      if (typeof rollbackAddedPipelineStep === "function") rollbackAddedPipelineStep(step.id);
+      renderPipeline();
+      refreshRunButton();
       reportPipelineError(err);
       throw err;
     });
@@ -409,7 +410,8 @@ function insertLogic(step, position) {
         .then(() => { setPipelineRuntimeStatus([step.id], "applied", "적용됨"); return true; })
         .catch(err => {
           setPipelineRuntimeStatus([step.id], "error", "오류");
-          if (typeof rollbackAddedPipelineStep === "function") rollbackAddedPipelineStep(step.id);
+          renderPipeline();
+          refreshRunButton();
           reportPipelineError(err);
           throw err;
         });
@@ -466,6 +468,30 @@ function replaceLogicAt(stepId, newCode, newDescription, language) {
   const originalStep = state.pipeline[idx];
   const next = state.pipeline.slice();
   next[idx] = normalizeStep({ ...next[idx], code: newCode, description: newDescription || next[idx].description, language });
+  if ((typeof getSkillEngine === "function" && getSkillEngine() === "vba") || pipelineUsesVba(next)) {
+    const liveExcelId = vbaTargetExcelId();
+    if (liveExcelId) {
+      if (typeof pushHistory === "function") pushHistory("단계 수정");
+      state.pipeline = next;
+      setPipelineRuntimeStatus([stepId], "running", "작업 중");
+      renderPipeline();
+      refreshRunButton();
+      if (typeof scheduleLogicAutoBackup === "function") scheduleLogicAutoBackup("step-updated");
+      const promise = reapplyVbaPipelineToLive(liveExcelId)
+        .then(() => {
+          setPipelineRuntimeStatus([stepId], "applied", "적용됨");
+          return true;
+        })
+        .catch(err => {
+          setPipelineRuntimeStatus([stepId], "error", "오류");
+          restorePipelineStep(stepId, originalStep);
+          reportPipelineError(err);
+          throw err;
+        });
+      toast(`Step ${idx + 1} 코드가 수정되었습니다. 라이브 Excel에 다시 반영 중입니다.`, "success");
+      return { pending: true, promise };
+    }
+  }
   const mustUseExcelBackend = pipelineUsesPython(next) || shouldDeferImmediatePipelineRun();
   if (mustUseExcelBackend) {
     if (typeof pushHistory === "function") pushHistory("단계 수정");
