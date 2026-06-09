@@ -3023,6 +3023,113 @@ def _restore_live_protected_view(app, wb):
         pass
 
 
+def _same_excel_workbook(a, b):
+    if a is None or b is None:
+        return False
+    for attr in ("FullName", "Name"):
+        try:
+            av = str(getattr(a, attr) or "").lower()
+            bv = str(getattr(b, attr) or "").lower()
+            if av and bv and av == bv:
+                return True
+        except Exception:
+            pass
+    return False
+
+
+def _capture_live_view_state(app, wb, session=None):
+    """현재 워크북의 활성 시트/선택 주소를 보존한다.
+    동반 워크북 오픈, reset, 창 복구가 ActiveSheet 를 마지막 시트로 바꾸는 경우를 막기 위한 상태다."""
+    state = {"sheet": "", "address": ""}
+    ws = None
+    try:
+        ws = wb.Windows(1).ActiveSheet
+    except Exception:
+        ws = None
+    if ws is None:
+        try:
+            active_ws = app.ActiveSheet
+            parent = getattr(active_ws, "Parent", None)
+            if _same_excel_workbook(parent, wb):
+                ws = active_ws
+        except Exception:
+            ws = None
+    if ws is not None:
+        try:
+            state["sheet"] = str(ws.Name or "")
+        except Exception:
+            state["sheet"] = ""
+    if not state["sheet"] and session:
+        remembered = str(session.get("lastSelectionSheet") or "")
+        if remembered:
+            try:
+                names = _excel_collection_names(wb.Worksheets)
+                if remembered in names:
+                    state["sheet"] = remembered
+            except Exception:
+                pass
+    if not state["sheet"]:
+        try:
+            names = _excel_collection_names(wb.Worksheets)
+            if names:
+                state["sheet"] = names[0]
+        except Exception:
+            pass
+    try:
+        sel = app.Selection
+        sel_ws = getattr(sel, "Worksheet", None)
+        if sel_ws is not None and str(getattr(sel_ws, "Name", "") or "") == state["sheet"]:
+            state["address"] = _excel_address(sel).replace("$", "")
+    except Exception:
+        pass
+    if not state["address"]:
+        try:
+            active_cell = app.ActiveCell
+            cell_ws = getattr(active_cell, "Worksheet", None)
+            if cell_ws is not None and str(getattr(cell_ws, "Name", "") or "") == state["sheet"]:
+                state["address"] = _excel_address(active_cell).replace("$", "")
+        except Exception:
+            pass
+    if not state["address"] and session and str(session.get("lastSelectionSheet") or "") == state["sheet"]:
+        state["address"] = str(session.get("lastSelectionAddress") or "")
+    return state if state.get("sheet") else None
+
+
+def _restore_live_view_state(app, wb, state, session=None):
+    if not state or not state.get("sheet"):
+        return
+    sheet = str(state.get("sheet") or "")
+    try:
+        names = _excel_collection_names(wb.Worksheets)
+    except Exception:
+        names = []
+    match = sheet if sheet in names else None
+    if not match:
+        normalized = normalize_text(sheet)
+        match = next((name for name in names if normalize_text(name) == normalized), None)
+    if not match:
+        return
+    try:
+        wb.Activate()
+    except Exception:
+        pass
+    try:
+        ws = wb.Worksheets(match)
+        ws.Activate()
+    except Exception:
+        return
+    address = str(state.get("address") or "")
+    if address:
+        try:
+            ws.Range(address).Select()
+        except Exception:
+            pass
+    if session is not None:
+        session["lastSelectionSheet"] = match
+        if address:
+            session["lastSelectionAddress"] = address
+
+
 def _restore_live_window(session, app, wb):
     """리셋(_copy_source_workbook_into_target)으로 offscreen park 된 라이브 창을 owner 모드 방식으로
     다시 보이게+제자리로 되돌린다(plain 위치맞춤 + owner + 워크북 뷰 채움)."""
@@ -3150,10 +3257,13 @@ def _run_vba_on_session_impl(excel_id, code, entry=None):
         _t = time.perf_counter()
         session = get_excel_session(excel_id)
         app, wb = session_workbook(session)
+        initial_view = _capture_live_view_state(app, wb, session)
+        final_view = initial_view
         timings["sessionMs"] = round((time.perf_counter() - _t) * 1000, 2)
         # 교차 파일 접근: 다른 업로드 파일들을 같은 인스턴스에 동반 오픈(읽기전용, 숨김).
         _t = time.perf_counter()
         _ensure_companion_workbooks(session, excel_id, app, wb)
+        _restore_live_view_state(app, wb, initial_view, session)
         timings["companionMs"] = round((time.perf_counter() - _t) * 1000, 2)
         prev_calc = None
         try:
@@ -3170,6 +3280,9 @@ def _run_vba_on_session_impl(excel_id, code, entry=None):
         try:
             _t = time.perf_counter()
             _inject_and_run_vba(app, wb, code, entry)
+            captured = _capture_live_view_state(app, wb, session)
+            if captured:
+                final_view = captured
             timings["injectRunMs"] = round((time.perf_counter() - _t) * 1000, 2)
         finally:
             _t = time.perf_counter()
@@ -3180,6 +3293,10 @@ def _run_vba_on_session_impl(excel_id, code, entry=None):
             # 동반 워크북을 열며 흐트러진 대상 창을 다시 보이게+제자리로(회색 빈 오버레이 방지).
             try:
                 _restore_live_window(session, app, wb)
+            except Exception:
+                pass
+            try:
+                _restore_live_view_state(app, wb, final_view, session)
             except Exception:
                 pass
             try:
@@ -3204,10 +3321,13 @@ def _run_vba_pipeline_on_session_impl(excel_id, steps, reset=True, entry=None):
         _t = time.perf_counter()
         session = get_excel_session(excel_id)
         app, wb = session_workbook(session)
+        initial_view = _capture_live_view_state(app, wb, session)
+        final_view = initial_view
         timings["sessionMs"] = round((time.perf_counter() - _t) * 1000, 2)
         # 교차 파일 접근: 다른 업로드 파일들을 같은 인스턴스에 동반 오픈(읽기전용, 숨김).
         _t = time.perf_counter()
         _ensure_companion_workbooks(session, excel_id, app, wb)
+        _restore_live_view_state(app, wb, initial_view, session)
         timings["companionMs"] = round((time.perf_counter() - _t) * 1000, 2)
         prev_calc = None
         try:
@@ -3228,6 +3348,7 @@ def _run_vba_pipeline_on_session_impl(excel_id, steps, reset=True, entry=None):
                     pass
                 _t = time.perf_counter()
                 _copy_source_workbook_into_target(app, wb, source)
+                _restore_live_view_state(app, wb, initial_view, session)
                 timings["resetMs"] = round((time.perf_counter() - _t) * 1000, 2)
             else:
                 # 비리셋(append): 현재 보호 상태를 풀고 실행(보호로 인한 1004 류 방지).
@@ -3248,6 +3369,9 @@ def _run_vba_pipeline_on_session_impl(excel_id, steps, reset=True, entry=None):
                         info = _vba_pipeline_step_info(st, active_idx, err)
                         raise PipelineExecutionError(info.get("message") or str(err), info) from err
                     applied += 1
+            captured = _capture_live_view_state(app, wb, session)
+            if captured:
+                final_view = captured
             timings["stepsMs"] = round((time.perf_counter() - _t_steps) * 1000, 2)
         finally:
             _t = time.perf_counter()
@@ -3258,6 +3382,10 @@ def _run_vba_pipeline_on_session_impl(excel_id, steps, reset=True, entry=None):
             # 동반 워크북/리셋/실패로 흐트러진 대상 창을 항상 복원(회색 빈 오버레이 방지).
             try:
                 _restore_live_window(session, app, wb)
+            except Exception:
+                pass
+            try:
+                _restore_live_view_state(app, wb, final_view, session)
             except Exception:
                 pass
             try:
