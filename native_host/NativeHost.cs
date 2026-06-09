@@ -208,7 +208,8 @@ namespace B2BNativeHost
             excelLoadingLabel.ForeColor = Color.FromArgb(96, 96, 112);
             excelLoadingLabel.BackColor = Color.FromArgb(248, 249, 252);
             excelLoadingLabel.Visible = false;
-            excelPanel.Controls.Add(excelLoadingLabel);
+            Controls.Add(excelLoadingLabel);
+            excelLoadingLabel.BringToFront();
 
             excelPanel.MouseDown += (s, e) => FocusExcelChild();
             excelPanel.Enter += (s, e) => FocusExcelChild();

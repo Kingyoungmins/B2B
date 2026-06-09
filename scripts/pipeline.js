@@ -45,6 +45,14 @@ function pipelineUsesPython(steps = state.pipeline) {
   return (steps || []).some(step => step && isStepEnabled(step) && inferPipelineStepLanguage(step) === "python");
 }
 
+function pipelineUsesVba(steps = state.pipeline) {
+  return (steps || []).some(step => step && isStepEnabled(step) && inferPipelineStepLanguage(step) === "vba");
+}
+
+function activePipelineSteps(steps = state.pipeline) {
+  return (steps || []).filter(step => step && isStepEnabled(step));
+}
+
 function stepRequiresFullWorkbookExecution(step) {
   if (!step || !isStepEnabled(step)) return false;
   if (step.manual || step.manualEdit) return false;
@@ -191,6 +199,59 @@ function restorePipelineStep(stepId, originalStep) {
 // 입력을 보며 적용하면 그 입력을 수정한다(입력 선작업 → 출력 활용 워크플로 지원).
 function vbaTargetExcelId() {
   return typeof currentExcelId === "function" ? currentExcelId() : null;
+}
+
+function preferredVbaRunFileId() {
+  if (state.currentFileId && typeof getFile === "function" && getFile(state.currentFileId)) {
+    return state.currentFileId;
+  }
+  if (state.outputTemplates && state.outputTemplates.length) {
+    const idx = state.activeOutputIndex >= 0 ? state.activeOutputIndex : 0;
+    return typeof outputTemplateFileId === "function" ? outputTemplateFileId(idx) : "output:" + idx;
+  }
+  if (state.output) return "output";
+  if (state.inputs && state.inputs.length) {
+    const first = state.inputs[0];
+    const name = typeof workbookDisplayName === "function"
+      ? workbookDisplayName(first, "입력 파일 1")
+      : first.name;
+    return "input:" + name;
+  }
+  return null;
+}
+
+async function ensureVbaRunExcelId() {
+  let excelId = vbaTargetExcelId();
+  if (excelId) return excelId;
+
+  const fileId = preferredVbaRunFileId();
+  if (!fileId) throw new Error("VBA 실행 대상 파일이 없습니다. 입력 또는 출력 파일을 먼저 업로드하세요.");
+  if (typeof setCurrentView === "function") setCurrentView(fileId);
+
+  excelId = vbaTargetExcelId();
+  if (excelId) return excelId;
+  if (typeof ensureExcelMirrorForFileId === "function") {
+    excelId = await ensureExcelMirrorForFileId(fileId);
+    if (excelId) return excelId;
+  }
+  throw new Error("VBA 실행 대상 Excel 창을 열지 못했습니다. 파일 탭을 선택해 Excel 창을 연 뒤 다시 실행하세요.");
+}
+
+function shouldRunPipelineAsVba(steps = state.pipeline) {
+  if (!activePipelineSteps(steps).length) return false;
+  return pipelineUsesVba(steps) || (typeof getSkillEngine === "function" && getSkillEngine() === "vba");
+}
+
+async function runVbaPipelinePreferLive(options = {}) {
+  const steps = options.pipeline || state.pipeline;
+  const activeSteps = activePipelineSteps(steps);
+  if (!activeSteps.length) throw new Error("실행할 활성 스킬이 없습니다.");
+  const nonVba = activeSteps.filter(step => inferPipelineStepLanguage(step) !== "vba");
+  if (nonVba.length) {
+    throw new Error("현재 실행기는 VBA 스킬만 라이브 Excel에서 실행합니다. 기존 JavaScript/Python 스킬은 VBA로 다시 생성해 주세요.");
+  }
+  const excelId = await ensureVbaRunExcelId();
+  return reapplyVbaPipelineToLive(excelId, { steps });
 }
 
 function recordVbaDebugTiming(record) {
@@ -930,6 +991,10 @@ function requestBackendViewDiff(before, after, step, stepIdx) {
 }
 
 async function runPipelinePreferBackend(options = {}) {
+  const stepsForRun = options.pipeline || state.pipeline;
+  if (shouldRunPipelineAsVba(stepsForRun)) {
+    return runVbaPipelinePreferLive({ ...options, pipeline: stepsForRun });
+  }
   if (typeof canRunPipelineOnBackend === "function" && canRunPipelineOnBackend()) {
     try {
       const result = await runPipelineOnBackend(options);
@@ -1121,11 +1186,12 @@ function renderPipeline() {
 
 // 0.4.9 리모콘 모델: VBA 엔진에서 토글/삭제/편집/순서변경 등으로 파이프라인이 바뀌면
 // 라이브 워크북을 원본으로 리셋한 뒤 enabled VBA 스텝을 순서대로 다시 적용한다.
-async function reapplyVbaPipelineToLive(excelId) {
+async function reapplyVbaPipelineToLive(excelId, options = {}) {
   const perfStartedAt = performance.now();
   let prehideMs = 0;
   let requestMs = 0;
-  const steps = (state.pipeline || [])
+  const sourceSteps = options.steps || state.pipeline;
+  const steps = (sourceSteps || [])
     .filter(s => isStepEnabled(s) && (s.language === "vba" || (typeof inferPipelineStepLanguage === "function" && inferPipelineStepLanguage(s) === "vba")))
     .map(s => ({ code: s.code }));
   if (window.runnerSetRunning) window.runnerSetRunning(true);
@@ -1232,7 +1298,7 @@ function refreshRunButton() {
     (state.inputs && state.inputs.length > 0) ||
     (state.outputTemplates && state.outputTemplates.length > 0) ||
     !!state.output;
-  const hasSteps = state.pipeline.length > 0;
+  const hasSteps = activePipelineSteps(state.pipeline).length > 0;
   $("btn-run").disabled = !(hasAnyFile && hasSteps);
   $("btn-save").disabled = !hasSteps;
   $("btn-download").disabled = !hasDownloadableFiles;
