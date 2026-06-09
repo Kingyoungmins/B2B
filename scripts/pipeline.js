@@ -319,6 +319,8 @@ function applyVbaStepToLiveExcel(step, excelId) {
       return true;
     })
     .catch(err => {
+      const failedIdx = (state.pipeline || []).findIndex(s => s && s.id === step.id);
+      attachPipelineStepError(err, step, failedIdx >= 0 ? failedIdx : (state.pipeline || []).length - 1);
       setPipelineRuntimeStatus([step.id], "error", "오류");
       if (typeof endExcelMirrorApplyLoading === "function") endExcelMirrorApplyLoading();
       if (typeof releaseExcelMirrorPipelineMute === "function") releaseExcelMirrorPipelineMute(excelId);
@@ -1053,6 +1055,29 @@ function _stepError(info) {
   return err;
 }
 
+function attachPipelineStepError(err, step, stepIdx, extra = {}) {
+  const numericIdx = Number(stepIdx);
+  const currentInfo = (err && (err._stepInfo || err.errorInfo)) || {};
+  const inferredLanguage = step && typeof inferPipelineStepLanguage === "function"
+    ? inferPipelineStepLanguage(step)
+    : "";
+  const info = {
+    stepIdx: Number.isInteger(numericIdx) && numericIdx >= 0 ? numericIdx : -1,
+    stepId: (step && (step.id || step.stepId)) || currentInfo.stepId || null,
+    description: (step && step.description) || currentInfo.description || "",
+    code: (step && step.code) || currentInfo.code || "",
+    language: (step && step.language) || inferredLanguage || currentInfo.language || "",
+    message: currentInfo.message || (err && err.message) || String(err || ""),
+    stack: currentInfo.stack || (err && err.stack) || "",
+    ...extra,
+  };
+  if (err && typeof err === "object") {
+    err._stepInfo = info;
+    err.errorInfo = info;
+  }
+  return err;
+}
+
 // 모든 파일/시트의 수식을 현재 데이터로 재평가해 state.formulaResults 에 저장.
 // 시뮬레이터 렌더 시 이 결과로 셀 표시값을 덮어쓴다.
 function recomputeAllFormulas() {
@@ -1193,7 +1218,13 @@ async function reapplyVbaPipelineToLive(excelId, options = {}) {
   const sourceSteps = options.steps || state.pipeline;
   const steps = (sourceSteps || [])
     .filter(s => isStepEnabled(s) && (s.language === "vba" || (typeof inferPipelineStepLanguage === "function" && inferPipelineStepLanguage(s) === "vba")))
-    .map(s => ({ code: s.code }));
+    .map(s => ({
+      stepIdx: (sourceSteps || []).indexOf(s),
+      stepId: s.id || null,
+      description: s.description || "",
+      code: s.code || "",
+      language: s.language || (typeof inferPipelineStepLanguage === "function" ? inferPipelineStepLanguage(s) : "vba"),
+    }));
   if (window.runnerSetRunning) window.runnerSetRunning(true);
   if (typeof muteExcelMirrorForPipeline === "function") muteExcelMirrorForPipeline(excelId);
   if (typeof beginExcelMirrorApplyLoading === "function") beginExcelMirrorApplyLoading("VBA 재적용 중...");
@@ -1226,6 +1257,13 @@ async function reapplyVbaPipelineToLive(excelId, options = {}) {
     });
     return data;
   } catch (err) {
+    if (err && (err._stepInfo || err.errorInfo)) {
+      const info = err._stepInfo || err.errorInfo;
+      err._stepInfo = { ...info, stepIdx: Number(info.stepIdx ?? -1) };
+      err.errorInfo = err._stepInfo;
+    } else if (steps.length === 1) {
+      attachPipelineStepError(err, steps[0], steps[0].stepIdx);
+    }
     if (typeof endExcelMirrorApplyLoading === "function") endExcelMirrorApplyLoading();
     if (typeof releaseExcelMirrorPipelineMute === "function") releaseExcelMirrorPipelineMute(excelId);
     if (typeof scheduleRestoreActiveExcelMirror === "function") scheduleRestoreActiveExcelMirror(180);
@@ -1358,7 +1396,17 @@ function hasErrorRecoverySeed(info) {
 
 function reportPipelineError(err, options) {
   options = options || {};
-  const info = (err && err._stepInfo) || {
+  const rawInfo = (err && (err._stepInfo || err.errorInfo)) || null;
+  const info = rawInfo ? {
+    stepIdx: Number(rawInfo.stepIdx ?? -1),
+    stepId: rawInfo.stepId || null,
+    description: rawInfo.description || "",
+    code: rawInfo.code || "",
+    language: rawInfo.language || "",
+    message: rawInfo.message || (err && err.message) || String(err || ""),
+    stack: rawInfo.stack || (err && err.stack) || "",
+    recoverable: rawInfo.recoverable !== false,
+  } : {
     stepIdx: -1,
     stepId: null,
     description: "",
@@ -1397,9 +1445,11 @@ function reportPipelineError(err, options) {
         recoverBtn.textContent = "복구 요청 중...";
         if (typeof requestErrorRecovery === "function") {
           requestErrorRecovery(info.stepIdx, {
+            stepIdx: Number(info.stepIdx) >= 0 ? Number(info.stepIdx) : -1,
             stepId: info.stepId || null,
             description: info.description || "",
             code: info.code || "",
+            language: info.language || "",
             message: info.message || err.message || String(err),
             stack: info.stack || "",
             compatibilityCheck: !!options.compatibilityCheck,

@@ -1079,7 +1079,14 @@ async function postExcelMirror(path, body, attempt = 0) {
     throw new Error("서버와 통신하지 못했습니다(컴퓨터 성능에 따라 지연될 수 있습니다). 잠시 후 다시 시도해 주세요.");
   }
   const data = await resp.json().catch(() => ({}));
-  if (!resp.ok || !data.ok) throw new Error(data.error || `HTTP ${resp.status}`);
+  if (!resp.ok || !data.ok) {
+    const err = new Error(data.error || `HTTP ${resp.status}`);
+    if (data.errorInfo) {
+      err.errorInfo = data.errorInfo;
+      err._stepInfo = data.errorInfo;
+    }
+    throw err;
+  }
   return data;
 }
 

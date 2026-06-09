@@ -726,6 +726,8 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
                 payload.get("code") or payload.get("vba") or "",
                 entry=payload.get("entry"),
             ))
+        except PipelineExecutionError as err:
+            self.send_json({"ok": False, "error": str(err), "errorInfo": err.info}, status=400)
         except Exception as err:
             self.send_json({"ok": False, "error": str(err)}, status=500)
 
@@ -739,6 +741,8 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
                 reset=True if reset is None else bool(reset),
                 entry=payload.get("entry"),
             ))
+        except PipelineExecutionError as err:
+            self.send_json({"ok": False, "error": str(err), "errorInfo": err.info}, status=400)
         except Exception as err:
             self.send_json({"ok": False, "error": str(err)}, status=500)
 
@@ -2627,6 +2631,33 @@ def _close_excel_session_impl(excel_id):
 VBA_SKILL_ENTRY = "B2BSkill"
 
 
+def _vba_pipeline_step_info(step, fallback_idx, err):
+    if isinstance(step, dict):
+        raw_idx = step.get("stepIdx")
+        try:
+            step_idx = int(raw_idx)
+        except Exception:
+            step_idx = int(fallback_idx)
+        return {
+            "stepIdx": step_idx,
+            "stepId": step.get("stepId") or None,
+            "description": step.get("description") or "",
+            "code": step.get("code") or "",
+            "language": step.get("language") or "vba",
+            "message": str(err),
+            "stack": "",
+        }
+    return {
+        "stepIdx": int(fallback_idx),
+        "stepId": None,
+        "description": "",
+        "code": str(step or ""),
+        "language": "vba",
+        "message": str(err),
+        "stack": "",
+    }
+
+
 def _inject_and_run_vba(app, wb, code, entry):
     """워크북에 VBA 모듈을 임시로 추가해 entry Sub를 실행하고, 끝나면 모듈을 제거한다.
     AccessVBOM 이 꺼져 있으면 wb.VBProject 접근에서 예외 → 명확한 안내로 변환."""
@@ -2863,40 +2894,63 @@ def _run_vba_pipeline_on_session_impl(excel_id, steps, reset=True, entry=None):
         _t = time.perf_counter()
         _ensure_companion_workbooks(session, excel_id, app, wb)
         timings["companionMs"] = round((time.perf_counter() - _t) * 1000, 2)
-        if reset:
-            source = session.get("sourcePath") or session.get("path")
-            try:
-                _protect_workbook_for_read_only_mirror(wb, False)  # 시트 교체 전 보호 해제
-            except Exception:
-                pass
-            try:
-                app.ScreenUpdating = False
-            except Exception:
-                pass
-            _t = time.perf_counter()
-            _copy_source_workbook_into_target(app, wb, source)
-            timings["resetMs"] = round((time.perf_counter() - _t) * 1000, 2)
-        else:
-            # 비리셋(append): 현재 보호 상태를 풀고 실행(보호로 인한 1004 류 방지).
-            _t = time.perf_counter()
-            try:
-                _protect_workbook_for_read_only_mirror(wb, False)
-            except Exception:
-                pass
-            timings["unprotectMs"] = round((time.perf_counter() - _t) * 1000, 2)
-        _t_steps = time.perf_counter()
+        prev_calc = None
+        try:
+            prev_calc = app.Calculation
+        except Exception:
+            prev_calc = None
         applied = 0
-        for st in steps:
-            code = (st.get("code") if isinstance(st, dict) else str(st)) or ""
-            if code.strip():
-                _inject_and_run_vba(app, wb, code, entry)
-                applied += 1
-        timings["stepsMs"] = round((time.perf_counter() - _t_steps) * 1000, 2)
-        _t = time.perf_counter()
-        _restore_live_protected_view(app, wb)
-        # 동반 워크북/리셋으로 흐트러진 대상 창을 항상 복원(회색 빈 오버레이 방지).
-        _restore_live_window(session, app, wb)
-        timings["restoreMs"] = round((time.perf_counter() - _t) * 1000, 2)
+        try:
+            if reset:
+                source = session.get("sourcePath") or session.get("path")
+                try:
+                    _protect_workbook_for_read_only_mirror(wb, False)  # 시트 교체 전 보호 해제
+                except Exception:
+                    pass
+                try:
+                    app.ScreenUpdating = False
+                except Exception:
+                    pass
+                _t = time.perf_counter()
+                _copy_source_workbook_into_target(app, wb, source)
+                timings["resetMs"] = round((time.perf_counter() - _t) * 1000, 2)
+            else:
+                # 비리셋(append): 현재 보호 상태를 풀고 실행(보호로 인한 1004 류 방지).
+                _t = time.perf_counter()
+                try:
+                    _protect_workbook_for_read_only_mirror(wb, False)
+                except Exception:
+                    pass
+                timings["unprotectMs"] = round((time.perf_counter() - _t) * 1000, 2)
+            _t_steps = time.perf_counter()
+            for active_idx, st in enumerate(steps):
+                code = (st.get("code") if isinstance(st, dict) else str(st)) or ""
+                if code.strip():
+                    try:
+                        _inject_and_run_vba(app, wb, code, entry)
+                    except Exception as err:
+                        timings["stepsMs"] = round((time.perf_counter() - _t_steps) * 1000, 2)
+                        info = _vba_pipeline_step_info(st, active_idx, err)
+                        raise PipelineExecutionError(info.get("message") or str(err), info) from err
+                    applied += 1
+            timings["stepsMs"] = round((time.perf_counter() - _t_steps) * 1000, 2)
+        finally:
+            _t = time.perf_counter()
+            try:
+                _restore_live_protected_view(app, wb)
+            except Exception:
+                pass
+            # 동반 워크북/리셋/실패로 흐트러진 대상 창을 항상 복원(회색 빈 오버레이 방지).
+            try:
+                _restore_live_window(session, app, wb)
+            except Exception:
+                pass
+            try:
+                if prev_calc is not None:
+                    app.Calculation = prev_calc
+            except Exception:
+                pass
+            timings["restoreMs"] = round((time.perf_counter() - _t) * 1000, 2)
         timings["totalServerMs"] = round((time.perf_counter() - _t0) * 1000, 2)
         return {"ok": True, "excelId": excel_id, "applied": applied, "debugTimings": timings}
 

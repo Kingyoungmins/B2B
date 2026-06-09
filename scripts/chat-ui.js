@@ -586,8 +586,7 @@ function createSmoothStructuredRenderer(textEl, codeEl, emptyText) {
 }
 
 function resolveErrorRecoveryStepIndex(stepIdx, errorInfo) {
-  const numeric = Number(stepIdx);
-  if (Number.isInteger(numeric) && numeric >= 0 && state.pipeline[numeric]) return numeric;
+  const hasIdentity = !!(errorInfo && (errorInfo.stepId || errorInfo.code));
   if (errorInfo && errorInfo.stepId) {
     const byId = state.pipeline.findIndex(step => step && step.id === errorInfo.stepId);
     if (byId >= 0) return byId;
@@ -596,10 +595,13 @@ function resolveErrorRecoveryStepIndex(stepIdx, errorInfo) {
     const byCode = state.pipeline.findIndex(step => step && step.code === errorInfo.code);
     if (byCode >= 0) return byCode;
   }
+  if (hasIdentity) return -1;
   if (errorInfo && errorInfo.description) {
     const byDesc = state.pipeline.findIndex(step => step && step.description === errorInfo.description);
     if (byDesc >= 0) return byDesc;
   }
+  const numeric = Number(stepIdx);
+  if (Number.isInteger(numeric) && numeric >= 0 && state.pipeline[numeric]) return numeric;
   return -1;
 }
 
@@ -618,13 +620,21 @@ async function requestErrorRecovery(stepIdx, errorInfo) {
       language: errorInfo && errorInfo.language,
     };
   }
+  const hasExplicitFailedTarget = !!(errorInfo && (
+    Number(errorInfo.stepIdx) >= 0 ||
+    errorInfo.stepId ||
+    errorInfo.code ||
+    errorInfo.description
+  ));
   if (!failedStep || !failedStep.code) {
     // 특정 step을 못 짚었으면 적용 가능한 마지막 단계를 복구 대상으로 추정한다.
-    const enabledSteps = (state.pipeline || []).filter(s => s && s.enabled !== false && s.code);
-    const guess = enabledSteps[enabledSteps.length - 1];
-    if (guess) {
-      failedStep = guess;
-      stepIdx = state.pipeline.indexOf(guess);
+    if (!hasExplicitFailedTarget) {
+      const enabledSteps = (state.pipeline || []).filter(s => s && s.enabled !== false && s.code);
+      const guess = enabledSteps[enabledSteps.length - 1];
+      if (guess) {
+        failedStep = guess;
+        stepIdx = state.pipeline.indexOf(guess);
+      }
     }
   }
   if (!failedStep || !failedStep.code) {
