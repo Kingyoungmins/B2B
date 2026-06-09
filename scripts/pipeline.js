@@ -289,6 +289,36 @@ function restoreVbaExcelAfterError(excelId) {
   if (typeof scheduleRestoreActiveExcelMirror === "function") scheduleRestoreActiveExcelMirror(0);
 }
 
+// [#19] 진행 중인 단일 VBA 적용을 취소하고 안전 복귀한다.
+// 서버 매크로는 EXCEL_LOCK 동기 실행이라 즉시 인터럽트가 불가하다(한계). 대신 진행 단계의 결과를
+// 무시(취소 토큰)하고, 원본 리셋 + 남은 enabled 스텝 재적용으로 '이전 정상 상태'로 되돌린다.
+// 실행 중이던 매크로의 부분 변경은 이 재적용이 덮어써서 오류 상태로 남지 않게 한다.
+async function requestExcelApplyCancel() {
+  const active = window.__activeVbaApply;
+  if (!active || !active.token || active.token.cancelled) return false;
+  active.token.cancelled = true;
+  toast("작업 중단 요청 — 이전 상태로 되돌리는 중...", "error");
+  // 낙관적으로 추가됐던 진행 단계를 파이프라인에서 제거.
+  if (active.stepId && Array.isArray(state.pipeline)) {
+    state.pipeline = state.pipeline.filter(s => s && s.id !== active.stepId);
+    if (typeof setPipelineRuntimeStatus === "function") setPipelineRuntimeStatus([active.stepId], null);
+  }
+  if (typeof renderPipeline === "function") renderPipeline();
+  if (typeof refreshRunButton === "function") refreshRunButton();
+  const excelId = active.excelId || (typeof vbaTargetExcelId === "function" ? vbaTargetExcelId() : null);
+  window.__activeVbaApply = null;
+  try {
+    if (excelId && typeof reapplyVbaPipelineToLive === "function") {
+      await reapplyVbaPipelineToLive(excelId, { steps: state.pipeline });
+    }
+    toast("작업을 중단하고 이전 상태로 되돌렸습니다.", "success");
+    return true;
+  } catch (err) {
+    toast("중단 후 복귀 중 오류: " + ((err && err.message) || err), "error");
+    return false;
+  }
+}
+
 // 0.4.9 리모콘 모델: 생성된 VBA를 라이브 워크북에 즉시 주입 실행한다.
 // 파이프라인 재실행/시뮬레이터를 거치지 않으므로 초저지연이고, 결과는 우측 라이브 엑셀에 바로 보인다.
 function applyVbaStepToLiveExcel(step, excelId) {
@@ -303,6 +333,11 @@ function applyVbaStepToLiveExcel(step, excelId) {
   if (typeof scheduleLogicAutoBackup === "function") scheduleLogicAutoBackup("step-added");
   if (typeof muteExcelMirrorForPipeline === "function") muteExcelMirrorForPipeline(excelId);
   if (typeof beginExcelMirrorApplyLoading === "function") beginExcelMirrorApplyLoading("VBA 적용 중...");
+  // [#19] 취소 토큰 등록: '작업 중단' 버튼이 이 적용을 취소하고 안전 복귀(reset 재적용)하게 한다.
+  // 서버 매크로는 EXCEL_LOCK 동기 실행이라 즉시 인터럽트는 불가 → 취소 시엔 결과를 무시하고
+  // 원본 리셋+남은 스텝 재적용으로 '이전 상태'로 되돌린다(requestExcelApplyCancel 참고).
+  const cancelToken = { cancelled: false };
+  window.__activeVbaApply = { token: cancelToken, excelId, stepId: step.id };
   const prehide = typeof hideAllExcelMirrorWindows === "function"
     ? (async () => {
         const started = performance.now();
@@ -327,7 +362,27 @@ function applyVbaStepToLiveExcel(step, excelId) {
         });
     })
     .then((data) => {
-      setPipelineRuntimeStatus([step.id], "applied", "적용됨");
+      // [#19] 취소된 적용이면 결과를 무시(상태/토스트/복원은 취소 핸들러가 담당).
+      if (cancelToken.cancelled) {
+        if (window.__activeVbaApply && window.__activeVbaApply.token === cancelToken) window.__activeVbaApply = null;
+        return true;
+      }
+      if (window.__activeVbaApply && window.__activeVbaApply.token === cancelToken) window.__activeVbaApply = null;
+      // 사후검증: 서버가 변경 셀/시트 수를 돌려준다. 변경이 전혀 없으면(노이펙트)
+      // '적용됨' 대신 '변경 없음 · 확인 필요'(비파괴)로 표시한다. verify 가 없거나(검증 불가)
+      // 변경이 있으면 정상 '적용됨'. 절대 '오류'로 강등하지 않는다(#1/#16 양방향 안전).
+      const verify = data && data.verify;
+      const noEffect = !!(verify
+        && typeof verify.changedCells === "number"
+        && verify.changedCells === 0
+        && (verify.sheetsAdded || 0) === 0
+        && (verify.sheetsRemoved || 0) === 0
+        && !verify.capped);
+      if (noEffect) {
+        setPipelineRuntimeStatus([step.id], "review", "변경 없음 · 확인 필요");
+      } else {
+        setPipelineRuntimeStatus([step.id], "applied", "적용됨");
+      }
       if (typeof endExcelMirrorApplyLoading === "function") endExcelMirrorApplyLoading();
       if (typeof releaseExcelMirrorPipelineMute === "function") releaseExcelMirrorPipelineMute(excelId);
       if (typeof scheduleRestoreActiveExcelMirror === "function") scheduleRestoreActiveExcelMirror(180);
@@ -339,10 +394,22 @@ function applyVbaStepToLiveExcel(step, excelId) {
         totalClientMs: performance.now() - perfStartedAt,
         server: (data && data.debugTimings) || {},
       });
-      toast(`"${step.description}" 적용됨`, "success");
+      if (noEffect) {
+        const warn = `"${step.description}" — 코드는 실행됐지만 워크북에 실제 변경이 없습니다. 대상 시트/열/조건이 요청과 맞는지 확인하세요(요청대로 적용되지 않았을 수 있습니다).`;
+        toast(warn, "error");
+        if (typeof addMessage === "function") addMessage("system", warn);
+      } else {
+        toast(`"${step.description}" 적용됨`, "success");
+      }
       return true;
     })
     .catch(err => {
+      // [#19] 취소된 적용의 (지연된) 오류는 삼킨다 — 복귀는 취소 핸들러가 이미 수행 중.
+      if (cancelToken.cancelled) {
+        if (window.__activeVbaApply && window.__activeVbaApply.token === cancelToken) window.__activeVbaApply = null;
+        return false;
+      }
+      if (window.__activeVbaApply && window.__activeVbaApply.token === cancelToken) window.__activeVbaApply = null;
       const failedIdx = (state.pipeline || []).findIndex(s => s && s.id === step.id);
       attachPipelineStepError(err, step, failedIdx >= 0 ? failedIdx : (state.pipeline || []).length - 1);
       setPipelineRuntimeStatus([step.id], "error", "오류");

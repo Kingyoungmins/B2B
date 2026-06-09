@@ -211,6 +211,33 @@
     opacity: 0.55;
     cursor: not-allowed;
   }
+  /* #10: 생각 중단 / 요청 중단 두 버튼 그룹 */
+  .msg .stream-stop-group {
+    flex: 0 0 auto;
+    display: inline-flex;
+    gap: 6px;
+  }
+  .msg .stream-stop-think-btn {
+    flex: 0 0 auto;
+    border: 1px solid var(--border);
+    border-radius: var(--r-sm);
+    background: white;
+    color: var(--ink-600);
+    padding: 3px 8px;
+    font-family: inherit;
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .msg .stream-stop-think-btn:hover {
+    color: #9A3412;
+    border-color: #FED7AA;
+    background: #FFF7ED;
+  }
+  .msg .stream-stop-think-btn:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
 
   .msg .reasoning-box {
     margin-bottom: 8px;

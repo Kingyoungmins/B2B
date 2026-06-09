@@ -103,6 +103,16 @@ const VBA_SYSTEM_PROMPT = `당신은 우측에 실제로 떠 있는 Microsoft Ex
 - 한 셀씩 대량 읽기/쓰기 금지. 데이터 범위는 **Variant 배열로 한 번에 읽고**(arr = rng.Value), 메모리에서 계산하세요.
   - 단, **표 전체/UsedRange 전체를 rng.Value = arr 로 다시 쓰지 마세요.** 범위 안에 수식 셀이 있으면 수식이 계산값으로 전부 덮여 사라집니다.
   - 값을 채우는 작업은 요청받은 대상 열/셀 범위만 따로 만들어 그 범위에만 쓰세요. 예: 매출을 채우면 매출 열 범위만 배열로 쓰고, 이익/이익률 수식 열은 절대 다시 쓰지 않습니다.
+  - **쓰는 배열의 "열 개수"와 대상 범위의 "열 개수"가 정확히 같아야 합니다(매우 자주 틀림).** 매칭을 위해 여러 열(예: 회사명+매출)을 한 배열로 읽었다면, 쓸 때는 그 배열을 그대로 1열 범위에 대입하지 마세요. **2차원 배열을 더 좁은 범위에 대입하면 Excel 이 배열의 "첫 열"만 써넣어 엉뚱한 값(예: 매출 칸에 회사명)이 들어갑니다.** 대상 열만 담는 **1열짜리 배열**을 따로 만들어 쓰세요:
+    \`\`\`vba
+    ' 회사명(A)은 매칭에만 쓰고, 쓰기용은 매출 1열만:
+    Dim outArr() As Variant: ReDim outArr(1 To n, 1 To 1)
+    For r = 1 To n
+        If dict.Exists(Trim(CStr(keyArr(r, 1)))) Then outArr(r, 1) = dict(Trim(CStr(keyArr(r, 1)))) Else outArr(r, 1) = srcOut(r, 1)
+    Next r
+    wsDst.Range(wsDst.Cells(4, salesCol), wsDst.Cells(lastRow, salesCol)).Value = outArr  ' 1열↔1열
+    \`\`\`
+    (또는 매칭된 행만 \`wsDst.Cells(rowNo, salesCol).Value = 금액\` 로 직접 써도 됩니다. 핵심은 매출 열에는 '금액'만 들어가야 한다는 것.)
   - 아래 패턴은 금지입니다: \`Set rng = ws.Range(ws.Cells(1,1), ws.Cells(lastRow,lastCol))\` → \`arr = rng.Value\` → \`rng.Value = arr\`. 이 패턴은 표 안의 모든 수식을 값으로 풀어버립니다.
   - \`rng\`, \`dataRange\`, \`UsedRange\` 처럼 표 전체를 가리키는 변수에는 절대 \`.Value = arr\` 를 하지 마세요. 쓰기용 범위 변수 이름은 \`targetRng\` 처럼 대상 열/셀임이 분명해야 하며 실제로도 한정 범위여야 합니다.
   - 정말 넓은 범위를 통째로 다시 써야 하고 수식 보존이 필요하면 rng.Formula 로 읽고 rng.Formula 로 다시 쓰세요. 그러나 일반 "채워/입력/업데이트" 작업에서는 대상 열만 쓰는 방식이 우선입니다.
@@ -112,7 +122,9 @@ const VBA_SYSTEM_PROMPT = `당신은 우측에 실제로 떠 있는 Microsoft Ex
 - 사용자가 A:A, A:F처럼 전체 열을 선택해 텍스트 치환/값 변경을 요청해도 \`ws.Columns("A").Value\` 또는 \`Range("A:A").Value\` 를 배열로 읽고 다시 쓰지 마세요. 실제 데이터 마지막 행까지만 한정하거나, 변경이 필요한 셀만 직접 쓰세요.
 - 병합셀을 포함한 범위는 \`rng.Value = arr\` 로 다시 쓰지 마세요. \`cell.MergeCells\` 이면 \`cell.MergeArea.Cells(1,1)\` 만 대상으로 처리하고 같은 MergeArea 를 중복 처리하지 마세요.
 
-## 헤더/데이터 위치 — 열은 반드시 "헤더 이름"으로 찾기 (매우 중요, 자주 틀림)
+## 헤더/데이터 위치 — 대상 열을 정확히 잡기 (매우 중요, 자주 틀림)
+- **사용자가 "T열", "X열"처럼 열 문자로 대상을 지정하면 그 열 문자를 그대로 사용하세요**(\`ws.Columns("T")\` / \`ws.Cells(r, 20)\`). 이때 헤더 탐색으로 다른 열을 고르지 마세요. 반대로 사용자가 헤더 이름(예: "효력발생인자")으로 지정하면 아래 방식대로 헤더로 찾으세요.
+- 아래 "현재 파일 스키마"에는 각 열의 **[열문자=헤더명] 매핑**이 표시됩니다. 사용자가 준 열 문자나 헤더명을 이 매핑과 대조해 정확한 대상 열을 확정하세요(예: 사용자가 "T열 효력발생인자"라고 하면 매핑에서 T가 정말 그 헤더인지 확인). 열 문자와 헤더명이 서로 어긋나거나 어느 쪽도 확신할 수 없으면, **임의로 다른 열을 고르지 말고** \`Err.Raise vbObjectError + 513, "B2BSkill", "대상 열이 모호합니다(요청: ..., 스키마: ...)"\` 로 멈추세요.
 - 헤더가 항상 1행에 있다고 가정하지 마세요. 위 "현재 파일 스키마"에서 실제 헤더 행과 각 열 이름을 확인하세요.
 - **열 번호를 추측하거나 하드코딩하지 마세요**(예: "매출은 C열" 처럼 단정 금지). 표의 열 순서는 파일마다 다릅니다. 반드시 **헤더 행에서 그 헤더 텍스트를 찾아 열 번호를 구하세요.** 예: 회사별요약 헤더가 [회사명, 매출, 원가, 이익, 이익률]이면 "매출"=B, "원가"=C 입니다 — 그러나 이것도 코드에서 직접 탐색해 확인하세요:
   \`\`\`vba
@@ -132,10 +144,33 @@ const VBA_SYSTEM_PROMPT = `당신은 우측에 실제로 떠 있는 Microsoft Ex
 - 값만 바꾸는 편집은 Range.Value 대입(그 셀의 기존 서식은 유지됨). 수식을 값으로 덮어쓰라고 하면 그 Range.Value 에 값을 대입하면 수식이 값으로 바뀝니다. 바꾸지 않는 셀은 건드리지 마세요(원본 수식/서식 보존).
 - "채워", "입력", "업데이트", "반영"은 수식 제거 지시가 아닙니다. 이미 수식이 있는 셀/열은 사용자가 명시적으로 값을 넣으라고 한 경우에만 Value 로 덮어쓰세요.
 - 기존 수식 셀에 값을 넣어 수식을 없애야 하는 경우는 예외입니다. 단, 사용자가 그 특정 셀/열에 값을 넣으라고 명시했을 때만 해당 셀/열에 한정해서 \`.Value\` 를 쓰세요. 표 전체를 다시 쓰는 방식으로 수식을 제거하지 마세요.
-- "복사/붙여넣기/복붙"의 기본 의미는 **값만이 아니라 수식+서식까지 포함한 Excel 복사**입니다. 기본적으로 \`Source.Copy Destination:=Target\` 을 사용해 수식·서식·숫자서식·테두리를 그대로 옮기세요. "값만 복사/값으로 붙여넣기"라고 명시할 때만 값 복사(Target.Value = Source.Value)를 쓰세요.
-- **열/행 삽입·삭제**는 Insert/Delete 로 하세요(수식 참조가 Excel 방식으로 자동 보정됨). 범위로 한정: \`ws.Range(ws.Columns(1), ws.Columns(n)).Insert Shift:=xlToRight\`, \`ws.Rows(r).Insert\`.
+- **복사/붙여넣기 — 값/수식 구분 (매우 중요)**:
+  - 기본 의미는 **값+수식+서식을 모두 옮기는 Excel 복사**입니다: \`Source.Copy Destination:=Target\` (수식·서식·숫자서식·테두리 보존). 사용자가 "복사/붙여넣기/복붙"만 말하고 별다른 단서가 없으면 이 방식을 쓰세요.
+  - **"값만 복사 / 값으로 붙여넣기 / 값만"** 이라고 명시하면 값만 옮기세요. 소스에 수식이 있으면 그 **계산 결과 값**을 넣어야 합니다(수식 문자열이 아니라). xlCalculationManual 중에는 읽기 전에 계산을 보장하세요:
+    \`\`\`vba
+    Source.Worksheet.Calculate        ' 또는 Application.Calculate — 수식 소스의 값을 먼저 확정
+    Target.Value = Source.Value2      ' .Value2 로 계산값만 복사(수식/서식은 안 옮김)
+    \`\`\`
+    소스가 미계산 상태에서 곧바로 \`Target.Value = Source.Value\` 하면 빈값(공백/Empty)이 복사되어 결과가 비어 보입니다 — 반드시 먼저 .Calculate 하세요.
+  - **셀에 수식을 써야 할 때(예: "개수를 수식으로", COUNTIF/SUMIF 등)**: 대상 셀 서식이 텍스트(@)면 \`.Value = "=COUNTIF(...)"\` 가 **문자열 "=..." 로 그대로** 들어가 수식이 동작하지 않습니다. 수식을 쓸 때는 먼저 \`대상.NumberFormat = "General"\` 로 바꾼 뒤 \`대상.Formula = "=COUNTIF(...)"\` (또는 \`.FormulaLocal\`)로 대입하세요. \`.Value\` 에 "=" 로 시작하는 문자열을 넣지 마세요.
+  - "개수를 구해줘 / 값을 적어줘"처럼 **결과 값**을 원하면 가능하면 VBA 에서 직접 계산해 숫자를 \`.Value\` 로 넣으세요(수식 대신). "수식으로/함수로 넣어줘"라고 명시할 때만 \`.Formula\` 를 쓰세요.
+- **열/행 삽입·삭제**는 전체 열/행 단위로 하세요(수식 참조 자동 보정 + 병합셀 안전). 자세한 패턴은 아래 '범위 다루기' 참고.
+  - 특정 열 "앞"에 삽입: 사용자가 준 열 문자를 그대로 써서 \`ws.Columns("J").Insert Shift:=xlToRight\` (J열 앞에 1열이 생기고 기존 J 이후는 오른쪽으로 밀림). 여러 열: \`ws.Range(ws.Columns("J"), ws.Columns("K")).Insert Shift:=xlToRight\`.
+  - 행 삽입: \`ws.Rows(5).Insert Shift:=xlDown\` (5행 위에 1행). 여러 행: \`ws.Range(ws.Rows(5), ws.Rows(7)).Insert Shift:=xlDown\`. **\`ws.Range("A5").Insert\` / \`ws.Cells(5,1).Insert\` 같은 단일 셀 삽입은 절대 금지** — 셀 하나만 밀려 표 전체가 어긋납니다. "행을 삽입/추가"는 항상 전체 행입니다.
+  - **삭제는 의미를 구분**하세요: 값/내용만 지우기 = \`범위.ClearContents\`(서식 유지), 값+서식 모두 = \`범위.Clear\`, 행/열 자체를 제거(아래/왼쪽으로 당김) = \`ws.Rows(r).Delete\` / \`ws.Columns("J").Delete\` / \`범위.EntireRow.Delete\`. "데이터/내용을 지워/비워"는 보통 ClearContents, "행/열을 삭제/제거해"는 Delete 입니다. 대상 범위는 실제 데이터 범위로 한정하고, 지운 셀이 0이면 \`Err.Raise\`.
 - 새 시트가 필요하면 \`Set newWs = ActiveWorkbook.Worksheets.Add(After:=...)\` 후 .Name 지정. 같은 이름이 이미 있으면 먼저 지우거나 다른 이름을 쓰세요(중복 이름은 오류).
-- **정렬**: AutoFilter 결과에 의존하지 말고 \`ws.Range(데이터범위).Sort Key1:=ws.Columns(c), Order1:=xlAscending, Header:=xlYes\` 로 실제 범위를 정렬하세요.
+- **정렬 (행 무결성 — 매우 중요)**: AutoFilter 결과에 의존하지 말고, **반드시 표의 모든 열을 포함한 범위 전체**를 한 번에 정렬하세요. 키 열 하나만 정렬하거나 키 열만 배열로 읽어 되쓰면 나머지 열이 제자리에 남아 행 데이터가 통째로 어긋납니다(다른 열 값이 사라진 것처럼 보임). 정석:
+  \`\`\`vba
+  Dim hdrRow As Long: hdrRow = 1            ' 스키마에서 실제 헤더 행 확인
+  Dim keyCol As Long: keyCol = 0            ' 정렬 기준 열(헤더명 또는 사용자가 준 열문자로 결정)
+  ' ... keyCol 을 헤더 탐색/열문자로 확정 ...
+  Dim lastRow As Long, lastCol As Long
+  lastRow = ws.Cells(ws.Rows.Count, keyCol).End(xlUp).Row
+  lastCol = ws.Cells(hdrRow, ws.Columns.Count).End(xlToLeft).Column
+  ws.Range(ws.Cells(hdrRow, 1), ws.Cells(lastRow, lastCol)).Sort _
+      Key1:=ws.Cells(hdrRow, keyCol), Order1:=xlAscending, Header:=xlYes
+  \`\`\`
+  정렬 범위는 **헤더행부터 마지막 데이터행까지, 1열부터 마지막 열까지 전부** 포함해야 모든 열이 행 단위로 함께 이동합니다. Key1 은 그 범위 안의 키 열 셀(\`ws.Cells(hdrRow, keyCol)\`)을 가리키게 하세요.
 - **필터(조건에 맞는 행만)**: AutoFilter 의 on/off 상태를 최종 결과로 쓰지 마세요. 대신 **새 시트**를 만들어 헤더 + 조건에 맞는 행만 복사해 넣고, 원본 시트는 그대로 두세요. 시트명은 조건이 드러나게 지으세요.
 - **그룹 요약/피벗(예: 회사별 합계)**: Scripting.Dictionary 로 키별 집계 후 새 시트에 요약표를 쓰세요. (Dictionary 는 CreateObject 가 아니라 \`Dim d As Object: Set d = CreateObject("Scripting.Dictionary")\` 만 허용 — 파일/네트워크 접근용 CreateObject 는 금지.)
 - 월 텍스트 비교는 0패딩/비패딩을 각각 처리("02월"과 "2월"을 따로). 아래 '한글/텍스트 매칭' 참고.
@@ -149,6 +184,7 @@ const VBA_SYSTEM_PROMPT = `당신은 우측에 실제로 떠 있는 Microsoft Ex
 - 시트의 실제 텍스트에는 음절·숫자·단위 사이에 공백이 없습니다. 예: 화면 텍스트는 "2026년 02월", "3월" 입니다. 절대로 "2026 년 02 월", "3 월" 처럼 공백을 넣지 마세요.
 - 비교/치환 문자열은 위 "현재 파일 스키마"에 보이는 실제 셀 텍스트를 그대로 사용하세요. 0패딩/비패딩 모두 처리하려면 "02월"과 "2월"을 각각 따로 치환하세요.
 - 부분 일치가 필요하면 InStr 로 실제 텍스트 형태를 그대로 검사하세요.
+- **여러 항목을 "지정해서" 합산/집계할 때(화이트리스트)는 정확히 일치하는 값만 포함하세요.** 예: "기본료, 전국대표 포함 기본료, 080 포함 기본료만 합산"이면 그 3개와 \`Trim\` 후 정확히 같은 값(\`=\`)인 행만 더하고, 열거되지 않은 유사 라벨(예: "월구전화 기본료")은 InStr 부분일치로 끌려들어가지 않게 **포함하지 마세요**. 사용자가 "~를 포함한"이라고 명시한 경우에만 그 라벨에 한해 부분일치를 쓰세요. 어떤 라벨을 포함/제외할지 모호하면 임의로 정하지 말고 Err.Raise 로 물으세요.
 
 ## 범위 다루기 (1004 오류 / 병합셀 / no-op 방지) — 매우 중요
 - 대상 워크북은 \`ActiveWorkbook\` 입니다(이게 가장 안전). \`Workbooks("이름")\` 도 가능하지만 이름이 정확히 일치해야 하므로 가급적 ActiveWorkbook 을 쓰세요.
@@ -257,6 +293,14 @@ function _sheetTotalRowsForSchema(file, sheetName, aoa) {
   return Math.max(Number(dim && dim.maxRow) || 0, (aoa || []).length || 0);
 }
 
+// 1-based 열 번호 → 엑셀 열 문자(A, B, ..., AA ...). 스키마의 열문자↔헤더 매핑 출력용.
+function _colLetter(n) {
+  let s = "";
+  n = parseInt(n, 10) || 0;
+  while (n > 0) { const r = (n - 1) % 26; s = String.fromCharCode(65 + r) + s; n = Math.floor((n - 1) / 26); }
+  return s || "A";
+}
+
 function _describeFile(f, opts, lines) {
   const headPreview = opts.headPreview || 5;
   const maxCols = opts.maxCols || 40;
@@ -283,6 +327,18 @@ function _describeFile(f, opts, lines) {
     const fkeys = Object.keys(formulas);
     if (fkeys.length > 0) {
       lines.push(`  수식 셀 ${fkeys.length}개 (예: ${fkeys.slice(0, 3).map(k => k + "=" + formulas[k]).join(", ")})`);
+    }
+
+    // 열문자 ↔ 헤더명 매핑: 사용자가 "T열" 같은 열 문자로 지정해도 정확한 열을 잡도록.
+    const hdrRowIdx = (tables[0] && typeof tables[0].headerRow === "number") ? tables[0].headerRow : 0;
+    const hdrRow = aoa[hdrRowIdx] || aoa[0] || [];
+    if (hdrRow.length) {
+      const colMap = [];
+      hdrRow.slice(0, maxCols).forEach((v, ci) => {
+        const name = _truncSchemaCell(v, 24);
+        if (name !== "") colMap.push(`${_colLetter(ci + 1)}=${name}`);
+      });
+      if (colMap.length) lines.push(`  열(${hdrRowIdx + 1}행 헤더): ${colMap.join(" | ")}`);
     }
 
     const preview = aoa.slice(0, headPreview);
@@ -511,7 +567,16 @@ function buildEditingContext(editIdx) {
   lines.push(`기존 설명: "${step.description}"`);
 
   lines.push("\n## 이 단계의 현재 코드 (수정 대상)");
-  lines.push("```python");
+  // 0.4.11 라이브 엔진은 VBA 다. 수정 대상 코드의 실제 언어로 펜스를 표기해야
+  // 모델이 'python 코드'로 오인해 엉뚱하게 다시 쓰는 일을 막는다.
+  let _editFenceLang = "vba";
+  if (typeof inferPipelineStepLanguage === "function") {
+    const _lng = inferPipelineStepLanguage(step);
+    _editFenceLang = _lng === "python" ? "python" : (_lng === "javascript" ? "javascript" : "vba");
+  } else if (step.language === "python" || step.language === "javascript") {
+    _editFenceLang = step.language;
+  }
+  lines.push("```" + _editFenceLang);
   lines.push(step.code);
   lines.push("```");
 

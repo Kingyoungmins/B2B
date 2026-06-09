@@ -66,6 +66,12 @@
     border-color: #FECACA;
     color: #991B1B;
   }
+  /* 사후검증: 코드는 돌았으나 실제 변경이 없을 때(비파괴 경고 — 오류 아님) */
+  .pipeline-item .step-runtime.review {
+    background: #FFEDD5;
+    border-color: #FED7AA;
+    color: #9A3412;
+  }
   .pipeline-item .step-edit,
   .pipeline-item .step-toggle,
   .pipeline-item .step-del {

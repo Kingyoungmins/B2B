@@ -2705,7 +2705,10 @@ def _validate_vba_source_before_inject(code):
             continue
         if re.search(r"\bAs(?:\s+New)?\s*$", line, re.IGNORECASE):
             raise RuntimeError("VBA 문법 오류(%d행): As 뒤의 자료형이 비어 있습니다." % idx)
-        if re.search(r"(?:,|\+|-|\*|/|&|=|<>|<=|>=|<|>|And|Or|Xor|Mod)\s*$", line, re.IGNORECASE):
+        # 기호 연산자로 끝나면 미완성 식. 단어 연산자(And/Or/Xor/Mod)는 반드시 \b 단어경계로
+        # 검사해야 "Exit For"(끝이 'or'), 변수명 color/vendor/cursor 등을 오탐하지 않는다.
+        if re.search(r"(?:,|\+|-|\*|/|&|=|<>|<=|>=|<|>)\s*$", line) \
+                or re.search(r"\b(?:And|Or|Xor|Mod)\s*$", line, re.IGNORECASE):
             raise RuntimeError("VBA 문법 오류(%d행): 줄 끝의 식이 완성되지 않았습니다." % idx)
         if re.match(r"^End\s+Sub\b", line, re.IGNORECASE):
             pop("Sub", "Sub", idx)
@@ -3277,6 +3280,13 @@ def _run_vba_on_session_impl(excel_id, code, entry=None):
         except Exception:
             pass
         timings["unprotectMs"] = round((time.perf_counter() - _t) * 1000, 2)
+        # 적용 전 스냅샷(노이펙트 판별용). 동반 워크북을 연 뒤라 그 오픈은 변경으로 안 잡힘.
+        verify = None
+        before_probe = None
+        try:
+            before_probe = _change_probe(app, wb)
+        except Exception:
+            before_probe = None
         try:
             _t = time.perf_counter()
             _inject_and_run_vba(app, wb, code, entry)
@@ -3284,6 +3294,11 @@ def _run_vba_on_session_impl(excel_id, code, entry=None):
             if captured:
                 final_view = captured
             timings["injectRunMs"] = round((time.perf_counter() - _t) * 1000, 2)
+            # 적용 직후 스냅샷 비교 → 변경 셀/시트 수. 실패해도 적용은 성공으로 둔다.
+            try:
+                verify = _diff_change_probe(before_probe, _change_probe(app, wb))
+            except Exception:
+                verify = None
         finally:
             _t = time.perf_counter()
             try:
@@ -3306,7 +3321,7 @@ def _run_vba_on_session_impl(excel_id, code, entry=None):
                 pass
             timings["restoreMs"] = round((time.perf_counter() - _t) * 1000, 2)
         timings["totalServerMs"] = round((time.perf_counter() - _t0) * 1000, 2)
-        return {"ok": True, "excelId": excel_id, "entry": entry, "debugTimings": timings}
+        return {"ok": True, "excelId": excel_id, "entry": entry, "debugTimings": timings, "verify": verify}
 
 
 def _run_vba_pipeline_on_session_impl(excel_id, steps, reset=True, entry=None):
@@ -3335,6 +3350,12 @@ def _run_vba_pipeline_on_session_impl(excel_id, steps, reset=True, entry=None):
         except Exception:
             prev_calc = None
         applied = 0
+        verify = None
+        before_probe = None
+        try:
+            before_probe = _change_probe(app, wb)
+        except Exception:
+            before_probe = None
         try:
             if reset:
                 source = session.get("sourcePath") or session.get("path")
@@ -3373,6 +3394,10 @@ def _run_vba_pipeline_on_session_impl(excel_id, steps, reset=True, entry=None):
             if captured:
                 final_view = captured
             timings["stepsMs"] = round((time.perf_counter() - _t_steps) * 1000, 2)
+            try:
+                verify = _diff_change_probe(before_probe, _change_probe(app, wb))
+            except Exception:
+                verify = None
         finally:
             _t = time.perf_counter()
             try:
@@ -3395,7 +3420,7 @@ def _run_vba_pipeline_on_session_impl(excel_id, steps, reset=True, entry=None):
                 pass
             timings["restoreMs"] = round((time.perf_counter() - _t) * 1000, 2)
         timings["totalServerMs"] = round((time.perf_counter() - _t0) * 1000, 2)
-        return {"ok": True, "excelId": excel_id, "applied": applied, "debugTimings": timings}
+        return {"ok": True, "excelId": excel_id, "applied": applied, "debugTimings": timings, "verify": verify}
 
 
 def run_vba_on_session(excel_id, code, entry=None):
@@ -3483,6 +3508,95 @@ def _sheet_snapshot(ws):
                 "key": formula_text if is_formula else value_text,
             }
     return cells
+
+
+# ── 적용 사후검증(노이펙트 판별) ────────────────────────────────────────────────
+# VBA 실행 전후로 "쓰기 가능한" 열린 워크북들의 시트 스냅샷을 떠서 변경 셀 수/시트 추가를
+# 센다. 입력 동반 워크북은 ReadOnly 라 건너뛰므로 비용이 한정된다. best-effort —
+# 실패하면 None 을 돌려주고(검증 불가), 절대 적용 자체를 실패로 만들지 않는다.
+# 중요: changedCells==0 을 서버가 "오류"로 처리하지 않는다(멱등 재적용·서식만 변경 등
+# 정당한 무변화가 있음). 카운트만 반환하고 판단은 프론트가 '확인 필요'로 표시한다.
+_CHANGE_PROBE_CELL_CAP = 100000
+
+def _change_probe(app, target_wb=None):
+    out = {}
+    try:
+        wbs = list(app.Workbooks)
+    except Exception:
+        return None
+    target_name = None
+    if target_wb is not None:
+        try:
+            target_name = target_wb.Name
+        except Exception:
+            target_name = None
+    for wb in wbs:
+        try:
+            wbname = wb.Name
+        except Exception:
+            continue
+        # 입력 동반(읽기전용) 워크북은 변하지 않으므로 비용 절감을 위해 건너뛴다.
+        # 단, 대상 워크북(target)은 read_only_mirror 로 열렸어도(ReadOnly=True) VBA 가 인메모리로
+        # 수정하므로 ReadOnly 여부와 무관하게 항상 포함한다(이게 없으면 매 적용이 '변경 없음' 오탐).
+        is_target = (target_name is not None and wbname == target_name)
+        if not is_target:
+            try:
+                if wb.ReadOnly:
+                    continue
+            except Exception:
+                pass
+        try:
+            names = _excel_collection_names(wb.Worksheets)
+        except Exception:
+            continue
+        for nm in names:
+            key = wbname + "\x00" + nm
+            try:
+                out[key] = _sheet_snapshot(wb.Worksheets(nm))
+            except Exception:
+                out[key] = None
+    return out
+
+
+def _diff_change_probe(before, after):
+    if before is None or after is None:
+        return None
+    before_keys = set(before.keys())
+    after_keys = set(after.keys())
+    sheets_added = len(after_keys - before_keys)
+    sheets_removed = len(before_keys - after_keys)
+    changed_cells = 0
+    capped = False
+    # 새로 생긴 시트의 비어있지 않은 셀은 모두 변경으로 카운트(새 시트 생성 = 변경 있음)
+    for k in (after_keys - before_keys):
+        snap = after.get(k) or {}
+        for c in snap.values():
+            if (c.get("key") or "") != "":
+                changed_cells += 1
+                if changed_cells > _CHANGE_PROBE_CELL_CAP:
+                    capped = True
+                    break
+        if capped:
+            break
+    # 공통 시트는 셀 key(수식 또는 값) 비교
+    if not capped:
+        for k in (before_keys & after_keys):
+            b = before.get(k) or {}
+            a = after.get(k) or {}
+            for addr in (set(b.keys()) | set(a.keys())):
+                if (b.get(addr) or {}).get("key", "") != (a.get(addr) or {}).get("key", ""):
+                    changed_cells += 1
+                    if changed_cells > _CHANGE_PROBE_CELL_CAP:
+                        capped = True
+                        break
+            if capped:
+                break
+    return {
+        "changedCells": changed_cells,
+        "sheetsAdded": sheets_added,
+        "sheetsRemoved": sheets_removed,
+        "capped": capped,
+    }
 
 
 def _active_sheet_snapshot(wb):

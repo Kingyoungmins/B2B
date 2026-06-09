@@ -8,6 +8,12 @@ const LLM_REASONING_WARNING_MS = 45000;
 const OPENAI_COMPAT_MAX_ATTEMPTS = 3;
 const OPENAI_COMPAT_RETRY_BASE_MS = 700;
 
+// [#3/#12] 사용자의 최신 메시지가 직전 결과에 대한 '정정'인지 추정(정정일 때만 정정-우선 지시 강화).
+function _looksLikeCorrection(text) {
+  const t = String(text || "");
+  return /(아니[야라다]?|아닌데|틀렸|틀림|잘못|말고|대신에?|가 아니라|이 아니라|왜.{0,20}했|했잖아|하라고|다시 ?(?:해|작성|생성|만들)|보고 ?작업)/.test(t);
+}
+
 async function callLLM(userMessage, options) {
   options = options || {};
   const thinkMode = settings.provider === "openai-compat"
@@ -32,6 +38,11 @@ async function callLLM(userMessage, options) {
     fullSystem = (editIdx >= 0
       ? EDIT_SYSTEM_PROMPT + "\n\n" + buildEditingContext(editIdx)
       : SYSTEM_PROMPT + "\n\n## 현재 파일 스키마\n" + buildSchemaSummary()) + engineNote;
+  }
+
+  // [#3/#12] 최신 메시지가 정정이면 이전 코드/해석을 고집하지 말고 정정을 최우선 반영하도록 강조.
+  if (_looksLikeCorrection(userMessage)) {
+    fullSystem += "\n\n## 사용자 정정 (최우선)\n사용자의 최신 메시지는 직전 작업/해석이 틀렸다는 정정입니다. 이전 단계 코드나 직전 해석(특히 잘못 고른 열·조건)을 그대로 반복하지 말고, 이 정정을 최우선으로 반영해 새로 작성하세요. 사용자가 지목한 열/항목/기준(열 문자나 헤더명)을 정확히 사용하세요.";
   }
 
   try {
@@ -89,12 +100,20 @@ async function callAnthropic(system) {
 async function callOpenAICompat(system, options) {
   options = options || {};
   let lastError = null;
+  const reqId = options.reqId || "?";
   for (let attempt = 1; attempt <= OPENAI_COMPAT_MAX_ATTEMPTS; attempt++) {
     if (attempt > 1 && typeof options.onReconnect === "function") {
       options.onReconnect(attempt, OPENAI_COMPAT_MAX_ATTEMPTS, lastError);
     }
+    // [B2B#5 진단] attempt>1 = 같은 요청 재전송 → 서버가 두 번 생성하면 중복응답의 원인.
+    if (attempt > 1) {
+      console.warn(`[B2B#5] req#${reqId} 재전송 attempt=${attempt}/${OPENAI_COMPAT_MAX_ATTEMPTS} (직전 오류: ${lastError && lastError.message}) — 같은 프롬프트가 서버로 다시 전송됨(중복응답 의심 지점)`);
+    }
     try {
-      return await callOpenAICompatOnce(system, options);
+      const reply = await callOpenAICompatOnce(system, options);
+      // [B2B#5 진단] 응답 길이가 비정상적으로 길거나 attempt>1 이면 의심. 표시측 중복은 chat-ui 로그와 대조.
+      console.debug(`[B2B#5] req#${reqId} 응답 수신 attempt=${attempt} length=${reply ? reply.length : 0}`);
+      return reply;
     } catch (err) {
       if (!shouldRetryOpenAICompatError(err) || attempt >= OPENAI_COMPAT_MAX_ATTEMPTS) throw err;
       lastError = err;
@@ -115,7 +134,9 @@ async function callOpenAICompatOnce(system, options) {
     model: settings.model || DEFAULTS["openai-compat"].model,
     messages,
     max_tokens: 4096,
-    temperature: 0.2,
+    // [#12] 기본은 낮게(일관성↑). seed 는 일부러 박지 않음 → 재요청/재생성 때 다른 시도가 나올 여지 유지.
+    // 호출자가 options.temperature 로 '다양하게 재생성'을 위해 더 높일 수 있음.
+    temperature: (typeof options.temperature === "number") ? options.temperature : 0.2,
     stream: true,
   };
   applyQwenThinkControl(payload, options.thinkMode === true);

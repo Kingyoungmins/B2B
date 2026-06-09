@@ -552,10 +552,45 @@ async function restoreActiveExcelMirrorWindow() {
 // ---- 적용 중 로딩 애니메이션 (이슈: 적용 중엔 미러가 안 보이므로 엑셀 영역에 로딩 표시) ----
 const EXCEL_MIRROR_SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 
+// [#19] 작업 중단 버튼: 네이티브 셸에서는 우측이 실제 Excel top-level 오버레이라 그 위에 둔 HTML 은
+// 가려진다. 그래서 position:fixed 로 '좌측 하단'(= WebView2 채팅 영역, Excel 에 안 가림)에 띄운다.
+function _ensureExcelCancelButton() {
+  let btn = document.getElementById("excel-apply-cancel-btn");
+  if (btn) return btn;
+  btn = document.createElement("button");
+  btn.id = "excel-apply-cancel-btn";
+  btn.type = "button";
+  btn.className = "excel-apply-cancel-btn";
+  btn.textContent = "■ 작업 중단";
+  btn.style.display = "none";
+  btn.onclick = () => {
+    if (typeof requestExcelApplyCancel !== "function") return;
+    btn.disabled = true;
+    btn.textContent = "중단 중...";
+    Promise.resolve(requestExcelApplyCancel()).catch(() => {}).then(() => {
+      btn.disabled = false;
+      btn.textContent = "■ 작업 중단";
+    });
+  };
+  document.body.appendChild(btn);
+  return btn;
+}
+function showExcelApplyCancelButton(show) {
+  const btn = _ensureExcelCancelButton();
+  if (show) {
+    btn.disabled = false;
+    btn.textContent = "■ 작업 중단";
+    btn.style.display = "inline-flex";
+  } else {
+    btn.style.display = "none";
+  }
+}
+
 // 적용 시작: 모든 미러 창을 숨기고(park) 네이티브 패널의 로딩 애니메이션을 돌린다.
 // (미러를 숨겨야 적용 중 여러 Excel 창이 앞으로 튀어나오지 않고, 패널의 로딩 표시가 보인다.)
 function beginExcelMirrorApplyLoading(message) {
   excelMirror.applying = true;
+  if (typeof showExcelApplyCancelButton === "function") showExcelApplyCancelButton(true);
   const label = message || "적용 반영 중...";
   if (typeof hideAllExcelMirrorWindows === "function") {
     hideAllExcelMirrorWindows().catch(() => {});
@@ -574,6 +609,7 @@ function beginExcelMirrorApplyLoading(message) {
 }
 
 function endExcelMirrorApplyLoading() {
+  if (typeof showExcelApplyCancelButton === "function") showExcelApplyCancelButton(false);
   if (!excelMirror.applying && !excelMirror.applyLoadingTimer) return;
   excelMirror.applying = false;
   clearInterval(excelMirror.applyLoadingTimer);

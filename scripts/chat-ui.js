@@ -59,17 +59,38 @@ function addMessage(role, text, opts) {
     div.textContent = text;
   }
   container.appendChild(div);
-  scrollChatToBottom();
+  // 사용자가 방금 보낸 메시지는 항상 맨 아래로(자기 행동), 그 외(어시스턴트/시스템)는 stick 상태 존중.
+  scrollChatToBottom({ force: role === "user" });
   return div;
 }
 
-function scrollChatToBottom() {
+// 사용자가 위로 스크롤해 이전 내용을 읽는 중이면 스트리밍 delta 가 화면을 끌어내리지 않도록
+// "맨 아래 근처일 때만 자동 스크롤"(stick-to-bottom) 한다.
+let _chatAutoStick = true;
+function _isChatNearBottom(container, threshold) {
+  threshold = (threshold == null) ? 80 : threshold;
+  return (container.scrollHeight - container.scrollTop - container.clientHeight) <= threshold;
+}
+function _ensureChatScrollWatcher() {
+  const container = $("chat-messages");
+  if (!container || container._b2bScrollWatch) return;
+  container._b2bScrollWatch = true;
+  // 사용자/프로그램 스크롤 후의 위치로 stick 여부를 갱신. 맨 아래면 따라가고, 위로 올리면 멈춘다.
+  container.addEventListener("scroll", () => {
+    _chatAutoStick = _isChatNearBottom(container);
+  }, { passive: true });
+}
+function scrollChatToBottom(opts) {
   const container = $("chat-messages");
   if (!container) return;
+  _ensureChatScrollWatcher();
+  const force = !!(opts && opts.force);
+  if (!force && !_chatAutoStick) return;   // 위로 스크롤해 읽는 중이면 자동 스크롤 보류
   requestAnimationFrame(() => {
     container.scrollTop = container.scrollHeight;
     requestAnimationFrame(() => {
       container.scrollTop = container.scrollHeight;
+      _chatAutoStick = true;
     });
   });
 }
@@ -194,6 +215,8 @@ function codeHasBroadValueRewrite(code) {
 
 function showCodeGuardBlock(message, context) {
   context = context || {};
+  // [B2B#18 진단] '적용 버튼이 안 눌린다'의 상당수는 가드가 조용히 막은 경우다. 로그로 구분.
+  console.warn(`[B2B#18] 적용 가드 차단: ${message}`);
   toast(message, "error");
   const div = addMessage("system", "", {});
   div.innerHTML = `
@@ -219,7 +242,7 @@ function showCodeGuardBlock(message, context) {
       }
     };
   }
-  scrollChatToBottom();
+  scrollChatToBottom({ force: true });   // 가드 안내/강제적용 버튼은 항상 보이도록(#18)
 }
 
 function validateAssistantCodeBeforeApply(code, context) {
@@ -444,33 +467,58 @@ function openInsertPositionDialog(currentCount, onConfirm) {
   });
 }
 
-function setupStreamingAssistantMessage(container, modeLabel, aiName, onStop) {
+function setupStreamingAssistantMessage(container, modeLabel, aiName, onStop, onStopThinking) {
   let initialized = false;
   let reasoningBox;
   let reasoningToggle;
   let reasoningContent;
   let stopBtn;
+  let stopThinkBtn;
   let answerText;
   let codeBlock;
   let statusText;
   let answerRenderer;
   let reasoningRenderer;
 
+  // #10: think 모드면 '생각 중단'(thinking 만 끊고 답변 받기) + '요청 중단'(전체 종료) 두 버튼,
+  // 아니면 기존처럼 단일 '중단'.
+  const stopButtonsHtml = () => {
+    if (!onStop) return "";
+    if (onStopThinking) {
+      return '<span class="stream-stop-group">'
+        + '<button class="stream-stop-think-btn" type="button">생각 중단</button>'
+        + '<button class="stream-stop-btn" type="button">요청 중단</button></span>';
+    }
+    return '<button class="stream-stop-btn" type="button">중단</button>';
+  };
+  const wireStopButtons = () => {
+    stopBtn = container.querySelector(".stream-stop-btn");
+    stopThinkBtn = container.querySelector(".stream-stop-think-btn");
+    if (stopBtn && onStop) {
+      stopBtn.onclick = () => {
+        stopBtn.disabled = true;
+        stopBtn.textContent = "중단 중...";
+        if (stopThinkBtn) stopThinkBtn.disabled = true;
+        onStop();
+      };
+    }
+    if (stopThinkBtn && onStopThinking) {
+      stopThinkBtn.onclick = () => {
+        stopThinkBtn.disabled = true;
+        stopThinkBtn.textContent = "생각 중단 중...";
+        onStopThinking();
+      };
+    }
+  };
+
   container.classList.add("loading");
   container.innerHTML = `
     <div class="streaming-topbar">
       <span><span class="loader"></span> ${escapeHtml(modeLabel)}${escapeHtml(aiName)}에게 전송 중...</span>
-      ${onStop ? '<button class="stream-stop-btn" type="button">중단</button>' : ""}
+      ${stopButtonsHtml()}
     </div>
   `;
-  stopBtn = container.querySelector(".stream-stop-btn");
-  if (stopBtn && onStop) {
-    stopBtn.onclick = () => {
-      stopBtn.disabled = true;
-      stopBtn.textContent = "중단 중...";
-      onStop();
-    };
-  }
+  wireStopButtons();
   scrollChatToBottom();
 
   function initialize() {
@@ -478,7 +526,7 @@ function setupStreamingAssistantMessage(container, modeLabel, aiName, onStop) {
     initialized = true;
     container.classList.remove("loading");
     container.innerHTML = `
-      ${onStop ? '<div class="streaming-topbar"><span class="stream-status"></span><button class="stream-stop-btn" type="button">중단</button></div>' : ""}
+      ${onStop ? '<div class="streaming-topbar"><span class="stream-status"></span>' + stopButtonsHtml() + '</div>' : ""}
       <div class="reasoning-box" hidden>
         <button class="reasoning-toggle" type="button">생각 펼치기</button>
         <div class="reasoning-content"></div>
@@ -491,18 +539,11 @@ function setupStreamingAssistantMessage(container, modeLabel, aiName, onStop) {
     reasoningBox = container.querySelector(".reasoning-box");
     reasoningToggle = container.querySelector(".reasoning-toggle");
     reasoningContent = container.querySelector(".reasoning-content");
-    stopBtn = container.querySelector(".stream-stop-btn");
     answerText = container.querySelector(".assistant-stream-text");
     codeBlock = container.querySelector(".assistant-stream-code");
     statusText = container.querySelector(".stream-status");
     if (statusText) statusText.textContent = `${modeLabel}${aiName} 응답 수신 중...`;
-    if (stopBtn && onStop) {
-      stopBtn.onclick = () => {
-        stopBtn.disabled = true;
-        stopBtn.textContent = "중단 중...";
-        onStop();
-      };
-    }
+    wireStopButtons();
     answerRenderer = createSmoothStructuredRenderer(
       answerText,
       codeBlock,
@@ -551,12 +592,14 @@ function setupStreamingAssistantMessage(container, modeLabel, aiName, onStop) {
       reasoningRenderer.flush();
       if (reasoningBox && reasoningBox.classList.contains("open")) scrollReasoningToBottom(reasoningContent);
       if (stopBtn) stopBtn.remove();
+      if (stopThinkBtn) stopThinkBtn.remove();
     },
     stopped() {
       if (stopBtn) {
         stopBtn.disabled = true;
         stopBtn.textContent = "중단됨";
       }
+      if (stopThinkBtn) stopThinkBtn.remove();
     },
   };
 }
@@ -615,6 +658,8 @@ function showThinkRetryPrompt(container, context) {
       $("chat-send").disabled = false;
     }
   };
+  // #10 '생각 중단': 버튼 클릭을 기다리지 않고 Think 없이 즉시 재요청.
+  if (context.autoStart) retryBtn.click();
 }
 
 function createSmoothStructuredRenderer(textEl, codeEl, emptyText) {
@@ -935,8 +980,16 @@ async function sendChat() {
   const msg = input.value.trim();
   if (!msg) return;
   if (!state.output && state.inputs.length === 0) { toast("입력 또는 출력 파일을 먼저 업로드하세요", "error"); return; }
+  // [#5] 인플라이트 락: 처리 중에는 버튼 클릭/Enter 재입력을 막아 같은 요청 중복 전송을 방지.
+  // (top 체크 ~ 첫 await 사이는 모두 동기 코드라 재진입이 끼어들 수 없음. 해제는 finally 단일 지점.)
+  if (window.__b2bChatInFlight) { toast("이전 요청을 처리 중입니다. 잠시 후 다시 시도하세요.", "error"); return; }
+  window.__b2bChatInFlight = true;
   // 전송 시점의 수정 대상 step을 캡처해두면, 이후 사용자가 수정 모드를 토글해도 응답 버튼은 올바른 step을 가리킨다.
   const editTargetId = state.editingStepId || null;
+  // [B2B#5 진단] 한 번의 전송에 고유 id 부여. 같은 id 로 응답이 2번 렌더되면 표시측 중복,
+  // 서로 다른 id 가 한 사용자 동작에서 2개 나오면 전송측 중복. llm-api 의 재전송 로그와 대조.
+  const reqId = (window.__b2bChatReqSeq = (window.__b2bChatReqSeq || 0) + 1);
+  console.debug(`[B2B#5] req#${reqId} sendChat 시작 (editTarget=${editTargetId || "none"})`);
   input.value = "";
   addMessage("user", msg);
   clearViewerDragSelection();
@@ -947,7 +1000,12 @@ async function sendChat() {
   const modeLabel = editTargetId ? "(수정 모드) " : "";
   const thinkMode = typeof isThinkModeEnabled === "function" && isThinkModeEnabled();
   const abortController = new AbortController();
-  const streamView = setupStreamingAssistantMessage(loading, modeLabel, aiName, () => abortController.abort());
+  let stopThinkingRequested = false;
+  const streamView = setupStreamingAssistantMessage(
+    loading, modeLabel, aiName,
+    () => abortController.abort(),                                   // 요청 중단: 전체 종료
+    thinkMode ? () => { stopThinkingRequested = true; abortController.abort(); } : null  // 생각 중단: think만 끊고 답변
+  );
   $("chat-send").disabled = true;
   let reasoningText = "";
   let prompt = "";
@@ -957,6 +1015,7 @@ async function sendChat() {
       : msg;
     const requestOptions = {
       editTargetId,
+      reqId,
       thinkMode,
       signal: abortController.signal,
       onDelta: (delta, full) => {
@@ -984,24 +1043,28 @@ async function sendChat() {
     streamView.flush();
     loading.remove();
     addAssistantReply(reply, { editTargetId, sourceUserMessage: msg, reasoning: reasoningText });
+    console.debug(`[B2B#5] req#${reqId} addAssistantReply 렌더 (reply length=${reply ? reply.length : 0})`);
     scrollChatToBottom();
   } catch (err) {
     loading.classList.remove("streaming");
     loading.classList.remove("loading");
-    if (err && err.name === "AbortError" && thinkMode) {
+    if (err && err.name === "AbortError" && thinkMode && stopThinkingRequested) {
+      // '생각 중단': thinking 을 끊고 Think 없이 같은 요청으로 답변을 자동 재요청.
       showThinkRetryPrompt(loading, {
         prompt,
         editTargetId,
         sourceUserMessage: msg,
         modeLabel,
         aiName,
-        message: "Think 요청을 중단했습니다.",
-        detail: "필요하면 Think 없이 같은 요청을 다시 보낼 수 있습니다.",
+        autoStart: true,
+        message: "생각을 중단하고 답변을 생성합니다…",
+        detail: "Think 없이 같은 요청으로 다시 보냅니다.",
       });
       scrollChatToBottom();
       return;
     }
     if (err && err.name === "AbortError") {
+      // '요청 중단'(또는 think 아님): 전체 종료.
       streamView.stopped();
       loading.textContent = "요청이 중단되었습니다.";
     } else {
@@ -1012,6 +1075,7 @@ async function sendChat() {
     scrollChatToBottom();
   } finally {
     $("chat-send").disabled = false;
+    window.__b2bChatInFlight = false;   // [#5] 락 해제는 항상 여기서(완료/오류/중단 공통)
   }
 }
 
