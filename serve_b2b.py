@@ -2664,6 +2664,41 @@ def _close_excel_session_impl(excel_id):
 VBA_SKILL_ENTRY = "B2BSkill"
 
 
+def _strip_vba_comment(line):
+    in_string = False
+    out = []
+    i = 0
+    while i < len(line):
+        ch = line[i]
+        if ch == '"':
+            out.append(ch)
+            if in_string and i + 1 < len(line) and line[i + 1] == '"':
+                out.append(line[i + 1])
+                i += 2
+                continue
+            in_string = not in_string
+            i += 1
+            continue
+        if ch == "'" and not in_string:
+            break
+        out.append(ch)
+        i += 1
+    return "".join(out)
+
+
+def _validate_vba_source_before_inject(code):
+    """VBE 디버거를 띄우는 명백한 컴파일 오류는 Excel에 주입하기 전에 차단한다."""
+    lines = str(code or "").splitlines()
+    for idx, raw in enumerate(lines, 1):
+        line = _strip_vba_comment(raw).strip()
+        if not line or line.endswith("_"):
+            continue
+        if re.search(r"\bAs(?:\s+New)?\s*$", line, re.IGNORECASE):
+            raise RuntimeError("VBA 문법 오류(%d행): As 뒤의 자료형이 비어 있습니다." % idx)
+        if re.search(r"(?:,|\+|-|\*|/|&|=|<>|<=|>=|<|>|And|Or|Xor|Mod)\s*$", line, re.IGNORECASE):
+            raise RuntimeError("VBA 문법 오류(%d행): 줄 끝의 식이 완성되지 않았습니다." % idx)
+
+
 def _vba_pipeline_step_info(step, fallback_idx, err):
     if isinstance(step, dict):
         raw_idx = step.get("stepIdx")
@@ -2747,6 +2782,59 @@ End Function
     return wrapped_user_code + "\n" + wrapper, runner_name, err_num_name, err_desc_name
 
 
+def _suppress_vba_debug_windows(pid=None):
+    """VBE/디버그 다이얼로그가 떠도 사용자에게 보이지 않도록 즉시 닫거나 숨긴다."""
+    wg = globals().get("win32gui")
+    wp = globals().get("win32process")
+    if wg is None or wp is None:
+        return
+    target_pid = int(pid or 0)
+    wm_close = getattr(globals().get("win32con"), "WM_CLOSE", 0x0010)
+    sw_hide = getattr(globals().get("win32con"), "SW_HIDE", 0)
+
+    def visit(hwnd, _):
+        try:
+            _tid, window_pid = wp.GetWindowThreadProcessId(hwnd)
+        except Exception:
+            return True
+        if target_pid and int(window_pid or 0) != target_pid:
+            return True
+        try:
+            title = wg.GetWindowText(hwnd) or ""
+            cls = wg.GetClassName(hwnd) or ""
+        except Exception:
+            return True
+        text = (title + " " + cls).lower()
+        if "visual basic" not in text and "wndclass_desked" not in text:
+            return True
+        try:
+            if cls == "#32770":
+                wg.PostMessage(hwnd, wm_close, 0, 0)
+            else:
+                wg.ShowWindow(hwnd, sw_hide)
+        except Exception:
+            pass
+        return True
+
+    try:
+        wg.EnumWindows(visit, None)
+    except Exception:
+        pass
+
+
+def _start_vba_debug_suppressor(pid=None):
+    stop = threading.Event()
+
+    def worker():
+        while not stop.is_set():
+            _suppress_vba_debug_windows(pid)
+            stop.wait(0.05)
+
+    thread = threading.Thread(target=worker, name="b2b-vba-debug-suppressor", daemon=True)
+    thread.start()
+    return stop
+
+
 def _hide_vba_editor(app):
     """VBE/디버거 창이 사용자 화면으로 올라오지 않게 숨긴다."""
     try:
@@ -2774,13 +2862,9 @@ def _inject_and_run_vba(app, wb, code, entry):
     code = code or ""
     if not code.strip():
         return
-    try:
-        vbproj = wb.VBProject
-    except Exception as err:
-        raise RuntimeError(
-            "VBA 프로젝트에 접근할 수 없습니다. Excel 옵션 > 보안 센터 > 매크로 설정에서 "
-            "'VBA 프로젝트 개체 모델에 대한 액세스 신뢰'를 켠 뒤 파일을 다시 여세요. (" + str(err) + ")"
-        )
+    _validate_vba_source_before_inject(code)
+    excel_pid = _excel_process_id(app)
+    suppressor = _start_vba_debug_suppressor(excel_pid)
     module = None
     prev_display_alerts = None
     prev_enable_events = None
@@ -2788,6 +2872,13 @@ def _inject_and_run_vba(app, wb, code, entry):
     try:
         _disable_vba_break_on_all_errors()
         _hide_vba_editor(app)
+        try:
+            vbproj = wb.VBProject
+        except Exception as err:
+            raise RuntimeError(
+                "VBA 프로젝트에 접근할 수 없습니다. Excel 옵션 > 보안 센터 > 매크로 설정에서 "
+                "'VBA 프로젝트 개체 모델에 대한 액세스 신뢰'를 켠 뒤 파일을 다시 여세요. (" + str(err) + ")"
+            )
         module = vbproj.VBComponents.Add(1)  # 1 = vbext_ct_StdModule
         module_name = module.Name
         safe_code, runner_name, err_num_name, err_desc_name = _wrap_vba_skill_code(code, entry)
@@ -2846,7 +2937,11 @@ def _inject_and_run_vba(app, wb, code, entry):
                 vbproj.VBComponents.Remove(module)
             except Exception:
                 pass
-        _hide_vba_editor(app)
+        try:
+            _hide_vba_editor(app)
+            _suppress_vba_debug_windows(excel_pid)
+        finally:
+            suppressor.set()
 
 
 def _restore_live_protected_view(app, wb):
