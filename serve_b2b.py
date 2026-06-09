@@ -1888,6 +1888,38 @@ def _ensure_vbom_access():
     return enabled
 
 
+def _disable_vba_break_on_all_errors():
+    """VBE Error Trapping 이 Break on All Errors 면 처리된 오류도 디버거로 진입한다.
+    Excel 은 이 값을 시작 시점에 읽으므로 새 Excel 인스턴스 생성 전에 HKCU 값을 Break on Unhandled Errors(0)로 둔다."""
+    try:
+        import winreg
+    except Exception:
+        return False
+    changed = False
+    views = [0]
+    for view_name in ("KEY_WOW64_64KEY", "KEY_WOW64_32KEY"):
+        view = getattr(winreg, view_name, 0)
+        if view and view not in views:
+            views.append(view)
+    for ver in ("7.1", "7.0"):
+        for view in views:
+            try:
+                key = winreg.CreateKeyEx(
+                    winreg.HKEY_CURRENT_USER,
+                    r"Software\Microsoft\VBA\%s\Common" % ver,
+                    0,
+                    winreg.KEY_SET_VALUE | view,
+                )
+                try:
+                    winreg.SetValueEx(key, "BreakOnAllErrors", 0, winreg.REG_DWORD, 0)
+                    changed = True
+                finally:
+                    winreg.CloseKey(key)
+            except Exception:
+                pass
+    return changed
+
+
 def _open_excel_session_impl(
     path,
     name=None,
@@ -1931,6 +1963,7 @@ def _open_excel_session_impl(
         path = working_copy_path
         # VBA 주입(스킬 적용)이 가능하도록, 이 라이브 인스턴스를 띄우기 전에 AccessVBOM 을 켠다.
         _ensure_vbom_access()
+        _disable_vba_break_on_all_errors()
     # read_only_mirror(읽기전용 보호 미러)와 live_editable(라이브) 모두 검증된 미러 표시 경로를 그대로 쓴다
     # (owner/프레임리스 커스텀은 선택/사이즈를 깨서 폐기). 라이브 차이는 작업복사본·VBA·저장뿐.
     # 작업복사본을 read-only 로 열어도 VBA/COM 은 메모리에서 수정 가능하고, 다운로드는 SaveCopyAs 로 저장.
@@ -2707,6 +2740,27 @@ End Function
     return wrapped_user_code + wrapper, runner_name, err_num_name, err_desc_name
 
 
+def _hide_vba_editor(app):
+    """VBE/디버거 창이 사용자 화면으로 올라오지 않게 숨긴다."""
+    try:
+        vbe = app.VBE
+    except Exception:
+        return
+    try:
+        vbe.MainWindow.Visible = False
+    except Exception:
+        pass
+    try:
+        count = int(vbe.Windows.Count)
+    except Exception:
+        count = 0
+    for idx in range(1, count + 1):
+        try:
+            vbe.Windows(idx).Visible = False
+        except Exception:
+            pass
+
+
 def _inject_and_run_vba(app, wb, code, entry):
     """워크북에 VBA 모듈을 임시로 추가해 entry Sub를 실행하고, 끝나면 모듈을 제거한다.
     AccessVBOM 이 꺼져 있으면 wb.VBProject 접근에서 예외 → 명확한 안내로 변환."""
@@ -2725,6 +2779,8 @@ def _inject_and_run_vba(app, wb, code, entry):
     prev_enable_events = None
     prev_enable_cancel_key = None
     try:
+        _disable_vba_break_on_all_errors()
+        _hide_vba_editor(app)
         module = vbproj.VBComponents.Add(1)  # 1 = vbext_ct_StdModule
         module_name = module.Name
         safe_code, runner_name, err_num_name, err_desc_name = _wrap_vba_skill_code(code, entry)
@@ -2783,10 +2839,15 @@ def _inject_and_run_vba(app, wb, code, entry):
                 vbproj.VBComponents.Remove(module)
             except Exception:
                 pass
+        _hide_vba_editor(app)
 
 
 def _restore_live_protected_view(app, wb):
     """VBA 실행 후 라이브 보기 상태(편집 차단+선택 허용, 리본/우클릭 숨김, 화면갱신)를 복구."""
+    try:
+        _hide_vba_editor(app)
+    except Exception:
+        pass
     try:
         _protect_workbook_for_read_only_mirror(wb, True)
     except Exception:

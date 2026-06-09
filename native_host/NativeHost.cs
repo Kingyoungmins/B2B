@@ -239,32 +239,20 @@ namespace B2BNativeHost
         protected override void OnHandleCreated(EventArgs e)
         {
             base.OnHandleCreated(e);
-            RegisterDebugHotkey();
         }
 
         protected override void OnHandleDestroyed(EventArgs e)
         {
-            UnregisterDebugHotkey();
             base.OnHandleDestroyed(e);
         }
 
         protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
         {
-            if (keyData == Keys.F8)
-            {
-                ToggleDebugPanel();
-                return true;
-            }
             return base.ProcessCmdKey(ref msg, keyData);
         }
 
         protected override void WndProc(ref Message m)
         {
-            if (m.Msg == WM_HOTKEY && m.WParam.ToInt32() == DEBUG_HOTKEY_ID)
-            {
-                ToggleDebugPanel();
-                return;
-            }
             base.WndProc(ref m);
         }
 
