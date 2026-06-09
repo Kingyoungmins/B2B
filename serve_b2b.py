@@ -2658,6 +2658,55 @@ def _vba_pipeline_step_info(step, fallback_idx, err):
     }
 
 
+def _wrap_vba_skill_code(code, entry):
+    """사용자 VBA를 내부 Sub로 바꾸고, 런타임 오류를 팝업 대신 상태값으로 전달하는 래퍼를 붙인다."""
+    entry = (entry or VBA_SKILL_ENTRY).strip() or VBA_SKILL_ENTRY
+    impl_name = "B2B_UserSkill_Impl"
+    runner_name = "B2B_RunSkill"
+    err_num_name = "B2B_GetLastErrNumber"
+    err_desc_name = "B2B_GetLastErrDescription"
+    pattern = re.compile(
+        r"^(\s*)(?:(Public|Private)\s+)?Sub\s+%s\s*\([^)]*\)"
+        % re.escape(entry),
+        re.IGNORECASE | re.MULTILINE,
+    )
+    wrapped_user_code, count = pattern.subn(
+        r"\1Private Sub %s()" % impl_name,
+        code,
+        count=1,
+    )
+    if count == 0:
+        wrapped_user_code = code
+        call_line = "%s" % entry
+    else:
+        call_line = "%s" % impl_name
+    wrapper = f"""
+
+Public B2B_LastErrNumber As Long
+Public B2B_LastErrDescription As String
+
+Public Sub {runner_name}()
+    On Error GoTo B2B_Err
+    B2B_LastErrNumber = 0
+    B2B_LastErrDescription = vbNullString
+    {call_line}
+    Exit Sub
+B2B_Err:
+    B2B_LastErrNumber = Err.Number
+    B2B_LastErrDescription = Err.Description
+End Sub
+
+Public Function {err_num_name}() As Long
+    {err_num_name} = B2B_LastErrNumber
+End Function
+
+Public Function {err_desc_name}() As String
+    {err_desc_name} = B2B_LastErrDescription
+End Function
+"""
+    return wrapped_user_code + wrapper, runner_name, err_num_name, err_desc_name
+
+
 def _inject_and_run_vba(app, wb, code, entry):
     """워크북에 VBA 모듈을 임시로 추가해 entry Sub를 실행하고, 끝나면 모듈을 제거한다.
     AccessVBOM 이 꺼져 있으면 wb.VBProject 접근에서 예외 → 명확한 안내로 변환."""
@@ -2672,15 +2721,63 @@ def _inject_and_run_vba(app, wb, code, entry):
             "'VBA 프로젝트 개체 모델에 대한 액세스 신뢰'를 켠 뒤 파일을 다시 여세요. (" + str(err) + ")"
         )
     module = None
+    prev_display_alerts = None
+    prev_enable_events = None
+    prev_enable_cancel_key = None
     try:
         module = vbproj.VBComponents.Add(1)  # 1 = vbext_ct_StdModule
         module_name = module.Name
-        module.CodeModule.AddFromString(code)
+        safe_code, runner_name, err_num_name, err_desc_name = _wrap_vba_skill_code(code, entry)
+        module.CodeModule.AddFromString(safe_code)
         try:
-            app.Run("%s.%s" % (module_name, entry))
+            prev_display_alerts = app.DisplayAlerts
+            app.DisplayAlerts = False
+        except Exception:
+            pass
+        try:
+            prev_enable_events = app.EnableEvents
+            app.EnableEvents = False
+        except Exception:
+            pass
+        try:
+            prev_enable_cancel_key = app.EnableCancelKey
+            app.EnableCancelKey = 0  # xlDisabled
+        except Exception:
+            pass
+        try:
+            app.Run("%s.%s" % (module_name, runner_name))
+            err_number = 0
+            err_description = ""
+            try:
+                err_number = int(app.Run("%s.%s" % (module_name, err_num_name)) or 0)
+            except Exception:
+                err_number = 0
+            try:
+                err_description = str(app.Run("%s.%s" % (module_name, err_desc_name)) or "")
+            except Exception:
+                err_description = ""
+            if err_number:
+                raise RuntimeError("VBA 실행 실패: %s" % (err_description or ("오류 번호 %s" % err_number)))
         except Exception as err:
+            if str(err).startswith("VBA 실행 실패:"):
+                raise
             raise RuntimeError("VBA 실행 실패: %s" % err)
     finally:
+        try:
+            if prev_enable_cancel_key is not None:
+                app.EnableCancelKey = prev_enable_cancel_key
+        except Exception:
+            pass
+        try:
+            if prev_enable_events is not None:
+                app.EnableEvents = prev_enable_events
+        except Exception:
+            pass
+        try:
+            if prev_display_alerts is not None:
+                app.DisplayAlerts = prev_display_alerts
+        except Exception:
+            pass
         if module is not None:
             try:
                 vbproj.VBComponents.Remove(module)

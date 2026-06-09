@@ -268,6 +268,27 @@ function recordVbaDebugTiming(record) {
   });
 }
 
+function restoreVbaExcelAfterError(excelId) {
+  if (typeof endExcelMirrorApplyLoading === "function") endExcelMirrorApplyLoading();
+  if (typeof releaseExcelMirrorPipelineMute === "function") releaseExcelMirrorPipelineMute(excelId);
+  if (excelId && typeof positionExcelMirrorWindow === "function") {
+    positionExcelMirrorWindow(excelId, { force: true })
+      .then(() => {
+        if (typeof raiseExcelMirrorWindow === "function") return raiseExcelMirrorWindow(excelId);
+        return null;
+      })
+      .catch(err => {
+        if (typeof isMissingExcelSessionError !== "function" || !isMissingExcelSessionError(err)) {
+          console.warn("Excel mirror error restore failed:", err);
+        }
+      });
+  }
+  if (excelId && typeof stabilizeExcelMirrorZOrder === "function") {
+    try { stabilizeExcelMirrorZOrder(excelId); } catch (_) {}
+  }
+  if (typeof scheduleRestoreActiveExcelMirror === "function") scheduleRestoreActiveExcelMirror(0);
+}
+
 // 0.4.9 리모콘 모델: 생성된 VBA를 라이브 워크북에 즉시 주입 실행한다.
 // 파이프라인 재실행/시뮬레이터를 거치지 않으므로 초저지연이고, 결과는 우측 라이브 엑셀에 바로 보인다.
 function applyVbaStepToLiveExcel(step, excelId) {
@@ -322,9 +343,7 @@ function applyVbaStepToLiveExcel(step, excelId) {
       const failedIdx = (state.pipeline || []).findIndex(s => s && s.id === step.id);
       attachPipelineStepError(err, step, failedIdx >= 0 ? failedIdx : (state.pipeline || []).length - 1);
       setPipelineRuntimeStatus([step.id], "error", "오류");
-      if (typeof endExcelMirrorApplyLoading === "function") endExcelMirrorApplyLoading();
-      if (typeof releaseExcelMirrorPipelineMute === "function") releaseExcelMirrorPipelineMute(excelId);
-      if (typeof scheduleRestoreActiveExcelMirror === "function") scheduleRestoreActiveExcelMirror(180);
+      restoreVbaExcelAfterError(excelId);
       renderPipeline();
       refreshRunButton();
       reportPipelineError(err);
@@ -1290,9 +1309,7 @@ async function reapplyVbaPipelineToLive(excelId, options = {}) {
     } else if (steps.length === 1) {
       attachPipelineStepError(err, steps[0], steps[0].stepIdx);
     }
-    if (typeof endExcelMirrorApplyLoading === "function") endExcelMirrorApplyLoading();
-    if (typeof releaseExcelMirrorPipelineMute === "function") releaseExcelMirrorPipelineMute(excelId);
-    if (typeof scheduleRestoreActiveExcelMirror === "function") scheduleRestoreActiveExcelMirror(180);
+    restoreVbaExcelAfterError(excelId);
     if (window.runnerSetRunning) window.runnerSetRunning(false);
     throw err;
   }
