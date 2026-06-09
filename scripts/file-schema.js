@@ -109,6 +109,8 @@ const VBA_SYSTEM_PROMPT = `당신은 우측에 실제로 떠 있는 Microsoft Ex
   - rng.Value 로 읽은 2차원 배열은 **1-based** 이고 arr(행, 열) 형태입니다. 단일 셀이면 배열이 아니라 스칼라가 오니 주의.
 - 마지막 행/열은 실제 데이터로 구하세요: \`lastRow = ws.Cells(ws.Rows.Count, keyCol).End(xlUp).Row\`, \`lastCol = ws.Cells(headerRow, ws.Columns.Count).End(xlToLeft).Column\`.
 - 읽기/쓰기는 전체 열/행(Range("A:F") 등)으로 하지 말고 실제 범위로 한정: \`ws.Range(ws.Cells(1,1), ws.Cells(lastRow, lastCol))\` (시트 전체 ~104만 행 처리는 매우 느림). **단 열/행 "삽입·삭제"는 예외 — 전체 열/행 형태가 병합셀에 안전합니다(아래 '범위 다루기' 참고).**
+- 사용자가 A:A, A:F처럼 전체 열을 선택해 텍스트 치환/값 변경을 요청해도 \`ws.Columns("A").Value\` 또는 \`Range("A:A").Value\` 를 배열로 읽고 다시 쓰지 마세요. 실제 데이터 마지막 행까지만 한정하거나, 변경이 필요한 셀만 직접 쓰세요.
+- 병합셀을 포함한 범위는 \`rng.Value = arr\` 로 다시 쓰지 마세요. \`cell.MergeCells\` 이면 \`cell.MergeArea.Cells(1,1)\` 만 대상으로 처리하고 같은 MergeArea 를 중복 처리하지 마세요.
 
 ## 헤더/데이터 위치 — 열은 반드시 "헤더 이름"으로 찾기 (매우 중요, 자주 틀림)
 - 헤더가 항상 1행에 있다고 가정하지 마세요. 위 "현재 파일 스키마"에서 실제 헤더 행과 각 열 이름을 확인하세요.

@@ -161,6 +161,7 @@ function codeHasBroadValueRewrite(code) {
   if (/\bUsedRange\s*\.Value\s*=/.test(text)) return true;
   if (/\bRange\s*\([^'\n\r]*(lastCol|xlToLeft|Columns\.Count)[^'\n\r]*\)\s*\.Value\s*=/i.test(text)) return true;
   if (/\bRange\s*\(\s*"[$]?[A-Z]+:[$]?[A-Z]+"\s*\)\s*\.Value\s*=/i.test(text)) return true;
+  if (/\bColumns\s*\([^)]*\)\s*\.Value\s*=/i.test(text)) return true;
 
   const broadRangeVars = new Set();
   const setRe = /\bSet\s+([A-Za-z_]\w*)\s*=\s*([^\n\r']+)/gi;
@@ -170,7 +171,8 @@ function codeHasBroadValueRewrite(code) {
     const expr = match[2] || "";
     const isBroadRange = /\bUsedRange\b/i.test(expr)
       || (/\bRange\s*\(/i.test(expr) && /\b(lastCol|xlToLeft|Columns\.Count)\b/i.test(expr))
-      || /\bRange\s*\(\s*"[$]?[A-Z]+:[$]?[A-Z]+"/i.test(expr);
+      || /\bRange\s*\(\s*"[$]?[A-Z]+:[$]?[A-Z]+"/i.test(expr)
+      || /\bColumns\s*\(/i.test(expr);
     if (isBroadRange) {
       broadRangeVars.add(varName.toLowerCase());
     }
@@ -185,9 +187,39 @@ function codeHasBroadValueRewrite(code) {
   const roundTrip = roundTripRe.exec(text);
   if (roundTrip) {
     const rangeVar = (roundTrip[2] || "").toLowerCase();
-    return rangeVar === "rng" || broadRangeVars.has(rangeVar);
+    return broadRangeVars.has(rangeVar);
   }
   return false;
+}
+
+function showCodeGuardBlock(message, context) {
+  context = context || {};
+  toast(message, "error");
+  const div = addMessage("system", "", {});
+  div.innerHTML = `
+    <div>${escapeHtml(message)}</div>
+    ${context.onForceApply ? `
+      <div class="action-btns" style="margin-top:8px">
+        <button class="action-btn danger" type="button">${escapeHtml(context.forceLabel || "강제로 적용")}</button>
+      </div>
+    ` : ""}
+  `;
+  const forceBtn = div.querySelector("button");
+  if (forceBtn && context.onForceApply) {
+    forceBtn.onclick = () => {
+      if (forceBtn.disabled) return;
+      forceBtn.disabled = true;
+      forceBtn.textContent = "강제 적용 중...";
+      try {
+        context.onForceApply();
+      } catch (err) {
+        forceBtn.disabled = false;
+        forceBtn.textContent = context.forceLabel || "강제로 적용";
+        throw err;
+      }
+    };
+  }
+  scrollChatToBottom();
 }
 
 function validateAssistantCodeBeforeApply(code, context) {
@@ -195,20 +227,17 @@ function validateAssistantCodeBeforeApply(code, context) {
   const sourceUserMessage = context.sourceUserMessage || "";
   if (codeMentionsFormulaOverwrite(code) && !userExplicitlyRequestsFormulaOverwrite(sourceUserMessage)) {
     const message = "사용자가 수식 제거를 명시하지 않았는데 생성 코드에 수식 제거/값 덮어쓰기 의도가 포함되어 적용을 막았습니다. 수식을 보존하는 코드로 다시 생성해 주세요.";
-    toast(message, "error");
-    addMessage("system", message);
+    showCodeGuardBlock(message, context);
     return false;
   }
   if (codeHasBroadValueRewrite(code) && !userExplicitlyRequestsFormulaOverwrite(sourceUserMessage)) {
     const message = "표 전체/UsedRange를 Value 배열로 다시 쓰는 VBA가 감지되어 적용을 막았습니다. 이 방식은 기존 수식을 값으로 바꿀 수 있으니 대상 열/셀만 쓰는 코드로 다시 생성해 주세요.";
-    toast(message, "error");
-    addMessage("system", message);
+    showCodeGuardBlock(message, context);
     return false;
   }
   if (userRequestsCopyPaste(sourceUserMessage) && !userRequestsValuesOnly(sourceUserMessage) && codeCopiesValuesOnly(code)) {
     const message = "복사/붙여넣기 요청에서 값만 복사하는 코드가 감지되어 적용을 막았습니다. 수식과 서식이 유지되도록 Range.Copy 또는 PasteSpecial xlPasteAll 방식으로 다시 생성해 주세요.";
-    toast(message, "error");
-    addMessage("system", message);
+    showCodeGuardBlock(message, context);
     return false;
   }
   return true;
@@ -259,8 +288,7 @@ function addAssistantReply(fullText, replyContext) {
       actions.appendChild(rejectBtn);
       div.appendChild(actions);
 
-      editApplyBtn.onclick = () => {
-        if (!validateAssistantCodeBeforeApply(code, replyContext)) return;
+      const runEditApply = () => {
         const result = replaceLogicAt(editTargetId, code, desc, language);
         if (result && !result.error) {
           editApplyBtn.disabled = true;
@@ -272,6 +300,15 @@ function addAssistantReply(fullText, replyContext) {
             () => restoreActionButtonsAfterFailure([editApplyBtn, rejectBtn], editApplyBtn, "\u2713 \uB2E4\uC2DC \uC218\uC815 \uC801\uC6A9")
           );
         }
+      };
+      editApplyBtn.onclick = () => {
+        const validationContext = {
+          ...(replyContext || {}),
+          forceLabel: "\uAC15\uC81C\uB85C \uC218\uC815 \uC801\uC6A9",
+          onForceApply: runEditApply,
+        };
+        if (!validateAssistantCodeBeforeApply(code, validationContext)) return;
+        runEditApply();
       };
       rejectBtn.onclick = () => {
         editApplyBtn.disabled = true;
@@ -293,8 +330,7 @@ function addAssistantReply(fullText, replyContext) {
       actions.appendChild(rejectBtn);
       div.appendChild(actions);
 
-      applyBtn.onclick = () => {
-        if (!validateAssistantCodeBeforeApply(code, replyContext)) return;
+      const runApply = () => {
         const result = applyLogic({ id: uid(), prompt: "", code, description: desc, language });
         applyBtn.disabled = true;
         insertBtn.disabled = true;
@@ -306,8 +342,7 @@ function addAssistantReply(fullText, replyContext) {
           () => restoreActionButtonsAfterFailure([applyBtn, insertBtn, rejectBtn], applyBtn, "\u2713 \uB2E4\uC2DC \uC801\uC6A9")
         );
       };
-      insertBtn.onclick = () => {
-        if (!validateAssistantCodeBeforeApply(code, replyContext)) return;
+      const runInsert = () => {
         openInsertPositionDialog(state.pipeline.length, (position) => {
           const result = insertLogic({ id: uid(), prompt: "", code, description: desc, language }, position);
           applyBtn.disabled = true;
@@ -320,6 +355,24 @@ function addAssistantReply(fullText, replyContext) {
             () => restoreActionButtonsAfterFailure([applyBtn, insertBtn, rejectBtn], insertBtn, "\u21B3 \uB2E4\uC2DC \uC0BD\uC785")
           );
         });
+      };
+      applyBtn.onclick = () => {
+        const validationContext = {
+          ...(replyContext || {}),
+          forceLabel: "\uAC15\uC81C\uB85C \uC801\uC6A9",
+          onForceApply: runApply,
+        };
+        if (!validateAssistantCodeBeforeApply(code, validationContext)) return;
+        runApply();
+      };
+      insertBtn.onclick = () => {
+        const validationContext = {
+          ...(replyContext || {}),
+          forceLabel: "\uAC15\uC81C\uB85C \uC0BD\uC785",
+          onForceApply: runInsert,
+        };
+        if (!validateAssistantCodeBeforeApply(code, validationContext)) return;
+        runInsert();
       };
       rejectBtn.onclick = () => {
         applyBtn.disabled = true;

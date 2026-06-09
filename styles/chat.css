@@ -159,6 +159,13 @@
     box-shadow: none;
   }
   .msg .action-btn.insert:hover { background: var(--m-50); color: var(--m-700); border-color: var(--m-400); box-shadow: 0 0 0 3px rgba(255,0,128,0.08); }
+  .msg .action-btn.danger {
+    background: #DC2626;
+    color: white;
+    border: 1px solid #B91C1C;
+    box-shadow: none;
+  }
+  .msg .action-btn.danger:hover { background: #B91C1C; box-shadow: 0 0 0 3px rgba(220,38,38,0.12); }
   .msg .action-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: none; }
   .msg .action-btn.pending {
     background: #FEF3C7;
