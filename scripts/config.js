@@ -1,7 +1,7 @@
 ﻿/* ===================================================================
    CONFIG
    =================================================================== */
-const B2B_BUILD_STAMP = "b2b-0.4.13-python-default-20260610-ixi-qwen36-think";
+const B2B_BUILD_STAMP = "b2b-0.5.1-20260610-proxy-qwen36";
 window.B2B_BUILD_STAMP = B2B_BUILD_STAMP;
 
 // 마우스 우클릭(컨텍스트 메뉴) 전역 차단. (네이티브 셸은 WebView 설정으로도 막지만 브라우저 모드 대비)
