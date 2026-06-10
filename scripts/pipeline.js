@@ -534,7 +534,11 @@ function applyLogic(step) {
       steps: useCurrentCache ? [step] : state.pipeline,
       backendBaseMode: useCurrentCache ? "current" : "original",
     })
-      .then(() => {
+      .then((st) => {
+        if (st && st.cancelled) {
+          setPipelineRuntimeStatus([step.id], "review", "중단됨 · 미적용");
+          return { cancelled: true };
+        }
         setPipelineRuntimeStatus([step.id], "applied", "\uC801\uC6A9\uB428");
         return true;
       })
@@ -545,7 +549,7 @@ function applyLogic(step) {
         throw err;
       });
     toast(`"${step.description}" 단계가 추가되었습니다. 시뮬레이터에 반영 중입니다.`, "success");
-    return { pending: true, promise };
+    return { pending: true, promise, cancel: () => (typeof cancelActiveBackendPipeline === "function" ? cancelActiveBackendPipeline() : false) };
   }
   try {
     runPipeline(next);
@@ -629,7 +633,11 @@ function insertLogic(step, position) {
     refreshRunButton();
     if (typeof scheduleLogicAutoBackup === "function") scheduleLogicAutoBackup("step-inserted");
     const promise = reconcilePipelineSimulationAfterEdit({ forceBackend: true, affectedStep: step })
-      .then(() => {
+      .then((st) => {
+        if (st && st.cancelled) {
+          setPipelineRuntimeStatus([step.id], "review", "중단됨 · 미적용");
+          return { cancelled: true };
+        }
         setPipelineRuntimeStatus([step.id], "applied", "\uC801\uC6A9\uB428");
         return true;
       })
@@ -640,7 +648,7 @@ function insertLogic(step, position) {
         throw err;
       });
     toast(`"${step.description}" 단계가 ${idx + 1}번째에 삽입되었습니다. 시뮬레이터에 반영 중입니다.`, "success");
-    return { pending: true, promise };
+    return { pending: true, promise, cancel: () => (typeof cancelActiveBackendPipeline === "function" ? cancelActiveBackendPipeline() : false) };
   }
   try {
     runPipeline(next);
@@ -723,7 +731,11 @@ function replaceLogicAt(stepId, newCode, newDescription, language) {
     refreshRunButton();
     if (typeof scheduleLogicAutoBackup === "function") scheduleLogicAutoBackup("step-updated");
     const promise = reconcilePipelineSimulationAfterEdit({ forceBackend: true, affectedStep: state.pipeline.find(s => s.id === stepId) || null })
-      .then(() => {
+      .then((st) => {
+        if (st && st.cancelled) {
+          setPipelineRuntimeStatus([stepId], "review", "중단됨 · 미적용");
+          return { cancelled: true };
+        }
         setPipelineRuntimeStatus([stepId], "applied", "\uC801\uC6A9\uB428");
         return true;
       })
@@ -734,7 +746,7 @@ function replaceLogicAt(stepId, newCode, newDescription, language) {
         throw err;
       });
     toast(`Step ${idx + 1} 코드가 수정되었습니다. 시뮬레이터에 반영 중입니다.`, "success");
-    return { pending: true, promise };
+    return { pending: true, promise, cancel: () => (typeof cancelActiveBackendPipeline === "function" ? cancelActiveBackendPipeline() : false) };
   }
   try {
     runPipeline(next);
@@ -1248,6 +1260,7 @@ async function runPipelinePreferBackend(options = {}) {
   if (typeof canRunPipelineOnBackend === "function" && canRunPipelineOnBackend()) {
     try {
       const result = await runPipelineOnBackend(options);
+      if (result && result.cancelled) return result;  // 사용자 중단 — 토스트 없이 조용히
       toast("백엔드 실행 결과를 현재 화면에 반영했습니다", "success");
       return result;
     } catch (err) {
@@ -1597,10 +1610,15 @@ async function reconcilePipelineSimulationAfterEdit(options = {}) {
     if (window.runnerSetRunning) window.runnerSetRunning(true);
     clearPipelineExecutionMemory({ keepViewer: true });
     try {
-      await runPipelinePreferBackend({
+      const _st = await runPipelinePreferBackend({
         pipeline: steps,
         baseMode: options.backendBaseMode || "original",
       });
+      if (_st && _st.cancelled) {
+        if (window.runnerSetRunning) window.runnerSetRunning(false);
+        toast("작업을 중단했습니다.", "success");
+        return _st;
+      }
       toast("스킬 변경 사항을 시뮬레이터에 다시 반영했습니다", "success");
       // [P1] 활성창 기본 — 뷰 이동은 '실제 변경된 스텝의 대상 파일'로만.
       // 토글/삭제/수정된 그 스킬의 targetFileId 가 있고 현재 탭과 다를 때만 그 파일로 이동한다.

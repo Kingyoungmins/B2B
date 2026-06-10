@@ -495,6 +495,9 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
         if self.path == "/api/pipeline/start":
             self.handle_backend_pipeline_start()
             return
+        if self.path == "/api/pipeline/cancel":
+            self.handle_pipeline_cancel()
+            return
         if self.path == "/api/excel/open":
             self.handle_excel_open()
             return
@@ -715,6 +718,17 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
 
         threading.Thread(target=worker, name=f"b2b-pipeline-{job_id[:8]}", daemon=True).start()
         self.send_json({"ok": True, "jobId": job_id, "status": "running"})
+
+    def handle_pipeline_cancel(self):
+        # 협조적 취소: 실행 중인 스텝은 끝까지 돌지만, 다음 스텝 시작 시점에 중단된다.
+        payload = self.read_json_body()
+        job_id = str(payload.get("jobId") or "")
+        with PIPELINE_JOBS_LOCK:
+            job = PIPELINE_JOBS.get(job_id)
+            if job is not None:
+                job["cancelRequested"] = True
+                job["stage"] = "중단 요청됨"
+        self.send_json({"ok": True, "jobId": job_id, "cancelRequested": job is not None})
 
     def handle_pipeline_status(self):
         job_id = self.path.rsplit("/", 1)[-1]
@@ -1155,6 +1169,25 @@ def update_pipeline_job(job_id, patch):
         current.update(patch)
         current["updated"] = time.time()
         PIPELINE_JOBS[job_id] = current
+
+
+def pipeline_job_cancel_requested(job_id):
+    if not job_id:
+        return False
+    with PIPELINE_JOBS_LOCK:
+        job = PIPELINE_JOBS.get(job_id)
+    return bool(job and job.get("cancelRequested"))
+
+
+def raise_if_pipeline_cancelled(job_id):
+    """협조적 취소 체크포인트 — 스텝 경계에서 호출. 취소 요청이 있으면 cancelled 플래그가
+    달린 PipelineExecutionError 를 던져 잡을 '사용자 중단'으로 끝낸다(프론트는 조용히 복귀)."""
+    if pipeline_job_cancel_requested(job_id):
+        raise PipelineExecutionError({
+            "cancelled": True,
+            "stepIdx": -1,
+            "message": "사용자가 작업을 중단했습니다.",
+        })
 
 
 def prune_pipeline_jobs_locked():
@@ -2944,6 +2977,7 @@ def _replace_excel_session_workbook_impl(excel_id, path, name=None, result_id=No
     path = Path(path)
     if not path.exists():
         raise RuntimeError(f"result file not found: {path}")
+    _rt0 = time.perf_counter(); _rt = {"mode": "replace"}  # F8 패널용 반영 단계 타이밍
     with EXCEL_LOCK:
         session = get_excel_session(excel_id)
         app, wb = session_workbook(session)
@@ -2954,6 +2988,7 @@ def _replace_excel_session_workbook_impl(excel_id, path, name=None, result_id=No
         except Exception:
             active_sheet = None
         old_temp_path = session.get("openTempPath")
+        _rt_close = time.perf_counter()
         live_editable = bool(session.get("liveEditable"))
         if read_only_mirror or live_editable:
             try:
@@ -2966,6 +3001,7 @@ def _replace_excel_session_workbook_impl(excel_id, path, name=None, result_id=No
             wb.Close(SaveChanges=False)
         except Exception:
             pass
+        _rt["closeMs"] = round((time.perf_counter() - _rt_close) * 1000, 1)
         if old_temp_path:
             try:
                 Path(old_temp_path).unlink(missing_ok=True)
@@ -2978,7 +3014,9 @@ def _replace_excel_session_workbook_impl(excel_id, path, name=None, result_id=No
         app.DisplayAlerts = False
         app.EnableEvents = False
         _park_excel_app_offscreen(app) if read_only_mirror else None
+        _rt_open = time.perf_counter()
         new_wb, new_temp_path = excel_workbooks_open(app, path, read_only=bool(read_only_mirror))
+        _rt["openMs"] = round((time.perf_counter() - _rt_open) * 1000, 1)
         if session.get("liveEditable") and LIVE_FRAME_MODE:
             # 새 SDI 프레임이 기본 위치로 번쩍 뜨지 않게 즉시 파킹(끝의 presenter 가 제자리 표시).
             _new_frame_hwnd = _workbook_window_hwnd(new_wb)
@@ -3042,6 +3080,7 @@ def _replace_excel_session_workbook_impl(excel_id, path, name=None, result_id=No
             except Exception:
                 pass
         elif live_editable:
+            _rt_show = time.perf_counter()
             # Python(openpyxl) 결과 교체의 라이브 반영 경로. 공유 인스턴스(frame 모드)에서는
             # app 전역(owner/hide/Visible) 조작 금지 — 이 세션의 새 프레임만 제어한다.
             try:
@@ -3105,6 +3144,7 @@ def _replace_excel_session_workbook_impl(excel_id, path, name=None, result_id=No
                 app.ScreenUpdating = True
             except Exception:
                 pass
+            _rt["presentMs"] = round((time.perf_counter() - _rt_show) * 1000, 1)
         else:
             presented = None
             if session.get("liveEditable") and LIVE_FRAME_MODE:
@@ -3129,6 +3169,7 @@ def _replace_excel_session_workbook_impl(excel_id, path, name=None, result_id=No
             "sheetNames": sheets,
             "readOnlyMirror": bool(read_only_mirror),
             "replaced": True,
+            "debugTimings": dict(_rt, totalMs=round((time.perf_counter() - _rt0) * 1000, 1)),
         }
 
 
@@ -7527,6 +7568,7 @@ class OpenpyxlSkillContext:
 
 
 def _run_openpyxl_python_pipeline_impl(payload, job_id=None):
+    _pp0 = time.perf_counter(); _pp = {"mode": "openpyxl"}  # F8 패널용
     if openpyxl is None:
         raise RuntimeError("openpyxl 이 설치되어 있지 않습니다(순수 Python 엔진 사용 불가).")
     output_item = payload.get("output") or {}
@@ -7578,7 +7620,9 @@ def _run_openpyxl_python_pipeline_impl(payload, job_id=None):
         active_file_id=current.get("fileId"),
         active_sheet=current.get("sheet"),
     )
+    _pp["loadMs"] = round((time.perf_counter() - _pp0) * 1000, 1); _pp_steps = time.perf_counter()
     for idx, step in enumerate(python_steps, start=1):
+        raise_if_pipeline_cancelled(job_id)  # 협조적 취소(스텝 경계)
         update_pipeline_job(job_id, {
             "stage": f"Python(openpyxl) Step {idx}/{len(python_steps)} 실행 중",
             "currentStep": idx,
@@ -7622,6 +7666,7 @@ def _run_openpyxl_python_pipeline_impl(payload, job_id=None):
                 "stack": repr(err),
             })
 
+    _pp["stepsMs"] = round((time.perf_counter() - _pp_steps) * 1000, 1); _pp_save = time.perf_counter()
     update_pipeline_job(job_id, {
         "stage": "결과 저장 중",
         "currentStep": len(python_steps),
@@ -7687,10 +7732,13 @@ def _run_openpyxl_python_pipeline_impl(payload, job_id=None):
     # 결과 응답으로 마지막 작업 시트를 넘기면 프런트/미러가 사용자의 현재 탭을 바꾸기 쉽다.
     active_output_sheet = None
     active_output_address = None
+    _pp["saveInspectMs"] = round((time.perf_counter() - _pp_save) * 1000, 1)
+    _pp["totalServerMs"] = round((time.perf_counter() - _pp0) * 1000, 1)
     return {
         "ok": True,
         "pythonExcel": True,
         "engine": "openpyxl",
+        "debugTimings": _pp,
         "snapshotHit": False,
         "snapshotStep": 0,
         "diffId": None,
@@ -8477,6 +8525,7 @@ def _run_excel_python_pipeline_impl(payload, job_id=None):
             active_sheet=current.get("sheet"),
         )
         for idx, step in enumerate(python_steps[resume_from:], start=resume_from + 1):
+            raise_if_pipeline_cancelled(job_id)  # 협조적 취소(스텝 경계)
             update_pipeline_job(job_id, {
                 "stage": f"Excel Python Step {idx}/{len(python_steps)} 실행 중",
                 "currentStep": idx,

@@ -670,6 +670,8 @@ async function runPipelineOnBackend(options = {}) {
     if (!startResp.ok || !startData.ok || !startData.jobId) {
       throw new Error(startData.error || `HTTP ${startResp.status}`);
     }
+    // [중단] 진행 중 잡을 전역에 노출 — 말풍선/전역 '작업 중단' 버튼이 협조적 취소를 보낼 수 있게.
+    window.__activeBackendPipelineJobId = startData.jobId;
 
     while (true) {
       const pollDelay = pollCount < 8 ? 250 : (pollCount < 40 ? 500 : 1000);
@@ -687,6 +689,11 @@ async function runPipelineOnBackend(options = {}) {
       setProgress(formatBackendProgress(status, startedAt));
 
       if (status.status === "error") {
+        if (status.errorInfo && status.errorInfo.cancelled) {
+          // 사용자 중단 — 오류가 아니라 조용한 취소로 처리(상태/토스트는 호출자가 결정).
+          setProgress("중단됨");
+          return { ok: false, cancelled: true, status: "cancelled" };
+        }
         const err = new Error(status.error || "백엔드 스킬 실행 중 오류가 발생했습니다.");
         if (status.errorInfo) {
           err._stepInfo = {
@@ -735,6 +742,7 @@ async function runPipelineOnBackend(options = {}) {
       }
     }
   } finally {
+    window.__activeBackendPipelineJobId = null;
     releaseExcelMirrorPipelineMute(outputExcelId);
     // 안전망: 적용 결과 반영(applyBackendPipelineResult)이 로딩을 끄지만,
     // 오류/중복실행 등으로 끄지 못한 경우를 대비해 잠시 후 로딩 종료 + 활성 미러 복원.
@@ -774,4 +782,18 @@ function formatDuration(seconds) {
   const m = Math.floor(seconds / 60);
   const s = seconds % 60;
   return m ? `${m}분 ${s}초` : `${s}초`;
+}
+
+// [중단] 협조적 python 잡 취소 — 실행 중 스텝은 끝까지 돌고, 다음 스텝 경계에서 멈춘다.
+async function cancelActiveBackendPipeline() {
+  const jobId = window.__activeBackendPipelineJobId;
+  if (!jobId) return false;
+  try {
+    await fetch("/api/pipeline/cancel", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ jobId }),
+    });
+    return true;
+  } catch (_) { return false; }
 }

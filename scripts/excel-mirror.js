@@ -479,10 +479,20 @@ async function refreshExcelMirrorForFileId(fileId, downloadUrl, options = {}) {
   const existingExcelId = excelMirror.sessionsByFileId[fileId];
   if (existingExcelId) {
     try {
+      const _reflectT0 = performance.now();
       const data = await postExcelMirror("/api/excel/replace", {
         excelId: existingExcelId,
         resultId,
       });
+      // [F8] 결과→Excel 반영(replace) 소요를 단계별로 패널에 기록(close/open/present 는 서버 계측).
+      if (typeof window.recordBackendDebugTiming === "function") {
+        window.recordBackendDebugTiming({
+          action: "reflect(replace)",
+          fileId: fileId,
+          replaceMs: Math.round(performance.now() - _reflectT0),
+          server: data.debugTimings || {},
+        });
+      }
       excelMirror.sessionsByFileId[fileId] = data.excelId;
       excelMirror.sessionLastUsedByFileId[fileId] = Date.now();
       excelMirror.activeExcelId = data.excelId;
@@ -836,6 +846,12 @@ function _ensureExcelCancelButton() {
   btn.textContent = "■ 작업 중단";
   btn.style.display = "none";
   btn.onclick = () => {
+    const vbaActive = window.__activeVbaApply && window.__activeVbaApply.token && !window.__activeVbaApply.token.cancelled;
+    if (!vbaActive && window.__activeBackendPipelineJobId && typeof cancelActiveBackendPipeline === "function") {
+      btn.disabled = true; btn.textContent = "중단 중...";
+      Promise.resolve(cancelActiveBackendPipeline()).catch(() => {}).then(() => { btn.disabled = false; btn.textContent = "■ 작업 중단"; });
+      return;
+    }
     if (typeof requestExcelApplyCancel !== "function") return;
     btn.disabled = true;
     btn.textContent = "중단 중...";
@@ -856,7 +872,9 @@ function showExcelApplyCancelButton(show) {
   if (!show) { btn.style.display = "none"; return; }
   const sync = () => {
     const a = window.__activeVbaApply;
-    btn.style.display = (excelMirror.applying && a && a.token && !a.token.cancelled) ? "" : "none";
+    const hasVba = !!(a && a.token && !a.token.cancelled);
+    const hasJob = !!window.__activeBackendPipelineJobId;
+    btn.style.display = (excelMirror.applying && (hasVba || hasJob)) ? "" : "none";
   };
   sync();
   setTimeout(sync, 150);  // begin 이 토큰 등록보다 먼저 불려도 잡히게 한 번 더
