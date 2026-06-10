@@ -7,8 +7,15 @@ $("btn-save").onclick = () => {
 $("btn-load").onclick = () => {
   openLoadDialog();
 };
-$("btn-reset").onclick = () => {
+$("btn-reset").onclick = async () => {
   if (!confirm("현재 화면 상태를 초기화할까요? (다운로드한 .logic.json 파일은 영향 없음)")) return;
+  // 초기화는 폐기 동작 → graceful 닫기(대형 워크북 건당 수 초 + COM 큐 점유) 대신
+  // 강제 정리: 모든 Excel 창이 즉시 사라지고, 직후 새 업로드가 정리 뒤에 줄서지 않는다.
+  if (typeof forceCloseAllExcelMirrorSessions === "function") {
+    forceCloseAllExcelMirrorSessions().catch(err => console.warn("Excel force close during reset failed:", err));
+  } else if (typeof closeAllExcelMirrorSessions === "function") {
+    closeAllExcelMirrorSessions().catch(err => console.warn("Excel close-all during reset failed:", err));
+  }
   state.inputs = [];
   state.inputsOriginal = [];
   state.output = null;
@@ -584,4 +591,3 @@ function addHistoricAssistant(fullText) {
 $("modal-bg").addEventListener("click", e => {
   if (e.target === $("modal-bg")) $("modal-bg").classList.remove("show");
 });
-

@@ -384,3 +384,49 @@
     border-color: var(--m-400);
     box-shadow: 0 0 0 3px rgba(255,0,128,0.1);
   }
+
+  /* ---- 스킬 설계창 도구(확대/비우기) + 메시지 삭제 ---- */
+  .panel-head .panel-head-actions {
+    display: inline-flex;
+    gap: 6px;
+    margin-left: 8px;
+    flex: 0 0 auto;
+  }
+  .panel-head .panel-head-actions button {
+    border: 1px solid var(--border);
+    background: #fff;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--ink-400);
+    padding: 2px 8px;
+    cursor: pointer;
+    letter-spacing: 0;
+  }
+  .panel-head .panel-head-actions button:hover {
+    color: var(--m-600);
+    border-color: var(--m-400);
+  }
+  /* 확대 모드: 대화 영역을 화면의 60% 높이까지 */
+  #panel-chat-section.chat-expanded .chat-messages,
+  #panel-chat-section.chat-expanded .left-chat-panel .chat-messages {
+    height: 60vh;
+  }
+  /* 메시지 호버 시 × (대화 기억에서 삭제) */
+  .chat-messages .msg { position: relative; }
+  .chat-messages .msg .msg-del {
+    position: absolute;
+    top: 2px;
+    right: 5px;
+    display: none;
+    border: none;
+    background: transparent;
+    color: inherit;
+    opacity: 0.45;
+    cursor: pointer;
+    font-size: 14px;
+    line-height: 1;
+    padding: 2px 4px;
+  }
+  .chat-messages .msg:hover .msg-del { display: block; }
+  .chat-messages .msg .msg-del:hover { opacity: 1; }

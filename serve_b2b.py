@@ -66,7 +66,12 @@ EXCEL_SESSIONS = {}
 EXCEL_LOCK = threading.RLock()
 EXCEL_QUEUE = None
 EXCEL_THREAD = None
+LIVE_EXCEL_APP = None  # 라이브 편집 세션들이 공유하는 앱 전용 Excel.Application
+# 단일 Excel 인스턴스(SDI)에서 워크북마다 생기는 최상위 프레임을 "세션별 hwnd"로 직접 제어하는 모드.
+# app.Hwnd(=그 순간 활성 프레임 1개) 기반의 기존 동작으로 되돌리려면 B2B_WINMODE=legacy 로 실행.
+LIVE_FRAME_MODE = (os.environ.get("B2B_WINMODE") or "frame").strip().lower() != "legacy"
 PYTHON_SKILL_APP = None  # 라이브 미러가 없을 때 Python 스킬 실행용으로 재사용하는 숨김 Excel 인스턴스
+PYTHON_SKILL_APP_PID = None  # 위 인스턴스의 pid — 강제 정리(force-restart/초기화) 때 COM 없이 종료하기 위해 기록
 PIPELINE_JOBS_LOCK = threading.Lock()
 WORKBOOK_CACHE_LOCK = threading.Lock()
 NODE_WORKER_LOCK = threading.Lock()
@@ -222,35 +227,118 @@ def _cleanup_excel_sessions_impl():
     _quit_python_skill_app()
     sessions = list(EXCEL_SESSIONS.values())
     EXCEL_SESSIONS.clear()
+    pids = set()
+    apps = []
+    app_keys = set()
     for session in sessions:
         pid = session.get("pid")
-        hide_guard = None
+        if pid:
+            pids.add(pid)
         try:
             app, wb = session_workbook(session)
-            _prepare_excel_session_for_close(app, wb)
-            hide_guard = _start_excel_hide_guard(app, enabled=True)
+            try:
+                key = int(app.Hwnd)
+            except Exception:
+                key = id(app)
+            if key not in app_keys:
+                app_keys.add(key)
+                apps.append(app)
+            _close_companion_workbooks(session, app)
             wb.Close(SaveChanges=False)
-            if app.Workbooks.Count == 0:
-                _hide_excel_app_window(app)
-                app.Quit()
         except Exception:
             pass
-        if pid:
-            deadline = time.time() + 1.5
-            while time.time() < deadline and _is_pid_alive(pid):
-                _hide_excel_windows_for_pid(pid)
-                time.sleep(0.1)
-            if _is_pid_alive(pid):
-                _hide_excel_windows_for_pid(pid)
-                _force_kill_pid(pid)
-        if hide_guard:
-            hide_guard.set()
-        temp_path = session.get("openTempPath")
-        if temp_path:
+        for key in ("openTempPath", "workingCopyPath"):
+            temp_path = session.get(key)
+            if temp_path:
+                try:
+                    Path(temp_path).unlink(missing_ok=True)
+                except Exception:
+                    pass
+        for cdir in session.get("companionTemps") or []:
             try:
-                Path(temp_path).unlink(missing_ok=True)
+                shutil.rmtree(cdir, ignore_errors=True)
             except Exception:
                 pass
+    for app in apps:
+        try:
+            app.DisplayAlerts = False
+        except Exception:
+            pass
+        try:
+            app.Quit()
+        except Exception:
+            pass
+    global LIVE_EXCEL_APP
+    LIVE_EXCEL_APP = None
+    for pid in pids:
+        deadline = time.time() + 1.5
+        while time.time() < deadline and _is_pid_alive(pid):
+            time.sleep(0.1)
+        if _is_pid_alive(pid):
+            _force_kill_pid(pid)
+
+
+def _force_restart_excel_sessions_direct():
+    """COM 큐를 '우회'하는 응급 복구. 공유 EXCEL.EXE 가 모달/행으로 굳으면 모든 excel_call 이
+    타임아웃되고 일반 close-all 조차 같은 큐에 줄을 서서 들어가지 못한다(단일 인스턴스의 단일 장애점).
+    여기서는 COM 호출 없이 세션에 저장해 둔 pid 만으로 프로세스를 강제 종료하고 상태를 비운다.
+    워커 스레드가 EXCEL_LOCK 을 쥔 채 멈춰 있을 수 있으므로 락은 짧게만 시도하고 실패해도 진행한다
+    (프로세스가 죽으면 굳어 있던 COM 호출도 오류로 풀려난다)."""
+    acquired = False
+    try:
+        acquired = EXCEL_LOCK.acquire(timeout=2)
+    except Exception:
+        acquired = False
+    try:
+        sessions = list(EXCEL_SESSIONS.values())
+        EXCEL_SESSIONS.clear()
+    finally:
+        if acquired:
+            try:
+                EXCEL_LOCK.release()
+            except Exception:
+                pass
+    global LIVE_EXCEL_APP, PYTHON_SKILL_APP, PYTHON_SKILL_APP_PID
+    LIVE_EXCEL_APP = None
+    PYTHON_SKILL_APP = None
+    pids = set()
+    if PYTHON_SKILL_APP_PID:
+        # 숨김 Python 스킬 인스턴스도 같이 정리(놔두면 보이지 않는 EXCEL.EXE 고아로 남는다).
+        try:
+            pids.add(int(PYTHON_SKILL_APP_PID))
+        except Exception:
+            pass
+    PYTHON_SKILL_APP_PID = None
+    for session in sessions:
+        pid = session.get("pid")
+        if pid:
+            try:
+                pids.add(int(pid))
+            except Exception:
+                pass
+    killed = 0
+    for pid in pids:
+        if _is_pid_alive(pid):
+            _force_kill_pid(pid)
+            killed += 1
+    deadline = time.time() + 2.0
+    while time.time() < deadline and any(_is_pid_alive(p) for p in pids):
+        time.sleep(0.1)
+    # 프로세스 종료 후에야 파일 잠금이 풀리므로 임시 파일 정리는 마지막에.
+    for session in sessions:
+        for key in ("openTempPath", "workingCopyPath"):
+            temp_path = session.get(key)
+            if temp_path:
+                try:
+                    Path(temp_path).unlink(missing_ok=True)
+                except Exception:
+                    pass
+        for cdir in session.get("companionTemps") or []:
+            try:
+                shutil.rmtree(cdir, ignore_errors=True)
+            except Exception:
+                pass
+    return {"ok": True, "killed": killed, "sessions": len(sessions)}
 
 
 atexit.register(cleanup_node_worker)
@@ -422,6 +510,12 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
         if self.path == "/api/excel/position":
             self.handle_excel_position()
             return
+        if self.path == "/api/excel/show-only":
+            self.handle_excel_show_only()
+            return
+        if self.path == "/api/excel/recover":
+            self.handle_excel_recover()
+            return
         if self.path == "/api/excel/raise":
             self.handle_excel_raise()
             return
@@ -452,6 +546,17 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
         if self.path == "/api/excel/close":
             self.handle_excel_close()
             return
+        if self.path == "/api/excel/close-all-async":
+            self.send_json({"ok": True})
+            threading.Thread(target=cleanup_excel_sessions, name="b2b-excel-close-all", daemon=True).start()
+            return
+        if self.path == "/api/excel/force-restart":
+            # COM 큐 '우회' 응급 복구(공유 Excel 행/모달 고착 시). excel_call 을 쓰지 않는다.
+            try:
+                self.send_json(_force_restart_excel_sessions_direct())
+            except Exception as err:
+                self.send_json({"ok": False, "error": str(err)}, status=500)
+            return
         if self.path == "/api/excel/close-all":
             cleanup_excel_sessions()
             self.send_json({"ok": True})
@@ -473,11 +578,16 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
 
     def send_json(self, payload, status=200):
         body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
-        self.send_response(status)
-        self.send_header("content-type", "application/json; charset=utf-8")
-        self.send_header("content-length", str(len(body)))
-        self.end_headers()
-        self.wfile.write(body)
+        try:
+            self.send_response(status)
+            self.send_header("content-type", "application/json; charset=utf-8")
+            self.send_header("content-length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+        except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError, OSError):
+            # NativeHost/WebView can close before cleanup responses are flushed.
+            # Treat this as a normal shutdown/reset race instead of printing errors.
+            return
 
     def handle_current_view_diff(self):
         try:
@@ -719,7 +829,6 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
                 workbook_id=workbook_id,
                 read_only_mirror=bool(payload.get("readOnlyMirror")),
                 live_editable=bool(payload.get("liveEditable")),
-                background=bool(payload.get("background")),
                 left=payload.get("left"),
                 top=payload.get("top"),
                 width=payload.get("width"),
@@ -734,6 +843,7 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
                 native_parent_hwnd=payload.get("nativeParentHwnd"),
                 native_host_hwnd=payload.get("nativeHostHwnd"),
                 native_overlay=bool(payload.get("nativeOverlay")),
+                defer_visible=bool(payload.get("deferVisible")),
             ))
         except Exception as err:
             self.send_json({"ok": False, "error": str(err)}, status=500)
@@ -766,6 +876,7 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
                 native_parent_hwnd=payload.get("nativeParentHwnd"),
                 native_host_hwnd=payload.get("nativeHostHwnd"),
                 native_overlay=bool(payload.get("nativeOverlay")),
+                defer_visible=bool(payload.get("deferVisible")),
             ))
         except Exception as err:
             self.send_json({"ok": False, "error": str(err)}, status=500)
@@ -848,6 +959,53 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
                 native_host_hwnd=payload.get("nativeHostHwnd"),
                 native_overlay=bool(payload.get("nativeOverlay")),
                 keep_zorder=bool(payload.get("keepZorder")),
+            ))
+        except Exception as err:
+            self.send_json({"ok": False, "error": str(err)}, status=400)
+
+    def handle_excel_show_only(self):
+        payload = self.read_json_body()
+        try:
+            self.send_json(show_only_excel_session(
+                payload.get("excelId"),
+                payload.get("left"),
+                payload.get("top"),
+                payload.get("width"),
+                payload.get("height"),
+                client_left=payload.get("clientLeft"),
+                client_top=payload.get("clientTop"),
+                client_width=payload.get("clientWidth"),
+                client_height=payload.get("clientHeight"),
+                viewport_width=payload.get("viewportWidth"),
+                viewport_height=payload.get("viewportHeight"),
+                browser_title=payload.get("browserTitle"),
+                native_parent_hwnd=payload.get("nativeParentHwnd"),
+                native_host_hwnd=payload.get("nativeHostHwnd"),
+                native_overlay=bool(payload.get("nativeOverlay")),
+                skip_position=bool(payload.get("skipPosition")),
+            ))
+        except Exception as err:
+            self.send_json({"ok": False, "error": str(err)}, status=400)
+
+    def handle_excel_recover(self):
+        payload = self.read_json_body()
+        try:
+            self.send_json(recover_excel_session(
+                payload.get("excelId"),
+                payload.get("left"),
+                payload.get("top"),
+                payload.get("width"),
+                payload.get("height"),
+                client_left=payload.get("clientLeft"),
+                client_top=payload.get("clientTop"),
+                client_width=payload.get("clientWidth"),
+                client_height=payload.get("clientHeight"),
+                viewport_width=payload.get("viewportWidth"),
+                viewport_height=payload.get("viewportHeight"),
+                browser_title=payload.get("browserTitle"),
+                native_parent_hwnd=payload.get("nativeParentHwnd"),
+                native_host_hwnd=payload.get("nativeHostHwnd"),
+                native_overlay=bool(payload.get("nativeOverlay")),
             ))
         except Exception as err:
             self.send_json({"ok": False, "error": str(err)}, status=400)
@@ -1170,7 +1328,16 @@ def excel_workbooks_open(app, path, read_only=False):
     errors = []
     for kwargs in attempts:
         try:
-            return app.Workbooks.Open(str(open_path), **kwargs), temp_path
+            wb = app.Workbooks.Open(str(open_path), **kwargs)
+            try:
+                # 초기화/응급복구가 EXCEL.EXE 를 강제 종료(taskkill)하는 방식이므로,
+                # 다음 Excel 실행에서 '문서 복구' 창이 뜨지 않도록 우리가 여는 모든 워크북을
+                # AutoRecover 대상에서 제외한다. 워크북 한정 속성이라 사용자 Excel 설정(레지스트리)은
+                # 건드리지 않으며, 작업복사본(폐기 대상)이라 복구 정보 자체가 무의미하다.
+                wb.EnableAutoRecover = False
+            except Exception:
+                pass
+            return wb, temp_path
         except Exception as err:
             errors.append(err)
     if temp_path:
@@ -1487,7 +1654,7 @@ def _configure_excel_grid_window(app, wb=None):
                 _allow_read_only_mirror_selection(wb.Worksheets(idx))
         except Exception:
             pass
-def _ensure_excel_workbook_view(app, wb=None, make_visible=True, activate=True, maximize_workbook=True, defer_show=False):
+def _ensure_excel_workbook_view(app, wb=None, make_visible=True, activate=True, maximize_workbook=True, defer_show=False, app_level=True):
     try:
         if make_visible and not defer_show:
             app.Visible = True
@@ -1521,7 +1688,10 @@ def _ensure_excel_workbook_view(app, wb=None, make_visible=True, activate=True, 
     except Exception:
         pass
     try:
-        app.WindowState = -4143  # xlNormal: keep the outer Excel window at the mirror panel size.
+        if app_level:
+            # SDI 공유 인스턴스에서 app.WindowState 는 활성 프레임에만 적용된다.
+            # frame 모드 호출자는 app_level=False 로 끄고 wb.Windows(1).WindowState 를 직접 쓴다.
+            app.WindowState = -4143  # xlNormal: keep the outer Excel window at the mirror panel size.
     except Exception:
         pass
     try:
@@ -1672,6 +1842,8 @@ def _position_excel_window(
     viewport_height=None,
     show=True,
     keep_zorder=False,
+    hwnd=None,
+    no_activate=False,
 ):
     left, top, width, height = _resolve_excel_mirror_rect(
         left,
@@ -1687,8 +1859,13 @@ def _position_excel_window(
         viewport_height=viewport_height,
     )
     if win32gui is not None and win32con is not None:
-        hwnd = int(app.Hwnd)
-        style_changed = False  # SetWindowLong 으로 실제 스타일이 바뀐 경우에만 SWP_FRAMECHANGED(전체 리드로우) 적용
+        # SDI 공유 인스턴스: app.Hwnd 는 '활성 프레임 1개'라 다중 워크북에서 엉뚱한 창을 만진다.
+        # 호출자가 세션 프레임 hwnd 를 넘기면 그 창만 제어한다.
+        try:
+            hwnd = int(hwnd) if hwnd else int(app.Hwnd)
+        except Exception:
+            hwnd = int(app.Hwnd)
+        style_changed = False  # SetWindowLong 으로 실제 스타일이 바뀐 경우에만 SWP_FRAMECHANGED(전체 리드로우)
         if native_overlay:
             try:
                 style = win32gui.GetWindowLong(hwnd, win32con.GWL_STYLE)
@@ -1806,8 +1983,11 @@ def _position_excel_window(
                     win32gui.ShowWindow(hwnd, getattr(win32con, "SW_RESTORE", 9))
                 if native_parent_hwnd or native_overlay:
                     win32gui.ShowWindow(hwnd, getattr(win32con, "SW_SHOWNA", 8))
-                    if native_parent_hwnd:
-                        _focus_excel_grid_child(hwnd)
+                    _focus_excel_grid_child(hwnd)
+                elif no_activate:
+                    # SW_SHOWNORMAL 은 활성화를 동반해 호스트 포커스를 뺏는다(다음 UI 클릭이
+                    # 창 활성화에 소비되는 '클릭 씹힘'의 원인). 라이브 프레임은 비활성 표시로 충분.
+                    win32gui.ShowWindow(hwnd, getattr(win32con, "SW_SHOWNA", 8))
                 else:
                     # SW_SHOWNORMAL 은 창을 활성화해 배경 미러가 포커스를 빼앗음 → 비활성 표시(SW_SHOWNA).
                     win32gui.ShowWindow(hwnd, getattr(win32con, "SW_SHOWNA", 8))
@@ -1884,18 +2064,18 @@ def _focus_excel_grid_child(hwnd):
             pass
 
 
-def _set_excel_window_owner(app, owner_hwnd):
-    """Excel 최상위 창의 소유자(owner)를 지정/해제한다.
+def _set_window_owner_hwnd(hwnd, owner_hwnd):
+    """지정한 최상위 창의 소유자(owner)를 지정/해제한다.
     owner_hwnd가 유효하면 그 창 위에 항상 표시되고(가려지지 않음), None/0이면 소유자 해제.
     SetParent(자식화, WS_CHILD)와 달리 owner 관계는 top-level 창을 유지하므로 셀 입력/선택이 정상 동작."""
     if win32gui is None or win32con is None:
         return False
     try:
-        hwnd = int(app.Hwnd)
+        hwnd = int(hwnd)
     except Exception:
         return False
     try:
-        if not win32gui.IsWindow(hwnd):
+        if not hwnd or not win32gui.IsWindow(hwnd):
             return False
     except Exception:
         return False
@@ -1916,25 +2096,111 @@ def _set_excel_window_owner(app, owner_hwnd):
         return False
 
 
-def _suppress_excel_taskbar_button(app, force_toolwindow=False):
-    """미러 Excel 창의 작업표시줄 버튼을 없앤다.
-    Excel 메인창(XLMAIN)은 WS_EX_APPWINDOW 라 owner 가 있어도 작업표시줄에 버튼이 강제 표시된다 →
-    APPWINDOW 제거(owner 있으면 이걸로 충분, 프레임 메트릭 불변).
-    owner 지정이 실패했을 땐(force_toolwindow) TOOLWINDOW 까지 붙여야 버튼이 안 생긴다."""
+def _set_excel_window_owner(app, owner_hwnd):
+    """(legacy) app.Hwnd 프레임의 owner 지정. frame 모드에서는 세션 프레임 hwnd 에
+    _set_window_owner_hwnd 를 직접 쓴다(공유 인스턴스에서 app.Hwnd 는 활성 프레임 1개뿐)."""
+    try:
+        hwnd = int(app.Hwnd)
+    except Exception:
+        return False
+    return _set_window_owner_hwnd(hwnd, owner_hwnd)
+
+
+def _style_live_frame(hwnd):
+    """라이브 프레임을 작업표시줄/Alt+Tab 목록에서 제외(WS_EX_TOOLWINDOW, WS_EX_APPWINDOW 제거).
+    소유(owned) 프레임이 활성일 때 호스트 작업표시줄 버튼이 '활성 그룹'으로 표시되어
+    클릭 시 호스트가 최소화되는 혼동과, 화면 밖에 파킹된 프레임으로 Alt+Tab 진입하는
+    문제를 함께 막는다. 캡션/프레임 자체는 유지(frameless 는 선택/사이즈를 깨서 폐기됨)."""
     if win32gui is None or win32con is None:
         return
     try:
-        hwnd = int(app.Hwnd)
-        if not win32gui.IsWindow(hwnd):
+        hwnd = int(hwnd)
+        if not hwnd or not win32gui.IsWindow(hwnd):
             return
-        ex = win32gui.GetWindowLong(hwnd, win32con.GWL_EXSTYLE)
-        desired = ex & ~getattr(win32con, "WS_EX_APPWINDOW", 0x00040000)
-        if force_toolwindow:
-            desired |= getattr(win32con, "WS_EX_TOOLWINDOW", 0x00000080)
-        if desired != ex:
+        ex_style = win32gui.GetWindowLong(hwnd, win32con.GWL_EXSTYLE)
+        desired = (ex_style | getattr(win32con, "WS_EX_TOOLWINDOW", 0x80)) & ~getattr(win32con, "WS_EX_APPWINDOW", 0x40000)
+        if desired != ex_style:
             win32gui.SetWindowLong(hwnd, win32con.GWL_EXSTYLE, desired)
+            flags = (
+                win32con.SWP_NOMOVE | win32con.SWP_NOSIZE | win32con.SWP_NOZORDER |
+                win32con.SWP_NOACTIVATE | win32con.SWP_NOOWNERZORDER | win32con.SWP_FRAMECHANGED
+            )
+            win32gui.SetWindowPos(hwnd, 0, 0, 0, 0, 0, flags)
     except Exception:
         pass
+
+
+def _show_window_na(hwnd):
+    """창을 활성화 없이 표시(SW_SHOWNA). 포커스는 현재 창(호스트)에 그대로 남는다."""
+    if win32gui is None or win32con is None:
+        return
+    try:
+        hwnd = int(hwnd)
+        if not hwnd or not win32gui.IsWindow(hwnd):
+            return
+        win32gui.ShowWindow(hwnd, getattr(win32con, "SW_SHOWNA", 8))
+    except Exception:
+        pass
+
+
+def _move_hwnd_offscreen(hwnd):
+    """프레임을 숨기지 않고 화면 밖(-32000)으로만 이동(WS_VISIBLE 유지).
+    SW_HIDE 와 달리 '활성 창 소멸'이 일어나지 않아 OS 가 z-order 의 임의 다음 창
+    (무관한 다른 앱일 수 있음)을 끌어올리는 일이 없고, 다시 보일 때 회색 빈 프레임도 안 생긴다."""
+    if win32gui is None or win32con is None:
+        return
+    try:
+        hwnd = int(hwnd)
+        if not hwnd or not win32gui.IsWindow(hwnd):
+            return
+        flags = (
+            getattr(win32con, "SWP_NOACTIVATE", 0x0010) |
+            getattr(win32con, "SWP_NOOWNERZORDER", 0x0200) |
+            getattr(win32con, "SWP_NOSIZE", 0x0001)
+        )
+        win32gui.SetWindowPos(hwnd, getattr(win32con, "HWND_BOTTOM", 1), -32000, -32000, 0, 0, flags)
+    except Exception:
+        pass
+
+
+def _handoff_foreground_to_host(host_hwnd, hwnds):
+    """숨기거나 파킹하려는 프레임이 현재 포그라운드면, OS 가 다음 활성 창을 임의로 고르기 전에
+    호스트로 포커스를 명시적으로 넘긴다(AttachThreadInput 으로 합법 전환).
+    '탭 전환/워크북 열기 때 무관한 다른 앱 창이 최상단으로 튀어나오는' 증상의 직접 방어선."""
+    if win32gui is None:
+        return False
+    try:
+        fg = int(win32gui.GetForegroundWindow() or 0)
+    except Exception:
+        return False
+    try:
+        targets = {int(h) for h in (hwnds or []) if h}
+    except Exception:
+        targets = set()
+    if not fg or fg not in targets:
+        return False
+    try:
+        host = int(host_hwnd or 0)
+        if not host or not win32gui.IsWindow(host):
+            return False
+    except Exception:
+        return False
+    try:
+        user32 = ctypes.windll.user32
+        kernel32 = ctypes.windll.kernel32
+        fg_thread = user32.GetWindowThreadProcessId(fg, None)
+        cur_thread = kernel32.GetCurrentThreadId()
+        attached = False
+        if fg_thread and fg_thread != cur_thread:
+            attached = bool(user32.AttachThreadInput(cur_thread, fg_thread, True))
+        try:
+            user32.SetForegroundWindow(host)
+        finally:
+            if attached:
+                user32.AttachThreadInput(cur_thread, fg_thread, False)
+        return True
+    except Exception:
+        return False
 
 
 def _style_live_overlay_window(app):
@@ -1968,12 +2234,12 @@ def _style_live_overlay_window(app):
         pass
 
 
-def _raise_excel_window(app):
+def _raise_excel_hwnd(hwnd):
     if win32gui is None or win32con is None:
         return
     try:
-        hwnd = int(app.Hwnd)
-        if not win32gui.IsWindow(hwnd):
+        hwnd = int(hwnd)
+        if not hwnd or not win32gui.IsWindow(hwnd):
             return
         if win32gui.IsIconic(hwnd):
             win32gui.ShowWindow(hwnd, getattr(win32con, "SW_RESTORE", 9))
@@ -1986,6 +2252,13 @@ def _raise_excel_window(app):
         )
         win32gui.SetWindowPos(hwnd, win32con.HWND_TOPMOST, 0, 0, 0, 0, flags)
         win32gui.SetWindowPos(hwnd, win32con.HWND_NOTOPMOST, 0, 0, 0, 0, flags)
+    except Exception:
+        pass
+
+
+def _raise_excel_window(app):
+    try:
+        _raise_excel_hwnd(int(app.Hwnd))
     except Exception:
         pass
 
@@ -2093,6 +2366,69 @@ def _disable_vba_break_on_all_errors():
             except Exception:
                 pass
     return changed
+def _is_live_shared_app(app):
+    global LIVE_EXCEL_APP
+    if app is None or LIVE_EXCEL_APP is None:
+        return False
+    try:
+        return int(app.Hwnd) == int(LIVE_EXCEL_APP.Hwnd)
+    except Exception:
+        return app is LIVE_EXCEL_APP
+
+
+def _get_live_excel_app():
+    """라이브 편집 워크북을 한 Excel 프로세스 안에 모으기 위한 앱 전용 Excel.Application.
+
+    기존 구조는 파일마다 DispatchEx("Excel.Application")를 호출해 EXCEL.EXE가 여러 개
+    생길 수 있었다. 저사양/VDI PC에서는 프로세스 다중화와 창 전환 비용이 커지므로,
+    라이브 편집 세션은 이 인스턴스 하나에 여러 Workbook을 여는 방식으로 실험한다.
+    사용자가 직접 띄운 Excel을 잡지 않기 위해 GetActiveObject는 쓰지 않고, 앱 전용
+    DispatchEx 인스턴스를 최초 1회만 만든다.
+    """
+    global LIVE_EXCEL_APP
+    app = LIVE_EXCEL_APP
+    if app is not None:
+        try:
+            _ = app.Workbooks.Count
+            return app
+        except Exception:
+            LIVE_EXCEL_APP = None
+    _ensure_vbom_access()
+    app = win32com.client.DispatchEx("Excel.Application")
+    app.Visible = False
+    app.DisplayAlerts = False
+    app.EnableEvents = False
+    for attr, value in (("AskToUpdateLinks", False), ("UserControl", True)):
+        try:
+            setattr(app, attr, value)
+        except Exception:
+            pass
+    LIVE_EXCEL_APP = app
+    return app
+
+
+def _quit_live_excel_app():
+    global LIVE_EXCEL_APP
+    app = LIVE_EXCEL_APP
+    LIVE_EXCEL_APP = None
+    if app is None:
+        return
+    try:
+        app.Quit()
+    except Exception:
+        pass
+
+
+def _remaining_sessions_for_pid(pid):
+    if not pid:
+        return []
+    try:
+        return [
+            s for s in EXCEL_SESSIONS.values()
+            if s.get("pid") and int(s.get("pid")) == int(pid)
+        ]
+    except Exception:
+        return []
 
 
 def _open_excel_session_impl(
@@ -2116,7 +2452,7 @@ def _open_excel_session_impl(
     native_host_hwnd=None,
     native_overlay=False,
     live_editable=False,
-    background=False,
+    defer_visible=False,
 ):
     if not excel_available():
         raise RuntimeError("Microsoft Excel COM automation is not available. Excel and pywin32 are required.")
@@ -2149,8 +2485,16 @@ def _open_excel_session_impl(
     open_read_only = bool(read_only_mirror)
     with EXCEL_LOCK:
         browser_hwnd = None if (native_parent_hwnd or native_overlay) else (_capture_browser_hwnd(browser_title) if read_only_mirror else None)
-        app = win32com.client.DispatchEx("Excel.Application")
-        app.Visible = False if manage_overlay else True
+        app = _get_live_excel_app() if live_editable else win32com.client.DispatchEx("Excel.Application")
+        live_frame_mode = bool(live_editable and LIVE_FRAME_MODE)
+        if live_frame_mode:
+            # frame 모드: 공유 인스턴스의 글로벌 Visible 토글 금지.
+            # app.Visible=False 는 모든 프레임을 동시에 숨겨, 그중 포그라운드였던 창이 '소멸'하며
+            # OS 가 z-order 의 무관한 다른 앱 창을 활성화(최상단 점프)하는 원인이 된다.
+            # 새 프레임은 아래에서 개별적으로 파킹한다.
+            pass
+        else:
+            app.Visible = False if manage_overlay else True
         app.DisplayAlerts = False
         app.EnableEvents = False
         if manage_overlay:
@@ -2166,8 +2510,19 @@ def _open_excel_session_impl(
             app.AskToUpdateLinks = False
         except Exception:
             pass
+        if defer_visible and not live_frame_mode:
+            try:
+                app.WindowState = -4143  # xlNormal
+            except Exception:
+                pass
+            for attr, value in (("Left", -32000), ("Top", -32000), ("Width", 10), ("Height", 10)):
+                try:
+                    setattr(app, attr, value)
+                except Exception:
+                    pass
         wb = None
         open_temp_path = None
+        frame_hwnd = None
         try:
             wb, open_temp_path = excel_workbooks_open(app, path, read_only=open_read_only)
             app_pid = _excel_process_id(app)
@@ -2177,71 +2532,94 @@ def _open_excel_session_impl(
                 # owner 모드: 호스트를 owner 로 둔 일반(프레임 유지) Excel 창.
                 # 프레임리스(WS_POPUP)는 owner 와 함께 쓰면 선택/사이즈를 깨므로 쓰지 않는다(검증됨).
                 # 리본/수식줄/우클릭/입력키 차단은 앱 레벨이라 선택에 영향 없음.
+                if live_frame_mode:
+                    # SDI: 이 워크북의 프레임 핸들을 잡아 즉시 화면 밖으로 파킹.
+                    # (보이는 공유 인스턴스에 새 프레임이 기본 캐스케이드 위치로 번쩍 뜨는 것과
+                    #  그 표시/활성화가 호스트 포커스를 흔드는 것을 모두 차단)
+                    frame_hwnd = _workbook_window_hwnd(wb)
+                    if frame_hwnd:
+                        _move_hwnd_offscreen(frame_hwnd)
                 try:
                     wb.Activate()
                 except Exception:
                     pass
                 _protect_workbook_for_read_only_mirror(wb, True)   # 편집 차단 + 선택 허용
                 _configure_excel_grid_window(app, wb)              # 리본/수식줄/우클릭/입력키 차단(앱 레벨)
-                try:
-                    app.WindowState = -4143  # xlNormal
-                except Exception:
-                    pass
-                owner_ok = _set_excel_window_owner(app, native_host_hwnd)     # owner (프레임 그대로 유지)
-                # 작업표시줄 버튼 억제: 창이 아직 숨김 상태일 때 적용해야 버튼이 아예 생기지 않는다.
-                _suppress_excel_taskbar_button(app, force_toolwindow=not owner_ok)
-                if width and height:
-                    _position_excel_window(
-                        app, left, top, width, height,
-                        client_left=client_left, client_top=client_top,
-                        client_width=client_width, client_height=client_height,
-                        viewport_width=viewport_width, viewport_height=viewport_height,
-                        show=False,
-                    )
-                try:
-                    app.Visible = True
-                except Exception:
-                    pass
-                try:
-                    _hide_excel_hwnd(app.Hwnd)
-                except Exception:
-                    pass
-                _ensure_excel_workbook_view(app, wb, make_visible=True, activate=False, maximize_workbook=False, defer_show=True)
-                try:
-                    _hide_excel_hwnd(app.Hwnd)
-                except Exception:
-                    pass
-                if not background:
-                    # show 전에 페인트 준비(그리기 허용 + 워크북 뷰 켬) → 빈 회색 프레임이 먼저 보이는 플래시 방지.
+                if frame_hwnd:
+                    try:
+                        wb.Windows(1).WindowState = -4143  # xlNormal (이 프레임만)
+                    except Exception:
+                        pass
+                    _set_window_owner_hwnd(frame_hwnd, native_host_hwnd)  # owner (프레임 그대로 유지)
+                    _style_live_frame(frame_hwnd)                         # 작업표시줄/Alt+Tab 제외
+                else:
+                    try:
+                        app.WindowState = -4143  # xlNormal
+                    except Exception:
+                        pass
+                    _set_excel_window_owner(app, native_host_hwnd)     # owner (프레임 그대로 유지)
+                if defer_visible:
+                    if frame_hwnd:
+                        # 프레임은 파킹 상태 그대로 두고, 인스턴스 Visible 만 1회 켠다.
+                        # (모든 라이브 프레임이 화면 밖이라 시각적 변화 없음. 이후 표시는 전부 프레임 단위.)
+                        try:
+                            if not bool(app.Visible):
+                                app.Visible = True
+                        except Exception:
+                            pass
+                    else:
+                        try:
+                            app.Visible = False
+                        except Exception:
+                            pass
+                elif frame_hwnd:
+                    try:
+                        if not bool(app.Visible):
+                            app.Visible = True
+                    except Exception:
+                        pass
+                    if width and height:
+                        _position_excel_window(
+                            app, left, top, width, height,
+                            hwnd=frame_hwnd, no_activate=True,
+                            client_left=client_left, client_top=client_top,
+                            client_width=client_width, client_height=client_height,
+                            viewport_width=viewport_width, viewport_height=viewport_height,
+                            show=True,
+                        )
+                    else:
+                        _show_window_na(frame_hwnd)
                     try:
                         app.ScreenUpdating = True
                     except Exception:
                         pass
+                    _ensure_excel_workbook_view(app, wb, make_visible=False, activate=False, maximize_workbook=False, app_level=False)
+                    _set_window_owner_hwnd(frame_hwnd, native_host_hwnd)
+                else:
+                    if width and height:
+                        _position_excel_window(
+                            app, left, top, width, height,
+                            client_left=client_left, client_top=client_top,
+                            client_width=client_width, client_height=client_height,
+                            viewport_width=viewport_width, viewport_height=viewport_height,
+                            show=False,
+                        )
                     try:
-                        wb.Windows(1).Visible = True
+                        app.Visible = True
                     except Exception:
                         pass
+                    try:
+                        app.ScreenUpdating = True
+                    except Exception:
+                        pass
+                    _ensure_excel_workbook_view(app, wb, make_visible=True, activate=False, maximize_workbook=False)
                     if width and height:
                         _position_excel_window(
                             app, left, top, width, height,
                             viewport_width=viewport_width, viewport_height=viewport_height,
                             show=True,
                         )
-                    _ensure_excel_workbook_view(app, wb, make_visible=True, activate=False, maximize_workbook=False)
-                else:
-                    # 백그라운드 사전 오픈: 워크북 뷰는 deferred, 창은 숨김 유지(화면/작업표시줄에 안 보임).
-                    # 첫 탭 전환 시 /api/excel/position 의 ensure-full 이 뷰를 완성한 뒤 raise 가 보여준다.
-                    _ensure_excel_workbook_view(app, wb, make_visible=True, activate=False, maximize_workbook=False, defer_show=True)
-                    try:
-                        _hide_excel_hwnd(app.Hwnd)
-                    except Exception:
-                        pass
-                try:
-                    app.ScreenUpdating = True
-                except Exception:
-                    pass
-                _set_excel_window_owner(app, native_host_hwnd)
-                _suppress_excel_taskbar_button(app, force_toolwindow=not owner_ok)
+                    _set_excel_window_owner(app, native_host_hwnd)
             elif read_only_mirror:
                 try:
                     wb.Activate()
@@ -2321,6 +2699,7 @@ def _open_excel_session_impl(
                 "id": excel_id,
                 "app": app,
                 "workbook": wb,
+                "frameHwnd": frame_hwnd,
                 "pid": app_pid,
                 "path": str(path),
                 "openPath": str(wb.FullName),
@@ -2332,6 +2711,7 @@ def _open_excel_session_impl(
                 # 표시/저장/리셋 분기는 liveEditable 플래그로 구분.
                 "readOnlyMirror": bool(read_only_mirror),
                 "liveEditable": bool(live_editable),
+                "deferredVisible": bool(defer_visible),
                 "sourcePath": str(source_path),
                 "workingCopyPath": str(working_copy_path) if working_copy_path else "",
                 "liveRect": (
@@ -2343,7 +2723,7 @@ def _open_excel_session_impl(
                 "nativeParentHwnd": None if (native_overlay or live_editable) else native_parent_hwnd,
                 "nativeHostHwnd": native_host_hwnd,
                 "nativeOverlay": False if live_editable else bool(native_overlay),
-                "hidden": bool(background),
+                "hidden": bool(defer_visible),
                 "lastNativePositionKey": (
                     f"{'overlay' if native_overlay else native_parent_hwnd}:{int(float(left or 0))}:{int(float(top or 0))}:{int(float(width or 0))}:{int(float(height or 0))}"
                     if read_only_mirror and (native_parent_hwnd or native_overlay) and width and height
@@ -2372,10 +2752,11 @@ def _open_excel_session_impl(
                     wb.Close(SaveChanges=False)
             except Exception:
                 pass
-            try:
-                app.Quit()
-            except Exception:
-                pass
+            if not _is_live_shared_app(app):
+                try:
+                    app.Quit()
+                except Exception:
+                    pass
             if open_temp_path:
                 try:
                     Path(open_temp_path).unlink(missing_ok=True)
@@ -2481,10 +2862,23 @@ def _activate_excel_session_impl(excel_id, sheet=None, address=None):
                     "warning": str(err),
                 }
         if not session.get("readOnlyMirror"):
-            try:
-                _safe_activate_excel_app(app)
-            except Exception:
-                pass
+            if session.get("liveEditable") and LIVE_FRAME_MODE:
+                # 범위 보기: 포커스는 채팅에 남기고 이 세션 프레임만 보이게/맨 위로.
+                # (여기서 활성화하면 사용자의 다음 클릭/타이핑이 창 전환에 씹힌다)
+                hwnd = _session_frame_hwnd(session, wb)
+                if hwnd:
+                    _show_window_na(hwnd)
+                    _raise_excel_hwnd(hwnd)
+                else:
+                    try:
+                        _safe_activate_excel_app(app)
+                    except Exception:
+                        pass
+            else:
+                try:
+                    _safe_activate_excel_app(app)
+                except Exception:
+                    pass
         return {"ok": True, "excelId": excel_id, "sheet": ws.Name, "address": selected_address}
 
 
@@ -2585,6 +2979,11 @@ def _replace_excel_session_workbook_impl(excel_id, path, name=None, result_id=No
         app.EnableEvents = False
         _park_excel_app_offscreen(app) if read_only_mirror else None
         new_wb, new_temp_path = excel_workbooks_open(app, path, read_only=bool(read_only_mirror))
+        if session.get("liveEditable") and LIVE_FRAME_MODE:
+            # 새 SDI 프레임이 기본 위치로 번쩍 뜨지 않게 즉시 파킹(끝의 presenter 가 제자리 표시).
+            _new_frame_hwnd = _workbook_window_hwnd(new_wb)
+            if _new_frame_hwnd:
+                _move_hwnd_offscreen(_new_frame_hwnd)
         if read_only_mirror:
             _park_excel_app_offscreen(app)
             try:
@@ -2643,6 +3042,8 @@ def _replace_excel_session_workbook_impl(excel_id, path, name=None, result_id=No
             except Exception:
                 pass
         elif live_editable:
+            # Python(openpyxl) 결과 교체의 라이브 반영 경로. 공유 인스턴스(frame 모드)에서는
+            # app 전역(owner/hide/Visible) 조작 금지 — 이 세션의 새 프레임만 제어한다.
             try:
                 new_wb.Activate()
             except Exception:
@@ -2652,54 +3053,74 @@ def _replace_excel_session_workbook_impl(excel_id, path, name=None, result_id=No
                 _configure_excel_grid_window(app, new_wb)
             except Exception:
                 pass
-            owner_ok = _set_excel_window_owner(app, session.get("nativeHostHwnd"))
-            _suppress_excel_taskbar_button(app, force_toolwindow=not owner_ok)
-            try:
-                _ensure_excel_workbook_view(app, new_wb, make_visible=True, activate=False, maximize_workbook=False, defer_show=True)
-            except Exception:
-                pass
-            try:
-                _hide_excel_hwnd(app.Hwnd)
-            except Exception:
-                pass
-            # show 전에 페인트 준비(그리기 허용 + 워크북 뷰 켬) — 결과 교체 시 빈 회색 프레임이
-            # 한 번 떴다 사라지는 플래시 방지(hwnd 는 아직 숨김/파킹 상태라 화면에 안 보임).
-            try:
-                app.ScreenUpdating = True
-            except Exception:
-                pass
-            try:
-                new_wb.Windows(1).Visible = True
-            except Exception:
-                pass
-            live_rect = session.get("liveRect") or {}
-            if live_rect.get("width") and live_rect.get("height"):
+            presented = None
+            if LIVE_FRAME_MODE:
+                # 워크북이 교체됐으므로 이전 프레임 핸들을 버리고 새 프레임 기준으로 표시.
+                session.pop("frameHwnd", None)
+                rect = session.get("liveRect") or {}
+                presented = _present_live_session_frame(
+                    session, app, new_wb,
+                    rect.get("left"), rect.get("top"), rect.get("width"), rect.get("height"),
+                    skip_position=not (rect.get("width") and rect.get("height")),
+                )
+            if presented is None:
+                # legacy(비frame) 폴백: 페인트 준비 후 show — 결과 교체 시 회색 프레임 플래시 방지.
+                _set_excel_window_owner(app, session.get("nativeHostHwnd"))
                 try:
-                    _position_excel_window(
-                        app,
-                        live_rect.get("left"),
-                        live_rect.get("top"),
-                        live_rect.get("width"),
-                        live_rect.get("height"),
-                        native_host_hwnd=session.get("nativeHostHwnd"),
-                        show=True,
-                    )
+                    _ensure_excel_workbook_view(app, new_wb, make_visible=True, activate=False, maximize_workbook=False, defer_show=True)
                 except Exception:
                     pass
-            try:
-                _ensure_excel_workbook_view(app, new_wb, make_visible=True, activate=False, maximize_workbook=False)
-            except Exception:
-                pass
-            _set_excel_window_owner(app, session.get("nativeHostHwnd"))
+                try:
+                    _hide_excel_hwnd(app.Hwnd)
+                except Exception:
+                    pass
+                try:
+                    app.ScreenUpdating = True
+                except Exception:
+                    pass
+                try:
+                    new_wb.Windows(1).Visible = True
+                except Exception:
+                    pass
+                live_rect = session.get("liveRect") or {}
+                if live_rect.get("width") and live_rect.get("height"):
+                    try:
+                        _position_excel_window(
+                            app,
+                            live_rect.get("left"),
+                            live_rect.get("top"),
+                            live_rect.get("width"),
+                            live_rect.get("height"),
+                            native_host_hwnd=session.get("nativeHostHwnd"),
+                            show=True,
+                        )
+                    except Exception:
+                        pass
+                try:
+                    _ensure_excel_workbook_view(app, new_wb, make_visible=True, activate=False, maximize_workbook=False)
+                except Exception:
+                    pass
+                _set_excel_window_owner(app, session.get("nativeHostHwnd"))
             try:
                 app.ScreenUpdating = True
             except Exception:
                 pass
         else:
-            try:
-                _safe_activate_excel_app(app)
-            except Exception:
-                pass
+            presented = None
+            if session.get("liveEditable") and LIVE_FRAME_MODE:
+                # 워크북이 교체됐으므로 이전 프레임 핸들을 버리고 새 프레임 기준으로 표시.
+                session.pop("frameHwnd", None)
+                rect = session.get("liveRect") or {}
+                presented = _present_live_session_frame(
+                    session, app, new_wb,
+                    rect.get("left"), rect.get("top"), rect.get("width"), rect.get("height"),
+                    skip_position=not (rect.get("width") and rect.get("height")),
+                )
+            if presented is None:
+                try:
+                    _safe_activate_excel_app(app)
+                except Exception:
+                    pass
         return {
             "ok": True,
             "excelId": excel_id,
@@ -2763,13 +3184,8 @@ def _position_excel_session_impl(
                 browser_valid = False
             if not browser_valid:
                 session["browserHwnd"] = _capture_browser_hwnd(browser_title)
-        if session.get("hidden") and session.get("liveEditable"):
-            # 숨김(적용 중 하드숨김 등) → 재표시: show 전에 뷰/그리기를 먼저 준비해야
-            # 회색 프레임이 한 번 떴다 사라지는 플래시가 없다. (hwnd 는 아직 파킹/숨김 → 화면에 안 보임)
-            try:
-                _ensure_excel_workbook_view(app, wb, make_visible=True, activate=False, maximize_workbook=False)
-            except Exception:
-                pass
+        # frame 모드: 공유 인스턴스의 app.Hwnd(활성 프레임)가 아니라 이 세션의 프레임을 직접 이동.
+        live_frame_hwnd = _session_frame_hwnd(session, wb) if (session.get("liveEditable") and LIVE_FRAME_MODE) else None
         _position_excel_window(
             app,
             left,
@@ -2787,6 +3203,8 @@ def _position_excel_session_impl(
             viewport_width=viewport_width,
             viewport_height=viewport_height,
             keep_zorder=keep_zorder,
+            hwnd=live_frame_hwnd,
+            no_activate=bool(live_frame_hwnd),
         )
         if native_position_key:
             session["lastNativePositionKey"] = native_position_key
@@ -2806,13 +3224,19 @@ def _position_excel_session_impl(
                 maximize_workbook=False if (session.get("nativeOverlay") or session.get("nativeParentHwnd")) else True,
             )
         elif session.get("liveEditable"):
-            # owner 재확인(리사이즈 후 풀릴 수 있음) + 그리드 채움 + 작업표시줄 버튼 억제 재보장.
-            owner_ok = _set_excel_window_owner(app, session.get("nativeHostHwnd"))
-            _suppress_excel_taskbar_button(app, force_toolwindow=not owner_ok)
-            try:
-                _ensure_excel_workbook_view(app, wb, make_visible=True, activate=False, maximize_workbook=False)
-            except Exception:
-                pass
+            # owner 재확인(리사이즈 후 풀릴 수 있음) + 그리드 채움.
+            if live_frame_hwnd:
+                _set_window_owner_hwnd(live_frame_hwnd, session.get("nativeHostHwnd"))
+                try:
+                    _ensure_excel_workbook_view(app, wb, make_visible=False, activate=False, maximize_workbook=False, app_level=False)
+                except Exception:
+                    pass
+            else:
+                _set_excel_window_owner(app, session.get("nativeHostHwnd"))
+                try:
+                    _ensure_excel_workbook_view(app, wb, make_visible=True, activate=False, maximize_workbook=False)
+                except Exception:
+                    pass
         return {
             "ok": True,
             "excelId": excel_id,
@@ -2827,32 +3251,534 @@ def _raise_excel_session_impl(excel_id):
     with EXCEL_LOCK:
         session = get_excel_session(excel_id)
         app, wb = session_workbook(session)
+        if session.get("liveEditable") and LIVE_FRAME_MODE:
+            hwnd = _session_frame_hwnd(session, wb)
+            if hwnd:
+                _set_window_owner_hwnd(hwnd, session.get("nativeHostHwnd"))
+                _raise_excel_hwnd(hwnd)
+                return {"ok": True, "excelId": excel_id}
         if session.get("readOnlyMirror") or session.get("liveEditable"):
             _raise_excel_window(app)
             if session.get("liveEditable"):
-                owner_ok = _set_excel_window_owner(app, session.get("nativeHostHwnd"))
-                # Excel 이 내부적으로 스타일을 리셋해도 작업표시줄 버튼이 다시 생기지 않게 재보장.
-                _suppress_excel_taskbar_button(app, force_toolwindow=not owner_ok)
+                _set_excel_window_owner(app, session.get("nativeHostHwnd"))
             session["hidden"] = False
         return {"ok": True, "excelId": excel_id}
 
 
-def _hide_excel_session_impl(excel_id, light=False):
+def _workbook_fullname(wb):
+    try:
+        return str(Path(wb.FullName).resolve()).lower()
+    except Exception:
+        try:
+            return str(wb.FullName).lower()
+        except Exception:
+            return ""
+
+
+def _excel_app_hwnd(app):
+    try:
+        return int(app.Hwnd)
+    except Exception:
+        return None
+
+
+def _same_excel_app(app_a, app_b):
+    hwnd_a = _excel_app_hwnd(app_a)
+    hwnd_b = _excel_app_hwnd(app_b)
+    return bool(hwnd_a and hwnd_b and hwnd_a == hwnd_b)
+
+
+def _session_for_workbook(wb, app=None):
+    target = _workbook_fullname(wb)
+    if not target:
+        return None, None, None
+    for sid, session in list(EXCEL_SESSIONS.items()):
+        try:
+            session_app = session.get("app")
+            if app is not None and session_app is not None and not _same_excel_app(app, session_app):
+                continue
+            session_wb = session.get("workbook")
+            if session_wb is not None and _workbook_fullname(session_wb) == target:
+                return sid, session, session_wb
+        except Exception:
+            continue
+    return None, None, None
+
+
+def _active_session_for_app(app, fallback_session=None, fallback_wb=None):
+    try:
+        active_wb = app.ActiveWorkbook
+    except Exception:
+        active_wb = None
+    sid, session, wb = _session_for_workbook(active_wb, app=app) if active_wb is not None else (None, None, None)
+    if sid and session and wb is not None:
+        return sid, session, wb
+    if fallback_session is not None:
+        return fallback_session.get("id"), fallback_session, fallback_wb
+    return None, None, None
+
+
+def _hide_workbook_window(wb):
+    try:
+        if wb is None or wb.Windows.Count < 1:
+            return False
+        win = wb.Windows(1)
+        try:
+            win.Visible = False
+            return True
+        except Exception:
+            pass
+        try:
+            hwnd = getattr(win, "Hwnd", None)
+            if hwnd:
+                _hide_excel_hwnd(hwnd)
+                return True
+        except Exception:
+            pass
+    except Exception:
+        pass
+    return False
+
+
+def _hide_peer_workbook_windows(app, active_excel_id):
+    hidden_ids = []
+    for sid, other_session in list(EXCEL_SESSIONS.items()):
+        if sid == active_excel_id:
+            continue
+        try:
+            other_app = other_session.get("app")
+            if other_app is None or not _same_excel_app(app, other_app):
+                continue
+            other_wb = other_session.get("workbook")
+            if other_wb is None:
+                continue
+            if _hide_workbook_window(other_wb):
+                other_session["hidden"] = True
+                hidden_ids.append(sid)
+        except Exception:
+            continue
+    return hidden_ids
+
+
+def _show_workbook_window(app, wb, activate=True):
+    try:
+        app.Visible = True
+    except Exception:
+        pass
+    try:
+        if wb is not None and wb.Windows.Count > 0:
+            wb.Windows(1).Visible = True
+    except Exception:
+        pass
+    try:
+        if activate and wb is not None:
+            wb.Activate()
+            wb.Windows(1).Activate()
+    except Exception:
+        pass
+    try:
+        _ensure_excel_workbook_view(app, wb, make_visible=True, activate=activate, maximize_workbook=False)
+    except Exception:
+        pass
+
+
+def _workbook_window_hwnd(wb):
+    """SDI 프레임(이 워크북의 최상위 창) 핸들. 공유 인스턴스에서 app.Hwnd 는
+    '그 순간 활성 프레임 1개'라 다중 워크북 제어에 쓰면 엉뚱한 창을 만진다."""
+    try:
+        if wb is None or wb.Windows.Count < 1:
+            return None
+        hwnd = int(wb.Windows(1).Hwnd)
+        return hwnd or None
+    except Exception:
+        return None
+
+
+def _session_frame_hwnd(session, wb=None):
+    """세션 워크북의 프레임 핸들(캐시). recover/replace 로 워크북이 바뀌면 자동 재조회."""
+    hwnd = session.get("frameHwnd")
+    try:
+        if hwnd and win32gui is not None and win32gui.IsWindow(int(hwnd)):
+            return int(hwnd)
+    except Exception:
+        pass
+    if wb is None:
+        wb = session.get("workbook")
+    hwnd = _workbook_window_hwnd(wb)
+    if hwnd:
+        session["frameHwnd"] = hwnd
+    return hwnd
+
+
+def _foreground_session_by_frame():
+    """포그라운드 창이 우리 라이브 세션 프레임이면 그 세션을 반환.
+    active-sync(엑셀→UI 탭 동기화)는 '사용자가 실제로 클릭해 포그라운드인 미러'만 따라가야
+    프로그램적 전환(show-only)과 경합해 탭이 되돌아가는 바운스가 생기지 않는다."""
+    if win32gui is None:
+        return None, None, None
+    try:
+        fg = int(win32gui.GetForegroundWindow() or 0)
+    except Exception:
+        return None, None, None
+    if not fg:
+        return None, None, None
+    for sid, session in list(EXCEL_SESSIONS.items()):
+        if not session.get("liveEditable"):
+            continue
+        try:
+            if int(session.get("frameHwnd") or 0) == fg:
+                wb = session.get("workbook")
+                if wb is not None:
+                    return sid, session, wb
+        except Exception:
+            continue
+    return None, None, None
+
+
+def _hide_peer_session_frames(active_excel_id, host_hwnd=None):
+    """frame 모드: 활성 세션 외 라이브 프레임을 전부 화면 밖으로 파킹.
+    파킹 대상이 포그라운드면 먼저 호스트로 포커스를 넘긴다(무관 창 점프 방지)."""
+    peers = []
+    for sid, other in list(EXCEL_SESSIONS.items()):
+        if sid == active_excel_id or not other.get("liveEditable"):
+            continue
+        try:
+            hwnd = _session_frame_hwnd(other)
+        except Exception:
+            hwnd = None
+        if hwnd:
+            peers.append((sid, other, hwnd))
+    if not peers:
+        return []
+    _handoff_foreground_to_host(host_hwnd, [hwnd for _sid, _other, hwnd in peers])
+    hidden_ids = []
+    for sid, other, hwnd in peers:
+        _move_hwnd_offscreen(hwnd)
+        other["hidden"] = True
+        hidden_ids.append(sid)
+    return hidden_ids
+
+
+def _present_live_session_frame(
+    session, app, wb,
+    left, top, width, height,
+    client_left=None, client_top=None, client_width=None, client_height=None,
+    viewport_width=None, viewport_height=None,
+    skip_position=False,
+):
+    """frame 모드 표시 경로: 대상 프레임만 배치/표시하고 나머지 라이브 프레임은 파킹.
+    포커스/활성화는 일절 주지 않는다(SW_SHOWNA/SWP_NOACTIVATE) — 전환 직후 호스트의
+    첫 클릭이 '창 활성화'에 소비되어 씹히는 문제를 막는다.
+    반환: 파킹한 peer id 리스트. 프레임 핸들을 못 구하면 None(호출자가 legacy 경로 사용)."""
+    target_hwnd = _session_frame_hwnd(session, wb)
+    if not target_hwnd:
+        return None
+    try:
+        if not bool(app.Visible):
+            # 모든 프레임이 파킹된 초기 상태에서만 도달 → 시각적 변화 없이 인스턴스만 켠다.
+            app.Visible = True
+    except Exception:
+        pass
+    _set_window_owner_hwnd(target_hwnd, session.get("nativeHostHwnd"))
+    _style_live_frame(target_hwnd)
+    try:
+        win = wb.Windows(1)
+        if not bool(win.Visible):
+            win.Visible = True  # 과거 경로가 COM 숨김을 남겼어도 회색 빈 프레임이 되지 않게 복구
+    except Exception:
+        pass
+    try:
+        wb.Windows(1).WindowState = -4143  # xlNormal
+    except Exception:
+        pass
+    do_position = bool(width and height) and not skip_position
+    if not do_position and width and height:
+        # skipPosition 요청이어도 실제 창이 파킹(-32000)돼 있으면 재배치한다.
+        # (클라 위치캐시는 서버측 파킹/숨김을 모를 수 있음 → '영역 밖에 뜨는 창' 방지)
+        try:
+            rect_now = win32gui.GetWindowRect(target_hwnd) if win32gui is not None else None
+            if rect_now and (rect_now[0] <= -30000 or rect_now[1] <= -30000):
+                do_position = True
+        except Exception:
+            pass
+    if do_position:
+        _position_excel_window(
+            app, left, top, width, height,
+            hwnd=target_hwnd, no_activate=True,
+            client_left=client_left, client_top=client_top,
+            client_width=client_width, client_height=client_height,
+            viewport_width=viewport_width, viewport_height=viewport_height,
+            show=True,
+        )
+    else:
+        _show_window_na(target_hwnd)
+        _raise_excel_hwnd(target_hwnd)
+    hidden_ids = _hide_peer_session_frames(session.get("id"), host_hwnd=session.get("nativeHostHwnd"))
+    try:
+        _ensure_excel_workbook_view(app, wb, make_visible=False, activate=False, maximize_workbook=False, app_level=False)
+    except Exception:
+        pass
+    session["hidden"] = False
+    return hidden_ids
+
+
+def _show_only_excel_session_impl(
+    excel_id,
+    left,
+    top,
+    width,
+    height,
+    client_left=None,
+    client_top=None,
+    client_width=None,
+    client_height=None,
+    viewport_width=None,
+    viewport_height=None,
+    browser_title=None,
+    native_parent_hwnd=None,
+    native_host_hwnd=None,
+    native_overlay=False,
+    skip_position=False,
+):
     with EXCEL_LOCK:
         session = get_excel_session(excel_id)
         app, wb = session_workbook(session)
-        if light:
-            # 가벼운 숨김(탭 전환용): rect/스타일/app.Visible 은 그대로 두고 창만 숨긴다.
-            # 다음 raise(SWP_SHOWWINDOW) 한 번으로 재배치 없이 즉시 제자리에 다시 나타난다.
+        if native_parent_hwnd:
+            session["nativeParentHwnd"] = native_parent_hwnd
+        if native_host_hwnd:
+            session["nativeHostHwnd"] = native_host_hwnd
+        if native_overlay:
+            session["nativeOverlay"] = True
+            session["nativeParentHwnd"] = None
+        browser_hwnd = session.get("browserHwnd")
+        try:
+            browser_valid = bool(browser_hwnd and win32gui is not None and win32gui.IsWindow(int(browser_hwnd)))
+        except Exception:
+            browser_valid = False
+        if session.get("readOnlyMirror") and not browser_valid:
+            session["browserHwnd"] = _capture_browser_hwnd(browser_title)
+
+        hidden_ids = None
+        if session.get("liveEditable") and LIVE_FRAME_MODE:
+            # frame 모드: 활성화/포커스 없이 대상 프레임만 제자리 표시, 나머지는 파킹.
+            hidden_ids = _present_live_session_frame(
+                session, app, wb,
+                left, top, width, height,
+                client_left=client_left, client_top=client_top,
+                client_width=client_width, client_height=client_height,
+                viewport_width=viewport_width, viewport_height=viewport_height,
+                skip_position=bool(skip_position),
+            )
+        if hidden_ids is None:
+            if session.get("liveEditable"):
+                _set_excel_window_owner(app, session.get("nativeHostHwnd"))
+            _show_workbook_window(app, wb, activate=True)
+            hidden_ids = _hide_peer_workbook_windows(app, excel_id)
+            _show_workbook_window(app, wb, activate=True)
+            if not skip_position:
+                _position_excel_window(
+                    app,
+                    left,
+                    top,
+                    width,
+                    height,
+                    browser_hwnd=None if (session.get("nativeParentHwnd") or session.get("nativeOverlay")) else (session.get("browserHwnd") if session.get("readOnlyMirror") else None),
+                    native_parent_hwnd=session.get("nativeParentHwnd") if session.get("readOnlyMirror") and not session.get("nativeOverlay") else None,
+                    native_host_hwnd=session.get("nativeHostHwnd") if session.get("readOnlyMirror") else None,
+                    native_overlay=bool(session.get("nativeOverlay")) if session.get("readOnlyMirror") else False,
+                    client_left=client_left,
+                    client_top=client_top,
+                    client_width=client_width,
+                    client_height=client_height,
+                    viewport_width=viewport_width,
+                    viewport_height=viewport_height,
+                    show=True,
+                )
             try:
-                hwnd = int(app.Hwnd)
-                if win32gui is not None and win32gui.IsWindow(hwnd):
-                    win32gui.ShowWindow(hwnd, getattr(win32con, "SW_HIDE", 0))
+                _safe_activate_excel_app(app)
             except Exception:
                 pass
-            session["hidden"] = True
-            return {"ok": True, "excelId": excel_id, "hidden": True, "light": True}
-        _hide_excel_app_window(app)
+        if width and height:
+            session["liveRect"] = {
+                "left": int(float(left or 0)), "top": int(float(top or 0)),
+                "width": int(float(width or 0)), "height": int(float(height or 0)),
+            }
+        session["hidden"] = False
+        session["lastNativePositionKey"] = ""
+        return {
+            "ok": True,
+            "excelId": excel_id,
+            "hidden": len(hidden_ids),
+            "hiddenIds": hidden_ids,
+            "skipPosition": bool(skip_position),
+            "left": int(float(left or 0)),
+            "top": int(float(top or 0)),
+            "width": int(float(width or 0)),
+            "height": int(float(height or 0)),
+        }
+
+
+def _reopen_excel_session_workbook(session):
+    if not excel_available():
+        raise RuntimeError("Microsoft Excel COM automation is not available. Excel and pywin32 are required.")
+    candidates = [
+        session.get("workingCopyPath"),
+        session.get("openPath"),
+        session.get("path"),
+        session.get("sourcePath"),
+    ]
+    path = next((Path(p) for p in candidates if p and Path(p).exists()), None)
+    if path is None:
+        raise RuntimeError("Excel workbook file for recovery was not found.")
+    live_editable = bool(session.get("liveEditable"))
+    read_only_mirror = bool(session.get("readOnlyMirror")) and not live_editable
+    app = _get_live_excel_app() if live_editable else win32com.client.DispatchEx("Excel.Application")
+    if not (live_editable and LIVE_FRAME_MODE):
+        # frame 모드에서는 글로벌 Visible 토글 금지(다른 라이브 프레임까지 동시에 사라져
+        # 포그라운드 소멸 → 무관한 앱 창 활성화). 새 프레임은 아래에서 개별 파킹한다.
+        app.Visible = False
+    app.DisplayAlerts = False
+    try:
+        app.EnableEvents = False
+    except Exception:
+        pass
+    try:
+        app.AskToUpdateLinks = False
+    except Exception:
+        pass
+    wb, open_temp_path = excel_workbooks_open(app, path, read_only=read_only_mirror)
+    session.pop("frameHwnd", None)  # 이전 워크북의 죽은 프레임 핸들 무효화
+    if live_editable and LIVE_FRAME_MODE:
+        new_frame_hwnd = _workbook_window_hwnd(wb)
+        if new_frame_hwnd:
+            _move_hwnd_offscreen(new_frame_hwnd)
+            session["frameHwnd"] = new_frame_hwnd
+    session["app"] = app
+    session["workbook"] = wb
+    session["pid"] = _excel_process_id(app)
+    session["path"] = str(path)
+    session["openPath"] = str(wb.FullName)
+    session["openTempPath"] = str(open_temp_path) if open_temp_path else session.get("openTempPath", "")
+    session["snapshots"] = {}
+    try:
+        _protect_workbook_for_read_only_mirror(wb, True)
+    except Exception:
+        pass
+    try:
+        _configure_excel_grid_window(app, wb)
+    except Exception:
+        pass
+    return app, wb, True
+
+
+def _recover_excel_session_impl(
+    excel_id,
+    left,
+    top,
+    width,
+    height,
+    client_left=None,
+    client_top=None,
+    client_width=None,
+    client_height=None,
+    viewport_width=None,
+    viewport_height=None,
+    browser_title=None,
+    native_parent_hwnd=None,
+    native_host_hwnd=None,
+    native_overlay=False,
+):
+    with EXCEL_LOCK:
+        session = get_excel_session(excel_id)
+        if native_parent_hwnd:
+            session["nativeParentHwnd"] = native_parent_hwnd
+        if native_host_hwnd:
+            session["nativeHostHwnd"] = native_host_hwnd
+        if native_overlay:
+            session["nativeOverlay"] = True
+            session["nativeParentHwnd"] = None
+        reopened = False
+        try:
+            app, wb = session_workbook(session)
+        except Exception:
+            app, wb, reopened = _reopen_excel_session_workbook(session)
+        _restore_app_state(app)
+        try:
+            _restore_live_protected_view(app, wb)
+        except Exception:
+            pass
+        if width and height:
+            session["liveRect"] = {
+                "left": int(float(left or 0)),
+                "top": int(float(top or 0)),
+                "width": int(float(width or 0)),
+                "height": int(float(height or 0)),
+            }
+        frame_mode = bool(session.get("liveEditable")) and LIVE_FRAME_MODE
+        hidden_ids = None
+        if frame_mode:
+            hidden_ids = _present_live_session_frame(
+                session, app, wb,
+                left, top, width, height,
+                client_left=client_left, client_top=client_top,
+                client_width=client_width, client_height=client_height,
+                viewport_width=viewport_width, viewport_height=viewport_height,
+                skip_position=not (width and height),
+            )
+        if hidden_ids is None:
+            try:
+                _restore_live_window(session, app, wb)
+            except Exception:
+                _show_workbook_window(app, wb, activate=True)
+            hidden_ids = _hide_peer_workbook_windows(app, excel_id)
+            try:
+                _show_workbook_window(app, wb, activate=True)
+            except Exception:
+                pass
+            try:
+                _safe_activate_excel_app(app)
+            except Exception:
+                pass
+        session["hidden"] = False
+        session["lastNativePositionKey"] = ""
+        try:
+            sheet = wb.ActiveSheet.Name if frame_mode else app.ActiveSheet.Name
+        except Exception:
+            sheet = ""
+        try:
+            if frame_mode:
+                # 활성화 없이도 이 세션 창의 선택 범위를 읽는다(Window.RangeSelection).
+                address = _excel_address(wb.Windows(1).RangeSelection).replace("$", "")
+            else:
+                address = _excel_address(app.Selection).replace("$", "")
+        except Exception:
+            address = ""
+        return {
+            "ok": True,
+            "excelId": excel_id,
+            "activeExcelId": excel_id,
+            "reopened": bool(reopened),
+            "hidden": len(hidden_ids),
+            "hiddenIds": hidden_ids,
+            "sheet": sheet,
+            "address": address,
+        }
+
+
+def _hide_excel_session_impl(excel_id):
+    with EXCEL_LOCK:
+        session = get_excel_session(excel_id)
+        app, wb = session_workbook(session)
+        if session.get("liveEditable") and LIVE_FRAME_MODE:
+            hwnd = _session_frame_hwnd(session, wb)
+            if hwnd:
+                # 포그라운드 프레임을 그냥 치우면 OS 가 무관한 다음 창을 활성화한다 → 호스트로 먼저 핸드오프.
+                _handoff_foreground_to_host(session.get("nativeHostHwnd"), [hwnd])
+                _move_hwnd_offscreen(hwnd)
+            else:
+                _hide_excel_app_window(app)
+        else:
+            _hide_excel_app_window(app)
         session["hidden"] = True
         session["lastNativePositionKey"] = ""
         return {"ok": True, "excelId": excel_id, "hidden": True}
@@ -2862,10 +3788,31 @@ def _hide_all_excel_sessions_impl():
     hidden = 0
     with EXCEL_LOCK:
         sessions = list(EXCEL_SESSIONS.values())
+    if LIVE_FRAME_MODE:
+        # 라이브 프레임 중 하나가 포그라운드면 먼저 호스트로 포커스를 넘긴다(무관 창 점프 방지).
+        frame_hwnds = []
+        host_hwnd = None
+        for session in sessions:
+            if not session.get("liveEditable"):
+                continue
+            hwnd = session.get("frameHwnd")
+            if hwnd:
+                frame_hwnds.append(hwnd)
+            if not host_hwnd:
+                host_hwnd = session.get("nativeHostHwnd")
+        if frame_hwnds:
+            _handoff_foreground_to_host(host_hwnd, frame_hwnds)
     for session in sessions:
         try:
             app, wb = session_workbook(session)
-            _hide_excel_app_window(app)
+            if session.get("liveEditable") and LIVE_FRAME_MODE:
+                hwnd = _session_frame_hwnd(session, wb)
+                if hwnd:
+                    _move_hwnd_offscreen(hwnd)
+                else:
+                    _hide_excel_app_window(app)
+            else:
+                _hide_excel_app_window(app)
             session["hidden"] = True
             session["lastNativePositionKey"] = ""
             hidden += 1
@@ -2901,18 +3848,28 @@ def _close_excel_session_impl(excel_id):
     if not session:
         return {"ok": True, "closed": False}
     pid = session.get("pid")
-    hide_guard = None
+    if LIVE_FRAME_MODE and session.get("liveEditable"):
+        # 닫히는 프레임이 포그라운드면 파괴 직전에 호스트로 포커스를 넘긴다(무관 창 점프 방지).
+        try:
+            hwnd = session.get("frameHwnd")
+            if hwnd:
+                _handoff_foreground_to_host(session.get("nativeHostHwnd"), [hwnd])
+        except Exception:
+            pass
     try:
         app, wb = session_workbook(session)
-        _prepare_excel_session_for_close(app, wb)
-        hide_guard = _start_excel_hide_guard(app, enabled=True)
+        _close_companion_workbooks(session, app)
         wb.Close(SaveChanges=False)
         if app.Workbooks.Count == 0:
             _hide_excel_app_window(app)
             app.Quit()
+            if _is_live_shared_app(app):
+                global LIVE_EXCEL_APP
+                LIVE_EXCEL_APP = None
     except Exception:
         pass
-    if pid:
+    # 공유 Excel 인스턴스에 같은 pid를 쓰는 다른 세션이 남아 있으면 프로세스를 죽이면 안 된다.
+    if pid and not _remaining_sessions_for_pid(pid):
         deadline = time.time() + 1.5
         while time.time() < deadline and _is_pid_alive(pid):
             _hide_excel_windows_for_pid(pid)
@@ -3287,6 +4244,37 @@ def _inject_and_run_vba(app, wb, code, entry):
             suppressor.set()
 
 
+def _restore_app_state(app):
+    """VBA 실행(성공/실패 무관) 후 Application 전역 상태를 결정적으로 정상화한다.
+
+    생성된 VBA 가 Application.Calculation = xlCalculationManual / ScreenUpdating = False 로
+    바꿔놓고 (특히 Err.Raise 로) 중단되면, 그 상태가 워크북 인스턴스에 남아 **이후 모든
+    수식 재계산이 멈춘다**(품질평가에서 가장 빈번했던 위험). 그래서 호출자의 복원에만
+    의존하지 않고 여기서 항상 Automatic/True 로 강제하고 한 번 재계산한다.
+    부수효과가 없는 안전한 정상화이므로 모든 실행 경로의 finally 에서 호출한다."""
+    try:
+        app.Calculation = -4105  # xlCalculationAutomatic (상수 이름이 환경따라 없을 수 있어 값 사용)
+    except Exception:
+        pass
+    try:
+        app.ScreenUpdating = True
+    except Exception:
+        pass
+    try:
+        app.EnableEvents = True
+    except Exception:
+        pass
+    try:
+        app.CutCopyMode = False
+    except Exception:
+        pass
+    # Manual 로 멈춰 있던 동안 갱신 안 된 수식을 한 번 강제 계산(고착 해소).
+    try:
+        app.Calculate()
+    except Exception:
+        pass
+
+
 def _restore_live_protected_view(app, wb):
     """VBA 실행 후 라이브 보기 상태(편집 차단+선택 허용, 리본/우클릭 숨김, 화면갱신)를 복구."""
     try:
@@ -3421,7 +4409,15 @@ def _restore_live_view_state(app, wb, state, session=None):
 def _restore_live_window(session, app, wb):
     """리셋(_copy_source_workbook_into_target)으로 offscreen park 된 라이브 창을 owner 모드 방식으로
     다시 보이게+제자리로 되돌린다(plain 위치맞춤 + owner + 워크북 뷰 채움)."""
-    _hide_non_target_workbook_windows(app, wb)
+    if session.get("liveEditable") and LIVE_FRAME_MODE:
+        rect = session.get("liveRect") or {}
+        presented = _present_live_session_frame(
+            session, app, wb,
+            rect.get("left"), rect.get("top"), rect.get("width"), rect.get("height"),
+            skip_position=not (rect.get("width") and rect.get("height")),
+        )
+        if presented is not None:
+            return
     try:
         app.Visible = True
     except Exception:
@@ -3452,9 +4448,7 @@ def _restore_live_window(session, app, wb):
     except Exception:
         pass
     _hide_non_target_workbook_windows(app, wb)
-    owner_ok = _set_excel_window_owner(app, session.get("nativeHostHwnd"))
-    # 적용/리셋 사이클이 스타일을 되돌렸을 수 있으니 작업표시줄 버튼 억제를 재보장.
-    _suppress_excel_taskbar_button(app, force_toolwindow=not owner_ok)
+    _set_excel_window_owner(app, session.get("nativeHostHwnd"))
 
 
 def _close_companion_workbooks(session, app):
@@ -3490,6 +4484,16 @@ def _ensure_companion_workbooks(session, excel_id, app, current_wb):
     except Exception:
         current_name = ""
     opened = {current_name} if current_name else set()
+    try:
+        for existing_wb in app.Workbooks:
+            try:
+                nm = str(existing_wb.Name).lower()
+                if nm:
+                    opened.add(nm)
+            except Exception:
+                pass
+    except Exception:
+        pass
     names, temps = [], []
     try:
         app.ScreenUpdating = False
@@ -3509,6 +4513,14 @@ def _ensure_companion_workbooks(session, excel_id, app, current_wb):
             except Exception:
                 clean = ""
         if not clean or clean.lower() in opened:
+            continue
+        if _is_live_shared_app(app) and _is_live_shared_app(_o_app):
+            # 같은 Excel.Application 안에 이미 열린 라이브 워크북이다.
+            # 스냅샷 복제본을 또 열면 프로세스 절감 효과가 사라지고 Workbooks("파일명")도 모호해진다.
+            try:
+                opened.add(str(o_wb.Name).lower())
+            except Exception:
+                opened.add(clean.lower())
             continue
         cdir = BACKEND_DIR / f"companion_{uuid.uuid4().hex}"
         try:
@@ -3558,27 +4570,13 @@ def _run_vba_on_session_impl(excel_id, code, entry=None):
         # 교차 파일 접근: 다른 업로드 파일들을 같은 인스턴스에 동반 오픈(읽기전용, 숨김).
         _t = time.perf_counter()
         _ensure_companion_workbooks(session, excel_id, app, wb)
-        _restore_live_view_state(app, wb, initial_view, session)
-        timings["companionMs"] = round((time.perf_counter() - _t) * 1000, 2)
-        prev_calc = None
-        try:
-            prev_calc = app.Calculation
-        except Exception:
-            prev_calc = None
         # VBA 실행 동안에는 시트 보호를 풀어 둔다(보호로 인한 1004 류 실패 방지). 끝나면 다시 보호.
         _t = time.perf_counter()
         try:
             _protect_workbook_for_read_only_mirror(wb, False)
         except Exception:
             pass
-        timings["unprotectMs"] = round((time.perf_counter() - _t) * 1000, 2)
-        # 적용 전 스냅샷(노이펙트 판별용). 동반 워크북을 연 뒤라 그 오픈은 변경으로 안 잡힘.
-        verify = None
-        before_probe = None
-        try:
-            before_probe = _change_probe(app, wb)
-        except Exception:
-            before_probe = None
+        before_fp = _workbook_change_fingerprint(wb)  # 실행 전 지문(변경 0건 검출용)
         try:
             _t = time.perf_counter()
             _inject_and_run_vba(app, wb, code, entry)
@@ -3586,11 +4584,6 @@ def _run_vba_on_session_impl(excel_id, code, entry=None):
             if captured:
                 final_view = captured
             timings["injectRunMs"] = round((time.perf_counter() - _t) * 1000, 2)
-            # 적용 직후 스냅샷 비교 → 변경 셀/시트 수. 실패해도 적용은 성공으로 둔다.
-            try:
-                verify = _diff_change_probe(before_probe, _change_probe(app, wb))
-            except Exception:
-                verify = None
         except PipelineExecutionError:
             raise
         except Exception as err:
@@ -3602,14 +4595,16 @@ def _run_vba_on_session_impl(excel_id, code, entry=None):
                 "description": "",
                 "code": code,
                 "language": "vba",
-                "message": f"{_cause}\n💡 이렇게 요청해 보세요: {_guide}\n(자세히: {err})",
+                "message": _cause + '\n' + "💡 이렇게 요청해 보세요: " + _guide + '\n' + "(자세히: " + str(err) + ")",
                 "cause": _cause,
                 "promptGuide": _guide,
                 "rawError": str(err),
                 "stack": "",
             }) from err
         finally:
-            _t = time.perf_counter()
+            # 성공/실패 무관: Application 전역 상태(Calculation/ScreenUpdating 등)를 먼저 정상화.
+            # 생성 VBA 가 Manual 로 두고 죽어도 재계산 고착이 남지 않게 한다.
+            _restore_app_state(app)
             try:
                 _restore_live_protected_view(app, wb)
             except Exception:
@@ -3619,18 +4614,28 @@ def _run_vba_on_session_impl(excel_id, code, entry=None):
                 _restore_live_window(session, app, wb)
             except Exception:
                 pass
-            try:
-                _restore_live_view_state(app, wb, final_view, session)
-            except Exception:
-                pass
-            try:
-                if prev_calc is not None:
-                    app.Calculation = prev_calc
-            except Exception:
-                pass
-            timings["restoreMs"] = round((time.perf_counter() - _t) * 1000, 2)
-        timings["totalServerMs"] = round((time.perf_counter() - _t0) * 1000, 2)
-        return {"ok": True, "excelId": excel_id, "entry": entry, "debugTimings": timings, "verify": verify}
+        # 여기 도달 = 실행 자체는 예외 없이 끝남. 그런데 워크북이 전혀 안 바뀌었다면
+        # '적용됨'으로 잘못 보고되는 no-op 이므로 실패로 드러낸다(품질평가 issue 45/57/58).
+        after_fp = _workbook_change_fingerprint(wb)
+        if before_fp and after_fp and before_fp == after_fp:
+            _noop_msg = (
+                "VBA 가 실행됐지만 워크북에 아무 변경도 없습니다(대상 시트/범위/조건을 확인하세요). "
+                "'적용됨'으로 잘못 보고되지 않도록 실패로 처리했습니다."
+            )
+            _cause, _guide = _pipeline_error_guide("변경된 셀이 없습니다", code)
+            raise PipelineExecutionError({
+                "stepIdx": 0,
+                "stepId": None,
+                "description": "",
+                "code": code,
+                "language": "vba",
+                "message": _cause + '\n' + "💡 이렇게 요청해 보세요: " + _guide + '\n' + "(자세히: " + _noop_msg + ")",
+                "cause": _cause,
+                "promptGuide": _guide,
+                "rawError": _noop_msg,
+                "stack": "",
+            })
+        return {"ok": True, "excelId": excel_id, "entry": entry}
 
 
 def _run_vba_pipeline_on_session_impl(excel_id, steps, reset=True, entry=None):
@@ -3651,20 +4656,6 @@ def _run_vba_pipeline_on_session_impl(excel_id, steps, reset=True, entry=None):
         # 교차 파일 접근: 다른 업로드 파일들을 같은 인스턴스에 동반 오픈(읽기전용, 숨김).
         _t = time.perf_counter()
         _ensure_companion_workbooks(session, excel_id, app, wb)
-        _restore_live_view_state(app, wb, initial_view, session)
-        timings["companionMs"] = round((time.perf_counter() - _t) * 1000, 2)
-        prev_calc = None
-        try:
-            prev_calc = app.Calculation
-        except Exception:
-            prev_calc = None
-        applied = 0
-        verify = None
-        before_probe = None
-        try:
-            before_probe = _change_probe(app, wb)
-        except Exception:
-            before_probe = None
         try:
             if reset:
                 source = session.get("sourcePath") or session.get("path")
@@ -3676,60 +4667,30 @@ def _run_vba_pipeline_on_session_impl(excel_id, steps, reset=True, entry=None):
                     app.ScreenUpdating = False
                 except Exception:
                     pass
-                _t = time.perf_counter()
                 _copy_source_workbook_into_target(app, wb, source)
-                _restore_live_view_state(app, wb, initial_view, session)
-                timings["resetMs"] = round((time.perf_counter() - _t) * 1000, 2)
             else:
                 # 비리셋(append): 현재 보호 상태를 풀고 실행(보호로 인한 1004 류 방지).
-                _t = time.perf_counter()
                 try:
                     _protect_workbook_for_read_only_mirror(wb, False)
                 except Exception:
                     pass
-                timings["unprotectMs"] = round((time.perf_counter() - _t) * 1000, 2)
-            _t_steps = time.perf_counter()
-            for active_idx, st in enumerate(steps):
+            for st in steps:
                 code = (st.get("code") if isinstance(st, dict) else str(st)) or ""
                 if code.strip():
-                    try:
-                        _inject_and_run_vba(app, wb, code, entry)
-                    except Exception as err:
-                        timings["stepsMs"] = round((time.perf_counter() - _t_steps) * 1000, 2)
-                        info = _vba_pipeline_step_info(st, active_idx, err)
-                        raise PipelineExecutionError(info.get("message") or str(err), info) from err
-                    applied += 1
-            captured = _capture_live_view_state(app, wb, session)
-            if captured:
-                final_view = captured
-            timings["stepsMs"] = round((time.perf_counter() - _t_steps) * 1000, 2)
-            try:
-                verify = _diff_change_probe(before_probe, _change_probe(app, wb))
-            except Exception:
-                verify = None
+                    _inject_and_run_vba(app, wb, code, entry)
         finally:
-            _t = time.perf_counter()
+            # 한 스텝이 던져도 Application 상태(ScreenUpdating=False 등)가 남지 않게 항상 정상화.
+            _restore_app_state(app)
             try:
                 _restore_live_protected_view(app, wb)
             except Exception:
                 pass
-            # 동반 워크북/리셋/실패로 흐트러진 대상 창을 항상 복원(회색 빈 오버레이 방지).
+            # 동반 워크북/리셋으로 흐트러진 대상 창을 항상 복원(회색 빈 오버레이 방지).
             try:
                 _restore_live_window(session, app, wb)
             except Exception:
                 pass
-            try:
-                _restore_live_view_state(app, wb, final_view, session)
-            except Exception:
-                pass
-            try:
-                if prev_calc is not None:
-                    app.Calculation = prev_calc
-            except Exception:
-                pass
-            timings["restoreMs"] = round((time.perf_counter() - _t) * 1000, 2)
-        timings["totalServerMs"] = round((time.perf_counter() - _t0) * 1000, 2)
-        return {"ok": True, "excelId": excel_id, "applied": applied, "debugTimings": timings, "verify": verify}
+        return {"ok": True, "excelId": excel_id, "applied": len(steps)}
 
 
 def run_vba_on_session(excel_id, code, entry=None):
@@ -3819,97 +4780,22 @@ def _sheet_snapshot(ws):
     return cells
 
 
-# ── 적용 사후검증(노이펙트 판별) ────────────────────────────────────────────────
-# VBA 실행 전후로 "쓰기 가능한" 열린 워크북들의 시트 스냅샷을 떠서 변경 셀 수/시트 추가를
-# 센다. 입력 동반 워크북은 ReadOnly 라 건너뛰므로 비용이 한정된다. best-effort —
-# 실패하면 None 을 돌려주고(검증 불가), 절대 적용 자체를 실패로 만들지 않는다.
-# 중요: changedCells==0 을 서버가 "오류"로 처리하지 않는다(멱등 재적용·서식만 변경 등
-# 정당한 무변화가 있음). 카운트만 반환하고 판단은 프론트가 '확인 필요'로 표시한다.
-_CHANGE_PROBE_CELL_CAP = 100000
-
-def _change_probe(app, target_wb=None):
-    out = {}
+def _active_sheet_snapshot(wb, prefer_workbook=False):
+    ws = None
+    if prefer_workbook:
+        # frame 모드: 전환 시 COM Activate 를 하지 않으므로 Application.ActiveSheet 는
+        # 다른 워크북을 가리킬 수 있다. 이 워크북 자체의 활성 시트를 우선 사용.
+        try:
+            ws = wb.ActiveSheet
+        except Exception:
+            ws = None
+    if ws is None:
+        ws = wb.Application.ActiveSheet
     try:
-        wbs = list(app.Workbooks)
+        if ws is not None and _workbook_fullname(ws.Parent) != _workbook_fullname(wb):
+            ws = None
     except Exception:
-        return None
-    target_name = None
-    if target_wb is not None:
-        try:
-            target_name = target_wb.Name
-        except Exception:
-            target_name = None
-    for wb in wbs:
-        try:
-            wbname = wb.Name
-        except Exception:
-            continue
-        # 입력 동반(읽기전용) 워크북은 변하지 않으므로 비용 절감을 위해 건너뛴다.
-        # 단, 대상 워크북(target)은 read_only_mirror 로 열렸어도(ReadOnly=True) VBA 가 인메모리로
-        # 수정하므로 ReadOnly 여부와 무관하게 항상 포함한다(이게 없으면 매 적용이 '변경 없음' 오탐).
-        is_target = (target_name is not None and wbname == target_name)
-        if not is_target:
-            try:
-                if wb.ReadOnly:
-                    continue
-            except Exception:
-                pass
-        try:
-            names = _excel_collection_names(wb.Worksheets)
-        except Exception:
-            continue
-        for nm in names:
-            key = wbname + "\x00" + nm
-            try:
-                out[key] = _sheet_snapshot(wb.Worksheets(nm))
-            except Exception:
-                out[key] = None
-    return out
-
-
-def _diff_change_probe(before, after):
-    if before is None or after is None:
-        return None
-    before_keys = set(before.keys())
-    after_keys = set(after.keys())
-    sheets_added = len(after_keys - before_keys)
-    sheets_removed = len(before_keys - after_keys)
-    changed_cells = 0
-    capped = False
-    # 새로 생긴 시트의 비어있지 않은 셀은 모두 변경으로 카운트(새 시트 생성 = 변경 있음)
-    for k in (after_keys - before_keys):
-        snap = after.get(k) or {}
-        for c in snap.values():
-            if (c.get("key") or "") != "":
-                changed_cells += 1
-                if changed_cells > _CHANGE_PROBE_CELL_CAP:
-                    capped = True
-                    break
-        if capped:
-            break
-    # 공통 시트는 셀 key(수식 또는 값) 비교
-    if not capped:
-        for k in (before_keys & after_keys):
-            b = before.get(k) or {}
-            a = after.get(k) or {}
-            for addr in (set(b.keys()) | set(a.keys())):
-                if (b.get(addr) or {}).get("key", "") != (a.get(addr) or {}).get("key", ""):
-                    changed_cells += 1
-                    if changed_cells > _CHANGE_PROBE_CELL_CAP:
-                        capped = True
-                        break
-            if capped:
-                break
-    return {
-        "changedCells": changed_cells,
-        "sheetsAdded": sheets_added,
-        "sheetsRemoved": sheets_removed,
-        "capped": capped,
-    }
-
-
-def _active_sheet_snapshot(wb):
-    ws = wb.Application.ActiveSheet
+        pass
     if ws is None:
         names = _excel_collection_names(wb.Worksheets)
         if not names:
@@ -3919,6 +4805,27 @@ def _active_sheet_snapshot(wb):
     return ws.Name, _sheet_snapshot(ws)
 
 
+def _workbook_change_fingerprint(wb):
+    """VBA 실행 전후 비교용 워크북 지문. 모든 시트의 used-range 를 셀별 (value-or-formula)
+    로 직렬화한 dict. 실행 후 이 지문이 그대로면 '변경 0건'(아무 일도 안 한 것).
+    VBA 가 어느 시트를 건드릴지 모르므로 활성 시트만 보지 않고 전 시트를 본다.
+    실패는 조용히 무시(변경검출은 보조 안전망이지 핵심 실행 경로가 아님)."""
+    fp = {}
+    try:
+        names = _excel_collection_names(wb.Worksheets)
+    except Exception:
+        return fp
+    for name in names:
+        try:
+            ws = wb.Worksheets(name)
+            snap = _sheet_snapshot(ws)
+            # 셀별 key(value 또는 formula)만 추려 가볍게.
+            fp[name] = {addr: cell.get("key", "") for addr, cell in snap.items()}
+        except Exception:
+            continue
+    return fp
+
+
 def _left_mouse_button_down():
     if os.name != "nt":
         return False
@@ -3926,6 +4833,30 @@ def _left_mouse_button_down():
         return bool(ctypes.windll.user32.GetAsyncKeyState(0x01) & 0x8000)
     except Exception:
         return False
+
+
+def _active_sheet_name(wb, prefer_workbook=False):
+    """활성 시트 '이름만' — 풀스냅샷 없이. 라이브 폴링 경량 경로용."""
+    ws = None
+    if prefer_workbook:
+        try:
+            ws = wb.ActiveSheet
+        except Exception:
+            ws = None
+    if ws is None:
+        try:
+            ws = wb.Application.ActiveSheet
+            if ws is not None and _workbook_fullname(ws.Parent) != _workbook_fullname(wb):
+                ws = None
+        except Exception:
+            ws = None
+    if ws is None:
+        names = _excel_collection_names(wb.Worksheets)
+        return names[0] if names else ""
+    try:
+        return str(ws.Name)
+    except Exception:
+        return ""
 
 
 def refresh_excel_session_snapshots(session, wb):
@@ -3942,11 +4873,27 @@ def _poll_excel_session_changes_impl(excel_id):
     with EXCEL_LOCK:
         session = get_excel_session(excel_id)
         app, wb = session_workbook(session)
+        if session.get("liveEditable") and LIVE_FRAME_MODE:
+            # active-sync: 사용자가 실제로 클릭해 '포그라운드'인 미러 프레임만 따라간다.
+            # ActiveWorkbook 기반 판정은 프로그램적 전환(show-only)과 경합해
+            # 방금 누른 탭이 이전 탭으로 되돌아가는 바운스를 만들었다.
+            fg_sid, fg_session, fg_wb = _foreground_session_by_frame()
+            if fg_sid and fg_sid != excel_id and fg_wb is not None:
+                session = fg_session
+                wb = fg_wb
+                excel_id = fg_sid
+        else:
+            active_excel_id, active_session, active_wb = _active_session_for_app(app, fallback_session=session, fallback_wb=wb)
+            if active_session is not None and active_wb is not None:
+                session = active_session
+                wb = active_wb
+                excel_id = active_excel_id or excel_id
         if session.get("readOnlyMirror"):
             if _left_mouse_button_down():
                 return {
                     "ok": True,
                     "excelId": excel_id,
+                    "activeExcelId": excel_id,
                     "sheet": session.get("lastSelectionSheet") or "",
                     "address": session.get("lastSelectionAddress") or "",
                     "changes": [],
@@ -3973,10 +4920,41 @@ def _poll_excel_session_changes_impl(excel_id):
             return {
                 "ok": True,
                 "excelId": excel_id,
+                "activeExcelId": excel_id,
                 "sheet": ws.Name,
                 "address": active_address,
                 "changes": [],
                 "readOnlyMirror": True,
+            }
+        frame_mode = bool(session.get("liveEditable")) and LIVE_FRAME_MODE
+        if session.get("liveEditable"):
+            # 라이브 미러: 실제 Excel 창이 곧 화면이므로 셀 단위 변경 감지(풀스냅샷 diff)가 필요 없다.
+            # 시트가 UserInterfaceOnly 보호라 직접 편집도 불가하고, changes 의 유일한 소비처는
+            # 읽기전용 미러 경고 문구였다. 특히 거대 파일(수십만 행)에서는 이 스냅샷이 폴마다
+            # 수 초씩 걸려 COM 큐를 도배 → 탭 전환 지연과 stale 응답에 의한 '탭 회귀'의 주범.
+            sheet_name = _active_sheet_name(wb, prefer_workbook=frame_mode)
+            active_address = ""
+            try:
+                if frame_mode:
+                    # 활성화 없이도 이 세션 창의 선택 범위를 읽는다(app.Selection 은 다른 워크북일 수 있음).
+                    active_address = _excel_address(wb.Windows(1).RangeSelection).replace("$", "")
+                else:
+                    active_address = _excel_address(app.Selection).replace("$", "")
+            except Exception:
+                try:
+                    active_address = _excel_address(app.Selection).replace("$", "")
+                except Exception:
+                    pass
+            session["lastSelectionSheet"] = sheet_name
+            session["lastSelectionAddress"] = active_address
+            return {
+                "ok": True,
+                "excelId": excel_id,
+                "activeExcelId": excel_id,
+                "sheet": sheet_name,
+                "address": active_address,
+                "changes": [],
+                "liveSelectionOnly": True,
             }
         sheet_name, snapshot = _active_sheet_snapshot(wb)
         snapshots = session.setdefault("snapshots", {})
@@ -3991,6 +4969,7 @@ def _poll_excel_session_changes_impl(excel_id):
             return {
                 "ok": True,
                 "excelId": excel_id,
+                "activeExcelId": excel_id,
                 "sheet": sheet_name,
                 "address": active_address,
                 "changes": [],
@@ -4019,6 +4998,7 @@ def _poll_excel_session_changes_impl(excel_id):
         return {
             "ok": True,
             "excelId": excel_id,
+            "activeExcelId": excel_id,
             "sheet": sheet_name,
             "address": active_address,
             "changes": changes,
@@ -4122,7 +5102,7 @@ def open_excel_session(
     native_host_hwnd=None,
     native_overlay=False,
     live_editable=False,
-    background=False,
+    defer_visible=False,
 ):
     return excel_call(
         _open_excel_session_impl,
@@ -4146,7 +5126,7 @@ def open_excel_session(
         native_host_hwnd=native_host_hwnd,
         native_overlay=native_overlay,
         live_editable=live_editable,
-        background=background,
+        defer_visible=defer_visible,
         timeout=180,  # 느린 PC/대용량 파일에서 Excel 열기가 길어질 수 있음
     )
 
@@ -4211,8 +5191,86 @@ def raise_excel_session(excel_id):
     return excel_call(_raise_excel_session_impl, excel_id, timeout=60)
 
 
-def hide_excel_session(excel_id, light=False):
-    return excel_call(_hide_excel_session_impl, excel_id, light=light, timeout=60)
+def show_only_excel_session(
+    excel_id,
+    left,
+    top,
+    width,
+    height,
+    client_left=None,
+    client_top=None,
+    client_width=None,
+    client_height=None,
+    viewport_width=None,
+    viewport_height=None,
+    browser_title=None,
+    native_parent_hwnd=None,
+    native_host_hwnd=None,
+    native_overlay=False,
+    skip_position=False,
+):
+    return excel_call(
+        _show_only_excel_session_impl,
+        excel_id,
+        left,
+        top,
+        width,
+        height,
+        client_left=client_left,
+        client_top=client_top,
+        client_width=client_width,
+        client_height=client_height,
+        viewport_width=viewport_width,
+        viewport_height=viewport_height,
+        browser_title=browser_title,
+        native_parent_hwnd=native_parent_hwnd,
+        native_host_hwnd=native_host_hwnd,
+        native_overlay=native_overlay,
+        skip_position=skip_position,
+        timeout=60,
+    )
+
+
+def recover_excel_session(
+    excel_id,
+    left,
+    top,
+    width,
+    height,
+    client_left=None,
+    client_top=None,
+    client_width=None,
+    client_height=None,
+    viewport_width=None,
+    viewport_height=None,
+    browser_title=None,
+    native_parent_hwnd=None,
+    native_host_hwnd=None,
+    native_overlay=False,
+):
+    return excel_call(
+        _recover_excel_session_impl,
+        excel_id,
+        left,
+        top,
+        width,
+        height,
+        client_left=client_left,
+        client_top=client_top,
+        client_width=client_width,
+        client_height=client_height,
+        viewport_width=viewport_width,
+        viewport_height=viewport_height,
+        browser_title=browser_title,
+        native_parent_hwnd=native_parent_hwnd,
+        native_host_hwnd=native_host_hwnd,
+        native_overlay=native_overlay,
+        timeout=90,
+    )
+
+
+def hide_excel_session(excel_id):
+    return excel_call(_hide_excel_session_impl, excel_id, timeout=60)
 
 
 def hide_all_excel_sessions():
@@ -6664,7 +7722,7 @@ def _get_python_skill_app():
     # 매 적용마다 Excel 을 새로 띄우고 Quit 하던 비용(콜드스타트 1~3초)을 없애기 위해
     # 숨김 Excel 인스턴스를 한 번만 만들어 재사용한다. 죽었으면 다시 만든다.
     # 반드시 EXCEL_QUEUE STA 워커 스레드에서만 호출된다(excel_call 경유).
-    global PYTHON_SKILL_APP
+    global PYTHON_SKILL_APP, PYTHON_SKILL_APP_PID
     app = PYTHON_SKILL_APP
     if app is not None:
         try:
@@ -6672,6 +7730,7 @@ def _get_python_skill_app():
             return app
         except Exception:
             PYTHON_SKILL_APP = None
+            PYTHON_SKILL_APP_PID = None
     app = win32com.client.DispatchEx("Excel.Application")
     app.Visible = False
     for attr, value in (("DisplayAlerts", False), ("EnableEvents", False), ("AskToUpdateLinks", False)):
@@ -6681,13 +7740,18 @@ def _get_python_skill_app():
             pass
     _hide_excel_app_window(app)
     PYTHON_SKILL_APP = app
+    try:
+        PYTHON_SKILL_APP_PID = _excel_process_id(app)
+    except Exception:
+        PYTHON_SKILL_APP_PID = None
     return app
 
 
 def _quit_python_skill_app():
-    global PYTHON_SKILL_APP
+    global PYTHON_SKILL_APP, PYTHON_SKILL_APP_PID
     app = PYTHON_SKILL_APP
     PYTHON_SKILL_APP = None
+    PYTHON_SKILL_APP_PID = None
     if app is None:
         return
     try:
@@ -7467,9 +8531,12 @@ def _run_excel_python_pipeline_impl(payload, job_id=None):
         _perf["stepsMs"] = (time.perf_counter() - _t_steps) * 1000
         # 적용 완료 후 마지막으로 쓴 시트/셀을 강제로 Activate/Select 하지 않는다.
         # 사용자가 입력 시트나 채팅창을 보고 있던 상태를 깨면 셀 선택/포커스가 튀는 문제가 생긴다.
+        # (frame 모드 철학과 동일 — 적용이 사용자의 보기 상태를 바꾸지 않는다)
         active_output_sheet = None
         active_output_address = None
-        if live_session:
+        if live_session and not live_session.get("liveEditable"):
+            # 라이브 세션 폴은 스냅샷 diff 를 쓰지 않으므로(liveSelectionOnly)
+            # 전 시트 재스냅샷(거대 파일에서 수 초)은 비라이브 세션에만 의미가 있다.
             try:
                 refresh_excel_session_snapshots(live_session, output_wb)
             except Exception as err:

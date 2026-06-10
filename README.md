@@ -63,6 +63,21 @@
 - **수식/서식 보존 가드 추가**: 범위 복사·붙여넣기에서 기존 수식이 값으로 풀리거나 서식이 사라지는 문제를 막기 위해 위험한 `Value` 배열 재기록 패턴을 감지하도록 했습니다.
 - **사용자 의도 예외 처리**: 사용자가 명시적으로 `값을 넣어`, `값만 복사`라고 요청한 경우에는 수식을 덮어쓰는 동작도 허용할 수 있도록 규칙을 분리했습니다.
 - **Excel COM 오류 처리 기반 마련**: VBA 실행 오류, 시트명 불일치, COM 예외, 실패 후 창 복원 문제를 다루기 위한 오류 처리 흐름을 추가했습니다.
+### ver0.4.11 + 1 Excel N Workbook View
+
+![Excel 자동화 UI 안정성 설계 비교](docs/images/ver0.4.11-one-excel-n-workbook-view.png)
+
+- **Excel 뷰 구조 안정화**: 기존처럼 파일 수만큼 `EXCEL.EXE`가 분리되는 방식 대신, 하나의 Excel 애플리케이션 인스턴스가 여러 workbook을 보유하는 구조를 기준으로 정리했습니다. 프로세스 수와 COM 제어 대상이 줄어 저사양 Windows PC에서 포커스/z-order 경쟁과 메모리 부담을 낮춥니다.
+- **show-only 탭 전환**: UI에서 선택한 탭의 workbook만 표시하고, 나머지 workbook 창은 숨기는 방식으로 전환했습니다. 사용자가 보는 Excel 창과 앱의 현재 탭 상태가 어긋나는 문제를 줄이고, 여러 workbook 창이 동시에 노출되어 좌측 UI를 가리는 현상을 완화합니다.
+- **탭 전환 동기화 보강**: 사용자가 탭을 클릭한 직후에는 늦게 도착한 Excel polling/active-sync 응답이 이전 탭으로 상태를 되돌리지 못하도록 보호 구간을 둡니다. 이로써 탭 전환 시 모래시계 커서가 반복되거나 선택 탭이 튀는 현상을 줄였습니다.
+- **초기 로딩 깜빡임 완화**: 여러 파일을 드래그앤드랍으로 올릴 때 workbook을 순차적으로 화면에 노출하지 않고, 필요한 세션을 준비한 뒤 마지막에 활성 workbook만 정리해서 보여주도록 했습니다. 로딩 중 창 크기와 위치가 엉키는 상황을 줄이는 것이 목적입니다.
+- **WebView/NativeHost 포커스 가드**: 앱이 다시 활성화될 때 Excel 창 복원보다 WebView 포커스를 우선해, 버튼 클릭이 첫 번째 클릭에서 씹히는 현상을 줄였습니다. Excel 미러가 포그라운드에 있을 때 작업표시줄/최소화 처리도 보정합니다.
+- **판단**: 안정화의 기반은 단일 Excel 구조이지만, 실제 체감 개선의 핵심은 `show-only active workbook`, inactive workbook 숨김, active-sync mute, preload 중 표시 지연, WebView focus guard를 함께 적용한 뷰 전환 제어입니다.
+- **공유 문서**: 폐쇄망/무설치 빌드 절차는 [OFFLINE_PORTABLE_BUILD.md](OFFLINE_PORTABLE_BUILD.md)에, Python 기반 엔진 적용 시 openpyxl/COM 리스크와 저사양 Windows 테스트 PC 조건은 [PYTHON_ENGINE_RISKS.md](PYTHON_ENGINE_RISKS.md)에 정리했습니다.
+
+#### 수정 예정 이슈
+- **서로 다른 workbook에서 스킬 저장/실행 시 대상이 꼬일 수 있음**: 현재는 일부 스킬 적용/재적용 경로에서 UI 탭 전환이 완료되지 않은 상태로 적용 가능한 상황이 남아 있습니다. workbook별 target pinning과 실행 전 대상 동기화를 추가 보강할 예정입니다.
+- **채팅창 비우기 시 전체 새로고침처럼 보이는 이슈**: 대화 기억 초기화 후 UI 상태가 과하게 재렌더링되는 문제가 있어, 채팅 기록 초기화와 파일/Excel 뷰 상태 갱신을 분리할 예정입니다.
 
 ### ver0.4.8
 - **업로드 완료 기준 변경**: 파일 파싱만 끝내고 업로드 완료로 보지 않고, 업로드된 입력/출력 파일의 실제 Excel 미러 창을 모두 연 뒤 업로드를 완료합니다.
@@ -382,6 +397,4 @@ B2B_ver0.5.1/
 - `launch_b2b.spec`는 `styles/`, `scripts/`, `vendor/`와 서버 실행에 필요한 파일을 EXE에 포함합니다.
 - AI가 생성한 스킬은 백엔드 Python/openpyxl, Excel COM Python 또는 VBA 경로에서 실행됩니다. 신뢰하지 않는 스킬 파일은 불러오지 마세요.
 - API key는 브라우저 `localStorage`에 저장됩니다. 코드에 실제 키를 하드코딩하지 마세요.
-
-
 

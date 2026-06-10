@@ -1,0 +1,67 @@
+{
+  "id": "insert_entire_row",
+  "title": "빈 행 삽입 요청에 셀 1개만 추가되는 오류: 행 전체 삽입",
+  "checks_by_mode": {
+    "vba": {
+      "risk_rules": [
+        "entire_row_insert",
+        "no_activecell_offset",
+        "single_sheet_scope"
+      ],
+      "must_match_any": [
+        {
+          "label": "행 전체 삽입",
+          "patterns": [
+            "\\.(?:Rows\\s*\\([^)]*\\)|EntireRow)\\s*\\.\\s*Insert\\b",
+            "\\bRows\\s*\\(\\s*\\d+\\s*(?::\\s*\\d+)?\\s*\\)\\s*\\.\\s*Insert\\b"
+          ]
+        }
+      ],
+      "must_not_match": [
+        "\\.Cells\\s*\\(\\s*\\d+\\s*,\\s*\\d+\\s*\\)\\s*\\.\\s*Insert\\b",
+        "For\\s+Each\\s+\\w+\\s+In\\s+(?:ActiveWorkbook\\s*\\.\\s*)?Worksheets"
+      ],
+      "windows_only": [
+        "행 전체가 삽입되어 표 전체가 한 행씩 내려가는지(셀 1개만 삽입 아님) 확인."
+      ]
+    },
+    "python": {
+      "risk_rules": [
+        "entire_row_insert",
+        "no_activecell_offset",
+        "single_sheet_scope"
+      ],
+      "must_match_any": [
+        {
+          "label": "행 전체 삽입",
+          "patterns": [
+            "\\.insert_rows\\s*\\("
+          ]
+        }
+      ],
+      "must_not_match": [
+        "\\.delete_rows\\s*\\("
+      ],
+      "windows_only": [
+        "행 전체가 삽입되어 표 전체가 한 행씩 내려가는지(셀 1개만 삽입 아님) 확인."
+      ]
+    }
+  },
+  "variants": [
+    {
+      "id": "insert_blank_row_between",
+      "prompt": "회사별요약 헤더(3행) 아래에 빈 행 하나를 삽입해줘. 셀 하나만 밀지 말고 행 전체를 삽입해.",
+      "expected": "4행 위치에 EntireRow Insert 로 빈 행 한 줄이 삽입되어 이하 데이터가 한 행씩 내려간다."
+    },
+    {
+      "id": "insert_rows_each_group",
+      "prompt": "매출 시트에서 데이터 맨 위(2행)에 빈 행 한 줄을 행 전체로 삽입해줘.",
+      "expected": "매출 시트 2행에 행 전체 삽입. 셀 1개만 삽입하는 형태가 아니다."
+    },
+    {
+      "id": "insert_full_row_top",
+      "prompt": "월별실적 표 맨 위에 빈 행을 하나 넣어줘. 행 전체가 삽입돼서 아래로 한 칸씩 밀려야 해.",
+      "expected": "월별실적 표 상단에 EntireRow Insert. 전월대비 수식 행도 함께 한 칸 내려간다."
+    }
+  ]
+}

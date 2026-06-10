@@ -6,7 +6,9 @@ function refreshChatState() {
   const panel = $("panel-chat");
   panel.classList.toggle("disabled", !ready);
   $("chat-send").disabled = !ready;
-  if (ready && $("chat-messages").children.length === 1 && $("chat-messages").children[0].classList.contains("system")) {
+  if (ready && $("chat-messages").children.length === 1 &&
+      $("chat-messages").children[0].classList.contains("system") &&
+      !$("chat-messages").children[0].classList.contains("cleared-marker")) {
     $("chat-messages").innerHTML = "";
     const targetLabel = state.output
       ? `출력 템플릿 "${state.output.name}" 이 로드되었습니다.`
@@ -93,6 +95,44 @@ function scrollChatToBottom(opts) {
       _chatAutoStick = true;
     });
   });
+}
+
+// ---- 대화 기억(히스토리) 삭제 ----
+// 잘못된 턴이 히스토리에 남아 다음 생성을 오염시키는 문제("기존작업 잔존")의 UI 해소책.
+// llm-api 가 push 시 histId 를 붙이고, 여기서 메시지 말풍선과 연결해 × 버튼으로 제거한다.
+const _boundChatHistIds = new Set();
+
+function bindChatHistoryEntryToMessage(div, role, content) {
+  try {
+    if (!div || !content) return;
+    const history = state.chatHistory || [];
+    for (let i = history.length - 1; i >= 0; i--) {
+      const entry = history[i];
+      if (entry && entry.role === role && entry.content === content &&
+          entry.histId && !_boundChatHistIds.has(entry.histId)) {
+        _boundChatHistIds.add(entry.histId);
+        attachChatMessageDeleteButton(div, entry.histId);
+        return;
+      }
+    }
+  } catch (_) {}
+}
+
+function attachChatMessageDeleteButton(div, histId) {
+  if (!div || !histId || div.querySelector(".msg-del")) return;
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "msg-del";
+  btn.title = "이 메시지를 대화 기억에서 삭제 (이후 생성에 반영되지 않음. 적용된 스킬은 유지)";
+  btn.textContent = "×";
+  btn.onclick = (e) => {
+    e.stopPropagation();
+    const idx = (state.chatHistory || []).findIndex(en => en && en.histId === histId);
+    if (idx >= 0) state.chatHistory.splice(idx, 1);
+    div.remove();
+    if (typeof toast === "function") toast("대화 기억에서 삭제했습니다. 이후 요청에 반영되지 않습니다.", "success");
+  };
+  div.appendChild(btn);
 }
 
 function scrollReasoningToBottom(el) {
@@ -256,6 +296,67 @@ function codeHasBroadValueRewrite(code) {
   return false;
 }
 
+// VBA 적용 직전 정적 안전 필터(런타임에 주입되기 전 차단). 평가 하니스
+// (tests/vba_regression/vba_static_checks.py)의 hard-block 패턴을 exe 로 포팅한 것.
+// 위반 시 자동으로 Qwen 재생성 → 재검사(최대 VBA_STATIC_MAX_REGEN 회) 후에도 실패하면
+// 사용자에게 차단 안내한다. (정적 FAIL 실패는 '정상 응답이지만 위험'이라 재생성 대상.)
+const VBA_STATIC_MAX_REGEN = 2;
+
+function vbaStaticSafetyFailures(code, sourceUserMessage) {
+  const text = String(code || "");
+  const failures = [];
+  const blocked = [
+    [/\bOn\s+Error\s+Resume\s+Next\b/i, "On Error Resume Next 로 오류를 삼키면 안 됩니다(실패가 '적용됨'으로 오보). 실패는 Err.Raise 로 전파하거나 On Error GoTo Cleanup 으로 상태 원복 후 재전파하세요."],
+    [/\bMsgBox\s*(?:\(|\s)/i, "MsgBox 는 자동 실행을 멈춥니다. 제거하고 실패는 Err.Raise 로 알리세요."],
+    [/\bInputBox\s*(?:\(|\s)/i, "InputBox 는 자동 실행을 멈춥니다. 제거하세요."],
+    [/\bShell\s*(?:\(|\s)/i, "Shell 실행은 금지입니다."],
+    [/\bWorkbooks\s*\.\s*Open\b/i, "Workbooks.Open 금지(다른 파일을 열지 마세요). 이미 열린 워크북만 다루세요."],
+    [/\bApplication\s*\.\s*Quit\b/i, "Application.Quit 금지."],
+    [/\.(?:Save|SaveAs|SaveCopyAs|Close)\b/i, "Save/SaveAs/Close 금지(파일 저장·닫기를 코드에서 하지 마세요)."],
+  ];
+  for (const [re, msg] of blocked) {
+    if (re.test(text)) failures.push(msg);
+  }
+  // 파일/네트워크용 CreateObject 금지(Scripting.Dictionary 는 허용).
+  const coRe = /\bCreateObject\s*\(\s*["']([^"']+)["']\s*\)/gi;
+  let m;
+  while ((m = coRe.exec(text)) !== null) {
+    if (String(m[1]).toLowerCase() !== "scripting.dictionary") {
+      failures.push(`CreateObject("${m[1]}") 금지(Scripting.Dictionary 외 파일/네트워크 객체 생성 불가).`);
+    }
+  }
+  // 전체 시트 순회는 사용자가 "전체/모든 시트"를 명시했을 때만 허용.
+  const allSheetIntent = /(\b(all|every)\s+sheets?\b|전체\s*시트|모든\s*시트|전\s*시트|시트\s*전체)/i.test(String(sourceUserMessage || ""));
+  if (!allSheetIntent && /\bFor\s+Each\s+\w+\s+In\s+(?:ActiveWorkbook\s*\.\s*)?Worksheets\b/i.test(text)) {
+    failures.push("'전체 시트' 요청이 아닌데 For Each ... In Worksheets 로 모든 시트를 순회합니다. 요청한 특정 시트만 대상으로 하세요.");
+  }
+  return failures;
+}
+
+function buildStaticSafetyRegenPrompt(code, failures, sourceUserMessage) {
+  const fixList = failures.map(f => `- ${f}`).join("\n");
+  return [
+    "방금 생성한 VBA 가 적용 직전 정적 안전 검사에서 막혔습니다.",
+    "원래 사용자 요청을 그대로 만족하되, 아래 위반을 모두 제거해 VBA 를 다시 작성하세요.",
+    "",
+    "## 원래 사용자 요청",
+    String(sourceUserMessage || "(직전 요청 참조)"),
+    "",
+    "## 막힌 이유(모두 고칠 것)",
+    fixList,
+    "",
+    "## 막힌 코드",
+    "```vba",
+    String(code || ""),
+    "```",
+    "",
+    "반드시 하나의 ```vba 코드 블록만 출력하세요. On Error Resume Next / MsgBox / InputBox / Shell /",
+    "Workbooks.Open / Save·Close / Application.Quit / 무관한 전체 시트 순회를 쓰지 마세요.",
+    "대상을 못 찾으면 Err.Raise vbObjectError + 513, \"B2BSkill\", \"사유\" 로 실패를 알리세요.",
+    "/no_think",
+  ].join("\n");
+}
+
 function showCodeGuardBlock(message, context) {
   context = context || {};
   // [B2B#18 진단] '적용 버튼이 안 눌린다'의 상당수는 가드가 조용히 막은 경우다. 로그로 구분.
@@ -288,9 +389,57 @@ function showCodeGuardBlock(message, context) {
   scrollChatToBottom({ force: true });   // 가드 안내/강제적용 버튼은 항상 보이도록(#18)
 }
 
+// 정적 안전 위반 시 Qwen 을 자동 재호출해 고친 코드를 받아 다시 검사 흐름에 태운다.
+// addAssistantReply 가 새 코드에 대해 validateAssistantCodeBeforeApply 를 다시 호출하므로
+// staticRegenAttempt 카운터로 무한 재생성을 막는다(VBA_STATIC_MAX_REGEN 회까지).
+async function autoRegenerateForStaticSafety(code, failures, context) {
+  const sourceUserMessage = (context && context.sourceUserMessage) || latestUserRequestForSafety();
+  const attempt = Number((context && context.staticRegenAttempt) || 0) + 1;
+  const prompt = buildStaticSafetyRegenPrompt(code, failures, sourceUserMessage);
+  toast(`안전하지 않은 패턴이 감지되어 코드를 자동으로 다시 생성합니다. (${attempt}/${VBA_STATIC_MAX_REGEN})`, "success");
+  const loading = addMessage("assistant", "", {});
+  const aiName = (typeof getAiDisplayName === "function" ? getAiDisplayName() : "AI");
+  const streamView = setupStreamingAssistantMessage(loading, `(안전 재생성 ${attempt}/${VBA_STATIC_MAX_REGEN}) `, aiName, null);
+  try {
+    $("chat-send").disabled = true;
+    const reply = await callLLM(prompt, {
+      onDelta: (_d, full) => { streamView.setAnswer(full); scrollChatToBottom(); },
+      onReconnect: (a, max) => { streamView.setAnswer(`ixi 연결이 끊겨 재연결 중입니다. (${a}/${max})`); },
+    });
+    streamView.flush();
+    loading.remove();
+    // 새 응답을 일반 흐름으로 렌더 → 새 코드가 자동으로 다시 정적검사된다(카운터 전파).
+    addAssistantReply(reply, { sourceUserMessage, staticRegenAttempt: attempt });
+    scrollChatToBottom();
+  } catch (err) {
+    loading.innerHTML = "안전 재생성 실패: " + escapeHtml(err && err.message ? err.message : String(err));
+    loading.classList.remove("assistant");
+    loading.classList.add("system", "error");
+    scrollChatToBottom();
+  } finally {
+    $("chat-send").disabled = false;
+  }
+}
+
 function validateAssistantCodeBeforeApply(code, context) {
   context = context || {};
   const sourceUserMessage = context.sourceUserMessage || "";
+  // 0) 런타임 안전 하드블록(On Error Resume Next, MsgBox, Workbooks.Open/.Save/.Close,
+  //    Application.Quit, Shell, 무관 전체시트순회, 파일 CreateObject). 위반 시 자동 재생성.
+  const safetyFailures = vbaStaticSafetyFailures(code, sourceUserMessage);
+  if (safetyFailures.length) {
+    const attemptsSoFar = Number(context.staticRegenAttempt || 0);
+    if (attemptsSoFar < VBA_STATIC_MAX_REGEN) {
+      autoRegenerateForStaticSafety(code, safetyFailures, context);
+    } else {
+      showCodeGuardBlock(
+        "여러 번 다시 생성했지만 안전하지 않은 패턴이 남아 적용을 막았습니다:\n- " +
+          safetyFailures.join("\n- "),
+        context,
+      );
+    }
+    return false;
+  }
   if (codeMentionsFormulaOverwrite(code) && !userExplicitlyRequestsFormulaOverwrite(sourceUserMessage)) {
     const message = "사용자가 수식 제거를 명시하지 않았는데 생성 코드에 수식 제거/값 덮어쓰기 의도가 포함되어 적용을 막았습니다. 수식을 보존하는 코드로 다시 생성해 주세요.";
     showCodeGuardBlock(message, context);
@@ -344,6 +493,7 @@ function addAssistantReply(fullText, replyContext) {
   div.className = "msg assistant";
   div.innerHTML = `<div>${escapeHtml(stripped)}</div>`;
   if (reasoning) div.insertBefore(createReasoningBox(reasoning), div.firstChild);
+  bindChatHistoryEntryToMessage(div, "assistant", fullText);
   if (code) {
     const codeBlk = document.createElement("pre");
     codeBlk.className = "code-block";
@@ -799,7 +949,7 @@ async function requestErrorRecovery(stepIdx, errorInfo, userNote) {
   const isExistingStep = stepIdx >= 0 && state.pipeline[stepIdx] === failedStep;
   const recoveryLanguage = failedStep.language ||
     (typeof inferPipelineStepLanguage === "function" ? inferPipelineStepLanguage(failedStep) : "python");
-  const isVbaRecovery = recoveryLanguage === "vba";
+  const isVbaRecovery = recoveryLanguage === "vba" || (typeof getSkillEngine === "function" && getSkillEngine() === "vba");
   const isPythonRecovery = !isVbaRecovery && recoveryLanguage === "python";
   const recoveryCodeRule = isVbaRecovery
     ? "Return exactly one VBA code block that defines Sub B2BSkill(). Do not return JavaScript or Python."
@@ -1056,7 +1206,8 @@ async function sendChat() {
   const reqId = (window.__b2bChatReqSeq = (window.__b2bChatReqSeq || 0) + 1);
   console.debug(`[B2B#5] req#${reqId} sendChat 시작 (editTarget=${editTargetId || "none"})`);
   input.value = "";
-  addMessage("user", msg);
+  const userMsgDiv = addMessage("user", msg);
+  scrollChatToBottom(true); // 전송 직후에는 위로 스크롤돼 있었어도 바닥으로
   clearViewerDragSelection();
   const loading = addMessage("assistant", "", {});
   loading.classList.add("streaming");
@@ -1108,6 +1259,7 @@ async function sendChat() {
     streamView.flush();
     loading.remove();
     addAssistantReply(reply, { editTargetId, sourceUserMessage: msg, reasoning: reasoningText });
+    bindChatHistoryEntryToMessage(userMsgDiv, "user", msg);
     console.debug(`[B2B#5] req#${reqId} addAssistantReply 렌더 (reply length=${reply ? reply.length : 0})`);
     scrollChatToBottom();
   } catch (err) {
@@ -1155,3 +1307,35 @@ $("chat-text").addEventListener("keydown", e => {
     sendChat();
   }
 });
+
+// ---- 스킬 설계창 도구: 대화 영역 확대/축소 + 대화 기억 비우기 ----
+(function setupChatPanelTools() {
+  const expandBtn = $("chat-expand-toggle");
+  if (expandBtn) {
+    expandBtn.onclick = (e) => {
+      e.stopPropagation(); // panel-head 의 접기/펼치기 토글로 번지지 않게
+      const section = document.getElementById("panel-chat-section");
+      if (!section) return;
+      const expanded = section.classList.toggle("chat-expanded");
+      const messages = $("chat-messages");
+      if (messages) messages.style.height = ""; // 수동 리사이즈(inline 높이) 초기화 → 클래스 높이 적용
+      expandBtn.textContent = expanded ? "⤡ 축소" : "⤢ 확대";
+      scrollChatToBottom(true);
+    };
+  }
+  const clearBtn = $("chat-clear-history");
+  if (clearBtn) {
+    clearBtn.onclick = (e) => {
+      e.stopPropagation();
+      if (!confirm("대화 기억을 모두 비울까요?\n(적용된 스킬 파이프라인과 파일은 그대로 유지됩니다)")) return;
+      state.chatHistory = [];
+      _boundChatHistIds.clear();
+      const container = $("chat-messages");
+      if (container) {
+        // cleared-marker: refreshChatState 의 '단일 system 메시지' 재초기화 조건과 구분(덮어쓰기 방지).
+        container.innerHTML = `<div class="msg system cleared-marker">대화 기억을 비웠습니다. 새 요청은 이전 대화의 영향을 받지 않습니다.</div>`;
+      }
+      if (typeof toast === "function") toast("대화 기억을 비웠습니다.", "success");
+    };
+  }
+})();

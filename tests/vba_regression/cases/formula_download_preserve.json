@@ -1,0 +1,56 @@
+{
+  "id": "formula_download_preserve",
+  "title": "파일 다운로드시 셀수식 유지 필요: 회사별요약 마진/마진율 수식 보존",
+  "checks_by_mode": {
+    "vba": {
+      "risk_rules": [
+        "formula_cells_not_overwritten",
+        "download_formula_preserve",
+        "no_activecell_offset"
+      ],
+      "must_not_match": [
+        "\\.Range\\s*\\(\\s*[\\\"']D4:E",
+        "\\.UsedRange\\s*\\.\\s*Value\\s*=",
+        "\\.Value\\s*=\\s*[^\\n]*\\.Value",
+        "For\\s+Each\\s+\\w+\\s+In\\s+(?:ActiveWorkbook\\s*\\.\\s*)?Worksheets"
+      ],
+      "windows_only": [
+        "회사별요약 B/C 만 채워지고 D(마진)/E(마진율)/24행 합계 수식이 그대로 재계산되는지 Excel 확인."
+      ]
+    },
+    "python": {
+      "risk_rules": [
+        "formula_cells_not_overwritten",
+        "download_formula_preserve",
+        "no_activecell_offset"
+      ],
+      "must_not_match": [
+        "\\.Range\\s*\\(\\s*[\\\"']D4:E",
+        "\\.Value2?\\s*=\\s*\\w[\\w.()\\[\\] ]*\\.Value2?",
+        "for\\s+\\w+\\s+in\\s+[\\w.]+\\.(?:worksheets|sheetnames)\\b",
+        "\\.Copy\\s*\\(",
+        "\\.PasteSpecial\\b"
+      ],
+      "windows_only": [
+        "회사별요약 B/C 만 채워지고 D(마진)/E(마진율)/24행 합계 수식이 그대로 재계산되는지 Excel 확인."
+      ]
+    }
+  },
+  "variants": [
+    {
+      "id": "fill_inputs_preserve_formula_cols",
+      "prompt": "회사별요약 시트에서 매출(B)과 원가(C) 빈칸만 채워줘. 마진(D), 마진율(E), 합계행 수식은 있으니까 절대 값으로 덮어쓰지 마.",
+      "expected": "회사별요약 B4:B23(매출), C4:C23(원가)만 값으로 채워진다. 회사별요약 D열(마진 =B-C), E열(마진율 =IFERROR(D/B,0)), 24행 합계(SUM/AVERAGE) 수식은 값으로 덮이지 않고 그대로 유지되어야 한다."
+    },
+    {
+      "id": "formula_result_check_not_overwrite",
+      "prompt": "고객이 다운로드 후 마진/마진율이 수식으로 계산됐는지 확인해야 해. B, C열만 입력하고 D, E의 수식은 유지되게 해줘.",
+      "expected": "B,C 열만 입력. D4:D23 의 =B-C, E4:E23 의 =IFERROR(D/B,0) 수식이 보존되어 다운로드 후 Excel 에서 재계산된다."
+    },
+    {
+      "id": "preserve_existing_formulas",
+      "prompt": "출력 템플릿(회사별요약)에 이미 들어있는 마진/마진율/합계 수식은 그대로 두고, 필요한 입력 셀(매출·원가)만 수정해줘.",
+      "expected": "B/C 입력 셀만 수정. 회사별요약 D열(마진 =B-C), E열(마진율 =IFERROR(D/B,0)), 24행 합계(SUM/AVERAGE) 수식은 값으로 덮이지 않고 그대로 유지되어야 한다."
+    }
+  ]
+}

@@ -20,7 +20,8 @@ async function callLLM(userMessage, options) {
   const thinkMode = settings.provider === "openai-compat"
     && (options.thinkMode === true || (options.thinkMode == null && isThinkModeEnabled()));
   if (!options.skipHistoryPush) {
-    state.chatHistory.push({ role: "user", content: userMessage });
+    // histId: 말풍선의 × 삭제 버튼이 이 항목을 대화 기억에서 제거할 때 쓰는 식별자.
+    state.chatHistory.push({ role: "user", content: userMessage, histId: (typeof uid === "function" ? uid() : String(Date.now() + Math.random())) });
   }
   const editTargetId = options.editTargetId;
   const editIdx = editTargetId
@@ -94,7 +95,7 @@ async function callAnthropic(system) {
   }
   const data = await resp.json();
   const content = data.content?.[0]?.text || "";
-  state.chatHistory.push({ role: "assistant", content });
+  state.chatHistory.push({ role: "assistant", content, histId: (typeof uid === "function" ? uid() : String(Date.now() + Math.random())) });
   return content;
 }
 
@@ -178,13 +179,13 @@ async function callOpenAICompatOnce(system, options) {
   const contentType = resp.headers.get("content-type") || "";
   if (resp.body && contentType.includes("text/event-stream")) {
     const content = await readOpenAICompatStream(resp, options);
-    state.chatHistory.push({ role: "assistant", content });
+    state.chatHistory.push({ role: "assistant", content, histId: (typeof uid === "function" ? uid() : String(Date.now() + Math.random())) });
     return content;
   }
 
   const data = await resp.json();
   const content = data.choices?.[0]?.message?.content || "";
-  state.chatHistory.push({ role: "assistant", content });
+  state.chatHistory.push({ role: "assistant", content, histId: (typeof uid === "function" ? uid() : String(Date.now() + Math.random())) });
   return content;
 }
 

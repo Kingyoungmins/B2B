@@ -89,6 +89,7 @@ namespace B2BNativeHost
         private System.Windows.Forms.Timer vbaDebugSuppressTimer;
         private bool excelMouseDownFocused;
         private FormWindowState lastWindowState;
+        private volatile bool hostMinimized;
         private bool shuttingDown;
         private bool restartingServer;
         private DateTime lastServerRestartUtc = DateTime.MinValue;
@@ -142,6 +143,18 @@ namespace B2BNativeHost
 
         [DllImport("user32.dll", SetLastError = true)]
         private static extern bool UnregisterHotKey(IntPtr hWnd, int id);
+        [DllImport("user32.dll")]
+        private static extern IntPtr GetForegroundWindow();
+
+        [DllImport("user32.dll")]
+        private static extern IntPtr GetWindow(IntPtr hWnd, uint uCmd);
+
+        [DllImport("user32.dll", CharSet = CharSet.Auto)]
+        private static extern int GetWindowText(IntPtr hWnd, StringBuilder lpString, int nMaxCount);
+
+        private const uint GW_OWNER = 4;
+        private const int WM_SYSCOMMAND = 0x0112;
+        private const int SC_MINIMIZE = 0xF020;
 
         [StructLayout(LayoutKind.Sequential)]
         private struct RECT
@@ -235,9 +248,23 @@ namespace B2BNativeHost
             Activated += (s, e) =>
             {
                 PublishNativeBounds();
-                // 호스트 창(웹뷰 + 네이티브 탭 포함)이 활성화됨 → JS에 알림(이벤트만, 시스템 호출 없음).
+                // 호스트 창(웹뷰 + 네이티브 탭 포함)이 활성화됨 → JS에 알림.
+                // 여기서 즉시 Excel 을 복원하면 비활성 WebView 의 첫 버튼 클릭이 포커스/raise 처리에
+                // 소비될 수 있어, 실제 복원은 JS 의 지연 스케줄이나 최소화 복원 경로에서만 수행한다.
                 ExecuteWebScript("window.dispatchEvent(new Event('b2bHostActivated'));");
                 RestoreActiveExcelMirror(false);
+                // WebView2 는 비활성→활성 전환의 첫 클릭을 페이지에 전달하지 않는 경우가 있다.
+                // 활성화 직후 웹뷰에 포커스를 미리 줘서 다음 클릭부터 바로 UI 버튼에 닿게 한다.
+                try
+                {
+                    BeginInvoke(new Action(delegate
+                    {
+                        try { if (webReady && webView != null) webView.Focus(); } catch { }
+                    }));
+                }
+                catch
+                {
+                }
             };
             Deactivate += (s, e) =>
             {
@@ -812,12 +839,58 @@ namespace B2BNativeHost
             }
         }
 
+        protected override void WndProc(ref Message m)
+        {
+            if (m.Msg == WM_SYSCOMMAND && (((int)(long)m.WParam) & 0xFFF0) == SC_MINIMIZE)
+            {
+                // 소유된(owned) Excel 미러가 포그라운드인 동안 작업표시줄의 호스트 버튼은
+                // '활성 그룹'으로 표시된다. 이때 그 버튼을 클릭하면 Windows 는 "활성 창 버튼 클릭
+                // = 최소화"로 처리해 호스트만 내려가고 미러가 붕 뜬다. 이 상황에서 사용자의 의도는
+                // '앱으로 복귀'이므로 최소화 대신 호스트를 활성화한다.
+                // (호스트 자신이 활성일 때의 최소화 — 타이틀바 버튼 등 — 는 그대로 동작)
+                try
+                {
+                    IntPtr fg = GetForegroundWindow();
+                    if (fg != IntPtr.Zero && fg != Handle && GetWindow(fg, GW_OWNER) == Handle)
+                    {
+                        Program.Log("Minimize intercepted (owned Excel foreground) -> activating host instead");
+                        Activate();
+                        return;
+                    }
+                }
+                catch
+                {
+                }
+            }
+            base.WndProc(ref m);
+        }
+
+        private string DescribeForegroundWindow()
+        {
+            try
+            {
+                IntPtr fg = GetForegroundWindow();
+                if (fg == IntPtr.Zero) return "(none)";
+                StringBuilder sb = new StringBuilder(256);
+                GetWindowText(fg, sb, sb.Capacity);
+                string owned = GetWindow(fg, GW_OWNER) == Handle ? " owned-by-host" : "";
+                return fg.ToInt64() + " '" + sb.ToString() + "' cls=" + WindowClass(fg) + owned;
+            }
+            catch
+            {
+                return "(error)";
+            }
+        }
+
         private void HandleHostResize()
         {
+            hostMinimized = WindowState == FormWindowState.Minimized;
             if (WindowState == FormWindowState.Minimized)
             {
                 if (lastWindowState != FormWindowState.Minimized)
                 {
+                    // 진단: 누가/언제 호스트를 최소화시키는지 추적(원치 않는 최소화 이슈 분석용).
+                    Program.Log("Host minimized; foreground=" + DescribeForegroundWindow());
                     HideAllExcelMirrors();
                 }
                 lastWindowState = WindowState;
@@ -852,11 +925,17 @@ namespace B2BNativeHost
 
         private void HideAllExcelMirrors()
         {
-            try
+            // UI 스레드에서 동기 HTTP(최대 1.5초)를 돌리면 최소화 처리가 멈칫한다 → 백그라운드로.
+            // 빠른 최소화→복원 레이스: 전송 전/후로 최소화 상태를 재확인하고, 늦게 숨겨졌으면 즉시 복원.
+            int hidePort = port;
+            string hideAppUrl = appUrl;
+            Task.Run(delegate
             {
-                if (!String.IsNullOrEmpty(appUrl) && port > 0)
+                try
                 {
-                    string hideUrl = "http://127.0.0.1:" + port + "/api/excel/hide-all";
+                    if (String.IsNullOrEmpty(hideAppUrl) || hidePort <= 0) return;
+                    if (!hostMinimized) return;
+                    string hideUrl = "http://127.0.0.1:" + hidePort + "/api/excel/hide-all";
                     HttpWebRequest req = (HttpWebRequest)WebRequest.Create(hideUrl);
                     req.Method = "POST";
                     req.Timeout = 1500;
@@ -865,12 +944,16 @@ namespace B2BNativeHost
                     using (req.GetResponse())
                     {
                     }
+                    if (!hostMinimized)
+                    {
+                        try { BeginInvoke(new Action(RestoreActiveExcelMirror)); } catch { }
+                    }
                 }
-            }
-            catch (Exception ex)
-            {
-                Program.Log("Excel hide-all failed: " + ex.Message);
-            }
+                catch (Exception ex)
+                {
+                    Program.Log("Excel hide-all failed: " + ex.Message);
+                }
+            });
             ExecuteWebScript("if (typeof hideAllExcelMirrorWindows === 'function') hideAllExcelMirrorWindows();");
         }
 
@@ -1014,8 +1097,10 @@ namespace B2BNativeHost
                     string closeUrl = "http://127.0.0.1:" + port + "/api/excel/close-all";
                     HttpWebRequest req = (HttpWebRequest)WebRequest.Create(closeUrl);
                     req.Method = "POST";
-                    req.Timeout = 25000;
-                    req.ReadWriteTimeout = 25000;
+                    // 종료 시 close-all 은 반드시 동기로 기다린다(비동기화하면 서버 kill 과 경합해
+                    // 공유 EXCEL.EXE 가 고아로 남는다). 대기 한도만 25s→15s 로 줄여 종료 체감 개선.
+                    req.Timeout = 15000;
+                    req.ReadWriteTimeout = 15000;
                     byte[] body = Encoding.UTF8.GetBytes("{}");
                     req.ContentType = "application/json";
                     req.ContentLength = body.Length;

@@ -1,0 +1,69 @@
+{
+  "id": "sort_target_column",
+  "title": "정렬 대상 열 오인식: 요청한 열이 아닌 다른 열을 정렬",
+  "checks_by_mode": {
+    "vba": {
+      "risk_rules": [
+        "sort_key_matches_request",
+        "no_activecell_offset",
+        "single_sheet_scope"
+      ],
+      "must_match_any": [
+        {
+          "label": "키가 있는 명시적 Sort",
+          "patterns": [
+            "\\.Sort\\b",
+            "\\bSort\\s+Key1\\s*:="
+          ]
+        }
+      ],
+      "must_not_match": [
+        "Key1\\s*:=\\s*(?:ActiveCell|Selection)",
+        "For\\s+Each\\s+\\w+\\s+In\\s+(?:ActiveWorkbook\\s*\\.\\s*)?Worksheets"
+      ],
+      "windows_only": [
+        "정렬 키가 요청한 헤더 열과 일치하고 인접 열이 아닌지 확인."
+      ]
+    },
+    "python": {
+      "risk_rules": [
+        "sort_key_matches_request",
+        "no_activecell_offset",
+        "single_sheet_scope"
+      ],
+      "must_match_any": [
+        {
+          "label": "키가 있는 명시적 Sort",
+          "patterns": [
+            "ctx\\.sort\\s*\\(",
+            "\\.sort\\s*\\("
+          ]
+        }
+      ],
+      "must_not_match": [
+        "for\\s+\\w+\\s+in\\s+[\\w.]+\\.(?:worksheets|sheetnames)\\b",
+        "\\.Copy\\s*\\("
+      ],
+      "windows_only": [
+        "정렬 키가 요청한 헤더 열과 일치하고 인접 열이 아닌지 확인."
+      ]
+    }
+  },
+  "variants": [
+    {
+      "id": "sort_amount_ascending",
+      "prompt": "매출 시트를 금액(D)열 기준 오름차순으로 정렬해줘. 건수(C)나 다른 열이 아니라 반드시 금액 열이 정렬 키여야 해.",
+      "expected": "매출 시트가 금액(D) 열을 Key1 으로 오름차순 정렬된다. ActiveCell/Selection 추측 키 아님."
+    },
+    {
+      "id": "sort_by_header_name",
+      "prompt": "매출 시트에서 '금액' 열을 기준으로 내림차순 정렬해줘. 열 위치를 추측하지 말고 그 헤더 이름으로 열을 찾아 정렬해.",
+      "expected": "헤더 '금액' 을 찾아 그 열을 Key1 으로 내림차순 정렬. 위치 추측 없음."
+    },
+    {
+      "id": "sort_specific_not_neighbor",
+      "prompt": "매출 시트 정렬은 딱 지정한 금액 열만 키로 써줘. 옆의 건수 열을 키로 잡아서 엉뚱하게 정렬되는 일이 없게.",
+      "expected": "금액 열만 정렬 키. 인접 건수 열을 키로 잡지 않는다."
+    }
+  ]
+}

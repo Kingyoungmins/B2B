@@ -24,6 +24,14 @@ Thumbs.db
 # Local automatic skill backups
 auto_backups/
 
+# Regression test generated reports
+tests/vba_regression/reports/**
+!tests/vba_regression/reports/.gitkeep
+tests/vba_regression/cases/_orig_backup/
+
+# Local transfer packages
+dist_transfer/
+
 # Native host generated files
 native_host/bin/
 native_host/packages/

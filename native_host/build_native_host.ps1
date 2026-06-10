@@ -8,13 +8,21 @@ $PkgVersion = "1.0.2903.40"
 $PkgName = "Microsoft.Web.WebView2"
 $PkgDir = Join-Path $PkgRoot "$PkgName.$PkgVersion"
 $Nupkg = Join-Path $PkgRoot "$PkgName.$PkgVersion.nupkg"
+$OfflineNupkg = Join-Path $RootDir "tools\offline\nuget\$PkgName.$PkgVersion.nupkg"
 
 New-Item -ItemType Directory -Force -Path $BinDir, $PkgRoot | Out-Null
 
 if (!(Test-Path $PkgDir)) {
-  $url = "https://www.nuget.org/api/v2/package/$PkgName/$PkgVersion"
-  Write-Host "Downloading $PkgName $PkgVersion..."
-  Invoke-WebRequest -Uri $url -OutFile $Nupkg
+  if (Test-Path $OfflineNupkg) {
+    Write-Host "Using offline WebView2 package: $OfflineNupkg"
+    Copy-Item -Force $OfflineNupkg $Nupkg
+  } elseif ($env:B2B_OFFLINE_BUILD -eq "1") {
+    throw "Offline WebView2 package not found: $OfflineNupkg"
+  } else {
+    $url = "https://www.nuget.org/api/v2/package/$PkgName/$PkgVersion"
+    Write-Host "Downloading $PkgName $PkgVersion..."
+    Invoke-WebRequest -Uri $url -OutFile $Nupkg
+  }
   Add-Type -AssemblyName System.IO.Compression.FileSystem
   [System.IO.Compression.ZipFile]::ExtractToDirectory($Nupkg, $PkgDir)
 }
