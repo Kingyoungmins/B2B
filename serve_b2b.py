@@ -7006,10 +7006,13 @@ class OpenpyxlWorkbookProxy:
 
 class OpenpyxlSkillContext:
     """COM ExcelSkillContext 와 동일한 API를 openpyxl 위에서 제공한다."""
-    def __init__(self, output_wb, input_wbs, output_cached_wb=None, output_name=None, active_file_id=None, active_sheet=None):
+    def __init__(self, output_wb, input_wbs, output_cached_wb=None, output_name=None, active_file_id=None, active_sheet=None, output_cached_path=None):
         self.excel = None
         self._workbook = output_wb
         self._output_cached_wb = output_cached_wb
+        self._output_cached_path = output_cached_path
+        self._output_cached_tried = False
+        self._dirty_workbook_ids = set()  # [성능] 입력 결과 저장/inspect 스킵 판단용
         self.output_name = output_name or "output"
         self.workbook = OpenpyxlWorkbookProxy(self, output_wb, self.output_name)
         self.output = self.workbook
@@ -7055,11 +7058,22 @@ class OpenpyxlSkillContext:
     def _is_output_workbook(self, wb):
         return self._unwrap_workbook(wb) is self._workbook
 
+    def _get_output_cached_wb(self):
+        # [성능] 지연 로드: ctx.value/display_value 를 쓰는 스킬에서만 data_only 짝 워크북을 연다.
+        if self._output_cached_wb is None and not self._output_cached_tried and self._output_cached_path:
+            self._output_cached_tried = True
+            try:
+                self._output_cached_wb = openpyxl_load_workbook_compatible(Path(self._output_cached_path), data_only=True)
+            except Exception:
+                self._output_cached_wb = None
+        return self._output_cached_wb
+
     def _cached_ws_for(self, ws):
         raw = getattr(ws, "_ws", ws)
         try:
-            if raw.parent is self._workbook and self._output_cached_wb is not None and raw.title in self._output_cached_wb.sheetnames:
-                return self._output_cached_wb[raw.title]
+            cached = self._get_output_cached_wb()
+            if raw.parent is self._workbook and cached is not None and raw.title in cached.sheetnames:
+                return cached[raw.title]
         except Exception:
             pass
         return None
@@ -7308,6 +7322,10 @@ class OpenpyxlSkillContext:
             suffix = "_" + str(idx)
             final = (base[: max(1, 31 - len(suffix))] + suffix)
         raw_ws = wb.create_sheet(title=final)
+        try:
+            self._dirty_workbook_ids.add(id(wb))
+        except Exception:
+            pass
         ws = OpenpyxlWorksheetProxy(raw_ws)
         if self._is_output_workbook(wb):
             self.last_output_sheet = ws.Name
@@ -7317,6 +7335,10 @@ class OpenpyxlSkillContext:
         if not grid:
             return ws
         raw = getattr(ws, "_ws", ws)
+        try:
+            self._dirty_workbook_ids.add(id(raw.parent))
+        except Exception:
+            pass
         # 병합 셀 유무를 한 번만 확인. 병합 없는 시트(작업/스크래치 시트 대부분)는 셀마다
         # merged-anchor 스캔(_opxl_write_cell)을 건너뛰고 직접 써서 대용량에서 크게 빨라진다.
         try:
@@ -7594,9 +7616,9 @@ def _run_openpyxl_python_pipeline_impl(payload, job_id=None):
     output_path_norm = str(Path(output_path).resolve()).lower()
     # 출력: data_only=False 로 열어 수식을 보존하고 값을 쓴다. 읽기는 쓴 값이 그대로 반영된다(read-after-write).
     output_wb = openpyxl_load_workbook_compatible(Path(output_path), data_only=False)
-    # 값만 복사에서 기존 수식 셀의 표시값을 읽기 위한 짝 워크북.
-    # 캐시가 없으면 ctx.value/display_value 가 단순 수식을 Python 에서 평가한다.
-    output_cached_wb = openpyxl_load_workbook_compatible(Path(output_path), data_only=True)
+    # 값만 복사에서 기존 수식 셀의 표시값을 읽기 위한 짝 워크북 — [성능] 지연 로드.
+    # 풀 파싱이 대용량에서 수십 초라, ctx.value/display_value 를 실제로 쓰는 스킬에서만 로드한다.
+    output_cached_wb = None  # OpenpyxlSkillContext 가 output_cached_path 로 필요 시 로드
 
     # 입력: data_only=True 로 열어 수식의 "계산된 값"을 읽는다(Excel 이 저장해둔 캐시값).
     # openpyxl 엔진에서 입력은 읽기 전용으로 취급한다(저장하면 수식이 사라지므로). 입력 편집은 Excel 엔진 사용.
@@ -7616,6 +7638,7 @@ def _run_openpyxl_python_pipeline_impl(payload, job_id=None):
         output_wb,
         input_wbs,
         output_cached_wb=output_cached_wb,
+        output_cached_path=str(output_path),
         output_name=output_name,
         active_file_id=current.get("fileId"),
         active_sheet=current.get("sheet"),
@@ -7693,11 +7716,20 @@ def _run_openpyxl_python_pipeline_impl(payload, job_id=None):
     # 3.7 JS 실행기와 같은 동작을 위해 수정된 입력 결과도 저장/다운로드 대상으로 노출한다.
     input_previews = {}
     input_download_urls = {}
+    # [성능] 입력은 정책상 읽기 전용 — 스킬이 실제로 건드린 입력만 저장/inspect 한다.
+    # (ctx 변이 헬퍼의 dirty 마킹 + 코드 정규식 휴리스틱. B2B_ALWAYS_SAVE_INPUTS=1 로 기존 동작 복원)
+    _code_all = chr(10).join(str(s.get("code") or "") for s in python_steps)
+    _inputs_maybe_written = bool(
+        os.environ.get("B2B_ALWAYS_SAVE_INPUTS") == "1"
+        or (re.search(r"ctx\.input", _code_all) and re.search(r"\.value\s*=|insert_(?:rows|cols)|delete_(?:rows|cols)|merge_cells|\.append\s*\(", _code_all))
+    )
     for item, rec in zip(input_items, input_wb_records):
         name = item.get("name") or rec["name"]
         wb = input_wbs.get(name)
         if wb is None or wb is output_wb:
             continue
+        if not _inputs_maybe_written and id(wb) not in getattr(ctx, "_dirty_workbook_ids", set()):
+            continue  # 변경 흔적 없는 입력: 저장(수 초)+inspect(재파싱) 생략
         safe_input_name = Path(str(name)).name
         if not Path(safe_input_name).suffix:
             safe_input_name += ".xlsx"

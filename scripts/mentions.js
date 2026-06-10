@@ -55,18 +55,28 @@ function getMentionQuery() {
 
 function buildMentionItems() {
   const items = [];
-  state.inputs.forEach(file => addFileMentions(items, file, "입력 파일"));
+  // 파일 하나가 비정상(시트명 미수신 등)이어도 @ 목록 전체가 죽지 않게 파일 단위로 격리.
+  // (스킬 적용 후 중간에 추가한 파일이 sheetNames 없이 등록되면 이전엔 메뉴 전체가 안 떴음)
+  (state.inputs || []).forEach(file => {
+    try { addFileMentions(items, file, "입력 파일"); } catch (e) { console.warn("mention build 실패:", file && file.name, e); }
+  });
   if (state.outputTemplates && state.outputTemplates.length) {
-    state.outputTemplates.forEach((tpl, idx) => addFileMentions(items, tpl.file, `출력 템플릿 ${idx + 1}`));
+    state.outputTemplates.forEach((tpl, idx) => {
+      try { addFileMentions(items, tpl && tpl.file, `출력 템플릿 ${idx + 1}`); } catch (e) { console.warn("mention build 실패:", e); }
+    });
   } else if (state.output) {
-    addFileMentions(items, state.output, "출력 템플릿");
+    try { addFileMentions(items, state.output, "출력 템플릿"); } catch (e) { console.warn("mention build 실패:", e); }
   }
   return items;
 }
 
 function addFileMentions(items, file, fileMeta) {
+  if (!file || !file.name) return;
   items.push({ type: "file", label: file.name, token: `@파일[${file.name}]`, meta: fileMeta });
-  file.sheetNames.forEach(sheet => {
+  const sheetNames = Array.isArray(file.sheetNames) && file.sheetNames.length
+    ? file.sheetNames
+    : Object.keys(file.sheets || {});
+  sheetNames.forEach(sheet => {
     items.push({ type: "sheet", label: sheet, token: `@시트[${file.name}/${sheet}]`, meta: `시트 · ${file.name}` });
     getSheetColumns(file, sheet).forEach(colName => {
       items.push({ type: "column", label: colName, token: `@컬럼[${file.name}/${sheet}/${colName}]`, meta: `컬럼 · ${file.name}/${sheet}` });

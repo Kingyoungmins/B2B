@@ -64,17 +64,17 @@
       const server = record.server || {};
       const mode = record.baseMode || "original";
       const steps = record.steps || 0;
-      // Excel(COM) 파이프라인 단계별 타이밍(있으면 표시). 어디서 느린지 바로 보인다.
-      const stageKeys = [
-        ["reset", server.resetMs], ["open", server.openMs], ["steps", server.stepsMs],
-        ["saveResult", server.saveResultMs], ["inspect", server.inspectMs], ["finalize", server.finalizeMs],
-      ].filter(([, v]) => v !== undefined && v !== null);
+      // 서버 단계별 타이밍 — server 객체의 *Ms 숫자 키를 전부 동적으로 표시한다.
+      // (COM: reset/open/steps/saveResult/… · openpyxl: load/steps/saveInspect · reflect: close/open/present)
+      const stageKeys = Object.keys(server)
+        .filter(k => /Ms$/.test(k) && k !== "totalServerMs" && Number.isFinite(Number(server[k])))
+        .map(k => [k.replace(/Ms$/, ""), server[k]]);
       const stageLine = stageKeys.length
         ? `<div class="debug-stages" style="margin-top:4px;font-size:11px;opacity:.85;line-height:1.5">${server.mode ? `[${server.mode}] ` : ""}${stageKeys.map(([k, v]) => `${k} ${ms(v)}`).join(" · ")}</div>`
         : "";
       return `
         <div class="debug-row">
-          <div class="debug-title">#${records.length - idx} ${record.worker ? "worker" : "fallback"} · ${mode} · ${steps} step</div>
+          <div class="debug-title">#${records.length - idx} ${record.action ? record.action : (record.worker ? "worker" : "fallback")} · ${mode} · ${steps} step</div>
           <div class="debug-grid">
             <span>total</span><b>${ms(record.totalClientMs)}</b>
             <span>start</span><b>${ms(record.startRequestMs)}</b>
