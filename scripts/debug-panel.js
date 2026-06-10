@@ -1,13 +1,11 @@
 /* Developer timing panel toggled by F8.
-   기본은 비활성(일반 사용자에게 노출 금지). 현장 VDI 에서 느린 지점을 진단할 때만
-   URL 에 ?debug=1 을 붙이거나 localStorage.b2bDebugAllowed="1" 로 켠다. */
+   병목 진단용 — 기본 허용(패널은 F8 누르기 전까지 숨김). URL 에 ?debug=0 을 붙일 때만 끈다. */
 (function setupDebugPanel() {
-  let allowed = false;
+  let allowed = true;
   try {
-    allowed = /[?&]debug=1\b/.test(window.location.search || "")
-      || localStorage.getItem("b2bDebugAllowed") === "1";
+    if (/[?&]debug=0\b/.test(window.location.search || "")) allowed = false;
   } catch (_) {
-    allowed = false;
+    allowed = true;
   }
   if (!allowed) {
     window.recordBackendDebugTiming = function() {};

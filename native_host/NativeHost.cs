@@ -276,15 +276,22 @@ namespace B2BNativeHost
         protected override void OnHandleCreated(EventArgs e)
         {
             base.OnHandleCreated(e);
+            RegisterDebugHotkey();  // F8 속도 디버그 패널(병목 진단) — 전역 핫키
         }
 
         protected override void OnHandleDestroyed(EventArgs e)
         {
+            UnregisterDebugHotkey();
             base.OnHandleDestroyed(e);
         }
 
         protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
         {
+            if (keyData == Keys.F8)
+            {
+                ToggleDebugPanel();  // 호스트/웹뷰 포커스 상태에서도 F8 토글
+                return true;
+            }
             return base.ProcessCmdKey(ref msg, keyData);
         }
 
@@ -833,6 +840,12 @@ namespace B2BNativeHost
 
         protected override void WndProc(ref Message m)
         {
+            if (m.Msg == WM_HOTKEY && ((int)(long)m.WParam) == DEBUG_HOTKEY_ID)
+            {
+                // F8 전역 핫키: Excel 미러가 포커스를 가진 상태에서도 속도 디버그 패널을 토글한다.
+                ToggleDebugPanel();
+                return;
+            }
             if (m.Msg == WM_SYSCOMMAND && (((int)(long)m.WParam) & 0xFFF0) == SC_MINIMIZE)
             {
                 // 소유된(owned) Excel 미러가 포그라운드인 동안 작업표시줄의 호스트 버튼은
