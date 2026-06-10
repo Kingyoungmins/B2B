@@ -1,0 +1,43 @@
+{
+  "id": "formula_vs_value_intent",
+  "title": "자연어 표현별 해석 편차: '구해줘'(수식) vs '적어줘'(값) 의도 구분",
+  "checks_by_mode": {
+    "vba": {
+      "risk_rules": [
+        "formula_vs_value_intent",
+        "no_activecell_offset",
+        "single_sheet_scope"
+      ],
+      "windows_only": [
+        "요청 표현에 맞는 형태(수식 또는 값)로 대상 셀에 들어갔는지 확인."
+      ]
+    },
+    "python": {
+      "risk_rules": [
+        "formula_vs_value_intent",
+        "no_activecell_offset",
+        "single_sheet_scope"
+      ],
+      "windows_only": [
+        "요청 표현에 맞는 형태(수식 또는 값)로 대상 셀에 들어갔는지 확인."
+      ]
+    }
+  },
+  "variants": [
+    {
+      "id": "count_write_value",
+      "prompt": "매출 시트 전체 건수의 합계를 숫자 값으로 월별실적!B4에 적어줘. 수식 말고 계산된 값으로.",
+      "expected": "월별실적!B4 에 매출 건수 합계가 '값'으로 들어간다(수식 아님)."
+    },
+    {
+      "id": "count_with_formula",
+      "prompt": "매출 시트 금액의 합계를 '구하는 수식'을 월별실적!C4에 넣어줘. 나중에 데이터 바뀌면 자동 갱신되게.",
+      "expected": "월별실적!C4 에 =SUM(...) 형태의 수식이 들어간다(값이 아니라 수식)."
+    },
+    {
+      "id": "sum_value_not_formula",
+      "prompt": "회사별요약 매출 합계(B24 자리)를 계산해서 그 결과 숫자만 박아줘. 수식 필요 없어.",
+      "expected": "해당 셀에 매출 합계의 숫자 값이 들어간다(수식 아님)."
+    }
+  ]
+}

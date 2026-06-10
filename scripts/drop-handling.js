@@ -489,16 +489,17 @@ function renderRunnerWorkflow() {
       `<div class="workflow-pill ${isStepEnabled(step) ? "" : "disabled"}" title="${escapeHtml(step.description)}">${idx + 1}. ${escapeHtml(step.description)}${isStepEnabled(step) ? "" : " (OFF)"}</div>`
     ).join("");
   }
+  const activeStepCount = state.pipeline.filter(isStepEnabled).length;
   if (resultList) {
-    resultList.innerHTML = state.output && state.pipeline.length
-      ? `<div class="workflow-pill">${state.pipeline.filter(isStepEnabled).length}개 활성 단계 실행 대상</div>`
+    resultList.innerHTML = state.output && activeStepCount
+      ? `<div class="workflow-pill">${activeStepCount}개 활성 단계 실행 대상</div>`
       : "";
   }
 
   if (inputNode) inputNode.classList.toggle("filled", state.inputs.length > 0);
   if (outputNode) outputNode.classList.toggle("filled", !!state.output);
   if (logicNode) logicNode.classList.toggle("filled", state.pipeline.length > 0);
-  if (resultNode) resultNode.classList.toggle("filled", !!state.output && state.pipeline.length > 0);
+  if (resultNode) resultNode.classList.toggle("filled", !!state.output && activeStepCount > 0);
   setNodeStatus(inputNode, state.inputs.length > 0, "파일 수정", () => openRunnerFileEditor("input"));
   setNodeStatus(outputNode, state.outputTemplates.length > 0, "파일 수정", () => openRunnerFileEditor("output"));
   setNodeStatus(logicNode, state.pipeline.length > 0, "스킬 수정", () => {
@@ -510,13 +511,15 @@ function renderRunnerWorkflow() {
   setCount("runner-output-count", state.outputTemplates.length || "–");
   setCount("runner-logic-count", state.pipeline.length);
 
-  const runnable = (state.inputs.length > 0 || !!state.output) && state.pipeline.length > 0;
+  const runnable = (state.inputs.length > 0 || !!state.output) && activeStepCount > 0;
   const centerSub = $("runner-center-sub");
   if (centerSub && !resultNode?.classList.contains("running") && !resultNode?.classList.contains("done")) {
     centerSub.textContent = runnable ? "실행 준비" : "대기 중";
   }
   const heroBadge = $("runner-hero-badge");
-  if (heroBadge) {
+  const isRunnerBusy = resultNode && resultNode.classList.contains("running");
+  const isRunnerDone = resultNode && resultNode.classList.contains("done");
+  if (heroBadge && !isRunnerBusy && !isRunnerDone) {
     heroBadge.classList.remove("ready", "running", "done");
     if (runnable) { heroBadge.classList.add("ready"); heroBadge.textContent = "실행 준비 완료"; }
     else { heroBadge.textContent = "대기 중"; }
@@ -548,10 +551,20 @@ function renderRunnerWorkflow() {
 window.runnerSetRunning = function(running) {
   const node = document.getElementById("runner-result-node");
   const sub = document.getElementById("runner-center-sub");
+  const statState = document.getElementById("runner-stat-state");
+  const badge = document.getElementById("runner-hero-badge");
   if (!node) return;
   node.classList.toggle("running", !!running);
   if (running) node.classList.remove("done");
   if (sub && running) sub.textContent = "실행 중...";
+  if (statState) statState.textContent = running ? "실행 중" : "준비";
+  if (badge) {
+    badge.classList.remove("ready", "running", "done");
+    if (running) {
+      badge.classList.add("running");
+      badge.textContent = "실행 중";
+    }
+  }
 };
 
 window.runnerSetProgress = function(text) {
@@ -560,19 +573,32 @@ window.runnerSetProgress = function(text) {
   const badge = document.getElementById("runner-hero-badge");
   if (sub) sub.textContent = text || "실행 중...";
   if (statState) statState.textContent = text || "실행 중";
-  if (badge) badge.textContent = text || "실행 중";
+  if (badge) {
+    badge.classList.remove("ready", "done");
+    badge.classList.add("running");
+    badge.textContent = text || "실행 중";
+  }
 };
 
 window.runnerSetDone = function() {
   const node = document.getElementById("runner-result-node");
   const sub = document.getElementById("runner-center-sub");
+  const statState = document.getElementById("runner-stat-state");
+  const badge = document.getElementById("runner-hero-badge");
   if (!node) return;
   node.classList.remove("running");
   node.classList.add("done");
   if (sub) sub.textContent = "완료";
+  if (statState) statState.textContent = "완료";
+  if (badge) {
+    badge.classList.remove("ready", "running");
+    badge.classList.add("done");
+    badge.textContent = "완료";
+  }
   setTimeout(() => {
     node.classList.remove("done");
     if (sub) sub.textContent = "실행 준비";
+    if (typeof renderRunnerWorkflow === "function") renderRunnerWorkflow();
   }, 2500);
 };
 

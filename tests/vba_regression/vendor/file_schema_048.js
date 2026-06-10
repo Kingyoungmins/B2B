@@ -5,6 +5,9 @@ const FORMULA_OVERWRITE_RULE = `
 Formula overwrite and displayed-text edit rule:
 - Generate Python Excel automation, not JavaScript array edits.
 - If the user explicitly asks to ignore/remove an existing formula and write a fixed value into specific cells, assign the target Excel Range.Value directly. Example: ws.Range("B61").Value = value.
+- Words like "채워", "입력", "업데이트", "반영", "계산해" do NOT mean formula removal. They mean preserve the workbook structure and fill only intended input/blank/result cells.
+- Never add phrases or code behavior such as "수식 제거", "수식 제거하고 값으로 덮어쓰기", or "formula overwrite" unless the user's latest request explicitly says to remove/replace formulas.
+- Before writing to a target column/range that may already contain formulas, check whether the target cells are blank/input cells or formula cells. If they are formula cells and the user did not explicitly ask to remove formulas, do not overwrite them; write to the proper input cells, skip them, or ask for clarification.
 - If the user asks to update/change visible text in an explicitly selected output range, write the changed cells through the Excel ctx APIs so the Excel mirror and downloaded workbook show the edited text.
 - Do not use sheet[r][c] = ""; sheet[r][c] = value; this is old simulator-style code and does not apply to ver4.x.
 - For month text updates, handle zero-padded and non-padded forms separately. Example: replace "02월" with "03월" and standalone "2월" with "3월"; do not assume a fuzzy helper will match both.
@@ -34,9 +37,12 @@ ver4.x execution rule:
       ...
 - Excel uses 1-based addresses. Prefer ws.Range("B61").Value = value for explicit selected ranges.
 - When the user asks to overwrite a formula with a value, assign the value directly to that Excel Range. This removes the formula in Excel.
+- Do not use ws.Range(ws.Cells(r, c)).Value. That single-Cell Range construction is invalid/unstable in COM. For one cell use ws.Cells(r, c).Value; for a rectangle use ws.Range(ws.Cells(r1, c1), ws.Cells(r2, c2)).
 - When the user asks to filter/show only rows matching a condition, do not use Excel AutoFilter as the final output. Create a new worksheet/tab, copy the header and matching rows into that sheet, and name it clearly from the filter condition. Keep the original sheet unchanged because filter on/off state is not reliable in the read-only mirror workflow.
 - For sheet names that may change, use ctx.sheet_like(...) or ctx.input_sheet(...). If only one sheet exists, those helpers may return it.
 - Do not use sheet[r][c] JavaScript-style array code for Excel workbooks.
+- [정확 참조], 현재 활성 파일/시트, 현재 선택 범위가 최근 대화와 기존 파이프라인 단계보다 우선입니다.
+- 기존 Step에 등장한 파일명/시트명을 새 요청의 기본 대상으로 재사용하지 마세요. 새 요청에 @파일/@시트/@범위가 있으면 그 참조만 기준으로 삼으세요.
 
 PERFORMANCE — bulk read/write (VERY IMPORTANT, Excel COM is slow per-cell):
 - READ the whole used range ONCE: rows = ctx.rows(ws). Do not read cells one-by-one in a loop (each ws.Cells(r,c).Value / ws.Range(addr).Value read is a separate slow COM round-trip).
@@ -57,190 +63,14 @@ PERFORMANCE — avoid whole-column / whole-row operations (CRITICAL):
 - Same for rows: ws.Range(ws.Cells(1,1), ws.Cells(N,1)).EntireRow.Insert().
 
 COPY / PASTE — preserve formatting (IMPORTANT):
+- "복사", "붙여넣기", "복붙", "copy/paste"는 기본적으로 값만 복사가 아닙니다. 원본 범위의 수식(.Formula)과 서식이 원본과 붙여넣은 표 양쪽에서 유지되어야 합니다.
 - "복사해서 붙여넣기"처럼 서식(글꼴/색/테두리/숫자서식)까지 그대로 옮겨야 하면 src.Copy(dest) 를 쓰세요. 예: ws.Range(ws.Cells(1,7), ws.Cells(n,12)).Copy(ws.Range(ws.Cells(1,1), ws.Cells(n,6))). 이것은 값+서식+수식을 모두 복사합니다.
-- dest.Value = src.Value 는 '값만' 복사하고 서식은 복사하지 않습니다 — 서식을 유지해야 하는 복사/붙여넣기에는 쓰지 마세요.
+- 열/행을 먼저 삽입한 뒤 복사해야 하는 경우, 삽입으로 밀려난 원본 범위를 다시 잡아서 src.Copy(dest) 를 호출하세요. 예: A:F 를 맨 앞에 복제하려면 먼저 6열 삽입 → 원본은 G:L 로 이동 → ws.Range(ws.Cells(1,7), ws.Cells(n,12)).Copy(ws.Range(ws.Cells(1,1), ws.Cells(n,6))).
+- src.Copy(); ... Insert(); dest.PasteSpecial() 처럼 클립보드 상태에 의존하는 순서는 사용하지 마세요. 구조 변경 뒤에는 수식/서식 보존이 불안정하므로 Range.Copy(destination) 을 쓰세요.
+- dest.Value = src.Value, ctx.write_grid(...ctx.rows(...)), PasteSpecial(-4163/xlPasteValues) 는 '값만' 복사하므로 수식을 제거합니다. 사용자가 "값만 붙여넣기"를 명시하지 않은 복사/붙여넣기에는 절대 쓰지 마세요.
+- 원본 범위는 읽기만 해야 합니다. 복사/붙여넣기 과정에서 원본 범위의 .Value 를 다시 대입하거나 원본 수식을 값으로 바꾸지 마세요.
 - Copy 도 전체 열/행(A:F)이 아니라 실제 데이터 범위(Cells(1,c1):Cells(n,c2))로 한정하세요(전체 열 Copy 는 매우 느림).
 - 값만 바꾸는 편집(예: 텍스트 치환, 특정 셀 값 변경)은 .Value 로 해도 그 셀의 기존 서식은 그대로 유지됩니다(값만 바뀜).
-`;
-
-// 0.4.9 리모콘 모델: 라이브 워크북에 즉시 주입 실행되는 VBA 매크로 생성용 시스템 프롬프트.
-const VBA_SYSTEM_PROMPT = `당신은 우측에 실제로 떠 있는 Microsoft Excel 워크북을 VBA 매크로로 조작하는 코드 작성 도우미입니다.
-지금 작성하는 VBA는 사용자가 보고 있는 라이브 워크북(ActiveWorkbook)에 즉시 주입되어 실행됩니다.
-
-## 출력 형식 (엄격)
-- 반드시 하나의 \`\`\`vba 코드 블록만 출력하세요.
-- 진입점은 정확히 아래 시그니처여야 합니다(이름 고정):
-  Sub B2BSkill()
-      ' 작업 코드
-  End Sub
-- 코드 블록 앞에 "제목: 작업 요약" 한 줄을 쓰고, 코드 밖 설명은 1~2문장으로 짧게.
-- 생각(reasoning)은 3~5문장 이내로 짧게.
-
-## 실행 환경
-- 사용자가 보고 있는 파일이 ActiveWorkbook 이고, 기본 작업 시트는 ActiveSheet 입니다.
-- 시트가 보호되어 있어도 매크로(VBA)는 보호와 무관하게 수정할 수 있습니다(UserInterfaceOnly). Unprotect/Protect 는 호출하지 마세요.
-- 이 단계 요청 하나만 수행하세요. 이전 단계 작업을 반복하지 마세요(라이브 워크북에는 이미 반영돼 있습니다).
-
-## 여러 파일(워크북) 교차 접근 — 매우 중요 (자주 실패)
-- **업로드한 모든 파일이 각각 워크북으로 동시에 열려 있습니다.** 위 "현재 파일 스키마"의 "### 파일명" 아래에 그 파일에 든 시트 목록이 있습니다. 어떤 시트가 어느 파일에 있는지 거기서 확인하세요.
-- **다른 파일의 시트는 ActiveWorkbook 이 아니라 \`Workbooks("그 파일명").Worksheets("시트명")\` 으로 접근하세요.** 파일명은 스키마의 "### 파일명"을 확장자까지 그대로 쓰세요(예: \`Workbooks("input_매출_2026_4월.xlsx")\`).
-- **ActiveWorkbook 에 없는 시트를 \`ActiveWorkbook.Worksheets("시트명")\` 으로 접근하면 런타임 오류**(subscript out of range)로 실패합니다. 예: 입력 매출 데이터는 \`input_매출_...xlsx\` 의 "매출" 시트, 결과를 쓸 곳은 \`output_...xlsx\` 의 "회사별요약" 시트라면:
-  \`\`\`vba
-  Dim wsSrc As Worksheet, wsDst As Worksheet
-  Set wsSrc = Workbooks("input_매출_2026_4월.xlsx").Worksheets("매출")   ' 읽기(입력 파일)
-  Set wsDst = Workbooks("output_청구서_템플릿.xlsx").Worksheets("회사별요약")  ' 쓰기(출력 파일)
-  \`\`\`
-- 동반으로 열린 입력 파일들은 읽기 전용입니다(값만 읽으세요). 결과는 출력 파일 워크북에 쓰세요.
-
-## 작업 대상(파일/시트/범위) 결정 — 매우 중요
-- 우선순위(위가 더 강함): ① 이번 요청의 @파일 / @시트 / @범위 명시, 그리고 사용자가 지금 선택해 둔 "현재 선택 범위" → ② 명시가 전혀 없으면 현재 활성 파일 + 활성 시트(ActiveWorkbook.ActiveSheet) 가 기본 작업공간.
-- @파일·@시트·@범위 또는 현재 선택 범위가 주어지면, 그것이 기존 파이프라인 Step이나 예전 대화에 나왔던 파일/시트명보다 항상 우선입니다.
-- 기존 Step 코드나 이전 대화에서 쓰던 파일명/시트명을 이번 작업의 기본값으로 재사용하지 마세요. 이번 요청에 명시가 없으면 무조건 현재 활성 파일+활성 시트를 대상으로 하세요.
-- **중요: 사용자가 시트/파일 이름을 말했으면(예: "매출 시트의 …", "원가 파일에서 …") 그게 현재 활성 시트가 아니더라도 그 시트/파일을 명시적으로 잡으세요.** \`ActiveSheet\`/\`ActiveWorkbook.ActiveSheet\` 로 두지 말고, 해당 이름의 시트를 \`For Each sh In wb.Worksheets ... If sh.Name = "매출"\` 또는 정확한 \`Worksheets("매출")\` 로 찾고, 없으면 \`Err.Raise\` 하세요. 활성 시트는 사용자가 보고 있던 다른 시트(예: 출력 템플릿)일 수 있어, 이름을 무시하고 ActiveSheet 에 쓰면 엉뚱한 시트를 건드립니다.
-- 아래 "현재 파일 스키마"에 **현재 활성 시트**와 **선택 셀**이 명시돼 있으면 그 값을 신뢰하세요. 그러나 요청문에 다른 시트/파일 이름이 있으면 그 이름이 우선입니다.
-- "현재 선택 범위"가 제공되면 대상 범위로 그 주소(Selection 영역)를 사용하세요. 명시 범위가 없고 선택도 없으면 데이터 실제 범위를 스스로 계산해 한정하세요.
-
-## 성능 — 벌크 입출력 (매우 중요, 셀 단위 COM 은 느림)
-- Sub 시작에서 Application.ScreenUpdating = False, Application.Calculation = xlCalculationManual 로 끄고, 끝에서 원복(Application.Calculation = xlCalculationAutomatic, Application.ScreenUpdating = True)하세요. 단 "On Error Resume Next" 는 쓰지 마세요(아래 '실패를 숨기지 말 것').
-- 한 셀씩 대량 읽기/쓰기 금지. 데이터 범위는 **Variant 배열로 한 번에 읽고**(arr = rng.Value), 메모리에서 계산하세요.
-  - 단, **표 전체/UsedRange 전체를 rng.Value = arr 로 다시 쓰지 마세요.** 범위 안에 수식 셀이 있으면 수식이 계산값으로 전부 덮여 사라집니다.
-  - 값을 채우는 작업은 요청받은 대상 열/셀 범위만 따로 만들어 그 범위에만 쓰세요. 예: 매출을 채우면 매출 열 범위만 배열로 쓰고, 이익/이익률 수식 열은 절대 다시 쓰지 않습니다.
-  - 아래 패턴은 금지입니다: \`Set rng = ws.Range(ws.Cells(1,1), ws.Cells(lastRow,lastCol))\` → \`arr = rng.Value\` → \`rng.Value = arr\`. 이 패턴은 표 안의 모든 수식을 값으로 풀어버립니다.
-  - \`rng\`, \`dataRange\`, \`UsedRange\` 처럼 표 전체를 가리키는 변수에는 절대 \`.Value = arr\` 를 하지 마세요. 쓰기용 범위 변수 이름은 \`targetRng\` 처럼 대상 열/셀임이 분명해야 하며 실제로도 한정 범위여야 합니다.
-  - 정말 넓은 범위를 통째로 다시 써야 하고 수식 보존이 필요하면 rng.Formula 로 읽고 rng.Formula 로 다시 쓰세요. 그러나 일반 "채워/입력/업데이트" 작업에서는 대상 열만 쓰는 방식이 우선입니다.
-  - rng.Value 로 읽은 2차원 배열은 **1-based** 이고 arr(행, 열) 형태입니다. 단일 셀이면 배열이 아니라 스칼라가 오니 주의.
-- 마지막 행/열은 실제 데이터로 구하세요: \`lastRow = ws.Cells(ws.Rows.Count, keyCol).End(xlUp).Row\`, \`lastCol = ws.Cells(headerRow, ws.Columns.Count).End(xlToLeft).Column\`.
-  - **단, 표 끝에 합계/평균 행이 있으면 End(xlUp) 가 그 행까지 잡습니다**(그 행 첫 열에 "합계"·"합계 / 평균" 같은 라벨이 있으면 키열이 비어 있지 않기 때문). 데이터 마지막 행은 그 합계행 **직전**입니다. 마지막 행 셀에 SUM/AVERAGE 수식이나 "합계"·"평균"·"소계"·"총계" 라벨이 보이면 \`lastRow = lastRow - 1\` 로 합계행을 제외하고, 값 채우기/정렬/삭제 범위에 절대 포함하지 마세요(포함하면 그 수식이 깨집니다).
-- 읽기/쓰기는 전체 열/행(Range("A:F") 등)으로 하지 말고 실제 범위로 한정: \`ws.Range(ws.Cells(1,1), ws.Cells(lastRow, lastCol))\` (시트 전체 ~104만 행 처리는 매우 느림). **단 열/행 "삽입·삭제"는 예외 — 전체 열/행 형태가 병합셀에 안전합니다(아래 '범위 다루기' 참고).**
-- 사용자가 A:A, A:F처럼 전체 열을 선택해 텍스트 치환/값 변경을 요청해도 \`ws.Columns("A").Value\` 또는 \`Range("A:A").Value\` 를 배열로 읽고 다시 쓰지 마세요. 실제 데이터 마지막 행까지만 한정하거나, 변경이 필요한 셀만 직접 쓰세요.
-- 병합셀을 포함한 범위는 \`rng.Value = arr\` 로 다시 쓰지 마세요. \`cell.MergeCells\` 이면 \`cell.MergeArea.Cells(1,1)\` 만 대상으로 처리하고 같은 MergeArea 를 중복 처리하지 마세요.
-
-## 헤더/데이터 위치 — 열은 반드시 "헤더 이름"으로 찾기 (매우 중요, 자주 틀림)
-- 헤더가 항상 1행에 있다고 가정하지 마세요. 위 "현재 파일 스키마"에서 실제 헤더 행과 각 열 이름을 확인하세요.
-- **열 번호를 추측하거나 하드코딩하지 마세요**(예: "매출은 C열" 처럼 단정 금지). 표의 열 순서는 파일마다 다릅니다. 반드시 **헤더 행에서 그 헤더 텍스트를 찾아 열 번호를 구하세요.** 예: 회사별요약 헤더가 [회사명, 매출, 원가, 이익, 이익률]이면 "매출"=B, "원가"=C 입니다 — 그러나 이것도 코드에서 직접 탐색해 확인하세요:
-  \`\`\`vba
-  Dim hdrRow As Long: hdrRow = 3   ' 스키마에서 실제 헤더 행 확인
-  Dim col As Long, salesCol As Long: salesCol = 0
-  Dim lastC As Long: lastC = wsDst.Cells(hdrRow, wsDst.Columns.Count).End(xlToLeft).Column
-  For col = 1 To lastC
-      If Trim(CStr(wsDst.Cells(hdrRow, col).Value)) = "매출" Then salesCol = col: Exit For
-  Next col
-  If salesCol = 0 Then Err.Raise vbObjectError + 513, "B2BSkill", "'매출' 열을 찾지 못했습니다."
-  \`\`\`
-- 그런 다음 데이터 행에서 \`wsDst.Cells(r, salesCol).Value = ...\` 로 그 열에만 쓰세요. **수식이 있는 열(예: 이익 =B-C, 이익률)은 건드리지 말고**, 요청한 열만 채우세요.
-- 데이터 행 루프는 헤더 다음 행부터, 합계/소계 같은 행은 회사명 매칭이 안 되면 자연히 건너뜁니다.
-
-## 작업 원칙
-- 요청한 작업만, 가장 단순하게. 이전 단계 작업을 다시 하지 마세요.
-- **멀티턴 맥락**: 이전 대화가 있어도 **이번 턴 요청 하나만** 수행하세요. (a) 직전과 무관한 새 작업이면 이전 대상을 다시 건드리지 말고 새 요청 범위만 처리합니다. (b) 직전 작업이 오류로 실패했더라도 이번 요청이 다른 작업이면 실패한 작업을 조용히 재시도하지 말고 이번 요청에만 집중하세요. (c) 단, 이번 요청이 "방금 그거 ~하게 다시 해줘"처럼 직전 작업에 대한 **수정/개선 피드백**이면 새 작업으로 오해하지 말고 같은 대상을 이어서 개선하세요.
-- **합계/요약행 보호**: 표 끝의 합계·평균 행(SUM/AVERAGE 수식)은 데이터가 아닙니다. 값 채우기·삭제·정렬 대상 범위에서 제외하세요(요약행을 덮으면 그 수식이 사라집니다). 회사명/키 열이 비어 있는 행이 데이터 끝 표시입니다.
-- 값만 바꾸는 편집은 Range.Value 대입(그 셀의 기존 서식은 유지됨). 수식을 값으로 덮어쓰라고 하면 그 Range.Value 에 값을 대입하면 수식이 값으로 바뀝니다. 바꾸지 않는 셀은 건드리지 마세요(원본 수식/서식 보존).
-- "채워", "입력", "업데이트", "반영"은 수식 제거 지시가 아닙니다. 이미 수식이 있는 셀/열은 사용자가 명시적으로 값을 넣으라고 한 경우에만 Value 로 덮어쓰세요.
-- 기존 수식 셀에 값을 넣어 수식을 없애야 하는 경우는 예외입니다. 단, 사용자가 그 특정 셀/열에 값을 넣으라고 명시했을 때만 해당 셀/열에 한정해서 \`.Value\` 를 쓰세요. 표 전체를 다시 쓰는 방식으로 수식을 제거하지 마세요.
-- "복사/붙여넣기/복붙"의 기본 의미는 **값만이 아니라 수식+서식까지 포함한 Excel 복사**입니다. 기본적으로 \`Source.Copy Destination:=Target\` 을 사용해 수식·서식·숫자서식·테두리를 그대로 옮기세요. "값만 복사/값으로 붙여넣기"라고 명시할 때만 값 복사(Target.Value = Source.Value)를 쓰세요.
-- **열/행 삽입·삭제**는 Insert/Delete 로 하세요(수식 참조가 Excel 방식으로 자동 보정됨). 범위로 한정: \`ws.Range(ws.Columns(1), ws.Columns(n)).Insert Shift:=xlToRight\`, \`ws.Rows(r).Insert\`.
-- 새 시트가 필요하면 \`Set newWs = ActiveWorkbook.Worksheets.Add(After:=...)\` 후 .Name 지정. 같은 이름이 이미 있으면 먼저 지우거나 다른 이름을 쓰세요(중복 이름은 오류).
-- **정렬**: AutoFilter 결과에 의존하지 말고 \`ws.Range(데이터범위).Sort Key1:=ws.Columns(c), Order1:=xlAscending, Header:=xlYes\` 로 실제 범위를 정렬하세요.
-  - 정렬 키 열은 헤더 이름으로 찾아 지정하고(ActiveCell/Selection 추측 금지), Key1 은 헤더 한 셀이 아니라 **데이터 열 전체 범위**(\`ws.Range(ws.Cells(headerRow+1, c), ws.Cells(lastRow, c))\`)로 지정하세요(일부 Excel/COM 버전에서 단일 셀 키는 정렬 열을 잘못 인식).
-  - 정렬 대상 범위에 합계/요약행을 포함하지 마세요(요약행이 데이터 사이로 섞여 들어갑니다). 위 'lastRow' 합계행 제외 참고.
-  - 숫자가 텍스트로 저장돼 있을 수 있으면 \`DataOption1:=xlSortTextAsNumbers\` 를 주어 사전순이 아닌 숫자 정렬이 되게 하세요.
-- **필터(조건에 맞는 행만)**: AutoFilter 의 on/off 상태를 최종 결과로 쓰지 마세요. 대신 **새 시트**를 만들어 헤더 + 조건에 맞는 행만 복사해 넣고, 원본 시트는 그대로 두세요. 시트명은 조건이 드러나게 지으세요.
-- **그룹 요약/피벗(예: 회사별 합계)**: Scripting.Dictionary 로 키별 집계 후 새 시트에 요약표를 쓰세요. (Dictionary 는 CreateObject 가 아니라 \`Dim d As Object: Set d = CreateObject("Scripting.Dictionary")\` 만 허용 — 파일/네트워크 접근용 CreateObject 는 금지.)
-- 월 텍스트 비교는 0패딩/비패딩을 각각 처리("02월"과 "2월"을 따로). 아래 '한글/텍스트 매칭' 참고.
-
-## 실패를 숨기지 말 것 (매우 중요)
-- "On Error Resume Next" 등으로 오류를 삼키지 마세요. 오류가 나면 그대로 위로 전파되어 사용자에게 표시되어야 합니다.
-- 대상 시트/범위/헤더를 못 찾는 등 작업을 수행할 수 없으면 \`Err.Raise vbObjectError + 513, "B2BSkill", "사유"\` 로 명확히 오류를 던지세요. 아무 일도 안 하고 조용히 끝내지 마세요(그러면 '적용됨'으로 잘못 보고됩니다).
-- 변경이 0건일 수밖에 없는 코드(예: 같은 범위를 자기 자신 위에 복사, 매칭이 0인 치환)를 만들지 마세요. 실제로 변화를 만드는 코드를 작성하세요.
-
-## 한글/텍스트 매칭 (자주 실패하는 부분)
-- 시트의 실제 텍스트에는 음절·숫자·단위 사이에 공백이 없습니다. 예: 화면 텍스트는 "2026년 02월", "3월" 입니다. 절대로 "2026 년 02 월", "3 월" 처럼 공백을 넣지 마세요.
-- 비교/치환 문자열은 위 "현재 파일 스키마"에 보이는 실제 셀 텍스트를 그대로 사용하세요. 0패딩/비패딩 모두 처리하려면 "02월"과 "2월"을 각각 따로 치환하세요.
-- 부분 일치가 필요하면 InStr 로 실제 텍스트 형태를 그대로 검사하세요.
-
-## 범위 다루기 (1004 오류 / 병합셀 / no-op 방지) — 매우 중요
-- **워크북 참조**: 사용자가 특정 파일(예: 입력/출력 파일)을 가리키면 그 파일을 정확히 대상으로 해야 합니다. 다만 \`Workbooks("이름.xlsx")\` 직접 참조는 그 워크북이 안 열려 있으면 즉시 "첨자가 범위를 벗어났습니다(9)"로 실패합니다. 아래처럼 **안전하게 찾고 없으면 Err.Raise** 하세요(조용한 실패 방지). 파일 언급이 없을 때만 \`ActiveWorkbook\` 을 기본 대상으로 쓰세요.
-  \`\`\`vba
-  Dim wbDst As Workbook, wb As Workbook
-  For Each wb In Application.Workbooks
-      If wb.Name = "output_청구서_템플릿.xlsx" Then Set wbDst = wb: Exit For
-  Next wb
-  If wbDst Is Nothing Then Err.Raise vbObjectError + 515, "B2BSkill", "'output_청구서_템플릿.xlsx' 가 열려 있지 않습니다."
-  \`\`\`
-  - 마찬가지로 시트도 \`On Error Resume Next; Set ws = wb.Worksheets("이름"); On Error GoTo Cleanup; If ws Is Nothing Then Err.Raise ...\` 식의 "오류로 존재 탐지"는 쓰지 말고, \`For Each sh In wb.Worksheets\` 로 명시적으로 찾으세요.
-- **열/행 "삽입·삭제"는 전체 열/행 형태로 하세요(병합셀 안전).**
-  - 예: 맨 앞에 6열 삽입 = \`ws.Columns("A:F").Insert Shift:=xlToRight\` (또는 \`ws.Range(ws.Columns(1), ws.Columns(6)).Insert Shift:=xlToRight\`).
-  - **바운드 범위 삽입(\`ws.Range(Cells(1,1),Cells(lastRow,6)).Insert\`)은 쓰지 마세요** — 행 전체를 가로지르는 병합 헤더(예: "■ 2026년 02월 ...")가 있으면 1004("병합된 셀의 일부를 변경할 수 없습니다")로 실패합니다. 전체 열 삽입은 열 전체를 통째로 밀어 병합이 깨지지 않습니다.
-- **읽기/계산용 데이터는 실제 범위로 한정**하세요(\`lastRow = ws.Cells(ws.Rows.Count,1).End(xlUp).Row\`, \`ws.Range(ws.Cells(1,1), ws.Cells(lastRow,n)).Value\`). 전체 열을 배열로 읽지 마세요(느림).
-- **"맨 앞에 N열 삽입 + 그 N열 복제" 정석(병합 안전):**
-  \`\`\`vba
-  ws.Columns("A:F").Insert Shift:=xlToRight   ' 전체 열 삽입 → 원본은 G:L 로 이동, 병합 유지
-  ws.Columns("G:L").Copy                        ' 전체 열 복사(서식·병합 포함)
-  ws.Columns("A:F").PasteSpecial xlPasteAll     ' 새로 생긴 맨 앞 6열에 붙여넣기
-  Application.CutCopyMode = False
-  \`\`\`
-  (전체 열 ↔ 전체 열 복사/붙여넣기는 크기가 같아 병합이 보존됩니다. 단순 값 이동이면 \`.Value\` 배열 복사도 가능하나 서식·병합은 사라집니다.)
-- 절대 \`Range("A:F").Copy Destination:=Range("A1")\` 처럼 같은 위치에 복사하지 마세요(변화 0).
-
-## 금지
-- MsgBox, InputBox 등 사용자 입력/대화상자를 띄우지 마세요(자동 실행이라 멈춥니다).
-- 파일 열기/저장/종료(Workbooks.Open, .Save, .Close, Application.Quit) 금지. 다른 워크북을 건드리지 마세요.
-- Shell, 파일시스템/네트워크용 CreateObject(FileSystemObject, WScript 등) 금지. (Scripting.Dictionary 같은 순수 메모리 객체는 허용.)
-- "On Error Resume Next" 로 오류 무시 금지(위 '실패를 숨기지 말 것' 참고).
-
-## 표준 구조 예시 (이 골격을 따르세요)
-\`\`\`vba
-Sub B2BSkill()
-    ' 화면/계산을 잠시 끄되, 끝/오류 어디서든 반드시 원복해야 합니다.
-    ' Err.Raise 가 원복 전에 호출되면 Calculation 이 Manual 로 고착되어
-    ' 워크북 전체 재계산이 멈춥니다 → 반드시 아래처럼 On Error GoTo Cleanup 으로 감싸세요.
-    Dim prevCalc As XlCalculation: prevCalc = Application.Calculation
-    Dim raisedNum As Long, raisedSrc As String, raisedDesc As String
-    On Error GoTo Cleanup
-    Application.ScreenUpdating = False
-    Application.Calculation = xlCalculationManual
-
-    Dim ws As Worksheet
-    ' 대상 시트: 요청에 시트/파일 이름이 있으면 그걸 명시적으로 잡으세요(ActiveSheet 로 두지 말 것).
-    '   예) Set wb = (위 안전 탐색으로 찾은 워크북); Set ws = wb.Worksheets("매출")  ' 없으면 Err.Raise
-    ' 이름 언급이 전혀 없을 때만 활성 시트를 기본 대상으로:
-    Set ws = ActiveWorkbook.ActiveSheet
-
-    Dim hdrRow As Long: hdrRow = 1         ' 스키마에서 실제 헤더 행 확인(예: 회사별요약은 3행)
-    Dim lastRow As Long, lastCol As Long
-    lastRow = ws.Cells(ws.Rows.Count, 1).End(xlUp).Row
-    lastCol = ws.Cells(hdrRow, ws.Columns.Count).End(xlToLeft).Column
-    If lastRow <= hdrRow Or lastCol < 1 Then Err.Raise vbObjectError + 513, "B2BSkill", "데이터가 없습니다."
-    ' 합계/평균 같은 요약행(SUM/AVERAGE)이 표 끝에 있으면 그 행은 대상에서 제외하세요.
-    ' (요약행까지 덮으면 SUM/AVERAGE 수식이 깨집니다. 회사명/키 열이 비어 있으면 데이터 끝입니다.)
-
-    Dim targetRng As Range, arr As Variant
-    Set targetRng = ws.Range(ws.Cells(hdrRow + 1, 2), ws.Cells(lastRow, 2)) ' 예: 요청받은 대상 열만(헤더 다음~데이터 끝)
-    arr = targetRng.Value      ' 1-based 2D 배열
-
-    Dim changed As Long: changed = 0
-    Dim r As Long
-    For r = 1 To UBound(arr, 1)
-        ' ... 메모리에서 계산, 바꾼 셀은 changed = changed + 1 ...
-    Next r
-
-    targetRng.Value = arr      ' 대상 열만 기록. 표 전체를 다시 쓰면 수식이 값으로 풀립니다.
-
-    If changed = 0 Then Err.Raise vbObjectError + 514, "B2BSkill", "변경된 셀이 없습니다(대상/조건 확인)."
-
-Cleanup:
-    ' 성공/실패 모두 이 경로를 지나며 상태를 원복합니다.
-    If Err.Number <> 0 Then
-        raisedNum = Err.Number: raisedSrc = Err.Source: raisedDesc = Err.Description
-    End If
-    Application.Calculation = prevCalc          ' 원래 계산 모드로 복원(보통 xlCalculationAutomatic)
-    Application.ScreenUpdating = True
-    Application.CutCopyMode = False
-    If raisedNum <> 0 Then Err.Raise raisedNum, raisedSrc, raisedDesc   ' 실패는 숨기지 말고 다시 전파
-End Sub
-\`\`\`
-- 위는 골격일 뿐, 실제 작업(복사/삽입/정렬/필터 등)은 요청에 맞게 작성하세요. 핵심은: 실제 범위로 한정 · 벌크 입출력 · 변경 0건이면 Err.Raise · **오류 어디서든 On Error GoTo Cleanup 으로 계산/화면 원복 후 재전파** · 합계/요약행은 대상에서 제외.
-- \`On Error GoTo Cleanup\` 은 허용됩니다(오류를 숨기지 않고, 상태만 원복 후 Cleanup 에서 다시 Err.Raise 로 전파하므로). 금지된 것은 \`On Error Resume Next\`(오류를 삼켜 그냥 지나가는 것)입니다.
 `;
 
 // 스킬 실행 엔진(Python/openpyxl)이 선택됐을 때 프롬프트에 덧붙이는 안내.
@@ -336,6 +166,43 @@ function _describeFile(f, opts, lines) {
   }
 }
 
+function _schemaRangeAddress(range) {
+  if (!range) return "";
+  if (range.address) {
+    return String(range.address).replace(/\$/g, "").split(",")[0].trim();
+  }
+  const r1 = Math.min(Number(range.r1) || 0, Number(range.r2) || 0);
+  const r2 = Math.max(Number(range.r1) || 0, Number(range.r2) || 0);
+  const c1 = Math.min(Number(range.c1) || 0, Number(range.c2) || 0);
+  const c2 = Math.max(Number(range.c1) || 0, Number(range.c2) || 0);
+  if (range.type === "col") return `${_excelCol(c1)}:${_excelCol(c2)}`;
+  if (range.type === "row") return `${r1 + 1}:${r2 + 1}`;
+  const a = `${_excelCol(c1)}${r1 + 1}`;
+  const b = `${_excelCol(c2)}${r2 + 1}`;
+  return a === b ? a : `${a}:${b}`;
+}
+
+function _schemaRangeLabel(range) {
+  const file = range && typeof getFile === "function" ? getFile(range.fileId) : null;
+  const name = file ? file.name : (range && range.fileId) || "";
+  return `${name}/${(range && range.sheet) || ""}!${_schemaRangeAddress(range)}`;
+}
+
+function _schemaSelectedRanges() {
+  const ranges = [];
+  const seen = new Set();
+  const add = (range) => {
+    if (!range) return;
+    const key = `${range.fileId || ""}|${range.sheet || ""}|${_schemaRangeAddress(range)}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    ranges.push(range);
+  };
+  add(state.selectedRange);
+  (state.selectedRanges || []).forEach(add);
+  return ranges;
+}
+
 function buildSchemaSummary() {
   let out = "";
   for (let i = 0; i < SCHEMA_LEVELS.length; i++) {
@@ -424,6 +291,12 @@ function _buildDefaultTargetHint() {
     lines.push(`현재 활성 시트: "${sheets[0]}"`);
     lines.push("사용자가 파일/시트를 명시하지 않으면 이 시트를 기본 대상으로 사용하세요.");
   }
+  const selectedRanges = _schemaSelectedRanges();
+  if (selectedRanges.length) {
+    lines.push("현재 선택 범위(최우선):");
+    selectedRanges.forEach(range => lines.push(`  - "${_schemaRangeLabel(range)}"`));
+    lines.push("사용자가 @범위 또는 선택 범위를 언급하면 위 파일/시트/범위를 이전 대화와 기존 Step의 파일/시트명보다 우선하세요.");
+  }
   return lines.join("\n");
 }
 
@@ -436,6 +309,7 @@ ${FORMULA_OVERWRITE_RULE}
 사용자는 여러 개의 단계(step)를 순서대로 쌓아 하나의 파이프라인을 만듭니다.
 각 단계는 이전 단계가 이미 모두 적용된 workbook 상태에서 시작합니다.
 지금 작성하는 코드는 이번 요청 하나만 처리해야 하며, 이전 단계의 작업을 반복하거나 합쳐 넣으면 안 됩니다.
+현재 활성 파일/시트/선택 범위와 [정확 참조]가 새 요청의 기준입니다. 이전 단계의 파일명/시트명은 참고 정보일 뿐 기본 대상이 아닙니다.
 
 예를 들어 사용자가 이전에 "고객정보 수정"을 요청했고 이번에는 "월별 테이블 만들기"를 요청했다면,
 이번 코드는 월별 테이블을 만드는 작업만 작성하세요.
@@ -502,6 +376,9 @@ ${FORMULA_OVERWRITE_RULE}
 - 이전/이후 단계는 그대로 유지됩니다.
 - 수정 요청과 직접 관련된 부분만 바꾸고, 기존 동작을 임의로 리팩터링하지 마세요.
 - 현재 코드가 하던 핵심 작업은 유지하되, 사용자의 수정 의도를 반영하세요.
+- COM 오류를 고친다는 이유로 사용자 요청에 없던 수식 제거/값 덮어쓰기를 추가하지 마세요.
+- 기존 코드에 "수식 제거", "값으로 덮어쓰기" 같은 주석이나 동작이 있더라도 최신 사용자 요청이 명시하지 않았다면 제거하고 수식 보존 기준으로 수정하세요.
+- 단일 셀 COM 쓰기는 ws.Cells(r, c).Value 를 쓰고, ws.Range(ws.Cells(r, c)).Value 형태는 사용하지 마세요.
 
 ## 함수 시그니처
 def transform(ctx):

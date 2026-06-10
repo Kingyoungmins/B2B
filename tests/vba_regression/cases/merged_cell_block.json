@@ -1,0 +1,50 @@
+{
+  "id": "merged_cell_block",
+  "title": "병합 셀(회사별요약 A1:E1 제목) 처리: 병합 유지한 채 제목만 수정 / 병합 해제 요청 분기",
+  "checks_by_mode": {
+    "python": {
+      "risk_rules": ["merge_safe", "single_sheet_scope", "no_activecell_offset"],
+      "must_not_match": [
+        "\\.Copy\\s*\\(",
+        "\\.PasteSpecial\\b",
+        "for\\s+\\w+\\s+in\\s+[\\w.]+\\.(?:worksheets|sheetnames)\\b"
+      ]
+    }
+  },
+  "variants": [
+    {
+      "id": "edit_title_keep_merge",
+      "prompt": "회사별요약 시트 맨 위 제목 칸(A1:E1 병합)에 적힌 제목을 '2026년 4월 청구 요약'으로 바꿔줘. 병합은 그대로 유지하고 텍스트만 고쳐.",
+      "expected": "A1(병합 좌상단)의 텍스트가 '2026년 4월 청구 요약' 으로 바뀌고, A1:E1 병합은 그대로 유지된다. 다른 셀/수식 불변.",
+      "assert": {
+        "assert_sheet": "회사별요약",
+        "expect_merged": ["A1:E1"],
+        "expect_cells": {"회사별요약!A1": {"text": "2026년 4월 청구 요약"}},
+        "expect_no_change_to": ["회사별요약!D4", "회사별요약!B24"]
+      }
+    },
+    {
+      "id": "unmerge_title",
+      "prompt": "회사별요약 제목 줄(A1부터 E1까지)의 셀 병합을 풀어줘. 병합만 해제하면 돼.",
+      "expected": "A1:E1 병합이 unmerge_cells 로 해제된다. 데이터/수식은 불변.",
+      "assert": {
+        "assert_sheet": "회사별요약",
+        "expect_unmerged": ["A1:E1"],
+        "expect_no_change_to": ["회사별요약!D4", "회사별요약!B24"]
+      }
+    },
+    {
+      "id": "no_copy_for_merge_region",
+      "prompt": "회사별요약 A1:E1 병합 제목을 COM 복사(src.Copy) 말고 openpyxl 방식으로 안전하게 다뤄줘 — 제목 텍스트를 '청구 요약(4월)'로만 바꾸면 돼.",
+      "exact_refs": [
+        "- 대상: 파일 \"output_청구서_템플릿.xlsx\", 시트 \"회사별요약\", 병합 \"A1:E1\""
+      ],
+      "expected": "A1 텍스트만 '청구 요약(4월)' 로 변경. src.Copy/PasteSpecial 같은 COM 전용 호출 없이 병합 유지.",
+      "assert": {
+        "assert_sheet": "회사별요약",
+        "expect_merged": ["A1:E1"],
+        "expect_cells": {"회사별요약!A1": {"text": "청구 요약(4월)"}}
+      }
+    }
+  ]
+}

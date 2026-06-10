@@ -6,6 +6,8 @@ ver4.0 replaces the browser-rendered spreadsheet simulator with a real Excel-bac
 Excel becomes the source of truth for workbook rendering, formulas, formatting, filtering, and large-file behavior.
 The web app remains responsible for skill generation, execution controls, status, logs, and packaging.
 
+See [PYTHON_ENGINE_RISKS.md](PYTHON_ENGINE_RISKS.md) for notes on why an openpyxl-first Python engine conflicts with this live Excel UX, especially on low-spec Windows PCs with one `EXCEL.EXE` holding multiple workbooks.
+
 ## Feasibility
 
 This is feasible on Windows when Microsoft Excel is installed. The local Python backend can control Excel through COM automation and expose a small HTTP API to the web UI.

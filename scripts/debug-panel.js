@@ -1,5 +1,25 @@
-﻿/* Developer timing panel toggled by F8. */
+/* Developer timing panel toggled by F8.
+   기본은 비활성(일반 사용자에게 노출 금지). 현장 VDI 에서 느린 지점을 진단할 때만
+   URL 에 ?debug=1 을 붙이거나 localStorage.b2bDebugAllowed="1" 로 켠다. */
 (function setupDebugPanel() {
+  let allowed = false;
+  try {
+    allowed = /[?&]debug=1\b/.test(window.location.search || "")
+      || localStorage.getItem("b2bDebugAllowed") === "1";
+  } catch (_) {
+    allowed = false;
+  }
+  if (!allowed) {
+    window.recordBackendDebugTiming = function() {};
+    window.toggleDebugPanel = function() {};
+    try {
+      localStorage.removeItem("b2bDebugPanelVisible");
+    } catch (_) {}
+    const existing = document.getElementById("debug-panel");
+    if (existing) existing.remove();
+    return;
+  }
+
   const stateKey = "b2bDebugPanelVisible";
   const maxRows = 12;
   const records = [];
