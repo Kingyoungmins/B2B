@@ -149,9 +149,6 @@ namespace B2BNativeHost
         [DllImport("user32.dll")]
         private static extern IntPtr GetWindow(IntPtr hWnd, uint uCmd);
 
-        [DllImport("user32.dll", CharSet = CharSet.Auto)]
-        private static extern int GetWindowText(IntPtr hWnd, StringBuilder lpString, int nMaxCount);
-
         private const uint GW_OWNER = 4;
         private const int WM_SYSCOMMAND = 0x0112;
         private const int SC_MINIMIZE = 0xF020;
@@ -289,11 +286,6 @@ namespace B2BNativeHost
         protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
         {
             return base.ProcessCmdKey(ref msg, keyData);
-        }
-
-        protected override void WndProc(ref Message m)
-        {
-            base.WndProc(ref m);
         }
 
         private void RegisterDebugHotkey()
@@ -946,7 +938,7 @@ namespace B2BNativeHost
                     }
                     if (!hostMinimized)
                     {
-                        try { BeginInvoke(new Action(RestoreActiveExcelMirror)); } catch { }
+                        try { BeginInvoke(new Action(delegate { RestoreActiveExcelMirror(false); })); } catch { }
                     }
                 }
                 catch (Exception ex)
