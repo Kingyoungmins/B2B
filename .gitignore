@@ -38,3 +38,4 @@ native_host/packages/
 
 # Embed prototype build output
 embed_proto/bin/
+_tmp_*
