@@ -84,3 +84,35 @@
 - 5개 중 매출채워 1차는 90s 타임아웃(하니스 한계) → 150s 재시도 통과. 생성된 모든 VBA가 검증기 통과(거짓 차단 0).
 
 라이브 Excel 의존 경로(#3 사후검증 표시, #19 취소/복귀, 미러 동작)는 창/Excel 없이는 기능 검증 불가 → GUI 수동 테스트 필요(로직 단위는 통과).
+
+---
+
+## 0.4.13.1 (2026-06-10) — 탭 전환 UX 3종 수정 (회색 플래시 / 작업표시줄 유령 / 버벅임)
+
+증상: ① 탭 전환 시 회색 엑셀이 잠깐 보였다 사라짐 ② 작업표시줄에 파일 수만큼 빈 회색 Excel 버튼 ③ 전환이 alt-tab처럼 즉각적이지 않음.
+
+근원인:
+- (②) 파일마다 별도 Excel 프로세스(owner 모드)인데 XLMAIN의 WS_EX_APPWINDOW를 안 떼서 owner가 있어도 작업표시줄 버튼이 강제 표시.
+- (①) 첫 방문 탭은 클릭 시점에 Excel 콜드 부팅(lazy open) + show가 페인트 준비(ScreenUpdating/워크북 뷰) 전에 실행 → 빈 회색 프레임 먼저 표시. 매 전환마다 SWP_FRAMECHANGED 전체 리드로우 + SW_SHOWNORMAL이 배경 창을 활성화하며 위로 튀어나옴.
+- (③) 탭 클릭마다 scheduleExcelMirrorPosition(true)가 모든 세션을 강제 재배치(COM 폭풍, EXCEL_LOCK 직렬화) + 전환이 position→raise→베이스라인 폴(시트 스냅샷)을 순차 await.
+
+수정(serve_b2b.py):
+- `_suppress_excel_taskbar_button()` 신설: WS_EX_APPWINDOW 제거(owner 실패 시 TOOLWINDOW 폴백). 적용 지점: open(라이브)×2, replace(라이브), position 재확인, raise, _restore_live_window.
+- open(라이브): show 전에 ScreenUpdating=True + 워크북 뷰 켬(회색 프레임 방지). `background=True` 오픈 지원(rect 배치만 하고 숨김 — 사전 오픈용).
+- `_position_excel_window`: SWP_NOACTIVATE 항상 적용, SWP_FRAMECHANGED는 스타일이 실제 바뀐 호출만, SW_SHOWNORMAL→SW_SHOWNA(+IsIconic→SW_RESTORE).
+- `/api/excel/hide`에 `light` 모드: 제자리 SW_HIDE만(rect/스타일 유지) → 다음 raise 한 번으로 즉시 복귀.
+- raise 시 owner+억제 재보장, hidden=False 동기화.
+
+수정(scripts/excel-mirror.js):
+- 탭 클릭 래퍼의 scheduleExcelMirrorPosition(true) 제거(재배치 폭풍 — 리사이즈 리스너가 이미 커버).
+- 전환: raise 후 비활성 세션 light-hide(fire-and-forget), 베이스라인 폴 비대기.
+- `ensureExcelMirrorSession({background:true})` + 업로드 후 나머지 탭 백그라운드 사전 오픈(preopenAllExcelMirrors) → 첫 전환도 부팅 없이 즉시. 결과(open-result) 파일은 사전 오픈 제외.
+
+기대 동작: 전환 = raise 1왕복(+이전 창 비동기 숨김), 작업표시줄에 Excel 버튼 0개, 회색 플래시 없음.
+트레이드오프: 업로드 직후 백그라운드에서 나머지 파일의 Excel 프로세스를 순차 기동(파일당 수 초, 그동안 폴/전환이 잠깐 느릴 수 있음, RAM 파일당 ~수십MB).
+
+### 추가 수정 (같은 날) — 스킬 적용 후 회색 엑셀 1회 플래시
+적용 후 결과 반영 경로 3곳이 여전히 "페인트 준비 전 show" 패턴이었음 → 탭 전환과 동일하게 reorder:
+- `_replace_excel_session_workbook_impl` live 분기(결과 파일 교체 — Python 엔진 주 경로): show 전에 ScreenUpdating=True + 워크북 뷰 켬.
+- `_position_excel_session_impl`: 숨김(hard-hide) 상태에서 재표시할 때 ensure-view 를 position(show) 앞으로.
+- `_restore_live_window`(VBA 엔진 적용 후 복원): ensure-view 를 position(show) 앞으로.

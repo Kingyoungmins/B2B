@@ -118,16 +118,41 @@ function setActionButtonPending(button, pendingText) {
   button.classList.add("pending");
 }
 
-function finalizeActionButtonFromResult(button, result, doneText, onFailure) {
+function finalizeActionButtonFromResult(button, result, doneText, onFailure, options = {}) {
   if (!button) return;
   if (result && result.pending && result.promise) {
     setActionButtonPending(button);
+    let cancelBtn = null;
+    const actions = options.actions || button.parentElement;
+    if (typeof result.cancel === "function" && actions) {
+      cancelBtn = document.createElement("button");
+      cancelBtn.className = "action-btn danger apply-cancel";
+      cancelBtn.type = "button";
+      cancelBtn.textContent = "■ 작업 중단";
+      cancelBtn.onclick = () => {
+        cancelBtn.disabled = true;
+        cancelBtn.textContent = "중단 중...";
+        Promise.resolve(result.cancel()).catch(() => {});
+      };
+      actions.appendChild(cancelBtn);
+    }
+    const cleanupCancelButton = () => {
+      if (cancelBtn && cancelBtn.parentElement) cancelBtn.remove();
+    };
     result.promise
-      .then(() => {
+      .then((value) => {
+        cleanupCancelButton();
+        if (value && value.cancelled) {
+          button.textContent = "\uC911\uB2E8\uB428";
+          button.classList.remove("pending");
+          button.classList.add("error");
+          return;
+        }
         button.textContent = doneText || "\u2713 \uC801\uC6A9\uB428";
         button.classList.remove("pending");
       })
       .catch(() => {
+        cleanupCancelButton();
         button.textContent = "\uC801\uC6A9 \uC2E4\uD328";
         button.classList.remove("pending");
         button.classList.add("error");
@@ -169,12 +194,30 @@ function userRequestsValuesOnly(text) {
   return /(값만|값\s*복사|값\s*붙여|수식\s*(빼고|제외|없이)|values?\s*only|paste\s*values?)/i.test(String(text || ""));
 }
 
+function userRequestsNumericOnly(text) {
+  return /(숫자만|숫자\s*값만|수치만|금액만|number(?:s)?\s*only|numeric\s*only)/i.test(String(text || ""));
+}
+
 function codeCopiesValuesOnly(code) {
   const text = String(code || "");
   return /\.Value\s*=\s*[^#\n\r;]+\.Value\b/i.test(text)
     || /PasteSpecial\s+[^'\n\r]*(xlPasteValues|-4163|Paste\s*:=\s*xlPasteValues|Paste\s*:=\s*-4163)/i.test(text)
     || /PasteSpecial\s*\([^)]*(xlPasteValues|-4163|Paste\s*=\s*-4163)/i.test(text)
     || /ctx\.(write_grid|set_range)\s*\([^)]*ctx\.rows\s*\(/i.test(text);
+}
+
+function codeFiltersNumericOnlyForCopy(code) {
+  const text = String(code || "");
+  const numericTest = /(IsNumeric\s*\(|WorksheetFunction\.IsNumber\s*\(|Application\.IsNumber\s*\(|\bisinstance\s*\([^)]*,\s*\(?\s*(?:int|float|Decimal)|\btype\s*\([^)]*\)\s*(?:is|==)\s*(?:int|float)|Number\.isFinite\s*\(|Number\.isInteger\s*\(|typeof\s+[^=\n\r]+\s*===\s*["']number["'])/i;
+  const copyWrite = /(복사|붙여|copy|paste|ctx\.(?:write_grid|set_range)\s*\(|\.Value\s*=|append\s*\(|dest|target)/i;
+  const skipNonNumeric = /(continue|pass|skip|else\s*:|if\s+not\s+.*(?:IsNumeric|isinstance|Number\.|typeof)|filter\s*\()/i;
+  return numericTest.test(text) && copyWrite.test(text) && skipNonNumeric.test(text);
+}
+
+function codeMisusesCtxRowsAsCellObjects(code) {
+  const text = String(code || "");
+  if (!/\bctx\.rows\s*\(/.test(text)) return false;
+  return /\b\w+\s*\[[^\]\n\r]+\]\s*\.\s*(?:row|column|value|coordinate)\b/i.test(text);
 }
 
 function codeHasBroadValueRewrite(code) {
@@ -263,6 +306,16 @@ function validateAssistantCodeBeforeApply(code, context) {
     showCodeGuardBlock(message, context);
     return false;
   }
+  if (userRequestsCopyPaste(sourceUserMessage) && !userRequestsNumericOnly(sourceUserMessage) && codeFiltersNumericOnlyForCopy(code)) {
+    const message = "복사/붙여넣기 요청에서 숫자 셀만 골라 복사하는 코드가 감지되어 적용을 막았습니다. 선택 범위의 텍스트, 숫자, 수식, 빈칸을 행/열 위치 그대로 모두 복사하는 코드로 다시 생성해 주세요.";
+    showCodeGuardBlock(message, context);
+    return false;
+  }
+  if (codeMisusesCtxRowsAsCellObjects(code)) {
+    const message = "ctx.rows() 결과를 셀 객체처럼 사용하는 코드가 감지되어 적용을 막았습니다. ctx.rows()의 row 값은 셀 객체가 아니라 값 리스트이므로 row[0].row/.value를 쓰지 말고 enumerate 또는 ctx.iter_rows(ws, start_row=...)로 행번호를 계산해 주세요.";
+    showCodeGuardBlock(message, context);
+    return false;
+  }
   return true;
 }
 
@@ -320,7 +373,8 @@ function addAssistantReply(fullText, replyContext) {
             editApplyBtn,
             result,
             "\u2713 \uC218\uC815 \uC801\uC6A9\uB428",
-            () => restoreActionButtonsAfterFailure([editApplyBtn, rejectBtn], editApplyBtn, "\u2713 \uB2E4\uC2DC \uC218\uC815 \uC801\uC6A9")
+            () => restoreActionButtonsAfterFailure([editApplyBtn, rejectBtn], editApplyBtn, "\u2713 \uB2E4\uC2DC \uC218\uC815 \uC801\uC6A9"),
+            { actions }
           );
         }
       };
@@ -354,7 +408,7 @@ function addAssistantReply(fullText, replyContext) {
       div.appendChild(actions);
 
       const runApply = () => {
-        const result = applyLogic({ id: uid(), prompt: "", code, description: desc, language });
+        const result = applyLogic({ id: uid(), prompt: latestUserRequestForSafety(), code, description: desc, language });
         applyBtn.disabled = true;
         insertBtn.disabled = true;
         rejectBtn.disabled = true;
@@ -362,12 +416,13 @@ function addAssistantReply(fullText, replyContext) {
           applyBtn,
           result,
           "\u2713 \uC801\uC6A9\uB428",
-          () => restoreActionButtonsAfterFailure([applyBtn, insertBtn, rejectBtn], applyBtn, "\u2713 \uB2E4\uC2DC \uC801\uC6A9")
+          () => restoreActionButtonsAfterFailure([applyBtn, insertBtn, rejectBtn], applyBtn, "\u2713 \uB2E4\uC2DC \uC801\uC6A9"),
+          { actions }
         );
       };
       const runInsert = () => {
         openInsertPositionDialog(state.pipeline.length, (position) => {
-          const result = insertLogic({ id: uid(), prompt: "", code, description: desc, language }, position);
+          const result = insertLogic({ id: uid(), prompt: latestUserRequestForSafety(), code, description: desc, language }, position);
           applyBtn.disabled = true;
           insertBtn.disabled = true;
           rejectBtn.disabled = true;
@@ -375,7 +430,8 @@ function addAssistantReply(fullText, replyContext) {
             insertBtn,
             result,
             `${position}\uBC88\uC5D0 \uC0BD\uC785\uB428`,
-            () => restoreActionButtonsAfterFailure([applyBtn, insertBtn, rejectBtn], insertBtn, "\u21B3 \uB2E4\uC2DC \uC0BD\uC785")
+            () => restoreActionButtonsAfterFailure([applyBtn, insertBtn, rejectBtn], insertBtn, "\u21B3 \uB2E4\uC2DC \uC0BD\uC785"),
+            { actions }
           );
         });
       };
@@ -703,7 +759,8 @@ function resolveErrorRecoveryStepIndex(stepIdx, errorInfo) {
   return -1;
 }
 
-async function requestErrorRecovery(stepIdx, errorInfo) {
+async function requestErrorRecovery(stepIdx, errorInfo, userNote) {
+  const recoveryNoteText = String(userNote || "").trim();
   const reportedStepIdx = Number((errorInfo && errorInfo.stepIdx) ?? stepIdx);
   stepIdx = resolveErrorRecoveryStepIndex(stepIdx, errorInfo);
   const displayStepNumber = Number.isInteger(reportedStepIdx) && reportedStepIdx >= 0
@@ -742,7 +799,7 @@ async function requestErrorRecovery(stepIdx, errorInfo) {
   const isExistingStep = stepIdx >= 0 && state.pipeline[stepIdx] === failedStep;
   const recoveryLanguage = failedStep.language ||
     (typeof inferPipelineStepLanguage === "function" ? inferPipelineStepLanguage(failedStep) : "python");
-  const isVbaRecovery = recoveryLanguage === "vba" || (typeof getSkillEngine === "function" && getSkillEngine() === "vba");
+  const isVbaRecovery = recoveryLanguage === "vba";
   const isPythonRecovery = !isVbaRecovery && recoveryLanguage === "python";
   const recoveryCodeRule = isVbaRecovery
     ? "Return exactly one VBA code block that defines Sub B2BSkill(). Do not return JavaScript or Python."
@@ -788,10 +845,18 @@ async function requestErrorRecovery(stepIdx, errorInfo) {
     "## 복구 방식",
     "- 코드는 자동 교체하지 않습니다. 사용자가 '수정 적용' 버튼을 눌러 적용할 수 있도록 수정 후보만 제안하세요.",
     "- 실패한 Step 하나만 고치세요. 이전/다음 Step의 작업을 반복하거나 새 기능을 추가하지 마세요.",
-    "- 현재 0.4.9 실행기는 VBA입니다. 반드시 ActiveWorkbook/Workbooks(...).Worksheets(...) 기준의 VBA 코드로 복구하세요.",
+    "- 실패한 Step은 VBA입니다. 반드시 ActiveWorkbook/Workbooks(...).Worksheets(...) 기준의 VBA 코드로 복구하세요.",
+  ] : [];
+
+  const userNoteBlock = recoveryNoteText ? [
+    "## ★ 사용자 추가 설명 — 최우선 반영",
+    "아래는 사용자가 직접 적은 '하려던 작업 / 실제로 나온 결과 / 기대하는 결과'입니다. 다른 어떤 추론보다 이 설명을 가장 우선해서, 대화 히스토리·실패 코드·오류와 함께 반영해 코드를 고치세요.",
+    recoveryNoteText,
+    "",
   ] : [];
 
   const prompt = [
+    ...userNoteBlock,
     `Step ${displayStepNumber} 실행 중 오류가 발생했습니다.`,
     isExistingStep
       ? "대화 히스토리의 사용자 의도, 현재 파일 스키마, 수정 대상 코드, 아래 오류를 함께 분석해서 이 Step을 교체할 수정 코드를 다시 작성하세요."
@@ -817,7 +882,7 @@ async function requestErrorRecovery(stepIdx, errorInfo) {
     schemaSummary ? "\n## 현재 업로드 파일/시트/컬럼 스키마\n" + schemaSummary : "",
   ].filter(Boolean).join("\n");
 
-  addMessage("system", `Step ${displayStepNumber} 에러 복구를 요청합니다.`);
+  addMessage("system", `Step ${displayStepNumber} 에러 복구를 요청합니다.${recoveryNoteText ? "\n📝 추가 설명: " + recoveryNoteText : ""}`);
   const loading = addMessage("assistant", "", {});
   loading.classList.add("streaming");
 

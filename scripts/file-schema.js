@@ -12,28 +12,38 @@ Formula overwrite and displayed-text edit rule:
   import re
   text = re.sub(r"02\\s*월", "03월", text)
   text = re.sub(r"(^|[^0-9])2\\s*월", r"\\g<1>3월", text)
+- Preserve compact Korean date formatting in replacements. Do not create new spaces such as "2026 년 03 월" or "03 월"; write "2026년 03월", "03월", and "3월".
 `;
 
 const PYTHON_EXCEL_SKILL_RULE = `
 ver4.x execution rule:
 - 생각(reasoning)은 짧고 간결하게. 결론에 필요한 핵심 판단만 적고, 같은 말을 반복하거나 코드를 통째로 미리 적어보지 마세요. 보통 3~5문장 이내로 생각을 마치고 바로 코드를 작성하세요.
-- Generate Python for real Microsoft Excel automation. Do not generate JavaScript or array-only simulator code.
+- Generate Python workbook automation. Do not generate JavaScript or array-only simulator code.
 - Return exactly one fenced \`\`\`python code block.
 - Required signature:
   def transform(ctx):
       ...
-- ctx.workbook is the output workbook. ctx.excel is the Excel Application.
+- ctx.workbook is the output workbook. ctx.excel is None in the default openpyxl engine and the Excel Application only when the server falls back to Excel COM Python.
 - Use ctx.sheet("sheet name") for output sheets and ctx.input("file or sheet hint") for input workbooks.
+- If the user references an output file (for example @파일[output_...xlsx] or @범위[output_...xlsx/...]), treat it as the current output workbook and use ctx.sheet(...) / ctx.workbook, not ctx.input(...).
 - Prefer ctx.input("file hint").sheet("sheet name") over raw wb.Worksheets("sheet name").
-- For tabular reads, prefer rows = ctx.rows(ws) and column lookup via ctx.col(ws, "header"). ctx.col returns a 1-based Excel column number; subtract 1 only when indexing Python row tuples/lists.
+- For tabular reads, prefer rows = ctx.rows(ws) and column lookup via ctx.col(ws, "header"). ctx.col returns a 1-based Excel column number and raises a clear error if the header is not found; subtract 1 only when indexing Python row tuples/lists.
+- ctx.rows(ws) returns plain row values (Python lists/tuples), NOT cell objects. Never use row[0].row, row[0].column, or row[0].value after ctx.rows(); row[0] is already the displayed/scalar cell value.
 - Do not assume headers are always data[0]. If a header might be below row 1, use ctx.header_row(ws), ctx.data_start_row(ws), or ctx.col(ws, "header").
 - When iterating tabular rows after finding columns, skip header rows:
   rows = ctx.rows(ws)
   start = ctx.data_start_row(ws) - 1
   for row in rows[start:]:
       ...
-- Excel uses 1-based addresses. Prefer ws.Range("B61").Value = value for explicit selected ranges.
+- If you need the Excel row number while iterating, either use enumerate or ctx.iter_rows:
+  for i, row in enumerate(rows[start:], start=start + 1):
+      excel_row = i
+  # or:
+  for excel_row, row in ctx.iter_rows(ws, start_row=ctx.data_start_row(ws)):
+      ...
+- Excel addresses are 1-based. Prefer ctx helpers and ws.cell(row=r, column=c).value for openpyxl-compatible code; ws.Range("B61").Value is supported by the compatibility shim for explicit selected ranges.
 - When the user asks to overwrite a formula with a value, assign the value directly to that Excel Range. This removes the formula in Excel.
+- For **values-only copy** from existing formula cells, do NOT read \`ws.cell(...).value\` because openpyxl returns the formula string (for example \`=B1+C1\`), not the displayed result. Use \`ctx.value(ws, row, col)\` / \`ctx.display_value(ws, row, col)\` for a single cell or \`ctx.display_rows(ws)\` for a table. If the formula cannot be computed by Python, add \`# B2B_ENGINE_FALLBACK: excel-com\` and use Excel COM so Excel returns the calculated value.
 - When the user asks to filter/show only rows matching a condition, do not use Excel AutoFilter as the final output. Create a new worksheet/tab, copy the header and matching rows into that sheet, and name it clearly from the filter condition. Keep the original sheet unchanged because filter on/off state is not reliable in the read-only mirror workflow.
 - For sheet names that may change, use ctx.sheet_like(...) or ctx.input_sheet(...). If only one sheet exists, those helpers may return it.
 - Do not use sheet[r][c] JavaScript-style array code for Excel workbooks.
@@ -58,7 +68,12 @@ PERFORMANCE — avoid whole-column / whole-row operations (CRITICAL):
 
 COPY / PASTE — preserve formatting (IMPORTANT):
 - "복사해서 붙여넣기"처럼 서식(글꼴/색/테두리/숫자서식)까지 그대로 옮겨야 하면 src.Copy(dest) 를 쓰세요. 예: ws.Range(ws.Cells(1,7), ws.Cells(n,12)).Copy(ws.Range(ws.Cells(1,1), ws.Cells(n,6))). 이것은 값+서식+수식을 모두 복사합니다.
+- If the user selected/dragged a column or range and says "이거 복사해서 ... 붙여넣어", copy the whole selected data extent in the same relative layout: headers, text cells, numeric cells, formula cells, blanks, and formats. Do NOT filter to numeric cells only unless the user explicitly says "숫자만/금액만".
+- For whole-column selections, bound the copy to the actual used rows, but include every cell in that bounded range. Do not compact the column by skipping text or blank cells; row positions must stay aligned.
+- The schema preview only shows sample rows. Never limit a copy/sort/filter to the preview rows. Use the worksheet's actual last used row/column. For month blocks in summary sheets, copy the whole bounded monthly block (title rows, header rows, blank separator column, all data rows), not just the rows visible in the preview.
 - dest.Value = src.Value 는 '값만' 복사하고 서식은 복사하지 않습니다 — 서식을 유지해야 하는 복사/붙여넣기에는 쓰지 마세요.
+- Python/openpyxl 에서도 사용자가 "값만"이라고 하지 않은 복사/붙여넣기는 기본이 **셀 복사**입니다. \`ctx.rows()\`/\`ctx.write_grid()\` 로 값만 다시 쓰지 말고, \`ws.cell(...).value\` 원본 셀을 대상 셀에 같은 위치로 대입하거나(엔진이 원본 수식/서식을 같이 운반함), 병합/Excel 고유 복붙이 중요하면 \`# B2B_ENGINE_FALLBACK: excel-com\` 과 Excel Copy/PasteSpecial 을 사용하세요.
+- Python/openpyxl 에서 '값만' 복사인데 원본이 수식 셀이면 \`ws.cell(...).value\` 를 그대로 쓰지 마세요. \`ctx.value(...)\` 또는 \`ctx.display_rows(...)\` 로 계산 결과 값을 읽어 대상 셀에 쓰세요.
 - Copy 도 전체 열/행(A:F)이 아니라 실제 데이터 범위(Cells(1,c1):Cells(n,c2))로 한정하세요(전체 열 Copy 는 매우 느림).
 - 값만 바꾸는 편집(예: 텍스트 치환, 특정 셀 값 변경)은 .Value 로 해도 그 셀의 기존 서식은 그대로 유지됩니다(값만 바뀜).
 `;
@@ -146,6 +161,7 @@ const VBA_SYSTEM_PROMPT = `당신은 우측에 실제로 떠 있는 Microsoft Ex
 - 기존 수식 셀에 값을 넣어 수식을 없애야 하는 경우는 예외입니다. 단, 사용자가 그 특정 셀/열에 값을 넣으라고 명시했을 때만 해당 셀/열에 한정해서 \`.Value\` 를 쓰세요. 표 전체를 다시 쓰는 방식으로 수식을 제거하지 마세요.
 - **복사/붙여넣기 — 값/수식 구분 (매우 중요)**:
   - 기본 의미는 **값+수식+서식을 모두 옮기는 Excel 복사**입니다: \`Source.Copy Destination:=Target\` (수식·서식·숫자서식·테두리 보존). 사용자가 "복사/붙여넣기/복붙"만 말하고 별다른 단서가 없으면 이 방식을 쓰세요.
+  - 사용자가 열/범위를 드래그하거나 "이거"라고 지칭한 뒤 복붙을 요청하면, 그 선택 범위 안의 **헤더·텍스트·숫자·수식·빈칸을 같은 상대 위치로 모두** 복사하세요. 사용자가 "숫자만/금액만"이라고 명시하지 않는 한 IsNumeric/숫자 타입 필터로 숫자 셀만 골라내지 마세요.
   - **"값만 복사 / 값으로 붙여넣기 / 값만"** 이라고 명시하면 값만 옮기세요. 소스에 수식이 있으면 그 **계산 결과 값**을 넣어야 합니다(수식 문자열이 아니라). xlCalculationManual 중에는 읽기 전에 계산을 보장하세요:
     \`\`\`vba
     Source.Worksheet.Calculate        ' 또는 Application.Calculate — 수식 소스의 값을 먼저 확정
@@ -244,22 +260,28 @@ End Sub
 `;
 
 // 스킬 실행 엔진(Python/openpyxl)이 선택됐을 때 프롬프트에 덧붙이는 안내.
-// Excel(COM) 엔진이면 빈 문자열(기본 프롬프트가 COM 기준이라 그대로 사용).
+// VBA 엔진이면 빈 문자열(VBA_SYSTEM_PROMPT가 별도로 사용됨).
 function skillEnginePromptNote() {
-  const engine = typeof getSkillEngine === "function" ? getSkillEngine() : "excel";
+  const engine = typeof getSkillEngine === "function" ? getSkillEngine() : "python";
   if (engine !== "python") return "";
   return `
 ## 실행 엔진: 순수 Python(openpyxl) — 현재 선택됨
-- 코드는 실제 Excel(COM)이 아니라 openpyxl 워크북 위에서 인프로세스로 실행됩니다(빠름).
-- 기존 ctx API와 \`ws.Range("B61").Value\` / \`ws.Cells(r, c).Value\` (읽기·쓰기)는 그대로 사용할 수 있습니다.
-- ctx 헬퍼 우선: ctx.sheet, ctx.input, ctx.rows, ctx.col, ctx.header_row, ctx.data_start_row, ctx.add_sheet, ctx.sort, ctx.filter_to_sheet, ctx.pivot, ctx.normalize.
-- openpyxl 워크시트 메서드도 사용 가능: \`ws.cell(row=r, column=c).value\`, \`ws.insert_cols(idx, amount)\`, \`ws.insert_rows(idx, amount)\`, \`ws.delete_cols(idx, amount)\`, \`ws.delete_rows(idx, amount)\`, \`ws.append([...])\`, \`ws.max_row\`, \`ws.max_column\`.
-- 사용 불가(COM 전용 — 호출하지 마세요): AutoFilter, Range.End, Range.Offset, Worksheet.Copy, Columns(i).Insert(), ctx.excel(=None).
+- 기본 실행은 실제 Excel(COM)이 아니라 openpyxl 워크북 위에서 인프로세스로 실행됩니다(빠름).
+- ctx 헬퍼 우선: ctx.sheet, ctx.input, ctx.rows, ctx.iter_rows, ctx.rows_with_index, ctx.display_rows, ctx.value, ctx.display_value, ctx.col, ctx.header_row, ctx.data_start_row, ctx.add_sheet, ctx.sort, ctx.filter_to_sheet, ctx.pivot, ctx.normalize, ctx.write_grid, ctx.set_range.
+- openpyxl 워크시트 메서드도 사용 가능: \`ws.cell(row=r, column=c).value\`, \`ws.insert_cols(idx, amount)\`, \`ws.insert_rows(idx, amount)\`, \`ws.delete_cols(idx, amount)\`, \`ws.delete_rows(idx, amount)\`, \`ws.append([...])\`, \`ws.max_row\`, \`ws.max_column\`. 단, 출력 파일의 수식 셀에서 \`ws.cell(...).value\` 는 계산값이 아니라 수식 문자열입니다.
+- COM 전용 호출은 기본적으로 사용하지 마세요: AutoFilter, Range.End, Range.Offset, Worksheet.Copy, Columns(i).Insert(), Rows(i).Insert(), ctx.excel.
 - 입력 파일 읽기: 수식이 있어도 ctx.rows / ws.Range().Value 는 **계산된 값**을 돌려줍니다(파일에 저장된 계산 결과). 그대로 읽으면 됩니다.
+- \`ctx.rows(ws)\` 의 각 row는 셀 객체가 아니라 값 리스트입니다. \`row[0].row\`, \`row[0].value\` 를 쓰지 마세요. 대상 행번호가 필요하면 \`for excel_row, row in ctx.iter_rows(ws, start_row=ctx.data_start_row(ws)):\` 를 쓰세요.
 - 출력 파일 수식: 기존 수식은 **보존**되며, 빈칸을 채우면 그 수식들은 파일을 Excel에서 열 때 **자동 재계산**되어 새 값이 보입니다. 즉 수식 셀을 직접 덮어쓸 필요 없이 입력 셀(예: 빈칸)만 채우면 됩니다.
+- **드래그한 열/범위 복붙**: 사용자가 선택 범위를 가리키며 "이거 복사해서 붙여넣어"라고 하면 선택된 데이터 범위의 헤더, 텍스트, 숫자, 수식, 빈칸을 같은 행/열 상대 위치로 모두 옮기세요. 숫자 셀만 골라내거나 빈칸을 제거해 압축하지 마세요. 사용자가 "숫자만/금액만"이라고 명시한 경우에만 숫자 필터를 사용하세요.
+- **복붙의 기본값은 셀 복사**입니다. 사용자가 "값"을 말하지 않았으면 \`ctx.rows()\` 로 읽은 값 배열을 \`write_grid\` 로 쓰는 방식은 금지입니다. 그 방식은 서식/수식/병합/열너비가 빠집니다. 원본 셀을 \`ws.cell(row=r, column=c).value\` 로 읽어 같은 상대 위치의 대상 셀에 대입하거나, 서식 유지가 핵심이면 Excel COM fallback 주석을 넣어 Excel 복사로 실행하세요.
+- **값만 복사 / 보이는 값 복사**: 원본이 출력 파일의 수식 셀이면 반드시 \`ctx.value(ws, row, col)\` 또는 \`ctx.display_rows(ws)\` 로 계산 결과 값을 읽으세요. \`ws.cell(...).value\` 를 그대로 쓰면 \`=B1+C1\` 같은 수식 문자열이 대상에 들어가 실패합니다.
 - 단, **이번 단계에서 쓴 값으로 계산되는 수식의 결과를 같은 코드 안에서 다시 읽지는 마세요**(openpyxl 은 그 자리에서 계산하지 않습니다). 결과 값이 필요하면 Python 에서 직접 계산하세요.
-- 입력 파일은 **읽기 전용**입니다(이 엔진에서 입력 파일 자체를 수정·저장하지 않음). 입력 파일을 편집해야 하면 상단 토글을 **Excel** 엔진으로 바꾸세요.
-- 열/행 삽입·삭제는 openpyxl의 ws.insert_cols/insert_rows/delete_cols/delete_rows 를 사용하세요(COM Insert/Delete 대신).
+- 입력 파일도 기본 openpyxl 경로에서 수정할 수 있고, 스킬 실행 후 변경된 입력 결과가 다운로드됩니다. 사용자가 입력 파일에 새 시트/중간 시트/정렬 결과를 만들라고 하면 해당 입력 workbook에 작성하세요. 단, 병합/서식 유지 복붙/Excel 고유 동작이 꼭 필요할 때만 \`# B2B_ENGINE_FALLBACK: excel-com\` 마커로 Excel COM Python fallback을 요청하세요.
+- 병합셀 단순 값 변경/텍스트 치환은 가능합니다. 병합영역 내부 셀에 쓰는 경우 좌상단 셀만 실제로 쓰인다고 보고, 같은 병합영역을 여러 번 덮어쓰지 마세요.
+- 병합셀을 포함한 파일에서 **열/행 삽입·삭제, 서식 유지 복사/붙여넣기, 병합 구조 변경**이 필요하면 Excel 방식 처리가 안전합니다. 이때도 VBA가 아니라 Python 코드를 작성하되 코드 첫 줄 근처에 \`# B2B_ENGINE_FALLBACK: excel-com\` 주석을 넣고, Excel COM 호환 API(\`ws.Columns("J").Insert\`, \`src.Copy(dest)\`, \`PasteSpecial\`)를 사용하세요. 서버가 이 Python step을 Excel COM Python으로 자동 실행합니다.
+- Excel COM Python fallback에서도 \`win32com\`을 import하지 마세요. 스킬 샌드박스에서 import가 차단됩니다. 이미 제공된 ctx.sheet(...), ctx.input(...), ws.Range/Cells/Columns/Rows 같은 COM 호환 객체만 사용하세요.
+- 병합셀이 없거나 단순 표 작업이면 열/행 삽입·삭제는 openpyxl의 \`ws.insert_cols/insert_rows/delete_cols/delete_rows\` 를 사용하세요.
 `;
 }
 
@@ -433,7 +455,8 @@ function _buildDefaultTargetHint() {
   if (isOutputTarget) {
     lines.push("사용자가 파일/시트를 명시하지 않으면 현재 출력 파일/시트를 수정하세요.");
   } else {
-    lines.push("사용자가 파일/시트를 명시하지 않으면 현재 입력 파일을 읽기 대상으로 사용하세요. 결과를 써야 하면 출력 워크북에 작성하세요.");
+    lines.push("사용자가 파일/시트를 명시하지 않으면 현재 입력 파일/시트를 작업 기준으로 사용하세요.");
+    lines.push("현재 입력 파일 자체에 새 시트 생성/삽입/삭제/서식 복사처럼 저장이 필요한 변경을 해야 하면 Python 코드 첫 줄 근처에 # B2B_ENGINE_FALLBACK: excel-com 을 넣으세요.");
   }
   if (multi) {
     lines.push(`사용자가 직접 선택한 시트 ${sheets.length}개:`);
@@ -485,30 +508,35 @@ def transform(ctx):
 
 ## 정렬 / 필터 / 피벗 (자주 쓰는 작업 — 헬퍼 우선 사용)
 - 가능하면 아래 ctx 헬퍼를 쓰세요. 직접 COM을 쓰는 것보다 안정적입니다.
-- **정렬**: \`ctx.sort(ws, "컬럼명", ascending=True, header=True)\` — 내부에서 올바른 숫자 상수로 Range.Sort 호출.
+- **정렬**: \`ctx.sort(ws, "컬럼명", ascending=True, header=True)\`. **여러 기준으로 정렬하려면 컬럼 리스트로 한 번에** 쓰세요: \`ctx.sort(ws, ["EID", "수납금액", "가입자당단가_도매대가"])\` (방향 혼합 시 \`ascending=[True, False, True]\`). ⚠️ 같은 시트에 \`ctx.sort\` 를 여러 번 연달아 호출하지 마세요 — 뒤 정렬이 앞 정렬을 무효화하고 대용량에서 느립니다. 다중 기준은 반드시 한 번의 리스트 호출로.
 - **필터**: \`ctx.filter_to_sheet(ws, lambda row: 조건, "결과시트명")\` — 헤더+조건에 맞는 행을 새 시트로 복사. 원본은 유지.
   - 예: \`ctx.filter_to_sheet(ws, lambda r: ctx.normalize(r[ctx.col(ws,"상태")-1]) == ctx.normalize("완료"), "완료건")\`
 - **피벗(그룹 요약)**: \`ctx.pivot(ws, group_by="회사명", value="매출", agg="sum", dest_name="회사별요약")\`
   - group_by는 문자열 또는 리스트, agg는 "sum"/"count"/"avg"/"max"/"min". 새 시트에 요약 표를 만듭니다.
+  - 공식 인자명은 \`group_by\`, \`value\`, \`agg\`, \`dest_name\` 입니다. pandas식 \`rows=\`, \`values=\` 로 작성하지 말고 위 형식을 우선 사용하세요.
+  - 같은 group_by에 대해 건수+금액합계+다른금액합계처럼 여러 집계가 필요하면 한 번에 만드세요: \`ctx.pivot(ws, group_by="MVNO상품명", value=["MVNO상품명","수납금액","가입자당단가_도매대가"], agg=["count","sum","sum"], dest_name="MVNO상품명별_피벗")\`. 따로 만든 여러 피벗 시트의 컬럼이 한 시트에 있다고 가정하지 마세요.
 - **COM 상수 주의**: 샌드박스에서 \`win32com\` 및 그 상수(xlAscending, xlYes 등)는 import할 수 없습니다.
   직접 Range.Sort/PivotTable 등을 호출해야 하면 이름 상수 대신 **숫자 값**을 쓰세요(예: 오름차순 1, 내림차순 2, 헤더있음 1).
 - AutoFilter를 최종 결과로 의존하지 마세요(읽기전용 미러에서 on/off 상태가 불안정). 필요하면 ctx.filter_to_sheet로 새 시트를 만드세요.
+- **중간/결과 시트 위치 (다단계 작업에서 매우 중요)**: 새 시트의 기본 위치는 **현재 활성 파일/시트 또는 원본으로 넘긴 시트의 워크북**입니다. \`ctx.sheet()\` 는 사용자가 보고 있던 활성 파일/시트를 기본으로 잡습니다. \`ctx.filter_to_sheet(ws, ...)\`·\`ctx.pivot(ws, ...)\` 는 \`ws\` 가 속한 워크북에 새 시트를 만듭니다. 출력에 만들려면 \`workbook=ctx.workbook\`, 특정 입력에 만들려면 \`workbook=ctx.input("파일힌트")\` 를 명시하세요.
+- 입력 파일 자체에 새 시트 생성, 필터 결과 시트 작성, 중간 시트 덮어쓰기처럼 값 중심의 변경을 해야 하면 기본 openpyxl로 처리하세요. 서식 유지 복붙, 병합 구조 변경, Excel 고유 삽입/삭제 보정처럼 openpyxl로 위험한 경우에만 \`# B2B_ENGINE_FALLBACK: excel-com\` 마커를 넣어 Excel COM Python으로 실행하세요.
+- **다단계 시트명 연속성**: 한 중간 시트를 여러 단계로 이어 가공할 땐, 다음 단계가 **직전 단계가 만든 바로 그 시트명**을 읽어야 합니다. 예: 1단계가 \`안전제일_정렬\`을 만들고 2단계가 거기서 중복제거한다면, 결과를 같은 \`안전제일_정렬\` 에 덮어쓰거나(권장) 새 이름으로 만들었으면 3단계가 그 **새 이름**을 읽으세요. 가공 결과를 새 시트에 두고 이후 단계가 가공 전 원래 시트를 읽으면 갱신 전 값이 집계됩니다(흔한 실수).
 
 ## import 규칙
-- 표준 라이브러리 import는 허용됩니다(예: re, json, datetime, math, collections, itertools, functools, decimal, statistics, random 등).
+- 표준 라이브러리 import는 허용됩니다(예: re, json, datetime, math, collections, itertools, functools, decimal, statistics, random, difflib 등).
 - os, sys, subprocess, shutil, pathlib 등 시스템/파일 접근 모듈은 import할 수 없습니다.
 
 ## 수식 보존 규칙
 - 다운로드 시 값을 바꾸지 않은 셀은 원본 xlsx의 수식과 서식을 유지합니다.
 - 값을 쓰지 않는 셀을 불필요하게 다시 대입하지 마세요.
 - 특정 셀에 값을 덮어쓰라고 한 경우에만 해당 Range.Value를 직접 대입하세요. 이때 Excel에서 기존 수식은 값으로 대체됩니다.
-- 열/행 추가, 복사, 삭제가 필요하면 Excel COM의 Insert, Copy, Delete를 사용해 수식 참조가 Excel 방식으로 보정되게 하세요.
+- 열/행 추가, 복사, 삭제는 현재 실행 엔진 안내를 따르세요. 기본 Python(openpyxl)에서는 ws.insert_cols/insert_rows/delete_cols/delete_rows 를 쓰고, 서식 유지 복사나 병합셀 구조 변경처럼 Excel 방식 보정이 필요할 때만 \`# B2B_ENGINE_FALLBACK: excel-com\` 마커와 COM 호환 API를 사용하세요.
 
 ## 응답 형식
 1. 코드 블록 앞에 반드시 "제목: 작업 내용 요약" 한 줄을 쓰세요.
 2. 응답은 정확히 하나의 \`\`\`python 코드 블록을 포함해야 합니다.
 3. 코드 블록 밖 설명은 1~2문장으로 짧게 쓰세요.
-4. 외부 라이브러리는 사용하지 마세요. Python 표준 라이브러리와 Excel COM 객체만 사용하세요.
+4. 외부 라이브러리는 사용하지 마세요. Python 표준 라이브러리와 제공된 ctx/workbook 객체만 사용하세요.
 `;
 
 const EDIT_SYSTEM_PROMPT = `${PYTHON_EXCEL_SKILL_RULE}

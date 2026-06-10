@@ -72,22 +72,24 @@ function openSettingsModal(devMode) {
     ` : ""}
 
     <div id="group-openai" style="${devMode && activeClaude ? "display:none" : ""}">
-      <label style="font-size:11.5px; color:#666">Base URL (ixi 프록시 또는 개발망 vLLM /v1)</label>
+      <label style="font-size:11.5px; color:#666">Base URL (로컬 /v1 프록시 → Violet 전달)</label>
       <input type="text" id="set-o-url" value="${escapeHtml(ixiUrl)}" />
       ${devMode ? `<div style="font-size:11px; color:#777; margin:-6px 0 8px">
         개발망 vLLM은 Windows에서 <code>http://localhost:8016/v1</code>을 먼저 사용하고, 실패하면 <code>http://192.168.219.105:8016/v1</code>을 자동 시도합니다.
       </div>` : ""}
+      ${devMode ? `
       <label style="font-size:11.5px; color:#666">Violet/vLLM 실제 주소 (ixi 프록시 전달 대상)</label>
       <input type="text" id="set-o-upstream" value="${escapeHtml(ixiUpstream)}" placeholder="http://...violet.uplus.co.kr" />
       <div style="font-size:11px; color:#777; margin:-6px 0 8px">
-        Base URL이 로컬 프록시(<code>/v1</code>)일 때, 서버가 이 주소로 요청을 전달합니다. 개발망 vLLM 직접 연결 시에는 무시됩니다.
+        legacy 로컬 프록시를 강제로 쓸 때만 사용합니다. 기본 ixi 호출은 프록시 없이 Violet/vLLM으로 직접 전송됩니다.
       </div>
+      ` : ""}
       <label style="font-size:11.5px; color:#666">API Key</label>
       <input type="text" id="set-o-key" value="${escapeHtml(ixiKey)}" />
       <label style="font-size:11.5px; color:#666">Think 제어 방식</label>
       <select id="set-o-think-control">
-        <option value="soft_switch" ${ixiThinkControlMode === "soft_switch" ? "selected" : ""}>Qwen3.5: /think, /no_think</option>
         <option value="chat_template_kwargs" ${ixiThinkControlMode === "chat_template_kwargs" ? "selected" : ""}>Qwen3.6/vLLM: chat_template_kwargs.enable_thinking</option>
+        ${devMode ? `<option value="soft_switch" ${ixiThinkControlMode === "soft_switch" ? "selected" : ""}>Qwen3.5 legacy: /think, /no_think</option>` : ""}
       </select>
     </div>
 
@@ -146,7 +148,7 @@ function openSettingsModal(devMode) {
         baseUrl: $("set-c-url").value.trim() || DEFAULTS.anthropic.baseUrl,
         apiKey: $("set-c-key").value.trim() || DEFAULTS.anthropic.apiKey,
         model: $("set-c-model").value || DEFAULTS.anthropic.model,
-        devModeSet: true,
+        devModeSet: devMode === true,
       };
     }
     return {
@@ -158,6 +160,7 @@ function openSettingsModal(devMode) {
       model: network === "dev-vllm" ? DEFAULTS.devVllm.model : DEFAULTS["openai-compat"].model,
       thinkMode: settings.thinkMode === true,
       thinkControlMode: normalizeThinkControlMode($("set-o-think-control").value),
+      devModeSet: devMode === true,
     };
   };
 
@@ -207,7 +210,11 @@ function openSettingsModal(devMode) {
       toast("Claude API Key가 비어 있습니다.", "error");
       return;
     }
-    settings = form;
+    settings = {
+      ...settings,
+      ...form,
+      skillEngine: typeof normalizeSkillEngine === "function" ? normalizeSkillEngine(settings.skillEngine) : (settings.skillEngine || "python"),
+    };
     saveSettings();
     $("modal-bg").classList.remove("show");
     toast("설정을 저장했습니다.", "success");

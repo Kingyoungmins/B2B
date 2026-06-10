@@ -5,6 +5,7 @@ const LLM_HISTORY_MAX_MESSAGES = 18;
 const LLM_HISTORY_MAX_CHARS = 32000;
 const LLM_REASONING_WARNING_CHARS = 7000;
 const LLM_REASONING_WARNING_MS = 45000;
+const LLM_REASONING_LOOP_CHARS = 12000;
 const OPENAI_COMPAT_MAX_ATTEMPTS = 3;
 const OPENAI_COMPAT_RETRY_BASE_MS = 700;
 
@@ -26,7 +27,7 @@ async function callLLM(userMessage, options) {
     ? state.pipeline.findIndex(s => s.id === editTargetId)
     : -1;
 
-  const engine = typeof getSkillEngine === "function" ? getSkillEngine() : "excel";
+  const engine = typeof getSkillEngine === "function" ? getSkillEngine() : "python";
   let fullSystem;
   if (engine === "vba" && typeof VBA_SYSTEM_PROMPT === "string") {
     // 0.4.9 리모콘 모델: VBA 매크로 생성. (편집 시에도 현재 코드 컨텍스트를 붙여 VBA로 수정.)
@@ -99,25 +100,39 @@ async function callAnthropic(system) {
 
 async function callOpenAICompat(system, options) {
   options = options || {};
+  let effectiveOptions = { ...options };
   let lastError = null;
   const reqId = options.reqId || "?";
+  let didThinkFallback = false;
   for (let attempt = 1; attempt <= OPENAI_COMPAT_MAX_ATTEMPTS; attempt++) {
-    if (attempt > 1 && typeof options.onReconnect === "function") {
-      options.onReconnect(attempt, OPENAI_COMPAT_MAX_ATTEMPTS, lastError);
+    if (attempt > 1 && typeof effectiveOptions.onReconnect === "function") {
+      effectiveOptions.onReconnect(attempt, OPENAI_COMPAT_MAX_ATTEMPTS, lastError);
     }
     // [B2B#5 진단] attempt>1 = 같은 요청 재전송 → 서버가 두 번 생성하면 중복응답의 원인.
     if (attempt > 1) {
       console.warn(`[B2B#5] req#${reqId} 재전송 attempt=${attempt}/${OPENAI_COMPAT_MAX_ATTEMPTS} (직전 오류: ${lastError && lastError.message}) — 같은 프롬프트가 서버로 다시 전송됨(중복응답 의심 지점)`);
     }
     try {
-      const reply = await callOpenAICompatOnce(system, options);
+      const reply = await callOpenAICompatOnce(system, effectiveOptions);
       // [B2B#5 진단] 응답 길이가 비정상적으로 길거나 attempt>1 이면 의심. 표시측 중복은 chat-ui 로그와 대조.
       console.debug(`[B2B#5] req#${reqId} 응답 수신 attempt=${attempt} length=${reply ? reply.length : 0}`);
       return reply;
     } catch (err) {
+      if (err && err.retryWithoutThink === true && effectiveOptions.thinkMode === true && !didThinkFallback) {
+        didThinkFallback = true;
+        lastError = err;
+        effectiveOptions = {
+          ...effectiveOptions,
+          thinkMode: false,
+          enableReasoning: false,
+        };
+        console.warn(`[B2B] req#${reqId} think 반복 감지 → no-think로 같은 요청 재시도`);
+        attempt -= 1;
+        continue;
+      }
       if (!shouldRetryOpenAICompatError(err) || attempt >= OPENAI_COMPAT_MAX_ATTEMPTS) throw err;
       lastError = err;
-      await delayOpenAICompatRetry(OPENAI_COMPAT_RETRY_BASE_MS * attempt, options.signal);
+      await delayOpenAICompatRetry(OPENAI_COMPAT_RETRY_BASE_MS * attempt, effectiveOptions.signal);
     }
   }
   throw lastError || new Error("LLM request failed");
@@ -125,13 +140,14 @@ async function callOpenAICompat(system, options) {
 
 async function callOpenAICompatOnce(system, options) {
   options = options || {};
-  const base = (settings.baseUrl || DEFAULTS["openai-compat"].baseUrl).replace(/\/$/, "");
+  const base = effectiveOpenAICompatBaseUrl();
+  const networkDefaults = settings.network === "dev-vllm" ? DEFAULTS.devVllm : DEFAULTS["openai-compat"];
   const messages = [
     { role: "system", content: system },
     ...getLLMChatHistory(),
   ];
   const payload = {
-    model: settings.model || DEFAULTS["openai-compat"].model,
+    model: settings.model || networkDefaults.model || DEFAULTS["openai-compat"].model,
     messages,
     max_tokens: 4096,
     // [#12] 기본은 낮게(일관성↑). seed 는 일부러 박지 않음 → 재요청/재생성 때 다른 시도가 나올 여지 유지.
@@ -144,7 +160,7 @@ async function callOpenAICompatOnce(system, options) {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "Api-Key": settings.apiKey || DEFAULTS["openai-compat"].apiKey,
+      "Api-Key": settings.apiKey || networkDefaults.apiKey || DEFAULTS["openai-compat"].apiKey,
     },
     signal: options.signal,
     body: JSON.stringify(payload),
@@ -170,6 +186,21 @@ async function callOpenAICompatOnce(system, options) {
   const content = data.choices?.[0]?.message?.content || "";
   state.chatHistory.push({ role: "assistant", content });
   return content;
+}
+
+function effectiveOpenAICompatBaseUrl() {
+  const raw = String(settings.baseUrl || "").trim().replace(/\/$/, "");
+  if (settings.network === "dev-vllm") {
+    const localProxyPattern = /^(?:https?:\/\/[^/]+)?\/v1$|^https?:\/\/(?:127\.0\.0\.1|localhost):8090\/v1$/i;
+    if (!raw || localProxyPattern.test(raw)) {
+      return DEFAULTS.devVllm.baseUrl.replace(/\/$/, "");
+    }
+    return raw;
+  }
+  if (typeof isLocalIxiProxyBaseUrl === "function" && isLocalIxiProxyBaseUrl(raw)) {
+    return DEFAULTS["openai-compat"].baseUrl.replace(/\/$/, "");
+  }
+  return (raw || DEFAULTS["openai-compat"].baseUrl).replace(/\/$/, "");
 }
 
 function getLLMChatHistory() {
@@ -213,7 +244,14 @@ async function readOpenAICompatStream(resp, options) {
       const trimmed = line.trim();
       if (!trimmed || trimmed.startsWith(":") || !trimmed.startsWith("data:")) continue;
       const data = trimmed.slice(5).trim();
-      if (data === "[DONE]") return full;
+      if (data === "[DONE]") {
+        if (!full.trim() && reasoningFull.trim()) {
+          const err = new Error("reasoning stream ended without content");
+          err.retryWithoutThink = true;
+          throw err;
+        }
+        return full;
+      }
       let parsed;
       try {
         parsed = JSON.parse(data);
@@ -233,6 +271,11 @@ async function readOpenAICompatStream(resp, options) {
         reasoningFull += reasoningDelta;
         if (typeof options.onReasoningDelta === "function") {
           options.onReasoningDelta(reasoningDelta, reasoningFull);
+        }
+        if (!full.trim() && reasoningFull.length >= LLM_REASONING_LOOP_CHARS && looksLikeRepeatedReasoning(reasoningFull)) {
+          const err = new Error("reasoning stream repeated before content");
+          err.retryWithoutThink = true;
+          throw err;
         }
         if (!full.trim()) {
           const elapsed = performance.now() - reasoningStartedAt;
@@ -258,7 +301,29 @@ async function readOpenAICompatStream(resp, options) {
     }
   }
 
+  if (!full.trim() && reasoningFull.trim()) {
+    const err = new Error("reasoning stream ended without content");
+    err.retryWithoutThink = true;
+    throw err;
+  }
   return full;
+}
+
+function looksLikeRepeatedReasoning(text) {
+  const compact = String(text || "").replace(/\s+/g, " ").trim();
+  if (compact.length < LLM_REASONING_LOOP_CHARS) return false;
+  const tail = compact.slice(-3600);
+  for (const size of [160, 240, 320, 480]) {
+    const unit = tail.slice(-size);
+    if (unit.trim().length >= size * 0.8 && tail.split(unit).length - 1 >= 3) return true;
+  }
+  const chunks = [];
+  for (let i = 0; i < tail.length; i += 450) {
+    const chunk = tail.slice(i, i + 450);
+    if (chunk.length >= 320) chunks.push(chunk);
+  }
+  if (chunks.length >= 6 && new Set(chunks.slice(-6)).size <= 2) return true;
+  return compact.length >= 26000;
 }
 
 function isRetryableOpenAICompatStatus(status) {
@@ -316,9 +381,16 @@ function applyQwenThinkDirective(messages, thinkMode) {
 }
 
 async function fetchOpenAICompat(path, preferredBase, options = {}) {
-  // 로컬 ixi 프록시(/v1)가 전달할 실제 Violet/vLLM 주소를 헤더로 알려준다.
-  // 프록시(서버)만 이 헤더를 읽으며, 개발망 vLLM 직접 연결 시에는 무시된다.
-  const upstream = settings.provider === "openai-compat" ? (settings.proxyUpstream || "") : "";
+  // 기본 ixi 경로는 Violet/vLLM 직접 호출이다. legacy 로컬 프록시(/v1)를 명시적으로 쓸 때만
+  // 서버가 전달할 upstream 헤더를 붙인다.
+  const preferred = String(preferredBase || "").trim().replace(/\/$/, "");
+  const usingLegacyLocalProxy = settings.provider === "openai-compat"
+    && settings.network !== "dev-vllm"
+    && typeof isLocalIxiProxyBaseUrl === "function"
+    && isLocalIxiProxyBaseUrl(preferred);
+  const upstream = usingLegacyLocalProxy
+    ? (settings.proxyUpstream || "")
+    : "";
   if (upstream) {
     options = { ...options, headers: { ...(options.headers || {}), "X-B2B-Vllm-Base": upstream } };
   }

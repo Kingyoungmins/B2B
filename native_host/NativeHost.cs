@@ -237,7 +237,7 @@ namespace B2BNativeHost
                 PublishNativeBounds();
                 // 호스트 창(웹뷰 + 네이티브 탭 포함)이 활성화됨 → JS에 알림(이벤트만, 시스템 호출 없음).
                 ExecuteWebScript("window.dispatchEvent(new Event('b2bHostActivated'));");
-                RestoreActiveExcelMirror();
+                RestoreActiveExcelMirror(false);
             };
             Deactivate += (s, e) =>
             {
@@ -464,7 +464,11 @@ namespace B2BNativeHost
             }
             webViewUserDataDir = Path.Combine(baseDir, "ver044_" + Process.GetCurrentProcess().Id);
             Directory.CreateDirectory(webViewUserDataDir);
-            return await CoreWebView2Environment.CreateAsync(null, webViewUserDataDir);
+            CoreWebView2EnvironmentOptions options = new CoreWebView2EnvironmentOptions();
+            // Native desktop shell: allow direct calls from local WebView content to the internal Violet/vLLM host.
+            // Without this, WebView2 still applies browser CORS rules and the app would need the local /v1 proxy.
+            options.AdditionalBrowserArguments = "--disable-web-security --disable-features=BlockInsecurePrivateNetworkRequests";
+            return await CoreWebView2Environment.CreateAsync(null, webViewUserDataDir, options);
         }
 
         private void HandleWebMessage(string message)
@@ -830,7 +834,7 @@ namespace B2BNativeHost
             PublishNativeBounds();
             if (restoredFromMinimized)
             {
-                RestoreActiveExcelMirror();
+                RestoreActiveExcelMirror(false);
             }
         }
 
@@ -870,9 +874,10 @@ namespace B2BNativeHost
             ExecuteWebScript("if (typeof hideAllExcelMirrorWindows === 'function') hideAllExcelMirrorWindows();");
         }
 
-        private void RestoreActiveExcelMirror()
+        private void RestoreActiveExcelMirror(bool raiseWindow = false)
         {
-            ExecuteWebScript("if (typeof restoreActiveExcelMirrorWindow === 'function') restoreActiveExcelMirrorWindow();");
+            string options = raiseWindow ? "{}" : "{ preserveFocus: true }";
+            ExecuteWebScript("if (typeof restoreActiveExcelMirrorWindow === 'function') restoreActiveExcelMirrorWindow(" + options + ");");
         }
 
 
@@ -1000,6 +1005,10 @@ namespace B2BNativeHost
             {
                 Program.Log("Cleanup starting");
                 if (excelFocusTimer != null) excelFocusTimer.Stop();
+                // 종료 중에는 Excel COM 이 Quit/Close 과정에서 top-level 회색 창을 잠깐 복원할 수 있다.
+                // 먼저 현재 패널의 Excel HWND 와 서버 세션 창을 숨긴 뒤 닫아야 중앙 빈 창이 튀지 않는다.
+                HideExcelChildren();
+                HideAllExcelMirrors();
                 if (!string.IsNullOrEmpty(appUrl))
                 {
                     string closeUrl = "http://127.0.0.1:" + port + "/api/excel/close-all";

@@ -126,7 +126,7 @@ function releaseExcelMirrorPipelineMute(outputExcelId) {
   excelMirror.selectionMutedUntil = Date.now() + 1500;
   if (typeof baselineExcelMirrorSession === "function") {
     setTimeout(() => {
-      baselineExcelMirrorSession(outputExcelId)
+      baselineExcelMirrorSession(outputExcelId, { syncSelection: false })
         .then(() => {
           excelMirror.mutedUntil = Date.now() + 300;
           excelMirror.selectionMutedUntil = Date.now() + 300;
@@ -290,11 +290,119 @@ function attachBackendRunClientContext(result, outputTarget, outputExcelId) {
   if (!result || typeof result !== "object") return result;
   result.clientOutputFileId = outputTarget ? outputTarget.fileId : null;
   result.clientOutputExcelId = outputExcelId || null;
+  if (window.backendRunViewBeforeApply) {
+    result.clientViewBeforeApply = window.backendRunViewBeforeApply;
+  }
   return result;
 }
 
+function captureBackendCurrentViewForApply() {
+  return {
+    fileId: state.currentFileId,
+    sheet: state.currentSheet,
+    selectedSheets: Array.isArray(state.selectedSheets) ? state.selectedSheets.slice() : [],
+    selectedCell: state.selectedCell ? { ...state.selectedCell } : null,
+    selectedRange: state.selectedRange ? { ...state.selectedRange } : null,
+    selectedRanges: Array.isArray(state.selectedRanges) ? state.selectedRanges.map(r => ({ ...r })) : [],
+    selectionAnchor: state.selectionAnchor ? { ...state.selectionAnchor } : null,
+  };
+}
+
+function isBackendOutputFileId(fileId) {
+  return fileId === "output" || String(fileId || "").startsWith("output:");
+}
+
+function chooseBackendRestoreView(result, viewBeforeApply, downloadUrls) {
+  const changedFileIds = new Set(Object.keys(downloadUrls || {}));
+  (result.files || []).forEach(fileResult => {
+    if (fileResult && fileResult.fileId) changedFileIds.add(fileResult.fileId);
+  });
+  if (result.liveApplied && result.clientOutputFileId) changedFileIds.add(result.clientOutputFileId);
+
+  const previousId = viewBeforeApply && viewBeforeApply.fileId;
+  const outputId = (result.clientOutputFileId && changedFileIds.has(result.clientOutputFileId))
+    ? result.clientOutputFileId
+    : Array.from(changedFileIds).find(isBackendOutputFileId);
+  if (outputId && getFile(outputId)) {
+    const previousWasSameOutput = previousId === outputId;
+    return {
+      ...(viewBeforeApply || {}),
+      fileId: outputId,
+      sheet: previousWasSameOutput ? viewBeforeApply.sheet : (result.activeSheet || null),
+      selectedSheets: previousWasSameOutput ? (viewBeforeApply.selectedSheets || []) : [],
+      selectedCell: previousWasSameOutput ? viewBeforeApply.selectedCell : null,
+      selectedRange: previousWasSameOutput ? viewBeforeApply.selectedRange : null,
+      selectedRanges: previousWasSameOutput ? (viewBeforeApply.selectedRanges || []) : [],
+      selectionAnchor: previousWasSameOutput ? viewBeforeApply.selectionAnchor : null,
+    };
+  }
+
+  if (previousId && changedFileIds.has(previousId) && getFile(previousId)) {
+    return viewBeforeApply;
+  }
+
+  if (previousId && getFile(previousId)) return viewBeforeApply;
+  const firstChangedId = Array.from(changedFileIds).find(id => getFile(id));
+  if (firstChangedId) {
+    return {
+      fileId: firstChangedId,
+      sheet: result.activeSheet || null,
+      selectedSheets: [],
+      selectedCell: null,
+      selectedRange: null,
+      selectedRanges: [],
+      selectionAnchor: null,
+    };
+  }
+  return viewBeforeApply || {};
+}
+
+function backendResultUrlForFile(result, downloadUrls, fileId) {
+  const file = fileId ? getFile(fileId) : null;
+  return (downloadUrls && downloadUrls[fileId]) ||
+    (file && file.backendDownloadUrl) ||
+    (isBackendOutputFileId(fileId) ? result.downloadUrl : null);
+}
+
+async function forceShowBackendResultMirror(result, activeId, downloadUrls) {
+  if (!activeId) return false;
+  const url = backendResultUrlForFile(result, downloadUrls, activeId);
+  try {
+    const file = activeId ? getFile(activeId) : null;
+    if (file && url) file.backendDownloadUrl = url;
+    if (url && typeof refreshExcelMirrorForFileId === "function") {
+      const existingExcelId = typeof excelMirrorSessionIdForFileId === "function"
+        ? excelMirrorSessionIdForFileId(activeId)
+        : null;
+      const refreshed = await refreshExcelMirrorForFileId(activeId, url, {
+        // 기존 세션이 있으면 /api/excel/replace 만 사용한다.
+        // 세션이 유실된 예외 상황에서만 해당 파일 하나를 다시 연다. 전체 close/reopen 은 금지.
+        openIfMissing: !existingExcelId,
+        preserveFocus: true,
+        raiseAfter: true,
+      });
+      if (refreshed) return true;
+    }
+    if (typeof switchVisibleExcelMirrorToFileId === "function") {
+      return await switchVisibleExcelMirrorToFileId(activeId);
+    }
+    if (typeof openExcelMirrorForFileId === "function") {
+      await openExcelMirrorForFileId(activeId);
+      return true;
+    }
+  } catch (err) {
+    console.warn("Excel mirror force-show failed:", err);
+    if (typeof toast === "function") {
+      toast("Excel 표시 갱신 실패: " + (err && err.message ? err.message : err), "error");
+    }
+  }
+  return false;
+}
+
 function applyBackendPipelineResult(result) {
+  const viewBeforeApply = result.clientViewBeforeApply || captureBackendCurrentViewForApply();
   const downloadUrls = result.downloadUrls || {};
+  const restoreView = chooseBackendRestoreView(result, viewBeforeApply, downloadUrls);
   const resultDiffs = result.diffs || {};
   (result.files || []).forEach(fileResult => {
     const file = getFile(fileResult.fileId);
@@ -377,15 +485,23 @@ function applyBackendPipelineResult(result) {
     syncFileMetadata(file);
   });
   if (typeof recomputeAllFormulas === "function") recomputeAllFormulas();
-  if (result && result.activeSheet) {
-    const activeFileId = result.clientOutputFileId ||
-      Object.keys(downloadUrls).find(id => id === "output" || id.startsWith("output:"));
-    const activeFile = activeFileId ? getFile(activeFileId) : null;
-    if (activeFile && activeFile.sheets && activeFile.sheets[result.activeSheet]) {
-      state.currentFileId = activeFileId;
-      state.currentSheet = result.activeSheet;
-      state.selectedSheets = [result.activeSheet];
-    }
+  // result.activeSheet 는 "어느 시트가 바뀌었는지"에 가까운 실행 메타다.
+  // 여기서 현재 탭을 바꾸면 적용 후 사용자가 보던 입력/출력/시트가 임의로 이동한다.
+  // 현재 시트가 삭제된 경우의 최소 보정은 위 fileResult.sheetNames 처리에서만 수행한다.
+  const previousFile = restoreView.fileId ? getFile(restoreView.fileId) : null;
+  if (previousFile) {
+    state.currentFileId = restoreView.fileId;
+    const sheetNames = previousFile.sheetNames || [];
+    state.currentSheet = sheetNames.includes(restoreView.sheet)
+      ? restoreView.sheet
+      : (sheetNames[0] || null);
+    state.selectedSheets = (restoreView.selectedSheets || []).filter(s => sheetNames.includes(s));
+    if (!state.selectedSheets.length && state.currentSheet) state.selectedSheets = [state.currentSheet];
+    const sameSheet = item => item && item.fileId === state.currentFileId && item.sheet === state.currentSheet;
+    state.selectedCell = sameSheet(restoreView.selectedCell) ? restoreView.selectedCell : null;
+    state.selectedRange = sameSheet(restoreView.selectedRange) ? restoreView.selectedRange : null;
+    state.selectedRanges = (restoreView.selectedRanges || []).filter(sameSheet);
+    state.selectionAnchor = sameSheet(restoreView.selectionAnchor) ? restoreView.selectionAnchor : null;
   }
   refreshTabs();
   renderExcelViewer();
@@ -396,57 +512,20 @@ function applyBackendPipelineResult(result) {
   // 나머지 변경된 파일은 숨긴 채 stale 로만 표시해, 그 파일로 전환할 때 갱신한다.
   // (예전엔 열린 모든 미러를 한꺼번에 갱신해 전부 떠오르는 미관 문제가 있었음)
   if (result && result.pythonExcel) {
-    const activeId = state.currentFileId;
     const changed = new Set(Object.keys(downloadUrls));
     if (result.liveApplied && result.clientOutputFileId) changed.add(result.clientOutputFileId);
+    const activeId = state.currentFileId;
     if (typeof excelMirror !== "undefined") {
       excelMirror.staleByFileId = excelMirror.staleByFileId || {};
     }
-    const sessionFor = (fid) => (typeof excelMirrorSessionIdForFileId === "function" ? excelMirrorSessionIdForFileId(fid) : null);
-
-    let activeRestoreScheduled = false;
     changed.forEach(fid => {
-      if (!fid || !sessionFor(fid)) return;
-      const isOutput = fid === "output" || fid.indexOf("output:") === 0;
-      if (fid === activeId) {
-        activeRestoreScheduled = true;
-        // 적용 중 숨겨둔 활성 미러를 복원(재배치) → 최상단으로 올린 뒤 → 로딩 애니메이션 종료.
-        // 순서를 지켜야 패널이 빈 채로 깜빡이는 구간이 없다.
-        setTimeout(async () => {
-          try {
-            if (isOutput && result.liveApplied) {
-              if (typeof acknowledgeExcelMirrorApplied === "function") await acknowledgeExcelMirrorApplied(fid);
-            } else {
-              const url = downloadUrls[fid] || (isOutput ? result.downloadUrl : null);
-              if (url && typeof refreshExcelMirrorForFileId === "function") {
-                // 활성 파일의 미러 세션이 없어진 예외 상황에서도 결과는 다시 열어 보여준다(openIfMissing:true).
-                await refreshExcelMirrorForFileId(fid, url, { openIfMissing: true });
-              } else if (typeof openExcelMirrorForFileId === "function" && !sessionFor(fid)) {
-                await openExcelMirrorForFileId(fid);
-              } else if (typeof acknowledgeExcelMirrorApplied === "function") {
-                await acknowledgeExcelMirrorApplied(fid);
-              }
-            }
-          } catch (_) {}
-          const aid = sessionFor(activeId);
-          if (aid && typeof raiseExcelMirrorWindow === "function") {
-            try { await raiseExcelMirrorWindow(aid, { force: true }); } catch (_) {}
-          }
-          if (typeof endExcelMirrorApplyLoading === "function") endExcelMirrorApplyLoading();
-        }, 150);
-      } else if (!(isOutput && result.liveApplied)) {
-        // 스택 모델: 비활성 미러는 숨겨둔 채 stale 로만 표시 → 그 파일로 전환할 때 갱신한다.
-        if (typeof excelMirror !== "undefined") excelMirror.staleByFileId[fid] = true;
-      }
+      if (!fid) return;
+      if (fid !== activeId && typeof excelMirror !== "undefined") excelMirror.staleByFileId[fid] = true;
     });
-
-    // 활성 파일에 열린 미러 세션이 없으면(복원 스케줄 안 됨) 로딩만 종료하고 활성 미러를 복원한다.
-    if (!activeRestoreScheduled) {
-      setTimeout(() => {
-        if (typeof endExcelMirrorApplyLoading === "function") endExcelMirrorApplyLoading();
-        if (typeof restoreActiveExcelMirrorWindow === "function") restoreActiveExcelMirrorWindow().catch(() => {});
-      }, 150);
-    }
+    setTimeout(async () => {
+      await forceShowBackendResultMirror(result, activeId, downloadUrls);
+      if (typeof endExcelMirrorApplyLoading === "function") endExcelMirrorApplyLoading();
+    }, 150);
   }
 }
 
@@ -523,6 +602,7 @@ async function runPipelineOnBackend(options = {}) {
   window.backendPipelineRunToken = (window.backendPipelineRunToken || 0) + 1;
   const runToken = window.backendPipelineRunToken;
   const outputTarget = getBackendOutputTarget();
+  window.backendRunViewBeforeApply = captureBackendCurrentViewForApply();
   const startedAt = Date.now();
   const perfStartedAt = performance.now();
   let pollCount = 0;
@@ -540,8 +620,10 @@ async function runPipelineOnBackend(options = {}) {
   const liveOutputExcelId = outputTarget && typeof excelMirrorSessionIdForFileId === "function"
     ? excelMirrorSessionIdForFileId(outputTarget.fileId)
     : null;
-  // 스킬 실행 엔진 선택: "python"(openpyxl, COM 없이 인프로세스 — 빠름) / "excel"(COM, 라이브 미러).
-  const skillEngine = typeof getSkillEngine === "function" ? getSkillEngine() : "excel";
+  // 스킬 실행 엔진 선택: "python"(openpyxl 우선) / "vba"(VBA step 생성용).
+  // 이미 만들어진 Python step은 F7 선택값과 무관하게 Python 백엔드로 실행한다.
+  const selectedSkillEngine = typeof getSkillEngine === "function" ? getSkillEngine() : "python";
+  const skillEngine = usesPythonExcel ? "python" : selectedSkillEngine;
   // Python(전부 Python 단계) 파이프라인도 라이브 미러에 직접 적용한다(2단계 최적화: 라이브 추가).
   // JS 단계가 섞이거나 openpyxl 엔진이면 라이브를 쓰지 않는다(openpyxl 은 결과 파일로 미러를 교체).
   const shouldUseLiveExcel = !!liveOutputExcelId && !hasActiveJavaScriptStep && skillEngine !== "python";
@@ -552,7 +634,9 @@ async function runPipelineOnBackend(options = {}) {
   }
   muteExcelMirrorForPipeline(outputExcelId);
   // 적용 중에는 미러 창을 숨기고 엑셀 영역에 로딩 애니메이션을 표시한다(창 튀어나옴 방지 + 진행 표시).
-  if (typeof beginExcelMirrorApplyLoading === "function") beginExcelMirrorApplyLoading("적용 반영 중...");
+  if (typeof beginExcelMirrorApplyLoading === "function") {
+    beginExcelMirrorApplyLoading("적용 반영 중...", { hideWindows: shouldUseLiveExcel || skillEngine !== "python" });
+  }
   const payload = {
     inputs: (state.inputsOriginal || []).map(f => ({
       name: f.name,
@@ -658,7 +742,7 @@ async function runPipelineOnBackend(options = {}) {
       if (typeof excelMirror !== "undefined" && excelMirror.applying) {
         if (typeof endExcelMirrorApplyLoading === "function") endExcelMirrorApplyLoading();
         if (typeof restoreActiveExcelMirrorWindow === "function") {
-          restoreActiveExcelMirrorWindow().catch(() => {});
+          restoreActiveExcelMirrorWindow({ preserveFocus: true }).catch(() => {});
         }
       }
     }, 1200);

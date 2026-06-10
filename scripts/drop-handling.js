@@ -543,8 +543,10 @@ function renderRunnerWorkflow() {
 
   if (runBtn) runBtn.disabled = !runnable;
   if (downloadBtn) {
-    const currentFile = state.currentFileId ? getFile(state.currentFileId) : null;
-    downloadBtn.disabled = !state.output && !(currentFile && currentFile.backendDownloadUrl);
+    const hasDownloadableFiles = typeof collectAllDownloadFiles === "function"
+      ? collectAllDownloadFiles().length > 0
+      : !!state.output;
+    downloadBtn.disabled = !hasDownloadableFiles;
   }
 }
 

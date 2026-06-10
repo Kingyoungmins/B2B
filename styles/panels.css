@@ -120,6 +120,45 @@
     background: var(--m-500);
     box-shadow: 0 0 0 3px rgba(255, 0, 128, 0.12);
   }
+  .engine-toggle {
+    height: 28px;
+    padding: 0 8px;
+    border: 1px solid var(--border);
+    border-radius: var(--r-sm);
+    background: #fff;
+    color: var(--ink-600);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 11px;
+    font-weight: 700;
+    transition: all 0.15s;
+  }
+  .engine-toggle:hover {
+    border-color: var(--m-200);
+    background: var(--m-50);
+    color: var(--m-700);
+  }
+  .engine-toggle.vba {
+    border-color: #f0b429;
+    background: #fff9e8;
+    color: #8a5a00;
+  }
+  .engine-toggle-kbd {
+    padding: 2px 4px;
+    border-radius: 4px;
+    background: var(--ink-50);
+    color: var(--ink-400);
+    font-size: 9px;
+    line-height: 1;
+  }
+  .engine-toggle.vba .engine-toggle-kbd {
+    background: rgba(240, 180, 41, 0.16);
+    color: #8a5a00;
+  }
 
   .left-body {
     flex: 1;

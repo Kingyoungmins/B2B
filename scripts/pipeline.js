@@ -49,6 +49,10 @@ function pipelineUsesVba(steps = state.pipeline) {
   return (steps || []).some(step => step && isStepEnabled(step) && inferPipelineStepLanguage(step) === "vba");
 }
 
+function pipelineHasMixedPythonVba(steps = state.pipeline) {
+  return pipelineUsesPython(steps) && pipelineUsesVba(steps);
+}
+
 function activePipelineSteps(steps = state.pipeline) {
   return (steps || []).filter(step => step && isStepEnabled(step));
 }
@@ -239,7 +243,7 @@ async function ensureVbaRunExcelId() {
 
 function shouldRunPipelineAsVba(steps = state.pipeline) {
   if (!activePipelineSteps(steps).length) return false;
-  return pipelineUsesVba(steps) || (typeof getSkillEngine === "function" && getSkillEngine() === "vba");
+  return pipelineUsesVba(steps);
 }
 
 async function runVbaPipelinePreferLive(options = {}) {
@@ -248,7 +252,7 @@ async function runVbaPipelinePreferLive(options = {}) {
   if (!activeSteps.length) throw new Error("실행할 활성 스킬이 없습니다.");
   const nonVba = activeSteps.filter(step => inferPipelineStepLanguage(step) !== "vba");
   if (nonVba.length) {
-    throw new Error("현재 실행기는 VBA 스킬만 라이브 Excel에서 실행합니다. 기존 JavaScript/Python 스킬은 VBA로 다시 생성해 주세요.");
+    throw new Error("Python 스킬과 VBA 스킬은 한 번에 라이브 VBA 파이프라인으로 실행할 수 없습니다. 같은 엔진으로 스킬을 다시 생성해 주세요.");
   }
   const excelId = await ensureVbaRunExcelId();
   return reapplyVbaPipelineToLive(excelId, { steps });
@@ -298,9 +302,14 @@ async function requestExcelApplyCancel() {
   if (!active || !active.token || active.token.cancelled) return false;
   active.token.cancelled = true;
   toast("작업 중단 요청 — 이전 상태로 되돌리는 중...", "error");
-  // 낙관적으로 추가됐던 진행 단계를 파이프라인에서 제거.
+  // 낙관적으로 추가/수정됐던 진행 단계를 파이프라인에서 제거하거나 이전 내용으로 복원.
   if (active.stepId && Array.isArray(state.pipeline)) {
-    state.pipeline = state.pipeline.filter(s => s && s.id !== active.stepId);
+    if (active.restoreStep) {
+      const idx = state.pipeline.findIndex(s => s && s.id === active.stepId);
+      if (idx >= 0) state.pipeline[idx] = active.restoreStep;
+    } else {
+      state.pipeline = state.pipeline.filter(s => s && s.id !== active.stepId);
+    }
     if (typeof setPipelineRuntimeStatus === "function") setPipelineRuntimeStatus([active.stepId], null);
   }
   if (typeof renderPipeline === "function") renderPipeline();
@@ -332,12 +341,12 @@ function applyVbaStepToLiveExcel(step, excelId) {
   refreshRunButton();
   if (typeof scheduleLogicAutoBackup === "function") scheduleLogicAutoBackup("step-added");
   if (typeof muteExcelMirrorForPipeline === "function") muteExcelMirrorForPipeline(excelId);
-  if (typeof beginExcelMirrorApplyLoading === "function") beginExcelMirrorApplyLoading("VBA 적용 중...");
   // [#19] 취소 토큰 등록: '작업 중단' 버튼이 이 적용을 취소하고 안전 복귀(reset 재적용)하게 한다.
   // 서버 매크로는 EXCEL_LOCK 동기 실행이라 즉시 인터럽트는 불가 → 취소 시엔 결과를 무시하고
   // 원본 리셋+남은 스텝 재적용으로 '이전 상태'로 되돌린다(requestExcelApplyCancel 참고).
   const cancelToken = { cancelled: false };
   window.__activeVbaApply = { token: cancelToken, excelId, stepId: step.id };
+  if (typeof beginExcelMirrorApplyLoading === "function") beginExcelMirrorApplyLoading("VBA 적용 중...");
   const prehide = typeof hideAllExcelMirrorWindows === "function"
     ? (async () => {
         const started = performance.now();
@@ -365,7 +374,7 @@ function applyVbaStepToLiveExcel(step, excelId) {
       // [#19] 취소된 적용이면 결과를 무시(상태/토스트/복원은 취소 핸들러가 담당).
       if (cancelToken.cancelled) {
         if (window.__activeVbaApply && window.__activeVbaApply.token === cancelToken) window.__activeVbaApply = null;
-        return true;
+        return { cancelled: true };
       }
       if (window.__activeVbaApply && window.__activeVbaApply.token === cancelToken) window.__activeVbaApply = null;
       // 사후검증: 서버가 변경 셀/시트 수를 돌려준다. 변경이 전혀 없으면(노이펙트)
@@ -407,7 +416,7 @@ function applyVbaStepToLiveExcel(step, excelId) {
       // [#19] 취소된 적용의 (지연된) 오류는 삼킨다 — 복귀는 취소 핸들러가 이미 수행 중.
       if (cancelToken.cancelled) {
         if (window.__activeVbaApply && window.__activeVbaApply.token === cancelToken) window.__activeVbaApply = null;
-        return false;
+        return { cancelled: true };
       }
       if (window.__activeVbaApply && window.__activeVbaApply.token === cancelToken) window.__activeVbaApply = null;
       const failedIdx = (state.pipeline || []).findIndex(s => s && s.id === step.id);
@@ -420,18 +429,27 @@ function applyVbaStepToLiveExcel(step, excelId) {
       throw err;
     });
   toast(`"${step.description}" 단계를 라이브 Excel에 적용 중...`, "success");
-  return { pending: true, promise };
+  return {
+    pending: true,
+    promise,
+    cancel: () => (typeof requestExcelApplyCancel === "function" ? requestExcelApplyCancel() : false),
+  };
 }
 
 function applyLogic(step) {
   step = normalizeStep(step);
   // 0.4.9 리모콘 모델: VBA 스킬은 파이프라인/시뮬레이터를 우회해 라이브 엑셀에 즉시 주입 실행.
-  if (((typeof getSkillEngine === "function" && getSkillEngine() === "vba") || step.language === "vba")) {
+  if (step.language === "vba") {
     const liveExcelId = vbaTargetExcelId();
     if (liveExcelId) return applyVbaStepToLiveExcel(step, liveExcelId);
     // 라이브 세션이 없으면 아래 기존 경로로 폴백.
   }
   const next = [...state.pipeline, step];
+  if (pipelineHasMixedPythonVba(next)) {
+    const err = new Error("Python 스킬과 VBA 스킬은 같은 파이프라인에서 섞어 실행할 수 없습니다. 같은 엔진으로 다시 생성해 주세요.");
+    toast(err.message, "error");
+    return { error: true, errorObject: err };
+  }
   const mustUseExcelBackend = pipelineUsesPython(next) || shouldDeferImmediatePipelineRun();
   if (mustUseExcelBackend) {
     if (typeof pushHistory === "function") pushHistory("단계 추가");
@@ -485,8 +503,13 @@ function insertLogic(step, position) {
   const idx = Math.max(0, Math.min(total, (position | 0) - 1));
   const next = state.pipeline.slice();
   next.splice(idx, 0, step);
+  if (pipelineHasMixedPythonVba(next)) {
+    const err = new Error("Python 스킬과 VBA 스킬은 같은 파이프라인에서 섞어 실행할 수 없습니다. 같은 엔진으로 다시 생성해 주세요.");
+    toast(err.message, "error");
+    return { error: true, errorObject: err };
+  }
   // 0.4.9 VBA: 중간 삽입은 순서가 바뀌므로 라이브를 리셋하고 enabled 스텝을 처음부터 재적용.
-  if ((typeof getSkillEngine === "function" && getSkillEngine() === "vba") || step.language === "vba") {
+  if (step.language === "vba") {
     const liveExcelId = vbaTargetExcelId();
     if (liveExcelId) {
       if (typeof pushHistory === "function") pushHistory("단계 삽입");
@@ -495,16 +518,35 @@ function insertLogic(step, position) {
       renderPipeline();
       refreshRunButton();
       if (typeof scheduleLogicAutoBackup === "function") scheduleLogicAutoBackup("step-inserted");
+      const cancelToken = { cancelled: false };
+      window.__activeVbaApply = { token: cancelToken, excelId: liveExcelId, stepId: step.id };
       const promise = reapplyVbaPipelineToLive(liveExcelId)
-        .then(() => { setPipelineRuntimeStatus([step.id], "applied", "적용됨"); return true; })
+        .then(() => {
+          if (cancelToken.cancelled) {
+            if (window.__activeVbaApply && window.__activeVbaApply.token === cancelToken) window.__activeVbaApply = null;
+            return { cancelled: true };
+          }
+          if (window.__activeVbaApply && window.__activeVbaApply.token === cancelToken) window.__activeVbaApply = null;
+          setPipelineRuntimeStatus([step.id], "applied", "적용됨");
+          return true;
+        })
         .catch(err => {
+          if (cancelToken.cancelled) {
+            if (window.__activeVbaApply && window.__activeVbaApply.token === cancelToken) window.__activeVbaApply = null;
+            return { cancelled: true };
+          }
+          if (window.__activeVbaApply && window.__activeVbaApply.token === cancelToken) window.__activeVbaApply = null;
           setPipelineRuntimeStatus([step.id], "error", "오류");
           renderPipeline();
           refreshRunButton();
           reportPipelineError(err);
           throw err;
         });
-      return { pending: true, promise };
+      return {
+        pending: true,
+        promise,
+        cancel: () => (typeof requestExcelApplyCancel === "function" ? requestExcelApplyCancel() : false),
+      };
     }
   }
   const mustUseExcelBackend = pipelineUsesPython(next) || shouldDeferImmediatePipelineRun();
@@ -557,7 +599,11 @@ function replaceLogicAt(stepId, newCode, newDescription, language) {
   const originalStep = state.pipeline[idx];
   const next = state.pipeline.slice();
   next[idx] = normalizeStep({ ...next[idx], code: newCode, description: newDescription || next[idx].description, language });
-  if ((typeof getSkillEngine === "function" && getSkillEngine() === "vba") || pipelineUsesVba(next)) {
+  if (pipelineHasMixedPythonVba(next)) {
+    toast("Python 스킬과 VBA 스킬은 같은 파이프라인에서 섞어 실행할 수 없습니다.", "error");
+    return { error: true, errorObject: new Error("mixed Python/VBA pipeline") };
+  }
+  if (pipelineUsesVba(next)) {
     const liveExcelId = vbaTargetExcelId();
     if (liveExcelId) {
       if (typeof pushHistory === "function") pushHistory("단계 수정");
@@ -566,19 +612,35 @@ function replaceLogicAt(stepId, newCode, newDescription, language) {
       renderPipeline();
       refreshRunButton();
       if (typeof scheduleLogicAutoBackup === "function") scheduleLogicAutoBackup("step-updated");
+      const cancelToken = { cancelled: false };
+      window.__activeVbaApply = { token: cancelToken, excelId: liveExcelId, stepId, restoreStep: originalStep };
       const promise = reapplyVbaPipelineToLive(liveExcelId)
         .then(() => {
+          if (cancelToken.cancelled) {
+            if (window.__activeVbaApply && window.__activeVbaApply.token === cancelToken) window.__activeVbaApply = null;
+            return { cancelled: true };
+          }
+          if (window.__activeVbaApply && window.__activeVbaApply.token === cancelToken) window.__activeVbaApply = null;
           setPipelineRuntimeStatus([stepId], "applied", "적용됨");
           return true;
         })
         .catch(err => {
+          if (cancelToken.cancelled) {
+            if (window.__activeVbaApply && window.__activeVbaApply.token === cancelToken) window.__activeVbaApply = null;
+            return { cancelled: true };
+          }
+          if (window.__activeVbaApply && window.__activeVbaApply.token === cancelToken) window.__activeVbaApply = null;
           setPipelineRuntimeStatus([stepId], "error", "오류");
           restorePipelineStep(stepId, originalStep);
           reportPipelineError(err);
           throw err;
         });
       toast(`Step ${idx + 1} 코드가 수정되었습니다. 라이브 Excel에 다시 반영 중입니다.`, "success");
-      return { pending: true, promise };
+      return {
+        pending: true,
+        promise,
+        cancel: () => (typeof requestExcelApplyCancel === "function" ? requestExcelApplyCancel() : false),
+      };
     }
   }
   const mustUseExcelBackend = pipelineUsesPython(next) || shouldDeferImmediatePipelineRun();
@@ -1390,7 +1452,10 @@ async function reapplyVbaPipelineToLive(excelId, options = {}) {
 
 async function reconcilePipelineSimulationAfterEdit(options = {}) {
   // VBA 엔진 + 라이브 세션이면 파이프라인 재동기화를 라이브 리셋+재적용으로 처리.
-  if (typeof getSkillEngine === "function" && getSkillEngine() === "vba") {
+  if (pipelineHasMixedPythonVba(state.pipeline)) {
+    throw new Error("Python 스킬과 VBA 스킬은 같은 파이프라인에서 섞어 실행할 수 없습니다. 같은 엔진으로 다시 생성해 주세요.");
+  }
+  if (pipelineUsesVba(state.pipeline)) {
     const liveExcelId = vbaTargetExcelId();
     if (liveExcelId) return reapplyVbaPipelineToLive(liveExcelId);
   }
@@ -1520,6 +1585,9 @@ function reportPipelineError(err, options) {
     code: rawInfo.code || "",
     language: rawInfo.language || "",
     message: rawInfo.message || (err && err.message) || String(err || ""),
+    cause: rawInfo.cause || "",
+    promptGuide: rawInfo.promptGuide || "",
+    rawError: rawInfo.rawError || "",
     stack: rawInfo.stack || (err && err.stack) || "",
     recoverable: rawInfo.recoverable !== false,
   } : {
@@ -1528,6 +1596,9 @@ function reportPipelineError(err, options) {
     description: "",
     code: "",
     message: (err && err.message) || String(err || ""),
+    cause: "",
+    promptGuide: "",
+    rawError: "",
     stack: (err && err.stack) || "",
     recoverable: false,
   };
@@ -1542,11 +1613,13 @@ function reportPipelineError(err, options) {
     div.innerHTML = `
       <div class="error-title"><b>스킬을 적용하지 못했습니다</b></div>
       <div class="error-desc">${Number(info.stepIdx) >= 0 ? `Step ${info.stepIdx + 1}${info.description ? ` · ${escapeHtml(info.description)}` : ""}` : "backend/runner stage"}</div>
-      <div class="error-help">입력 파일, 시트명, 선택 범위가 요청과 맞는지 확인한 뒤 스킬을 수정하거나 다시 생성해 주세요.</div>
+      ${info.cause ? `<div class="error-cause">${escapeHtml(info.cause)}</div>` : ""}
+      <div class="error-help">${info.promptGuide ? `💡 이렇게 요청해 보세요: ${escapeHtml(info.promptGuide)}` : "입력 파일, 시트명, 선택 범위가 요청과 맞는지 확인한 뒤 스킬을 수정하거나 다시 생성해 주세요."}</div>
+      <textarea class="error-recover-note" rows="2" placeholder="(선택) 무엇을 하려 했는지·실제로 어떻게 됐는지·기대 결과를 적으면 복구가 더 정확해집니다. 예: 매출을 회사별로 합쳐 B열에 넣으려 했는데 #VALUE!가 떴고, 숫자 합계가 보이길 원해요."></textarea>
       <button class="error-recover-btn" type="button">에러 복구 시도</button>
       <details class="error-details">
-        <summary>상세 오류 보기</summary>
-        <pre>${escapeHtml(info.message || err.message || String(err))}${info.stack ? "\n\n" + escapeHtml(info.stack) : ""}</pre>
+        <summary>상세 오류 보기 (기술 세부)</summary>
+        <pre>${escapeHtml(info.rawError || info.message || err.message || String(err))}${info.stack ? "\n\n" + escapeHtml(info.stack) : ""}</pre>
       </details>
     `;
     chatBox.appendChild(div);
@@ -1559,6 +1632,7 @@ function reportPipelineError(err, options) {
         if (recoverBtn.disabled) return;
         recoverBtn.disabled = true;
         recoverBtn.textContent = "복구 요청 중...";
+        const recoverNote = ((div.querySelector(".error-recover-note") || {}).value || "").trim();
         if (typeof requestErrorRecovery === "function") {
           requestErrorRecovery(info.stepIdx, {
             stepIdx: Number(info.stepIdx) >= 0 ? Number(info.stepIdx) : -1,
@@ -1569,7 +1643,7 @@ function reportPipelineError(err, options) {
             message: info.message || err.message || String(err),
             stack: info.stack || "",
             compatibilityCheck: !!options.compatibilityCheck,
-          }).finally(() => {
+          }, recoverNote).finally(() => {
             recoverBtn.textContent = "에러 복구 시도";
             recoverBtn.disabled = false;
           });
@@ -1664,6 +1738,7 @@ function showRunnerPipelineError(err, options) {
     </div>
     <div class="runner-error-step">${escapeHtml(stepText)}</div>
     <div class="runner-error-help">입력 파일명, 시트명, 선택 범위 또는 불러온 스킬의 대상이 현재 파일과 맞는지 확인하세요. 복구 버튼은 현재 파일 구조에 맞게 스킬 참조를 보정한 뒤 다시 실행합니다.</div>
+    <textarea class="runner-error-note" rows="2" placeholder="(선택) 하려던 작업·실제 결과·기대 결과를 적으면 LLM 복구가 더 정확해집니다. 적으면 자동 보정 대신 이 설명을 최우선으로 복구합니다."></textarea>
     <div class="runner-error-actions">
       <button class="runner-error-recover" type="button">에러 복구 시도</button>
       <button class="runner-error-open-generator" type="button">생성기에서 보기</button>
@@ -1684,6 +1759,7 @@ function showRunnerPipelineError(err, options) {
       const originalText = recoverBtn.textContent;
       recoverBtn.textContent = "자동 복구 중...";
       try {
+        const recoverNote = ((panel.querySelector(".runner-error-note") || {}).value || "").trim();
         const recoveryInfo = {
           stepIdx: info && info.stepIdx,
           stepId: info && info.stepId || null,
@@ -1694,12 +1770,13 @@ function showRunnerPipelineError(err, options) {
           stack,
           compatibilityCheck: !!options.compatibilityCheck,
         };
-        if (canAutoRecover) {
+        // 사용자가 추가 설명을 적었으면, 그 설명을 못 쓰는 자동 보정 대신 LLM 복구(대화+설명 반영)로 보낸다.
+        if (canAutoRecover && !recoverNote) {
           recoverBtn.textContent = "자동 복구 중...";
           await attemptRunnerAutoRecovery(recoveryInfo);
         } else {
           recoverBtn.textContent = "복구 요청 중...";
-          await requestErrorRecovery(info && info.stepIdx, recoveryInfo);
+          await requestErrorRecovery(info && info.stepIdx, recoveryInfo, recoverNote);
         }
       } catch (recoverErr) {
         reportPipelineError(recoverErr, { compatibilityCheck: true, runner: true });
@@ -1731,7 +1808,10 @@ $("runner-run-btn").onclick = () => {
     }
   }, 650);
 };
-$("runner-download-btn").onclick = () => openDownloadModal();
+$("runner-download-btn").onclick = () => {
+  if (typeof downloadAllFilesZip === "function") downloadAllFilesZip($("runner-download-btn"));
+  else openDownloadModal();
+};
 $("runner-load-btn").onclick = () => openLoadDialog();
 $("runner-open-generator").onclick = () => setPage("generator");
 

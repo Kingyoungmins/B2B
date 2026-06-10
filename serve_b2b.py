@@ -1,5 +1,6 @@
 ﻿#!/usr/bin/env python3
 import http.server
+import ast
 import atexit
 import csv
 import ctypes
@@ -9,6 +10,7 @@ import io
 import json
 import math
 import os
+import copy
 from pathlib import Path
 import queue
 import re
@@ -25,6 +27,7 @@ from urllib.parse import parse_qs, quote, unquote, urlparse
 import urllib.error
 import urllib.request
 import uuid
+from functools import total_ordering
 
 try:
     import openpyxl
@@ -159,6 +162,7 @@ def cleanup_excel_sessions():
         except Exception:
             pass
         for pid in pids:
+            _hide_excel_windows_for_pid(pid)
             _force_kill_pid(pid)
 
 
@@ -220,19 +224,27 @@ def _cleanup_excel_sessions_impl():
     EXCEL_SESSIONS.clear()
     for session in sessions:
         pid = session.get("pid")
+        hide_guard = None
         try:
             app, wb = session_workbook(session)
+            _prepare_excel_session_for_close(app, wb)
+            hide_guard = _start_excel_hide_guard(app, enabled=True)
             wb.Close(SaveChanges=False)
             if app.Workbooks.Count == 0:
+                _hide_excel_app_window(app)
                 app.Quit()
         except Exception:
             pass
         if pid:
             deadline = time.time() + 1.5
             while time.time() < deadline and _is_pid_alive(pid):
+                _hide_excel_windows_for_pid(pid)
                 time.sleep(0.1)
             if _is_pid_alive(pid):
+                _hide_excel_windows_for_pid(pid)
                 _force_kill_pid(pid)
+        if hide_guard:
+            hide_guard.set()
         temp_path = session.get("openTempPath")
         if temp_path:
             try:
@@ -252,6 +264,63 @@ class PipelineExecutionError(RuntimeError):
             message = info.get("message") or info.get("error") or "pipeline step failed"
         super().__init__(message)
         self.info = info or {}
+
+
+def _pipeline_error_guide(message, code=""):
+    """난해한 엔진 예외를 (원인, 프롬프트 작성 가이드) 한국어 쌍으로 변환한다.
+    사용자가 '왜 났는지' 이해하고 '다음엔 어떻게 요청해야 하는지' 케이스별로 알 수 있게 한다."""
+    m = str(message or "")
+    ml = m.lower()
+    def has(*subs):
+        return any(s in ml for s in subs)
+    if has("cannot convert") and has("excel", "cell"):
+        return ("행(여러 값)을 한 칸(셀)에 통째로 쓰려다 실패했습니다.",
+                "한 셀이 아니라 '표/범위'로 써달라고 명확히 하세요. 예: \"안전제일 행들을 새 시트 A1부터 표로 넣어줘\" 또는 \"한 행씩 차례로 추가해줘\".")
+    if ("sheet" in ml and "not" in ml and "found" in ml) or ("시트" in m and ("없" in m or "찾지" in m)):
+        return ("지정한 시트를 찾지 못했습니다(앞 단계에서 만든 중간 시트를 엉뚱한 곳에서 찾는 경우가 흔합니다).",
+                "이전 단계가 만든 시트를 쓸 땐 그 이름을 정확히 적고 \"앞 단계에서 만든 ○○ 시트에서\"라고 하세요. 원본 입력 시트는 @시트[파일/시트]로 콕 집어 지정하세요.")
+    if ("column not found" in ml) or ("col" in ml and "not found" in ml) or ("열" in m and ("없" in m or "찾지" in m)) or ("헤더" in m and "찾" in m):
+        return ("표의 헤더(열 이름)를 찾지 못했습니다.",
+                "열을 정확한 헤더명이나 열 문자로 지정하세요. 예: \"수납금액 열\" 또는 \"C열\". 가장 확실한 방법은 @컬럼[...] / @범위[...] 로 지정하는 것입니다.")
+    if has("has no attribute"):
+        return ("데이터 값을 객체처럼 잘못 다뤄 생긴 코드 오류입니다(생성된 코드 문제).",
+                "한 번 더 생성하거나 작업을 더 작게 쪼개 요청하세요. 예: \"합계만 B30 셀에 직접 써줘\"처럼 단순하게.")
+    if has("is not defined") or "name '" in ml:
+        return ("코드가 정의되지 않은 것을 사용했습니다(생성된 코드 문제).",
+                "재생성하거나 한 번에 한 작업씩 나눠 요청하세요. 여러 작업을 한 문장에 몰아넣지 마세요.")
+    if has("index out of range", "list index") or ("out of range" in ml and "subscript" not in ml):
+        return ("행/열 범위를 벗어났습니다.",
+                "대상 범위를 명시하세요. 예: \"A4:D24 범위만\", \"헤더는 3행\"처럼 위치를 알려주면 안전합니다.")
+    if has("division by zero", "zerodivision"):
+        return ("0으로 나누는 계산이 있었습니다.",
+                "0일 때 처리를 알려주세요. 예: \"분모가 0이면 결과는 0으로\".")
+    if has("merged") or "병합" in m:
+        return ("병합된 셀에 직접 쓰려다 실패했습니다.",
+                "병합 영역은 \"왼쪽 위 셀에만 써줘\"라고 하거나, 병합/서식 변경이 필요하면 코드 첫 줄에 # B2B_ENGINE_FALLBACK: excel-com 을 넣어 Excel 처리를 요청하세요.")
+    if has("read-only", "read only", "permission denied") or ("저장" in m and ("실패" in m or "권한" in m)):
+        return ("입력 파일은 읽기 전용이라, 입력에 쓰거나 저장하려다 실패했을 수 있습니다.",
+                "결과는 출력 파일에 쓰도록 하세요. 입력 파일을 꼭 바꿔야 하면 코드 첫 줄에 # B2B_ENGINE_FALLBACK: excel-com 을 넣어 Excel 처리를 요청하세요.")
+    # ── VBA(Excel COM 매크로) 특유 오류 ── (subscript/accessvbom/문법 등은 위 일반 케이스보다 먼저 잡히도록 케이스 조건을 한정)
+    if has("accessvbom") or ("프로젝트에 접근" in m) or ("매크로 설정" in m):
+        return ("Excel이 VBA(매크로) 접근을 차단했습니다.",
+                "이건 프롬프트로는 해결되지 않습니다 — Excel 옵션 > 보안 센터 > 매크로 설정에서 'VBA 프로젝트 개체 모델에 대한 액세스 신뢰'를 켠 뒤 파일을 다시 여세요.")
+    if has("subscript out of range") or ("첨자" in m) or ("적용 범위를 벗어" in m):
+        return ("지정한 시트·파일·범위가 없거나 이름이 틀렸습니다(subscript out of range).",
+                "@파일[...] / @시트[파일/시트]로 정확한 이름을 지정하세요. 앞 단계에서 만든 시트면 그 이름을 그대로, 새로 만들 거면 \"새 시트 ○○에\"라고 명시하세요.")
+    if has("type mismatch") or ("형식이 일치" in m) or ("형식이 맞지" in m):
+        return ("값의 형식이 맞지 않습니다(숫자 자리에 글자가 있는 등).",
+                "어느 열이 숫자/날짜인지 알려주거나 \"빈칸·문자는 0으로 처리\"처럼 예외 규칙을 함께 적어주세요.")
+    if ("변경된 셀이 없" in m) or ("매칭" in m and "없" in m) or ("바뀐" in m and "없" in m):
+        return ("코드는 실행됐지만 조건에 맞는 대상이 없어 아무것도 바뀌지 않았습니다.",
+                "대상 시트/열/조건이 실제 데이터와 맞는지 확인하세요. 특히 이름 표기(회사명/항목명 등)가 입력·출력에서 다르면 @컬럼/@범위로 정확히 지정하거나 \"비슷한 이름도 매칭해줘\"라고 요청하세요.")
+    if ("문법 오류" in m) or has("compile error", "syntax error") or ("컴파일" in m and "오류" in m):
+        return ("생성된 VBA 코드에 문법 오류가 있습니다(생성 문제).",
+                "한 번 더 생성하거나 작업을 더 단순하게 나눠 요청하세요.")
+    if has("1004", "application-defined", "object-defined") or ("개체에서 정의" in m):
+        return ("Excel이 그 작업을 거부했습니다(잘못된 범위·시트, 보호, 병합 등 1004 오류).",
+                "대상 범위/시트를 @범위·@시트로 명확히 지정하세요. 열/행 삽입·삭제는 \"J열 앞에 한 열\", \"5행 위에 한 행\"처럼 전체 열/행 기준으로 요청하면 안전합니다.")
+    return ("작업 중 예기치 못한 오류가 났습니다.",
+            "요청을 더 구체적으로 적어주세요 — 대상 파일/시트/열/범위를 @파일·@시트·@컬럼·@범위로 지정하고, 한 번에 한 작업씩 나누면 정확도가 올라갑니다.")
 
 
 class B2BHandler(http.server.SimpleHTTPRequestHandler):
@@ -650,6 +719,7 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
                 workbook_id=workbook_id,
                 read_only_mirror=bool(payload.get("readOnlyMirror")),
                 live_editable=bool(payload.get("liveEditable")),
+                background=bool(payload.get("background")),
                 left=payload.get("left"),
                 top=payload.get("top"),
                 width=payload.get("width"),
@@ -708,12 +778,13 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
             self.send_json({"ok": False, "error": "result not found"}, status=404)
             return
         try:
+            read_only_mirror = payload.get("readOnlyMirror") if "readOnlyMirror" in payload else None
             self.send_json(replace_excel_session_workbook(
                 payload.get("excelId"),
                 path,
                 name=path.name,
                 result_id=result_id,
-                read_only_mirror=bool(payload.get("readOnlyMirror")),
+                read_only_mirror=read_only_mirror,
             ))
         except Exception as err:
             self.send_json({"ok": False, "error": str(err)}, status=500)
@@ -791,7 +862,7 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
     def handle_excel_hide(self):
         payload = self.read_json_body()
         try:
-            self.send_json(hide_excel_session(payload.get("excelId")))
+            self.send_json(hide_excel_session(payload.get("excelId"), light=bool(payload.get("light"))))
         except Exception as err:
             self.send_json({"ok": False, "error": str(err)}, status=400)
 
@@ -1186,6 +1257,74 @@ def normalize_text(value):
     return "".join(str(value or "").lower().split())
 
 
+def normalize_sheet_lookup(value):
+    # Sheet names often differ only by spaces/underscores generated by the LLM
+    # ("인포콘_올인원_정렬" vs "인포콘올인원_정렬"). Keep this looser
+    # matching scoped to sheet lookup only; data value matching remains stricter.
+    return re.sub(r"[\s_\-]+", "", str(value or "").lower())
+
+
+@total_ordering
+class ExcelColumnNumber:
+    """1-based Excel column number that is also safe as a Python row-list index."""
+    def __init__(self, value):
+        self.value = int(value)
+
+    def __int__(self):
+        return self.value
+
+    def __index__(self):
+        return max(0, self.value - 1)
+
+    def __repr__(self):
+        return str(self.value)
+
+    def __str__(self):
+        return str(self.value)
+
+    def _coerce(self, other):
+        try:
+            return int(other)
+        except Exception:
+            return NotImplemented
+
+    def __eq__(self, other):
+        other_value = self._coerce(other)
+        if other_value is NotImplemented:
+            return False
+        return self.value == other_value
+
+    def __lt__(self, other):
+        other_value = self._coerce(other)
+        if other_value is NotImplemented:
+            return NotImplemented
+        return self.value < other_value
+
+    def __hash__(self):
+        return hash(self.value)
+
+    def __add__(self, other):
+        other_value = self._coerce(other)
+        if other_value is NotImplemented:
+            return NotImplemented
+        return self.value + other_value
+
+    def __radd__(self, other):
+        return self.__add__(other)
+
+    def __sub__(self, other):
+        other_value = self._coerce(other)
+        if other_value is NotImplemented:
+            return NotImplemented
+        return self.value - other_value
+
+    def __rsub__(self, other):
+        other_value = self._coerce(other)
+        if other_value is NotImplemented:
+            return NotImplemented
+        return other_value - self.value
+
+
 def _excel_collection_names(collection):
     names = []
     try:
@@ -1348,9 +1487,9 @@ def _configure_excel_grid_window(app, wb=None):
                 _allow_read_only_mirror_selection(wb.Worksheets(idx))
         except Exception:
             pass
-def _ensure_excel_workbook_view(app, wb=None, make_visible=True, activate=True, maximize_workbook=True):
+def _ensure_excel_workbook_view(app, wb=None, make_visible=True, activate=True, maximize_workbook=True, defer_show=False):
     try:
-        if make_visible:
+        if make_visible and not defer_show:
             app.Visible = True
     except Exception:
         pass
@@ -1367,7 +1506,8 @@ def _ensure_excel_workbook_view(app, wb=None, make_visible=True, activate=True, 
     except Exception:
         pass
     try:
-        app.ScreenUpdating = True
+        if not defer_show:
+            app.ScreenUpdating = True
     except Exception:
         pass
     try:
@@ -1387,7 +1527,8 @@ def _ensure_excel_workbook_view(app, wb=None, make_visible=True, activate=True, 
     try:
         win = wb.Windows(1) if wb is not None else app.ActiveWindow
         if win is not None:
-            win.Visible = True
+            if not defer_show:
+                win.Visible = True
             if maximize_workbook:
                 win.WindowState = -4137  # xlMaximized: fill only the workbook area inside Excel.
             win.DisplayHeadings = True
@@ -1547,6 +1688,7 @@ def _position_excel_window(
     )
     if win32gui is not None and win32con is not None:
         hwnd = int(app.Hwnd)
+        style_changed = False  # SetWindowLong 으로 실제 스타일이 바뀐 경우에만 SWP_FRAMECHANGED(전체 리드로우) 적용
         if native_overlay:
             try:
                 style = win32gui.GetWindowLong(hwnd, win32con.GWL_STYLE)
@@ -1567,11 +1709,13 @@ def _position_excel_window(
                     desired_style &= ~win32con.WS_VISIBLE
                 if desired_style != style:
                     win32gui.SetWindowLong(hwnd, win32con.GWL_STYLE, desired_style)
+                    style_changed = True
                 try:
                     ex_style = win32gui.GetWindowLong(hwnd, win32con.GWL_EXSTYLE)
                     desired_ex_style = (ex_style | getattr(win32con, "WS_EX_TOOLWINDOW", 0)) & ~getattr(win32con, "WS_EX_APPWINDOW", 0)
                     if desired_ex_style != ex_style:
                         win32gui.SetWindowLong(hwnd, win32con.GWL_EXSTYLE, desired_ex_style)
+                        style_changed = True
                 except Exception:
                     pass
                 try:
@@ -1606,6 +1750,7 @@ def _position_excel_window(
                         desired_style |= win32con.WS_VISIBLE
                     if desired_style != style:
                         win32gui.SetWindowLong(hwnd, win32con.GWL_STYLE, desired_style)
+                        style_changed = True
                     if current_parent != parent_hwnd:
                         win32gui.SetParent(hwnd, parent_hwnd)
                     # SetParent changes Excel into a child window. Coordinates must
@@ -1629,13 +1774,16 @@ def _position_excel_window(
                     )
                     style |= win32con.WS_CHILD | win32con.WS_VISIBLE
                     win32gui.SetWindowLong(hwnd, win32con.GWL_STYLE, style)
+                    style_changed = True
                     win32gui.SetParent(hwnd, parent_hwnd)
                     left, top = win32gui.ScreenToClient(parent_hwnd, (left, top))
             except Exception:
                 pass
-        flags = win32con.SWP_NOOWNERZORDER | win32con.SWP_FRAMECHANGED
-        if native_parent_hwnd or not (show and native_overlay):
-            flags |= win32con.SWP_NOACTIVATE
+        # NOACTIVATE 를 항상 적용: 재배치/표시가 배경 미러 창을 활성화해 위로 튀어나오며
+        # 회색 플래시를 만들고 활성 창의 포커스를 빼앗는 문제 방지(이 함수는 미러 창 전용).
+        flags = win32con.SWP_NOOWNERZORDER | win32con.SWP_NOACTIVATE
+        if style_changed:
+            flags |= win32con.SWP_FRAMECHANGED  # 스타일이 실제로 바뀐 호출에서만 전체 프레임 리드로우
         if keep_zorder:
             # z-order 를 바꾸지 않고 위치/크기만 변경(비활성 창이 위로 튀어나오는 순회 방지).
             flags |= win32con.SWP_NOZORDER
@@ -1654,11 +1802,15 @@ def _position_excel_window(
         )
         if show:
             try:
-                if native_parent_hwnd:
+                if win32gui.IsIconic(hwnd):
+                    win32gui.ShowWindow(hwnd, getattr(win32con, "SW_RESTORE", 9))
+                if native_parent_hwnd or native_overlay:
                     win32gui.ShowWindow(hwnd, getattr(win32con, "SW_SHOWNA", 8))
-                    _focus_excel_grid_child(hwnd)
+                    if native_parent_hwnd:
+                        _focus_excel_grid_child(hwnd)
                 else:
-                    win32gui.ShowWindow(hwnd, win32con.SW_SHOWNORMAL)
+                    # SW_SHOWNORMAL 은 창을 활성화해 배경 미러가 포커스를 빼앗음 → 비활성 표시(SW_SHOWNA).
+                    win32gui.ShowWindow(hwnd, getattr(win32con, "SW_SHOWNA", 8))
             except Exception:
                 pass
         return
@@ -1764,6 +1916,27 @@ def _set_excel_window_owner(app, owner_hwnd):
         return False
 
 
+def _suppress_excel_taskbar_button(app, force_toolwindow=False):
+    """미러 Excel 창의 작업표시줄 버튼을 없앤다.
+    Excel 메인창(XLMAIN)은 WS_EX_APPWINDOW 라 owner 가 있어도 작업표시줄에 버튼이 강제 표시된다 →
+    APPWINDOW 제거(owner 있으면 이걸로 충분, 프레임 메트릭 불변).
+    owner 지정이 실패했을 땐(force_toolwindow) TOOLWINDOW 까지 붙여야 버튼이 안 생긴다."""
+    if win32gui is None or win32con is None:
+        return
+    try:
+        hwnd = int(app.Hwnd)
+        if not win32gui.IsWindow(hwnd):
+            return
+        ex = win32gui.GetWindowLong(hwnd, win32con.GWL_EXSTYLE)
+        desired = ex & ~getattr(win32con, "WS_EX_APPWINDOW", 0x00040000)
+        if force_toolwindow:
+            desired |= getattr(win32con, "WS_EX_TOOLWINDOW", 0x00000080)
+        if desired != ex:
+            win32gui.SetWindowLong(hwnd, win32con.GWL_EXSTYLE, desired)
+    except Exception:
+        pass
+
+
 def _style_live_overlay_window(app):
     """라이브 창을 프레임리스(제목줄/테두리/최소·최대화 버튼 제거)로 만든다.
     미러 overlay 스타일과 동일하되 owner(GWL_HWNDPARENT)는 건드리지 않는다 — owner 는 따로 지정해 무깜빡임 유지."""
@@ -1802,6 +1975,8 @@ def _raise_excel_window(app):
         hwnd = int(app.Hwnd)
         if not win32gui.IsWindow(hwnd):
             return
+        if win32gui.IsIconic(hwnd):
+            win32gui.ShowWindow(hwnd, getattr(win32con, "SW_RESTORE", 9))
         flags = (
             win32con.SWP_NOMOVE |
             win32con.SWP_NOSIZE |
@@ -1941,6 +2116,7 @@ def _open_excel_session_impl(
     native_host_hwnd=None,
     native_overlay=False,
     live_editable=False,
+    background=False,
 ):
     if not excel_available():
         raise RuntimeError("Microsoft Excel COM automation is not available. Excel and pywin32 are required.")
@@ -2011,7 +2187,9 @@ def _open_excel_session_impl(
                     app.WindowState = -4143  # xlNormal
                 except Exception:
                     pass
-                _set_excel_window_owner(app, native_host_hwnd)     # owner (프레임 그대로 유지)
+                owner_ok = _set_excel_window_owner(app, native_host_hwnd)     # owner (프레임 그대로 유지)
+                # 작업표시줄 버튼 억제: 창이 아직 숨김 상태일 때 적용해야 버튼이 아예 생기지 않는다.
+                _suppress_excel_taskbar_button(app, force_toolwindow=not owner_ok)
                 if width and height:
                     _position_excel_window(
                         app, left, top, width, height,
@@ -2025,17 +2203,45 @@ def _open_excel_session_impl(
                 except Exception:
                     pass
                 try:
+                    _hide_excel_hwnd(app.Hwnd)
+                except Exception:
+                    pass
+                _ensure_excel_workbook_view(app, wb, make_visible=True, activate=False, maximize_workbook=False, defer_show=True)
+                try:
+                    _hide_excel_hwnd(app.Hwnd)
+                except Exception:
+                    pass
+                if not background:
+                    # show 전에 페인트 준비(그리기 허용 + 워크북 뷰 켬) → 빈 회색 프레임이 먼저 보이는 플래시 방지.
+                    try:
+                        app.ScreenUpdating = True
+                    except Exception:
+                        pass
+                    try:
+                        wb.Windows(1).Visible = True
+                    except Exception:
+                        pass
+                    if width and height:
+                        _position_excel_window(
+                            app, left, top, width, height,
+                            viewport_width=viewport_width, viewport_height=viewport_height,
+                            show=True,
+                        )
+                    _ensure_excel_workbook_view(app, wb, make_visible=True, activate=False, maximize_workbook=False)
+                else:
+                    # 백그라운드 사전 오픈: 워크북 뷰는 deferred, 창은 숨김 유지(화면/작업표시줄에 안 보임).
+                    # 첫 탭 전환 시 /api/excel/position 의 ensure-full 이 뷰를 완성한 뒤 raise 가 보여준다.
+                    _ensure_excel_workbook_view(app, wb, make_visible=True, activate=False, maximize_workbook=False, defer_show=True)
+                    try:
+                        _hide_excel_hwnd(app.Hwnd)
+                    except Exception:
+                        pass
+                try:
                     app.ScreenUpdating = True
                 except Exception:
                     pass
-                _ensure_excel_workbook_view(app, wb, make_visible=True, activate=False, maximize_workbook=False)
-                if width and height:
-                    _position_excel_window(
-                        app, left, top, width, height,
-                        viewport_width=viewport_width, viewport_height=viewport_height,
-                        show=True,
-                    )
                 _set_excel_window_owner(app, native_host_hwnd)
+                _suppress_excel_taskbar_button(app, force_toolwindow=not owner_ok)
             elif read_only_mirror:
                 try:
                     wb.Activate()
@@ -2137,7 +2343,7 @@ def _open_excel_session_impl(
                 "nativeParentHwnd": None if (native_overlay or live_editable) else native_parent_hwnd,
                 "nativeHostHwnd": native_host_hwnd,
                 "nativeOverlay": False if live_editable else bool(native_overlay),
-                "hidden": False,
+                "hidden": bool(background),
                 "lastNativePositionKey": (
                     f"{'overlay' if native_overlay else native_parent_hwnd}:{int(float(left or 0))}:{int(float(top or 0))}:{int(float(width or 0))}:{int(float(height or 0))}"
                     if read_only_mirror and (native_parent_hwnd or native_overlay) and width and height
@@ -2354,11 +2560,13 @@ def _replace_excel_session_workbook_impl(excel_id, path, name=None, result_id=No
         except Exception:
             active_sheet = None
         old_temp_path = session.get("openTempPath")
-        if read_only_mirror:
+        live_editable = bool(session.get("liveEditable"))
+        if read_only_mirror or live_editable:
             try:
                 app.ScreenUpdating = False
             except Exception:
                 pass
+        if read_only_mirror:
             _hide_excel_app_window(app)
         try:
             wb.Close(SaveChanges=False)
@@ -2434,6 +2642,59 @@ def _replace_excel_session_workbook_impl(excel_id, path, name=None, result_id=No
                 app.ScreenUpdating = True
             except Exception:
                 pass
+        elif live_editable:
+            try:
+                new_wb.Activate()
+            except Exception:
+                pass
+            try:
+                _protect_workbook_for_read_only_mirror(new_wb, True)
+                _configure_excel_grid_window(app, new_wb)
+            except Exception:
+                pass
+            owner_ok = _set_excel_window_owner(app, session.get("nativeHostHwnd"))
+            _suppress_excel_taskbar_button(app, force_toolwindow=not owner_ok)
+            try:
+                _ensure_excel_workbook_view(app, new_wb, make_visible=True, activate=False, maximize_workbook=False, defer_show=True)
+            except Exception:
+                pass
+            try:
+                _hide_excel_hwnd(app.Hwnd)
+            except Exception:
+                pass
+            # show 전에 페인트 준비(그리기 허용 + 워크북 뷰 켬) — 결과 교체 시 빈 회색 프레임이
+            # 한 번 떴다 사라지는 플래시 방지(hwnd 는 아직 숨김/파킹 상태라 화면에 안 보임).
+            try:
+                app.ScreenUpdating = True
+            except Exception:
+                pass
+            try:
+                new_wb.Windows(1).Visible = True
+            except Exception:
+                pass
+            live_rect = session.get("liveRect") or {}
+            if live_rect.get("width") and live_rect.get("height"):
+                try:
+                    _position_excel_window(
+                        app,
+                        live_rect.get("left"),
+                        live_rect.get("top"),
+                        live_rect.get("width"),
+                        live_rect.get("height"),
+                        native_host_hwnd=session.get("nativeHostHwnd"),
+                        show=True,
+                    )
+                except Exception:
+                    pass
+            try:
+                _ensure_excel_workbook_view(app, new_wb, make_visible=True, activate=False, maximize_workbook=False)
+            except Exception:
+                pass
+            _set_excel_window_owner(app, session.get("nativeHostHwnd"))
+            try:
+                app.ScreenUpdating = True
+            except Exception:
+                pass
         else:
             try:
                 _safe_activate_excel_app(app)
@@ -2478,21 +2739,6 @@ def _position_excel_session_impl(
         if session.get("readOnlyMirror") and (next_native_parent_hwnd or next_native_overlay):
             native_position_key = f"{'overlay' if next_native_overlay else next_native_parent_hwnd}:{int(float(left or 0))}:{int(float(top or 0))}:{int(float(width or 0))}:{int(float(height or 0))}"
             if session.get("lastNativePositionKey") == native_position_key and not session.get("hidden"):
-                if next_native_overlay:
-                    _ensure_excel_workbook_view(app, wb, make_visible=True, activate=False, maximize_workbook=False)
-                    _position_excel_window(
-                        app,
-                        left,
-                        top,
-                        width,
-                        height,
-                        native_parent_hwnd=None,
-                        native_host_hwnd=next_native_host_hwnd,
-                        native_overlay=True,
-                        viewport_width=viewport_width,
-                        viewport_height=viewport_height,
-                        show=True,
-                    )
                 return {
                     "ok": True,
                     "excelId": excel_id,
@@ -2517,6 +2763,13 @@ def _position_excel_session_impl(
                 browser_valid = False
             if not browser_valid:
                 session["browserHwnd"] = _capture_browser_hwnd(browser_title)
+        if session.get("hidden") and session.get("liveEditable"):
+            # 숨김(적용 중 하드숨김 등) → 재표시: show 전에 뷰/그리기를 먼저 준비해야
+            # 회색 프레임이 한 번 떴다 사라지는 플래시가 없다. (hwnd 는 아직 파킹/숨김 → 화면에 안 보임)
+            try:
+                _ensure_excel_workbook_view(app, wb, make_visible=True, activate=False, maximize_workbook=False)
+            except Exception:
+                pass
         _position_excel_window(
             app,
             left,
@@ -2553,8 +2806,9 @@ def _position_excel_session_impl(
                 maximize_workbook=False if (session.get("nativeOverlay") or session.get("nativeParentHwnd")) else True,
             )
         elif session.get("liveEditable"):
-            # owner 재확인(리사이즈 후 풀릴 수 있음) + 그리드 채움.
-            _set_excel_window_owner(app, session.get("nativeHostHwnd"))
+            # owner 재확인(리사이즈 후 풀릴 수 있음) + 그리드 채움 + 작업표시줄 버튼 억제 재보장.
+            owner_ok = _set_excel_window_owner(app, session.get("nativeHostHwnd"))
+            _suppress_excel_taskbar_button(app, force_toolwindow=not owner_ok)
             try:
                 _ensure_excel_workbook_view(app, wb, make_visible=True, activate=False, maximize_workbook=False)
             except Exception:
@@ -2576,14 +2830,28 @@ def _raise_excel_session_impl(excel_id):
         if session.get("readOnlyMirror") or session.get("liveEditable"):
             _raise_excel_window(app)
             if session.get("liveEditable"):
-                _set_excel_window_owner(app, session.get("nativeHostHwnd"))
+                owner_ok = _set_excel_window_owner(app, session.get("nativeHostHwnd"))
+                # Excel 이 내부적으로 스타일을 리셋해도 작업표시줄 버튼이 다시 생기지 않게 재보장.
+                _suppress_excel_taskbar_button(app, force_toolwindow=not owner_ok)
+            session["hidden"] = False
         return {"ok": True, "excelId": excel_id}
 
 
-def _hide_excel_session_impl(excel_id):
+def _hide_excel_session_impl(excel_id, light=False):
     with EXCEL_LOCK:
         session = get_excel_session(excel_id)
         app, wb = session_workbook(session)
+        if light:
+            # 가벼운 숨김(탭 전환용): rect/스타일/app.Visible 은 그대로 두고 창만 숨긴다.
+            # 다음 raise(SWP_SHOWWINDOW) 한 번으로 재배치 없이 즉시 제자리에 다시 나타난다.
+            try:
+                hwnd = int(app.Hwnd)
+                if win32gui is not None and win32gui.IsWindow(hwnd):
+                    win32gui.ShowWindow(hwnd, getattr(win32con, "SW_HIDE", 0))
+            except Exception:
+                pass
+            session["hidden"] = True
+            return {"ok": True, "excelId": excel_id, "hidden": True, "light": True}
         _hide_excel_app_window(app)
         session["hidden"] = True
         session["lastNativePositionKey"] = ""
@@ -2633,19 +2901,27 @@ def _close_excel_session_impl(excel_id):
     if not session:
         return {"ok": True, "closed": False}
     pid = session.get("pid")
+    hide_guard = None
     try:
         app, wb = session_workbook(session)
+        _prepare_excel_session_for_close(app, wb)
+        hide_guard = _start_excel_hide_guard(app, enabled=True)
         wb.Close(SaveChanges=False)
         if app.Workbooks.Count == 0:
+            _hide_excel_app_window(app)
             app.Quit()
     except Exception:
         pass
     if pid:
         deadline = time.time() + 1.5
         while time.time() < deadline and _is_pid_alive(pid):
+            _hide_excel_windows_for_pid(pid)
             time.sleep(0.1)
         if _is_pid_alive(pid):
+            _hide_excel_windows_for_pid(pid)
             _force_kill_pid(pid)
+    if hide_guard:
+        hide_guard.set()
     for key in ("openTempPath", "workingCopyPath"):
         temp_path = session.get(key)
         if temp_path:
@@ -2758,6 +3034,9 @@ def _validate_vba_source_before_inject(code):
 
 
 def _vba_pipeline_step_info(step, fallback_idx, err):
+    _code = (step.get("code") if isinstance(step, dict) else str(step or "")) or ""
+    _cause, _guide = _pipeline_error_guide(str(err), _code)
+    _msg = f"{_cause}\n💡 이렇게 요청해 보세요: {_guide}\n(자세히: {err})"
     if isinstance(step, dict):
         raw_idx = step.get("stepIdx")
         try:
@@ -2770,7 +3049,10 @@ def _vba_pipeline_step_info(step, fallback_idx, err):
             "description": step.get("description") or "",
             "code": step.get("code") or "",
             "language": step.get("language") or "vba",
-            "message": str(err),
+            "message": _msg,
+            "cause": _cause,
+            "promptGuide": _guide,
+            "rawError": str(err),
             "stack": "",
         }
     return {
@@ -2779,7 +3061,10 @@ def _vba_pipeline_step_info(step, fallback_idx, err):
         "description": "",
         "code": str(step or ""),
         "language": "vba",
-        "message": str(err),
+        "message": _msg,
+        "cause": _cause,
+        "promptGuide": _guide,
+        "rawError": str(err),
         "stack": "",
     }
 
@@ -3150,6 +3435,11 @@ def _restore_live_window(session, app, wb):
     except Exception:
         pass
     _set_excel_window_owner(app, session.get("nativeHostHwnd"))
+    # show 전에 워크북 뷰/그리기를 먼저 준비(파킹 상태라 화면엔 안 보임) → 회색 프레임 플래시 방지.
+    try:
+        _ensure_excel_workbook_view(app, wb, make_visible=True, activate=False, maximize_workbook=False)
+    except Exception:
+        pass
     rect = session.get("liveRect") or {}
     left, top, width, height = rect.get("left"), rect.get("top"), rect.get("width"), rect.get("height")
     if width and height:
@@ -3162,7 +3452,9 @@ def _restore_live_window(session, app, wb):
     except Exception:
         pass
     _hide_non_target_workbook_windows(app, wb)
-    _set_excel_window_owner(app, session.get("nativeHostHwnd"))
+    owner_ok = _set_excel_window_owner(app, session.get("nativeHostHwnd"))
+    # 적용/리셋 사이클이 스타일을 되돌렸을 수 있으니 작업표시줄 버튼 억제를 재보장.
+    _suppress_excel_taskbar_button(app, force_toolwindow=not owner_ok)
 
 
 def _close_companion_workbooks(session, app):
@@ -3299,6 +3591,23 @@ def _run_vba_on_session_impl(excel_id, code, entry=None):
                 verify = _diff_change_probe(before_probe, _change_probe(app, wb))
             except Exception:
                 verify = None
+        except PipelineExecutionError:
+            raise
+        except Exception as err:
+            # 단일 VBA 적용 실패도 파이프라인과 같은 포맷(원인+프롬프트 가이드+세부)으로 통일.
+            _cause, _guide = _pipeline_error_guide(str(err), code)
+            raise PipelineExecutionError({
+                "stepIdx": 0,
+                "stepId": None,
+                "description": "",
+                "code": code,
+                "language": "vba",
+                "message": f"{_cause}\n💡 이렇게 요청해 보세요: {_guide}\n(자세히: {err})",
+                "cause": _cause,
+                "promptGuide": _guide,
+                "rawError": str(err),
+                "stack": "",
+            }) from err
         finally:
             _t = time.perf_counter()
             try:
@@ -3813,6 +4122,7 @@ def open_excel_session(
     native_host_hwnd=None,
     native_overlay=False,
     live_editable=False,
+    background=False,
 ):
     return excel_call(
         _open_excel_session_impl,
@@ -3836,6 +4146,7 @@ def open_excel_session(
         native_host_hwnd=native_host_hwnd,
         native_overlay=native_overlay,
         live_editable=live_editable,
+        background=background,
         timeout=180,  # 느린 PC/대용량 파일에서 Excel 열기가 길어질 수 있음
     )
 
@@ -3900,8 +4211,8 @@ def raise_excel_session(excel_id):
     return excel_call(_raise_excel_session_impl, excel_id, timeout=60)
 
 
-def hide_excel_session(excel_id):
-    return excel_call(_hide_excel_session_impl, excel_id, timeout=60)
+def hide_excel_session(excel_id, light=False):
+    return excel_call(_hide_excel_session_impl, excel_id, light=light, timeout=60)
 
 
 def hide_all_excel_sessions():
@@ -3947,7 +4258,12 @@ def normalize_python_pipeline_code(code):
         if stripped.startswith("//"):
             line = line[:len(line) - len(line.lstrip())] + "#" + stripped[2:]
         normalized.append(line)
-    return "\n".join(normalized).strip() + "\n"
+    text = "\n".join(normalized).strip()
+    # LLMs often write workbook.sheets["SheetName"] by analogy with dict-like
+    # workbook objects. Our proxies expose .sheet(name) / .sheets(name). Normalize
+    # the subscript form so otherwise valid generated skills do not fail at runtime.
+    text = re.sub(r"(\b[\w\.]+\s*)\.sheets\s*\[\s*([^\]\n]+?)\s*\]", r"\1.sheet(\2)", text)
+    return text + "\n"
 
 
 def pipeline_has_python(payload):
@@ -3960,6 +4276,113 @@ def pipeline_has_python(payload):
 
 def _excel_names(collection):
     return _excel_collection_names(collection)
+
+
+_EXCEL_NO_CELL_VALUE = object()
+
+
+class ExcelCellProxy:
+    def __init__(self, cell):
+        object.__setattr__(self, "_cell", cell)
+
+    def __getattr__(self, name):
+        return getattr(object.__getattribute__(self, "_cell"), name)
+
+    @property
+    def value(self):
+        return self._cell.Value
+
+    @value.setter
+    def value(self, v):
+        self._cell.Value = v
+
+
+class ExcelWorksheetProxy:
+    """COM Worksheet wrapper with small openpyxl-style aliases for fallback runs."""
+    def __init__(self, worksheet):
+        object.__setattr__(self, "_worksheet", worksheet)
+
+    def __getattr__(self, name):
+        return getattr(object.__getattribute__(self, "_worksheet"), name)
+
+    def __setattr__(self, key, value):
+        if key == "_worksheet":
+            object.__setattr__(self, key, value)
+        elif key == "Name":
+            self._worksheet.Name = value
+        else:
+            setattr(self._worksheet, key, value)
+
+    @property
+    def raw(self):
+        return self._worksheet
+
+    @property
+    def Name(self):
+        return self._worksheet.Name
+
+    @property
+    def Parent(self):
+        return self._worksheet.Parent
+
+    @property
+    def max_row(self):
+        try:
+            return int(self._worksheet.UsedRange.Row) + int(self._worksheet.UsedRange.Rows.Count) - 1
+        except Exception:
+            return 1
+
+    @property
+    def max_column(self):
+        try:
+            return int(self._worksheet.UsedRange.Column) + int(self._worksheet.UsedRange.Columns.Count) - 1
+        except Exception:
+            return 1
+
+    def cell(self, row=None, column=None, value=_EXCEL_NO_CELL_VALUE):
+        c = self._worksheet.Cells(int(row), int(column))
+        if value is not _EXCEL_NO_CELL_VALUE:
+            c.Value = value
+        return ExcelCellProxy(c)
+
+    def insert_cols(self, idx, amount=1):
+        idx = int(idx)
+        amount = max(1, int(amount or 1))
+        rng = self._worksheet.Range(self._worksheet.Columns(idx), self._worksheet.Columns(idx + amount - 1))
+        rng.Insert(Shift=-4161)  # xlShiftToRight
+
+    def insert_rows(self, idx, amount=1):
+        idx = int(idx)
+        amount = max(1, int(amount or 1))
+        rng = self._worksheet.Range(self._worksheet.Rows(idx), self._worksheet.Rows(idx + amount - 1))
+        rng.Insert(Shift=-4121)  # xlShiftDown
+
+    def delete_cols(self, idx, amount=1):
+        idx = int(idx)
+        amount = max(1, int(amount or 1))
+        rng = self._worksheet.Range(self._worksheet.Columns(idx), self._worksheet.Columns(idx + amount - 1))
+        rng.Delete()
+
+    def delete_rows(self, idx, amount=1):
+        idx = int(idx)
+        amount = max(1, int(amount or 1))
+        rng = self._worksheet.Range(self._worksheet.Rows(idx), self._worksheet.Rows(idx + amount - 1))
+        rng.Delete()
+
+    def append(self, values):
+        row = self.max_row + 1
+        values = list(values or [])
+        if not values:
+            return
+        rng = self._worksheet.Range(
+            self._worksheet.Cells(row, 1),
+            self._worksheet.Cells(row, len(values)),
+        )
+        rng.Value = [values]
+
+    def clear(self):
+        self._worksheet.Cells.Clear()
+        return self
 
 
 class ExcelWorksheetsProxy:
@@ -3988,6 +4411,16 @@ class ExcelWorksheetsProxy:
     def __len__(self):
         return int(self._collection.Count)
 
+    @property
+    def names(self):
+        return _excel_collection_names(self._collection)
+
+    def add(self, name=None):
+        ws = self._collection.Add()
+        if name:
+            ws.Name = str(name)
+        return ExcelWorksheetProxy(ws)
+
     def __getattr__(self, name):
         return getattr(self._collection, name)
 
@@ -4012,6 +4445,10 @@ class ExcelWorkbookProxy:
     def sheet(self, name=None):
         return self._ctx.sheet(name, workbook=self)
 
+    @property
+    def sheets(self):
+        return self.Worksheets
+
     def sheet_like(self, name=None):
         return self._ctx.sheet_like(name, workbook=self)
 
@@ -4021,6 +4458,21 @@ class ExcelWorkbookProxy:
     def rows(self, sheet_or_name=None):
         return self._ctx.rows(sheet_or_name, workbook=self)
 
+    def iter_rows(self, sheet_or_name=None, start_row=1):
+        return self._ctx.iter_rows(sheet_or_name, workbook=self, start_row=start_row)
+
+    def rows_with_index(self, sheet_or_name=None, start_row=1):
+        return self._ctx.iter_rows(sheet_or_name, workbook=self, start_row=start_row)
+
+    def display_rows(self, sheet_or_name=None):
+        return self._ctx.display_rows(sheet_or_name, workbook=self)
+
+    def value(self, sheet_or_name, row, col):
+        return self._ctx.value(sheet_or_name, row, col, workbook=self)
+
+    def display_value(self, sheet_or_name, row, col):
+        return self._ctx.display_value(sheet_or_name, row, col, workbook=self)
+
     def col(self, sheet_or_name, header, header_rows=20):
         return self._ctx.col(sheet_or_name, header, workbook=self, header_rows=header_rows)
 
@@ -4029,10 +4481,11 @@ class ExcelWorkbookProxy:
 
 
 class ExcelSkillContext:
-    def __init__(self, app, output_wb, input_wbs):
+    def __init__(self, app, output_wb, input_wbs, output_name=None, active_file_id=None, active_sheet=None):
         self.excel = app
         self._workbook = output_wb
-        self.workbook = ExcelWorkbookProxy(self, output_wb, "output")
+        self.output_name = output_name or "output"
+        self.workbook = ExcelWorkbookProxy(self, output_wb, self.output_name)
         self.output = self.workbook
         self.last_output_sheet = None
         self.last_output_address = None
@@ -4040,9 +4493,29 @@ class ExcelSkillContext:
             name: ExcelWorkbookProxy(self, wb, name)
             for name, wb in (input_wbs or {}).items()
         }
+        self.active_file_id = str(active_file_id or "")
+        self.active_sheet_name = str(active_sheet or "")
+        self.active_workbook = self._workbook_for_file_id(self.active_file_id) or self.workbook
 
     def _unwrap_workbook(self, wb):
         return wb.raw if isinstance(wb, ExcelWorkbookProxy) else wb
+
+    def _workbook_for_file_id(self, file_id):
+        file_id = str(file_id or "")
+        if not file_id:
+            return None
+        if file_id == "output" or file_id.startswith("output:"):
+            return self.workbook
+        if file_id.startswith("input:"):
+            hint = file_id[6:]
+            try:
+                return self.workbook_like(hint)
+            except Exception:
+                return self.inputs.get(hint)
+        return None
+
+    def _default_workbook(self):
+        return self.active_workbook or self.workbook
 
     def _is_output_workbook(self, wb):
         wb = self._unwrap_workbook(wb)
@@ -4059,6 +4532,7 @@ class ExcelSkillContext:
             return self.workbook
         norm = self.normalize(hint)
         candidates = [(name, wb) for name, wb in self.inputs.items()]
+        candidates.append((self.output_name, self.workbook))
         candidates.append(("output", self.workbook))
         for name, wb in candidates:
             if self.normalize(name) == norm:
@@ -4091,6 +4565,7 @@ class ExcelSkillContext:
             except Exception:
                 return names[0]
         norm = self.normalize(name)
+        sheet_norm_loose = normalize_sheet_lookup(name)
         for sheet_name in names:
             if self.normalize(sheet_name) == norm:
                 return sheet_name
@@ -4098,16 +4573,51 @@ class ExcelSkillContext:
             sheet_norm = self.normalize(sheet_name)
             if norm in sheet_norm or sheet_norm in norm:
                 return sheet_name
+        for sheet_name in names:
+            candidate = normalize_sheet_lookup(sheet_name)
+            if sheet_norm_loose and (candidate == sheet_norm_loose or sheet_norm_loose in candidate or candidate in sheet_norm_loose):
+                return sheet_name
         if allow_single and len(names) == 1:
             return names[0]
         return None
 
     def sheet(self, name=None, workbook=None):
-        wb = self._unwrap_workbook(workbook or self.workbook)
-        sheet_name = self._find_sheet_name(wb, name)
+        default_wb = workbook or self._default_workbook()
+        wb = self._unwrap_workbook(default_wb)
+        lookup_name = self.active_sheet_name if (name is None and workbook is None and self.active_sheet_name) else name
+        sheet_name = self._find_sheet_name(wb, lookup_name)
+        if not sheet_name and workbook is None:
+            matches = []
+            candidates = [self.workbook] + list(self.inputs.values())
+            seen = set()
+            for candidate in candidates:
+                raw_candidate = self._unwrap_workbook(candidate)
+                try:
+                    key = str(Path(raw_candidate.FullName).resolve()).lower()
+                except Exception:
+                    key = str(id(raw_candidate))
+                if key in seen:
+                    continue
+                seen.add(key)
+                input_sheet = self._find_sheet_name(raw_candidate, lookup_name, allow_single=False)
+                if input_sheet:
+                    matches.append((raw_candidate, input_sheet))
+            if len(matches) == 1:
+                wb, sheet_name = matches[0]
+        if not sheet_name and workbook is None and lookup_name != name:
+            sheet_name = self._find_sheet_name(wb, name)
+        if not sheet_name and workbook is None:
+            matches = []
+            for input_wb in self.inputs.values():
+                raw_input = self._unwrap_workbook(input_wb)
+                input_sheet = self._find_sheet_name(raw_input, name, allow_single=False)
+                if input_sheet:
+                    matches.append((raw_input, input_sheet))
+            if len(matches) == 1:
+                wb, sheet_name = matches[0]
         if not sheet_name:
             raise RuntimeError(f"sheet not found: {name}")
-        ws = wb.Worksheets(sheet_name)
+        ws = ExcelWorksheetProxy(wb.Worksheets(sheet_name))
         if self._is_output_workbook(wb):
             self.last_output_sheet = ws.Name
         return ws
@@ -4148,18 +4658,44 @@ class ExcelSkillContext:
             return [list(values)]
         return [list(row) for row in values]
 
+    def iter_rows(self, sheet_or_name, workbook=None, start_row=1):
+        ws = self._ws_of(sheet_or_name, workbook)
+        rows = self.rows(ws)
+        try:
+            base_row = int(ws.UsedRange.Row)
+        except Exception:
+            base_row = 1
+        min_row = max(int(start_row or base_row), base_row)
+        for offset, row in enumerate(rows):
+            excel_row = base_row + offset
+            if excel_row >= min_row:
+                yield excel_row, row
+
+    def rows_with_index(self, sheet_or_name, workbook=None, start_row=1):
+        return self.iter_rows(sheet_or_name, workbook=workbook, start_row=start_row)
+
+    def value(self, sheet_or_name, row, col, workbook=None):
+        ws = self._ws_of(sheet_or_name, workbook)
+        return ws.Cells(int(row), int(col)).Value
+
+    def display_value(self, sheet_or_name, row, col, workbook=None):
+        return self.value(sheet_or_name, row, col, workbook=workbook)
+
+    def display_rows(self, sheet_or_name, workbook=None):
+        return self.rows(sheet_or_name, workbook=workbook)
+
     def col(self, sheet_or_name, header, workbook=None, header_rows=20):
         rows = self.rows(sheet_or_name, workbook)
         target = self.normalize(header)
         for r_idx, row in enumerate(rows[:header_rows], start=1):
             for c_idx, value in enumerate(row, start=1):
                 if self.normalize(value) == target:
-                    return c_idx
+                    return ExcelColumnNumber(c_idx)
         for r_idx, row in enumerate(rows[:header_rows], start=1):
             for c_idx, value in enumerate(row, start=1):
                 if target and target in self.normalize(value):
-                    return c_idx
-        return -1
+                    return ExcelColumnNumber(c_idx)
+        raise RuntimeError(f"column not found: {header}")
 
     def header_row(self, sheet_or_name, workbook=None, header_rows=20):
         rows = self.rows(sheet_or_name, workbook)
@@ -4180,8 +4716,8 @@ class ExcelSkillContext:
 
     def _col0(self, rows, name_or_idx, header_rows=20):
         # 행 리스트 기준 0-based 열 인덱스. 정수는 1-based 로 간주.
-        if isinstance(name_or_idx, int):
-            return max(0, name_or_idx - 1)
+        if isinstance(name_or_idx, (int, ExcelColumnNumber)):
+            return max(0, int(name_or_idx) - 1)
         target = self.normalize(name_or_idx)
         scan = rows[:header_rows] if header_rows else rows
         for row in scan:
@@ -4195,8 +4731,8 @@ class ExcelSkillContext:
         return None
 
     def add_sheet(self, name, workbook=None):
-        wb = self._unwrap_workbook(workbook or self.workbook)
-        base = (str(name) or "Sheet")[:31]
+        wb = self._unwrap_workbook(workbook or self._default_workbook())
+        base = re.sub(r"[\[\]:*?/\\]", "_", str(name) or "Sheet")[:31] or "Sheet"
         existing = {self.normalize(n) for n in _excel_names(wb.Worksheets)}
         final = base
         idx = 1
@@ -4248,22 +4784,61 @@ class ExcelSkillContext:
             self.last_output_address = str(address)
         return ws
 
+    @staticmethod
+    def _num(v):
+        if isinstance(v, bool):
+            return None
+        if isinstance(v, (int, float)):
+            return float(v)
+        if isinstance(v, str):
+            s = v.strip().replace(",", "")
+            try:
+                return float(s)
+            except ValueError:
+                return None
+        return None
+
     def sort(self, sheet_or_name, by, ascending=True, header=True, workbook=None):
-        # Range.Sort 를 올바른 숫자 상수로 호출(win32com 상수 import 불필요).
+        # COM Range.Sort 가 일부 중간시트에서 헤더를 데이터처럼 섞는 경우가 있어,
+        # openpyxl 경로와 동일하게 값 행을 Python 에서 정렬한 뒤 한 번에 다시 쓴다.
         ws = self._ws_of(sheet_or_name, workbook)
         rows = self.rows(ws)
-        rel = self._col0(rows, by)
-        if rel is None:
-            raise RuntimeError("sort: column not found: %r" % (by,))
-        used = ws.UsedRange
-        abs_col = int(used.Column) + rel  # rel 은 0-based, used.Column 은 1-based
-        key = ws.Cells(int(used.Row), abs_col)
-        used.Sort(
-            Key1=key,
-            Order1=1 if ascending else 2,  # xlAscending=1 / xlDescending=2
-            Header=1 if header else 2,      # xlYes=1 / xlNo=2
-            Orientation=1,                  # xlTopToBottom=1
-        )
+        keys = list(by) if isinstance(by, (list, tuple)) else [by]
+        rels = []
+        for k in keys:
+            rel = self._col0(rows, k)
+            if rel is None:
+                raise RuntimeError("sort: column not found: %r" % (k,))
+            rels.append(rel)
+        asc_list = list(ascending) if isinstance(ascending, (list, tuple)) else [ascending] * len(keys)
+        while len(asc_list) < len(keys):
+            asc_list.append(asc_list[-1] if asc_list else True)
+        hdr_count = 1 if header else 0
+        head = rows[:hdr_count]
+        body = rows[hdr_count:]
+
+        def _cellkey(r, rel):
+            v = r[rel] if rel < len(r) else None
+            num = self._num(v)
+            return (0, num) if num is not None else (1, self.normalize(v))
+
+        if len(set(bool(a) for a in asc_list)) <= 1:
+            rev = not bool(asc_list[0]) if asc_list else False
+            body.sort(key=lambda r: tuple(_cellkey(r, rel) for rel in rels), reverse=rev)
+        else:
+            for i in range(len(rels) - 1, -1, -1):
+                body.sort(key=lambda r, rel=rels[i]: _cellkey(r, rel), reverse=not bool(asc_list[i]))
+
+        max_col = max((len(r) for r in rows), default=0)
+        grid = list(head) + body
+        padded = [list(r) + [None] * (max_col - len(r)) for r in grid]
+        try:
+            used = ws.UsedRange
+            start_row = int(used.Row)
+            start_col = int(used.Column)
+        except Exception:
+            start_row, start_col = 1, 1
+        self._write_grid(ws, padded, start_row=start_row, start_col=start_col)
         if self._is_output_workbook(ws.Parent):
             self.last_output_sheet = ws.Name
         return ws
@@ -4275,18 +4850,90 @@ class ExcelSkillContext:
         hr = max(0, int(header_rows or 0))
         header = rows[:hr]
         matched = []
-        for r in rows[hr:]:
+        body = rows[hr:]
+        total = len(body)
+        report = getattr(self, "_progress", None)
+        report = report if (total > 20000 and callable(report)) else None
+        for k, r in enumerate(body):
             try:
                 if predicate(r):
                     matched.append(r)
             except Exception:
                 continue
-        dest = self.add_sheet(dest_name, workbook=workbook or self.workbook)
+            if report is not None and (k % 20000 == 0):
+                try: report("거르는 중", k, total)
+                except Exception: pass
+        dest_wb = workbook
+        if dest_wb is None:
+            try:
+                dest_wb = ws.Parent
+            except Exception:
+                dest_wb = self._default_workbook()
+        dest = self.add_sheet(dest_name, workbook=dest_wb)
         self._write_grid(dest, list(header) + matched)
         return dest
 
-    def pivot(self, sheet_or_name, group_by, value=None, agg="sum", dest_name=None, header_rows=1, workbook=None):
+    def _merge_pivot_grid_into_base(self, workbook, dest_name, grid):
+        name = str(dest_name or "")
+        if not name or name.endswith("_피벗") or "_" not in name or not grid or len(grid[0]) < 2:
+            return
+        prefix = name.rsplit("_", 1)[0]
+        base_names = [prefix + "_피벗", prefix + "_pivot"]
+        base_ws = None
+        for base_name in base_names:
+            try:
+                base_ws = self.sheet(base_name, workbook=workbook)
+                break
+            except Exception:
+                base_ws = None
+        if base_ws is None:
+            return
+        try:
+            base_sheet_name = base_ws.Name
+        except Exception:
+            base_sheet_name = ""
+        if self.normalize(base_sheet_name) == self.normalize(name):
+            return
+        base_rows = self.rows(base_ws)
+        if not base_rows:
+            return
+        base_header = list(base_rows[0] or [])
+        src_header = list(grid[0] or [])
+        add_cols = []
+        for src_idx, label in enumerate(src_header[1:], start=1):
+            if not any(self.normalize(label) == self.normalize(h) for h in base_header):
+                add_cols.append((src_idx, label))
+        if not add_cols:
+            return
+        out = [base_header + [label for _, label in add_cols]]
+        key_to_values = {}
+        for row in grid[1:]:
+            if not row:
+                continue
+            key_to_values[self.normalize(row[0])] = row
+        for row in base_rows[1:]:
+            cur = list(row or [])
+            key = self.normalize(cur[0] if cur else "")
+            src = key_to_values.get(key)
+            cur += [(src[i] if src is not None and i < len(src) else None) for i, _ in add_cols]
+            out.append(cur)
+        existing_keys = {self.normalize((row or [""])[0]) for row in base_rows[1:]}
+        for row in grid[1:]:
+            if not row or self.normalize(row[0]) in existing_keys:
+                continue
+            cur = [row[0]] + [None] * (len(base_header) - 1)
+            cur += [(row[i] if i < len(row) else None) for i, _ in add_cols]
+            out.append(cur)
+        self._write_grid(base_ws, out)
+
+    def pivot(self, sheet_or_name, group_by=None, value=None, agg="sum", dest_name=None, header_rows=1, workbook=None, **kwargs):
         # Python 집계로 그룹별 요약 표를 새 시트에 만든다(COM PivotTable 보다 안정적).
+        if group_by is None:
+            group_by = kwargs.get("rows")
+        if value is None and "values" in kwargs:
+            value = kwargs.get("values")
+        if dest_name is None:
+            dest_name = kwargs.get("name") or kwargs.get("dest")
         ws = self._ws_of(sheet_or_name, workbook)
         rows = self.rows(ws)
         hr = max(1, int(header_rows or 1))
@@ -4294,41 +4941,35 @@ class ExcelSkillContext:
         data = rows[hr:]
         group_cols = list(group_by) if isinstance(group_by, (list, tuple)) else [group_by]
         gidx = [self._col0(rows, g, hr) for g in group_cols]
-        vidx = self._col0(rows, value, hr) if value is not None else None
-        agg = str(agg or "sum").lower()
-
-        def _num(v):
-            if isinstance(v, bool):
-                return None
-            if isinstance(v, (int, float)):
-                return float(v)
-            if isinstance(v, str):
-                s = v.strip().replace(",", "")
-                try:
-                    return float(s)
-                except ValueError:
-                    return None
-            return None
+        values = list(value) if isinstance(value, (list, tuple)) else [value]
+        aggs = list(agg) if isinstance(agg, (list, tuple)) else [agg] * len(values)
+        while len(aggs) < len(values):
+            aggs.append(aggs[-1] if aggs else "sum")
+        aggs = [str(a or "sum").lower() for a in aggs]
+        vidxs = [self._col0(rows, v, hr) if v is not None else None for v in values]
 
         groups = {}
         order = []
         for r in data:
             key = tuple((r[i] if (i is not None and i < len(r)) else "") for i in gidx)
             if key not in groups:
-                groups[key] = []
+                groups[key] = [[] for _ in values]
                 order.append(key)
-            if vidx is not None and vidx < len(r):
-                groups[key].append(r[vidx])
+            for pos, vidx in enumerate(vidxs):
+                if vidx is None:
+                    groups[key][pos].append(1)
+                elif vidx < len(r):
+                    groups[key][pos].append(r[vidx])
 
-        def _aggregate(vals):
-            nums = [n for n in (_num(v) for v in vals) if n is not None]
-            if agg == "count":
+        def _aggregate(vals, agg_name):
+            nums = [n for n in (self._num(v) for v in vals) if n is not None]
+            if agg_name == "count":
                 return len(vals)
-            if agg in ("avg", "average", "mean"):
+            if agg_name in ("avg", "average", "mean"):
                 return (sum(nums) / len(nums)) if nums else 0
-            if agg == "max":
+            if agg_name == "max":
                 return max(nums) if nums else ""
-            if agg == "min":
+            if agg_name == "min":
                 return min(nums) if nums else ""
             return sum(nums)
 
@@ -4336,13 +4977,21 @@ class ExcelSkillContext:
         for n, i in enumerate(gidx):
             label = header_row[i] if (i is not None and i < len(header_row)) else ("그룹%d" % (n + 1))
             out_header.append(label)
-        value_label = (str(value) if value is not None else "값") + "_" + (agg if agg != "average" else "avg")
-        out_header.append(value_label)
+        for v, agg_name in zip(values, aggs):
+            label = str(v) if v is not None else "값"
+            out_header.append(label + "_" + (agg_name if agg_name != "average" else "avg"))
         grid = [out_header]
         for key in order:
-            grid.append(list(key) + [_aggregate(groups[key])])
-        dest = self.add_sheet(dest_name or "피벗요약", workbook=workbook or self.workbook)
+            grid.append(list(key) + [_aggregate(groups[key][i], aggs[i]) for i in range(len(values))])
+        dest_wb = workbook
+        if dest_wb is None:
+            try:
+                dest_wb = ws.Parent
+            except Exception:
+                dest_wb = self._default_workbook()
+        dest = self.add_sheet(dest_name or "피벗요약", workbook=dest_wb)
         self._write_grid(dest, grid)
+        self._merge_pivot_grid_into_base(dest_wb, dest.Name, grid)
         return dest
 
 
@@ -4351,6 +5000,7 @@ _SKILL_ALLOWED_IMPORTS = {
     "re", "datetime", "math", "json", "collections", "itertools",
     "functools", "string", "decimal", "statistics", "calendar",
     "textwrap", "unicodedata", "fractions", "random", "operator", "copy",
+    "difflib",
 }
 
 
@@ -4403,6 +5053,258 @@ def _opxl_coord(token):
     return int(row), int(col)
 
 
+_OPXL_NO_VALUE = object()
+
+
+def _opxl_merged_anchor(ws, row, col):
+    try:
+        for merged in ws.merged_cells.ranges:
+            if merged.min_row <= row <= merged.max_row and merged.min_col <= col <= merged.max_col:
+                return int(merged.min_row), int(merged.min_col)
+    except Exception:
+        pass
+    return int(row), int(col)
+
+
+def _opxl_write_cell(ws, row, col, value, redirect_merged=False):
+    ar, ac = _opxl_merged_anchor(ws, row, col)
+    if (ar, ac) != (int(row), int(col)) and not redirect_merged:
+        return False
+    ws.cell(row=ar, column=ac, value=value)
+    return True
+
+
+_OPXL_CELL_REF_RE = re.compile(r"(?<![A-Za-z0-9_])(?:'([^']+)'!)?([A-Z]{1,3})([1-9][0-9]*)(?![A-Za-z0-9_])")
+
+
+def _opxl_col_to_index(col):
+    out = 0
+    for ch in str(col or "").upper():
+        if "A" <= ch <= "Z":
+            out = out * 26 + (ord(ch) - 64)
+    return out
+
+
+def _opxl_get_cached_cell_value(cached_ws, row, col):
+    if cached_ws is None:
+        return None
+    try:
+        value = cached_ws.cell(row=int(row), column=int(col)).value
+        if isinstance(value, str) and value.startswith("="):
+            return None
+        return value
+    except Exception:
+        return None
+
+
+def _opxl_safe_eval_arithmetic(expr):
+    allowed_binops = {
+        ast.Add: lambda a, b: a + b,
+        ast.Sub: lambda a, b: a - b,
+        ast.Mult: lambda a, b: a * b,
+        ast.Div: lambda a, b: a / b,
+        ast.Pow: lambda a, b: a ** b,
+        ast.Mod: lambda a, b: a % b,
+    }
+    allowed_unary = {
+        ast.UAdd: lambda a: +a,
+        ast.USub: lambda a: -a,
+    }
+
+    def _eval(node):
+        if isinstance(node, ast.Expression):
+            return _eval(node.body)
+        if isinstance(node, ast.Constant):
+            if isinstance(node.value, (int, float, str, bool)) or node.value is None:
+                return node.value
+            raise ValueError("unsupported constant")
+        if isinstance(node, ast.BinOp) and type(node.op) in allowed_binops:
+            return allowed_binops[type(node.op)](_eval(node.left), _eval(node.right))
+        if isinstance(node, ast.UnaryOp) and type(node.op) in allowed_unary:
+            return allowed_unary[type(node.op)](_eval(node.operand))
+        if isinstance(node, ast.Compare):
+            left = _eval(node.left)
+            for op, comparator in zip(node.ops, node.comparators):
+                right = _eval(comparator)
+                if isinstance(op, ast.Eq):
+                    ok = left == right
+                elif isinstance(op, ast.NotEq):
+                    ok = left != right
+                elif isinstance(op, ast.Lt):
+                    ok = left < right
+                elif isinstance(op, ast.LtE):
+                    ok = left <= right
+                elif isinstance(op, ast.Gt):
+                    ok = left > right
+                elif isinstance(op, ast.GtE):
+                    ok = left >= right
+                else:
+                    raise ValueError("unsupported comparison")
+                if not ok:
+                    return False
+                left = right
+            return True
+        raise ValueError("unsupported expression")
+
+    return _eval(ast.parse(expr, mode="eval"))
+
+
+def _opxl_split_top_level_args(text):
+    args = []
+    cur = []
+    depth = 0
+    in_quote = False
+    quote_ch = ""
+    for ch in str(text or ""):
+        if in_quote:
+            cur.append(ch)
+            if ch == quote_ch:
+                in_quote = False
+            continue
+        if ch in ("'", '"'):
+            in_quote = True
+            quote_ch = ch
+            cur.append(ch)
+            continue
+        if ch == "(":
+            depth += 1
+            cur.append(ch)
+            continue
+        if ch == ")":
+            depth = max(0, depth - 1)
+            cur.append(ch)
+            continue
+        if ch == "," and depth == 0:
+            args.append("".join(cur).strip())
+            cur = []
+            continue
+        cur.append(ch)
+    args.append("".join(cur).strip())
+    return args
+
+
+def _opxl_range_values(ws, token, cached_ws=None, seen=None):
+    token = str(token or "").replace("$", "").strip()
+    sheet_name = None
+    if "!" in token:
+        sheet_part, token = token.split("!", 1)
+        sheet_name = sheet_part.strip("'")
+    if ":" not in token:
+        match = re.fullmatch(r"([A-Z]{1,3})([1-9][0-9]*)", token, re.I)
+        if not match:
+            return []
+        col = _opxl_col_to_index(match.group(1))
+        row = int(match.group(2))
+        target_ws = ws.parent[sheet_name] if sheet_name else ws
+        target_cached = cached_ws.parent[sheet_name] if (sheet_name and cached_ws is not None and sheet_name in cached_ws.parent.sheetnames) else cached_ws
+        return [_opxl_display_cell_value(target_ws, row, col, target_cached, seen)]
+    left, right = token.split(":", 1)
+    m1 = re.fullmatch(r"([A-Z]{1,3})([1-9][0-9]*)", left, re.I)
+    m2 = re.fullmatch(r"([A-Z]{1,3})([1-9][0-9]*)", right, re.I)
+    if not m1 or not m2:
+        return []
+    r1, c1 = int(m1.group(2)), _opxl_col_to_index(m1.group(1))
+    r2, c2 = int(m2.group(2)), _opxl_col_to_index(m2.group(1))
+    target_ws = ws.parent[sheet_name] if sheet_name else ws
+    target_cached = cached_ws.parent[sheet_name] if (sheet_name and cached_ws is not None and sheet_name in cached_ws.parent.sheetnames) else cached_ws
+    values = []
+    for row in range(min(r1, r2), max(r1, r2) + 1):
+        for col in range(min(c1, c2), max(c1, c2) + 1):
+            values.append(_opxl_display_cell_value(target_ws, row, col, target_cached, seen))
+    return values
+
+
+def _opxl_numeric_values(values):
+    nums = []
+    for value in values:
+        if isinstance(value, bool) or value in (None, ""):
+            continue
+        if isinstance(value, (int, float)):
+            nums.append(float(value))
+            continue
+        try:
+            nums.append(float(str(value).replace(",", "")))
+        except Exception:
+            continue
+    return nums
+
+
+def _opxl_eval_formula(ws, formula, cached_ws=None, seen=None):
+    expr = str(formula or "")
+    if expr.startswith("="):
+        expr = expr[1:]
+    expr = expr.strip()
+    if not expr:
+        return None
+    upper = expr.upper()
+    for fn in ("SUM", "AVERAGE", "COUNTIF", "IFERROR"):
+        prefix = fn + "("
+        if upper.startswith(prefix) and expr.endswith(")"):
+            args = _opxl_split_top_level_args(expr[len(prefix):-1])
+            if fn == "SUM":
+                values = []
+                for arg in args:
+                    values.extend(_opxl_range_values(ws, arg, cached_ws, seen) if ":" in arg or re.fullmatch(r"(?:'[^']+'!)?[A-Z]{1,3}[1-9][0-9]*", arg.replace("$", ""), re.I) else [_opxl_eval_formula(ws, "=" + arg, cached_ws, seen)])
+                nums = _opxl_numeric_values(values)
+                return sum(nums)
+            if fn == "AVERAGE":
+                values = []
+                for arg in args:
+                    values.extend(_opxl_range_values(ws, arg, cached_ws, seen) if ":" in arg or re.fullmatch(r"(?:'[^']+'!)?[A-Z]{1,3}[1-9][0-9]*", arg.replace("$", ""), re.I) else [_opxl_eval_formula(ws, "=" + arg, cached_ws, seen)])
+                nums = _opxl_numeric_values(values)
+                return (sum(nums) / len(nums)) if nums else 0
+            if fn == "COUNTIF":
+                if len(args) < 2:
+                    raise ValueError("COUNTIF requires range and criterion")
+                values = _opxl_range_values(ws, args[0], cached_ws, seen)
+                criterion = _opxl_eval_formula(ws, "=" + args[1], cached_ws, seen)
+                return sum(1 for value in values if value == criterion)
+            if fn == "IFERROR":
+                if len(args) < 2:
+                    raise ValueError("IFERROR requires value and fallback")
+                try:
+                    return _opxl_eval_formula(ws, "=" + args[0], cached_ws, seen)
+                except Exception:
+                    return _opxl_eval_formula(ws, "=" + args[1], cached_ws, seen)
+
+    def _replace_cell(match):
+        sheet_name, col_text, row_text = match.groups()
+        row = int(row_text)
+        col = _opxl_col_to_index(col_text)
+        target_ws = ws.parent[sheet_name] if sheet_name else ws
+        target_cached = cached_ws.parent[sheet_name] if (sheet_name and cached_ws is not None and sheet_name in cached_ws.parent.sheetnames) else cached_ws
+        value = _opxl_display_cell_value(target_ws, row, col, target_cached, seen)
+        if value in (None, ""):
+            value = 0
+        return repr(value) if isinstance(value, str) else str(value)
+
+    py_expr = _OPXL_CELL_REF_RE.sub(_replace_cell, expr.replace("$", ""))
+    py_expr = py_expr.replace("^", "**")
+    return _opxl_safe_eval_arithmetic(py_expr)
+
+
+def _opxl_display_cell_value(ws, row, col, cached_ws=None, seen=None):
+    row, col = int(row), int(col)
+    seen = seen or set()
+    key = (id(ws), row, col)
+    if key in seen:
+        raise RuntimeError(f"circular formula reference at {ws.title}!{row},{col}")
+    value = ws.cell(row=row, column=col).value
+    if not (isinstance(value, str) and value.startswith("=")):
+        return value
+    cached = _opxl_get_cached_cell_value(cached_ws, row, col)
+    if cached is not None:
+        return cached
+    seen.add(key)
+    try:
+        return _opxl_eval_formula(ws, value, cached_ws, seen)
+    except Exception as err:
+        coord = f"{ws.title}!{ws.cell(row=row, column=col).coordinate}"
+        raise RuntimeError(f"formula value unavailable for {coord}: {value} ({err})")
+    finally:
+        seen.discard(key)
+
+
 class _OpxlCount:
     def __init__(self, count):
         self.Count = int(count)
@@ -4429,7 +5331,7 @@ class _OpxlRange:
 
     def _set_value(self, value):
         if self._single and not isinstance(value, (list, tuple)):
-            self._ws.cell(row=self._r1, column=self._c1, value=value)
+            _opxl_write_cell(self._ws, self._r1, self._c1, value, redirect_merged=True)
             return
         if isinstance(value, (list, tuple)) and value and not isinstance(value[0], (list, tuple)):
             value = [value]  # 1행 그리드로 취급
@@ -4444,7 +5346,7 @@ class _OpxlRange:
                 row = [row]
             for j, c in enumerate(range(self._c1, self._c2 + 1)):
                 if j < len(row):
-                    self._ws.cell(row=r, column=c, value=row[j])
+                    _opxl_write_cell(self._ws, r, c, row[j], redirect_merged=False)
 
     Value = property(_get_value, _set_value)
     Value2 = property(_get_value, _set_value)
@@ -4467,6 +5369,215 @@ class _OpxlRange:
 
     def Select(self):
         return self
+
+
+class _OpxlRowProxy:
+    def __init__(self, sheet_proxy, row_idx):
+        self._sheet_proxy = sheet_proxy
+        self._ws = sheet_proxy._ws
+        self._row_idx = int(row_idx)
+
+    @property
+    def values(self):
+        self._sheet_proxy.flush_pending_rows()
+        max_col = int(self._ws.max_column or 1)
+        return [self._ws.cell(row=self._row_idx, column=c).value for c in range(1, max_col + 1)]
+
+    @values.setter
+    def values(self, row_values):
+        self._sheet_proxy._set_pending_row_values(self._row_idx, list(row_values or []))
+
+    def clear(self):
+        self._sheet_proxy._set_pending_row_clear(self._row_idx)
+        return self
+
+
+class _OpxlFormulaString(str):
+    def __new__(cls, value, row, col, ws=None):
+        obj = str.__new__(cls, value)
+        obj._b2b_origin_row = int(row)
+        obj._b2b_origin_col = int(col)
+        obj._b2b_origin_ws = ws
+        return obj
+
+    def replace(self, old, new, count=-1):
+        if count == -1:
+            value = super().replace(old, new)
+        else:
+            value = super().replace(old, new, count)
+        return _OpxlFormulaString(
+            value,
+            self._b2b_origin_row,
+            self._b2b_origin_col,
+            getattr(self, "_b2b_origin_ws", None),
+        )
+
+
+class _OpxlCopiedInt(int):
+    def __new__(cls, value, row, col, ws=None):
+        obj = int.__new__(cls, value)
+        obj._b2b_origin_row = int(row)
+        obj._b2b_origin_col = int(col)
+        obj._b2b_origin_ws = ws
+        return obj
+
+
+class _OpxlCopiedFloat(float):
+    def __new__(cls, value, row, col, ws=None):
+        obj = float.__new__(cls, value)
+        obj._b2b_origin_row = int(row)
+        obj._b2b_origin_col = int(col)
+        obj._b2b_origin_ws = ws
+        return obj
+
+
+def _opxl_coord_from_row_col(row, col):
+    from openpyxl.utils import get_column_letter
+    return f"{get_column_letter(int(col))}{int(row)}"
+
+
+def _opxl_translate_formula(value, dest_row, dest_col):
+    if not (isinstance(value, _OpxlFormulaString) and str(value).startswith("=")):
+        return value
+    try:
+        origin = _opxl_coord_from_row_col(value._b2b_origin_row, value._b2b_origin_col)
+        dest = _opxl_coord_from_row_col(dest_row, dest_col)
+        if origin == dest:
+            return str(value)
+        from openpyxl.formula.translate import Translator
+        return Translator(str(value), origin=origin).translate_formula(dest)
+    except Exception:
+        return str(value)
+
+
+def _opxl_unwrap_copied_value(value):
+    if isinstance(value, _OpxlFormulaString):
+        return str(value)
+    if isinstance(value, _OpxlCopiedInt):
+        return int(value)
+    if isinstance(value, _OpxlCopiedFloat):
+        return float(value)
+    return value
+
+
+def _opxl_copied_source(value):
+    ws = getattr(value, "_b2b_origin_ws", None)
+    if ws is None:
+        return None
+    try:
+        return ws, int(value._b2b_origin_row), int(value._b2b_origin_col)
+    except Exception:
+        return None
+
+
+def _opxl_ranges_overlap(a, b):
+    return not (a.max_row < b.min_row or a.min_row > b.max_row or a.max_col < b.min_col or a.min_col > b.max_col)
+
+
+def _opxl_unmerge_overlapping(ws, target_range):
+    try:
+        for existing in list(ws.merged_cells.ranges):
+            if _opxl_ranges_overlap(existing, target_range):
+                ws.unmerge_cells(str(existing))
+    except Exception:
+        pass
+
+
+def _opxl_copy_cell_presentation(src_ws, src_row, src_col, dst_ws, dst_row, dst_col):
+    from openpyxl.utils import get_column_letter
+    from openpyxl.worksheet.cell_range import CellRange
+
+    src = src_ws.cell(row=int(src_row), column=int(src_col))
+    dst = dst_ws.cell(row=int(dst_row), column=int(dst_col))
+    if getattr(src, "has_style", False):
+        dst._style = copy.copy(src._style)
+    if src.number_format:
+        dst.number_format = src.number_format
+    if src.hyperlink:
+        dst._hyperlink = copy.copy(src.hyperlink)
+    if src.comment:
+        dst.comment = copy.copy(src.comment)
+
+    try:
+        src_dim = src_ws.column_dimensions.get(get_column_letter(int(src_col)))
+        if src_dim and src_dim.width:
+            dst_ws.column_dimensions[get_column_letter(int(dst_col))].width = src_dim.width
+    except Exception:
+        pass
+    try:
+        src_height = src_ws.row_dimensions[int(src_row)].height
+        if src_height:
+            dst_ws.row_dimensions[int(dst_row)].height = src_height
+    except Exception:
+        pass
+
+    try:
+        for merged in list(src_ws.merged_cells.ranges):
+            if not (merged.min_row <= int(src_row) <= merged.max_row and merged.min_col <= int(src_col) <= merged.max_col):
+                continue
+            if int(src_row) != merged.min_row or int(src_col) != merged.min_col:
+                return
+            row_delta = int(dst_row) - int(src_row)
+            col_delta = int(dst_col) - int(src_col)
+            target = CellRange(
+                min_col=merged.min_col + col_delta,
+                min_row=merged.min_row + row_delta,
+                max_col=merged.max_col + col_delta,
+                max_row=merged.max_row + row_delta,
+            )
+            if target.min_row < 1 or target.min_col < 1:
+                continue
+            _opxl_unmerge_overlapping(dst_ws, target)
+            dst_ws.merge_cells(str(target))
+            break
+    except Exception:
+        pass
+
+
+class _OpxlCellProxy:
+    def __init__(self, ws, row, col):
+        object.__setattr__(self, "_ws", ws)
+        object.__setattr__(self, "_row", int(row))
+        object.__setattr__(self, "_col", int(col))
+
+    @property
+    def _cell(self):
+        return self._ws.cell(row=self._row, column=self._col)
+
+    def __getattr__(self, name):
+        return getattr(self._cell, name)
+
+    def __setattr__(self, key, value):
+        if key in ("_ws", "_row", "_col"):
+            object.__setattr__(self, key, value)
+        elif key == "value":
+            type(self).value.fset(self, value)
+        else:
+            setattr(self._cell, key, value)
+
+    @property
+    def value(self):
+        value = self._cell.value
+        if isinstance(value, str):
+            return _OpxlFormulaString(value, self._row, self._col, self._ws)
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, int):
+            return _OpxlCopiedInt(value, self._row, self._col, self._ws)
+        if isinstance(value, float):
+            return _OpxlCopiedFloat(value, self._row, self._col, self._ws)
+        return value
+
+    @value.setter
+    def value(self, value):
+        ar, ac = _opxl_merged_anchor(self._ws, self._row, self._col)
+        if (ar, ac) != (self._row, self._col) and value in (None, ""):
+            return
+        src = _opxl_copied_source(value)
+        if src:
+            _opxl_copy_cell_presentation(src[0], src[1], src[2], self._ws, ar, ac)
+        translated = _opxl_translate_formula(value, ar, ac)
+        self._ws.cell(row=ar, column=ac).value = _opxl_unwrap_copied_value(translated)
 
 
 class OpenpyxlWorksheetProxy:
@@ -4494,16 +5605,198 @@ class OpenpyxlWorksheetProxy:
     def Parent(self):
         return self._ws.parent
 
+    def _pending_rows(self):
+        pending = getattr(self._ws, "_b2b_pending_rows", None)
+        if pending is None:
+            pending = {}
+            setattr(self._ws, "_b2b_pending_rows", pending)
+        return pending
+
+    def _set_pending_row_values(self, row_idx, values):
+        self._pending_rows()[int(row_idx)] = list(values or [])
+
+    def _set_pending_row_clear(self, row_idx):
+        self._pending_rows()[int(row_idx)] = None
+
+    def flush_pending_rows(self):
+        pending = getattr(self._ws, "_b2b_pending_rows", None)
+        if not pending:
+            return self
+        items = sorted(pending.items())
+        setattr(self._ws, "_b2b_pending_rows", {})
+        has_merges = bool(getattr(getattr(self._ws, "merged_cells", None), "ranges", None))
+        cell = self._ws.cell
+
+        def is_blank_initial_row():
+            try:
+                return (
+                    int(self._ws.max_row or 1) == 1
+                    and int(self._ws.max_column or 1) == 1
+                    and self._ws.cell(row=1, column=1).value in (None, "")
+                )
+            except Exception:
+                return False
+
+        current_max_col = int(self._ws.max_column or 1)
+
+        def write_direct(row_idx, values):
+            nonlocal current_max_col
+            max_col = max(current_max_col, len(values or []))
+            for c in range(1, max_col + 1):
+                value = values[c - 1] if values is not None and c <= len(values) else None
+                if has_merges:
+                    _opxl_write_cell(self._ws, row_idx, c, value, redirect_merged=True)
+                else:
+                    cell(row=row_idx, column=c).value = value
+            current_max_col = max_col
+
+        current_max_row = int(self._ws.max_row or 0)
+        for row_idx, values in items:
+            row_idx = int(row_idx)
+            if values is None:
+                write_direct(row_idx, None)
+                current_max_row = max(current_max_row, row_idx)
+                continue
+            if row_idx == 1 and is_blank_initial_row():
+                write_direct(row_idx, values)
+                current_max_row = max(current_max_row, row_idx)
+                try:
+                    self._ws._current_row = max(int(getattr(self._ws, "_current_row", 0) or 0), 1)
+                except Exception:
+                    pass
+                continue
+            if (not has_merges) and row_idx == current_max_row + 1:
+                self._ws.append(values)
+                current_max_row = row_idx
+            else:
+                write_direct(row_idx, values)
+                current_max_row = max(current_max_row, row_idx)
+        return self
+
     def Cells(self, r, c):
+        self.flush_pending_rows()
         return _OpxlRange(self._ws, r, c, r, c)
+
+    def row(self, row_idx):
+        return _OpxlRowProxy(self, row_idx)
+
+    def clear(self):
+        self.flush_pending_rows()
+        max_row = int(self._ws.max_row or 0)
+        if max_row > 0:
+            self._ws.delete_rows(1, max_row)
+        try:
+            self._ws._current_row = 0
+        except Exception:
+            pass
+        return self
+
+    def append(self, values):
+        self.flush_pending_rows()
+        values = list(values or [])
+        current_row = int(getattr(self._ws, "_current_row", 0) or 0)
+        is_blank_initial_row = False
+        if current_row <= 1:
+            try:
+                is_blank_initial_row = (
+                    int(self._ws.max_row or 1) == 1
+                    and int(self._ws.max_column or 1) == 1
+                    and self._ws.cell(row=1, column=1).value in (None, "")
+                )
+            except Exception:
+                is_blank_initial_row = False
+        if is_blank_initial_row:
+            cell = self._ws.cell
+            for c, value in enumerate(values, start=1):
+                cell(row=1, column=c).value = value
+            try:
+                self._ws._current_row = 1
+            except Exception:
+                pass
+        else:
+            self._ws.append(values)
+        return self
+
+    def _formula_cells(self):
+        self.flush_pending_rows()
+        formulas = []
+        for row in self._ws.iter_rows():
+            for cell in row:
+                value = cell.value
+                if isinstance(value, str) and value.startswith("="):
+                    formulas.append((int(cell.row), int(cell.column), value))
+        return formulas
+
+    def _write_translated_formula(self, old_row, old_col, new_row, new_col, formula):
+        try:
+            wrapped = _OpxlFormulaString(formula, old_row, old_col)
+            self._ws.cell(row=int(new_row), column=int(new_col)).value = _opxl_translate_formula(wrapped, new_row, new_col)
+        except Exception:
+            self._ws.cell(row=int(new_row), column=int(new_col)).value = formula
+
+    def insert_cols(self, idx, amount=1):
+        self.flush_pending_rows()
+        idx = int(idx)
+        amount = max(1, int(amount or 1))
+        formulas = self._formula_cells()
+        self._ws.insert_cols(idx, amount)
+        for row, col, formula in formulas:
+            if col >= idx:
+                self._write_translated_formula(row, col, row, col + amount, formula)
+        return self
+
+    def insert_rows(self, idx, amount=1):
+        self.flush_pending_rows()
+        idx = int(idx)
+        amount = max(1, int(amount or 1))
+        formulas = self._formula_cells()
+        self._ws.insert_rows(idx, amount)
+        for row, col, formula in formulas:
+            if row >= idx:
+                self._write_translated_formula(row, col, row + amount, col, formula)
+        return self
+
+    def delete_cols(self, idx, amount=1):
+        self.flush_pending_rows()
+        idx = int(idx)
+        amount = max(1, int(amount or 1))
+        last_deleted = idx + amount - 1
+        formulas = self._formula_cells()
+        self._ws.delete_cols(idx, amount)
+        for row, col, formula in formulas:
+            if col > last_deleted:
+                self._write_translated_formula(row, col, row, col - amount, formula)
+        return self
+
+    def delete_rows(self, idx, amount=1):
+        self.flush_pending_rows()
+        idx = int(idx)
+        amount = max(1, int(amount or 1))
+        last_deleted = idx + amount - 1
+        formulas = self._formula_cells()
+        self._ws.delete_rows(idx, amount)
+        for row, col, formula in formulas:
+            if row > last_deleted:
+                self._write_translated_formula(row, col, row - amount, col, formula)
+        return self
 
     @property
     def UsedRange(self):
+        self.flush_pending_rows()
         mr = self._ws.max_row or 1
         mc = self._ws.max_column or 1
         return _OpxlRange(self._ws, 1, 1, mr, mc)
 
+    def cell(self, row=None, column=None, value=_OPXL_NO_VALUE):
+        self.flush_pending_rows()
+        ar, ac = _opxl_merged_anchor(self._ws, int(row), int(column))
+        proxy = _OpxlCellProxy(self._ws, ar, ac)
+        if value is not _OPXL_NO_VALUE:
+            proxy.value = value
+        return proxy
+
     def Range(self, a1, a2=None):
+        self.flush_pending_rows()
         if a2 is not None:
             r1, c1 = a1._r1, a1._c1
             r2, c2 = a2._r1, a2._c1
@@ -4518,11 +5811,45 @@ class OpenpyxlWorksheetProxy:
         return _OpxlRange(self._ws, r, c, r, c)
 
 
+class _OpenpyxlSheetsProxy:
+    def __init__(self, workbook_proxy):
+        self._workbook_proxy = workbook_proxy
+
+    def __call__(self, name=None):
+        return self._workbook_proxy.sheet(name)
+
+    def __getitem__(self, name):
+        return self._workbook_proxy.sheet(name)
+
+    def __contains__(self, name):
+        raw = self._workbook_proxy.raw
+        return str(name) in raw.sheetnames
+
+    def __iter__(self):
+        raw = self._workbook_proxy.raw
+        for name in raw.sheetnames:
+            yield OpenpyxlWorksheetProxy(raw[name])
+
+    def __len__(self):
+        return len(self._workbook_proxy.raw.sheetnames)
+
+    def add(self, name=None):
+        return self._workbook_proxy._ctx.add_sheet(
+            name or "Sheet",
+            workbook=self._workbook_proxy._ctx._sheet_add_target(self._workbook_proxy),
+        )
+
+    @property
+    def names(self):
+        return list(self._workbook_proxy.raw.sheetnames)
+
+
 class OpenpyxlWorkbookProxy:
     def __init__(self, ctx, workbook, name=None):
         self._ctx = ctx
         self._workbook = workbook
         self.name = name or ""
+        self._sheets_proxy = _OpenpyxlSheetsProxy(self)
 
     @property
     def raw(self):
@@ -4531,8 +5858,21 @@ class OpenpyxlWorkbookProxy:
     def __getattr__(self, name):
         return getattr(self._workbook, name)
 
+    def __getitem__(self, name):
+        return self.sheet(name)
+
+    def __contains__(self, name):
+        return str(name) in self._workbook.sheetnames
+
     def sheet(self, name=None):
         return self._ctx.sheet(name, workbook=self)
+
+    @property
+    def sheets(self, name=None):
+        return self._sheets_proxy
+
+    def add_sheet(self, name):
+        return self._ctx.add_sheet(name, workbook=self)
 
     def sheet_like(self, name=None):
         return self._ctx.sheet_like(name, workbook=self)
@@ -4543,6 +5883,21 @@ class OpenpyxlWorkbookProxy:
     def rows(self, sheet_or_name=None):
         return self._ctx.rows(sheet_or_name, workbook=self)
 
+    def iter_rows(self, sheet_or_name=None, start_row=1):
+        return self._ctx.iter_rows(sheet_or_name, workbook=self, start_row=start_row)
+
+    def rows_with_index(self, sheet_or_name=None, start_row=1):
+        return self._ctx.iter_rows(sheet_or_name, workbook=self, start_row=start_row)
+
+    def display_rows(self, sheet_or_name=None):
+        return self._ctx.display_rows(sheet_or_name, workbook=self)
+
+    def value(self, sheet_or_name, row, col):
+        return self._ctx.value(sheet_or_name, row, col, workbook=self)
+
+    def display_value(self, sheet_or_name, row, col):
+        return self._ctx.display_value(sheet_or_name, row, col, workbook=self)
+
     def col(self, sheet_or_name, header, header_rows=20):
         return self._ctx.col(sheet_or_name, header, workbook=self, header_rows=header_rows)
 
@@ -4552,23 +5907,63 @@ class OpenpyxlWorkbookProxy:
 
 class OpenpyxlSkillContext:
     """COM ExcelSkillContext 와 동일한 API를 openpyxl 위에서 제공한다."""
-    def __init__(self, output_wb, input_wbs):
+    def __init__(self, output_wb, input_wbs, output_cached_wb=None, output_name=None, active_file_id=None, active_sheet=None):
         self.excel = None
         self._workbook = output_wb
-        self.workbook = OpenpyxlWorkbookProxy(self, output_wb, "output")
+        self._output_cached_wb = output_cached_wb
+        self.output_name = output_name or "output"
+        self.workbook = OpenpyxlWorkbookProxy(self, output_wb, self.output_name)
         self.output = self.workbook
         self.last_output_sheet = None
         self.last_output_address = None
+        self._progress = None  # 느린 루프 진행률 콜백(stage, done, total). 실행기가 주입.
         self.inputs = {
             name: OpenpyxlWorkbookProxy(self, wb, name)
             for name, wb in (input_wbs or {}).items()
         }
+        self.active_file_id = str(active_file_id or "")
+        self.active_sheet_name = str(active_sheet or "")
+        self.active_workbook = self._workbook_for_file_id(self.active_file_id) or self.workbook
+        self._last_sheet_workbook_raw = self._unwrap_workbook(self.active_workbook)
 
     def _unwrap_workbook(self, wb):
         return wb.raw if isinstance(wb, OpenpyxlWorkbookProxy) else wb
 
+    def _sheet_add_target(self, owner):
+        owner_raw = self._unwrap_workbook(owner)
+        recent_raw = getattr(self, "_last_sheet_workbook_raw", None)
+        if owner_raw is self._workbook and recent_raw is not None and recent_raw is not self._workbook:
+            return recent_raw
+        return owner
+
+    def _workbook_for_file_id(self, file_id):
+        file_id = str(file_id or "")
+        if not file_id:
+            return None
+        if file_id == "output" or file_id.startswith("output:"):
+            return self.workbook
+        if file_id.startswith("input:"):
+            hint = file_id[6:]
+            try:
+                return self.workbook_like(hint)
+            except Exception:
+                return self.inputs.get(hint)
+        return None
+
+    def _default_workbook(self):
+        return self.active_workbook or self.workbook
+
     def _is_output_workbook(self, wb):
         return self._unwrap_workbook(wb) is self._workbook
+
+    def _cached_ws_for(self, ws):
+        raw = getattr(ws, "_ws", ws)
+        try:
+            if raw.parent is self._workbook and self._output_cached_wb is not None and raw.title in self._output_cached_wb.sheetnames:
+                return self._output_cached_wb[raw.title]
+        except Exception:
+            pass
+        return None
 
     def normalize(self, value):
         return normalize_text(value)
@@ -4581,6 +5976,7 @@ class OpenpyxlSkillContext:
             return self.workbook
         norm = self.normalize(hint)
         candidates = [(name, wb) for name, wb in self.inputs.items()]
+        candidates.append((self.output_name, self.workbook))
         candidates.append(("output", self.workbook))
         for name, wb in candidates:
             if self.normalize(name) == norm:
@@ -4613,6 +6009,7 @@ class OpenpyxlSkillContext:
             except Exception:
                 return names[0]
         norm = self.normalize(name)
+        sheet_norm_loose = normalize_sheet_lookup(name)
         for sheet_name in names:
             if self.normalize(sheet_name) == norm:
                 return sheet_name
@@ -4620,16 +6017,50 @@ class OpenpyxlSkillContext:
             sheet_norm = self.normalize(sheet_name)
             if norm in sheet_norm or sheet_norm in norm:
                 return sheet_name
+        for sheet_name in names:
+            candidate = normalize_sheet_lookup(sheet_name)
+            if sheet_norm_loose and (candidate == sheet_norm_loose or sheet_norm_loose in candidate or candidate in sheet_norm_loose):
+                return sheet_name
         if allow_single and len(names) == 1:
             return names[0]
         return None
 
     def sheet(self, name=None, workbook=None):
-        raw = self._unwrap_workbook(workbook or self.workbook)
-        sheet_name = self._find_sheet_name(workbook or self.workbook, name)
+        default_wb = workbook or self._default_workbook()
+        raw = self._unwrap_workbook(default_wb)
+        lookup_name = self.active_sheet_name if (name is None and workbook is None and self.active_sheet_name) else name
+        allow_single = (not bool(lookup_name)) or (workbook is not None and not self._is_output_workbook(raw))
+        sheet_name = self._find_sheet_name(default_wb, lookup_name, allow_single=allow_single)
+        if not sheet_name and workbook is None:
+            matches = []
+            candidates = [self.workbook] + list(self.inputs.values())
+            seen = set()
+            for candidate in candidates:
+                raw_candidate = self._unwrap_workbook(candidate)
+                key = str(id(raw_candidate))
+                if key in seen:
+                    continue
+                seen.add(key)
+                candidate_sheet = self._find_sheet_name(raw_candidate, lookup_name, allow_single=False)
+                if candidate_sheet:
+                    matches.append((raw_candidate, candidate_sheet))
+            if len(matches) == 1:
+                raw, sheet_name = matches[0]
+        if not sheet_name and workbook is not None and self._is_output_workbook(raw) and lookup_name:
+            matches = []
+            for candidate in self.inputs.values():
+                raw_candidate = self._unwrap_workbook(candidate)
+                candidate_sheet = self._find_sheet_name(candidate, lookup_name, allow_single=False)
+                if candidate_sheet:
+                    matches.append((raw_candidate, candidate_sheet))
+            if len(matches) == 1:
+                raw, sheet_name = matches[0]
+        if not sheet_name and workbook is None and lookup_name != name:
+            sheet_name = self._find_sheet_name(default_wb, name, allow_single=not bool(name))
         if not sheet_name:
             raise RuntimeError(f"sheet not found: {name}")
         ws = OpenpyxlWorksheetProxy(raw[sheet_name])
+        self._last_sheet_workbook_raw = raw
         if self._is_output_workbook(raw):
             self.last_output_sheet = ws.Name
         return ws
@@ -4662,13 +6093,66 @@ class OpenpyxlSkillContext:
     def _ws_of(self, sheet_or_name, workbook=None):
         return sheet_or_name if hasattr(sheet_or_name, "UsedRange") else self.sheet(sheet_or_name, workbook)
 
+    def flush_pending_rows(self):
+        workbooks = [self._workbook]
+        for wb in self.inputs.values():
+            raw = self._unwrap_workbook(wb)
+            if raw not in workbooks:
+                workbooks.append(raw)
+        for wb in workbooks:
+            for ws in list(getattr(wb, "worksheets", []) or []):
+                OpenpyxlWorksheetProxy(ws).flush_pending_rows()
+
     def rows(self, sheet_or_name, workbook=None):
         ws = self._ws_of(sheet_or_name, workbook)
+        if hasattr(ws, "flush_pending_rows"):
+            ws.flush_pending_rows()
         raw = getattr(ws, "_ws", ws)
         out = []
         for row in raw.iter_rows(values_only=True):
             out.append(list(row))
         # 끝쪽 완전 빈 행 제거(openpyxl max_row 가 과대평가될 수 있음)
+        while out and all(v is None or v == "" for v in out[-1]):
+            out.pop()
+        return out
+
+    def iter_rows(self, sheet_or_name, workbook=None, start_row=1):
+        rows = self.rows(sheet_or_name, workbook=workbook)
+        min_row = max(1, int(start_row or 1))
+        for excel_row, row in enumerate(rows, start=1):
+            if excel_row >= min_row:
+                yield excel_row, row
+
+    def rows_with_index(self, sheet_or_name, workbook=None, start_row=1):
+        return self.iter_rows(sheet_or_name, workbook=workbook, start_row=start_row)
+
+    def value(self, sheet_or_name, row, col, workbook=None):
+        """Return the displayed/calculated value for one cell.
+
+        Use this for "값만 복사" from formula cells. Plain ws.cell(...).value keeps
+        the formula string so formula-preserving copy still works.
+        """
+        ws = self._ws_of(sheet_or_name, workbook)
+        if hasattr(ws, "flush_pending_rows"):
+            ws.flush_pending_rows()
+        raw = getattr(ws, "_ws", ws)
+        return _opxl_display_cell_value(raw, int(row), int(col), self._cached_ws_for(raw))
+
+    def display_value(self, sheet_or_name, row, col, workbook=None):
+        return self.value(sheet_or_name, row, col, workbook=workbook)
+
+    def display_rows(self, sheet_or_name, workbook=None):
+        ws = self._ws_of(sheet_or_name, workbook)
+        if hasattr(ws, "flush_pending_rows"):
+            ws.flush_pending_rows()
+        raw = getattr(ws, "_ws", ws)
+        cached_ws = self._cached_ws_for(raw)
+        out = []
+        for r_idx in range(1, (raw.max_row or 0) + 1):
+            row = []
+            for c_idx in range(1, (raw.max_column or 0) + 1):
+                row.append(_opxl_display_cell_value(raw, r_idx, c_idx, cached_ws))
+            out.append(row)
         while out and all(v is None or v == "" for v in out[-1]):
             out.pop()
         return out
@@ -4679,12 +6163,12 @@ class OpenpyxlSkillContext:
         for row in rows[:header_rows]:
             for c_idx, value in enumerate(row, start=1):
                 if self.normalize(value) == target:
-                    return c_idx
+                    return ExcelColumnNumber(c_idx)
         for row in rows[:header_rows]:
             for c_idx, value in enumerate(row, start=1):
                 if target and target in self.normalize(value):
-                    return c_idx
-        return -1
+                    return ExcelColumnNumber(c_idx)
+        raise RuntimeError(f"column not found: {header}")
 
     def header_row(self, sheet_or_name=None, workbook=None, header_rows=20):
         rows = self.rows(sheet_or_name, workbook)
@@ -4700,8 +6184,8 @@ class OpenpyxlSkillContext:
         return self.header_row(sheet_or_name, workbook, header_rows) + 1
 
     def _col0(self, rows, name_or_idx, header_rows=20):
-        if isinstance(name_or_idx, int):
-            return max(0, name_or_idx - 1)
+        if isinstance(name_or_idx, (int, ExcelColumnNumber)):
+            return max(0, int(name_or_idx) - 1)
         target = self.normalize(name_or_idx)
         scan = rows[:header_rows] if header_rows else rows
         for row in scan:
@@ -4715,8 +6199,8 @@ class OpenpyxlSkillContext:
         return None
 
     def add_sheet(self, name, workbook=None):
-        wb = self._unwrap_workbook(workbook or self.workbook)
-        base = (str(name) or "Sheet")[:31]
+        wb = self._unwrap_workbook(workbook or self._default_workbook())
+        base = re.sub(r"[\[\]:*?/\\]", "_", str(name) or "Sheet")[:31] or "Sheet"
         existing = {self.normalize(n) for n in wb.sheetnames}
         final = base
         idx = 1
@@ -4734,9 +6218,29 @@ class OpenpyxlSkillContext:
         if not grid:
             return ws
         raw = getattr(ws, "_ws", ws)
+        # 병합 셀 유무를 한 번만 확인. 병합 없는 시트(작업/스크래치 시트 대부분)는 셀마다
+        # merged-anchor 스캔(_opxl_write_cell)을 건너뛰고 직접 써서 대용량에서 크게 빨라진다.
+        try:
+            has_merges = bool(raw.merged_cells.ranges)
+        except Exception:
+            has_merges = True  # 알 수 없으면 안전(기존) 경로
+        total = len(grid)
+        cell = raw.cell
+        report = self._progress if (total > 20000 and callable(self._progress)) else None
         for i, row in enumerate(grid):
-            for j, value in enumerate(row or []):
-                raw.cell(row=start_row + i, column=start_col + j, value=value)
+            R = start_row + i
+            if has_merges:
+                for j, value in enumerate(row or []):
+                    _opxl_write_cell(raw, R, start_col + j, value, redirect_merged=False)
+            else:
+                for j, value in enumerate(row or []):
+                    cell(row=R, column=start_col + j, value=value)
+            if report is not None and (i % 20000 == 0):
+                try: report("쓰는 중", i, total)
+                except Exception: pass
+        if report is not None:
+            try: report("쓰는 중", total, total)
+            except Exception: pass
         return ws
 
     def write_grid(self, ws, grid, start_row=1, start_col=1):
@@ -4758,28 +6262,48 @@ class OpenpyxlSkillContext:
         return ws
 
     def sort(self, sheet_or_name, by, ascending=True, header=True, workbook=None):
+        # 다중키 지원: by 는 단일 컬럼명/인덱스 또는 컬럼 리스트. ascending 도 bool 또는 리스트.
         ws = self._ws_of(sheet_or_name, workbook)
         rows = self.rows(ws)
-        rel = self._col0(rows, by)
-        if rel is None:
-            raise RuntimeError("sort: column not found: %r" % (by,))
+        keys = list(by) if isinstance(by, (list, tuple)) else [by]
+        rels = []
+        for k in keys:
+            rel = self._col0(rows, k)
+            if rel is None:
+                raise RuntimeError("sort: column not found: %r" % (k,))
+            rels.append(rel)
+        asc_list = list(ascending) if isinstance(ascending, (list, tuple)) else [ascending] * len(rels)
+        while len(asc_list) < len(rels):
+            asc_list.append(asc_list[-1] if asc_list else True)
         hdr_count = 1 if header else 0
         head = rows[:hdr_count]
         body = rows[hdr_count:]
 
-        def _key(r):
+        def _cellkey(r, rel):
             v = r[rel] if rel < len(r) else None
             num = self._num(v)
             return (0, num) if num is not None else (1, self.normalize(v))
 
-        body.sort(key=_key, reverse=not ascending)
-        # 기존 영역을 지우고 다시 쓴다.
-        raw = getattr(ws, "_ws", ws)
+        if len(set(bool(a) for a in asc_list)) <= 1:
+            rev = not bool(asc_list[0]) if asc_list else False
+            body.sort(key=lambda r: tuple(_cellkey(r, rel) for rel in rels), reverse=rev)
+        else:
+            # 키별 정렬 방향이 섞이면 안정정렬을 마지막 키부터 적용
+            for i in range(len(rels) - 1, -1, -1):
+                body.sort(key=lambda r, rel=rels[i]: _cellkey(r, rel), reverse=not bool(asc_list[i]))
+
+        # 정렬은 행 수를 보존하므로, 셀 단위 전체 clear 루프(느림) 대신 직사각형 그리드로 한 번에 재기록.
         max_col = max((len(r) for r in rows), default=0)
-        for r_idx in range(1, (raw.max_row or 0) + 1):
-            for c_idx in range(1, max_col + 1):
-                raw.cell(row=r_idx, column=c_idx, value=None)
-        self._write_grid(ws, list(head) + body)
+        grid = list(head) + body
+        padded = [list(r) + [None] * (max_col - len(r)) for r in grid]
+        raw = getattr(ws, "_ws", ws)
+        self._write_grid(ws, padded)
+        # 혹시 기존 시트가 새 그리드보다 길면 그 잔여행만 비운다(보통 없음).
+        old_max = raw.max_row or 0
+        if old_max > len(padded):
+            for r_idx in range(len(padded) + 1, old_max + 1):
+                for c_idx in range(1, max_col + 1):
+                    raw.cell(row=r_idx, column=c_idx, value=None)
         if self._is_output_workbook(ws.Parent):
             self.last_output_sheet = ws.Name
         return ws
@@ -4790,15 +6314,77 @@ class OpenpyxlSkillContext:
         hr = max(0, int(header_rows or 0))
         header = rows[:hr]
         matched = []
-        for r in rows[hr:]:
+        body = rows[hr:]
+        total = len(body)
+        report = getattr(self, "_progress", None)
+        report = report if (total > 20000 and callable(report)) else None
+        for k, r in enumerate(body):
             try:
                 if predicate(r):
                     matched.append(r)
             except Exception:
                 continue
-        dest = self.add_sheet(dest_name, workbook=workbook or self.workbook)
+            if report is not None and (k % 20000 == 0):
+                try: report("거르는 중", k, total)
+                except Exception: pass
+        dest_wb = workbook
+        if dest_wb is None:
+            try:
+                dest_wb = ws.Parent
+            except Exception:
+                dest_wb = self._default_workbook()
+        dest = self.add_sheet(dest_name, workbook=dest_wb)
         self._write_grid(dest, list(header) + matched)
         return dest
+
+    def _merge_pivot_grid_into_base(self, workbook, dest_name, grid):
+        name = str(dest_name or "")
+        if not name or name.endswith("_피벗") or "_" not in name or not grid or len(grid[0]) < 2:
+            return
+        prefix = name.rsplit("_", 1)[0]
+        base_names = [prefix + "_피벗", prefix + "_pivot"]
+        base_ws = None
+        for base_name in base_names:
+            try:
+                base_ws = self.sheet(base_name, workbook=workbook)
+                break
+            except Exception:
+                base_ws = None
+        if base_ws is None:
+            return
+        if self.normalize(base_ws.Name) == self.normalize(name):
+            return
+        base_rows = self.rows(base_ws)
+        if not base_rows:
+            return
+        base_header = list(base_rows[0] or [])
+        src_header = list(grid[0] or [])
+        add_cols = []
+        for src_idx, label in enumerate(src_header[1:], start=1):
+            if not any(self.normalize(label) == self.normalize(h) for h in base_header):
+                add_cols.append((src_idx, label))
+        if not add_cols:
+            return
+        out = [base_header + [label for _, label in add_cols]]
+        key_to_values = {}
+        for row in grid[1:]:
+            if not row:
+                continue
+            key_to_values[self.normalize(row[0])] = row
+        for row in base_rows[1:]:
+            cur = list(row or [])
+            key = self.normalize(cur[0] if cur else "")
+            src = key_to_values.get(key)
+            cur += [(src[i] if src is not None and i < len(src) else None) for i, _ in add_cols]
+            out.append(cur)
+        existing_keys = {self.normalize((row or [""])[0]) for row in base_rows[1:]}
+        for row in grid[1:]:
+            if not row or self.normalize(row[0]) in existing_keys:
+                continue
+            cur = [row[0]] + [None] * (len(base_header) - 1)
+            cur += [(row[i] if i < len(row) else None) for i, _ in add_cols]
+            out.append(cur)
+        self._write_grid(base_ws, out)
 
     @staticmethod
     def _num(v):
@@ -4814,7 +6400,13 @@ class OpenpyxlSkillContext:
                 return None
         return None
 
-    def pivot(self, sheet_or_name, group_by, value=None, agg="sum", dest_name=None, header_rows=1, workbook=None):
+    def pivot(self, sheet_or_name, group_by=None, value=None, agg="sum", dest_name=None, header_rows=1, workbook=None, **kwargs):
+        if group_by is None:
+            group_by = kwargs.get("rows")
+        if value is None and "values" in kwargs:
+            value = kwargs.get("values")
+        if dest_name is None:
+            dest_name = kwargs.get("name") or kwargs.get("dest")
         ws = self._ws_of(sheet_or_name, workbook)
         rows = self.rows(ws)
         hr = max(1, int(header_rows or 1))
@@ -4822,28 +6414,35 @@ class OpenpyxlSkillContext:
         data = rows[hr:]
         group_cols = list(group_by) if isinstance(group_by, (list, tuple)) else [group_by]
         gidx = [self._col0(rows, g, hr) for g in group_cols]
-        vidx = self._col0(rows, value, hr) if value is not None else None
-        agg = str(agg or "sum").lower()
+        values = list(value) if isinstance(value, (list, tuple)) else [value]
+        aggs = list(agg) if isinstance(agg, (list, tuple)) else [agg] * len(values)
+        while len(aggs) < len(values):
+            aggs.append(aggs[-1] if aggs else "sum")
+        aggs = [str(a or "sum").lower() for a in aggs]
+        vidxs = [self._col0(rows, v, hr) if v is not None else None for v in values]
 
         groups = {}
         order = []
         for r in data:
             key = tuple((r[i] if (i is not None and i < len(r)) else "") for i in gidx)
             if key not in groups:
-                groups[key] = []
+                groups[key] = [[] for _ in values]
                 order.append(key)
-            if vidx is not None and vidx < len(r):
-                groups[key].append(r[vidx])
+            for pos, vidx in enumerate(vidxs):
+                if vidx is None:
+                    groups[key][pos].append(1)
+                elif vidx < len(r):
+                    groups[key][pos].append(r[vidx])
 
-        def _aggregate(vals):
+        def _aggregate(vals, agg_name):
             nums = [n for n in (self._num(v) for v in vals) if n is not None]
-            if agg == "count":
+            if agg_name == "count":
                 return len(vals)
-            if agg in ("avg", "average", "mean"):
+            if agg_name in ("avg", "average", "mean"):
                 return (sum(nums) / len(nums)) if nums else 0
-            if agg == "max":
+            if agg_name == "max":
                 return max(nums) if nums else ""
-            if agg == "min":
+            if agg_name == "min":
                 return min(nums) if nums else ""
             return sum(nums)
 
@@ -4851,13 +6450,21 @@ class OpenpyxlSkillContext:
         for n, i in enumerate(gidx):
             label = header_row[i] if (i is not None and i < len(header_row)) else ("그룹%d" % (n + 1))
             out_header.append(label)
-        value_label = (str(value) if value is not None else "값") + "_" + (agg if agg != "average" else "avg")
-        out_header.append(value_label)
+        for v, agg_name in zip(values, aggs):
+            label = str(v) if v is not None else "값"
+            out_header.append(label + "_" + (agg_name if agg_name != "average" else "avg"))
         grid = [out_header]
         for key in order:
-            grid.append(list(key) + [_aggregate(groups[key])])
-        dest = self.add_sheet(dest_name or "피벗요약", workbook=workbook or self.workbook)
+            grid.append(list(key) + [_aggregate(groups[key][i], aggs[i]) for i in range(len(values))])
+        dest_wb = workbook
+        if dest_wb is None:
+            try:
+                dest_wb = ws.Parent
+            except Exception:
+                dest_wb = self._default_workbook()
+        dest = self.add_sheet(dest_name or "피벗요약", workbook=dest_wb)
         self._write_grid(dest, grid)
+        self._merge_pivot_grid_into_base(dest_wb, dest.Name, grid)
         return dest
 
 
@@ -4887,6 +6494,9 @@ def _run_openpyxl_python_pipeline_impl(payload, job_id=None):
     output_path_norm = str(Path(output_path).resolve()).lower()
     # 출력: data_only=False 로 열어 수식을 보존하고 값을 쓴다. 읽기는 쓴 값이 그대로 반영된다(read-after-write).
     output_wb = openpyxl_load_workbook_compatible(Path(output_path), data_only=False)
+    # 값만 복사에서 기존 수식 셀의 표시값을 읽기 위한 짝 워크북.
+    # 캐시가 없으면 ctx.value/display_value 가 단순 수식을 Python 에서 평가한다.
+    output_cached_wb = openpyxl_load_workbook_compatible(Path(output_path), data_only=True)
 
     # 입력: data_only=True 로 열어 수식의 "계산된 값"을 읽는다(Excel 이 저장해둔 캐시값).
     # openpyxl 엔진에서 입력은 읽기 전용으로 취급한다(저장하면 수식이 사라지므로). 입력 편집은 Excel 엔진 사용.
@@ -4900,7 +6510,16 @@ def _run_openpyxl_python_pipeline_impl(payload, job_id=None):
         wb = openpyxl_load_workbook_compatible(Path(rec["path"]), data_only=True)
         input_wbs[name] = wb
 
-    ctx = OpenpyxlSkillContext(output_wb, input_wbs)
+    output_name = output_item.get("name") or output_wb_record["name"]
+    current = payload.get("current") or {}
+    ctx = OpenpyxlSkillContext(
+        output_wb,
+        input_wbs,
+        output_cached_wb=output_cached_wb,
+        output_name=output_name,
+        active_file_id=current.get("fileId"),
+        active_sheet=current.get("sheet"),
+    )
     for idx, step in enumerate(python_steps, start=1):
         update_pipeline_job(job_id, {
             "stage": f"Python(openpyxl) Step {idx}/{len(python_steps)} 실행 중",
@@ -4908,6 +6527,13 @@ def _run_openpyxl_python_pipeline_impl(payload, job_id=None):
             "completedSteps": idx - 1,
             "stepRunning": True,
             "errorInfo": None,
+        })
+        # 느린 루프(대용량 정렬/필터/쓰기)에서 행 진행률을 stage 로 노출(프론트가 폴링해 표시).
+        ctx._progress = lambda stage, done, total, _i=idx, _n=len(python_steps): update_pipeline_job(job_id, {
+            "stage": f"Python(openpyxl) Step {_i}/{_n} — {stage} {done:,}/{total:,}행",
+            "currentStep": _i,
+            "completedSteps": _i - 1,
+            "stepRunning": True,
         })
         original_code = str(step.get("code") or "")
         code = normalize_python_pipeline_code(original_code)
@@ -4921,7 +6547,9 @@ def _run_openpyxl_python_pipeline_impl(payload, job_id=None):
                 raise RuntimeError("Python step must define def transform(ctx):")
             stage_label = "transform"
             transform(ctx)
+            ctx.flush_pending_rows()
         except Exception as err:
+            _cause, _guide = _pipeline_error_guide(str(err), original_code)
             raise PipelineExecutionError({
                 "stepIdx": idx - 1,
                 "stepId": step.get("id"),
@@ -4929,7 +6557,10 @@ def _run_openpyxl_python_pipeline_impl(payload, job_id=None):
                 "code": original_code,
                 "normalizedCode": code,
                 "language": step.get("language") or "python",
-                "message": f"{stage_label}: {err}",
+                "message": f"{_cause}\n💡 이렇게 요청해 보세요: {_guide}\n(자세히: {stage_label} 단계 — {err})",
+                "cause": _cause,
+                "promptGuide": _guide,
+                "rawError": f"{stage_label}: {err}",
                 "stack": repr(err),
             })
 
@@ -4940,6 +6571,7 @@ def _run_openpyxl_python_pipeline_impl(payload, job_id=None):
         "stepRunning": False,
     })
     BACKEND_DIR.mkdir(parents=True, exist_ok=True)
+    ctx.flush_pending_rows()
 
     # 출력 저장. openpyxl 은 수식을 계산하지 않으므로(셀에 캐시값 없음), Excel 이 열 때 전체 재계산하도록
     # fullCalcOnLoad 를 켠다. → 미러(실제 Excel)와 다운로드 파일에서 수식이 새 값으로 보인다.
@@ -4954,11 +6586,37 @@ def _run_openpyxl_python_pipeline_impl(payload, job_id=None):
     result_path = BACKEND_DIR / f"{uuid.uuid4().hex}_result_{safe_name}"
     output_wb.save(str(result_path))
 
-    # 입력은 읽기 전용(편집/저장하지 않음) → 미리보기/다운로드 없음(변경 없음).
+    # 입력 워크북도 파이프라인 안에서 새 시트/정렬/필터 결과가 만들어질 수 있다.
+    # 3.7 JS 실행기와 같은 동작을 위해 수정된 입력 결과도 저장/다운로드 대상으로 노출한다.
     input_previews = {}
     input_download_urls = {}
+    for item, rec in zip(input_items, input_wb_records):
+        name = item.get("name") or rec["name"]
+        wb = input_wbs.get(name)
+        if wb is None or wb is output_wb:
+            continue
+        safe_input_name = Path(str(name)).name
+        if not Path(safe_input_name).suffix:
+            safe_input_name += ".xlsx"
+        input_result_path = BACKEND_DIR / f"{uuid.uuid4().hex}_result_{safe_input_name}"
+        try:
+            wb.save(str(input_result_path))
+        except Exception as err:
+            raise RuntimeError(f"입력 결과 저장 실패({name}): {err}") from err
+        input_result_id = uuid.uuid4().hex
+        RESULTS[input_result_id] = {
+            "path": str(input_result_path),
+            "name": input_result_path.name,
+            "created": time.time(),
+        }
+        inspected_input = inspect_workbook(input_result_path)
+        input_previews[name] = inspected_input.get("sheets") or {}
+        try:
+            update_workbook_current_cache(rec, rows_only_sheets(input_previews[name]))
+        except Exception:
+            pass
+        input_download_urls[f"input:{name}"] = f"/api/workbooks/download/{input_result_id}"
 
-    current = payload.get("current") or {}
     output_file_id = current.get("outputFileId") or "output:0"
     result_id = uuid.uuid4().hex
     RESULTS[result_id] = {"path": str(result_path), "name": result_path.name, "created": time.time()}
@@ -4968,8 +6626,9 @@ def _run_openpyxl_python_pipeline_impl(payload, job_id=None):
     previews = build_result_previews(input_previews, result_output, current, {}, [])
     download_urls = dict(input_download_urls)
     download_urls[output_file_id] = f"/api/workbooks/download/{result_id}"
-    active_output_sheet = ctx.last_output_sheet
-    active_output_address = ctx.last_output_address
+    # 결과 응답으로 마지막 작업 시트를 넘기면 프런트/미러가 사용자의 현재 탭을 바꾸기 쉽다.
+    active_output_sheet = None
+    active_output_address = None
     return {
         "ok": True,
         "pythonExcel": True,
@@ -5212,6 +6871,31 @@ def _hide_excel_hwnd(hwnd):
         pass
 
 
+def _hide_excel_windows_for_pid(pid):
+    if win32gui is None or win32process is None:
+        return
+    try:
+        target_pid = int(pid or 0)
+    except Exception:
+        return
+    if not target_pid:
+        return
+
+    def visit(hwnd, _):
+        try:
+            _tid, window_pid = win32process.GetWindowThreadProcessId(hwnd)
+            if int(window_pid or 0) == target_pid:
+                _hide_excel_hwnd(hwnd)
+        except Exception:
+            pass
+        return True
+
+    try:
+        win32gui.EnumWindows(visit, None)
+    except Exception:
+        pass
+
+
 def _workbook_identity(wb):
     try:
         return str(Path(wb.FullName).resolve()).lower()
@@ -5287,6 +6971,31 @@ def _hide_excel_app_window(app):
         pass
     try:
         _hide_excel_hwnd(app.Hwnd)
+    except Exception:
+        pass
+
+
+def _prepare_excel_session_for_close(app, wb=None):
+    """Close/Quit 직전에 Excel 이 빈 회색 top-level 창을 복원하지 못하게 먼저 숨긴다."""
+    try:
+        app.DisplayAlerts = False
+    except Exception:
+        pass
+    try:
+        app.ScreenUpdating = False
+    except Exception:
+        pass
+    try:
+        app.Interactive = False
+    except Exception:
+        pass
+    if wb is not None:
+        try:
+            _hide_workbook_windows(wb)
+        except Exception:
+            pass
+    try:
+        _hide_excel_app_window(app)
     except Exception:
         pass
 
@@ -5693,7 +7402,16 @@ def _run_excel_python_pipeline_impl(payload, job_id=None):
         _perf["openMs"] = max(0.0, (time.perf_counter() - _t0) * 1000 - _perf["resetMs"])
         _t_steps = time.perf_counter()
 
-        ctx = ExcelSkillContext(app, output_wb, input_wbs)
+        output_name = output_item.get("name") or output_wb_record["name"]
+        current = payload.get("current") or {}
+        ctx = ExcelSkillContext(
+            app,
+            output_wb,
+            input_wbs,
+            output_name=output_name,
+            active_file_id=current.get("fileId"),
+            active_sheet=current.get("sheet"),
+        )
         for idx, step in enumerate(python_steps[resume_from:], start=resume_from + 1):
             update_pipeline_job(job_id, {
                 "stage": f"Excel Python Step {idx}/{len(python_steps)} 실행 중",
@@ -5715,6 +7433,7 @@ def _run_excel_python_pipeline_impl(payload, job_id=None):
                 stage_label = "transform"
                 transform(ctx)
             except Exception as err:
+                _cause, _guide = _pipeline_error_guide(str(err), original_code)
                 raise PipelineExecutionError({
                     "stepIdx": idx - 1,
                     "stepId": step.get("id"),
@@ -5722,7 +7441,10 @@ def _run_excel_python_pipeline_impl(payload, job_id=None):
                     "code": original_code,
                     "normalizedCode": code,
                     "language": step.get("language") or "python",
-                    "message": f"{stage_label}: {err}",
+                    "message": f"{_cause}\n💡 이렇게 요청해 보세요: {_guide}\n(자세히: {stage_label} 단계 — {err})",
+                    "cause": _cause,
+                    "promptGuide": _guide,
+                    "rawError": f"{stage_label}: {err}",
                     "stack": repr(err),
                 })
             _safe_excel_calculate(app)
@@ -5743,18 +7465,10 @@ def _run_excel_python_pipeline_impl(payload, job_id=None):
                     _warn_excel_nonfatal("pipeline snapshot", err)
 
         _perf["stepsMs"] = (time.perf_counter() - _t_steps) * 1000
-        active_output_sheet = ctx.last_output_sheet if ctx else None
-        active_output_address = ctx.last_output_address if ctx else None
-        if active_output_sheet:
-            try:
-                output_wb.Activate()
-                ws = output_wb.Worksheets(active_output_sheet)
-                ws.Activate()
-                if active_output_address:
-                    ws.Range(str(active_output_address)).Select()
-                # 미러 앱을 보이게/활성화하지 않는다(적용 중 창 튀어나옴 방지). 완료 후 프런트가 표시.
-            except Exception as err:
-                _warn_excel_nonfatal("activate output sheet", err)
+        # 적용 완료 후 마지막으로 쓴 시트/셀을 강제로 Activate/Select 하지 않는다.
+        # 사용자가 입력 시트나 채팅창을 보고 있던 상태를 깨면 셀 선택/포커스가 튀는 문제가 생긴다.
+        active_output_sheet = None
+        active_output_address = None
         if live_session:
             try:
                 refresh_excel_session_snapshots(live_session, output_wb)
@@ -5854,16 +7568,6 @@ def _run_excel_python_pipeline_impl(payload, job_id=None):
                 app.ScreenUpdating = restore_screen_updating
             except Exception:
                 pass
-        if live_session and active_output_sheet:
-            try:
-                output_wb.Activate()
-                ws = output_wb.Worksheets(active_output_sheet)
-                ws.Activate()
-                if active_output_address:
-                    ws.Range(str(active_output_address)).Select()
-                # 미러 앱을 보이게/활성화하지 않는다(적용 중 창 튀어나옴 방지). 완료 후 프런트가 표시.
-            except Exception as err:
-                _warn_excel_nonfatal("restore active output sheet", err)
         if hide_guard:
             hide_guard.set()
 
@@ -7253,13 +8957,116 @@ def _xlsx_object_reason(path):
     return ""
 
 
+def _xlsx_has_merged_cells(path):
+    p = Path(path)
+    try:
+        if not zipfile.is_zipfile(p):
+            return False
+        with zipfile.ZipFile(p) as z:
+            for n in z.namelist():
+                if not (n.startswith("xl/worksheets/") and n.endswith(".xml")):
+                    continue
+                try:
+                    data = z.read(n, 2000000)
+                except TypeError:
+                    data = z.read(n)
+                if b"<mergeCell" in data or b"<mergeCells" in data:
+                    return True
+    except Exception:
+            return False
+    return False
+
+
+def _xlsx_has_formulas(path):
+    p = Path(path)
+    try:
+        if not zipfile.is_zipfile(p):
+            return False
+        with zipfile.ZipFile(p) as z:
+            for n in z.namelist():
+                if not (n.startswith("xl/worksheets/") and n.endswith(".xml")):
+                    continue
+                try:
+                    data = z.read(n, 2000000)
+                except TypeError:
+                    data = z.read(n)
+                if b"<f" in data:
+                    return True
+    except Exception:
+        return False
+    return False
+
+
+def _python_step_requests_excel_com(step):
+    code = normalize_python_pipeline_code(str((step or {}).get("code") or ""))
+    if re.search(r"B2B_(?:ENGINE_FALLBACK|FORCE_ENGINE)\s*:\s*excel[-_ ]?com", code, re.I):
+        return "명시적 Excel COM 요청"
+    return ""
+
+
+def _python_step_has_structural_or_format_operation(step):
+    code = normalize_python_pipeline_code(str((step or {}).get("code") or ""))
+    patterns_ci = [
+        r"\binsert_cols\s*\(",
+        r"\binsert_rows\s*\(",
+        r"\bdelete_cols\s*\(",
+        r"\bdelete_rows\s*\(",
+        r"\bmove_range\s*\(",
+        r"\bmerge_cells\s*\(",
+        r"\bunmerge_cells\s*\(",
+        r"\bcopy_worksheet\s*\(",
+        r"\.Copy\s*\(",
+        r"\.PasteSpecial\s*\(",
+        r"\.EntireColumn\b",
+        r"\.EntireRow\b",
+        r"\.Insert\b",
+        r"\.Delete\b",
+    ]
+    if any(re.search(pat, code, re.I) for pat in patterns_ci):
+        return True
+    # COM-only properties must stay case-sensitive so ctx.rows(...) is not mistaken for ws.Rows(...).
+    patterns_case_sensitive = [
+        r"\.Columns\s*\(",
+        r"\.Rows\s*\(",
+    ]
+    return any(re.search(pat, code) for pat in patterns_case_sensitive)
+
+
+def _python_step_has_values_only_formula_copy_risk(step):
+    code = normalize_python_pipeline_code(str((step or {}).get("code") or ""))
+    text = "\n".join([
+        str((step or {}).get("description") or ""),
+        str((step or {}).get("prompt") or ""),
+        code,
+    ])
+    if not re.search(r"(값만|보이는\s*값|계산(?:된)?\s*값|수식\s*(?:말고|빼고|제외|없이)|values?\s*only|paste\s*values?)", text, re.I):
+        return False
+    # ctx.value/display_value/display_rows 는 openpyxl 에서도 수식 표시값을 계산/조회하는 안전 경로.
+    if re.search(r"\bctx\.(?:value|display_value|display_rows)\s*\(", code):
+        return False
+    if re.search(r"\.value\b", code, re.I) and (re.search(r"\.value\s*=", code, re.I) or re.search(r"\bctx\.(?:write_grid|set_range)\s*\(", code)):
+        return True
+    if re.search(r"\bctx\.rows\s*\(", code) and re.search(r"\bctx\.(?:write_grid|set_range)\s*\(", code):
+        return True
+    return False
+
+
 def _pipeline_payload_needs_com(payload):
     """openpyxl 엔진이 안전하지 않으면 사유 문자열을 반환(없으면 "").
     - 출력에 객체(차트/이미지/피벗/매크로)가 있으면 저장 시 유실 → COM.
     - 출력/입력 중 CSV 가 있으면 openpyxl 로 못 여므로 → COM.
+    - 병합셀이 있는 출력에서 구조 변경/서식 복붙은 Excel 방식 보정이 필요 → COM.
     - 수식은 트리거 아님(입력=계산값 읽기, 출력=수식 보존+Excel 재계산)."""
+    active_steps = [s for s in (payload.get("pipeline") or []) if not (s and s.get("enabled") is False)]
+    python_steps = [s for s in active_steps if is_python_pipeline_step(s)]
+    for step in python_steps:
+        reason = _python_step_requests_excel_com(step)
+        if reason:
+            return reason
     out = payload.get("output") or {}
     out_wid = out.get("backendWorkbookId")
+    output_has_merged_cells = False
+    output_has_formulas = False
     if out_wid:
         try:
             rec = get_workbook_or_raise(out_wid)
@@ -7268,8 +9075,14 @@ def _pipeline_payload_needs_com(payload):
             reason = _xlsx_object_reason(rec["path"])
             if reason:
                 return f"{out.get('name') or rec.get('name') or '출력'}: {reason}"
+            output_has_merged_cells = _xlsx_has_merged_cells(rec["path"])
+            output_has_formulas = _xlsx_has_formulas(rec["path"])
         except Exception:
             pass
+    if output_has_formulas and any(_python_step_has_values_only_formula_copy_risk(s) for s in python_steps):
+        return "수식 셀 값만 복사: Excel 계산값 필요"
+    if output_has_merged_cells and any(_python_step_has_structural_or_format_operation(s) for s in python_steps):
+        return "병합셀 포함 파일의 구조 변경/서식 복사"
     for it in (payload.get("inputs") or []):
         wid = it.get("backendWorkbookId")
         if not wid:
@@ -7285,10 +9098,10 @@ def _pipeline_payload_needs_com(payload):
 
 def run_backend_pipeline_payload(payload, job_id=None):
     if pipeline_has_python(payload):
-        # 엔진 선택: "python"(openpyxl, COM 없이 인프로세스 — 빠름) vs 기본 "excel"(COM, 라이브 미러).
-        engine = str(payload.get("engine") or "excel").lower()
+        # 엔진 선택: 기본 "python"(openpyxl, COM 없이 인프로세스 — 빠름) / 보조 "excel"(COM Python).
+        engine = str(payload.get("engine") or "python").lower()
         if engine in ("python", "openpyxl") and openpyxl is not None:
-            # 안전장치: 차트/이미지/피벗/매크로/수식/CSV 가 있으면 객체 유실·계산오류를 막기 위해
+            # 안전장치: 차트/이미지/피벗/매크로/CSV/병합셀 구조변경 등이 있으면 객체 유실·계산오류를 막기 위해
             # 이 실행만 자동으로 Excel(COM) 엔진으로 전환한다.
             com_reason = _pipeline_payload_needs_com(payload)
             if com_reason:

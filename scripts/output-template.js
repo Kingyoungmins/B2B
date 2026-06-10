@@ -2,7 +2,7 @@
    출력 템플릿 다운로드 (원본 양식 보존)
    =================================================================== */
 $("btn-download").onclick = () => {
-  downloadAllFilesZip();
+  downloadAllFilesZip($("btn-download"));
 };
 
 async function downloadCurrentWorkbookFile(fileId) {
@@ -105,14 +105,14 @@ function archiveFilename() {
   return `전체_파일_${stamp}.zip`;
 }
 
-async function downloadAllFilesZip() {
+async function downloadAllFilesZip(buttonEl) {
   const files = collectAllDownloadFiles();
   if (!files.length) {
     toast("다운로드할 입력/출력 파일이 없습니다.", "error");
     return;
   }
 
-  const btn = $("btn-download");
+  const btn = buttonEl || $("btn-download");
   const originalText = btn ? btn.textContent : "";
   const filename = archiveFilename();
   try {

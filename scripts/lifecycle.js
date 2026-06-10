@@ -24,6 +24,13 @@
     if (closed) return;
     closed = true;
     try {
+      // 앱/탭 종료 시 Excel 이 Quit 전 빈 회색 창으로 복원되는 것을 줄이기 위해
+      // 세션 종료 신호보다 먼저 모든 미러 창을 숨긴다.
+      navigator.sendBeacon("/api/excel/hide-all", "");
+    } catch {
+      post("/api/excel/hide-all", true);
+    }
+    try {
       navigator.sendBeacon("/__b2b_close", sessionId);
     } catch {
       post("/__b2b_close", true);

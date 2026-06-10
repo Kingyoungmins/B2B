@@ -305,6 +305,12 @@
   }
   .runner-error-step { color: #92400E; font-weight: 700; margin-bottom: 6px; }
   .runner-error-help { color: #78350F; line-height: 1.45; margin-bottom: 8px; }
+  .runner-error-note {
+    display: block; width: 100%; box-sizing: border-box; margin-bottom: 8px;
+    border: 1px solid #E5E7EB; border-radius: 6px; padding: 6px 8px;
+    font-family: inherit; font-size: 12px; line-height: 1.45; resize: vertical; min-height: 40px;
+  }
+  .runner-error-note:focus { outline: none; border-color: #F59E0B; background: #FFFBEB; }
   .runner-error-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
   .runner-error-actions button {
     border: 1px solid #F59E0B;

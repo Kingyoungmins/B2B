@@ -196,6 +196,9 @@ function refreshTabs() {
       cls: "output",
     })),
   ];
+  if (!(state.outputTemplates && state.outputTemplates.length) && state.output) {
+    all.push({ id: "output", name: state.output.name || "출력 파일", cls: "output" });
+  }
 
   if (state.currentFileId === "output" && state.outputTemplates && state.outputTemplates.length) {
     const idx = state.activeOutputIndex >= 0 ? state.activeOutputIndex : 0;
