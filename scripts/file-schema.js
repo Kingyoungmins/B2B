@@ -72,7 +72,13 @@ COPY / PASTE — preserve formatting (IMPORTANT):
 - For whole-column selections, bound the copy to the actual used rows, but include every cell in that bounded range. Do not compact the column by skipping text or blank cells; row positions must stay aligned.
 - The schema preview only shows sample rows. Never limit a copy/sort/filter to the preview rows. Use the worksheet's actual last used row/column. For month blocks in summary sheets, copy the whole bounded monthly block (title rows, header rows, blank separator column, all data rows), not just the rows visible in the preview.
 - dest.Value = src.Value 는 '값만' 복사하고 서식은 복사하지 않습니다 — 서식을 유지해야 하는 복사/붙여넣기에는 쓰지 마세요.
-- Python/openpyxl 에서도 사용자가 "값만"이라고 하지 않은 복사/붙여넣기는 기본이 **셀 복사**입니다. \`ctx.rows()\`/\`ctx.write_grid()\` 로 값만 다시 쓰지 말고, \`ws.cell(...).value\` 원본 셀을 대상 셀에 같은 위치로 대입하거나(엔진이 원본 수식/서식을 같이 운반함), 병합/Excel 고유 복붙이 중요하면 \`# B2B_ENGINE_FALLBACK: excel-com\` 과 Excel Copy/PasteSpecial 을 사용하세요.
+- **복사/붙여넣기(복붙) 요청은 openpyxl 로 처리하지 마세요(매우 자주 틀림)**: openpyxl 에서 \`.value\` 대입은 **값/수식 문자열만 옮기고 서식(글꼴·색·테두리·숫자서식·병합)은 전혀 옮기지 못합니다.** 사용자가 "값만"이라고 명시하지 않은 모든 복사/붙여넣기는 반드시 코드 첫 줄에 \`# B2B_ENGINE_FALLBACK: excel-com\` 을 넣고 Excel 복사로 처리하세요 — 값+수식+서식+병합이 전부 그대로 갑니다:
+  \`\`\`python
+  # B2B_ENGINE_FALLBACK: excel-com
+  def transform(ctx):
+      ws = ctx.sheet("회사별요약")
+      ws.Range("A1:E100").Copy(ws.Range("G1"))   # 값+수식+서식+병합 전부 복사 (열 전체 A:E 대신 실제 데이터 범위로)
+  \`\`\`
 - Python/openpyxl 에서 '값만' 복사인데 원본이 수식 셀이면 \`ws.cell(...).value\` 를 그대로 쓰지 마세요. \`ctx.value(...)\` 또는 \`ctx.display_rows(...)\` 로 계산 결과 값을 읽어 대상 셀에 쓰세요.
 - Copy 도 전체 열/행(A:F)이 아니라 실제 데이터 범위(Cells(1,c1):Cells(n,c2))로 한정하세요(전체 열 Copy 는 매우 느림).
 - 값만 바꾸는 편집(예: 텍스트 치환, 특정 셀 값 변경)은 .Value 로 해도 그 셀의 기존 서식은 그대로 유지됩니다(값만 바뀜).

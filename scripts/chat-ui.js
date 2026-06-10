@@ -240,7 +240,16 @@ function userRequestsNumericOnly(text) {
 
 function codeCopiesValuesOnly(code) {
   const text = String(code || "");
-  return /\.Value\s*=\s*[^#\n\r;]+\.Value\b/i.test(text)
+  // python(openpyxl) 두 줄 분리 패턴까지 잡는다: val = ws.cell(...).value → ws.cell(...).value = val
+  // openpyxl 의 .value 대입은 서식을 전혀 옮기지 못하므로, COM 폴백 마커 없이 복붙을
+  // .value 루프로 처리하는 코드는 '값만 복사'로 판정한다(복붙 요청일 때만 가드가 발동).
+  const isPythonSkill = /def\s+transform\s*\(\s*ctx\s*\)/.test(text);
+  const hasComFallback = /B2B_ENGINE_FALLBACK\s*:\s*excel-com/i.test(text);
+  const pythonValueCopyLoop = isPythonSkill && !hasComFallback &&
+    /\.cell\s*\([^)]*\)\s*\.value\s*=/.test(text) &&
+    /=\s*[\w.]*\.cell\s*\([^)]*\)\s*\.value\b/.test(text);
+  return pythonValueCopyLoop
+    || /\.Value\s*=\s*[^#\n\r;]+\.Value\b/i.test(text)
     || /PasteSpecial\s+[^'\n\r]*(xlPasteValues|-4163|Paste\s*:=\s*xlPasteValues|Paste\s*:=\s*-4163)/i.test(text)
     || /PasteSpecial\s*\([^)]*(xlPasteValues|-4163|Paste\s*=\s*-4163)/i.test(text)
     || /ctx\.(write_grid|set_range)\s*\([^)]*ctx\.rows\s*\(/i.test(text);
