@@ -9,9 +9,9 @@ namespace B2BSingleExe
 {
     internal static class Program
     {
-        private const string Version = "0.4.8";
+        private const string Version = "0.5.2";
         private const string ResourceName = "payload.zip";
-        private const string MainExeName = "B2B_ver0.4.8.exe";
+        private const string ExtractDirPrefix = "B2B_single_";
 
         [STAThread]
         private static int Main(string[] args)
@@ -24,7 +24,7 @@ namespace B2BSingleExe
 
                 string extractDir = Path.Combine(
                     Path.GetTempPath(),
-                    "B2B_ver0.4.8_single_" + Process.GetCurrentProcess().Id + "_" + DateTime.UtcNow.Ticks
+                    ExtractDirPrefix + Process.GetCurrentProcess().Id + "_" + DateTime.UtcNow.Ticks
                 );
                 Directory.CreateDirectory(extractDir);
 
@@ -33,10 +33,11 @@ namespace B2BSingleExe
                 ZipFile.ExtractToDirectory(payloadZip, extractDir);
                 TryDelete(payloadZip);
 
-                string mainExe = Path.Combine(extractDir, MainExeName);
-                if (!File.Exists(mainExe))
+                // 메인 exe 는 버전을 박지 않고 payload 안에서 동적으로 찾는다(B2B_ver*.exe 1개 전제).
+                string mainExe = FindMainExe(extractDir);
+                if (mainExe == null)
                 {
-                    throw new FileNotFoundException("Packaged app entry was not found.", mainExe);
+                    throw new FileNotFoundException("Packaged app entry (B2B_ver*.exe) was not found in payload.", extractDir);
                 }
 
                 ProcessStartInfo psi = new ProcessStartInfo();
@@ -70,6 +71,28 @@ namespace B2BSingleExe
             }
         }
 
+        private static string FindMainExe(string extractDir)
+        {
+            try
+            {
+                string wrapperName = Path.GetFileName(Assembly.GetExecutingAssembly().Location);
+                string[] candidates = Directory.GetFiles(extractDir, "B2B_ver*.exe", SearchOption.TopDirectoryOnly);
+                foreach (string candidate in candidates)
+                {
+                    string name = Path.GetFileName(candidate);
+                    // wrapper 자신/서버 exe 제외, 네이티브 호스트 본체만.
+                    if (String.Equals(name, wrapperName, StringComparison.OrdinalIgnoreCase)) continue;
+                    if (name.IndexOf("_single", StringComparison.OrdinalIgnoreCase) >= 0) continue;
+                    if (String.Equals(name, "B2B_Server.exe", StringComparison.OrdinalIgnoreCase)) continue;
+                    return candidate;
+                }
+            }
+            catch
+            {
+            }
+            return null;
+        }
+
         private static void ExtractPayloadZip(string targetPath)
         {
             Assembly asm = Assembly.GetExecutingAssembly();
@@ -99,7 +122,7 @@ namespace B2BSingleExe
             try
             {
                 string temp = Path.GetTempPath();
-                foreach (string dir in Directory.GetDirectories(temp, "B2B_ver0.4.8_single_*"))
+                foreach (string dir in Directory.GetDirectories(temp, ExtractDirPrefix + "*"))
                 {
                     try
                     {

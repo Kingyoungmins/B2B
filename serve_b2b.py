@@ -69,6 +69,13 @@ LIVE_EXCEL_APP = None  # 라이브 편집 세션들이 공유하는 앱 전용 E
 LIVE_FRAME_MODE = (os.environ.get("B2B_WINMODE") or "frame").strip().lower() != "legacy"
 PYTHON_SKILL_APP = None  # 라이브 미러가 없을 때 Python 스킬 실행용으로 재사용하는 숨김 Excel 인스턴스
 PYTHON_SKILL_APP_PID = None  # 위 인스턴스의 pid — 강제 정리(force-restart/초기화) 때 COM 없이 종료하기 위해 기록
+# 이 앱이 DispatchEx 로 띄운 모든 EXCEL.EXE pid. 세션에 기록되기 전에 열기가 실패하면 고아 Excel 이
+# 남는데, 강제 정리(초기화/force-restart)가 세션 pid 만 죽이면 그 고아는 영원히 안 닫힌다 → 전부 추적.
+SPAWNED_EXCEL_PIDS = set()
+# 강제 정리 시 끊어낼 COM 프록시 보관소. 전역 참조를 HTTP 스레드에서 None 으로 떨어뜨리면
+# Release 가 STA 워커 밖에서 일어나는데, 워커가 행 상태면 그 Release 가 같이 굳을 수 있다.
+# 미세한 래퍼 누수(재시작당 1~2개) < HTTP 스레드 교착이므로 여기 붙들어 둔다.
+_COM_REF_GRAVEYARD = []
 PIPELINE_JOBS_LOCK = threading.Lock()
 WORKBOOK_CACHE_LOCK = threading.Lock()
 NODE_WORKER_LOCK = threading.Lock()
@@ -149,11 +156,16 @@ def excel_available():
 def cleanup_excel_sessions():
     if not excel_available():
         return
-    pids = []
+    pids = set()
     try:
-        pids = [session.get("pid") for session in list(EXCEL_SESSIONS.values()) if session.get("pid")]
+        pids.update(int(session.get("pid")) for session in list(EXCEL_SESSIONS.values()) if session.get("pid"))
     except Exception:
-        pids = []
+        pass
+    try:
+        # 세션 기록 전에 실패한 고아 인스턴스까지(이 앱이 띄운 pid 전체).
+        pids.update(int(p) for p in SPAWNED_EXCEL_PIDS)
+    except Exception:
+        pass
     try:
         excel_call(_cleanup_excel_sessions_impl, timeout=20)
     except Exception:
@@ -163,8 +175,14 @@ def cleanup_excel_sessions():
             EXCEL_SESSIONS.clear()
         except Exception:
             pass
-        for pid in pids:
+    # graceful 정리가 성공했어도 추적된 pid 가 살아 있으면(고아) 마저 종료한다.
+    for pid in pids:
+        if _is_pid_alive(pid):
             _force_kill_pid(pid)
+    try:
+        SPAWNED_EXCEL_PIDS.clear()
+    except Exception:
+        pass
 
 
 def ensure_excel_worker():
@@ -295,6 +313,13 @@ def _force_restart_excel_sessions_direct():
             except Exception:
                 pass
     global LIVE_EXCEL_APP, PYTHON_SKILL_APP, PYTHON_SKILL_APP_PID
+    # COM 프록시 전역을 그냥 None 으로 떨어뜨리면 마지막 참조 해제(Release)가 이 HTTP 스레드에서
+    # 일어난다. 행 상태의 STA 워커로 마샬링되는 Release 는 같이 굳을 수 있으므로(초기화가 영영
+    # 안 끝나는 증상) 참조를 graveyard 로 옮겨 Release 자체를 막는다.
+    if LIVE_EXCEL_APP is not None:
+        _COM_REF_GRAVEYARD.append(LIVE_EXCEL_APP)
+    if PYTHON_SKILL_APP is not None:
+        _COM_REF_GRAVEYARD.append(PYTHON_SKILL_APP)
     LIVE_EXCEL_APP = None
     PYTHON_SKILL_APP = None
     pids = set()
@@ -312,29 +337,39 @@ def _force_restart_excel_sessions_direct():
                 pids.add(int(pid))
             except Exception:
                 pass
-    killed = 0
-    for pid in pids:
-        if _is_pid_alive(pid):
-            _force_kill_pid(pid)
-            killed += 1
-    deadline = time.time() + 2.0
-    while time.time() < deadline and any(_is_pid_alive(p) for p in pids):
-        time.sleep(0.1)
-    # 프로세스 종료 후에야 파일 잠금이 풀리므로 임시 파일 정리는 마지막에.
-    for session in sessions:
-        for key in ("openTempPath", "workingCopyPath"):
-            temp_path = session.get(key)
-            if temp_path:
+    # 세션 기록 전에 열기가 실패한 고아 인스턴스까지 포함(이 앱이 띄운 pid 전체).
+    try:
+        pids.update(int(p) for p in SPAWNED_EXCEL_PIDS)
+        SPAWNED_EXCEL_PIDS.clear()
+    except Exception:
+        pass
+
+    def _kill_and_cleanup():
+        # taskkill(프로세스당 최대 3초) + 생존 확인 루프는 수 초가 걸릴 수 있다.
+        # HTTP 응답을 잡아두면 초기화 버튼이 그 시간만큼 굳으므로 백그라운드에서 수행한다.
+        for pid in pids:
+            if _is_pid_alive(pid):
+                _force_kill_pid(pid)
+        deadline = time.time() + 3.0
+        while time.time() < deadline and any(_is_pid_alive(p) for p in pids):
+            time.sleep(0.2)
+        # 프로세스 종료 후에야 파일 잠금이 풀리므로 임시 파일 정리는 마지막에.
+        for session in sessions:
+            for key in ("openTempPath", "workingCopyPath"):
+                temp_path = session.get(key)
+                if temp_path:
+                    try:
+                        Path(temp_path).unlink(missing_ok=True)
+                    except Exception:
+                        pass
+            for cdir in session.get("companionTemps") or []:
                 try:
-                    Path(temp_path).unlink(missing_ok=True)
+                    shutil.rmtree(cdir, ignore_errors=True)
                 except Exception:
                     pass
-        for cdir in session.get("companionTemps") or []:
-            try:
-                shutil.rmtree(cdir, ignore_errors=True)
-            except Exception:
-                pass
-    return {"ok": True, "killed": killed, "sessions": len(sessions)}
+
+    threading.Thread(target=_kill_and_cleanup, name="b2b-force-restart-kill", daemon=True).start()
+    return {"ok": True, "killing": len(pids), "sessions": len(sessions)}
 
 
 atexit.register(cleanup_node_worker)
@@ -475,6 +510,9 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
             return
         if self.path == "/api/excel/run-vba":
             self.handle_excel_run_vba()
+            return
+        if self.path == "/api/excel/run-python":
+            self.handle_excel_run_python()
             return
         if self.path == "/api/excel/run-vba-pipeline":
             self.handle_excel_run_vba_pipeline()
@@ -845,6 +883,16 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
                 payload.get("excelId"),
                 payload.get("code") or payload.get("vba") or "",
                 entry=payload.get("entry"),
+            ))
+        except Exception as err:
+            self.send_json({"ok": False, "error": str(err)}, status=500)
+
+    def handle_excel_run_python(self):
+        payload = self.read_json_body()
+        try:
+            self.send_json(run_python_on_session(
+                payload.get("excelId"),
+                payload.get("code") or "",
             ))
         except Exception as err:
             self.send_json({"ok": False, "error": str(err)}, status=500)
@@ -2128,6 +2176,17 @@ def _excel_process_id(app):
         return None
 
 
+def _track_spawned_excel_app(app):
+    """이 앱이 띄운 Excel 인스턴스의 pid 를 기록한다(고아 정리용).
+    DispatchEx 직후에만 호출할 것 — 사용자 개인 Excel(GetActiveObject 폴백)을 등록하면 안 된다."""
+    try:
+        pid = _excel_process_id(app)
+        if pid:
+            SPAWNED_EXCEL_PIDS.add(int(pid))
+    except Exception:
+        pass
+
+
 def _force_kill_pid(pid):
     if not pid or os.name != "nt":
         return
@@ -2188,6 +2247,38 @@ def _ensure_vbom_access():
     return enabled
 
 
+COPILOT_DISABLED_DONE = False
+
+
+def _disable_office_copilot_best_effort():
+    """폐쇄망 VDI 에서 Excel 그리드/하단에 Copilot 버튼이 떠 사용자가 누르면 패널까지 열리는
+    사고를 막는다. HKCU 정책(turnoffcopilot=1)으로 Office Copilot UI 전체를 끈다.
+    관리자 권한 불필요. '이후 새로 띄우는' Office 인스턴스부터 적용되므로 Excel 을 띄우기
+    전에 호출해야 한다. 그룹정책이 키 쓰기를 막는 환경이면 조용히 실패한다(동작 영향 없음)."""
+    global COPILOT_DISABLED_DONE
+    if COPILOT_DISABLED_DONE or os.name != "nt":
+        return COPILOT_DISABLED_DONE
+    try:
+        import winreg
+    except Exception:
+        return False
+    done = False
+    try:
+        key = winreg.CreateKey(
+            winreg.HKEY_CURRENT_USER,
+            r"Software\Policies\Microsoft\office\16.0\common\copilot",
+        )
+        try:
+            winreg.SetValueEx(key, "turnoffcopilot", 0, winreg.REG_DWORD, 1)
+            done = True
+        finally:
+            winreg.CloseKey(key)
+    except Exception:
+        pass
+    COPILOT_DISABLED_DONE = done
+    return done
+
+
 def _is_live_shared_app(app):
     global LIVE_EXCEL_APP
     if app is None or LIVE_EXCEL_APP is None:
@@ -2216,7 +2307,9 @@ def _get_live_excel_app():
         except Exception:
             LIVE_EXCEL_APP = None
     _ensure_vbom_access()
+    _disable_office_copilot_best_effort()
     app = win32com.client.DispatchEx("Excel.Application")
+    _track_spawned_excel_app(app)
     app.Visible = False
     app.DisplayAlerts = False
     app.EnableEvents = False
@@ -2306,7 +2399,9 @@ def _open_excel_session_impl(
     open_read_only = bool(read_only_mirror)
     with EXCEL_LOCK:
         browser_hwnd = None if (native_parent_hwnd or native_overlay) else (_capture_browser_hwnd(browser_title) if read_only_mirror else None)
+        _disable_office_copilot_best_effort()
         app = _get_live_excel_app() if live_editable else win32com.client.DispatchEx("Excel.Application")
+        _track_spawned_excel_app(app)
         live_frame_mode = bool(live_editable and LIVE_FRAME_MODE)
         if live_frame_mode:
             # frame 모드: 공유 인스턴스의 글로벌 Visible 토글 금지.
@@ -3962,7 +4057,13 @@ def _run_vba_pipeline_on_session_impl(excel_id, steps, reset=True, entry=None):
                     pass
             for st in steps:
                 code = (st.get("code") if isinstance(st, dict) else str(st)) or ""
-                if code.strip():
+                if not code.strip():
+                    continue
+                lang = (st.get("language") if isinstance(st, dict) else "") or ""
+                if str(lang).lower() == "python":
+                    # Python COM 스킬(벌크 ctx 엔진). VBA 와 같은 리셋-재적용 흐름에서 혼용 가능.
+                    _exec_python_com_skill(app, wb, session, code)
+                else:
                     _inject_and_run_vba(app, wb, code, entry)
         finally:
             # 한 스텝이 던져도 Application 상태(ScreenUpdating=False 등)가 남지 않게 항상 정상화.
@@ -3985,6 +4086,626 @@ def run_vba_on_session(excel_id, code, entry=None):
 
 def run_vba_pipeline_on_session(excel_id, steps, reset=True, entry=None):
     return excel_call(_run_vba_pipeline_on_session_impl, excel_id, steps, reset=reset, entry=entry, timeout=600)
+
+
+# =====================================================================
+# Python COM 스킬 엔진 (ver0.5.2 4단계 — openpyxl 아님, 라이브 Excel COM bulk 제어)
+#
+# 강제 구조 4겹:
+#   L1 API 표면: 생성코드에 win32com/Application 을 주지 않고 벌크 전용 ctx 만 노출
+#      → 셀 단위 COM 루프는 '작성 자체가 불가능'(쓰기 프리미티브가 벌크뿐).
+#   L2 AST 정적 게이트: 실행 전 구조 분석(루프 내 ctx 쓰기, 금지 import/빌트인,
+#      Select/Activate/ActiveWorkbook, openpyxl 관용구).
+#   L3 런타임 가드: COM 호출 예산 + 데드라인(트레이서) + 쓰기 저널(실패 시 정밀 롤백)
+#      + finally 의 앱 상태 복구. 저널이 곧 변경 기록이라 별도 풀스냅샷 지문이 불필요.
+#   L4 프롬프트: PYTHON_COM_SYSTEM_PROMPT (file-schema.js) — ctx API 레퍼런스 + few-shot.
+# =====================================================================
+
+PY_SKILL_ENTRY = "transform"
+PY_COM_BUDGET = int(os.environ.get("B2B_PY_COM_BUDGET", "400"))
+PY_SKILL_TIMEOUT_S = float(os.environ.get("B2B_PY_SKILL_TIMEOUT", "120"))
+PY_READ_MAX_CELLS = int(os.environ.get("B2B_PY_READ_MAX_CELLS", "6000000"))
+
+_PY_SAFE_BUILTINS = {
+    "len": len, "range": range, "enumerate": enumerate, "zip": zip,
+    "min": min, "max": max, "sum": sum, "sorted": sorted, "reversed": reversed,
+    "abs": abs, "round": round, "any": any, "all": all, "isinstance": isinstance,
+    "str": str, "int": int, "float": float, "bool": bool,
+    "list": list, "dict": dict, "set": set, "tuple": tuple,
+    "Exception": Exception, "ValueError": ValueError, "TypeError": TypeError,
+    "KeyError": KeyError, "IndexError": IndexError, "RuntimeError": RuntimeError,
+    "print": (lambda *a, **k: None),  # 출력은 무시(자동 실행 차단 요소 없음)
+    "True": True, "False": False, "None": None,
+}
+
+_XL_UP = -4162
+_XL_TO_LEFT = -4159
+
+
+class PythonComSkillError(RuntimeError):
+    pass
+
+
+class PythonComSkillContext:
+    """생성된 Python 스킬에 노출되는 유일한 능력(capability).
+
+    - 모든 읽기/쓰기는 Range.Value2/Formula 벌크 1회 호출로만 수행된다.
+    - 쓰기 전 대상 범위의 기존 수식(Formula)을 저널에 백업 → 실패 시 그 범위만 정밀 롤백.
+    - 매 연산마다 COM 예산과 데드라인을 검사해 저사양 PC 의 COM 폭주를 차단한다.
+    - 대상 워크북은 세션에 고정(pinned)되어 ActiveWorkbook 에 의존하지 않는다.
+    """
+
+    def __init__(self, app, wb, session, _shared=None):
+        self._app = app
+        self._wb = wb
+        self._session = session
+        if _shared is None:
+            _shared = {
+                "com_calls": 0,
+                "deadline": time.monotonic() + PY_SKILL_TIMEOUT_S,
+                "journal": [],          # (ws_name, address, formulas_2d)
+                "structural": [],       # 롤백 불가 구조 변경 설명 목록
+                "books": {},
+            }
+        self._shared = _shared
+
+    # ---- 내부 가드 ----
+    def _tick(self, n=1):
+        self._shared["com_calls"] += n
+        if self._shared["com_calls"] > PY_COM_BUDGET:
+            raise PythonComSkillError(
+                f"COM 호출 예산({PY_COM_BUDGET}회)을 초과했습니다. 셀 단위 반복 대신 "
+                "ctx.read()/ctx.write() 벌크 호출로 다시 작성하세요."
+            )
+        if time.monotonic() > self._shared["deadline"]:
+            raise PythonComSkillError("Python 스킬 실행 시간이 초과되었습니다.")
+
+    def _ws(self, sheet):
+        self._tick(1)
+        try:
+            ws = self._wb.Worksheets(str(sheet))
+            _ = ws.Name
+            return ws
+        except Exception:
+            names = _excel_collection_names(self._wb.Worksheets)
+            raise PythonComSkillError(
+                f"시트 '{sheet}' 를 찾지 못했습니다. 사용 가능한 시트: {names}"
+            )
+
+    def _rng(self, ws, a1):
+        try:
+            return ws.Range(str(a1))
+        except Exception:
+            raise PythonComSkillError(f"잘못된 범위 주소입니다: '{a1}' (예: \"B2:D100\")")
+
+    @staticmethod
+    def _as_2d(values):
+        if not isinstance(values, (list, tuple)) or not values:
+            raise PythonComSkillError("write() 값은 2차원 리스트여야 합니다. 예: [[1,2],[3,4]]")
+        rows = []
+        width = None
+        for row in values:
+            if not isinstance(row, (list, tuple)):
+                raise PythonComSkillError("write() 값은 2차원 리스트여야 합니다(각 행도 리스트).")
+            if width is None:
+                width = len(row)
+            elif len(row) != width:
+                raise PythonComSkillError("write() 의 모든 행은 같은 길이여야 합니다.")
+            rows.append(tuple("" if v is None else v for v in row))
+        if width == 0:
+            raise PythonComSkillError("write() 에 빈 행을 전달할 수 없습니다.")
+        return tuple(rows), len(rows), width
+
+    def _journal_save(self, ws, rng):
+        try:
+            address = str(rng.Address)
+            formulas = _range_matrix(rng.Formula)
+            self._shared["journal"].append((str(ws.Name), address, formulas))
+            self._tick(2)
+        except Exception:
+            # 저널 실패는 실행을 막지 않는다(롤백 불가로만 기록).
+            self._shared["structural"].append("journal-save-failed")
+
+    # ---- 조회 ----
+    def sheets(self):
+        """시트 이름 목록."""
+        self._tick(1)
+        return _excel_collection_names(self._wb.Worksheets)
+
+    def used_range(self, sheet):
+        """(행수, 열수) — 시트의 사용 범위 크기."""
+        ws = self._ws(sheet)
+        used = ws.UsedRange
+        self._tick(2)
+        return int(used.Rows.Count), int(used.Columns.Count)
+
+    def last_row(self, sheet, col=1):
+        """해당 열 기준 마지막 데이터 행(1-based). 표 끝 합계행 포함 여부는 호출자가 판단."""
+        ws = self._ws(sheet)
+        self._tick(2)
+        return int(ws.Cells(ws.Rows.Count, int(col)).End(_XL_UP).Row)
+
+    def last_col(self, sheet, row=1):
+        """해당 행 기준 마지막 데이터 열(1-based)."""
+        ws = self._ws(sheet)
+        self._tick(2)
+        return int(ws.Cells(int(row), ws.Columns.Count).End(_XL_TO_LEFT).Column)
+
+    def find_header(self, sheet, header_text, header_row=1):
+        """헤더 행에서 헤더 텍스트로 열 번호(1-based)를 찾는다. 없으면 오류.
+        열 번호를 추측/하드코딩하지 말고 반드시 이 함수를 쓸 것."""
+        ws = self._ws(sheet)
+        row = int(header_row)
+        last_col = self.last_col(sheet, row)
+        rng = ws.Range(ws.Cells(row, 1), ws.Cells(row, max(1, last_col)))
+        self._tick(2)
+        values = _range_matrix(rng.Value2)
+        target = str(header_text).strip()
+        headers = [str(v).strip() if v is not None else "" for v in (values[0] if values else [])]
+        for idx, text in enumerate(headers, start=1):
+            if text == target:
+                return idx
+        for idx, text in enumerate(headers, start=1):
+            if target and target in text:
+                return idx
+        raise PythonComSkillError(
+            f"'{sheet}' 시트 {row}행에서 헤더 '{header_text}' 를 찾지 못했습니다. 실제 헤더: {headers}"
+        )
+
+    def read(self, sheet, a1_range=None):
+        """범위를 2차원 리스트로 한 번에 읽는다(COM 1회). a1_range 생략 시 used range."""
+        ws = self._ws(sheet)
+        rng = self._rng(ws, a1_range) if a1_range else ws.UsedRange
+        self._tick(3)
+        cells = int(rng.Rows.Count) * int(rng.Columns.Count)
+        if cells > PY_READ_MAX_CELLS:
+            raise PythonComSkillError(
+                f"읽기 범위가 너무 큽니다({cells:,}셀 > {PY_READ_MAX_CELLS:,}). 범위를 한정하세요."
+            )
+        return _range_matrix(rng.Value2)
+
+    def read_formulas(self, sheet, a1_range):
+        """범위의 수식 문자열을 2차원 리스트로 읽는다(수식 없는 셀은 값)."""
+        ws = self._ws(sheet)
+        rng = self._rng(ws, a1_range)
+        self._tick(3)
+        cells = int(rng.Rows.Count) * int(rng.Columns.Count)
+        if cells > PY_READ_MAX_CELLS:
+            raise PythonComSkillError(f"읽기 범위가 너무 큽니다({cells:,}셀). 범위를 한정하세요.")
+        return _range_matrix(rng.Formula)
+
+    def has_formulas(self, sheet, a1_range):
+        """범위에 수식이 하나라도 있으면 True."""
+        ws = self._ws(sheet)
+        rng = self._rng(ws, a1_range)
+        self._tick(2)
+        has = rng.HasFormula
+        return has is not False
+
+    # ---- 쓰기(벌크 전용) ----
+    def write(self, sheet, a1_start, values, overwrite_formulas=False):
+        """2차원 리스트를 시작 셀 기준으로 한 번에 쓴다(COM 1회).
+        대상에 기존 수식이 있으면 기본적으로 차단된다(overwrite_formulas=True 는
+        사용자가 수식 제거/값 대체를 '명시'했을 때만)."""
+        ws = self._ws(sheet)
+        data, rows, cols = self._as_2d(values)
+        anchor = self._rng(ws, a1_start)
+        rng = anchor.Resize(rows, cols)
+        self._tick(3)
+        if not overwrite_formulas:
+            has = rng.HasFormula
+            self._tick(1)
+            if has is not False:
+                raise PythonComSkillError(
+                    f"'{sheet}'!{a1_start} 대상 범위에 기존 수식이 있어 쓰기를 차단했습니다. "
+                    "수식 열은 건너뛰고 대상 열만 쓰거나, 사용자가 명시적으로 요청한 경우에만 "
+                    "overwrite_formulas=True 를 사용하세요."
+                )
+        self._journal_save(ws, rng)
+        rng.Value2 = data
+        self._tick(1)
+        return rows * cols
+
+    def write_cell(self, sheet, a1, value, overwrite_formulas=False):
+        """단일 셀 쓰기(소량 전용 — 루프에서 반복 호출하면 예산 초과로 차단됨)."""
+        return self.write(sheet, a1, [[value]], overwrite_formulas=overwrite_formulas)
+
+    def write_formulas(self, sheet, a1_start, formulas):
+        """수식 문자열 2차원 리스트를 한 번에 기록(예: [["=B2-C2"],["=B3-C3"]])."""
+        ws = self._ws(sheet)
+        data, rows, cols = self._as_2d(formulas)
+        anchor = self._rng(ws, a1_start)
+        rng = anchor.Resize(rows, cols)
+        self._tick(3)
+        self._journal_save(ws, rng)
+        rng.Formula = data
+        self._tick(1)
+        return rows * cols
+
+    def copy(self, src_sheet, src_range, dst_sheet, dst_cell):
+        """Excel 네이티브 복사(값+수식+서식+병합 보존). '복사/복붙' 요청의 기본 수단."""
+        src_ws = self._ws(src_sheet)
+        dst_ws = self._ws(dst_sheet)
+        src = self._rng(src_ws, src_range)
+        dst = self._rng(dst_ws, dst_cell)
+        self._tick(2)
+        try:
+            dst_target = dst.Resize(int(src.Rows.Count), int(src.Columns.Count))
+            self._tick(2)
+            self._journal_save(dst_ws, dst_target)
+        except Exception:
+            self._shared["structural"].append(f"copy:{dst_sheet}!{dst_cell}")
+        src.Copy(dst)
+        self._tick(1)
+        try:
+            self._app.CutCopyMode = False
+        except Exception:
+            pass
+        return True
+
+    def clear(self, sheet, a1_range):
+        """범위 내용 삭제(서식 유지). 수식 포함 여부와 무관하게 저널에 백업 후 삭제."""
+        ws = self._ws(sheet)
+        rng = self._rng(ws, a1_range)
+        self._tick(2)
+        self._journal_save(ws, rng)
+        rng.ClearContents()
+        self._tick(1)
+        return True
+
+    # ---- 구조 변경(저널 롤백 불가 → structural 표시) ----
+    def insert_rows(self, sheet, row, count=1):
+        ws = self._ws(sheet)
+        self._tick(2)
+        ws.Rows(f"{int(row)}:{int(row) + int(count) - 1}").Insert()
+        self._shared["structural"].append(f"insert_rows:{sheet}:{row}+{count}")
+        return True
+
+    def insert_cols(self, sheet, col, count=1):
+        """전체 열 삽입(병합셀 안전). col 은 'B' 또는 2 모두 허용."""
+        ws = self._ws(sheet)
+        col_letter = col if isinstance(col, str) else _col_letter(int(col))
+        end_letter = col_letter if int(count) <= 1 else _col_letter(
+            (int(col) if not isinstance(col, str) else self._col_index(col_letter)) + int(count) - 1
+        )
+        self._tick(2)
+        ws.Columns(f"{col_letter}:{end_letter}").Insert()
+        self._shared["structural"].append(f"insert_cols:{sheet}:{col_letter}+{count}")
+        return True
+
+    @staticmethod
+    def _col_index(letter):
+        n = 0
+        for ch in str(letter).strip().upper():
+            if not ("A" <= ch <= "Z"):
+                raise PythonComSkillError(f"잘못된 열 문자: {letter}")
+            n = n * 26 + (ord(ch) - 64)
+        return n
+
+    def delete_rows(self, sheet, row, count=1):
+        ws = self._ws(sheet)
+        self._tick(2)
+        ws.Rows(f"{int(row)}:{int(row) + int(count) - 1}").Delete()
+        self._shared["structural"].append(f"delete_rows:{sheet}:{row}+{count}")
+        return True
+
+    def delete_cols(self, sheet, col, count=1):
+        ws = self._ws(sheet)
+        col_letter = col if isinstance(col, str) else _col_letter(int(col))
+        start_idx = self._col_index(col_letter)
+        end_letter = _col_letter(start_idx + int(count) - 1)
+        self._tick(2)
+        ws.Columns(f"{col_letter}:{end_letter}").Delete()
+        self._shared["structural"].append(f"delete_cols:{sheet}:{col_letter}+{count}")
+        return True
+
+    def add_sheet(self, name, after=None):
+        self._tick(3)
+        names = _excel_collection_names(self._wb.Worksheets)
+        if str(name) in names:
+            raise PythonComSkillError(f"시트 '{name}' 이 이미 있습니다. 다른 이름을 쓰거나 먼저 삭제하세요.")
+        anchor = self._wb.Worksheets(str(after)) if after else self._wb.Worksheets(self._wb.Worksheets.Count)
+        ws = self._wb.Worksheets.Add(After=anchor)
+        ws.Name = str(name)
+        self._shared["structural"].append(f"add_sheet:{name}")
+        return True
+
+    def delete_sheet(self, name):
+        ws = self._ws(name)
+        self._tick(1)
+        ws.Delete()
+        self._shared["structural"].append(f"delete_sheet:{name}")
+        return True
+
+    def sort(self, sheet, a1_range, key_col, ascending=True, has_header=True):
+        """실제 범위 정렬. key_col 은 범위 내 1-based 열 번호 또는 'B' 열 문자."""
+        ws = self._ws(sheet)
+        rng = self._rng(ws, a1_range)
+        self._tick(3)
+        self._journal_save(ws, rng)
+        if isinstance(key_col, str):
+            key_idx_abs = self._col_index(key_col)
+            key_idx = key_idx_abs - int(rng.Column) + 1
+            self._tick(1)
+        else:
+            key_idx = int(key_col)
+        if key_idx < 1 or key_idx > int(rng.Columns.Count):
+            raise PythonComSkillError(f"정렬 키 열({key_col})이 범위를 벗어났습니다.")
+        key_rng = rng.Columns(key_idx)
+        self._tick(2)
+        rng.Sort(Key1=key_rng, Order1=(1 if ascending else 2), Header=(1 if has_header else 2))
+        self._tick(1)
+        return True
+
+    # ---- 표시/서식 ----
+    def hide_cols(self, sheet, col_range, hidden=True):
+        """예: ctx.hide_cols("매출", "B:D")"""
+        ws = self._ws(sheet)
+        self._tick(2)
+        ws.Columns(str(col_range)).Hidden = bool(hidden)
+        self._shared["structural"].append(f"hide_cols:{sheet}:{col_range}:{hidden}")
+        return True
+
+    def hide_rows(self, sheet, row_range, hidden=True):
+        ws = self._ws(sheet)
+        self._tick(2)
+        ws.Rows(str(row_range)).Hidden = bool(hidden)
+        self._shared["structural"].append(f"hide_rows:{sheet}:{row_range}:{hidden}")
+        return True
+
+    def merge(self, sheet, a1_range):
+        ws = self._ws(sheet)
+        rng = self._rng(ws, a1_range)
+        self._tick(2)
+        self._journal_save(ws, rng)
+        rng.Merge()
+        self._shared["structural"].append(f"merge:{sheet}:{a1_range}")
+        return True
+
+    def unmerge(self, sheet, a1_range):
+        ws = self._ws(sheet)
+        rng = self._rng(ws, a1_range)
+        self._tick(2)
+        rng.UnMerge()
+        self._shared["structural"].append(f"unmerge:{sheet}:{a1_range}")
+        return True
+
+    def set_number_format(self, sheet, a1_range, fmt):
+        ws = self._ws(sheet)
+        rng = self._rng(ws, a1_range)
+        self._tick(2)
+        rng.NumberFormat = str(fmt)
+        self._shared["structural"].append(f"number_format:{sheet}:{a1_range}")
+        return True
+
+    # ---- 교차 파일 ----
+    def book(self, workbook_name):
+        """같은 Excel 인스턴스에 열린 다른 업로드 파일을 대상으로 하는 ctx.
+        예: out = ctx.book("output_검증파일.xlsx"); out.write(...)"""
+        key = str(workbook_name).strip()
+        if key in self._shared["books"]:
+            return self._shared["books"][key]
+        self._tick(2)
+        target = None
+        try:
+            for wb in self._app.Workbooks:
+                try:
+                    if str(wb.Name) == key or str(Path(str(wb.Name)).stem) == str(Path(key).stem):
+                        target = wb
+                        break
+                except Exception:
+                    continue
+        except Exception:
+            target = None
+        if target is None:
+            raise PythonComSkillError(
+                f"워크북 '{workbook_name}' 이 열려 있지 않습니다. 업로드된 파일명을 그대로 쓰세요."
+            )
+        sub = PythonComSkillContext(self._app, target, self._session, _shared=self._shared)
+        self._shared["books"][key] = sub
+        return sub
+
+    # ---- 마무리/롤백 ----
+    def _changed(self):
+        return bool(self._shared["journal"]) or bool(self._shared["structural"])
+
+    def _rollback(self):
+        """실패 시 저널 역순 복원(쓰기 범위만 정밀 원복). 구조 변경은 롤백 불가."""
+        restored = 0
+        for ws_name, address, formulas in reversed(self._shared["journal"]):
+            try:
+                ws = self._wb.Worksheets(ws_name)
+                data = tuple(tuple("" if v is None else v for v in row) for row in formulas)
+                if data:
+                    ws.Range(address).Formula = data
+                    restored += 1
+            except Exception:
+                continue
+        return restored, bool(self._shared["structural"])
+
+    def summary(self):
+        return {
+            "comCalls": self._shared["com_calls"],
+            "writes": len(self._shared["journal"]),
+            "structural": list(self._shared["structural"]),
+        }
+
+
+def _python_com_static_check(code):
+    """실행 전 AST 정적 게이트. 위반은 사람이 읽을 수 있는 한국어 사유로 모아 한 번에 반환."""
+    import ast as _ast
+    failures = []
+    try:
+        tree = _ast.parse(code)
+    except SyntaxError as err:
+        raise PythonComSkillError(f"Python 문법 오류: {err}")
+
+    has_entry = False
+    forbidden_names = {
+        "open", "eval", "exec", "compile", "__import__", "input", "globals", "locals",
+        "vars", "getattr", "setattr", "delattr", "exit", "quit", "breakpoint", "help",
+    }
+    forbidden_attrs = {"Select", "Activate", "ActiveWorkbook", "ActiveSheet", "Application", "Quit",
+                       "Save", "SaveAs", "SaveCopyAs", "Close"}
+    write_ops = {"write", "write_cell", "write_formulas", "copy", "clear", "insert_rows",
+                 "insert_cols", "delete_rows", "delete_cols", "merge", "unmerge", "sort"}
+
+    loop_stack = []
+
+    class _Checker(_ast.NodeVisitor):
+        def visit_Import(self, node):
+            failures.append("import 는 사용할 수 없습니다(re/datetime/math 는 이미 주어져 있음).")
+
+        def visit_ImportFrom(self, node):
+            failures.append("import 는 사용할 수 없습니다(re/datetime/math 는 이미 주어져 있음).")
+
+        def visit_FunctionDef(self, node):
+            nonlocal has_entry
+            if node.name == PY_SKILL_ENTRY:
+                has_entry = True
+            self.generic_visit(node)
+
+        def visit_While(self, node):
+            if isinstance(node.test, _ast.Constant) and node.test.value is True:
+                failures.append("while True 무한 루프는 금지입니다.")
+            loop_stack.append("while")
+            self.generic_visit(node)
+            loop_stack.pop()
+
+        def visit_For(self, node):
+            loop_stack.append("for")
+            self.generic_visit(node)
+            loop_stack.pop()
+
+        def visit_Call(self, node):
+            func = node.func
+            if isinstance(func, _ast.Name) and func.id in forbidden_names:
+                failures.append(f"{func.id}() 는 사용할 수 없습니다.")
+            if isinstance(func, _ast.Attribute):
+                if func.attr in forbidden_attrs:
+                    failures.append(f".{func.attr} 는 사용할 수 없습니다(ctx API 만 사용).")
+                if loop_stack and func.attr in write_ops:
+                    failures.append(
+                        f"루프 안에서 ctx.{func.attr}() 를 반복 호출하면 안 됩니다. "
+                        "데이터를 메모리(리스트)에서 모두 계산한 뒤 ctx.write() 한 번으로 쓰세요."
+                    )
+            self.generic_visit(node)
+
+        def visit_Attribute(self, node):
+            if isinstance(node.value, _ast.Name) and node.value.id in {"win32com", "openpyxl", "os", "sys"}:
+                failures.append(f"{node.value.id} 모듈은 사용할 수 없습니다(ctx API 만 사용).")
+            self.generic_visit(node)
+
+        def visit_Subscript(self, node):
+            # openpyxl 관용구 ws["A1"] 차단(이 빌드의 Python 은 openpyxl 이 아님).
+            if isinstance(node.value, _ast.Name) and node.value.id in {"ws", "sheet", "worksheet"}:
+                failures.append(
+                    'ws["A1"] 식 openpyxl 관용구는 지원되지 않습니다. '
+                    "ctx.read()/ctx.write() 벌크 API 를 사용하세요."
+                )
+            self.generic_visit(node)
+
+    _Checker().visit(tree)
+    if not has_entry:
+        failures.append(f"def {PY_SKILL_ENTRY}(ctx): 진입 함수가 필요합니다.")
+    if failures:
+        # 중복 사유 정리
+        unique = list(dict.fromkeys(failures))
+        raise PythonComSkillError("정적 검사 위반:\n- " + "\n- ".join(unique))
+
+
+def _exec_python_com_skill(app, wb, session, code):
+    """샌드박스 exec + 데드라인 트레이서로 생성 Python 스킬을 실행한다.
+    반환: ctx.summary(). 실패 시 저널 롤백 후 PythonComSkillError 재전파."""
+    _python_com_static_check(code)
+    ctx = PythonComSkillContext(app, wb, session)
+    safe_globals = {
+        "__builtins__": dict(_PY_SAFE_BUILTINS),
+        "re": re,
+        "datetime": datetime,
+        "math": math,
+    }
+    try:
+        exec(compile(code, "<b2b_python_skill>", "exec"), safe_globals)
+    except PythonComSkillError:
+        raise
+    except Exception as err:
+        raise PythonComSkillError(f"Python 스킬 정의 중 오류: {err}")
+    fn = safe_globals.get(PY_SKILL_ENTRY)
+    if not callable(fn):
+        raise PythonComSkillError(f"def {PY_SKILL_ENTRY}(ctx): 함수를 찾지 못했습니다.")
+
+    deadline = time.monotonic() + PY_SKILL_TIMEOUT_S
+    counter = {"n": 0}
+
+    def _tracer(frame, event, arg):
+        counter["n"] += 1
+        if counter["n"] % 20000 == 0 and time.monotonic() > deadline:
+            raise PythonComSkillError("Python 스킬 실행 시간이 초과되었습니다(무한 루프 의심).")
+        return _tracer
+
+    sys.settrace(_tracer)
+    try:
+        fn(ctx)
+    except PythonComSkillError as err:
+        restored, structural = ctx._rollback()
+        if structural:
+            err = PythonComSkillError(
+                str(err) + " (쓰기 변경은 원복했지만 행/열/시트 구조 변경은 원복하지 못했습니다 — "
+                "실행 버튼으로 리셋 재적용을 권장합니다)"
+            )
+        raise err
+    except Exception as err:
+        restored, structural = ctx._rollback()
+        note = " (쓰기 변경은 원복됨)" if restored or not structural else ""
+        if structural:
+            note = " (쓰기 변경은 원복했지만 구조 변경은 원복하지 못했습니다 — 리셋 재적용 권장)"
+        raise PythonComSkillError(f"Python 스킬 실행 오류: {err}{note}")
+    finally:
+        sys.settrace(None)
+
+    if not ctx._changed():
+        raise PythonComSkillError(
+            "스킬이 실행됐지만 워크북에 아무 변경도 없습니다(대상 시트/범위/조건을 확인하세요). "
+            "'적용됨'으로 잘못 보고되지 않도록 실패로 처리했습니다."
+        )
+    return ctx.summary()
+
+
+def _run_python_on_session_impl(excel_id, code):
+    """라이브 세션에 떠 있는 실제 워크북에 Python COM 스킬을 실행한다(VBA 경로와 동일한 외피:
+    동반 워크북 보장 → 보호 해제 → 실행 → 앱 상태/보호/창 복구). 변경 검출은 ctx 저널이 담당."""
+    if not (code or "").strip():
+        raise RuntimeError("Python 코드가 비어 있습니다.")
+    with EXCEL_LOCK:
+        session = get_excel_session(excel_id)
+        app, wb = session_workbook(session)
+        _ensure_companion_workbooks(session, excel_id, app, wb)
+        try:
+            _protect_workbook_for_read_only_mirror(wb, False)
+        except Exception:
+            pass
+        try:
+            app.ScreenUpdating = False
+        except Exception:
+            pass
+        try:
+            summary = _exec_python_com_skill(app, wb, session, code)
+        finally:
+            _restore_app_state(app)
+            try:
+                _restore_live_protected_view(app, wb)
+            except Exception:
+                pass
+            try:
+                _restore_live_window(session, app, wb)
+            except Exception:
+                pass
+        return {"ok": True, "excelId": excel_id, "engine": "python-com", **summary}
+
+
+def run_python_on_session(excel_id, code):
+    return excel_call(_run_python_on_session_impl, excel_id, code, timeout=180)
 
 
 def _com_scalar(value):
@@ -4359,11 +5080,29 @@ def _get_excel_hover_info_impl(excel_id):
         return {"ok": True, "excelId": excel_id, **info}
 
 
+def _excel_queue_backlog():
+    """COM 워커 큐에서 '대기 중'인 작업 수(실행 중인 작업은 제외)."""
+    try:
+        return EXCEL_QUEUE.qsize() if EXCEL_QUEUE is not None else 0
+    except Exception:
+        return 0
+
+
+# 주기 폴(상태/수식 확인)은 큐가 이만큼 밀려 있으면 줄을 서지 않고 즉시 건너뛴다.
+# 폴이 큐에 쌓이면 긴 작업(적용/열기)이 끝난 뒤 stale 응답이 한꺼번에 돌아와
+# 탭/선택이 꼬이는 원인이 된다. 폴은 놓쳐도 다음 주기에 다시 오므로 버리는 것이 안전.
+POLL_SHED_QUEUE_DEPTH = 3
+
+
 def poll_excel_session_changes(excel_id):
+    if _excel_queue_backlog() >= POLL_SHED_QUEUE_DEPTH:
+        return {"ok": True, "skipped": True, "busy": True, "excelId": excel_id}
     return excel_call(_poll_excel_session_changes_impl, excel_id, timeout=60)
 
 
 def get_excel_hover_info(excel_id):
+    if _excel_queue_backlog() >= POLL_SHED_QUEUE_DEPTH:
+        return {"ok": True, "skipped": True, "busy": True, "excelId": excel_id}
     return excel_call(_get_excel_hover_info_impl, excel_id, timeout=60)
 
 
@@ -5673,6 +6412,7 @@ def _get_python_skill_app():
             PYTHON_SKILL_APP = None
             PYTHON_SKILL_APP_PID = None
     app = win32com.client.DispatchEx("Excel.Application")
+    _track_spawned_excel_app(app)
     app.Visible = False
     for attr, value in (("DisplayAlerts", False), ("EnableEvents", False), ("AskToUpdateLinks", False)):
         try:
@@ -7946,6 +8686,8 @@ def run_backend_pipeline_payload(payload, job_id=None):
 
 
 if __name__ == "__main__":
+    # Excel 을 처음 띄우기 전에 미리 — Copilot UI 차단은 새 Office 인스턴스부터 적용된다.
+    _disable_office_copilot_best_effort()
     with B2BThreadingTCPServer((HOST, PORT), B2BHandler) as httpd:
         print(f"B2B serving on http://{HOST}:{PORT}")
         print(f"Proxying /v1/* to {VLLM_BASE}/v1/*")

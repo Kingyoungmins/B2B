@@ -2,10 +2,11 @@
 setlocal
 cd /d "%~dp0"
 
-set "APP_VERSION=0.4.11-single-excel"
+set "APP_VERSION=0.5.2"
 set "SERVER_EXE=B2B_Server.exe"
 set "PACKAGE_DIR=dist\B2B_ver%APP_VERSION%"
 set "PACKAGE_ZIP=dist\B2B_ver%APP_VERSION%_portable.zip"
+set "SINGLE_EXE=dist\B2B_ver%APP_VERSION%_single.exe"
 set "OFFLINE_DIR=%~dp0tools\offline"
 set "WHEELHOUSE=%OFFLINE_DIR%\wheels"
 set "OFFLINE_NODE=%OFFLINE_DIR%\node\node.exe"
@@ -132,6 +133,72 @@ if not exist "%PACKAGE_DIR%\node.exe" (
     exit /b 1
 )
 
+echo.
+echo [INFO] Building single-file EXE...
+set "CSC=%WINDIR%\Microsoft.NET\Framework64\v4.0.30319\csc.exe"
+if not exist "%CSC%" (
+    echo [ERROR] C# compiler not found: %CSC%
+    exit /b 1
+)
+if not exist "build" mkdir "build"
+
+if "%B2B_EMBED_RUNTIME%"=="1" goto single_exe_embedded
+
+rem ---- 기본: payload wrapper 방식 (ver0.5.2 merge plan 5단계) ----
+rem 폴더형 패키지 전체를 payload.zip 으로 wrapper exe 에 내장 → 실행 시 %%TEMP%% 에 풀어
+rem 폴더형과 동일한 실행 환경을 재현한다. NativeHost 런타임 로직을 건드리지 않는다.
+set "PAYLOAD_ZIP=build\b2b_ver%APP_VERSION%_single_payload.zip"
+if exist "%PAYLOAD_ZIP%" del /f /q "%PAYLOAD_ZIP%"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "Compress-Archive -Path '%PACKAGE_DIR%\*' -DestinationPath '%PAYLOAD_ZIP%' -Force"
+if errorlevel 1 (
+    echo [ERROR] Payload zip creation failed.
+    exit /b 1
+)
+"%CSC%" /nologo /target:winexe /platform:x64 /optimize+ /codepage:65001 ^
+  /reference:System.dll ^
+  /reference:System.Core.dll ^
+  /reference:System.Windows.Forms.dll ^
+  /reference:System.IO.Compression.dll ^
+  /reference:System.IO.Compression.FileSystem.dll ^
+  /resource:%PAYLOAD_ZIP%,payload.zip ^
+  /out:"%SINGLE_EXE%" ^
+  "single_exe\B2BSingleExeLauncher.cs"
+if errorlevel 1 (
+    echo [ERROR] Single exe wrapper compile failed.
+    exit /b 1
+)
+del /f /q "%PAYLOAD_ZIP%" >nul 2>nul
+goto single_exe_done
+
+:single_exe_embedded
+rem ---- 대안(보류): NativeHost 임베디드 런타임 방식 — Windows 반복 오류 원인 분석 전까지
+rem 기본안으로 쓰지 않는다. 필요 시 B2B_EMBED_RUNTIME=1 로 빌드해 비교 검증.
+powershell -NoProfile -ExecutionPolicy Bypass -Command ^
+  "$ErrorActionPreference='Stop';" ^
+  "$csc=Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe';" ^
+  "if (!(Test-Path $csc)) { throw 'C# compiler not found: ' + $csc };" ^
+  "$refs=@('System.dll','System.Core.dll','System.Drawing.dll','System.Windows.Forms.dll','native_host\bin\Microsoft.Web.WebView2.Core.dll','native_host\bin\Microsoft.Web.WebView2.WinForms.dll');" ^
+  "$cscArgs=@('/nologo','/target:winexe','/platform:x64','/optimize+','/codepage:65001','/out:%SINGLE_EXE%');" ^
+  "foreach ($r in $refs) { $cscArgs += '/reference:' + $r };" ^
+  "$cscArgs += '/resource:dist\%SERVER_EXE%,B2B_Server.exe';" ^
+  "$cscArgs += '/resource:%OFFLINE_NODE%,node.exe';" ^
+  "$cscArgs += '/resource:native_host\bin\Microsoft.Web.WebView2.Core.dll,Microsoft.Web.WebView2.Core.dll';" ^
+  "$cscArgs += '/resource:native_host\bin\Microsoft.Web.WebView2.WinForms.dll,Microsoft.Web.WebView2.WinForms.dll';" ^
+  "$cscArgs += '/resource:native_host\bin\WebView2Loader.dll,WebView2Loader.dll';" ^
+  "$cscArgs += 'native_host\NativeHost.cs';" ^
+  "& $csc @cscArgs;" ^
+  "if ($LASTEXITCODE -ne 0) { throw 'Single-file launcher compile failed with exit code ' + $LASTEXITCODE }"
+if errorlevel 1 (
+    echo [ERROR] Single-file launcher build failed.
+    exit /b 1
+)
+
+:single_exe_done
+if not exist "%SINGLE_EXE%" (
+    echo [ERROR] Missing %SINGLE_EXE%.
+    exit /b 1
+)
+
 powershell -NoProfile -ExecutionPolicy Bypass -Command "if (Test-Path '%PACKAGE_ZIP%') { Remove-Item -Force '%PACKAGE_ZIP%' }; Compress-Archive -Path '%PACKAGE_DIR%\*' -DestinationPath '%PACKAGE_ZIP%' -Force"
 if errorlevel 1 (
     echo [ERROR] Portable zip creation failed.
@@ -143,6 +210,7 @@ echo ============================================
 echo  Offline build complete
 echo  EXE: %PACKAGE_DIR%\B2B_ver%APP_VERSION%.exe
 echo  ZIP: %PACKAGE_ZIP%
+echo  SINGLE EXE: %SINGLE_EXE%
 echo ============================================
 echo.
 endlocal

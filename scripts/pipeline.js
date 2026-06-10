@@ -49,6 +49,16 @@ function pipelineUsesVba(steps = state.pipeline) {
   return (steps || []).some(step => step && isStepEnabled(step) && inferPipelineStepLanguage(step) === "vba");
 }
 
+// 라이브 Excel 실행 대상 스텝(VBA 또는 Python COM)이 있는지. ver0.5.2 4단계부터
+// Python(def transform(ctx))도 백엔드(openpyxl)가 아니라 라이브 세션에서 실행한다.
+function pipelineUsesLiveSkill(steps = state.pipeline) {
+  return (steps || []).some(step => {
+    if (!step || !isStepEnabled(step)) return false;
+    const lang = inferPipelineStepLanguage(step);
+    return lang === "vba" || lang === "python";
+  });
+}
+
 function activePipelineSteps(steps = state.pipeline) {
   return (steps || []).filter(step => step && isStepEnabled(step));
 }
@@ -206,9 +216,11 @@ function vbaTargetExcelId() {
 // 상태에서 실행/토글/편집해도, A에서 만든 스킬은 A 탭으로 전환한 뒤 A에 적용한다.
 // (B의 같은 범위 셀이 수정되는 사고 방지 — 사용자기대: "스킬은 만든 파일에서 돈다")
 function pipelinePinnedTargetFileId(steps = state.pipeline) {
-  const vbaSteps = (steps || []).filter(s =>
-    s && s.targetFileId &&
-    (s.language === "vba" || inferPipelineStepLanguage(s) === "vba"));
+  const vbaSteps = (steps || []).filter(s => {
+    if (!s || !s.targetFileId) return false;
+    const lang = s.language || inferPipelineStepLanguage(s);
+    return lang === "vba" || lang === "python";
+  });
   const resolve = list => {
     for (const s of list) {
       if (typeof getFile === "function" && getFile(s.targetFileId)) return s.targetFileId;
@@ -288,16 +300,18 @@ async function ensureVbaRunExcelId() {
 
 function shouldRunPipelineAsVba(steps = state.pipeline) {
   if (!activePipelineSteps(steps).length) return false;
-  return pipelineUsesVba(steps) || (typeof getSkillEngine === "function" && getSkillEngine() === "vba");
+  // VBA/Python COM 스텝이 있거나 엔진이 라이브 계열이면 라이브 실행기로.
+  return pipelineUsesLiveSkill(steps) ||
+    (typeof getSkillEngine === "function" && ["vba", "python"].includes(getSkillEngine()));
 }
 
 async function runVbaPipelinePreferLive(options = {}) {
   const steps = options.pipeline || state.pipeline;
   const activeSteps = activePipelineSteps(steps);
   if (!activeSteps.length) throw new Error("실행할 활성 스킬이 없습니다.");
-  const nonVba = activeSteps.filter(step => inferPipelineStepLanguage(step) !== "vba");
-  if (nonVba.length) {
-    throw new Error("현재 실행기는 VBA 스킬만 라이브 Excel에서 실행합니다. 기존 JavaScript/Python 스킬은 VBA로 다시 생성해 주세요.");
+  const unsupported = activeSteps.filter(step => !["vba", "python"].includes(inferPipelineStepLanguage(step)));
+  if (unsupported.length) {
+    throw new Error("현재 실행기는 VBA/Python 스킬만 라이브 Excel에서 실행합니다. 기존 JavaScript 스킬은 다시 생성해 주세요.");
   }
   // 실행 버튼: 스킬이 만들어졌던 파일을 우선 대상(탭 전환 포함)으로, 없으면 기존 추정 경로.
   let excelId = null;
@@ -367,6 +381,9 @@ function applyVbaStepToLiveExcel(step, excelId) {
   const perfStartedAt = performance.now();
   let prehideMs = 0;
   let requestMs = 0;
+  // ver0.5.2 4단계: 언어에 따라 실행기 선택 — python(def transform(ctx)) 은 Python COM 엔진.
+  const liveLang = step.language || (typeof inferPipelineStepLanguage === "function" ? inferPipelineStepLanguage(step) : "vba");
+  const endpoint = liveLang === "python" ? "/api/excel/run-python" : "/api/excel/run-vba";
   if (typeof pushHistory === "function") pushHistory("단계 추가");
   state.pipeline.push(step);
   setPipelineRuntimeStatus([step.id], "running", "작업 중");
@@ -374,7 +391,7 @@ function applyVbaStepToLiveExcel(step, excelId) {
   refreshRunButton();
   if (typeof scheduleLogicAutoBackup === "function") scheduleLogicAutoBackup("step-added");
   if (typeof muteExcelMirrorForPipeline === "function") muteExcelMirrorForPipeline(excelId);
-  if (typeof beginExcelMirrorApplyLoading === "function") beginExcelMirrorApplyLoading("VBA 적용 중...");
+  if (typeof beginExcelMirrorApplyLoading === "function") beginExcelMirrorApplyLoading("스킬 적용 중...");
   const prehide = typeof hideAllExcelMirrorWindows === "function"
     ? (async () => {
         const started = performance.now();
@@ -389,11 +406,11 @@ function applyVbaStepToLiveExcel(step, excelId) {
   const promise = prehide
     .then(() => {
       const requestStarted = performance.now();
-      return postExcelMirror("/api/excel/run-vba", { excelId, code: step.code }, 0, {
-        // 저사양 PC: 실행 + 전/후 변경검출(전 시트 스냅샷 2회)까지 포함되므로 20초는 빠듯해
+      return postExcelMirror(endpoint, { excelId, code: step.code }, 0, {
+        // 저사양 PC: 실행 + 변경검출까지 포함되므로 20초는 빠듯해
         // '실패 표시 후 실제로는 적용되는' 상태 불일치를 만들었다 → 45초로 완화.
         timeoutMs: 45000,
-        timeoutMessage: "VBA 실행 응답이 지연되어 중단했습니다. 저사양 PC에서는 백그라운드에서 계속 적용 중일 수 있으니 잠시 후 화면을 확인해 주세요.",
+        timeoutMessage: "스킬 실행 응답이 지연되어 중단했습니다. 저사양 PC에서는 백그라운드에서 계속 적용 중일 수 있으니 잠시 후 화면을 확인해 주세요.",
       })
         .then(data => {
           requestMs = performance.now() - requestStarted;
@@ -435,11 +452,19 @@ function applyLogic(step) {
   // 이 스텝이 만들어진(=지금 보고 있는) 파일을 실행 대상으로 고정한다.
   // 이후 다른 탭에서 실행/토글해도 이 파일로 전환해 실행된다.
   if (!step.targetFileId && state.currentFileId) step.targetFileId = state.currentFileId;
-  // 0.4.9 리모콘 모델: VBA 스킬은 파이프라인/시뮬레이터를 우회해 라이브 엑셀에 즉시 주입 실행.
-  if (((typeof getSkillEngine === "function" && getSkillEngine() === "vba") || step.language === "vba")) {
-    const liveExcelId = vbaTargetExcelId();
-    if (liveExcelId) return applyVbaStepToLiveExcel(step, liveExcelId);
-    // 라이브 세션이 없으면 아래 기존 경로로 폴백.
+  // 라이브 실행기(VBA/Python COM): 파이프라인/시뮬레이터를 우회해 라이브 엑셀에 즉시 실행.
+  {
+    const liveLang = inferPipelineStepLanguage(step);
+    if (liveLang === "vba" || liveLang === "python") {
+      const liveExcelId = vbaTargetExcelId();
+      if (liveExcelId) return applyVbaStepToLiveExcel(step, liveExcelId);
+      // 라이브 세션이 없으면 대상 파일 미러를 연 뒤 적용(Python 을 백엔드 openpyxl 로 보내지 않는다).
+      const pendingPromise = ensureVbaRunExcelId().then(excelId => {
+        const res = applyVbaStepToLiveExcel(step, excelId);
+        return res && res.promise ? res.promise : res;
+      });
+      return { pending: true, promise: pendingPromise };
+    }
   }
   const next = [...state.pipeline, step];
   const mustUseExcelBackend = pipelineUsesPython(next) || shouldDeferImmediatePipelineRun();
@@ -496,8 +521,8 @@ function insertLogic(step, position) {
   const idx = Math.max(0, Math.min(total, (position | 0) - 1));
   const next = state.pipeline.slice();
   next.splice(idx, 0, step);
-  // 0.4.9 VBA: 중간 삽입은 순서가 바뀌므로 라이브를 리셋하고 enabled 스텝을 처음부터 재적용.
-  if ((typeof getSkillEngine === "function" && getSkillEngine() === "vba") || step.language === "vba") {
+  // 라이브 실행기: 중간 삽입은 순서가 바뀌므로 라이브를 리셋하고 enabled 스텝을 처음부터 재적용.
+  if (pipelineUsesLiveSkill(next)) {
     const liveExcelId = vbaTargetExcelId();
     if (liveExcelId) {
       if (typeof pushHistory === "function") pushHistory("단계 삽입");
@@ -568,7 +593,7 @@ function replaceLogicAt(stepId, newCode, newDescription, language) {
   const originalStep = state.pipeline[idx];
   const next = state.pipeline.slice();
   next[idx] = normalizeStep({ ...next[idx], code: newCode, description: newDescription || next[idx].description, language });
-  if ((typeof getSkillEngine === "function" && getSkillEngine() === "vba") || pipelineUsesVba(next)) {
+  if (pipelineUsesLiveSkill(next)) {
     const liveExcelId = vbaTargetExcelId();
     if (liveExcelId) {
       if (typeof pushHistory === "function") pushHistory("단계 수정");
@@ -1343,7 +1368,11 @@ async function reapplyVbaPipelineToLive(excelId, options = {}) {
   let requestMs = 0;
   const sourceSteps = options.steps || state.pipeline;
   const steps = (sourceSteps || [])
-    .filter(s => isStepEnabled(s) && (s.language === "vba" || (typeof inferPipelineStepLanguage === "function" && inferPipelineStepLanguage(s) === "vba")))
+    .filter(s => {
+      if (!isStepEnabled(s)) return false;
+      const lang = s.language || (typeof inferPipelineStepLanguage === "function" ? inferPipelineStepLanguage(s) : "");
+      return lang === "vba" || lang === "python";
+    })
     .map(s => ({
       stepIdx: (sourceSteps || []).indexOf(s),
       stepId: s.id || null,
@@ -1363,7 +1392,7 @@ async function reapplyVbaPipelineToLive(excelId, options = {}) {
   } catch (_) {}
   if (window.runnerSetRunning) window.runnerSetRunning(true);
   if (typeof muteExcelMirrorForPipeline === "function") muteExcelMirrorForPipeline(excelId);
-  if (typeof beginExcelMirrorApplyLoading === "function") beginExcelMirrorApplyLoading("VBA 재적용 중...");
+  if (typeof beginExcelMirrorApplyLoading === "function") beginExcelMirrorApplyLoading("스킬 재적용 중...");
   try {
     if (typeof hideAllExcelMirrorWindows === "function") {
       const started = performance.now();
@@ -1376,8 +1405,9 @@ async function reapplyVbaPipelineToLive(excelId, options = {}) {
     }
     const requestStarted = performance.now();
     const data = await postExcelMirror("/api/excel/run-vba-pipeline", { excelId, steps, reset: true }, 0, {
-      // 리셋(원본 시트 교체) + 스텝당 실행 시간을 저사양 기준으로 여유 있게.
-      timeoutMs: Math.max(45000, Math.min(180000, steps.length * 30000)),
+      // 리셋(원본 시트 교체)만으로도 대형 파일은 1분 이상 걸릴 수 있다(특히 토글 OFF: steps=0).
+      // 기본 90초 + 스텝당 30초 — 너무 짧으면 '실패 표시 후 실제로는 적용되는' 상태 불일치가 생긴다.
+      timeoutMs: Math.max(90000, Math.min(300000, 60000 + steps.length * 30000)),
       timeoutMessage: "VBA 파이프라인 실행 응답이 지연되어 중단했습니다. 저사양 PC에서는 백그라운드에서 계속 적용 중일 수 있으니 잠시 후 화면을 확인해 주세요.",
     });
     requestMs = performance.now() - requestStarted;
@@ -1411,8 +1441,11 @@ async function reapplyVbaPipelineToLive(excelId, options = {}) {
 }
 
 async function reconcilePipelineSimulationAfterEdit(options = {}) {
-  // VBA 엔진 + 라이브 세션이면 파이프라인 재동기화를 라이브 리셋+재적용으로 처리.
-  if (typeof getSkillEngine === "function" && getSkillEngine() === "vba") {
+  // 라이브 엔진(vba/python COM) + 라이브 세션이면 파이프라인 재동기화를 라이브 리셋+재적용으로 처리.
+  // (주의: 이 분기를 안 타면 백엔드 openpyxl 경로로 빠져 '라이브 Excel 은 리셋되지 않는' 상태가 된다 —
+  //  python 엔진 강제 후 토글 OFF 가 해제되지 않던 버그의 원인. vba 단독 체크 금지.)
+  const liveEngine = typeof getSkillEngine === "function" ? getSkillEngine() : "";
+  if (liveEngine === "vba" || liveEngine === "python") {
     // 대상 고정: 스킬이 만들어졌던 파일(A)을 우선 대상으로 삼는다(현재 탭이 B여도).
     // reapplyVbaPipelineToLive 내부에서도 다시 보정하지만, 여기서 먼저 A 세션을
     // 확보(필요 시 새로 오픈)해 두면 A 미러가 트림돼 닫힌 경우에도 안전하게 동작한다.

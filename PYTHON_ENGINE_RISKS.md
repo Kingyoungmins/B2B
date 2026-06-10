@@ -1,5 +1,34 @@
 # Python Engine Risks for Live Excel UX
 
+## Direction (ver0.5.2 merge)
+
+ver0.5.2 병합에서 다음 방향을 우선 검토한다 (`docs/VER_0_5_2_MERGE_PLAN.md` 4단계):
+
+- **기본 후보는 Python COM이다.** 실제 떠 있는 Excel workbook을 직접 제어해 live Excel UX와
+  탭/선택 상태를 유지하는 방향이 현재 구조와 가장 잘 맞는다.
+- openpyxl은 완전 배제라기보다 **merge 방향에 따라 제한적 보조 경로로 검토**한다. live preview가
+  필요 없는 파일 전용 변환에는 유용할 수 있지만, 기본 실행 경로로 둘 때는 visible workbook과
+  file workbook의 상태 분리, reload 비용, 수식/객체 보존 문제가 생긴다.
+- 아래 "Python COM bulk 설계 체크리스트"는 Python COM을 도입할 경우의 필수 기준이다.
+
+### Python COM bulk 설계 체크리스트 (도입 시 필수)
+
+- 생성 코드는 명시적인 target workbook/fileId를 받는다. wrapper가 보장한 경우 외에는
+  `ActiveWorkbook`에 의존하지 않는다.
+- `Range.Value2`로 2D 배열을 한 번에 읽고, Python 메모리에서 계산한 뒤 대상 `Range.Value2`에
+  한 번에 쓴다. 셀 단위 반복 COM 호출(`.Cells(r,c).Value = ...` 루프)은 프롬프트/정적검사/런타임
+  가드로 금지한다.
+- `UsedRange` 전체 재기록 금지 — 대상 범위와 출력 범위를 명시적으로 좁힌다.
+- `.Select`/`.Activate`는 사용자가 보는 workbook 전환 wrapper에서만 제한적으로 허용하고,
+  데이터 처리 로직 내부에서는 금지한다.
+- 수식이 있는 셀은 쓰기 전에 Formula/HasFormula 맵을 확인하고, 사용자 요청이 명확하지 않으면
+  값으로 덮어쓰지 않는다.
+- ScreenUpdating/Calculation/EnableEvents 제어와 finally 복구를 런타임에서 강제한다.
+- 필수 테스트: 수식 유지/다운로드 후 계산, 숨김 열·행 유지, 병합셀 구조 복사, 다중 workbook
+  입출력 참조, 적용 후 현재 탭 유지, bulk vs 셀 단위 성능 측정, 실행 실패 후 창/탭/selection 복구.
+
+이하 문서는 위 방향의 근거다.
+
 ## Context
 
 This note summarizes design risks if the current live Excel architecture moves toward a Python-based skill language.

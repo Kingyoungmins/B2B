@@ -4,6 +4,7 @@ using System.Drawing;
 using System.IO;
 using System.Net;
 using System.Net.Sockets;
+using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
@@ -16,12 +17,19 @@ namespace B2BNativeHost
 {
     static class Program
     {
-        public static readonly string LogPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "native_host.log");
+        public static readonly string RuntimeDir = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "B2B_Billing_Agent",
+            "embedded_runtime"
+        );
+        public static readonly string LogPath = Path.Combine(RuntimeDir, "native_host.log");
+        private static bool embeddedRuntimeReady;
 
         public static void Log(string message)
         {
             try
             {
+                Directory.CreateDirectory(Path.GetDirectoryName(LogPath));
                 File.AppendAllText(
                     LogPath,
                     DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff") + " " + message + Environment.NewLine,
@@ -31,6 +39,113 @@ namespace B2BNativeHost
             catch
             {
             }
+        }
+
+        public static void InstallEmbeddedAssemblyResolver()
+        {
+            AppDomain.CurrentDomain.AssemblyResolve += delegate(object sender, ResolveEventArgs args)
+            {
+                try
+                {
+                    AssemblyName name = new AssemblyName(args.Name);
+                    string dllName = name.Name + ".dll";
+                    if (!String.Equals(dllName, "Microsoft.Web.WebView2.Core.dll", StringComparison.OrdinalIgnoreCase)
+                        && !String.Equals(dllName, "Microsoft.Web.WebView2.WinForms.dll", StringComparison.OrdinalIgnoreCase))
+                    {
+                        return null;
+                    }
+                    string path = EnsureEmbeddedResourceFile(dllName, false);
+                    return File.Exists(path) ? Assembly.LoadFrom(path) : null;
+                }
+                catch
+                {
+                    return null;
+                }
+            };
+        }
+
+        public static string EnsureBundledRuntimeFiles()
+        {
+            if (embeddedRuntimeReady) return RuntimeDir;
+            Directory.CreateDirectory(RuntimeDir);
+            bool hasEmbeddedServer = HasEmbeddedResourceFile("B2B_Server.exe");
+            bool hasEmbeddedNode = HasEmbeddedResourceFile("node.exe");
+            if (!hasEmbeddedServer && !hasEmbeddedNode)
+            {
+                embeddedRuntimeReady = true;
+                return RuntimeDir;
+            }
+            EnsureEmbeddedResourceFile("B2B_Server.exe", hasEmbeddedServer);
+            EnsureEmbeddedResourceFile("node.exe", hasEmbeddedNode);
+            EnsureEmbeddedResourceFile("Microsoft.Web.WebView2.Core.dll", false);
+            EnsureEmbeddedResourceFile("Microsoft.Web.WebView2.WinForms.dll", false);
+            EnsureEmbeddedResourceFile("WebView2Loader.dll", false);
+            string path = Environment.GetEnvironmentVariable("PATH") ?? "";
+            if (path.IndexOf(RuntimeDir, StringComparison.OrdinalIgnoreCase) < 0)
+            {
+                Environment.SetEnvironmentVariable("PATH", RuntimeDir + Path.PathSeparator + path);
+            }
+            embeddedRuntimeReady = true;
+            Log("Embedded runtime ready at " + RuntimeDir);
+            return RuntimeDir;
+        }
+
+        private static bool HasEmbeddedResourceFile(string fileName)
+        {
+            Assembly asm = Assembly.GetExecutingAssembly();
+            string suffix = "." + fileName.Replace("\\", ".").Replace("/", ".");
+            foreach (string name in asm.GetManifestResourceNames())
+            {
+                if (name.EndsWith(suffix, StringComparison.OrdinalIgnoreCase)
+                    || String.Equals(name, fileName, StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        private static string EnsureEmbeddedResourceFile(string fileName, bool required)
+        {
+            string target = Path.Combine(RuntimeDir, fileName);
+
+            Assembly asm = Assembly.GetExecutingAssembly();
+            string suffix = "." + fileName.Replace("\\", ".").Replace("/", ".");
+            string resourceName = null;
+            foreach (string name in asm.GetManifestResourceNames())
+            {
+                if (name.EndsWith(suffix, StringComparison.OrdinalIgnoreCase)
+                    || String.Equals(name, fileName, StringComparison.OrdinalIgnoreCase))
+                {
+                    resourceName = name;
+                    break;
+                }
+            }
+
+            if (resourceName == null)
+            {
+                if (File.Exists(target)) return target;
+                if (required) throw new FileNotFoundException("Embedded resource not found", fileName);
+                return target;
+            }
+
+            Directory.CreateDirectory(RuntimeDir);
+            using (Stream input = asm.GetManifestResourceStream(resourceName))
+            {
+                if (input == null)
+                {
+                    if (required) throw new FileNotFoundException("Embedded resource stream not found", resourceName);
+                    return target;
+                }
+                string tmp = target + ".tmp";
+                using (FileStream output = File.Create(tmp))
+                {
+                    input.CopyTo(output);
+                }
+                if (File.Exists(target)) File.Delete(target);
+                File.Move(tmp, target);
+            }
+            return target;
         }
 
         private static void ShowFatal(Exception ex)
@@ -48,6 +163,7 @@ namespace B2BNativeHost
         [STAThread]
         static void Main()
         {
+            InstallEmbeddedAssemblyResolver();
             Application.ThreadException += delegate(object sender, ThreadExceptionEventArgs e) { ShowFatal(e.Exception); };
             AppDomain.CurrentDomain.UnhandledException += delegate(object sender, UnhandledExceptionEventArgs e)
             {
@@ -57,6 +173,7 @@ namespace B2BNativeHost
             try
             {
                 Log("Native host starting");
+                EnsureBundledRuntimeFiles();
                 Application.EnableVisualStyles();
                 Application.SetCompatibleTextRenderingDefault(false);
                 Application.Run(new MainForm());
@@ -93,6 +210,14 @@ namespace B2BNativeHost
         private bool restartingServer;
         private DateTime lastServerRestartUtc = DateTime.MinValue;
         private int recentRestartCount;
+        // 작업 잠금(UI busy): WebView 의 DOM 오버레이는 왼쪽 웹 영역만 덮는다.
+        // 오른쪽 네이티브 파일탭과 Excel 창(별도 HWND)은 여기서 직접 잠근다.
+        private Form uiBusyOverlay;
+        private Label uiBusyOverlayLabel;
+        private System.Windows.Forms.Timer uiBusyRevealTimer;
+        private System.Windows.Forms.Timer uiBusyFailsafeTimer;
+        private bool uiBusyActive;
+        private string uiBusyLabelText = "작업 중...";
 
         private delegate bool EnumWindowProc(IntPtr hwnd, IntPtr lParam);
 
@@ -226,6 +351,8 @@ namespace B2BNativeHost
             Activated += (s, e) =>
             {
                 PublishNativeBounds();
+                // 다른 앱에 갔다가 복귀: 작업이 아직 진행 중이면 차단막을 다시 깐다.
+                if (uiBusyActive) ShowUiBusyOverlay();
                 // 호스트 창(웹뷰 + 네이티브 탭 포함)이 활성화됨 → JS에 알림.
                 // 여기서 즉시 Excel 을 복원하면 비활성 WebView 의 첫 버튼 클릭이 포커스/raise 처리에
                 // 소비될 수 있어, 실제 복원은 JS 의 지연 스케줄이나 최소화 복원 경로에서만 수행한다.
@@ -247,6 +374,8 @@ namespace B2BNativeHost
             {
                 // 호스트 창이 비활성화됨(엑셀/다른 앱/최소화). 포그라운드 판정은 python(hide-inactive)이 수행.
                 ExecuteWebScript("window.dispatchEvent(new Event('b2bHostDeactivated'));");
+                // TopMost 차단막이 다른 앱 위에 떠 있지 않게 비활성화 동안은 숨긴다(상태는 유지).
+                if (uiBusyActive) HideUiBusyOverlay();
             };
             split.SplitterMoved += (s, e) => PublishNativeBounds();
             excelPanel.Resize += (s, e) => PublishNativeBounds();
@@ -281,6 +410,15 @@ namespace B2BNativeHost
                 if (File.Exists(Path.Combine(candidate, "B2B_Server.exe"))) return candidate;
                 if (File.Exists(Path.Combine(candidate, "serve_b2b.py"))) return candidate;
                 dir = Path.Combine(candidate, "..");
+            }
+            try
+            {
+                string embedded = Program.EnsureBundledRuntimeFiles();
+                if (File.Exists(Path.Combine(embedded, "B2B_Server.exe"))) return embedded;
+            }
+            catch (Exception ex)
+            {
+                Program.Log("Embedded runtime unavailable: " + ex.Message);
             }
             return Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", ".."));
         }
@@ -385,6 +523,11 @@ namespace B2BNativeHost
                 UpdateExcelLoading(message);
                 return;
             }
+            if (message.StartsWith("B2B_UI_BUSY\t", StringComparison.Ordinal))
+            {
+                UpdateUiBusy(message);
+                return;
+            }
             if (message == "B2B_RESTART_SERVER")
             {
                 Task ignore = RestartPythonServerAsync(false);
@@ -402,6 +545,186 @@ namespace B2BNativeHost
             if (active)
             {
                 excelLoadingLabel.BringToFront();
+            }
+            // 패널 로딩 라벨과 busy 오버레이 라벨이 겹쳐 이중 표기되지 않게 표현을 갱신.
+            RefreshUiBusyOverlayPresentation();
+        }
+
+        private void UpdateUiBusy(string message)
+        {
+            string[] parts = message.Split('\t');
+            bool active = parts.Length > 1 && parts[1] == "1";
+            string text = parts.Length > 2 ? DecodeMessagePart(parts[2]) : "";
+            SetUiBusy(active, text);
+        }
+
+        private void SetUiBusy(bool active, string text)
+        {
+            uiBusyActive = active;
+            if (!String.IsNullOrWhiteSpace(text)) uiBusyLabelText = text;
+            try
+            {
+                nativeFileTabs.Enabled = !active;
+            }
+            catch
+            {
+            }
+            if (active)
+            {
+                ShowUiBusyOverlay();
+                // WebView 쪽 해제 메시지가 유실돼도(페이지 리로드/크래시) 잠금이 영구화되지 않게
+                // 자체 failsafe 로 푼다(JS 의 90초 failsafe 보다 약간 길게).
+                if (uiBusyFailsafeTimer == null)
+                {
+                    uiBusyFailsafeTimer = new System.Windows.Forms.Timer();
+                    uiBusyFailsafeTimer.Interval = 100000;
+                    uiBusyFailsafeTimer.Tick += delegate
+                    {
+                        Program.Log("UI busy failsafe release");
+                        SetUiBusy(false, "");
+                    };
+                }
+                uiBusyFailsafeTimer.Stop();
+                uiBusyFailsafeTimer.Start();
+            }
+            else
+            {
+                if (uiBusyFailsafeTimer != null) uiBusyFailsafeTimer.Stop();
+                HideUiBusyOverlay();
+            }
+        }
+
+        private void ShowUiBusyOverlay()
+        {
+            if (hostMinimized || WindowState == FormWindowState.Minimized) return;
+            // 호스트(또는 호스트가 소유한 Excel 미러)가 포그라운드가 아니면 깔지 않는다 —
+            // TopMost 차단막이 사용자가 보고 있는 다른 앱 위에 뜨면 안 된다. 복귀 시 Activated 에서 다시 깐다.
+            try
+            {
+                IntPtr fg = GetForegroundWindow();
+                bool hostForeground = fg == Handle || (fg != IntPtr.Zero && GetWindow(fg, GW_OWNER) == Handle);
+                if (!hostForeground) return;
+            }
+            catch
+            {
+            }
+            if (uiBusyOverlay == null || uiBusyOverlay.IsDisposed)
+            {
+                uiBusyOverlay = new ClickBlockOverlayForm();
+                uiBusyOverlay.Owner = this;
+                uiBusyOverlayLabel = new Label();
+                uiBusyOverlayLabel.Dock = DockStyle.Fill;
+                uiBusyOverlayLabel.TextAlign = ContentAlignment.MiddleCenter;
+                uiBusyOverlayLabel.Font = new Font(Font.FontFamily, 11F, FontStyle.Bold);
+                uiBusyOverlayLabel.ForeColor = Color.FromArgb(96, 96, 112);
+                uiBusyOverlayLabel.Cursor = Cursors.WaitCursor;
+                uiBusyOverlayLabel.Visible = false;
+                uiBusyOverlay.Controls.Add(uiBusyOverlayLabel);
+            }
+            PositionUiBusyOverlay();
+            if (!uiBusyOverlay.Visible)
+            {
+                // 즉시 입력만 차단(거의 투명), 잠깐의 전환에서는 시각적 깜빡임이 없게
+                // 짧은 지연 후에만 반투명+라벨을 보여준다(웹 오버레이의 showDelay 와 동일한 발상).
+                uiBusyOverlay.Opacity = 0.02;
+                uiBusyOverlayLabel.Visible = false;
+                uiBusyOverlay.Show();
+            }
+            if (uiBusyRevealTimer == null)
+            {
+                uiBusyRevealTimer = new System.Windows.Forms.Timer();
+                uiBusyRevealTimer.Interval = 200;
+                uiBusyRevealTimer.Tick += delegate
+                {
+                    uiBusyRevealTimer.Stop();
+                    RefreshUiBusyOverlayPresentation();
+                };
+            }
+            uiBusyRevealTimer.Stop();
+            uiBusyRevealTimer.Start();
+        }
+
+        private void RefreshUiBusyOverlayPresentation()
+        {
+            try
+            {
+                if (!uiBusyActive || uiBusyOverlay == null || uiBusyOverlay.IsDisposed || !uiBusyOverlay.Visible) return;
+                if (uiBusyRevealTimer != null && uiBusyRevealTimer.Enabled) return; // 아직 지연 표시 전
+                if (excelLoadingLabel.Visible)
+                {
+                    // 패널 로딩 라벨(스피너)이 이미 상태를 보여주는 중 → 오버레이는 클릭 방패 역할만.
+                    uiBusyOverlay.Opacity = 0.06;
+                    uiBusyOverlayLabel.Visible = false;
+                }
+                else
+                {
+                    uiBusyOverlay.Opacity = 0.42;
+                    uiBusyOverlayLabel.Text = uiBusyLabelText;
+                    uiBusyOverlayLabel.Visible = true;
+                }
+            }
+            catch
+            {
+            }
+        }
+
+        private void PositionUiBusyOverlay()
+        {
+            if (uiBusyOverlay == null || uiBusyOverlay.IsDisposed) return;
+            try
+            {
+                uiBusyOverlay.Bounds = excelPanel.RectangleToScreen(excelPanel.ClientRectangle);
+            }
+            catch
+            {
+            }
+        }
+
+        private void HideUiBusyOverlay()
+        {
+            if (uiBusyRevealTimer != null) uiBusyRevealTimer.Stop();
+            try
+            {
+                if (uiBusyOverlay != null && !uiBusyOverlay.IsDisposed && uiBusyOverlay.Visible)
+                {
+                    uiBusyOverlay.Hide();
+                }
+            }
+            catch
+            {
+            }
+        }
+
+        // Excel 미러 창(별도 최상위 HWND) 위를 덮어 클릭을 흡수하는 차단막.
+        // WS_EX_NOACTIVATE: 클릭해도 포커스를 뺏지 않고 입력만 흡수(활성화 루프 방지).
+        // WS_EX_TOOLWINDOW: 작업표시줄/Alt+Tab 에 노출되지 않음.
+        private sealed class ClickBlockOverlayForm : Form
+        {
+            public ClickBlockOverlayForm()
+            {
+                FormBorderStyle = FormBorderStyle.None;
+                ShowInTaskbar = false;
+                StartPosition = FormStartPosition.Manual;
+                TopMost = true;
+                BackColor = Color.FromArgb(250, 250, 252);
+                Cursor = Cursors.WaitCursor;
+                Opacity = 0.02;
+            }
+
+            protected override bool ShowWithoutActivation
+            {
+                get { return true; }
+            }
+
+            protected override CreateParams CreateParams
+            {
+                get
+                {
+                    CreateParams cp = base.CreateParams;
+                    cp.ExStyle |= 0x08000000; // WS_EX_NOACTIVATE
+                    cp.ExStyle |= 0x00000080; // WS_EX_TOOLWINDOW
+                    return cp;
+                }
             }
         }
 
@@ -690,6 +1013,7 @@ namespace B2BNativeHost
             string key = excelPanel.Handle.ToInt64() + ":" + screen.X + ":" + screen.Y + ":" + rect.Width + ":" + rect.Height;
             if (key == lastNativeBoundsKey) return;
             lastNativeBoundsKey = key;
+            PositionUiBusyOverlay();
             string script = string.Format(
                 "window.__B2B_NATIVE_SHELL={{enabled:true,excelOverlay:true,excelParentHwnd:'{0}',nativeHostHwnd:'{1}',excelLeft:{2},excelTop:{3},excelWidth:{4},excelHeight:{5}}};window.dispatchEvent(new Event('b2bNativeResize'));",
                 excelPanel.Handle.ToInt64(),
@@ -761,6 +1085,7 @@ namespace B2BNativeHost
                     // 진단: 누가/언제 호스트를 최소화시키는지 추적(원치 않는 최소화 이슈 분석용).
                     Program.Log("Host minimized; foreground=" + DescribeForegroundWindow());
                     HideAllExcelMirrors();
+                    if (uiBusyActive) HideUiBusyOverlay();
                 }
                 lastWindowState = WindowState;
                 return;

@@ -6,6 +6,41 @@
 
 ## 최근 변경사항
 
+### ver0.5.2 (병합 작업 브랜치 — `docs/VER_0_5_2_MERGE_PLAN.md`)
+
+기준은 ver0.5.0의 저사양 Windows PC 안정화 구조이며, ver0.5.1의 유효 변경을 선별 이식했습니다.
+
+- **스킬 실행 엔진: Python COM 중심 실험** — openpyxl 결과 파일 교체가 아니라 우측에 떠 있는
+  라이브 Excel 워크북을 벌크 전용 `ctx` API(서버 `PythonComSkillContext`)로 제어하는 경로를
+  기본 후보로 정리했습니다. API 표면 축소, AST 정적 게이트, COM 호출 예산/데드라인, 쓰기 저널
+  롤백, no-op 검출, ctx 레퍼런스/few-shot 프롬프트를 함께 둡니다. 기존 VBA 스텝은 언어 추론으로
+  계속 VBA 실행기로 라우팅되어 혼용 가능합니다. 비상 복귀: `localStorage.b2bSkillEngineOverride="vba"`.
+- **Qwen3.6-FP8 생성 안정화**: ixi 기본 Qwen3.6-27B-FP8, Think 제어 `chat_template_kwargs`,
+  설정 v4 마이그레이션, reasoning 루프 감지 시 no-think 자동 폴백을 반영했습니다. Qwen 계열은
+  준-greedy 저온 샘플링에서 반복 출력이 발생할 수 있어 no-think/think별 temperature/top_p/top_k와
+  presence_penalty를 분리 적용하고, 동일 줄 반복/장황 코드 게이트를 추가했습니다.
+- **정적 게이트 실패 시 VBA 1회 폴백**: Python COM 코드가 반복·장황·비지원 문법 때문에 게이트를
+  3회 연속 통과하지 못하면, 같은 요청을 VBA 프롬프트로 1회 재생성해 검사/실행합니다. VBA 쪽도
+  실패하면 무한 핑퐁 없이 최종 차단합니다.
+- **적용 후 view restore(0.5.1 이식)**: 적용 직전 view(파일/시트/선택)를 캡처해 적용 후
+  탭이 임의로 튀지 않게 복원. 활성 파일만 즉시 갱신, 나머지는 stale 표시 후 전환 시 갱신.
+- **스킬 재적용/토글 경로 보정**: Python 스킬도 VBA와 동일한 라이브 리셋+재적용 경로를 타도록
+  `reconcilePipelineSimulationAfterEdit` 분기를 일반화했습니다. OFF/삭제 후 라이브 Excel 화면이
+  남아 있던 문제와 대형 파일에서 뒤늦게 적용되는 불일치를 줄이기 위해 리셋 타임아웃도 완화했습니다.
+- **0.5.0 수정 예정 이슈 보강**: 스킬 대상 워크북 pinning(생성 시 파일 고정 → 실행/토글/편집
+  시 그 파일로 탭 전환 후 적용), 채팅 비우기 분리(chat history만 초기화, `cleared-marker`)를
+  반영했습니다.
+- **작업 중 UI 잠금/복구 기반**: Excel 로드·탭 전환·복구·스킬 적용 중에는 `beginUiBusy`/`withUiBusy`
+  로 상단 workbook 탭, Excel 뷰, 드롭/클릭 입력을 잠그고 작업 중 표시를 냅니다. 스킬 적용 중에는
+  중단 버튼을 통해 `/api/excel/force-restart` 기반 비상 복구를 시도합니다.
+- **초기화/채팅 비우기 후 멈춤 완화**: force-restart에서 COM 참조 해제를 즉시 수행하지 않고
+  graveyard로 넘기며, taskkill/생존 확인은 백그라운드로 분리해 HTTP 응답을 먼저 반환합니다.
+  앱이 생성한 Excel PID를 추적해 초기화/종료 시 고아 Excel을 정리하되 사용자가 직접 띄운 Excel은
+  제외합니다.
+- **단일 exe = payload wrapper(기본)**: 폴더 패키지를 payload.zip으로 내장해 `%TEMP%`에 풀어
+  실행. 기존 NativeHost 임베디드 방식은 `B2B_EMBED_RUNTIME=1` 대안으로 보류.
+- 창 안정화(R1/R2/R3 frame 모드)는 `B2B_WINMODE=legacy`로 구동작 복귀 가능.
+
 ### ver0.4.11 + 1 Excel N Workbook View
 
 ![Excel 자동화 UI 안정성 설계 비교](docs/images/ver0.4.11-one-excel-n-workbook-view.png)
@@ -330,4 +365,3 @@ B2B_ver3.7/
 - `launch_b2b.spec`는 `styles/`, `scripts/`, `vendor/` 전체를 EXE에 포함합니다.
 - AI가 생성한 스킬은 브라우저에서 `new Function(...)`으로 실행됩니다. 신뢰하지 않는 스킬 파일은 불러오지 마세요.
 - API key는 브라우저 `localStorage`에 저장됩니다. 코드에 실제 키를 하드코딩하지 마세요.
-

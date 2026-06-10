@@ -7,16 +7,27 @@ This guide is for Windows build/test PCs that cannot access the internet.
 Build a portable package without downloading anything during the build:
 
 ```text
-dist\B2B_ver0.4.11-single-excel\
-dist\B2B_ver0.4.11-single-excel_portable.zip
+dist\B2B_ver0.5.2\
+dist\B2B_ver0.5.2_portable.zip
+dist\B2B_ver0.5.2_single.exe
 ```
 
 The portable folder contains:
 
-- `B2B_ver0.4.11-single-excel.exe` native shell
+- `B2B_ver0.5.2.exe` native shell
 - `B2B_Server.exe` PyInstaller server
 - WebView2 SDK DLLs used by the native shell
 - `node.exe` bundled beside the server
+
+The single exe is a **payload wrapper** (ver0.5.2 merge plan, stage 5): the whole
+portable folder is embedded as `payload.zip` and extracted to `%TEMP%` at launch,
+so it reproduces exactly the folder-package runtime. Use this file when a tester
+needs to copy only one executable to another PC.
+
+Alternative (on hold): set `B2B_EMBED_RUNTIME=1` before running the build to use
+the legacy NativeHost embedded-resource single exe (extracts to
+`%LOCALAPPDATA%\B2B_Billing_Agent\embedded_runtime`). It had repeated errors on
+Windows and is kept only for comparison until the root cause is found.
 
 ## Closed-Network Requirements
 
@@ -130,18 +141,28 @@ build_exe_offline.bat
 Run the packaged app:
 
 ```bat
-dist\B2B_ver0.4.11-single-excel\B2B_ver0.4.11-single-excel.exe
+dist\B2B_ver0.5.2\B2B_ver0.5.2.exe
 ```
 
 Or move this zip to the test PC:
 
 ```text
-dist\B2B_ver0.4.11-single-excel_portable.zip
+dist\B2B_ver0.5.2_portable.zip
 ```
+
+For one-file transfer, move this executable instead:
+
+```text
+dist\B2B_ver0.5.2_single.exe
+```
+
+The first launch can be slower because the wrapper extracts the whole payload
+to `%TEMP%`. Old extract dirs (1+ day) are cleaned automatically on next launch.
 
 ## Notes
 
 - `build_exe_offline.bat` sets `B2B_OFFLINE_BUILD=1`, so the native host build fails instead of downloading WebView2 when the local `.nupkg` is missing.
 - The script prepends `tools\offline\node` to `PATH`, so PyInstaller bundles that `node.exe`.
 - The generated package also copies `node.exe` beside `B2B_Server.exe`; the backend checks that location first at runtime.
+- The single exe still requires Microsoft Excel desktop app and WebView2 Runtime on the target PC. The embedded WebView2 DLLs are SDK loader/managed DLLs, not the runtime itself.
 - No commit is required for this test branch; the build uses the current working tree.

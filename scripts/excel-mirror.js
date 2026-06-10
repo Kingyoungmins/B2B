@@ -42,6 +42,181 @@ const excelMirror = {
   // z-order/최소화를 OS가 처리하므로 주기 raise/hide-inactive/포커스 재배치는 끈다(드래그 선택 보호).
   ownerMode: true,
 };
+// ---- 전역 작업 잠금(busy gate) ----
+// Excel 창 로딩/스킬 적용/전환/복구 같은 COM 직렬 작업이 도는 동안 다른 클릭이 끼어들면
+// 큐가 꼬여 탭/창 상태가 어긋난다 → 작업 중에는 포인터 입력을 즉시 차단하고,
+// 120ms 이상 길어지는 작업만 오버레이로 표시한다. 빠른 탭 전환은 깜빡임을 줄이고,
+// 느린 Excel COM 작업은 사용자가 "지금 조작 불가"임을 명확히 볼 수 있게 한다.
+// 안전장치: 어떤 버그로 해제가 누락돼도 토큰마다 90초 후 자동 해제된다.
+const uiBusy = { count: 0, el: null, since: 0, guardInstalled: false };
+
+function _ensureUiBusyOverlay() {
+  if (uiBusy.el) return uiBusy.el;
+  const style = document.createElement("style");
+  style.textContent = `
+    #b2b-busy-overlay {
+      position: fixed; inset: 0; z-index: 2147483000;
+      display: none; align-items: flex-start; justify-content: center;
+      background: rgba(250, 250, 252, 0.45);
+      cursor: wait;
+    }
+    #b2b-busy-overlay.show { display: flex; }
+    body.b2b-ui-busy, body.b2b-ui-busy * { cursor: wait !important; }
+    #b2b-busy-overlay .busy-pill {
+      margin-top: 18vh;
+      display: inline-flex; align-items: center; gap: 10px;
+      background: #fff; border: 1px solid var(--border, #e1e4eb);
+      border-radius: 999px; padding: 10px 18px;
+      font-size: 13px; font-weight: 700; color: var(--ink-900, #202430);
+      box-shadow: 0 6px 24px rgba(0,0,0,0.12);
+    }
+    #b2b-busy-overlay .busy-spin {
+      width: 14px; height: 14px; border-radius: 50%;
+      border: 2px solid var(--m-400, #ff4db8); border-top-color: transparent;
+      animation: b2bBusySpin 0.8s linear infinite;
+    }
+    #b2b-busy-overlay .busy-stop {
+      display: none;
+      border: 1px solid #ef4444;
+      background: #fff;
+      color: #dc2626;
+      border-radius: 999px;
+      padding: 6px 10px;
+      font-size: 12px;
+      font-weight: 800;
+      cursor: pointer;
+    }
+    #b2b-busy-overlay .busy-stop.show { display: inline-flex; }
+    #b2b-busy-overlay .busy-stop:disabled {
+      opacity: 0.55;
+      cursor: wait;
+    }
+    @keyframes b2bBusySpin { to { transform: rotate(360deg); } }
+  `;
+  document.head.appendChild(style);
+  const el = document.createElement("div");
+  el.id = "b2b-busy-overlay";
+  el.innerHTML = `<div class="busy-pill"><span class="busy-spin"></span><span class="busy-label">작업 중...</span><button class="busy-stop" type="button">작업 중단</button></div>`;
+  // 오버레이가 모든 포인터 입력을 흡수한다(클릭/더블클릭/휠 차단).
+  // 단, 오버레이 안의 '작업 중단' 버튼만은 통과시킨다 — capture 단계에서 stopPropagation 하면
+  // 자기 자식인 버튼의 click 핸들러까지 막혀 버튼이 눌리지 않는 버그가 있었다.
+  ["pointerdown", "pointerup", "click", "dblclick", "wheel", "contextmenu"].forEach(type => {
+    el.addEventListener(type, e => {
+      const target = e.target;
+      if (target && typeof target.closest === "function" && target.closest(".busy-stop")) return;
+      e.stopPropagation();
+      e.preventDefault();
+    }, true);
+  });
+  document.body.appendChild(el);
+  uiBusy.el = el;
+  _installUiBusyInputGuard();
+  return el;
+}
+
+function _installUiBusyInputGuard() {
+  if (uiBusy.guardInstalled) return;
+  uiBusy.guardInstalled = true;
+  const blockedTypes = ["pointerdown", "pointerup", "click", "dblclick", "contextmenu", "wheel", "dragenter", "dragover", "drop"];
+  blockedTypes.forEach(type => {
+    document.addEventListener(type, e => {
+      if (!isUiBusy()) return;
+      const overlay = uiBusy.el;
+      if (overlay && overlay.contains(e.target)) return;
+      e.stopPropagation();
+      e.preventDefault();
+    }, true);
+  });
+}
+
+function isUiBusy() {
+  return uiBusy.count > 0;
+}
+
+function beginUiBusy(label = "작업 중...", options = {}) {
+  uiBusy.count += 1;
+  if (uiBusy.count === 1) uiBusy.since = Date.now();
+  const showDelayMs = Math.max(0, Number(options.showDelayMs ?? 120));
+  try {
+    const el = _ensureUiBusyOverlay();
+    const labelEl = el.querySelector(".busy-label");
+    if (labelEl) labelEl.textContent = label;
+    const stopBtn = el.querySelector(".busy-stop");
+    if (stopBtn) {
+      stopBtn.textContent = options.stopLabel || "작업 중단";
+      stopBtn.disabled = false;
+      stopBtn.classList.toggle("show", typeof options.onStop === "function");
+      stopBtn.onclick = typeof options.onStop === "function"
+        ? async e => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (stopBtn.disabled) return;
+            stopBtn.disabled = true;
+            stopBtn.textContent = options.stoppingLabel || "중단 중...";
+            try {
+              await options.onStop();
+            } catch (err) {
+              console.warn("busy stop failed:", err);
+              if (typeof toast === "function") toast("작업 중단 요청에 실패했습니다: " + (err.message || err), "error");
+              stopBtn.disabled = false;
+              stopBtn.textContent = options.stopLabel || "작업 중단";
+            }
+          }
+        : null;
+    }
+    document.body.classList.add("b2b-ui-busy");
+  } catch (_) {}
+  try { publishNativeUiBusy(true, label); } catch (_) {}
+  const token = { released: false, timer: null, showTimer: null };
+  token.showTimer = setTimeout(() => {
+    if (token.released || !isUiBusy()) return;
+    try {
+      const el = _ensureUiBusyOverlay();
+      const labelEl = el.querySelector(".busy-label");
+      if (labelEl) labelEl.textContent = label;
+      el.classList.add("show");
+    } catch (_) {}
+  }, showDelayMs);
+  token.timer = setTimeout(() => endUiBusy(token, { failsafe: true }), 90000);
+  return token;
+}
+
+function endUiBusy(token, opts = {}) {
+  if (!token || token.released) return;
+  token.released = true;
+  clearTimeout(token.showTimer);
+  clearTimeout(token.timer);
+  uiBusy.count = Math.max(0, uiBusy.count - 1);
+  if (uiBusy.count === 0) {
+    if (uiBusy.el) uiBusy.el.classList.remove("show");
+    const stopBtn = uiBusy.el && uiBusy.el.querySelector(".busy-stop");
+    if (stopBtn) {
+      stopBtn.classList.remove("show");
+      stopBtn.onclick = null;
+      stopBtn.disabled = false;
+    }
+    try { document.body.classList.remove("b2b-ui-busy"); } catch (_) {}
+    try { publishNativeUiBusy(false, ""); } catch (_) {}
+    const held = Date.now() - uiBusy.since;
+    if (typeof toast === "function") {
+      if (opts.failsafe) {
+        toast("작업이 예상보다 오래 걸려 화면 잠금을 해제했습니다. 화면이 이상하면 탭을 다시 눌러 주세요.", "error");
+      } else if (!opts.silentComplete && held > 1200) {
+        toast("작업 완료 — 화면 조작이 가능합니다.", "success");
+      }
+    }
+  }
+}
+
+async function withUiBusy(label, fn, options = {}) {
+  const token = beginUiBusy(label, options);
+  try {
+    return await fn();
+  } finally {
+    endUiBusy(token, options);
+  }
+}
+
 // 업로드한 모든 파일(보통 입력 여러 개 + 출력)을 미리 열어 스택해 둔다.
 const EXCEL_MIRROR_MAX_CACHED_SESSIONS = 10;
 const EXCEL_MIRROR_MAX_ROWS = 1048576;
@@ -129,6 +304,15 @@ function publishNativeExcelLoading(active, message) {
   if (!bridge || typeof bridge.postMessage !== "function") return;
   const enc = value => encodeURIComponent(String(value || ""));
   bridge.postMessage(["B2B_EXCEL_LOADING", active ? "1" : "0", enc(message || "")].join("\t"));
+}
+
+// DOM 오버레이는 WebView 영역만 덮는다. 오른쪽 네이티브 파일탭과 Excel 창(별도 HWND)은
+// 네이티브 호스트가 직접 잠가야 하므로 busy 상태를 호스트에 중계한다.
+function publishNativeUiBusy(active, label) {
+  const bridge = window.chrome && window.chrome.webview;
+  if (!bridge || typeof bridge.postMessage !== "function") return;
+  const enc = value => encodeURIComponent(String(value || ""));
+  bridge.postMessage(["B2B_UI_BUSY", active ? "1" : "0", enc(label || "")].join("\t"));
 }
 
 function setExcelMirrorOpening(target, active) {
@@ -243,10 +427,16 @@ async function openCurrentWorkbookInExcel() {
 }
 
 async function openExcelMirrorForFileId(fileId) {
-  if (fileId && typeof setCurrentView === "function") {
-    setCurrentView(fileId);
+  const run = async () => {
+    if (fileId && typeof setCurrentView === "function") {
+      setCurrentView(fileId);
+    }
+    await openCurrentWorkbookInExcel();
+  };
+  if (typeof withUiBusy === "function") {
+    return withUiBusy("Excel 창 여는 중...", run, { showDelayMs: 120, silentComplete: true });
   }
-  await openCurrentWorkbookInExcel();
+  return run();
 }
 
 // 업로드된 모든 파일의 fileId 목록(입력 + 출력). publishNativeFileTabs 와 동일한 규칙.
@@ -313,48 +503,50 @@ async function ensureExcelMirrorSession(fileId, { makeActive = false, deferVisib
 // 저사양 개선: 선택 파일을 '먼저' 열어 즉시 표시하고, 나머지는 백그라운드로 순차 오픈한다.
 // (기존: 전부 연 뒤에야 표시 → 파일 수 × 오픈시간 동안 빈 화면)
 async function preopenAllExcelMirrors(selectedFileId) {
-  const ids = listAllWorkbookFileIds();
-  if (!ids.length) return;
-  const selected = selectedFileId || state.currentFileId || ids[ids.length - 1];
-  const rest = ids.filter(id => id !== selected);
-  const total = rest.length + 1;
-  const failures = [];
-  // 재진입 가드: 새 preopen 이 시작되면 이전 백그라운드 오픈 루프는 중단한다.
-  const seq = (excelMirror.preopenSeq = (excelMirror.preopenSeq || 0) + 1);
-  excelMirror.preopening = true;
-  // 업로드는 명시적 사용자 동작 → preopen 동안 호스트를 활성으로 간주해
-  // 자동숨김(periodic)이 방금 연 미러들을 park(숨김) 하지 못하게 한다.
-  excelMirror.hostActive = true;
-  publishNativeExcelLoading(true, `Excel 창 준비 중... (1/${total})\n컴퓨터 성능에 따라 다소 지연될 수 있습니다`);
+  const busyToken = typeof beginUiBusy === "function"
+    ? beginUiBusy("Excel 창 준비 중...", { showDelayMs: 120, silentComplete: true })
+    : null;
   try {
-    // 1) 선택 파일 먼저: 열자마자 표시해 업로드 직후 빈 화면 시간을 최소화.
+    const ids = listAllWorkbookFileIds();
+    if (!ids.length) return;
+    const selected = selectedFileId || state.currentFileId || ids[ids.length - 1];
+    const rest = ids.filter(id => id !== selected);
+    const total = rest.length + 1;
+    const failures = [];
+    // 재진입 가드: 새 preopen 이 시작되면 이전 백그라운드 오픈 루프는 중단한다.
+    const seq = (excelMirror.preopenSeq = (excelMirror.preopenSeq || 0) + 1);
+    excelMirror.preopening = true;
+    // 업로드는 명시적 사용자 동작 → preopen 동안 호스트를 활성으로 간주해
+    // 자동숨김(periodic)이 방금 연 미러들을 park(숨김) 하지 못하게 한다.
+    excelMirror.hostActive = true;
+    publishNativeExcelLoading(true, `Excel 창 준비 중... (1/${total})\n컴퓨터 성능에 따라 다소 지연될 수 있습니다`);
     try {
-      await ensureExcelMirrorSession(selected, { makeActive: false, deferVisible: true });
-    } catch (err) {
-      failures.push({ fileId: selected, error: err });
-      if (!isMissingExcelSessionError(err)) console.warn("Excel mirror preopen failed:", selected, err);
-    }
-    if (typeof setCurrentView === "function") setCurrentView(selected);
-    const selExcelId = excelMirror.sessionsByFileId[selected];
-    if (selExcelId) {
+      // 1) 선택 파일 먼저: 열자마자 표시해 업로드 직후 빈 화면 시간을 최소화.
       try {
-        await showOnlyExcelMirrorWindow(selExcelId, { force: true });
-        scheduleExcelMirrorBaselinePoll(selExcelId, 700);
+        await ensureExcelMirrorSession(selected, { makeActive: false, deferVisible: true });
       } catch (err) {
-        if (!isMissingExcelSessionError(err)) console.warn("Excel mirror first show failed:", err);
+        failures.push({ fileId: selected, error: err });
+        if (!isMissingExcelSessionError(err)) console.warn("Excel mirror preopen failed:", selected, err);
       }
+      if (typeof setCurrentView === "function") setCurrentView(selected);
+      const selExcelId = excelMirror.sessionsByFileId[selected];
+      if (selExcelId) {
+        try {
+          await showOnlyExcelMirrorWindow(selExcelId, { force: true });
+          scheduleExcelMirrorBaselinePoll(selExcelId, 700);
+        } catch (err) {
+          if (!isMissingExcelSessionError(err)) console.warn("Excel mirror first show failed:", err);
+        }
+      }
+      startExcelMirrorPolling();
+    } catch (err) {
+      // 1단계가 예외로 빠져도 백그라운드 단계 플래그가 남지 않게 정리 후 전파.
+      if (excelMirror.preopenSeq === seq) excelMirror.preopening = false;
+      throw err;
+    } finally {
+      publishNativeExcelLoading(false, "");
     }
-    startExcelMirrorPolling();
-  } catch (err) {
-    // 1단계가 예외로 빠져도 백그라운드 단계 플래그가 남지 않게 정리 후 전파.
-    if (excelMirror.preopenSeq === seq) excelMirror.preopening = false;
-    throw err;
-  } finally {
-    // 선택본이 보이면 로딩 오버레이는 내린다(나머지는 화면 밖에서 조용히 열림).
-    publishNativeExcelLoading(false, "");
-  }
-  // 2) 나머지 파일은 백그라운드 순차 오픈(숨김 상태). 진행률은 상태줄로만 표시.
-  try {
+    // 2) 나머지 파일은 백그라운드 순차 오픈(숨김 상태). 진행률은 상태줄로만 표시.
     let done = 1;
     for (const fid of rest) {
       if (excelMirror.preopenSeq !== seq) return; // 새 preopen/리셋이 시작됨 → 이 루프 중단
@@ -375,7 +567,8 @@ async function preopenAllExcelMirrors(selectedFileId) {
     }
     return { opened: total - failures.length, failed: failures.length, failures };
   } finally {
-    if (excelMirror.preopenSeq === seq) excelMirror.preopening = false;
+    excelMirror.preopening = false;
+    if (busyToken && typeof endUiBusy === "function") endUiBusy(busyToken, { silentComplete: true });
   }
 }
 
@@ -386,39 +579,49 @@ async function autoOpenMirrorAfterUpload(selectedFileId) {
 
 async function switchVisibleExcelMirrorToFileId(fileId) {
   if (!fileId) return false;
-  const excelId = excelMirror.sessionsByFileId[fileId];
-  if (!excelId) {
-    updateMirrorShellStatus();
-    return false;
-  }
-  // 적용으로 변경됐지만 표시 안 한 입력/출력 미러(stale)는 전환 시 최신 결과로 교체.
-  if (excelMirror.staleByFileId && excelMirror.staleByFileId[fileId]) {
-    delete excelMirror.staleByFileId[fileId];
-    const file = typeof getFile === "function" ? getFile(fileId) : null;
-    const url = file && file.backendDownloadUrl;
-    if (url && isBackendResultDownloadUrl(url) && typeof refreshExcelMirrorForFileId === "function") {
-      try {
-        const refreshed = await refreshExcelMirrorForFileId(fileId, url, { openIfMissing: false });
-        if (refreshed) return true;
-      } catch (err) {
-        if (!isMissingExcelSessionError(err)) console.warn("Excel mirror stale refresh failed:", err);
+  const busyToken = typeof beginUiBusy === "function"
+    ? beginUiBusy("Excel 탭 전환 중...", { showDelayMs: 180, silentComplete: true })
+    : null;
+  try {
+    const excelId = excelMirror.sessionsByFileId[fileId];
+    if (!excelId) {
+      updateMirrorShellStatus();
+      return false;
+    }
+    // 적용으로 변경됐지만 표시 안 한 입력/출력 미러(stale)는 전환 시 최신 결과로 교체.
+    if (excelMirror.staleByFileId && excelMirror.staleByFileId[fileId]) {
+      delete excelMirror.staleByFileId[fileId];
+      const file = typeof getFile === "function" ? getFile(fileId) : null;
+      const url = file && file.backendDownloadUrl;
+      if (url && isBackendResultDownloadUrl(url) && typeof refreshExcelMirrorForFileId === "function") {
+        try {
+          const refreshed = await refreshExcelMirrorForFileId(fileId, url, { openIfMissing: false });
+          if (refreshed) return true;
+        } catch (err) {
+          if (!isMissingExcelSessionError(err)) console.warn("Excel mirror stale refresh failed:", err);
+        }
       }
     }
+    excelMirror.activeExcelId = excelId;
+    excelMirror.sessionLastUsedByFileId[fileId] = Date.now();
+    // 탭 연타 가드: 이 전환이 끝나기 전에 새 전환이 시작됐으면(seq 변경) 후속 처리를 건너뛴다.
+    // (서버 show-only 는 COM 큐에서 순서대로 실행되므로 마지막 전환이 최종 상태를 결정)
+    const seq = (excelMirror.switchSeq = (excelMirror.switchSeq || 0) + 1);
+    await showOnlyExcelMirrorWindow(excelId);
+    if (excelMirror.switchSeq !== seq) return true;
+    scheduleExcelMirrorBaselinePoll(excelId, 700);
+    startExcelMirrorPolling();
+    updateMirrorShellStatus();
+    return true;
+  } finally {
+    if (busyToken && typeof endUiBusy === "function") endUiBusy(busyToken, { silentComplete: true });
   }
-  excelMirror.activeExcelId = excelId;
-  excelMirror.sessionLastUsedByFileId[fileId] = Date.now();
-  // 탭 연타 가드: 이 전환이 끝나기 전에 새 전환이 시작됐으면(seq 변경) 후속 처리를 건너뛴다.
-  // (서버 show-only 는 COM 큐에서 순서대로 실행되므로 마지막 전환이 최종 상태를 결정)
-  const seq = (excelMirror.switchSeq = (excelMirror.switchSeq || 0) + 1);
-  await showOnlyExcelMirrorWindow(excelId);
-  if (excelMirror.switchSeq !== seq) return true;
-  scheduleExcelMirrorBaselinePoll(excelId, 700);
-  startExcelMirrorPolling();
-  updateMirrorShellStatus();
-  return true;
 }
 
-async function openExcelMirrorResultForFileId(fileId, downloadUrl) {
+async function openExcelMirrorResultForFileId(fileId, downloadUrl, options = {}) {
+  // options.preserveFocus / raiseAfter: 0.5.1 호환 시그니처.
+  // 이 빌드의 표시 경로는 어떤 경우에도 포커스를 가져가지 않으므로(SW_SHOWNA/NOACTIVATE)
+  // preserveFocus 는 항상 충족되고, show-only 가 자체적으로 최상단 표시를 보장한다.
   const resultId = extractResultIdFromDownloadUrl(downloadUrl);
   if (!fileId || !resultId) return false;
   if (typeof setCurrentView === "function") setCurrentView(fileId);
@@ -431,7 +634,7 @@ async function openExcelMirrorResultForFileId(fileId, downloadUrl) {
   excelMirror.mutedUntil = Date.now() + 1000;
   suppressExcelMirrorSelection(3000);
   await showOnlyExcelMirrorWindow(data.excelId, { force: true });
-  await pollExcelMirrorChanges(data.excelId, { baselineOnly: true });
+  await pollExcelMirrorChanges(data.excelId, { baselineOnly: true, syncSelection: false });
   startExcelMirrorPolling();
   await trimExcelMirrorSessionCache(fileId);
   return true;
@@ -443,20 +646,28 @@ async function refreshExcelMirrorForFileId(fileId, downloadUrl, options = {}) {
   const existingExcelId = excelMirror.sessionsByFileId[fileId];
   if (existingExcelId) {
     try {
+      // [0.5.1 이식] readOnlyMirror 강제 지정 제거 — 세션의 기존 모드(라이브)를 유지한다.
+      // (라이브 세션을 읽기전용으로 바꾸면 이후 VBA 대상 지정이 깨진다)
       const data = await postExcelMirror("/api/excel/replace", {
         excelId: existingExcelId,
         resultId,
-        readOnlyMirror: true,
       });
       excelMirror.sessionsByFileId[fileId] = data.excelId;
       excelMirror.sessionLastUsedByFileId[fileId] = Date.now();
       excelMirror.activeExcelId = data.excelId;
+      // 교체 직후 stale 폴 응답이 탭을 되돌리지 않게(프로그램적 표시 변경).
+      excelMirror.activeSyncMutedUntil = Date.now() + 1500;
+      excelMirror.lastUserSwitchAt = Date.now();
       updateMirrorShellStatus(`Excel 창이 최신 결과로 갱신됨: ${data.name || ""}`);
       excelMirror.mutedUntil = Date.now() + 1000;
       suppressExcelMirrorSelection(3000);
-      await positionExcelMirrorWindow(data.excelId, { force: true });
-      stabilizeExcelMirrorZOrder(data.excelId);
-      await pollExcelMirrorChanges(data.excelId, { baselineOnly: true });
+      await positionExcelMirrorWindow(data.excelId, { force: true, keepZorder: !!options.preserveFocus });
+      if (options.raiseAfter) {
+        await raiseExcelMirrorWindow(data.excelId, { force: true });
+      } else if (!options.preserveFocus) {
+        stabilizeExcelMirrorZOrder(data.excelId);
+      }
+      await pollExcelMirrorChanges(data.excelId, { baselineOnly: true, syncSelection: false });
       startExcelMirrorPolling();
       return true;
     } catch (err) {
@@ -465,7 +676,10 @@ async function refreshExcelMirrorForFileId(fileId, downloadUrl, options = {}) {
     }
   }
   if (options.openIfMissing) {
-    return openExcelMirrorResultForFileId(fileId, downloadUrl);
+    return openExcelMirrorResultForFileId(fileId, downloadUrl, {
+      preserveFocus: !!options.preserveFocus,
+      raiseAfter: !!options.raiseAfter,
+    });
   }
   return false;
 }
@@ -491,7 +705,7 @@ async function acknowledgeExcelMirrorApplied(fileId) {
   excelMirror.mutedUntil = Date.now() + 1500;
   excelMirror.selectionMutedUntil = Date.now() + 1500;
   await positionExcelMirrorWindow(excelId, { force: true });
-  await baselineExcelMirrorSession(excelId);
+  await baselineExcelMirrorSession(excelId, { syncSelection: false });
   excelMirror.mutedUntil = Date.now() + 300;
   excelMirror.selectionMutedUntil = Date.now() + 300;
   updateMirrorShellStatus("열려 있는 Excel 창에 적용되었습니다.");
@@ -499,11 +713,19 @@ async function acknowledgeExcelMirrorApplied(fileId) {
   return true;
 }
 
-async function baselineExcelMirrorSession(excelId, attempts = 8) {
+async function baselineExcelMirrorSession(excelId, options = {}, attempts = 8) {
+  // 구버전 호출 호환: baselineExcelMirrorSession(excelId, 8) 형태도 허용.
+  if (typeof options === "number") {
+    attempts = options;
+    options = {};
+  }
   if (!excelId) return null;
   for (let i = 0; i < attempts; i++) {
     if (!excelMirror.polling) {
-      return await pollExcelMirrorChanges(excelId, { baselineOnly: true });
+      return await pollExcelMirrorChanges(excelId, {
+        baselineOnly: true,
+        syncSelection: options.syncSelection !== false,
+      });
     }
     await new Promise(resolve => setTimeout(resolve, 150));
   }
@@ -616,6 +838,10 @@ function clearExcelMirrorClientState() {
   excelMirror.hideTimer = null;
   excelMirror.applying = false;
   excelMirror.applyLoadingTimer = null;
+  if (excelMirror.applyBusyToken && typeof endUiBusy === "function") {
+    endUiBusy(excelMirror.applyBusyToken, { silentComplete: true });
+    excelMirror.applyBusyToken = null;
+  }
   if (typeof publishNativeExcelLoading === "function") publishNativeExcelLoading(false, "");
   updateMirrorShellStatus();
 }
@@ -638,14 +864,21 @@ async function closeAllExcelMirrorSessions() {
 async function forceCloseAllExcelMirrorSessions() {
   clearExcelMirrorClientState(); // 타이머/세션 매핑부터 즉시 차단(초기화 UI 와 동기)
   try {
-    await postExcelMirror("/api/excel/force-restart", {});
+    // 서버는 pid kill 을 백그라운드로 돌리고 즉시 응답하지만, 혹시 서버 자체가 굳어 있어도
+    // 초기화 UI 가 함께 굳지 않도록 타임아웃 백스톱을 둔다.
+    await postExcelMirror("/api/excel/force-restart", {}, 0, {
+      timeoutMs: 8000,
+      timeoutMessage: "Excel 강제 정리 요청이 지연되어 기다리지 않고 진행합니다.",
+    });
   } catch (err) {
     if (!isMissingExcelSessionError(err)) console.warn("Excel force close failed:", err);
   }
   return true;
 }
 
-async function restoreActiveExcelMirrorWindow() {
+async function restoreActiveExcelMirrorWindow(options = {}) {
+  // options.preserveFocus: 0.5.1 호환 시그니처 — 이 빌드의 복원 경로는 원래 포커스를
+  // 가져가지 않으므로(SW_SHOWNA/NOACTIVATE) 항상 preserveFocus 와 동일하게 동작한다.
   const excelId = currentExcelId() || excelMirror.activeExcelId;
   if (!excelId) return false;
   if (Date.now() < (excelMirror.uiClickGuardUntil || 0)) return false;
@@ -659,6 +892,10 @@ async function restoreActiveExcelMirrorWindow() {
 
 async function recoverExcelMirrorWindow(excelId = currentExcelId() || excelMirror.activeExcelId, options = {}) {
   if (!excelId) return false;
+  const busyToken = typeof beginUiBusy === "function"
+    ? beginUiBusy("Excel 창 복구 중...", { showDelayMs: 120, silentComplete: true })
+    : null;
+  try {
   const rect = excelMirrorScreenRect();
   if (!rect) return false;
   excelMirror.activeSyncMutedUntil = Date.now() + 1500;
@@ -690,6 +927,9 @@ async function recoverExcelMirrorWindow(excelId = currentExcelId() || excelMirro
   updateMirrorShellStatus(data.reopened ? "Excel 창을 복구해 다시 열었습니다." : "Excel 창을 복구했습니다.");
   if (data.reopened) maybeAutoReapplyAfterRecover(activeExcelId);
   return true;
+  } finally {
+    if (busyToken && typeof endUiBusy === "function") endUiBusy(busyToken, { silentComplete: true });
+  }
 }
 
 // 복구가 워크북을 '파일에서 다시 열었다'(reopened) = 메모리에 적용돼 있던 스킬 결과가
@@ -738,13 +978,15 @@ function noteExcelComTimeout(err) {
 async function forceRestartExcelMirrors(reason) {
   if (excelMirror.forceRestarting) return false;
   excelMirror.forceRestarting = true;
+  const busyToken = typeof beginUiBusy === "function"
+    ? beginUiBusy("Excel 재시작 중...", { showDelayMs: 80, silentComplete: true })
+    : null;
   try {
     if (typeof toast === "function") toast(reason || "Excel을 강제로 재시작합니다...", "error");
     try {
-      await fetch("/api/excel/force-restart", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: "{}",
+      await postExcelMirror("/api/excel/force-restart", {}, 0, {
+        timeoutMs: 8000,
+        timeoutMessage: "Excel 강제 정리 요청이 지연되어 기다리지 않고 진행합니다.",
       });
     } catch (_) {}
     clearExcelMirrorClientState();
@@ -757,6 +999,7 @@ async function forceRestartExcelMirrors(reason) {
     return true;
   } finally {
     excelMirror.forceRestarting = false;
+    if (busyToken && typeof endUiBusy === "function") endUiBusy(busyToken, { silentComplete: true });
   }
 }
 
@@ -765,10 +1008,27 @@ const EXCEL_MIRROR_SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "
 
 // 적용 시작: 모든 미러 창을 숨기고(park) 네이티브 패널의 로딩 애니메이션을 돌린다.
 // (미러를 숨겨야 적용 중 여러 Excel 창이 앞으로 튀어나오지 않고, 패널의 로딩 표시가 보인다.)
-function beginExcelMirrorApplyLoading(message) {
+function beginExcelMirrorApplyLoading(message, options = {}) {
   excelMirror.applying = true;
   const label = message || "적용 반영 중...";
-  if (typeof hideAllExcelMirrorWindows === "function") {
+  if (!excelMirror.applyBusyToken && typeof beginUiBusy === "function") {
+    excelMirror.applyBusyToken = beginUiBusy(label, {
+      showDelayMs: 120,
+      stopLabel: "작업 중단",
+      stoppingLabel: "중단 중...",
+      onStop: async () => {
+        if (typeof toast === "function") {
+          toast("작업 중단을 요청했습니다. Excel 세션을 재시작합니다...", "error");
+        }
+        if (typeof forceRestartExcelMirrors === "function") {
+          await forceRestartExcelMirrors("작업 중단 요청으로 Excel을 재시작합니다. 잠시만 기다려 주세요...");
+        }
+      },
+    });
+  }
+  // [0.5.1 이식] hideWindows:false — 라이브 Excel 을 건드리지 않는 적용(인프로세스 백엔드)에서는
+  // 창을 숨길 필요가 없어 깜빡임을 줄인다. 기본은 true(기존 동작).
+  if (options.hideWindows !== false && typeof hideAllExcelMirrorWindows === "function") {
     hideAllExcelMirrorWindows().catch(() => {});
   }
   let i = 0;
@@ -789,6 +1049,10 @@ function endExcelMirrorApplyLoading() {
   excelMirror.applying = false;
   clearInterval(excelMirror.applyLoadingTimer);
   excelMirror.applyLoadingTimer = null;
+  if (excelMirror.applyBusyToken && typeof endUiBusy === "function") {
+    endUiBusy(excelMirror.applyBusyToken);
+    excelMirror.applyBusyToken = null;
+  }
   if (typeof publishNativeExcelLoading === "function") publishNativeExcelLoading(false, "");
 }
 
@@ -933,6 +1197,9 @@ function startExcelMirrorPolling() {
   if (excelMirror.pollTimer) return;
   // 선택 범위가 채팅에 빠르게 뜨도록 폴링 간격을 짧게(활성 미러 1개만 폴링하므로 COM 부담 적음).
   excelMirror.pollTimer = setInterval(() => {
+    // 작업 잠금(적용/전환/재시작) 중에는 주기 폴을 쉰다 — 폴이 같은 COM 큐에 줄을 서면
+    // 큐가 밀리고, 작업 종료 후 stale 응답이 한꺼번에 돌아와 탭/선택이 꼬이는 원인이 된다.
+    if (typeof isUiBusy === "function" && isUiBusy()) return;
     const excelId = currentExcelId();
     if (excelId) {
       pollExcelMirrorChanges(excelId).catch(err => console.warn("Excel mirror poll failed:", err));
@@ -940,6 +1207,7 @@ function startExcelMirrorPolling() {
   }, isNativeExcelShell() ? 450 : 400);
   if (!excelMirror.formulaInfoTimer) {
     excelMirror.formulaInfoTimer = setInterval(() => {
+      if (typeof isUiBusy === "function" && isUiBusy()) return;
       const excelId = currentExcelId();
       if (excelId) {
         pollExcelFormulaInfo(excelId).catch(err => console.warn("Excel formula info poll failed:", err));
@@ -963,7 +1231,11 @@ async function pollExcelFormulaInfo(excelId) {
   if (!excelId || excelMirror.formulaPolling) return;
   excelMirror.formulaPolling = true;
   try {
-    const data = await postExcelMirror("/api/excel/hover-info", { excelId });
+    // 타임아웃 없이는 서버가 행이면 formulaPolling 플래그가 영원히 true 로 남아 폴링이 영구 정지한다.
+    const data = await postExcelMirror("/api/excel/hover-info", { excelId }, 0, {
+      timeoutMs: 15000,
+      timeoutMessage: "Excel 수식 정보 응답 지연(이번 확인 건너뜀)",
+    });
     if (data && data.hasFormula && data.formula) {
       const label = `${data.sheet || ""}${data.address ? "!" + data.address : ""}`;
       updateMirrorShellStatus(`${label}  ${data.formula}`);
@@ -982,8 +1254,14 @@ async function pollExcelMirrorChanges(excelId, options = {}) {
   // 고정 시간 mute 만으로는 전환 직전에 출발한 응답이 mute 종료 후 도착해 탭을 되돌릴 수 있다.
   const sentAt = Date.now();
   try {
-    const data = await postExcelMirror("/api/excel/changes", { excelId });
-    if (data.address) {
+    // 30초 백스톱: 서버/COM 이 행이어도 polling 플래그가 풀리고 다음 폴이 정상 재개되게 한다.
+    const data = await postExcelMirror("/api/excel/changes", { excelId }, 0, {
+      timeoutMs: 30000,
+      timeoutMessage: "Excel 상태 확인 응답 지연(이번 확인 건너뜀)",
+    });
+    // [0.5.1 이식] syncSelection:false — 적용 직후 baseline 등 프로그램적 폴에서는
+    // 선택/탭(active-sync) 동기화를 건너뛴다(적용 후 화면이 임의로 움직이는 원인 차단).
+    if (data.address && options.syncSelection !== false) {
       const activeExcelId = data.activeExcelId || data.excelId || excelId;
       const syncMuted = Date.now() < (excelMirror.activeSyncMutedUntil || 0);
       const switchedAfterSend = (excelMirror.lastUserSwitchAt || 0) > sentAt;

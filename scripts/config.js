@@ -1,11 +1,14 @@
-﻿/* ===================================================================
+/* ===================================================================
    CONFIG
    =================================================================== */
-const B2B_BUILD_STAMP = "b2b-overlay-shell-20260605-047-02";
+const B2B_BUILD_STAMP = "b2b-0.5.2-20260610-merge-qwen36-proxy";
 window.B2B_BUILD_STAMP = B2B_BUILD_STAMP;
 
 // 마우스 우클릭(컨텍스트 메뉴) 전역 차단. (네이티브 셸은 WebView 설정으로도 막지만 브라우저 모드 대비)
 window.addEventListener("contextmenu", (e) => { e.preventDefault(); }, true);
+
+const IXI_VIOLET_BASE_URL = "http://canvas-ns-1727666527880704.mng.ip.violet.uplus.co.kr";
+const IXI_OPENAI_BASE_URL = `${IXI_VIOLET_BASE_URL}/v1`;
 
 const DEFAULTS = {
   anthropic: {
@@ -15,14 +18,16 @@ const DEFAULTS = {
   },
   "openai-compat": {
     apiKey: "7365676d",
-    model: ["Qwen3.5", "27B", "FP8"].join("-"),
+    model: ["Qwen3.6", "27B", "FP8"].join("-"),
+    // ixi는 0.4.12 방식(로컬 /v1 프록시)로 호출한다 — 서버(serve_b2b)가 /v1/* 를 Violet/vLLM 으로 전달.
+    // (직접 호출은 게이트웨이 403/CORS 등 환경 이슈가 있어 프록시 경유로 복귀)
     baseUrl: location.protocol === "http:" || location.protocol === "https:"
       ? `${location.origin}/v1`
       : "http://127.0.0.1:8090/v1",
     // ixi 프록시(/v1/*)가 실제로 전달할 Violet/vLLM 상위 주소. 설정에서 변경 가능.
-    proxyUpstream: "http://canvas-ns-1727666527880704.mng.ip.violet.uplus.co.kr",
+    proxyUpstream: IXI_VIOLET_BASE_URL,
     thinkMode: false,
-    thinkControlMode: "soft_switch",
+    thinkControlMode: "chat_template_kwargs",
     network: "ixi",
   },
   devVllm: {
@@ -40,9 +45,35 @@ const OPENAI_COMPAT_FALLBACK_BASE_URLS = [
   "http://127.0.0.1:8090/v1",
 ];
 
-const SETTINGS_KEY = "mvno_llm_settings_v3";
-const SETTINGS_KEY_MIGRATE = ["mvno_llm_settings_v2", "mvno_llm_settings_v1"];
+const SETTINGS_KEY = "mvno_llm_settings_v4";
+const SETTINGS_KEY_MIGRATE = ["mvno_llm_settings_v3", "mvno_llm_settings_v2", "mvno_llm_settings_v1"];
 let settings = loadSettings();
+
+function isLocalIxiProxyBaseUrl(value) {
+  const raw = String(value || "").trim().replace(/\/$/, "");
+  return !raw ||
+    /^(?:https?:\/\/[^/]+)?\/v1$/i.test(raw) ||
+    /^https?:\/\/(?:127\.0\.0\.1|localhost):8090\/v1$/i.test(raw);
+}
+
+function normalizeIxiBaseUrl(value, parsed) {
+  const raw = String(value || "").trim().replace(/\/$/, "");
+  // 로컬 프록시 변형(빈값, /v1, 127.0.0.1:8090 등)은 현재 origin 기준 프록시 기본값으로 정규화.
+  if (isLocalIxiProxyBaseUrl(raw)) return DEFAULTS["openai-compat"].baseUrl;
+  // 0.4.13 직접호출 시절 저장된 Violet 직접 주소는 프록시 기본값으로 복귀(DEV 모달 명시 저장만 유지).
+  if (raw === IXI_OPENAI_BASE_URL && !(parsed && parsed.devModeSet === true)) {
+    return DEFAULTS["openai-compat"].baseUrl;
+  }
+  return raw;
+}
+
+function defaultIxiSettings() {
+  return {
+    provider: "openai-compat",
+    ...DEFAULTS["openai-compat"],
+    network: "ixi",
+  };
+}
 
 function normalizeSettings(parsed) {
   if (!parsed || typeof parsed !== "object") return null;
@@ -54,33 +85,62 @@ function normalizeSettings(parsed) {
       model: parsed.model || DEFAULTS.anthropic.model,
       baseUrl: parsed.baseUrl || DEFAULTS.anthropic.baseUrl,
       apiKey: parsed.apiKey || DEFAULTS.anthropic.apiKey,
-      devModeSet: true,
+      devModeSet: parsed.devModeSet === true,
     };
   }
   if (parsed.provider === "openai-compat") {
+    const network = parsed.network === "dev-vllm" ? "dev-vllm" : "ixi";
+    const networkDefaults = network === "dev-vllm" ? DEFAULTS.devVllm : DEFAULTS["openai-compat"];
     return {
       ...DEFAULTS["openai-compat"],
+      ...networkDefaults,
       ...parsed,
       provider: "openai-compat",
-      model: parsed.model || DEFAULTS["openai-compat"].model,
-      baseUrl: parsed.baseUrl || DEFAULTS["openai-compat"].baseUrl,
-      proxyUpstream: parsed.proxyUpstream || DEFAULTS["openai-compat"].proxyUpstream,
+      model: normalizeIxiModel(network, parsed.model, parsed) || networkDefaults.model || DEFAULTS["openai-compat"].model,
+      baseUrl: network === "dev-vllm"
+        ? (parsed.baseUrl || networkDefaults.baseUrl || DEFAULTS.devVllm.baseUrl)
+        : normalizeIxiBaseUrl(parsed.baseUrl || networkDefaults.baseUrl || DEFAULTS["openai-compat"].baseUrl, parsed),
+      proxyUpstream: network === "dev-vllm" ? "" : (parsed.proxyUpstream || DEFAULTS["openai-compat"].proxyUpstream),
       apiKey: parsed.apiKey || DEFAULTS["openai-compat"].apiKey,
       thinkMode: parsed.thinkMode === true,
-      thinkControlMode: normalizeThinkControlMode(parsed.thinkControlMode),
-      network: parsed.network === "dev-vllm" ? "dev-vllm" : "ixi",
+      thinkControlMode: normalizeIxiThinkControlMode(
+        network,
+        normalizeThinkControlMode(parsed.thinkControlMode || networkDefaults.thinkControlMode),
+        parsed
+      ),
+      network,
+      devModeSet: parsed.devModeSet === true,
     };
   }
   return null;
 }
 
+function normalizeIxiModel(network, value, parsed) {
+  // 저장 설정에 남은 옛 ixi 기본 모델(Qwen3.5)은 새 기본(Qwen3.6)으로 승격한다.
+  // DEV 모달에서 명시 저장한 설정(devModeSet)만 그대로 유지. dev-vllm 네트워크는 건드리지 않는다.
+  if (network === "ixi" && String(value || "") === "Qwen3.5-27B-FP8" && !(parsed && parsed.devModeSet === true)) {
+    return DEFAULTS["openai-compat"].model;
+  }
+  return value;
+}
+
 function normalizeThinkControlMode(value) {
+  if (value === "soft_switch") return value;
   if (value === "chat_template_kwargs") return value;
   return DEFAULTS["openai-compat"].thinkControlMode;
 }
 
+function normalizeIxiThinkControlMode(network, value, parsed) {
+  // v4 개발 중 저장된 ixi 기본값(soft_switch)은 Qwen3.6/vLLM 기본값으로 승격한다.
+  // DEV 모달에서 명시 저장한 설정만 legacy soft_switch를 유지한다.
+  if (network === "ixi" && value === "soft_switch" && !(parsed && parsed.devModeSet === true)) {
+    return DEFAULTS["openai-compat"].thinkControlMode;
+  }
+  return value;
+}
+
 function loadSettings() {
-  const ixiDefault = { provider: "openai-compat", ...DEFAULTS["openai-compat"] };
+  const ixiDefault = defaultIxiSettings();
 
   try {
     const raw = localStorage.getItem(SETTINGS_KEY);
@@ -93,6 +153,9 @@ function loadSettings() {
       const raw = localStorage.getItem(key);
       const normalized = normalizeSettings(raw ? JSON.parse(raw) : null);
       if (normalized && normalized.provider === "openai-compat") {
+        // 0.4.13 개발 중 dev-vLLM이 기본값처럼 저장된 v3 설정은 새 기본값(ixi)로 교체한다.
+        // 이후 사용자가 DEV 모달에서 직접 dev-vLLM을 저장하면 devModeSet=true로 유지된다.
+        if (normalized.network === "dev-vllm" && normalized.devModeSet !== true) continue;
         try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(normalized)); } catch {}
         return normalized;
       }
@@ -153,10 +216,16 @@ function setupThinkToggle() {
 }
 
 /* ===================================================================
-   스킬 실행 엔진(0.4.9 리모콘 모델): VBA.
-   - 우측에 실제로 떠 있는 라이브 워크북에 VBA를 즉시 주입 실행(초저지연).
-   - 라이브 세션이 없으면 applyLogic 이 기존 Excel(COM) 파이프라인으로 자연 폴백.
+   스킬 실행 엔진(ver0.5.2 4단계): Python COM — 기본 강제.
+   - openpyxl 이 아니다. 우측에 떠 있는 라이브 워크북을 ctx(벌크 전용 COM 래퍼)로
+     직접 제어한다(서버 PythonComSkillContext). 결과는 즉시 화면에 보인다.
+   - 강제 구조: API 표면 축소(셀단위 쓰기 부재) → AST 정적 게이트 → COM 예산/저널 롤백.
+   - 기존 VBA 스텝은 언어 추론으로 계속 VBA 실행기로 라우팅된다(혼용 가능).
+   - 비상 복귀: localStorage.b2bSkillEngineOverride = "vba" (재빌드 없이 VDI 에서 전환).
    =================================================================== */
 function getSkillEngine() {
-  return "vba";
+  try {
+    if (localStorage.getItem("b2bSkillEngineOverride") === "vba") return "vba";
+  } catch {}
+  return "python";
 }

@@ -286,6 +286,80 @@ function vbaStaticSafetyFailures(code, sourceUserMessage) {
   return failures;
 }
 
+// ver0.5.2 4단계: Python COM 스킬용 클라이언트 정적 안전 검사(적용 직전 1차 게이트).
+// 서버의 AST 게이트가 최종 권위이고, 여기서는 빠른 차단 + 자동 재생성을 위해 같은 규칙을
+// 정규식 휴리스틱으로 검사한다.
+function pythonComStaticSafetyFailures(code, sourceUserMessage) {
+  const text = String(code || "");
+  const failures = [];
+  if (!/def\s+transform\s*\(\s*ctx\s*\)\s*:/.test(text)) {
+    failures.push("def transform(ctx): 진입 함수가 필요합니다.");
+  }
+  const blocked = [
+    [/^\s*(?:import|from)\s+\w+/m, "import 는 사용할 수 없습니다(re/datetime/math 는 이미 주어져 있음)."],
+    [/\b(?:open|eval|exec|__import__|input|compile)\s*\(/, "open/eval/exec/__import__ 등 빌트인은 사용할 수 없습니다."],
+    [/\b(?:win32com|openpyxl|subprocess|os\.|sys\.)/, "win32com/openpyxl/os/sys 모듈은 사용할 수 없습니다(ctx API 만 사용)."],
+    [/\bload_workbook\s*\(|\bws\s*\[\s*["']/, 'openpyxl 관용구(ws["A1"], load_workbook)는 지원되지 않습니다. ctx.read()/ctx.write() 를 사용하세요.'],
+    [/\.(?:Select|Activate)\s*\(/, ".Select/.Activate 는 사용할 수 없습니다."],
+    [/\bActiveWorkbook\b|\bActiveSheet\b/, "ActiveWorkbook/ActiveSheet 에 의존하지 마세요(ctx 가 대상 파일에 고정되어 있음)."],
+    [/while\s+True\s*:/, "while True 무한 루프는 금지입니다."],
+    [/\.(?:Save|SaveAs|SaveCopyAs|Close|Quit)\s*\(/, "저장/닫기/종료 호출은 금지입니다."],
+  ];
+  for (const [re, msg] of blocked) {
+    if (re.test(text)) failures.push(msg);
+  }
+  // 루프 내부의 ctx 쓰기 반복(셀 단위 COM 폭주) 휴리스틱 — 서버 AST 게이트와 동일 규칙.
+  if (/(?:for|while)\s[^\n]*:\s*\n(?:[ \t]+[^\n]*\n)*?[ \t]+(?:ctx|\w+)\.(?:write|write_cell|write_formulas|copy|clear|insert_rows|insert_cols|delete_rows|delete_cols|merge|unmerge|sort)\s*\(/.test(text)) {
+    failures.push("루프 안에서 ctx 쓰기 함수를 반복 호출하면 안 됩니다. 값을 2차원 리스트로 모은 뒤 ctx.write() 한 번으로 쓰세요.");
+  }
+  if (/overwrite_formulas\s*=\s*True/.test(text) && !userExplicitlyRequestsFormulaOverwrite(sourceUserMessage)) {
+    failures.push("사용자가 수식 제거를 명시하지 않았는데 overwrite_formulas=True 를 사용했습니다. 수식 셀은 건너뛰도록 다시 작성하세요.");
+  }
+  // degenerate 출력 감지: 준-greedy 디코딩의 Qwen 이 같은 줄을 끝없이 반복하거나
+  // 단순 작업에 수백 줄을 토해내는 경우 — 적용 전에 걸러 간결 재생성을 유도한다.
+  const lines = text.split("\n");
+  const lineCounts = {};
+  let maxRepeat = 0;
+  for (const raw of lines) {
+    const line = raw.trim();
+    if (line.length < 6) continue; // 빈 줄·괄호 등 자연스러운 반복은 허용
+    const n = (lineCounts[line] || 0) + 1;
+    lineCounts[line] = n;
+    if (n > maxRepeat) maxRepeat = n;
+  }
+  if (maxRepeat >= 8) {
+    failures.push("같은 코드 줄이 비정상적으로 여러 번 반복되었습니다. 반복 없이, 필요한 로직만 간결하게 다시 작성하세요(비슷한 처리는 for 루프로 묶기).");
+  }
+  if (lines.length > 150) {
+    failures.push("코드가 비정상적으로 깁니다. 요청을 만족하는 최소한의 코드(보통 40줄 이내)로 다시 작성하세요.");
+  }
+  return failures;
+}
+
+function buildPythonStaticSafetyRegenPrompt(code, failures, sourceUserMessage) {
+  const fixList = failures.map(f => `- ${f}`).join("\n");
+  return [
+    "방금 생성한 Python 스킬이 적용 직전 정적 안전 검사에서 막혔습니다.",
+    "원래 사용자 요청을 그대로 만족하되, 아래 위반을 모두 제거해 다시 작성하세요.",
+    "",
+    "## 원래 사용자 요청",
+    String(sourceUserMessage || "(직전 요청 참조)"),
+    "",
+    "## 막힌 이유(모두 고칠 것)",
+    fixList,
+    "",
+    "## 막힌 코드",
+    "```python",
+    String(code || ""),
+    "```",
+    "",
+    "반드시 하나의 ```python 코드 블록으로 def transform(ctx): 를 출력하세요.",
+    "규칙: import 금지(re/datetime/math 는 제공됨) · ctx API 만 사용 · 읽기는 ctx.read() 한 번,",
+    "계산은 메모리에서, 쓰기는 ctx.write() 한 번 · 루프 안 ctx 쓰기 금지 · 실패는 raise ValueError.",
+    "/no_think",
+  ].join("\n");
+}
+
 function buildStaticSafetyRegenPrompt(code, failures, sourceUserMessage) {
   const fixList = failures.map(f => `- ${f}`).join("\n");
   return [
@@ -346,7 +420,9 @@ function showCodeGuardBlock(message, context) {
 async function autoRegenerateForStaticSafety(code, failures, context) {
   const sourceUserMessage = (context && context.sourceUserMessage) || latestUserRequestForSafety();
   const attempt = Number((context && context.staticRegenAttempt) || 0) + 1;
-  const prompt = buildStaticSafetyRegenPrompt(code, failures, sourceUserMessage);
+  const prompt = (context && context.skillLanguage === "python")
+    ? buildPythonStaticSafetyRegenPrompt(code, failures, sourceUserMessage)
+    : buildStaticSafetyRegenPrompt(code, failures, sourceUserMessage);
   toast(`안전하지 않은 패턴이 감지되어 코드를 자동으로 다시 생성합니다. (${attempt}/${VBA_STATIC_MAX_REGEN})`, "success");
   const loading = addMessage("assistant", "", {});
   const aiName = (typeof getAiDisplayName === "function" ? getAiDisplayName() : "AI");
@@ -359,8 +435,12 @@ async function autoRegenerateForStaticSafety(code, failures, context) {
     });
     streamView.flush();
     loading.remove();
-    // 새 응답을 일반 흐름으로 렌더 → 새 코드가 자동으로 다시 정적검사된다(카운터 전파).
-    addAssistantReply(reply, { sourceUserMessage, staticRegenAttempt: attempt });
+    // 새 응답을 일반 흐름으로 렌더 → 새 코드가 자동으로 다시 정적검사된다(카운터/폴백 표식 전파).
+    addAssistantReply(reply, {
+      sourceUserMessage,
+      staticRegenAttempt: attempt,
+      vbaFallbackTried: !!(context && context.vbaFallbackTried),
+    });
     scrollChatToBottom();
   } catch (err) {
     loading.innerHTML = "안전 재생성 실패: " + escapeHtml(err && err.message ? err.message : String(err));
@@ -372,10 +452,82 @@ async function autoRegenerateForStaticSafety(code, failures, context) {
   }
 }
 
+// Python COM 정적 게이트를 (최초 생성 + 자동 재생성 VBA_STATIC_MAX_REGEN 회) 연속으로 통과하지
+// 못하면 같은 요청을 VBA 매크로로 전환해 한 번 더 생성한다. 이 호출 1회만 VBA 시스템 프롬프트를
+// 쓰고(forceEngine), 전역 엔진 설정은 바꾸지 않는다. 생성된 VBA 는 일반 흐름(addAssistantReply)을
+// 타므로 VBA 정적 게이트가 다시 검사하고, 적용 시 language="vba" 라우팅으로 run-vba 에 실행된다.
+async function autoRegenerateAsVbaFallback(code, failures, context) {
+  const sourceUserMessage = (context && context.sourceUserMessage) || latestUserRequestForSafety();
+  const fixList = (failures || []).map(f => `- ${f}`).join("\n");
+  const prompt = [
+    "Python 스킬이 정적 안전 검사를 여러 번 통과하지 못했습니다. 같은 요청을 VBA 매크로로 전환해 다시 작성하세요.",
+    "",
+    "## 원래 사용자 요청",
+    String(sourceUserMessage || "(직전 요청 참조)"),
+    "",
+    "## Python 에서 막혔던 이유(같은 실수를 VBA 에서 반복하지 말 것)",
+    fixList,
+    "",
+    "반드시 하나의 ```vba 코드 블록만 출력하세요. On Error Resume Next / MsgBox / InputBox / Shell /",
+    "Workbooks.Open / Save·Close / Application.Quit / 무관한 전체 시트 순회를 쓰지 마세요.",
+    "대상을 못 찾으면 Err.Raise vbObjectError + 513, \"B2BSkill\", \"사유\" 로 실패를 알리세요.",
+    "/no_think",
+  ].join("\n");
+  toast("Python 안전 검사를 계속 통과하지 못해 VBA 로 전환해 다시 생성합니다.", "success");
+  const loading = addMessage("assistant", "", {});
+  const aiName = (typeof getAiDisplayName === "function" ? getAiDisplayName() : "AI");
+  const streamView = setupStreamingAssistantMessage(loading, "(VBA 전환 재생성) ", aiName, null);
+  try {
+    $("chat-send").disabled = true;
+    const reply = await callLLM(prompt, {
+      forceEngine: "vba",
+      onDelta: (_d, full) => { streamView.setAnswer(full); scrollChatToBottom(); },
+      onReconnect: (a, max) => { streamView.setAnswer(`ixi 연결이 끊겨 재연결 중입니다. (${a}/${max})`); },
+    });
+    streamView.flush();
+    loading.remove();
+    // vbaFallbackTried: VBA 쪽 게이트도 끝내 막히면 다시 python 으로 돌아오지 않고 최종 차단.
+    addAssistantReply(reply, { sourceUserMessage, staticRegenAttempt: 0, vbaFallbackTried: true });
+    scrollChatToBottom();
+  } catch (err) {
+    loading.innerHTML = "VBA 전환 재생성 실패: " + escapeHtml(err && err.message ? err.message : String(err));
+    loading.classList.remove("assistant");
+    loading.classList.add("system", "error");
+    scrollChatToBottom();
+  } finally {
+    $("chat-send").disabled = false;
+  }
+}
+
 function validateAssistantCodeBeforeApply(code, context) {
   context = context || {};
   const sourceUserMessage = context.sourceUserMessage || "";
-  // 0) 런타임 안전 하드블록(On Error Resume Next, MsgBox, Workbooks.Open/.Save/.Close,
+  // ver0.5.2 4단계: Python COM 스킬은 전용 게이트로(서버 AST 게이트의 1차 방어선).
+  const codeText = String(code || "");
+  const isPythonSkill = /def\s+transform\s*\(\s*ctx\s*\)\s*:/.test(codeText) ||
+    (/\bctx\.\w+\s*\(/.test(codeText) && !/\bSub\s+\w+\s*\(/i.test(codeText));
+  if (isPythonSkill) {
+    const pyFailures = pythonComStaticSafetyFailures(code, sourceUserMessage);
+    if (pyFailures.length) {
+      const attemptsSoFar = Number(context.staticRegenAttempt || 0);
+      if (attemptsSoFar < VBA_STATIC_MAX_REGEN) {
+        autoRegenerateForStaticSafety(code, pyFailures, { ...context, skillLanguage: "python" });
+      } else if (!context.vbaFallbackTried) {
+        // Python 정적 제약을 (최초+재생성 포함) 연속 3회 통과하지 못함 → 같은 요청을
+        // VBA 로 전환해 마지막으로 한 번 더 시도한다(전역 엔진 설정은 그대로).
+        autoRegenerateAsVbaFallback(code, pyFailures, context);
+      } else {
+        showCodeGuardBlock(
+          "여러 번 다시 생성했지만 안전하지 않은 패턴이 남아 적용을 막았습니다:\n- " +
+            pyFailures.join("\n- "),
+          context,
+        );
+      }
+      return false;
+    }
+    return true; // 아래 VBA 전용 휴리스틱은 건너뜀
+  }
+  // 0) VBA 런타임 안전 하드블록(On Error Resume Next, MsgBox, Workbooks.Open/.Save/.Close,
   //    Application.Quit, Shell, 무관 전체시트순회, 파일 CreateObject). 위반 시 자동 재생성.
   const safetyFailures = vbaStaticSafetyFailures(code, sourceUserMessage);
   if (safetyFailures.length) {
