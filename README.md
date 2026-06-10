@@ -6,6 +6,64 @@
 
 ## 최근 변경사항
 
+### ver0.5.1
+- **배포 버전 갱신**: 빌드 산출물 기준을 `B2B_ver0.5.1` / `B2B_ver0.5.1_single.exe`로 정리했습니다.
+- **기본 모델 설정 정리**: ixi 기본 모델을 `Qwen3.6-27B-FP8`로 맞추고, Think 기본 제어 방식을 3.6 계열 설정에 맞게 조정했습니다.
+- **ixi 호출 경로 안정화**: Native 실행 기준으로 로컬 `/v1` 프록시를 거쳐 Violet/vLLM으로 전달하는 설정을 기본값으로 정리했습니다.
+- **Python 기본 스킬 엔진 유지**: 기본 엔진은 Python/openpyxl이며, 필요 시 Excel COM Python 또는 VBA 경로로 우회할 수 있는 구조를 유지합니다.
+- **전체 파일 다운로드 UX 정리**: 스킬 실행기 쪽 다운로드를 생성기 영역과 같은 전체 파일 다운로드 흐름으로 맞췄습니다.
+
+### ver0.5.0
+- **폐쇄망/오프라인 배포 준비**: WebView2, Node, Python wheel, .NET 빌드 의존성을 포함한 포터블 패키징 흐름을 정리했습니다.
+- **Python 엔진 리스크 문서화**: openpyxl 기본 엔진과 실제 Excel COM 제어 사이의 차이, 수식 계산값/서식/병합셀/피벗/차트 처리 리스크를 별도 문서로 정리했습니다.
+- **1 Excel N Workbook View 구조 정리**: 여러 파일을 하나의 Excel 인스턴스에 두고, 앱 상단 탭이 실제 Excel 창을 새로 열지 않고 표시 대상만 바꾸는 구조를 문서화했습니다.
+- **Native 실행 기준 강화**: 브라우저 직접 실행보다 `start_b2b_native.bat` 기반 실행을 기준 경로로 정리했습니다.
+
+### ver0.4.13.2
+- **0.4.13 안정화 복사본**: `test_runs` 같은 대용량 테스트 산출물을 제외하고 0.4.13 기준 작업본을 분리했습니다.
+- **Native 실행 기준 고정**: 실제 사용/테스트 경로를 `start_b2b_native.bat`로 맞추고, 웹 브라우저 직접 실행 의존도를 낮췄습니다.
+- **파일 탭 전환 안정화 시도**: 상단 파일 탭을 누를 때 마지막 업로드 파일로 되돌아가거나 회색 Excel 창이 작업표시줄에 남는 현상을 줄이기 위해 표시 대상 전환 흐름을 조정했습니다.
+- **기본 모델/Think 설정 정리**: ixi 모델 사용을 기본값으로 두고, Qwen 3.6 계열 Think 제어 방식에 맞춰 설정을 정리했습니다.
+
+### ver0.4.13
+- **Python 스킬 엔진 기본 채택**: 기존 VBA 중심 실행을 보조 경로로 두고, 기본 스킬 실행은 Python/openpyxl 기반으로 전환했습니다.
+- **F7 엔진 선택 구조 추가**: Python/openpyxl, Excel COM Python, VBA 경로를 선택하거나 자동 라우팅할 수 있는 구조를 추가했습니다. 기본값은 Python입니다.
+- **자동 COM fallback 추가**: 병합셀 구조 변경, 서식 유지 복붙, 수식 셀의 값만 복사, xls/csv/매크로/피벗/차트/이미지 등 openpyxl로 안전하지 않은 작업은 Excel COM Python으로 넘길 수 있게 했습니다.
+- **통합 `ctx` API 보강**: `ctx.rows`, `ctx.rows_with_index`, `ctx.value`, `ctx.display_value`, `ctx.display_rows`, `ctx.write_grid`, `ctx.set_range` 등 Python 스킬용 헬퍼를 보강했습니다.
+- **값/수식 복사 규칙 정리**: 사용자가 `값`을 명시하면 표시값 중심으로 복사하고, 별도 명시가 없으면 수식과 서식을 포함한 일반 복사로 해석하도록 프롬프트 규칙을 강화했습니다.
+- **입력 파일 수정 지원**: 작업 의도가 입력 파일 기준이면 출력 워크북에 억지로 만들지 않고 활성 파일/활성 시트 기준으로 작업하도록 정리했습니다. 변경된 입력 파일도 다운로드 대상에 포함합니다.
+- **수식 재계산 표시 보강**: openpyxl 저장 후 Excel에서 열었을 때 `SUM`, `AVERAGE`, `IFERROR` 등 수식 결과가 다시 계산되도록 계산 플래그를 유지합니다.
+- **미러/포커스 안정화**: 스킬 적용 뒤 파일 탭, 보기 버튼, 채팅창 클릭 시 Excel 포커스가 튀거나 다른 파일이 보이는 문제를 줄이기 위해 표시 대상 복원 흐름을 보강했습니다.
+- **테스트 데이터 확장**: 정렬, 필터, 복붙, 병합셀, 수식 보존, 값만 복사, 타 파일 참조, 입력 파일 수정 등 회귀 테스트용 데이터를 `test_data` 기준으로 보강했습니다.
+
+### ver0.4.12
+- **VBA 안정화 기준 버전**: 0.4.11에서 보강한 VBA 라이브 실행 흐름을 안정화한 기준 버전입니다.
+- **디버거 노출 방지 강화**: VBA 문법 오류나 런타임 오류가 발생해도 Visual Basic 편집기/디버거가 사용자 화면에 뜨지 않고 앱 오류 상태로 전환되도록 방어했습니다.
+- **실패 후 Excel 복구 강화**: 스킬 실패, 에러 복구, 사용자가 오류 팝업을 닫은 뒤에도 원래 보던 Excel 창과 시트를 다시 보이도록 복원 흐름을 보강했습니다.
+- **VBA 선택 실행 유지**: 이후 Python 기본 전환을 위해 VBA 실행기는 보조 엔진으로 남겨두는 구조를 유지했습니다.
+
+### ver0.4.11
+- **적용 결과 검증 강화**: 실제 변경이 없는데도 `적용됨`으로 표시되는 문제를 줄이기 위해 적용 전후 변경 검증 흐름을 추가했습니다.
+- **VBA 문법 사전검증 추가**: 실행 전에 VBA 구문 오류를 먼저 잡아 디버거 팝업으로 빠지는 상황을 줄였습니다.
+- **에러 복구 대상 수정**: 실패한 Step이 아닌 이전 Step을 복구 대상으로 잡는 문제를 수정하고, 사용자 메모/정정 내용을 복구 프롬프트에서 우선 반영하도록 했습니다.
+- **작업 중단 UX 보강**: Think 중단과 요청 중단을 분리하고, 스킬 실행 중단 버튼을 작업 중인 말풍선 근처에서 다루는 방향으로 정리했습니다.
+- **스크롤/채팅 UX 개선**: 스킬 적용 중에도 채팅창 스크롤이 막히지 않도록 UI 상태 처리를 정리했습니다.
+- **프롬프트 규칙 강화**: 열 문자 지정은 헤더 추정보다 우선하고, 행/열 삽입·삭제, 시트/셀 삭제, 정렬, 값 복사와 수식 복사를 구분하도록 생성 규칙을 보강했습니다.
+- **엑셀 로딩 UI 조정**: 기존 하단 로딩 애니메이션의 위치와 표시 방식을 조정하고, 전체 화면을 덮는 로딩 UI는 원래 의도와 충돌하지 않도록 정리했습니다.
+
+### ver0.4.10
+- **공유 Excel 인스턴스 실험/보강**: 여러 워크북을 각자 새 Excel 창으로 여는 방식에서 발생하던 회색 오버레이와 포커스 충돌을 줄이기 위해 공유 인스턴스 기반 구조를 보강했습니다.
+- **동반 워크북 처리 개선**: `매출 채워`, `원가 채워`처럼 다른 업로드 파일을 참조하는 작업에서 동반 워크북을 같은 실행 컨텍스트에서 다루도록 정리했습니다.
+- **파일 보기/탭 전환 안정화**: 실제 Excel을 띄운 상태에서 파일 탭과 보기 버튼이 불필요하게 새 창을 만들지 않도록 표시 흐름을 조정했습니다.
+- **실행기 패키징 점검**: Native 실행기와 단일 exe 빌드 흐름에서 엔트리 파일 경로가 맞지 않아 실행 실패하는 케이스를 점검했습니다.
+
+### ver0.4.9
+- **VBA 기반 라이브 스킬 실행 도입**: openpyxl 값 편집 중심에서 실제 Excel에 VBA/COM 명령을 실행하는 방식으로 전환했습니다.
+- **실제 Excel 미러 기반 작업**: 파일 업로드 시 실제 Excel 창을 열고, 사용자가 보는 Excel 상태를 기준으로 스킬을 적용하도록 구조를 바꿨습니다.
+- **수식/서식 보존 가드 추가**: 범위 복사·붙여넣기에서 기존 수식이 값으로 풀리거나 서식이 사라지는 문제를 막기 위해 위험한 `Value` 배열 재기록 패턴을 감지하도록 했습니다.
+- **사용자 의도 예외 처리**: 사용자가 명시적으로 `값을 넣어`, `값만 복사`라고 요청한 경우에는 수식을 덮어쓰는 동작도 허용할 수 있도록 규칙을 분리했습니다.
+- **Excel COM 오류 처리 기반 마련**: VBA 실행 오류, 시트명 불일치, COM 예외, 실패 후 창 복원 문제를 다루기 위한 오류 처리 흐름을 추가했습니다.
+
 ### ver0.4.8
 - **업로드 완료 기준 변경**: 파일 파싱만 끝내고 업로드 완료로 보지 않고, 업로드된 입력/출력 파일의 실제 Excel 미러 창을 모두 연 뒤 업로드를 완료합니다.
 - **보기/탭 전환 동작 정리**: 업로드 시 이미 Excel 창을 열어 두므로 파일 목록/네이티브 탭 전환은 새로 여는 동작이 아니라 열린 Excel 미러를 최상단으로 올리는 동작으로 처리합니다.
@@ -193,12 +251,12 @@ build_exe.bat
 빌드 결과:
 
 ```text
-dist\B2B_ver0.4.4\B2B_ver0.4.4.exe   (네이티브 호스트)
-dist\B2B_ver0.4.4\B2B_Server.exe     (PyInstaller 서버)
-dist\B2B_ver0.4.4_portable.zip       (배포용 zip)
+dist\B2B_ver0.5.1\B2B_ver0.5.1.exe   (네이티브 호스트)
+dist\B2B_ver0.5.1\B2B_Server.exe     (PyInstaller 서버)
+dist\B2B_ver0.5.1_portable.zip       (배포용 zip)
 ```
 
-단일 self-extracting EXE가 필요하면 `build_single_exe.bat`을 추가 실행합니다 (`dist\B2B_ver0.4.4_single.exe`).
+단일 self-extracting EXE가 필요하면 `build_single_exe.bat`을 추가 실행합니다 (`dist\B2B_ver0.5.1_single.exe`).
 
 `dist/`와 `build/`는 git 추적 대상이 아닙니다.
 
@@ -216,53 +274,68 @@ dist\B2B_ver0.4.4_portable.zip       (배포용 zip)
 ## 주요 기능
 
 ### 입력/출력 파일
-- 입력 파일 여러 개 업로드: `.xlsx`, `.xls`, `.csv`
-- 출력 템플릿 여러 개 업로드: `.xlsx`, `.xls`
-- 시트별 미리보기와 현재 선택 범위 관리
-- 엑셀 시뮬레이터 우측 상단의 `분리` 버튼으로 미리보기를 별도 창에 표시
-- 원본 xlsx의 스타일과 수식을 최대한 보존해 다운로드
+- 입력 파일 여러 개 업로드: `.xlsx`, `.xlsm`, `.xltx`, `.xltm`, `.xls`, `.csv`
+- 출력 템플릿 여러 개 업로드: `.xlsx`, `.xlsm`, `.xltx`, `.xltm`, `.xls`
+- 실제 Excel 미러에서 파일/시트/범위 선택을 관리하고, 선택 범위를 채팅 멘션으로 전달합니다.
+- openpyxl 기본 경로에서는 xlsx 계열 파일을 빠르게 처리하고, xls/csv/매크로/피벗/차트/이미지/병합셀 구조 변경 등은 Excel COM 경로로 우회합니다.
+- 원본 스타일, 병합, 수식, 열 너비, 테두리, 채움색을 최대한 보존해 다운로드합니다.
+- 스킬이 입력 파일을 수정한 경우, 변경된 입력 파일도 전체 파일 다운로드에 포함합니다.
 
 ### AI 스킬 생성
-- 기본 모델은 ixi 모델입니다.
+- 기본 모델은 ixi `Qwen3.6-27B-FP8`입니다.
 - 일반 설정 버튼에서는 ixi 연결 정보만 노출합니다.
 - F9 개발자 모드에서 Claude provider를 선택할 수 있습니다.
-- AI는 `function transform(inputs, output) { ... return { inputs, output }; }` 형태의 JavaScript 코드를 생성합니다.
+- AI는 기본적으로 `def transform(ctx): ...` 형태의 Python Excel 스킬을 생성합니다.
+- 기본 실행 엔진은 Python/openpyxl입니다. 작업 특성상 openpyxl로 안전하지 않은 경우 Excel COM Python 또는 VBA로 전환됩니다.
+- 사용자가 `값`을 명시하지 않은 복사/붙여넣기는 수식과 서식을 포함한 일반 복사로 해석합니다. `값만`을 명시하면 표시값 중심으로 처리합니다.
 
 ### 파이프라인
 - AI가 만든 스킬을 단계별로 적용, 수정, 삭제, 비활성화할 수 있습니다.
 - 셀 직접 편집도 파이프라인 단계로 기록됩니다.
 - 전체 실행 시 원본 입력/출력 상태에서 모든 단계를 순서대로 재실행합니다.
 - 실행 실패 시 어느 단계에서 실패했는지 메시지와 stack을 표시합니다.
+- 적용 전후 변경 검증으로 실제 변경이 없는 작업을 `적용됨`으로 오인하지 않도록 방어합니다.
 
-### 문자열/유사도 매칭
-AI 생성 코드에서 사용할 수 있는 헬퍼:
+### Python 스킬 헬퍼
+AI 생성 코드에서 사용할 수 있는 주요 `ctx` 헬퍼:
 
-```javascript
-col(sheetAoA, "회사명")
-findColumnGlobal(inputs, "회사명")
-similarity("안전제일", "안전 제일")
-normalizeText("안전 제일")
-replaceNormalizedText("2월 데이터", "2 월", "3월")
+```python
+ws = ctx.sheet("회사별요약")
+sales_wb = ctx.input("매출")
+rows = ctx.rows(ws)
+for excel_row, row in ctx.rows_with_index(ws):
+    ...
+col_sales = ctx.col(ws, "매출")
+value = ctx.value(ws, excel_row, col_sales)
+display = ctx.display_value(ws, excel_row, col_sales)
+ctx.write_grid(ws, [[123]], start_row=4, start_col=2)
 ```
 
-행이나 셀을 찾을 때 권장 패턴:
+행 번호가 필요하면 `ctx.rows_with_index(ws)` 또는 `enumerate(ctx.rows(ws), start=1)`를 사용합니다. `ctx.rows(ws)`는 셀 객체가 아니라 값 튜플 목록입니다.
 
-```javascript
-normalizeText(cell).includes(normalizeText("안전제일"))
-```
-
-이 패턴은 공백, 줄바꿈, 탭, 대소문자 차이를 제거해 비교합니다.
+수식 셀의 `값만` 복사가 필요하면 `ctx.value` / `ctx.display_value` / `ctx.display_rows`를 사용합니다. Excel 계산값이 반드시 필요한 작업은 `# B2B_ENGINE_FALLBACK: excel-com` 마커로 COM 경로를 강제할 수 있습니다.
 
 ### 저장/불러오기
 - 스킬 파이프라인을 zip으로 저장합니다.
-- zip 안에는 `.logic.json` 매니페스트와 단계별 `.js` 파일이 포함됩니다.
+- zip 안에는 `.logic.json` 매니페스트와 단계별 스킬 코드 파일이 포함됩니다.
 - 저장된 대화 기록도 함께 복원됩니다.
 
 ## 디렉터리 구조
 
 ```text
-B2B_ver3.7/
+B2B_ver0.5.1/
 ├─ index.html
+├─ serve_b2b.py
+├─ launch_b2b.py
+├─ launch_b2b.spec
+├─ start_b2b.bat
+├─ start_b2b_native.bat
+├─ build_exe.bat
+├─ build_single_exe.bat
+├─ EXCEL_MIRROR_ARCHITECTURE.md
+├─ native_host/
+├─ single_exe/
+├─ tools/
 ├─ styles/
 │  ├─ base.css
 │  ├─ layout.css
@@ -300,19 +373,14 @@ B2B_ver3.7/
 ├─ vendor/
 │  ├─ xlsx.full.js
 │  └─ pretendard-variable.woff2
-├─ test_data/
-├─ serve_b2b.py
-├─ launch_b2b.py
-├─ launch_b2b.spec
-├─ start_b2b.bat
-└─ build_exe.bat
+└─ test_data/
 ```
 
 ## 개발 메모
 
 - JS 파일은 `index.html`의 script 로딩 순서에 의존합니다. 새 모듈을 추가하면 의존하는 파일보다 뒤에 배치해야 합니다.
-- `launch_b2b.spec`는 `styles/`, `scripts/`, `vendor/` 전체를 EXE에 포함합니다.
-- AI가 생성한 스킬은 브라우저에서 `new Function(...)`으로 실행됩니다. 신뢰하지 않는 스킬 파일은 불러오지 마세요.
+- `launch_b2b.spec`는 `styles/`, `scripts/`, `vendor/`와 서버 실행에 필요한 파일을 EXE에 포함합니다.
+- AI가 생성한 스킬은 백엔드 Python/openpyxl, Excel COM Python 또는 VBA 경로에서 실행됩니다. 신뢰하지 않는 스킬 파일은 불러오지 마세요.
 - API key는 브라우저 `localStorage`에 저장됩니다. 코드에 실제 키를 하드코딩하지 마세요.
 
 
