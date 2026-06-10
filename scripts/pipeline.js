@@ -530,6 +530,7 @@ function applyLogic(step) {
     const useCurrentCache = !pipelineUsesPython(state.pipeline) && canUseBackendCurrentCacheForAppend();
     const promise = reconcilePipelineSimulationAfterEdit({
       forceBackend: true,
+      affectedStep: step,
       steps: useCurrentCache ? [step] : state.pipeline,
       backendBaseMode: useCurrentCache ? "current" : "original",
     })
@@ -627,7 +628,7 @@ function insertLogic(step, position) {
     renderPipeline();
     refreshRunButton();
     if (typeof scheduleLogicAutoBackup === "function") scheduleLogicAutoBackup("step-inserted");
-    const promise = reconcilePipelineSimulationAfterEdit({ forceBackend: true })
+    const promise = reconcilePipelineSimulationAfterEdit({ forceBackend: true, affectedStep: step })
       .then(() => {
         setPipelineRuntimeStatus([step.id], "applied", "\uC801\uC6A9\uB428");
         return true;
@@ -721,7 +722,7 @@ function replaceLogicAt(stepId, newCode, newDescription, language) {
     renderPipeline();
     refreshRunButton();
     if (typeof scheduleLogicAutoBackup === "function") scheduleLogicAutoBackup("step-updated");
-    const promise = reconcilePipelineSimulationAfterEdit({ forceBackend: true })
+    const promise = reconcilePipelineSimulationAfterEdit({ forceBackend: true, affectedStep: state.pipeline.find(s => s.id === stepId) || null })
       .then(() => {
         setPipelineRuntimeStatus([stepId], "applied", "\uC801\uC6A9\uB428");
         return true;
@@ -1428,10 +1429,11 @@ function renderPipeline() {
       if (currentIdx < 0) return;
       if (typeof pushHistory === "function") pushHistory("단계 적용 여부 변경");
       state.pipeline[currentIdx] = { ...state.pipeline[currentIdx], enabled: !isStepEnabled(state.pipeline[currentIdx]) };
+      const toggledStep = state.pipeline[currentIdx];
       renderPipeline();
       refreshRunButton();
       if (typeof scheduleLogicAutoBackup === "function") scheduleLogicAutoBackup("step-toggled");
-      reconcilePipelineSimulationAfterEdit().catch(err => reportPipelineError(err));
+      reconcilePipelineSimulationAfterEdit({ affectedStep: toggledStep }).catch(err => reportPipelineError(err));
     };
     item.querySelector(".step-edit").onclick = (e) => {
       e.stopPropagation();
@@ -1444,11 +1446,12 @@ function renderPipeline() {
       if (currentIdx < 0) return;
       if (typeof pushHistory === "function") pushHistory("단계 삭제");
       if (state.editingStepId === stepId) state.editingStepId = null;
+      const removedStep = state.pipeline[currentIdx];
       state.pipeline.splice(currentIdx, 1);
       renderPipeline();
       refreshRunButton();
       if (typeof scheduleLogicAutoBackup === "function") scheduleLogicAutoBackup("step-deleted");
-      reconcilePipelineSimulationAfterEdit().catch(err => reportPipelineError(err));
+      reconcilePipelineSimulationAfterEdit({ affectedStep: removedStep }).catch(err => reportPipelineError(err));
     };
     list.appendChild(item);
   });
@@ -1599,17 +1602,14 @@ async function reconcilePipelineSimulationAfterEdit(options = {}) {
         baseMode: options.backendBaseMode || "original",
       });
       toast("스킬 변경 사항을 시뮬레이터에 다시 반영했습니다", "success");
-      // [P1] 토글/삭제/수정 결과가 보이도록 변경된 파일(스킬의 핀 대상, 없으면 출력) 탭으로 이동.
+      // [P1] 활성창 기본 — 뷰 이동은 '실제 변경된 스텝의 대상 파일'로만.
+      // 토글/삭제/수정된 그 스킬의 targetFileId 가 있고 현재 탭과 다를 때만 그 파일로 이동한다.
+      // (출력으로 무조건 점프하지 않음. 예: 3번 탭에서 2번 파일 스킬을 off → 2번이 변경 → 뷰는 2번으로)
       try {
-        let targetFileId = pipelinePinnedAnyTargetFileId(steps);
-        if (!targetFileId) {
-          if (state.outputTemplates && state.outputTemplates.length) {
-            const oi = state.activeOutputIndex >= 0 ? state.activeOutputIndex : 0;
-            targetFileId = typeof outputTemplateFileId === "function" ? outputTemplateFileId(oi) : ("output:" + oi);
-          } else if (state.output) {
-            targetFileId = "output";
-          }
-        }
+        const affected = options.affectedStep || null;
+        const targetFileId = (affected && affected.targetFileId &&
+          typeof getFile === "function" && getFile(affected.targetFileId))
+          ? affected.targetFileId : null;
         if (targetFileId && state.currentFileId !== targetFileId && typeof setCurrentView === "function") {
           setCurrentView(targetFileId);
         }
