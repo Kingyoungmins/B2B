@@ -224,6 +224,18 @@ function pipelinePinnedTargetFileId(steps = state.pipeline) {
   return resolve(vbaSteps.filter(s => s.enabled !== false)) || resolve(vbaSteps);
 }
 
+// python 스텝까지 포함한 언어 무관 핀 대상(백엔드 재실행 후 '변경된 파일' 탭 이동용).
+function pipelinePinnedAnyTargetFileId(steps = state.pipeline) {
+  const withTarget = (steps || []).filter(s => s && s.targetFileId);
+  const resolve = list => {
+    for (const s of list) {
+      if (typeof getFile === "function" && getFile(s.targetFileId)) return s.targetFileId;
+    }
+    return null;
+  };
+  return resolve(withTarget.filter(s => s.enabled !== false)) || resolve(withTarget);
+}
+
 function pipelineHasUnresolvedTarget(steps = state.pipeline) {
   return (steps || []).some(s =>
     s && s.targetFileId && typeof getFile === "function" && !getFile(s.targetFileId));
@@ -1535,7 +1547,15 @@ async function reconcilePipelineSimulationAfterEdit(options = {}) {
       if (pinned && pinned.excelId) liveExcelId = pinned.excelId;
     } catch (_) {}
     if (!liveExcelId) liveExcelId = vbaTargetExcelId();
-    if (liveExcelId) return reapplyVbaPipelineToLive(liveExcelId, { steps: stepsForReconcile });
+    if (liveExcelId) {
+      // [#19] 토글/삭제발 재적용에도 취소 토큰을 등록해 '작업 중단' 버튼이 뜨고 동작하게 한다.
+      const cancelToken = { cancelled: false };
+      window.__activeVbaApply = { token: cancelToken, excelId: liveExcelId };
+      return reapplyVbaPipelineToLive(liveExcelId, { steps: stepsForReconcile })
+        .finally(() => {
+          if (window.__activeVbaApply && window.__activeVbaApply.token === cancelToken) window.__activeVbaApply = null;
+        });
+    }
   }
   const steps = options.steps || state.pipeline;
   const hasAnyOriginal = !!state.outputOriginal || ((state.inputsOriginal || []).length > 0);
@@ -1579,6 +1599,21 @@ async function reconcilePipelineSimulationAfterEdit(options = {}) {
         baseMode: options.backendBaseMode || "original",
       });
       toast("스킬 변경 사항을 시뮬레이터에 다시 반영했습니다", "success");
+      // [P1] 토글/삭제/수정 결과가 보이도록 변경된 파일(스킬의 핀 대상, 없으면 출력) 탭으로 이동.
+      try {
+        let targetFileId = pipelinePinnedAnyTargetFileId(steps);
+        if (!targetFileId) {
+          if (state.outputTemplates && state.outputTemplates.length) {
+            const oi = state.activeOutputIndex >= 0 ? state.activeOutputIndex : 0;
+            targetFileId = typeof outputTemplateFileId === "function" ? outputTemplateFileId(oi) : ("output:" + oi);
+          } else if (state.output) {
+            targetFileId = "output";
+          }
+        }
+        if (targetFileId && state.currentFileId !== targetFileId && typeof setCurrentView === "function") {
+          setCurrentView(targetFileId);
+        }
+      } catch (_) {}
       if (window.runnerSetDone) window.runnerSetDone();
     } catch (err) {
       if (window.runnerSetRunning) window.runnerSetRunning(false);

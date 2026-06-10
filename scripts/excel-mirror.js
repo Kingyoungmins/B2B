@@ -848,8 +848,18 @@ function _ensureExcelCancelButton() {
   return btn;
 }
 function showExcelApplyCancelButton(show) {
-  const btn = document.getElementById("excel-apply-cancel-btn");
-  if (btn) btn.style.display = "none";
+  // [#19 재수리] 채팅 말풍선으로 옮기며 전역 버튼을 무조건 숨기던 잔해 → 토글/삭제발 적용처럼
+  // 말풍선이 없는 경로에서 "작업 중"인데 중단 버튼이 어디에도 없던 문제를 고친다.
+  // VBA 취소 토큰이 활성일 때만 표시(python 백엔드 잡은 중단 API 없음).
+  const btn = _ensureExcelCancelButton();
+  if (!btn) return;
+  if (!show) { btn.style.display = "none"; return; }
+  const sync = () => {
+    const a = window.__activeVbaApply;
+    btn.style.display = (excelMirror.applying && a && a.token && !a.token.cancelled) ? "" : "none";
+  };
+  sync();
+  setTimeout(sync, 150);  // begin 이 토큰 등록보다 먼저 불려도 잡히게 한 번 더
 }
 
 // 적용 시작: 모든 미러 창을 숨기고(park) 네이티브 패널의 로딩 애니메이션을 돌린다.
@@ -1486,6 +1496,9 @@ async function postExcelMirror(path, body, attempt = 0, options = {}) {
       clearTimeout(excelMirror.switchTimer);
       excelMirror.switchTimer = setTimeout(() => {
         if (!fileId) return;
+        // 적용 중(applying)엔 전환을 보류 — 핀(setCurrentView)발 전환이 hideAll/파킹과 경합해
+        // 프레임이 꼬이는 문제 방지. 적용 종료 후 scheduleRestoreActiveExcelMirror 가 현재 탭을 표시한다.
+        if (excelMirror.applying) return;
         if (excelMirror.sessionsByFileId[fileId]) {
           // 이미 열린 미러 → 빠른 전환(raise만).
           switchVisibleExcelMirrorToFileId(fileId).catch(err => {
