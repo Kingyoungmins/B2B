@@ -269,6 +269,47 @@ function codeMisusesCtxRowsAsCellObjects(code) {
   return /\b\w+\s*\[[^\]\n\r]+\]\s*\.\s*(?:row|column|value|coordinate)\b/i.test(text);
 }
 
+// [0.5.2 이식·하이브리드] degenerate 출력 감지 — 준-greedy 디코딩의 Qwen 이 같은 줄을 끝없이
+// 반복하는 경우(모든 python 코드 공통). 적용 전에 걸러 간결 재생성을 유도한다.
+function pythonDegenerateOutputFailure(code) {
+  const lines = String(code || "").split("\n");
+  const counts = {};
+  let maxRepeat = 0;
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (line.length < 6) continue; // 빈 줄·괄호 등 자연스러운 반복은 허용
+    const n = (counts[line] || 0) + 1;
+    counts[line] = n;
+    if (n > maxRepeat) maxRepeat = n;
+  }
+  if (maxRepeat >= 8) {
+    return "같은 코드 줄이 비정상적으로 여러 번 반복되었습니다. 반복 없이, 필요한 로직만 간결하게 다시 생성해 주세요(비슷한 처리는 for 루프로 묶기).";
+  }
+  return null;
+}
+
+// [0.5.2 이식·하이브리드] COM 폴백(# B2B_ENGINE_FALLBACK: excel-com) 코드 한정 bulk 위반 검사.
+// openpyxl(인프로세스) 코드는 셀 루프가 빨라 대상이 아니고, COM 은 셀 단위 호출이 왕복당 느려
+// 루프 내 COM 쓰기/전체 열 연산/Select·Activate 를 차단한다.
+function pythonComBulkViolations(code) {
+  const text = String(code || "");
+  if (!/B2B_ENGINE_FALLBACK\s*:\s*excel-com/i.test(text)) return [];
+  const failures = [];
+  if (/(?:for|while)\s[^\n]*:\s*\n(?:[ \t]+[^\n]*\n)*?[ \t]+[\w.]+\.(?:Cells|Range)\s*\([^)]*\)\s*\.\s*Value\d?\s*=/.test(text)) {
+    failures.push("루프 안에서 셀 단위 COM 쓰기(.Cells/.Range...Value=)를 반복하면 매우 느립니다. 값을 2차원 리스트로 모은 뒤 Range(...).Value = grid 한 번으로 쓰세요.");
+  }
+  if (/\.(?:Select|Activate)\s*\(\s*\)/.test(text)) {
+    failures.push(".Select()/.Activate() 는 사용하지 마세요(느리고 사용자의 화면 상태를 깨뜨립니다).");
+  }
+  if (/Range\s*\(\s*["'][A-Z]{1,3}:[A-Z]{1,3}["']\s*\)|\bColumns\s*\(|EntireColumn\.Copy|EntireRow\.Copy/.test(text)) {
+    failures.push("전체 열/행(A:F, Columns(...)) 단위 연산은 100만 행을 처리해 매우 느립니다. 실제 데이터 범위(ws.Cells(r,c) 기반)로 한정하세요.");
+  }
+  if (/\.(?:Save|SaveAs|Close|Quit)\s*\(/.test(text)) {
+    failures.push("저장/닫기/종료 호출은 금지입니다(앱이 라이브 세션을 관리합니다).");
+  }
+  return failures;
+}
+
 function codeHasBroadValueRewrite(code) {
   const text = String(code || "");
   if (/\bUsedRange\s*\.Value\s*=/.test(text)) return true;
@@ -472,6 +513,16 @@ function validateAssistantCodeBeforeApply(code, context) {
   if (codeMisusesCtxRowsAsCellObjects(code)) {
     const message = "ctx.rows() 결과를 셀 객체처럼 사용하는 코드가 감지되어 적용을 막았습니다. ctx.rows()의 row 값은 셀 객체가 아니라 값 리스트이므로 row[0].row/.value를 쓰지 말고 enumerate 또는 ctx.iter_rows(ws, start_row=...)로 행번호를 계산해 주세요.";
     showCodeGuardBlock(message, context);
+    return false;
+  }
+  const degen = pythonDegenerateOutputFailure(code);
+  if (degen) {
+    showCodeGuardBlock(degen, context);
+    return false;
+  }
+  const comViolations = pythonComBulkViolations(code);
+  if (comViolations.length) {
+    showCodeGuardBlock("Excel(COM) 폴백 코드의 성능/안전 위반이 감지되어 적용을 막았습니다:\n- " + comViolations.join("\n- "), context);
     return false;
   }
   return true;

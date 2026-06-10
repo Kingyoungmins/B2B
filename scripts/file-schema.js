@@ -321,6 +321,12 @@ function skillEnginePromptNote() {
 - 병합셀 단순 값 변경/텍스트 치환은 가능합니다. 병합영역 내부 셀에 쓰는 경우 좌상단 셀만 실제로 쓰인다고 보고, 같은 병합영역을 여러 번 덮어쓰지 마세요.
 - 병합셀을 포함한 파일에서 **열/행 삽입·삭제, 서식 유지 복사/붙여넣기, 병합 구조 변경**이 필요하면 Excel 방식 처리가 안전합니다. 이때도 VBA가 아니라 Python 코드를 작성하되 코드 첫 줄 근처에 \`# B2B_ENGINE_FALLBACK: excel-com\` 주석을 넣고, Excel COM 호환 API(\`ws.Columns("J").Insert\`, \`src.Copy(dest)\`, \`PasteSpecial\`)를 사용하세요. 서버가 이 Python step을 Excel COM Python으로 자동 실행합니다.
 - Excel COM Python fallback에서도 \`win32com\`을 import하지 마세요. 스킬 샌드박스에서 import가 차단됩니다. 이미 제공된 ctx.sheet(...), ctx.input(...), ws.Range/Cells/Columns/Rows 같은 COM 호환 객체만 사용하세요.
+- **COM 폴백 성능 규칙(매우 중요 — COM 은 셀 단위 호출이 왕복당 느림)**:
+  - 읽기는 한 번에: \`rows = ctx.rows(ws)\` 또는 \`grid = ws.Range(...).Value\` 로 2차원으로 받아 Python 메모리에서 계산하세요. 루프 안에서 \`ws.Cells(r,c).Value\` 를 반복 읽지 마세요.
+  - 쓰기도 한 번에: 결과를 2차원 리스트로 모아 \`ws.Range(ws.Cells(r1,c1), ws.Cells(r2,c2)).Value = grid\` 한 번으로. **루프 안에서 셀 단위 .Value= 반복 금지.**
+  - **전체 열/행 연산 금지**: \`ws.Range("A:F")\`, \`ws.Columns(...)\` 는 104만 행 전체를 처리해 수십 초가 걸립니다. 실제 데이터 범위(\`ws.Cells(r,c)\` 기반)로 반드시 한정하세요.
+  - 열/행 삽입은 한 번의 호출로: \`ws.Range(ws.Cells(1,1), ws.Cells(1,N)).EntireColumn.Insert()\`. 삽입만으로 기존 데이터가 밀려나므로 별도 전체 열 Copy 가 필요 없습니다.
+  - \`.Select()/.Activate()\`, \`ActiveWorkbook/ActiveSheet\` 의존, \`.Save/.Close/.Quit\` 호출 금지(앱이 라이브 세션을 관리).
 - 병합셀이 없거나 단순 표 작업이면 열/행 삽입·삭제는 openpyxl의 \`ws.insert_cols/insert_rows/delete_cols/delete_rows\` 를 사용하세요.
 `;
 }

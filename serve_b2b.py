@@ -72,6 +72,11 @@ LIVE_EXCEL_APP = None  # 라이브 편집 세션들이 공유하는 앱 전용 E
 LIVE_FRAME_MODE = (os.environ.get("B2B_WINMODE") or "frame").strip().lower() != "legacy"
 PYTHON_SKILL_APP = None  # 라이브 미러가 없을 때 Python 스킬 실행용으로 재사용하는 숨김 Excel 인스턴스
 PYTHON_SKILL_APP_PID = None  # 위 인스턴스의 pid — 강제 정리(force-restart/초기화) 때 COM 없이 종료하기 위해 기록
+# [0.5.2 이식] 이 앱이 DispatchEx 로 띄운 모든 EXCEL.EXE pid. 세션 기록 전에 열기가 실패하면
+# 고아 Excel 이 남는데, 강제 정리(초기화/force-restart)가 세션 pid 만 죽이면 영영 안 닫힘 → 전부 추적.
+SPAWNED_EXCEL_PIDS = set()
+# [0.5.2 이식] 강제 정리 시 끊어낼 COM 프록시 보관소 — 행 상태 STA 워커로의 Release 마샬링 교착 방지.
+_COM_REF_GRAVEYARD = []
 PIPELINE_JOBS_LOCK = threading.Lock()
 WORKBOOK_CACHE_LOCK = threading.Lock()
 NODE_WORKER_LOCK = threading.Lock()
@@ -152,11 +157,16 @@ def excel_available():
 def cleanup_excel_sessions():
     if not excel_available():
         return
-    pids = []
+    pids = set()
     try:
-        pids = [session.get("pid") for session in list(EXCEL_SESSIONS.values()) if session.get("pid")]
+        pids.update(int(session.get("pid")) for session in list(EXCEL_SESSIONS.values()) if session.get("pid"))
     except Exception:
-        pids = []
+        pass
+    try:
+        # 세션 기록 전에 실패한 고아 인스턴스까지(이 앱이 띄운 pid 전체).
+        pids.update(int(p) for p in SPAWNED_EXCEL_PIDS)
+    except Exception:
+        pass
     try:
         excel_call(_cleanup_excel_sessions_impl, timeout=20)
     except Exception:
@@ -166,9 +176,14 @@ def cleanup_excel_sessions():
             EXCEL_SESSIONS.clear()
         except Exception:
             pass
-        for pid in pids:
-            _hide_excel_windows_for_pid(pid)
+    # graceful 정리가 성공했어도 추적된 pid 가 살아 있으면(고아) 마저 종료한다.
+    for pid in pids:
+        if _is_pid_alive(pid):
             _force_kill_pid(pid)
+    try:
+        SPAWNED_EXCEL_PIDS.clear()
+    except Exception:
+        pass
 
 
 def ensure_excel_worker():
@@ -299,6 +314,13 @@ def _force_restart_excel_sessions_direct():
             except Exception:
                 pass
     global LIVE_EXCEL_APP, PYTHON_SKILL_APP, PYTHON_SKILL_APP_PID
+    # COM 프록시 전역을 그냥 None 으로 떨어뜨리면 마지막 참조 해제(Release)가 이 HTTP 스레드에서
+    # 일어난다. 행 상태의 STA 워커로 마샬링되는 Release 는 같이 굳을 수 있으므로(초기화가 영영
+    # 안 끝나는 증상) 참조를 graveyard 로 옮겨 Release 자체를 막는다.
+    if LIVE_EXCEL_APP is not None:
+        _COM_REF_GRAVEYARD.append(LIVE_EXCEL_APP)
+    if PYTHON_SKILL_APP is not None:
+        _COM_REF_GRAVEYARD.append(PYTHON_SKILL_APP)
     LIVE_EXCEL_APP = None
     PYTHON_SKILL_APP = None
     pids = set()
@@ -316,29 +338,39 @@ def _force_restart_excel_sessions_direct():
                 pids.add(int(pid))
             except Exception:
                 pass
-    killed = 0
-    for pid in pids:
-        if _is_pid_alive(pid):
-            _force_kill_pid(pid)
-            killed += 1
-    deadline = time.time() + 2.0
-    while time.time() < deadline and any(_is_pid_alive(p) for p in pids):
-        time.sleep(0.1)
-    # 프로세스 종료 후에야 파일 잠금이 풀리므로 임시 파일 정리는 마지막에.
-    for session in sessions:
-        for key in ("openTempPath", "workingCopyPath"):
-            temp_path = session.get(key)
-            if temp_path:
+    # 세션 기록 전에 열기가 실패한 고아 인스턴스까지 포함(이 앱이 띄운 pid 전체).
+    try:
+        pids.update(int(p) for p in SPAWNED_EXCEL_PIDS)
+        SPAWNED_EXCEL_PIDS.clear()
+    except Exception:
+        pass
+
+    def _kill_and_cleanup():
+        # taskkill(프로세스당 최대 3초) + 생존 확인 루프는 수 초가 걸릴 수 있다.
+        # HTTP 응답을 잡아두면 초기화 버튼이 그 시간만큼 굳으므로 백그라운드에서 수행한다.
+        for pid in pids:
+            if _is_pid_alive(pid):
+                _force_kill_pid(pid)
+        deadline = time.time() + 3.0
+        while time.time() < deadline and any(_is_pid_alive(p) for p in pids):
+            time.sleep(0.2)
+        # 프로세스 종료 후에야 파일 잠금이 풀리므로 임시 파일 정리는 마지막에.
+        for session in sessions:
+            for key in ("openTempPath", "workingCopyPath"):
+                temp_path = session.get(key)
+                if temp_path:
+                    try:
+                        Path(temp_path).unlink(missing_ok=True)
+                    except Exception:
+                        pass
+            for cdir in session.get("companionTemps") or []:
                 try:
-                    Path(temp_path).unlink(missing_ok=True)
+                    shutil.rmtree(cdir, ignore_errors=True)
                 except Exception:
                     pass
-        for cdir in session.get("companionTemps") or []:
-            try:
-                shutil.rmtree(cdir, ignore_errors=True)
-            except Exception:
-                pass
-    return {"ok": True, "killed": killed, "sessions": len(sessions)}
+
+    threading.Thread(target=_kill_and_cleanup, name="b2b-force-restart-kill", daemon=True).start()
+    return {"ok": True, "killing": len(pids), "sessions": len(sessions)}
 
 
 atexit.register(cleanup_node_worker)
@@ -2309,6 +2341,17 @@ def _excel_process_id(app):
         return None
 
 
+
+def _track_spawned_excel_app(app):
+    """이 앱이 띄운 Excel 인스턴스의 pid 를 기록한다(고아 정리용).
+    DispatchEx 직후에만 호출할 것 — 사용자 개인 Excel(GetActiveObject)을 등록하면 안 된다."""
+    try:
+        pid = _excel_process_id(app)
+        if pid:
+            SPAWNED_EXCEL_PIDS.add(int(pid))
+    except Exception:
+        pass
+
 def _force_kill_pid(pid):
     if not pid or os.name != "nt":
         return
@@ -2428,6 +2471,7 @@ def _get_live_excel_app():
             LIVE_EXCEL_APP = None
     _ensure_vbom_access()
     app = win32com.client.DispatchEx("Excel.Application")
+    _track_spawned_excel_app(app)  # [0.5.2 이식] 고아 Excel 추적
     app.Visible = False
     app.DisplayAlerts = False
     app.EnableEvents = False
@@ -2519,6 +2563,7 @@ def _open_excel_session_impl(
     with EXCEL_LOCK:
         browser_hwnd = None if (native_parent_hwnd or native_overlay) else (_capture_browser_hwnd(browser_title) if read_only_mirror else None)
         app = _get_live_excel_app() if live_editable else win32com.client.DispatchEx("Excel.Application")
+        _track_spawned_excel_app(app)  # [0.5.2 이식] 고아 Excel 추적
         live_frame_mode = bool(live_editable and LIVE_FRAME_MODE)
         if live_frame_mode:
             # frame 모드: 공유 인스턴스의 글로벌 Visible 토글 금지.
@@ -3674,6 +3719,7 @@ def _reopen_excel_session_workbook(session):
     live_editable = bool(session.get("liveEditable"))
     read_only_mirror = bool(session.get("readOnlyMirror")) and not live_editable
     app = _get_live_excel_app() if live_editable else win32com.client.DispatchEx("Excel.Application")
+    _track_spawned_excel_app(app)  # [0.5.2 이식] 고아 Excel 추적
     if not (live_editable and LIVE_FRAME_MODE):
         # frame 모드에서는 글로벌 Visible 토글 금지(다른 라이브 프레임까지 동시에 사라져
         # 포그라운드 소멸 → 무관한 앱 창 활성화). 새 프레임은 아래에서 개별 파킹한다.
@@ -7812,6 +7858,7 @@ def _get_python_skill_app():
             PYTHON_SKILL_APP = None
             PYTHON_SKILL_APP_PID = None
     app = win32com.client.DispatchEx("Excel.Application")
+    _track_spawned_excel_app(app)  # [0.5.2 이식] 고아 Excel 추적
     app.Visible = False
     for attr, value in (("DisplayAlerts", False), ("EnableEvents", False), ("AskToUpdateLinks", False)):
         try:
@@ -8955,6 +9002,7 @@ def inspect_workbook_with_excel(path, source_error=None):
     if not excel_available():
         return inspect_workbook_fallback(path, source_error)
     app = win32com.client.DispatchEx("Excel.Application")
+    _track_spawned_excel_app(app)  # [0.5.2 이식] 고아 Excel 추적
     app.Visible = False
     app.DisplayAlerts = False
     app.EnableEvents = False
@@ -9065,6 +9113,7 @@ def load_workbook_aoa(path):
 
 def load_workbook_aoa_with_excel(path):
     app = win32com.client.DispatchEx("Excel.Application")
+    _track_spawned_excel_app(app)  # [0.5.2 이식] 고아 Excel 추적
     app.Visible = False
     app.DisplayAlerts = False
     app.EnableEvents = False

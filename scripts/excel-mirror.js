@@ -44,6 +44,191 @@ const excelMirror = {
   ownerMode: true,
 };
 // 업로드한 모든 파일(보통 입력 여러 개 + 출력)을 미리 열어 스택해 둔다.
+// [0.5.2 이식] 전역 작업 잠금(busy gate)
+// DOM 오버레이는 WebView 영역만 덮는다. 오른쪽 네이티브 파일탭과 Excel 창(별도 HWND)은
+// 네이티브 호스트가 직접 잠가야 하므로 busy 상태를 호스트에 중계한다.
+function publishNativeUiBusy(active, label) {
+  const bridge = window.chrome && window.chrome.webview;
+  if (!bridge || typeof bridge.postMessage !== "function") return;
+  const enc = value => encodeURIComponent(String(value || ""));
+  bridge.postMessage(["B2B_UI_BUSY", active ? "1" : "0", enc(label || "")].join("\t"));
+}
+
+// ---- 전역 작업 잠금(busy gate) ----
+// Excel 창 로딩/스킬 적용/전환/복구 같은 COM 직렬 작업이 도는 동안 다른 클릭이 끼어들면
+// 큐가 꼬여 탭/창 상태가 어긋난다 → 작업 중에는 포인터 입력을 즉시 차단하고,
+// 120ms 이상 길어지는 작업만 오버레이로 표시한다. 빠른 탭 전환은 깜빡임을 줄이고,
+// 느린 Excel COM 작업은 사용자가 "지금 조작 불가"임을 명확히 볼 수 있게 한다.
+// 안전장치: 어떤 버그로 해제가 누락돼도 토큰마다 90초 후 자동 해제된다.
+const uiBusy = { count: 0, el: null, since: 0, guardInstalled: false };
+
+function _ensureUiBusyOverlay() {
+  if (uiBusy.el) return uiBusy.el;
+  const style = document.createElement("style");
+  style.textContent = `
+    #b2b-busy-overlay {
+      position: fixed; inset: 0; z-index: 2147483000;
+      display: none; align-items: flex-start; justify-content: center;
+      background: rgba(250, 250, 252, 0.45);
+      cursor: wait;
+    }
+    #b2b-busy-overlay.show { display: flex; }
+    body.b2b-ui-busy, body.b2b-ui-busy * { cursor: wait !important; }
+    #b2b-busy-overlay .busy-pill {
+      margin-top: 18vh;
+      display: inline-flex; align-items: center; gap: 10px;
+      background: #fff; border: 1px solid var(--border, #e1e4eb);
+      border-radius: 999px; padding: 10px 18px;
+      font-size: 13px; font-weight: 700; color: var(--ink-900, #202430);
+      box-shadow: 0 6px 24px rgba(0,0,0,0.12);
+    }
+    #b2b-busy-overlay .busy-spin {
+      width: 14px; height: 14px; border-radius: 50%;
+      border: 2px solid var(--m-400, #ff4db8); border-top-color: transparent;
+      animation: b2bBusySpin 0.8s linear infinite;
+    }
+    #b2b-busy-overlay .busy-stop {
+      display: none;
+      border: 1px solid #ef4444;
+      background: #fff;
+      color: #dc2626;
+      border-radius: 999px;
+      padding: 6px 10px;
+      font-size: 12px;
+      font-weight: 800;
+      cursor: pointer;
+    }
+    #b2b-busy-overlay .busy-stop.show { display: inline-flex; }
+    #b2b-busy-overlay .busy-stop:disabled {
+      opacity: 0.55;
+      cursor: wait;
+    }
+    @keyframes b2bBusySpin { to { transform: rotate(360deg); } }
+  `;
+  document.head.appendChild(style);
+  const el = document.createElement("div");
+  el.id = "b2b-busy-overlay";
+  el.innerHTML = `<div class="busy-pill"><span class="busy-spin"></span><span class="busy-label">작업 중...</span><button class="busy-stop" type="button">작업 중단</button></div>`;
+  // 오버레이가 모든 포인터 입력을 흡수한다(클릭/더블클릭/휠 차단).
+  // 단, 오버레이 안의 '작업 중단' 버튼만은 통과시킨다 — capture 단계에서 stopPropagation 하면
+  // 자기 자식인 버튼의 click 핸들러까지 막혀 버튼이 눌리지 않는 버그가 있었다.
+  ["pointerdown", "pointerup", "click", "dblclick", "wheel", "contextmenu"].forEach(type => {
+    el.addEventListener(type, e => {
+      const target = e.target;
+      if (target && typeof target.closest === "function" && target.closest(".busy-stop")) return;
+      e.stopPropagation();
+      e.preventDefault();
+    }, true);
+  });
+  document.body.appendChild(el);
+  uiBusy.el = el;
+  _installUiBusyInputGuard();
+  return el;
+}
+
+function _installUiBusyInputGuard() {
+  if (uiBusy.guardInstalled) return;
+  uiBusy.guardInstalled = true;
+  const blockedTypes = ["pointerdown", "pointerup", "click", "dblclick", "contextmenu", "wheel", "dragenter", "dragover", "drop"];
+  blockedTypes.forEach(type => {
+    document.addEventListener(type, e => {
+      if (!isUiBusy()) return;
+      const overlay = uiBusy.el;
+      if (overlay && overlay.contains(e.target)) return;
+      e.stopPropagation();
+      e.preventDefault();
+    }, true);
+  });
+}
+
+function isUiBusy() {
+  return uiBusy.count > 0;
+}
+
+function beginUiBusy(label = "작업 중...", options = {}) {
+  uiBusy.count += 1;
+  if (uiBusy.count === 1) uiBusy.since = Date.now();
+  const showDelayMs = Math.max(0, Number(options.showDelayMs ?? 120));
+  try {
+    const el = _ensureUiBusyOverlay();
+    const labelEl = el.querySelector(".busy-label");
+    if (labelEl) labelEl.textContent = label;
+    const stopBtn = el.querySelector(".busy-stop");
+    if (stopBtn) {
+      stopBtn.textContent = options.stopLabel || "작업 중단";
+      stopBtn.disabled = false;
+      stopBtn.classList.toggle("show", typeof options.onStop === "function");
+      stopBtn.onclick = typeof options.onStop === "function"
+        ? async e => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (stopBtn.disabled) return;
+            stopBtn.disabled = true;
+            stopBtn.textContent = options.stoppingLabel || "중단 중...";
+            try {
+              await options.onStop();
+            } catch (err) {
+              console.warn("busy stop failed:", err);
+              if (typeof toast === "function") toast("작업 중단 요청에 실패했습니다: " + (err.message || err), "error");
+              stopBtn.disabled = false;
+              stopBtn.textContent = options.stopLabel || "작업 중단";
+            }
+          }
+        : null;
+    }
+    document.body.classList.add("b2b-ui-busy");
+  } catch (_) {}
+  try { publishNativeUiBusy(true, label); } catch (_) {}
+  const token = { released: false, timer: null, showTimer: null };
+  token.showTimer = setTimeout(() => {
+    if (token.released || !isUiBusy()) return;
+    try {
+      const el = _ensureUiBusyOverlay();
+      const labelEl = el.querySelector(".busy-label");
+      if (labelEl) labelEl.textContent = label;
+      el.classList.add("show");
+    } catch (_) {}
+  }, showDelayMs);
+  token.timer = setTimeout(() => endUiBusy(token, { failsafe: true }), 90000);
+  return token;
+}
+
+function endUiBusy(token, opts = {}) {
+  if (!token || token.released) return;
+  token.released = true;
+  clearTimeout(token.showTimer);
+  clearTimeout(token.timer);
+  uiBusy.count = Math.max(0, uiBusy.count - 1);
+  if (uiBusy.count === 0) {
+    if (uiBusy.el) uiBusy.el.classList.remove("show");
+    const stopBtn = uiBusy.el && uiBusy.el.querySelector(".busy-stop");
+    if (stopBtn) {
+      stopBtn.classList.remove("show");
+      stopBtn.onclick = null;
+      stopBtn.disabled = false;
+    }
+    try { document.body.classList.remove("b2b-ui-busy"); } catch (_) {}
+    try { publishNativeUiBusy(false, ""); } catch (_) {}
+    const held = Date.now() - uiBusy.since;
+    if (typeof toast === "function") {
+      if (opts.failsafe) {
+        toast("작업이 예상보다 오래 걸려 화면 잠금을 해제했습니다. 화면이 이상하면 탭을 다시 눌러 주세요.", "error");
+      } else if (!opts.silentComplete && held > 1200) {
+        toast("작업 완료 — 화면 조작이 가능합니다.", "success");
+      }
+    }
+  }
+}
+
+async function withUiBusy(label, fn, options = {}) {
+  const token = beginUiBusy(label, options);
+  try {
+    return await fn();
+  } finally {
+    endUiBusy(token, options);
+  }
+}
+
 const EXCEL_MIRROR_MAX_CACHED_SESSIONS = 10;
 const EXCEL_MIRROR_MAX_ROWS = 1048576;
 const EXCEL_MIRROR_MAX_COLS = 16384;
@@ -397,6 +582,8 @@ async function autoOpenMirrorAfterUpload(selectedFileId) {
 }
 
 async function switchVisibleExcelMirrorToFileId(fileId) {
+  const _busyTok = typeof beginUiBusy === "function" ? beginUiBusy("Excel 탭 전환 중...", { showDelayMs: 180, silentComplete: true }) : null;
+  try {
   if (!fileId) return false;
   let excelId = excelMirror.sessionsByFileId[fileId];
   if (!excelId) {
@@ -452,6 +639,9 @@ async function switchVisibleExcelMirrorToFileId(fileId) {
   startExcelMirrorPolling();
   updateMirrorShellStatus();
   return true;
+  } finally {
+    if (_busyTok && typeof endUiBusy === "function") endUiBusy(_busyTok, { silentComplete: true });
+  }
 }
 
 async function openExcelMirrorResultForFileId(fileId, downloadUrl, options = {}) {
@@ -729,6 +919,8 @@ async function restoreActiveExcelMirrorWindow(options = {}) {
 }
 
 async function recoverExcelMirrorWindow(excelId = currentExcelId() || excelMirror.activeExcelId, options = {}) {
+  const _rbusy = typeof beginUiBusy === "function" ? beginUiBusy("Excel 창 복구 중...", { showDelayMs: 120, silentComplete: true }) : null;
+  try {
   if (!excelId) return false;
   const rect = excelMirrorScreenRect();
   if (!rect) return false;
@@ -761,6 +953,9 @@ async function recoverExcelMirrorWindow(excelId = currentExcelId() || excelMirro
   updateMirrorShellStatus(data.reopened ? "Excel 창을 복구해 다시 열었습니다." : "Excel 창을 복구했습니다.");
   if (data.reopened) maybeAutoReapplyAfterRecover(activeExcelId);
   return true;
+  } finally {
+    if (_rbusy && typeof endUiBusy === "function") endUiBusy(_rbusy, { silentComplete: true });
+  }
 }
 
 // 복구가 워크북을 '파일에서 다시 열었다'(reopened) = 메모리에 적용돼 있던 스킬 결과가
@@ -884,6 +1079,20 @@ function showExcelApplyCancelButton(show) {
 // (미러를 숨겨야 적용 중 여러 Excel 창이 앞으로 튀어나오지 않고, 패널의 로딩 표시가 보인다.)
 function beginExcelMirrorApplyLoading(message, options = {}) {
   excelMirror.applying = true;
+  if (!excelMirror.applyBusyToken && typeof beginUiBusy === "function") {
+    excelMirror.applyBusyToken = beginUiBusy(message || "적용 반영 중...", {
+      showDelayMs: 120,
+      stopLabel: "작업 중단",
+      stoppingLabel: "중단 중...",
+      onStop: async () => {
+        const a = window.__activeVbaApply;
+        if (a && a.token && !a.token.cancelled && typeof requestExcelApplyCancel === "function") { await requestExcelApplyCancel(); return; }
+        if (window.__activeBackendPipelineJobId && typeof cancelActiveBackendPipeline === "function") { await cancelActiveBackendPipeline(); return; }
+        if (typeof toast === "function") toast("작업 중단을 요청했습니다. Excel 세션을 재시작합니다...", "error");
+        if (typeof forceRestartExcelMirrors === "function") await forceRestartExcelMirrors("작업 중단 요청으로 Excel을 재시작합니다.");
+      },
+    });
+  }
   if (typeof showExcelApplyCancelButton === "function") showExcelApplyCancelButton(true);
   const label = message || "적용 반영 중...";
   const hideWindows = options.forceHideWindows === true || (!isNativeExcelShell() && options.hideWindows !== false);
@@ -904,6 +1113,10 @@ function beginExcelMirrorApplyLoading(message, options = {}) {
 }
 
 function endExcelMirrorApplyLoading() {
+  if (excelMirror.applyBusyToken && typeof endUiBusy === "function") {
+    endUiBusy(excelMirror.applyBusyToken, { silentComplete: true });
+    excelMirror.applyBusyToken = null;
+  }
   if (typeof showExcelApplyCancelButton === "function") showExcelApplyCancelButton(false);
   if (!excelMirror.applying && !excelMirror.applyLoadingTimer) return;
   excelMirror.applying = false;

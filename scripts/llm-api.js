@@ -147,15 +147,27 @@ async function callOpenAICompatOnce(system, options) {
     { role: "system", content: system },
     ...getLLMChatHistory(),
   ];
+  const model = settings.model || networkDefaults.model || DEFAULTS["openai-compat"].model;
+  const isQwen = /qwen/i.test(String(model || ""));
+  const thinkOn = options.thinkMode === true;
+  // [0.5.2 이식] Qwen3 계열은 공식 가이드가 greedy/저온 디코딩을 금지한다 — temperature 0.2 같은
+  // 준-greedy 설정에서 같은 줄을 끝없이 반복하는 degenerate 출력이 발생한다(FP8 양자화는 더 심함).
+  // 권장값: no-think temp 0.7/top_p 0.8, think temp 0.6/top_p 0.95, top_k 20, presence_penalty 1.5.
+  const defaultTemperature = isQwen ? (thinkOn ? 0.6 : 0.7) : 0.2;
   const payload = {
-    model: settings.model || networkDefaults.model || DEFAULTS["openai-compat"].model,
+    model,
     messages,
     max_tokens: 4096,
-    // [#12] 기본은 낮게(일관성↑). seed 는 일부러 박지 않음 → 재요청/재생성 때 다른 시도가 나올 여지 유지.
-    // 호출자가 options.temperature 로 '다양하게 재생성'을 위해 더 높일 수 있음.
-    temperature: (typeof options.temperature === "number") ? options.temperature : 0.2,
+    // seed 는 일부러 박지 않음 → 재요청/재생성 때 다른 시도가 나올 여지 유지.
+    // 호출자가 options.temperature 로 직접 지정할 수 있음.
+    temperature: (typeof options.temperature === "number") ? options.temperature : defaultTemperature,
     stream: true,
   };
+  if (isQwen) {
+    payload.top_p = thinkOn ? 0.95 : 0.8;
+    payload.top_k = 20;             // vLLM 확장 파라미터(Qwen 권장)
+    payload.presence_penalty = 1.5; // FP8 양자화 반복 억제(Qwen 공식 권장 범위)
+  }
   applyQwenThinkControl(payload, options.thinkMode === true);
   const { resp, url } = await fetchOpenAICompat("/chat/completions", base, {
     method: "POST",
