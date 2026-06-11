@@ -4753,9 +4753,12 @@ def _run_vba_pipeline_on_session_impl(excel_id, steps, reset=True, entry=None):
         initial_view = _capture_live_view_state(app, wb, session)
         final_view = initial_view
         timings["sessionMs"] = round((time.perf_counter() - _t) * 1000, 2)
-        # 교차 파일 접근: 다른 업로드 파일들을 같은 인스턴스에 동반 오픈(읽기전용, 숨김).
+        # [0.5.2.2 §5.2] 스텝 없는 순수 리셋 호출은 교차 읽기가 없으므로 동반 스냅샷을 생략한다 —
+        # 동반 스냅샷은 다른 라이브 워크북 전부를 SaveCopyAs 하는 무거운 작업이라, 다중 파일 리셋을
+        # 파일별 호출로 나눠 보낼 때 호출마다 반복되면 복구가 수 분씩 걸린다.
         _t = time.perf_counter()
-        _ensure_companion_workbooks(session, excel_id, app, wb)
+        if steps:
+            _ensure_companion_workbooks(session, excel_id, app, wb)
         try:
             if reset:
                 source = session.get("sourcePath") or session.get("path")
