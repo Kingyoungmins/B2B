@@ -8,41 +8,28 @@ $("btn-load").onclick = () => {
   openLoadDialog();
 };
 $("btn-reset").onclick = async () => {
-  if (!confirm("현재 화면 상태를 초기화할까요? (다운로드한 .logic.json 파일은 영향 없음)")) return;
-  // 초기화는 폐기 동작 → graceful 닫기(대형 워크북 건당 수 초 + COM 큐 점유) 대신
-  // 강제 정리: 모든 Excel 창이 즉시 사라지고, 직후 새 업로드가 정리 뒤에 줄서지 않는다.
-  if (typeof forceCloseAllExcelMirrorSessions === "function") {
-    forceCloseAllExcelMirrorSessions().catch(err => console.warn("Excel force close during reset failed:", err));
-  } else if (typeof closeAllExcelMirrorSessions === "function") {
-    closeAllExcelMirrorSessions().catch(err => console.warn("Excel close-all during reset failed:", err));
+  // [사용자 요청] 초기화 = 띄운 Excel 전부 종료 + 프로그램 재시작처럼 동작.
+  // confirm() 이 항상-위 Excel 미러 창 뒤에 가려져 화면이 굳어 보이는 문제(0.5.2.2 §7)가 있어
+  // 묻기 전에 미러를 먼저 숨긴다. 취소하면 활성 미러를 복원한다.
+  try { if (typeof hideAllExcelMirrorWindows === "function") await hideAllExcelMirrorWindows(); } catch (_) {}
+  if (!confirm("초기화할까요? 띄워진 Excel 창을 모두 닫고 프로그램을 새로 시작한 상태로 되돌립니다.\n(다운로드한 .logic.json 파일은 영향 없음)")) {
+    try { if (typeof scheduleRestoreActiveExcelMirror === "function") scheduleRestoreActiveExcelMirror(0); } catch (_) {}
+    return;
   }
-  state.inputs = [];
-  state.inputsOriginal = [];
-  state.output = null;
-  state.outputOriginal = null;
-  state.outputTemplates = [];
-  state.activeOutputIndex = -1;
-  state.pipeline = [];
-  state.chatHistory = [];
-  state.currentFileId = null;
-  state.currentSheet = null;
-  state.editingStepId = null;
-  state.fuzzyResolution = {};
-  state.lastError = null;
-  state.formulaResults = {};
-  state.selectedSheets = [];
-  state.selectedCell = null;
-  state.selectedRange = null;
-  state.selectedRanges = [];
-  state.selectionAnchor = null;
-  $("chat-messages").innerHTML = `<div class="msg system">입력 또는 출력 파일 업로드 후 활성화됩니다.</div>`;
-  renderInputList();
-  renderOutputChip();
-  renderPipeline();
-  refreshTabs();
-  refreshChatState();
-  renderExcelViewer();
-  refreshRunButton();
+  // 1) Excel 전부 강제 종료: 서버가 즉시 응답하고 백그라운드 스레드가 세션/워커/고아 EXCEL.EXE 까지 정리.
+  try {
+    if (typeof forceCloseAllExcelMirrorSessions === "function") {
+      await forceCloseAllExcelMirrorSessions();
+    } else if (typeof closeAllExcelMirrorSessions === "function") {
+      await closeAllExcelMirrorSessions();
+    }
+  } catch (err) {
+    console.warn("초기화 중 Excel 종료 실패(리로드는 계속 진행):", err);
+  }
+  // 2) SPA 전체 리로드 = 프로그램 재시작과 동일한 상태 초기화.
+  //    이전의 수동 state 필드 초기화는 새 상태/타이머/토큰이 생길 때마다 누락돼 '반쯤 초기화'가 됐다 —
+  //    리로드는 모든 JS 상태·타이머·busy 토큰·취소 토큰이 부팅 직후와 같아진다(서버/설정은 유지).
+  location.reload();
 };
 
 function logicBackupTimestamp() {
