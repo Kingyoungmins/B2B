@@ -1088,12 +1088,16 @@ function beginExcelMirrorApplyLoading(message, options = {}) {
       showDelayMs: 120,
       stopLabel: "작업 중단",
       stoppingLabel: "중단 중...",
+      // [검증패치#1] 말풍선 '작업 중단' 버튼과 완전히 같은 로직을 쓴다(버튼 복사).
+      // 이전 버전은 토큰이 아직 등록되지 않은 찰나에 누르면 forceRestart(Excel 강제 재시작)로
+      // 빠져 '중단'이 세션 전체 재시작처럼 동작했다 — 협조 취소만 수행하고 강제 재시작은 하지 않는다.
       onStop: async () => {
-        const a = window.__activeVbaApply;
-        if (a && a.token && !a.token.cancelled && typeof requestExcelApplyCancel === "function") { await requestExcelApplyCancel(); return; }
-        if (window.__activeBackendPipelineJobId && typeof cancelActiveBackendPipeline === "function") { await cancelActiveBackendPipeline(); return; }
-        if (typeof toast === "function") toast("작업 중단을 요청했습니다. Excel 세션을 재시작합니다...", "error");
-        if (typeof forceRestartExcelMirrors === "function") await forceRestartExcelMirrors("작업 중단 요청으로 Excel을 재시작합니다.");
+        const vbaActive = window.__activeVbaApply && window.__activeVbaApply.token && !window.__activeVbaApply.token.cancelled;
+        if (!vbaActive && window.__activeBackendPipelineJobId && typeof cancelActiveBackendPipeline === "function") {
+          await cancelActiveBackendPipeline();
+          return;
+        }
+        if (typeof requestExcelApplyCancel === "function") await requestExcelApplyCancel();
       },
     });
   }

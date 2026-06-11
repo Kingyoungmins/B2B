@@ -481,6 +481,12 @@ function pythonComStaticSafetyFailures(code, sourceUserMessage) {
   if (lines.length > 150) {
     failures.push("코드가 비정상적으로 깁니다. 요청을 만족하는 최소한의 코드(보통 40줄 이내)로 다시 작성하세요.");
   }
+  // [검증패치#4] 복사/붙여넣기 요청인데 ctx.copy 없이 read→write 재구성 — 헤더/빈칸 누락·서식/수식 소실의 원인.
+  if (typeof userRequestsCopyPaste === "function" && userRequestsCopyPaste(sourceUserMessage) &&
+      (typeof userRequestsValuesOnly !== "function" || !userRequestsValuesOnly(sourceUserMessage)) &&
+      !/ctx\.copy\s*\(/.test(scanText) && /ctx\.read\s*\(/.test(scanText) && /ctx\.(write|write_cell|write_formulas)\s*\(/.test(scanText)) {
+    failures.push("복사/붙여넣기 요청은 ctx.copy(원본시트, 범위, 대상시트, 시작셀) 로 범위 전체(헤더·빈칸 포함)를 그대로 옮겨야 합니다 — read→write 값 재구성은 서식·수식·빈칸이 사라집니다.");
+  }
   return failures;
 }
 
