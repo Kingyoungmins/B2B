@@ -6,7 +6,15 @@
 
 ## 최근 변경사항
 
-### ver0.5.4 (현재 브랜치)
+### ver0.5.5
+
+ver0.5.4(라이브 COM 기본 전환)의 실사용 안정화 릴리스.
+
+- **치명 엔진 버그 수정**: 동적 COM 디스패치에서 `Range.Resize` 가 단일 셀로 둔갑해 `ctx.write` 가 마지막 한 칸에만 기록되던 문제(값 채우기/치환이 엉뚱한 셀에 적용), 같은 파일명이 열려 있을 때 토글 리셋이 None 워크북으로 크래시하던 문제, 빈 단일 셀 read 가 [] 로 줄어들던 문제.
+- **혼합 엔진 실행 호환**: 한 파이프라인에 openpyxl(레거시)/VBA/COM-bulk 스텝이 섞여도 전체가 한 체인에서 실행(레거시 포함 시 백엔드 워커가 스텝별 디스패치). 구버전 logic.zip 호환 복원.
+- **필드 수정**: 탭 전환 후 몇 초 뒤 회귀(폴 active 동기화를 edge 기준으로), 비우기/초기화 확인창 클릭 불가(DOM 모달로 교체), 업로드/적용 중 끼어들기 차단(busy + 네이티브 탭 비활성), 초기화 직후 첫 업로드 빈 화면 자가복구, busy 중 호스트 최소화 자동 복귀, 교차 파일 스킬 on/off 시 출력 파일로 뷰 이동, 오류 스킬 삭제가 부활하던 문제, 뒤집힌 범위(G1:F100) 거부, `ctx.formula_mask` 신설, Think 모드 기본 ON.
+
+### ver0.5.4
 
 **계보**: ver0.5.1 → ver0.5.3(0.5.0의 단일 Excel 멀티워크북 뷰 머지) → ver0.5.4.
 같은 시기의 다른 갈래인 ver0.5.2/ver0.5.2.2(0.5.0 베이스 + Python COM 엔진)의 핵심을 이 브랜치에 흡수해, 사실상 두 갈래의 통합본입니다.
@@ -289,12 +297,12 @@ build_exe.bat
 빌드 결과:
 
 ```text
-dist\B2B_ver0.5.4\B2B_ver0.5.4.exe   (네이티브 호스트)
-dist\B2B_ver0.5.4\B2B_Server.exe     (PyInstaller 서버)
-dist\B2B_ver0.5.4_portable.zip       (배포용 zip)
+dist\B2B_ver0.5.5\B2B_ver0.5.5.exe   (네이티브 호스트)
+dist\B2B_ver0.5.5\B2B_Server.exe     (PyInstaller 서버)
+dist\B2B_ver0.5.5_portable.zip       (배포용 zip)
 ```
 
-단일 self-extracting EXE가 필요하면 `build_single_exe.bat`을 추가 실행합니다 (`dist\B2B_ver0.5.4_single.exe`).
+단일 self-extracting EXE가 필요하면 `build_single_exe.bat`을 추가 실행합니다 (`dist\B2B_ver0.5.5_single.exe`).
 
 `dist/`와 `build/`는 git 추적 대상이 아닙니다.
 
@@ -383,7 +391,7 @@ ctx.write_grid(ws, [[123]], start_row=4, start_col=2)
 ## 디렉터리 구조
 
 ```text
-B2B_ver0.5.4/
+B2B_ver0.5.5/
 ├─ index.html
 ├─ serve_b2b.py
 ├─ launch_b2b.py

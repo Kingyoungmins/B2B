@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
@@ -9,9 +9,9 @@ namespace B2BSingleExe
 {
     internal static class Program
     {
-        private const string Version = "0.5.4";
+        private const string Version = "0.5.5";
         private const string ResourceName = "payload.zip";
-        private const string MainExeName = "B2B_ver0.5.4.exe";
+        private const string MainExeName = "B2B_ver0.5.5.exe";
 
         [STAThread]
         private static int Main(string[] args)
@@ -24,7 +24,7 @@ namespace B2BSingleExe
 
                 string extractDir = Path.Combine(
                     Path.GetTempPath(),
-                    "B2B_ver0.5.4_single_" + Process.GetCurrentProcess().Id + "_" + DateTime.UtcNow.Ticks
+                    "B2B_ver0.5.5_single_" + Process.GetCurrentProcess().Id + "_" + DateTime.UtcNow.Ticks
                 );
                 Directory.CreateDirectory(extractDir);
 
@@ -99,7 +99,7 @@ namespace B2BSingleExe
             try
             {
                 string temp = Path.GetTempPath();
-                foreach (string dir in Directory.GetDirectories(temp, "B2B_ver0.5.4_single_*"))
+                foreach (string dir in Directory.GetDirectories(temp, "B2B_ver0.5.5_single_*"))
                 {
                     try
                     {
