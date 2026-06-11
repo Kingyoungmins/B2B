@@ -1554,13 +1554,19 @@ function renderPipeline() {
       if (typeof pushHistory === "function") pushHistory("단계 삭제");
       if (state.editingStepId === stepId) state.editingStepId = null;
       const removedStep = state.pipeline[currentIdx];
+      // [필드] 이 스텝이 라이브에 '실제 적용된' 상태였는지 — 적용 실패(오류) 스텝은 라이브에 없으므로
+      // 아래 reconcile 이 실패해도 부활시키면 안 된다(오류 스킬이 영영 안 지워지는 현상).
+      const removedWasApplied = typeof getPipelineRuntimeStatus === "function"
+        && (getPipelineRuntimeStatus(stepId) || {}).status === "applied";
       state.pipeline.splice(currentIdx, 1);
       renderPipeline();
       refreshRunButton();
       if (typeof scheduleLogicAutoBackup === "function") scheduleLogicAutoBackup("step-deleted");
       reconcilePipelineSimulationAfterEdit({ affectedStep: removedStep }).catch(err => {
         // [0.5.2.2 §5.5] 라이브 반영 실패 — UI 에선 지워졌는데 라이브엔 남는 어긋남 방지, 원위치 복원.
-        if (removedStep && state.pipeline.findIndex(s => s.id === stepId) < 0) {
+        // 단, 적용된 적 없는(오류/대기) 스텝은 라이브에 존재하지 않으므로 복원하지 않는다 —
+        // reconcile 실패는 남은 스텝/세션 문제이지 이 삭제를 되돌릴 이유가 아니다.
+        if (removedWasApplied && removedStep && state.pipeline.findIndex(s => s.id === stepId) < 0) {
           const at = Math.max(0, Math.min(currentIdx, state.pipeline.length));
           state.pipeline.splice(at, 0, removedStep);
           renderPipeline();
