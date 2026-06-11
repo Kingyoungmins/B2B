@@ -981,6 +981,7 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
                 payload.get("steps") or [],
                 reset=True if reset is None else bool(reset),
                 entry=payload.get("entry"),
+                view_sheet=payload.get("viewSheet"),
             ))
         except PipelineExecutionError as err:
             self.send_json({"ok": False, "error": str(err), "errorInfo": err.info}, status=400)
@@ -4759,7 +4760,7 @@ def _run_vba_on_session_impl(excel_id, code, entry=None):
         return {"ok": True, "excelId": excel_id, "entry": entry}
 
 
-def _run_vba_pipeline_on_session_impl(excel_id, steps, reset=True, entry=None):
+def _run_vba_pipeline_on_session_impl(excel_id, steps, reset=True, entry=None, view_sheet=None):
     """VBA 스킬 파이프라인을 라이브 워크북에 적용한다.
     reset=True: 원본으로 되돌린 뒤(_copy_source_workbook_into_target) enabled 스텝을 순서대로 재적용
     (토글/삭제/순서변경/편집 후 재동기화에 사용). reset=False: 주어진 스텝만 현재 상태에 이어서 실행."""
@@ -4811,6 +4812,25 @@ def _run_vba_pipeline_on_session_impl(excel_id, steps, reset=True, entry=None):
                     _inject_and_run_vba(app, wb, code, entry)
         finally:
             # 한 스텝이 던져도 Application 상태(ScreenUpdating=False 등)가 남지 않게 항상 정상화.
+            # [사용자 요청] 적용/토글 후 활성 시트: ① 프론트가 affectedStep 코드에서 추정한
+            # '변경된 시트'(viewSheet) ② 없으면 토글 전 보던 시트(initial_view) — 리셋의 시트
+            # 재복사가 ActiveSheet 를 '마지막 시트'로 남기던 현상 수정.
+            try:
+                _ws_target = None
+                if view_sheet:
+                    try:
+                        _ws_target = wb.Worksheets(str(view_sheet))
+                    except Exception:
+                        _ws_target = None
+                if _ws_target is None and initial_view and initial_view.get("sheet"):
+                    try:
+                        _ws_target = wb.Worksheets(str(initial_view.get("sheet")))
+                    except Exception:
+                        _ws_target = None
+                if _ws_target is not None:
+                    _ws_target.Activate()
+            except Exception:
+                pass
             _restore_app_state(app)
             try:
                 _restore_live_protected_view(app, wb)
@@ -4828,8 +4848,8 @@ def run_vba_on_session(excel_id, code, entry=None):
     return excel_call(_run_vba_on_session_impl, excel_id, code, entry=entry, timeout=180)
 
 
-def run_vba_pipeline_on_session(excel_id, steps, reset=True, entry=None):
-    return excel_call(_run_vba_pipeline_on_session_impl, excel_id, steps, reset=reset, entry=entry, timeout=600)
+def run_vba_pipeline_on_session(excel_id, steps, reset=True, entry=None, view_sheet=None):
+    return excel_call(_run_vba_pipeline_on_session_impl, excel_id, steps, reset=reset, entry=entry, view_sheet=view_sheet, timeout=600)
 
 
 # =====================================================================

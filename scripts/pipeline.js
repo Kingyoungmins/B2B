@@ -1693,6 +1693,7 @@ async function reapplyVbaPipelineToLive(excelId, options = {}) {
         excelId: sessionExcelId,
         steps: enabledSteps.map(stepPayload),
         reset: true,
+        viewSheet: options.viewSheet || null,
       }, 0, {
         timeoutMs: pipelineTimeoutMs(enabledSteps.length),
         timeoutMessage: pipelineTimeoutMessage,
@@ -1727,6 +1728,7 @@ async function reapplyVbaPipelineToLive(excelId, options = {}) {
           excelId: sessionExcelId,
           steps: group.steps.map(stepPayload),
           reset: false, // 리셋 단계에서 이미 전부 원복했으므로 이어서 실행만 한다.
+          viewSheet: options.viewSheet || null,
         }, 0, {
           timeoutMs: pipelineTimeoutMs(group.steps.length),
           timeoutMessage: pipelineTimeoutMessage,
@@ -1781,6 +1783,25 @@ async function reapplyVbaPipelineToLive(excelId, options = {}) {
 
 // [필드 추가#1] 토글/삭제 후 뷰 이동 대상: 스킬 코드가 다른 파일(출력)에 쓰는 교차 파일
 // 스킬이면 '실제 값이 들어간' 그 파일로 이동한다. 아니면 스킬이 만들어진 파일(targetFileId).
+// [사용자 요청] affectedStep 코드에서 '값이 쓰인 시트'를 추정 — on/off 후 그 시트로 이동.
+// COM dialect: 쓰기 계열 ctx 호출의 첫 번째 시트 인자(copy 는 대상 시트=3번째 인자).
+// VBA: Worksheets("...")/Sheets("...") 첫 등장. 못 찾으면 null(서버가 토글 전 시트로 복원).
+function affectedStepViewSheetHint(affected) {
+  const code = String((affected && affected.code) || "");
+  if (!code) return null;
+  const lang = (affected && affected.language) || "";
+  if (lang === "vba") {
+    const m = code.match(/(?:Worksheets|Sheets)\(\s*"([^"]+)"\s*\)/);
+    return m ? m[1] : null;
+  }
+  let m = code.match(/ctx\.copy\(\s*["'][^"']*["']\s*,\s*["'][^"']*["']\s*,\s*["']([^"']+)["']/);
+  if (m) return m[1];
+  m = code.match(/ctx\.(?:write|write_cell|write_formulas|clear|sort|insert_rows|insert_cols|delete_rows|delete_cols|merge|unmerge|set_number_format|hide_rows|hide_cols|add_sheet)\(\s*["']([^"']+)["']/);
+  if (m) return m[1];
+  m = code.match(/ctx\.read(?:_formulas)?\(\s*["']([^"']+)["']/);
+  return m ? m[1] : null;
+}
+
 function affectedStepViewFileId(affected) {
   if (!affected) return null;
   try {
@@ -1823,7 +1844,7 @@ async function reconcilePipelineSimulationAfterEdit(options = {}) {
       // [#19] 토글/삭제발 재적용에도 취소 토큰을 등록해 '작업 중단' 버튼이 뜨고 동작하게 한다.
       const cancelToken = { cancelled: false };
       window.__activeVbaApply = { token: cancelToken, excelId: liveExcelId };
-      return reapplyVbaPipelineToLive(liveExcelId, { steps: stepsForReconcile })
+      return reapplyVbaPipelineToLive(liveExcelId, { steps: stepsForReconcile, viewSheet: affectedStepViewSheetHint(options.affectedStep) })
         .then(result => {
           // [P1] 활성창 기본 — 뷰 이동은 '실제 변경된 스텝의 대상 파일'로만(출력으로 무조건 점프 금지).
           try {
