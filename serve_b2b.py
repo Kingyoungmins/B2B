@@ -4599,6 +4599,9 @@ def _ensure_companion_workbooks(session, excel_id, app, current_wb):
             session["companionRevs"] = want_revs
     except Exception:
         pass
+    # [필드 찐막] frame(공유 앱) 모드에서 실제 스냅샷/정리가 없으면 꼬리의 Activate/창숨김/
+    # ScreenUpdating 토글을 건너뛴다 — 파일별 '첫 적용'에서 창이 내려갔다 뜨던 출렁임의 원인.
+    _companion_changed = bool(session.get("companionNames") or session.get("companionTemps"))
     _close_companion_workbooks(session, app)
     try:
         current_name = str(current_wb.Name).lower()
@@ -4616,10 +4619,7 @@ def _ensure_companion_workbooks(session, excel_id, app, current_wb):
     except Exception:
         pass
     names, temps = [], []
-    try:
-        app.ScreenUpdating = False
-    except Exception:
-        pass
+    _screen_off = False
     for other_id, other in list(EXCEL_SESSIONS.items()):
         if other_id == excel_id or not other.get("liveEditable"):
             continue
@@ -4643,6 +4643,13 @@ def _ensure_companion_workbooks(session, excel_id, app, current_wb):
             except Exception:
                 opened.add(clean.lower())
             continue
+        if not _screen_off:
+            try:
+                app.ScreenUpdating = False
+                _screen_off = True
+            except Exception:
+                pass
+        _companion_changed = True
         cdir = BACKEND_DIR / f"companion_{uuid.uuid4().hex}"
         try:
             cdir.mkdir(parents=True, exist_ok=True)
@@ -4661,16 +4668,18 @@ def _ensure_companion_workbooks(session, excel_id, app, current_wb):
                 pass
     session["companionNames"] = names
     session["companionTemps"] = temps
-    # 동반 워크북을 열면 ActiveWorkbook 이 바뀔 수 있으니 현재 세션 워크북을 다시 활성화.
-    try:
-        current_wb.Activate()
-    except Exception:
-        pass
-    _hide_non_target_workbook_windows(app, current_wb)
-    try:
-        app.ScreenUpdating = True
-    except Exception:
-        pass
+    # 동반 워크북을 실제로 열고 닫았을 때만 활성/숨김/화면 갱신을 손댄다(불필요한 창 출렁임 방지).
+    if _companion_changed:
+        try:
+            current_wb.Activate()
+        except Exception:
+            pass
+        _hide_non_target_workbook_windows(app, current_wb)
+    if _screen_off:
+        try:
+            app.ScreenUpdating = True
+        except Exception:
+            pass
 
 
 def _run_vba_on_session_impl(excel_id, code, entry=None):
