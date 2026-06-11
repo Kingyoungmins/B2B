@@ -616,7 +616,8 @@ async function runPipelineOnBackend(options = {}) {
     : (options.pipeline || state.pipeline);
   const usesPythonExcel = typeof pipelineUsesPython === "function" && pipelineUsesPython(pipelineForRun);
   const activeStepsForRun = (pipelineForRun || []).filter(isStepEnabled);
-  const hasActiveJavaScriptStep = activeStepsForRun.some(step => inferPipelineStepLanguage(step) !== "python");
+  // [혼합 호환] vba 스텝은 이제 백엔드 워커가 실행 가능 — JS(레거시)만 별도 취급.
+  const hasActiveJavaScriptStep = activeStepsForRun.some(step => !["python", "vba"].includes(inferPipelineStepLanguage(step)));
   const liveOutputExcelId = outputTarget && typeof excelMirrorSessionIdForFileId === "function"
     ? excelMirrorSessionIdForFileId(outputTarget.fileId)
     : null;
@@ -646,7 +647,12 @@ async function runPipelineOnBackend(options = {}) {
       name: outputTarget.original.name,
       backendWorkbookId: outputTarget.original.backendWorkbookId,
     } : null,
-    pipeline: pipelineForRun,
+    // [혼합 호환] 워커가 VBA/COM-bulk 스텝의 기준 워크북을 고를 수 있게 대상 파일명을 첨부.
+    pipeline: (pipelineForRun || []).map(s => {
+      if (!s || !s.targetFileId || typeof getFile !== "function") return s;
+      const tf = getFile(s.targetFileId);
+      return tf && tf.name ? { ...s, targetFileName: tf.name } : s;
+    }),
     baseMode: options.baseMode || "original",
     engine: skillEngine,
     current: {

@@ -162,7 +162,9 @@ async function callOpenAICompatOnce(system, options) {
   const thinkOn = options.thinkMode === true;
   // [0.5.2 이식] Qwen3 계열은 공식 가이드가 greedy/저온 디코딩을 금지한다 — temperature 0.2 같은
   // 준-greedy 설정에서 같은 줄을 끝없이 반복하는 degenerate 출력이 발생한다(FP8 양자화는 더 심함).
-  // 권장값: no-think temp 0.7/top_p 0.8, think temp 0.6/top_p 0.95, top_k 20, presence_penalty 1.5.
+  // 권장값: no-think temp 0.7/top_p 0.8, think temp 0.6/top_p 0.95, top_k 20.
+  // presence_penalty 는 상시 1.5 금지(코드 토큰 재사용 벌점 → 출력 품질 저하) — 기본 0.5,
+  // degenerate(줄 반복) 재생성에서만 호출자가 1.5 를 지정한다. [0.5.2.2 교정]
   const defaultTemperature = isQwen ? (thinkOn ? 0.6 : 0.7) : 0.2;
   const payload = {
     model,
@@ -260,8 +262,6 @@ function getLLMChatHistory() {
   while (history.length && history[0].role !== "user") history.shift();
   return history;
 }
-
-async
 
 async function readOpenAICompatStream(resp, options) {
   options = options || {};

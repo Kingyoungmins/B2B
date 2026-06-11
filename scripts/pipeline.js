@@ -41,14 +41,34 @@ function shouldDeferImmediatePipelineRun() {
     (typeof hasBackendOnlyWorkbooks === "function" && hasBackendOnlyWorkbooks());
 }
 
-// [0.5.4 하이브리드] 스텝의 라이브 실행 언어 — vba/python 이면 라이브 Excel 에서 실행.
-// 첫 줄 부근에 `# B2B_ENGINE: openpyxl` 마커가 있으면 라이브에서 빼고 백엔드 openpyxl 로 보낸다
-// (Excel 미설치 환경용 배치/레거시 스텝).
+// [혼합 호환] 레거시 python 방언 감지 — 구버전 openpyxl ctx 헬퍼(rows/sheet/value/write_grid…),
+// openpyxl 직접 사용, 구 마커(# B2B_ENGINE: openpyxl / # B2B_ENGINE_FALLBACK: excel-com).
+// 이런 스텝은 라이브 COM ctx 로 실행할 수 없으므로 백엔드(openpyxl/숨김 Excel 워커) 경로로 보낸다.
+function pythonStepUsesLegacyDialect(code) {
+  const text = String(code || "");
+  if (/^\s*#\s*B2B_ENGINE\s*:\s*openpyxl/im.test(text)) return true;
+  if (/^\s*#\s*B2B_ENGINE_FALLBACK\s*:\s*excel-com/im.test(text)) return true;
+  if (/\bopenpyxl\b|\bload_workbook\s*\(/.test(text)) return true;
+  if (/\bctx\.(?:rows|rows_with_index|iter_rows|sheet|input|workbook|write_grid|set_range|col|display_rows|display_value|value|cell)\s*\(/.test(text)) return true;
+  if (/\bctx\.workbook\b/.test(text)) return true;
+  if (/\bws\.cell\s*\(|\.iter_rows\s*\(/.test(text)) return true;
+  return false;
+}
+
+// [혼합 호환] 스텝의 라이브 실행 언어 — vba/python(COM bulk)이면 라이브 Excel 에서 실행 가능.
+// 레거시 방언이면 null(백엔드 전용). 파이프라인에 백엔드 전용 스텝이 하나라도 섞이면
+// 순서 보존을 위해 전체를 백엔드 체인으로 보낸다(pipelineHasBackendOnlyStep).
 function pipelineStepLiveLanguage(s) {
   if (!s || !s.code) return null;
-  if (/^\s*#\s*B2B_ENGINE\s*:\s*openpyxl/im.test(String(s.code))) return null;
   const lang = s.language || (typeof inferPipelineStepLanguage === "function" ? inferPipelineStepLanguage(s) : "");
-  return (lang === "vba" || lang === "python") ? lang : null;
+  if (lang === "vba") return "vba";
+  if (lang !== "python") return null;
+  return pythonStepUsesLegacyDialect(s.code) ? null : "python";
+}
+
+// 켜진 스텝 중 라이브 실행 불가(레거시 python/기타) 스텝이 있는가 — 있으면 전체 백엔드 라우팅.
+function pipelineHasBackendOnlyStep(steps = state.pipeline) {
+  return (steps || []).some(s => s && s.code && isStepEnabled(s) && !pipelineStepLiveLanguage(s));
 }
 
 function pipelineUsesPython(steps = state.pipeline) {
@@ -61,10 +81,6 @@ function pipelineUsesVba(steps = state.pipeline) {
 
 function pipelineUsesLiveSkill(steps = state.pipeline) {
   return (steps || []).some(s => !!pipelineStepLiveLanguage(s));
-}
-
-function pipelineHasMixedPythonVba(steps = state.pipeline) {
-  return pipelineUsesPython(steps) && pipelineUsesVba(steps);
 }
 
 function activePipelineSteps(steps = state.pipeline) {
@@ -369,12 +385,10 @@ async function ensureVbaRunExcelId() {
 
 function shouldRunPipelineAsVba(steps = state.pipeline) {
   if (!activePipelineSteps(steps).length) return false;
-  // [0.5.2.2] VBA/Python COM 스텝이 있으면 라이브 실행기로. openpyxl 마커 스텝만 있으면 백엔드로.
+  // [혼합 호환] 백엔드 전용(레거시) 스텝이 하나라도 있으면 전체를 백엔드 만능 경로로.
+  if (pipelineHasBackendOnlyStep(steps)) return false;
   if (pipelineUsesLiveSkill(steps)) return true;
-  const engineLive = typeof getSkillEngine === "function" && ["vba", "python"].includes(getSkillEngine());
-  if (!engineLive) return false;
-  // 엔진이 라이브 계열이어도 활성 스텝이 전부 openpyxl 마커(백엔드 전용)면 백엔드 경로.
-  return activePipelineSteps(steps).every(s => !!pipelineStepLiveLanguage(s));
+  return typeof getSkillEngine === "function" && ["vba", "python"].includes(getSkillEngine());
 }
 
 async function runVbaPipelinePreferLive(options = {}) {
@@ -584,7 +598,9 @@ function applyLogic(step) {
   // 라이브 실행기(VBA/Python COM): 파이프라인/시뮬레이터를 우회해 라이브 엑셀에 즉시 실행.
   {
     const liveLang = pipelineStepLiveLanguage(step);
-    if (liveLang === "vba" || liveLang === "python") {
+    // [혼합 호환] 기존 파이프라인에 백엔드 전용(레거시) 스텝이 있으면 새 스텝도 백엔드 체인에
+    // 합류시킨다 — 라이브와 백엔드에 절반씩 적용되면 스텝 간 데이터 의존 순서가 깨진다.
+    if ((liveLang === "vba" || liveLang === "python") && !pipelineHasBackendOnlyStep(state.pipeline)) {
       const liveExcelId = vbaTargetExcelId();
       if (liveExcelId) return applyVbaStepToLiveExcel(step, liveExcelId);
       // 라이브 세션이 없으면 대상 파일 미러를 연 뒤 적용(Python 을 백엔드 openpyxl 로 보내지 않는다).
@@ -596,11 +612,6 @@ function applyLogic(step) {
     }
   }
   const next = [...state.pipeline, step];
-  if (pipelineHasMixedPythonVba(next)) {
-    const err = new Error("Python 스킬과 VBA 스킬은 같은 파이프라인에서 섞어 실행할 수 없습니다. 같은 엔진으로 다시 생성해 주세요.");
-    toast(err.message, "error");
-    return { error: true, errorObject: err };
-  }
   const mustUseExcelBackend = pipelineUsesPython(next) || shouldDeferImmediatePipelineRun();
   if (mustUseExcelBackend) {
     if (typeof pushHistory === "function") pushHistory("단계 추가");
@@ -660,11 +671,6 @@ function insertLogic(step, position) {
   const idx = Math.max(0, Math.min(total, (position | 0) - 1));
   const next = state.pipeline.slice();
   next.splice(idx, 0, step);
-  if (pipelineHasMixedPythonVba(next)) {
-    const err = new Error("Python 스킬과 VBA 스킬은 같은 파이프라인에서 섞어 실행할 수 없습니다. 같은 엔진으로 다시 생성해 주세요.");
-    toast(err.message, "error");
-    return { error: true, errorObject: err };
-  }
   // 0.4.9 VBA: 중간 삽입은 순서가 바뀌므로 라이브를 리셋하고 enabled 스텝을 처음부터 재적용.
   if (step.language === "vba") {
     const liveExcelId = vbaTargetExcelId();
@@ -760,10 +766,6 @@ function replaceLogicAt(stepId, newCode, newDescription, language) {
   const originalStep = state.pipeline[idx];
   const next = state.pipeline.slice();
   next[idx] = normalizeStep({ ...next[idx], code: newCode, description: newDescription || next[idx].description, language });
-  if (pipelineHasMixedPythonVba(next)) {
-    toast("Python 스킬과 VBA 스킬은 같은 파이프라인에서 섞어 실행할 수 없습니다.", "error");
-    return { error: true, errorObject: new Error("mixed Python/VBA pipeline") };
-  }
   if ((typeof getSkillEngine === "function" && getSkillEngine() === "vba") || pipelineUsesVba(next)) {
     const liveExcelId = vbaTargetExcelId();
     if (liveExcelId) {
@@ -1591,9 +1593,6 @@ function noteLivePipelineApplied(steps = state.pipeline) {
 
 // 라이브 상태를 더 이상 신뢰할 수 없을 때(세션 전부 닫힘/초기화/적용 실패) 호출 —
 // 다음 편집은 무조건 실제 재적용을 수행한다.
-
-// 라이브 상태를 더 이상 신뢰할 수 없을 때(세션 전부 닫힘/초기화/적용 실패) 호출 —
-// 다음 편집은 무조건 실제 재적용을 수행한다.
 function invalidateLivePipelineApplied() {
   _lastLiveAppliedSignature = null;
 }
@@ -1649,11 +1648,17 @@ async function reapplyVbaPipelineToLive(excelId, options = {}) {
     addResetTarget(stepTargetFileId(s));
     crossOutputFileIdsReferencedInCode(s.code).forEach(addResetTarget);
   });
-  if (!resetFileIds.length) addResetTarget(fallbackFileId);
+  if (!resetFileIds.length && fallbackFileId) addResetTarget(fallbackFileId);
+  // [리뷰⑥] 대상 폴백 체인이 전부 비면(세션 강제종료 직후 등) null 이 흘러가 '창을 열지 못해'류의
+  // 엉뚱한 에러가 났다 — 원인을 그대로 말하는 에러로 교체.
+  if (!resetFileIds.length) {
+    throw new Error("작업 대상 파일을 결정할 수 없습니다. 파일 탭을 먼저 선택해 Excel 창을 띄운 뒤 다시 시도해 주세요.");
+  }
   if (window.runnerSetRunning) window.runnerSetRunning(true);
   if (typeof muteExcelMirrorForPipeline === "function") muteExcelMirrorForPipeline(excelId);
   if (typeof beginExcelMirrorApplyLoading === "function") beginExcelMirrorApplyLoading("스킬 재적용 중...");
   let failingStep = null;
+  const _resetDone = []; // [리뷰③] 다중 파일 리셋이 중간 실패하면 어디까지 되돌렸는지 추적
   try {
     if (typeof hideAllExcelMirrorWindows === "function") {
       const started = performance.now();
@@ -1698,6 +1703,7 @@ async function reapplyVbaPipelineToLive(excelId, options = {}) {
           timeoutMs: 180000,
           timeoutMessage: "워크북 리셋 응답이 지연되어 중단했습니다. 저사양 PC에서는 백그라운드에서 계속 진행 중일 수 있으니 잠시 후 화면을 확인해 주세요.",
         });
+        _resetDone.push(fid);
       }
       // 2) 적용 단계: 켜진 스텝을 전역 순서 그대로, 각자 자기 대상 파일의 세션에서 실행한다.
       //    같은 세션의 연속 스텝은 한 호출로 배칭해 동반 스냅샷 반복을 줄인다.
@@ -1741,6 +1747,16 @@ async function reapplyVbaPipelineToLive(excelId, options = {}) {
     return data || { ok: true, applied: enabledSteps.length };
   } catch (err) {
     invalidateLivePipelineApplied(); // 부분 적용 가능성 — 다음 편집은 반드시 실제 재적용
+    // [리뷰③] 다중 파일 리셋이 중간에 끊기면 '일부 원본/일부 적용값' 혼합 상태 — 사용자에게 정확히 알린다.
+    try {
+      if (_resetDone.length && _resetDone.length < (resetFileIds || []).length) {
+        const nameOf = fid => { try { const f = typeof getFile === "function" ? getFile(fid) : null; return (f && f.name) || String(fid); } catch (_) { return String(fid); } };
+        const done = _resetDone.map(nameOf).join(", ");
+        const rest = (resetFileIds || []).filter(f => !_resetDone.includes(f)).map(nameOf).join(", ");
+        err.message = String(err.message || err) +
+          ` — 주의: 일부 파일만 원본으로 되돌려진 상태입니다(되돌림: ${done} / 미처리: ${rest}). 지금 데이터는 일시적으로 어긋나 있으니, 같은 동작을 다시 시도하면 전체가 다시 적용됩니다.`;
+      }
+    } catch (_) {}
     if (err && (err._stepInfo || err.errorInfo)) {
       const info = err._stepInfo || err.errorInfo;
       err._stepInfo = { ...info, stepIdx: Number(info.stepIdx ?? (failingStep ? failingStep.stepIdx : -1)) };
@@ -1762,7 +1778,9 @@ async function reconcilePipelineSimulationAfterEdit(options = {}) {
   // (주의: 이 분기를 안 타면 백엔드 openpyxl 경로로 빠져 '라이브 Excel 은 리셋되지 않는' 상태가 된다 —
   //  python 엔진 강제 후 토글 OFF 가 해제되지 않던 버그의 원인. vba 단독 체크 금지.)
   const liveEngine = typeof getSkillEngine === "function" ? getSkillEngine() : "";
-  if (liveEngine === "vba" || liveEngine === "python") {
+  // [혼합 호환] 레거시(백엔드 전용) 스텝이 섞여 있으면 라이브 리셋-재적용 대신 아래 백엔드
+  // 전체 재실행으로 보낸다(백엔드 워커가 VBA/COM-bulk/openpyxl 스텝을 순서대로 모두 실행).
+  if ((liveEngine === "vba" || liveEngine === "python") && !pipelineHasBackendOnlyStep(options.steps || state.pipeline)) {
     // 대상 고정: 스킬이 만들어졌던 파일(A)을 우선 대상으로 삼는다(현재 탭이 B여도).
     // reapplyVbaPipelineToLive 내부에서도 다시 보정하지만, 여기서 먼저 A 세션을
     // 확보(필요 시 새로 오픈)해 두면 A 미러가 트림돼 닫힌 경우에도 안전하게 동작한다.

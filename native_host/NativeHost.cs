@@ -145,6 +145,8 @@ namespace B2BNativeHost
         private static extern bool UnregisterHotKey(IntPtr hWnd, int id);
         [DllImport("user32.dll")]
         private static extern IntPtr GetForegroundWindow();
+        [DllImport("user32.dll")]
+        private static extern bool EnableWindow(IntPtr hWnd, bool bEnable);
 
         [DllImport("user32.dll")]
         private static extern IntPtr GetWindow(IntPtr hWnd, uint uCmd);
@@ -497,6 +499,67 @@ namespace B2BNativeHost
             return await CoreWebView2Environment.CreateAsync(null, webViewUserDataDir, options);
         }
 
+        // [리뷰⑦] JS 의 beginUiBusy/endUiBusy 가 보내는 B2B_UI_BUSY 의 네이티브 절반:
+        // busy 동안 우리 미러 영역과 겹치는 Excel(XLMAIN) 창의 입력을 막아, 적용 중 사용자가
+        // 라이브 워크북을 직접 편집해 COM 작업과 경합하는 것을 차단한다.
+        // 페이지 리로드(초기화)로 busy=0 이 영영 안 올 수 있으므로 90초 failsafe 타이머로 자동 해제.
+        private System.Collections.Generic.List<IntPtr> uiBusyDisabledWindows = new System.Collections.Generic.List<IntPtr>();
+        private System.Windows.Forms.Timer uiBusyFailsafeTimer;
+
+        private void UpdateUiBusyLock(string message)
+        {
+            string[] parts = message.Split('	');
+            bool active = parts.Length > 1 && parts[1] == "1";
+            if (active) ApplyUiBusyLock();
+            else ReleaseUiBusyLock();
+        }
+
+        private void ApplyUiBusyLock()
+        {
+            ReleaseUiBusyLock();
+            try
+            {
+                Rectangle panelRect = excelPanel.RectangleToScreen(excelPanel.ClientRectangle);
+                EnumWindows(delegate(IntPtr hwnd, IntPtr lParam)
+                {
+                    try
+                    {
+                        if (!IsWindowVisible(hwnd)) return true;
+                        StringBuilder cls = new StringBuilder(64);
+                        GetClassName(hwnd, cls, cls.Capacity);
+                        if (cls.ToString().IndexOf("XLMAIN", StringComparison.OrdinalIgnoreCase) < 0) return true;
+                        RECT r;
+                        if (!GetWindowRect(hwnd, out r)) return true;
+                        Rectangle wr = Rectangle.FromLTRB(r.Left, r.Top, r.Right, r.Bottom);
+                        if (!wr.IntersectsWith(panelRect)) return true; // 우리 오버레이 영역의 Excel 창만(무관한 Excel 보호)
+                        EnableWindow(hwnd, false);
+                        uiBusyDisabledWindows.Add(hwnd);
+                    }
+                    catch { }
+                    return true;
+                }, IntPtr.Zero);
+            }
+            catch { }
+            if (uiBusyFailsafeTimer == null)
+            {
+                uiBusyFailsafeTimer = new System.Windows.Forms.Timer();
+                uiBusyFailsafeTimer.Interval = 90000;
+                uiBusyFailsafeTimer.Tick += delegate { ReleaseUiBusyLock(); };
+            }
+            uiBusyFailsafeTimer.Stop();
+            uiBusyFailsafeTimer.Start();
+        }
+
+        private void ReleaseUiBusyLock()
+        {
+            try { if (uiBusyFailsafeTimer != null) uiBusyFailsafeTimer.Stop(); } catch { }
+            foreach (IntPtr hwnd in uiBusyDisabledWindows)
+            {
+                try { EnableWindow(hwnd, true); } catch { }
+            }
+            uiBusyDisabledWindows.Clear();
+        }
+
         private void HandleWebMessage(string message)
         {
             if (String.IsNullOrEmpty(message)) return;
@@ -513,6 +576,11 @@ namespace B2BNativeHost
             if (message.StartsWith("B2B_EXCEL_LOADING\t", StringComparison.Ordinal))
             {
                 UpdateExcelLoading(message);
+                return;
+            }
+            if (message.StartsWith("B2B_UI_BUSY	", StringComparison.Ordinal))
+            {
+                UpdateUiBusyLock(message);
                 return;
             }
             if (message == "B2B_RESTART_SERVER")

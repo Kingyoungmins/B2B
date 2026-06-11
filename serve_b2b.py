@@ -4578,6 +4578,24 @@ def _ensure_companion_workbooks(session, excel_id, app, current_wb):
     원본 업로드 파일이 아니라 라이브 임시 워크북의 최신 상태(SaveCopyAs)를 읽으므로,
     사용자가 입력 파일을 먼저 스킬로 수정한 뒤 그 값을 출력 스킬에서 활용할 수 있다.
     매 실행마다 이전 동반본을 닫고 새로 스냅샷한다(항상 최신). VBA 는 Workbooks("파일명") 으로 교차 접근."""
+    # [리뷰②] 신선도 스킵: 다른 세션들이 마지막 스냅샷 이후 변하지 않았으면(rev 동일) 통째로 생략.
+    # rev 는 각 세션에서 vba/python/파이프라인 실행이 일어날 때마다 +1 된다(아래 run impl 들).
+    # 한계: 사용자가 라이브 Excel 창에 직접 타이핑한 변경은 rev 에 안 잡힌다 — 그 경우를 위해
+    # B2B_COMPANION_ALWAYS_SNAPSHOT=1 로 기존(매번 스냅샷) 동작을 강제할 수 있다.
+    try:
+        if os.environ.get("B2B_COMPANION_ALWAYS_SNAPSHOT") != "1":
+            want_revs = {}
+            for _oid, _o in list(EXCEL_SESSIONS.items()):
+                if _oid == excel_id or not _o.get("liveEditable"):
+                    continue
+                want_revs[_oid] = int(_o.get("rev") or 0)
+            prev_revs = session.get("companionRevs")
+            temps_ok = all(Path(t).exists() for t in (session.get("companionTemps") or []))
+            if prev_revs == want_revs and temps_ok:
+                return
+            session["companionRevs"] = want_revs
+    except Exception:
+        pass
     _close_companion_workbooks(session, app)
     try:
         current_name = str(current_wb.Name).lower()
@@ -4663,6 +4681,7 @@ def _run_vba_on_session_impl(excel_id, code, entry=None):
     with EXCEL_LOCK:
         _t = time.perf_counter()
         session = get_excel_session(excel_id)
+        session["rev"] = int(session.get("rev") or 0) + 1  # [리뷰②] 동반 스냅샷 신선도 추적
         app, wb = session_workbook(session)
         initial_view = _capture_live_view_state(app, wb, session)
         final_view = initial_view
@@ -4749,6 +4768,7 @@ def _run_vba_pipeline_on_session_impl(excel_id, steps, reset=True, entry=None):
     with EXCEL_LOCK:
         _t = time.perf_counter()
         session = get_excel_session(excel_id)
+        session["rev"] = int(session.get("rev") or 0) + 1  # [리뷰②] 동반 스냅샷 신선도 추적
         app, wb = session_workbook(session)
         initial_view = _capture_live_view_state(app, wb, session)
         final_view = initial_view
@@ -5426,6 +5446,7 @@ def _run_python_on_session_impl(excel_id, code):
         raise RuntimeError("Python 코드가 비어 있습니다.")
     with EXCEL_LOCK:
         session = get_excel_session(excel_id)
+        session["rev"] = int(session.get("rev") or 0) + 1  # [리뷰②] 동반 스냅샷 신선도 추적
         app, wb = session_workbook(session)
         _ensure_companion_workbooks(session, excel_id, app, wb)
         try:
@@ -6046,6 +6067,38 @@ def is_python_pipeline_step(step):
         language in ("python", "py")
         or re.search(r"^\s*def\s+transform\s*\(\s*ctx\s*\)\s*:", code, re.M) is not None
     )
+
+
+_LEGACY_PY_DIALECT_RE = re.compile(
+    r"(^[ \t]*#[ \t]*B2B_ENGINE[ \t]*:[ \t]*openpyxl)"
+    r"|(^[ \t]*#[ \t]*B2B_ENGINE_FALLBACK[ \t]*:[ \t]*excel-com)"
+    r"|\bopenpyxl\b|\bload_workbook[ \t]*\("
+    r"|\bctx\.(?:rows|rows_with_index|iter_rows|sheet|input|workbook|write_grid|set_range|col|display_rows|display_value|value|cell)[ \t]*\("
+    r"|\bctx\.workbook\b|\bws\.cell[ \t]*\(|\.iter_rows[ \t]*\(",
+    re.M | re.I)
+
+
+def python_step_uses_legacy_dialect(code):
+    """[혼합 호환] 구버전 openpyxl/excel-com 방언인가 — True 면 ExcelSkillContext(레거시 ctx)로,
+    False 면 라이브와 동일한 COM-bulk ctx(_exec_python_com_skill)로 실행한다."""
+    return bool(_LEGACY_PY_DIALECT_RE.search(str(code or "")))
+
+
+def is_vba_pipeline_step(step):
+    if not step or step.get("enabled") is False:
+        return False
+    lang = str(step.get("language") or "").lower()
+    if lang == "vba":
+        return True
+    if is_python_pipeline_step(step):
+        return False
+    code = str(step.get("code") or "")
+    return re.search(r"^[ \t]*(?:Public[ \t]+|Private[ \t]+)?Sub[ \t]+\w+[ \t]*\(", code, re.M) is not None
+
+
+def _pipeline_payload_has_vba(payload):
+    steps = [s for s in (payload.get("pipeline") or []) if not (s and s.get("enabled") is False)]
+    return any(is_vba_pipeline_step(s) for s in steps)
 
 
 def normalize_python_pipeline_code(code):
@@ -8954,7 +9007,8 @@ def _python_step_sig(step):
     # 라이브 미러에 이미 적용된 단계와 새 요청을 비교하기 위한 안정적 시그니처.
     # id + 정규화된 코드가 같으면 같은 단계로 본다(코드 편집 시 시그니처가 달라짐).
     code = normalize_python_pipeline_code(str((step or {}).get("code") or ""))
-    raw = (str((step or {}).get("id") or "") + "\x00" + code).encode("utf-8")
+    # [혼합 호환] 같은 코드라도 언어(vba/python)가 다르면 다른 단계 — 시그니처에 언어 포함.
+    raw = (str((step or {}).get("id") or "") + "\x00" + str((step or {}).get("language") or "") + "\x00" + code).encode("utf-8")
     return hashlib.sha1(raw).hexdigest()
 
 
@@ -9092,6 +9146,20 @@ def _result_from_workbook_files(output_path, input_paths_by_name, output_item, o
     }
 
 
+def _worker_step_target_wb(step, input_wb_by_name, output_wb):
+    """[혼합 호환] 워커에서 VBA/COM-bulk 스텝의 기준 워크북 결정:
+    프론트가 첨부한 targetFileName → 입력 워크북 이름 매칭, 없으면 출력 워크북."""
+    name = str((step or {}).get("targetFileName") or "").strip()
+    if name:
+        if name in input_wb_by_name:
+            return input_wb_by_name[name]
+        low = name.lower()
+        for k, wb in input_wb_by_name.items():
+            if str(k).lower() == low:
+                return wb
+    return output_wb
+
+
 def _run_excel_python_pipeline_impl(payload, job_id=None):
     if not excel_available():
         raise RuntimeError("Microsoft Excel COM automation is not available. Excel and pywin32 are required.")
@@ -9103,9 +9171,10 @@ def _run_excel_python_pipeline_impl(payload, job_id=None):
     output_wb_record = get_workbook_or_raise(output_item.get("backendWorkbookId"))
     input_wb_records = [get_workbook_or_raise(item.get("backendWorkbookId")) for item in input_items]
     active_steps = [s for s in (payload.get("pipeline") or []) if not (s and s.get("enabled") is False)]
-    python_steps = [s for s in active_steps if is_python_pipeline_step(s)]
+    # [혼합 호환] VBA 스텝도 같은 체인에서 실행한다(전역 순서 보존). JS(레거시)만 불가.
+    python_steps = [s for s in active_steps if is_python_pipeline_step(s) or is_vba_pipeline_step(s)]
     if len(python_steps) != len(active_steps):
-        raise RuntimeError("Python Excel execution cannot mix JavaScript and Python steps in one run.")
+        raise RuntimeError("Excel 실행기는 Python/VBA 스텝만 실행할 수 있습니다(JavaScript 스텝은 다시 생성해 주세요).")
     cached_prefix = _find_best_pipeline_snapshot(input_items, input_wb_records, output_item, output_wb_record, python_steps)
     resume_from = cached_prefix[0] if cached_prefix else 0
     resume_snapshot = cached_prefix[2] if cached_prefix else None
@@ -9283,16 +9352,34 @@ def _run_excel_python_pipeline_impl(payload, job_id=None):
             })
             original_code = str(step.get("code") or "")
             code = normalize_python_pipeline_code(original_code)
+            # [혼합 호환] 스텝별 엔진 디스패치 — 같은 체인(같은 워크북 상태)에서 순서대로 실행:
+            #   vba          → 숨김 워커 Excel 에 VBA 주입 실행
+            #   COM-bulk     → 라이브와 동일한 벌크 ctx 엔진(_exec_python_com_skill, AST 게이트 포함)
+            #   레거시 python → 기존 ExcelSkillContext(transform(ctx))
+            _step_lang = str(step.get("language") or "").lower()
             namespace = _safe_python_globals()
             try:
-                stage_label = "compile"
-                exec(compile(code, f"<pipeline_step_{idx}>", "exec"), namespace, namespace)
-                stage_label = "lookup transform"
-                transform = namespace.get("transform")
-                if not callable(transform):
-                    raise RuntimeError("Python step must define def transform(ctx):")
-                stage_label = "transform"
-                transform(ctx)
+                if _step_lang == "vba" or is_vba_pipeline_step(step):
+                    stage_label = "vba"
+                    _twb = _worker_step_target_wb(step, input_wb_by_name, output_wb)
+                    try:
+                        _twb.Activate()
+                    except Exception:
+                        pass
+                    _inject_and_run_vba(app, _twb, original_code)
+                elif not python_step_uses_legacy_dialect(original_code):
+                    stage_label = "com-bulk"
+                    _twb = _worker_step_target_wb(step, input_wb_by_name, output_wb)
+                    _exec_python_com_skill(app, _twb, None, original_code)
+                else:
+                    stage_label = "compile"
+                    exec(compile(code, f"<pipeline_step_{idx}>", "exec"), namespace, namespace)
+                    stage_label = "lookup transform"
+                    transform = namespace.get("transform")
+                    if not callable(transform):
+                        raise RuntimeError("Python step must define def transform(ctx):")
+                    stage_label = "transform"
+                    transform(ctx)
             except Exception as err:
                 _cause, _guide = _pipeline_error_guide(str(err), original_code)
                 raise PipelineExecutionError({
@@ -10925,6 +11012,11 @@ def _pipeline_payload_needs_com(payload):
     - 수식은 트리거 아님(입력=계산값 읽기, 출력=수식 보존+Excel 재계산)."""
     active_steps = [s for s in (payload.get("pipeline") or []) if not (s and s.get("enabled") is False)]
     python_steps = [s for s in active_steps if is_python_pipeline_step(s)]
+    # [혼합 호환] VBA 스텝 또는 라이브 COM 전용(ctx 벌크) 스텝은 openpyxl 로 실행 불가 — Excel 엔진으로.
+    if any(is_vba_pipeline_step(s) for s in active_steps):
+        return "VBA 스텝 포함"
+    if any(is_python_pipeline_step(s) and not python_step_uses_legacy_dialect(str(s.get("code") or "")) for s in active_steps):
+        return "라이브 COM 전용(ctx 벌크) 스텝 포함"
     for step in python_steps:
         reason = _python_step_requests_excel_com(step)
         if reason:
@@ -10963,7 +11055,8 @@ def _pipeline_payload_needs_com(payload):
 
 
 def run_backend_pipeline_payload(payload, job_id=None):
-    if pipeline_has_python(payload):
+    # [혼합 호환] VBA 스텝이 섞인 파이프라인도 Excel 워커 경로에서 실행한다(노드 워커 불가).
+    if pipeline_has_python(payload) or _pipeline_payload_has_vba(payload):
         # 엔진 선택: 기본 "python"(openpyxl, COM 없이 인프로세스 — 빠름) / 보조 "excel"(COM Python).
         engine = str(payload.get("engine") or "python").lower()
         if engine in ("python", "openpyxl") and openpyxl is not None:
