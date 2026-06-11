@@ -1,10 +1,33 @@
 ﻿# B2B 빌링 Agent
 
-엑셀 입력 파일과 출력 템플릿을 업로드한 뒤, AI가 생성한 Python Excel 스킬을 단계별 파이프라인으로 실행해 결과 xlsx를 만드는 로컬 웹앱입니다.
+엑셀 입력 파일과 출력 템플릿을 업로드한 뒤, AI가 생성한 Excel 스킬(Python COM 또는 VBA)을 단계별 파이프라인으로 실제로 떠 있는 Excel 워크북에 적용해 결과 xlsx를 만드는 로컬 웹앱입니다.
 
 브라우저에서 동작하는 SPA와 로컬 Python HTTP 서버로 구성되어 있으며, `/v1/*` 요청은 사내 OpenAI-compatible ixi 모델 서버로 프록시됩니다. F9 개발자 모드에서는 Claude API를 선택해 테스트할 수 있습니다.
 
 ## 최근 변경사항
+
+### ver0.5.4 (현재 브랜치)
+
+**계보**: ver0.5.1 → ver0.5.3(0.5.0의 단일 Excel 멀티워크북 뷰 머지) → ver0.5.4.
+같은 시기의 다른 갈래인 ver0.5.2/ver0.5.2.2(0.5.0 베이스 + Python COM 엔진)의 핵심을 이 브랜치에 흡수해, 사실상 두 갈래의 통합본입니다.
+
+- **기본 스킬 엔진을 라이브 Python COM으로 전환**: 실서버(2코어/12GB) F8 측정에서 openpyxl 경로가 적용 1회에 207초(load 132s + steps 41s + saveInspect 34s), COM 워커 경로도 매번 open 17~19s + 반영(replace) 11.5s가 들었습니다. 새 기본 경로는 이미 떠 있는 라이브 워크북에 COM으로 직접 실행하므로 이 비용이 구조적으로 없습니다.
+  - 서버: `/api/excel/run-python`(단건), `/api/excel/run-vba-pipeline`이 스텝 `language`별로 VBA/Python을 디스패치(한 파이프라인에서 혼용 가능).
+  - 안전장치 4겹: ① 벌크 전용 `ctx` API 표면(셀 단위 COM 루프는 작성 자체가 불가) ② 서버 AST 정적 게이트 ③ 런타임 COM 호출 예산+데드라인+쓰기 저널(실패 시 정밀 롤백) ④ 전용 프롬프트(`PYTHON_COM_SYSTEM_PROMPT`).
+- **openpyxl은 하이브리드 폴백으로 유지**: 스텝 코드 첫 줄 부근에 `# B2B_ENGINE: openpyxl` 마커가 있으면 라이브 대신 백엔드 openpyxl 파이프라인으로 라우팅됩니다(`pipelineStepLiveLanguage`). 레거시 스텝/백엔드 시뮬/Excel을 못 띄우는 환경용이며, **신규 생성은 항상 COM 규약**입니다.
+- **ver0.5.2.2 교정 이식(1~6)**:
+  1. Qwen `presence_penalty` 상시 1.5 → 기본 0.5(같은 줄 도배 degenerate 재생성 시에만 1.5). 상시 1.5는 코드 토큰(`ctx.`/`Range`/`def`) 재사용에 벌점을 줘 우회 표현·이상한 변수명을 유발했습니다.
+  2. 정적 게이트 오탐 제거: 들여쓰기 인식 루프 검사(루프 **뒤** bulk write는 통과), `ctx` 수신자 한정(+`book = ctx.book(...)` 별칭 추적), `re.compile` 허용, 주석 제거 후 검사, `while 1` 차단.
+  3. 스킬 ON/OFF·삭제 무결성: 다중 워크북 리셋+스텝별 대상 세션 실행(관련 파일이 1개면 기존처럼 서버 호출 1번), 세션 확보 실패 시 현재 탭 워크북으로 폴백하지 않고 명시적 에러(잘못된 파일 오염+거짓 "적용됨" 차단), no-op 편집은 재적용 생략(시그니처), 실패 시 토글/삭제 UI 원복, 세션 강제 재시작 시 시그니처 무효화.
+  4. 설명만/주석만 응답 감지+자동 재생성(최대 2회), Python 정적 게이트 2회 실패 → VBA 전환 생성(`forceEngine`, 전역 설정 불변), 런타임 2회 실패 → VBA 복구 전환.
+  5. think 모드 `max_tokens` 8192, LLM 히스토리 12개/20k자 + 오래된 코드 블록 접기(자기 출력 모방 차단).
+  6. 샌드박스 빌트인 `chr/ord/divmod/map/filter` 추가(열 문자 계산용).
+- 0.5.3의 고유 기능은 보존: 작업 중단 취소 토큰, 토글/삭제 시 변경된 파일로 뷰 이동(affectedStep), 복구 시 사용자 메모 우선 반영, 복붙(값만/숫자만) 가드, F8 디버그 패널.
+
+### ver0.5.3
+
+- **0.5.0의 Excel 뷰 구조 머지**: 파일당 Excel 프로세스 → 단일 공유 Excel 인스턴스 + 워크북별 프레임 창 제어(`B2B_WINMODE=frame`, 문제 시 `legacy` 폴백). 탭 전환이 창을 새로 만들지 않고 표시 대상만 바꿉니다.
+- 적용 협조 취소(`/api/pipeline/cancel`), 말풍선 내 작업 중단 버튼, F8 속도 디버그 패널(적용 단계별 ms), openpyxl 적용 속도 최적화(출력 캐시 지연 로드+입력 저장 스킵, 31MB 기준 114→74s), 스킬 적용 후 추가한 파일 멘션 인식, 복붙 서식/수식 보존 가드.
 
 ### ver0.5.1
 - **배포 버전 갱신**: 빌드 산출물 기준을 `B2B_ver0.5.1` / `B2B_ver0.5.1_single.exe`로 정리했습니다.
@@ -266,12 +289,12 @@ build_exe.bat
 빌드 결과:
 
 ```text
-dist\B2B_ver0.5.1\B2B_ver0.5.1.exe   (네이티브 호스트)
-dist\B2B_ver0.5.1\B2B_Server.exe     (PyInstaller 서버)
-dist\B2B_ver0.5.1_portable.zip       (배포용 zip)
+dist\B2B_ver0.5.4\B2B_ver0.5.4.exe   (네이티브 호스트)
+dist\B2B_ver0.5.4\B2B_Server.exe     (PyInstaller 서버)
+dist\B2B_ver0.5.4_portable.zip       (배포용 zip)
 ```
 
-단일 self-extracting EXE가 필요하면 `build_single_exe.bat`을 추가 실행합니다 (`dist\B2B_ver0.5.1_single.exe`).
+단일 self-extracting EXE가 필요하면 `build_single_exe.bat`을 추가 실행합니다 (`dist\B2B_ver0.5.4_single.exe`).
 
 `dist/`와 `build/`는 git 추적 대상이 아닙니다.
 
@@ -285,6 +308,11 @@ dist\B2B_ver0.5.1_portable.zip       (배포용 zip)
 | `B2B_VLLM_BASE` | 사내 ixi/vLLM 주소 | `/v1/*` 프록시 대상 |
 | `B2B_NO_BROWSER` | 없음 | `1`이면 브라우저 자동 실행 안 함 |
 | `B2B_LOG_REQUESTS` | 없음 | `1`이면 HTTP 요청 로그 출력 |
+| `B2B_WINMODE` | `frame` | Excel 뷰 모드. `frame`=단일 인스턴스+프레임 제어, `legacy`=구버전 폴백 |
+| `B2B_PY_COM_BUDGET` | `400` | Python COM 스킬 1회당 COM 호출 예산(초과 시 실패 — 셀 루프 방지) |
+| `B2B_PY_SKILL_TIMEOUT` | `120` | Python COM 스킬 실행 데드라인(초) |
+| `B2B_PY_READ_MAX_CELLS` | `6000000` | `ctx.read` 1회 최대 셀 수 |
+| `B2B_ALWAYS_SAVE_INPUTS` | 없음 | `1`이면 백엔드 적용 시 입력 파일을 항상 저장(기본은 변경 감지 스킵) |
 
 ## 주요 기능
 
@@ -301,7 +329,7 @@ dist\B2B_ver0.5.1_portable.zip       (배포용 zip)
 - 일반 설정 버튼에서는 ixi 연결 정보만 노출합니다.
 - F9 개발자 모드에서 Claude provider를 선택할 수 있습니다.
 - AI는 기본적으로 `def transform(ctx): ...` 형태의 Python Excel 스킬을 생성합니다.
-- 기본 실행 엔진은 Python/openpyxl입니다. 작업 특성상 openpyxl로 안전하지 않은 경우 Excel COM Python 또는 VBA로 전환됩니다.
+- 기본 실행 엔진은 **라이브 Python COM**입니다(열려 있는 실제 워크북에 벌크 `ctx` API로 직접 실행). 정적 게이트를 반복 통과하지 못하거나 런타임 실패가 누적되면 같은 요청을 VBA로 전환해 재생성/복구합니다. openpyxl은 `# B2B_ENGINE: openpyxl` 마커 스텝·레거시 스텝·백엔드 시뮬 전용 폴백입니다.
 - 사용자가 `값`을 명시하지 않은 복사/붙여넣기는 수식과 서식을 포함한 일반 복사로 해석합니다. `값만`을 명시하면 표시값 중심으로 처리합니다.
 
 ### 파이프라인
@@ -312,7 +340,24 @@ dist\B2B_ver0.5.1_portable.zip       (배포용 zip)
 - 적용 전후 변경 검증으로 실제 변경이 없는 작업을 `적용됨`으로 오인하지 않도록 방어합니다.
 
 ### Python 스킬 헬퍼
-AI 생성 코드에서 사용할 수 있는 주요 `ctx` 헬퍼:
+
+**기본(라이브 COM) `ctx` API** — `def transform(ctx):` 안에서 벌크 호출만 허용됩니다(루프 안에서 ctx 쓰기 금지, 게이트가 차단):
+
+```python
+def transform(ctx):
+    rows = ctx.read("매출", "A2:F100")            # 2차원 값 리스트(1회 호출)
+    out = [[r[0], (r[3] or 0) * 1.1] for r in rows]
+    ctx.write("회사별요약", "B4", out)             # 루프 밖에서 1회 기록
+    ctx.sort("회사별요약", "B4:C20", key_col="C", ascending=False)
+    other = ctx.book("원가.xlsx")                 # 다른 업로드 파일 접근
+```
+
+주요 메서드: `read / read_formulas / write / write_cell / write_formulas / copy / clear / sort /
+insert_rows·cols / delete_rows·cols / add_sheet / delete_sheet / merge / unmerge / set_number_format /
+find_header / last_row / last_col / used_range / book(파일명)`. 수식 셀은 기본적으로 보호되며
+덮어쓰려면 `overwrite_formulas=True`를 명시해야 합니다.
+
+**폴백(openpyxl) `ctx` 헬퍼** — `# B2B_ENGINE: openpyxl` 마커 스텝과 백엔드 시뮬 경로에서만 사용됩니다:
 
 ```python
 ws = ctx.sheet("회사별요약")
@@ -328,7 +373,7 @@ ctx.write_grid(ws, [[123]], start_row=4, start_col=2)
 
 행 번호가 필요하면 `ctx.rows_with_index(ws)` 또는 `enumerate(ctx.rows(ws), start=1)`를 사용합니다. `ctx.rows(ws)`는 셀 객체가 아니라 값 튜플 목록입니다.
 
-수식 셀의 `값만` 복사가 필요하면 `ctx.value` / `ctx.display_value` / `ctx.display_rows`를 사용합니다. Excel 계산값이 반드시 필요한 작업은 `# B2B_ENGINE_FALLBACK: excel-com` 마커로 COM 경로를 강제할 수 있습니다.
+수식 셀의 `값만` 복사가 필요하면 `ctx.value` / `ctx.display_value` / `ctx.display_rows`를 사용합니다. (0.5.4부터 COM이 기본이므로 `# B2B_ENGINE_FALLBACK: excel-com` 마커는 의미가 없고, 반대로 openpyxl 강제가 필요할 때 `# B2B_ENGINE: openpyxl` 마커를 씁니다.)
 
 ### 저장/불러오기
 - 스킬 파이프라인을 zip으로 저장합니다.
@@ -338,7 +383,7 @@ ctx.write_grid(ws, [[123]], start_row=4, start_col=2)
 ## 디렉터리 구조
 
 ```text
-B2B_ver0.5.1/
+B2B_ver0.5.4/
 ├─ index.html
 ├─ serve_b2b.py
 ├─ launch_b2b.py
@@ -395,6 +440,8 @@ B2B_ver0.5.1/
 
 - JS 파일은 `index.html`의 script 로딩 순서에 의존합니다. 새 모듈을 추가하면 의존하는 파일보다 뒤에 배치해야 합니다.
 - `launch_b2b.spec`는 `styles/`, `scripts/`, `vendor/`와 서버 실행에 필요한 파일을 EXE에 포함합니다.
-- AI가 생성한 스킬은 백엔드 Python/openpyxl, Excel COM Python 또는 VBA 경로에서 실행됩니다. 신뢰하지 않는 스킬 파일은 불러오지 마세요.
+- AI가 생성한 스킬은 라이브 Python COM(기본)/VBA/백엔드 openpyxl(폴백) 경로에서 실행됩니다. 신뢰하지 않는 스킬 파일은 불러오지 마세요.
+- 엔진 코드 위치: 서버 `serve_b2b.py`의 `PythonComSkillContext`(ctx API+저널)·`_python_com_static_check`(AST 게이트)·`_run_python_on_session_impl`, 프론트 `scripts/pipeline.js`의 `pipelineStepLiveLanguage`(라우팅)·`reapplyVbaPipelineToLive`(리셋-재적용), `scripts/chat-ui.js`의 `pythonComStaticSafetyFailures`(클라 1차 게이트)·`validateAssistantCodeBeforeApply`, `scripts/file-schema.js`의 `PYTHON_COM_SYSTEM_PROMPT`.
+- 게이트를 수정할 때는 "위험 차단"만 하고 정상 코드는 통과해야 합니다 — 특히 루프 검사는 들여쓰기를 보고 루프 **안**의 ctx 쓰기만 차단해야 합니다(루프 뒤 벌크 write가 권장 패턴).
 - API key는 브라우저 `localStorage`에 저장됩니다. 코드에 실제 키를 하드코딩하지 마세요.
 
