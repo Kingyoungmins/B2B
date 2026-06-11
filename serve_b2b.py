@@ -1407,6 +1407,8 @@ def excel_workbooks_open(app, path, read_only=False):
     for kwargs in attempts:
         try:
             wb = app.Workbooks.Open(str(open_path), **kwargs)
+            if wb is None:
+                raise RuntimeError(f"Workbooks.Open 이 워크북을 반환하지 않았습니다(같은 이름의 파일이 이미 열려 있을 수 있음): {open_path}")
             try:
                 # 초기화/응급복구가 EXCEL.EXE 를 강제 종료(taskkill)하는 방식이므로,
                 # 다음 Excel 실행에서 '문서 복구' 창이 뜨지 않도록 우리가 여는 모든 워크북을
@@ -4924,6 +4926,30 @@ class PythonComSkillContext:
             n = n * 26 + (ord(ch) - 64)
         return n
 
+    def _resize_rng(self, ws, anchor, rows, cols):
+        """anchor 셀에서 rows×cols 명시 범위를 만든다.
+        [핵심 버그 수정] 동적 디스패치(DispatchEx)에서 Range.Resize(r, c)가 파라미터 프로퍼티로
+        잘못 해석돼 단일 셀(오프셋 위치)을 반환한다 — write 가 '마지막 한 칸'에만 기록되던 원인.
+        Resize 를 쓰지 않고 시작 행/열에서 끝 주소를 직접 계산한다."""
+        r0 = int(anchor.Row)
+        c0 = int(anchor.Column)
+        return ws.Range(f"{_col_letter(c0)}{r0}:{_col_letter(c0 + int(cols) - 1)}{r0 + int(rows) - 1}")
+
+    @staticmethod
+    def _shaped_matrix(rng, value):
+        """_range_matrix 가 빈/None(전부 빈 셀) 결과를 줄 때도 범위 차원을 보존해
+        [[None]*cols]*rows 를 돌려준다 — 빈 단일 셀 read 가 [] 로 줄어들어
+        호출 코드의 m[0][0] 이 IndexError 나던 문제 방지."""
+        m = _range_matrix(value)
+        if m:
+            return m
+        try:
+            rows = int(rng.Rows.Count)
+            cols = int(rng.Columns.Count)
+        except Exception:
+            rows = cols = 1
+        return [[None] * max(1, cols) for _ in range(max(1, rows))]
+
     def _rng(self, ws, a1):
         ref = str(a1)
         # 뒤집힌 범위("G1:F100", "B10:B5")는 Excel 이 조용히 정규화해 의도와 다른 폭/높이로
@@ -5025,7 +5051,7 @@ class PythonComSkillContext:
             raise PythonComSkillError(
                 f"읽기 범위가 너무 큽니다({cells:,}셀 > {PY_READ_MAX_CELLS:,}). 범위를 한정하세요."
             )
-        return _range_matrix(rng.Value2)
+        return self._shaped_matrix(rng, rng.Value2)
 
     def read_formulas(self, sheet, a1_range):
         """범위의 수식 문자열을 2차원 리스트로 읽는다(수식 없는 셀은 값)."""
@@ -5035,7 +5061,7 @@ class PythonComSkillContext:
         cells = int(rng.Rows.Count) * int(rng.Columns.Count)
         if cells > PY_READ_MAX_CELLS:
             raise PythonComSkillError(f"읽기 범위가 너무 큽니다({cells:,}셀). 범위를 한정하세요.")
-        return _range_matrix(rng.Formula)
+        return self._shaped_matrix(rng, rng.Formula)
 
     def has_formulas(self, sheet, a1_range):
         """범위에 수식이 하나라도 있으면 True."""
@@ -5051,7 +5077,7 @@ class PythonComSkillContext:
         ws = self._ws(sheet)
         rng = self._rng(ws, a1_range)
         self._tick(2)
-        f = _range_matrix(rng.Formula)
+        f = self._shaped_matrix(rng, rng.Formula)
         return [[isinstance(v, str) and v.startswith("=") for v in row] for row in f]
 
     # ---- 쓰기(벌크 전용) ----
@@ -5062,7 +5088,7 @@ class PythonComSkillContext:
         ws = self._ws(sheet)
         data, rows, cols = self._as_2d(values)
         anchor = self._rng(ws, a1_start)
-        rng = anchor.Resize(rows, cols)
+        rng = self._resize_rng(ws, anchor, rows, cols)
         self._tick(3)
         if not overwrite_formulas:
             has = rng.HasFormula
@@ -5087,7 +5113,7 @@ class PythonComSkillContext:
         ws = self._ws(sheet)
         data, rows, cols = self._as_2d(formulas)
         anchor = self._rng(ws, a1_start)
-        rng = anchor.Resize(rows, cols)
+        rng = self._resize_rng(ws, anchor, rows, cols)
         self._tick(3)
         self._journal_save(ws, rng)
         rng.Formula = data
@@ -5102,7 +5128,7 @@ class PythonComSkillContext:
         dst = self._rng(dst_ws, dst_cell)
         self._tick(2)
         try:
-            dst_target = dst.Resize(int(src.Rows.Count), int(src.Columns.Count))
+            dst_target = self._resize_rng(dst.Worksheet, dst, int(src.Rows.Count), int(src.Columns.Count))
             self._tick(2)
             self._journal_save(dst_ws, dst_target)
         except Exception:
@@ -8980,14 +9006,12 @@ def _copy_source_workbook_into_target(app, target_wb, source_path):
     temp_copy = None
     source_temp_path = None
     try:
-        try:
-            target_fullname = str(Path(target_wb.FullName).resolve()).lower()
-        except Exception:
-            target_fullname = ""
-        if target_fullname and target_fullname == str(source_path.resolve()).lower():
-            temp_copy = BACKEND_DIR / f"live_reset_{uuid.uuid4().hex}{source_path.suffix or '.xlsx'}"
-            shutil.copy2(source_path, temp_copy)
-            open_path = temp_copy
+        # [e2e 수정] 같은 '파일명(베이스네임)'의 워크북이 이 앱에 이미 열려 있으면, 알림 억제 상태의
+        # Workbooks.Open 이 예외 대신 None 을 돌려준다(경로가 달라도 이름만 같으면 발생).
+        # 리셋 소스는 항상 UUID 임시사본으로 복사해 연다 — 이름 충돌을 원천 차단(복사 비용은 로컬 1회).
+        temp_copy = BACKEND_DIR / f"live_reset_{uuid.uuid4().hex}{source_path.suffix or '.xlsx'}"
+        shutil.copy2(source_path, temp_copy)
+        open_path = temp_copy
 
         _park_excel_app_offscreen(app)
         source_wb, source_temp_path = excel_workbooks_open(app, open_path, read_only=True)

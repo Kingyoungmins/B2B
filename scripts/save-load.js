@@ -26,6 +26,8 @@ $("btn-reset").onclick = async () => {
   } catch (err) {
     console.warn("초기화 중 Excel 종료 실패(리로드는 계속 진행):", err);
   }
+  // [필드#4] 초기화 직후 첫 업로드에서 Excel 창이 빈 화면으로 남는 케이스 자가복구용 표식.
+  try { sessionStorage.setItem("b2bJustReset", "1"); } catch (_) {}
   // 2) SPA 전체 리로드 = 프로그램 재시작과 동일한 상태 초기화.
   //    이전의 수동 state 필드 초기화는 새 상태/타이머/토큰이 생길 때마다 누락돼 '반쯤 초기화'가 됐다 —
   //    리로드는 모든 JS 상태·타이머·busy 토큰·취소 토큰이 부팅 직후와 같아진다(서버/설정은 유지).

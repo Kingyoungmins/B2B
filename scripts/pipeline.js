@@ -517,7 +517,7 @@ function applyVbaStepToLiveExcel(step, excelId) {
   // 원본 리셋+남은 스텝 재적용으로 '이전 상태'로 되돌린다(requestExcelApplyCancel 참고).
   const cancelToken = { cancelled: false };
   window.__activeVbaApply = { token: cancelToken, excelId, stepId: step.id };
-  if (typeof beginExcelMirrorApplyLoading === "function") beginExcelMirrorApplyLoading("VBA 적용 중...");
+  if (typeof beginExcelMirrorApplyLoading === "function") beginExcelMirrorApplyLoading(liveLang === "python" ? "스킬 적용 중(Python)..." : "스킬 적용 중(VBA)...");
   const prehide = typeof hideAllExcelMirrorWindows === "function"
     ? (async () => {
         const started = performance.now();
@@ -536,7 +536,7 @@ function applyVbaStepToLiveExcel(step, excelId) {
         // 저사양 PC: 실행 + 전/후 변경검출(전 시트 스냅샷 2회)까지 포함되므로 20초는 빠듯해
         // '실패 표시 후 실제로는 적용되는' 상태 불일치를 만들었다 → 45초로 완화.
         timeoutMs: 45000,
-        timeoutMessage: "VBA 실행 응답이 지연되어 중단했습니다. 저사양 PC에서는 백그라운드에서 계속 적용 중일 수 있으니 잠시 후 화면을 확인해 주세요.",
+        timeoutMessage: "스킬 실행 응답이 지연되어 중단했습니다. 저사양 PC에서는 백그라운드에서 계속 적용 중일 수 있으니 잠시 후 화면을 확인해 주세요.",
       })
         .then(data => {
           requestMs = performance.now() - requestStarted;
@@ -1672,7 +1672,7 @@ async function reapplyVbaPipelineToLive(excelId, options = {}) {
     const requestStarted = performance.now();
     const stepPayload = st => ({ stepIdx: st.stepIdx, stepId: st.stepId, description: st.description, code: st.code, language: st.language });
     const pipelineTimeoutMs = n => Math.max(90000, Math.min(300000, 60000 + n * 30000));
-    const pipelineTimeoutMessage = "VBA 파이프라인 실행 응답이 지연되어 중단했습니다. 저사양 PC에서는 백그라운드에서 계속 적용 중일 수 있으니 잠시 후 화면을 확인해 주세요.";
+    const pipelineTimeoutMessage = "스킬 파이프라인 실행 응답이 지연되어 중단했습니다. 저사양 PC에서는 백그라운드에서 계속 적용 중일 수 있으니 잠시 후 화면을 확인해 주세요.";
     let data = null;
     // 빠른 경로(대부분의 파이프라인): 관련 파일이 1개면 예전처럼 서버 호출 1번으로
     // 리셋+전체 재적용을 끝낸다. 서버는 호출마다 동반 워크북 전체를 재스냅샷하므로
@@ -1773,6 +1773,21 @@ async function reapplyVbaPipelineToLive(excelId, options = {}) {
 }
 
 
+// [필드 추가#1] 토글/삭제 후 뷰 이동 대상: 스킬 코드가 다른 파일(출력)에 쓰는 교차 파일
+// 스킬이면 '실제 값이 들어간' 그 파일로 이동한다. 아니면 스킬이 만들어진 파일(targetFileId).
+function affectedStepViewFileId(affected) {
+  if (!affected) return null;
+  try {
+    const cross = typeof crossOutputFileIdsReferencedInCode === "function"
+      ? crossOutputFileIdsReferencedInCode(affected.code || "") : [];
+    for (const fid of cross || []) {
+      if (fid && typeof getFile === "function" && getFile(fid)) return fid;
+    }
+  } catch (_) {}
+  const tid = affected.targetFileId;
+  return (tid && typeof getFile === "function" && getFile(tid)) ? tid : null;
+}
+
 async function reconcilePipelineSimulationAfterEdit(options = {}) {
   // 라이브 엔진(vba/python COM) + 라이브 세션이면 파이프라인 재동기화를 라이브 리셋+재적용으로 처리.
   // (주의: 이 분기를 안 타면 백엔드 openpyxl 경로로 빠져 '라이브 Excel 은 리셋되지 않는' 상태가 된다 —
@@ -1807,8 +1822,7 @@ async function reconcilePipelineSimulationAfterEdit(options = {}) {
           // [P1] 활성창 기본 — 뷰 이동은 '실제 변경된 스텝의 대상 파일'로만(출력으로 무조건 점프 금지).
           try {
             const affected = options.affectedStep || null;
-            const tfid = (affected && affected.targetFileId &&
-              typeof getFile === "function" && getFile(affected.targetFileId)) ? affected.targetFileId : null;
+            const tfid = affectedStepViewFileId(affected);
             if (tfid && state.currentFileId !== tfid && typeof setCurrentView === "function") setCurrentView(tfid);
           } catch (_) {}
           return result;
@@ -1879,9 +1893,7 @@ async function reconcilePipelineSimulationAfterEdit(options = {}) {
       // (출력으로 무조건 점프하지 않음. 예: 3번 탭에서 2번 파일 스킬을 off → 2번이 변경 → 뷰는 2번으로)
       try {
         const affected = options.affectedStep || null;
-        const targetFileId = (affected && affected.targetFileId &&
-          typeof getFile === "function" && getFile(affected.targetFileId))
-          ? affected.targetFileId : null;
+        const targetFileId = affectedStepViewFileId(affected);
         if (targetFileId && state.currentFileId !== targetFileId && typeof setCurrentView === "function") {
           setCurrentView(targetFileId);
         }

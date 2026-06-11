@@ -505,11 +505,16 @@ namespace B2BNativeHost
         // 페이지 리로드(초기화)로 busy=0 이 영영 안 올 수 있으므로 90초 failsafe 타이머로 자동 해제.
         private System.Collections.Generic.List<IntPtr> uiBusyDisabledWindows = new System.Collections.Generic.List<IntPtr>();
         private System.Windows.Forms.Timer uiBusyFailsafeTimer;
+        private volatile bool uiBusyActive;
 
         private void UpdateUiBusyLock(string message)
         {
             string[] parts = message.Split('	');
             bool active = parts.Length > 1 && parts[1] == "1";
+            uiBusyActive = active;
+            // [필드#2] busy 동안 네이티브 파일 탭(웹뷰 밖 C# 컨트롤)도 클릭 불가로 — DOM 오버레이가
+            // 못 막는 영역. Excel 창 입력 차단(EnableWindow)과 함께 작업 중 끼어들기를 완성한다.
+            try { if (nativeFileTabs != null) nativeFileTabs.Enabled = !active; } catch { }
             if (active) ApplyUiBusyLock();
             else ReleaseUiBusyLock();
         }
@@ -552,6 +557,7 @@ namespace B2BNativeHost
 
         private void ReleaseUiBusyLock()
         {
+            try { if (nativeFileTabs != null) nativeFileTabs.Enabled = true; } catch { }
             try { if (uiBusyFailsafeTimer != null) uiBusyFailsafeTimer.Stop(); } catch { }
             foreach (IntPtr hwnd in uiBusyDisabledWindows)
             {
@@ -964,6 +970,14 @@ namespace B2BNativeHost
                 {
                     // 진단: 누가/언제 호스트를 최소화시키는지 추적(원치 않는 최소화 이슈 분석용).
                     Program.Log("Host minimized; foreground=" + DescribeForegroundWindow());
+                    // [필드#5] 스킬 on/off(미러 hide/show) 중 호스트가 의도치 않게 최소화되는
+                    // 간헐 현상 — busy 작업 중의 최소화는 사용자 의도가 아니므로 즉시 복귀한다.
+                    if (uiBusyActive)
+                    {
+                        Program.Log("Auto-restore: minimized during busy work");
+                        WindowState = FormWindowState.Maximized;
+                        return;
+                    }
                     HideAllExcelMirrors();
                 }
                 lastWindowState = WindowState;
@@ -980,7 +994,11 @@ namespace B2BNativeHost
             PublishNativeBounds();
             if (restoredFromMinimized)
             {
-                RestoreActiveExcelMirror(false);
+                // [필드 추가#2] 최소화 복귀 직후엔 JS 가 아직 옛 패널 rect 를 들고 있어 미러가
+                // 엉뚱한 위치에 따로 뜰 수 있다 — 위치 재계산(force)을 먼저 시키고 잠시 뒤 복원한다.
+                ExecuteWebScript(
+                    "if (typeof scheduleExcelMirrorPosition === 'function') scheduleExcelMirrorPosition(true);" +
+                    "if (typeof scheduleRestoreActiveExcelMirror === 'function') scheduleRestoreActiveExcelMirror(240, { preserveFocus: true });");
             }
         }
 

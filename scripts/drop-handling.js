@@ -120,6 +120,15 @@ async function loadInputFiles(files) {
   const startInputCount = state.inputs.length;
   const startOriginalCount = state.inputsOriginal.length;
   const job = beginUpload("입력 파일 업로드", files.length);
+  // [필드#2] 업로드(파싱~미러 오픈) 동안 탭 전환/엑셀 뷰 클릭이 끼어들면 상태가 어긋난다 —
+  // 전 구간을 전역 busy 게이트로 잠그고, 중단은 오버레이의 '작업 중단' 버튼으로 받는다.
+  const busyToken = typeof beginUiBusy === "function"
+    ? beginUiBusy("입력 파일 업로드 중...", {
+        onStop: () => { job.cancelled = true; },
+        stopLabel: "업로드 중단",
+        stoppingLabel: "중단 중...",
+      })
+    : null;
   try {
     for (let i = 0; i < files.length; i++) {
       if (job.cancelled) break;
@@ -165,6 +174,7 @@ async function loadInputFiles(files) {
       }
     }
   } finally {
+    if (busyToken && typeof endUiBusy === "function") endUiBusy(busyToken, { silentComplete: true });
     finishUpload(job);
   }
 }
@@ -173,6 +183,15 @@ async function loadOutputTemplates(files) {
   if (!files.length) return;
   prepareMemoryForFileUpload(files);
   const job = beginUpload("출력 템플릿 업로드", files.length);
+  // [필드#2] 업로드(파싱~미러 오픈) 동안 탭 전환/엑셀 뷰 클릭이 끼어들면 상태가 어긋난다 —
+  // 전 구간을 전역 busy 게이트로 잠그고, 중단은 오버레이의 '작업 중단' 버튼으로 받는다.
+  const busyToken = typeof beginUiBusy === "function"
+    ? beginUiBusy("출력 템플릿 업로드 중...", {
+        onStop: () => { job.cancelled = true; },
+        stopLabel: "업로드 중단",
+        stoppingLabel: "중단 중...",
+      })
+    : null;
   const startIndex = state.outputTemplates.length;
   const previousActiveOutputIndex = state.activeOutputIndex;
   const previousOutput = state.output;
@@ -221,6 +240,7 @@ async function loadOutputTemplates(files) {
       toast(`${state.outputTemplates.length - startIndex}개 출력 템플릿을 로드했습니다.`, "success");
     }
   } finally {
+    if (busyToken && typeof endUiBusy === "function") endUiBusy(busyToken, { silentComplete: true });
     finishUpload(job);
   }
 }

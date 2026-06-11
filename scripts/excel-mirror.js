@@ -441,6 +441,22 @@ async function openExcelMirrorForFileId(fileId) {
     setCurrentView(fileId);
   }
   await openCurrentWorkbookInExcel();
+  // [필드#4] 초기화(전체 Excel 강제종료) 직후의 첫 오픈은 창이 빈 화면으로 남는 케이스가
+  // 보고됨 — 그 부팅에 한해 1초 뒤 한 번 recover 로 재표시를 보정한다(표식은 1회용).
+  try {
+    if (sessionStorage.getItem("b2bJustReset") === "1") {
+      sessionStorage.removeItem("b2bJustReset");
+      const justOpenedFileId = fileId;
+      setTimeout(() => {
+        try {
+          const excelId = excelMirror.sessionsByFileId[justOpenedFileId];
+          if (excelId && typeof recoverExcelMirrorWindow === "function") {
+            recoverExcelMirrorWindow(excelId, { skipBaseline: true }).catch(() => {});
+          }
+        } catch (_) {}
+      }, 1000);
+    }
+  } catch (_) {}
 }
 
 // 업로드된 모든 파일의 fileId 목록(입력 + 출력). publishNativeFileTabs 와 동일한 규칙.
@@ -1337,15 +1353,26 @@ async function pollExcelMirrorChanges(excelId, options = {}) {
         return data;
       }
       const activeFileId = fileIdForExcelMirrorId(activeExcelId);
+      // [필드#3] frame 모드의 탭 전환은 no-activate(표시만)라 서버 ActiveWorkbook 이 옛 파일로
+      // 남는다. 현재값(level) 기준으로 탭을 맞추면 가드 만료 후 매 폴마다 옛 탭으로 회귀한다 —
+      // '변화(edge)'가 있을 때만 따라간다(사용자가 Excel 창을 직접 클릭해 활성화한 경우 등).
+      const prevPolledActive = excelMirror.lastPolledActiveExcelId || null;
+      excelMirror.lastPolledActiveExcelId = activeExcelId;
+      const activeChanged = prevPolledActive !== null && prevPolledActive !== activeExcelId;
       if (activeFileId) {
-        excelMirror.activeExcelId = activeExcelId;
         excelMirror.sessionLastUsedByFileId[activeFileId] = Date.now();
-        if (state.currentFileId !== activeFileId && typeof setCurrentView === "function") {
-          setCurrentView(activeFileId);
+        if (activeChanged) {
+          excelMirror.activeExcelId = activeExcelId;
+          if (state.currentFileId !== activeFileId && typeof setCurrentView === "function") {
+            setCurrentView(activeFileId);
+          }
         }
       }
-      const appendToChat = shouldAppendExcelSelectionFromPoll(activeExcelId, data.sheet, data.address, options);
-      syncSelectionFromExcel(data.sheet, data.address, { appendToChat, fileId: activeFileId, excelId: activeExcelId });
+      // 탭과 다른(스테일 활성) 파일의 Selection 으로 현재 탭의 선택/멘션을 덮지 않는다.
+      if (activeFileId && activeFileId === state.currentFileId) {
+        const appendToChat = shouldAppendExcelSelectionFromPoll(activeExcelId, data.sheet, data.address, options);
+        syncSelectionFromExcel(data.sheet, data.address, { appendToChat, fileId: activeFileId, excelId: activeExcelId });
+      }
     }
     if (!options.baselineOnly && Date.now() < excelMirror.mutedUntil) return data;
     if (!options.baselineOnly && Array.isArray(data.changes) && data.changes.length) {
@@ -1695,7 +1722,7 @@ async function postExcelMirror(path, body, attempt = 0, options = {}) {
     });
   } catch (err) {
     if (err && err.name === "AbortError") {
-      throw new Error(options.timeoutMessage || "Excel VBA 실행이 응답하지 않아 중단했습니다.");
+      throw new Error(options.timeoutMessage || "Excel 스킬 실행이 응답하지 않아 중단했습니다.");
     }
     // 네트워크 수준 실패("Failed to fetch") — 저사양 PC 에서 서버가 COM 으로 잠깐 바빠 응답을 못 한 경우.
     // 짧게 2회까지 재시도한 뒤에도 실패하면 성능 안내를 붙여 던진다.
