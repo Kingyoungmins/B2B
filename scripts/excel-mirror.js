@@ -449,9 +449,12 @@ async function openExcelMirrorForFileId(fileId) {
       const justOpenedFileId = fileId;
       setTimeout(() => {
         try {
+          // [핫픽스] 1초 사이에 다른 파일로 넘어갔으면(연속 업로드 등) 절대 발화하지 않는다 —
+          // 이 복구가 이전 파일을 들어올리며 뷰를 빼앗던 치명 회귀의 원인.
+          if (state.currentFileId !== justOpenedFileId) return;
           const excelId = excelMirror.sessionsByFileId[justOpenedFileId];
           if (excelId && typeof recoverExcelMirrorWindow === "function") {
-            recoverExcelMirrorWindow(excelId, { skipBaseline: true }).catch(() => {});
+            recoverExcelMirrorWindow(excelId, { skipBaseline: true, preserveView: true }).catch(() => {});
           }
         } catch (_) {}
       }, 1000);
@@ -951,7 +954,8 @@ async function recoverExcelMirrorWindow(excelId = currentExcelId() || excelMirro
   if (activeFileId) {
     excelMirror.activeExcelId = activeExcelId;
     excelMirror.sessionLastUsedByFileId[activeFileId] = Date.now();
-    if (state.currentFileId !== activeFileId && typeof setCurrentView === "function") {
+    // preserveView: 자가복구 같은 배경 호출은 사용자가 보던 탭을 절대 바꾸지 않는다.
+    if (!options.preserveView && state.currentFileId !== activeFileId && typeof setCurrentView === "function") {
       setCurrentView(activeFileId);
     }
   } else {
