@@ -170,7 +170,7 @@ const VBA_SYSTEM_PROMPT = `당신은 우측에 실제로 떠 있는 Microsoft Ex
 
 ## 작업 원칙
 - 요청한 작업만, 가장 단순하게. 이전 단계 작업을 다시 하지 마세요.
-- **멀티턴 맥락**: 이전 대화가 있어도 **이번 턴 요청 하나만** 수행하세요. (a) 직전과 무관한 새 작업이면 이전 대상을 다시 건드리지 말고 새 요청 범위만 처리합니다. (b) 직전 작업이 오류로 실패했더라도 이번 요청이 다른 작업이면 실패한 작업을 조용히 재시도하지 말고 이번 요청에만 집중하세요. (c) 단, 이번 요청이 "방금 그거 ~하게 다시 해줘"처럼 직전 작업에 대한 **수정/개선 피드백**이면 새 작업으로 오해하지 말고 같은 대상을 이어서 개선하세요.
+- **멀티턴 맥락**: 이전 대화가 있어도 **이번 턴 요청 하나만** 수행하세요. (a) 직전과 무관한 새 작업이면 이전 대상을 다시 건드리지 말고 새 요청 범위만 처리합니다. (b) 직전 작업이 오류로 실패했더라도 이번 요청이 다른 작업이면 실패한 작업을 조용히 재시도하지 말고 이번 요청에만 집중하세요. (c) 단, 이번 요청이 "방금 그거 ~하게 다시 해줘"처럼 직전 작업에 대한 **수정/개선 피드백**이면 새 작업으로 오해하지 말고 같은 대상을 이어서 개선하세요. (d) **대상 관성 금지**: 파일/시트 선택은 이번 메시지와 "현재 보고 있는 대상"에서만 결정하세요. 이전 턴에서 다루던 파일/시트는 이번 메시지가 다시 지목할 때만 사용합니다.
 - **합계/요약행 보호**: 표 끝의 합계·평균 행(SUM/AVERAGE 수식)은 데이터가 아닙니다. 값 채우기·삭제·정렬 대상 범위에서 제외하세요(요약행을 덮으면 그 수식이 사라집니다). 회사명/키 열이 비어 있는 행이 데이터 끝 표시입니다.
 - 값만 바꾸는 편집은 Range.Value 대입(그 셀의 기존 서식은 유지됨). 수식을 값으로 덮어쓰라고 하면 그 Range.Value 에 값을 대입하면 수식이 값으로 바뀝니다. 바꾸지 않는 셀은 건드리지 마세요(원본 수식/서식 보존).
 - "채워", "입력", "업데이트", "반영"은 수식 제거 지시가 아닙니다. 이미 수식이 있는 셀/열은 사용자가 명시적으로 값을 넣으라고 한 경우에만 Value 로 덮어쓰세요.
@@ -498,17 +498,19 @@ function _buildDefaultTargetHint() {
     ? state.selectedSheets
     : (state.currentSheet ? [state.currentSheet] : []);
   const tag = (typeof isOutputFileId === "function" && isOutputFileId(state.currentFileId)) ? "[출력]" : "[입력]";
-  const isOutputTarget = tag === "[출력]";
+  const engine = (typeof getSkillEngine === "function") ? getSkillEngine() : "python";
   const multi = sheets.length > 1;
   const lines = [];
   lines.push(`${tag} 파일: "${file.name}"`);
-  lines.push(`기본 대상 객체: ${isOutputTarget ? "ctx.workbook / ctx.sheet(...)" : `ctx.input(${JSON.stringify(file.name)})`}`);
-  if (isOutputTarget) {
-    lines.push("사용자가 파일/시트를 명시하지 않으면 현재 출력 파일/시트를 수정하세요.");
+  if (engine === "vba") {
+    lines.push(`기본 대상: Workbooks(${JSON.stringify(file.name)}) — 사용자가 파일/시트를 명시하지 않으면 이 파일이 작업 대상입니다.`);
   } else {
-    lines.push("사용자가 파일/시트를 명시하지 않으면 현재 입력 파일/시트를 작업 기준으로 사용하세요.");
-    lines.push("현재 입력 파일 자체에 새 시트 생성/삽입/삭제/서식 복사처럼 저장이 필요한 변경을 해야 하면 Python 코드 첫 줄 근처에 # B2B_ENGINE_FALLBACK: excel-com 을 넣으세요.");
+    // [0.5.4] 기본 엔진 = 라이브 Python COM: 기본 ctx 가 이 파일에 바인딩되어 있다.
+    // (구버전 openpyxl 문구 ctx.input(...)/ctx.workbook 은 COM ctx 에 존재하지 않아 혼란을 유발했음)
+    lines.push("기본 ctx 는 이 파일에 바인딩되어 있습니다. 사용자가 파일/시트를 명시하지 않으면 이 파일이 작업 대상입니다.");
+    lines.push(`다른 업로드 파일이 필요할 때만 ctx.book("정확한 파일명.xlsx") 을 쓰세요. 새 시트도 사용자가 다른 파일을 지목하지 않는 한 이 파일 안에 만드세요.`);
   }
+  lines.push("이전 대화에서 다른 파일/시트를 다뤘더라도, 이번 요청이 직접 지목하지 않는 한 위 대상이 우선입니다.");
   if (multi) {
     lines.push(`사용자가 직접 선택한 시트 ${sheets.length}개:`);
     sheets.forEach(s => lines.push(`  - "${s}"`));
@@ -518,8 +520,9 @@ function _buildDefaultTargetHint() {
     lines.push(`현재 활성 시트: "${sheets[0]}"`);
     lines.push("사용자가 파일/시트를 명시하지 않으면 이 시트를 기본 대상으로 사용하세요.");
   }
-  return lines.join("\n");
+  return lines.join(String.fromCharCode(10));
 }
+
 
 const PYTHON_COM_SYSTEM_PROMPT = `당신은 우측에 실제로 떠 있는 Microsoft Excel 워크북을 Python 으로 조작하는 코드 작성 도우미입니다.
 작성한 코드는 즉시 라이브 Excel 에 실행되어 결과가 바로 화면에 보입니다. 파일을 열고 닫는 코드가 아닙니다.
@@ -586,7 +589,7 @@ const PYTHON_COM_SYSTEM_PROMPT = `당신은 우측에 실제로 떠 있는 Micro
   \`datetime.datetime(1899,12,30) + datetime.timedelta(days=serial)\` 로 변환하세요.
 
 ## 멀티턴 맥락
-- 이전 대화가 있어도 **이번 턴 요청 하나만** 수행하세요. (a) 무관한 새 작업이면 이전 대상을 다시 건드리지 않기 (b) 직전 작업이 실패했어도 이번 요청이 다른 작업이면 재시도하지 않기 (c) "방금 그거 ~하게 다시"는 같은 대상을 이어서 개선.
+- 이전 대화가 있어도 **이번 턴 요청 하나만** 수행하세요. (a) 무관한 새 작업이면 이전 대상을 다시 건드리지 않기 (b) 직전 작업이 실패했어도 이번 요청이 다른 작업이면 재시도하지 않기 (c) "방금 그거 ~하게 다시"는 같은 대상을 이어서 개선. (d) **대상 관성 금지**: 파일/시트는 이번 메시지와 "현재 보고 있는 대상"에서만 결정 — 이전 턴의 파일/시트를 관성으로 쓰지 않기.
 
 ## 표준 골격 (이 구조를 따르세요)
 \`\`\`python
