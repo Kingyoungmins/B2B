@@ -12,7 +12,10 @@ $("btn-reset").onclick = async () => {
   // confirm() 이 항상-위 Excel 미러 창 뒤에 가려져 화면이 굳어 보이는 문제(0.5.2.2 §7)가 있어
   // 묻기 전에 미러를 먼저 숨긴다. 취소하면 활성 미러를 복원한다.
   try { if (typeof hideAllExcelMirrorWindows === "function") await hideAllExcelMirrorWindows(); } catch (_) {}
-  if (!confirm("초기화할까요? 띄워진 Excel 창을 모두 닫고 프로그램을 새로 시작한 상태로 되돌립니다.\n(다운로드한 .logic.json 파일은 영향 없음)")) {
+  const confirmed = typeof openB2bConfirmModal === "function"
+    ? await openB2bConfirmModal("초기화할까요? 띄워진 Excel 창을 모두 닫고 프로그램을 새로 시작한 상태로 되돌립니다." + String.fromCharCode(10) + "(다운로드한 .logic.json 파일은 영향 없음)", { okLabel: "초기화" })
+    : confirm("초기화할까요?");
+  if (!confirmed) {
     try { if (typeof scheduleRestoreActiveExcelMirror === "function") scheduleRestoreActiveExcelMirror(0); } catch (_) {}
     return;
   }

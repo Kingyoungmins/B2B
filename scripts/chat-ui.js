@@ -263,12 +263,6 @@ function codeFiltersNumericOnlyForCopy(code) {
   return numericTest.test(text) && copyWrite.test(text) && skipNonNumeric.test(text);
 }
 
-function codeMisusesCtxRowsAsCellObjects(code) {
-  const text = String(code || "");
-  if (!/\bctx\.rows\s*\(/.test(text)) return false;
-  return /\b\w+\s*\[[^\]\n\r]+\]\s*\.\s*(?:row|column|value|coordinate)\b/i.test(text);
-}
-
 // [0.5.2 이식·하이브리드] degenerate 출력 감지 — 준-greedy 디코딩의 Qwen 이 같은 줄을 끝없이
 // 반복하는 경우(모든 python 코드 공통). 적용 전에 걸러 간결 재생성을 유도한다.
 function pythonDegenerateOutputFailure(code) {
@@ -1743,17 +1737,28 @@ $("chat-text").addEventListener("keydown", e => {
   }
   const clearBtn = $("chat-clear-history");
   if (clearBtn) {
-    clearBtn.onclick = (e) => {
+    clearBtn.onclick = async (e) => {
       e.stopPropagation();
-      if (!confirm("대화 기억을 모두 비울까요?\n(적용된 스킬 파이프라인과 파일은 그대로 유지됩니다)")) return;
+      // 미러(항상-위 네이티브 Excel 창)가 모달을 덮거나 클릭을 가로채지 않게 먼저 숨긴다.
+      try { if (typeof hideAllExcelMirrorWindows === "function") await hideAllExcelMirrorWindows(); } catch (_) {}
+      const confirmed = typeof openB2bConfirmModal === "function"
+        ? await openB2bConfirmModal("대화 기억을 모두 비울까요?" + String.fromCharCode(10) + "(적용된 스킬 파이프라인과 파일은 그대로 유지됩니다)", { okLabel: "비우기" })
+        : confirm("대화 기억을 모두 비울까요?");
+      if (!confirmed) {
+        try { if (typeof scheduleRestoreActiveExcelMirror === "function") scheduleRestoreActiveExcelMirror(0); } catch (_) {}
+        return;
+      }
       state.chatHistory = [];
       _boundChatHistIds.clear();
+      // 새 세션처럼: 런타임 실패 카운터도 함께 리셋(이전 작업의 VBA 전환 누적이 새 대화에 안 넘어가게).
+      if (typeof clearPythonRuntimeFailures === "function") clearPythonRuntimeFailures();
       const container = $("chat-messages");
       if (container) {
         // cleared-marker: refreshChatState 의 '단일 system 메시지' 재초기화 조건과 구분(덮어쓰기 방지).
         container.innerHTML = `<div class="msg system cleared-marker">대화 기억을 비웠습니다. 새 요청은 이전 대화의 영향을 받지 않습니다.</div>`;
       }
       if (typeof toast === "function") toast("대화 기억을 비웠습니다.", "success");
+      try { if (typeof scheduleRestoreActiveExcelMirror === "function") scheduleRestoreActiveExcelMirror(120); } catch (_) {}
     };
   }
 })();
