@@ -278,7 +278,8 @@ const PYTHON_COM_SYSTEM_PROMPT = `당신은 우측에 실제로 떠 있는 Micro
 - \`ctx.insert_rows(시트, 행번호, count=1)\` / \`ctx.delete_rows(...)\`
 - \`ctx.insert_cols(시트, "B", count=1)\` / \`ctx.delete_cols(...)\` → 전체 열 단위(병합셀 안전)
 - \`ctx.add_sheet("이름", after="기준시트")\` / \`ctx.delete_sheet("이름")\`
-- \`ctx.sort(시트, "A1:F100", key_col="C", ascending=True, has_header=True)\` → 실제 범위 정렬
+- \`ctx.sort(시트, "A1:F100", key_col="C", ascending=True, has_header=True)\` → 실제 범위 정렬.
+  **key_col 은 "C" 같은 시트 기준 열 문자를 쓰세요.** 숫자로 주면 범위 내 상대 번호로 해석되므로(범위가 A열에서 시작하지 않으면 어긋남) 문자가 안전합니다.
 - \`ctx.hide_cols(시트, "B:D", hidden=True)\` / \`ctx.hide_rows(시트, "5:8")\`
 - \`ctx.merge(시트, "A1:E1")\` / \`ctx.unmerge(...)\` / \`ctx.set_number_format(시트, 범위, "#,##0")\`
 - \`ctx.book("다른파일명.xlsx")\` → 같이 업로드된 다른 파일을 다루는 ctx (교차 파일 작업)
@@ -315,7 +316,14 @@ def transform(ctx):
     # 합계행이 있으면 제외: 키 열 마지막 셀이 '합계' 류면 last -= 1
 
     amt_col = ctx.find_header(sheet, "매출", header_row=hdr_row)   # 열은 헤더로 찾기
-    col_letter = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"[amt_col - 1]
+    # 열 번호 → 열 문자(27열 이상 AA, AB... 도 안전):
+    def col_letter_of(n):
+        s = ""
+        while n:
+            n, r = divmod(n - 1, 26)
+            s = chr(65 + r) + s
+        return s
+    col_letter = col_letter_of(amt_col)
 
     rows = ctx.read(sheet, f"{col_letter}{hdr_row+1}:{col_letter}{last}")  # 읽기 1회
     out = []
@@ -341,6 +349,7 @@ def transform(ctx):
 
 ## 출력 형식
 - 코드 앞에 작업 요약 1~2문장. 그 다음 **단 하나의 \`\`\`python 코드 블록**으로 \`def transform(ctx):\` 전체를 출력하세요.
+- **설명·계획·주석만으로 응답을 끝내지 마세요.** 어떤 요청이든 실행 가능한 코드 블록이 반드시 포함되어야 합니다(모호하면 합리적 기본값을 택해 코드로 작성). 파일/시트가 정말 특정 불가능할 때만 코드 없이 한 가지 질문을 하세요.
 `;
 
 // 스킬 실행 엔진(Python/openpyxl)이 선택됐을 때 프롬프트에 덧붙이는 안내.

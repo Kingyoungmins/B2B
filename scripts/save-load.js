@@ -7,8 +7,51 @@ $("btn-save").onclick = () => {
 $("btn-load").onclick = () => {
   openLoadDialog();
 };
-$("btn-reset").onclick = async () => {
-  if (!confirm("현재 화면 상태를 초기화할까요? (다운로드한 .logic.json 파일은 영향 없음)")) return;
+$("btn-reset").onclick = () => {
+  // confirm() 같은 블로킹 네이티브 다이얼로그는 항상-위 Excel 미러 창(별도 HWND) 뒤에
+  // 가려질 수 있고, 그러면 JS 전체가 멈춘 채 사용자는 "화면이 굳었다"고 보게 된다.
+  // → 미러 창을 먼저 숨기고, 비차단 DOM 모달로 확인을 받는다.
+  if (typeof hideAllExcelMirrorWindows === "function") {
+    hideAllExcelMirrorWindows().catch(() => {});
+  }
+  openResetConfirmModal();
+};
+
+function openResetConfirmModal() {
+  const modal = $("modal");
+  const bg = $("modal-bg");
+  if (!modal || !bg) { performScreenReset(); return; } // 모달 셸이 없으면 즉시 진행(블로킹 confirm 회귀 방지)
+  modal.innerHTML = `
+    <h3>화면 상태 초기화</h3>
+    <p style="font-size:12px; color:#666; margin-bottom:10px">
+      현재 화면 상태를 초기화할까요?<br>(다운로드한 .logic.json 파일은 영향 없음)
+    </p>
+    <div class="row">
+      <button class="btn-secondary" id="reset-cancel">취소</button>
+      <button class="btn-primary" id="reset-confirm">초기화</button>
+    </div>
+  `;
+  bg.classList.add("show");
+  const close = () => bg.classList.remove("show");
+  $("reset-cancel").onclick = () => {
+    close();
+    if (typeof restoreActiveExcelMirrorWindow === "function") {
+      restoreActiveExcelMirrorWindow().catch(() => {});
+    }
+  };
+  $("reset-confirm").onclick = () => {
+    close();
+    performScreenReset();
+  };
+}
+
+function performScreenReset() {
+  // 초기화 멈춤 버그 방어: 진행 중이던 작업(업로드/미러 오픈/적용)이 쥔 전역 busy 잠금을
+  // 가장 먼저 강제 해제한다 — 폐기 후 그 작업들은 끝나지 않을 수 있고, 잠금이 남으면
+  // 화면과 네이티브 입력이 굳은 채 "초기화 후 상호작용 중단"이 된다.
+  if (typeof forceReleaseUiBusy === "function") forceReleaseUiBusy();
+  if (state.uploadJob) state.uploadJob.cancelled = true; // 진행 중 업로드 루프 중단
+  if (typeof clearPythonRuntimeFailures === "function") clearPythonRuntimeFailures();
   // 초기화는 폐기 동작 → graceful 닫기(대형 워크북 건당 수 초 + COM 큐 점유) 대신
   // 강제 정리: 모든 Excel 창이 즉시 사라지고, 직후 새 업로드가 정리 뒤에 줄서지 않는다.
   if (typeof forceCloseAllExcelMirrorSessions === "function") {
@@ -43,7 +86,7 @@ $("btn-reset").onclick = async () => {
   refreshChatState();
   renderExcelViewer();
   refreshRunButton();
-};
+}
 
 function logicBackupTimestamp() {
   return new Date().toISOString().slice(0, 19).replace(/[T:]/g, "-");

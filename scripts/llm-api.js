@@ -1,8 +1,11 @@
 ﻿/* ===================================================================
    LLM API
    =================================================================== */
-const LLM_HISTORY_MAX_MESSAGES = 18;
-const LLM_HISTORY_MAX_CHARS = 32000;
+const LLM_HISTORY_MAX_MESSAGES = 12;
+const LLM_HISTORY_MAX_CHARS = 20000;
+// 오래된 assistant 턴의 코드 블록은 히스토리에서 접는다 — 모델이 자기 과거의 장황한
+// 출력을 그대로 모방·반복하는 것을 막는다(수정 모드는 buildEditingContext 가 현재 코드를 따로 제공).
+const LLM_HISTORY_KEEP_CODE_TURNS = 1;
 const LLM_REASONING_WARNING_CHARS = 7000;
 const LLM_REASONING_WARNING_MS = 45000;
 const LLM_REASONING_LOOP_CHARS = 12000;
@@ -167,7 +170,9 @@ async function callOpenAICompatOnce(system, options) {
   const payload = {
     model,
     messages,
-    max_tokens: 4096,
+    // think 모드는 reasoning+본문이 같은 예산을 나눠 쓴다(vLLM) — 4096이면 생각이 길어질 때
+    // 본문이 잘리거나 아예 안 나와 no-think 폴백 재생성으로 이어진다.
+    max_tokens: thinkOn ? 8192 : 4096,
     // seed 는 일부러 박지 않음 → 재요청/재생성 때 다른 시도가 나올 여지 유지.
     // 호출자가 options.temperature 로 직접 지정할 수 있음.
     temperature: (typeof options.temperature === "number") ? options.temperature : defaultTemperature,
@@ -176,7 +181,12 @@ async function callOpenAICompatOnce(system, options) {
   if (isQwen) {
     payload.top_p = thinkOn ? 0.95 : 0.8;
     payload.top_k = 20;             // vLLM 확장 파라미터(Qwen 권장)
-    payload.presence_penalty = 1.5; // FP8 양자화 반복 억제(Qwen 공식 권장 범위)
+    // presence_penalty 1.5 상시 적용은 코드 토큰(ctx., Range, def 등)의 정상 재사용까지
+    // 벌점을 줘 장황한 우회 표현·이상한 변수명 변형(="멍청한 출력")을 유발한다.
+    // 기본은 약하게(0.5), degenerate(줄 반복) 감지 후 재생성에서만 호출자가 1.5 를 넘긴다.
+    payload.presence_penalty = (typeof options.presencePenalty === "number")
+      ? options.presencePenalty
+      : 0.5;
   }
   applyQwenThinkControl(payload, options.thinkMode === true);
   const { resp, url } = await fetchOpenAICompat("/chat/completions", base, {
@@ -227,15 +237,28 @@ function effectiveOpenAICompatBaseUrl() {
   return (raw || DEFAULTS["openai-compat"].baseUrl).replace(/\/$/, "");
 }
 
+// 오래된 assistant 턴의 코드 블록을 한 줄 표시로 접는다(최근 N개 assistant 턴은 원본 유지).
+function _collapseHistoryCodeBlocks(content) {
+  return String(content || "").replace(/```[a-zA-Z0-9_-]*\s*([\s\S]*?)```/g, (m, body) => {
+    const firstLine = String(body || "").split("\n").map(l => l.trim()).find(Boolean) || "";
+    return `[이전 단계 코드 블록 생략${firstLine ? `: ${firstLine.slice(0, 80)}` : ""}]`;
+  });
+}
+
 function getLLMChatHistory() {
   const source = Array.isArray(state.chatHistory) ? state.chatHistory : [];
   const picked = [];
   let totalChars = 0;
+  let assistantSeen = 0;
 
   for (let i = source.length - 1; i >= 0 && picked.length < LLM_HISTORY_MAX_MESSAGES; i--) {
     const msg = source[i];
     if (!msg || (msg.role !== "user" && msg.role !== "assistant")) continue;
-    const content = String(msg.content || "");
+    let content = String(msg.content || "");
+    if (msg.role === "assistant") {
+      assistantSeen += 1;
+      if (assistantSeen > LLM_HISTORY_KEEP_CODE_TURNS) content = _collapseHistoryCodeBlocks(content);
+    }
     const nextChars = totalChars + content.length;
     if (picked.length > 0 && nextChars > LLM_HISTORY_MAX_CHARS) break;
     picked.push({ role: msg.role, content });

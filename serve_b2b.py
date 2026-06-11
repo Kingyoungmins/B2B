@@ -4036,7 +4036,11 @@ def _run_vba_pipeline_on_session_impl(excel_id, steps, reset=True, entry=None):
         session = get_excel_session(excel_id)
         app, wb = session_workbook(session)
         # 교차 파일 접근: 다른 업로드 파일들을 같은 인스턴스에 동반 오픈(읽기전용, 숨김).
-        _ensure_companion_workbooks(session, excel_id, app, wb)
+        # 단, 스텝 없는 순수 리셋 호출은 교차 읽기가 없으므로 생략한다 — 동반 스냅샷은
+        # 다른 라이브 워크북 전부를 SaveCopyAs 하는 무거운 작업이라, 다중 파일 리셋을
+        # 파일별 호출로 나눠 보낼 때 호출마다 반복되면 복구가 수 분씩 걸린다.
+        if steps:
+            _ensure_companion_workbooks(session, excel_id, app, wb)
         try:
             if reset:
                 source = session.get("sourcePath") or session.get("path")
@@ -4112,6 +4116,9 @@ _PY_SAFE_BUILTINS = {
     "abs": abs, "round": round, "any": any, "all": all, "isinstance": isinstance,
     "str": str, "int": int, "float": float, "bool": bool,
     "list": list, "dict": dict, "set": set, "tuple": tuple,
+    # 열 문자 계산(chr(65+...)/divmod)·문자 코드 변환은 생성 코드가 흔히 쓰는 순수 함수 —
+    # 빠져 있으면 "name 'chr' is not defined" 런타임 실패가 난다.
+    "chr": chr, "ord": ord, "divmod": divmod, "map": map, "filter": filter,
     "Exception": Exception, "ValueError": ValueError, "TypeError": TypeError,
     "KeyError": KeyError, "IndexError": IndexError, "RuntimeError": RuntimeError,
     "print": (lambda *a, **k: None),  # 출력은 무시(자동 실행 차단 요소 없음)
@@ -4551,8 +4558,30 @@ def _python_com_static_check(code):
                  "insert_cols", "delete_rows", "delete_cols", "merge", "unmerge", "sort"}
 
     loop_stack = []
+    # 루프 내 쓰기 금지는 'ctx 계열' 수신자에만 적용한다 — 일반 리스트/딕셔너리의
+    # .copy()/.sort()/.clear() 는 메모리 연산이라 무해한데, 수신자 확인 없이 이름만 보면
+    # for r in rows: out.append(r.copy()) 같은 흔한 관용구가 전부 오탐으로 차단된다.
+    ctx_aliases = {"ctx"}
+
+    def _is_ctx_receiver(value):
+        if isinstance(value, _ast.Name):
+            return value.id in ctx_aliases
+        if isinstance(value, _ast.Call):
+            f = value.func
+            return isinstance(f, _ast.Attribute) and f.attr == "book" and _is_ctx_receiver(f.value)
+        return False
 
     class _Checker(_ast.NodeVisitor):
+        def visit_Assign(self, node):
+            # book = ctx.book("다른파일.xlsx") 별칭 추적(별칭의 루프 내 쓰기도 잡기 위함).
+            if isinstance(node.value, _ast.Call):
+                f = node.value.func
+                if isinstance(f, _ast.Attribute) and f.attr == "book" and _is_ctx_receiver(f.value):
+                    for tgt in node.targets:
+                        if isinstance(tgt, _ast.Name):
+                            ctx_aliases.add(tgt.id)
+            self.generic_visit(node)
+
         def visit_Import(self, node):
             failures.append("import 는 사용할 수 없습니다(re/datetime/math 는 이미 주어져 있음).")
 
@@ -4584,7 +4613,7 @@ def _python_com_static_check(code):
             if isinstance(func, _ast.Attribute):
                 if func.attr in forbidden_attrs:
                     failures.append(f".{func.attr} 는 사용할 수 없습니다(ctx API 만 사용).")
-                if loop_stack and func.attr in write_ops:
+                if loop_stack and func.attr in write_ops and _is_ctx_receiver(func.value):
                     failures.append(
                         f"루프 안에서 ctx.{func.attr}() 를 반복 호출하면 안 됩니다. "
                         "데이터를 메모리(리스트)에서 모두 계산한 뒤 ctx.write() 한 번으로 쓰세요."

@@ -208,6 +208,27 @@ function endUiBusy(token, opts = {}) {
   }
 }
 
+// '전부 폐기'(초기화) 경로 전용: 진행 중이던 모든 busy 토큰을 무시하고 잠금을 즉시 해제한다.
+// 초기화가 EXCEL.EXE 를 강제 종료하면 그 위에서 돌던 COM/fetch 작업은 끝나지 않을 수 있고,
+// 그 토큰들이 count 를 쥔 채 남으면 화면+네이티브 호스트 입력이 (failsafe 90초까지) 잠겨
+// "초기화 후 상호작용 중단" 증상이 된다. 폐기 후에는 그 작업들의 잠금이 무의미하므로 전체 해제.
+function forceReleaseUiBusy() {
+  uiBusy.count = 0;
+  try {
+    if (uiBusy.el) {
+      uiBusy.el.classList.remove("show");
+      const stopBtn = uiBusy.el.querySelector(".busy-stop");
+      if (stopBtn) {
+        stopBtn.classList.remove("show");
+        stopBtn.onclick = null;
+        stopBtn.disabled = false;
+      }
+    }
+    document.body.classList.remove("b2b-ui-busy");
+  } catch (_) {}
+  try { publishNativeUiBusy(false, ""); } catch (_) {}
+}
+
 async function withUiBusy(label, fn, options = {}) {
   const token = beginUiBusy(label, options);
   try {
@@ -842,6 +863,11 @@ function clearExcelMirrorClientState() {
     endUiBusy(excelMirror.applyBusyToken, { silentComplete: true });
     excelMirror.applyBusyToken = null;
   }
+  // 전부-폐기 정리: 다른 in-flight 작업이 쥔 busy 토큰도 모두 무효(세션이 사라졌으므로).
+  // 남겨두면 초기화 직후 화면/네이티브 입력이 잠긴 채 failsafe(90초)까지 굳는다.
+  forceReleaseUiBusy();
+  // 라이브 워크북이 전부 닫힘 — '적용 완료 상태' 기억도 무효(다음 편집은 실제 재적용).
+  if (typeof invalidateLivePipelineApplied === "function") invalidateLivePipelineApplied();
   if (typeof publishNativeExcelLoading === "function") publishNativeExcelLoading(false, "");
   updateMirrorShellStatus();
 }
