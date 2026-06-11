@@ -159,6 +159,7 @@ function openSettingsModal(devMode) {
       apiKey: $("set-o-key").value.trim() || (network === "dev-vllm" ? DEFAULTS.devVllm.apiKey : DEFAULTS["openai-compat"].apiKey),
       model: network === "dev-vllm" ? DEFAULTS.devVllm.model : DEFAULTS["openai-compat"].model,
       thinkMode: settings.thinkMode === true,
+      thinkModeUserSet: settings.thinkModeUserSet === true, // 토글 선택 이력 보존(부팅 시 기본 ON 마이그레이션과 구분)
       thinkControlMode: normalizeThinkControlMode($("set-o-think-control").value),
       devModeSet: devMode === true,
     };

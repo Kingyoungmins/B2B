@@ -26,7 +26,8 @@ const DEFAULTS = {
       : "http://127.0.0.1:8090/v1",
     // ixi 프록시(/v1/*)가 실제로 전달할 Violet/vLLM 상위 주소. 설정에서 변경 가능.
     proxyUpstream: IXI_VIOLET_BASE_URL,
-    thinkMode: false,
+    // [사용자 요청] Think 모드 기본 ON — 저장값이 명시적으로 false 일 때만 꺼진다.
+    thinkMode: true,
     thinkControlMode: "chat_template_kwargs",
     network: "ixi",
   },
@@ -110,7 +111,10 @@ function normalizeSettings(parsed) {
         : normalizeIxiBaseUrl(parsed.baseUrl || networkDefaults.baseUrl || DEFAULTS["openai-compat"].baseUrl, parsed),
       proxyUpstream: network === "dev-vllm" ? "" : (parsed.proxyUpstream || DEFAULTS["openai-compat"].proxyUpstream),
       apiKey: parsed.apiKey || DEFAULTS["openai-compat"].apiKey,
-      thinkMode: parsed.thinkMode === true,
+      // [사용자 요청] Think 기본 ON. 과거 기본값(false)이 저장돼 있던 사용자도 ON 으로 올린다 —
+      // 사용자가 토글 버튼으로 직접 바꾼 적 있는 경우(thinkModeUserSet)에만 저장값을 존중.
+      thinkMode: parsed.thinkModeUserSet === true ? parsed.thinkMode === true : true,
+      thinkModeUserSet: parsed.thinkModeUserSet === true,
       thinkControlMode: normalizeIxiThinkControlMode(
         network,
         normalizeThinkControlMode(parsed.thinkControlMode || networkDefaults.thinkControlMode),
@@ -224,6 +228,7 @@ function setupThinkToggle() {
     settings = {
       ...settings,
       thinkMode: !isThinkModeEnabled(),
+      thinkModeUserSet: true, // 직접 토글 — 이후 부팅에서 이 선택을 존중
     };
     saveSettings();
     toast(`Think 모드 ${settings.thinkMode ? "켜짐" : "꺼짐"}`, "success");
