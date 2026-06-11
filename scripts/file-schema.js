@@ -548,13 +548,16 @@ const PYTHON_COM_SYSTEM_PROMPT = `당신은 우측에 실제로 떠 있는 Micro
 - \`ctx.find_header(시트, "헤더명", header_row=1)\` → 열 번호(1-based). **열 번호를 추측/하드코딩하지 말고 반드시 이 함수로 찾으세요.**
 - \`ctx.read(시트, "B2:D100")\` → 2차원 리스트(값). 범위 생략 시 전체 사용범위. **반환 리스트는 0-based** — values[0][0] 이 범위의 좌상단 셀.
 - \`ctx.read_formulas(시트, 범위)\` → 수식 문자열 2차원 리스트(수식 없으면 값)
-- \`ctx.has_formulas(시트, 범위)\` → 수식 존재 여부
+- \`ctx.has_formulas(시트, 범위)\` → **범위 전체에 대한 단일 bool**(수식이 하나라도 있으면 True). 셀별 배열이 아닙니다 — 첨자([i][0])로 접근하면 오류.
+- \`ctx.formula_mask(시트, 범위)\` → **셀별** 수식 여부 2차원 리스트(True/False). 수식 셀만 건너뛰고 채울 때 이걸 쓰세요.
 - \`ctx.write(시트, "B2", 이차원리스트, overwrite_formulas=False)\` → 시작 셀 기준 한 번에 기록
 - \`ctx.write_cell(시트, "B2", 값)\` → 단일 셀(소량 전용 — 루프 반복 금지)
 - \`ctx.write_formulas(시트, "D2", [["=B2-C2"],["=B3-C3"]])\` → 수식 기록
 - \`ctx.copy(원본시트, "A1:F20", 대상시트, "A1")\` → Excel 네이티브 복사(값+수식+서식+병합 보존). "복사/복붙" 요청의 기본 수단.
   - 복사/붙여넣기는 지정(선택) 범위를 **헤더·빈칸 포함 위치 그대로** 한 번의 \`ctx.copy\` 로 옮기세요. 값이 있는 셀만 골라 read→write 로 재구성하는 것은 금지입니다(서식·수식·빈칸 소실).
   - "맨 앞에/사이에 붙여넣기"는 먼저 \`ctx.insert_cols\`/\`ctx.insert_rows\` 로 자리를 만든 뒤 \`ctx.copy\` 하세요.
+  - 표준 패턴(열 A:F 를 맨 앞에 복사 삽입): \`ctx.insert_cols(시트, "A", count=6)\` → 원본은 오른쪽으로 6칸 이동(G:L) → \`ctx.copy(시트, "G:L", 시트, "A1")\`. 전체 열 표기("G:L")를 쓰면 행 수 계산이 필요 없습니다.
+  - 범위 문자열을 f-string 으로 조합할 때 **시작:끝 순서**를 확인하세요 — "G1:F100" 같은 뒤집힌 범위는 실행기가 거부합니다.
 - \`ctx.clear(시트, 범위)\` → 내용 삭제(서식 유지)
 - \`ctx.insert_rows(시트, 행번호, count=1)\` / \`ctx.delete_rows(...)\`
 - \`ctx.insert_cols(시트, "B", count=1)\` / \`ctx.delete_cols(...)\` → 전체 열 단위(병합셀 안전)

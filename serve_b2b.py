@@ -4917,9 +4917,27 @@ class PythonComSkillContext:
                 f"시트 '{sheet}' 를 찾지 못했습니다. 사용 가능한 시트: {names}"
             )
 
+    @staticmethod
+    def _col_num(letters):
+        n = 0
+        for ch in str(letters).upper():
+            n = n * 26 + (ord(ch) - 64)
+        return n
+
     def _rng(self, ws, a1):
+        ref = str(a1)
+        # 뒤집힌 범위("G1:F100", "B10:B5")는 Excel 이 조용히 정규화해 의도와 다른 폭/높이로
+        # 동작한다(예: 6열 복사가 2열 복사가 됨) — 생성 코드의 f-string 실수를 즉시 드러낸다.
+        m = re.match(r"^\$?([A-Za-z]{1,3})\$?(\d+)?:\$?([A-Za-z]{1,3})\$?(\d+)?$", ref.strip())
+        if m:
+            c1, r1, c2, r2 = m.group(1), m.group(2), m.group(3), m.group(4)
+            if self._col_num(c1) > self._col_num(c2) or (r1 and r2 and int(r1) > int(r2)):
+                raise PythonComSkillError(
+                    f"범위 표기가 뒤집혔습니다: '{ref}' — 시작 셀이 끝 셀보다 뒤에 있습니다. "
+                    f"'{c2}{r2 or ''}:{c1}{r1 or ''}' 처럼 시작:끝 순서로 고쳐 주세요."
+                )
         try:
-            return ws.Range(str(a1))
+            return ws.Range(ref)
         except Exception:
             raise PythonComSkillError(f"잘못된 범위 주소입니다: '{a1}' (예: \"B2:D100\")")
 
@@ -5026,6 +5044,15 @@ class PythonComSkillContext:
         self._tick(2)
         has = rng.HasFormula
         return has is not False
+
+    def formula_mask(self, sheet, a1_range):
+        """셀별 수식 여부를 2차원 리스트(True/False)로 반환(COM 1회).
+        has_formulas 는 범위 '전체'에 대한 단일 bool 이므로 셀별 판단에는 이 메서드를 쓸 것."""
+        ws = self._ws(sheet)
+        rng = self._rng(ws, a1_range)
+        self._tick(2)
+        f = _range_matrix(rng.Formula)
+        return [[isinstance(v, str) and v.startswith("=") for v in row] for row in f]
 
     # ---- 쓰기(벌크 전용) ----
     def write(self, sheet, a1_start, values, overwrite_formulas=False):
