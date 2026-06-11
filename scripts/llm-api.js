@@ -1,8 +1,10 @@
 ﻿/* ===================================================================
    LLM API
    =================================================================== */
-const LLM_HISTORY_MAX_MESSAGES = 18;
-const LLM_HISTORY_MAX_CHARS = 32000;
+const LLM_HISTORY_MAX_MESSAGES = 12;
+const LLM_HISTORY_MAX_CHARS = 20000;
+// [0.5.2.2] 원본 코드 블록을 남길 최근 assistant 턴 수 — 그 이전 턴의 코드는 접는다.
+const LLM_HISTORY_KEEP_CODE_TURNS = 1;
 const LLM_REASONING_WARNING_CHARS = 7000;
 const LLM_REASONING_WARNING_MS = 45000;
 const LLM_REASONING_LOOP_CHARS = 12000;
@@ -28,9 +30,17 @@ async function callLLM(userMessage, options) {
     ? state.pipeline.findIndex(s => s.id === editTargetId)
     : -1;
 
-  const engine = typeof getSkillEngine === "function" ? getSkillEngine() : "python";
+  // [0.5.2.2] forceEngine: Python 게이트 연속 실패로 VBA 폴백 생성할 때 등 이 호출 1회에 한해
+  // 시스템 프롬프트 엔진을 강제한다(전역 엔진 설정 불변).
+  const engine = options.forceEngine
+    || (typeof getSkillEngine === "function" ? getSkillEngine() : "python");
   let fullSystem;
-  if (engine === "vba" && typeof VBA_SYSTEM_PROMPT === "string") {
+  if (engine === "python" && typeof PYTHON_COM_SYSTEM_PROMPT === "string") {
+    // [0.5.4] 기본 Python 엔진 = 라이브 Excel COM bulk 제어(ctx API). openpyxl 은 서버 폴백 전용.
+    fullSystem = PYTHON_COM_SYSTEM_PROMPT + (editIdx >= 0
+      ? "\n\n" + buildEditingContext(editIdx)
+      : "\n\n## 현재 파일 스키마\n" + buildSchemaSummary());
+  } else if (engine === "vba" && typeof VBA_SYSTEM_PROMPT === "string") {
     // 0.4.9 리모콘 모델: VBA 매크로 생성. (편집 시에도 현재 코드 컨텍스트를 붙여 VBA로 수정.)
     fullSystem = VBA_SYSTEM_PROMPT + (editIdx >= 0
       ? "\n\n" + buildEditingContext(editIdx)
@@ -157,7 +167,8 @@ async function callOpenAICompatOnce(system, options) {
   const payload = {
     model,
     messages,
-    max_tokens: 4096,
+    // [0.5.2.2] think 모드는 reasoning+본문이 같은 토큰 예산을 나눠 써 4096이면 본문이 잘림 → 8192.
+    max_tokens: thinkOn ? 8192 : 4096,
     // seed 는 일부러 박지 않음 → 재요청/재생성 때 다른 시도가 나올 여지 유지.
     // 호출자가 options.temperature 로 직접 지정할 수 있음.
     temperature: (typeof options.temperature === "number") ? options.temperature : defaultTemperature,
@@ -166,7 +177,9 @@ async function callOpenAICompatOnce(system, options) {
   if (isQwen) {
     payload.top_p = thinkOn ? 0.95 : 0.8;
     payload.top_k = 20;             // vLLM 확장 파라미터(Qwen 권장)
-    payload.presence_penalty = 1.5; // FP8 양자화 반복 억제(Qwen 공식 권장 범위)
+    // [0.5.2.2 교정] 상시 1.5 는 코드 토큰(ctx./Range/def/변수명)의 정상 재사용에도 벌점을 줘
+    // 우회 표현·이상한 변수명을 유발한다 — 기본 0.5, degenerate 재생성 시에만 호출자가 1.5 지정.
+    payload.presence_penalty = (typeof options.presencePenalty === "number") ? options.presencePenalty : 0.5;
   }
   applyQwenThinkControl(payload, options.thinkMode === true);
   const { resp, url } = await fetchOpenAICompat("/chat/completions", base, {
@@ -216,15 +229,27 @@ function effectiveOpenAICompatBaseUrl() {
   return (raw || DEFAULTS["openai-compat"].baseUrl).replace(/\/$/, "");
 }
 
+function _collapseHistoryCodeBlocks(content) {
+  return String(content || "").replace(/```[a-zA-Z0-9_-]*\s*([\s\S]*?)```/g, (m, body) => {
+    const firstLine = String(body || "").split("\n").map(l => l.trim()).find(Boolean) || "";
+    return `[이전 단계 코드 블록 생략${firstLine ? `: ${firstLine.slice(0, 80)}` : ""}]`;
+  });
+}
+
 function getLLMChatHistory() {
   const source = Array.isArray(state.chatHistory) ? state.chatHistory : [];
   const picked = [];
   let totalChars = 0;
+  let assistantSeen = 0;
 
   for (let i = source.length - 1; i >= 0 && picked.length < LLM_HISTORY_MAX_MESSAGES; i--) {
     const msg = source[i];
     if (!msg || (msg.role !== "user" && msg.role !== "assistant")) continue;
-    const content = String(msg.content || "");
+    let content = String(msg.content || "");
+    if (msg.role === "assistant") {
+      assistantSeen += 1;
+      if (assistantSeen > LLM_HISTORY_KEEP_CODE_TURNS) content = _collapseHistoryCodeBlocks(content);
+    }
     const nextChars = totalChars + content.length;
     if (picked.length > 0 && nextChars > LLM_HISTORY_MAX_CHARS) break;
     picked.push({ role: msg.role, content });
@@ -235,6 +260,8 @@ function getLLMChatHistory() {
   while (history.length && history[0].role !== "user") history.shift();
   return history;
 }
+
+async
 
 async function readOpenAICompatStream(resp, options) {
   options = options || {};

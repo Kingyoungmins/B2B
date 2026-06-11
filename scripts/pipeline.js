@@ -41,12 +41,26 @@ function shouldDeferImmediatePipelineRun() {
     (typeof hasBackendOnlyWorkbooks === "function" && hasBackendOnlyWorkbooks());
 }
 
+// [0.5.4 하이브리드] 스텝의 라이브 실행 언어 — vba/python 이면 라이브 Excel 에서 실행.
+// 첫 줄 부근에 `# B2B_ENGINE: openpyxl` 마커가 있으면 라이브에서 빼고 백엔드 openpyxl 로 보낸다
+// (Excel 미설치 환경용 배치/레거시 스텝).
+function pipelineStepLiveLanguage(s) {
+  if (!s || !s.code) return null;
+  if (/^\s*#\s*B2B_ENGINE\s*:\s*openpyxl/im.test(String(s.code))) return null;
+  const lang = s.language || (typeof inferPipelineStepLanguage === "function" ? inferPipelineStepLanguage(s) : "");
+  return (lang === "vba" || lang === "python") ? lang : null;
+}
+
 function pipelineUsesPython(steps = state.pipeline) {
   return (steps || []).some(step => step && isStepEnabled(step) && inferPipelineStepLanguage(step) === "python");
 }
 
 function pipelineUsesVba(steps = state.pipeline) {
   return (steps || []).some(step => step && isStepEnabled(step) && inferPipelineStepLanguage(step) === "vba");
+}
+
+function pipelineUsesLiveSkill(steps = state.pipeline) {
+  return (steps || []).some(s => !!pipelineStepLiveLanguage(s));
 }
 
 function pipelineHasMixedPythonVba(steps = state.pipeline) {
@@ -256,6 +270,11 @@ async function ensurePinnedVbaTargetExcelId(steps = state.pipeline) {
   if (state.currentFileId !== fileId && typeof setCurrentView === "function") {
     // 대상 파일로 탭을 먼저 전환(미러 표시 포함) → 사용자가 결과를 그 자리에서 본다.
     setCurrentView(fileId);
+    // [0.5.2.2 §5.6] setCurrentView 가 예약한 비동기 미러 전환이 곧 시작될 리셋·재적용과 경합하지 않게 취소.
+    if (typeof excelMirror !== "undefined" && excelMirror.switchTimer) {
+      clearTimeout(excelMirror.switchTimer);
+      excelMirror.switchTimer = null;
+    }
   }
   let excelId = (typeof excelMirror !== "undefined" && excelMirror.sessionsByFileId)
     ? excelMirror.sessionsByFileId[fileId]
@@ -265,6 +284,52 @@ async function ensurePinnedVbaTargetExcelId(steps = state.pipeline) {
   }
   return excelId ? { fileId, excelId } : null;
 }
+
+async function excelIdForPipelineFileId(fileId) {
+  if (!fileId) return null;
+  let excelId = (typeof excelMirror !== "undefined" && excelMirror.sessionsByFileId)
+    ? excelMirror.sessionsByFileId[fileId]
+    : null;
+  if (!excelId && typeof ensureExcelMirrorForFileId === "function") {
+    try { excelId = await ensureExcelMirrorForFileId(fileId); } catch (_) { excelId = null; }
+  }
+  return excelId || null;
+}
+
+// 대상 파일의 세션을 반드시 확보 — 실패하면 '다른 워크북으로 조용히 폴백'하지 않고 중단한다.
+// (폴백하면 ctx.write/ActiveWorkbook 이 현재 탭 파일에 실행돼, "적용됐다"는데 출력 파일은
+// 그대로이고 엉뚱한 파일이 오염되는 사고가 난다 — 탭 이동 후 토글 ON 미반영 버그의 원인.)
+
+async function requirePipelineSessionExcelId(fileId, purpose) {
+  const excelId = await excelIdForPipelineFileId(fileId);
+  if (excelId) return excelId;
+  const file = (typeof getFile === "function") ? getFile(fileId) : null;
+  const name = (file && file.name) ? file.name : String(fileId || "대상 파일");
+  throw new Error(
+    `'${name}' 의 Excel 창을 열지 못해 ${purpose}를 중단했습니다(다른 파일에 잘못 쓰는 것을 막기 위한 중단). ` +
+    "해당 파일 탭을 눌러 Excel 창이 뜨는 것을 확인한 뒤 다시 시도해 주세요."
+  );
+}
+
+// 스텝 코드가 파일명으로 직접 참조하는 출력 파일들(교차 기록 대상).
+// 입력 탭에서 만든 스킬이 Workbooks("output_....xlsx") / ctx.book("...") 으로 출력에 쓰는
+// 패턴이 흔한데, 이때 리셋이 스텝의 대상(입력)만 되돌리면 출력에 쓴 값이 남아
+// 토글 OFF 가 안 풀리고 ON 재실행이 중복 기록된다 → 참조된 출력도 리셋 대상에 포함.
+// (입력 파일 참조는 대부분 읽기이므로 대상(targetFileId)일 때만 리셋한다.)
+
+function crossOutputFileIdsReferencedInCode(code) {
+  const text = String(code || "");
+  if (!text) return [];
+  const ids = [];
+  (state.outputTemplates || []).forEach((tpl, idx) => {
+    const name = tpl && tpl.file && tpl.file.name;
+    if (name && text.includes(name)) {
+      ids.push(typeof outputTemplateFileId === "function" ? outputTemplateFileId(idx) : "output:" + idx);
+    }
+  });
+  return ids;
+}
+
 
 function preferredVbaRunFileId() {
   if (state.currentFileId && typeof getFile === "function" && getFile(state.currentFileId)) {
@@ -304,16 +369,21 @@ async function ensureVbaRunExcelId() {
 
 function shouldRunPipelineAsVba(steps = state.pipeline) {
   if (!activePipelineSteps(steps).length) return false;
-  return pipelineUsesVba(steps) || (typeof getSkillEngine === "function" && getSkillEngine() === "vba");
+  // [0.5.2.2] VBA/Python COM 스텝이 있으면 라이브 실행기로. openpyxl 마커 스텝만 있으면 백엔드로.
+  if (pipelineUsesLiveSkill(steps)) return true;
+  const engineLive = typeof getSkillEngine === "function" && ["vba", "python"].includes(getSkillEngine());
+  if (!engineLive) return false;
+  // 엔진이 라이브 계열이어도 활성 스텝이 전부 openpyxl 마커(백엔드 전용)면 백엔드 경로.
+  return activePipelineSteps(steps).every(s => !!pipelineStepLiveLanguage(s));
 }
 
 async function runVbaPipelinePreferLive(options = {}) {
   const steps = options.pipeline || state.pipeline;
   const activeSteps = activePipelineSteps(steps);
   if (!activeSteps.length) throw new Error("실행할 활성 스킬이 없습니다.");
-  const nonVba = activeSteps.filter(step => inferPipelineStepLanguage(step) !== "vba");
-  if (nonVba.length) {
-    throw new Error("Python 스킬과 VBA 스킬은 한 번에 라이브 VBA 파이프라인으로 실행할 수 없습니다. 같은 엔진으로 스킬을 다시 생성해 주세요.");
+  const unsupported = activeSteps.filter(step => !["vba", "python"].includes(inferPipelineStepLanguage(step)));
+  if (unsupported.length) {
+    throw new Error("현재 실행기는 VBA/Python 스킬만 라이브 Excel에서 실행합니다. 기존 JavaScript 스킬은 다시 생성해 주세요.");
   }
   // 실행 버튼: 스킬이 만들어졌던 파일을 우선 대상(탭 전환 포함)으로, 없으면 기존 추정 경로.
   let excelId = null;
@@ -416,6 +486,9 @@ async function requestExcelApplyCancel() {
 // 파이프라인 재실행/시뮬레이터를 거치지 않으므로 초저지연이고, 결과는 우측 라이브 엑셀에 바로 보인다.
 function applyVbaStepToLiveExcel(step, excelId) {
   const perfStartedAt = performance.now();
+  // [0.5.2.2] 언어에 따라 실행기 선택 — python(def transform(ctx)) 은 Python COM 라이브 엔진.
+  const liveLang = step.language || (typeof inferPipelineStepLanguage === "function" ? inferPipelineStepLanguage(step) : "vba");
+  const liveEndpoint = liveLang === "python" ? "/api/excel/run-python" : "/api/excel/run-vba";
   let prehideMs = 0;
   let requestMs = 0;
   if (typeof pushHistory === "function") pushHistory("단계 추가");
@@ -445,7 +518,7 @@ function applyVbaStepToLiveExcel(step, excelId) {
   const promise = prehide
     .then(() => {
       const requestStarted = performance.now();
-      return postExcelMirror("/api/excel/run-vba", { excelId, code: step.code }, 0, {
+      return postExcelMirror(liveEndpoint, { excelId, code: step.code }, 0, {
         // 저사양 PC: 실행 + 전/후 변경검출(전 시트 스냅샷 2회)까지 포함되므로 20초는 빠듯해
         // '실패 표시 후 실제로는 적용되는' 상태 불일치를 만들었다 → 45초로 완화.
         timeoutMs: 45000,
@@ -464,6 +537,7 @@ function applyVbaStepToLiveExcel(step, excelId) {
       }
       if (window.__activeVbaApply && window.__activeVbaApply.token === cancelToken) window.__activeVbaApply = null;
       setPipelineRuntimeStatus([step.id], "applied", "적용됨");
+      noteLivePipelineApplied(state.pipeline); // [0.5.2.2] 추가 적용 완료 상태 기억(no-op 편집 생략용)
       if (typeof endExcelMirrorApplyLoading === "function") endExcelMirrorApplyLoading();
       if (typeof releaseExcelMirrorPipelineMute === "function") releaseExcelMirrorPipelineMute(excelId);
       if (typeof scheduleRestoreActiveExcelMirror === "function") scheduleRestoreActiveExcelMirror(180);
@@ -507,11 +581,19 @@ function applyLogic(step) {
   // 이 스텝이 만들어진(=지금 보고 있는) 파일을 실행 대상으로 고정한다.
   // 이후 다른 탭에서 실행/토글해도 이 파일로 전환해 실행된다.
   if (!step.targetFileId && state.currentFileId) step.targetFileId = state.currentFileId;
-  // 0.4.9 리모콘 모델: VBA 스킬은 파이프라인/시뮬레이터를 우회해 라이브 엑셀에 즉시 주입 실행.
-  if (step.language === "vba") {
-    const liveExcelId = vbaTargetExcelId();
-    if (liveExcelId) return applyVbaStepToLiveExcel(step, liveExcelId);
-    // 라이브 세션이 없으면 아래 기존 경로로 폴백.
+  // 라이브 실행기(VBA/Python COM): 파이프라인/시뮬레이터를 우회해 라이브 엑셀에 즉시 실행.
+  {
+    const liveLang = pipelineStepLiveLanguage(step);
+    if (liveLang === "vba" || liveLang === "python") {
+      const liveExcelId = vbaTargetExcelId();
+      if (liveExcelId) return applyVbaStepToLiveExcel(step, liveExcelId);
+      // 라이브 세션이 없으면 대상 파일 미러를 연 뒤 적용(Python 을 백엔드 openpyxl 로 보내지 않는다).
+      const pendingPromise = ensureVbaRunExcelId().then(excelId => {
+        const res = applyVbaStepToLiveExcel(step, excelId);
+        return res && res.promise ? res.promise : res;
+      });
+      return { pending: true, promise: pendingPromise };
+    }
   }
   const next = [...state.pipeline, step];
   if (pipelineHasMixedPythonVba(next)) {
@@ -1441,12 +1523,22 @@ function renderPipeline() {
       const currentIdx = state.pipeline.findIndex(s => s.id === stepId);
       if (currentIdx < 0) return;
       if (typeof pushHistory === "function") pushHistory("단계 적용 여부 변경");
-      state.pipeline[currentIdx] = { ...state.pipeline[currentIdx], enabled: !isStepEnabled(state.pipeline[currentIdx]) };
+      const prevEnabled = isStepEnabled(state.pipeline[currentIdx]);
+      state.pipeline[currentIdx] = { ...state.pipeline[currentIdx], enabled: !prevEnabled };
       const toggledStep = state.pipeline[currentIdx];
       renderPipeline();
       refreshRunButton();
       if (typeof scheduleLogicAutoBackup === "function") scheduleLogicAutoBackup("step-toggled");
-      reconcilePipelineSimulationAfterEdit({ affectedStep: toggledStep }).catch(err => reportPipelineError(err));
+      reconcilePipelineSimulationAfterEdit({ affectedStep: toggledStep }).catch(err => {
+        // [0.5.2.2 §5.5] 라이브 반영 실패 — ON 표시인데 미적용인 '유령 상태'를 막기 위해 토글 원복.
+        const idxNow = state.pipeline.findIndex(s => s.id === stepId);
+        if (idxNow >= 0) {
+          state.pipeline[idxNow] = { ...state.pipeline[idxNow], enabled: prevEnabled };
+          renderPipeline();
+          refreshRunButton();
+        }
+        reportPipelineError(err);
+      });
     };
     item.querySelector(".step-edit").onclick = (e) => {
       e.stopPropagation();
@@ -1464,7 +1556,16 @@ function renderPipeline() {
       renderPipeline();
       refreshRunButton();
       if (typeof scheduleLogicAutoBackup === "function") scheduleLogicAutoBackup("step-deleted");
-      reconcilePipelineSimulationAfterEdit({ affectedStep: removedStep }).catch(err => reportPipelineError(err));
+      reconcilePipelineSimulationAfterEdit({ affectedStep: removedStep }).catch(err => {
+        // [0.5.2.2 §5.5] 라이브 반영 실패 — UI 에선 지워졌는데 라이브엔 남는 어긋남 방지, 원위치 복원.
+        if (removedStep && state.pipeline.findIndex(s => s.id === stepId) < 0) {
+          const at = Math.max(0, Math.min(currentIdx, state.pipeline.length));
+          state.pipeline.splice(at, 0, removedStep);
+          renderPipeline();
+          refreshRunButton();
+        }
+        reportPipelineError(err);
+      });
     };
     list.appendChild(item);
   });
@@ -1474,33 +1575,85 @@ function renderPipeline() {
 
 // 0.4.9 리모콘 모델: VBA 엔진에서 토글/삭제/편집/순서변경 등으로 파이프라인이 바뀌면
 // 라이브 워크북을 원본으로 리셋한 뒤 enabled VBA 스텝을 순서대로 다시 적용한다.
+// [0.5.2.2] 마지막으로 라이브에 적용 완료된 '켜진 스텝 집합' 시그니처 — no-op 편집 생략용.
+let _lastLiveAppliedSignature = null;
+
+function liveEnabledStepsSignature(steps = state.pipeline) {
+  return (steps || [])
+    .filter(s => !!(s && s.code && isStepEnabled(s) && pipelineStepLiveLanguage(s)))
+    .map(s => [s.id || "", s.language || "", s.targetFileId || "", String(s.code || "")].join(""))
+    .join("");
+}
+
+function noteLivePipelineApplied(steps = state.pipeline) {
+  _lastLiveAppliedSignature = liveEnabledStepsSignature(steps);
+}
+
+// 라이브 상태를 더 이상 신뢰할 수 없을 때(세션 전부 닫힘/초기화/적용 실패) 호출 —
+// 다음 편집은 무조건 실제 재적용을 수행한다.
+
+// 라이브 상태를 더 이상 신뢰할 수 없을 때(세션 전부 닫힘/초기화/적용 실패) 호출 —
+// 다음 편집은 무조건 실제 재적용을 수행한다.
+function invalidateLivePipelineApplied() {
+  _lastLiveAppliedSignature = null;
+}
+
+// 0.4.9 리모콘 모델: VBA 엔진에서 토글/삭제/편집/순서변경 등으로 파이프라인이 바뀌면
+// 라이브 워크북을 원본으로 리셋한 뒤 enabled VBA 스텝을 순서대로 다시 적용한다.
+
+
 async function reapplyVbaPipelineToLive(excelId, options = {}) {
   const perfStartedAt = performance.now();
   let prehideMs = 0;
   let requestMs = 0;
   const sourceSteps = options.steps || state.pipeline;
-  const steps = (sourceSteps || [])
-    .filter(s => isStepEnabled(s) && (s.language === "vba" || (typeof inferPipelineStepLanguage === "function" && inferPipelineStepLanguage(s) === "vba")))
+  const liveLangOf = s => pipelineStepLiveLanguage(s);
+  // 꺼진 스텝 포함 전체 라이브 스텝 — 리셋 대상 계산에 사용(토글 OFF 의 효과를 되돌리려면
+  // 그 꺼진 스텝이 건드렸던 워크북도 리셋해야 한다).
+  const allLiveSteps = (sourceSteps || []).filter(s => s && s.code && liveLangOf(s));
+  const enabledSteps = allLiveSteps
+    .filter(isStepEnabled)
     .map(s => ({
       stepIdx: (sourceSteps || []).indexOf(s),
       stepId: s.id || null,
       description: s.description || "",
       code: s.code || "",
-      language: s.language || (typeof inferPipelineStepLanguage === "function" ? inferPipelineStepLanguage(s) : "vba"),
+      language: liveLangOf(s) || "vba",
+      targetFileId: s.targetFileId || null,
     }));
   // 대상 고정: 호출자가 넘긴 excelId(보통 '현재 탭')보다 스텝이 만들어졌던 파일이 우선.
   // B 탭을 보던 중 토글/실행해도 A에서 만든 스킬은 A로 전환 후 A에 리셋·재적용된다.
+  let pinnedFileId = null;
   try {
     const pinned = await ensurePinnedVbaTargetExcelId(sourceSteps);
     if (pinned && pinned.excelId) {
       excelId = pinned.excelId;
+      pinnedFileId = pinned.fileId;
     } else if (pipelineHasUnresolvedTarget(sourceSteps)) {
       warnUnresolvedPipelineTarget();
     }
   } catch (_) {}
+  // 스텝별 실행 대상: 자기 targetFileId(살아있으면) > 고정 대상 > 현재 세션의 파일.
+  const fallbackFileId = pinnedFileId
+    || (typeof fileIdForExcelMirrorId === "function" ? fileIdForExcelMirrorId(excelId) : null)
+    || state.currentFileId;
+  const stepTargetFileId = s => {
+    const tid = s && s.targetFileId;
+    return (tid && typeof getFile === "function" && getFile(tid)) ? tid : fallbackFileId;
+  };
+  // 리셋 대상 = 모든 라이브 스텝(꺼진 것 포함)의 대상 파일 ∪ 코드가 파일명으로 참조하는 출력 파일.
+  // (입력→출력 스킬: 대상은 입력이지만 출력에 썼으므로, 출력도 리셋해야 OFF 가 실제로 풀린다.)
+  const resetFileIds = [];
+  const addResetTarget = fid => { if (fid && !resetFileIds.includes(fid)) resetFileIds.push(fid); };
+  allLiveSteps.forEach(s => {
+    addResetTarget(stepTargetFileId(s));
+    crossOutputFileIdsReferencedInCode(s.code).forEach(addResetTarget);
+  });
+  if (!resetFileIds.length) addResetTarget(fallbackFileId);
   if (window.runnerSetRunning) window.runnerSetRunning(true);
   if (typeof muteExcelMirrorForPipeline === "function") muteExcelMirrorForPipeline(excelId);
-  if (typeof beginExcelMirrorApplyLoading === "function") beginExcelMirrorApplyLoading("VBA 재적용 중...");
+  if (typeof beginExcelMirrorApplyLoading === "function") beginExcelMirrorApplyLoading("스킬 재적용 중...");
+  let failingStep = null;
   try {
     if (typeof hideAllExcelMirrorWindows === "function") {
       const started = performance.now();
@@ -1512,11 +1665,63 @@ async function reapplyVbaPipelineToLive(excelId, options = {}) {
       }
     }
     const requestStarted = performance.now();
-    const data = await postExcelMirror("/api/excel/run-vba-pipeline", { excelId, steps, reset: true }, 0, {
-      // 리셋(원본 시트 교체) + 스텝당 실행 시간을 저사양 기준으로 여유 있게.
-      timeoutMs: Math.max(45000, Math.min(180000, steps.length * 30000)),
-      timeoutMessage: "VBA 파이프라인 실행 응답이 지연되어 중단했습니다. 저사양 PC에서는 백그라운드에서 계속 적용 중일 수 있으니 잠시 후 화면을 확인해 주세요.",
-    });
+    const stepPayload = st => ({ stepIdx: st.stepIdx, stepId: st.stepId, description: st.description, code: st.code, language: st.language });
+    const pipelineTimeoutMs = n => Math.max(90000, Math.min(300000, 60000 + n * 30000));
+    const pipelineTimeoutMessage = "VBA 파이프라인 실행 응답이 지연되어 중단했습니다. 저사양 PC에서는 백그라운드에서 계속 적용 중일 수 있으니 잠시 후 화면을 확인해 주세요.";
+    let data = null;
+    // 빠른 경로(대부분의 파이프라인): 관련 파일이 1개면 예전처럼 서버 호출 1번으로
+    // 리셋+전체 재적용을 끝낸다. 서버는 호출마다 동반 워크북 전체를 재스냅샷하므로
+    // 호출 수를 늘리면(특히 에러 복구 경로) 파일 수 × 스텝 수만큼 COM 저장이 폭증해
+    // '복구중' 장기화·서버 행의 원인이 된다 — 다중 파일이 실제로 얽힌 경우에만 단계를 나눈다.
+    const uniqueTargets = Array.from(new Set(enabledSteps.map(stepTargetFileId)));
+    const singleFileFlow = resetFileIds.length === 1 &&
+      (uniqueTargets.length === 0 || (uniqueTargets.length === 1 && uniqueTargets[0] === resetFileIds[0]));
+    if (singleFileFlow) {
+      const sessionExcelId = await requirePipelineSessionExcelId(resetFileIds[0], "재적용");
+      data = await postExcelMirror("/api/excel/run-vba-pipeline", {
+        excelId: sessionExcelId,
+        steps: enabledSteps.map(stepPayload),
+        reset: true,
+      }, 0, {
+        timeoutMs: pipelineTimeoutMs(enabledSteps.length),
+        timeoutMessage: pipelineTimeoutMessage,
+      });
+    } else {
+      // 1) 리셋 단계: 관련된 모든 워크북을 각자 원본으로 되돌린다(스텝 실행 없이).
+      //    '첫 스텝의 대상' 하나만 리셋하면 다른 파일에 쓴 값이 남아
+      //    입력↔출력이 섞인 파이프라인의 토글이 꼬인다.
+      for (const fid of resetFileIds) {
+        // 세션 확보 실패 시 건너뛰면(continue) 그 워크북만 안 되돌려져 OFF 가 부분 적용된다 → 중단.
+        const sessionExcelId = await requirePipelineSessionExcelId(fid, "워크북 리셋");
+        data = await postExcelMirror("/api/excel/run-vba-pipeline", { excelId: sessionExcelId, steps: [], reset: true }, 0, {
+          // 리셋(원본 시트 교체)만으로도 대형 파일은 1분 이상 걸릴 수 있다.
+          timeoutMs: 180000,
+          timeoutMessage: "워크북 리셋 응답이 지연되어 중단했습니다. 저사양 PC에서는 백그라운드에서 계속 진행 중일 수 있으니 잠시 후 화면을 확인해 주세요.",
+        });
+      }
+      // 2) 적용 단계: 켜진 스텝을 전역 순서 그대로, 각자 자기 대상 파일의 세션에서 실행한다.
+      //    같은 세션의 연속 스텝은 한 호출로 배칭해 동반 스냅샷 반복을 줄인다.
+      const groups = [];
+      for (const st of enabledSteps) {
+        const fid = stepTargetFileId(st);
+        const last = groups[groups.length - 1];
+        if (last && last.fileId === fid) last.steps.push(st);
+        else groups.push({ fileId: fid, steps: [st] });
+      }
+      for (const group of groups) {
+        failingStep = group.steps[0];
+        const sessionExcelId = await requirePipelineSessionExcelId(group.fileId, "스킬 적용");
+        data = await postExcelMirror("/api/excel/run-vba-pipeline", {
+          excelId: sessionExcelId,
+          steps: group.steps.map(stepPayload),
+          reset: false, // 리셋 단계에서 이미 전부 원복했으므로 이어서 실행만 한다.
+        }, 0, {
+          timeoutMs: pipelineTimeoutMs(group.steps.length),
+          timeoutMessage: pipelineTimeoutMessage,
+        });
+      }
+    }
+    failingStep = null;
     requestMs = performance.now() - requestStarted;
     if (typeof endExcelMirrorApplyLoading === "function") endExcelMirrorApplyLoading();
     if (typeof releaseExcelMirrorPipelineMute === "function") releaseExcelMirrorPipelineMute(excelId);
@@ -1524,22 +1729,26 @@ async function reapplyVbaPipelineToLive(excelId, options = {}) {
     try { await positionExcelMirrorWindow(excelId, { force: true }); } catch (_) {}
     try { stabilizeExcelMirrorZOrder(excelId); } catch (_) {}
     if (window.runnerSetDone) window.runnerSetDone();
+    noteLivePipelineApplied(sourceSteps); // 이 적용 상태와 같은 편집은 이후 no-op 으로 생략
     recordVbaDebugTiming({
       action: "reapply",
-      steps: steps.length,
+      steps: enabledSteps.length,
       prehideMs,
       startRequestMs: requestMs,
       totalClientMs: performance.now() - perfStartedAt,
       server: (data && data.debugTimings) || {},
     });
-    return data;
+    return data || { ok: true, applied: enabledSteps.length };
   } catch (err) {
+    invalidateLivePipelineApplied(); // 부분 적용 가능성 — 다음 편집은 반드시 실제 재적용
     if (err && (err._stepInfo || err.errorInfo)) {
       const info = err._stepInfo || err.errorInfo;
-      err._stepInfo = { ...info, stepIdx: Number(info.stepIdx ?? -1) };
+      err._stepInfo = { ...info, stepIdx: Number(info.stepIdx ?? (failingStep ? failingStep.stepIdx : -1)) };
       err.errorInfo = err._stepInfo;
-    } else if (steps.length === 1) {
-      attachPipelineStepError(err, steps[0], steps[0].stepIdx);
+    } else if (failingStep) {
+      attachPipelineStepError(err, failingStep, failingStep.stepIdx);
+    } else if (enabledSteps.length === 1) {
+      attachPipelineStepError(err, enabledSteps[0], enabledSteps[0].stepIdx);
     }
     restoreVbaExcelAfterError(excelId);
     if (window.runnerSetRunning) window.runnerSetRunning(false);
@@ -1547,16 +1756,24 @@ async function reapplyVbaPipelineToLive(excelId, options = {}) {
   }
 }
 
+
 async function reconcilePipelineSimulationAfterEdit(options = {}) {
-  // VBA 엔진 + 라이브 세션이면 파이프라인 재동기화를 라이브 리셋+재적용으로 처리.
-  if (pipelineHasMixedPythonVba(state.pipeline)) {
-    throw new Error("Python 스킬과 VBA 스킬은 같은 파이프라인에서 섞어 실행할 수 없습니다. 같은 엔진으로 다시 생성해 주세요.");
-  }
-  if ((typeof getSkillEngine === "function" && getSkillEngine() === "vba") || pipelineUsesVba(state.pipeline)) {
+  // 라이브 엔진(vba/python COM) + 라이브 세션이면 파이프라인 재동기화를 라이브 리셋+재적용으로 처리.
+  // (주의: 이 분기를 안 타면 백엔드 openpyxl 경로로 빠져 '라이브 Excel 은 리셋되지 않는' 상태가 된다 —
+  //  python 엔진 강제 후 토글 OFF 가 해제되지 않던 버그의 원인. vba 단독 체크 금지.)
+  const liveEngine = typeof getSkillEngine === "function" ? getSkillEngine() : "";
+  if (liveEngine === "vba" || liveEngine === "python") {
     // 대상 고정: 스킬이 만들어졌던 파일(A)을 우선 대상으로 삼는다(현재 탭이 B여도).
     // reapplyVbaPipelineToLive 내부에서도 다시 보정하지만, 여기서 먼저 A 세션을
     // 확보(필요 시 새로 오픈)해 두면 A 미러가 트림돼 닫힌 경우에도 안전하게 동작한다.
     const stepsForReconcile = options.steps || state.pipeline;
+    // no-op 편집 생략: 이미 OFF 인 스킬의 삭제처럼 '켜진 스텝 집합'이 변하지 않는 편집은
+    // 라이브 적용 상태도 그대로이므로 느린 전체 리셋+재적용을 건너뛴다.
+    if (_lastLiveAppliedSignature !== null &&
+        liveEnabledStepsSignature(stepsForReconcile) === _lastLiveAppliedSignature) {
+      if (typeof toast === "function") toast("적용 상태 변화가 없어 Excel 재적용을 건너뛰었습니다.", "success");
+      return;
+    }
     let liveExcelId = null;
     try {
       const pinned = await ensurePinnedVbaTargetExcelId(stepsForReconcile);
@@ -1568,9 +1785,28 @@ async function reconcilePipelineSimulationAfterEdit(options = {}) {
       const cancelToken = { cancelled: false };
       window.__activeVbaApply = { token: cancelToken, excelId: liveExcelId };
       return reapplyVbaPipelineToLive(liveExcelId, { steps: stepsForReconcile })
+        .then(result => {
+          // [P1] 활성창 기본 — 뷰 이동은 '실제 변경된 스텝의 대상 파일'로만(출력으로 무조건 점프 금지).
+          try {
+            const affected = options.affectedStep || null;
+            const tfid = (affected && affected.targetFileId &&
+              typeof getFile === "function" && getFile(affected.targetFileId)) ? affected.targetFileId : null;
+            if (tfid && state.currentFileId !== tfid && typeof setCurrentView === "function") setCurrentView(tfid);
+          } catch (_) {}
+          return result;
+        })
         .finally(() => {
           if (window.__activeVbaApply && window.__activeVbaApply.token === cancelToken) window.__activeVbaApply = null;
         });
+    }
+    // 라이브 세션을 전혀 못 구했는데 백엔드(openpyxl 시뮬) 경로로 떨어지면, 결과는 미리보기에만
+    // 반영되고 라이브 Excel 은 그대로인 채 "반영했다" 토스트가 떠서 유령 적용이 된다 → 명확히 실패.
+    const hasLiveSteps = (stepsForReconcile || []).some(s => !!pipelineStepLiveLanguage(s));
+    if (hasLiveSteps) {
+      throw new Error(
+        "적용할 Excel 창을 열지 못해 변경을 라이브에 반영하지 못했습니다. " +
+        "파일 탭을 눌러 Excel 창이 뜨는 것을 확인한 뒤 다시 시도해 주세요."
+      );
     }
   }
   const steps = options.steps || state.pipeline;

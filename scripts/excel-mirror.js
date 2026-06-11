@@ -843,6 +843,8 @@ async function hideAllExcelMirrorWindows(options = {}) {
 }
 
 function clearExcelMirrorClientState() {
+  // [0.5.2.2] 라이브 세션이 사라지면 no-op 생략 시그니처를 무효화 — 다음 편집은 반드시 실제 재적용.
+  if (typeof invalidateLivePipelineApplied === "function") { try { invalidateLivePipelineApplied(); } catch (_) {} }
   stopExcelMirrorPolling();
   // 진행 중인 preopen 백그라운드 루프가 있다면 seq 를 올려 즉시 중단시킨다.
   excelMirror.preopenSeq = (excelMirror.preopenSeq || 0) + 1;
@@ -1002,6 +1004,8 @@ function noteExcelComTimeout(err) {
 }
 
 async function forceRestartExcelMirrors(reason) {
+  // [0.5.2.2] 라이브 세션이 사라지면 no-op 생략 시그니처를 무효화 — 다음 편집은 반드시 실제 재적용.
+  if (typeof invalidateLivePipelineApplied === "function") { try { invalidateLivePipelineApplied(); } catch (_) {} }
   if (excelMirror.forceRestarting) return false;
   excelMirror.forceRestarting = true;
   try {
