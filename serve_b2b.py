@@ -5539,7 +5539,9 @@ def _python_com_static_check(code):
     }
     forbidden_attrs = {"Select", "Activate", "ActiveWorkbook", "ActiveSheet", "Application", "Quit",
                        "Save", "SaveAs", "SaveCopyAs", "Close"}
-    write_ops = {"write", "write_cell", "write_formulas", "copy", "clear", "insert_rows",
+    # copy 는 셀이 아니라 범위(열/영역) 복사라 여러 열 재배치 등에서 루프 반복이 정당하다
+    # (셀 단위 남용은 런타임 COM 예산 PY_COM_BUDGET 로 차단). 그래서 루프 차단 대상에서 제외.
+    write_ops = {"write", "write_cell", "write_formulas", "clear", "insert_rows",
                  "insert_cols", "delete_rows", "delete_cols", "merge", "unmerge", "sort"}
 
     loop_stack = []

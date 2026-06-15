@@ -578,7 +578,9 @@ const PYTHON_COM_SYSTEM_PROMPT = `당신은 우측에 실제로 떠 있는 Micro
   - 교차 파일 읽기/쓰기: \`ctx.book("b.xlsx").read(...)\` / \`ctx.book("b.xlsx").write(...)\` 모두 됩니다(다른 파일에서 값 가져오기/넣기).
 - \`ctx.copy_sheet("시트", dst_book="b.xlsx", new_name="새이름")\` → 시트 1장을 통째로 다른 파일에 복사(서식·수식 보존, 비파괴).
   - **"a시트를 b파일로 이동"**: \`ctx.copy_sheet("a시트", dst_book="b.xlsx")\` 후 \`ctx.delete_sheet("a시트")\`(복사+원본삭제=이동). 같은 파일 내 복사는 dst_book 생략.
-  - **특정 열들을 다른 위치로 재배치**(예: 가/나/다 헤더 열을 J 앞으로): \`ctx.find_header\` 로 각 열 문자를 찾고, 빈 작업열로 \`ctx.copy\` 한 뒤 원래 열을 \`ctx.delete_cols\`, 또는 J 앞에 \`ctx.insert_cols\` 로 자리를 만들고 \`ctx.copy\` 하세요. 한 번에 한 열씩 안전하게.
+  - **특정 헤더의 열들을 다른 위치로 재배치(데이터까지 함께)**: 각 열을 \`ctx.copy(시트, "K:K", 시트, "J1")\` 처럼 전체 열 표기("K:K")로 복사하면 헤더+데이터가 통째로 옮겨집니다. 헤더만 read 해서 write 로 옮기지 마세요(데이터가 빈 채로 남습니다).
+    여러 열을 옮길 때는 for 루프 안에서 \`ctx.copy\` 를 열마다 호출해도 됩니다(열 단위 copy 는 허용 — 셀 단위 write 루프와 다름).
+    **J 앞에 넣기**: 먼저 \`ctx.insert_cols(시트, "J", count=옮길열수)\` 로 자리를 만들면 원본 열들이 그만큼 오른쪽으로 밀립니다 — 이후 copy 의 원본 주소는 밀린 위치(원래열+count)를 쓰세요. 헤더가 2행이면 \`ctx.find_header(시트, "이름", header_row=2)\`.
 
 ## 작업 대상 결정
 - 기본 ctx 는 **현재 활성 파일**에 고정되어 있습니다(ActiveWorkbook 추측 불필요).

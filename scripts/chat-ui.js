@@ -451,7 +451,7 @@ function pythonComStaticSafetyFailures(code, sourceUserMessage) {
       "(?:(?:\\1[ \\t]+[^\\n]*)?\\n)*?" +                 // 본문: 더 깊은 들여쓰기 줄/빈 줄만 통과
       "\\1[ \\t]+[^\\n]*\\b(?:" + recv + ")" +
       "(?:\\s*\\.\\s*book\\s*\\([^\\n]*?\\))?" +          // ctx.book("...").write(...) 체이닝 포함
-      "\\s*\\.\\s*(?:write|write_cell|write_formulas|copy|clear|insert_rows|insert_cols|delete_rows|delete_cols|merge|unmerge|sort)\\s*\\(",
+      "\\s*\\.\\s*(?:write|write_cell|write_formulas|clear|insert_rows|insert_cols|delete_rows|delete_cols|merge|unmerge|sort)\\s*\\(",
       "m"
     );
     if (loopWriteRe.test(scanText)) { // 루프 본문의 주석("# ctx.write 는 밖에서") 오탐 방지
