@@ -3980,8 +3980,6 @@ def _close_excel_session_impl(excel_id):
         if _is_pid_alive(pid):
             _hide_excel_windows_for_pid(pid)
             _force_kill_pid(pid)
-    if hide_guard:
-        hide_guard.set()
     for key in ("openTempPath", "workingCopyPath"):
         temp_path = session.get(key)
         if temp_path:

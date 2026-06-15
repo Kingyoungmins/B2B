@@ -238,6 +238,10 @@ function userRequestsNumericOnly(text) {
   return /(숫자만|숫자\s*값만|수치만|금액만|number(?:s)?\s*only|numeric\s*only)/i.test(String(text || ""));
 }
 
+function userRequestsSort(text) {
+  return /(정렬|내림\s*차순|오름\s*차순|소트|sort|order\s*by)/i.test(String(text || ""));
+}
+
 function codeCopiesValuesOnly(code) {
   const text = String(code || "");
   // python(openpyxl) 두 줄 분리 패턴까지 잡는다: val = ws.cell(...).value → ws.cell(...).value = val
@@ -480,6 +484,20 @@ function pythonComStaticSafetyFailures(code, sourceUserMessage) {
       (typeof userRequestsValuesOnly !== "function" || !userRequestsValuesOnly(sourceUserMessage)) &&
       !/ctx\.copy\s*\(/.test(scanText) && /ctx\.read\s*\(/.test(scanText) && /ctx\.(write|write_cell|write_formulas)\s*\(/.test(scanText)) {
     failures.push("복사/붙여넣기 요청은 ctx.copy(원본시트, 범위, 대상시트, 시작셀) 로 범위 전체(헤더·빈칸 포함)를 그대로 옮겨야 합니다 — read→write 값 재구성은 서식·수식·빈칸이 사라집니다.");
+  }
+  // [정렬 헤더 보호] 사용자가 정렬을 요청했는데:
+  //  (a) ctx.sort 없이 파이썬 .sort()/sorted() 로 정렬 후 ctx.write → 헤더가 데이터와 섞이고 행이 어긋남
+  //  (b) has_header=False 를 명시 → 1행 헤더가 정렬에 휩쓸림
+  if (typeof userRequestsSort === "function" && userRequestsSort(sourceUserMessage)) {
+    const usesCtxSort = /ctx\.sort\s*\(/.test(scanText);
+    const pySort = /(?:\.sort\s*\(|sorted\s*\()/.test(scanText);
+    const writesBack = /ctx\.(?:write|write_cell|write_formulas)\s*\(/.test(scanText);
+    if (!usesCtxSort && pySort && writesBack) {
+      failures.push("정렬은 ctx.sort(시트, 범위, key_col=열문자, has_header=True) 로 하세요. read→파이썬 정렬→write 는 헤더가 데이터와 섞이고 다른 열이 행 단위로 어긋납니다.");
+    }
+    if (usesCtxSort && /has_header\s*=\s*False/.test(scanText)) {
+      failures.push("표 1행이 헤더이므로 ctx.sort 에 has_header=True(기본값)를 쓰세요 — has_header=False 는 헤더 행을 정렬에 포함시킵니다.");
+    }
   }
   return failures;
 }

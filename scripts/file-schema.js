@@ -564,6 +564,8 @@ const PYTHON_COM_SYSTEM_PROMPT = `당신은 우측에 실제로 떠 있는 Micro
 - \`ctx.add_sheet("이름", after="기준시트")\` / \`ctx.delete_sheet("이름")\`
 - \`ctx.sort(시트, "A1:F100", key_col="C", ascending=True, has_header=True)\` → 실제 범위 정렬.
   **key_col 은 "C" 같은 시트 기준 열 문자를 쓰세요.** 숫자로 주면 범위 내 상대 번호로 해석되므로(범위가 A열에서 시작하지 않으면 어긋남) 문자가 안전합니다.
+  **정렬은 반드시 \`ctx.sort\` 로 하세요. \`ctx.read\` 로 읽어 파이썬에서 정렬한 뒤 \`ctx.write\` 로 되쓰지 마세요** — 헤더 행이 데이터와 섞이고(헤더가 정렬돼 위치가 바뀜) 다른 열이 행 단위로 어긋납니다.
+  **표 1행이 헤더면 \`has_header=True\`(기본값) 그대로 두세요 — 헤더는 정렬에서 제외됩니다.** 헤더가 정말 없는 표일 때만 False. 정렬 범위는 헤더행 포함 표 전체(예: "A1:J15").
 - \`ctx.hide_cols(시트, "B:D", hidden=True)\` / \`ctx.hide_rows(시트, "5:8")\`
 - \`ctx.merge(시트, "A1:E1")\` / \`ctx.unmerge(...)\` / \`ctx.set_number_format(시트, 범위, "#,##0")\`
 - \`ctx.book("다른파일명.xlsx")\` → 같이 업로드된 다른 파일을 다루는 ctx (교차 파일 작업)
