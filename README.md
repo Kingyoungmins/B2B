@@ -6,6 +6,10 @@
 
 ## 최근 변경사항
 
+### ver0.5.6
+
+ver0.5.5 기반 복사본(작업 시작 시점). 변경 사항은 이 절에 추가.
+
 ### ver0.5.5
 
 ver0.5.4(라이브 COM 기본 전환)의 실사용 안정화 릴리스.
@@ -297,12 +301,12 @@ build_exe.bat
 빌드 결과:
 
 ```text
-dist\B2B_ver0.5.5\B2B_ver0.5.5.exe   (네이티브 호스트)
-dist\B2B_ver0.5.5\B2B_Server.exe     (PyInstaller 서버)
-dist\B2B_ver0.5.5_portable.zip       (배포용 zip)
+dist\B2B_ver0.5.6\B2B_ver0.5.6.exe   (네이티브 호스트)
+dist\B2B_ver0.5.6\B2B_Server.exe     (PyInstaller 서버)
+dist\B2B_ver0.5.6_portable.zip       (배포용 zip)
 ```
 
-단일 self-extracting EXE가 필요하면 `build_single_exe.bat`을 추가 실행합니다 (`dist\B2B_ver0.5.5_single.exe`).
+단일 self-extracting EXE가 필요하면 `build_single_exe.bat`을 추가 실행합니다 (`dist\B2B_ver0.5.6_single.exe`).
 
 `dist/`와 `build/`는 git 추적 대상이 아닙니다.
 
@@ -391,7 +395,7 @@ ctx.write_grid(ws, [[123]], start_row=4, start_col=2)
 ## 디렉터리 구조
 
 ```text
-B2B_ver0.5.5/
+B2B_ver0.5.6/
 ├─ index.html
 ├─ serve_b2b.py
 ├─ launch_b2b.py
