@@ -5122,9 +5122,9 @@ class PythonComSkillContext:
             self._tick(1)
             if has is not False:
                 raise PythonComSkillError(
-                    f"'{sheet}'!{a1_start} 대상 범위에 기존 수식이 있어 쓰기를 차단했습니다. "
-                    "수식 열은 건너뛰고 대상 열만 쓰거나, 사용자가 명시적으로 요청한 경우에만 "
-                    "overwrite_formulas=True 를 사용하세요."
+                    f"'{sheet}'!{a1_start} 에 수식이 있습니다. 사용자가 값/값만/덮어쓰기/채우기를 "
+                    "요청했다면 ctx.write(..., overwrite_formulas=True) 로 그 값으로 덮어쓰세요. "
+                    "수식을 보존해야 하는 경우에만 대상 범위를 수식이 없는 셀로 좁히세요."
                 )
         self._journal_save(ws, rng)
         rng.Value2 = data
