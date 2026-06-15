@@ -2003,6 +2003,34 @@ function hasErrorRecoverySeed(info) {
   return Array.isArray(state.pipeline) && state.pipeline.some(s => s && s.enabled !== false && s.code);
 }
 
+// [#2] 실행 오류를 코드 지식이 없는 사용자에게 풀어 설명한다(단발 LLM 호출, 대화 기록 무관).
+// 반환: 사용자용 안내 문자열 또는 null(LLM 미설정/실패 → 호출자가 기존 안내로 폴백).
+async function explainPipelineErrorForUser(info) {
+  if (typeof callLLMOneShot !== "function") return null;
+  const req = (typeof latestUserRequestForSafety === "function") ? latestUserRequestForSafety() : "";
+  const system = [
+    "당신은 한국어 엑셀 자동화 도우미입니다. 방금 사용자가 시킨 작업이 오류로 실패했습니다.",
+    "엑셀/코드 지식이 전혀 없는 사용자에게 친절하고 평이하게 설명하세요. 반드시 이 흐름을 지키세요:",
+    "(1) 사용자가 무엇을 하려 했는지 한 문장으로 되짚기",
+    "(2) 어느 단계/어느 부분에서 막혔는지(엑셀 화면 기준의 일상어로)",
+    "(3) 왜 막혔는지 쉬운 말로 — 함수명·영문 오류·코드·스택트레이스는 절대 쓰지 말 것",
+    "(4) 사용자의 의도가 '…'가 맞는지 확인하는 질문 하나, 또는 어떻게 바꿔 말하면 되는지 1가지 제안",
+    "전체 3~5문장, 따뜻하고 명확하게. 기술 용어/코드/영문 오류 메시지를 그대로 옮기지 마세요.",
+  ].join("\n");
+  const user = [
+    `사용자 요청: ${req || "(기록 없음)"}`,
+    `실패한 단계 설명: ${info.description || "(설명 없음)"}`,
+    `내부 오류(참고용 — 사용자에게 그대로 보여주지 말 것): ${info.rawError || info.message || info.cause || ""}`,
+  ].join("\n");
+  try {
+    const out = await callLLMOneShot(system, user, { maxTokens: 500 });
+    const text = String(out || "").trim();
+    return text || null;
+  } catch (_) {
+    return null;
+  }
+}
+
 function reportPipelineError(err, options) {
   options = options || {};
   const rawInfo = (err && (err._stepInfo || err.errorInfo)) || null;
@@ -2042,7 +2070,7 @@ function reportPipelineError(err, options) {
       <div class="error-title"><b>스킬을 적용하지 못했습니다</b></div>
       <div class="error-desc">${Number(info.stepIdx) >= 0 ? `Step ${info.stepIdx + 1}${info.description ? ` · ${escapeHtml(info.description)}` : ""}` : "backend/runner stage"}</div>
       ${info.cause ? `<div class="error-cause">${escapeHtml(info.cause)}</div>` : ""}
-      <div class="error-help">${info.promptGuide ? `💡 이렇게 요청해 보세요: ${escapeHtml(info.promptGuide)}` : "입력 파일, 시트명, 선택 범위가 요청과 맞는지 확인한 뒤 스킬을 수정하거나 다시 생성해 주세요."}</div>
+      <div class="error-help">🔎 무엇이 잘못됐는지 쉬운 말로 확인하는 중…</div>
       <textarea class="error-recover-note" rows="2" placeholder="(선택) 무엇을 하려 했는지·실제로 어떻게 됐는지·기대 결과를 적으면 복구가 더 정확해집니다. 예: 매출을 회사별로 합쳐 B열에 넣으려 했는데 #VALUE!가 떴고, 숫자 합계가 보이길 원해요."></textarea>
       <button class="error-recover-btn" type="button">에러 복구 시도</button>
       <details class="error-details">
@@ -2051,6 +2079,26 @@ function reportPipelineError(err, options) {
       </details>
     `;
     chatBox.appendChild(div);
+    // [#2] 기존 매크로성 안내 대신, LLM 이 코드 모르는 사용자 눈높이로 "무엇을 하려다 어디서 왜
+    // 막혔는지 + 의도 확인"을 한 번 더 풀어 쓴다. 실패/미설정이면 기존 안내로 폴백(에러 표시를 막지 않음).
+    {
+      const helpEl = div.querySelector(".error-help");
+      const fallbackHelp = info.promptGuide
+        ? `💡 이렇게 요청해 보세요: ${escapeHtml(info.promptGuide)}`
+        : "입력 파일, 시트명, 선택 범위가 요청과 맞는지 확인한 뒤 스킬을 수정하거나 다시 생성해 주세요.";
+      if (typeof explainPipelineErrorForUser === "function") {
+        explainPipelineErrorForUser(info)
+          .then(text => {
+            if (!helpEl) return;
+            helpEl.innerHTML = text
+              ? `🙂 ${escapeHtml(text).replace(/\n/g, "<br>")}`
+              : fallbackHelp;
+          })
+          .catch(() => { if (helpEl) helpEl.innerHTML = fallbackHelp; });
+      } else if (helpEl) {
+        helpEl.innerHTML = fallbackHelp;
+      }
+    }
     const recoverBtn = div.querySelector(".error-recover-btn");
     if (recoverBtn) {
       // 복구 버튼은 항상 활성화한다(사용자 요구). 시드가 없으면 requestErrorRecovery 가

@@ -766,7 +766,7 @@ const NO_CODE_MAX_REGEN = 2;
 function _looksLikeClarifyingQuestion(text) {
   const t = String(text || "");
   if (!/\?|까요|입니까|인가요/.test(t)) return false;
-  return /(어떤|어느|무엇|어디|몇|중에|선택|알려\s*주|확인해\s*주|말씀해\s*주)/.test(t);
+  return /(어떤|어느|무엇|어디|몇|중에|선택|알려\s*주|확인해\s*주|말씀해\s*주|값으로|수식으로|숫자로|적을지|넣을지|적을까요|넣을까요)/.test(t);
 }
 
 // 실행 가능한 문장이 없는 주석-only 코드인지 검사(파이썬 # / VBA '·Rem).

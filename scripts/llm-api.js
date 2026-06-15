@@ -109,6 +109,64 @@ async function callAnthropic(system) {
   return content;
 }
 
+// [#2] 대화 기록과 무관한 단발 LLM 호출(에러를 사용자 눈높이로 해설할 때 등).
+// state.chatHistory 를 건드리지 않고, 코드 생성용 시스템 프롬프트도 쓰지 않는다.
+// 실패하면 throw — 호출자가 기존 안내로 폴백한다(에러 표시를 막지 않게).
+async function callLLMOneShot(systemPrompt, userPrompt, options) {
+  options = options || {};
+  const maxTokens = options.maxTokens || 600;
+  const stripThink = (s) => String(s || "").replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
+  if (settings.provider === "anthropic") {
+    const base = (settings.baseUrl || DEFAULTS.anthropic.baseUrl).replace(/\/$/, "");
+    const resp = await fetch(base + "/messages", {
+      method: "POST",
+      headers: {
+        "x-api-key": settings.apiKey || DEFAULTS.anthropic.apiKey,
+        "anthropic-version": "2023-06-01",
+        "anthropic-dangerous-direct-browser-access": "true",
+        "content-type": "application/json",
+      },
+      signal: options.signal,
+      body: JSON.stringify({
+        model: settings.model || DEFAULTS.anthropic.model,
+        max_tokens: maxTokens,
+        system: systemPrompt,
+        messages: [{ role: "user", content: String(userPrompt || "") }],
+      }),
+    });
+    if (!resp.ok) throw new Error("Anthropic one-shot " + resp.status);
+    const data = await resp.json();
+    return stripThink(data.content && data.content[0] && data.content[0].text);
+  }
+  const networkDefaults = settings.network === "dev-vllm" ? DEFAULTS.devVllm : DEFAULTS["openai-compat"];
+  const base = effectiveOpenAICompatBaseUrl();
+  const model = settings.model || networkDefaults.model || DEFAULTS["openai-compat"].model;
+  const payload = {
+    model,
+    messages: [
+      { role: "system", content: String(systemPrompt || "") },
+      { role: "user", content: String(userPrompt || "") },
+    ],
+    max_tokens: maxTokens,
+    temperature: 0.4,
+    stream: false,
+  };
+  // Qwen 계열은 think 비활성으로(해설은 추론 불필요, 응답에 think 토큰 섞임 방지).
+  if (typeof applyQwenThinkControl === "function") applyQwenThinkControl(payload, false);
+  const { resp } = await fetchOpenAICompat("/chat/completions", base, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Api-Key": settings.apiKey || networkDefaults.apiKey || DEFAULTS["openai-compat"].apiKey,
+    },
+    signal: options.signal,
+    body: JSON.stringify(payload),
+  });
+  if (!resp.ok) throw new Error("LLM one-shot " + resp.status);
+  const data = await resp.json();
+  return stripThink(data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content);
+}
+
 async function callOpenAICompat(system, options) {
   options = options || {};
   let effectiveOptions = { ...options };
