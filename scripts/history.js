@@ -147,4 +147,18 @@ function setupHistoryButtons() {
   if (undo) undo.onclick = undoHistory;
   if (redo) redo.onclick = redoHistory;
   refreshHistoryButtons();
+  // [편의] Ctrl/Cmd+Z = undo, Ctrl/Cmd+Y 또는 Ctrl/Cmd+Shift+Z = redo.
+  // 입력 필드(채팅/셀 편집 등)에서는 그 필드의 기본 실행취소를 살리기 위해 가로채지 않는다.
+  if (!window.__b2bHistoryHotkeys) {
+    window.__b2bHistoryHotkeys = true;
+    document.addEventListener("keydown", (e) => {
+      if (!(e.ctrlKey || e.metaKey)) return;
+      const el = e.target;
+      const tag = (el && el.tagName) || "";
+      if (/INPUT|TEXTAREA|SELECT/.test(tag) || (el && el.isContentEditable)) return;
+      const k = String(e.key || "").toLowerCase();
+      if (k === "z" && !e.shiftKey) { e.preventDefault(); undoHistory(); }
+      else if (k === "y" || (k === "z" && e.shiftKey)) { e.preventDefault(); redoHistory(); }
+    });
+  }
 }
