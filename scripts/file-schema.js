@@ -563,6 +563,9 @@ const PYTHON_COM_SYSTEM_PROMPT = `당신은 우측에 실제로 떠 있는 Micro
 - \`ctx.clear(시트, 범위)\` → 내용 삭제(서식 유지)
 - \`ctx.insert_rows(시트, 행번호, count=1)\` / \`ctx.delete_rows(...)\`
 - \`ctx.insert_cols(시트, "B", count=1)\` / \`ctx.delete_cols(...)\` → 전체 열 단위(병합셀 안전)
+- \`ctx.move_cols(시트, 열목록_또는_조건, 기준열, header_row=1, scan_from=None)\` → 여러 열을 헤더+데이터까지 통째로 기준열 앞으로 이동(원본 제거, 인덱스 시프트 자동).
+  - 열을 정확히 알면 목록: \`ctx.move_cols("S", ["a_항목","b_값"], "J")\`
+  - **헤더 조건으로 고를 땐 함수**(헤더명 받아 True/False): \`ctx.move_cols("S", lambda h: any(x in str(h) for x in ["a","b","c"]), "J", scan_from="J")\`. 직접 헤더를 스캔하지 마세요(cell_to_addr 같은 함수는 없습니다). 2행 헤더면 header_row=2.
 - \`ctx.add_sheet("이름", after="기준시트")\` / \`ctx.delete_sheet("이름")\`
 - \`ctx.filter_to_sheet("시트", predicate, "결과시트이름")\` → 조건에 맞는 행만 골라 **새 시트(현재 활성 파일)**에 정리(원본 보존). predicate 는 데이터 행(값 리스트, 0-based)을 받아 True/False 반환.
   - **"x열에서 y만 필터/추출해줘"**는 이걸 쓰세요(제자리에서 행을 삭제하지 말 것 — 원본을 보존하고 새 시트에 모읍니다). 예: \`ctx.filter_to_sheet("Sheet1", lambda r: str(r[2]) == "안전제일", "안전제일목록")\`. 열 인덱스는 ctx.find_header 로 확인한 열번호-1(0-based)을 쓰세요.
@@ -578,7 +581,7 @@ const PYTHON_COM_SYSTEM_PROMPT = `당신은 우측에 실제로 떠 있는 Micro
   - 교차 파일 읽기/쓰기: \`ctx.book("b.xlsx").read(...)\` / \`ctx.book("b.xlsx").write(...)\` 모두 됩니다(다른 파일에서 값 가져오기/넣기).
 - \`ctx.copy_sheet("시트", dst_book="b.xlsx", new_name="새이름")\` → 시트 1장을 통째로 다른 파일에 복사(서식·수식 보존, 비파괴).
   - **"a시트를 b파일로 이동"**: \`ctx.copy_sheet("a시트", dst_book="b.xlsx")\` 후 \`ctx.delete_sheet("a시트")\`(복사+원본삭제=이동). 같은 파일 내 복사는 dst_book 생략.
-  - **특정 헤더의 열들을 다른 위치로 재배치(데이터까지 함께)**: 각 열을 \`ctx.copy(시트, "K:K", 시트, "J1")\` 처럼 전체 열 표기("K:K")로 복사하면 헤더+데이터가 통째로 옮겨집니다. 헤더만 read 해서 write 로 옮기지 마세요(데이터가 빈 채로 남습니다).
+  - **특정 헤더의 열들을 다른 위치로 재배치(데이터까지 함께)**: \`ctx.move_cols(시트, ["헤더명들…"], "J")\` 한 번으로 하세요(인덱스 시프트·원본 삭제 자동). 직접 insert_cols+copy+delete 로 짜지 마세요(시프트 실수로 데이터가 어긋납니다). 헤더 행이 2행이면 먼저 \`ctx.find_header(…, header_row=2)\` 로 헤더명을 확인하세요.
     여러 열을 옮길 때는 for 루프 안에서 \`ctx.copy\` 를 열마다 호출해도 됩니다(열 단위 copy 는 허용 — 셀 단위 write 루프와 다름).
     **J 앞에 넣기**: 먼저 \`ctx.insert_cols(시트, "J", count=옮길열수)\` 로 자리를 만들면 원본 열들이 그만큼 오른쪽으로 밀립니다 — 이후 copy 의 원본 주소는 밀린 위치(원래열+count)를 쓰세요. 헤더가 2행이면 \`ctx.find_header(시트, "이름", header_row=2)\`.
 

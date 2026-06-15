@@ -5344,6 +5344,73 @@ class PythonComSkillContext:
         """텍스트 정규화(공백/표기 차이 제거). 값 비교 보조용."""
         return normalize_text(value)
 
+    def move_cols(self, sheet, columns, before, header_row=1, scan_from=None):
+        """여러 열을 헤더+데이터까지 통째로 before 열 앞으로 옮긴다(원본 제거). 인덱스 시프트 자동.
+        columns 는 둘 중 하나:
+          - 열 목록: 헤더명 또는 "C" 열 문자. 예: ctx.move_cols("S", ["a_항목","b_값"], "J")
+          - 조건 함수(헤더명을 받아 True/False): 헤더 행을 스캔해 매칭 열을 자동 선택.
+            예: ctx.move_cols("S", lambda h: any(x in str(h) for x in ["a","b","c"]), "J", scan_from="J")
+        header_row: 헤더가 몇 행인지(2행 헤더면 2). scan_from: 그 열부터만 스캔(예: "J")."""
+        ws = self._ws(sheet)
+        self._tick(2)
+
+        def _idx_of(spec):
+            s = str(spec).strip()
+            if re.fullmatch(r"[A-Za-z]{1,3}", s):
+                return self._col_index(s)
+            return int(spec)
+
+        before_idx = _idx_of(before)
+        hr = max(1, int(header_row or 1))
+
+        if callable(columns):
+            last_c = self.last_col(sheet, hr)
+            grid = self.read(sheet, _col_letter(1) + str(hr) + ":" + _col_letter(max(1, last_c)) + str(hr))
+            hdr = list(grid[0]) if grid else []
+            sf = _idx_of(scan_from) if scan_from is not None else 1
+            src_idx = []
+            for i0, h in enumerate(hdr):
+                idx1 = i0 + 1
+                if idx1 < sf:
+                    continue
+                try:
+                    keep = bool(columns(h))
+                except Exception as err:
+                    raise PythonComSkillError(f"열 선택 조건(predicate) 실행 오류: {err}")
+                if keep:
+                    src_idx.append(idx1)
+        else:
+            cols = columns if isinstance(columns, (list, tuple)) else [columns]
+            def _to_idx(spec):
+                s = str(spec).strip()
+                if re.fullmatch(r"[A-Za-z]{1,3}", s):
+                    return self._col_index(s)
+                try:
+                    return self.find_header(sheet, s, header_row=hr)
+                except PythonComSkillError:
+                    pass
+                try:
+                    return int(spec)
+                except Exception:
+                    raise PythonComSkillError(f"옮길 열 '{spec}' 을 찾지 못했습니다(헤더명 또는 열 문자를 쓰세요).")
+            src_idx = sorted(set(_to_idx(c) for c in cols))
+
+        src_idx = sorted(set(src_idx))
+        if not src_idx:
+            raise PythonComSkillError("옮길 열을 찾지 못했습니다(조건/목록을 확인하세요).")
+        n = len(src_idx)
+        # before 앞에 n개 삽입 → before_idx 이상의 기존 열이 오른쪽으로 n칸 밀린다.
+        self.insert_cols(sheet, _col_letter(before_idx), count=n)
+        shifted = [(s + n if s >= before_idx else s) for s in src_idx]
+        for k, s in enumerate(shifted):
+            src = _col_letter(s)
+            self.copy(sheet, src + ":" + src, sheet, _col_letter(before_idx + k) + "1")
+        # 원본 삭제: 큰 인덱스부터(역순)라야 남은 원본 인덱스가 안 밀린다.
+        for s in sorted(shifted, reverse=True):
+            self.delete_cols(sheet, _col_letter(s))
+        self._shared["structural"].append(f"move_cols:{sheet}:{src_idx}->{before}")
+        return True
+
     def add_sheet(self, name, after=None):
         self._tick(3)
         names = _excel_collection_names(self._wb.Worksheets)
