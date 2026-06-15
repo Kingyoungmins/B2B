@@ -471,7 +471,11 @@ async function requestExcelApplyCancel() {
   active.token.cancelled = true;
   toast("작업 중단 요청 — 이전 상태로 되돌리는 중...", "error");
   // 낙관적으로 추가/수정됐던 진행 단계를 파이프라인에서 제거하거나 이전 내용으로 복원.
-  if (active.stepId && Array.isArray(state.pipeline)) {
+  if (active.restorePipeline && Array.isArray(active.restorePipeline)) {
+    // [중단 복원] 토글/삭제발 재적용을 중단하면 변경 전 파이프라인 전체로 되돌린다
+    // (reconcile 경로는 단일 stepId 가 아니라 파이프라인 상태 변경이라 스냅샷으로 복원).
+    state.pipeline = active.restorePipeline;
+  } else if (active.stepId && Array.isArray(state.pipeline)) {
     if (active.restoreStep) {
       const idx = state.pipeline.findIndex(s => s && s.id === active.stepId);
       if (idx >= 0) state.pipeline[idx] = active.restoreStep;
@@ -1530,12 +1534,13 @@ function renderPipeline() {
       if (currentIdx < 0) return;
       if (typeof pushHistory === "function") pushHistory("단계 적용 여부 변경");
       const prevEnabled = isStepEnabled(state.pipeline[currentIdx]);
+      const beforeToggleSnapshot = (state.pipeline || []).map(s => ({ ...s })); // [중단 복원] 변경 전
       state.pipeline[currentIdx] = { ...state.pipeline[currentIdx], enabled: !prevEnabled };
       const toggledStep = state.pipeline[currentIdx];
       renderPipeline();
       refreshRunButton();
       if (typeof scheduleLogicAutoBackup === "function") scheduleLogicAutoBackup("step-toggled");
-      reconcilePipelineSimulationAfterEdit({ affectedStep: toggledStep }).catch(err => {
+      reconcilePipelineSimulationAfterEdit({ affectedStep: toggledStep, restorePipeline: beforeToggleSnapshot }).catch(err => {
         // [0.5.2.2 §5.5] 라이브 반영 실패 — ON 표시인데 미적용인 '유령 상태'를 막기 위해 토글 원복.
         const idxNow = state.pipeline.findIndex(s => s.id === stepId);
         if (idxNow >= 0) {
@@ -1558,6 +1563,7 @@ function renderPipeline() {
       if (typeof pushHistory === "function") pushHistory("단계 삭제");
       if (state.editingStepId === stepId) state.editingStepId = null;
       const removedStep = state.pipeline[currentIdx];
+      const beforeDeleteSnapshot = (state.pipeline || []).map(s => ({ ...s })); // [중단 복원] 삭제 전
       // [필드] 이 스텝이 라이브에 '실제 적용된' 상태였는지 — 적용 실패(오류) 스텝은 라이브에 없으므로
       // 아래 reconcile 이 실패해도 부활시키면 안 된다(오류 스킬이 영영 안 지워지는 현상).
       const removedWasApplied = typeof getPipelineRuntimeStatus === "function"
@@ -1566,7 +1572,7 @@ function renderPipeline() {
       renderPipeline();
       refreshRunButton();
       if (typeof scheduleLogicAutoBackup === "function") scheduleLogicAutoBackup("step-deleted");
-      reconcilePipelineSimulationAfterEdit({ affectedStep: removedStep }).catch(err => {
+      reconcilePipelineSimulationAfterEdit({ affectedStep: removedStep, restorePipeline: beforeDeleteSnapshot }).catch(err => {
         // [0.5.2.2 §5.5] 라이브 반영 실패 — UI 에선 지워졌는데 라이브엔 남는 어긋남 방지, 원위치 복원.
         // 단, 적용된 적 없는(오류/대기) 스텝은 라이브에 존재하지 않으므로 복원하지 않는다 —
         // reconcile 실패는 남은 스텝/세션 문제이지 이 삭제를 되돌릴 이유가 아니다.
@@ -1847,7 +1853,7 @@ async function reconcilePipelineSimulationAfterEdit(options = {}) {
     if (liveExcelId) {
       // [#19] 토글/삭제발 재적용에도 취소 토큰을 등록해 '작업 중단' 버튼이 뜨고 동작하게 한다.
       const cancelToken = { cancelled: false };
-      window.__activeVbaApply = { token: cancelToken, excelId: liveExcelId };
+      window.__activeVbaApply = { token: cancelToken, excelId: liveExcelId, restorePipeline: options.restorePipeline || null };
       return reapplyVbaPipelineToLive(liveExcelId, { steps: stepsForReconcile, viewSheet: affectedStepViewSheetHint(options.affectedStep) })
         .then(result => {
           // [P1] 활성창 기본 — 뷰 이동은 '실제 변경된 스텝의 대상 파일'로만(출력으로 무조건 점프 금지).
