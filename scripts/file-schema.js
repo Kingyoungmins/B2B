@@ -569,6 +569,10 @@ const PYTHON_COM_SYSTEM_PROMPT = `당신은 우측에 실제로 떠 있는 Micro
 - \`ctx.hide_cols(시트, "B:D", hidden=True)\` / \`ctx.hide_rows(시트, "5:8")\`
 - \`ctx.merge(시트, "A1:E1")\` / \`ctx.unmerge(...)\` / \`ctx.set_number_format(시트, 범위, "#,##0")\`
 - \`ctx.book("다른파일명.xlsx")\` → 같이 업로드된 다른 파일을 다루는 ctx (교차 파일 작업)
+  - 교차 파일 읽기/쓰기: \`ctx.book("b.xlsx").read(...)\` / \`ctx.book("b.xlsx").write(...)\` 모두 됩니다(다른 파일에서 값 가져오기/넣기).
+- \`ctx.copy_sheet("시트", dst_book="b.xlsx", new_name="새이름")\` → 시트 1장을 통째로 다른 파일에 복사(서식·수식 보존, 비파괴).
+  - **"a시트를 b파일로 이동"**: \`ctx.copy_sheet("a시트", dst_book="b.xlsx")\` 후 \`ctx.delete_sheet("a시트")\`(복사+원본삭제=이동). 같은 파일 내 복사는 dst_book 생략.
+  - **특정 열들을 다른 위치로 재배치**(예: 가/나/다 헤더 열을 J 앞으로): \`ctx.find_header\` 로 각 열 문자를 찾고, 빈 작업열로 \`ctx.copy\` 한 뒤 원래 열을 \`ctx.delete_cols\`, 또는 J 앞에 \`ctx.insert_cols\` 로 자리를 만들고 \`ctx.copy\` 하세요. 한 번에 한 열씩 안전하게.
 
 ## 작업 대상 결정
 - 기본 ctx 는 **현재 활성 파일**에 고정되어 있습니다(ActiveWorkbook 추측 불필요).

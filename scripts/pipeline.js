@@ -577,6 +577,10 @@ function applyVbaStepToLiveExcel(step, excelId) {
       attachPipelineStepError(err, step, failedIdx >= 0 ? failedIdx : (state.pipeline || []).length - 1);
       setPipelineRuntimeStatus([step.id], "error", "오류");
       restoreVbaExcelAfterError(excelId);
+      // [#2] 적용에 실패한(라이브에 들어가지 못한) 새 스텝은 파이프라인에서 제거한다.
+      // 안 그러면 항상 raise 하는 깨진 스텝(예: "데이터가 없습니다")이 남아 이후 모든 재적용이
+      // 그 스텝에서 또 실패 → 후속 작업이 전부 막히는 마비를 일으킨다(백엔드 경로와 동일하게 정리).
+      if (typeof rollbackAddedPipelineStep === "function") rollbackAddedPipelineStep(step.id);
       renderPipeline();
       refreshRunButton();
       reportPipelineError(err);

@@ -5242,6 +5242,53 @@ class PythonComSkillContext:
         self._shared["structural"].append(f"delete_sheet:{name}")
         return True
 
+    def copy_sheet(self, src_sheet, dst_book=None, new_name=None, before=None, after=None):
+        """시트 1장을 통째로 복사한다(서식·수식·값 보존). dst_book 을 주면 다른 파일로 복사(교차 파일).
+        비파괴: 원본 시트는 그대로 둔다. '이동'은 복사 후 ctx.delete_sheet(원본) 를 호출하세요.
+          ctx.copy_sheet("가시트", dst_book="출력.xlsx")            # 출력 파일 맨 뒤에 복사
+          ctx.copy_sheet("요약", new_name="요약본", after="데이터")   # 같은 파일, 이름 지정
+        같은 Excel 인스턴스에 열린 워크북만 대상. 구조 변경이라 실패 시 롤백되지 않는다."""
+        ws = self._ws(src_sheet)
+        self._tick(2)
+        if dst_book is not None:
+            dst_ctx = self.book(dst_book) if isinstance(dst_book, str) else dst_book
+            dst_wb = dst_ctx._wb
+            # [리뷰] 비공유/별도 앱 모드에서는 다른 파일이 읽기전용 스냅샷으로 열릴 수 있다 —
+            # 그 경우 시트 추가가 silently 실패하므로 명확한 에러로 거른다(데이터 손실/혼란 방지).
+            try:
+                _dst_ro = bool(dst_wb.ReadOnly)
+            except Exception:
+                _dst_ro = False
+            if _dst_ro:
+                raise PythonComSkillError(
+                    f"대상 파일이 읽기 전용으로 열려 있어 시트를 복사할 수 없습니다. "
+                    f"대상 파일 탭을 한 번 열어 활성화한 뒤 다시 시도해 주세요.")
+        else:
+            dst_wb = self._wb
+        existing = list(_excel_collection_names(dst_wb.Worksheets))
+        if new_name is not None and str(new_name) in existing:
+            raise PythonComSkillError(f"대상 워크북에 시트 '{new_name}' 이 이미 있습니다. 다른 이름을 쓰세요.")
+        # [중요] win32com 에서 Worksheet.Copy(After=...) 키워드 인자는 무동작이라(시트가 안 옮겨지고
+        # 새 워크북만 생기거나 아무 일도 안 남), 반드시 positional 로 호출한다: Copy(Before, After).
+        if before is not None:
+            ws.Copy(dst_wb.Worksheets(str(before)))
+        elif after is not None:
+            ws.Copy(pythoncom.Empty, dst_wb.Worksheets(str(after)))
+        else:
+            ws.Copy(pythoncom.Empty, dst_wb.Worksheets(int(dst_wb.Worksheets.Count)))
+        # 새로 생긴 시트를 이름 diff 로 식별한다(ActiveSheet 는 헤드리스에서 신뢰할 수 없어
+        # 원본을 가리키는 경우가 있다 — 그걸 rename 하면 원본 시트명이 바뀌어 데이터 손실처럼 보인다).
+        added = [n for n in _excel_collection_names(dst_wb.Worksheets) if n not in existing]
+        if not added:
+            raise PythonComSkillError(f"시트 '{src_sheet}' 복사가 적용되지 않았습니다(대상/위치를 확인하세요).")
+        if new_name is not None:
+            try:
+                dst_wb.Worksheets(added[0]).Name = str(new_name)
+            except Exception:
+                pass
+        self._shared["structural"].append(f"copy_sheet:{src_sheet}->{dst_book or 'self'}")
+        return True
+
     def sort(self, sheet, a1_range, key_col, ascending=True, has_header=True):
         """실제 범위 정렬. key_col 은 범위 내 1-based 열 번호 또는 'B' 열 문자."""
         ws = self._ws(sheet)

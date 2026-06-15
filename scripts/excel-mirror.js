@@ -1303,13 +1303,18 @@ function startExcelMirrorPolling() {
       pollExcelMirrorChanges(excelId).catch(err => console.warn("Excel mirror poll failed:", err));
     }
   }, isNativeExcelShell() ? EXCEL_MIRROR_POLL_MS : 450);
-  if (!isNativeExcelShell() && !excelMirror.formulaInfoTimer) {
+  if (!excelMirror.formulaInfoTimer) {
+    // [#1] 네이티브 셸에서도 수식 표시줄을 갱신한다. hover-info 는 Selection 읽기 + StatusBar 쓰기뿐이라
+    // 포커스를 끊지 않는다(changes 폴은 이미 네이티브에서 돈다). 적용 중(quietUntil)엔 건너뛰고,
+    // 네이티브에서는 주기를 보수적으로 둔다(COM 부하 최소화).
+    const formulaInterval = isNativeExcelShell() ? 1200 : 850;
     excelMirror.formulaInfoTimer = setInterval(() => {
+      if (isNativeExcelShell() && Date.now() < (excelMirror.quietUntil || 0)) return;
       const excelId = currentExcelId();
       if (excelId) {
         pollExcelFormulaInfo(excelId).catch(err => console.warn("Excel formula info poll failed:", err));
       }
-    }, 850);
+    }, formulaInterval);
   }
 }
 
