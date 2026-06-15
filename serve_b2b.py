@@ -5224,6 +5224,35 @@ class PythonComSkillContext:
         self._shared["structural"].append(f"delete_cols:{sheet}:{col_letter}+{count}")
         return True
 
+    def filter_to_sheet(self, sheet, predicate, dest_name, header_rows=1, after=None):
+        """조건에 맞는 행만 골라 **새 시트(현재 활성 파일)**에 정리한다 — 원본은 그대로 둔다.
+        predicate(row) 는 데이터 행(값 리스트, 0-based 인덱스)을 받아 True/False 를 반환.
+          ctx.filter_to_sheet("Sheet1", lambda r: r[2] == "안전제일", "안전제일목록")
+        "x열에서 y만 필터/추출해 새 시트에 정리" 요청의 기본 수단."""
+        ws = self._ws(sheet)
+        self._tick(2)
+        grid = self.read(sheet)  # used range 전체(헤더+데이터)
+        hr = max(0, int(header_rows))
+        header = [list(r) for r in grid[:hr]]
+        matched = []
+        for row in grid[hr:]:
+            r = list(row)
+            try:
+                keep = bool(predicate(r))
+            except Exception as err:
+                raise PythonComSkillError(f"필터 조건(predicate) 실행 오류: {err}")
+            if keep:
+                matched.append(r)
+        if str(dest_name) in _excel_collection_names(self._wb.Worksheets):
+            raise PythonComSkillError(f"시트 '{dest_name}' 이 이미 있습니다. 다른 이름을 쓰거나 먼저 삭제하세요.")
+        self.add_sheet(str(dest_name), after=after)
+        out = header + matched
+        if out:
+            # 새 시트라 수식 충돌 없음 → overwrite_formulas=True 로 그대로 기록.
+            self.write(str(dest_name), "A1", out, overwrite_formulas=True)
+        self._shared["structural"].append(f"filter_to_sheet:{sheet}->{dest_name}({len(matched)})")
+        return dest_name
+
     def add_sheet(self, name, after=None):
         self._tick(3)
         names = _excel_collection_names(self._wb.Worksheets)
