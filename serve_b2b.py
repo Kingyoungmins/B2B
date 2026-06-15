@@ -5253,6 +5253,97 @@ class PythonComSkillContext:
         self._shared["structural"].append(f"filter_to_sheet:{sheet}->{dest_name}({len(matched)})")
         return dest_name
 
+    def pivot(self, sheet, group_by, value=None, agg="sum", dest_name=None, header_rows=1, after=None):
+        """그룹별 집계 요약 표를 **새 시트(현재 활성 파일)**에 만든다(Python 집계 — 안정적).
+        group_by/value 는 헤더명(권장) 또는 열 문자("C"). agg 는 sum/count/avg/max/min.
+          ctx.pivot("매출", group_by="회사", value="금액", agg="sum", dest_name="회사별합계")
+        "~별로 합계/개수/평균 내줘" 요청의 기본 수단(원본 보존)."""
+        self._tick(2)
+        grid = self.read(sheet)
+        hr = max(1, int(header_rows or 1))
+        header = list(grid[hr - 1]) if len(grid) >= hr else []
+        data = grid[hr:]
+
+        def _col0(spec):
+            s = str(spec).strip()
+            for i, h in enumerate(header):
+                if str(h).strip() == s:
+                    return i
+            if re.fullmatch(r"[A-Za-z]{1,3}", s):
+                return self._col_index(s) - 1
+            try:
+                n = int(spec)
+                return n - 1 if n >= 1 else n
+            except Exception:
+                raise PythonComSkillError(f"열 '{spec}' 을 헤더에서 찾지 못했습니다(헤더명 또는 열 문자를 쓰세요).")
+
+        def _to_num(v):
+            if isinstance(v, bool):
+                return None
+            if isinstance(v, (int, float)):
+                return float(v)
+            try:
+                return float(str(v).replace(",", ""))
+            except Exception:
+                return None
+
+        group_cols = list(group_by) if isinstance(group_by, (list, tuple)) else [group_by]
+        gidx = [_col0(g) for g in group_cols]
+        values = list(value) if isinstance(value, (list, tuple)) else [value]
+        aggs = list(agg) if isinstance(agg, (list, tuple)) else [agg] * len(values)
+        while len(aggs) < len(values):
+            aggs.append(aggs[-1] if aggs else "sum")
+        aggs = [str(a or "sum").lower() for a in aggs]
+        vidx = [(_col0(v) if v is not None else None) for v in values]
+
+        groups = {}
+        order = []
+        for r in data:
+            r = list(r)
+            key = tuple((r[i] if (i is not None and i < len(r)) else "") for i in gidx)
+            if key not in groups:
+                groups[key] = [[] for _ in values]
+                order.append(key)
+            for pos, vi in enumerate(vidx):
+                if vi is None:
+                    groups[key][pos].append(1)
+                elif vi < len(r):
+                    groups[key][pos].append(r[vi])
+
+        def _agg(vals, name):
+            nums = [n for n in (_to_num(v) for v in vals) if n is not None]
+            if name == "count":
+                return len(vals)
+            if name in ("avg", "average", "mean"):
+                return (sum(nums) / len(nums)) if nums else 0
+            if name == "max":
+                return max(nums) if nums else ""
+            if name == "min":
+                return min(nums) if nums else ""
+            return sum(nums)
+
+        out_header = []
+        for n, i in enumerate(gidx):
+            out_header.append(header[i] if (i is not None and i < len(header)) else ("그룹%d" % (n + 1)))
+        for v, a in zip(values, aggs):
+            out_header.append((str(v) if v is not None else "값") + "_" + ("avg" if a in ("average", "mean") else a))
+        out = [out_header]
+        for key in order:
+            out.append(list(key) + [_agg(groups[key][i], aggs[i]) for i in range(len(values))])
+
+        name = str(dest_name or "피벗요약")
+        if name in _excel_collection_names(self._wb.Worksheets):
+            raise PythonComSkillError(f"시트 '{name}' 이 이미 있습니다. 다른 이름을 쓰거나 먼저 삭제하세요.")
+        self.add_sheet(name, after=after)
+        if out:
+            self.write(name, "A1", out, overwrite_formulas=True)
+        self._shared["structural"].append(f"pivot:{sheet}->{name}({len(order)})")
+        return name
+
+    def normalize(self, value):
+        """텍스트 정규화(공백/표기 차이 제거). 값 비교 보조용."""
+        return normalize_text(value)
+
     def add_sheet(self, name, after=None):
         self._tick(3)
         names = _excel_collection_names(self._wb.Worksheets)

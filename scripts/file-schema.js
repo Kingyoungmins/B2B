@@ -566,6 +566,8 @@ const PYTHON_COM_SYSTEM_PROMPT = `당신은 우측에 실제로 떠 있는 Micro
 - \`ctx.add_sheet("이름", after="기준시트")\` / \`ctx.delete_sheet("이름")\`
 - \`ctx.filter_to_sheet("시트", predicate, "결과시트이름")\` → 조건에 맞는 행만 골라 **새 시트(현재 활성 파일)**에 정리(원본 보존). predicate 는 데이터 행(값 리스트, 0-based)을 받아 True/False 반환.
   - **"x열에서 y만 필터/추출해줘"**는 이걸 쓰세요(제자리에서 행을 삭제하지 말 것 — 원본을 보존하고 새 시트에 모읍니다). 예: \`ctx.filter_to_sheet("Sheet1", lambda r: str(r[2]) == "안전제일", "안전제일목록")\`. 열 인덱스는 ctx.find_header 로 확인한 열번호-1(0-based)을 쓰세요.
+- \`ctx.pivot("시트", group_by="회사", value="금액", agg="sum", dest_name="회사별합계")\` → 그룹별 집계 요약 표를 **새 시트(활성 파일)**에 만듦(원본 보존). agg 는 sum/count/avg/max/min.
+  - **"~별로 합계/개수/평균 내줘 / 요약해줘"**는 이걸 쓰세요(group_by/value 는 헤더명 권장). 직접 집계 루프를 짜지 말고 ctx.pivot 우선.
 - \`ctx.sort(시트, "A1:F100", key_col="C", ascending=True, has_header=True)\` → 실제 범위 정렬.
   **key_col 은 "C" 같은 시트 기준 열 문자를 쓰세요.** 숫자로 주면 범위 내 상대 번호로 해석되므로(범위가 A열에서 시작하지 않으면 어긋남) 문자가 안전합니다.
   **정렬은 반드시 \`ctx.sort\` 로 하세요. \`ctx.read\` 로 읽어 파이썬에서 정렬한 뒤 \`ctx.write\` 로 되쓰지 마세요** — 헤더 행이 데이터와 섞이고(헤더가 정렬돼 위치가 바뀜) 다른 열이 행 단위로 어긋납니다.
