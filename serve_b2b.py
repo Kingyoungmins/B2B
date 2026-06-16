@@ -5081,6 +5081,13 @@ class PythonComSkillContext:
         for idx, text in enumerate(headers, start=1):
             if text == target:
                 return idx
+        # 정규화 비교: 공백·표기 차이("3 월" == "3월", 전각/대소문자)로 LLM 이 헤더에 공백을
+        # 끼워 넣어도 매칭한다(정확 매칭 다음, 느슨한 부분포함 전에 둔다).
+        ntarget = normalize_text(target)
+        if ntarget:
+            for idx, text in enumerate(headers, start=1):
+                if normalize_text(text) == ntarget:
+                    return idx
         for idx, text in enumerate(headers, start=1):
             if target and target in text:
                 return idx
