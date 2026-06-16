@@ -554,6 +554,11 @@ function applyVbaStepToLiveExcel(step, excelId) {
         return { cancelled: true };
       }
       if (window.__activeVbaApply && window.__activeVbaApply.token === cancelToken) window.__activeVbaApply = null;
+      // [#5] 구조 변경(열삭제·시트추가 등) 응답이면 대상 파일의 스키마 캐시를 갱신 —
+      // 다음 단계 생성이 옛 구조(삭제된 열 등)를 보지 않게 한다.
+      if (data && data.liveSchema) {
+        try { applyLiveSchemaToFileCache(excelId, data.liveSchema); } catch (_) {}
+      }
       setPipelineRuntimeStatus([step.id], "applied", "적용됨");
       noteLivePipelineApplied(state.pipeline); // [0.5.2.2] 추가 적용 완료 상태 기억(no-op 편집 생략용)
       if (typeof endExcelMirrorApplyLoading === "function") endExcelMirrorApplyLoading();
@@ -1614,6 +1619,32 @@ function noteLivePipelineApplied(steps = state.pipeline) {
 // 다음 편집은 무조건 실제 재적용을 수행한다.
 function invalidateLivePipelineApplied() {
   _lastLiveAppliedSignature = null;
+}
+
+// [#5] 라이브 COM 적용으로 구조가 바뀐 파일의 클라 스키마 캐시(미리보기 AoA/시트명/차원)를
+// 서버가 보낸 경량 스키마로 갱신한다. 백엔드 경로(runPipeline)와 동일 수준(sheets + sheetNames)으로
+// 맞춰 캐시 불일치를 피한다(tables/formulas 는 백엔드처럼 건드리지 않음). 안 하면 다음 단계 생성 시
+// buildSchemaSummary 가 옛 구조(삭제된 열 등)를 LLM 에 전달한다.
+function applyLiveSchemaToFileCache(excelId, schema) {
+  if (!excelId || !schema) return;
+  const fileId = typeof fileIdForExcelMirrorId === "function" ? fileIdForExcelMirrorId(excelId) : null;
+  const f = (fileId && typeof getFile === "function") ? getFile(fileId) : null;
+  if (!f) return;
+  const names = (Array.isArray(schema.sheetNames) && schema.sheetNames.length)
+    ? schema.sheetNames
+    : Object.keys(schema.sheets || {});
+  if (!names.length) return;
+  if (schema.sheets && typeof schema.sheets === "object") {
+    f.sheets = f.sheets || {};
+    names.forEach(nm => { if (Array.isArray(schema.sheets[nm])) f.sheets[nm] = schema.sheets[nm]; });
+    // 서버에 없는(삭제된) 시트의 캐시는 제거 — syncFileMetadata 가 sheetNames 를 f.sheets 키로 재구성.
+    Object.keys(f.sheets).forEach(nm => { if (!names.includes(nm)) delete f.sheets[nm]; });
+  }
+  if (schema.dims && typeof schema.dims === "object") {
+    f.backendPreviewDimensions = f.backendPreviewDimensions || {};
+    names.forEach(nm => { if (schema.dims[nm]) f.backendPreviewDimensions[nm] = schema.dims[nm]; });
+  }
+  if (typeof syncFileMetadata === "function") { try { syncFileMetadata(f); } catch (_) {} }
 }
 
 // 0.4.9 리모콘 모델: VBA 엔진에서 토글/삭제/편집/순서변경 등으로 파이프라인이 바뀌면

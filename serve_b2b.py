@@ -5823,7 +5823,15 @@ def _run_python_on_session_impl(excel_id, code):
                 _restore_live_window(session, app, wb)
             except Exception:
                 pass
-        return {"ok": True, "excelId": excel_id, "engine": "python-com", **summary}
+        result = {"ok": True, "excelId": excel_id, "engine": "python-com", **summary}
+        # [#5] 구조 변경(열삭제·시트추가 등)이 있었으면 경량 미리보기 스키마를 함께 실어,
+        # 클라가 대상 파일 캐시를 갱신해 다음 단계 생성이 옛 구조를 보지 않게 한다.
+        if summary.get("structural"):
+            try:
+                result["liveSchema"] = _live_preview_schema(wb)
+            except Exception:
+                pass
+        return result
 
 
 def run_python_on_session(excel_id, code):
@@ -5875,6 +5883,32 @@ def _col_letter(n):
 # 스냅샷이 읽을 최대 범위(거대/부풀린 UsedRange 방어). 변경 감지용이라 이 정도면 충분.
 _SNAPSHOT_MAX_ROWS = 20000
 _SNAPSHOT_MAX_COLS = 256
+
+
+def _live_preview_schema(wb, max_rows=60, max_cols=_SNAPSHOT_MAX_COLS):
+    """라이브 적용 후 클라 스키마 캐시 갱신용 경량 미리보기(시트명 + 상위 N행 AoA + 차원).
+    구조 변경(열삭제/시트추가 등) 뒤 다음 단계 생성이 옛 구조(삭제된 열 등)를 보지 않게 한다.
+    Value2 라 날짜도 숫자(serial)로 와 JSON 직렬화가 안전하다(클라 ctx.read 와 동일)."""
+    names = list(_excel_collection_names(wb.Worksheets))
+    sheets, dims = {}, {}
+    for nm in names:
+        try:
+            ws = wb.Worksheets(str(nm))
+            used = ws.UsedRange
+            total_rows = int(used.Row) + int(used.Rows.Count) - 1
+            total_cols = int(used.Column) + int(used.Columns.Count) - 1
+            nrows = max(0, min(total_rows, max_rows))
+            ncols = max(0, min(total_cols, max_cols))
+            if nrows < 1 or ncols < 1:
+                sheets[nm] = []
+            else:
+                rng = ws.Range(ws.Cells(1, 1), ws.Cells(nrows, ncols))
+                sheets[nm] = _range_matrix(rng.Value2)
+            dims[nm] = {"maxRow": max(0, total_rows), "maxCol": max(0, total_cols)}
+        except Exception:
+            sheets[nm] = []
+            dims[nm] = {"maxRow": 0, "maxCol": 0}
+    return {"sheetNames": names, "sheets": sheets, "dims": dims}
 
 
 def _sheet_snapshot(ws):
