@@ -659,9 +659,9 @@ async function switchVisibleExcelMirrorToFileId(fileId) {
   updateMirrorShellStatus();
   return true;
   } finally {
-    // 전환 완료(또는 실패) → 명시 전환 잠금 해제. 이 시점엔 옛 창이 화면 밖으로 파킹돼
-    // 포그라운드로 잡히지 않으므로, 이후 폴의 active-sync 는 정상 동작해도 회귀하지 않는다.
-    if (excelMirror.pendingUserViewFileId === fileId) excelMirror.pendingUserViewFileId = null;
+    // 명시 전환 잠금은 여기서 풀지 않는다 — no-activate 전환이라 목표 창이 곧장 포그라운드가
+    // 아니어서, 즉시 풀면 옛 창이 잠깐 포그라운드인 사이 폴이 옛 탭으로 회귀한다(보기b→클릭→a).
+    // 해제는 pollExcelMirrorChanges 가 '목표 창이 실제 active'로 확인할 때(또는 8초 만료) 한다.
     if (_busyTok && typeof endUiBusy === "function") endUiBusy(_busyTok, { silentComplete: true });
   }
 }
@@ -1365,14 +1365,25 @@ async function pollExcelMirrorChanges(excelId, options = {}) {
         return data;
       }
       const activeFileId = fileIdForExcelMirrorId(activeExcelId);
-      // [필드] 사용자 명시 전환 잠금: 탭/보기로 고른 파일의 창이 아직 포그라운드가 아니면
-      // (setCurrentView ~ showOnly 사이의 전환 '갭', 옛 창이 화면/포그라운드로 남은 상태),
-      // 폴이 그 옛 창을 따라 탭/선택을 되돌리지 못하게 한다. 전환 완료(switchVisible)나 만료 시 해제.
+      // [필드] 사용자 명시 전환 잠금: 탭/보기로 고른 파일의 창이 아직 '실제 active(포그라운드)'로
+      // 확인되기 전에는, 옛 창이 잠깐 포그라운드로 남은 사이 폴이 탭/선택을 되돌리지 못하게 한다.
+      // no-activate 전환이라 목표 창은 곧장 포그라운드가 아니다 → 해제 기준은 '시간'이 아니라
+      // '목표 창이 active 로 폴에 잡힐 때'다. (switchVisible finally 에서 즉시 풀면, 옛 창이 아직
+      //  fg 인 사이 폴이 회귀를 만든다: 보기b→클릭→a.) 8초는 안전망 만료.
       const pendingView = excelMirror.pendingUserViewFileId;
       const pendingFresh = pendingView && (Date.now() - (excelMirror.pendingUserViewAt || 0) < 8000);
-      if (pendingFresh && activeFileId && activeFileId !== pendingView) {
-        excelMirror.lastPolledActiveExcelId = activeExcelId;
-        return data;
+      if (pendingFresh) {
+        if (activeFileId && activeFileId === pendingView) {
+          // 목표 창이 실제 active 로 확인됨 → 잠금 해제하고 이하 정상 동기화 진행.
+          excelMirror.pendingUserViewFileId = null;
+        } else if (activeFileId && activeFileId !== pendingView) {
+          // 아직 옛 창이 활성/포그라운드(전환 갭) → 탭/선택 동기화 보류.
+          // lastPolledActiveExcelId 는 갱신하지 않는다 — 옛 active 로 prev 를 오염시키면
+          // 목표 도달 직후 stale edge 로 다시 회귀할 수 있다.
+          return data;
+        }
+        // activeFileId 가 없으면(호스트가 포그라운드 등) 잠금 유지한 채 아래로 — 아래
+        // active-sync 는 activeFileId 가 있을 때만 동작하므로 탭을 건드리지 않는다.
       }
       // [필드#3] frame 모드의 탭 전환은 no-activate(표시만)라 서버 ActiveWorkbook 이 옛 파일로
       // 남는다. 현재값(level) 기준으로 탭을 맞추면 가드 만료 후 매 폴마다 옛 탭으로 회귀한다 —
