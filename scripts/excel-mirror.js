@@ -659,6 +659,9 @@ async function switchVisibleExcelMirrorToFileId(fileId) {
   updateMirrorShellStatus();
   return true;
   } finally {
+    // 전환 완료(또는 실패) → 명시 전환 잠금 해제. 이 시점엔 옛 창이 화면 밖으로 파킹돼
+    // 포그라운드로 잡히지 않으므로, 이후 폴의 active-sync 는 정상 동작해도 회귀하지 않는다.
+    if (excelMirror.pendingUserViewFileId === fileId) excelMirror.pendingUserViewFileId = null;
     if (_busyTok && typeof endUiBusy === "function") endUiBusy(_busyTok, { silentComplete: true });
   }
 }
@@ -1362,6 +1365,15 @@ async function pollExcelMirrorChanges(excelId, options = {}) {
         return data;
       }
       const activeFileId = fileIdForExcelMirrorId(activeExcelId);
+      // [필드] 사용자 명시 전환 잠금: 탭/보기로 고른 파일의 창이 아직 포그라운드가 아니면
+      // (setCurrentView ~ showOnly 사이의 전환 '갭', 옛 창이 화면/포그라운드로 남은 상태),
+      // 폴이 그 옛 창을 따라 탭/선택을 되돌리지 못하게 한다. 전환 완료(switchVisible)나 만료 시 해제.
+      const pendingView = excelMirror.pendingUserViewFileId;
+      const pendingFresh = pendingView && (Date.now() - (excelMirror.pendingUserViewAt || 0) < 8000);
+      if (pendingFresh && activeFileId && activeFileId !== pendingView) {
+        excelMirror.lastPolledActiveExcelId = activeExcelId;
+        return data;
+      }
       // [필드#3] frame 모드의 탭 전환은 no-activate(표시만)라 서버 ActiveWorkbook 이 옛 파일로
       // 남는다. 현재값(level) 기준으로 탭을 맞추면 가드 만료 후 매 폴마다 옛 탭으로 회귀한다 —
       // '변화(edge)'가 있을 때만 따라간다(사용자가 Excel 창을 직접 클릭해 활성화한 경우 등).
@@ -1768,6 +1780,14 @@ async function postExcelMirror(path, body, attempt = 0, options = {}) {
       // setCurrentView("output") 는 내부에서 "output:0" 으로 정규화된다.
       // 미러 세션도 정규화된 현재 fileId 로 열어야 탭/미러가 서로 다른 파일을 보지 않는다.
       const fileId = state.currentFileId || args[0];
+      // 사용자 명시 전환 잠금 설정: 실제 창 전환(showOnly)이 끝나기 전의 '갭' 동안에는
+      // 옛 창이 아직 화면/포그라운드로 남아 있다. 그 사이 엑셀을 클릭하면 서버 포그라운드
+      // 판정이 옛 창을 가리켜 폴의 active-sync 가 방금 고른 탭을 되돌렸다('보기'a→탭b→클릭→a).
+      // 전환이 끝날 때까지(switchVisible finally) 폴이 옛 탭으로 회귀하지 못하게 잠근다.
+      if (fileId) {
+        excelMirror.pendingUserViewFileId = fileId;
+        excelMirror.pendingUserViewAt = Date.now();
+      }
       clearTimeout(excelMirror.switchTimer);
       excelMirror.switchTimer = setTimeout(() => {
         if (!fileId) return;
