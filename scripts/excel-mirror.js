@@ -852,7 +852,12 @@ async function hideAllExcelMirrorWindows(options = {}) {
   try {
     // 세션별 N회 왕복(hide × N) 대신 서버 일괄 엔드포인트 1회 — 적용 시작 지연이
     // 세션 수와 무관해진다(저사양에서 세션당 큐 작업 비용 × N 절감). 동작은 동일.
-    await postExcelMirror("/api/excel/hide-all", {});
+    // timeoutMs 필수 — 미지정 시 서버 COM 교착으로 응답이 없으면 prehide 가 무한 대기해
+    // 적용 화면이 멈춘다(붙여넣기 적용 시 멈춤). 지연 시 숨김은 건너뛰고 적용을 진행. [#16]
+    await postExcelMirror("/api/excel/hide-all", {}, 0, {
+      timeoutMs: 15000,
+      timeoutMessage: "미러 숨김이 지연되어 건너뜁니다.",
+    });
     entries.forEach(([fileId, excelId]) => {
       if (excelId) excelMirror.hiddenByExcelId[excelId] = true;
     });

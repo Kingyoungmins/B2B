@@ -708,6 +708,9 @@ function insertLogic(step, position) {
           }
           if (window.__activeVbaApply && window.__activeVbaApply.token === cancelToken) window.__activeVbaApply = null;
           setPipelineRuntimeStatus([step.id], "error", "오류");
+          // 깨진 삽입 스텝을 파이프라인에서 제거 — 안 하면 이후 모든 재적용이 이 스텝에서 반복
+          // 실패해 작업 마비(다른 적용 경로와 동일하게 롤백). [#17]
+          rollbackAddedPipelineStep(step.id);
           renderPipeline();
           refreshRunButton();
           reportPipelineError(err);

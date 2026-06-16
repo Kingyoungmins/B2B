@@ -4801,6 +4801,9 @@ def _run_vba_pipeline_on_session_impl(excel_id, steps, reset=True, entry=None, v
                 except Exception:
                     pass
                 _copy_source_workbook_into_target(app, wb, source)
+                # 원본으로 되돌렸으니 서버측 적용추적도 무효화 — 취소/리셋 후 유사 스킬을 '이미 수행'으로
+                # 오인해 reset 을 건너뛰던 문제 방지(다음 스킬은 전체 재적용으로 정확히 처리).
+                session["appliedStepSigs"] = None
             else:
                 # 비리셋(append): 현재 보호 상태를 풀고 실행(보호로 인한 1004 류 방지).
                 try:
@@ -5243,6 +5246,11 @@ class PythonComSkillContext:
                 raise PythonComSkillError(f"필터 조건(predicate) 실행 오류: {err}")
             if keep:
                 matched.append(r)
+        if not matched:
+            # 매칭 0건이면 새 시트를 만들지 않는다 — 빈 시트만 남아 재요청 시 '이미 있음'으로
+            # 반복 실패하던 문제 방지. 값의 공백/표기 차이는 ctx.normalize 로 맞춰야 한다.
+            raise PythonComSkillError(
+                "필터 조건을 만족하는 행이 없습니다. 값의 공백·표기 차이(ctx.normalize 사용)나 열/조건을 확인하세요.")
         if str(dest_name) in _excel_collection_names(self._wb.Worksheets):
             raise PythonComSkillError(f"시트 '{dest_name}' 이 이미 있습니다. 다른 이름을 쓰거나 먼저 삭제하세요.")
         self.add_sheet(str(dest_name), after=after)
@@ -5422,6 +5430,20 @@ class PythonComSkillContext:
         self._shared["structural"].append(f"add_sheet:{name}")
         return True
 
+    def rename_sheet(self, old_name, new_name):
+        """시트 이름만 변경한다(위치·내용 유지). '복사/이동'이 아니라 순수 이름 변경 전용."""
+        ws = self._ws(old_name)
+        self._tick(1)
+        names = _excel_collection_names(self._wb.Worksheets)
+        if str(new_name) != str(old_name) and str(new_name) in names:
+            raise PythonComSkillError(f"시트 '{new_name}' 이 이미 있습니다. 다른 이름을 쓰세요.")
+        try:
+            ws.Name = str(new_name)
+        except Exception as e:
+            raise PythonComSkillError(f"시트 이름 변경 실패: {e}")
+        self._shared["structural"].append(f"rename_sheet:{old_name}->{new_name}")
+        return True
+
     def delete_sheet(self, name):
         ws = self._ws(name)
         self._tick(1)
@@ -5477,22 +5499,37 @@ class PythonComSkillContext:
         return True
 
     def sort(self, sheet, a1_range, key_col, ascending=True, has_header=True):
-        """실제 범위 정렬. key_col 은 범위 내 1-based 열 번호 또는 'B' 열 문자."""
+        """실제 범위 정렬. key_col 은 범위 내 1-based 열 번호/'B' 열 문자, 또는 이들의 리스트(다중키, 최대 3).
+        ascending 도 단일 bool 또는 키별 bool 리스트를 받는다."""
         ws = self._ws(sheet)
         rng = self._rng(ws, a1_range)
         self._tick(3)
         self._journal_save(ws, rng)
-        if isinstance(key_col, str):
-            key_idx_abs = self._col_index(key_col)
-            key_idx = key_idx_abs - int(rng.Column) + 1
+        keys = list(key_col) if isinstance(key_col, (list, tuple)) else [key_col]
+        if not keys:
+            raise PythonComSkillError("정렬 키가 비어 있습니다.")
+        if len(keys) > 3:
+            raise PythonComSkillError(f"정렬 키는 최대 3개까지 지원합니다(요청 {len(keys)}개).")
+        asc = list(ascending) if isinstance(ascending, (list, tuple)) else [ascending] * len(keys)
+        while len(asc) < len(keys):
+            asc.append(asc[-1] if asc else True)
+        key_rngs = []
+        for k in keys:
+            if isinstance(k, str):
+                key_idx = self._col_index(k) - int(rng.Column) + 1
+                self._tick(1)
+            else:
+                key_idx = int(k)
+            if key_idx < 1 or key_idx > int(rng.Columns.Count):
+                raise PythonComSkillError(f"정렬 키({k})가 범위를 벗어났습니다.")
+            key_rngs.append(rng.Columns(key_idx))
             self._tick(1)
-        else:
-            key_idx = int(key_col)
-        if key_idx < 1 or key_idx > int(rng.Columns.Count):
-            raise PythonComSkillError(f"정렬 키 열({key_col})이 범위를 벗어났습니다.")
-        key_rng = rng.Columns(key_idx)
-        self._tick(2)
-        rng.Sort(Key1=key_rng, Order1=(1 if ascending else 2), Header=(1 if has_header else 2))
+        sort_kw = {"Key1": key_rngs[0], "Order1": (1 if asc[0] else 2), "Header": (1 if has_header else 2)}
+        if len(key_rngs) >= 2:
+            sort_kw["Key2"] = key_rngs[1]; sort_kw["Order2"] = (1 if asc[1] else 2)
+        if len(key_rngs) >= 3:
+            sort_kw["Key3"] = key_rngs[2]; sort_kw["Order3"] = (1 if asc[2] else 2)
+        rng.Sort(**sort_kw)
         self._tick(1)
         return True
 
@@ -5606,10 +5643,11 @@ def _python_com_static_check(code):
     }
     forbidden_attrs = {"Select", "Activate", "ActiveWorkbook", "ActiveSheet", "Application", "Quit",
                        "Save", "SaveAs", "SaveCopyAs", "Close"}
-    # copy 는 셀이 아니라 범위(열/영역) 복사라 여러 열 재배치 등에서 루프 반복이 정당하다
-    # (셀 단위 남용은 런타임 COM 예산 PY_COM_BUDGET 로 차단). 그래서 루프 차단 대상에서 제외.
-    write_ops = {"write", "write_cell", "write_formulas", "clear", "insert_rows",
-                 "insert_cols", "delete_rows", "delete_cols", "merge", "unmerge", "sort"}
+    # copy/clear/delete_rows/delete_cols 는 셀이 아니라 범위·구조 단위라 여러 열 재배치·중복 제거·
+    # 양식 비우기 등에서 루프 반복이 정당하다(셀 단위 남용은 런타임 COM 예산 PY_COM_BUDGET 로 차단).
+    # 그래서 루프 차단 대상에서 제외한다.
+    write_ops = {"write", "write_cell", "write_formulas", "insert_rows",
+                 "insert_cols", "merge", "unmerge", "sort"}
 
     loop_stack = []
     # 루프 내 쓰기 금지는 'ctx 계열' 수신자에만 적용한다 — 일반 리스트/딕셔너리의

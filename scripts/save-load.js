@@ -528,6 +528,11 @@ function loadLogic(data, filename, meta) {
   // 채팅 히스토리도 함께 복원 (있으면)
   state.chatHistory = Array.isArray(data.chatHistory) ? deepClone(data.chatHistory) : [];
   state.editingStepId = null;
+  // 불러온 파이프라인은 라이브에 아직 적용 안 됨 → 적용추적 시그니처 무효화. 안 하면 첫 '전체 실행'이
+  // no-op 으로 거부되거나 옛 서명과 충돌해 "스킬을 적용하지 못했습니다" 가 뜬다. [#18]
+  if (typeof invalidateLivePipelineApplied === "function") {
+    try { invalidateLivePipelineApplied(); } catch (_) {}
+  }
   renderPipeline();
   renderChatFromHistory();
   refreshChatState();
