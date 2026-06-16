@@ -5516,7 +5516,14 @@ class PythonComSkillContext:
         key_rngs = []
         for k in keys:
             if isinstance(k, str):
-                key_idx = self._col_index(k) - int(rng.Column) + 1
+                s = k.strip()
+                if re.fullmatch(r"[A-Za-z]{1,3}", s):
+                    abs_idx = self._col_index(s)
+                else:
+                    # 열 문자가 아니면 헤더명으로 간주 → find_header 로 절대 열번호 조회.
+                    # (LLM 이 key_col 에 "회사" 같은 헤더명을 넘기는 경우가 흔하다.)
+                    abs_idx = self.find_header(sheet, s, header_row=1)
+                key_idx = abs_idx - int(rng.Column) + 1
                 self._tick(1)
             else:
                 key_idx = int(k)
@@ -5528,7 +5535,10 @@ class PythonComSkillContext:
         # (진단 확인). SortFields API(ws.Sort.Header)는 정상 동작하므로 이쪽을 쓴다. 다중키도 자연 지원.
         ws.Sort.SortFields.Clear()
         for i, kr in enumerate(key_rngs):
-            ws.Sort.SortFields.Add(Key=kr, Order=(1 if asc[i] else 2))
+            # win32com 은 Add 의 named/positional Order 인자를 무시할 수 있어(asc 로 고정됨),
+            # 반환된 SortField 의 Order 프로퍼티를 직접 설정한다(내림차순 보장).
+            sf = ws.Sort.SortFields.Add(kr)
+            sf.Order = (1 if asc[i] else 2)
             self._tick(1)
         ws.Sort.SetRange(rng)
         ws.Sort.Header = (1 if has_header else 2)
