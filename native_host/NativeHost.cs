@@ -631,6 +631,18 @@ namespace B2BNativeHost
                     nativeFileTabs.Controls.Add(empty);
                     return;
                 }
+                // [0.5.7] 파일 탭 '더블클릭 전환' 안내 배지. native shell 은 웹의 .right(파일 탭 포함)를
+                // 숨기고 우측 탭을 여기 C# nativeFileTabs 로 그리므로, 안내도 웹이 아닌 여기에 직접 넣는다.
+                Label hint = new Label();
+                hint.Text = "📑 더블클릭으로 전환";
+                hint.AutoSize = true;
+                hint.ForeColor = Color.FromArgb(209, 0, 160);
+                hint.BackColor = Color.FromArgb(255, 241, 250);
+                hint.BorderStyle = BorderStyle.FixedSingle;
+                hint.Padding = new Padding(6, 4, 6, 4);
+                hint.Margin = new Padding(0, 1, 8, 0);
+                hint.TextAlign = ContentAlignment.MiddleCenter;
+                nativeFileTabs.Controls.Add(hint);
                 for (int i = 2; i < parts.Length; i++)
                 {
                     if (String.IsNullOrEmpty(parts[i])) continue;
