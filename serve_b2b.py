@@ -5524,13 +5524,17 @@ class PythonComSkillContext:
                 raise PythonComSkillError(f"정렬 키({k})가 범위를 벗어났습니다.")
             key_rngs.append(rng.Columns(key_idx))
             self._tick(1)
-        sort_kw = {"Key1": key_rngs[0], "Order1": (1 if asc[0] else 2), "Header": (1 if has_header else 2)}
-        if len(key_rngs) >= 2:
-            sort_kw["Key2"] = key_rngs[1]; sort_kw["Order2"] = (1 if asc[1] else 2)
-        if len(key_rngs) >= 3:
-            sort_kw["Key3"] = key_rngs[2]; sort_kw["Order3"] = (1 if asc[2] else 2)
-        rng.Sort(**sort_kw)
-        self._tick(1)
+        # [중요] win32com 에서 rng.Sort(Header=...) 는 Header 인자가 무시돼 헤더행까지 정렬된다
+        # (진단 확인). SortFields API(ws.Sort.Header)는 정상 동작하므로 이쪽을 쓴다. 다중키도 자연 지원.
+        ws.Sort.SortFields.Clear()
+        for i, kr in enumerate(key_rngs):
+            ws.Sort.SortFields.Add(Key=kr, Order=(1 if asc[i] else 2))
+            self._tick(1)
+        ws.Sort.SetRange(rng)
+        ws.Sort.Header = (1 if has_header else 2)
+        ws.Sort.Apply()
+        ws.Sort.SortFields.Clear()
+        self._tick(2)
         return True
 
     # ---- 표시/서식 ----
