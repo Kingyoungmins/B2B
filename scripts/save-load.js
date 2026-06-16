@@ -69,6 +69,7 @@ function buildLogicZipEntries(name) {
       language: s.language || "javascript",
       stepFile: stepFiles[idx],
       code: s.code,
+      targetFileId: s.targetFileId || null,  // [#18] 스텝의 대상 파일 바인딩 — 저장/불러오기로 유지되어야 재실행 시 올바른 파일에 적용됨
     })),
     chatHistory: state.chatHistory,
   };
@@ -182,6 +183,7 @@ function openSaveModal() {
         language: s.language || "javascript",
         stepFile: stepFiles[idx],
         code: s.code, // 외부 step 파일이 누락되어도 동작하도록 임베딩 fallback 유지
+        targetFileId: s.targetFileId || null, // [#18] 대상 파일 바인딩 유지
       })),
       chatHistory: state.chatHistory, // 복원 시 대화 내용도 표시되도록 함께 저장
     };
@@ -493,6 +495,7 @@ async function loadLogicFiles(files) {
       enabled: s.enabled !== false,
       language,
       code,
+      targetFileId: s.targetFileId || null,  // [#18] 저장된 대상 파일 바인딩 복원(재실행이 올바른 파일에 적용되도록)
     };
   });
 

@@ -583,6 +583,7 @@ const PYTHON_COM_SYSTEM_PROMPT = `당신은 우측에 실제로 떠 있는 Micro
 - \`ctx.merge(시트, "A1:E1")\` / \`ctx.unmerge(...)\` / \`ctx.set_number_format(시트, 범위, "#,##0")\`
 - \`ctx.book("다른파일명.xlsx")\` → 같이 업로드된 다른 파일을 다루는 ctx (교차 파일 작업)
   - 교차 파일 읽기/쓰기: \`ctx.book("b.xlsx").read(...)\` / \`ctx.book("b.xlsx").write(...)\` 모두 됩니다(다른 파일에서 값 가져오기/넣기).
+  - **★ 다단계에서 가장 흔한 실수 — 다른 파일의 시트는 항상 ctx.book() 으로 접근**: 어떤 단계가 \`ctx.book("정산서.xlsx").write("정산", ...)\` 로 **다른 파일(정산서)** 에 "정산" 시트를 만들었다면, **그 시트를 다루는 모든 단계도 반드시 \`ctx.book("정산서.xlsx").sort("정산", ...)\` 처럼 같은 ctx.book() 을 다시 써야** 합니다. 그냥 \`ctx.sort("정산", ...)\` 로 쓰면 현재 기본 파일(보통 청구내역)에서 "정산" 을 찾다가 "시트를 찾지 못했습니다" 로 실패합니다. **시트 이름만 보고 기본 ctx 를 쓰지 말고, 그 시트가 어느 파일에 있는지로 ctx.book() 여부를 정하세요.**
   - **다른 파일의 특정 범위(표)만 옮길 때**: \`ctx.copy\`(범위 복사)는 **같은 파일 안에서만** 동작합니다 — 다른 파일로는 \`ctx.book("원본").read(범위)\` 로 읽어 \`ctx.book("대상").write(셀, 값)\` 로 넣으세요(값 기준). 시트 통째면 \`ctx.copy_sheet\` 를 쓰세요.
 - \`ctx.copy_sheet("시트", dst_book="b.xlsx", new_name="새이름")\` → 시트 1장을 통째로 다른 파일에 복사(서식·수식 보존, 비파괴).
   - **"a시트를 b파일로 이동"**: \`ctx.copy_sheet("a시트", dst_book="b.xlsx")\` 후 \`ctx.delete_sheet("a시트")\`(복사+원본삭제=이동). 같은 파일 내 복사는 dst_book 생략.

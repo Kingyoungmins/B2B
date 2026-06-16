@@ -4944,10 +4944,27 @@ class PythonComSkillContext:
             _ = ws.Name
             return ws
         except Exception:
-            names = _excel_collection_names(self._wb.Worksheets)
-            raise PythonComSkillError(
-                f"시트 '{sheet}' 를 찾지 못했습니다. 사용 가능한 시트: {names}"
-            )
+            pass
+        # 현재 워크북에 없으면 같은 Excel 인스턴스의 다른 열린 워크북에서 찾는다 —
+        # 교차파일 스킬이 ctx.book() 없이 시트명만 쓴 경우나, 저장된 스킬의 파일 바인딩이
+        # 유실된 채 재실행되는 경우를 구제(안전망). 단 그 시트명이 '정확히 한 워크북'에만
+        # 있을 때만 따라간다(여러 곳에 있으면 모호하므로 기존 에러로 둔다).
+        try:
+            matches = []
+            for owb in self._app.Workbooks:
+                try:
+                    if str(sheet) in _excel_collection_names(owb.Worksheets):
+                        matches.append(owb)
+                except Exception:
+                    continue
+            if len(matches) == 1:
+                return matches[0].Worksheets(str(sheet))
+        except Exception:
+            pass
+        names = _excel_collection_names(self._wb.Worksheets)
+        raise PythonComSkillError(
+            f"시트 '{sheet}' 를 찾지 못했습니다. 사용 가능한 시트: {names}"
+        )
 
     @staticmethod
     def _col_num(letters):

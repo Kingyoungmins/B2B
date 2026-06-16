@@ -124,6 +124,9 @@ function releaseExcelMirrorPipelineMute(outputExcelId) {
   // selectionMutedUntil 은 직접 리셋한다(suppressExcelMirrorSelection 은 Math.max 라 10분 억제를 못 줄임).
   excelMirror.mutedUntil = Date.now() + 1500;
   excelMirror.selectionMutedUntil = Date.now() + 1500;
+  // [#3] 적용 시작 전 출발한 in-flight 폴이 적용 완료 후 도착해 stale active 로 탭을 되돌리던 회귀 방지.
+  // (사용자의 명시적 탭 전환 switchVisible 은 이 가드와 무관하게 동작 — 폴의 자동 active-sync 만 억제)
+  excelMirror.activeSyncMutedUntil = Date.now() + 1500;
   if (typeof baselineExcelMirrorSession === "function") {
     setTimeout(() => {
       baselineExcelMirrorSession(outputExcelId, { syncSelection: false })
