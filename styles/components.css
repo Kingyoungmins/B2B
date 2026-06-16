@@ -106,7 +106,8 @@
     transition: all 0.15s;
   }
   .chip-remove:hover { color: var(--m-600); background: var(--m-50); }
-  .chip-view,
+  /* [0.5.7] '보기' 버튼 제거 — 화면 전환은 상단 파일 탭 '더블클릭'으로 통일(단일 클릭은 안내). */
+  .chip-view { display: none !important; }
   .chip-download {
     background: transparent;
     border: 1px solid var(--border);
@@ -119,7 +120,6 @@
     font-family: inherit;
     transition: all 0.15s;
   }
-  .chip-view:hover,
   .chip-download:hover { background: var(--m-50); color: var(--m-600); border-color: var(--m-200); }
   /* ============ BUTTONS ============ */
   button {

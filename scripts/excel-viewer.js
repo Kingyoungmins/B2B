@@ -237,7 +237,15 @@ function refreshTabs() {
       t.className = "tab " + f.cls + (state.currentFileId === f.id ? " active" : "");
       t.dataset.fileId = f.id;
       t.innerHTML = `<span class="dot"></span>${escapeHtml(f.name)}`;
-      t.onclick = () => setCurrentView(f.id);
+      // [0.5.7] 단일 클릭 전환은 native overlay 에서 Excel 이 포커스를 못 받아 첫 셀 클릭이
+      // 씹혔다(보기 버튼도 동일). 더블클릭으로 전환하면 그 클릭 입력이 Excel 포커스를 유발해
+      // 바로 셀 선택이 된다 → 전환은 더블클릭으로 통일하고 단일 클릭엔 안내만 한다.
+      t.title = "더블클릭하여 이 파일로 전환";
+      t.ondblclick = () => setCurrentView(f.id);
+      t.onclick = () => {
+        if (state.currentFileId === f.id) return; // 이미 보고 있는 탭이면 안내 불필요
+        if (typeof toast === "function") toast("탭을 더블클릭하면 그 파일로 전환됩니다.", "info");
+      };
       fileTabs.appendChild(t);
     });
 
@@ -273,7 +281,8 @@ function refreshTabs() {
       const dim = state.currentSheet ? getSheetDimension(cur, state.currentSheet) : null;
       const rowLabel = dim ? ` \u00B7 \uC804\uCCB4 ${Number(dim.maxRow || 0).toLocaleString("ko-KR")}\uD589` : "";
       const colLabel = dim ? ` \u00B7 ${Number(dim.maxCol || 0).toLocaleString("ko-KR")}\uC5F4` : "";
-      info.textContent = `${cur.name} \u00B7 ${state.currentSheet || ""}${selLabel}${rowLabel}${colLabel}`;
+      const switchHint = all.length > 1 ? "  \u00B7  \uD0ED \uB354\uBE14\uD074\uB9AD\uC73C\uB85C \uC804\uD658" : "";
+      info.textContent = `${cur.name} \u00B7 ${state.currentSheet || ""}${selLabel}${rowLabel}${colLabel}${switchHint}`;
     } else {
       info.textContent = empty;
     }
