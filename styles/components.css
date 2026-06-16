@@ -106,8 +106,20 @@
     transition: all 0.15s;
   }
   .chip-remove:hover { color: var(--m-600); background: var(--m-50); }
-  /* [0.5.7] '보기' 버튼 제거 — 화면 전환은 상단 파일 탭 '더블클릭'으로 통일(단일 클릭은 안내). */
+  /* [0.5.7] '보기' 버튼 제거 — 화면 전환은 상단 파일 탭 '더블클릭'으로 통일. */
   .chip-view { display: none !important; }
+  /* [0.5.7] 파일 탭 더블클릭 전환 안내(상시 노출) */
+  .tab-dblclick-hint {
+    font-size: 11.5px;
+    color: var(--m-600);
+    background: var(--m-50);
+    border: 1px solid var(--m-200);
+    border-radius: 6px;
+    padding: 5px 10px;
+    margin: 2px 0 6px;
+    display: inline-block;
+    font-weight: 600;
+  }
   .chip-download {
     background: transparent;
     border: 1px solid var(--border);
