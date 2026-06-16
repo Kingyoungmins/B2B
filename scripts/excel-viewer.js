@@ -232,6 +232,14 @@ function refreshTabs() {
   tabTargets.forEach(({ fileTabs, sheetTabs, info, empty }) => {
     if (!fileTabs || !sheetTabs || !info) return;
     fileTabs.innerHTML = "";
+    // [0.5.7] 안내를 file-tabs '줄 안'에 넣는다 — file-tabs 위(right-header) 영역은 native shell
+    // 에서 잘려 안 보였다. 탭 줄은 보이므로 탭들 앞에 안내 배지를 둔다.
+    if (all.length) {
+      const hint = document.createElement("div");
+      hint.className = "tab-dblclick-hint";
+      hint.innerHTML = "📑 탭 <b>더블클릭</b>으로 전환";
+      fileTabs.appendChild(hint);
+    }
     all.forEach(f => {
       const t = document.createElement("div");
       t.className = "tab " + f.cls + (state.currentFileId === f.id ? " active" : "");
