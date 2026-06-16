@@ -38,7 +38,11 @@ $("btn-reset").onclick = async () => {
 };
 
 function logicBackupTimestamp() {
-  return new Date().toISOString().slice(0, 19).replace(/[T:]/g, "-");
+  // [수정] toISOString() 은 UTC 라 파일명 시각이 로컬(KST=UTC+9)보다 9시간 느렸다.
+  // 백업 파일명은 사용자가 보는 로컬 시각으로 만든다(메타데이터 createdAt 의 ISO 는 표준이라 UTC 유지).
+  const d = new Date();
+  const pad = n => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}-${pad(d.getHours())}-${pad(d.getMinutes())}-${pad(d.getSeconds())}`;
 }
 
 function safeLogicBaseName(name) {
@@ -132,7 +136,7 @@ async function saveLogicAutoBackup(reason, seq) {
 function openSaveModal() {
   if (state.pipeline.length === 0) { toast("저장할 단계가 없습니다", "error"); return; }
   const modal = $("modal");
-  const defaultName = "logic_" + new Date().toISOString().slice(0,16).replace(/[T:]/g,"-");
+  const defaultName = "logic_" + logicBackupTimestamp().slice(0, 16);  // 로컬 시각(분까지)
   modal.innerHTML = `
     <h3>스킬 저장 (ZIP 다운로드)</h3>
     <p style="font-size:12px; color:#666; margin-bottom:10px">
