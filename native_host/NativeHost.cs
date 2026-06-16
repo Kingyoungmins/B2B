@@ -453,6 +453,10 @@ namespace B2BNativeHost
                 {
                     webReady = true;
                     if (startupSplash != null) startupSplash.Visible = false;  // 준비 완료 → 스플래시 숨김
+                    // [필드] 초기화(location.reload)·재네비게이션 시 JS 의 window.__B2B_NATIVE_SHELL 이
+                    // 사라지는데, 패널 위치가 그대로면 lastNativeBoundsKey 가 같아 재주입을 건너뛰어
+                    // 미러 좌표가 복원되지 않았다(초기화 후 Excel 미러 안 보임). 네비게이션마다 강제 재주입.
+                    lastNativeBoundsKey = "";
                     PublishNativeBounds();
                 };
                 webView.CoreWebView2.Navigate(appUrl);
