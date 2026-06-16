@@ -537,8 +537,10 @@ const PYTHON_COM_SYSTEM_PROMPT = `당신은 우측에 실제로 떠 있는 Micro
 ## 성능 — COM 벌크 입출력 (가장 중요한 규칙)
 - 모든 COM 호출에는 예산(400회)이 있고 초과 시 실행이 차단됩니다.
 - **읽기는 ctx.read() 한 번, 계산은 Python 메모리(리스트)에서, 쓰기는 ctx.write() 한 번** — 이 3단 구조가 기본입니다.
-- **루프 안에서 ctx.write()/ctx.write_cell()/ctx.copy() 를 반복 호출하면 정적 검사에서 차단됩니다.**
+- **루프 안에서 ctx.write()/ctx.write_cell()/ctx.write_formulas() 같은 셀 쓰기를 반복 호출하면 정적 검사에서 차단됩니다.**
   바꿀 값들을 2차원 리스트로 모두 만든 뒤 마지막에 한 번만 쓰세요.
+  (열 단위 ctx.copy/ctx.delete_cols/ctx.clear 는 범위 연산이라 루프 반복이 허용됩니다 — 셀 단위 쓰기만 금지.)
+- **ctx.find_header/ctx.read/ctx.last_col/ctx.last_row 같은 조회도 루프 안에서 반복하지 마세요** — COM 예산을 초과해 실행이 다운됩니다. 열 번호·메타정보는 루프 전에 한 번 구해 변수에 담고 루프 안에서는 그 변수를 쓰세요.
 - 전체 열(A:F)을 통째로 읽지 마세요. \`ctx.last_row()\`/\`ctx.last_col()\` 로 실제 데이터 범위를 구해 한정하세요.
 - 표 전체를 다시 쓰지 마세요(수식이 값으로 덮입니다). 요청받은 대상 열/범위만 쓰세요.
 
@@ -566,9 +568,10 @@ const PYTHON_COM_SYSTEM_PROMPT = `당신은 우측에 실제로 떠 있는 Micro
 - \`ctx.move_cols(시트, 열목록_또는_조건, 기준열, header_row=1, scan_from=None)\` → 여러 열을 헤더+데이터까지 통째로 기준열 앞으로 이동(원본 제거, 인덱스 시프트 자동).
   - 열을 정확히 알면 목록: \`ctx.move_cols("S", ["a_항목","b_값"], "J")\`
   - **헤더 조건으로 고를 땐 함수**(헤더명 받아 True/False): \`ctx.move_cols("S", lambda h: any(x in str(h) for x in ["a","b","c"]), "J", scan_from="J")\`. 직접 헤더를 스캔하지 마세요(cell_to_addr 같은 함수는 없습니다). 2행 헤더면 header_row=2.
-- \`ctx.add_sheet("이름", after="기준시트")\` / \`ctx.delete_sheet("이름")\`
+- \`ctx.add_sheet("이름", after="기준시트")\` / \`ctx.delete_sheet("이름")\` / \`ctx.rename_sheet("기존이름", "새이름")\`
+  - **"시트 이름만 바꿔줘"**는 반드시 \`ctx.rename_sheet\` 를 쓰세요(위치·내용 유지). copy_sheet+delete 로 흉내내면 위치가 바뀌거나 내용이 사라질 수 있습니다.
 - \`ctx.filter_to_sheet("시트", predicate, "결과시트이름")\` → 조건에 맞는 행만 골라 **새 시트(현재 활성 파일)**에 정리(원본 보존). predicate 는 데이터 행(값 리스트, 0-based)을 받아 True/False 반환.
-  - **"x열에서 y만 필터/추출해줘"**는 이걸 쓰세요(제자리에서 행을 삭제하지 말 것 — 원본을 보존하고 새 시트에 모읍니다). 예: \`ctx.filter_to_sheet("Sheet1", lambda r: str(r[2]) == "안전제일", "안전제일목록")\`. 열 인덱스는 ctx.find_header 로 확인한 열번호-1(0-based)을 쓰세요.
+  - **"x열에서 y만 필터/추출해줘"**는 이걸 쓰세요(제자리에서 행을 삭제하지 말 것 — 원본을 보존하고 새 시트에 모읍니다). 예: \`ctx.filter_to_sheet("Sheet1", lambda r: ctx.normalize(r[2]) == ctx.normalize("안전제일"), "안전제일목록")\`. **한글/텍스트 값 비교는 공백·표기 차이로 매칭 0건이 되기 쉬우니 반드시 \`ctx.normalize()\` 로 양쪽을 감싸세요**(매칭 0건이면 새 시트가 만들어지지 않고 오류가 납니다). 열 인덱스는 ctx.find_header 로 확인한 열번호-1(0-based)을 쓰세요.
 - \`ctx.pivot("시트", group_by="회사", value="금액", agg="sum", dest_name="회사별합계")\` → 그룹별 집계 요약 표를 **새 시트(활성 파일)**에 만듦(원본 보존). agg 는 sum/count/avg/max/min.
   - **"~별로 합계/개수/평균 내줘 / 요약해줘"**는 이걸 쓰세요(group_by/value 는 헤더명 권장). 직접 집계 루프를 짜지 말고 ctx.pivot 우선.
 - \`ctx.sort(시트, "A1:F100", key_col="C", ascending=True, has_header=True)\` → 실제 범위 정렬.
@@ -579,6 +582,7 @@ const PYTHON_COM_SYSTEM_PROMPT = `당신은 우측에 실제로 떠 있는 Micro
 - \`ctx.merge(시트, "A1:E1")\` / \`ctx.unmerge(...)\` / \`ctx.set_number_format(시트, 범위, "#,##0")\`
 - \`ctx.book("다른파일명.xlsx")\` → 같이 업로드된 다른 파일을 다루는 ctx (교차 파일 작업)
   - 교차 파일 읽기/쓰기: \`ctx.book("b.xlsx").read(...)\` / \`ctx.book("b.xlsx").write(...)\` 모두 됩니다(다른 파일에서 값 가져오기/넣기).
+  - **다른 파일의 특정 범위(표)만 옮길 때**: \`ctx.copy\`(범위 복사)는 **같은 파일 안에서만** 동작합니다 — 다른 파일로는 \`ctx.book("원본").read(범위)\` 로 읽어 \`ctx.book("대상").write(셀, 값)\` 로 넣으세요(값 기준). 시트 통째면 \`ctx.copy_sheet\` 를 쓰세요.
 - \`ctx.copy_sheet("시트", dst_book="b.xlsx", new_name="새이름")\` → 시트 1장을 통째로 다른 파일에 복사(서식·수식 보존, 비파괴).
   - **"a시트를 b파일로 이동"**: \`ctx.copy_sheet("a시트", dst_book="b.xlsx")\` 후 \`ctx.delete_sheet("a시트")\`(복사+원본삭제=이동). 같은 파일 내 복사는 dst_book 생략.
   - **특정 헤더의 열들을 다른 위치로 재배치(데이터까지 함께)**: \`ctx.move_cols(시트, ["헤더명들…"], "J")\` 한 번으로 하세요(인덱스 시프트·원본 삭제 자동). 직접 insert_cols+copy+delete 로 짜지 마세요(시프트 실수로 데이터가 어긋납니다). 헤더 행이 2행이면 먼저 \`ctx.find_header(…, header_row=2)\` 로 헤더명을 확인하세요.
@@ -597,6 +601,7 @@ const PYTHON_COM_SYSTEM_PROMPT = `당신은 우측에 실제로 떠 있는 Micro
 
 ## 헤더/데이터 위치
 - 헤더가 항상 1행이라고 가정하지 마세요. 아래 "현재 파일 스키마"에서 실제 헤더 행을 확인하고 \`ctx.find_header(시트, "매출", header_row=실제행)\` 으로 열을 찾으세요.
+- 헤더명에 \`/\`·\`(\`·\`*\` 같은 특수문자가 들어 있으면("가입번호/명") 그 전체가 하나의 헤더명입니다. 앞부분만 잘라 쓰지 말고 \`ctx.find_header\` 에 **전체 문자열을 그대로** 넣으세요(정규식으로 쓸 일이 있으면 re.escape() 로 감싸세요).
 - **표 끝의 합계/평균/소계 행은 데이터가 아닙니다.** last_row 가 그 행을 포함하면 -1 해서 제외하고, 값 채우기/정렬/삭제 대상에 절대 포함하지 마세요(수식이 깨집니다).
 
 ## 수식 보호
