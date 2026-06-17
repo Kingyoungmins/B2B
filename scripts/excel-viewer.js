@@ -87,7 +87,17 @@ function isOutputFileId(fileId) {
   return fileId === "output" || outputTemplateIndexFromFileId(fileId) >= 0;
 }
 
-function setCurrentView(fileId) {
+function isExplicitViewSwitchSource(options) {
+  const source = typeof options === "string"
+    ? options
+    : String((options && (options.source || options.reason)) || "");
+  return source === "upload" || source === "user-tab";
+}
+
+function setCurrentView(fileId, options = {}) {
+  if (!isExplicitViewSwitchSource(options)) {
+    return false;
+  }
   if (fileId === "output" && state.outputTemplates && state.outputTemplates.length) {
     const idx = state.activeOutputIndex >= 0 ? state.activeOutputIndex : 0;
     fileId = outputTemplateFileId(idx);
@@ -109,6 +119,11 @@ function setCurrentView(fileId) {
   renderOutputChip();
   refreshTabs();
   renderExcelViewer();
+  return true;
+}
+
+function switchWorkbookFileFromUserTab(fileId) {
+  return window.setCurrentView(fileId, { source: "user-tab" });
 }
 
 function getFile(fileId) {
@@ -215,11 +230,6 @@ function refreshTabs() {
     state.selectionAnchor = null;
   }
 
-  if (!state.currentFileId && all.length) {
-    setCurrentView(all[all.length - 1].id);
-    return;
-  }
-
   // 현재 파일에서 selectedSheets 정합성 유지
   const cur = getFile(state.currentFileId);
   if (cur) {
@@ -249,7 +259,7 @@ function refreshTabs() {
       // 씹혔다. 더블클릭으로 전환하면 그 클릭 입력이 Excel 포커스를 유발해 셀 선택이 바로 된다 →
       // 전환은 더블클릭으로만(단일 클릭은 동작 없음). 안내는 file-tabs 위 상시 힌트(.tab-dblclick-hint).
       t.title = "더블클릭하여 이 파일로 전환";
-      t.ondblclick = () => setCurrentView(f.id);
+      t.ondblclick = () => switchWorkbookFileFromUserTab(f.id);
       fileTabs.appendChild(t);
     });
 

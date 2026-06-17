@@ -436,11 +436,16 @@ async function openCurrentWorkbookInExcel() {
   }
 }
 
-async function openExcelMirrorForFileId(fileId) {
-  if (fileId && typeof setCurrentView === "function") {
-    setCurrentView(fileId);
+async function openExcelMirrorForFileId(fileId, options = {}) {
+  if (fileId && typeof setCurrentView === "function" && excelMirrorAllowsViewSwitch(options)) {
+    setCurrentView(fileId, options);
   }
-  await openCurrentWorkbookInExcel();
+  if (excelMirrorAllowsViewSwitch(options)) {
+    await openCurrentWorkbookInExcel();
+  } else {
+    const excelId = await ensureExcelMirrorSession(fileId, { makeActive: false, deferVisible: true });
+    if (!excelId) return null;
+  }
   // [필드#4] 초기화(전체 Excel 강제종료) 직후의 첫 오픈은 창이 빈 화면으로 남는 케이스가
   // 보고됨 — 그 부팅에 한해 1초 뒤 한 번 recover 로 재표시를 보정한다(표식은 1회용).
   try {
@@ -478,6 +483,10 @@ function listAllWorkbookFileIds() {
     ids.push("output");
   }
   return ids;
+}
+
+function excelMirrorAllowsViewSwitch(options) {
+  return typeof isExplicitViewSwitchSource === "function" && isExplicitViewSwitchSource(options);
 }
 
 // 지정한 파일의 미러 세션을 보장(없으면 연다). 활성화/최상단 올리기는 makeActive 일 때만.
@@ -528,7 +537,7 @@ async function ensureExcelMirrorSession(fileId, { makeActive = false, deferVisib
 // 이후 탭/보기 전환은 선택된 미러를 z-order 최상단으로 올리기만 하면 되어 깜빡임이 없다.
 // 저사양 개선: 선택 파일을 '먼저' 열어 즉시 표시하고, 나머지는 백그라운드로 순차 오픈한다.
 // (기존: 전부 연 뒤에야 표시 → 파일 수 × 오픈시간 동안 빈 화면)
-async function preopenAllExcelMirrors(selectedFileId) {
+async function preopenAllExcelMirrors(selectedFileId, options = {}) {
   const ids = listAllWorkbookFileIds();
   if (!ids.length) return;
   const selected = selectedFileId || state.currentFileId || ids[ids.length - 1];
@@ -550,7 +559,9 @@ async function preopenAllExcelMirrors(selectedFileId) {
       failures.push({ fileId: selected, error: err });
       if (!isMissingExcelSessionError(err)) console.warn("Excel mirror preopen failed:", selected, err);
     }
-    if (typeof setCurrentView === "function") setCurrentView(selected);
+    if (typeof setCurrentView === "function" && excelMirrorAllowsViewSwitch(options)) {
+      setCurrentView(selected, options);
+    }
     const selExcelId = excelMirror.sessionsByFileId[selected];
     if (selExcelId) {
       try {
@@ -597,7 +608,7 @@ async function preopenAllExcelMirrors(selectedFileId) {
 
 // 호환용 진입점: 업로드 직후에는 현재 파일만 열어 화면 순회/깜빡임을 막는다.
 async function autoOpenMirrorAfterUpload(selectedFileId) {
-  return preopenAllExcelMirrors(selectedFileId);
+  return preopenAllExcelMirrors(selectedFileId, { source: "upload" });
 }
 
 async function switchVisibleExcelMirrorToFileId(fileId) {
@@ -666,7 +677,9 @@ async function switchVisibleExcelMirrorToFileId(fileId) {
 async function openExcelMirrorResultForFileId(fileId, downloadUrl, options = {}) {
   const resultId = extractResultIdFromDownloadUrl(downloadUrl);
   if (!fileId || !resultId) return false;
-  if (!options.preserveFocus && typeof setCurrentView === "function") setCurrentView(fileId);
+  if (!options.preserveFocus && typeof setCurrentView === "function" && excelMirrorAllowsViewSwitch(options)) {
+    setCurrentView(fileId, options);
+  }
   const data = await postExcelMirror("/api/excel/open-result", { resultId, liveEditable: true, ...(excelMirrorScreenRect() || {}) });
   excelMirror.sessionsByFileId[fileId] = data.excelId;
   excelMirror.sessionLastUsedByFileId[fileId] = Date.now();
@@ -739,7 +752,7 @@ async function ensureExcelMirrorForFileId(fileId) {
   if (!fileId) return null;
   let excelId = excelMirrorSessionIdForFileId(fileId);
   if (excelId) return excelId;
-  await openExcelMirrorForFileId(fileId);
+    await openExcelMirrorForFileId(fileId, { source: "session" });
   return excelMirrorSessionIdForFileId(fileId);
 }
 
@@ -959,10 +972,7 @@ async function recoverExcelMirrorWindow(excelId = currentExcelId() || excelMirro
   if (activeFileId) {
     excelMirror.activeExcelId = activeExcelId;
     excelMirror.sessionLastUsedByFileId[activeFileId] = Date.now();
-    // preserveView: 자가복구 같은 배경 호출은 사용자가 보던 탭을 절대 바꾸지 않는다.
-    if (!options.preserveView && state.currentFileId !== activeFileId && typeof setCurrentView === "function") {
-      setCurrentView(activeFileId);
-    }
+    // 복구는 Excel 창 상태만 보정하고, 사용자가 보던 앱 탭은 바꾸지 않는다.
   } else {
     excelMirror.activeExcelId = activeExcelId;
   }
@@ -993,7 +1003,11 @@ function maybeAutoReapplyAfterRecover(excelId) {
     if (!excelId) return;
     const steps = (state.pipeline || []).filter(s => s && s.enabled !== false && s.code);
     if (!steps.length) return;
-    if (typeof pipelineUsesVba === "function" && !pipelineUsesVba(state.pipeline)) return;
+    if (typeof pipelineUsesLiveSkill === "function") {
+      if (!pipelineUsesLiveSkill(state.pipeline)) return;
+    } else if (typeof pipelineUsesVba === "function" && !pipelineUsesVba(state.pipeline)) {
+      return;
+    }
     const now = Date.now();
     if (now < (excelMirror.autoReapplyBlockedUntil || 0)) return;
     excelMirror.autoReapplyBlockedUntil = now + 120000;
@@ -1377,9 +1391,7 @@ async function pollExcelMirrorChanges(excelId, options = {}) {
         excelMirror.sessionLastUsedByFileId[activeFileId] = Date.now();
         if (activeChanged) {
           excelMirror.activeExcelId = activeExcelId;
-          if (state.currentFileId !== activeFileId && typeof setCurrentView === "function") {
-            setCurrentView(activeFileId);
-          }
+          // Excel 활성 워크북 변화는 기록만 하고 앱의 현재 탭은 바꾸지 않는다.
         }
       }
       // 탭과 다른(스테일 활성) 파일의 Selection 으로 현재 탭의 선택/멘션을 덮지 않는다.
@@ -1403,11 +1415,12 @@ async function pollExcelMirrorChanges(excelId, options = {}) {
 
 function syncSelectionFromExcel(sheet, address, options = {}) {
   if (!sheet || !address) return;
+  const target = currentExcelMirrorTarget();
+  const fileId = options.fileId || (target ? target.fileId : state.currentFileId);
+  if (!fileId || fileId !== state.currentFileId) return;
   const previousSheet = state.currentSheet;
   const previousFileId = state.currentFileId;
   state.currentSheet = sheet;
-  const target = currentExcelMirrorTarget();
-  const fileId = options.fileId || (target ? target.fileId : state.currentFileId);
   const range = parseExcelSelectionAddress(address, fileId, sheet);
   if (range) {
     state.selectedRange = range;
@@ -1766,6 +1779,7 @@ async function postExcelMirror(path, body, attempt = 0, options = {}) {
   if (typeof originalSetCurrentView === "function") {
     window.setCurrentView = function(...args) {
       const result = originalSetCurrentView.apply(this, args);
+      if (result === false) return result;
       replaceSimulatorWithMirrorShell();
       updateMirrorShellStatus();
       // (제거) scheduleExcelMirrorPosition(true): 탭 클릭마다 모든 세션을 강제 재배치하던 COM 폭풍 —

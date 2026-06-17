@@ -421,6 +421,9 @@ def _pipeline_error_guide(message, code=""):
         return ("입력 파일은 읽기 전용이라, 입력에 쓰거나 저장하려다 실패했을 수 있습니다.",
                 "결과는 출력 파일에 쓰도록 하세요. 입력 파일을 꼭 바꿔야 하면 코드 첫 줄에 # B2B_ENGINE_FALLBACK: excel-com 을 넣어 Excel 처리를 요청하세요.")
     # ── VBA(Excel COM 매크로) 특유 오류 ── (subscript/accessvbom/문법 등은 위 일반 케이스보다 먼저 잡히도록 케이스 조건을 한정)
+    if ("매크로를 실행할 수 없습니다" in m) or has("cannot run the macro", "macro may not be available", "macros may be disabled"):
+        return ("Excel이 VBA 실행을 거부했습니다.",
+                "앱과 Excel 프로세스를 모두 닫은 뒤 다시 실행하세요. 같은 파일에서 채팅 단일 적용은 되는데 전체실행만 실패하면 프로그램 실행 경로 문제입니다.")
     if has("accessvbom") or ("프로젝트에 접근" in m) or ("매크로 설정" in m):
         return ("Excel이 VBA(매크로) 접근을 차단했습니다.",
                 "이건 프롬프트로는 해결되지 않습니다 — Excel 옵션 > 보안 센터 > 매크로 설정에서 'VBA 프로젝트 개체 모델에 대한 액세스 신뢰'를 켠 뒤 파일을 다시 여세요.")
@@ -951,15 +954,32 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
 
     def handle_excel_run_vba(self):
         payload = self.read_json_body()
+        trace_id = uuid.uuid4().hex[:10]
+        code = payload.get("code") or payload.get("vba") or ""
+        _vba_trace(
+            "http.run_vba.request",
+            traceId=trace_id,
+            excelId=payload.get("excelId"),
+            entry=payload.get("entry"),
+            restoreWindow=payload.get("restoreWindow"),
+            codeLen=len(str(code)),
+            codeHash=_trace_hash(code),
+            codeHead=_trace_text(code, 350),
+        )
         try:
-            self.send_json(run_vba_on_session(
+            result = run_vba_on_session(
                 payload.get("excelId"),
-                payload.get("code") or payload.get("vba") or "",
+                code,
                 entry=payload.get("entry"),
-            ))
+                restore_window=payload.get("restoreWindow") is not False,
+            )
+            _vba_trace("http.run_vba.response", traceId=trace_id, ok=True, result=result)
+            self.send_json(result)
         except PipelineExecutionError as err:
+            _vba_trace("http.run_vba.error", traceId=trace_id, kind="PipelineExecutionError", error=str(err), errorInfo=err.info)
             self.send_json({"ok": False, "error": str(err), "errorInfo": err.info}, status=400)
         except Exception as err:
+            _vba_trace("http.run_vba.error", traceId=trace_id, kind=type(err).__name__, error=str(err))
             self.send_json({"ok": False, "error": str(err)}, status=500)
 
     def handle_excel_run_python(self):
@@ -975,17 +995,45 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
     def handle_excel_run_vba_pipeline(self):
         payload = self.read_json_body()
         reset = payload.get("reset")
+        trace_id = uuid.uuid4().hex[:10]
+        steps = payload.get("steps") or []
+        step_preview = []
+        for idx, st in enumerate(steps[:12]):
+            code = (st.get("code") if isinstance(st, dict) else str(st)) or ""
+            step_preview.append({
+                "idx": idx,
+                "stepIdx": st.get("stepIdx") if isinstance(st, dict) else None,
+                "stepId": st.get("stepId") if isinstance(st, dict) else None,
+                "language": st.get("language") if isinstance(st, dict) else None,
+                "description": _trace_text(st.get("description") if isinstance(st, dict) else "", 160),
+                "codeLen": len(str(code)),
+                "codeHash": _trace_hash(code),
+                "codeHead": _trace_text(code, 260),
+            })
+        _vba_trace(
+            "http.run_vba_pipeline.request",
+            traceId=trace_id,
+            excelId=payload.get("excelId"),
+            reset=True if reset is None else bool(reset),
+            viewSheet=payload.get("viewSheet"),
+            steps=len(steps),
+            stepPreview=step_preview,
+        )
         try:
-            self.send_json(run_vba_pipeline_on_session(
+            result = run_vba_pipeline_on_session(
                 payload.get("excelId"),
-                payload.get("steps") or [],
+                steps,
                 reset=True if reset is None else bool(reset),
                 entry=payload.get("entry"),
                 view_sheet=payload.get("viewSheet"),
-            ))
+            )
+            _vba_trace("http.run_vba_pipeline.response", traceId=trace_id, ok=True, result=result)
+            self.send_json(result)
         except PipelineExecutionError as err:
+            _vba_trace("http.run_vba_pipeline.error", traceId=trace_id, kind="PipelineExecutionError", error=str(err), errorInfo=err.info)
             self.send_json({"ok": False, "error": str(err), "errorInfo": err.info}, status=400)
         except Exception as err:
+            _vba_trace("http.run_vba_pipeline.error", traceId=trace_id, kind=type(err).__name__, error=str(err))
             self.send_json({"ok": False, "error": str(err)}, status=500)
 
     def handle_excel_activate(self):
@@ -1394,7 +1442,13 @@ def excel_workbooks_open(app, path, read_only=False):
     except Exception:
         pass
     try:
-        app.AutomationSecurity = 3  # msoAutomationSecurityForceDisable
+        # [핵심 수정] msoAutomationSecurityLow(1) 로 연다(이전엔 ForceDisable(3)).
+        # ForceDisable 로 파일을 열면 일부 환경(기업/특정 Office 빌드)에서 그 인스턴스의 '모든 매크로'가
+        # 영구 비활성화되어, 이후 주입한 러너 매크로의 Application.Run 이 "매크로를 실행할 수 없습니다"로
+        # 실패한다(전체실행이 companion 재오픈 후 100% 실패한 근본원인). run 직전에 Low 로 낮춰도
+        # 이미 차단된 상태는 되돌릴 수 없으므로, '열 때부터' Low 로 연다. 업로드 파일은 .xlsx(매크로 없음)이고
+        # 러너 .xlsm 은 우리가 만든 것이라 Low 는 안전하다.
+        app.AutomationSecurity = 1  # msoAutomationSecurityLow
     except Exception:
         pass
 
@@ -2402,11 +2456,62 @@ def _is_pid_alive(pid):
         return False
 
 
+def _b2b_runner_trusted_dir():
+    """러너 .xlsm 를 만들 고정 폴더(Excel 신뢰 위치로 등록되는 곳)."""
+    d = Path(tempfile.gettempdir()) / "b2b_runner_trusted"
+    try:
+        d.mkdir(parents=True, exist_ok=True)
+    except Exception:
+        pass
+    return d
+
+
+def _ensure_runner_trusted_location():
+    """러너 폴더를 Excel '신뢰할 수 있는 위치(Trusted Location)'로 등록한다.
+    [핵심] 신뢰 위치의 매크로는 Trust Center 매크로 설정(VBAWarnings)·실행 타이밍·인스턴스 상태와
+    무관하게 '항상' 실행된다. 전체실행이 어떤 Excel 인스턴스에선 매크로 실행이 막히던(간헐적
+    "매크로를 실행할 수 없습니다") 현상을, 러너를 신뢰 위치에서 실행해 결정적으로 우회한다.
+    Excel 시작 시점에 읽으므로 인스턴스 DispatchEx 전에 호출한다."""
+    base = _b2b_runner_trusted_dir()
+    try:
+        import winreg
+    except Exception:
+        return base
+    path_str = str(base)
+    if not path_str.endswith("\\"):
+        path_str += "\\"
+    for ver in ("16.0", "15.0", "14.0", "12.0"):
+        try:
+            sec = r"Software\Microsoft\Office\%s\Excel\Security" % ver
+            # 신뢰 위치 전체가 꺼져 있으면 켜고, %TEMP% 하위도 허용.
+            try:
+                tl = winreg.CreateKey(winreg.HKEY_CURRENT_USER, sec + r"\Trusted Locations")
+                try:
+                    winreg.SetValueEx(tl, "AllLocationsDisabled", 0, winreg.REG_DWORD, 0)
+                finally:
+                    winreg.CloseKey(tl)
+            except Exception:
+                pass
+            # 전용 신뢰 위치 등록(고정 키명 — 기존 Location0..N 과 충돌 없음, Excel 은 하위키 전부 열거).
+            loc = winreg.CreateKey(winreg.HKEY_CURRENT_USER, sec + r"\Trusted Locations\B2BRunner")
+            try:
+                winreg.SetValueEx(loc, "Path", 0, winreg.REG_SZ, path_str)
+                winreg.SetValueEx(loc, "AllowSubFolders", 0, winreg.REG_DWORD, 1)
+                winreg.SetValueEx(loc, "Description", 0, winreg.REG_SZ, "B2B VBA runner (auto)")
+            finally:
+                winreg.CloseKey(loc)
+        except Exception:
+            pass
+    return base
+
+
 def _ensure_vbom_access():
-    """'VBA 프로젝트 개체 모델에 대한 액세스 신뢰'(AccessVBOM) 레지스트리 플래그를 켠다(HKCU).
-    이게 꺼져 있으면 wb.VBProject 접근이 막혀 VBA 주입이 불가능하다.
-    설치된 Office 버전 폴더 모두에 1을 써 둔다. 이 플래그는 '이후 새로 띄우는' Excel 인스턴스에 적용되므로
-    라이브 Excel을 DispatchEx 하기 직전에 호출해야 그 인스턴스가 VBProject 접근을 허용한다."""
+    """매크로 주입·실행에 필요한 Trust Center 플래그를 켠다(HKCU).
+    - AccessVBOM=1: wb.VBProject 접근 허용(매크로 주입에 필요). 꺼져 있으면 주입 자체가 막힌다.
+    - VBAWarnings=1: '모든 매크로 사용'(매크로 실행에 필요). 이게 1이 아니면 일부 인스턴스에서
+      주입한 러너 매크로의 Application.Run 이 "매크로를 실행할 수 없습니다"로 막힌다(전체실행 간헐 실패의
+      근본원인 — injection 은 되는데 RUN 만 차단). 앱이 만든 임시 러너 + 사용자 .xlsx 라 실행 허용이 안전.
+    이 값들은 '이후 새로 띄우는' Excel 인스턴스에 적용되므로 라이브 Excel DispatchEx 직전에 호출한다."""
     try:
         import winreg
     except Exception:
@@ -2420,11 +2525,16 @@ def _ensure_vbom_access():
             )
             try:
                 winreg.SetValueEx(key, "AccessVBOM", 0, winreg.REG_DWORD, 1)
+                winreg.SetValueEx(key, "VBAWarnings", 0, winreg.REG_DWORD, 1)  # 1=모든 매크로 사용
                 enabled = True
             finally:
                 winreg.CloseKey(key)
         except Exception:
             pass
+    try:
+        _ensure_runner_trusted_location()  # 러너 폴더를 신뢰 위치로 — 매크로 항상 실행 허용(핵심)
+    except Exception:
+        pass
     return enabled
 
 
@@ -4183,6 +4293,189 @@ End Function
     return wrapped_user_code + "\n" + wrapper, runner_name, err_num_name, err_desc_name
 
 
+def _extract_vba_source_for_injection(code, entry=None):
+    """Saved skills can contain the assistant reply text around the VBA block.
+
+    Excel's VBE accepts AddFromString even when the module later cannot compile; the
+    following Application.Run then reports the misleading "macro cannot run" error.
+    Strip markdown/title/reference text here so loaded .zip skills execute the same
+    way as freshly generated chat code.
+    """
+    text = str(code or "").replace("\r\n", "\n").replace("\r", "\n").strip()
+    if not text:
+        return text
+
+    fence = re.search(r"```(?:vba|vb|visual\s*basic)?\s*\n([\s\S]*?)```", text, re.IGNORECASE)
+    if fence:
+        text = fence.group(1).strip()
+
+    lines = text.split("\n")
+    # Drop obvious non-VBA wrappers that older auto-save/export paths sometimes
+    # placed before the real Sub.
+    while lines:
+        stripped = lines[0].lstrip()
+        if not stripped:
+            lines.pop(0)
+            continue
+        if stripped.startswith("//") or stripped.startswith("#"):
+            lines.pop(0)
+            continue
+        if re.match(r"^(?:제목|title|설명|정확\s*참조|\[정확\s*참조\])\s*[:\]]", stripped, re.IGNORECASE):
+            lines.pop(0)
+            continue
+        break
+    text = "\n".join(lines).strip()
+
+    entry = (entry or VBA_SKILL_ENTRY).strip() or VBA_SKILL_ENTRY
+    entry_re = re.compile(r"^\s*(?:(?:Public|Private|Friend|Static)\s+)?Sub\s+%s\s*\(" % re.escape(entry), re.IGNORECASE | re.MULTILINE)
+    first_sub_re = re.compile(r"^\s*(?:(?:Public|Private|Friend|Static)\s+)?Sub\s+\w+\s*\(", re.IGNORECASE | re.MULTILINE)
+    option_re = re.compile(r"^\s*Option\s+[^\n]+\n", re.IGNORECASE | re.MULTILINE)
+
+    m = entry_re.search(text) or first_sub_re.search(text)
+    if m and m.start() > 0:
+        prefix = text[:m.start()]
+        # Keep leading Option lines only; discard prose/markdown/reference text.
+        options = "".join(mm.group(0) for mm in option_re.finditer(prefix))
+        text = (options + text[m.start():]).strip()
+
+    # Remove any trailing markdown/prose after the last End Sub when no helper
+    # Function follows. This is deliberately conservative.
+    end_matches = list(re.finditer(r"^\s*End\s+Sub\b.*$", text, re.IGNORECASE | re.MULTILINE))
+    if end_matches:
+        last_end = end_matches[-1]
+        tail = text[last_end.end():]
+        if tail.strip() and not re.search(r"^\s*(?:(?:Public|Private|Friend|Static)\s+)?Function\s+\w+\s*\(", tail, re.IGNORECASE | re.MULTILINE):
+            text = text[:last_end.end()].strip()
+
+    return text
+
+
+def _vba_macro_ref(wb, module_name, macro_name):
+    """Return a workbook-qualified macro reference for Application.Run.
+
+    When multiple workbooks are open, running "Module1.Macro" can resolve against
+    the active workbook instead of the workbook that received the temporary
+    module. Qualifying with the workbook name makes injected VBA deterministic.
+    """
+    try:
+        wb_name = str(wb.Name)
+    except Exception:
+        wb_name = ""
+    if wb_name:
+        wb_name = wb_name.replace("'", "''")
+        return "'%s'!%s.%s" % (wb_name, module_name, macro_name)
+    return "%s.%s" % (module_name, macro_name)
+
+
+def _vba_macro_refs(wb, module_name, macro_name):
+    refs = []
+    def add(value):
+        if value and value not in refs:
+            refs.append(value)
+    try:
+        wb_name = str(wb.Name)
+    except Exception:
+        wb_name = ""
+    try:
+        wb_fullname = str(wb.FullName)
+    except Exception:
+        wb_fullname = ""
+    if wb_name:
+        add("'%s'!%s.%s" % (wb_name.replace("'", "''"), module_name, macro_name))
+    if wb_fullname:
+        add("'%s'!%s.%s" % (wb_fullname.replace("'", "''"), module_name, macro_name))
+    add("%s.%s" % (module_name, macro_name))
+    add(macro_name)
+    return refs
+
+
+def _run_vba_macro_any_ref(app, host_wb, module_name, macro_name):
+    last_err = None
+    refs = _vba_macro_refs(host_wb, module_name, macro_name)
+    _vba_trace("vba.macro.refs", host=_trace_workbook_info(host_wb), moduleName=module_name, macro=macro_name, refs=refs)
+    for ref in refs:
+        try:
+            try:
+                host_wb.Activate()
+            except Exception:
+                pass
+            result = app.Run(ref)
+            _vba_trace("vba.macro.ref.ok", ref=ref, moduleName=module_name, macro=macro_name, result=_trace_text(result, 120))
+            return result
+        except Exception as err:
+            last_err = err
+            _vba_trace("vba.macro.ref.fail", ref=ref, moduleName=module_name, macro=macro_name, error=str(err))
+            try:
+                _diag_vba_log_line("VBA-RUN-REF-FAIL ref=%r err=%r" % (ref, str(err)[:180]))
+            except Exception:
+                pass
+    if last_err is not None:
+        raise last_err
+    raise RuntimeError("VBA 매크로 참조를 만들 수 없습니다.")
+
+
+def _workbook_name_lookup_key(value):
+    """Normalize workbook names for generated-code lookups.
+
+    Users and browser upload flows sometimes preserve URL-escaped spaces in file
+    names (``%20``) while the LLM writes the human-visible space. Treat those as
+    the same workbook name, without doing broad fuzzy matching.
+    """
+    text = str(value or "")
+    try:
+        text = unquote(text)
+    except Exception:
+        pass
+    text = text.replace("\u00a0", " ")
+    text = re.sub(r"\s+", " ", text).strip().lower()
+    return text
+
+
+def _resolve_open_workbook_name(app, requested_name):
+    """Return the actual open workbook name matching requested_name.
+
+    Exact name wins. Otherwise match only after URL-decoding and whitespace
+    normalization. Ambiguous normalized matches are ignored.
+    """
+    requested = str(requested_name or "")
+    if not requested:
+        return requested
+    try:
+        names = [str(wb.Name) for wb in app.Workbooks]
+    except Exception:
+        return requested
+    for name in names:
+        if name == requested:
+            return name
+    req_key = _workbook_name_lookup_key(requested)
+    matches = [name for name in names if _workbook_name_lookup_key(name) == req_key]
+    return matches[0] if len(matches) == 1 else requested
+
+
+def _normalize_vba_workbook_literals(app, code):
+    """Patch workbook filename string literals to the actual open workbook name.
+
+    This keeps imported/old skills runnable when the saved code contains
+    ``...LGU .xlsx`` but the user's actual file name is ``...LGU%20.xlsx``.
+    Only .xls* string literals that resolve to one currently open workbook are
+    changed.
+    """
+    text = str(code or "")
+    if ".xls" not in text.lower():
+        return text
+
+    def repl(match):
+        quote_ch = match.group(1)
+        literal = match.group(2)
+        actual = _resolve_open_workbook_name(app, literal)
+        if actual == literal:
+            return match.group(0)
+        escaped = actual.replace(quote_ch, quote_ch + quote_ch)
+        return quote_ch + escaped + quote_ch
+
+    return re.sub(r'(["\'])([^"\']+\.xlsm?|[^"\']+\.xlsx|[^"\']+\.xlsb)\1', repl, text, flags=re.I)
+
+
 def _suppress_vba_debug_windows(pid=None):
     """VBE/디버그 다이얼로그가 떠도 사용자에게 보이지 않도록 즉시 닫거나 숨긴다."""
     wg = globals().get("win32gui")
@@ -4257,24 +4550,346 @@ def _hide_vba_editor(app):
             pass
 
 
-def _inject_and_run_vba(app, wb, code, entry):
-    """워크북에 VBA 모듈을 임시로 추가해 entry Sub를 실행하고, 끝나면 모듈을 제거한다.
-    AccessVBOM 이 꺼져 있으면 wb.VBProject 접근에서 예외 → 명확한 안내로 변환."""
-    code = code or ""
-    if not code.strip():
-        return
-    _validate_vba_source_before_inject(code)
-    excel_pid = _excel_process_id(app)
-    suppressor = _start_vba_debug_suppressor(excel_pid)
+def _vba_workbook_name(wb):
+    try:
+        return str(wb.Name or "")
+    except Exception:
+        return ""
+
+
+def _vba_string_literal(value):
+    return '"' + str(value or "").replace('"', '""') + '"'
+
+
+def _rewrite_thisworkbook_for_runner_host(code, context_wb):
+    """임시 .xlsm 러너에서 실행할 때 ThisWorkbook 은 러너 자신을 가리킨다.
+    생성 코드가 ThisWorkbook.Worksheets(...) 를 쓰면 대상 파일이 아니라 러너 파일에 써져
+    성공처럼 보이는 no-op 이 된다. 러너 경로에서는 대상 워크북 명시 참조로 바꾼다."""
+    text = str(code or "")
+    if not re.search(r"\bThisWorkbook\b", text, re.I):
+        return text
+    return re.sub(
+        r"\bThisWorkbook\b",
+        "Workbooks(%s)" % _vba_string_literal(_vba_workbook_name(context_wb)),
+        text,
+        flags=re.I,
+    )
+
+
+def _vba_should_use_runner_host(wb):
+    """Return True when the target workbook is not a reliable VBA host."""
+    name = _vba_workbook_name(wb).lower()
+    if name.endswith(".csv"):
+        return True
+    try:
+        file_format = int(wb.FileFormat)
+        # 6=CSV cannot host a VBA project. Normal .xlsx workbooks can still host
+        # a temporary in-memory module through VBProject during automation, and
+        # that path matches the single-apply behavior more reliably than a temp
+        # .xlsm runner in hosted WebView/native full-run contexts.
+        if file_format in (6,):
+            return True
+    except Exception:
+        pass
+    return False
+
+
+def _is_vba_macro_run_blocked_error(err):
+    text = str(err or "").lower()
+    return any(needle in text for needle in [
+        "매크로를 실행할 수 없습니다",
+        "모든 매크로를 사용하지 못할 수 있습니다",
+        "cannot run the macro",
+        "macro may not be available",
+        "macros may be disabled",
+    ])
+
+
+def _create_vba_runner_workbook(app, context_wb):
+    """Create a local temporary .xlsm workbook used only to host injected VBA."""
+    # 러너는 '신뢰 위치'로 등록된 폴더 안에 만든다 → 그 매크로는 Trust Center 설정/타이밍과 무관하게 실행됨.
+    try:
+        _runner_base = str(_b2b_runner_trusted_dir())
+    except Exception:
+        _runner_base = None
+    temp_dir = Path(tempfile.mkdtemp(prefix="b2b_vba_runner_", dir=_runner_base) if _runner_base
+                    else tempfile.mkdtemp(prefix="b2b_vba_runner_"))
+    temp_path = temp_dir / ("b2b_vba_runner_%s.xlsm" % uuid.uuid4().hex[:8])
+    runner = None
+    prev_display_alerts = None
+    try:
+        try:
+            prev_display_alerts = app.DisplayAlerts
+            app.DisplayAlerts = False
+        except Exception:
+            pass
+        runner = app.Workbooks.Add()
+        try:
+            runner.SaveAs(str(temp_path), FileFormat=52)  # xlOpenXMLWorkbookMacroEnabled
+        except Exception:
+            # Unsaved BookN can still host temporary injected modules in most installs.
+            pass
+        try:
+            # 앱 전체실행 컨텍스트에서는 숨겨진 러너 통합문서를 대상으로
+            # Application.Run 이 "매크로를 실행할 수 없습니다"로 거부되는 사례가 있었다.
+            # 창은 visible 로 두되 화면 밖 작은 normal window 로 치워 사용자 화면에는 거의 노출하지 않는다.
+            win = runner.Windows(1)
+            win.Visible = True
+            try:
+                win.WindowState = -4143  # xlNormal
+            except Exception:
+                pass
+            try:
+                win.Left = -32000
+                win.Top = -32000
+                win.Width = 120
+                win.Height = 80
+            except Exception:
+                pass
+        except Exception:
+            pass
+        try:
+            context_wb.Activate()
+        except Exception:
+            pass
+        return runner, temp_dir
+    except Exception:
+        try:
+            if runner is not None:
+                runner.Close(SaveChanges=False)
+        except Exception:
+            pass
+        shutil.rmtree(temp_dir, ignore_errors=True)
+        raise
+    finally:
+        try:
+            if prev_display_alerts is not None:
+                app.DisplayAlerts = prev_display_alerts
+        except Exception:
+            pass
+
+
+def _close_vba_runner_workbook(app, runner_wb, temp_dir):
+    prev_display_alerts = None
+    try:
+        try:
+            prev_display_alerts = app.DisplayAlerts
+            app.DisplayAlerts = False
+        except Exception:
+            pass
+        if runner_wb is not None:
+            try:
+                runner_wb.Close(SaveChanges=False)
+            except Exception:
+                pass
+    finally:
+        try:
+            if prev_display_alerts is not None:
+                app.DisplayAlerts = prev_display_alerts
+        except Exception:
+            pass
+        if temp_dir:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+
+def _diag_vba_log_line(msg):
+    """[임시 진단] VBA 실행 결과 한 줄을 vba_runner_fail.log 에 남긴다(성공/런타임에러/실행예외 구분)."""
+    try:
+        import datetime as _dt
+        from pathlib import Path as _P
+        with open(_P(__file__).resolve().parent / "vba_runner_fail.log", "a", encoding="utf-8") as f:
+            f.write("[%s] %s\n" % (_dt.datetime.now().isoformat(), msg))
+    except Exception:
+        pass
+
+
+def _vba_trace_path():
+    return Path(__file__).resolve().parent / "vba_pipeline_trace.jsonl"
+
+
+def _trace_text(value, limit=500):
+    text = str(value or "")
+    text = text.replace("\r\n", "\n").replace("\r", "\n")
+    if len(text) > limit:
+        return text[:limit] + "...<truncated %d chars>" % (len(text) - limit)
+    return text
+
+
+def _trace_hash(value):
+    return hashlib.sha256(str(value or "").encode("utf-8", errors="replace")).hexdigest()[:16]
+
+
+def _trace_workbook_info(wb):
+    info = {}
+    if wb is None:
+        return info
+    for key in ("Name", "FullName", "Path"):
+        try:
+            info[key] = str(getattr(wb, key) or "")
+        except Exception as err:
+            info[key] = "<err %s>" % err
+    try:
+        info["Worksheets"] = _excel_collection_names(wb.Worksheets)
+    except Exception:
+        pass
+    return info
+
+
+def _vba_trace(event, **fields):
+    """Structured VBA/pipeline trace for field failures.
+
+    File: <repo>/vba_pipeline_trace.jsonl. Each line is a compact JSON event so
+    we can compare single apply vs full-run without guessing from UI text.
+    """
+    try:
+        payload = {
+            "ts": datetime.datetime.now().isoformat(timespec="milliseconds"),
+            "pid": os.getpid(),
+            "event": event,
+        }
+        payload.update(fields)
+        with _vba_trace_path().open("a", encoding="utf-8") as f:
+            f.write(json.dumps(payload, ensure_ascii=False, default=str) + "\n")
+    except Exception:
+        pass
+
+
+def _diag_prerun_window_state(app, context_wb):
+    """[임시 진단] VBA Application.Run 직전, Excel 앱 프레임 + 대상 워크북 창의
+    부모/owner/스타일/가시성을 기록한다. 단일적용 vs 전체실행의 창 상태 차이를 비교하기 위함."""
+    try:
+        import win32gui as _wg, win32con as _wc, datetime as _dt
+        out = ["---- PRE-RUN window state %s ----" % _dt.datetime.now().isoformat()]
+        def _desc(tag, h):
+            try:
+                h = int(h)
+                par = _wg.GetParent(h)
+                own = _wg.GetWindowLong(h, getattr(_wc, "GWL_HWNDPARENT", -8))
+                stl = _wg.GetWindowLong(h, _wc.GWL_STYLE)
+                vis = _wg.IsWindowVisible(h)
+                out.append("%s hwnd=%s parent=%s owner=%s WS_CHILD=%s visible=%s"
+                           % (tag, h, par, own, bool(stl & _wc.WS_CHILD), vis))
+            except Exception as e:
+                out.append("%s <err %s>" % (tag, e))
+        try: _desc("app.Hwnd", app.Hwnd)
+        except Exception as e: out.append("app.Hwnd <err %s>" % e)
+        try: _desc("ctxwb.Win", context_wb.Windows(1).Hwnd)
+        except Exception as e: out.append("ctxwb.Win <err %s>" % e)
+        try: out.append("app.Visible=%s ScreenUpdating=%s" % (app.Visible, app.ScreenUpdating))
+        except Exception: pass
+        from pathlib import Path as _P
+        with open(_P(__file__).resolve().parent / "vba_runner_fail.log", "a", encoding="utf-8") as f:
+            f.write("\n".join(out) + "\n")
+    except Exception:
+        pass
+
+
+def _diag_vba_run_failure(app, host_wb, vbproj, module, module_name, safe_code, err):
+    """[임시 진단] 러너 매크로 실행 실패 원인 포착: 컴파일에러 vs 매크로차단 vs 기타.
+    log = <repo>/vba_runner_fail.log. 실제 흐름을 절대 깨지 않도록 전부 방어한다."""
+    import datetime as _dt
+    lines = ["==== VBA RUN FAIL %s ====" % _dt.datetime.now().isoformat()]
+    def _s(label, fn):
+        try:
+            lines.append("%s: %r" % (label, fn()))
+        except Exception as e:
+            lines.append("%s: <err %s>" % (label, e))
+    _s("err", lambda: str(err))
+    _s("host_wb.FullName", lambda: str(host_wb.FullName))
+    _s("host_wb.Name", lambda: str(host_wb.Name))
+    _s("module_name", lambda: module_name)
+    _s("app.AutomationSecurity", lambda: app.AutomationSecurity)
+    _s("app.Interactive", lambda: app.Interactive)
+    _s("app.EnableEvents", lambda: app.EnableEvents)
+    _s("app.Visible", lambda: app.Visible)
+    _s("app.Version/Build", lambda: "%s/%s" % (app.Version, app.Build))
+    _s("open_workbooks", lambda: [str(w.Name) for w in app.Workbooks])
+    try:
+        cm = module.CodeModule
+        injected = cm.Lines(1, cm.CountOfLines)
+    except Exception as e:
+        injected = "<could not read module: %s>" % e
+    # 판별 probe: 같은 워크북에 트리비얼 함수를 넣고 실행 가능한지.
+    try:
+        pm = vbproj.VBComponents.Add(1)
+        pname = pm.Name
+        pm.CodeModule.AddFromString("Public Function B2B_Probe999() As Long\r\n B2B_Probe999 = 123\r\nEnd Function\r\n")
+        try:
+            val = app.Run("'%s'!%s.B2B_Probe999" % (str(host_wb.Name).replace("'", "''"), pname))
+            lines.append("DISCRIMINATOR: PROBE_OK(=%r) → 매크로 실행 가능 → 원래 모듈 컴파일에러 의심" % val)
+        except Exception as e2:
+            lines.append("DISCRIMINATOR: PROBE_FAIL(%s) → 이 워크북/앱에서 매크로 실행 자체가 차단" % e2)
+        try:
+            vbproj.VBComponents.Remove(pm)
+        except Exception:
+            pass
+    except Exception as e:
+        lines.append("DISCRIMINATOR: <probe setup err %s>" % e)
+    # 창 상태(임베드 여부) 포착
+    try:
+        import win32gui as _wg, win32con as _wc
+        _h = int(app.Hwnd)
+        _s("excel_hwnd", lambda: _h)
+        _s("GetParent(excel)", lambda: _wg.GetParent(_h))
+        _s("owner(GWL_HWNDPARENT)", lambda: _wg.GetWindowLong(_h, getattr(_wc, "GWL_HWNDPARENT", -8)))
+        _s("IsWindowVisible", lambda: _wg.IsWindowVisible(_h))
+        _s("style&WS_CHILD", lambda: bool(_wg.GetWindowLong(_h, _wc.GWL_STYLE) & _wc.WS_CHILD))
+    except Exception as e:
+        lines.append("window-state: <err %s>" % e)
+    # 결정적: 완전히 새(비임베드) Excel 인스턴스에서 트리비얼 매크로가 도는가?
+    try:
+        import win32com.client as _w, uuid as _uuid, tempfile as _tf, os as _os
+        fa = _w.DispatchEx("Excel.Application")
+        fpid = None
+        try:
+            fa.Visible = False
+            fa.DisplayAlerts = False
+            try: fpid = _excel_process_id(fa)
+            except Exception: fpid = None
+            rb = fa.Workbooks.Add()
+            ftmp = _os.path.join(_tf.mkdtemp(prefix="b2b_freshprobe_"), "fp_%s.xlsm" % _uuid.uuid4().hex[:6])
+            try: rb.SaveAs(ftmp, FileFormat=52)
+            except Exception: pass
+            fmod = rb.VBProject.VBComponents.Add(1)
+            fmn = fmod.Name
+            fmod.CodeModule.AddFromString("Public Function B2B_FP() As Long\r\n B2B_FP = 7\r\nEnd Function\r\n")
+            try:
+                fv = fa.Run("'%s'!%s.B2B_FP" % (str(rb.Name).replace("'", "''"), fmn))
+                lines.append("FRESH_INSTANCE_PROBE: OK(=%r) → 새 인스턴스는 매크로 실행 가능 → 임베드 라이브 인스턴스만 문제" % fv)
+            except Exception as e2:
+                lines.append("FRESH_INSTANCE_PROBE: FAIL(%s) → 새 인스턴스도 안 됨 → 환경/애드인/프로세스 컨텍스트 문제" % e2)
+            try: rb.Close(SaveChanges=False)
+            except Exception: pass
+        finally:
+            try: fa.Quit()
+            except Exception: pass
+            try:
+                if fpid: _os.system("taskkill /F /PID %s >NUL 2>&1" % fpid)
+            except Exception: pass
+    except Exception as e:
+        lines.append("FRESH_INSTANCE_PROBE: <setup err %s>" % e)
+    lines.append("---- injected code ----")
+    lines.append(injected)
+    lines.append("==== END ====\n")
+    try:
+        from pathlib import Path as _P
+        logp = _P(__file__).resolve().parent / "vba_runner_fail.log"
+        with open(logp, "a", encoding="utf-8") as f:
+            f.write("\n".join(lines) + "\n")
+    except Exception:
+        pass
+
+
+def _inject_and_run_vba_in_host(app, host_wb, context_wb, code, entry):
+    """Inject/run VBA in host_wb while keeping context_wb as ActiveWorkbook."""
     module = None
     prev_display_alerts = None
     prev_enable_events = None
     prev_enable_cancel_key = None
+    prev_auto_security = None
     try:
-        _disable_vba_break_on_all_errors()
-        _hide_vba_editor(app)
         try:
-            vbproj = wb.VBProject
+            vbproj = host_wb.VBProject
         except Exception as err:
             raise RuntimeError(
                 "VBA 프로젝트에 접근할 수 없습니다. Excel 옵션 > 보안 센터 > 매크로 설정에서 "
@@ -4282,7 +4897,33 @@ def _inject_and_run_vba(app, wb, code, entry):
             )
         module = vbproj.VBComponents.Add(1)  # 1 = vbext_ct_StdModule
         module_name = module.Name
+        if host_wb is not context_wb:
+            code = _rewrite_thisworkbook_for_runner_host(code, context_wb)
         safe_code, runner_name, err_num_name, err_desc_name = _wrap_vba_skill_code(code, entry)
+        _vba_trace(
+            "vba.inject.host.prepare",
+            host=_trace_workbook_info(host_wb),
+            context=_trace_workbook_info(context_wb),
+            moduleName=module_name,
+            entry=entry,
+            codeLen=len(str(code)),
+            codeHash=_trace_hash(code),
+            safeCodeLen=len(str(safe_code)),
+            safeCodeHash=_trace_hash(safe_code),
+            safeCodeHead=_trace_text(safe_code, 420),
+        )
+        context_name = _vba_workbook_name(context_wb)
+        if context_name:
+            activate_context = (
+                "    On Error Resume Next\n"
+                "    Workbooks(%s).Activate\n"
+                "    On Error GoTo B2B_Err\n" % _vba_string_literal(context_name)
+            )
+            safe_code = safe_code.replace(
+                "    B2B_LastErrDescription = vbNullString\n",
+                "    B2B_LastErrDescription = vbNullString\n" + activate_context,
+                1,
+            )
         module.CodeModule.AddFromString(safe_code)
         try:
             prev_display_alerts = app.DisplayAlerts
@@ -4299,25 +4940,79 @@ def _inject_and_run_vba(app, wb, code, entry):
             app.EnableCancelKey = 0  # xlDisabled
         except Exception:
             pass
+        # [핵심 수정] 매크로 실행 직전 AutomationSecurity 를 Low(1)로 낮춘다.
+        # excel_workbooks_open 이 파일을 열 때 AutomationSecurity=ForceDisable(3)로 설정하는데,
+        # 일부 환경(기업/특정 Office 빌드)에서는 ForceDisable 이 인스턴스의 '모든 매크로'를 비활성화해
+        # 주입한 러너 매크로의 Application.Run 이 "매크로를 실행할 수 없습니다"(-2146827284)로 실패한다.
+        # 우리가 만든 임시 러너 + 사용자 자신의 파일이므로 Low 로 낮추는 것은 안전하다. finally 에서 원복.
         try:
-            app.Run("%s.%s" % (module_name, runner_name))
+            prev_auto_security = app.AutomationSecurity
+            app.AutomationSecurity = 1  # msoAutomationSecurityLow
+        except Exception:
+            pass
+        try:
+            try:
+                context_wb.Activate()
+            except Exception:
+                pass
+            _diag_prerun_window_state(app, context_wb)  # [임시 진단] run 직전 창 상태 기록
+            _vba_trace(
+                "vba.macro.run.start",
+                host=_trace_workbook_info(host_wb),
+                context=_trace_workbook_info(context_wb),
+                moduleName=module_name,
+                macro=runner_name,
+                refs=_vba_macro_refs(host_wb, module_name, runner_name),
+            )
+            _run_vba_macro_any_ref(app, host_wb, module_name, runner_name)
             err_number = 0
             err_description = ""
             try:
-                err_number = int(app.Run("%s.%s" % (module_name, err_num_name)) or 0)
+                err_number = int(_run_vba_macro_any_ref(app, host_wb, module_name, err_num_name) or 0)
             except Exception:
                 err_number = 0
             try:
-                err_description = str(app.Run("%s.%s" % (module_name, err_desc_name)) or "")
+                err_description = str(_run_vba_macro_any_ref(app, host_wb, module_name, err_desc_name) or "")
             except Exception:
                 err_description = ""
             if err_number:
+                _diag_vba_log_line("VBA-RUNTIME-ERR num=%s desc=%r" % (err_number, err_description))
+                _vba_trace("vba.macro.runtime_error", errNumber=err_number, errDescription=err_description)
                 raise RuntimeError("VBA 실행 실패: %s" % (err_description or ("오류 번호 %s" % err_number)))
+            _diag_vba_log_line("VBA-OK")
+            _vba_trace("vba.macro.run.ok", host=_trace_workbook_info(host_wb), moduleName=module_name, macro=runner_name)
         except Exception as err:
             if str(err).startswith("VBA 실행 실패:"):
                 raise
+            try:
+                _hp = str(host_wb.FullName)
+            except Exception:
+                _hp = "<?>"
+            try:
+                _as = app.AutomationSecurity
+            except Exception:
+                _as = "<?>"
+            _diag_vba_log_line("VBA-RUN-EXC host=%r autosec=%s err=%r" % (_hp, _as, str(err)[:200]))
+            _vba_trace(
+                "vba.macro.run.error",
+                host=_trace_workbook_info(host_wb),
+                context=_trace_workbook_info(context_wb),
+                moduleName=module_name,
+                macro=runner_name,
+                automationSecurity=_as,
+                error=str(err),
+            )
+            try:
+                _diag_vba_run_failure(app, host_wb, vbproj, module, module_name, safe_code, err)
+            except Exception:
+                pass
             raise RuntimeError("VBA 실행 실패: %s" % err)
     finally:
+        try:
+            if prev_auto_security is not None:
+                app.AutomationSecurity = prev_auto_security
+        except Exception:
+            pass
         try:
             if prev_enable_cancel_key is not None:
                 app.EnableCancelKey = prev_enable_cancel_key
@@ -4338,11 +5033,105 @@ def _inject_and_run_vba(app, wb, code, entry):
                 vbproj.VBComponents.Remove(module)
             except Exception:
                 pass
+
+
+def _inject_and_run_vba(app, wb, code, entry):
+    """VBA 모듈을 임시 추가해 entry Sub를 실행하고, 끝나면 제거한다.
+
+    일반 .xlsx도 자동화 중에는 임시 in-memory VBA 모듈을 직접 주입해 실행할 수 있다.
+    따라서 단일 적용/전체실행 모두 우선 대상 워크북을 직접 호스트로 쓴다. CSV처럼
+    VBA 프로젝트 호스트가 될 수 없거나 직접 실행이 실제로 차단된 경우에만 임시
+    .xlsm 러너를 최후 우회 경로로 사용한다.
+    """
+    code = code or ""
+    if not code.strip():
+        return
+    original_code = code
+    code = _extract_vba_source_for_injection(code, entry)
+    _vba_trace(
+        "vba.code.normalized",
+        workbook=_trace_workbook_info(wb),
+        entry=entry,
+        beforeLen=len(str(original_code)),
+        beforeHash=_trace_hash(original_code),
+        beforeHead=_trace_text(original_code, 420),
+        afterLen=len(str(code)),
+        afterHash=_trace_hash(code),
+        afterHead=_trace_text(code, 420),
+        changed=(str(original_code) != str(code)),
+    )
+    code = _normalize_vba_workbook_literals(app, code)
+    _validate_vba_source_before_inject(code)
+    excel_pid = _excel_process_id(app)
+    _vba_trace(
+        "vba.inject.start",
+        workbook=_trace_workbook_info(wb),
+        excelPid=excel_pid,
+        codeLen=len(str(code)),
+        codeHash=_trace_hash(code),
+        codeHead=_trace_text(code, 420),
+    )
+    suppressor = _start_vba_debug_suppressor(excel_pid)
+    runner_wb = None
+    runner_temp = None
+    try:
+        _disable_vba_break_on_all_errors()
+        _hide_vba_editor(app)
+        if _vba_should_use_runner_host(wb):
+            _run_vba_via_runner_with_retry(app, wb, code, entry)
+            return
+        try:
+            _inject_and_run_vba_in_host(app, wb, wb, code, entry)
+            return
+        except Exception as err:
+            if not _is_vba_macro_run_blocked_error(err):
+                raise
+            _run_vba_via_runner_with_retry(app, wb, code, entry)
+            return
+    finally:
         try:
             _hide_vba_editor(app)
             _suppress_vba_debug_windows(excel_pid)
         finally:
             suppressor.set()
+
+
+def _run_vba_via_runner_with_retry(app, wb, code, entry, attempts=2):
+    """임시 .xlsm 러너에서 VBA 를 실행한다. '매크로를 실행할 수 없습니다'(-2146827284)는 일부 환경에서
+    Excel 이 파일 오픈/주입 직후 잠깐 '준비 안 됨' 상태일 때 간헐적으로 나는데(전체실행이 될 때/안 될 때가
+    갈리던 현상), 잠깐 대기 후 '러너를 새로 만들어' 재시도하면 대개 통과한다. 매크로 차단이 아닌 실제
+    오류(스킬 버그 등)는 즉시 전파한다."""
+    last_err = None
+    for i in range(max(1, attempts)):
+        runner_wb = None
+        runner_temp = None
+        try:
+            runner_wb, runner_temp = _create_vba_runner_workbook(app, wb)
+            _inject_and_run_vba_in_host(app, runner_wb, wb, code, entry)
+            return  # 성공
+        except Exception as err:
+            last_err = err
+            if not _is_vba_macro_run_blocked_error(err):
+                raise  # 실제 스킬/실행 오류 → 재시도 무의미, 그대로 전파
+        finally:
+            if runner_wb is not None:
+                _close_vba_runner_workbook(app, runner_wb, runner_temp)
+        if i < attempts - 1:
+            # 매크로 차단(간헐) → 대기 후 새 러너로 재시도. Excel 이 준비되도록 잠깐 양보.
+            try:
+                _diag_vba_log_line("RUNNER-RETRY %d/%d (macro-blocked, waiting)" % (i + 1, attempts))
+            except Exception:
+                pass
+            try:
+                time.sleep(0.7 * (i + 1))
+            except Exception:
+                pass
+            try:
+                _disable_vba_break_on_all_errors()
+                _hide_vba_editor(app)
+            except Exception:
+                pass
+    raise last_err if last_err is not None else RuntimeError("VBA 러너 실행 실패")
 
 
 def _restore_app_state(app):
@@ -4680,7 +5469,7 @@ def _ensure_companion_workbooks(session, excel_id, app, current_wb):
             pass
 
 
-def _run_vba_on_session_impl(excel_id, code, entry=None):
+def _run_vba_on_session_impl(excel_id, code, entry=None, restore_window=True):
     """라이브 세션에 떠 있는 실제 워크북에 VBA 매크로를 주입해 즉시 실행한다(저지연 리모콘, 단일 단계 append).
     시트는 UserInterfaceOnly=True 보호라 사용자는 직접 편집 못 해도 VBA/COM 은 수정 가능."""
     entry = (str(entry).strip() if entry else "") or VBA_SKILL_ENTRY
@@ -4708,6 +5497,7 @@ def _run_vba_on_session_impl(excel_id, code, entry=None):
         before_fp = _workbook_change_fingerprint(wb)  # 실행 전 지문(변경 0건 검출용)
         try:
             _t = time.perf_counter()
+            _prepare_vba_macro_run_window_state(session, app, wb)
             _inject_and_run_vba(app, wb, code, entry)
             captured = _capture_live_view_state(app, wb, session)
             if captured:
@@ -4716,20 +5506,50 @@ def _run_vba_on_session_impl(excel_id, code, entry=None):
         except PipelineExecutionError:
             raise
         except Exception as err:
-            # 단일 VBA 적용 실패도 파이프라인과 같은 포맷(원인+프롬프트 가이드+세부)으로 통일.
-            _cause, _guide = _pipeline_error_guide(str(err), code)
-            raise PipelineExecutionError({
-                "stepIdx": 0,
-                "stepId": None,
-                "description": "",
-                "code": code,
-                "language": "vba",
-                "message": _cause + '\n' + "💡 이렇게 요청해 보세요: " + _guide + '\n' + "(자세히: " + str(err) + ")",
-                "cause": _cause,
-                "promptGuide": _guide,
-                "rawError": str(err),
-                "stack": "",
-            }) from err
+            if _is_vba_macro_run_blocked_error(err):
+                try:
+                    _diag_vba_log_line("VBA-LIVE-BLOCKED -> isolated single-step fallback")
+                    _t_fb = time.perf_counter()
+                    _run_vba_pipeline_on_session_impl(
+                        excel_id,
+                        [{
+                            "stepIdx": 0,
+                            "stepId": None,
+                            "description": "",
+                            "code": code,
+                            "language": "vba",
+                        }],
+                        reset=False,
+                        entry=entry,
+                        view_sheet=(initial_view or {}).get("sheet") if initial_view else None,
+                    )
+                    captured = _capture_live_view_state(app, wb, session)
+                    if captured:
+                        final_view = captured
+                    timings["injectRunMs"] = round((time.perf_counter() - _t) * 1000, 2)
+                    timings["isolatedFallbackMs"] = round((time.perf_counter() - _t_fb) * 1000, 2)
+                    err = None
+                except PipelineExecutionError:
+                    raise
+                except Exception as fallback_err:
+                    err = fallback_err
+            if err is None:
+                pass
+            else:
+                # 단일 VBA 적용 실패도 파이프라인과 같은 포맷(원인+프롬프트 가이드+세부)으로 통일.
+                _cause, _guide = _pipeline_error_guide(str(err), code)
+                raise PipelineExecutionError({
+                    "stepIdx": 0,
+                    "stepId": None,
+                    "description": "",
+                    "code": code,
+                    "language": "vba",
+                    "message": _cause + '\n' + "💡 이렇게 요청해 보세요: " + _guide + '\n' + "(자세히: " + str(err) + ")",
+                    "cause": _cause,
+                    "promptGuide": _guide,
+                    "rawError": str(err),
+                    "stack": "",
+                }) from err
         finally:
             # 성공/실패 무관: Application 전역 상태(Calculation/ScreenUpdating 등)를 먼저 정상화.
             # 생성 VBA 가 Manual 로 두고 죽어도 재계산 고착이 남지 않게 한다.
@@ -4738,11 +5558,13 @@ def _run_vba_on_session_impl(excel_id, code, entry=None):
                 _restore_live_protected_view(app, wb)
             except Exception:
                 pass
-            # 동반 워크북을 열며 흐트러진 대상 창을 다시 보이게+제자리로(회색 빈 오버레이 방지).
-            try:
-                _restore_live_window(session, app, wb)
-            except Exception:
-                pass
+            # 단일 적용은 바로 결과를 보여야 하므로 복원한다. 전체실행은 step마다 복원하면
+            # 빈 Excel 창이 여러 번 튀므로 클라이언트가 마지막에 한 번만 복원한다.
+            if restore_window:
+                try:
+                    _restore_live_window(session, app, wb)
+                except Exception:
+                    pass
         # 여기 도달 = 실행 자체는 예외 없이 끝남. 그런데 워크북이 전혀 안 바뀌었다면
         # '적용됨'으로 잘못 보고되는 no-op 이므로 실패로 드러낸다(품질평가 issue 45/57/58).
         after_fp = _workbook_change_fingerprint(wb)
@@ -4767,64 +5589,282 @@ def _run_vba_on_session_impl(excel_id, code, entry=None):
         return {"ok": True, "excelId": excel_id, "entry": entry}
 
 
+def _detach_live_excel_window(app):
+    """라이브 Excel 창이 WebView 에 임베드(WS_CHILD/owner)돼 있으면 독립 top-level 로 분리한다.
+    [근거] FRESH_INSTANCE_PROBE 결과: 비임베드 인스턴스는 VBA 매크로(Application.Run)가 정상 실행되지만,
+    임베드된 라이브 인스턴스는 reset 의 창 park 이후 매크로 실행 시 COM 이 RPC 사망한다.
+    파이프라인 VBA 실행 동안만 분리해 단일적용과 동일한(매크로 실행 가능한) 창 상태로 만든다.
+    반환: 복구용 상태 튜플(또는 임베드가 아니면 None)."""
+    try:
+        import win32gui, win32con
+    except Exception:
+        return None
+    try:
+        hwnd = int(app.Hwnd)
+        prev_parent = win32gui.GetParent(hwnd)
+        owner_idx = getattr(win32con, "GWL_HWNDPARENT", -8)
+        prev_owner = win32gui.GetWindowLong(hwnd, owner_idx)
+        prev_style = win32gui.GetWindowLong(hwnd, win32con.GWL_STYLE)
+        if not prev_parent and not (prev_style & win32con.WS_CHILD) and not prev_owner:
+            return None  # 임베드 아님(단일 DispatchEx 등) — 손대지 않음
+        # WS_CHILD 제거 + WS_POPUP + 숨김 유지로 독립 top-level 화(화면 깜빡임 없음).
+        new_style = (prev_style & ~(win32con.WS_CHILD | win32con.WS_VISIBLE)) | win32con.WS_POPUP
+        try:
+            win32gui.SetParent(hwnd, 0)
+        except Exception:
+            pass
+        try:
+            win32gui.SetWindowLong(hwnd, win32con.GWL_STYLE, new_style)
+        except Exception:
+            pass
+        try:
+            win32gui.SetWindowLong(hwnd, owner_idx, 0)
+        except Exception:
+            pass
+        return (hwnd, prev_parent, prev_owner, prev_style)
+    except Exception:
+        return None
+
+
+def _reattach_live_excel_window(state):
+    """_detach_live_excel_window 로 분리한 창을 원래 부모/owner/스타일로 되돌린다."""
+    if not state:
+        return
+    try:
+        import win32gui, win32con
+        hwnd, prev_parent, prev_owner, prev_style = state
+        owner_idx = getattr(win32con, "GWL_HWNDPARENT", -8)
+        try:
+            win32gui.SetWindowLong(hwnd, win32con.GWL_STYLE, prev_style)
+        except Exception:
+            pass
+        if prev_parent:
+            try:
+                win32gui.SetParent(hwnd, prev_parent)
+            except Exception:
+                pass
+        if prev_owner:
+            try:
+                win32gui.SetWindowLong(hwnd, owner_idx, prev_owner)
+            except Exception:
+                pass
+    except Exception:
+        pass
+
+
+def _setup_isolated_pipeline_instance(session, excel_id, reset, work):
+    """격리 실행용 새 Excel 인스턴스를 띄우고 대상+동반 워크북을 '정확한 이름'으로 연다.
+    - 대상: reset 이면 source 원본, 아니면 현재 라이브 상태(SaveCopyAs).
+    - 동반(다른 라이브 편집 세션): 현재 라이브 상태(SaveCopyAs) — VBA 의 Workbooks("파일명") 교차참조용.
+    반환: (fapp, ftarget, fpid). 호출자가 finally 에서 정리한다."""
+    live_app0, live_wb0 = session_workbook(session)
+    target_name = Path(str(session.get("name") or "")).name
+    if not target_name:
+        target_name = Path(str(live_wb0.Name)).name
+    _ensure_vbom_access()
+    _disable_vba_break_on_all_errors()
+    fapp = win32com.client.DispatchEx("Excel.Application")
+    _track_spawned_excel_app(fapp)
+    fpid = None
+    try:
+        fpid = _excel_process_id(fapp)
+    except Exception:
+        fpid = None
+    _vba_trace(
+        "pipeline.isolated.setup.start",
+        excelId=excel_id,
+        reset=reset,
+        work=str(work),
+        targetName=target_name,
+        sessionName=session.get("name"),
+        sessionPath=session.get("path"),
+        sourcePath=session.get("sourcePath"),
+        liveWorkbook=_trace_workbook_info(live_wb0),
+        isolatedPid=fpid,
+    )
+    for attr, val in (("Visible", False), ("DisplayAlerts", False), ("EnableEvents", False), ("AskToUpdateLinks", False)):
+        try:
+            setattr(fapp, attr, val)
+        except Exception:
+            pass
+    # 대상 워크북
+    tdir = work / "t"
+    tdir.mkdir(parents=True, exist_ok=True)
+    tpath = tdir / target_name
+    if reset:
+        src = session.get("sourcePath") or session.get("path")
+        shutil.copy2(Path(src), tpath)
+    else:
+        live_wb0.SaveCopyAs(str(tpath))
+    ftarget, _t = excel_workbooks_open(fapp, str(tpath), read_only=False)
+    _vba_trace(
+        "pipeline.isolated.target.opened",
+        excelId=excel_id,
+        reset=reset,
+        isolatedPid=fpid,
+        targetPath=str(tpath),
+        targetWorkbook=_trace_workbook_info(ftarget),
+    )
+    opened = {target_name.lower()}
+    # 동반 워크북(다른 라이브 편집 세션의 현재 상태)
+    for oid, other in list(EXCEL_SESSIONS.items()):
+        if oid == excel_id or not other.get("liveEditable"):
+            continue
+        try:
+            _oa, o_wb = session_workbook(other)
+        except Exception:
+            continue
+        cname = Path(str(other.get("name") or "")).name
+        if not cname:
+            try:
+                cname = Path(str(o_wb.Name)).name
+            except Exception:
+                cname = ""
+        if not cname or cname.lower() in opened:
+            continue
+        cdir = work / ("c_" + uuid.uuid4().hex[:6])
+        cdir.mkdir(parents=True, exist_ok=True)
+        cpath = cdir / cname
+        try:
+            o_wb.SaveCopyAs(str(cpath))
+            excel_workbooks_open(fapp, str(cpath), read_only=False)
+            opened.add(cname.lower())
+            _vba_trace("pipeline.isolated.companion.opened", excelId=excel_id, isolatedPid=fpid, companionName=cname, companionPath=str(cpath))
+        except Exception:
+            _vba_trace("pipeline.isolated.companion.error", excelId=excel_id, isolatedPid=fpid, companionName=cname, companionPath=str(cpath))
+            pass
+    return fapp, ftarget, fpid
+
+
 def _run_vba_pipeline_on_session_impl(excel_id, steps, reset=True, entry=None, view_sheet=None):
-    """VBA 스킬 파이프라인을 라이브 워크북에 적용한다.
-    reset=True: 원본으로 되돌린 뒤(_copy_source_workbook_into_target) enabled 스텝을 순서대로 재적용
-    (토글/삭제/순서변경/편집 후 재동기화에 사용). reset=False: 주어진 스텝만 현재 상태에 이어서 실행."""
+    """VBA/Python 스킬 파이프라인을 적용한다.
+    [핵심] 라이브(임베드/오버레이) Excel 인스턴스는 reset 후 VBA Application.Run 이 간헐적으로 RPC 로
+    사망한다(전체실행이 100% 실패한 근본원인 — 진단 로그/FRESH_INSTANCE_PROBE 로 확정). 새(비임베드)
+    인스턴스는 항상 정상 실행되므로, 스텝이 있는 파이프라인은 '격리된 새 Excel'에서 실행하고 결과
+    워크북만 라이브에 반영(_copy_source_workbook_into_target)한다. 스텝 없는 reset 은 VBA 가 없어
+    라이브에서 직접 처리(안전)."""
     entry = (str(entry).strip() if entry else "") or VBA_SKILL_ENTRY
     steps = steps or []
-    _t0 = time.perf_counter()
-    timings = {"mode": "vba-pipeline", "steps": len(steps), "reset": bool(reset)}
     with EXCEL_LOCK:
-        _t = time.perf_counter()
         session = get_excel_session(excel_id)
         session["rev"] = int(session.get("rev") or 0) + 1  # [리뷰②] 동반 스냅샷 신선도 추적
         app, wb = session_workbook(session)
         initial_view = _capture_live_view_state(app, wb, session)
-        final_view = initial_view
-        timings["sessionMs"] = round((time.perf_counter() - _t) * 1000, 2)
-        # 교차 파일 접근: 다른 업로드 파일들을 같은 인스턴스에 동반 오픈(읽기전용, 숨김).
-        # 동반 스냅샷은 다른 라이브 워크북 전부를 SaveCopyAs 하는 무거운 작업이라, 다중 파일 리셋을
-        # 파일별 호출로 나눠 보낼 때 호출마다 반복되면 복구가 수 분씩 걸린다.
-        _t = time.perf_counter()
-        if steps:
-            _ensure_companion_workbooks(session, excel_id, app, wb)
+        run_steps = [s for s in steps
+                     if ((s.get("code") if isinstance(s, dict) else str(s)) or "").strip()]
+        _vba_trace(
+            "pipeline.impl.start",
+            excelId=excel_id,
+            reset=reset,
+            entry=entry,
+            viewSheet=view_sheet,
+            sessionName=session.get("name"),
+            sessionPath=session.get("path"),
+            workbook=_trace_workbook_info(wb),
+            steps=len(steps or []),
+            runSteps=len(run_steps),
+        )
         try:
-            if reset:
-                source = session.get("sourcePath") or session.get("path")
+            if not run_steps:
+                # 스텝 없음(리셋 전용/빈 파이프라인): VBA 실행이 없으므로 라이브에서 직접 처리.
+                if reset:
+                    source = session.get("sourcePath") or session.get("path")
+                    try:
+                        _protect_workbook_for_read_only_mirror(wb, False)
+                    except Exception:
+                        pass
+                    try:
+                        app.ScreenUpdating = False
+                    except Exception:
+                        pass
+                    _copy_source_workbook_into_target(app, wb, source)
+                    session["appliedStepSigs"] = None
+                return {"ok": True, "excelId": excel_id, "applied": 0}
+
+            # 스텝 있음: 격리된 새 인스턴스에서 reset+실행 후 결과를 라이브에 반영.
+            work = Path(tempfile.mkdtemp(prefix="b2b_isopipe_"))
+            fapp = None
+            fpid = None
+            try:
+                fapp, ftarget, fpid = _setup_isolated_pipeline_instance(session, excel_id, reset, work)
                 try:
-                    _protect_workbook_for_read_only_mirror(wb, False)  # 시트 교체 전 보호 해제
+                    _protect_workbook_for_read_only_mirror(ftarget, False)
+                except Exception:
+                    pass
+                for st in steps:
+                    code = (st.get("code") if isinstance(st, dict) else str(st)) or ""
+                    if not code.strip():
+                        continue
+                    lang = (st.get("language") if isinstance(st, dict) else "") or ""
+                    _vba_trace(
+                        "pipeline.step.start",
+                        excelId=excel_id,
+                        isolatedPid=fpid,
+                        stepIdx=st.get("stepIdx") if isinstance(st, dict) else None,
+                        stepId=st.get("stepId") if isinstance(st, dict) else None,
+                        language=lang,
+                        description=_trace_text(st.get("description") if isinstance(st, dict) else "", 220),
+                        codeLen=len(str(code)),
+                        codeHash=_trace_hash(code),
+                        codeHead=_trace_text(code, 360),
+                    )
+                    if str(lang).lower() == "python":
+                        _exec_python_com_skill(fapp, ftarget, session, code)
+                    else:
+                        _inject_and_run_vba(fapp, ftarget, code, entry)
+                    _vba_trace(
+                        "pipeline.step.ok",
+                        excelId=excel_id,
+                        isolatedPid=fpid,
+                        stepIdx=st.get("stepIdx") if isinstance(st, dict) else None,
+                        stepId=st.get("stepId") if isinstance(st, dict) else None,
+                        language=lang,
+                    )
+                # 결과 저장 → 라이브 대상 워크북에 시트 교체로 반영(라이브에선 VBA 안 돌리므로 안전).
+                result_name = Path(str(session.get("name") or "result.xlsx")).name
+                rpath = work / ("result_" + result_name)
+                ftarget.SaveCopyAs(str(rpath))
+                try:
+                    _protect_workbook_for_read_only_mirror(wb, False)
                 except Exception:
                     pass
                 try:
                     app.ScreenUpdating = False
                 except Exception:
                     pass
-                _copy_source_workbook_into_target(app, wb, source)
-                # 원본으로 되돌렸으니 서버측 적용추적도 무효화 — 취소/리셋 후 유사 스킬을 '이미 수행'으로
-                # 오인해 reset 을 건너뛰던 문제 방지(다음 스킬은 전체 재적용으로 정확히 처리).
+                _copy_source_workbook_into_target(app, wb, str(rpath))
+                _vba_trace(
+                    "pipeline.result.copied",
+                    excelId=excel_id,
+                    isolatedPid=fpid,
+                    resultPath=str(rpath),
+                    liveWorkbook=_trace_workbook_info(wb),
+                )
                 session["appliedStepSigs"] = None
-            else:
-                # 비리셋(append): 현재 보호 상태를 풀고 실행(보호로 인한 1004 류 방지).
+            finally:
                 try:
-                    _protect_workbook_for_read_only_mirror(wb, False)
+                    if fapp is not None:
+                        for w in list(fapp.Workbooks):
+                            try:
+                                w.Close(SaveChanges=False)
+                            except Exception:
+                                pass
                 except Exception:
                     pass
-            for st in steps:
-                code = (st.get("code") if isinstance(st, dict) else str(st)) or ""
-                if not code.strip():
-                    continue
-                lang = (st.get("language") if isinstance(st, dict) else "") or ""
-                if str(lang).lower() == "python":
-                    # [0.5.2.2] Python COM 스킬(벌크 ctx 엔진) — VBA 와 같은 리셋-재적용 흐름에서 혼용.
-                    _exec_python_com_skill(app, wb, session, code)
-                else:
-                    _inject_and_run_vba(app, wb, code, entry)
+                try:
+                    if fapp is not None:
+                        fapp.Quit()
+                except Exception:
+                    pass
+                try:
+                    if fpid:
+                        os.system("taskkill /F /PID %s >NUL 2>&1" % fpid)
+                except Exception:
+                    pass
+                shutil.rmtree(work, ignore_errors=True)
+            return {"ok": True, "excelId": excel_id, "applied": len(run_steps)}
         finally:
-            # 한 스텝이 던져도 Application 상태(ScreenUpdating=False 등)가 남지 않게 항상 정상화.
-            # [사용자 요청] 적용/토글 후 활성 시트: ① 프론트가 affectedStep 코드에서 추정한
-            # '변경된 시트'(viewSheet) ② 없으면 토글 전 보던 시트(initial_view) — 리셋의 시트
-            # 재복사가 ActiveSheet 를 '마지막 시트'로 남기던 현상 수정.
+            # 라이브 창/상태 복원(대상 시트 활성화 포함).
             try:
                 _ws_target = None
                 if view_sheet:
@@ -4846,16 +5886,14 @@ def _run_vba_pipeline_on_session_impl(excel_id, steps, reset=True, entry=None, v
                 _restore_live_protected_view(app, wb)
             except Exception:
                 pass
-            # 동반 워크북/리셋으로 흐트러진 대상 창을 항상 복원(회색 빈 오버레이 방지).
             try:
                 _restore_live_window(session, app, wb)
             except Exception:
                 pass
-        return {"ok": True, "excelId": excel_id, "applied": len(steps)}
 
 
-def run_vba_on_session(excel_id, code, entry=None):
-    return excel_call(_run_vba_on_session_impl, excel_id, code, entry=entry, timeout=180)
+def run_vba_on_session(excel_id, code, entry=None, restore_window=True):
+    return excel_call(_run_vba_on_session_impl, excel_id, code, entry=entry, restore_window=restore_window, timeout=180)
 
 
 def run_vba_pipeline_on_session(excel_id, steps, reset=True, entry=None, view_sheet=None):
@@ -5480,22 +6518,62 @@ class PythonComSkillContext:
         비파괴: 원본 시트는 그대로 둔다. '이동'은 복사 후 ctx.delete_sheet(원본) 를 호출하세요.
           ctx.copy_sheet("가시트", dst_book="출력.xlsx")            # 출력 파일 맨 뒤에 복사
           ctx.copy_sheet("요약", new_name="요약본", after="데이터")   # 같은 파일, 이름 지정
-        같은 Excel 인스턴스에 열린 워크북만 대상. 구조 변경이라 실패 시 롤백되지 않는다."""
+        대상이 다른 Excel 인스턴스에 있으면 임시 워크북을 매개로 복사한다. 구조 변경이라 실패 시 롤백되지 않는다."""
         ws = self._ws(src_sheet)
         self._tick(2)
+        target_session = None
+        target_app = self._app
+
+        def _name_matches(wb_obj, wanted):
+            try:
+                actual = str(wb_obj.Name)
+            except Exception:
+                return False
+            return (
+                actual == wanted
+                or str(Path(actual).stem) == str(Path(wanted).stem)
+                or _workbook_name_lookup_key(actual) == _workbook_name_lookup_key(wanted)
+            )
+
         if dst_book is not None:
+            dst_key = str(dst_book).strip() if isinstance(dst_book, str) else ""
             dst_ctx = self.book(dst_book) if isinstance(dst_book, str) else dst_book
             dst_wb = dst_ctx._wb
+            try:
+                target_app = dst_wb.Application
+            except Exception:
+                target_app = self._app
             # [리뷰] 비공유/별도 앱 모드에서는 다른 파일이 읽기전용 스냅샷으로 열릴 수 있다 —
-            # 그 경우 시트 추가가 silently 실패하므로 명확한 에러로 거른다(데이터 손실/혼란 방지).
+            # 그 경우 같은 이름의 실제 라이브 세션을 찾아 쓰기 대상으로 바꾼다.
             try:
                 _dst_ro = bool(dst_wb.ReadOnly)
             except Exception:
                 _dst_ro = False
+            if _dst_ro and dst_key:
+                for _sid, _other in list(EXCEL_SESSIONS.items()):
+                    if not _other.get("liveEditable"):
+                        continue
+                    try:
+                        _app, _wb = session_workbook(_other)
+                    except Exception:
+                        continue
+                    try:
+                        if _name_matches(_wb, dst_key) and not bool(_wb.ReadOnly):
+                            target_session = _other
+                            target_app = _app
+                            dst_wb = _wb
+                            # 뒤이어 같은 코드에서 ctx.book("대상")을 다시 부르면 쓰기 가능한 ctx가 나오게 갱신.
+                            self._shared["books"][dst_key] = PythonComSkillContext(
+                                target_app, dst_wb, target_session, _shared=self._shared
+                            )
+                            _dst_ro = False
+                            break
+                    except Exception:
+                        continue
             if _dst_ro:
                 raise PythonComSkillError(
                     f"대상 파일이 읽기 전용으로 열려 있어 시트를 복사할 수 없습니다. "
-                    f"대상 파일 탭을 한 번 열어 활성화한 뒤 다시 시도해 주세요.")
+                    f"대상 파일 탭을 한 번 열어 라이브 세션을 만든 뒤 다시 시도해 주세요.")
         else:
             dst_wb = self._wb
         existing = list(_excel_collection_names(dst_wb.Worksheets))
@@ -5503,12 +6581,71 @@ class PythonComSkillContext:
             raise PythonComSkillError(f"대상 워크북에 시트 '{new_name}' 이 이미 있습니다. 다른 이름을 쓰세요.")
         # [중요] win32com 에서 Worksheet.Copy(After=...) 키워드 인자는 무동작이라(시트가 안 옮겨지고
         # 새 워크북만 생기거나 아무 일도 안 남), 반드시 positional 로 호출한다: Copy(Before, After).
-        if before is not None:
-            ws.Copy(dst_wb.Worksheets(str(before)))
-        elif after is not None:
-            ws.Copy(pythoncom.Empty, dst_wb.Worksheets(str(after)))
+        def _copy_to_target(copy_ws):
+            if before is not None:
+                copy_ws.Copy(dst_wb.Worksheets(str(before)))
+            elif after is not None:
+                copy_ws.Copy(pythoncom.Empty, dst_wb.Worksheets(str(after)))
+            else:
+                copy_ws.Copy(pythoncom.Empty, dst_wb.Worksheets(int(dst_wb.Worksheets.Count)))
+
+        same_app = True
+        try:
+            same_app = _same_excel_app(self._app, target_app)
+        except Exception:
+            same_app = True
+        if same_app:
+            _copy_to_target(ws)
         else:
-            ws.Copy(pythoncom.Empty, dst_wb.Worksheets(int(dst_wb.Worksheets.Count)))
+            # Excel은 서로 다른 Application 인스턴스 간 Worksheet.Copy 가 불안정하다.
+            # 시트 1장짜리 임시 xlsx를 매개로 대상 앱 안에서 다시 Copy 한다.
+            tmp_path = BACKEND_DIR / f"sheet_copy_{uuid.uuid4().hex}.xlsx"
+            tmp_wb = None
+            import_wb = None
+            old_alerts_src = old_alerts_dst = None
+            try:
+                try:
+                    old_alerts_src = self._app.DisplayAlerts
+                    self._app.DisplayAlerts = False
+                except Exception:
+                    pass
+                ws.Copy()
+                tmp_wb = self._app.ActiveWorkbook
+                tmp_wb.SaveAs(str(tmp_path), FileFormat=51)
+                tmp_wb.Close(SaveChanges=False)
+                tmp_wb = None
+                try:
+                    old_alerts_dst = target_app.DisplayAlerts
+                    target_app.DisplayAlerts = False
+                except Exception:
+                    pass
+                import_wb, _ = excel_workbooks_open(target_app, tmp_path, read_only=False)
+                _copy_to_target(import_wb.Worksheets(1))
+            finally:
+                if tmp_wb is not None:
+                    try:
+                        tmp_wb.Close(SaveChanges=False)
+                    except Exception:
+                        pass
+                if import_wb is not None:
+                    try:
+                        import_wb.Close(SaveChanges=False)
+                    except Exception:
+                        pass
+                if old_alerts_src is not None:
+                    try:
+                        self._app.DisplayAlerts = old_alerts_src
+                    except Exception:
+                        pass
+                if old_alerts_dst is not None:
+                    try:
+                        target_app.DisplayAlerts = old_alerts_dst
+                    except Exception:
+                        pass
+                try:
+                    Path(tmp_path).unlink(missing_ok=True)
+                except Exception:
+                    pass
         # 새로 생긴 시트를 이름 diff 로 식별한다(ActiveSheet 는 헤드리스에서 신뢰할 수 없어
         # 원본을 가리키는 경우가 있다 — 그걸 rename 하면 원본 시트명이 바뀌어 데이터 손실처럼 보인다).
         added = [n for n in _excel_collection_names(dst_wb.Worksheets) if n not in existing]
@@ -5517,6 +6654,11 @@ class PythonComSkillContext:
         if new_name is not None:
             try:
                 dst_wb.Worksheets(added[0]).Name = str(new_name)
+            except Exception as err:
+                raise PythonComSkillError(f"복사된 시트 이름을 '{new_name}' 으로 바꾸지 못했습니다: {err}")
+        if target_session is not None:
+            try:
+                target_session["rev"] = int(target_session.get("rev") or 0) + 1
             except Exception:
                 pass
         self._shared["structural"].append(f"copy_sheet:{src_sheet}->{dst_book or 'self'}")
@@ -5621,10 +6763,14 @@ class PythonComSkillContext:
             return self._shared["books"][key]
         self._tick(2)
         target = None
+        requested_key = _workbook_name_lookup_key(key)
         try:
             for wb in self._app.Workbooks:
                 try:
-                    if str(wb.Name) == key or str(Path(str(wb.Name)).stem) == str(Path(key).stem):
+                    wb_name = str(wb.Name)
+                    if (wb_name == key
+                            or str(Path(wb_name).stem) == str(Path(key).stem)
+                            or _workbook_name_lookup_key(wb_name) == requested_key):
                         target = wb
                         break
                 except Exception:
@@ -9314,6 +10460,36 @@ def _hide_excel_app_window(app):
         pass
 
 
+def _prepare_vba_macro_run_window_state(session, app, wb):
+    """Put Excel into the same non-visible state that reliably allows Application.Run.
+
+    Native frame mode parks only the HWND offscreen for visual reasons, leaving
+    Application.Visible and the workbook window visible. On some Office builds that
+    state refuses both direct injected macros and temp .xlsm runner macros. Macro
+    execution should not depend on the UI hide path, so the server forces the
+    session into a true hidden state immediately before running VBA and the normal
+    finally path restores the live window afterward.
+    """
+    try:
+        session["hidden"] = True
+        session["lastNativePositionKey"] = ""
+    except Exception:
+        pass
+    try:
+        _hide_workbook_windows(wb)
+    except Exception:
+        pass
+    try:
+        _hide_excel_app_window(app)
+    except Exception:
+        pass
+    try:
+        pid = session.get("pid") or _excel_process_id(app)
+        _hide_excel_windows_for_pid(pid)
+    except Exception:
+        pass
+
+
 def _prepare_excel_session_for_close(app, wb=None):
     """Close/Quit 직전에 Excel 이 빈 회색 top-level 창을 복원하지 못하게 먼저 숨긴다."""
     try:
@@ -9790,7 +10966,7 @@ def _run_excel_python_pipeline_impl(payload, job_id=None):
                         _twb.Activate()
                     except Exception:
                         pass
-                    _inject_and_run_vba(app, _twb, original_code)
+                    _inject_and_run_vba(app, _twb, original_code, VBA_SKILL_ENTRY)
                 elif not python_step_uses_legacy_dialect(original_code):
                     stage_label = "com-bulk"
                     _twb = _worker_step_target_wb(step, input_wb_by_name, output_wb)

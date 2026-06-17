@@ -219,52 +219,115 @@ function restoreActionButtonsAfterFailure(buttons, primaryButton, retryText) {
 }
 
 function userExplicitlyRequestsFormulaOverwrite(text) {
-  return /수식\s*(제거|삭제|지워|없애|값으로|대체|덮어)|기존\s*수식.*(제거|삭제|지워|없애|값)|formula\s*(remove|delete|overwrite|replace)|값으로\s*(덮어|대체|바꿔)/i.test(String(text || ""));
+  const t = String(text || "");
+  return /수식\s*(제거|삭제|지워|없애|값으로|대체|덮어)|기존\s*수식.*(제거|삭제|지워|없애|값)|formula\s*(remove|delete|overwrite|replace)|값으로\s*(덮어|대체|바꿔)/i.test(t)
+    || /(?:값\s*만|값만|보이는\s*값|계산(?:된)?\s*값|paste\s*values?|values?\s*only|copy\s*values?)/i.test(t)
+    || /값(?:만)?\s*(?:을|를)?\s*(?:복사|붙여\s*넣|붙여넣|입력|기입|채워|반영)|(?:복사|붙여\s*넣|붙여넣)\s*.*값(?:만)?/i.test(t)
+    || /값\s*으로\s*(?:붙여\s*넣|붙여넣|덮어|대체|바꿔|입력|기입|채워)/i.test(t);
 }
 
 function codeMentionsFormulaOverwrite(code) {
   return /수식\s*(제거|삭제|지워|없애)|수식을?\s*값으로|값으로\s*덮어쓰기|formula\s*(remove|delete|overwrite|replace)/i.test(String(code || ""));
 }
 
-function userRequestsCopyPaste(text) {
-  return /(복사|붙여\s*넣|붙여넣|복붙|copy|paste)/i.test(String(text || ""));
-}
-
-function userRequestsValuesOnly(text) {
-  return /(값만|값\s*복사|값\s*붙여|수식\s*(빼고|제외|없이)|values?\s*only|paste\s*values?)/i.test(String(text || ""));
-}
-
-function userRequestsNumericOnly(text) {
-  return /(숫자만|숫자\s*값만|수치만|금액만|number(?:s)?\s*only|numeric\s*only)/i.test(String(text || ""));
-}
-
 function userRequestsSort(text) {
   return /(정렬|내림\s*차순|오름\s*차순|소트|sort|order\s*by)/i.test(String(text || ""));
 }
 
-function codeCopiesValuesOnly(code) {
-  const text = String(code || "");
-  // python(openpyxl) 두 줄 분리 패턴까지 잡는다: val = ws.cell(...).value → ws.cell(...).value = val
-  // openpyxl 의 .value 대입은 서식을 전혀 옮기지 못하므로, COM 폴백 마커 없이 복붙을
-  // .value 루프로 처리하는 코드는 '값만 복사'로 판정한다(복붙 요청일 때만 가드가 발동).
-  const isPythonSkill = /def\s+transform\s*\(\s*ctx\s*\)/.test(text);
-  const hasComFallback = /B2B_ENGINE_FALLBACK\s*:\s*excel-com/i.test(text);
-  const pythonValueCopyLoop = isPythonSkill && !hasComFallback &&
-    /\.cell\s*\([^)]*\)\s*\.value\s*=/.test(text) &&
-    /=\s*[\w.]*\.cell\s*\([^)]*\)\s*\.value\b/.test(text);
-  return pythonValueCopyLoop
-    || /\.Value\s*=\s*[^#\n\r;]+\.Value\b/i.test(text)
-    || /PasteSpecial\s+[^'\n\r]*(xlPasteValues|-4163|Paste\s*:=\s*xlPasteValues|Paste\s*:=\s*-4163)/i.test(text)
-    || /PasteSpecial\s*\([^)]*(xlPasteValues|-4163|Paste\s*=\s*-4163)/i.test(text)
-    || /ctx\.(write_grid|set_range)\s*\([^)]*ctx\.rows\s*\(/i.test(text);
+function shouldRouteRequestToVba(text) {
+  const t = String(text || "");
+  if (!t.trim()) return false;
+  const explicitVba = /\bVBA\b|VBA\s*로|매크로/i.test(t);
+  const pivotLike = /(피벗|pivot|유사\s*피벗|그룹\s*별|그룹별|집계표|요약표|크로스탭)/i.test(t)
+    || (/(?:별|별로)\s*(?:합계|집계|요약|평균|개수|건수)/i.test(t) && /(합계|집계|요약|평균|개수|건수)/i.test(t));
+  // "피벗"이라는 단어가 없어도 "D열을 행으로, H열을 열로, R열 합계" 같은 요청은
+  // 실질적으로 크로스탭/유사 피벗이다. 저사양 환경에서 Python 경로가 무거워질 수 있고
+  // 발신번호/ID 같은 식별자 보존도 중요하므로 VBA 라우팅 대상으로 본다.
+  const pivotShape = (
+    /(행\s*(?:으로|기준|라벨|필드|값)|row\s*(?:field|label|as|by))/i.test(t)
+    && /(열\s*(?:로|으로|기준|필드|배치|분리|추가)|column\s*(?:field|label|as|by))/i.test(t)
+    && /(합계|집계|요약|평균|개수|건수|sum|count|average|avg|값\s*으로|값\s*에)/i.test(t)
+  );
+  const keyedRowOverwrite = (
+    /(가입번호|계약번호|청구번호|고객번호|발신번호|전화번호|ID|코드|키|key)/i.test(t)
+    && /(일치|매칭|같은|동일|찾아서|찾아|기준으로|기준)/i.test(t)
+    && /(행\s*전체|해당\s*행|그\s*행|row)/i.test(t)
+    && /(덮어\s*씌|덮어쓰|갱신|업데이트|update|overwrite|반영)/i.test(t)
+  );
+  const conditionMarkers = t.match(/(일\s*때|이면|일\s*경우|인\s*경우|조건|조건문|where|when|if|그리고|또는|동시에|and|or|&&|\|\||필터|추출)/gi) || [];
+  const colRefs = t.match(/(?:[A-Z]{1,3}\s*열|@[^\s\]]*컬럼|컬럼|열\s*\()/gi) || [];
+  const rowwiseWrite = /(동일\s*행|같은\s*행|각\s*행|행마다|입력|기입|채워|환산|변환|계산|반영)/i.test(t);
+  const wholeSheetCrossCopy = /(시트\s*전체|전체\s*시트|sheet\s*전체|worksheet|탭\s*전체)/i.test(t)
+    && /(복사|붙여\s*넣|붙여넣|copy|paste)/i.test(t)
+    && /(파일|workbook|다른\s*파일|출력|입력|@파일)/i.test(t);
+  if (explicitVba) return true;
+  if (pivotLike || pivotShape || keyedRowOverwrite || wholeSheetCrossCopy) return true;
+  if (conditionMarkers.length >= 2 && (rowwiseWrite || colRefs.length >= 2)) return true;
+  return conditionMarkers.length >= 1 && rowwiseWrite && colRefs.length >= 2;
 }
 
-function codeFiltersNumericOnlyForCopy(code) {
-  const text = String(code || "");
-  const numericTest = /(IsNumeric\s*\(|WorksheetFunction\.IsNumber\s*\(|Application\.IsNumber\s*\(|\bisinstance\s*\([^)]*,\s*\(?\s*(?:int|float|Decimal)|\btype\s*\([^)]*\)\s*(?:is|==)\s*(?:int|float)|Number\.isFinite\s*\(|Number\.isInteger\s*\(|typeof\s+[^=\n\r]+\s*===\s*["']number["'])/i;
-  const copyWrite = /(복사|붙여|copy|paste|ctx\.(?:write_grid|set_range)\s*\(|\.Value\s*=|append\s*\(|dest|target)/i;
-  const skipNonNumeric = /(continue|pass|skip|else\s*:|if\s+not\s+.*(?:IsNumeric|isinstance|Number\.|typeof)|filter\s*\()/i;
-  return numericTest.test(text) && copyWrite.test(text) && skipNonNumeric.test(text);
+function shouldRouteRequestToPython(text) {
+  const t = String(text || "");
+  if (!t.trim()) return false;
+  if (/\bVBA\b|VBA\s*로|매크로/i.test(t)) return false;
+  const multiValueCell = /(하나의\s*셀에\s*여러|한\s*셀에\s*여러|셀\s*안(?:의|에)?\s*데이터|셀안의?\s*데이터|아래로\s*여러|여러\s*개\s*(?:들어|데이터|값)|여러개\s*(?:들어|데이터|값)|셀들을?\s*(?:분리|나눠|쪼개)|구분자|줄\s*바꿈|줄바꿈|TEXTSPLIT|CHAR\s*\(\s*10\s*\)|split)/i.test(t);
+  const lookupMatch = /(일치|매칭|같은|동일|찾아서|찾아|기준)/i.test(t);
+  const aggregateWrite = /(합계값|합계|합산|더해|sum|작성|입력|기입|채워|넣어|반영)/i.test(t);
+  const rangeRefs = t.match(/@범위\[/g) || [];
+  const explicitColumns = /![A-Z]{1,3}:[A-Z]{1,3}\]/i.test(t);
+  const identifierLookup = /(가입번호|계약번호|고객번호|발신번호|전화번호|ID|코드|키|key)/i.test(t);
+  const splitAggregateHint = /(병합(?:된|한)?\s*경우\s*합산|여러\s*개(?:면|일\s*때)?\s*합산|각각(?:의)?\s*.*더해서|각각(?:의)?\s*.*합계|분리.*합산)/i.test(t);
+  const lookupValueToTarget = (
+    rangeRefs.length >= 4
+    && lookupMatch
+    && aggregateWrite
+    && /(가져|넣어|작성|입력|기입|채워|반영)/i.test(t)
+    && /(열로|열에|H:H|H\s*열|대상|결과)/i.test(t)
+  );
+  // 예: 출력 P열 한 셀에 여러 코드가 있고, 입력 BP와 매칭해 BQ 값을 합산하여 출력 H열에 작성.
+  // 매크로 주입이 필요 없는 값 계산/채우기 작업이므로 VBA 보안 설정 오류를 피하기 위해 Python COM으로 보낸다.
+  return (multiValueCell || splitAggregateHint || (identifierLookup && lookupValueToTarget))
+    && lookupMatch
+    && aggregateWrite
+    && (rangeRefs.length >= 3 || explicitColumns);
+}
+
+function excelColumnLetterToIndex(letter) {
+  const col = String(letter || "").toUpperCase().replace(/[^A-Z]/g, "");
+  if (!col) return 0;
+  let n = 0;
+  for (const ch of col) {
+    n = n * 26 + (ch.charCodeAt(0) - 64);
+  }
+  return n;
+}
+
+function requestedExcelColumnLetters(text) {
+  const out = new Set();
+  const src = String(text || "");
+  const rangeRe = /!\$?([A-Z]{1,3})(?::\$?([A-Z]{1,3}))?\]?/gi;
+  let m;
+  while ((m = rangeRe.exec(src)) !== null) {
+    if (m[1]) out.add(String(m[1]).toUpperCase());
+    if (m[2]) out.add(String(m[2]).toUpperCase());
+  }
+  const colWordRe = /\b([A-Z]{1,3})\s*열\b/gi;
+  while ((m = colWordRe.exec(src)) !== null) {
+    out.add(String(m[1]).toUpperCase());
+  }
+  return [...out].filter(c => c && excelColumnLetterToIndex(c) > 0);
+}
+
+function multiValueLookupIntent(sourceUserMessage) {
+  const s = String(sourceUserMessage || "");
+  const cols = requestedExcelColumnLetters(s);
+  const explicitLookupShape = cols.length >= 3 && /(열로|열에|가져|넣어|작성|입력|채워|반영|대상|결과)/i.test(s);
+  return (
+    (/(가입번호|계약번호|고객번호|발신번호|전화번호|ID|코드|키|key)/i.test(s) || explicitLookupShape)
+    && /(일치|매칭|같은|동일|찾아서|찾아|기준)/i.test(s)
+    && /(합계|합산|더해|가져|넣어|작성|입력|채워|반영)/i.test(s)
+    && /(한\s*셀|셀\s*안|셀안|여러|병합|줄\s*바꿈|줄바꿈|TEXTSPLIT|CHAR\s*\(\s*10\s*\)|P90|P:P)/i.test(s)
+  );
 }
 
 // [0.5.2 이식·하이브리드] degenerate 출력 감지 — 준-greedy 디코딩의 Qwen 이 같은 줄을 끝없이
@@ -330,7 +393,7 @@ function codeHasBroadValueRewrite(code) {
 // (tests/vba_regression/vba_static_checks.py)의 hard-block 패턴을 exe 로 포팅한 것.
 // 위반 시 자동으로 Qwen 재생성 → 재검사(최대 VBA_STATIC_MAX_REGEN 회) 후에도 실패하면
 // 사용자에게 차단 안내한다. (정적 FAIL 실패는 '정상 응답이지만 위험'이라 재생성 대상.)
-const VBA_STATIC_MAX_REGEN = 2;
+const VBA_STATIC_MAX_REGEN = 1;
 // Python 정적 게이트는 2회 실패(최초 1회 + 재생성 1회)면 더 끌지 않고 바로 VBA 전환한다.
 // (Python COM 기반 제약일 가능성이 높은데 같은 제약으로 3번째 재생성을 돌리는 것은 낭비.)
 const PYTHON_STATIC_MAX_REGEN = 1;
@@ -357,6 +420,129 @@ function vbaStaticSafetyFailures(code, sourceUserMessage) {
   while ((m = coRe.exec(text)) !== null) {
     if (String(m[1]).toLowerCase() !== "scripting.dictionary") {
       failures.push(`CreateObject("${m[1]}") 금지(Scripting.Dictionary 외 파일/네트워크 객체 생성 불가).`);
+    }
+  }
+  const mutatesAppState = /\bApplication\s*\.\s*(?:ScreenUpdating|Calculation|EnableEvents|DisplayAlerts)\s*=/i.test(text);
+  if (mutatesAppState) {
+    const hasCleanupHandler = /\bOn\s+Error\s+GoTo\s+Cleanup\b/i.test(text) && /^\s*Cleanup\s*:/im.test(text);
+    const restoresState = /\bApplication\s*\.\s*(?:ScreenUpdating|Calculation|EnableEvents|DisplayAlerts)\s*=/gi.test(text.replace(/\bApplication\s*\.\s*(?:ScreenUpdating|Calculation|EnableEvents|DisplayAlerts)\s*=\s*(?:False|xlCalculationManual)\b/gi, ""));
+    if (!hasCleanupHandler || !restoresState) {
+      failures.push("Application.ScreenUpdating/Calculation/EnableEvents/DisplayAlerts 를 바꾸는 VBA는 오류가 나도 반드시 Cleanup 라벨에서 원복해야 합니다. On Error GoTo Cleanup, prevCalc 저장, Cleanup: 원복 후 Err.Raise 패턴으로 작성하세요.");
+    }
+  }
+  // 발신번호/ID 같은 식별자 피벗은 결과 열을 텍스트 서식으로 먼저 잡아야 한다.
+  // 값을 쓴 뒤 NumberFormat="@"를 적용하면 Excel 이 이미 선행 0을 제거한 상태라 복구되지 않는다.
+  const idPivotIntent = /(피벗|pivot|그룹|요약|호유형|분리|열로)/i.test(String(sourceUserMessage || "") + "\n" + text)
+    && /(발신번호|전화번호|휴대폰|번호|ID|코드|계정)/i.test(String(sourceUserMessage || "") + "\n" + text);
+  if (idPivotIntent) {
+    const fmtMatch = /(?:Columns\s*\(\s*(?:1|"A"|'A')\s*\)|Range\s*\(\s*["']A:A["']\s*\))\s*\.\s*NumberFormat\s*=\s*["']@["']/i.exec(text);
+    const dataWriteMatch = /(?:Cells\s*\(\s*(?:outRow|outR|rowNo|rIdx|kIdx\s*\+\s*\d+)\s*,\s*1\s*\)\s*\.\s*(?:Value|Value2)|Range\s*\(\s*["']A[2-9]\d*:?)/i.exec(text);
+    if (!fmtMatch) {
+      failures.push("발신번호/ID 같은 식별자 피벗 결과 열은 값을 쓰기 전에 Columns(1).NumberFormat = \"@\" 로 텍스트 서식을 지정하세요.");
+    } else if (dataWriteMatch && fmtMatch.index > dataWriteMatch.index) {
+      failures.push("식별자 결과 열 NumberFormat=\"@\" 가 데이터 쓰기 뒤에 있습니다. 시트 생성 직후, 데이터 쓰기 전에 적용하세요.");
+    }
+  }
+  // VBA For Each 제어 변수는 Variant/Object 여야 한다. Dictionary.Keys 를 String 변수로 돌리면
+  // "For Each control variable must be Variant or Object" 컴파일 오류로 매크로가 실행되지 않는다.
+  const scalarDecls = new Map();
+  const scalarDeclRe = /(?:\bDim|,)\s+([A-Za-z_][A-Za-z0-9_]*)\s+As\s+(String|Long|Integer|Double|Currency|Single|Date|Boolean)\b/gi;
+  let declMatch;
+  while ((declMatch = scalarDeclRe.exec(text)) !== null) {
+    scalarDecls.set(String(declMatch[1]).toLowerCase(), String(declMatch[2]));
+  }
+  const forEachRe = /\bFor\s+Each\s+([A-Za-z_][A-Za-z0-9_]*)\s+In\b/gi;
+  let forEachMatch;
+  while ((forEachMatch = forEachRe.exec(text)) !== null) {
+    const varName = String(forEachMatch[1] || "");
+    const scalarType = scalarDecls.get(varName.toLowerCase());
+    if (scalarType) {
+      failures.push(`For Each 제어 변수 '${varName}' 가 ${scalarType} 로 선언되어 있습니다. Dictionary/Collection 순회 변수는 Variant 또는 Object 로 선언하세요.`);
+    }
+  }
+  const timeToSecondsIntent = /(시간|time).{0,20}(초|second)|초.{0,20}(환산|변환|계산)/i.test(String(sourceUserMessage || ""));
+  if (timeToSecondsIntent) {
+    const hasTextTimeBranch = /\b(?:Split|TimeValue|DateDiff)\s*\(|\bInStr\s*\([^)]*["']:["']/i.test(text);
+    const hasSerialHandling = /86400|\b(?:TimeValue|DateDiff)\s*\(/i.test(text);
+    if (!hasTextTimeBranch) {
+      failures.push("시간을 초로 환산하는 VBA는 '01:02:03' 같은 콜론 텍스트를 Split/InStr/TimeValue/DateDiff 로 처리해야 합니다. IsNumeric 분기만 있으면 텍스트 시간이 건너뜁니다.");
+    }
+    if (!hasSerialHandling) {
+      failures.push("Excel 시간 시리얼(0~1 숫자)을 초로 바꾸는 86400 처리도 포함하세요.");
+    }
+  }
+  if (/\bColumns\s*\.\s*Count\b[\s\S]{0,80}\.\s*End\s*\(\s*xlToRight\s*\)/i.test(text)) {
+    failures.push("마지막 열 계산에서 Columns.Count 기준 End(xlToRight)는 XFD 끝열로 잡혀 오작동합니다. End(xlToLeft)를 쓰세요.");
+  }
+  const formulaPreserveIntent = /수식\s*(?:셀)?\s*(?:제외|건너|유지|보존)|(?:제외|건너|유지|보존)\s*.*수식|HasFormula/i.test(String(sourceUserMessage || "") + "\n" + text);
+  if (formulaPreserveIntent
+      && /\bHasFormula\b/i.test(text)
+      && /\b(?:rng|targetRng|dstRng|range|targetRange)\s*\.\s*(?:Value|Value2)\s*=\s*(?:outArr|arr|values|dataArr)\b/i.test(text)) {
+    failures.push("수식 셀을 제외/보존해야 하는 VBA가 범위 전체를 배열로 다시 써서 수식 셀까지 값으로 바꿀 수 있습니다. HasFormula=False 인 셀만 개별 갱신하세요.");
+  }
+  const requestedCols = requestedExcelColumnLetters(sourceUserMessage);
+  const requestedColIndices = new Set(requestedCols.map(excelColumnLetterToIndex).filter(Boolean));
+  const requestedMultiCols = requestedCols.filter(c => c.length >= 2);
+  if (requestedMultiCols.length) {
+    const numericColUses = new Set();
+    const cellNumRe = /\bCells\s*\(\s*[^,\n\r()]+,\s*(\d{2,5})\s*\)/gi;
+    let cellNumMatch;
+    while ((cellNumMatch = cellNumRe.exec(text)) !== null) {
+      numericColUses.add(Number(cellNumMatch[1]));
+    }
+    const columnsNumRe = /\bColumns\s*\(\s*(\d{2,5})\s*\)/gi;
+    while ((cellNumMatch = columnsNumRe.exec(text)) !== null) {
+      numericColUses.add(Number(cellNumMatch[1]));
+    }
+    const unexpected = [...numericColUses]
+      .filter(n => n >= 27 && n <= 16384 && !requestedColIndices.has(n))
+      .sort((a, b) => a - b);
+    if (unexpected.length) {
+      const expected = requestedMultiCols
+        .map(c => `${c}=${excelColumnLetterToIndex(c)}`)
+        .join(", ");
+      failures.push(`요청에 ${requestedMultiCols.join(", ")} 열이 명시되어 있는데 코드가 다른 다중문자 열 번호(${unexpected.join(", ")})를 하드코딩했습니다. ${expected} 입니다. 열 번호를 추측하지 말고 Columns("BP")/Range("BP" & r) 같은 열 문자 참조 또는 검증된 변환 함수를 쓰세요.`);
+    }
+    const quotedColRe = /\b(?:Range|Columns)\s*\(\s*["']\$?([A-Z]{2,3})(?::\$?([A-Z]{2,3}))?/gi;
+    let quotedMatch;
+    const unexpectedLetters = new Set();
+    while ((quotedMatch = quotedColRe.exec(text)) !== null) {
+      for (const col of [quotedMatch[1], quotedMatch[2]]) {
+        if (col && !requestedCols.includes(String(col).toUpperCase())) {
+          unexpectedLetters.add(String(col).toUpperCase());
+        }
+      }
+    }
+    if (unexpectedLetters.size) {
+      failures.push(`요청에 없는 다중문자 열(${[...unexpectedLetters].join(", ")})을 참조했습니다. BP/BQ 같은 열 문자는 한 글자 열과 달리 숫자 변환 실수가 잦으므로 요청 열 문자 그대로 사용하세요.`);
+    }
+  }
+  if (multiValueLookupIntent(sourceUserMessage)) {
+    if (/\bInStr\s*\(/i.test(text) || /\bLike\b/i.test(text)) {
+      failures.push("가입번호/코드가 한 셀에 여러 개 들어 있는 조회는 부분일치(InStr/Like)가 아니라 셀 값을 구분자로 분리한 토큰과 BP/키 값을 정확 일치 비교해야 합니다.");
+    }
+    if (/\b(?:targetRng|outRng|dstRng|resultRng|rng)\s*\.\s*(?:Value|Value2)\s*=\s*(?:outArr|arr|values|resultArr)/i.test(text)
+        || /\bRange\s*\([^'\n\r]*(?:Cells\s*\([^)]*,\s*(?:8|["']H["'])\s*\)|["']H)/i.test(text) && /\.\s*(?:Value|Value2)\s*=\s*(?:outArr|arr|values|resultArr)/i.test(text)) {
+      failures.push("다중 가입번호 매칭 결과를 H열 전체 배열로 다시 쓰면 매칭 없는 행과 합계 수식이 0/값으로 오염됩니다. 매칭된 행의 H셀만 갱신하고 미매칭/수식 행은 그대로 두세요.");
+    }
+  }
+  const keyedOverwriteIntent = (
+    /(가입번호|계약번호|청구번호|고객번호|ID|코드|키|key)/i.test(String(sourceUserMessage || ""))
+    && /(일치|매칭|같은|동일|찾아서|찾아|기준으로|기준)/i.test(String(sourceUserMessage || ""))
+    && /(행\s*전체|해당\s*행|그\s*행|row)/i.test(String(sourceUserMessage || ""))
+    && /(덮어\s*씌|덮어쓰|갱신|업데이트|update|overwrite|반영)/i.test(String(sourceUserMessage || ""))
+    && !/(피벗|pivot|크로스탭|행\s*으로.*열\s*로)/i.test(String(sourceUserMessage || ""))
+  );
+  if (keyedOverwriteIntent) {
+    if (/\b(?:dstRange|dstRng|targetRange|targetRng|destRange|destRng|outRange|outRng|dataRange|dataRng|rng)\s*\.\s*(?:Value|Value2)\s*=\s*(?:dstArr|targetArr|destArr|outArr|arr|dataArr)/i.test(text)
+        || /\b(?:wsDst|targetWs|dstWs|destWs)\s*\.\s*Range\s*\([^)]*\)\s*\.\s*(?:Value|Value2)\s*=\s*(?:dstArr|targetArr|destArr|outArr|arr|dataArr)/i.test(text)) {
+      failures.push("키 매칭 행 덮어쓰기에서 대상 전체 범위를 배열로 다시 쓰면 미매칭 행/수식이 오염될 수 있습니다. 매칭된 대상 행만 한 행씩 갱신하세요.");
+    }
+    if (!/\.Text\b/i.test(text) && /\b(?:srcArr|dstArr|dataArr|arr)\s*\(/i.test(text)) {
+      failures.push("가입번호/계약번호 같은 매칭 키를 배열 Value 로만 읽으면 앞 0/표시형식 차이로 매칭이 깨질 수 있습니다. 키 비교는 ws.Cells(row, keyCol).Text 를 정규화해서 사용하세요.");
+    }
+    if (/\bElse\b[\s\S]{0,240}(?:\.\s*(?:Value|Value2)\s*=\s*0|\w+\s*\([^)]*\)\s*=\s*0)/i.test(text)) {
+      failures.push("키가 매칭되지 않은 행에 0을 쓰면 기존 청구 데이터가 오염됩니다. 미매칭 행은 그대로 두세요.");
     }
   }
   // 전체 시트 순회는 사용자가 "전체/모든 시트"를 명시했을 때만 허용.
@@ -479,12 +665,6 @@ function pythonComStaticSafetyFailures(code, sourceUserMessage) {
   if (lines.length > 150) {
     failures.push("코드가 비정상적으로 깁니다. 요청을 만족하는 최소한의 코드(보통 40줄 이내)로 다시 작성하세요.");
   }
-  // [검증패치#4] 복사/붙여넣기 요청인데 ctx.copy 없이 read→write 재구성 — 헤더/빈칸 누락·서식/수식 소실의 원인.
-  if (typeof userRequestsCopyPaste === "function" && userRequestsCopyPaste(sourceUserMessage) &&
-      (typeof userRequestsValuesOnly !== "function" || !userRequestsValuesOnly(sourceUserMessage)) &&
-      !/ctx\.copy(?:_sheet)?\s*\(/.test(scanText) && /ctx\.read\s*\(/.test(scanText) && /ctx\.(write|write_cell|write_formulas)\s*\(/.test(scanText)) {
-    failures.push("복사/붙여넣기 요청은 ctx.copy(원본시트, 범위, 대상시트, 시작셀) 로 범위 전체(헤더·빈칸 포함)를 그대로 옮겨야 합니다 — read→write 값 재구성은 서식·수식·빈칸이 사라집니다.");
-  }
   // [정렬 헤더 보호] 사용자가 정렬을 요청했는데:
   //  (a) ctx.sort 없이 파이썬 .sort()/sorted() 로 정렬 후 ctx.write → 헤더가 데이터와 섞이고 행이 어긋남
   //  (b) has_header=False 를 명시 → 1행 헤더가 정렬에 휩쓸림
@@ -584,7 +764,7 @@ function showCodeGuardBlock(message, context) {
 
 // 정적 안전 위반 시 Qwen 을 자동 재호출해 고친 코드를 받아 다시 검사 흐름에 태운다.
 // addAssistantReply 가 새 코드에 대해 validateAssistantCodeBeforeApply 를 다시 호출하므로
-// staticRegenAttempt 카운터로 무한 재생성을 막는다(VBA_STATIC_MAX_REGEN 회까지).
+// staticRegenAttempt 카운터로 무한 재생성을 막는다(언어별 MAX_REGEN 회까지).
 async function autoRegenerateForStaticSafety(code, failures, context) {
   const sourceUserMessage = (context && context.sourceUserMessage) || latestUserRequestForSafety();
   const attempt = Number((context && context.staticRegenAttempt) || 0) + 1;
@@ -603,17 +783,19 @@ async function autoRegenerateForStaticSafety(code, failures, context) {
   try {
     $("chat-send").disabled = true;
     const reply = await callLLM(prompt, {
+      forceEngine: isPythonRegen ? "python" : "vba",
       presencePenalty: hasDegenerateFailure ? 1.5 : undefined,
       onDelta: (_d, full) => { streamView.setAnswer(full); scrollChatToBottom(); },
       onReconnect: (a, max) => { streamView.setAnswer(`ixi 연결이 끊겨 재연결 중입니다. (${a}/${max})`); },
     });
     streamView.flush();
     loading.remove();
-    // 새 응답을 일반 흐름으로 렌더 → 새 코드가 자동으로 다시 정적검사된다(카운터/폴백 표식 전파).
+    // 새 응답을 일반 흐름으로 렌더 → 원래 "적용" 동작이면 자동으로 다시 검사/적용한다.
     addAssistantReply(reply, {
       sourceUserMessage,
       staticRegenAttempt: attempt,
       vbaFallbackTried: !!(context && context.vbaFallbackTried),
+      autoApplyMode: context && context.autoApplyMode,
     });
     scrollChatToBottom();
   } catch (err) {
@@ -626,7 +808,7 @@ async function autoRegenerateForStaticSafety(code, failures, context) {
   }
 }
 
-// Python COM 정적 게이트를 (최초 생성 + 자동 재생성 VBA_STATIC_MAX_REGEN 회) 연속으로 통과하지
+// Python COM 정적 게이트를 (최초 생성 + 자동 재생성 PYTHON_STATIC_MAX_REGEN 회) 연속으로 통과하지
 // 못하면 같은 요청을 VBA 매크로로 전환해 한 번 더 생성한다. 이 호출 1회만 VBA 시스템 프롬프트를
 // 쓰고(forceEngine), 전역 엔진 설정은 바꾸지 않는다. 생성된 VBA 는 일반 흐름(addAssistantReply)을
 // 타므로 VBA 정적 게이트가 다시 검사하고, 적용 시 language="vba" 라우팅으로 run-vba 에 실행된다.
@@ -661,7 +843,12 @@ async function autoRegenerateAsVbaFallback(code, failures, context) {
     streamView.flush();
     loading.remove();
     // vbaFallbackTried: VBA 쪽 게이트도 끝내 막히면 다시 python 으로 돌아오지 않고 최종 차단.
-    addAssistantReply(reply, { sourceUserMessage, staticRegenAttempt: 0, vbaFallbackTried: true });
+    addAssistantReply(reply, {
+      sourceUserMessage,
+      staticRegenAttempt: 0,
+      vbaFallbackTried: true,
+      autoApplyMode: (context && context.autoApplyMode) || "apply",
+    });
     scrollChatToBottom();
   } catch (err) {
     loading.innerHTML = "VBA 전환 재생성 실패: " + escapeHtml(err && err.message ? err.message : String(err));
@@ -706,7 +893,13 @@ function validateAssistantCodeBeforeApply(code, context) {
   const safetyFailures = vbaStaticSafetyFailures(code, sourceUserMessage);
   if (safetyFailures.length) {
     const attemptsSoFar = Number(context.staticRegenAttempt || 0);
-    if (attemptsSoFar < VBA_STATIC_MAX_REGEN) {
+    if (context.vbaFallbackTried) {
+      showCodeGuardBlock(
+        "VBA 우회 코드도 안전하지 않은 패턴이 남아 적용을 막았습니다:\n- " +
+          safetyFailures.join("\n- "),
+        context,
+      );
+    } else if (attemptsSoFar < VBA_STATIC_MAX_REGEN) {
       autoRegenerateForStaticSafety(code, safetyFailures, context);
     } else {
       showCodeGuardBlock(
@@ -724,16 +917,6 @@ function validateAssistantCodeBeforeApply(code, context) {
   }
   if (codeHasBroadValueRewrite(code) && !userExplicitlyRequestsFormulaOverwrite(sourceUserMessage)) {
     const message = "표 전체/UsedRange를 Value 배열로 다시 쓰는 VBA가 감지되어 적용을 막았습니다. 이 방식은 기존 수식을 값으로 바꿀 수 있으니 대상 열/셀만 쓰는 코드로 다시 생성해 주세요.";
-    showCodeGuardBlock(message, context);
-    return false;
-  }
-  if (userRequestsCopyPaste(sourceUserMessage) && !userRequestsValuesOnly(sourceUserMessage) && codeCopiesValuesOnly(code)) {
-    const message = "복사/붙여넣기 요청에서 값만 복사하는 코드가 감지되어 적용을 막았습니다. 수식과 서식이 유지되도록 Range.Copy 또는 PasteSpecial xlPasteAll 방식으로 다시 생성해 주세요.";
-    showCodeGuardBlock(message, context);
-    return false;
-  }
-  if (userRequestsCopyPaste(sourceUserMessage) && !userRequestsNumericOnly(sourceUserMessage) && codeFiltersNumericOnlyForCopy(code)) {
-    const message = "복사/붙여넣기 요청에서 숫자 셀만 골라 복사하는 코드가 감지되어 적용을 막았습니다. 선택 범위의 텍스트, 숫자, 수식, 빈칸을 행/열 위치 그대로 모두 복사하는 코드로 다시 생성해 주세요.";
     showCodeGuardBlock(message, context);
     return false;
   }
@@ -902,12 +1085,18 @@ function addAssistantReply(fullText, replyContext) {
       editApplyBtn.onclick = () => {
         const validationContext = {
           ...(replyContext || {}),
+          autoApplyMode: "edit",
           forceLabel: "\uAC15\uC81C\uB85C \uC218\uC815 \uC801\uC6A9",
           onForceApply: runEditApply,
         };
         if (!validateAssistantCodeBeforeApply(code, validationContext)) return;
         runEditApply();
       };
+      if (replyContext && replyContext.autoApplyMode === "edit") {
+        setTimeout(() => {
+          if (!editApplyBtn.disabled) editApplyBtn.click();
+        }, 0);
+      }
       rejectBtn.onclick = () => {
         editApplyBtn.disabled = true;
         rejectBtn.disabled = true;
@@ -959,6 +1148,7 @@ function addAssistantReply(fullText, replyContext) {
       applyBtn.onclick = () => {
         const validationContext = {
           ...(replyContext || {}),
+          autoApplyMode: "apply",
           forceLabel: "\uAC15\uC81C\uB85C \uC801\uC6A9",
           onForceApply: runApply,
         };
@@ -968,6 +1158,7 @@ function addAssistantReply(fullText, replyContext) {
       insertBtn.onclick = () => {
         const validationContext = {
           ...(replyContext || {}),
+          autoApplyMode: "insert",
           forceLabel: "\uAC15\uC81C\uB85C \uC0BD\uC785",
           onForceApply: runInsert,
         };
@@ -980,6 +1171,11 @@ function addAssistantReply(fullText, replyContext) {
         rejectBtn.disabled = true;
         rejectBtn.textContent = "\uAC70\uC808\uB428";
       };
+      if (replyContext && replyContext.autoApplyMode === "apply") {
+        setTimeout(() => {
+          if (!applyBtn.disabled) applyBtn.click();
+        }, 0);
+      }
     }
   }
   $("chat-messages").appendChild(div);
@@ -1359,7 +1555,18 @@ async function requestErrorRecovery(stepIdx, errorInfo, userNote) {
   const isExistingStep = stepIdx >= 0 && state.pipeline[stepIdx] === failedStep;
   const recoveryLanguage = failedStep.language ||
     (typeof inferPipelineStepLanguage === "function" ? inferPipelineStepLanguage(failedStep) : "python");
-  let isVbaRecovery = recoveryLanguage === "vba" || (typeof getSkillEngine === "function" && getSkillEngine() === "vba");
+  const recoverySignals = [
+    recoveryLanguage,
+    failedStep && failedStep.code,
+    failedStep && failedStep.description,
+    errorInfo && errorInfo.language,
+    errorInfo && errorInfo.message,
+    errorInfo && errorInfo.stack,
+    recoveryNoteText,
+  ].filter(Boolean).join("\n");
+  const shouldKeepVbaRecovery = /(?:^|\b)vba(?:\b|$)|매크로|Sub\s+B2BSkill\s*\(|End\s+Sub|VBA\s*실행\s*실패|B2B_RunSkill/i.test(recoverySignals);
+  let isVbaRecovery = recoveryLanguage === "vba" || shouldKeepVbaRecovery ||
+    (typeof getSkillEngine === "function" && getSkillEngine() === "vba");
   let isPythonRecovery = !isVbaRecovery && recoveryLanguage === "python";
   // [0.5.2.2 §4.2] Python COM 런타임 실패가 같은 step 에서 누적되면(기본 2회) Python COM 기반
   // 자체의 제약으로 판단하고 이번 복구부터 VBA 전환 생성을 시도한다(전역 엔진 설정은 불변).
@@ -1473,8 +1680,10 @@ async function requestErrorRecovery(stepIdx, errorInfo, userNote) {
 
   try {
     const requestOptions = {
-      // [0.5.2.2] VBA 전환 복구는 이 호출 1회만 VBA 시스템 프롬프트를 쓴다(전역 엔진 설정 불변).
-      forceEngine: vbaRuntimeSwitch ? "vba" : undefined,
+      // 에러 복구는 실패 Step의 언어를 유지한다. 저장된 VBA 스킬 전체실행 실패 후 복구가
+      // Python ctx 로 바뀌면 사용자가 "반드시 vba"를 다시 입력해야 했고, 혼합 파이프라인의
+      // 엔진 호환성도 깨진다. 이 호출 1회만 강제하며 전역 엔진 설정은 건드리지 않는다.
+      forceEngine: isVbaRecovery ? "vba" : (isPythonRecovery ? "python" : undefined),
       editTargetId: isExistingStep ? failedStep.id : null,
       thinkMode,
       signal: abortController.signal,
@@ -1643,7 +1852,9 @@ async function sendChat() {
   loading.classList.add("streaming");
   // 외부 노출 시엔 내부 모델명을 표시하지 않고 LLM 으로 통일
   const aiName = settings.provider === "openai-compat" ? "ixi 모델" : "LLM";
-  const modeLabel = editTargetId ? "(수정 모드) " : "";
+  const routeToVba = shouldRouteRequestToVba(msg);
+  const routeToPython = !routeToVba && shouldRouteRequestToPython(msg);
+  const modeLabel = editTargetId ? "(수정 모드) " : (routeToVba ? "(VBA 라우팅) " : (routeToPython ? "(Python 라우팅) " : ""));
   const thinkMode = typeof isThinkModeEnabled === "function" && isThinkModeEnabled();
   const abortController = new AbortController();
   let stopThinkingRequested = false;
@@ -1663,6 +1874,12 @@ async function sendChat() {
       editTargetId,
       reqId,
       thinkMode,
+      forceEngine: routeToVba ? "vba" : (routeToPython ? "python" : undefined),
+      routingHint: routeToVba
+        ? "복합 조건/피벗성 집계/시트 전체 교차파일 복사 요청은 저사양 PC에서 Python COM 경로가 멈출 수 있으므로 이번 응답은 VBA로 작성합니다."
+        : (routeToPython
+          ? "한 셀에 여러 값이 들어 있는 열을 분해해 다른 파일 열과 매칭하고 값 합계를 대상 열에 쓰는 요청입니다. VBA 매크로가 아니라 Python COM으로 작성하세요. 가입번호/코드류는 부분일치가 아니라 분리된 토큰과 조회 열 값을 정확 일치 비교하세요. 전체 열을 그대로 읽지 말고 실제 마지막 행까지 범위를 한정하세요. 매칭된 행만 대상 열에 쓰고, 매칭 없는 행/합계 수식/텍스트 행은 그대로 보존하세요."
+          : ""),
       signal: abortController.signal,
       onDelta: (delta, full) => {
         streamView.setAnswer(full);

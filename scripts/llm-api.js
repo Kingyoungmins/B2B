@@ -56,6 +56,9 @@ async function callLLM(userMessage, options) {
   if (_looksLikeCorrection(userMessage)) {
     fullSystem += "\n\n## 사용자 정정 (최우선)\n사용자의 최신 메시지는 직전 작업/해석이 틀렸다는 정정입니다. 이전 단계 코드나 직전 해석(특히 잘못 고른 열·조건)을 그대로 반복하지 말고, 이 정정을 최우선으로 반영해 새로 작성하세요. 사용자가 지목한 열/항목/기준(열 문자나 헤더명)을 정확히 사용하세요.";
   }
+  if (options.routingHint) {
+    fullSystem += "\n\n## 실행 라우팅\n" + String(options.routingHint);
+  }
 
   try {
     let reply;

@@ -323,40 +323,7 @@ function chooseBackendRestoreView(result, viewBeforeApply, downloadUrls) {
   if (result.liveApplied && result.clientOutputFileId) changedFileIds.add(result.clientOutputFileId);
 
   const previousId = viewBeforeApply && viewBeforeApply.fileId;
-  const outputId = (result.clientOutputFileId && changedFileIds.has(result.clientOutputFileId))
-    ? result.clientOutputFileId
-    : Array.from(changedFileIds).find(isBackendOutputFileId);
-  if (outputId && getFile(outputId)) {
-    const previousWasSameOutput = previousId === outputId;
-    return {
-      ...(viewBeforeApply || {}),
-      fileId: outputId,
-      sheet: previousWasSameOutput ? viewBeforeApply.sheet : (result.activeSheet || null),
-      selectedSheets: previousWasSameOutput ? (viewBeforeApply.selectedSheets || []) : [],
-      selectedCell: previousWasSameOutput ? viewBeforeApply.selectedCell : null,
-      selectedRange: previousWasSameOutput ? viewBeforeApply.selectedRange : null,
-      selectedRanges: previousWasSameOutput ? (viewBeforeApply.selectedRanges || []) : [],
-      selectionAnchor: previousWasSameOutput ? viewBeforeApply.selectionAnchor : null,
-    };
-  }
-
-  if (previousId && changedFileIds.has(previousId) && getFile(previousId)) {
-    return viewBeforeApply;
-  }
-
   if (previousId && getFile(previousId)) return viewBeforeApply;
-  const firstChangedId = Array.from(changedFileIds).find(id => getFile(id));
-  if (firstChangedId) {
-    return {
-      fileId: firstChangedId,
-      sheet: result.activeSheet || null,
-      selectedSheets: [],
-      selectedCell: null,
-      selectedRange: null,
-      selectedRanges: [],
-      selectionAnchor: null,
-    };
-  }
   return viewBeforeApply || {};
 }
 
@@ -377,21 +344,14 @@ async function forceShowBackendResultMirror(result, activeId, downloadUrls) {
       const existingExcelId = typeof excelMirrorSessionIdForFileId === "function"
         ? excelMirrorSessionIdForFileId(activeId)
         : null;
+      if (!existingExcelId) return false;
       const refreshed = await refreshExcelMirrorForFileId(activeId, url, {
-        // 기존 세션이 있으면 /api/excel/replace 만 사용한다.
-        // 세션이 유실된 예외 상황에서만 해당 파일 하나를 다시 연다. 전체 close/reopen 은 금지.
-        openIfMissing: !existingExcelId,
+        // 기존 세션만 조용히 교체한다. 결과 반영 때문에 다른 파일을 열거나 화면 탭을 바꾸지 않는다.
+        openIfMissing: false,
         preserveFocus: true,
-        raiseAfter: true,
+        raiseAfter: false,
       });
       if (refreshed) return true;
-    }
-    if (typeof switchVisibleExcelMirrorToFileId === "function") {
-      return await switchVisibleExcelMirrorToFileId(activeId);
-    }
-    if (typeof openExcelMirrorForFileId === "function") {
-      await openExcelMirrorForFileId(activeId);
-      return true;
     }
   } catch (err) {
     console.warn("Excel mirror force-show failed:", err);
@@ -652,9 +612,14 @@ async function runPipelineOnBackend(options = {}) {
     } : null,
     // [혼합 호환] 워커가 VBA/COM-bulk 스텝의 기준 워크북을 고를 수 있게 대상 파일명을 첨부.
     pipeline: (pipelineForRun || []).map(s => {
-      if (!s || !s.targetFileId || typeof getFile !== "function") return s;
-      const tf = getFile(s.targetFileId);
-      return tf && tf.name ? { ...s, targetFileName: tf.name } : s;
+      if (!s || typeof getFile !== "function") return s;
+      const inferredTarget = typeof inferPipelineStepTargetFileId === "function"
+        ? inferPipelineStepTargetFileId(s)
+        : null;
+      const targetFileId = (s.targetFileId && getFile(s.targetFileId)) ? s.targetFileId : inferredTarget;
+      if (!targetFileId) return s;
+      const tf = getFile(targetFileId);
+      return tf && tf.name ? { ...s, targetFileId, targetFileName: tf.name } : s;
     }),
     baseMode: options.baseMode || "original",
     engine: skillEngine,

@@ -6,6 +6,14 @@
 
 ## 최근 변경사항
 
+### ver0.5.8
+
+ver0.5.7 기반 안정화 패치.
+
+- 복사/붙여넣기 관련 적용 전 안전 재생성 가드를 제거했습니다. 값만 복사, 수식 셀의 계산값 복사, 서식 있는 셀 대상 붙여넣기 같은 요청을 과도하게 막지 않습니다.
+- 복합 조건/피벗성 집계/시트 전체 교차파일 복사 요청은 저사양 PC에서 Python COM 경로가 멈출 수 있어 VBA 생성으로 자동 라우팅합니다.
+- `ctx.copy_sheet()`의 교차파일 시트 전체 복사를 보강했습니다. 대상 파일이 읽기전용 동반본으로 잡힌 경우 실제 라이브 대상 워크북을 찾고, 다른 Excel 인스턴스면 임시 워크북을 매개로 복사합니다.
+
 ### ver0.5.6
 
 ver0.5.5 기반. 실사용 피드백을 반영한 생성 품질·안정성·기능 보완 릴리스(라이브 Python COM 엔진 기준).
@@ -322,12 +330,12 @@ build_exe.bat
 빌드 결과:
 
 ```text
-dist\B2B_ver0.5.6\B2B_ver0.5.6.exe   (네이티브 호스트)
-dist\B2B_ver0.5.6\B2B_Server.exe     (PyInstaller 서버)
-dist\B2B_ver0.5.6_portable.zip       (배포용 zip)
+dist\B2B_ver0.5.8\B2B_ver0.5.8.exe   (네이티브 호스트)
+dist\B2B_ver0.5.8\B2B_Server.exe     (PyInstaller 서버)
+dist\B2B_ver0.5.8_portable.zip       (배포용 zip)
 ```
 
-단일 self-extracting EXE가 필요하면 `build_single_exe.bat`을 추가 실행합니다 (`dist\B2B_ver0.5.6_single.exe`).
+단일 self-extracting EXE가 필요하면 `build_single_exe.bat`을 추가 실행합니다 (`dist\B2B_ver0.5.8_single.exe`).
 
 `dist/`와 `build/`는 git 추적 대상이 아닙니다.
 
@@ -416,7 +424,7 @@ ctx.write_grid(ws, [[123]], start_row=4, start_col=2)
 ## 디렉터리 구조
 
 ```text
-B2B_ver0.5.6/
+B2B_ver0.5.8/
 ├─ index.html
 ├─ serve_b2b.py
 ├─ launch_b2b.py

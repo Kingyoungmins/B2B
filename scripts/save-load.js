@@ -46,7 +46,34 @@ function logicBackupTimestamp() {
 }
 
 function safeLogicBaseName(name) {
-  return String(name || "logic").replace(/[^\w\uAC00-\uD7A3-]/g, "_");
+  return String(name || "logic").trim().replace(/[^\w\uAC00-\uD7A3\-\s]/g, "_").replace(/\s+/g, " ").trim() || "logic";
+}
+
+function stripLogicTimestampSuffix(name) {
+  let base = String(name || "").trim();
+  base = base.replace(/\.(?:zip|logic\.json|json)$/i, "");
+  base = base.replace(/_step\d+$/i, "");
+  base = base.replace(/(?:[_-])?\d{4}-\d{2}-\d{2}-\d{2}-\d{2}-\d{2}$/i, "");
+  base = base.replace(/(?:[_-])?\d{4}-\d{2}-\d{2}-\d{2}-\d{2}$/i, "");
+  return safeLogicBaseName(base || "logic");
+}
+
+function currentLogicSaveBaseName(fallback) {
+  const fromState = state && state.logicSaveBaseName ? state.logicSaveBaseName : "";
+  let fromStorage = "";
+  try { fromStorage = localStorage.getItem("b2b_logic_save_base_name") || ""; } catch (_) {}
+  return stripLogicTimestampSuffix(fromState || fromStorage || fallback || "logic");
+}
+
+function rememberLogicSaveBaseName(name) {
+  const base = stripLogicTimestampSuffix(name || "logic");
+  state.logicSaveBaseName = base;
+  try { localStorage.setItem("b2b_logic_save_base_name", base); } catch (_) {}
+  return base;
+}
+
+function timestampedLogicArchiveName(baseName) {
+  return `${safeLogicBaseName(baseName || "logic")}_${logicBackupTimestamp()}`;
 }
 
 function buildLogicZipEntries(name) {
@@ -60,6 +87,7 @@ function buildLogicZipEntries(name) {
     version: 3,
     type: "mvno-logic",
     name,
+    saveBaseName: currentLogicSaveBaseName(stripLogicTimestampSuffix(name)),
     createdAt: new Date().toISOString(),
     stepCount: state.pipeline.length,
     pipeline: state.pipeline.map((s, idx) => ({
@@ -114,7 +142,7 @@ function scheduleLogicAutoBackup(reason) {
 async function saveLogicAutoBackup(reason, seq) {
   if (seq !== logicAutoBackupSeq) return;
   try {
-    const name = `logic_auto_${logicBackupTimestamp()}_step${state.pipeline.length}`;
+    const name = timestampedLogicArchiveName(currentLogicSaveBaseName("logic"));
     const blob = createZipBlob(buildLogicZipEntries(name));
     const resp = await fetch("/api/logic/backup", {
       method: "POST",
@@ -137,7 +165,8 @@ async function saveLogicAutoBackup(reason, seq) {
 function openSaveModal() {
   if (state.pipeline.length === 0) { toast("저장할 단계가 없습니다", "error"); return; }
   const modal = $("modal");
-  const defaultName = "logic_" + logicBackupTimestamp().slice(0, 16);  // 로컬 시각(분까지)
+  const defaultName = currentLogicSaveBaseName("logic");
+  const previewName = timestampedLogicArchiveName(defaultName) + ".zip";
   modal.innerHTML = `
     <h3>스킬 저장 (ZIP 다운로드)</h3>
     <p style="font-size:12px; color:#666; margin-bottom:10px">
@@ -150,7 +179,10 @@ function openSaveModal() {
     <p style="font-size:11.5px; color:#888; margin-bottom:10px">
       .js/.py 파일은 VSCode 등 외부 에디터에서 직접 수정 가능합니다. 불러오기 시 JSON과 함께 선택하면 수정된 코드가 반영됩니다.
     </p>
-    <input type="text" id="save-name" placeholder="파일 이름 (확장자 제외)" value="${defaultName}" />
+    <input type="text" id="save-name" placeholder="파일 이름 (확장자/일시 제외)" value="${escapeHtml(defaultName)}" />
+    <p id="save-name-preview" style="font-size:11.5px; color:#666; margin:8px 0 0">
+      저장 파일명: ${escapeHtml(previewName)}
+    </p>
     <div class="row">
       <button class="btn-secondary" id="modal-cancel">취소</button>
       <button class="btn-primary" id="modal-save">ZIP 다운로드</button>
@@ -158,62 +190,18 @@ function openSaveModal() {
   `;
   $("modal-bg").classList.add("show");
   setTimeout(() => $("save-name").select(), 50);
+  const refreshPreview = () => {
+    const base = stripLogicTimestampSuffix(($("save-name") && $("save-name").value) || defaultName);
+    const preview = $("save-name-preview");
+    if (preview) preview.textContent = `저장 파일명: ${timestampedLogicArchiveName(base)}.zip`;
+  };
+  $("save-name").addEventListener("input", refreshPreview);
   $("modal-cancel").onclick = () => $("modal-bg").classList.remove("show");
   $("modal-save").onclick = () => {
-    const name = $("save-name").value.trim();
-    if (!name) return;
-
-    // 각 단계를 개별 .js/.py 파일로 저장하고, 매니페스트에서 파일명 참조
-    const safeBase = name.replace(/[^\w\uAC00-\uD7A3-]/g, "_");
-    const stepFiles = state.pipeline.map((s, idx) => {
-      const lang = s && s.language ? s.language : "javascript";
-      return `${safeBase}_step_${idx + 1}.${lang === "python" ? "py" : "js"}`;
-    });
-
-    const manifest = {
-      version: 3,
-      type: "mvno-logic",
-      name,
-      createdAt: new Date().toISOString(),
-      stepCount: state.pipeline.length,
-      pipeline: state.pipeline.map((s, idx) => ({
-        id: s.id,
-        description: s.description,
-        enabled: isStepEnabled(s),
-        language: s.language || "javascript",
-        stepFile: stepFiles[idx],
-        code: s.code, // 외부 step 파일이 누락되어도 동작하도록 임베딩 fallback 유지
-        targetFileId: s.targetFileId || null, // [#18] 대상 파일 바인딩 유지
-      })),
-      chatHistory: state.chatHistory, // 복원 시 대화 내용도 표시되도록 함께 저장
-    };
-
-    const zipEntries = [{
-      name: name + ".logic.json",
-      text: JSON.stringify(manifest, null, 2),
-      mime: "application/json",
-    }];
-
-    state.pipeline.forEach((step, idx) => {
-      const lang = step.language || "javascript";
-      const comment = lang === "python" ? "#" : "//";
-      const header =
-        `${comment} ${name}\n` +
-        `${comment} Step ${idx + 1}: ${step.description}\n` +
-        `${comment} 생성: ${new Date().toISOString()}\n` +
-        `${comment} ----------------------------------------------------------\n` +
-        `${comment} 이 파일은 자동 생성되었습니다. 직접 수정 후 저장한 뒤\n` +
-        `${comment} "스킬 불러오기"에서 .logic.json과 함께 선택하면 반영됩니다.\n` +
-        `${comment} 함수 시그니처: ${lang === "python" ? "def transform(ctx):" : "function transform(inputs, output) { ... return { inputs, output }; }"}\n` +
-        `${comment} ----------------------------------------------------------\n\n`;
-      zipEntries.push({
-        name: stepFiles[idx],
-        text: header + step.code,
-        mime: lang === "python" ? "text/x-python" : "text/javascript",
-      });
-    });
-
-    downloadZip(zipEntries, name + ".zip");
+    const baseName = rememberLogicSaveBaseName($("save-name").value.trim());
+    if (!baseName) return;
+    const name = timestampedLogicArchiveName(baseName);
+    downloadZip(buildLogicZipEntries(name), name + ".zip");
     $("modal-bg").classList.remove("show");
     toast(`"${name}.zip" 다운로드 시작`, "success");
   };
@@ -527,6 +515,7 @@ function openLoadDialog() {
 function loadLogic(data, filename, meta) {
   // 파이프라인 복원. 자동 실행 X (사용자가 "전체 실행"을 눌러야 적용됨).
   state.pipeline = deepClone(data.pipeline || []);
+  rememberLogicSaveBaseName(data.saveBaseName || data.name || filename || "logic");
   if (typeof ensurePipelineStepIds === "function") ensurePipelineStepIds();
   // 채팅 히스토리도 함께 복원 (있으면)
   state.chatHistory = Array.isArray(data.chatHistory) ? deepClone(data.chatHistory) : [];

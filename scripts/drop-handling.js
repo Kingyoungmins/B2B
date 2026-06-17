@@ -167,9 +167,9 @@ async function loadInputFiles(files) {
       if (selected) {
         updateUpload(job, files.length, "실제 Excel 창 여는 중...");
         if (typeof preopenAllExcelMirrors === "function") {
-          await preopenAllExcelMirrors(selected);
+          await preopenAllExcelMirrors(selected, { source: "upload" });
         } else if (typeof openExcelMirrorForFileId === "function") {
-          await openExcelMirrorForFileId(selected);
+          await openExcelMirrorForFileId(selected, { source: "upload" });
         }
       }
     }
@@ -231,11 +231,11 @@ async function loadOutputTemplates(files) {
       const lastOutputFileId = "output:" + (state.outputTemplates.length - 1);
       updateUpload(job, files.length, "실제 Excel 창 여는 중...");
       if (typeof preopenAllExcelMirrors === "function") {
-        await preopenAllExcelMirrors(lastOutputFileId);
+        await preopenAllExcelMirrors(lastOutputFileId, { source: "upload" });
       } else if (typeof openExcelMirrorForFileId === "function") {
-        await openExcelMirrorForFileId(lastOutputFileId);
+        await openExcelMirrorForFileId(lastOutputFileId, { source: "upload" });
       } else if (!state.currentFileId) {
-        setCurrentView(lastOutputFileId);
+        setCurrentView(lastOutputFileId, { source: "upload" });
       }
       toast(`${state.outputTemplates.length - startIndex}개 출력 템플릿을 로드했습니다.`, "success");
     }
@@ -269,11 +269,6 @@ function firstAvailableFileId() {
 // 현재 보던 파일을 닫은 뒤, 남은 파일로 전환해 그 미러를 즉시 표시한다.
 // 남은 파일이 없으면 선택을 비우고 모든 Excel 미러를 숨긴다.
 function selectFallbackFileAfterRemoval() {
-  const fallbackId = firstAvailableFileId();
-  if (fallbackId && typeof setCurrentView === "function") {
-    setCurrentView(fallbackId);
-    return;
-  }
   state.currentFileId = null;
   state.currentSheet = null;
   state.selectedCell = null;
@@ -323,9 +318,7 @@ function removeOutputTemplateAt(idx) {
   } else {
     activateOutputTemplate(0);
     if (wasCurrentOutput) {
-      const nextIdx = Math.min(idx, state.outputTemplates.length - 1);
-      if (typeof setCurrentView === "function") setCurrentView("output:" + nextIdx);
-      else state.currentFileId = "output:" + nextIdx;
+      selectFallbackFileAfterRemoval();
     }
   }
   renderOutputChip();
@@ -357,7 +350,7 @@ function renderInputList() {
     list.appendChild(div);
   });
   list.querySelectorAll(".chip-view").forEach(btn => {
-    btn.onclick = () => setCurrentView("input:" + state.inputs[btn.dataset.idx].name);
+    btn.onclick = () => showTopTabSwitchHint();
   });
   list.querySelectorAll(".chip-remove").forEach(btn => {
     btn.onclick = () => {
@@ -452,8 +445,7 @@ function openRunnerFileEditor(role) {
   modal.querySelectorAll(".chip-view").forEach(btn => {
     btn.onclick = (e) => {
       e.stopPropagation();
-      const idx = Number(btn.dataset.idx);
-      setCurrentView(isOutput ? "output:" + idx : "input:" + state.inputs[idx].name);
+      showTopTabSwitchHint();
       $("modal-bg").classList.remove("show");
     };
   });
@@ -624,8 +616,14 @@ window.runnerSetDone = function() {
   }, 2500);
 };
 
+function showTopTabSwitchHint() {
+  if (typeof toast === "function") {
+    toast("파일 전환은 상단 파일 탭을 더블클릭해서 해주세요.", "success");
+  }
+}
+
 function openWorkbookFileFromList(fileId) {
-  setCurrentView(fileId);
+  return switchWorkbookFileFromUserTab(fileId);
 }
 
 function downloadWorkbookFileFromList(fileId) {
@@ -669,7 +667,7 @@ renderInputList = function() {
     list.appendChild(div);
   });
   list.querySelectorAll(".chip-view").forEach(btn => {
-    btn.onclick = () => openWorkbookFileFromList("input:" + workbookDisplayName(state.inputs[btn.dataset.idx], `입력 파일 ${Number(btn.dataset.idx) + 1}`));
+    btn.onclick = () => showTopTabSwitchHint();
   });
   list.querySelectorAll(".chip-download").forEach(btn => {
     btn.onclick = () => downloadWorkbookFileFromList("input:" + workbookDisplayName(state.inputs[btn.dataset.idx], `입력 파일 ${Number(btn.dataset.idx) + 1}`));
@@ -714,7 +712,7 @@ renderOutputChip = function() {
     el.appendChild(div);
   });
   el.querySelectorAll(".chip-view").forEach(btn => {
-    btn.onclick = () => openWorkbookFileFromList("output:" + btn.dataset.idx);
+    btn.onclick = () => showTopTabSwitchHint();
   });
   el.querySelectorAll(".chip-download").forEach(btn => {
     btn.onclick = () => downloadWorkbookFileFromList("output:" + btn.dataset.idx);
@@ -764,8 +762,7 @@ openRunnerFileEditor = function(role) {
   modal.querySelectorAll(".chip-view").forEach(btn => {
     btn.onclick = (e) => {
       e.stopPropagation();
-      const idx = Number(btn.dataset.idx);
-      openWorkbookFileFromList(isOutput ? "output:" + idx : "input:" + workbookDisplayName(state.inputs[idx], `입력 파일 ${idx + 1}`));
+      showTopTabSwitchHint();
       $("modal-bg").classList.remove("show");
     };
   });

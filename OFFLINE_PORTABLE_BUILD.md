@@ -7,13 +7,13 @@ This guide is for Windows build/test PCs that cannot access the internet.
 Build a portable package without downloading anything during the build:
 
 ```text
-dist\B2B_ver0.4.11-single-excel\
-dist\B2B_ver0.4.11-single-excel_portable.zip
+dist\B2B_ver0.5.8\
+dist\B2B_ver0.5.8_portable.zip
 ```
 
 The portable folder contains:
 
-- `B2B_ver0.4.11-single-excel.exe` native shell
+- `B2B_ver0.5.8.exe` native shell
 - `B2B_Server.exe` PyInstaller server
 - WebView2 SDK DLLs used by the native shell
 - `node.exe` bundled beside the server
@@ -130,13 +130,13 @@ build_exe_offline.bat
 Run the packaged app:
 
 ```bat
-dist\B2B_ver0.4.11-single-excel\B2B_ver0.4.11-single-excel.exe
+dist\B2B_ver0.5.8\B2B_ver0.5.8.exe
 ```
 
 Or move this zip to the test PC:
 
 ```text
-dist\B2B_ver0.4.11-single-excel_portable.zip
+dist\B2B_ver0.5.8_portable.zip
 ```
 
 ## Notes

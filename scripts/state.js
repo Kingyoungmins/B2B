@@ -16,6 +16,7 @@ const state = {
   selectionAnchor: null,
   selectedSheets: [],
   pipeline: [],
+  logicSaveBaseName: "",
   history: { undo: [], redo: [], limit: 80 },
   chatHistory: [],
   currentPage: "generator",
