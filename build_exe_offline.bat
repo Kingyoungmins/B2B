@@ -2,7 +2,7 @@
 setlocal
 cd /d "%~dp0"
 
-set "APP_VERSION=0.5.9"
+set "APP_VERSION=0.5.10"
 set "SERVER_EXE=B2B_Server.exe"
 set "PACKAGE_DIR=dist\B2B_ver%APP_VERSION%"
 set "PACKAGE_ZIP=dist\B2B_ver%APP_VERSION%_portable.zip"

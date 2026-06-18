@@ -6,6 +6,14 @@
 
 ## 최근 변경사항
 
+### ver0.5.10
+
+ver0.5.9 기반 후속 작업 브랜치.
+
+- 0.5.9 안정화 상태를 기준으로 새 버전 폴더와 브랜치를 분리했습니다.
+- 빌드 산출물 경로와 single exe wrapper 버전을 0.5.10으로 올렸습니다.
+- 좌측 메뉴의 사용 가이드(`USER_GUIDE.html`)가 빌드 산출물에 포함되는 상태를 유지합니다.
+
 ### ver0.5.9
 
 ver0.5.8 기반 런타임 안정화 패치.
@@ -357,12 +365,12 @@ build_exe.bat
 빌드 결과:
 
 ```text
-dist\B2B_ver0.5.9\B2B_ver0.5.9.exe   (네이티브 호스트)
-dist\B2B_ver0.5.9\B2B_Server.exe     (PyInstaller 서버)
-dist\B2B_ver0.5.9_portable.zip       (배포용 zip)
+dist\B2B_ver0.5.10\B2B_ver0.5.10.exe   (네이티브 호스트)
+dist\B2B_ver0.5.10\B2B_Server.exe      (PyInstaller 서버)
+dist\B2B_ver0.5.10_portable.zip        (배포용 zip)
 ```
 
-단일 self-extracting EXE가 필요하면 `build_single_exe.bat`을 추가 실행합니다 (`dist\B2B_ver0.5.9_single.exe`).
+단일 self-extracting EXE가 필요하면 `build_single_exe.bat`을 추가 실행합니다 (`dist\B2B_ver0.5.10_single.exe`).
 
 `dist/`와 `build/`는 git 추적 대상이 아닙니다.
 
@@ -451,7 +459,7 @@ ctx.write_grid(ws, [[123]], start_row=4, start_col=2)
 ## 디렉터리 구조
 
 ```text
-B2B_ver0.5.9/
+B2B_ver0.5.10/
 ├─ index.html
 ├─ serve_b2b.py
 ├─ launch_b2b.py
