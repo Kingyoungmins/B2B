@@ -32,6 +32,7 @@ const excelMirror = {
   lastNativePositionKey: "",
   lastBackgroundPollAt: 0,
   lastFormulaInfoAt: 0,
+  lastHideInactiveAt: 0,
   positionListenersInstalled: false,
   hideTimer: null,
   // 호스트 창(웹뷰+네이티브 탭 패널 포함) 활성 여부. C# Activated/Deactivated 이벤트로 갱신.
@@ -234,7 +235,9 @@ async function withUiBusy(label, fn, options = {}) {
 const EXCEL_MIRROR_MAX_CACHED_SESSIONS = 10;
 const EXCEL_MIRROR_MAX_ROWS = 1048576;
 const EXCEL_MIRROR_MAX_COLS = 16384;
-const EXCEL_MIRROR_POLL_MS = 1100;
+const EXCEL_MIRROR_POLL_MS = 2200;
+const EXCEL_MIRROR_FORMULA_POLL_MS = 7000;
+const EXCEL_MIRROR_HIDE_IDLE_MS = 5000;
 
 function setupExcelMirrorControls() {
   installMirrorRenderOverride();
@@ -1329,7 +1332,7 @@ function startExcelMirrorPolling() {
     // [#1] 네이티브 셸에서도 수식 표시줄을 갱신한다. hover-info 는 Selection 읽기 + StatusBar 쓰기뿐이라
     // 포커스를 끊지 않는다(changes 폴은 이미 네이티브에서 돈다). 적용 중(quietUntil)엔 건너뛰고,
     // 네이티브에서는 주기를 보수적으로 둔다(COM 부하 최소화).
-    const formulaInterval = isNativeExcelShell() ? 3500 : 2500;
+    const formulaInterval = isNativeExcelShell() ? EXCEL_MIRROR_FORMULA_POLL_MS : 2500;
     excelMirror.formulaInfoTimer = setInterval(() => {
       if (document.hidden || excelMirror.hostActive === false) return;
       if (isNativeExcelShell() && Date.now() < (excelMirror.quietUntil || 0)) return;
@@ -1844,8 +1847,11 @@ function installOverlayAutoHide() {
     clearTimeout(excelMirror.hideTimer);
     excelMirror.hideTimer = null;
   };
-  const hideInactive = () => {
+  const hideInactive = (options = {}) => {
     if (!hasSessions()) return;
+    const now = Date.now();
+    if (!options.force && now - (excelMirror.lastHideInactiveAt || 0) < EXCEL_MIRROR_HIDE_IDLE_MS) return;
+    excelMirror.lastHideInactiveAt = now;
     // 백엔드가 (포그라운드가 Excel 이 아니면) 전부 숨길 수 있으므로 위치 추적을 전체 무효화.
     invalidateExcelMirrorPositionTracking();
     postExcelMirror("/api/excel/hide-inactive", {}).catch(err => {
@@ -1857,7 +1863,7 @@ function installOverlayAutoHide() {
     excelMirror.hideTimer = setTimeout(() => {
       excelMirror.hideTimer = null;
       if (excelMirror.hostActive !== false && !document.hidden) return;
-      hideInactive();
+      hideInactive({ force: true });
     }, delay);
   };
   const restoreSoon = (options = {}) => {
@@ -1889,14 +1895,14 @@ function installOverlayAutoHide() {
     if (!hasSessions()) return;
     if (excelMirror.hostActive !== false) return; // 호스트 활성(네이티브 탭 포함) → 그대로
     hideInactive();
-  }, 700);
+  }, EXCEL_MIRROR_HIDE_IDLE_MS);
 
   // 최소화/완전 가려짐 → 즉시 숨김(보조). (엑셀 클릭은 document를 hidden으로 만들지 않으므로 구분됨)
   document.addEventListener("visibilitychange", () => {
     if (document.hidden) {
       excelMirror.hostActive = false;
       clearHideTimer();
-      hideInactive();
+      hideInactive({ force: true });
     }
     else restoreSoon({ preserveFocus: true });
   });
@@ -1904,7 +1910,7 @@ function installOverlayAutoHide() {
   document.addEventListener("click", (e) => {
     const t = e.target;
     if (t && t.tagName === "INPUT" && (t.type === "file" || t.getAttribute("type") === "file")) {
-      hideInactive();
+      hideInactive({ force: true });
     }
   }, true);
   document.addEventListener("pointerdown", () => restoreSoon({ preserveFocus: true }), true);

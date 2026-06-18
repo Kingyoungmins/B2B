@@ -1993,6 +1993,7 @@ function renderPipeline() {
     state.editingStepId = null;
   }
   list.innerHTML = "";
+  const frag = document.createDocumentFragment();
   state.pipeline.forEach((step, idx) => {
     const item = document.createElement("div");
     item.className = "pipeline-item";
@@ -2069,8 +2070,9 @@ function renderPipeline() {
         reportPipelineError(err);
       });
     };
-    list.appendChild(item);
+    frag.appendChild(item);
   });
+  list.appendChild(frag);
   if (typeof renderEditingBanner === "function") renderEditingBanner();
   renderRunnerWorkflow();
 }

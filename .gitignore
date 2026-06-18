@@ -26,6 +26,7 @@ auto_backups/
 
 # Local runtime/debug logs
 vba_pipeline_trace.jsonl
+runtime_load_trace.jsonl
 vba_runner_fail.log
 
 # Regression test generated reports

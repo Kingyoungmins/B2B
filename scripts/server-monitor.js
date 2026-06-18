@@ -9,7 +9,7 @@
   if (location.protocol === "file:") return; // 서버 없는 정적 모드는 제외
 
   const HEALTH_URL = "/api/backend/health";
-  const POLL_MS = 4000;
+  const POLL_MS = 15000;
   const FAIL_THRESHOLD = 2; // 연속 실패 2회부터 끊김으로 간주(일시적 깜빡임 무시)
 
   let failCount = 0;
@@ -152,6 +152,10 @@
   }
 
   async function poll() {
+    if (document.hidden && !disconnected) {
+      failCount = 0;
+      return;
+    }
     if (!isIxiSelected()) {
       // ixi가 아니면 모니터링/배너 비활성화 + 상태 초기화.
       if (disconnected || (banner && banner.style.display !== "none")) {
@@ -173,6 +177,9 @@
   }
 
   setInterval(poll, POLL_MS);
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) poll();
+  });
 
   // 다른 모듈에서 백엔드 호출 실패 시 즉시 점검을 트리거할 수 있도록 노출.
   window.b2bReportServerError = function () {

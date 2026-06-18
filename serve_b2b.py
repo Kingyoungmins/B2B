@@ -5,6 +5,7 @@ import atexit
 import csv
 import ctypes
 import datetime
+import gc
 import hashlib
 import io
 import json
@@ -47,6 +48,11 @@ except Exception:
     win32gui = None
     win32process = None
 
+try:
+    import psutil
+except Exception:
+    psutil = None
+
 
 HOST = os.environ.get("B2B_HOST", "127.0.0.1")
 PORT = int(os.environ.get("B2B_PORT", "8090"))
@@ -69,16 +75,36 @@ EXCEL_THREAD = None
 LIVE_EXCEL_APP = None  # 라이브 편집 세션들이 공유하는 앱 전용 Excel.Application
 LAST_COPY_SOURCE = {}  # 복사(Ctrl+C) 중 스냅샷한 클립보드 소스 {"source":{book,sheet,range}, "ts":monotonic}
                        # — 붙여넣기/탭전환으로 클립보드 Link 가 사라진 뒤 복붙 캡처가 소스를 복구하는 폴백.
+COPY_SOURCE_SNAPSHOT_THROTTLE_SECONDS = float(os.environ.get("B2B_COPY_SOURCE_SNAPSHOT_THROTTLE", "5"))
 # 단일 Excel 인스턴스(SDI)에서 워크북마다 생기는 최상위 프레임을 "세션별 hwnd"로 직접 제어하는 모드.
 # app.Hwnd(=그 순간 활성 프레임 1개) 기반의 기존 동작으로 되돌리려면 B2B_WINMODE=legacy 로 실행.
 LIVE_FRAME_MODE = (os.environ.get("B2B_WINMODE") or "frame").strip().lower() != "legacy"
 PYTHON_SKILL_APP = None  # 라이브 미러가 없을 때 Python 스킬 실행용으로 재사용하는 숨김 Excel 인스턴스
 PYTHON_SKILL_APP_PID = None  # 위 인스턴스의 pid — 강제 정리(force-restart/초기화) 때 COM 없이 종료하기 위해 기록
+PYTHON_SKILL_APP_LAST_USED = 0.0
+PYTHON_SKILL_APP_IDLE_TTL_SECONDS = float(os.environ.get("B2B_PYTHON_SKILL_APP_IDLE_TTL", "900"))
+PYTHON_SKILL_APP_REAP_CHECK_AT = 0.0
 # [0.5.2 이식] 이 앱이 DispatchEx 로 띄운 모든 EXCEL.EXE pid. 세션 기록 전에 열기가 실패하면
 # 고아 Excel 이 남는데, 강제 정리(초기화/force-restart)가 세션 pid 만 죽이면 영영 안 닫힘 → 전부 추적.
 SPAWNED_EXCEL_PIDS = set()
 EXCEL_LAST_REAP_AT = 0.0
 EXCEL_REAP_INTERVAL_SECONDS = float(os.environ.get("B2B_EXCEL_REAP_INTERVAL", "300"))
+HEALTH_EXCEL_DIAG_INTERVAL_SECONDS = float(os.environ.get("B2B_HEALTH_EXCEL_DIAG_INTERVAL", "60"))
+HEALTH_LAST_EXCEL_DIAG_AT = 0.0
+HEALTH_CACHED_EXCEL_DIAG = None
+PERF_LOG_INTERVAL_SECONDS = float(os.environ.get("B2B_PERF_LOG_INTERVAL", "60"))
+PERF_LAST_LOG_AT = 0.0
+RUNTIME_SAMPLER_INTERVAL_SECONDS = float(os.environ.get("B2B_RUNTIME_SAMPLER_INTERVAL", "30"))
+RUNTIME_SAMPLER_STARTED = False
+HOUSEKEEPING_INTERVAL_SECONDS = float(os.environ.get("B2B_EXCEL_CLEANUP_INTERVAL", "600"))
+HOUSEKEEPING_RUNNING = False
+HOUSEKEEPING_LAST_RUN_AT = 0.0
+HOUSEKEEPING_LAST_DURATION_MS = 0.0
+HOUSEKEEPING_LAST_SKIPPED_REASON = ""
+HOUSEKEEPING_RUN_COUNT = 0
+HOUSEKEEPING_ERROR = ""
+HOUSEKEEPING_GC_LAST_AT = 0.0
+HOUSEKEEPING_SNAPSHOT_MAX_BYTES = int(os.environ.get("B2B_PIPELINE_SNAPSHOT_MAX_BYTES", str(256 * 1024 * 1024)))
 # [0.5.2 이식] 강제 정리 시 끊어낼 COM 프록시 보관소 — 행 상태 STA 워커로의 Release 마샬링 교착 방지.
 _COM_REF_GRAVEYARD = []
 PIPELINE_JOBS_LOCK = threading.Lock()
@@ -96,7 +122,7 @@ MAX_PIPELINE_JOBS = 40
 # 이 크기를 넘으면 중간 단계 스냅샷을 건너뛰고 "마지막 단계"만 저장한다(동일 파이프라인 재적용은 여전히 즉시).
 SNAPSHOT_INTERMEDIATE_MAX_BYTES = 8 * 1024 * 1024
 PIPELINE_JOB_TTL_SECONDS = 60 * 60
-APP_BUILD_STAMP = "b2b-0.5.10-20260618-runtime-guard"
+APP_BUILD_STAMP = "b2b-0.5.10-20260618-runtime-maintenance"
 EXCEL_MIRROR_PROTECT_PASSWORD = "b2b_mirror_readonly"
 
 
@@ -171,6 +197,7 @@ def cleanup_excel_sessions():
         pids.update(int(p) for p in SPAWNED_EXCEL_PIDS)
     except Exception:
         pass
+    _perf_trace("excel.cleanup.start", pids=sorted(pids))
     try:
         excel_call(_cleanup_excel_sessions_impl, timeout=20)
     except Exception:
@@ -188,6 +215,11 @@ def cleanup_excel_sessions():
         SPAWNED_EXCEL_PIDS.clear()
     except Exception:
         pass
+    _perf_trace(
+        "excel.cleanup.end",
+        pids=sorted(pids),
+        aliveAfter=[pid for pid in sorted(pids) if _is_pid_alive(pid)],
+    )
 
 
 def ensure_excel_worker():
@@ -203,6 +235,7 @@ def ensure_excel_worker():
                 try:
                     item = EXCEL_QUEUE.get(timeout=0.05)
                 except queue.Empty:
+                    _maybe_quit_idle_python_skill_app()
                     pythoncom.PumpWaitingMessages()
                     continue
                 if item is None:
@@ -317,7 +350,7 @@ def _force_restart_excel_sessions_direct():
                 EXCEL_LOCK.release()
             except Exception:
                 pass
-    global LIVE_EXCEL_APP, PYTHON_SKILL_APP, PYTHON_SKILL_APP_PID
+    global LIVE_EXCEL_APP, PYTHON_SKILL_APP, PYTHON_SKILL_APP_PID, PYTHON_SKILL_APP_LAST_USED
     # COM 프록시 전역을 그냥 None 으로 떨어뜨리면 마지막 참조 해제(Release)가 이 HTTP 스레드에서
     # 일어난다. 행 상태의 STA 워커로 마샬링되는 Release 는 같이 굳을 수 있으므로(초기화가 영영
     # 안 끝나는 증상) 참조를 graveyard 로 옮겨 Release 자체를 막는다.
@@ -335,6 +368,7 @@ def _force_restart_excel_sessions_direct():
         except Exception:
             pass
     PYTHON_SKILL_APP_PID = None
+    PYTHON_SKILL_APP_LAST_USED = 0.0
     for session in sessions:
         pid = session.get("pid")
         if pid:
@@ -348,6 +382,7 @@ def _force_restart_excel_sessions_direct():
         SPAWNED_EXCEL_PIDS.clear()
     except Exception:
         pass
+    _perf_trace("excel.force_restart.start", pids=sorted(pids))
 
     def _kill_and_cleanup():
         # taskkill(프로세스당 최대 3초) + 생존 확인 루프는 수 초가 걸릴 수 있다.
@@ -358,6 +393,11 @@ def _force_restart_excel_sessions_direct():
         deadline = time.time() + 3.0
         while time.time() < deadline and any(_is_pid_alive(p) for p in pids):
             time.sleep(0.2)
+        _perf_trace(
+            "excel.force_restart.end",
+            pids=sorted(pids),
+            aliveAfter=[pid for pid in sorted(pids) if _is_pid_alive(pid)],
+        )
         # 프로세스 종료 후에야 파일 잠금이 풀리므로 임시 파일 정리는 마지막에.
         for session in sessions:
             for key in ("openTempPath", "workingCopyPath"):
@@ -488,7 +528,14 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
                 "appDir": str(app_dir),
                 "openpyxl": bool(openpyxl),
                 "excelCom": bool(excel_available()),
-                "excel": _excel_runtime_diagnostics(reap=True) if excel_available() else None,
+                "excel": _health_excel_diagnostics() if excel_available() else None,
+                "maintenance": _maintenance_status(),
+                "runtime": {
+                    "counts": _runtime_counts_snapshot(),
+                    "pipelineJobs": _pipeline_job_stats(),
+                    "snapshots": _pipeline_snapshot_stats(),
+                    "queueSize": _excel_queue_size(),
+                },
                 "node": bool(node_executable()),
                 "nodePath": node_executable(),
                 "files": {
@@ -615,7 +662,17 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
             return
         if self.path == "/api/excel/diagnostics":
             try:
-                self.send_json({"ok": True, "excel": _excel_runtime_diagnostics(reap=bool(self.read_json_body().get("reap")))})
+                self.send_json({
+                    "ok": True,
+                    "excel": _excel_runtime_diagnostics(reap=bool(self.read_json_body().get("reap"))),
+                    "maintenance": _maintenance_status(),
+                    "runtime": {
+                        "counts": _runtime_counts_snapshot(),
+                        "pipelineJobs": _pipeline_job_stats(),
+                        "snapshots": _pipeline_snapshot_stats(),
+                        "queueSize": _excel_queue_size(),
+                    },
+                })
             except Exception as err:
                 self.send_json({"ok": False, "error": str(err)}, status=500)
             return
@@ -2458,12 +2515,14 @@ def _track_spawned_excel_app(app):
         pid = _excel_process_id(app)
         if pid:
             SPAWNED_EXCEL_PIDS.add(int(pid))
+            _perf_trace("excel.spawned", pid=int(pid), tracked=sorted(int(p) for p in SPAWNED_EXCEL_PIDS if p))
     except Exception:
         pass
 
 def _force_kill_pid(pid):
     if not pid or os.name != "nt":
         return
+    _perf_trace("excel.force_kill", pid=int(pid))
     try:
         subprocess.run(
             ["taskkill", "/PID", str(int(pid)), "/T", "/F"],
@@ -2495,7 +2554,354 @@ def _is_pid_alive(pid):
         return False
 
 
-def _excel_runtime_diagnostics(reap=False):
+def _health_excel_diagnostics():
+    """Health polling should be cheap. Excel process diagnostics are cached and
+    refreshed periodically so an idle app does not keep scanning processes."""
+    global HEALTH_LAST_EXCEL_DIAG_AT, HEALTH_CACHED_EXCEL_DIAG
+    now = time.time()
+    if (
+        HEALTH_CACHED_EXCEL_DIAG is None
+        or now - float(HEALTH_LAST_EXCEL_DIAG_AT or 0) >= HEALTH_EXCEL_DIAG_INTERVAL_SECONDS
+    ):
+        HEALTH_CACHED_EXCEL_DIAG = _excel_runtime_diagnostics(reap=True)
+        HEALTH_LAST_EXCEL_DIAG_AT = now
+    return HEALTH_CACHED_EXCEL_DIAG
+
+
+def _perf_trace_path():
+    return writable_app_dir() / "runtime_load_trace.jsonl"
+
+
+def _process_perf_snapshot(pid):
+    if not pid:
+        return {}
+    info = {"pid": int(pid)}
+    if psutil is None:
+        return info
+    try:
+        proc = psutil.Process(int(pid))
+        mem = proc.memory_info()
+        cpu = proc.cpu_times()
+        info.update({
+            "name": proc.name(),
+            "rssMb": round(float(mem.rss) / (1024 * 1024), 1),
+            "vmsMb": round(float(mem.vms) / (1024 * 1024), 1),
+            "threads": proc.num_threads(),
+            "status": proc.status(),
+            "cpuUserSeconds": round(float(getattr(cpu, "user", 0.0)), 3),
+            "cpuSystemSeconds": round(float(getattr(cpu, "system", 0.0)), 3),
+        })
+        try:
+            info["handles"] = proc.num_handles()
+        except Exception:
+            pass
+    except Exception as err:
+        info["error"] = str(err)
+    return info
+
+
+def _perf_trace(event, **fields):
+    try:
+        payload = {
+            "ts": datetime.datetime.now().isoformat(timespec="milliseconds"),
+            "pid": os.getpid(),
+            "event": event,
+        }
+        payload.update(fields)
+        with _perf_trace_path().open("a", encoding="utf-8") as f:
+            f.write(json.dumps(payload, ensure_ascii=False, default=str) + "\n")
+    except Exception:
+        pass
+
+
+def _maybe_perf_trace_runtime(reason, diagnostics):
+    global PERF_LAST_LOG_AT
+    now = time.time()
+    if now - float(PERF_LAST_LOG_AT or 0) < PERF_LOG_INTERVAL_SECONDS:
+        return
+    PERF_LAST_LOG_AT = now
+    excel_pids = set()
+    try:
+        excel_pids.update(int(p) for p in diagnostics.get("sessionPids") or [] if p)
+    except Exception:
+        pass
+    try:
+        excel_pids.update(int(row.get("pid")) for row in diagnostics.get("trackedPids") or [] if row.get("pid"))
+    except Exception:
+        pass
+    python_pid = diagnostics.get("pythonSkillPid")
+    if python_pid:
+        try:
+            excel_pids.add(int(python_pid))
+        except Exception:
+            pass
+    _perf_trace(
+        "runtime.load",
+        reason=reason,
+        backend=_process_perf_snapshot(os.getpid()),
+        excel=[_process_perf_snapshot(pid) for pid in sorted(excel_pids)],
+        diagnostics=diagnostics,
+    )
+
+
+def _excel_queue_size():
+    try:
+        return int(EXCEL_QUEUE.qsize()) if EXCEL_QUEUE is not None else 0
+    except Exception:
+        return None
+
+
+def _pipeline_job_stats():
+    now = time.time()
+    with PIPELINE_JOBS_LOCK:
+        jobs = list(PIPELINE_JOBS.values())
+    running = [j for j in jobs if str(j.get("status") or "").lower() == "running"]
+    ages = [
+        now - float(j.get("created") or j.get("updated") or now)
+        for j in jobs
+    ]
+    return {
+        "count": len(jobs),
+        "running": len(running),
+        "oldestAgeSec": round(max(ages), 1) if ages else 0,
+    }
+
+
+def _pipeline_snapshot_stats():
+    snapshots_root = (BACKEND_DIR / "pipeline_step_snapshots").resolve()
+    total = 0
+    file_count = 0
+    missing = 0
+    for snapshot in list(PIPELINE_STEP_SNAPSHOTS.values()):
+        for raw_path in (snapshot.get("files") or {}).values():
+            try:
+                path = Path(raw_path)
+                if snapshots_root not in path.resolve().parents:
+                    continue
+                if path.exists():
+                    total += path.stat().st_size
+                    file_count += 1
+                else:
+                    missing += 1
+            except Exception:
+                missing += 1
+    return {
+        "count": len(PIPELINE_STEP_SNAPSHOTS),
+        "files": file_count,
+        "missingFiles": missing,
+        "bytes": total,
+        "mb": round(total / (1024 * 1024), 1),
+    }
+
+
+def _delete_pipeline_snapshot_entry(key, snapshot):
+    snapshots_root = (BACKEND_DIR / "pipeline_step_snapshots").resolve()
+    dirs = set()
+    for raw_path in (snapshot.get("files") or {}).values():
+        try:
+            path = Path(raw_path).resolve()
+            if snapshots_root in path.parents:
+                dirs.add(path.parent)
+                path.unlink(missing_ok=True)
+        except Exception:
+            pass
+    for directory in sorted(dirs, key=lambda p: len(str(p)), reverse=True):
+        try:
+            if directory != snapshots_root and snapshots_root in directory.parents:
+                shutil.rmtree(directory, ignore_errors=True)
+        except Exception:
+            pass
+
+
+def _cleanup_pipeline_snapshots_by_limits():
+    before = _pipeline_snapshot_stats()
+    ordered = sorted(PIPELINE_STEP_SNAPSHOTS.items(), key=lambda item: item[1].get("created", 0))
+    removed = 0
+    while ordered:
+        stats = _pipeline_snapshot_stats()
+        if stats["count"] <= MAX_PIPELINE_STEP_SNAPSHOTS and stats["bytes"] <= HOUSEKEEPING_SNAPSHOT_MAX_BYTES:
+            break
+        key, snapshot = ordered.pop(0)
+        if key in PIPELINE_STEP_SNAPSHOTS:
+            PIPELINE_STEP_SNAPSHOTS.pop(key, None)
+            _delete_pipeline_snapshot_entry(key, snapshot)
+            removed += 1
+    after = _pipeline_snapshot_stats()
+    return {"removed": removed, "before": before, "after": after}
+
+
+def _cleanup_stale_copy_source(max_age_seconds=600):
+    try:
+        ts = float(LAST_COPY_SOURCE.get("ts") or 0)
+    except Exception:
+        ts = 0
+    if ts and time.monotonic() - ts > max_age_seconds:
+        LAST_COPY_SOURCE.clear()
+        return True
+    return False
+
+
+def _maintenance_status():
+    return {
+        "cleanupLastRunAt": HOUSEKEEPING_LAST_RUN_AT,
+        "cleanupLastDurationMs": HOUSEKEEPING_LAST_DURATION_MS,
+        "cleanupLastSkippedReason": HOUSEKEEPING_LAST_SKIPPED_REASON,
+        "cleanupRunCount": HOUSEKEEPING_RUN_COUNT,
+        "cleanupError": HOUSEKEEPING_ERROR,
+        "runtimeSamplerIntervalSeconds": RUNTIME_SAMPLER_INTERVAL_SECONDS,
+        "housekeepingIntervalSeconds": HOUSEKEEPING_INTERVAL_SECONDS,
+    }
+
+
+def _runtime_counts_snapshot():
+    return {
+        "workbooks": len(WORKBOOKS),
+        "results": len(RESULTS),
+        "diffs": len(DIFFS),
+        "pipelineSnapshots": len(PIPELINE_STEP_SNAPSHOTS),
+        "pipelineJobs": len(PIPELINE_JOBS),
+        "excelSessions": len(EXCEL_SESSIONS),
+        "trackedExcelPids": len(SPAWNED_EXCEL_PIDS),
+    }
+
+
+def _sample_lock_contended():
+    acquired = False
+    try:
+        acquired = EXCEL_LOCK.acquire(timeout=0.1)
+        return not acquired
+    except Exception:
+        return True
+    finally:
+        if acquired:
+            try:
+                EXCEL_LOCK.release()
+            except Exception:
+                pass
+
+
+def _runtime_sampler_once():
+    diagnostics = _excel_runtime_diagnostics(reap=False, log=False) if excel_available() else None
+    excel_pids = set()
+    if diagnostics:
+        try:
+            excel_pids.update(int(p) for p in diagnostics.get("sessionPids") or [] if p)
+        except Exception:
+            pass
+        try:
+            excel_pids.update(int(row.get("pid")) for row in diagnostics.get("trackedPids") or [] if row.get("pid"))
+        except Exception:
+            pass
+        if diagnostics.get("pythonSkillPid"):
+            try:
+                excel_pids.add(int(diagnostics.get("pythonSkillPid")))
+            except Exception:
+                pass
+    _perf_trace(
+        "runtime.sample",
+        backend=_process_perf_snapshot(os.getpid()),
+        excel=[_process_perf_snapshot(pid) for pid in sorted(excel_pids)],
+        queueSize=_excel_queue_size(),
+        excelLockContended=_sample_lock_contended(),
+        counts=_runtime_counts_snapshot(),
+        pipelineJobs=_pipeline_job_stats(),
+        snapshots=_pipeline_snapshot_stats(),
+        diagnostics=diagnostics,
+        maintenance=_maintenance_status(),
+    )
+
+
+def _pipeline_is_busy():
+    try:
+        return _excel_queue_size() not in (None, 0) or _pipeline_job_stats().get("running", 0) > 0
+    except Exception:
+        return True
+
+
+def _run_low_risk_housekeeping():
+    global HOUSEKEEPING_RUNNING, HOUSEKEEPING_LAST_RUN_AT, HOUSEKEEPING_LAST_DURATION_MS
+    global HOUSEKEEPING_LAST_SKIPPED_REASON, HOUSEKEEPING_RUN_COUNT, HOUSEKEEPING_ERROR, HOUSEKEEPING_GC_LAST_AT
+    if HOUSEKEEPING_RUNNING:
+        HOUSEKEEPING_LAST_SKIPPED_REASON = "already-running"
+        _perf_trace("runtime.housekeeping.skip", reason=HOUSEKEEPING_LAST_SKIPPED_REASON)
+        return
+    if _pipeline_is_busy():
+        HOUSEKEEPING_LAST_SKIPPED_REASON = "pipeline-or-queue-busy"
+        _perf_trace("runtime.housekeeping.skip", reason=HOUSEKEEPING_LAST_SKIPPED_REASON)
+        return
+    acquired = False
+    try:
+        acquired = EXCEL_LOCK.acquire(timeout=0.05)
+    except Exception:
+        acquired = False
+    if not acquired:
+        HOUSEKEEPING_LAST_SKIPPED_REASON = "excel-lock-busy"
+        _perf_trace("runtime.housekeeping.skip", reason=HOUSEKEEPING_LAST_SKIPPED_REASON)
+        return
+    try:
+        EXCEL_LOCK.release()
+    except Exception:
+        pass
+
+    started = time.perf_counter()
+    HOUSEKEEPING_RUNNING = True
+    HOUSEKEEPING_LAST_SKIPPED_REASON = ""
+    HOUSEKEEPING_ERROR = ""
+    detail = {}
+    try:
+        detail["copySourceCleared"] = _cleanup_stale_copy_source()
+        with PIPELINE_JOBS_LOCK:
+            prune_pipeline_jobs_locked()
+        detail["snapshots"] = _cleanup_pipeline_snapshots_by_limits()
+        detail["excel"] = _excel_runtime_diagnostics(reap=True, log=False) if excel_available() else None
+        now = time.time()
+        if now - float(HOUSEKEEPING_GC_LAST_AT or 0) >= 300:
+            detail["gcCollected"] = gc.collect()
+            HOUSEKEEPING_GC_LAST_AT = now
+        HOUSEKEEPING_RUN_COUNT += 1
+        HOUSEKEEPING_LAST_RUN_AT = time.time()
+    except Exception as err:
+        HOUSEKEEPING_ERROR = str(err)
+        detail["error"] = str(err)
+    finally:
+        HOUSEKEEPING_LAST_DURATION_MS = round((time.perf_counter() - started) * 1000, 1)
+        HOUSEKEEPING_RUNNING = False
+        _perf_trace(
+            "runtime.housekeeping",
+            durationMs=HOUSEKEEPING_LAST_DURATION_MS,
+            skippedReason=HOUSEKEEPING_LAST_SKIPPED_REASON,
+            error=HOUSEKEEPING_ERROR,
+            detail=detail,
+        )
+
+
+def _runtime_maintenance_loop():
+    next_sample = 0.0
+    next_housekeeping = time.time() + max(60.0, HOUSEKEEPING_INTERVAL_SECONDS)
+    while True:
+        now = time.time()
+        if now >= next_sample:
+            try:
+                _runtime_sampler_once()
+            except Exception as err:
+                _perf_trace("runtime.sample.error", error=str(err))
+            next_sample = now + max(5.0, RUNTIME_SAMPLER_INTERVAL_SECONDS)
+        if now >= next_housekeeping:
+            _run_low_risk_housekeeping()
+            next_housekeeping = now + max(60.0, HOUSEKEEPING_INTERVAL_SECONDS)
+        time.sleep(1.0)
+
+
+def start_runtime_maintenance_threads():
+    global RUNTIME_SAMPLER_STARTED
+    if RUNTIME_SAMPLER_STARTED:
+        return
+    RUNTIME_SAMPLER_STARTED = True
+    thread = threading.Thread(target=_runtime_maintenance_loop, name="b2b-runtime-maintenance", daemon=True)
+    thread.start()
+
+
+def _excel_runtime_diagnostics(reap=False, log=True):
     """Return lightweight Excel process diagnostics and optionally reap app-owned orphan PIDs.
 
     Only PIDs recorded in SPAWNED_EXCEL_PIDS are candidates. User-launched Excel
@@ -2529,7 +2935,14 @@ def _excel_runtime_diagnostics(reap=False):
         protected.add(python_pid)
 
     now = time.time()
+    reap_skipped_reason = ""
     should_reap = bool(reap) and (now - float(EXCEL_LAST_REAP_AT or 0)) >= EXCEL_REAP_INTERVAL_SECONDS
+    if should_reap and lock_unavailable:
+        # If the Excel lock is busy, a pipeline/open operation may be in the
+        # middle of registering its protected session PID. Reaping from a stale
+        # snapshot can kill that in-flight app-owned Excel instance.
+        should_reap = False
+        reap_skipped_reason = "lock-unavailable"
     rows = []
     reaped = []
     stale = []
@@ -2565,7 +2978,7 @@ def _excel_runtime_diagnostics(reap=False):
                     EXCEL_LOCK.release()
                 except Exception:
                     pass
-    return {
+    diagnostics = {
         "sessions": len(session_pids),
         "sessionPids": sorted(session_pids),
         "trackedPids": rows,
@@ -2573,7 +2986,11 @@ def _excel_runtime_diagnostics(reap=False):
         "pythonSkillPid": python_pid,
         "lastReapAt": EXCEL_LAST_REAP_AT,
         "lockUnavailable": lock_unavailable,
+        "reapSkippedReason": reap_skipped_reason,
     }
+    if log:
+        _maybe_perf_trace_runtime("excel-diagnostics", diagnostics)
+    return diagnostics
 
 
 def _b2b_runner_trusted_dir():
@@ -4960,14 +5377,17 @@ def _diag_vba_run_failure(app, host_wb, vbproj, module, module_name, safe_code, 
     try:
         import win32com.client as _w, uuid as _uuid, tempfile as _tf, os as _os
         fa = _w.DispatchEx("Excel.Application")
+        _track_spawned_excel_app(fa)
         fpid = None
+        fdir = None
         try:
             fa.Visible = False
             fa.DisplayAlerts = False
             try: fpid = _excel_process_id(fa)
             except Exception: fpid = None
             rb = fa.Workbooks.Add()
-            ftmp = _os.path.join(_tf.mkdtemp(prefix="b2b_freshprobe_"), "fp_%s.xlsm" % _uuid.uuid4().hex[:6])
+            fdir = _tf.mkdtemp(prefix="b2b_freshprobe_")
+            ftmp = _os.path.join(fdir, "fp_%s.xlsm" % _uuid.uuid4().hex[:6])
             try: rb.SaveAs(ftmp, FileFormat=52)
             except Exception: pass
             fmod = rb.VBProject.VBComponents.Add(1)
@@ -4984,7 +5404,13 @@ def _diag_vba_run_failure(app, host_wb, vbproj, module, module_name, safe_code, 
             try: fa.Quit()
             except Exception: pass
             try:
-                if fpid: _os.system("taskkill /F /PID %s >NUL 2>&1" % fpid)
+                if fpid:
+                    _force_kill_pid(fpid)
+                    SPAWNED_EXCEL_PIDS.discard(int(fpid))
+            except Exception: pass
+            try:
+                if fdir:
+                    shutil.rmtree(fdir, ignore_errors=True)
             except Exception: pass
     except Exception as e:
         lines.append("FRESH_INSTANCE_PROBE: <setup err %s>" % e)
@@ -6141,19 +6567,32 @@ def _maybe_snapshot_copy_source(app):
     """복사(Ctrl+C)로 CutCopyMode 가 켜져 있는 동안 클립보드 소스를 전역 스냅샷에 저장한다.
     교차파일 복붙은 복사(A)→탭전환→붙여넣기(B) 과정에서 클립보드 Link 가 사라져 캡처 시점엔
     소스를 못 읽는 경우가 있다(실측). 폴이 주기적으로 이걸 호출해 '복사 중'에 미리 잡아두면
-    캡처가 폴백으로 복구할 수 있다. 폴마다 호출되므로 CutCopyMode 가 꺼져 있으면 즉시 반환."""
+    캡처가 폴백으로 복구할 수 있다. 폴마다 호출되지만 클립보드 OpenClipboard 는 throttle 로 제한한다."""
     try:
-        if not app.CutCopyMode:
+        cut_copy_active = bool(app.CutCopyMode)
+        if not cut_copy_active:
+            LAST_COPY_SOURCE["cutCopyActive"] = False
             return
     except Exception:
         return
+    now = time.monotonic()
+    try:
+        was_active = bool(LAST_COPY_SOURCE.get("cutCopyActive"))
+        last_poll = float(LAST_COPY_SOURCE.get("pollTs") or 0)
+    except Exception:
+        was_active = False
+        last_poll = 0.0
+    if was_active and now - last_poll < COPY_SOURCE_SNAPSHOT_THROTTLE_SECONDS:
+        return
+    LAST_COPY_SOURCE["cutCopyActive"] = True
+    LAST_COPY_SOURCE["pollTs"] = now
     try:
         src = _read_excel_clipboard_source()
     except Exception:
         src = None
     if src:
         LAST_COPY_SOURCE["source"] = src
-        LAST_COPY_SOURCE["ts"] = time.monotonic()
+        LAST_COPY_SOURCE["ts"] = now
 
 
 def _registered_path_for_name(name):
@@ -10701,8 +11140,9 @@ def _get_python_skill_app():
     # 매 적용마다 Excel 을 새로 띄우고 Quit 하던 비용(콜드스타트 1~3초)을 없애기 위해
     # 숨김 Excel 인스턴스를 한 번만 만들어 재사용한다. 죽었으면 다시 만든다.
     # 반드시 EXCEL_QUEUE STA 워커 스레드에서만 호출된다(excel_call 경유).
-    global PYTHON_SKILL_APP, PYTHON_SKILL_APP_PID
+    global PYTHON_SKILL_APP, PYTHON_SKILL_APP_PID, PYTHON_SKILL_APP_LAST_USED
     app = PYTHON_SKILL_APP
+    PYTHON_SKILL_APP_LAST_USED = time.time()
     if app is not None:
         try:
             _ = app.Workbooks.Count  # 살아있는지 확인
@@ -10724,20 +11164,52 @@ def _get_python_skill_app():
         PYTHON_SKILL_APP_PID = _excel_process_id(app)
     except Exception:
         PYTHON_SKILL_APP_PID = None
+    _perf_trace("excel.python_skill.spawned", pid=PYTHON_SKILL_APP_PID)
     return app
 
 
 def _quit_python_skill_app():
-    global PYTHON_SKILL_APP, PYTHON_SKILL_APP_PID
+    global PYTHON_SKILL_APP, PYTHON_SKILL_APP_PID, PYTHON_SKILL_APP_LAST_USED
     app = PYTHON_SKILL_APP
+    pid = PYTHON_SKILL_APP_PID
     PYTHON_SKILL_APP = None
     PYTHON_SKILL_APP_PID = None
+    PYTHON_SKILL_APP_LAST_USED = 0.0
     if app is None:
         return
     try:
         app.Quit()
     except Exception:
         pass
+    if pid:
+        deadline = time.time() + 1.5
+        while time.time() < deadline and _is_pid_alive(pid):
+            time.sleep(0.1)
+        if _is_pid_alive(pid):
+            _perf_trace("excel.python_skill.force_kill_after_quit", pid=pid)
+            _force_kill_pid(pid)
+
+
+def _maybe_quit_idle_python_skill_app():
+    """Run only on the Excel COM STA worker. Do not call from HTTP threads."""
+    global PYTHON_SKILL_APP_REAP_CHECK_AT
+    now = time.time()
+    if now - float(PYTHON_SKILL_APP_REAP_CHECK_AT or 0) < 30:
+        return
+    PYTHON_SKILL_APP_REAP_CHECK_AT = now
+    if PYTHON_SKILL_APP is None:
+        return
+    last_used = float(PYTHON_SKILL_APP_LAST_USED or 0)
+    if last_used <= 0 or now - last_used < PYTHON_SKILL_APP_IDLE_TTL_SECONDS:
+        return
+    pid = PYTHON_SKILL_APP_PID
+    _perf_trace(
+        "excel.python_skill.idle_quit",
+        pid=pid,
+        idleSeconds=round(now - last_used, 1),
+        ttlSeconds=PYTHON_SKILL_APP_IDLE_TTL_SECONDS,
+    )
+    _quit_python_skill_app()
 
 
 def _workbook_fingerprint(wb_record):
@@ -10812,20 +11284,7 @@ def _find_best_pipeline_snapshot(input_items, input_wbs, output_item, output_wb_
 
 
 def _cleanup_pipeline_step_snapshots():
-    if len(PIPELINE_STEP_SNAPSHOTS) <= MAX_PIPELINE_STEP_SNAPSHOTS:
-        return
-    snapshots_root = (BACKEND_DIR / "pipeline_step_snapshots").resolve()
-    ordered = sorted(PIPELINE_STEP_SNAPSHOTS.items(), key=lambda item: item[1].get("created", 0))
-    while len(ordered) > MAX_PIPELINE_STEP_SNAPSHOTS:
-        key, snapshot = ordered.pop(0)
-        PIPELINE_STEP_SNAPSHOTS.pop(key, None)
-        for path in (snapshot.get("files") or {}).values():
-            try:
-                # 스냅샷 디렉터리 내부 파일만 삭제. (미수정 입력은 원본을 참조하므로 절대 삭제 금지)
-                if snapshots_root in Path(path).resolve().parents:
-                    Path(path).unlink(missing_ok=True)
-            except Exception:
-                pass
+    _cleanup_pipeline_snapshots_by_limits()
 
 
 def _save_pipeline_step_snapshot(key, step_idx, app, output_wb, input_wb_by_name, input_stable_src=None):
@@ -13352,6 +13811,7 @@ def run_backend_pipeline_payload(payload, job_id=None):
 
 
 if __name__ == "__main__":
+    start_runtime_maintenance_threads()
     with B2BThreadingTCPServer((HOST, PORT), B2BHandler) as httpd:
         print(f"B2B serving on http://{HOST}:{PORT}")
         print(f"Proxying /v1/* to {VLLM_BASE}/v1/*")

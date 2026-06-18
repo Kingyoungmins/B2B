@@ -85,8 +85,12 @@ namespace B2BNativeHost
         private bool webReady;
         private string lastNativeBoundsKey = "";
         private string webViewUserDataDir = "";
+        private const int NativeFastTimerIntervalMs = 80;
+        private const int ExcelFocusIdleTimerIntervalMs = 500;
+        private const int VbaDebugIdleTimerIntervalMs = 1000;
         private System.Windows.Forms.Timer excelFocusTimer;
         private System.Windows.Forms.Timer vbaDebugSuppressTimer;
+        private DateTime vbaDebugFastUntilUtc = DateTime.MinValue;
         private bool excelMouseDownFocused;
         private FormWindowState lastWindowState;
         private volatile bool hostMinimized;
@@ -333,8 +337,15 @@ namespace B2BNativeHost
         {
             if (vbaDebugSuppressTimer != null) return;
             vbaDebugSuppressTimer = new System.Windows.Forms.Timer();
-            vbaDebugSuppressTimer.Interval = 80;
-            vbaDebugSuppressTimer.Tick += (s, e) => SuppressVbaDebugWindows();
+            vbaDebugSuppressTimer.Interval = VbaDebugIdleTimerIntervalMs;
+            vbaDebugSuppressTimer.Tick += (s, e) =>
+            {
+                bool fast = uiBusyActive || DateTime.UtcNow <= vbaDebugFastUntilUtc;
+                int wanted = fast ? NativeFastTimerIntervalMs : VbaDebugIdleTimerIntervalMs;
+                if (vbaDebugSuppressTimer.Interval != wanted) vbaDebugSuppressTimer.Interval = wanted;
+                if (!fast && hostMinimized) return;
+                SuppressVbaDebugWindows();
+            };
             vbaDebugSuppressTimer.Start();
         }
 
@@ -516,6 +527,11 @@ namespace B2BNativeHost
             string[] parts = message.Split('	');
             bool active = parts.Length > 1 && parts[1] == "1";
             uiBusyActive = active;
+            if (active)
+            {
+                vbaDebugFastUntilUtc = DateTime.UtcNow.AddSeconds(120);
+                try { if (vbaDebugSuppressTimer != null) vbaDebugSuppressTimer.Interval = NativeFastTimerIntervalMs; } catch { }
+            }
             // [필드#2] busy 동안 네이티브 파일 탭(웹뷰 밖 C# 컨트롤)도 클릭 불가로 — DOM 오버레이가
             // 못 막는 영역. Excel 창 입력 차단(EnableWindow)과 함께 작업 중 끼어들기를 완성한다.
             try { if (nativeFileTabs != null) nativeFileTabs.Enabled = !active; } catch { }
@@ -1086,20 +1102,24 @@ namespace B2BNativeHost
         private void StartExcelFocusAssist()
         {
             excelFocusTimer = new System.Windows.Forms.Timer();
-            excelFocusTimer.Interval = 80;
+            excelFocusTimer.Interval = ExcelFocusIdleTimerIntervalMs;
             excelFocusTimer.Tick += delegate
             {
                 try
                 {
                     bool leftDown = (Control.MouseButtons & MouseButtons.Left) == MouseButtons.Left;
+                    Point local = excelPanel.PointToClient(Cursor.Position);
+                    bool overPanel = excelPanel.ClientRectangle.Contains(local);
+                    bool fast = uiBusyActive || leftDown || overPanel;
+                    int wanted = fast ? NativeFastTimerIntervalMs : ExcelFocusIdleTimerIntervalMs;
+                    if (excelFocusTimer.Interval != wanted) excelFocusTimer.Interval = wanted;
                     if (!leftDown)
                     {
                         excelMouseDownFocused = false;
                         return;
                     }
                     if (excelMouseDownFocused) return;
-                    Point local = excelPanel.PointToClient(Cursor.Position);
-                    if (!excelPanel.ClientRectangle.Contains(local)) return;
+                    if (!overPanel) return;
                     excelMouseDownFocused = true;
                     FocusExcelChild();
                 }

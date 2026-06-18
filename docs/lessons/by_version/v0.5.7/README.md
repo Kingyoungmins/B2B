@@ -6,56 +6,6 @@
 
 ## 최근 변경사항
 
-### ver0.5.10
-
-ver0.5.9 기반 후속 작업 브랜치.
-
-- 0.5.9 안정화 상태를 기준으로 새 버전 폴더와 브랜치를 분리했습니다.
-- 빌드 산출물 경로와 single exe wrapper 버전을 0.5.10으로 올렸습니다.
-- 좌측 메뉴의 사용 가이드(`USER_GUIDE.html`)가 빌드 산출물에 포함되는 상태를 유지합니다.
-- **기본 스킬 엔진을 VBA로 전환**: 신규/기존 로컬 설정에서 과거 기본값처럼 저장된 Python 엔진은 VBA로 승격합니다. 사용자가 F7로 직접 전환한 이후의 선택은 별도 플래그로 저장합니다.
-- **장시간 idle 부하 완화**: server health polling(4초→15초), lifecycle ping(5초→30초), Excel 미러 hide-inactive 안전망(0.7초→5초)을 늦추고, Excel 진단은 60초 캐시로 바꿨습니다.
-- **상시 부하 샘플러 추가**: `/api/backend/health`를 누르지 않아도 30초마다 `runtime_load_trace.jsonl`에 backend RSS/스레드/핸들, Excel PID 상태, 큐 크기, lock 경합, 파이프라인 job/snapshot 누적량을 남깁니다. 유휴 1시간 버벅임은 이제 로그로 원인을 좁힐 수 있습니다.
-- **10분 저위험 housekeeping 추가**: pipeline/VBA/Python COM 실행 중이 아니고 Excel lock이 비어 있을 때만 오래된 copy source, pipeline job, snapshot metadata/file, 앱 소유 orphan Excel PID를 정리합니다. 주기 정리는 `StatusBar`, `CutCopyMode`, `Workbooks`, `UsedRange`, 저장/재오픈을 건드리지 않습니다.
-- **좀비 Excel/부하 추적 보강**: `runtime_load_trace.jsonl`에 backend 메모리/스레드 수, 앱이 만든 Excel PID, spawn/force-kill/cleanup/reap 이벤트를 남깁니다. VBA 실패 진단용 `DispatchEx` Excel도 PID 추적 대상에 포함했고, Python 숨김 Excel 인스턴스는 15분 idle TTL 후 COM 워커 내부에서 안전 종료합니다.
-- **클립보드/네이티브 타이머 부하 완화**: 복붙 감지용 CutCopyMode 스냅샷은 전이 또는 5초 throttle 기준으로만 수행합니다. NativeHost의 VBA 디버그창 억제용 80ms 전역 창 탐색은 매크로/작업 중에만 빠르게 돌고, idle 상태에서는 1초 주기로 물러납니다.
-- **스킬 누적 UI 부하 완화**: 파이프라인 렌더링을 fragment 기반으로 줄이고, 자동 스킬 백업 ZIP 생성은 최소 20초 간격으로 제한했습니다.
-
-### ver0.5.9
-
-ver0.5.8 기반 런타임 안정화 패치.
-
-- **수식 overwrite 기본값 변경**: 값 채우기/입력/반영 대상 범위에 기존 수식이 있어도 더 이상 런타임에서 차단하지 않습니다. 사용자가 지정한 대상 셀/열은 값으로 덮어쓸 수 있고, 수식 보존은 사용자가 명시했을 때만 생성 코드가 범위를 제외합니다.
-- **복사 의미 정리**: "값/값만/값으로 붙여넣기"는 계산 결과 값만 쓰고, 그냥 "복사/복붙/붙여넣기"는 값+수식+서식+병합을 보존하는 Excel 네이티브 복사로 생성하게 했습니다.
-- **HCN류 다중 값 매칭 합산 라우팅 수정**: 한 셀에 여러 가입번호/코드가 있고 다른 파일 열과 매칭해 합계를 쓰는 작업은 Python COM 강제 라우팅을 중단하고 VBA 우선 라우팅으로 돌립니다. Python으로 생성되더라도 `None` 행을 필터링해 위로 당겨 쓰는 패턴은 정적 게이트로 차단합니다.
-- **요약 행과 대상 수식 구분**: H141 `=SUM(H88:H140)` / P141 `부가세포함` 같은 행은 "수식이라 보존"이 아니라 "데이터 행이 아닌 요약 행"으로 처리합니다. 데이터 행 범위를 먼저 잡고 합계/소계/부가세포함 행은 쓰기 대상에서 제외합니다.
-- **장시간 실행 안정성**: 앱이 만든 Excel PID를 `/api/backend/health`와 `/api/excel/diagnostics`에서 확인할 수 있게 했고, 세션에 묶이지 않은 고아 Excel PID는 주기적으로 정리합니다. WebView/네이티브 창이 비활성 상태일 때 Excel 미러 COM 폴링도 줄였습니다.
-- **Python COM 멈춤 방어**: Python 스킬 기본 실행 제한 시간을 낮추고, 제한을 넘기면 앱이 띄운 Excel 세션을 정리해 다음 작업까지 같이 멈추지 않게 했습니다.
-
-### ver0.5.8
-
-ver0.5.7 기반 안정화 패치.
-
-- 복사/붙여넣기 관련 적용 전 안전 재생성 가드를 제거했습니다. 값만 복사, 수식 셀의 계산값 복사, 서식 있는 셀 대상 붙여넣기 같은 요청을 과도하게 막지 않습니다.
-- 복합 조건/피벗성 집계/시트 전체 교차파일 복사 요청은 저사양 PC에서 Python COM 경로가 멈출 수 있어 VBA 생성으로 자동 라우팅합니다.
-- `ctx.copy_sheet()`의 교차파일 시트 전체 복사를 보강했습니다. 대상 파일이 읽기전용 동반본으로 잡힌 경우 실제 라이브 대상 워크북을 찾고, 다른 Excel 인스턴스면 임시 워크북을 매개로 복사합니다.
-- **전체실행/VBA 실행기 삽질 결론**: 같은 VBA 스킬이 채팅 단일 적용에서는 성공하지만 `전체실행`/스킬 실행기에서는 `B2B_RunSkill 매크로를 실행할 수 없습니다`로 실패하는 문제가 있었습니다. 원인은 Excel 보안설정이 아니라, 저장된 스킬 payload에 `// Step...`, `[정확 참조]`, `제목:` 같은 설명/주석이 `Sub B2BSkill()` 앞에 붙어 서버 주입 시 매크로 등록이 깨지는 것과, 전체실행 경로가 단일 적용과 다른 임시 runner/탭 전환 흐름을 타는 것이었습니다.
-  - 서버는 VBA 주입 전 `Sub ... End Sub` 본문만 보수적으로 추출해 주입합니다. 따라서 저장된 logic.zip 안에 설명 텍스트가 섞여 있어도 실제 실행 코드는 정규화됩니다.
-  - VBA가 하나라도 포함된 파이프라인은 생성기 전체실행, 스킬 실행기 전체실행, on/off, 삭제, undo/redo 재적용 모두 `/api/excel/run-vba-pipeline` 격리 파이프라인으로 통일했습니다. Python COM 스텝이 섞여 있어도 같은 파이프라인 안에서 순서를 유지합니다.
-  - 마지막 VBA 스텝을 OFF 하거나 삭제해 enabled 스텝이 0개가 되는 경우도 `steps: []`, `reset: true`로 원본 복원만 수행해 Excel 라이브 상태가 이전 적용값으로 남지 않게 했습니다.
-  - 현장 확인은 `vba_pipeline_trace.jsonl`에서 `vba.code.normalized changed: true`, `vba.macro.ref.ok`, `vba.macro.run.ok`, `http.run_vba_pipeline.response ok:true` 순서로 보면 됩니다. 이 로그 파일은 런타임 진단용이라 git에는 커밋하지 않습니다.
-- **저장 스킬/복구 호환**: 실패한 VBA 스킬의 에러복구가 Python ctx로 바뀌던 흐름을 막고, 기존 VBA 스킬은 복구 시에도 VBA를 유지하게 했습니다. 사용자가 코드를 모르는 상태에서 zip을 불러와 전체실행만 눌러도 내부에서 동일한 실행 경로를 쓰는 것이 기준입니다.
-- **재발 방지 체크리스트**:
-  1. `채팅 단일 적용은 되는데 전체실행/실행기만 실패`하면 Excel 매크로 보안부터 의심하지 말고, 먼저 저장 스킬 payload와 전체실행 호출 경로 차이를 본다.
-  2. `매크로를 실행할 수 없습니다`, `B2B_RunSkill`, `b2b_vba_runner_*.xlsm` 오류는 실제 원인이 코드 주입/매크로 등록/실행 경로 차이일 수 있다. 사용자에게 "콘텐츠 사용 누르세요"로 안내하기 전에 `vba_pipeline_trace.jsonl`을 확인한다.
-  3. VBA 포함 전체실행은 개별 `/api/excel/run-vba` 반복 호출로 되돌리지 않는다. 공통 기준은 `/api/excel/run-vba-pipeline` 격리 파이프라인이다.
-  4. 실행기, 생성기 전체실행, 자동복구 후 재실행, on/off, 삭제, undo/redo는 서로 다른 실행기를 만들지 말고 같은 재적용 함수로 모은다.
-  5. 저장된 코드 앞뒤에 설명/주석/정확참조/제목이 섞일 수 있다고 가정한다. 서버 주입 직전에는 항상 실제 `Sub ... End Sub` 또는 `def transform(ctx):` 본문만 추출/정규화한다.
-  6. Python COM + VBA 혼합 파이프라인은 언어별로 따로 리셋하거나 임시 결과를 덮지 않는다. 한 파이프라인에서 순서대로 실행하고, 리셋은 대상 파일 기준으로 한 번만 수행한다.
-  7. 마지막 스텝 OFF/삭제처럼 enabled 스텝이 없어지는 케이스는 "아무것도 안 함"이 아니라 원본 복원이다.
-  8. 실패를 고쳤다고 판단하기 전에는 최소 단일 VBA 1스텝, Python+VBA 혼합, 스킬 실행기 전체실행, on/off, 삭제, undo/redo 경로를 같이 본다.
-- **빌드 확인**: 0.5.8 기준 `build_exe.bat`와 `build_single_exe.bat`로 `dist\B2B_ver0.5.8_portable.zip`, `dist\B2B_ver0.5.8_single.exe` 생성까지 확인했습니다.
-
 ### ver0.5.6
 
 ver0.5.5 기반. 실사용 피드백을 반영한 생성 품질·안정성·기능 보완 릴리스(라이브 Python COM 엔진 기준).
@@ -372,12 +322,12 @@ build_exe.bat
 빌드 결과:
 
 ```text
-dist\B2B_ver0.5.10\B2B_ver0.5.10.exe   (네이티브 호스트)
-dist\B2B_ver0.5.10\B2B_Server.exe      (PyInstaller 서버)
-dist\B2B_ver0.5.10_portable.zip        (배포용 zip)
+dist\B2B_ver0.5.6\B2B_ver0.5.6.exe   (네이티브 호스트)
+dist\B2B_ver0.5.6\B2B_Server.exe     (PyInstaller 서버)
+dist\B2B_ver0.5.6_portable.zip       (배포용 zip)
 ```
 
-단일 self-extracting EXE가 필요하면 `build_single_exe.bat`을 추가 실행합니다 (`dist\B2B_ver0.5.10_single.exe`).
+단일 self-extracting EXE가 필요하면 `build_single_exe.bat`을 추가 실행합니다 (`dist\B2B_ver0.5.6_single.exe`).
 
 `dist/`와 `build/`는 git 추적 대상이 아닙니다.
 
@@ -466,7 +416,7 @@ ctx.write_grid(ws, [[123]], start_row=4, start_col=2)
 ## 디렉터리 구조
 
 ```text
-B2B_ver0.5.10/
+B2B_ver0.5.6/
 ├─ index.html
 ├─ serve_b2b.py
 ├─ launch_b2b.py

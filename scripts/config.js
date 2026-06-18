@@ -48,7 +48,7 @@ const OPENAI_COMPAT_FALLBACK_BASE_URLS = [
 
 const SETTINGS_KEY = "mvno_llm_settings_v4";
 const SETTINGS_KEY_MIGRATE = ["mvno_llm_settings_v3", "mvno_llm_settings_v2", "mvno_llm_settings_v1"];
-const DEFAULT_SKILL_ENGINE = "python";
+const DEFAULT_SKILL_ENGINE = "vba";
 const SKILL_ENGINE_LABELS = {
   python: "Python",
   vba: "VBA",
@@ -79,12 +79,14 @@ function defaultIxiSettings() {
     ...DEFAULTS["openai-compat"],
     network: "ixi",
     skillEngine: DEFAULT_SKILL_ENGINE,
+    skillEngineUserSet: false,
   };
 }
 
 function normalizeSettings(parsed) {
   if (!parsed || typeof parsed !== "object") return null;
-  const skillEngine = normalizeSkillEngine(parsed.skillEngine);
+  const skillEngine = normalizeStoredSkillEngine(parsed);
+  const skillEngineUserSet = parsed.skillEngineUserSet === true;
   if (parsed.provider === "anthropic") {
     return {
       ...DEFAULTS.anthropic,
@@ -95,6 +97,7 @@ function normalizeSettings(parsed) {
       apiKey: parsed.apiKey || DEFAULTS.anthropic.apiKey,
       devModeSet: parsed.devModeSet === true,
       skillEngine,
+      skillEngineUserSet,
     };
   }
   if (parsed.provider === "openai-compat") {
@@ -123,6 +126,7 @@ function normalizeSettings(parsed) {
       network,
       devModeSet: parsed.devModeSet === true,
       skillEngine,
+      skillEngineUserSet,
     };
   }
   return null;
@@ -130,7 +134,17 @@ function normalizeSettings(parsed) {
 
 function normalizeSkillEngine(value) {
   value = String(value || "").trim().toLowerCase();
+  if (value === "python") return "python";
   if (value === "vba") return "vba";
+  return DEFAULT_SKILL_ENGINE;
+}
+
+function normalizeStoredSkillEngine(parsed) {
+  const raw = String((parsed && parsed.skillEngine) || "").trim().toLowerCase();
+  if (parsed && parsed.skillEngineUserSet === true) return normalizeSkillEngine(raw);
+  // 0.5.10부터 기본 엔진은 VBA다. 0.5.9 이하에서 기본값처럼 저장된 "python"은
+  // 새 기본값으로 올리고, 이미 VBA로 저장된 환경만 그대로 유지한다.
+  if (raw === "vba") return "vba";
   return DEFAULT_SKILL_ENGINE;
 }
 
@@ -238,8 +252,8 @@ function setupThinkToggle() {
 
 /* ===================================================================
    스킬 실행 엔진(0.4.13):
-   - 기본 Python: openpyxl 백엔드 우선, 필요 시 Excel COM Python fallback.
-   - 보조 VBA: 사용자가 F7로 선택했을 때만 라이브 Excel VBA 주입 실행.
+   - 기본 VBA: Excel 라이브 작업의 서식/수식/복붙 의미를 우선 보존한다.
+   - 보조 Python: 사용자가 F7로 선택했을 때만 Python 스킬 생성/실행을 사용한다.
    =================================================================== */
 function getSkillEngine() {
   return normalizeSkillEngine(settings && settings.skillEngine);
@@ -251,7 +265,7 @@ function setSkillEngine(engine, options = {}) {
     updateSkillEngineToggle();
     return next;
   }
-  settings = { ...settings, skillEngine: next };
+  settings = { ...settings, skillEngine: next, skillEngineUserSet: true };
   saveSettings();
   if (!options.silent && typeof toast === "function") {
     toast(`스킬 실행 엔진: ${SKILL_ENGINE_LABELS[next]}`, "success");

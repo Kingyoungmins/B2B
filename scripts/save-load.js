@@ -159,6 +159,9 @@ function buildLogicZipEntries(name) {
 
 let logicAutoBackupTimer = null;
 let logicAutoBackupSeq = 0;
+let logicAutoBackupLastAt = 0;
+const LOGIC_AUTO_BACKUP_MIN_INTERVAL_MS = 20000;
+const LOGIC_AUTO_BACKUP_DELAY_MS = 1500;
 
 function scheduleLogicAutoBackup(reason) {
   if (!state.pipeline || state.pipeline.length === 0) return;
@@ -166,11 +169,15 @@ function scheduleLogicAutoBackup(reason) {
   logicAutoBackupSeq += 1;
   const seq = logicAutoBackupSeq;
   clearTimeout(logicAutoBackupTimer);
-  logicAutoBackupTimer = setTimeout(() => saveLogicAutoBackup(reason, seq), 600);
+  const elapsed = Date.now() - logicAutoBackupLastAt;
+  const minDelay = state.pipeline.length >= 20 ? 5000 : LOGIC_AUTO_BACKUP_DELAY_MS;
+  const delay = Math.max(minDelay, LOGIC_AUTO_BACKUP_MIN_INTERVAL_MS - elapsed);
+  logicAutoBackupTimer = setTimeout(() => saveLogicAutoBackup(reason, seq), delay);
 }
 
 async function saveLogicAutoBackup(reason, seq) {
   if (seq !== logicAutoBackupSeq) return;
+  logicAutoBackupLastAt = Date.now();
   try {
     const name = timestampedLogicArchiveName(currentLogicSaveBaseName(defaultLogicBaseNameFromInputs()));
     const blob = createZipBlob(buildLogicZipEntries(name));

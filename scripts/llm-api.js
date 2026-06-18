@@ -33,7 +33,7 @@ async function callLLM(userMessage, options) {
   // [0.5.2.2] forceEngine: Python 게이트 연속 실패로 VBA 폴백 생성할 때 등 이 호출 1회에 한해
   // 시스템 프롬프트 엔진을 강제한다(전역 엔진 설정 불변).
   const engine = options.forceEngine
-    || (typeof getSkillEngine === "function" ? getSkillEngine() : "python");
+    || (typeof getSkillEngine === "function" ? getSkillEngine() : "vba");
   let fullSystem;
   if (engine === "python" && typeof PYTHON_COM_SYSTEM_PROMPT === "string") {
     // [0.5.4] 기본 Python 엔진 = 라이브 Excel COM bulk 제어(ctx API). openpyxl 은 서버 폴백 전용.

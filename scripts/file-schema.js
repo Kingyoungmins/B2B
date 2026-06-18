@@ -381,7 +381,7 @@ End Sub
 // 스킬 실행 엔진(Python/openpyxl)이 선택됐을 때 프롬프트에 덧붙이는 안내.
 // VBA 엔진이면 빈 문자열(VBA_SYSTEM_PROMPT가 별도로 사용됨).
 function skillEnginePromptNote() {
-  const engine = typeof getSkillEngine === "function" ? getSkillEngine() : "python";
+  const engine = typeof getSkillEngine === "function" ? getSkillEngine() : "vba";
   if (engine !== "python") return "";
   return `
 ## 실행 엔진: 순수 Python(openpyxl) — 현재 선택됨
@@ -572,7 +572,7 @@ function _buildDefaultTargetHint() {
     ? state.selectedSheets
     : (state.currentSheet ? [state.currentSheet] : []);
   const tag = (typeof isOutputFileId === "function" && isOutputFileId(state.currentFileId)) ? "[출력]" : "[입력]";
-  const engine = (typeof getSkillEngine === "function") ? getSkillEngine() : "python";
+  const engine = (typeof getSkillEngine === "function") ? getSkillEngine() : "vba";
   const multi = sheets.length > 1;
   const lines = [];
   lines.push(`${tag} 파일: "${file.name}"`);
@@ -771,8 +771,8 @@ def transform(ctx):
 - 코드 앞에 작업 요약 1~2문장. 그 다음 **단 하나의 \`\`\`python 코드 블록**으로 \`def transform(ctx):\` 전체를 출력하세요.
 - **설명·계획·주석만으로 응답을 끝내지 마세요.** 어떤 요청이든 실행 가능한 코드 블록이 반드시 포함되어야 합니다(모호하면 합리적 기본값을 택해 코드로 작성). 파일/시트가 정말 특정 불가능할 때만 코드 없이 한 가지 질문을 하세요.
 `;
-// [0.5.4 하이브리드] 기본 엔진은 위 Python COM(라이브 워크북 직접 제어)이다.
-// openpyxl 이 꼭 필요한 경우(Excel 미설치 환경 대비 배치 변환 등)는 서버가 자동 폴백하며,
+// [0.5.10] 기본 생성/실행 엔진은 VBA다. 사용자가 F7로 Python을 선택한 경우에만
+// 위 Python COM 프롬프트가 사용된다. openpyxl 이 꼭 필요한 경우는 서버가 자동 폴백하며,
 // 그때는 기존 openpyxl SYSTEM_PROMPT 규칙의 코드가 실행된다.
 // 라우팅 규칙: 스텝 코드 첫 줄 부근의 `# B2B_ENGINE: openpyxl` 마커가 있으면 라이브 COM 대신
 // 백엔드 openpyxl 파이프라인으로 보낸다(pipelineStepLiveLanguage). 생성은 항상 COM 규약.

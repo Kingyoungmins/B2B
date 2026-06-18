@@ -214,7 +214,8 @@ function openSettingsModal(devMode) {
     settings = {
       ...settings,
       ...form,
-      skillEngine: typeof normalizeSkillEngine === "function" ? normalizeSkillEngine(settings.skillEngine) : (settings.skillEngine || "python"),
+      skillEngine: typeof normalizeSkillEngine === "function" ? normalizeSkillEngine(settings.skillEngine) : (settings.skillEngine || "vba"),
+      skillEngineUserSet: settings.skillEngineUserSet === true,
     };
     saveSettings();
     $("modal-bg").classList.remove("show");

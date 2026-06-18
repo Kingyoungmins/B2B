@@ -6,21 +6,6 @@
 
 ## 최근 변경사항
 
-### ver0.5.10
-
-ver0.5.9 기반 후속 작업 브랜치.
-
-- 0.5.9 안정화 상태를 기준으로 새 버전 폴더와 브랜치를 분리했습니다.
-- 빌드 산출물 경로와 single exe wrapper 버전을 0.5.10으로 올렸습니다.
-- 좌측 메뉴의 사용 가이드(`USER_GUIDE.html`)가 빌드 산출물에 포함되는 상태를 유지합니다.
-- **기본 스킬 엔진을 VBA로 전환**: 신규/기존 로컬 설정에서 과거 기본값처럼 저장된 Python 엔진은 VBA로 승격합니다. 사용자가 F7로 직접 전환한 이후의 선택은 별도 플래그로 저장합니다.
-- **장시간 idle 부하 완화**: server health polling(4초→15초), lifecycle ping(5초→30초), Excel 미러 hide-inactive 안전망(0.7초→5초)을 늦추고, Excel 진단은 60초 캐시로 바꿨습니다.
-- **상시 부하 샘플러 추가**: `/api/backend/health`를 누르지 않아도 30초마다 `runtime_load_trace.jsonl`에 backend RSS/스레드/핸들, Excel PID 상태, 큐 크기, lock 경합, 파이프라인 job/snapshot 누적량을 남깁니다. 유휴 1시간 버벅임은 이제 로그로 원인을 좁힐 수 있습니다.
-- **10분 저위험 housekeeping 추가**: pipeline/VBA/Python COM 실행 중이 아니고 Excel lock이 비어 있을 때만 오래된 copy source, pipeline job, snapshot metadata/file, 앱 소유 orphan Excel PID를 정리합니다. 주기 정리는 `StatusBar`, `CutCopyMode`, `Workbooks`, `UsedRange`, 저장/재오픈을 건드리지 않습니다.
-- **좀비 Excel/부하 추적 보강**: `runtime_load_trace.jsonl`에 backend 메모리/스레드 수, 앱이 만든 Excel PID, spawn/force-kill/cleanup/reap 이벤트를 남깁니다. VBA 실패 진단용 `DispatchEx` Excel도 PID 추적 대상에 포함했고, Python 숨김 Excel 인스턴스는 15분 idle TTL 후 COM 워커 내부에서 안전 종료합니다.
-- **클립보드/네이티브 타이머 부하 완화**: 복붙 감지용 CutCopyMode 스냅샷은 전이 또는 5초 throttle 기준으로만 수행합니다. NativeHost의 VBA 디버그창 억제용 80ms 전역 창 탐색은 매크로/작업 중에만 빠르게 돌고, idle 상태에서는 1초 주기로 물러납니다.
-- **스킬 누적 UI 부하 완화**: 파이프라인 렌더링을 fragment 기반으로 줄이고, 자동 스킬 백업 ZIP 생성은 최소 20초 간격으로 제한했습니다.
-
 ### ver0.5.9
 
 ver0.5.8 기반 런타임 안정화 패치.
@@ -372,12 +357,12 @@ build_exe.bat
 빌드 결과:
 
 ```text
-dist\B2B_ver0.5.10\B2B_ver0.5.10.exe   (네이티브 호스트)
-dist\B2B_ver0.5.10\B2B_Server.exe      (PyInstaller 서버)
-dist\B2B_ver0.5.10_portable.zip        (배포용 zip)
+dist\B2B_ver0.5.9\B2B_ver0.5.9.exe   (네이티브 호스트)
+dist\B2B_ver0.5.9\B2B_Server.exe     (PyInstaller 서버)
+dist\B2B_ver0.5.9_portable.zip       (배포용 zip)
 ```
 
-단일 self-extracting EXE가 필요하면 `build_single_exe.bat`을 추가 실행합니다 (`dist\B2B_ver0.5.10_single.exe`).
+단일 self-extracting EXE가 필요하면 `build_single_exe.bat`을 추가 실행합니다 (`dist\B2B_ver0.5.9_single.exe`).
 
 `dist/`와 `build/`는 git 추적 대상이 아닙니다.
 
@@ -466,7 +451,7 @@ ctx.write_grid(ws, [[123]], start_row=4, start_col=2)
 ## 디렉터리 구조
 
 ```text
-B2B_ver0.5.10/
+B2B_ver0.5.9/
 ├─ index.html
 ├─ serve_b2b.py
 ├─ launch_b2b.py
