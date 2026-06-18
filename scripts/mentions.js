@@ -139,8 +139,62 @@ function hideMentionMenu() {
   if (mentionMenu) mentionMenu.hidden = true;
 }
 
+function parseMentionBody(body) {
+  const raw = String(body || "").trim();
+  const bang = raw.lastIndexOf("!");
+  if (bang >= 0) {
+    const left = raw.slice(0, bang);
+    const slash = left.lastIndexOf("/");
+    return {
+      raw,
+      file: slash >= 0 ? left.slice(0, slash) : "",
+      sheet: slash >= 0 ? left.slice(slash + 1) : left,
+      address: raw.slice(bang + 1),
+    };
+  }
+  const slash = raw.lastIndexOf("/");
+  return {
+    raw,
+    file: slash >= 0 ? raw.slice(0, slash) : raw,
+    sheet: slash >= 0 ? raw.slice(slash + 1) : "",
+    address: "",
+  };
+}
+
+function isWholeColumnAddress(address) {
+  return /^[A-Z]{1,3}:[A-Z]{1,3}$/i.test(String(address || "").replace(/\$/g, "").trim());
+}
+
+function isDuplicateCountIntent(message) {
+  return /(동일\s*값|같은\s*값|중복).{0,24}(개수|갯수|건수)|(?:개수|갯수|건수).{0,24}(적어|입력|채워|작성|구해)|COUNTIF/i.test(String(message || ""));
+}
+
+function buildMentionHardRules(message, refs) {
+  const exactRefs = (refs || []).filter(r => r && (r.file || r.sheet || r.address));
+  if (!exactRefs.length) return [];
+  const rules = [
+    "",
+    "[정확 참조 사용 규칙 - 강제]",
+    "- 아래 파일명/시트명/범위/컬럼명은 코드에 그대로 복사하세요. 번역, 영문화, 띄어쓰기 보정, 대소문자 변경 금지.",
+    "- 특히 한글 시트명은 절대 번역하지 마세요. 예: 통합인터넷(국제) -> 통합internet(국제) 는 실패입니다.",
+  ];
+  exactRefs.forEach(ref => {
+    if (ref.file) rules.push(`- 정확 파일명: "${ref.file}"`);
+    if (ref.sheet) rules.push(`- 정확 시트명: "${ref.sheet}"`);
+    if (ref.column) rules.push(`- 정확 컬럼명: "${ref.column}"`);
+    if (ref.address) rules.push(`- 정확 주소: "${ref.address}"`);
+  });
+  const wholeColumnCount = exactRefs.some(ref => isWholeColumnAddress(ref.address)) && isDuplicateCountIntent(message);
+  const explicitHeaderRow2 = /(?:헤더|제목)\s*(?:가|는|은)?\s*2\s*행|2\s*행\s*(?:헤더|제목)/i.test(String(message || ""));
+  if (wholeColumnCount && !explicitHeaderRow2) {
+    rules.push("- 전체 열 범위에서 동일값/중복 개수를 채우는 요청입니다. 요청에 '2행이 헤더'라고 명시되지 않았으므로 1행을 헤더로 보고 2행부터 데이터로 포함하세요. 2행을 건너뛰지 마세요.");
+  }
+  return rules;
+}
+
 function augmentUserPromptWithMentions(message) {
   const lines = [];
+  const refs = [];
   const seen = new Set();
   const add = (line) => {
     if (!seen.has(line)) {
@@ -156,12 +210,16 @@ function augmentUserPromptWithMentions(message) {
     const parts = m[2].split("/");
     if (kind === "파일") {
       add(`- 파일명: ${parts.join("/")}`);
+      refs.push({ file: parts.join("/"), sheet: "", address: "" });
     } else if (kind === "시트") {
       add(`- 시트명: 파일 "${parts[0] || ""}", 시트 "${parts.slice(1).join("/")}"`);
+      refs.push({ file: parts[0] || "", sheet: parts.slice(1).join("/"), address: "" });
     } else if (kind === "컬럼") {
       add(`- 컬럼명: 파일 "${parts[0] || ""}", 시트 "${parts[1] || ""}", 컬럼 "${parts.slice(2).join("/")}"`);
+      refs.push({ file: parts[0] || "", sheet: parts[1] || "", address: "", column: parts.slice(2).join("/") });
     } else if (kind === "범위") {
       add(`- 선택 범위: ${m[2]}`);
+      refs.push(parseMentionBody(m[2]));
     }
   }
 
@@ -171,25 +229,40 @@ function augmentUserPromptWithMentions(message) {
   tokens.forEach(token => {
     if (token.startsWith("@file:")) {
       add(`- 파일명: ${dec(token.slice(6))}`);
+      refs.push({ file: dec(token.slice(6)), sheet: "", address: "" });
     } else if (token.startsWith("@sheet:")) {
       const [file, sheet] = token.slice(7).split("/");
       add(`- 시트명: 파일 "${dec(file)}", 시트 "${dec(sheet)}"`);
+      refs.push({ file: dec(file), sheet: dec(sheet), address: "" });
     } else if (token.startsWith("@column:")) {
       const [file, sheet, ...col] = token.slice(8).split("/");
       add(`- 컬럼명: 파일 "${dec(file)}", 시트 "${dec(sheet)}", 컬럼 "${dec(col.join("/"))}"`);
+      refs.push({ file: dec(file), sheet: dec(sheet), address: "", column: dec(col.join("/")) });
     }
   });
 
   if (state.selectedCell) {
     const file = getFile(state.selectedCell.fileId);
     add(`- 선택 셀: 파일 "${file ? file.name : state.selectedCell.fileId}", 시트 "${state.selectedCell.sheet}", 셀 "${_excelCol(state.selectedCell.c)}${state.selectedCell.r + 1}"`);
+    refs.push({
+      file: file ? file.name : state.selectedCell.fileId,
+      sheet: state.selectedCell.sheet,
+      address: `${_excelCol(state.selectedCell.c)}${state.selectedCell.r + 1}`,
+    });
   }
   if (state.selectedRange) {
-    add(`- 선택 범위: ${formatRangeMentionBody(state.selectedRange)}`);
+    const body = formatRangeMentionBody(state.selectedRange);
+    add(`- 선택 범위: ${body}`);
+    refs.push(parseMentionBody(body));
   }
-  (state.selectedRanges || []).forEach(range => add(`- 선택 범위: ${formatRangeMentionBody(range)}`));
+  (state.selectedRanges || []).forEach(range => {
+    const body = formatRangeMentionBody(range);
+    add(`- 선택 범위: ${body}`);
+    refs.push(parseMentionBody(body));
+  });
   if (!lines.length) return message;
-  return `${message}\n\n[정확 참조]\n${lines.join("\n")}`;
+  const hardRules = buildMentionHardRules(message, refs);
+  return `${message}\n\n[정확 참조]\n${lines.join("\n")}${hardRules.join("\n")}`;
 }
 
 function formatRangeMentionBody(range) {

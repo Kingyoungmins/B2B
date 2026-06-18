@@ -404,6 +404,15 @@ function pipelinePythonSourceWorkbookNames(code) {
     const name = varValues[m[1]];
     if (name && !names.includes(name)) names.push(name);
   }
+  // [복붙 캡처] ctx.paste_copied(..., src_book='소스', dst_book='대상') 의 src_book 은 '읽기 소스'다.
+  // 교차파일(src≠dst)일 때만 소스로 표시 → 대상 추론이 dst_book(붙여넣은 파일)을 고르게 한다.
+  // (같은 파일이면 src_book 을 빼지 않아 기존 동작 유지.)
+  const sb = /src_book\s*=\s*["']([^"']+\.xls(?:x|m|b)?)["']/i.exec(text);
+  const db = /dst_book\s*=\s*["']([^"']+\.xls(?:x|m|b)?)["']/i.exec(text);
+  if (sb && db && typeof pipelineWorkbookNameKey === "function"
+      && pipelineWorkbookNameKey(sb[1]) !== pipelineWorkbookNameKey(db[1])) {
+    if (!names.includes(sb[1])) names.push(sb[1]);
+  }
   return names;
 }
 
@@ -749,6 +758,19 @@ async function runIsolatedLivePipelineSteps(sourceSteps, initialExcelId, options
   }
 }
 
+function pipelineStepReadsOtherFile(step) {
+  // 교차파일 복붙(소스≠대상): ctx.paste_copied(..., src_book='X', dst_book='Y') 에서 X≠Y.
+  // 라이브 경로로 돌리면 소스 워크북을 직접 읽어 그 창의 보호뷰(리본 숨김)가 풀리고 잠겨
+  // 재업로드가 안 된다. 격리 경로는 소스를 throwaway 복사본으로 읽어 라이브 소스를 안 건드린다.
+  const code = String((step && step.code) || "");
+  const sb = /src_book\s*=\s*["']([^"']+)["']/i.exec(code);
+  const db = /dst_book\s*=\s*["']([^"']+)["']/i.exec(code);
+  if (sb && db && typeof pipelineWorkbookNameKey === "function") {
+    return pipelineWorkbookNameKey(sb[1]) !== pipelineWorkbookNameKey(db[1]);
+  }
+  return false;
+}
+
 async function runVbaPipelinePreferLive(options = {}) {
   const steps = options.pipeline || state.pipeline;
   const activeSteps = activePipelineSteps(steps);
@@ -786,10 +808,14 @@ async function runVbaPipelinePreferLive(options = {}) {
     }
     excelId = await ensureVbaRunExcelId();
   }
-  if (hasVbaStep) {
+  // 교차파일 복붙(소스≠대상)이 하나라도 있으면 격리 파이프라인으로 돌린다. 라이브 경로는 소스
+  // 워크북을 직접 읽어 그 창의 보호뷰가 풀리고/잠겨 재업로드가 막히는 부작용이 있다(실측). 격리
+  // 경로는 소스를 throwaway 복사본으로만 읽으므로 라이브 소스를 전혀 건드리지 않는다.
+  const hasCrossFileStep = activeSteps.some(pipelineStepReadsOtherFile);
+  if (hasVbaStep || hasCrossFileStep) {
     // 사용자가 확인한 실패 케이스의 공통점은 전체실행에서 라이브 임베드 Excel 인스턴스가
-    // Application.Run 을 거부하는 것이다. VBA 가 하나라도 있으면 새 비임베드 Excel 에서
-    // 순서대로 실행한 뒤 결과 워크북만 라이브로 복사한다. Python COM 스텝이 섞여도 같은
+    // Application.Run 을 거부하는 것이다. VBA 가 하나라도 있으면(또는 교차파일 복붙이면) 새 비임베드
+    // Excel 에서 순서대로 실행한 뒤 결과 워크북만 라이브로 복사한다. Python COM 스텝이 섞여도 같은
     // 격리 파이프라인 안에서 순서를 유지한다.
     return runIsolatedLivePipelineSteps(steps, excelId, options);
   }
@@ -2658,6 +2684,7 @@ function buildPipelineAutoRepairPrompt(step, stepIdx, reason, targetLanguage) {
       "- PivotTable 객체를 억지로 만들지 말고, 행/열/합계 형태 요약은 Scripting.Dictionary 기반 집계로 작성하세요.",
       "- 전화번호/가입번호/계약번호처럼 앞 0이 의미 있는 키는 .Text 로 읽고, 결과 열 NumberFormat=\"@\" 를 데이터 쓰기 전에 적용하세요.",
       "- 값만 복사/붙여넣기는 수식을 복사하지 말고 표시값 또는 Value를 읽어 대상 Range.Value로 쓰세요.",
+      "- 값 채우기/입력/반영은 요청받은 대상 범위에 쓰세요. 대상 셀에 기존 수식이 있으면 값으로 대체해도 되지만, 합계/소계/부가세포함 같은 요약 행은 데이터 행이 아니므로 제외하세요.",
       "- 조건별 시간 환산은 '01:02:03' 같은 텍스트와 Excel 시간 serial 값을 모두 처리하세요.",
       "- 키 기준 행 덮어쓰기는 대상 행 중 매칭된 행만 갱신하고, 미매칭 행은 그대로 두세요.",
       "- On Error Resume Next, MsgBox, InputBox, Shell, Workbooks.Open, Save/Close, Application.Quit 을 쓰지 마세요.",
@@ -2776,10 +2803,6 @@ function localRepairPipelineStep(step, failures) {
   const language = inferPipelineStepLanguage(step);
   const code = String(step && step.code || "");
   const reasonText = (failures || []).join("\n");
-  if (language === "vba" && /수식 셀.*범위 전체|HasFormula|수식.*값으로 바꿀 수/i.test(reasonText + "\n" + code)) {
-    const repaired = localRepairFormulaPreserveZeroVba(code);
-    if (repaired) return { code: repaired, language: "vba", description: step.description || "수식 셀 제외 값 입력" };
-  }
   if (language === "vba" && /Application\.(?:ScreenUpdating|Calculation|EnableEvents|DisplayAlerts)|Cleanup|Copy\s+Destination/i.test(reasonText + "\n" + code)) {
     const repaired = localRepairCopyPasteVbaCleanup(code);
     if (repaired) return { code: repaired, language: "vba", description: step.description || "교차 워크북 범위 복사 붙여넣기" };
@@ -2929,6 +2952,9 @@ async function runPipelineWithAutoRepair(options = {}) {
       const stepIdx = resolveRunnerRecoveryStepIndex(info);
       if (!Number.isInteger(stepIdx) || stepIdx < 0 || !state.pipeline[stepIdx]) throw err;
       const step = state.pipeline[stepIdx];
+      // 캡처한 복붙/셀삭제는 '사용자가 실제로 한 동작의 정확 좌표 재생'이 목적이다. LLM 자동복구로
+      // 재생성하면 동작이 바뀌고(복붙 버그 재발) 같은 실패를 반복하며 "박힘" → 재생성하지 말고 그대로 보고.
+      if (step && step.code && /\[복붙 캡처\]|\[셀 삭제 캡처\]/.test(String(step.code))) throw err;
       const key = step.id || `idx:${stepIdx}`;
       const count = repairsByStep.get(key) || 0;
       if (count >= PIPELINE_AUTO_REPAIR_MAX_PER_STEP || repairsDone >= PIPELINE_AUTO_REPAIR_MAX_REPAIRS) throw err;
@@ -2961,6 +2987,80 @@ $("btn-run").onclick = async () => {
     setGeneratorRunLoading(false);
   }
 };
+
+// [복붙 캡처] 우측 라이브 엑셀에서 Ctrl+C(복사) → Ctrl+V(붙여넣기) 한 직후 이 버튼을 누르면,
+// 서버가 클립보드(소스 범위)와 현재 선택영역(붙여넣은 대상)을 역추적해 ctx.paste_copied(...) 스킬 단계로
+// 저장한다. Excel 네이티브 복사를 그대로 재생하므로 값/수식/서식이 보존되고, LLM 추측이 없어 복붙 버그가 없다.
+// (재생은 Python COM 경로 → VBA 러너를 타지 않음.)
+(function () {
+  const btn = (typeof $ === "function") ? $("btn-capture-copypaste") : null;
+  if (!btn) return;
+  btn.onclick = async () => {
+    const excelId = (typeof vbaTargetExcelId === "function" && vbaTargetExcelId())
+      || (typeof currentExcelId === "function" && currentExcelId());
+    if (!excelId) { toast("먼저 우측에 엑셀 파일을 열어 주세요", "error"); return; }
+    btn.disabled = true;
+    try {
+      const data = await postExcelMirror("/api/excel/capture-copypaste", { excelId }, 0, { timeoutMs: 20000 });
+      if (!data || !data.ok) { toast((data && data.error) || "복붙을 찾지 못했습니다", "error"); return; }
+      if (data.dimsMatch === false) {
+        toast("붙여넣은 범위 크기가 복사한 범위와 달라요. 복사→붙여넣기 직후 다시 눌러 주세요.", "error");
+        return;
+      }
+      const step = {
+        id: (typeof uid === "function" ? uid() : ("cap_" + ((state.pipeline || []).length + 1))),
+        prompt: "복붙 캡처: " + data.description,
+        code: data.code,
+        description: data.description,
+        language: "python",
+        // 대상 = 붙여넣은(=캡처한 세션) 파일. 교차파일 복붙은 코드에 소스/대상 두 파일명이 있어
+        // 자동 추론이 소스를 대상으로 잘못 고를 수 있다 → 전체실행이 엉뚱한 세션에서 돌아 실패.
+        // 명시 targetFileId 로 대상을 '붙여넣은 파일'로 고정한다.
+        targetFileId: (typeof fileIdForExcelMirrorId === "function" ? fileIdForExcelMirrorId(excelId) : null)
+          || state.currentFileId || null,
+      };
+      applyLogic(step);
+      toast("복붙을 스킬 단계로 저장했습니다 — " + data.description, "success");
+    } catch (err) {
+      toast("복붙 캡처 실패: " + (err && err.message ? err.message : String(err)), "error");
+    } finally {
+      btn.disabled = false;
+    }
+  };
+})();
+
+// [셀 삭제 캡처] 우측 라이브 엑셀에서 지울 범위를 선택(또는 Delete)한 직후 이 버튼을 누르면,
+// 서버가 현재 선택영역을 역추적해 ctx.clear(...) 스킬 단계로 저장한다(값/수식 삭제, 서식 유지).
+// 재생은 Python COM 경로 → VBA 러너를 타지 않음.
+(function () {
+  const btn = (typeof $ === "function") ? $("btn-capture-delete") : null;
+  if (!btn) return;
+  btn.onclick = async () => {
+    const excelId = (typeof vbaTargetExcelId === "function" && vbaTargetExcelId())
+      || (typeof currentExcelId === "function" && currentExcelId());
+    if (!excelId) { toast("먼저 우측에 엑셀 파일을 열어 주세요", "error"); return; }
+    btn.disabled = true;
+    try {
+      const data = await postExcelMirror("/api/excel/capture-delete", { excelId }, 0, { timeoutMs: 20000 });
+      if (!data || !data.ok) { toast((data && data.error) || "선택 영역을 찾지 못했습니다", "error"); return; }
+      const step = {
+        id: (typeof uid === "function" ? uid() : ("del_" + ((state.pipeline || []).length + 1))),
+        prompt: "셀 삭제 캡처: " + data.description,
+        code: data.code,
+        description: data.description,
+        language: "python",
+        targetFileId: (typeof fileIdForExcelMirrorId === "function" ? fileIdForExcelMirrorId(excelId) : null)
+          || state.currentFileId || null,
+      };
+      applyLogic(step);
+      toast("셀 삭제를 스킬 단계로 저장했습니다 — " + data.description, "success");
+    } catch (err) {
+      toast("셀 삭제 캡처 실패: " + (err && err.message ? err.message : String(err)), "error");
+    } finally {
+      btn.disabled = false;
+    }
+  };
+})();
 
 // item 9: 어느 단계에서 어떤 사유로 실패했는지 토스트 + 채팅 panel 에 모두 노출.
 function hasErrorRecoverySeed(info) {

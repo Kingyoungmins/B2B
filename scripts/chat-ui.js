@@ -230,6 +230,66 @@ function codeMentionsFormulaOverwrite(code) {
   return /수식\s*(제거|삭제|지워|없애)|수식을?\s*값으로|값으로\s*덮어쓰기|formula\s*(remove|delete|overwrite|replace)/i.test(String(code || ""));
 }
 
+function userExplicitlyRequestsVba(text) {
+  const t = String(text || "");
+  return /(?:^|[^\w])vba(?:[^\w]|$)|vba\s*(?:로|모드|버전|코드|작성|짜|해|써)|매크로|Sub\s+B2BSkill\s*\(/i.test(t);
+}
+
+function exactSheetNamesFromMentions(text) {
+  const source = String(text || "");
+  const names = new Set();
+  const mentionRe = /@(?:범위|컬럼|시트)\[([^\]]+)\]/g;
+  let m;
+  while ((m = mentionRe.exec(source)) !== null) {
+    const body = String(m[1] || "").trim();
+    if (!body) continue;
+    let sheet = "";
+    const bang = body.lastIndexOf("!");
+    if (bang >= 0) {
+      const left = body.slice(0, bang);
+      sheet = left.slice(left.lastIndexOf("/") + 1);
+    } else {
+      const fileSep = body.search(/\.(?:xlsx|xlsm|xlsb|xls|csv)\//i);
+      if (fileSep >= 0) {
+        const afterFile = body.slice(fileSep).replace(/^\.(?:xlsx|xlsm|xlsb|xls|csv)\//i, "");
+        sheet = afterFile.split("/")[0] || "";
+      }
+    }
+    sheet = sheet.replace(/^'|'$/g, "").trim();
+    if (sheet) names.add(sheet);
+  }
+  return [...names];
+}
+
+function exactReferenceFailures(code, sourceUserMessage) {
+  const failures = [];
+  const source = String(sourceUserMessage || "");
+  const text = String(code || "");
+  if (!/@(?:범위|컬럼|시트)\[/.test(source)) return failures;
+  for (const sheetName of exactSheetNamesFromMentions(source)) {
+    if (!text.includes(sheetName)) {
+      failures.push(`요청의 정확한 시트명 "${sheetName}" 이 코드에 그대로 들어 있지 않습니다. @범위/@컬럼의 시트명은 번역하거나 영문화하지 말고 한 글자도 바꾸지 마세요.`);
+    }
+  }
+  return failures;
+}
+
+function wholeColumnCountRowTwoFailures(code, sourceUserMessage) {
+  const source = String(sourceUserMessage || "");
+  const text = String(code || "");
+  const wholeColumnRange = /@범위\[[^\]]+![A-Z]{1,3}:[A-Z]{1,3}\]/i.test(source);
+  const countIntent = /(동일\s*값|같은\s*값|중복).{0,20}(개수|갯수|건수)|(?:개수|갯수|건수).{0,20}(적어|입력|채워|작성|구해)|COUNTIF/i.test(source);
+  const explicitHeaderRow2 = /(?:헤더|제목)\s*(?:가|는|은)?\s*2\s*행|2\s*행\s*(?:헤더|제목)|hdr_row\s*=\s*2|header_row\s*=\s*2/i.test(source);
+  if (!wholeColumnRange || !countIntent || explicitHeaderRow2) return [];
+  const skipsRow2 = (
+    /\b(?:hdr_row|header_row)\s*=\s*2\b/i.test(text)
+    && /(?:hdr_row|header_row)\s*\+\s*1|\{\s*(?:hdr_row|header_row)\s*\+\s*1\s*\}/i.test(text)
+  ) || /\b(?:For\s+\w+\s*=\s*3\s+To|for\s+\w+\s+in\s+range\s*\(\s*3\s*,)/i.test(text)
+    || /["'][A-Z]{1,3}3(?::|\{|\$|["'])/i.test(text);
+  if (!skipsRow2) return [];
+  return ["전체 열 범위에서 동일값 개수/중복 개수를 채우는 요청인데 코드가 2행을 헤더로 가정하고 3행부터 처리합니다. 요청에 '2행이 헤더'라고 명시되지 않았으면 1행을 헤더로 보고 2행부터 포함하거나, 실제 2행이 헤더인지 검사한 뒤 시작 행을 정하세요."];
+}
+
 function userRequestsSort(text) {
   return /(정렬|내림\s*차순|오름\s*차순|소트|sort|order\s*by)/i.test(String(text || ""));
 }
@@ -237,7 +297,9 @@ function userRequestsSort(text) {
 function shouldRouteRequestToVba(text) {
   const t = String(text || "");
   if (!t.trim()) return false;
-  const explicitVba = /\bVBA\b|VBA\s*로|매크로/i.test(t);
+  const explicitVba = userExplicitlyRequestsVba(t);
+  const rangeRefs = t.match(/@범위\[/g) || [];
+  const explicitColumns = /![A-Z]{1,3}:[A-Z]{1,3}\]/i.test(t);
   const pivotLike = /(피벗|pivot|유사\s*피벗|그룹\s*별|그룹별|집계표|요약표|크로스탭)/i.test(t)
     || (/(?:별|별로)\s*(?:합계|집계|요약|평균|개수|건수)/i.test(t) && /(합계|집계|요약|평균|개수|건수)/i.test(t));
   // "피벗"이라는 단어가 없어도 "D열을 행으로, H열을 열로, R열 합계" 같은 요청은
@@ -260,8 +322,14 @@ function shouldRouteRequestToVba(text) {
   const wholeSheetCrossCopy = /(시트\s*전체|전체\s*시트|sheet\s*전체|worksheet|탭\s*전체)/i.test(t)
     && /(복사|붙여\s*넣|붙여넣|copy|paste)/i.test(t)
     && /(파일|workbook|다른\s*파일|출력|입력|@파일)/i.test(t);
+  const multiValueLookupAggregate = (
+    /(하나의\s*셀에\s*여러|한\s*셀에\s*여러|셀\s*안(?:의|에)?\s*데이터|셀안의?\s*데이터|여러\s*개\s*(?:들어|데이터|값)|여러개\s*(?:들어|데이터|값)|병합(?:된|한)?\s*경우\s*합산|분리.*합산|줄\s*바꿈|줄바꿈|split)/i.test(t)
+    && /(일치|매칭|같은|동일|찾아서|찾아|기준)/i.test(t)
+    && /(합계값|합계|합산|더해|sum|작성|입력|기입|채워|넣어|반영|가져)/i.test(t)
+    && (rangeRefs.length >= 3 || explicitColumns)
+  );
   if (explicitVba) return true;
-  if (pivotLike || pivotShape || keyedRowOverwrite || wholeSheetCrossCopy) return true;
+  if (pivotLike || pivotShape || keyedRowOverwrite || wholeSheetCrossCopy || multiValueLookupAggregate) return true;
   if (conditionMarkers.length >= 2 && (rowwiseWrite || colRefs.length >= 2)) return true;
   return conditionMarkers.length >= 1 && rowwiseWrite && colRefs.length >= 2;
 }
@@ -269,7 +337,7 @@ function shouldRouteRequestToVba(text) {
 function shouldRouteRequestToPython(text) {
   const t = String(text || "");
   if (!t.trim()) return false;
-  if (/\bVBA\b|VBA\s*로|매크로/i.test(t)) return false;
+  if (userExplicitlyRequestsVba(t)) return false;
   const multiValueCell = /(하나의\s*셀에\s*여러|한\s*셀에\s*여러|셀\s*안(?:의|에)?\s*데이터|셀안의?\s*데이터|아래로\s*여러|여러\s*개\s*(?:들어|데이터|값)|여러개\s*(?:들어|데이터|값)|셀들을?\s*(?:분리|나눠|쪼개)|구분자|줄\s*바꿈|줄바꿈|TEXTSPLIT|CHAR\s*\(\s*10\s*\)|split)/i.test(t);
   const lookupMatch = /(일치|매칭|같은|동일|찾아서|찾아|기준)/i.test(t);
   const aggregateWrite = /(합계값|합계|합산|더해|sum|작성|입력|기입|채워|넣어|반영)/i.test(t);
@@ -330,8 +398,62 @@ function multiValueLookupIntent(sourceUserMessage) {
   );
 }
 
+function numericArithmeticIntent(text) {
+  return /(합계|합산|더해|더해서|더하|차감|빼|계산|정산|금액|요금|매출|원가|수납|청구|총액|잔액|손익|sum|total|amount|fee|charge|balance|net|profit|cost|revenue)/i.test(String(text || ""));
+}
+
+function userRequestsAbsoluteValue(text) {
+  return /(절대값|절댓값|양수로|모두\s*양수|음수\s*(?:제거|없애|양수)|부호\s*(?:제거|무시)|absolute\s*value|abs\s*\()/i.test(String(text || ""));
+}
+
+function negativeSignLossFailures(code, sourceUserMessage, languageLabel) {
+  const scan = String(code || "");
+  const source = String(sourceUserMessage || "");
+  if (userRequestsAbsoluteValue(source)) return [];
+  if (!numericArithmeticIntent(source + "\n" + scan)) return [];
+  const failures = [];
+  const prefix = languageLabel || "코드";
+  const add = (msg) => {
+    if (!failures.includes(msg)) failures.push(msg);
+  };
+  const absScan = scan
+    .replace(/-\s*(?:abs|Abs)\s*\(/g, "NEGATIVE_ABS_OK(")
+    .replace(/-\s*(?:WorksheetFunction|Application\s*\.\s*WorksheetFunction)\s*\.\s*Abs\s*\(/gi, "NEGATIVE_ABS_OK(");
+  if (/\b(?:Math\s*\.\s*)?abs\s*\(/i.test(absScan)
+      || /\b(?:WorksheetFunction|Application\s*\.\s*WorksheetFunction)\s*\.\s*Abs\s*\(/i.test(absScan)) {
+    add(`${prefix}가 금액/요금/합계 계산에서 abs/Abs 로 음수를 양수로 바꿉니다. 사용자가 절대값/양수화를 명시하지 않았으면 음수 부호를 보존하세요.`);
+  }
+  if (/\.\s*replace\s*\(\s*["'][-−–]["']\s*,\s*["']{2}\s*\)/i.test(scan)
+      || /\bReplace\s*\([^,\n\r]+,\s*["'][-−–]["']\s*,\s*["']{2}\s*\)/i.test(scan)) {
+    add(`${prefix}가 숫자 문자열에서 '-' 부호를 제거합니다. 쉼표/공백만 제거하고 마이너스 부호는 보존한 뒤 합산하세요.`);
+  }
+  if (/\.\s*(?:strip|lstrip|rstrip)\s*\(\s*["'][-−–]["']\s*\)/i.test(scan)) {
+    add(`${prefix}가 strip/lstrip/rstrip 으로 '-' 부호를 제거합니다. 금액 계산에서는 부호 제거가 아니라 부호 보존 파싱을 해야 합니다.`);
+  }
+  const reSubMatches = scan.match(/re\s*\.\s*sub\s*\(\s*r?["'][^"']*\[\^[^\]]*0-9[^\]]*\][^"']*["']\s*,\s*["']{2}/gi) || [];
+  for (const pat of reSubMatches) {
+    const cls = (/\[\^([^\]]+)\]/.exec(pat) || [])[1] || "";
+    if (!/[-−–]/.test(cls)) {
+      add(`${prefix}가 re.sub 숫자 정리에서 '-' 부호를 허용하지 않아 음수를 양수로 만들 수 있습니다. 정규식 숫자 정리 시 마이너스 부호를 보존하세요.`);
+      break;
+    }
+  }
+  const removesAccountingParens = /(?:\.replace|Replace)\s*\([^)]*["']\(["']\s*,\s*["']{2}/i.test(scan)
+    && /(?:\.replace|Replace)\s*\([^)]*["']\)["']\s*,\s*["']{2}/i.test(scan);
+  const hasAccountingNegativeHandling = /\b(?:neg|negative|isNegative|is_negative)\b|-\s*abs\s*\(|-\s*Abs\s*\(|\*\s*-1\b|\bIf\b[\s\S]{0,120}<\s*0/i.test(scan);
+  if (removesAccountingParens && !hasAccountingNegativeHandling) {
+    add(`${prefix}가 회계식 음수 괄호 '(1,234)'의 괄호만 제거해 양수로 만들 수 있습니다. 괄호 음수는 -1234 로 변환하세요.`);
+  }
+  return failures;
+}
+
+function isBenignRepeatedCodeLine(line) {
+  const t = String(line || "").trim();
+  return /^(?:End\s+(?:If|With|Select|Sub|Function|Property|Type)|Next(?:\s+\w+)?|Else|Loop|Wend|Cleanup:|Finally:|Try:|Except\b.*|pass|continue)$/i.test(t);
+}
+
 // [0.5.2 이식·하이브리드] degenerate 출력 감지 — 준-greedy 디코딩의 Qwen 이 같은 줄을 끝없이
-// 반복하는 경우(모든 python 코드 공통). 적용 전에 걸러 간결 재생성을 유도한다.
+// 반복하는 경우. VBA 의 End If/Next 같은 정상 구조 반복은 제외한다.
 function pythonDegenerateOutputFailure(code) {
   const lines = String(code || "").split("\n");
   const counts = {};
@@ -339,6 +461,7 @@ function pythonDegenerateOutputFailure(code) {
   for (const rawLine of lines) {
     const line = rawLine.trim();
     if (line.length < 6) continue; // 빈 줄·괄호 등 자연스러운 반복은 허용
+    if (isBenignRepeatedCodeLine(line)) continue;
     const n = (counts[line] || 0) + 1;
     counts[line] = n;
     if (n > maxRepeat) maxRepeat = n;
@@ -474,7 +597,8 @@ function vbaStaticSafetyFailures(code, sourceUserMessage) {
   if (/\bColumns\s*\.\s*Count\b[\s\S]{0,80}\.\s*End\s*\(\s*xlToRight\s*\)/i.test(text)) {
     failures.push("마지막 열 계산에서 Columns.Count 기준 End(xlToRight)는 XFD 끝열로 잡혀 오작동합니다. End(xlToLeft)를 쓰세요.");
   }
-  const formulaPreserveIntent = /수식\s*(?:셀)?\s*(?:제외|건너|유지|보존)|(?:제외|건너|유지|보존)\s*.*수식|HasFormula/i.test(String(sourceUserMessage || "") + "\n" + text);
+  failures.push(...negativeSignLossFailures(text, sourceUserMessage, "VBA 코드"));
+  const formulaPreserveIntent = /수식\s*(?:셀)?\s*(?:제외|건너|유지|보존)|(?:제외|건너|유지|보존)\s*.*수식/i.test(String(sourceUserMessage || ""));
   if (formulaPreserveIntent
       && /\bHasFormula\b/i.test(text)
       && /\b(?:rng|targetRng|dstRng|range|targetRange)\s*\.\s*(?:Value|Value2)\s*=\s*(?:outArr|arr|values|dataArr)\b/i.test(text)) {
@@ -524,6 +648,11 @@ function vbaStaticSafetyFailures(code, sourceUserMessage) {
     if (/\b(?:targetRng|outRng|dstRng|resultRng|rng)\s*\.\s*(?:Value|Value2)\s*=\s*(?:outArr|arr|values|resultArr)/i.test(text)
         || /\bRange\s*\([^'\n\r]*(?:Cells\s*\([^)]*,\s*(?:8|["']H["'])\s*\)|["']H)/i.test(text) && /\.\s*(?:Value|Value2)\s*=\s*(?:outArr|arr|values|resultArr)/i.test(text)) {
       failures.push("다중 가입번호 매칭 결과를 H열 전체 배열로 다시 쓰면 매칭 없는 행과 합계 수식이 0/값으로 오염됩니다. 매칭된 행의 H셀만 갱신하고 미매칭/수식 행은 그대로 두세요.");
+    }
+    if (/\bCells\s*\(\s*r\s*,\s*(?:targetColOut|8)\s*\)\s*\.\s*(?:Value|Value2)\s*=\s*totalAmount\b/i.test(text)
+        && !/\b(?:matchFound|matched|hasMatch)\b/i.test(text)
+        && !/\bIf\s+totalAmount\s*>\s*0\b/i.test(text)) {
+      failures.push("다중 가입번호 매칭에서 totalAmount=0 을 H열에 무조건 쓰면 미매칭 행이나 '부가세포함' 합계 행의 수식이 0으로 덮입니다. 매칭된 데이터 행에서만 쓰고, P열이 요약 라벨인 행은 제외하세요.");
     }
   }
   const keyedOverwriteIntent = (
@@ -613,6 +742,7 @@ function pythonComStaticSafetyFailures(code, sourceUserMessage) {
   for (const [re, msg] of blocked) {
     if (re.test(scanText)) failures.push(msg);
   }
+  failures.push(...negativeSignLossFailures(scanText, sourceUserMessage, "Python 코드"));
   // 루프 내부의 ctx 쓰기 반복(셀 단위 COM 폭주) 휴리스틱 — 서버 AST 게이트와 동일 규칙.
   // 수신자는 ctx 와 ctx.book(...) 별칭만 본다 — (?:\w+)\. 로 아무 변수나 매칭하면
   // 루프 안의 일반 리스트 .copy()/.sort()/.clear() 까지 오탐으로 차단된다.
@@ -644,8 +774,8 @@ function pythonComStaticSafetyFailures(code, sourceUserMessage) {
       failures.push("루프 안에서 ctx 쓰기 함수를 반복 호출하면 안 됩니다. 값을 2차원 리스트로 모은 뒤 ctx.write() 한 번으로 쓰세요.");
     }
   }
-  if (/overwrite_formulas\s*=\s*True/.test(scanText) && !userExplicitlyRequestsFormulaOverwrite(sourceUserMessage)) {
-    failures.push("사용자가 수식 제거를 명시하지 않았는데 overwrite_formulas=True 를 사용했습니다. 수식 셀은 건너뛰도록 다시 작성하세요.");
+  if (/\bnon_none\s*=\s*\[[\s\S]{0,300}\bfor\b[\s\S]{0,120}\bif\b[\s\S]{0,120}is\s+not\s+None[\s\S]{0,900}\bctx\s*\.\s*write\s*\([^)]*\bnon_none\b/i.test(scanText)) {
+    failures.push("None 행을 필터링한 결과(non_none)를 원래 시작 행에 다시 쓰면 중간 행이 위로 당겨져 다른 행/합계행을 오염시킵니다. 행 위치를 보존한 전체 2차원 배열로 쓰거나 VBA로 작성하세요.");
   }
   // degenerate 출력 감지: 준-greedy 디코딩의 Qwen 이 같은 줄을 끝없이 반복하거나
   // 단순 작업에 수백 줄을 토해내는 경우 — 적용 전에 걸러 간결 재생성을 유도한다.
@@ -655,6 +785,7 @@ function pythonComStaticSafetyFailures(code, sourceUserMessage) {
   for (const raw of lines) {
     const line = raw.trim();
     if (line.length < 6) continue; // 빈 줄·괄호 등 자연스러운 반복은 허용
+    if (typeof isBenignRepeatedCodeLine === "function" && isBenignRepeatedCodeLine(line)) continue;
     const n = (lineCounts[line] || 0) + 1;
     lineCounts[line] = n;
     if (n > maxRepeat) maxRepeat = n;
@@ -680,6 +811,31 @@ function pythonComStaticSafetyFailures(code, sourceUserMessage) {
     }
   }
   return failures;
+}
+
+function pythonComMustUseVbaReason(code, sourceUserMessage) {
+  const source = String(sourceUserMessage || "");
+  const text = String(code || "");
+  if (typeof multiValueLookupIntent === "function" && multiValueLookupIntent(source)) {
+    return "한 셀 여러 값 분리 + 다른 파일 키 매칭 + 합산 후 열 쓰기 작업은 Python COM으로 실행하면 앱이 멈추거나 행 위치가 밀릴 수 있습니다. 이 작업은 VBA로 실행해야 합니다.";
+  }
+  const codeLooksLikeMultiValueLookup = (
+    /\bctx\s*\.\s*book\s*\(/i.test(text)
+    && /(?:BP|BQ|P:P|H:H|account|가입|key|token|tokens|split|re\.split)/i.test(text)
+    && /\b(?:split|re\s*\.\s*split)\s*\(/i.test(text)
+    && /\b(?:sum|total|합계|amount|fee)\b/i.test(text)
+    && /\bctx\s*\.\s*(?:write|write_cell)\s*\(/i.test(text)
+  );
+  if (codeLooksLikeMultiValueLookup) {
+    return "생성된 Python COM 코드가 다중 토큰 매칭/합산/쓰기 패턴입니다. 이 패턴은 현장 멈춤 재현 케이스라 실행하지 않고 VBA로 전환해야 합니다.";
+  }
+  const timeToSecondsIntent = /(시간|time).{0,30}(초|second)|초.{0,30}(환산|변환|계산)/i.test(source);
+  const multiConditionIntent = ((source.match(/(일\s*때|이면|일\s*경우|인\s*경우|조건|where|when|if|그리고|동시에|and)/gi) || []).length >= 1)
+    && /(?:[A-Z]{1,3}\s*열|@범위\[|@컬럼\[|동일\s*행|같은\s*행)/i.test(source);
+  if (timeToSecondsIntent && multiConditionIntent) {
+    return "조건이 걸린 행 단위 시간 환산은 Python COM 셀 루프가 생성되기 쉬운 현장 멈춤 재현 케이스입니다. VBA로 실행해야 합니다.";
+  }
+  return "";
 }
 
 function buildPythonStaticSafetyRegenPrompt(code, failures, sourceUserMessage) {
@@ -867,7 +1023,54 @@ function validateAssistantCodeBeforeApply(code, context) {
   const codeText = String(code || "");
   const isPythonSkill = /def\s+transform\s*\(\s*ctx\s*\)\s*:/.test(codeText) ||
     (/\bctx\.\w+\s*\(/.test(codeText) && !/\bSub\s+\w+\s*\(/i.test(codeText));
+  if (isPythonSkill && userExplicitlyRequestsVba(sourceUserMessage)) {
+    const reason = "사용자가 이번 요청에서 VBA/매크로로 작성하라고 명시했는데 Python COM 코드가 생성되었습니다. Python 으로 적용하지 않고 VBA 매크로로 다시 생성합니다.";
+    if (!context.vbaFallbackTried) {
+      autoRegenerateAsVbaFallback(code, [reason], context);
+    } else {
+      showCodeGuardBlock(reason, context);
+    }
+    return false;
+  }
+  const commonFailures = [
+    ...exactReferenceFailures(code, sourceUserMessage),
+    ...wholeColumnCountRowTwoFailures(code, sourceUserMessage),
+  ];
+  if (commonFailures.length) {
+    const attemptsSoFar = Number(context.staticRegenAttempt || 0);
+    if (isPythonSkill) {
+      if (attemptsSoFar < PYTHON_STATIC_MAX_REGEN) {
+        autoRegenerateForStaticSafety(code, commonFailures, { ...context, skillLanguage: "python" });
+      } else if (!context.vbaFallbackTried) {
+        autoRegenerateAsVbaFallback(code, commonFailures, context);
+      } else {
+        showCodeGuardBlock(
+          "여러 번 다시 생성했지만 정확 참조/행 범위 문제가 남아 적용을 막았습니다:\n- " +
+            commonFailures.join("\n- "),
+          context,
+        );
+      }
+    } else if (attemptsSoFar < VBA_STATIC_MAX_REGEN && !context.vbaFallbackTried) {
+      autoRegenerateForStaticSafety(code, commonFailures, context);
+    } else {
+      showCodeGuardBlock(
+        "여러 번 다시 생성했지만 정확 참조/행 범위 문제가 남아 적용을 막았습니다:\n- " +
+          commonFailures.join("\n- "),
+        context,
+      );
+    }
+    return false;
+  }
   if (isPythonSkill) {
+    const mustUseVba = pythonComMustUseVbaReason(code, sourceUserMessage);
+    if (mustUseVba) {
+      if (!context.vbaFallbackTried) {
+        autoRegenerateAsVbaFallback(code, [mustUseVba], context);
+      } else {
+        showCodeGuardBlock(mustUseVba, context);
+      }
+      return false;
+    }
     const pyFailures = pythonComStaticSafetyFailures(code, sourceUserMessage);
     if (pyFailures.length) {
       const attemptsSoFar = Number(context.staticRegenAttempt || 0);
@@ -910,13 +1113,8 @@ function validateAssistantCodeBeforeApply(code, context) {
     }
     return false;
   }
-  if (codeMentionsFormulaOverwrite(code) && !userExplicitlyRequestsFormulaOverwrite(sourceUserMessage)) {
-    const message = "사용자가 수식 제거를 명시하지 않았는데 생성 코드에 수식 제거/값 덮어쓰기 의도가 포함되어 적용을 막았습니다. 수식을 보존하는 코드로 다시 생성해 주세요.";
-    showCodeGuardBlock(message, context);
-    return false;
-  }
-  if (codeHasBroadValueRewrite(code) && !userExplicitlyRequestsFormulaOverwrite(sourceUserMessage)) {
-    const message = "표 전체/UsedRange를 Value 배열로 다시 쓰는 VBA가 감지되어 적용을 막았습니다. 이 방식은 기존 수식을 값으로 바꿀 수 있으니 대상 열/셀만 쓰는 코드로 다시 생성해 주세요.";
+  if (codeHasBroadValueRewrite(code) && !/표\s*전체|시트\s*전체|UsedRange|전체\s*범위/i.test(sourceUserMessage)) {
+    const message = "표 전체/UsedRange를 Value 배열로 다시 쓰는 VBA가 감지되어 적용을 막았습니다. 요청받은 대상 열/셀 범위만 한정해서 쓰는 코드로 다시 생성해 주세요.";
     showCodeGuardBlock(message, context);
     return false;
   }
@@ -1647,8 +1845,8 @@ async function requestErrorRecovery(stepIdx, errorInfo, userNote) {
       ? "대화 히스토리의 사용자 의도, 현재 파일 스키마, 수정 대상 코드, 아래 오류를 함께 분석해서 이 Step을 교체할 수정 코드를 다시 작성하세요."
       : "이 Step은 아직 파이프라인에 적용되지 못했습니다. 대화 히스토리의 사용자 의도, 현재 파일 스키마, 실패한 코드, 아래 오류를 함께 분석해서 적용 가능한 새 스킬 코드를 다시 작성하세요.",
     recoveryCodeRule,
-    "오류 복구는 실패 원인만 고치는 작업입니다. 사용자의 최신 요청에 없는 수식 제거, 값 덮어쓰기, 대상 파일/시트 변경을 새로 추가하지 마세요.",
-    "\"채워\", \"입력\", \"업데이트\", \"반영\"은 수식 제거 지시가 아닙니다. 수식 셀을 값으로 바꾸는 코드는 사용자가 명시적으로 수식 제거/값 대체를 요청했을 때만 작성하세요.",
+    "오류 복구는 실패 원인만 고치는 작업입니다. 사용자의 최신 요청에 없는 대상 파일/시트 변경이나 무관한 전체 범위 재작성은 새로 추가하지 마세요.",
+    "\"채워\", \"입력\", \"업데이트\", \"반영\"은 요청받은 대상 범위에 값을 쓰라는 뜻입니다. 그 대상 셀에 기존 수식이 있더라도 값으로 대체할 수 있습니다. 단, 표 끝의 합계/소계/부가세포함 같은 요약 행은 데이터 행이 아니므로 범위에서 제외하세요.",
     ...compatibilityPrompt,
     recoveryCodeRule,
     "",
@@ -1854,6 +2052,7 @@ async function sendChat() {
   const aiName = settings.provider === "openai-compat" ? "ixi 모델" : "LLM";
   const routeToVba = shouldRouteRequestToVba(msg);
   const routeToPython = !routeToVba && shouldRouteRequestToPython(msg);
+  const explicitVbaRequest = userExplicitlyRequestsVba(msg);
   const modeLabel = editTargetId ? "(수정 모드) " : (routeToVba ? "(VBA 라우팅) " : (routeToPython ? "(Python 라우팅) " : ""));
   const thinkMode = typeof isThinkModeEnabled === "function" && isThinkModeEnabled();
   const abortController = new AbortController();
@@ -1876,7 +2075,9 @@ async function sendChat() {
       thinkMode,
       forceEngine: routeToVba ? "vba" : (routeToPython ? "python" : undefined),
       routingHint: routeToVba
-        ? "복합 조건/피벗성 집계/시트 전체 교차파일 복사 요청은 저사양 PC에서 Python COM 경로가 멈출 수 있으므로 이번 응답은 VBA로 작성합니다."
+        ? (explicitVbaRequest
+          ? "사용자가 이번 요청에서 VBA/매크로를 명시했습니다. 반드시 하나의 ```vba 코드 블록(Sub B2BSkill())만 작성하고 Python def transform(ctx)는 절대 출력하지 마세요. @범위/@컬럼의 파일명·시트명은 번역 없이 정확히 복사하세요."
+          : "복합 조건/피벗성 집계/시트 전체 교차파일 복사/한 셀 여러 값 매칭 합산 요청은 저사양 PC에서 Python COM 경로가 멈추거나 행 위치가 밀릴 수 있으므로 이번 응답은 VBA로 작성합니다. 전체 열은 실제 데이터 범위로 한정하고, 합계/소계/부가세포함 같은 요약 행은 데이터 행에서 제외하세요.")
         : (routeToPython
           ? "한 셀에 여러 값이 들어 있는 열을 분해해 다른 파일 열과 매칭하고 값 합계를 대상 열에 쓰는 요청입니다. VBA 매크로가 아니라 Python COM으로 작성하세요. 가입번호/코드류는 부분일치가 아니라 분리된 토큰과 조회 열 값을 정확 일치 비교하세요. 전체 열을 그대로 읽지 말고 실제 마지막 행까지 범위를 한정하세요. 매칭된 행만 대상 열에 쓰고, 매칭 없는 행/합계 수식/텍스트 행은 그대로 보존하세요."
           : ""),

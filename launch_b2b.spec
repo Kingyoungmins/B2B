@@ -27,6 +27,7 @@ a = Analysis(
     binaries=[(NODE_EXE, '.')] if NODE_EXE else [],
     datas=[
         ('index.html', '.'),
+        ('USER_GUIDE.html', '.'),
         ('serve_b2b.py', '.'),
         *collect('styles'),
         *collect('scripts'),

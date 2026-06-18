@@ -9,7 +9,7 @@ function setPage(page) {
   document.querySelectorAll(".right-page").forEach(el => {
     el.classList.toggle("active", el.id === `right-${page}`);
   });
-  document.querySelectorAll(".menu-item").forEach(el => {
+  document.querySelectorAll(".menu-item[data-page]").forEach(el => {
     el.classList.toggle("active", el.dataset.page === page);
   });
   $("page-title").textContent = page === "runner" ? "스킬 실행기" : "B2B 빌링 Agent";
@@ -32,9 +32,17 @@ function closeMenu() {
 $("btn-menu").onclick = openMenu;
 $("menu-close").onclick = closeMenu;
 $("menu-scrim").onclick = closeMenu;
-document.querySelectorAll(".menu-item").forEach(item => {
+document.querySelectorAll(".menu-item[data-page]").forEach(item => {
   item.onclick = () => setPage(item.dataset.page);
 });
+
+const guideButton = $("btn-open-guide");
+if (guideButton) {
+  guideButton.onclick = () => {
+    closeMenu();
+    window.open("USER_GUIDE.html", "_blank", "noopener");
+  };
+}
 
 document.addEventListener("click", e => {
   const head = e.target.closest(".panel-head");

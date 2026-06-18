@@ -67,6 +67,8 @@ EXCEL_LOCK = threading.RLock()
 EXCEL_QUEUE = None
 EXCEL_THREAD = None
 LIVE_EXCEL_APP = None  # 라이브 편집 세션들이 공유하는 앱 전용 Excel.Application
+LAST_COPY_SOURCE = {}  # 복사(Ctrl+C) 중 스냅샷한 클립보드 소스 {"source":{book,sheet,range}, "ts":monotonic}
+                       # — 붙여넣기/탭전환으로 클립보드 Link 가 사라진 뒤 복붙 캡처가 소스를 복구하는 폴백.
 # 단일 Excel 인스턴스(SDI)에서 워크북마다 생기는 최상위 프레임을 "세션별 hwnd"로 직접 제어하는 모드.
 # app.Hwnd(=그 순간 활성 프레임 1개) 기반의 기존 동작으로 되돌리려면 B2B_WINMODE=legacy 로 실행.
 LIVE_FRAME_MODE = (os.environ.get("B2B_WINMODE") or "frame").strip().lower() != "legacy"
@@ -75,6 +77,8 @@ PYTHON_SKILL_APP_PID = None  # 위 인스턴스의 pid — 강제 정리(force-r
 # [0.5.2 이식] 이 앱이 DispatchEx 로 띄운 모든 EXCEL.EXE pid. 세션 기록 전에 열기가 실패하면
 # 고아 Excel 이 남는데, 강제 정리(초기화/force-restart)가 세션 pid 만 죽이면 영영 안 닫힘 → 전부 추적.
 SPAWNED_EXCEL_PIDS = set()
+EXCEL_LAST_REAP_AT = 0.0
+EXCEL_REAP_INTERVAL_SECONDS = float(os.environ.get("B2B_EXCEL_REAP_INTERVAL", "300"))
 # [0.5.2 이식] 강제 정리 시 끊어낼 COM 프록시 보관소 — 행 상태 STA 워커로의 Release 마샬링 교착 방지.
 _COM_REF_GRAVEYARD = []
 PIPELINE_JOBS_LOCK = threading.Lock()
@@ -92,7 +96,7 @@ MAX_PIPELINE_JOBS = 40
 # 이 크기를 넘으면 중간 단계 스냅샷을 건너뛰고 "마지막 단계"만 저장한다(동일 파이프라인 재적용은 여전히 즉시).
 SNAPSHOT_INTERMEDIATE_MAX_BYTES = 8 * 1024 * 1024
 PIPELINE_JOB_TTL_SECONDS = 60 * 60
-APP_BUILD_STAMP = "b2b-overlay-shell-20260605-047-02"
+APP_BUILD_STAMP = "b2b-0.5.9-20260618-runtime-guard"
 EXCEL_MIRROR_PROTECT_PASSWORD = "b2b_mirror_readonly"
 
 
@@ -484,6 +488,7 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
                 "appDir": str(app_dir),
                 "openpyxl": bool(openpyxl),
                 "excelCom": bool(excel_available()),
+                "excel": _excel_runtime_diagnostics(reap=True) if excel_available() else None,
                 "node": bool(node_executable()),
                 "nodePath": node_executable(),
                 "files": {
@@ -581,6 +586,12 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
         if self.path == "/api/excel/run-vba-pipeline":
             self.handle_excel_run_vba_pipeline()
             return
+        if self.path == "/api/excel/capture-copypaste":
+            self.handle_excel_capture_copypaste()
+            return
+        if self.path == "/api/excel/capture-delete":
+            self.handle_excel_capture_delete()
+            return
         if self.path == "/api/excel/hover-info":
             self.handle_excel_hover_info()
             return
@@ -601,6 +612,12 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
         if self.path == "/api/excel/close-all":
             cleanup_excel_sessions()
             self.send_json({"ok": True})
+            return
+        if self.path == "/api/excel/diagnostics":
+            try:
+                self.send_json({"ok": True, "excel": _excel_runtime_diagnostics(reap=bool(self.read_json_body().get("reap")))})
+            except Exception as err:
+                self.send_json({"ok": False, "error": str(err)}, status=500)
             return
         if self.path == "/api/diff/current-view":
             self.handle_current_view_diff()
@@ -951,6 +968,28 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
             ))
         except Exception as err:
             self.send_json({"ok": False, "error": str(err)}, status=500)
+
+    def handle_excel_capture_copypaste(self):
+        """[복붙 캡처] 사용자가 라이브 Excel에서 방금 한 Ctrl+C/Ctrl+V 를 역추적해
+        ctx.paste_copied(...) Python 스텝으로 만들어 돌려준다(프론트가 파이프라인에 추가)."""
+        payload = self.read_json_body()
+        try:
+            result = run_capture_copypaste(payload.get("excelId"))
+            self.send_json(result)
+        except Exception as err:
+            # 캡처 실패(복사 없음/선택 영역 문제)는 사용자 안내용이므로 200 + ok:false 로 메시지를 그대로 전달.
+            _vba_trace("capture.copypaste.error", excelId=payload.get("excelId"), error=str(err))
+            self.send_json({"ok": False, "error": str(err)})
+
+    def handle_excel_capture_delete(self):
+        """[셀 삭제 캡처] 사용자가 선택 후 Delete 로 지운 범위를 역추적해
+        ctx.clear(...) Python 스텝으로 만들어 돌려준다(프론트가 파이프라인에 추가)."""
+        payload = self.read_json_body()
+        try:
+            result = run_capture_delete(payload.get("excelId"))
+            self.send_json(result)
+        except Exception as err:
+            self.send_json({"ok": False, "error": str(err)})
 
     def handle_excel_run_vba(self):
         payload = self.read_json_body()
@@ -2454,6 +2493,87 @@ def _is_pid_alive(pid):
         return str(int(pid)) in (completed.stdout or "")
     except Exception:
         return False
+
+
+def _excel_runtime_diagnostics(reap=False):
+    """Return lightweight Excel process diagnostics and optionally reap app-owned orphan PIDs.
+
+    Only PIDs recorded in SPAWNED_EXCEL_PIDS are candidates. User-launched Excel
+    processes are never touched.
+    """
+    global EXCEL_LAST_REAP_AT
+    lock_unavailable = False
+    acquired = False
+    try:
+        acquired = EXCEL_LOCK.acquire(timeout=0.5)
+    except Exception:
+        acquired = False
+    if not acquired:
+        lock_unavailable = True
+    try:
+        session_pids = {
+            int(session.get("pid"))
+            for session in list(EXCEL_SESSIONS.values())
+            if session.get("pid")
+        }
+        tracked_pids = {int(p) for p in SPAWNED_EXCEL_PIDS if p}
+        python_pid = int(PYTHON_SKILL_APP_PID) if PYTHON_SKILL_APP_PID else None
+    finally:
+        if acquired:
+            try:
+                EXCEL_LOCK.release()
+            except Exception:
+                pass
+    protected = set(session_pids)
+    if python_pid:
+        protected.add(python_pid)
+
+    now = time.time()
+    should_reap = bool(reap) and (now - float(EXCEL_LAST_REAP_AT or 0)) >= EXCEL_REAP_INTERVAL_SECONDS
+    rows = []
+    reaped = []
+    stale = []
+    for pid in sorted(tracked_pids):
+        alive = _is_pid_alive(pid)
+        protected_pid = pid in protected
+        if should_reap and alive and not protected_pid:
+            _force_kill_pid(pid)
+            reaped.append(pid)
+            alive = _is_pid_alive(pid)
+        if not alive:
+            stale.append(pid)
+        rows.append({
+            "pid": pid,
+            "alive": bool(alive),
+            "protected": bool(protected_pid),
+            "kind": "python-skill" if pid == python_pid else ("session" if pid in session_pids else "orphan"),
+        })
+    if should_reap:
+        EXCEL_LAST_REAP_AT = now
+    if stale or reaped:
+        acquired = False
+        try:
+            acquired = EXCEL_LOCK.acquire(timeout=0.5)
+            if acquired:
+                for pid in set(stale + reaped):
+                    SPAWNED_EXCEL_PIDS.discard(pid)
+        except Exception:
+            pass
+        finally:
+            if acquired:
+                try:
+                    EXCEL_LOCK.release()
+                except Exception:
+                    pass
+    return {
+        "sessions": len(session_pids),
+        "sessionPids": sorted(session_pids),
+        "trackedPids": rows,
+        "reapedPids": reaped,
+        "pythonSkillPid": python_pid,
+        "lastReapAt": EXCEL_LAST_REAP_AT,
+        "lockUnavailable": lock_unavailable,
+    }
 
 
 def _b2b_runner_trusted_dir():
@@ -5900,6 +6020,348 @@ def run_vba_pipeline_on_session(excel_id, steps, reset=True, entry=None, view_sh
     return excel_call(_run_vba_pipeline_on_session_impl, excel_id, steps, reset=reset, entry=entry, view_sheet=view_sheet, timeout=600)
 
 
+# ===== 복붙 캡처(녹화): 사용자의 Ctrl+C/Ctrl+V 를 역추적해 스킬 스텝으로 저장 =====
+
+def _r1c1_to_a1(r1c1):
+    """Excel 'Link' 포맷의 R1C1 범위 표기를 A1 로 변환. Link 포맷은 항상 R1C1 이다.
+    지원하는 모든 선택 형태(실측):
+      'R1C1:R6C5' → 'A1:E6'   (일반 사각 범위)
+      'R2C2'      → 'B2'       (단일 셀)
+      'C1:C5'     → 'A:E'      (전체 열 다중)   ← 전체 열 선택 시 R/행 표기가 없음
+      'C3'        → 'C:C'      (전체 열 단일)
+      'R1:R6'     → '1:6'      (전체 행 다중)   ← 전체 행 선택 시 C/열 표기가 없음
+      'R3'        → '3:3'      (전체 행 단일)
+    이전 구현은 매치 실패 토큰을 그대로 반환 → 'C1:C5'(전체열)을 A1 셀범위 C1:C5 로,
+    'R1:R6'(전체행)을 무효 주소로 오해해 캡처가 깨졌다."""
+    s = str(r1c1).strip()
+
+    def _conv(tok):
+        tok = tok.strip()
+        m = re.match(r"^R(\d+)C(\d+)$", tok)   # 일반 셀 (R 행 + C 열)
+        if m:
+            return _col_letter(int(m.group(2))) + m.group(1), "cell"
+        m = re.match(r"^C(\d+)$", tok)          # 전체 열 (열 번호만)
+        if m:
+            return _col_letter(int(m.group(1))), "col"
+        m = re.match(r"^R(\d+)$", tok)          # 전체 행 (행 번호만)
+        if m:
+            return m.group(1), "row"
+        return tok, "raw"
+
+    def _area(a):
+        a = a.strip()
+        if ":" in a:
+            x, y = a.split(":", 1)
+            cx, _ = _conv(x)
+            cy, _ = _conv(y)
+            return cx + ":" + cy
+        val, kind = _conv(a)
+        if kind in ("col", "row"):
+            # 단일 전체 열/행은 A1 에서 'C:C' / '3:3' 처럼 시작:끝 동일 표기로 만든다.
+            return val + ":" + val
+        return val
+
+    # 비연속 다중 영역(Ctrl-클릭) Link 는 'C1:C3,C5:C5' / 'R1C1:R6C5,C8:C10' 처럼 콤마로 묶인다.
+    # 각 영역을 개별 변환해 합쳐야 'A:C,E:E' 같은 정상 A1 다중영역이 된다(콤마 무시 시 손상됨).
+    return ",".join(_area(a) for a in s.split(","))
+
+
+def _read_excel_clipboard_source():
+    """Windows 클립보드의 Excel 'Link' 포맷에서 복사 소스(워크북/시트/범위)를 역추적한다.
+    형식: b'Excel\\x00[BookName]SheetName\\x00R1C1:R2C2\\x00\\x00'. Ctrl+C 직후~붙여넣기 후까지 유지됨.
+    반환: {"book","sheet","range"} 또는 None."""
+    try:
+        import win32clipboard
+    except Exception:
+        return None
+    data = None
+    opened = False
+    for _ in range(8):  # 다른 프로세스가 잠깐 점유할 수 있어 재시도
+        try:
+            win32clipboard.OpenClipboard()
+            opened = True
+        except Exception:
+            time.sleep(0.05)
+            continue
+        try:
+            # 포맷을 열거하며 이름 == "Link"(Excel 소스참조) 를 찾는다.
+            f = 0
+            while True:
+                f = win32clipboard.EnumClipboardFormats(f)
+                if f == 0:
+                    break
+                try:
+                    nm = win32clipboard.GetClipboardFormatName(f)
+                except Exception:
+                    nm = ""
+                if nm == "Link":
+                    try:
+                        data = win32clipboard.GetClipboardData(f)
+                    except Exception:
+                        data = None
+                    break
+        except Exception:
+            data = None
+        finally:
+            try:
+                win32clipboard.CloseClipboard()
+            except Exception:
+                pass
+        break
+    if not opened or not data:
+        return None
+    if isinstance(data, bytes):
+        text = None
+        for enc in ("cp949", "mbcs", "utf-8", "latin-1"):
+            try:
+                text = data.decode(enc)
+                break
+            except Exception:
+                continue
+        if text is None:
+            return None
+    else:
+        text = str(data)
+    parts = text.split("\x00")
+    if len(parts) < 3:
+        return None
+    # parts[1] = '[Book]Sheet' (미저장) 또는 'C:\\경로\\[Book.xlsx]Sheet' (저장된 파일) → [Book]Sheet 를 어디서든 찾는다.
+    m = re.search(r"\[(.*?)\]([^\x00]*)$", parts[1])
+    if not m:
+        return None
+    book = m.group(1).strip()
+    sheet = m.group(2).strip()
+    rng = _r1c1_to_a1(parts[2].strip())
+    if not (book and sheet and rng):
+        return None
+    return {"book": book, "sheet": sheet, "range": rng}
+
+
+def _maybe_snapshot_copy_source(app):
+    """복사(Ctrl+C)로 CutCopyMode 가 켜져 있는 동안 클립보드 소스를 전역 스냅샷에 저장한다.
+    교차파일 복붙은 복사(A)→탭전환→붙여넣기(B) 과정에서 클립보드 Link 가 사라져 캡처 시점엔
+    소스를 못 읽는 경우가 있다(실측). 폴이 주기적으로 이걸 호출해 '복사 중'에 미리 잡아두면
+    캡처가 폴백으로 복구할 수 있다. 폴마다 호출되므로 CutCopyMode 가 꺼져 있으면 즉시 반환."""
+    try:
+        if not app.CutCopyMode:
+            return
+    except Exception:
+        return
+    try:
+        src = _read_excel_clipboard_source()
+    except Exception:
+        src = None
+    if src:
+        LAST_COPY_SOURCE["source"] = src
+        LAST_COPY_SOURCE["ts"] = time.monotonic()
+
+
+def _registered_path_for_name(name):
+    """워크북 이름 → 업로드/세션 레지스트리의 파일 경로(교차파일 재생 시 소스 자동 열기용).
+    활성 세션의 현재 경로(편집본 반영)를 우선하고, 없으면 업로드 레지스트리에서 찾는다."""
+    if not name:
+        return None
+    want = _workbook_name_lookup_key(str(name))
+    stem = str(Path(str(name)).stem)
+    for sess in list(EXCEL_SESSIONS.values()):
+        p = sess.get("path")
+        if not p:
+            continue
+        try:
+            if _workbook_name_lookup_key(Path(p).name) == want or str(Path(p).stem) == stem:
+                return p
+        except Exception:
+            continue
+    for rec in list(WORKBOOKS.values()):
+        p = rec.get("path")
+        nm = rec.get("name") or ""
+        if not p:
+            continue
+        try:
+            if (_workbook_name_lookup_key(nm) == want
+                    or _workbook_name_lookup_key(Path(p).name) == want
+                    or str(Path(nm or p).stem) == stem):
+                return p
+        except Exception:
+            continue
+    return None
+
+
+def _capture_copypaste_on_session_impl(excel_id):
+    """라이브 세션에서 '방금 한 복붙'을 캡처한다.
+    소스 = 클립보드 Link(Ctrl+C 한 범위), 대상 = 현재 Selection(Ctrl+V 로 붙여진 범위).
+    반환: 캡처 정보 + 그대로 스킬 스텝으로 쓸 ctx.paste_copied(...) Python 코드."""
+    with EXCEL_LOCK:
+        session = get_excel_session(excel_id)
+        app, wb = session_workbook(session)
+        try:
+            open_books = [str(w.Name) for w in app.Workbooks]
+        except Exception:
+            open_books = None
+        try:
+            session_book = str(wb.Name)
+        except Exception:
+            session_book = None
+        source = _read_excel_clipboard_source()
+        # 클립보드 Link 가 이미 사라졌으면(특히 교차파일: 복사→탭전환→붙여넣기 후) 복사 중 폴이
+        # 잡아둔 전역 스냅샷으로 복구한다.
+        snap_used = False
+        if not source:
+            snap = LAST_COPY_SOURCE.get("source")
+            ts = LAST_COPY_SOURCE.get("ts")
+            if snap and ts is not None and (time.monotonic() - ts) < 120:
+                source = snap
+                snap_used = True
+        # 진단 로그: 이 한 줄로 인스턴스 구성(open_books)·클립보드 소스·세션 책을 본다.
+        _vba_trace("capture.copypaste.start", excelId=excel_id, sessionBook=session_book,
+                   openBooks=open_books, clipboardSource=source, snapUsed=snap_used)
+        if not source:
+            _vba_trace("capture.copypaste.reject", excelId=excel_id, reason="no-clipboard-source")
+            raise RuntimeError(
+                "복사한 내용을 찾지 못했습니다. 우측 엑셀에서 복사할 범위를 드래그해 Ctrl+C 한 뒤, "
+                "붙여넣을 위치에 Ctrl+V 하고 곧바로 [복붙 저장]을 눌러 주세요(복사 후 다른 작업을 하면 사라집니다)."
+            )
+        # 대상 = 이 세션(excelId) 워크북에 사용자가 붙여넣은 위치.
+        # 전역 app.Selection 은 교차파일/오버레이에서 '소스' 워크북을 가리킬 수 있어(붙여넣은 B가 아니라
+        # 복사한 A의 선택이 잡힘) 신뢰하지 않는다 — 세션 워크북 자체 창의 RangeSelection 을 직접 읽는다.
+        try:
+            sel = None
+            dst_via = None
+            try:
+                sel = wb.Windows(1).RangeSelection
+                _ = sel.Worksheet  # 유효성 확인
+                dst_via = "session-window"
+            except Exception:
+                sel = app.Selection
+                dst_via = "global-selection"
+            dst_ws = sel.Worksheet
+            dst_sheet = str(dst_ws.Name)
+            dst_book = str(dst_ws.Parent.Name)
+            top = sel.Cells(1, 1)
+            dst_cell = str(top.Address).replace("$", "")  # '$D$1' → 'D1'
+            sel_rows = int(sel.Rows.Count)
+            sel_cols = int(sel.Columns.Count)
+        except Exception as e:
+            _vba_trace("capture.copypaste.reject", excelId=excel_id, reason="dest-read-failed", error=str(e))
+            raise RuntimeError("붙여넣은 위치(선택 영역)를 읽지 못했습니다: %s" % e)
+        # 진단: 전역 app.Selection 이 가리키는 책 — 세션 창 결과와 다르면 오버레이 포커스 이슈 단서.
+        try:
+            global_sel_book = str(app.Selection.Worksheet.Parent.Name)
+        except Exception:
+            global_sel_book = None
+        _vba_trace("capture.copypaste.dest", excelId=excel_id, via=dst_via,
+                   dstBook=dst_book, dstSheet=dst_sheet, dstCell=dst_cell,
+                   selRows=sel_rows, selCols=sel_cols, globalSelectionBook=global_sel_book)
+        # 비연속 다중 영역(Ctrl-클릭) 복사는 재생이 불안정/모호하므로 거부 — 클립보드 범위 문자열의
+        # 콤마로 판정한다(소스가 다른 인스턴스/미오픈이어도 인스턴스 무관하게 검사 가능).
+        if "," in str(source.get("range", "")):
+            _vba_trace("capture.copypaste.reject", excelId=excel_id, reason="multi-area",
+                       range=source.get("range"))
+            raise RuntimeError(
+                "여러 영역을 한꺼번에 복사한 건 캡처할 수 없어요. 한 영역(연속 범위/열 전체/행 전체)씩 "
+                "복사 → 붙여넣기 → [복붙 저장] 해 주세요."
+            )
+        # 소스 크기는 같은 인스턴스에 열려 있을 때만 검증(경고용). 다른 인스턴스/미오픈이면 검증을
+        # 생략하되 저장은 허용한다 — 재생 시 업로드 경로에서 자동으로 열어 복사하므로(교차파일).
+        src_rows = src_cols = None
+        src_found = False
+        try:
+            want = _workbook_name_lookup_key(source["book"])
+            src_ws = None
+            for owb in app.Workbooks:
+                if _workbook_name_lookup_key(str(owb.Name)) == want:
+                    src_ws = owb.Worksheets(source["sheet"])
+                    break
+            if src_ws is not None:
+                src_found = True
+                srng = src_ws.Range(source["range"])
+                src_rows = int(srng.Rows.Count)
+                src_cols = int(srng.Columns.Count)
+        except Exception:
+            src_rows = src_cols = None
+        same = _workbook_name_lookup_key(source["book"]) == _workbook_name_lookup_key(dst_book)
+        _vba_trace("capture.copypaste.source", excelId=excel_id, srcBook=source["book"],
+                   srcFoundInInstance=src_found, srcRows=src_rows, srcCols=src_cols,
+                   crossFile=(not same))
+        # 대상이 단일 셀이면 '붙여넣기 기준점'이므로 정상(ctx.paste_copied 가 소스 크기만큼 자동 확장).
+        # 다중 셀을 선택했는데 소스 크기와 다르면 오캡처 의심 → 경고(소스 크기 모르면 검증 생략).
+        if not src_rows:
+            dims_match = None
+        elif sel_rows == 1 and sel_cols == 1:
+            dims_match = True
+        else:
+            dims_match = (src_rows == sel_rows and src_cols == sel_cols)
+        step_code = (
+            "def transform(ctx):\n"
+            "    # [복붙 캡처] 사용자가 라이브 Excel에서 직접 복사/붙여넣기한 동작 재현(값+수식+서식 보존)\n"
+            "    ctx.paste_copied(%r, %r, %r, %r, src_book=%r, dst_book=%r)\n"
+            % (source["sheet"], source["range"], dst_sheet, dst_cell, source["book"], dst_book)
+        )
+        desc = "복붙: %s!%s → %s!%s%s" % (
+            source["sheet"], source["range"], dst_sheet, dst_cell,
+            "" if same else " (교차파일)",
+        )
+        _vba_trace("capture.copypaste.result", excelId=excel_id, ok=True, description=desc,
+                   dimsMatch=dims_match, crossFile=(not same))
+        return {
+            "ok": True,
+            "source": source,
+            "dest": {"book": dst_book, "sheet": dst_sheet, "cell": dst_cell,
+                     "rows": sel_rows, "cols": sel_cols},
+            "dimsMatch": dims_match,
+            "language": "python",
+            "code": step_code,
+            "description": desc,
+        }
+
+
+def run_capture_copypaste(excel_id):
+    return excel_call(_capture_copypaste_on_session_impl, excel_id, timeout=60)
+
+
+def _capture_delete_on_session_impl(excel_id):
+    """라이브 세션에서 '방금 Delete 로 지운 셀'을 캡처한다.
+    대상 = 현재 Selection(사용자가 선택해 Delete 한 범위). ctx.clear(sheet, range) 스킬 스텝을 만든다
+    (값/수식만 삭제, 서식 유지). LLM 추측 없이 캡처된 좌표로 재생하므로 모호성이 없다."""
+    with EXCEL_LOCK:
+        session = get_excel_session(excel_id)
+        app, wb = session_workbook(session)
+        try:
+            sel = app.Selection
+            ws = sel.Worksheet
+            sheet = str(ws.Name)
+            book = str(ws.Parent.Name)
+            addr = _excel_address(sel).replace("$", "")
+        except Exception as e:
+            raise RuntimeError("선택 영역을 읽지 못했습니다: %s" % e)
+        if not addr:
+            raise RuntimeError(
+                "지울 셀 범위를 먼저 선택해 주세요. 우측 엑셀에서 지울 범위를 드래그(또는 Delete)한 뒤 "
+                "곧바로 [셀 삭제 저장]을 눌러 주세요."
+            )
+        # 세션의 주 워크북과 다른 파일을 선택했으면 ctx.book(...) 으로 그 파일을 대상으로 한다(교차파일 안전).
+        same_book = _workbook_name_lookup_key(book) == _workbook_name_lookup_key(str(wb.Name))
+        call = "ctx.clear(%r, %r)" % (sheet, addr) if same_book \
+            else "ctx.book(%r).clear(%r, %r)" % (book, sheet, addr)
+        step_code = (
+            "def transform(ctx):\n"
+            "    # [셀 삭제 캡처] 사용자가 선택 후 Delete 로 지운 범위의 값/수식 삭제(서식 유지)\n"
+            "    %s\n" % call
+        )
+        desc = "셀 삭제: %s!%s%s" % (sheet, addr, "" if same_book else " (교차파일)")
+        return {
+            "ok": True,
+            "target": {"book": book, "sheet": sheet, "range": addr},
+            "language": "python",
+            "code": step_code,
+            "description": desc,
+        }
+
+
+def run_capture_delete(excel_id):
+    return excel_call(_capture_delete_on_session_impl, excel_id, timeout=60)
+
+
 # =====================================================================
 # Python COM 스킬 엔진 (ver0.5.2 4단계 — openpyxl 아님, 라이브 Excel COM bulk 제어)
 #
@@ -5915,7 +6377,7 @@ def run_vba_pipeline_on_session(excel_id, steps, reset=True, entry=None, view_sh
 
 PY_SKILL_ENTRY = "transform"
 PY_COM_BUDGET = int(os.environ.get("B2B_PY_COM_BUDGET", "400"))
-PY_SKILL_TIMEOUT_S = float(os.environ.get("B2B_PY_SKILL_TIMEOUT", "120"))
+PY_SKILL_TIMEOUT_S = float(os.environ.get("B2B_PY_SKILL_TIMEOUT", "75"))
 PY_READ_MAX_CELLS = int(os.environ.get("B2B_PY_READ_MAX_CELLS", "6000000"))
 
 _PY_SAFE_BUILTINS = {
@@ -6173,30 +6635,21 @@ class PythonComSkillContext:
         return [[isinstance(v, str) and v.startswith("=") for v in row] for row in f]
 
     # ---- 쓰기(벌크 전용) ----
-    def write(self, sheet, a1_start, values, overwrite_formulas=False):
+    def write(self, sheet, a1_start, values, overwrite_formulas=True):
         """2차원 리스트를 시작 셀 기준으로 한 번에 쓴다(COM 1회).
-        대상에 기존 수식이 있으면 기본적으로 차단된다(overwrite_formulas=True 는
-        사용자가 수식 제거/값 대체를 '명시'했을 때만)."""
+        0.5.9부터 요청받은 대상 범위는 기본적으로 값으로 덮어쓴다. 수식 보존은
+        생성 코드가 데이터 범위/요약 행을 정확히 제외하는 방식으로 처리한다."""
         ws = self._ws(sheet)
         data, rows, cols = self._as_2d(values)
         anchor = self._rng(ws, a1_start)
         rng = self._resize_rng(ws, anchor, rows, cols)
         self._tick(3)
-        if not overwrite_formulas:
-            has = rng.HasFormula
-            self._tick(1)
-            if has is not False:
-                raise PythonComSkillError(
-                    f"'{sheet}'!{a1_start} 에 수식이 있습니다. 사용자가 값/값만/덮어쓰기/채우기를 "
-                    "요청했다면 ctx.write(..., overwrite_formulas=True) 로 그 값으로 덮어쓰세요. "
-                    "수식을 보존해야 하는 경우에만 대상 범위를 수식이 없는 셀로 좁히세요."
-                )
         self._journal_save(ws, rng)
         rng.Value2 = data
         self._tick(1)
         return rows * cols
 
-    def write_cell(self, sheet, a1, value, overwrite_formulas=False):
+    def write_cell(self, sheet, a1, value, overwrite_formulas=True):
         """단일 셀 쓰기(소량 전용 — 루프에서 반복 호출하면 예산 초과로 차단됨)."""
         return self.write(sheet, a1, [[value]], overwrite_formulas=overwrite_formulas)
 
@@ -6232,6 +6685,85 @@ class PythonComSkillContext:
         except Exception:
             pass
         return True
+
+    def paste_copied(self, src_sheet, src_range, dst_sheet, dst_cell, src_book=None, dst_book=None):
+        """[복붙 캡처 재생] 사용자가 라이브 Excel에서 Ctrl+C/Ctrl+V 한 동작을 그대로 재현한다.
+        Excel 네이티브 Range.Copy(Destination=) 로 값+수식+서식+병합을 보존하며, 같은 인스턴스에 열린
+        다른 워크북 간 복사(교차파일)도 지원한다. src_book/dst_book 을 주면 그 워크북에서 시트를 찾는다.
+        LLM 추측이 아니라 캡처된 실제 좌표로 실행하므로 '값/수식 복붙' 모호성이 없다."""
+        # 소스 워크북이 같은 인스턴스에 안 열려 있으면(전체실행/재실행 때 흔함) 업로드 경로에서
+        # 읽기전용으로 열어 교차파일 복사를 성립시킨다(작업 후 닫아 누수 방지). dst 는 작업 대상이라
+        # 보통 열려 있다.
+        opened_src = None
+        if src_book:
+            try:
+                src_ctx = self.book(src_book)
+                _vba_trace("paste_copied.src", srcBook=src_book, resolved="in-instance")
+            except PythonComSkillError:
+                p = _registered_path_for_name(src_book)
+                if not (p and os.path.exists(p)):
+                    _vba_trace("paste_copied.src", srcBook=src_book, resolved="not-open-no-path", path=p)
+                    raise
+                opened_src = self._app.Workbooks.Open(p, ReadOnly=True, UpdateLinks=0)
+                self._tick(2)
+                src_ctx = PythonComSkillContext(self._app, opened_src, self._session, _shared=self._shared)
+                _vba_trace("paste_copied.src", srcBook=src_book, resolved="auto-opened-readonly", path=p)
+        else:
+            src_ctx = self
+        dst_ctx = self.book(dst_book) if dst_book else self
+        try:
+            src_ws = src_ctx._ws(src_sheet)
+            dst_ws = dst_ctx._ws(dst_sheet)
+            src = src_ctx._rng(src_ws, src_range)
+            dst = dst_ctx._rng(dst_ws, dst_cell)
+            self._tick(2)
+            src_rows = int(src.Rows.Count)
+            src_cols = int(src.Columns.Count)
+            sheet_rows = int(src_ws.Rows.Count)
+            sheet_cols = int(src_ws.Columns.Count)
+            # 전체 열/행 소스('A:E','1:6')는 Rows/Columns.Count 가 시트 전체(1048576/16384)라
+            # 대상 전체를 저널하면 수백만 빈 셀을 읽어 멈춘다 → 대상 열/행 ∩ UsedRange(실제 데이터)만
+            # 백업해 롤백 가능하게 한다. 전체 열/행 복사는 Excel 이 대상도 전체 열/행으로 자동 확장한다.
+            full_col = src_rows >= sheet_rows
+            full_row = src_cols >= sheet_cols
+            whole = full_col or full_row
+            if whole:
+                try:
+                    c0 = int(dst.Column)
+                    r0 = int(dst.Row)
+                    if full_col:
+                        band = dst_ws.Range(dst_ws.Cells(1, c0), dst_ws.Cells(1, c0 + src_cols - 1)).EntireColumn
+                    else:
+                        band = dst_ws.Range(dst_ws.Cells(r0, 1), dst_ws.Cells(r0 + src_rows - 1, 1)).EntireRow
+                    backup = self._app.Intersect(band, dst_ws.UsedRange)
+                    self._tick(2)
+                    if backup is not None:
+                        dst_ctx._journal_save(dst_ws, backup)
+                    else:
+                        # 대상에 기존 데이터 없음 → 잃을 것 없음. 그래도 신규 채움은 롤백 불가이므로 표시.
+                        self._shared["structural"].append(f"paste_copied(whole):{dst_sheet}!{dst_cell}")
+                except Exception:
+                    self._shared["structural"].append(f"paste_copied(whole):{dst_sheet}!{dst_cell}")
+            else:
+                try:
+                    dst_target = dst_ctx._resize_rng(dst_ws, dst, src_rows, src_cols)
+                    self._tick(2)
+                    dst_ctx._journal_save(dst_ws, dst_target)
+                except Exception:
+                    self._shared["structural"].append(f"paste_copied:{dst_sheet}!{dst_cell}")
+            src.Copy(dst)
+            self._tick(1)
+            try:
+                self._app.CutCopyMode = False
+            except Exception:
+                pass
+            return True
+        finally:
+            if opened_src is not None:
+                try:
+                    opened_src.Close(SaveChanges=False)
+                except Exception:
+                    pass
 
     def clear(self, sheet, a1_range):
         """범위 내용 삭제(서식 유지). 수식 포함 여부와 무관하게 저널에 백업 후 삭제."""
@@ -6815,6 +7347,19 @@ def _python_com_static_check(code):
     """실행 전 AST 정적 게이트. 위반은 사람이 읽을 수 있는 한국어 사유로 모아 한 번에 반환."""
     import ast as _ast
     failures = []
+    code_text = str(code or "")
+    # Field regression: Python COM can hang the UI on multi-file, multi-token
+    # lookup/aggregation jobs even when the generated code is syntactically
+    # "bulk-ish". This class should be generated/executed as VBA.
+    if (re.search(r"\bctx\s*\.\s*book\s*\(", code_text, re.I)
+            and re.search(r"\b(?:split|re\s*\.\s*split)\s*\(", code_text, re.I)
+            and re.search(r"(?:BP|BQ|P:P|H:H|token|tokens|account|key|가입)", code_text, re.I)
+            and re.search(r"\b(?:sum|total|amount|fee)\b", code_text, re.I)
+            and re.search(r"\bctx\s*\.\s*(?:write|write_cell)\s*\(", code_text, re.I)):
+        failures.append(
+            "다중 토큰 매칭/합산/쓰기 작업은 Python COM으로 실행하지 마세요. "
+            "현장 멈춤 재현 패턴이므로 VBA(Scripting.Dictionary + 배열 처리)로 작성해야 합니다."
+        )
     try:
         tree = _ast.parse(code)
     except SyntaxError as err:
@@ -7019,7 +7564,19 @@ def _run_python_on_session_impl(excel_id, code):
 
 
 def run_python_on_session(excel_id, code):
-    return excel_call(_run_python_on_session_impl, excel_id, code, timeout=180)
+    timeout = max(45, int(PY_SKILL_TIMEOUT_S) + 15)
+    try:
+        return excel_call(_run_python_on_session_impl, excel_id, code, timeout=timeout)
+    except TimeoutError as err:
+        try:
+            _force_restart_excel_sessions_direct()
+        except Exception:
+            pass
+        raise RuntimeError(
+            "Python COM 스킬 실행이 제한 시간을 넘겨 Excel 세션을 정리했습니다. "
+            "전체 열/셀 단위 반복이나 큰 조건 루프는 VBA 또는 벌크 read/write 로 다시 생성해야 합니다. "
+            + str(err)
+        )
 
 
 
@@ -7222,6 +7779,8 @@ def _poll_excel_session_changes_impl(excel_id):
     with EXCEL_LOCK:
         session = get_excel_session(excel_id)
         app, wb = session_workbook(session)
+        # 복사 중(CutCopyMode)이면 클립보드 소스를 스냅샷 — 붙여넣기/탭전환 후 캡처 폴백용.
+        _maybe_snapshot_copy_source(app)
         if session.get("liveEditable") and LIVE_FRAME_MODE:
             # active-sync: 사용자가 실제로 클릭해 '포그라운드'인 미러 프레임만 따라간다.
             # ActiveWorkbook 기반 판정은 프로그램적 전환(show-only)과 경합해

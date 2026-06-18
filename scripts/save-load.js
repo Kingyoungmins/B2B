@@ -55,6 +55,7 @@ function stripLogicTimestampSuffix(name) {
   base = base.replace(/_step\d+$/i, "");
   base = base.replace(/(?:[_-])?\d{4}-\d{2}-\d{2}-\d{2}-\d{2}-\d{2}$/i, "");
   base = base.replace(/(?:[_-])?\d{4}-\d{2}-\d{2}-\d{2}-\d{2}$/i, "");
+  base = base.replace(/(?:[_-])?\d+\s*(?:단계|steps?)$/i, "");  // 스텝 수 표기(_3단계) 제거 → 재저장 시 누적 방지
   return safeLogicBaseName(base || "logic");
 }
 
@@ -62,7 +63,33 @@ function currentLogicSaveBaseName(fallback) {
   const fromState = state && state.logicSaveBaseName ? state.logicSaveBaseName : "";
   let fromStorage = "";
   try { fromStorage = localStorage.getItem("b2b_logic_save_base_name") || ""; } catch (_) {}
-  return stripLogicTimestampSuffix(fromState || fromStorage || fallback || "logic");
+  const remembered = fromState || fromStorage;
+  // 명시적으로 기억된 이름이 있으면 그걸 쓰되, 옛 기본값 "logic" 이면 호출자 fallback(입력 파일명)을 우선.
+  const chosen = (remembered && remembered.trim().toLowerCase() !== "logic")
+    ? remembered
+    : (fallback || remembered || "logic");
+  return stripLogicTimestampSuffix(chosen || "logic");
+}
+
+function defaultLogicBaseNameFromInputs() {
+  // 스킬 기본 이름 = 첫 입력 파일명(확장자 제거). 없으면 출력 템플릿명, 그래도 없으면 "logic".
+  // 어떤 입력으로 만든 스킬인지 파일명으로 식별되게 한다(저장/자동저장 공통).
+  try {
+    let nm = "";
+    const inputs = (state && state.inputs) || [];
+    if (inputs.length) {
+      nm = (typeof workbookDisplayName === "function") ? workbookDisplayName(inputs[0], "") : (inputs[0] && inputs[0].name) || "";
+    }
+    if (!nm) {
+      const tpls = (state && state.outputTemplates) || [];
+      if (tpls.length && tpls[0] && tpls[0].file) nm = tpls[0].file.name || "";
+      else if (state && state.output && state.output.name) nm = state.output.name;
+    }
+    nm = String(nm || "").replace(/\.(xls[xmb]?|csv|tsv)$/i, "");
+    return stripLogicTimestampSuffix(nm || "logic");
+  } catch (_) {
+    return "logic";
+  }
 }
 
 function rememberLogicSaveBaseName(name) {
@@ -73,7 +100,10 @@ function rememberLogicSaveBaseName(name) {
 }
 
 function timestampedLogicArchiveName(baseName) {
-  return `${safeLogicBaseName(baseName || "logic")}_${logicBackupTimestamp()}`;
+  const base = safeLogicBaseName(baseName || "logic");
+  const n = (state && Array.isArray(state.pipeline)) ? state.pipeline.length : 0;
+  const stepPart = n > 0 ? `_${n}단계` : "";  // 몇 스텝짜리 스킬인지 파일명에 표기
+  return `${base}${stepPart}_${logicBackupTimestamp()}`;
 }
 
 function buildLogicZipEntries(name) {
@@ -142,7 +172,7 @@ function scheduleLogicAutoBackup(reason) {
 async function saveLogicAutoBackup(reason, seq) {
   if (seq !== logicAutoBackupSeq) return;
   try {
-    const name = timestampedLogicArchiveName(currentLogicSaveBaseName("logic"));
+    const name = timestampedLogicArchiveName(currentLogicSaveBaseName(defaultLogicBaseNameFromInputs()));
     const blob = createZipBlob(buildLogicZipEntries(name));
     const resp = await fetch("/api/logic/backup", {
       method: "POST",
@@ -165,7 +195,7 @@ async function saveLogicAutoBackup(reason, seq) {
 function openSaveModal() {
   if (state.pipeline.length === 0) { toast("저장할 단계가 없습니다", "error"); return; }
   const modal = $("modal");
-  const defaultName = currentLogicSaveBaseName("logic");
+  const defaultName = currentLogicSaveBaseName(defaultLogicBaseNameFromInputs());
   const previewName = timestampedLogicArchiveName(defaultName) + ".zip";
   modal.innerHTML = `
     <h3>스킬 저장 (ZIP 다운로드)</h3>

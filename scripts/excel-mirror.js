@@ -30,6 +30,8 @@ const excelMirror = {
   uiClickGuardUntil: 0,
   lastPositionKey: "",
   lastNativePositionKey: "",
+  lastBackgroundPollAt: 0,
+  lastFormulaInfoAt: 0,
   positionListenersInstalled: false,
   hideTimer: null,
   // 호스트 창(웹뷰+네이티브 탭 패널 포함) 활성 여부. C# Activated/Deactivated 이벤트로 갱신.
@@ -1316,6 +1318,7 @@ function startExcelMirrorPolling() {
   if (excelMirror.pollTimer) return;
   // 네이티브 Excel 오버레이에서는 COM 폴링이 셀/채팅 포커스를 끊을 수 있어 보수적으로 둔다.
   excelMirror.pollTimer = setInterval(() => {
+    if (document.hidden || excelMirror.hostActive === false) return;
     if (isNativeExcelShell() && Date.now() < (excelMirror.quietUntil || 0)) return;
     const excelId = currentExcelId();
     if (excelId) {
@@ -1326,8 +1329,9 @@ function startExcelMirrorPolling() {
     // [#1] 네이티브 셸에서도 수식 표시줄을 갱신한다. hover-info 는 Selection 읽기 + StatusBar 쓰기뿐이라
     // 포커스를 끊지 않는다(changes 폴은 이미 네이티브에서 돈다). 적용 중(quietUntil)엔 건너뛰고,
     // 네이티브에서는 주기를 보수적으로 둔다(COM 부하 최소화).
-    const formulaInterval = isNativeExcelShell() ? 1200 : 850;
+    const formulaInterval = isNativeExcelShell() ? 3500 : 2500;
     excelMirror.formulaInfoTimer = setInterval(() => {
+      if (document.hidden || excelMirror.hostActive === false) return;
       if (isNativeExcelShell() && Date.now() < (excelMirror.quietUntil || 0)) return;
       const excelId = currentExcelId();
       if (excelId) {

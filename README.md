@@ -6,6 +6,17 @@
 
 ## 최근 변경사항
 
+### ver0.5.9
+
+ver0.5.8 기반 런타임 안정화 패치.
+
+- **수식 overwrite 기본값 변경**: 값 채우기/입력/반영 대상 범위에 기존 수식이 있어도 더 이상 런타임에서 차단하지 않습니다. 사용자가 지정한 대상 셀/열은 값으로 덮어쓸 수 있고, 수식 보존은 사용자가 명시했을 때만 생성 코드가 범위를 제외합니다.
+- **복사 의미 정리**: "값/값만/값으로 붙여넣기"는 계산 결과 값만 쓰고, 그냥 "복사/복붙/붙여넣기"는 값+수식+서식+병합을 보존하는 Excel 네이티브 복사로 생성하게 했습니다.
+- **HCN류 다중 값 매칭 합산 라우팅 수정**: 한 셀에 여러 가입번호/코드가 있고 다른 파일 열과 매칭해 합계를 쓰는 작업은 Python COM 강제 라우팅을 중단하고 VBA 우선 라우팅으로 돌립니다. Python으로 생성되더라도 `None` 행을 필터링해 위로 당겨 쓰는 패턴은 정적 게이트로 차단합니다.
+- **요약 행과 대상 수식 구분**: H141 `=SUM(H88:H140)` / P141 `부가세포함` 같은 행은 "수식이라 보존"이 아니라 "데이터 행이 아닌 요약 행"으로 처리합니다. 데이터 행 범위를 먼저 잡고 합계/소계/부가세포함 행은 쓰기 대상에서 제외합니다.
+- **장시간 실행 안정성**: 앱이 만든 Excel PID를 `/api/backend/health`와 `/api/excel/diagnostics`에서 확인할 수 있게 했고, 세션에 묶이지 않은 고아 Excel PID는 주기적으로 정리합니다. WebView/네이티브 창이 비활성 상태일 때 Excel 미러 COM 폴링도 줄였습니다.
+- **Python COM 멈춤 방어**: Python 스킬 기본 실행 제한 시간을 낮추고, 제한을 넘기면 앱이 띄운 Excel 세션을 정리해 다음 작업까지 같이 멈추지 않게 했습니다.
+
 ### ver0.5.8
 
 ver0.5.7 기반 안정화 패치.
@@ -346,12 +357,12 @@ build_exe.bat
 빌드 결과:
 
 ```text
-dist\B2B_ver0.5.8\B2B_ver0.5.8.exe   (네이티브 호스트)
-dist\B2B_ver0.5.8\B2B_Server.exe     (PyInstaller 서버)
-dist\B2B_ver0.5.8_portable.zip       (배포용 zip)
+dist\B2B_ver0.5.9\B2B_ver0.5.9.exe   (네이티브 호스트)
+dist\B2B_ver0.5.9\B2B_Server.exe     (PyInstaller 서버)
+dist\B2B_ver0.5.9_portable.zip       (배포용 zip)
 ```
 
-단일 self-extracting EXE가 필요하면 `build_single_exe.bat`을 추가 실행합니다 (`dist\B2B_ver0.5.8_single.exe`).
+단일 self-extracting EXE가 필요하면 `build_single_exe.bat`을 추가 실행합니다 (`dist\B2B_ver0.5.9_single.exe`).
 
 `dist/`와 `build/`는 git 추적 대상이 아닙니다.
 
@@ -440,7 +451,7 @@ ctx.write_grid(ws, [[123]], start_row=4, start_col=2)
 ## 디렉터리 구조
 
 ```text
-B2B_ver0.5.8/
+B2B_ver0.5.9/
 ├─ index.html
 ├─ serve_b2b.py
 ├─ launch_b2b.py

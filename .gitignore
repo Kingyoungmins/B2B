@@ -24,6 +24,10 @@ Thumbs.db
 # Local automatic skill backups
 auto_backups/
 
+# Local runtime/debug logs
+vba_pipeline_trace.jsonl
+vba_runner_fail.log
+
 # Regression test generated reports
 tests/vba_regression/reports/**
 !tests/vba_regression/reports/.gitkeep
