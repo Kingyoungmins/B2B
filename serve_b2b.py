@@ -1031,7 +1031,8 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
         ctx.paste_copied(...) Python 스텝으로 만들어 돌려준다(프론트가 파이프라인에 추가)."""
         payload = self.read_json_body()
         try:
-            result = run_capture_copypaste(payload.get("excelId"))
+            values_only = str(payload.get("valuesOnly", "")).strip().lower() in ("1", "true", "yes", "on")
+            result = run_capture_copypaste(payload.get("excelId"), values_only=values_only)
             self.send_json(result)
         except Exception as err:
             # 캡처 실패(복사 없음/선택 영역 문제)는 사용자 안내용이므로 200 + ok:false 로 메시지를 그대로 전달.
@@ -6626,7 +6627,7 @@ def _registered_path_for_name(name):
     return None
 
 
-def _capture_copypaste_on_session_impl(excel_id):
+def _capture_copypaste_on_session_impl(excel_id, values_only=False):
     """라이브 세션에서 '방금 한 복붙'을 캡처한다.
     소스 = 클립보드 Link(Ctrl+C 한 범위), 대상 = 현재 Selection(Ctrl+V 로 붙여진 범위).
     반환: 캡처 정보 + 그대로 스킬 스텝으로 쓸 ctx.paste_copied(...) Python 코드."""
@@ -6653,7 +6654,8 @@ def _capture_copypaste_on_session_impl(excel_id):
                 snap_used = True
         # 진단 로그: 이 한 줄로 인스턴스 구성(open_books)·클립보드 소스·세션 책을 본다.
         _vba_trace("capture.copypaste.start", excelId=excel_id, sessionBook=session_book,
-                   openBooks=open_books, clipboardSource=source, snapUsed=snap_used)
+                   openBooks=open_books, clipboardSource=source, snapUsed=snap_used,
+                   valuesOnly=bool(values_only))
         if not source:
             _vba_trace("capture.copypaste.reject", excelId=excel_id, reason="no-clipboard-source")
             raise RuntimeError(
@@ -6730,18 +6732,27 @@ def _capture_copypaste_on_session_impl(excel_id):
             dims_match = True
         else:
             dims_match = (src_rows == sel_rows and src_cols == sel_cols)
-        step_code = (
-            "def transform(ctx):\n"
-            "    # [복붙 캡처] 사용자가 라이브 Excel에서 직접 복사/붙여넣기한 동작 재현(값+수식+서식 보존)\n"
-            "    ctx.paste_copied(%r, %r, %r, %r, src_book=%r, dst_book=%r)\n"
-            % (source["sheet"], source["range"], dst_sheet, dst_cell, source["book"], dst_book)
-        )
-        desc = "복붙: %s!%s → %s!%s%s" % (
+        if values_only:
+            step_code = (
+                "def transform(ctx):\n"
+                "    # [복붙 캡처] 사용자가 라이브 Excel에서 직접 복사/붙여넣기한 동작 재현(값만 붙여넣기)\n"
+                "    ctx.paste_copied(%r, %r, %r, %r, src_book=%r, dst_book=%r, values_only=True)\n"
+                % (source["sheet"], source["range"], dst_sheet, dst_cell, source["book"], dst_book)
+            )
+        else:
+            step_code = (
+                "def transform(ctx):\n"
+                "    # [복붙 캡처] 사용자가 라이브 Excel에서 직접 복사/붙여넣기한 동작 재현(값+수식+서식 보존)\n"
+                "    ctx.paste_copied(%r, %r, %r, %r, src_book=%r, dst_book=%r)\n"
+                % (source["sheet"], source["range"], dst_sheet, dst_cell, source["book"], dst_book)
+            )
+        desc = "%s복붙: %s!%s → %s!%s%s" % (
+            "값만 " if values_only else "",
             source["sheet"], source["range"], dst_sheet, dst_cell,
             "" if same else " (교차파일)",
         )
         _vba_trace("capture.copypaste.result", excelId=excel_id, ok=True, description=desc,
-                   dimsMatch=dims_match, crossFile=(not same))
+                   dimsMatch=dims_match, crossFile=(not same), valuesOnly=bool(values_only))
         return {
             "ok": True,
             "source": source,
@@ -6751,11 +6762,12 @@ def _capture_copypaste_on_session_impl(excel_id):
             "language": "python",
             "code": step_code,
             "description": desc,
+            "valuesOnly": bool(values_only),
         }
 
 
-def run_capture_copypaste(excel_id):
-    return excel_call(_capture_copypaste_on_session_impl, excel_id, timeout=60)
+def run_capture_copypaste(excel_id, values_only=False):
+    return excel_call(_capture_copypaste_on_session_impl, excel_id, bool(values_only), timeout=60)
 
 
 def _capture_delete_on_session_impl(excel_id):
@@ -7125,11 +7137,12 @@ class PythonComSkillContext:
             pass
         return True
 
-    def paste_copied(self, src_sheet, src_range, dst_sheet, dst_cell, src_book=None, dst_book=None):
+    def paste_copied(self, src_sheet, src_range, dst_sheet, dst_cell, src_book=None, dst_book=None, values_only=False):
         """[복붙 캡처 재생] 사용자가 라이브 Excel에서 Ctrl+C/Ctrl+V 한 동작을 그대로 재현한다.
         Excel 네이티브 Range.Copy(Destination=) 로 값+수식+서식+병합을 보존하며, 같은 인스턴스에 열린
         다른 워크북 간 복사(교차파일)도 지원한다. src_book/dst_book 을 주면 그 워크북에서 시트를 찾는다.
-        LLM 추측이 아니라 캡처된 실제 좌표로 실행하므로 '값/수식 복붙' 모호성이 없다."""
+        LLM 추측이 아니라 캡처된 실제 좌표로 실행하므로 '값/수식 복붙' 모호성이 없다.
+        values_only=True 면 소스 수식의 계산값만 대상에 쓰고, 소스 서식/수식은 복사하지 않는다."""
         # 소스 워크북이 같은 인스턴스에 안 열려 있으면(전체실행/재실행 때 흔함) 업로드 경로에서
         # 읽기전용으로 열어 교차파일 복사를 성립시킨다(작업 후 닫아 누수 방지). dst 는 작업 대상이라
         # 보통 열려 있다.
@@ -7190,7 +7203,20 @@ class PythonComSkillContext:
                     dst_ctx._journal_save(dst_ws, dst_target)
                 except Exception:
                     self._shared["structural"].append(f"paste_copied:{dst_sheet}!{dst_cell}")
-            src.Copy(dst)
+            if values_only:
+                try:
+                    src_ws.Calculate()
+                except Exception:
+                    try:
+                        self._app.Calculate()
+                    except Exception:
+                        pass
+                self._tick(1)
+                src.Copy()
+                self._tick(1)
+                dst.PasteSpecial(Paste=-4163)  # xlPasteValues
+            else:
+                src.Copy(dst)
             self._tick(1)
             try:
                 self._app.CutCopyMode = False

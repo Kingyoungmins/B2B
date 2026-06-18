@@ -187,6 +187,27 @@
 
   .action-row { display: flex; gap: 8px; flex-wrap: wrap; }
   .action-row button { flex: 1; min-width: 92px; }
+  .capture-option {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 34px;
+    padding: 0 10px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: #fff;
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 700;
+    white-space: nowrap;
+    user-select: none;
+  }
+  .capture-option input {
+    width: 14px;
+    height: 14px;
+    accent-color: var(--primary);
+  }
   /* ============ TOAST ============ */
   .toast {
     position: fixed;

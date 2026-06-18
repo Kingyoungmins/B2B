@@ -2996,14 +2996,17 @@ $("btn-run").onclick = async () => {
 // (재생은 Python COM 경로 → VBA 러너를 타지 않음.)
 (function () {
   const btn = (typeof $ === "function") ? $("btn-capture-copypaste") : null;
+  const valuesOnlyInput = (typeof $ === "function") ? $("capture-copypaste-values-only") : null;
   if (!btn) return;
   btn.onclick = async () => {
     const excelId = (typeof vbaTargetExcelId === "function" && vbaTargetExcelId())
       || (typeof currentExcelId === "function" && currentExcelId());
     if (!excelId) { toast("먼저 우측에 엑셀 파일을 열어 주세요", "error"); return; }
+    const valuesOnly = !!(valuesOnlyInput && valuesOnlyInput.checked);
     btn.disabled = true;
+    if (valuesOnlyInput) valuesOnlyInput.disabled = true;
     try {
-      const data = await postExcelMirror("/api/excel/capture-copypaste", { excelId }, 0, { timeoutMs: 20000 });
+      const data = await postExcelMirror("/api/excel/capture-copypaste", { excelId, valuesOnly }, 0, { timeoutMs: 20000 });
       if (!data || !data.ok) { toast((data && data.error) || "복붙을 찾지 못했습니다", "error"); return; }
       if (data.dimsMatch === false) {
         toast("붙여넣은 범위 크기가 복사한 범위와 달라요. 복사→붙여넣기 직후 다시 눌러 주세요.", "error");
@@ -3027,6 +3030,7 @@ $("btn-run").onclick = async () => {
       toast("복붙 캡처 실패: " + (err && err.message ? err.message : String(err)), "error");
     } finally {
       btn.disabled = false;
+      if (valuesOnlyInput) valuesOnlyInput.disabled = false;
     }
   };
 })();
