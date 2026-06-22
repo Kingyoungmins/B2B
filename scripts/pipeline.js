@@ -2158,6 +2158,12 @@ function invalidateLivePipelineApplied() {
   _lastLiveAppliedSignature = null;
 }
 
+// 직전에 라이브 파이프라인이 적용돼 있었는지. 강제재시작 직전에 캡처해 '자동 1회 재적용' 여부 판단에 쓴다
+// (invalidate 호출 이후엔 항상 null 이라 알 수 없으므로, 그 전에 읽어야 함).
+function isLivePipelineApplied() {
+  return _lastLiveAppliedSignature !== null;
+}
+
 // [#5] 라이브 COM 적용으로 구조가 바뀐 파일의 클라 스키마 캐시(미리보기 AoA/시트명/차원)를
 // 서버가 보낸 경량 스키마로 갱신한다. 백엔드 경로(runPipeline)와 동일 수준(sheets + sheetNames)으로
 // 맞춰 캐시 불일치를 피한다(tables/formulas 는 백엔드처럼 건드리지 않음). 안 하면 다음 단계 생성 시
@@ -2706,6 +2712,9 @@ function buildPipelineAutoRepairPrompt(step, stepIdx, reason, targetLanguage) {
   const failures = (reason && reason.failures || []).map(f => `- ${f}`).join("\n");
   const errInfo = reason && reason.errorInfo || {};
   const extraFailures = (reason && reason.previousFailures || []).map(f => `- ${f}`).join("\n");
+  const duplicateDeleteHint = isVba && typeof duplicateRowDeleteVbaHint === "function"
+    ? duplicateRowDeleteVbaHint(source)
+    : "";
   return [
     "불러온 .zip 스킬 파이프라인을 전체 실행하는 중입니다.",
     "사용자는 코딩을 전혀 모르므로, 사용자가 코드를 수정하거나 복구 버튼을 누르지 않아도 이 Step이 바로 실행되도록 고쳐야 합니다.",
@@ -2738,6 +2747,8 @@ function buildPipelineAutoRepairPrompt(step, stepIdx, reason, targetLanguage) {
     String(step && step.code || ""),
     "```",
     "",
+    duplicateDeleteHint,
+    duplicateDeleteHint ? "" : null,
     isVba ? [
       "## VBA 복구 필수 규칙",
       "- Workbooks/Worksheets/Range 참조는 현재 열려 있는 실제 워크북과 시트명을 기준으로 명확히 지정하세요.",

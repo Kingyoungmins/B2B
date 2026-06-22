@@ -7111,7 +7111,8 @@ class PythonComSkillContext:
         cells = int(rng.Rows.Count) * int(rng.Columns.Count)
         if cells > PY_READ_MAX_CELLS:
             raise PythonComSkillError(
-                f"읽기 범위가 너무 큽니다({cells:,}셀 > {PY_READ_MAX_CELLS:,}). 범위를 한정하세요."
+                f"읽기 범위가 너무 큽니다({cells:,}셀 > {PY_READ_MAX_CELLS:,}). "
+                "Python COM은 단순 작업용으로 보수적으로 제한됩니다. 범위를 더 좁히거나 VBA 경로를 사용하세요."
             )
         return self._shaped_matrix(rng, rng.Value2)
 
@@ -7122,7 +7123,10 @@ class PythonComSkillContext:
         self._tick(3)
         cells = int(rng.Rows.Count) * int(rng.Columns.Count)
         if cells > PY_READ_MAX_CELLS:
-            raise PythonComSkillError(f"읽기 범위가 너무 큽니다({cells:,}셀). 범위를 한정하세요.")
+            raise PythonComSkillError(
+                f"읽기 범위가 너무 큽니다({cells:,}셀 > {PY_READ_MAX_CELLS:,}). "
+                "Python COM은 단순 작업용으로 보수적으로 제한됩니다. 범위를 더 좁히거나 VBA 경로를 사용하세요."
+            )
         return self._shaped_matrix(rng, rng.Formula)
 
     def has_formulas(self, sheet, a1_range):

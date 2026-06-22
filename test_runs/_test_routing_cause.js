@@ -3,7 +3,7 @@ const fs = require("fs"), path = require("path");
 const src = fs.readFileSync(path.join(__dirname, "..", "scripts", "chat-ui.js"), "utf8");
 const s = src.indexOf("function userExplicitlyRequestsVba");
 const pIdx = src.indexOf("function shouldRouteRequestToPython");
-const after = src.indexOf("\nfunction ", pIdx + 10);
+const after = src.indexOf("function numericArithmeticIntent", pIdx + 10);
 let block = src.slice(s, after);
 block += "\nglobalThis.R = { vba: shouldRouteRequestToVba, py: shouldRouteRequestToPython, simple: shouldRouteSimpleStructureEditToPython };";
 eval(block);
@@ -40,6 +40,13 @@ check("[회귀] '선택 범위 셀 삭제' → simple TRUE", R.simple('선택 �
 // 7) 회귀: 단순 삭제가 아니어도(매칭+합산) 파일명 무관하게 VBA/복합 라우팅 유지
 const complex = '@범위[a.xlsx/S!A1:A100] 가입번호가 일치하는 행의 금액을 합산해서 @범위[b.xlsx/S!H:H] 에 작성';
 check("[회귀] 매칭+합산 복합요청은 simple FALSE", R.simple(complex) === false);
+check("[회귀] 매칭+합산 복합요청은 routePython FALSE", R.py(complex) === false);
+
+// 8) regression: conditional duplicate row deletion must go to VBA, not Python COM.
+const duplicateDelete = "\u0045\uc5f4 \u004d\u0056\u004e\u004f\uc0c1\ud488\uba85\uc5d0\uc11c '\uc548\uc804\uc81c\uc77c'\ub9cc \u0054\uc5f4 '\u0045\u0049\u0044' \uc911\ubcf5\uac12\uc81c\uac70\ud574. \uc911\ubcf5\uac12 \uc81c\uac70\ud560\ub54c \ubc29\ubc95\uc740 \uc704\uc5d0 \uc788\ub294 \uac12\ubd80\ud130 \uc9c0\uc6cc. \ub300\uc2e0 \uc218\ub0a9\uae08\uc561\uc774 1 \uc774\uc0c1\uc778\uac70\ub294 \uc9c0\uc6b0\uba74 \uc548\ub3fc";
+check("[regression] conditional duplicate row delete -> routeVba TRUE", R.vba(duplicateDelete) === true);
+check("[regression] conditional duplicate row delete -> routePython FALSE", R.py(duplicateDelete) === false);
+check("[regression] conditional duplicate row delete -> simple FALSE", R.simple(duplicateDelete) === false);
 
 console.log("\n=== RESULT: " + pass + " PASS / " + fail + " FAIL ===");
 process.exit(fail ? 2 : 0);

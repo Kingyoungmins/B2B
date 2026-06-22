@@ -304,6 +304,7 @@ function routingIntentText(text) {
 function shouldRouteSimpleStructureEditToPython(text) {
   const t = String(text || "");
   if (!t.trim()) return false;
+  if (typeof duplicateRowDeleteIntent === "function" && duplicateRowDeleteIntent(t)) return false;
   const intent = routingIntentText(t);
   const hasDirectTarget = /@범위\[[^\]]+![^\]]+\]/i.test(t)
     || /\b[A-Z]{1,3}\s*:\s*[A-Z]{1,3}\b/i.test(t)
@@ -327,6 +328,7 @@ function shouldRouteRequestToVba(text) {
   const intent = routingIntentText(t);  // 키워드 매칭은 멘션(파일명/시트명) 제거한 의도 텍스트로
   const explicitVba = userExplicitlyRequestsVba(intent);
   const simplePythonStructureEdit = shouldRouteSimpleStructureEditToPython(t);
+  const duplicateRowDelete = duplicateRowDeleteIntent(t);
   const rangeRefs = t.match(/@범위\[/g) || [];                  // 구조 신호: 원문
   const explicitColumns = /![A-Z]{1,3}:[A-Z]{1,3}\]/i.test(t);  // 구조 신호: 원문(멘션 내 전체열)
   const pivotLike = /(피벗|pivot|유사\s*피벗|그룹\s*별|그룹별|집계표|요약표|크로스탭)/i.test(intent)
@@ -357,7 +359,7 @@ function shouldRouteRequestToVba(text) {
     && /(합계값|합계|합산|더해|sum|작성|입력|기입|채워|넣어|반영|가져)/i.test(intent)
     && (rangeRefs.length >= 3 || explicitColumns)
   );
-  if (explicitVba) return true;
+  if (explicitVba || duplicateRowDelete) return true;
   if (simplePythonStructureEdit) return false;
   if (pivotLike || pivotShape || keyedRowOverwrite || wholeSheetCrossCopy || multiValueLookupAggregate) return true;
   if (conditionMarkers.length >= 2 && (rowwiseWrite || colRefs.length >= 2)) return true;
@@ -369,27 +371,11 @@ function shouldRouteRequestToPython(text) {
   if (!t.trim()) return false;
   const intent = routingIntentText(t);  // 키워드 매칭은 멘션(파일명/시트명) 제거한 의도 텍스트로
   if (userExplicitlyRequestsVba(intent)) return false;
+  if (duplicateRowDeleteIntent(t)) return false;
+  // Python COM은 저사양 VM에서 COM 멈춤 리스크가 있으므로 단순한 1개 기능 요청에만 강제 라우팅한다.
+  // 매칭/합산/조건/피벗/행삭제 같은 복합 작업은 기본 VBA 경로가 처리한다.
   if (shouldRouteSimpleStructureEditToPython(t)) return true;
-  const multiValueCell = /(하나의\s*셀에\s*여러|한\s*셀에\s*여러|셀\s*안(?:의|에)?\s*데이터|셀안의?\s*데이터|아래로\s*여러|여러\s*개\s*(?:들어|데이터|값)|여러개\s*(?:들어|데이터|값)|셀들을?\s*(?:분리|나눠|쪼개)|구분자|줄\s*바꿈|줄바꿈|TEXTSPLIT|CHAR\s*\(\s*10\s*\)|split)/i.test(intent);
-  const lookupMatch = /(일치|매칭|같은|동일|찾아서|찾아|기준)/i.test(intent);
-  const aggregateWrite = /(합계값|합계|합산|더해|sum|작성|입력|기입|채워|넣어|반영)/i.test(intent);
-  const rangeRefs = t.match(/@범위\[/g) || [];                  // 구조 신호: 원문
-  const explicitColumns = /![A-Z]{1,3}:[A-Z]{1,3}\]/i.test(t);  // 구조 신호: 원문
-  const identifierLookup = /(가입번호|계약번호|고객번호|발신번호|전화번호|ID|코드|키|key)/i.test(intent);
-  const splitAggregateHint = /(병합(?:된|한)?\s*경우\s*합산|여러\s*개(?:면|일\s*때)?\s*합산|각각(?:의)?\s*.*더해서|각각(?:의)?\s*.*합계|분리.*합산)/i.test(intent);
-  const lookupValueToTarget = (
-    rangeRefs.length >= 4
-    && lookupMatch
-    && aggregateWrite
-    && /(가져|넣어|작성|입력|기입|채워|반영)/i.test(intent)
-    && /(열로|열에|H:H|H\s*열|대상|결과)/i.test(intent)
-  );
-  // 예: 출력 P열 한 셀에 여러 코드가 있고, 입력 BP와 매칭해 BQ 값을 합산하여 출력 H열에 작성.
-  // 매크로 주입이 필요 없는 값 계산/채우기 작업이므로 VBA 보안 설정 오류를 피하기 위해 Python COM으로 보낸다.
-  return (multiValueCell || splitAggregateHint || (identifierLookup && lookupValueToTarget))
-    && lookupMatch
-    && aggregateWrite
-    && (rangeRefs.length >= 3 || explicitColumns);
+  return false;
 }
 
 function excelColumnLetterToIndex(letter) {
@@ -428,6 +414,16 @@ function multiValueLookupIntent(sourceUserMessage) {
     && /(합계|합산|더해|가져|넣어|작성|입력|채워|반영)/i.test(s)
     && /(한\s*셀|셀\s*안|셀안|여러|병합|줄\s*바꿈|줄바꿈|TEXTSPLIT|CHAR\s*\(\s*10\s*\)|P90|P:P)/i.test(s)
   );
+}
+
+function duplicateRowDeleteIntent(sourceUserMessage) {
+  const source = String(sourceUserMessage || "");
+  const s = typeof routingIntentText === "function" ? routingIntentText(source) : source;
+  const duplicateDelete = /(?:중복\s*값?|중복값|duplicate).{0,24}(?:제거|삭제|지워|없애|remove|delete)|(?:제거|삭제|지워|없애|remove|delete).{0,24}(?:중복\s*값?|중복값|duplicate)/i.test(s);
+  if (!duplicateDelete) return false;
+  const rowDeleteShape = /(행|위에\s*있는|아래|먼저|EID|ID|키|코드|가입번호|고객번호|계약번호|수납금액|금액|보호|지우면\s*안|삭제하면\s*안|1\s*이상|>=\s*1)/i.test(s);
+  const hasColumnRefs = requestedExcelColumnLetters(source).length >= 2;
+  return rowDeleteShape || hasColumnRefs;
 }
 
 function numericArithmeticIntent(text) {
@@ -574,8 +570,10 @@ function vbaStaticSafetyFailures(code, sourceUserMessage) {
   const coRe = /\bCreateObject\s*\(\s*["']([^"']+)["']\s*\)/gi;
   let m;
   while ((m = coRe.exec(text)) !== null) {
-    if (String(m[1]).toLowerCase() !== "scripting.dictionary") {
-      failures.push(`CreateObject("${m[1]}") 금지(Scripting.Dictionary 외 파일/네트워크 객체 생성 불가).`);
+    const progId = String(m[1]).toLowerCase();
+    const allowedObjects = new Set(["scripting.dictionary", "system.collections.arraylist"]);
+    if (!allowedObjects.has(progId)) {
+      failures.push(`CreateObject("${m[1]}") 금지(Scripting.Dictionary/System.Collections.ArrayList 외 파일/네트워크 객체 생성 불가).`);
     }
   }
   const mutatesAppState = /\bApplication\s*\.\s*(?:ScreenUpdating|Calculation|EnableEvents|DisplayAlerts)\s*=/i.test(text);
@@ -704,6 +702,25 @@ function vbaStaticSafetyFailures(code, sourceUserMessage) {
         && !/\b(?:matchFound|matched|hasMatch)\b/i.test(text)
         && !/\bIf\s+totalAmount\s*>\s*0\b/i.test(text)) {
       failures.push("다중 가입번호 매칭에서 totalAmount=0 을 H열에 무조건 쓰면 미매칭 행이나 '부가세포함' 합계 행의 수식이 0으로 덮입니다. 매칭된 데이터 행에서만 쓰고, P열이 요약 라벨인 행은 제외하세요.");
+    }
+  }
+  if (typeof duplicateRowDeleteIntent === "function" && duplicateRowDeleteIntent(sourceUserMessage)) {
+    const readsWholeExcelGrid = /\bRange\s*\(\s*["']\$?[A-Z]{1,3}:\$?[A-Z]{1,3}["']\s*\)\s*\.\s*(?:Value|Value2)\b/i.test(text)
+      || /\bColumns\s*\([^)]*\)\s*\.\s*(?:Value|Value2)\b/i.test(text)
+      || /\bRows\s*\([^)]*\)\s*\.\s*(?:Value|Value2)\b/i.test(text)
+      || /\bRange\s*\(\s*(?:ws\.)?Cells\s*\(\s*1\s*,\s*1\s*\)\s*,\s*(?:ws\.)?Cells\s*\(\s*(?:ws\.)?Rows\.Count\s*,\s*(?:ws\.)?Columns\.Count\s*\)\s*\)\s*\.\s*(?:Value|Value2)\b/i.test(text);
+    if (readsWholeExcelGrid) {
+      failures.push("대량 조건부 중복 행 삭제에서 행 번호 없는 전체 열/전체 시트 값을 통째로 읽지 마세요. 실제 lastRow/lastCol 로 한정된 데이터 범위는 허용되며, 가능하면 필요한 열(E=상품명, M=수납금액, T=EID)만 읽으세요.");
+    }
+    const rowDeleteLoop = /\bFor\b[\s\S]{0,1800}\b(?:Rows\s*\([^\n\r]*\)|EntireRow)\s*\.\s*Delete\b/i.test(text);
+    if (rowDeleteLoop && !/\bAutoFilter\b/i.test(text)) {
+      failures.push("대량 중복 행 삭제에서 Rows(...).Delete 를 루프 안에서 반복하면 30만 행 파일에서 타임아웃됩니다. 보조열에 삭제표시를 한 뒤 AutoFilter 로 표시된 행을 한 번에 삭제하세요.");
+    }
+    if (/\bFor\s+\w+\s*=\s*0\s+To\s+\w+\s*-\s*2\b[\s\S]{0,1400}\bFor\s+\w+\s*=\s*\w+\s*\+\s*1\s+To\b/i.test(text)) {
+      failures.push("삭제 행 목록 정렬에 이중 For 버블정렬을 쓰지 마세요. System.Collections.ArrayList 에 Add 후 .Sort 를 쓰거나, 보조열+AutoFilter 패턴으로 정렬 자체를 피하세요.");
+    }
+    if (/\bIf\s+del(?:List|Dict|Rows|Keys)?\.Count\s*=\s*0\s+Then\s+Err\.Raise/i.test(text)) {
+      failures.push("조건부 중복 제거에서 삭제 대상이 0건이면 오류가 아니라 정상 no-op 으로 종료하세요. 이미 중복이 정리된 상태에서도 스킬 생성이 막히면 안 됩니다.");
     }
   }
   const keyedOverwriteIntent = (
@@ -867,6 +884,9 @@ function pythonComStaticSafetyFailures(code, sourceUserMessage) {
 function pythonComMustUseVbaReason(code, sourceUserMessage) {
   const source = String(sourceUserMessage || "");
   const text = String(code || "");
+  if (typeof duplicateRowDeleteIntent === "function" && duplicateRowDeleteIntent(source)) {
+    return "조건이 붙은 중복 행 삭제는 Python COM으로 넓은 범위를 읽거나 행 삭제를 반복하면 큰 파일에서 멈춥니다. 이 작업은 VBA 보조열+AutoFilter 방식으로 실행해야 합니다.";
+  }
   if (typeof multiValueLookupIntent === "function" && multiValueLookupIntent(source)) {
     return "한 셀 여러 값 분리 + 다른 파일 키 매칭 + 합산 후 열 쓰기 작업은 Python COM으로 실행하면 앱이 멈추거나 행 위치가 밀릴 수 있습니다. 이 작업은 VBA로 실행해야 합니다.";
   }
@@ -913,6 +933,25 @@ function buildPythonStaticSafetyRegenPrompt(code, failures, sourceUserMessage) {
   ].join("\n");
 }
 
+function duplicateRowDeleteVbaHint(sourceUserMessage) {
+  if (!(typeof duplicateRowDeleteIntent === "function" && duplicateRowDeleteIntent(sourceUserMessage))) return "";
+  return [
+    "",
+    "## 대량 조건부 중복 행 삭제 작성 규칙",
+    "- 이 요청은 조건부 중복 '행 삭제'입니다. 반드시 VBA로 작성하세요.",
+    "- 성능상 필요한 열만 각각 1열 배열로 읽는 방식을 우선하세요. 예: E열 상품명, M열 수납금액, T열 EID.",
+    "- 파일이 큰 것은 정상일 수 있으므로 실제 lastRow/lastCol 로 한정된 데이터 범위 읽기는 허용됩니다. 행 번호 없는 전체 열(A:T, E:T) 또는 전체 시트 끝까지 읽는 코드는 쓰지 마세요.",
+    "- 사용자가 'E열 MVNO상품명에서 안전제일만'이라고 하면 E열 값이 정확히 '안전제일'인 행만 대상으로 하세요. '안전제일(망개통용)' 같은 접미사 값은 포함하지 마세요.",
+    "- 같은 EID 그룹에서 수납금액이 1 이상인 행은 절대 삭제하지 마세요.",
+    "- 수납금액이 1 미만인 중복 행은 위쪽 행부터 삭제하고, 같은 그룹의 삭제 가능 행 중 가장 아래쪽 1개만 남기세요.",
+    "- 삭제할 행이 0개면 오류를 내지 말고 정상 종료하세요.",
+    "- 30만 행 이상도 가능해야 하므로 Rows(...).Delete를 루프 안에서 반복하지 마세요.",
+    "- 빠른 삭제 패턴: 임시 보조열(마지막 열+1)에 삭제 대상 행만 'B2B_DELETE' 표시 → AutoFilter로 보조열='B2B_DELETE' 필터 → 데이터 행 SpecialCells(xlCellTypeVisible).EntireRow.Delete 한 번 → 보조열 삭제/정리.",
+    "- 보조열 추가/삭제는 작업 끝 Cleanup에서 정리하세요. AutoFilterMode도 끄세요.",
+    "- 정렬이 꼭 필요하면 System.Collections.ArrayList는 사용 가능하지만, 버블정렬 이중 For는 쓰지 마세요.",
+  ].join("\n");
+}
+
 function buildStaticSafetyRegenPrompt(code, failures, sourceUserMessage) {
   const fixList = failures.map(f => `- ${f}`).join("\n");
   return [
@@ -929,6 +968,7 @@ function buildStaticSafetyRegenPrompt(code, failures, sourceUserMessage) {
     "```vba",
     String(code || ""),
     "```",
+    duplicateRowDeleteVbaHint(sourceUserMessage),
     "",
     "반드시 하나의 ```vba 코드 블록만 출력하세요. On Error Resume Next / MsgBox / InputBox / Shell /",
     "Workbooks.Open / Save·Close / Application.Quit / 무관한 전체 시트 순회를 쓰지 마세요.",
@@ -1030,6 +1070,8 @@ async function autoRegenerateAsVbaFallback(code, failures, context) {
     "",
     "## Python 에서 막혔던 이유(같은 실수를 VBA 에서 반복하지 말 것)",
     fixList,
+    "",
+    duplicateRowDeleteVbaHint(sourceUserMessage),
     "",
     "반드시 하나의 ```vba 코드 블록만 출력하세요. On Error Resume Next / MsgBox / InputBox / Shell /",
     "Workbooks.Open / Save·Close / Application.Quit / 무관한 전체 시트 순회를 쓰지 마세요.",
@@ -2106,6 +2148,7 @@ async function sendChat() {
   const routeToSimplePythonStructure = routeToPython && shouldRouteSimpleStructureEditToPython(msg);
   const explicitVbaRequest = userExplicitlyRequestsVba(msg);
   const routeMultiValueLookup = typeof multiValueLookupIntent === "function" && multiValueLookupIntent(msg);
+  const routeDuplicateRowDelete = typeof duplicateRowDeleteIntent === "function" && duplicateRowDeleteIntent(msg);
   const modeLabel = editTargetId ? "(수정 모드) " : (routeToVba ? "(VBA 라우팅) " : (routeToPython ? "(Python 라우팅) " : ""));
   const thinkMode = typeof isThinkModeEnabled === "function" && isThinkModeEnabled();
   const abortController = new AbortController();
@@ -2130,13 +2173,14 @@ async function sendChat() {
       routingHint: routeToVba
         ? (explicitVbaRequest
           ? "사용자가 이번 요청에서 VBA/매크로를 명시했습니다. 반드시 하나의 ```vba 코드 블록(Sub B2BSkill())만 작성하고 Python def transform(ctx)는 절대 출력하지 마세요. @범위/@컬럼의 파일명·시트명은 번역 없이 정확히 복사하세요."
-          : (routeMultiValueLookup
+          : (routeDuplicateRowDelete
+            ? "조건이 붙은 중복 행 삭제 요청입니다. 이번 응답은 반드시 VBA로 작성하세요. Python def transform(ctx)는 절대 출력하지 마세요. 30만 행 이상도 처리 가능해야 하므로 성능상 필요한 열만 각각 1열 배열로 읽는 방식을 우선하세요. 예: E열 상품명, M열 수납금액, T열 EID. 단, 실제 lastRow/lastCol 로 한정된 데이터 범위 읽기는 허용되며, 행 번호 없는 전체 열(A:T, E:T) 또는 전체 시트 끝까지 읽는 코드는 쓰지 마세요. 'E열에서 안전제일만'은 정확히 '안전제일'인 행만 대상으로 하고 '안전제일(망개통용)' 같은 접미사 값은 포함하지 마세요. 같은 EID에서 수납금액이 1 이상인 행은 삭제 금지, 수납금액 1 미만 중복은 위쪽 행부터 삭제하고 가장 아래쪽 1개만 남기세요. Rows(...).Delete를 루프 안에서 반복하지 말고, 임시 보조열에 삭제 대상만 표시한 뒤 AutoFilter + SpecialCells(xlCellTypeVisible).EntireRow.Delete로 한 번에 삭제하세요. 삭제 대상 0건은 오류가 아니라 정상 종료입니다. System.Collections.ArrayList는 정렬용으로 사용 가능하지만 버블정렬 이중 For는 쓰지 마세요."
+            : (routeMultiValueLookup
             ? "한 셀에 여러 값이 들어 있는 열을 분해해 다른 파일 열과 정확 매칭하고 합산해 쓰는 요청입니다. 이번 응답은 반드시 VBA로 작성하세요. BP/BQ/AA 같은 다중문자 열은 숫자로 암산하지 말고 ws.Columns(\"BP\").Column 또는 ws.Cells(r, \"BP\")처럼 열 문자를 그대로 쓰세요. Excel VBA에는 Continue For가 없으므로 If Len(tok)>0 Then ... End If 구조를 쓰세요. 대상 H열 전체 범위를 배열로 다시 쓰지 말고, matchedAny=True인 데이터 행의 wsOut.Cells(r, \"H\").Value만 개별 갱신하세요. 매칭 없는 행, H열 기존 텍스트/수식, P열이 부가세포함/합계/소계 같은 요약 라벨인 행은 그대로 두세요."
             : "복합 조건/피벗성 집계/시트 전체 교차파일 복사/한 셀 여러 값 매칭 합산 요청은 저사양 PC에서 Python COM 경로가 멈추거나 행 위치가 밀릴 수 있으므로 이번 응답은 VBA로 작성합니다. 전체 열은 실제 데이터 범위로 한정하고, 합계/소계/부가세포함 같은 요약 행은 데이터 행에서 제외하세요. Excel VBA에는 Continue For가 없으므로 사용하지 마세요."))
+          )
         : (routeToPython
-          ? (routeToSimplePythonStructure
-            ? "단순 행/열 삽입·삭제 또는 범위 내용 삭제 요청입니다. VBA 매크로가 아니라 Python COM으로 작성하세요. 행/열 자체 삭제·추가는 ctx.delete_rows/delete_cols/insert_rows/insert_cols 를 쓰고, 셀/범위의 내용만 지우는 요청은 ctx.clear 를 쓰세요. @범위의 파일명·시트명·주소는 번역하거나 바꾸지 말고 그대로 쓰세요."
-            : "한 셀에 여러 값이 들어 있는 열을 분해해 다른 파일 열과 매칭하고 값 합계를 대상 열에 쓰는 요청입니다. VBA 매크로가 아니라 Python COM으로 작성하세요. 가입번호/코드류는 부분일치가 아니라 분리된 토큰과 조회 열 값을 정확 일치 비교하세요. 전체 열을 그대로 읽지 말고 실제 마지막 행까지 범위를 한정하세요. 매칭된 행만 대상 열에 쓰고, 매칭 없는 행/합계 수식/텍스트 행은 그대로 보존하세요.")
+          ? "단순 행/열 삽입·삭제 또는 범위 내용 삭제 요청입니다. VBA 매크로가 아니라 Python COM으로 작성하세요. 행/열 자체 삭제·추가는 ctx.delete_rows/delete_cols/insert_rows/insert_cols 를 쓰고, 셀/범위의 내용만 지우는 요청은 ctx.clear 를 쓰세요. @범위의 파일명·시트명·주소는 번역하거나 바꾸지 말고 그대로 쓰세요."
           : ""),
       signal: abortController.signal,
       onDelta: (delta, full) => {
