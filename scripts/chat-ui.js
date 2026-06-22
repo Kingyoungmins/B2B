@@ -294,10 +294,29 @@ function userRequestsSort(text) {
   return /(정렬|내림\s*차순|오름\s*차순|소트|sort|order\s*by)/i.test(String(text || ""));
 }
 
+function shouldRouteSimpleStructureEditToPython(text) {
+  const t = String(text || "");
+  if (!t.trim()) return false;
+  const hasDirectTarget = /@범위\[[^\]]+![^\]]+\]/i.test(t)
+    || /\b[A-Z]{1,3}\s*:\s*[A-Z]{1,3}\b/i.test(t)
+    || /\b\d+\s*:\s*\d+\b/i.test(t)
+    || /[A-Z]{1,3}\s*열|\d+\s*행|선택\s*(?:범위|행|열|셀)/i.test(t);
+  if (!hasDirectTarget) return false;
+
+  const insertAxis = /(행|열).{0,16}(추가|삽입|insert)|(?:추가|삽입|insert).{0,16}(행|열)/i.test(t);
+  const deleteAxis = /(행|열).{0,16}(삭제|지워|없애|제거|delete)|(?:삭제|지워|없애|제거|delete).{0,16}(행|열)/i.test(t);
+  const clearCells = /(셀|범위|데이터|내용|값).{0,20}(삭제|지워|비워|제거|clear)|(?:삭제|지워|비워|제거|clear).{0,20}(셀|범위|데이터|내용|값)/i.test(t);
+  if (!(insertAxis || deleteAxis || clearCells)) return false;
+
+  // 조건/매칭/집계/복붙이 섞인 작업은 단순 구조 조작이 아니므로 기존 라우팅 규칙에 맡긴다.
+  return !/(일치|매칭|같은|동일|찾아서|찾아|조건|이면|일\s*때|경우|피벗|그룹|집계|합계|합산|개수|건수|정렬|복사|붙여\s*넣|붙여넣|덮어|갱신|업데이트|분리|토큰|환산|계산|입력|작성|채워|가져)/i.test(t);
+}
+
 function shouldRouteRequestToVba(text) {
   const t = String(text || "");
   if (!t.trim()) return false;
   const explicitVba = userExplicitlyRequestsVba(t);
+  const simplePythonStructureEdit = shouldRouteSimpleStructureEditToPython(t);
   const rangeRefs = t.match(/@범위\[/g) || [];
   const explicitColumns = /![A-Z]{1,3}:[A-Z]{1,3}\]/i.test(t);
   const pivotLike = /(피벗|pivot|유사\s*피벗|그룹\s*별|그룹별|집계표|요약표|크로스탭)/i.test(t)
@@ -329,6 +348,7 @@ function shouldRouteRequestToVba(text) {
     && (rangeRefs.length >= 3 || explicitColumns)
   );
   if (explicitVba) return true;
+  if (simplePythonStructureEdit) return false;
   if (pivotLike || pivotShape || keyedRowOverwrite || wholeSheetCrossCopy || multiValueLookupAggregate) return true;
   if (conditionMarkers.length >= 2 && (rowwiseWrite || colRefs.length >= 2)) return true;
   return conditionMarkers.length >= 1 && rowwiseWrite && colRefs.length >= 2;
@@ -338,6 +358,7 @@ function shouldRouteRequestToPython(text) {
   const t = String(text || "");
   if (!t.trim()) return false;
   if (userExplicitlyRequestsVba(t)) return false;
+  if (shouldRouteSimpleStructureEditToPython(t)) return true;
   const multiValueCell = /(하나의\s*셀에\s*여러|한\s*셀에\s*여러|셀\s*안(?:의|에)?\s*데이터|셀안의?\s*데이터|아래로\s*여러|여러\s*개\s*(?:들어|데이터|값)|여러개\s*(?:들어|데이터|값)|셀들을?\s*(?:분리|나눠|쪼개)|구분자|줄\s*바꿈|줄바꿈|TEXTSPLIT|CHAR\s*\(\s*10\s*\)|split)/i.test(t);
   const lookupMatch = /(일치|매칭|같은|동일|찾아서|찾아|기준)/i.test(t);
   const aggregateWrite = /(합계값|합계|합산|더해|sum|작성|입력|기입|채워|넣어|반영)/i.test(t);
@@ -2052,6 +2073,7 @@ async function sendChat() {
   const aiName = settings.provider === "openai-compat" ? "ixi 모델" : "LLM";
   const routeToVba = shouldRouteRequestToVba(msg);
   const routeToPython = !routeToVba && shouldRouteRequestToPython(msg);
+  const routeToSimplePythonStructure = routeToPython && shouldRouteSimpleStructureEditToPython(msg);
   const explicitVbaRequest = userExplicitlyRequestsVba(msg);
   const modeLabel = editTargetId ? "(수정 모드) " : (routeToVba ? "(VBA 라우팅) " : (routeToPython ? "(Python 라우팅) " : ""));
   const thinkMode = typeof isThinkModeEnabled === "function" && isThinkModeEnabled();
@@ -2079,7 +2101,9 @@ async function sendChat() {
           ? "사용자가 이번 요청에서 VBA/매크로를 명시했습니다. 반드시 하나의 ```vba 코드 블록(Sub B2BSkill())만 작성하고 Python def transform(ctx)는 절대 출력하지 마세요. @범위/@컬럼의 파일명·시트명은 번역 없이 정확히 복사하세요."
           : "복합 조건/피벗성 집계/시트 전체 교차파일 복사/한 셀 여러 값 매칭 합산 요청은 저사양 PC에서 Python COM 경로가 멈추거나 행 위치가 밀릴 수 있으므로 이번 응답은 VBA로 작성합니다. 전체 열은 실제 데이터 범위로 한정하고, 합계/소계/부가세포함 같은 요약 행은 데이터 행에서 제외하세요.")
         : (routeToPython
-          ? "한 셀에 여러 값이 들어 있는 열을 분해해 다른 파일 열과 매칭하고 값 합계를 대상 열에 쓰는 요청입니다. VBA 매크로가 아니라 Python COM으로 작성하세요. 가입번호/코드류는 부분일치가 아니라 분리된 토큰과 조회 열 값을 정확 일치 비교하세요. 전체 열을 그대로 읽지 말고 실제 마지막 행까지 범위를 한정하세요. 매칭된 행만 대상 열에 쓰고, 매칭 없는 행/합계 수식/텍스트 행은 그대로 보존하세요."
+          ? (routeToSimplePythonStructure
+            ? "단순 행/열 삽입·삭제 또는 범위 내용 삭제 요청입니다. VBA 매크로가 아니라 Python COM으로 작성하세요. 행/열 자체 삭제·추가는 ctx.delete_rows/delete_cols/insert_rows/insert_cols 를 쓰고, 셀/범위의 내용만 지우는 요청은 ctx.clear 를 쓰세요. @범위의 파일명·시트명·주소는 번역하거나 바꾸지 말고 그대로 쓰세요."
+            : "한 셀에 여러 값이 들어 있는 열을 분해해 다른 파일 열과 매칭하고 값 합계를 대상 열에 쓰는 요청입니다. VBA 매크로가 아니라 Python COM으로 작성하세요. 가입번호/코드류는 부분일치가 아니라 분리된 토큰과 조회 열 값을 정확 일치 비교하세요. 전체 열을 그대로 읽지 말고 실제 마지막 행까지 범위를 한정하세요. 매칭된 행만 대상 열에 쓰고, 매칭 없는 행/합계 수식/텍스트 행은 그대로 보존하세요.")
           : ""),
       signal: abortController.signal,
       onDelta: (delta, full) => {

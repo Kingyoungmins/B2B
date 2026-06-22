@@ -775,6 +775,7 @@ namespace B2BNativeHost
             psi.EnvironmentVariables["B2B_PORT"] = port.ToString();
             psi.EnvironmentVariables["B2B_HOST"] = "127.0.0.1";
             psi.EnvironmentVariables["B2B_NO_BROWSER"] = "1";
+            psi.EnvironmentVariables["B2B_NATIVE_HOST_PID"] = Process.GetCurrentProcess().Id.ToString();
             psi.EnvironmentVariables["PYTHONUNBUFFERED"] = "1";
             serverProcess = Process.Start(psi);
             if (serverProcess == null) throw new InvalidOperationException("Python server did not start.");
@@ -1225,9 +1226,10 @@ namespace B2BNativeHost
                     HttpWebRequest req = (HttpWebRequest)WebRequest.Create(closeUrl);
                     req.Method = "POST";
                     // 종료 시 close-all 은 반드시 동기로 기다린다(비동기화하면 서버 kill 과 경합해
-                    // 공유 EXCEL.EXE 가 고아로 남는다). 대기 한도만 25s→15s 로 줄여 종료 체감 개선.
-                    req.Timeout = 15000;
-                    req.ReadWriteTimeout = 15000;
+                    // 공유 EXCEL.EXE 가 고아로 남는다). 서버 내부 Excel 정리 타임아웃(20s)보다
+                    // 짧으면 정리 중인 서버를 먼저 죽여 Excel 이 남을 수 있으므로 여유를 둔다.
+                    req.Timeout = 35000;
+                    req.ReadWriteTimeout = 35000;
                     byte[] body = Encoding.UTF8.GetBytes("{}");
                     req.ContentType = "application/json";
                     req.ContentLength = body.Length;
@@ -1242,6 +1244,7 @@ namespace B2BNativeHost
             catch (Exception ex)
             {
                 Program.Log("Excel close-all failed: " + ex.Message);
+                TryPostShutdownJson("/api/excel/force-restart", 8000);
             }
             HideExcelChildren();
             try
@@ -1265,6 +1268,32 @@ namespace B2BNativeHost
             }
             catch
             {
+            }
+        }
+
+        private void TryPostShutdownJson(string path, int timeoutMs)
+        {
+            try
+            {
+                if (String.IsNullOrEmpty(path)) return;
+                string url = "http://127.0.0.1:" + port + path;
+                HttpWebRequest req = (HttpWebRequest)WebRequest.Create(url);
+                req.Method = "POST";
+                req.Timeout = timeoutMs;
+                req.ReadWriteTimeout = timeoutMs;
+                byte[] body = Encoding.UTF8.GetBytes("{}");
+                req.ContentType = "application/json";
+                req.ContentLength = body.Length;
+                using (Stream stream = req.GetRequestStream())
+                {
+                    stream.Write(body, 0, body.Length);
+                }
+                using (req.GetResponse()) { }
+                Program.Log("Shutdown endpoint completed: " + path);
+            }
+            catch (Exception ex)
+            {
+                Program.Log("Shutdown endpoint failed " + path + ": " + ex.Message);
             }
         }
 

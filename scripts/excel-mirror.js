@@ -135,9 +135,12 @@ function _installUiBusyInputGuard() {
   const blockedTypes = ["pointerdown", "pointerup", "click", "dblclick", "contextmenu", "wheel", "dragenter", "dragover", "drop"];
   blockedTypes.forEach(type => {
     document.addEventListener(type, e => {
-      if (!isUiBusy()) return;
+      // [버튼 안 눌림 수정] 오버레이가 '실제로 보일 때'만 입력을 막는다. 예전엔 count>0 이면
+      // 막았는데, 오버레이는 showDelay(120~180ms) 뒤에야 표시되므로 그 사이(또는 showDelay 보다
+      // 빨리 끝나는 탭전환/짧은 작업)에 전송/적용 클릭이 '시각적 안내 없이' 먹혔다.
       const overlay = uiBusy.el;
-      if (overlay && overlay.contains(e.target)) return;
+      if (!isUiBusy() || !overlay || !overlay.classList.contains("show")) return;
+      if (overlay.contains(e.target)) return;
       e.stopPropagation();
       e.preventDefault();
     }, true);

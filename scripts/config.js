@@ -7,8 +7,11 @@ window.B2B_BUILD_STAMP = B2B_BUILD_STAMP;
 // 마우스 우클릭(컨텍스트 메뉴) 전역 차단. (네이티브 셸은 WebView 설정으로도 막지만 브라우저 모드 대비)
 window.addEventListener("contextmenu", (e) => { e.preventDefault(); }, true);
 
-const IXI_VIOLET_BASE_URL = "http://canvas-ns-1727666527880704.mng.ip.violet.uplus.co.kr";
+const IXI_VIOLET_BASE_URL = "https://e2e-ns-17786299267796664.mng-1.ip.violet.uplus.co.kr";
 const IXI_OPENAI_BASE_URL = `${IXI_VIOLET_BASE_URL}/v1`;
+// 옛 ixi upstream/키 — 저장된 설정(localStorage)에 남아 있으면 새 값으로 승격(마이그레이션).
+const IXI_LEGACY_UPSTREAMS = ["http://canvas-ns-1727666527880704.mng.ip.violet.uplus.co.kr"];
+const IXI_LEGACY_API_KEYS = ["7365676d"];
 
 const DEFAULTS = {
   anthropic: {
@@ -17,7 +20,7 @@ const DEFAULTS = {
     baseUrl: "https://api.anthropic.com/v1",
   },
   "openai-compat": {
-    apiKey: "7365676d",
+    apiKey: "653265",
     model: ["Qwen3.6", "27B", "FP8"].join("-"),
     // ixi는 0.4.12 방식(로컬 /v1 프록시)로 호출한다 — 서버(serve_b2b)가 /v1/* 를 Violet/vLLM 으로 전달.
     // (직접 호출은 게이트웨이 403/CORS 등 환경 이슈가 있어 프록시 경유로 복귀)
@@ -112,8 +115,8 @@ function normalizeSettings(parsed) {
       baseUrl: network === "dev-vllm"
         ? (parsed.baseUrl || networkDefaults.baseUrl || DEFAULTS.devVllm.baseUrl)
         : normalizeIxiBaseUrl(parsed.baseUrl || networkDefaults.baseUrl || DEFAULTS["openai-compat"].baseUrl, parsed),
-      proxyUpstream: network === "dev-vllm" ? "" : (parsed.proxyUpstream || DEFAULTS["openai-compat"].proxyUpstream),
-      apiKey: parsed.apiKey || DEFAULTS["openai-compat"].apiKey,
+      proxyUpstream: network === "dev-vllm" ? "" : normalizeIxiProxyUpstream(parsed.proxyUpstream, parsed),
+      apiKey: normalizeIxiApiKey(network, parsed.apiKey, networkDefaults, parsed),
       // [사용자 요청] Think 기본 ON. 과거 기본값(false)이 저장돼 있던 사용자도 ON 으로 올린다 —
       // 사용자가 토글 버튼으로 직접 바꾼 적 있는 경우(thinkModeUserSet)에만 저장값을 존중.
       thinkMode: parsed.thinkModeUserSet === true ? parsed.thinkMode === true : true,
@@ -155,6 +158,27 @@ function normalizeIxiModel(network, value, parsed) {
     return DEFAULTS["openai-compat"].model;
   }
   return value;
+}
+
+function normalizeIxiProxyUpstream(value, parsed) {
+  // 저장 설정에 남은 옛 ixi upstream 주소는 새 기본 upstream 으로 승격(DEV 명시 저장 제외).
+  const raw = String(value || "").trim().replace(/\/$/, "");
+  if (!raw) return DEFAULTS["openai-compat"].proxyUpstream;
+  if (IXI_LEGACY_UPSTREAMS.includes(raw) && !(parsed && parsed.devModeSet === true)) {
+    return DEFAULTS["openai-compat"].proxyUpstream;
+  }
+  return raw;
+}
+
+function normalizeIxiApiKey(network, value, networkDefaults, parsed) {
+  // 옛 ixi API 키는 새 키로 승격(DEV 명시 저장 제외). dev-vllm 네트워크 키는 그대로 둔다.
+  const raw = String(value || "").trim();
+  const fallback = (networkDefaults && networkDefaults.apiKey) || DEFAULTS["openai-compat"].apiKey;
+  if (!raw) return fallback;
+  if (network === "ixi" && IXI_LEGACY_API_KEYS.includes(raw) && !(parsed && parsed.devModeSet === true)) {
+    return DEFAULTS["openai-compat"].apiKey;
+  }
+  return raw;
 }
 
 function normalizeThinkControlMode(value) {

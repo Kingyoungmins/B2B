@@ -58,7 +58,7 @@ HOST = os.environ.get("B2B_HOST", "127.0.0.1")
 PORT = int(os.environ.get("B2B_PORT", "8090"))
 VLLM_BASE = os.environ.get(
     "B2B_VLLM_BASE",
-    "http://canvas-ns-1727666527880704.mng.ip.violet.uplus.co.kr",
+    "https://e2e-ns-17786299267796664.mng-1.ip.violet.uplus.co.kr",
 ).rstrip("/")
 PROXY_RETRY_ATTEMPTS = int(os.environ.get("B2B_PROXY_RETRY_ATTEMPTS", "3"))
 PROXY_RETRY_BASE_DELAY = float(os.environ.get("B2B_PROXY_RETRY_BASE_DELAY", "0.6"))
@@ -89,6 +89,10 @@ PYTHON_SKILL_APP_REAP_CHECK_AT = 0.0
 SPAWNED_EXCEL_PIDS = set()
 EXCEL_LAST_REAP_AT = 0.0
 EXCEL_REAP_INTERVAL_SECONDS = float(os.environ.get("B2B_EXCEL_REAP_INTERVAL", "300"))
+NATIVE_HOST_PID = int(os.environ.get("B2B_NATIVE_HOST_PID") or "0")
+DISABLE_PARENT_WATCH = os.environ.get("B2B_DISABLE_PARENT_WATCH", "").strip().lower() in ("1", "true", "yes")
+PARENT_WATCH_GRACE_SECONDS = float(os.environ.get("B2B_PARENT_WATCH_GRACE_SECONDS", "10"))
+PARENT_WATCH_MISSING_SINCE = 0.0
 HEALTH_EXCEL_DIAG_INTERVAL_SECONDS = float(os.environ.get("B2B_HEALTH_EXCEL_DIAG_INTERVAL", "60"))
 HEALTH_LAST_EXCEL_DIAG_AT = 0.0
 HEALTH_CACHED_EXCEL_DIAG = None
@@ -636,9 +640,6 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
         if self.path == "/api/excel/capture-copypaste":
             self.handle_excel_capture_copypaste()
             return
-        if self.path == "/api/excel/capture-delete":
-            self.handle_excel_capture_delete()
-            return
         if self.path == "/api/excel/hover-info":
             self.handle_excel_hover_info()
             return
@@ -1037,16 +1038,6 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
         except Exception as err:
             # 캡처 실패(복사 없음/선택 영역 문제)는 사용자 안내용이므로 200 + ok:false 로 메시지를 그대로 전달.
             _vba_trace("capture.copypaste.error", excelId=payload.get("excelId"), error=str(err))
-            self.send_json({"ok": False, "error": str(err)})
-
-    def handle_excel_capture_delete(self):
-        """[셀 삭제 캡처] 사용자가 선택 후 Delete 로 지운 범위를 역추적해
-        ctx.clear(...) Python 스텝으로 만들어 돌려준다(프론트가 파이프라인에 추가)."""
-        payload = self.read_json_body()
-        try:
-            result = run_capture_delete(payload.get("excelId"))
-            self.send_json(result)
-        except Exception as err:
             self.send_json({"ok": False, "error": str(err)})
 
     def handle_excel_run_vba(self):
@@ -2881,6 +2872,7 @@ def _runtime_maintenance_loop():
     next_housekeeping = time.time() + max(60.0, HOUSEKEEPING_INTERVAL_SECONDS)
     while True:
         now = time.time()
+        _native_parent_watch_once(now)
         if now >= next_sample:
             try:
                 _runtime_sampler_once()
@@ -2891,6 +2883,41 @@ def _runtime_maintenance_loop():
             _run_low_risk_housekeeping()
             next_housekeeping = now + max(60.0, HOUSEKEEPING_INTERVAL_SECONDS)
         time.sleep(1.0)
+
+
+def _native_parent_watch_once(now):
+    """Native host가 사라졌는데 Python 서버만 살아남으면 Excel COM 인스턴스도 고아로 남는다.
+
+    Native host가 서버를 띄운 경우에만 B2B_NATIVE_HOST_PID를 넘기므로, 일반 단독 서버 실행에는
+    영향을 주지 않는다. 부모가 사라진 상태가 잠깐의 프로세스 전환이 아니라는 것을 grace로 확인한 뒤
+    서버가 직접 app-owned Excel을 정리하고 종료한다.
+    """
+    global PARENT_WATCH_MISSING_SINCE
+    if DISABLE_PARENT_WATCH or not NATIVE_HOST_PID:
+        return
+    if _is_pid_alive(NATIVE_HOST_PID):
+        PARENT_WATCH_MISSING_SINCE = 0.0
+        return
+    if not PARENT_WATCH_MISSING_SINCE:
+        PARENT_WATCH_MISSING_SINCE = now
+        _perf_trace("runtime.parent.missing", parentPid=NATIVE_HOST_PID)
+        return
+    if now - PARENT_WATCH_MISSING_SINCE < max(1.0, PARENT_WATCH_GRACE_SECONDS):
+        return
+    _perf_trace(
+        "runtime.parent.missing.shutdown",
+        parentPid=NATIVE_HOST_PID,
+        missingForSeconds=round(now - PARENT_WATCH_MISSING_SINCE, 1),
+    )
+    try:
+        cleanup_excel_sessions()
+    except Exception as err:
+        _perf_trace("runtime.parent.missing.cleanup_error", error=str(err))
+    try:
+        cleanup_node_worker()
+    except Exception:
+        pass
+    os._exit(0)
 
 
 def start_runtime_maintenance_threads():
@@ -6768,49 +6795,6 @@ def _capture_copypaste_on_session_impl(excel_id, values_only=False):
 
 def run_capture_copypaste(excel_id, values_only=False):
     return excel_call(_capture_copypaste_on_session_impl, excel_id, bool(values_only), timeout=60)
-
-
-def _capture_delete_on_session_impl(excel_id):
-    """라이브 세션에서 '방금 Delete 로 지운 셀'을 캡처한다.
-    대상 = 현재 Selection(사용자가 선택해 Delete 한 범위). ctx.clear(sheet, range) 스킬 스텝을 만든다
-    (값/수식만 삭제, 서식 유지). LLM 추측 없이 캡처된 좌표로 재생하므로 모호성이 없다."""
-    with EXCEL_LOCK:
-        session = get_excel_session(excel_id)
-        app, wb = session_workbook(session)
-        try:
-            sel = app.Selection
-            ws = sel.Worksheet
-            sheet = str(ws.Name)
-            book = str(ws.Parent.Name)
-            addr = _excel_address(sel).replace("$", "")
-        except Exception as e:
-            raise RuntimeError("선택 영역을 읽지 못했습니다: %s" % e)
-        if not addr:
-            raise RuntimeError(
-                "지울 셀 범위를 먼저 선택해 주세요. 우측 엑셀에서 지울 범위를 드래그(또는 Delete)한 뒤 "
-                "곧바로 [셀 삭제 저장]을 눌러 주세요."
-            )
-        # 세션의 주 워크북과 다른 파일을 선택했으면 ctx.book(...) 으로 그 파일을 대상으로 한다(교차파일 안전).
-        same_book = _workbook_name_lookup_key(book) == _workbook_name_lookup_key(str(wb.Name))
-        call = "ctx.clear(%r, %r)" % (sheet, addr) if same_book \
-            else "ctx.book(%r).clear(%r, %r)" % (book, sheet, addr)
-        step_code = (
-            "def transform(ctx):\n"
-            "    # [셀 삭제 캡처] 사용자가 선택 후 Delete 로 지운 범위의 값/수식 삭제(서식 유지)\n"
-            "    %s\n" % call
-        )
-        desc = "셀 삭제: %s!%s%s" % (sheet, addr, "" if same_book else " (교차파일)")
-        return {
-            "ok": True,
-            "target": {"book": book, "sheet": sheet, "range": addr},
-            "language": "python",
-            "code": step_code,
-            "description": desc,
-        }
-
-
-def run_capture_delete(excel_id):
-    return excel_call(_capture_delete_on_session_impl, excel_id, timeout=60)
 
 
 # =====================================================================

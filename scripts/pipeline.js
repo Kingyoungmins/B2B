@@ -465,8 +465,63 @@ function pipelineTargetSheetNames(step) {
   return names;
 }
 
+// ctx 의 '읽기 전용' 메서드. 이외의 메서드 호출은 변형(쓰기/삭제/구조변경)으로 본다.
+const PIPELINE_CTX_READER_METHODS = new Set(["read", "sheets", "used_range", "has_formulas", "formula_mask", "book"]);
+
+// VAR = ctx.book("X")  ->  { VAR: "X" }
+function pipelinePythonBookVarNames(code) {
+  const map = {};
+  let m;
+  const re = /([A-Za-z_]\w*)\s*=\s*ctx\.book\s*\(\s*["']([^"']+)["']\s*\)/g;
+  while ((m = re.exec(String(code || "")))) map[m[1]] = m[2];
+  return map;
+}
+
+// ctx.book("X") 로 가져온 다른 파일을 '변형'(delete_sheet/write/clear/...)하는 경우의 X 목록.
+// 추론기가 ctx.book 을 무조건 읽기 소스로 봐서 변형 대상을 놓치는 것을 보완한다(시트삭제/교차파일 쓰기).
+function pipelinePythonMutatedBookNames(code) {
+  const text = String(code || "");
+  if (!/ctx\.book\s*\(/.test(text)) return [];
+  const names = [];
+  const add = n => { if (n && !names.includes(n)) names.push(n); };
+  let m;
+  // (a) 직접 체이닝: ctx.book("X").<method>(
+  const chain = /ctx\.book\s*\(\s*["']([^"']+)["']\s*\)\s*\.\s*([A-Za-z_]\w*)\s*\(/g;
+  while ((m = chain.exec(text))) { if (!PIPELINE_CTX_READER_METHODS.has(m[2])) add(m[1]); }
+  // (b) 변수 경유: VAR = ctx.book("X"); VAR.<method>(
+  const vars = pipelinePythonBookVarNames(text);
+  for (const v of Object.keys(vars)) {
+    const esc = v.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const re = new RegExp("\\b" + esc + "\\s*\\.\\s*([A-Za-z_]\\w*)\\s*\\(", "g");
+    while ((m = re.exec(text))) { if (!PIPELINE_CTX_READER_METHODS.has(m[1])) add(vars[v]); }
+  }
+  return names;
+}
+
+// 메인 ctx(=세션 워크북) 자체를 직접 변형하는가. ctx.book(...) 의 .book 은 읽기로 취급(제외).
+function pipelineStepMutatesMainCtx(code) {
+  const re = /\bctx\s*\.\s*([A-Za-z_]\w*)\s*\(/g;
+  let m;
+  while ((m = re.exec(String(code || "")))) {
+    if (!PIPELINE_CTX_READER_METHODS.has(m[1])) return true;
+  }
+  return false;
+}
+
 function inferPipelineStepTargetFileId(step) {
   if (!step) return null;
+  // [교차파일 변형] ctx.book("X").<변형메서드>(...) 로 '다른 파일을 변형'하는 스텝은 X 가 실제 변형 대상이다.
+  // 추론기가 ctx.book 을 무조건 읽기 소스로 봐 대상을 (보던 탭 등) 엉뚱하게 잡으면, 전체실행(격리)에서
+  // 변형이 '버려지는 동반 복사본'에 적용돼 "적용됨"인데 반영 안 되는 버그가 난다(예: 시트 삭제가 안 됨).
+  // 메인 ctx 를 직접 변형하지 않는 경우에 한해, 저장된(잘못될 수 있는) targetFileId 보다 우선해 X 로 복구한다.
+  try {
+    if (!pipelineStepMutatesMainCtx(step.code)) {
+      for (const name of pipelinePythonMutatedBookNames(step.code)) {
+        const fid = pipelineFileIdByWorkbookName(name);
+        if (fid) return fid;
+      }
+    }
+  } catch (_) {}
   const saved = pipelineResolveSavedTargetFileId(step.targetFileId);
   if (saved) return saved;
   const lang = (step.language || inferPipelineStepLanguage(step));
@@ -808,10 +863,13 @@ async function runVbaPipelinePreferLive(options = {}) {
     }
     excelId = await ensureVbaRunExcelId();
   }
-  // 교차파일 복붙(소스≠대상)이 하나라도 있으면 격리 파이프라인으로 돌린다. 라이브 경로는 소스
-  // 워크북을 직접 읽어 그 창의 보호뷰가 풀리고/잠겨 재업로드가 막히는 부작용이 있다(실측). 격리
-  // 경로는 소스를 throwaway 복사본으로만 읽으므로 라이브 소스를 전혀 건드리지 않는다.
-  const hasCrossFileStep = activeSteps.some(pipelineStepReadsOtherFile);
+  // 교차파일 스텝(복붙 소스≠대상, 또는 ctx.book("X").<변형>으로 다른 파일을 변형)이 하나라도 있으면
+  // 격리 파이프라인으로 돌린다. 라이브 경로는 (1) 소스 워크북을 직접 읽어 창 보호뷰가 풀리거나
+  // (2) 스텝을 '보던 탭' 세션에서 돌려 정작 변형 대상 파일은 보호 해제가 안 돼 "보호된 시트" 오류가 난다.
+  // 격리 경로는 각 스텝을 '변형 대상 파일' 세션(ftarget, 보호 해제됨)에서 돌리고 다른 파일은 throwaway
+  // 복사본으로만 열므로 둘 다 해결된다.
+  const hasCrossFileStep = activeSteps.some(s =>
+    pipelineStepReadsOtherFile(s) || (pipelinePythonMutatedBookNames(s.code).length > 0));
   if (hasVbaStep || hasCrossFileStep) {
     // 사용자가 확인한 실패 케이스의 공통점은 전체실행에서 라이브 임베드 Excel 인스턴스가
     // Application.Run 을 거부하는 것이다. VBA 가 하나라도 있으면(또는 교차파일 복붙이면) 새 비임베드
@@ -2954,9 +3012,9 @@ async function runPipelineWithAutoRepair(options = {}) {
       const stepIdx = resolveRunnerRecoveryStepIndex(info);
       if (!Number.isInteger(stepIdx) || stepIdx < 0 || !state.pipeline[stepIdx]) throw err;
       const step = state.pipeline[stepIdx];
-      // 캡처한 복붙/셀삭제는 '사용자가 실제로 한 동작의 정확 좌표 재생'이 목적이다. LLM 자동복구로
+      // 캡처한 복붙은 '사용자가 실제로 한 동작의 정확 좌표 재생'이 목적이다. LLM 자동복구로
       // 재생성하면 동작이 바뀌고(복붙 버그 재발) 같은 실패를 반복하며 "박힘" → 재생성하지 말고 그대로 보고.
-      if (step && step.code && /\[복붙 캡처\]|\[셀 삭제 캡처\]/.test(String(step.code))) throw err;
+      if (step && step.code && /\[복붙 캡처\]/.test(String(step.code))) throw err;
       const key = step.id || `idx:${stepIdx}`;
       const count = repairsByStep.get(key) || 0;
       if (count >= PIPELINE_AUTO_REPAIR_MAX_PER_STEP || repairsDone >= PIPELINE_AUTO_REPAIR_MAX_REPAIRS) throw err;
@@ -3031,39 +3089,6 @@ $("btn-run").onclick = async () => {
     } finally {
       btn.disabled = false;
       if (valuesOnlyInput) valuesOnlyInput.disabled = false;
-    }
-  };
-})();
-
-// [셀 삭제 캡처] 우측 라이브 엑셀에서 지울 범위를 선택(또는 Delete)한 직후 이 버튼을 누르면,
-// 서버가 현재 선택영역을 역추적해 ctx.clear(...) 스킬 단계로 저장한다(값/수식 삭제, 서식 유지).
-// 재생은 Python COM 경로 → VBA 러너를 타지 않음.
-(function () {
-  const btn = (typeof $ === "function") ? $("btn-capture-delete") : null;
-  if (!btn) return;
-  btn.onclick = async () => {
-    const excelId = (typeof vbaTargetExcelId === "function" && vbaTargetExcelId())
-      || (typeof currentExcelId === "function" && currentExcelId());
-    if (!excelId) { toast("먼저 우측에 엑셀 파일을 열어 주세요", "error"); return; }
-    btn.disabled = true;
-    try {
-      const data = await postExcelMirror("/api/excel/capture-delete", { excelId }, 0, { timeoutMs: 20000 });
-      if (!data || !data.ok) { toast((data && data.error) || "선택 영역을 찾지 못했습니다", "error"); return; }
-      const step = {
-        id: (typeof uid === "function" ? uid() : ("del_" + ((state.pipeline || []).length + 1))),
-        prompt: "셀 삭제 캡처: " + data.description,
-        code: data.code,
-        description: data.description,
-        language: "python",
-        targetFileId: (typeof fileIdForExcelMirrorId === "function" ? fileIdForExcelMirrorId(excelId) : null)
-          || state.currentFileId || null,
-      };
-      applyLogic(step);
-      toast("셀 삭제를 스킬 단계로 저장했습니다 — " + data.description, "success");
-    } catch (err) {
-      toast("셀 삭제 캡처 실패: " + (err && err.message ? err.message : String(err)), "error");
-    } finally {
-      btn.disabled = false;
     }
   };
 })();
