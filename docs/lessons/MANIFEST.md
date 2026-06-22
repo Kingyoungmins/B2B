@@ -19,6 +19,8 @@ Generated from selected lesson documents in B2B_ver0.5.6 ~ B2B_ver0.5.9.
 | `13_legacy_changelog.md` | 13349 |
 | `14_v0510_cross_file_copy_paste_full_run.md` | 7197 |
 | `15_v0510_idle_runtime_load.md` | 4476 |
+| `16_v0510_routing_mention_keyword_collision.md` | 3932 |
+| `17_v0510_vba_hidden_noop_smoke.md` | 3024 |
 | `by_version/v0.5.6/CHANGES_claude.md` | 14668 |
 | `by_version/v0.5.6/EXCEL_MIRROR_ARCHITECTURE.md` | 3215 |
 | `by_version/v0.5.6/PYTHON_ENGINE_RISKS.md` | 7599 |

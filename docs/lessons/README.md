@@ -42,6 +42,8 @@
 | Python COM이 느리거나 앱이 멈춤 | `02_python_engine_risks.md`, `08_v059_freeze_regression_scenarios.md` |
 | 값만 복사, 그냥 복사, 수식/서식 보존 혼동 | `07_v058_regression_scenarios.md`, `09_v059_copy_paste_capture_scenarios.md` |
 | 교차파일 복붙이 전체실행만 실패(보호 시트 오류)·복붙 캡처 동작/함정 | `14_v0510_cross_file_copy_paste_full_run.md`, `09_v059_copy_paste_capture_scenarios.md` |
+| 단순 작업이 엉뚱한 엔진(VBA/Python)으로 라우팅됨·엔진 선택 규칙 | `16_v0510_routing_mention_keyword_collision.md`, `01_project_readme_changelog.md` |
+| VBA 행/열 숨김·숨김해제가 적용됐는데 "변경 없음" 오류로 스킬 생성이 막힘 | `17_v0510_vba_hidden_noop_smoke.md` |
 | 피벗/유사 피벗, 선행 0 보존, 시간 환산 | `07_v058_regression_scenarios.md`, `04_vba_regression_checklist.md` |
 | VBA 생성 흐름 전체를 설명해야 함 | `05_chat_to_excel_flow_prompt.md` |
 | Excel 미러/네이티브 구조 파악 | `03_excel_mirror_architecture.md` |
@@ -79,6 +81,8 @@
 | `12_changes_claude_review_notes.md` | `CHANGES_claude.md` |
 | `13_legacy_changelog.md` | `CHANGELOG.md` |
 | `14_v0510_cross_file_copy_paste_full_run.md` | 2026-06-18 교차파일 전체실행 조사 세션에서 신규 작성(단일 원본 복사 아님) |
+| `16_v0510_routing_mention_keyword_collision.md` | 2026-06-22 라우팅 오분류(파일명 키워드 충돌) 조사 세션에서 신규 작성 |
+| `17_v0510_vba_hidden_noop_smoke.md` | 2026-06-22 VBA 행/열 숨김 상태 no-op 실패 조사 세션에서 신규 작성 |
 | `by_version/v0.5.6/*` | `../B2B_ver0.5.6`의 교훈성 MD |
 | `by_version/v0.5.7/*` | `../B2B_ver0.5.7`의 교훈성 MD |
 | `by_version/v0.5.8/*` | `../B2B_ver0.5.8`의 교훈성 MD와 회귀 리포트 |

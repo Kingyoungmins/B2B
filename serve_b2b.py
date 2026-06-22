@@ -469,6 +469,17 @@ def _pipeline_error_guide(message, code=""):
         return ("입력 파일은 읽기 전용이라, 입력에 쓰거나 저장하려다 실패했을 수 있습니다.",
                 "결과는 출력 파일에 쓰도록 하세요. 입력 파일을 꼭 바꿔야 하면 코드 첫 줄에 # B2B_ENGINE_FALLBACK: excel-com 을 넣어 Excel 처리를 요청하세요.")
     # ── VBA(Excel COM 매크로) 특유 오류 ── (subscript/accessvbom/문법 등은 위 일반 케이스보다 먼저 잡히도록 케이스 조건을 한정)
+    code_text = str(code or "")
+    if "vba 안전 검사" in m:
+        return ("생성된 VBA 코드가 안전 검사를 통과하지 못했습니다.",
+                "열 문자는 숫자로 암산하지 말고 BP/BQ처럼 그대로 쓰고, 매칭된 행만 갱신하도록 다시 생성하세요.")
+    if re.search(r"\bContinue\s+For\b", code_text, re.IGNORECASE):
+        return ("생성된 VBA 코드에 Excel VBA가 지원하지 않는 문법이 있습니다.",
+                "Continue For 대신 If Len(...) > 0 Then ... End If 구조로 다시 생성하세요.")
+    if re.search(r"\b(?=[A-Za-z0-9_]*bp)(?=[A-Za-z0-9_]*col)[A-Za-z_][A-Za-z0-9_]*\s*=\s*58\b", code_text, re.IGNORECASE) \
+            or re.search(r"\b(?=[A-Za-z0-9_]*bq)(?=[A-Za-z0-9_]*col)[A-Za-z_][A-Za-z0-9_]*\s*=\s*59\b", code_text, re.IGNORECASE):
+        return ("생성된 VBA 코드가 BP/BQ 열 번호를 잘못 계산했습니다.",
+                "BP는 68, BQ는 69입니다. 하지만 숫자를 직접 쓰지 말고 ws.Columns(\"BP\").Column 또는 ws.Cells(r, \"BP\")처럼 열 문자를 그대로 쓰게 다시 생성하세요.")
     if ("매크로를 실행할 수 없습니다" in m) or has("cannot run the macro", "macro may not be available", "macros may be disabled"):
         return ("Excel이 VBA 실행을 거부했습니다.",
                 "앱과 Excel 프로세스를 모두 닫은 뒤 다시 실행하세요. 같은 파일에서 채팅 단일 적용은 되는데 전체실행만 실패하면 프로그램 실행 경로 문제입니다.")
@@ -4695,10 +4706,56 @@ def _strip_vba_comment(line):
     return "".join(out)
 
 
+def _vba_allows_unchanged_fingerprint_success(code):
+    """Some VBA operations are intentionally idempotent and are not reflected in the
+    cell value/formula fingerprint. Example: Rows("3:5").Hidden = False succeeds
+    even when those rows are already visible. Treat only narrow structural state
+    setters as successful no-change operations; value/calculation tasks still use
+    the no-op guard below."""
+    text = "\n".join(_strip_vba_comment(line) for line in str(code or "").splitlines())
+    if not text.strip():
+        return False
+    hidden_setter = re.search(
+        r"(?:\.\s*(?:Rows|Columns)\s*\([^)]*\)|\.\s*Entire(?:Row|Column)|\b(?:Rows|Columns)\s*\([^)]*\))"
+        r"\s*\.\s*Hidden\s*=\s*(?:True|False)\b",
+        text,
+        re.IGNORECASE,
+    )
+    return bool(hidden_setter)
+
+
 def _validate_vba_source_before_inject(code):
     """VBE 디버거를 띄우는 명백한 컴파일 오류는 Excel에 주입하기 전에 차단한다."""
     lines = str(code or "").splitlines()
     block_stack = []
+    code_text = str(code or "")
+    bad_col_assignments = [
+        ("BP", 58, 68, re.compile(r"\b(?=[A-Za-z0-9_]*bp)(?=[A-Za-z0-9_]*col)[A-Za-z_][A-Za-z0-9_]*\s*=\s*58\b", re.IGNORECASE)),
+        ("BQ", 59, 69, re.compile(r"\b(?=[A-Za-z0-9_]*bq)(?=[A-Za-z0-9_]*col)[A-Za-z_][A-Za-z0-9_]*\s*=\s*59\b", re.IGNORECASE)),
+    ]
+    for col, wrong, expected, pattern in bad_col_assignments:
+        if pattern.search(code_text):
+            raise RuntimeError(
+                'VBA 안전 검사: %s열 번호를 %d로 하드코딩했습니다. %s열은 %d입니다. '
+                'ws.Columns("%s").Column 또는 ws.Cells(r, "%s")처럼 열 문자를 그대로 사용하세요.'
+                % (col, wrong, col, expected, col, col)
+            )
+    multi_value_lookup_shape = (
+        re.search(r"\bBP\b", code_text, re.IGNORECASE)
+        and re.search(r"\bBQ\b", code_text, re.IGNORECASE)
+        and re.search(r"\b(?:token|tokens|Split)\b", code_text, re.IGNORECASE)
+        and re.search(r"\b(?:hCol|targetColOut|targetCol|outCol|resultCol)\b|[\"']H[\"']", code_text, re.IGNORECASE)
+    )
+    if multi_value_lookup_shape:
+        for raw in lines:
+            line = _strip_vba_comment(raw).strip()
+            if re.search(r"\bRange\s*\(", line, re.IGNORECASE) \
+                    and re.search(r"\.\s*(?:Value|Value2)\s*=\s*[A-Za-z_][A-Za-z0-9_]*(?:Arr|Array|Values|Data)\b", line, re.IGNORECASE) \
+                    and re.search(r"\b(?:hCol|targetColOut|targetCol|outCol|resultCol)\b|Cells\s*\([^)]*,\s*(?:8|[\"']H[\"'])\s*\)|[\"']H", line, re.IGNORECASE):
+                raise RuntimeError(
+                    "VBA 안전 검사: 다중 가입번호 매칭 결과를 H열 전체 범위에 배열로 다시 쓰고 있습니다. "
+                    "매칭된 데이터 행의 H셀만 개별 갱신하고, 미매칭/합계/수식 행은 그대로 두세요."
+                )
 
     def push(kind, line_no, expected):
         block_stack.append((kind, line_no, expected))
@@ -4712,6 +4769,11 @@ def _validate_vba_source_before_inject(code):
         line = _strip_vba_comment(raw).strip()
         if not line or line.endswith("_"):
             continue
+        if re.search(r"\bContinue\s+For\b", line, re.IGNORECASE):
+            raise RuntimeError(
+                "VBA 문법 오류(%d행): Excel VBA는 Continue For를 지원하지 않습니다. "
+                "If Len(...) > 0 Then ... End If 또는 GoTo 라벨을 사용하세요." % idx
+            )
         if re.search(r"\bAs(?:\s+New)?\s*$", line, re.IGNORECASE):
             raise RuntimeError("VBA 문법 오류(%d행): As 뒤의 자료형이 비어 있습니다." % idx)
         # 기호 연산자로 끝나면 미완성 식. 단어 연산자(And/Or/Xor/Mod)는 반드시 \b 단어경계로
@@ -6143,6 +6205,17 @@ def _run_vba_on_session_impl(excel_id, code, entry=None, restore_window=True):
         # '적용됨'으로 잘못 보고되는 no-op 이므로 실패로 드러낸다(품질평가 issue 45/57/58).
         after_fp = _workbook_change_fingerprint(wb)
         if before_fp and after_fp and before_fp == after_fp:
+            if _vba_allows_unchanged_fingerprint_success(code):
+                try:
+                    _vba_trace(
+                        "vba.noop.allowed",
+                        excelId=excel_id,
+                        entry=entry,
+                        reason="idempotent-hidden-state",
+                    )
+                except Exception:
+                    pass
+                return {"ok": True, "excelId": excel_id, "entry": entry, "noChange": True}
             _noop_msg = (
                 "VBA 가 실행됐지만 워크북에 아무 변경도 없습니다(대상 시트/범위/조건을 확인하세요). "
                 "'적용됨'으로 잘못 보고되지 않도록 실패로 처리했습니다."

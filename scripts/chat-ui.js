@@ -294,57 +294,67 @@ function userRequestsSort(text) {
   return /(정렬|내림\s*차순|오름\s*차순|소트|sort|order\s*by)/i.test(String(text || ""));
 }
 
+// 라우팅 '의도' 판정용: @범위/@컬럼/@시트[...] 안의 파일명·시트명·범위를 제거한다.
+// 파일명에 '작성/복사/정산/계산' 같은 라우팅 키워드가 들어 있으면(예: output_..._LG작성.xlsx)
+// 의도가 오분류되어 엔진이 잘못 선택되던 버그를 막는다. 대상 '존재' 판정(@범위 유무 등)은 원문을 쓴다.
+function routingIntentText(text) {
+  return String(text || "").replace(/@(?:범위|컬럼|시트)\[[^\]]*\]/g, " ");
+}
+
 function shouldRouteSimpleStructureEditToPython(text) {
   const t = String(text || "");
   if (!t.trim()) return false;
+  const intent = routingIntentText(t);
   const hasDirectTarget = /@범위\[[^\]]+![^\]]+\]/i.test(t)
     || /\b[A-Z]{1,3}\s*:\s*[A-Z]{1,3}\b/i.test(t)
     || /\b\d+\s*:\s*\d+\b/i.test(t)
-    || /[A-Z]{1,3}\s*열|\d+\s*행|선택\s*(?:범위|행|열|셀)/i.test(t);
+    || /[A-Z]{1,3}\s*열|\d+\s*행|선택\s*(?:범위|행|열|셀)/i.test(intent);
   if (!hasDirectTarget) return false;
 
-  const insertAxis = /(행|열).{0,16}(추가|삽입|insert)|(?:추가|삽입|insert).{0,16}(행|열)/i.test(t);
-  const deleteAxis = /(행|열).{0,16}(삭제|지워|없애|제거|delete)|(?:삭제|지워|없애|제거|delete).{0,16}(행|열)/i.test(t);
-  const clearCells = /(셀|범위|데이터|내용|값).{0,20}(삭제|지워|비워|제거|clear)|(?:삭제|지워|비워|제거|clear).{0,20}(셀|범위|데이터|내용|값)/i.test(t);
+  const insertAxis = /(행|열).{0,16}(추가|삽입|insert)|(?:추가|삽입|insert).{0,16}(행|열)/i.test(intent);
+  const deleteAxis = /(행|열).{0,16}(삭제|지워|없애|제거|delete)|(?:삭제|지워|없애|제거|delete).{0,16}(행|열)/i.test(intent);
+  const clearCells = /(셀|범위|데이터|내용|값).{0,20}(삭제|지워|비워|제거|clear)|(?:삭제|지워|비워|제거|clear).{0,20}(셀|범위|데이터|내용|값)/i.test(intent);
   if (!(insertAxis || deleteAxis || clearCells)) return false;
 
   // 조건/매칭/집계/복붙이 섞인 작업은 단순 구조 조작이 아니므로 기존 라우팅 규칙에 맡긴다.
-  return !/(일치|매칭|같은|동일|찾아서|찾아|조건|이면|일\s*때|경우|피벗|그룹|집계|합계|합산|개수|건수|정렬|복사|붙여\s*넣|붙여넣|덮어|갱신|업데이트|분리|토큰|환산|계산|입력|작성|채워|가져)/i.test(t);
+  // (의도 텍스트로만 검사 — 파일명/시트명 키워드 충돌 방지.)
+  return !/(일치|매칭|같은|동일|찾아서|찾아|조건|이면|일\s*때|경우|피벗|그룹|집계|합계|합산|개수|건수|정렬|복사|붙여\s*넣|붙여넣|덮어|갱신|업데이트|분리|토큰|환산|계산|입력|작성|채워|가져)/i.test(intent);
 }
 
 function shouldRouteRequestToVba(text) {
   const t = String(text || "");
   if (!t.trim()) return false;
-  const explicitVba = userExplicitlyRequestsVba(t);
+  const intent = routingIntentText(t);  // 키워드 매칭은 멘션(파일명/시트명) 제거한 의도 텍스트로
+  const explicitVba = userExplicitlyRequestsVba(intent);
   const simplePythonStructureEdit = shouldRouteSimpleStructureEditToPython(t);
-  const rangeRefs = t.match(/@범위\[/g) || [];
-  const explicitColumns = /![A-Z]{1,3}:[A-Z]{1,3}\]/i.test(t);
-  const pivotLike = /(피벗|pivot|유사\s*피벗|그룹\s*별|그룹별|집계표|요약표|크로스탭)/i.test(t)
-    || (/(?:별|별로)\s*(?:합계|집계|요약|평균|개수|건수)/i.test(t) && /(합계|집계|요약|평균|개수|건수)/i.test(t));
+  const rangeRefs = t.match(/@범위\[/g) || [];                  // 구조 신호: 원문
+  const explicitColumns = /![A-Z]{1,3}:[A-Z]{1,3}\]/i.test(t);  // 구조 신호: 원문(멘션 내 전체열)
+  const pivotLike = /(피벗|pivot|유사\s*피벗|그룹\s*별|그룹별|집계표|요약표|크로스탭)/i.test(intent)
+    || (/(?:별|별로)\s*(?:합계|집계|요약|평균|개수|건수)/i.test(intent) && /(합계|집계|요약|평균|개수|건수)/i.test(intent));
   // "피벗"이라는 단어가 없어도 "D열을 행으로, H열을 열로, R열 합계" 같은 요청은
   // 실질적으로 크로스탭/유사 피벗이다. 저사양 환경에서 Python 경로가 무거워질 수 있고
   // 발신번호/ID 같은 식별자 보존도 중요하므로 VBA 라우팅 대상으로 본다.
   const pivotShape = (
-    /(행\s*(?:으로|기준|라벨|필드|값)|row\s*(?:field|label|as|by))/i.test(t)
-    && /(열\s*(?:로|으로|기준|필드|배치|분리|추가)|column\s*(?:field|label|as|by))/i.test(t)
-    && /(합계|집계|요약|평균|개수|건수|sum|count|average|avg|값\s*으로|값\s*에)/i.test(t)
+    /(행\s*(?:으로|기준|라벨|필드|값)|row\s*(?:field|label|as|by))/i.test(intent)
+    && /(열\s*(?:로|으로|기준|필드|배치|분리|추가)|column\s*(?:field|label|as|by))/i.test(intent)
+    && /(합계|집계|요약|평균|개수|건수|sum|count|average|avg|값\s*으로|값\s*에)/i.test(intent)
   );
   const keyedRowOverwrite = (
-    /(가입번호|계약번호|청구번호|고객번호|발신번호|전화번호|ID|코드|키|key)/i.test(t)
-    && /(일치|매칭|같은|동일|찾아서|찾아|기준으로|기준)/i.test(t)
-    && /(행\s*전체|해당\s*행|그\s*행|row)/i.test(t)
-    && /(덮어\s*씌|덮어쓰|갱신|업데이트|update|overwrite|반영)/i.test(t)
+    /(가입번호|계약번호|청구번호|고객번호|발신번호|전화번호|ID|코드|키|key)/i.test(intent)
+    && /(일치|매칭|같은|동일|찾아서|찾아|기준으로|기준)/i.test(intent)
+    && /(행\s*전체|해당\s*행|그\s*행|row)/i.test(intent)
+    && /(덮어\s*씌|덮어쓰|갱신|업데이트|update|overwrite|반영)/i.test(intent)
   );
-  const conditionMarkers = t.match(/(일\s*때|이면|일\s*경우|인\s*경우|조건|조건문|where|when|if|그리고|또는|동시에|and|or|&&|\|\||필터|추출)/gi) || [];
+  const conditionMarkers = intent.match(/(일\s*때|이면|일\s*경우|인\s*경우|조건|조건문|where|when|if|그리고|또는|동시에|and|or|&&|\|\||필터|추출)/gi) || [];
   const colRefs = t.match(/(?:[A-Z]{1,3}\s*열|@[^\s\]]*컬럼|컬럼|열\s*\()/gi) || [];
-  const rowwiseWrite = /(동일\s*행|같은\s*행|각\s*행|행마다|입력|기입|채워|환산|변환|계산|반영)/i.test(t);
-  const wholeSheetCrossCopy = /(시트\s*전체|전체\s*시트|sheet\s*전체|worksheet|탭\s*전체)/i.test(t)
-    && /(복사|붙여\s*넣|붙여넣|copy|paste)/i.test(t)
-    && /(파일|workbook|다른\s*파일|출력|입력|@파일)/i.test(t);
+  const rowwiseWrite = /(동일\s*행|같은\s*행|각\s*행|행마다|입력|기입|채워|환산|변환|계산|반영)/i.test(intent);
+  const wholeSheetCrossCopy = /(시트\s*전체|전체\s*시트|sheet\s*전체|worksheet|탭\s*전체)/i.test(intent)
+    && /(복사|붙여\s*넣|붙여넣|copy|paste)/i.test(intent)
+    && /(파일|workbook|다른\s*파일|출력|입력|@파일)/i.test(intent);
   const multiValueLookupAggregate = (
-    /(하나의\s*셀에\s*여러|한\s*셀에\s*여러|셀\s*안(?:의|에)?\s*데이터|셀안의?\s*데이터|여러\s*개\s*(?:들어|데이터|값)|여러개\s*(?:들어|데이터|값)|병합(?:된|한)?\s*경우\s*합산|분리.*합산|줄\s*바꿈|줄바꿈|split)/i.test(t)
-    && /(일치|매칭|같은|동일|찾아서|찾아|기준)/i.test(t)
-    && /(합계값|합계|합산|더해|sum|작성|입력|기입|채워|넣어|반영|가져)/i.test(t)
+    /(하나의\s*셀에\s*여러|한\s*셀에\s*여러|셀\s*안(?:의|에)?\s*데이터|셀안의?\s*데이터|여러\s*개\s*(?:들어|데이터|값)|여러개\s*(?:들어|데이터|값)|병합(?:된|한)?\s*경우\s*합산|분리.*합산|줄\s*바꿈|줄바꿈|split)/i.test(intent)
+    && /(일치|매칭|같은|동일|찾아서|찾아|기준)/i.test(intent)
+    && /(합계값|합계|합산|더해|sum|작성|입력|기입|채워|넣어|반영|가져)/i.test(intent)
     && (rangeRefs.length >= 3 || explicitColumns)
   );
   if (explicitVba) return true;
@@ -357,21 +367,22 @@ function shouldRouteRequestToVba(text) {
 function shouldRouteRequestToPython(text) {
   const t = String(text || "");
   if (!t.trim()) return false;
-  if (userExplicitlyRequestsVba(t)) return false;
+  const intent = routingIntentText(t);  // 키워드 매칭은 멘션(파일명/시트명) 제거한 의도 텍스트로
+  if (userExplicitlyRequestsVba(intent)) return false;
   if (shouldRouteSimpleStructureEditToPython(t)) return true;
-  const multiValueCell = /(하나의\s*셀에\s*여러|한\s*셀에\s*여러|셀\s*안(?:의|에)?\s*데이터|셀안의?\s*데이터|아래로\s*여러|여러\s*개\s*(?:들어|데이터|값)|여러개\s*(?:들어|데이터|값)|셀들을?\s*(?:분리|나눠|쪼개)|구분자|줄\s*바꿈|줄바꿈|TEXTSPLIT|CHAR\s*\(\s*10\s*\)|split)/i.test(t);
-  const lookupMatch = /(일치|매칭|같은|동일|찾아서|찾아|기준)/i.test(t);
-  const aggregateWrite = /(합계값|합계|합산|더해|sum|작성|입력|기입|채워|넣어|반영)/i.test(t);
-  const rangeRefs = t.match(/@범위\[/g) || [];
-  const explicitColumns = /![A-Z]{1,3}:[A-Z]{1,3}\]/i.test(t);
-  const identifierLookup = /(가입번호|계약번호|고객번호|발신번호|전화번호|ID|코드|키|key)/i.test(t);
-  const splitAggregateHint = /(병합(?:된|한)?\s*경우\s*합산|여러\s*개(?:면|일\s*때)?\s*합산|각각(?:의)?\s*.*더해서|각각(?:의)?\s*.*합계|분리.*합산)/i.test(t);
+  const multiValueCell = /(하나의\s*셀에\s*여러|한\s*셀에\s*여러|셀\s*안(?:의|에)?\s*데이터|셀안의?\s*데이터|아래로\s*여러|여러\s*개\s*(?:들어|데이터|값)|여러개\s*(?:들어|데이터|값)|셀들을?\s*(?:분리|나눠|쪼개)|구분자|줄\s*바꿈|줄바꿈|TEXTSPLIT|CHAR\s*\(\s*10\s*\)|split)/i.test(intent);
+  const lookupMatch = /(일치|매칭|같은|동일|찾아서|찾아|기준)/i.test(intent);
+  const aggregateWrite = /(합계값|합계|합산|더해|sum|작성|입력|기입|채워|넣어|반영)/i.test(intent);
+  const rangeRefs = t.match(/@범위\[/g) || [];                  // 구조 신호: 원문
+  const explicitColumns = /![A-Z]{1,3}:[A-Z]{1,3}\]/i.test(t);  // 구조 신호: 원문
+  const identifierLookup = /(가입번호|계약번호|고객번호|발신번호|전화번호|ID|코드|키|key)/i.test(intent);
+  const splitAggregateHint = /(병합(?:된|한)?\s*경우\s*합산|여러\s*개(?:면|일\s*때)?\s*합산|각각(?:의)?\s*.*더해서|각각(?:의)?\s*.*합계|분리.*합산)/i.test(intent);
   const lookupValueToTarget = (
     rangeRefs.length >= 4
     && lookupMatch
     && aggregateWrite
-    && /(가져|넣어|작성|입력|기입|채워|반영)/i.test(t)
-    && /(열로|열에|H:H|H\s*열|대상|결과)/i.test(t)
+    && /(가져|넣어|작성|입력|기입|채워|반영)/i.test(intent)
+    && /(열로|열에|H:H|H\s*열|대상|결과)/i.test(intent)
   );
   // 예: 출력 P열 한 셀에 여러 코드가 있고, 입력 BP와 매칭해 BQ 값을 합산하여 출력 H열에 작성.
   // 매크로 주입이 필요 없는 값 계산/채우기 작업이므로 VBA 보안 설정 오류를 피하기 위해 Python COM으로 보낸다.
@@ -554,6 +565,7 @@ function vbaStaticSafetyFailures(code, sourceUserMessage) {
     [/\bWorkbooks\s*\.\s*Open\b/i, "Workbooks.Open 금지(다른 파일을 열지 마세요). 이미 열린 워크북만 다루세요."],
     [/\bApplication\s*\.\s*Quit\b/i, "Application.Quit 금지."],
     [/\.(?:Save|SaveAs|SaveCopyAs|Close)\b/i, "Save/SaveAs/Close 금지(파일 저장·닫기를 코드에서 하지 마세요)."],
+    [/\bContinue\s+For\b/i, "Excel VBA에는 Continue For 문법이 없습니다. 빈 토큰은 If Len(...) > 0 Then ... End If 로 감싸거나 GoTo 라벨을 사용하세요."],
   ];
   for (const [re, msg] of blocked) {
     if (re.test(text)) failures.push(msg);
@@ -629,6 +641,19 @@ function vbaStaticSafetyFailures(code, sourceUserMessage) {
   const requestedColIndices = new Set(requestedCols.map(excelColumnLetterToIndex).filter(Boolean));
   const requestedMultiCols = requestedCols.filter(c => c.length >= 2);
   if (requestedMultiCols.length) {
+    const colVarAssignRe = /\b([A-Za-z_][A-Za-z0-9_]*(?:Col|Column|col|column)[A-Za-z0-9_]*)\s*=\s*(\d{1,5})\b/gi;
+    let colVarAssignMatch;
+    while ((colVarAssignMatch = colVarAssignRe.exec(text)) !== null) {
+      const varName = String(colVarAssignMatch[1] || "");
+      const assigned = Number(colVarAssignMatch[2]);
+      for (const col of requestedMultiCols) {
+        const expected = excelColumnLetterToIndex(col);
+        const varMentionsCol = new RegExp(col.split("").join("[_\\s]*"), "i").test(varName);
+        if (varMentionsCol && assigned !== expected) {
+          failures.push(`${varName} = ${assigned} 로 되어 있지만 ${col}열은 ${expected}입니다. BP/BQ 같은 다중문자 열 번호를 암산하지 말고 ws.Columns("${col}").Column 또는 ws.Cells(r, "${col}")처럼 열 문자를 그대로 쓰세요.`);
+        }
+      }
+    }
     const numericColUses = new Set();
     const cellNumRe = /\bCells\s*\(\s*[^,\n\r()]+,\s*(\d{2,5})\s*\)/gi;
     let cellNumMatch;
@@ -666,8 +691,13 @@ function vbaStaticSafetyFailures(code, sourceUserMessage) {
     if (/\bInStr\s*\(/i.test(text) || /\bLike\b/i.test(text)) {
       failures.push("가입번호/코드가 한 셀에 여러 개 들어 있는 조회는 부분일치(InStr/Like)가 아니라 셀 값을 구분자로 분리한 토큰과 BP/키 값을 정확 일치 비교해야 합니다.");
     }
-    if (/\b(?:targetRng|outRng|dstRng|resultRng|rng)\s*\.\s*(?:Value|Value2)\s*=\s*(?:outArr|arr|values|resultArr)/i.test(text)
-        || /\bRange\s*\([^'\n\r]*(?:Cells\s*\([^)]*,\s*(?:8|["']H["'])\s*\)|["']H)/i.test(text) && /\.\s*(?:Value|Value2)\s*=\s*(?:outArr|arr|values|resultArr)/i.test(text)) {
+    const writesWholeRangeArray = /\b(?:targetRng|outRng|dstRng|resultRng|rng)\s*\.\s*(?:Value|Value2)\s*=\s*(?:[A-Za-z_]\w*)?(?:Arr|Array|Values|Data)\b/i.test(text)
+      || String(text || "").split(/\r?\n/).some(line =>
+        /\bRange\s*\(/i.test(line)
+        && /\.\s*(?:Value|Value2)\s*=\s*[A-Za-z_]\w*(?:Arr|Array|Values|Data)\b/i.test(line)
+        && /(?:\b(?:hCol|targetColOut|targetCol|outCol|resultCol)\b|Cells\s*\([^)]*,\s*(?:8|["']H["'])\s*\)|["']H)/i.test(line)
+      );
+    if (writesWholeRangeArray) {
       failures.push("다중 가입번호 매칭 결과를 H열 전체 배열로 다시 쓰면 매칭 없는 행과 합계 수식이 0/값으로 오염됩니다. 매칭된 행의 H셀만 갱신하고 미매칭/수식 행은 그대로 두세요.");
     }
     if (/\bCells\s*\(\s*r\s*,\s*(?:targetColOut|8)\s*\)\s*\.\s*(?:Value|Value2)\s*=\s*totalAmount\b/i.test(text)
@@ -2075,6 +2105,7 @@ async function sendChat() {
   const routeToPython = !routeToVba && shouldRouteRequestToPython(msg);
   const routeToSimplePythonStructure = routeToPython && shouldRouteSimpleStructureEditToPython(msg);
   const explicitVbaRequest = userExplicitlyRequestsVba(msg);
+  const routeMultiValueLookup = typeof multiValueLookupIntent === "function" && multiValueLookupIntent(msg);
   const modeLabel = editTargetId ? "(수정 모드) " : (routeToVba ? "(VBA 라우팅) " : (routeToPython ? "(Python 라우팅) " : ""));
   const thinkMode = typeof isThinkModeEnabled === "function" && isThinkModeEnabled();
   const abortController = new AbortController();
@@ -2099,7 +2130,9 @@ async function sendChat() {
       routingHint: routeToVba
         ? (explicitVbaRequest
           ? "사용자가 이번 요청에서 VBA/매크로를 명시했습니다. 반드시 하나의 ```vba 코드 블록(Sub B2BSkill())만 작성하고 Python def transform(ctx)는 절대 출력하지 마세요. @범위/@컬럼의 파일명·시트명은 번역 없이 정확히 복사하세요."
-          : "복합 조건/피벗성 집계/시트 전체 교차파일 복사/한 셀 여러 값 매칭 합산 요청은 저사양 PC에서 Python COM 경로가 멈추거나 행 위치가 밀릴 수 있으므로 이번 응답은 VBA로 작성합니다. 전체 열은 실제 데이터 범위로 한정하고, 합계/소계/부가세포함 같은 요약 행은 데이터 행에서 제외하세요.")
+          : (routeMultiValueLookup
+            ? "한 셀에 여러 값이 들어 있는 열을 분해해 다른 파일 열과 정확 매칭하고 합산해 쓰는 요청입니다. 이번 응답은 반드시 VBA로 작성하세요. BP/BQ/AA 같은 다중문자 열은 숫자로 암산하지 말고 ws.Columns(\"BP\").Column 또는 ws.Cells(r, \"BP\")처럼 열 문자를 그대로 쓰세요. Excel VBA에는 Continue For가 없으므로 If Len(tok)>0 Then ... End If 구조를 쓰세요. 대상 H열 전체 범위를 배열로 다시 쓰지 말고, matchedAny=True인 데이터 행의 wsOut.Cells(r, \"H\").Value만 개별 갱신하세요. 매칭 없는 행, H열 기존 텍스트/수식, P열이 부가세포함/합계/소계 같은 요약 라벨인 행은 그대로 두세요."
+            : "복합 조건/피벗성 집계/시트 전체 교차파일 복사/한 셀 여러 값 매칭 합산 요청은 저사양 PC에서 Python COM 경로가 멈추거나 행 위치가 밀릴 수 있으므로 이번 응답은 VBA로 작성합니다. 전체 열은 실제 데이터 범위로 한정하고, 합계/소계/부가세포함 같은 요약 행은 데이터 행에서 제외하세요. Excel VBA에는 Continue For가 없으므로 사용하지 마세요."))
         : (routeToPython
           ? (routeToSimplePythonStructure
             ? "단순 행/열 삽입·삭제 또는 범위 내용 삭제 요청입니다. VBA 매크로가 아니라 Python COM으로 작성하세요. 행/열 자체 삭제·추가는 ctx.delete_rows/delete_cols/insert_rows/insert_cols 를 쓰고, 셀/범위의 내용만 지우는 요청은 ctx.clear 를 쓰세요. @범위의 파일명·시트명·주소는 번역하거나 바꾸지 말고 그대로 쓰세요."
