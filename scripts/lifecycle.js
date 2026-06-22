@@ -38,7 +38,7 @@
   }
 
   post("/__b2b_ping", false);
-  setInterval(() => post("/__b2b_ping", false), 30000);
+  setInterval(() => post("/__b2b_ping", false), 15000);
   window.addEventListener("pagehide", close);
   window.addEventListener("beforeunload", close);
   window.addEventListener("unload", close);

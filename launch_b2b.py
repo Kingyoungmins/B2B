@@ -9,7 +9,13 @@ import webbrowser
 from functools import partial
 from pathlib import Path
 
-from serve_b2b import B2BHandler, PORT as DEFAULT_PORT, cleanup_excel_sessions, cleanup_node_worker
+from serve_b2b import (
+    B2BHandler,
+    PORT as DEFAULT_PORT,
+    cleanup_excel_sessions,
+    cleanup_node_worker,
+    start_runtime_maintenance_threads,
+)
 
 import socketserver
 
@@ -17,8 +23,8 @@ import socketserver
 LAUNCH_HOST = os.environ.get("B2B_LAUNCH_HOST", "127.0.0.1")
 SERVER_HOST = os.environ.get("B2B_HOST", "127.0.0.1")
 BASE_DIR = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
-HEARTBEAT_TIMEOUT_SECONDS = 20
-EMPTY_CLIENT_GRACE_SECONDS = 1
+HEARTBEAT_TIMEOUT_SECONDS = int(os.environ.get("B2B_HEARTBEAT_TIMEOUT_SECONDS", "90"))
+EMPTY_CLIENT_GRACE_SECONDS = int(os.environ.get("B2B_EMPTY_CLIENT_GRACE_SECONDS", "5"))
 
 
 def candidate_ports() -> list[int]:
@@ -200,12 +206,16 @@ def main() -> int:
         print(f"Missing app file: {BASE_DIR / 'index.html'}", file=sys.stderr)
         return 1
 
+    start_runtime_maintenance_threads()
+    native_host_mode = bool(str(os.environ.get("B2B_NATIVE_HOST_PID") or "").strip())
+
     httpd = None
     shutdown_event = threading.Event()
     lifecycle = BrowserLifecycle()
 
     try:
-        start_lifecycle_monitor(lifecycle, shutdown_event)
+        if not native_host_mode:
+            start_lifecycle_monitor(lifecycle, shutdown_event)
         errors = []
         selected_port = None
         for port in candidate_ports():
