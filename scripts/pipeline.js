@@ -769,8 +769,6 @@ async function runIsolatedLivePipelineSteps(sourceSteps, initialExcelId, options
     }
     for (const group of groups) {
       const excelId = await requirePipelineSessionExcelId(group.fileId, "스킬 전체실행");
-      const ids = group.steps.map(s => s.stepId).filter(Boolean);
-      if (ids.length) setPipelineRuntimeStatus(ids, "running", "작업 중");
       if (!mutedExcelIds.includes(excelId) && typeof muteExcelMirrorForPipeline === "function") {
         muteExcelMirrorForPipeline(excelId);
         mutedExcelIds.push(excelId);
@@ -779,21 +777,47 @@ async function runIsolatedLivePipelineSteps(sourceSteps, initialExcelId, options
         beginExcelMirrorApplyLoading("스킬 전체실행 중...", { hideWindows: false });
         loadingStarted = true;
       }
-      const data = await postExcelMirror("/api/excel/run-vba-pipeline", {
-        excelId,
-        steps: group.steps,
-        reset: !resetDone.has(group.fileId),
-        viewSheet: options.viewSheet || null,
-      }, 0, {
-        timeoutMs: pipelineTimeoutMs(group.steps.length),
-        timeoutMessage: pipelineTimeoutMessage,
-      });
-      lastData = data;
-      resetDone.add(group.fileId);
-      applied += group.steps.length;
-      if (ids.length) setPipelineRuntimeStatus(ids, "applied", "적용됨");
-      if (data && data.liveSchema) {
-        try { applyLiveSchemaToFileCache(excelId, data.liveSchema); } catch (_) {}
+      if (!resetDone.has(group.fileId)) {
+        const resetData = await postExcelMirror("/api/excel/run-vba-pipeline", {
+          excelId,
+          steps: [],
+          reset: true,
+          viewSheet: options.viewSheet || null,
+        }, 0, {
+          timeoutMs: 180000,
+          timeoutMessage: "워크북 리셋 응답이 지연되어 중단했습니다. 저사양 PC에서는 백그라운드에서 계속 진행 중일 수 있으니 잠시 후 화면을 확인해 주세요.",
+        });
+        lastData = resetData;
+        resetDone.add(group.fileId);
+        if (resetData && resetData.liveSchema) {
+          try { applyLiveSchemaToFileCache(excelId, resetData.liveSchema); } catch (_) {}
+        }
+      }
+      for (const stepPayload of group.steps) {
+        const ids = stepPayload && stepPayload.stepId ? [stepPayload.stepId] : [];
+        if (ids.length) setPipelineRuntimeStatus(ids, "running", "작업 중");
+        const originalStep = Number.isInteger(stepPayload && stepPayload.stepIdx)
+          ? ((sourceSteps || state.pipeline || [])[stepPayload.stepIdx] || null)
+          : ((sourceSteps || state.pipeline || []).find(s => s && s.id === (stepPayload && stepPayload.stepId)) || null);
+        if (resetDone.has(group.fileId) && originalStep) {
+          await captureStepPreApplySnapshot(originalStep, excelId);
+        }
+        const data = await postExcelMirror("/api/excel/run-vba-pipeline", {
+          excelId,
+          steps: [stepPayload],
+          reset: false,
+          viewSheet: options.viewSheet || null,
+        }, 0, {
+          timeoutMs: pipelineTimeoutMs(1),
+          timeoutMessage: pipelineTimeoutMessage,
+        });
+        lastData = data;
+        resetDone.add(group.fileId);
+        applied += 1;
+        if (ids.length) setPipelineRuntimeStatus(ids, "applied", "적용됨");
+        if (data && data.liveSchema) {
+          try { applyLiveSchemaToFileCache(excelId, data.liveSchema); } catch (_) {}
+        }
       }
     }
     if (loadingStarted && typeof endExcelMirrorApplyLoading === "function") endExcelMirrorApplyLoading();
@@ -1034,7 +1058,8 @@ function applyVbaStepToLiveExcel(step, excelId, options = {}) {
       })()
     : Promise.resolve();
   const promise = prehide
-    .then(() => {
+    .then(async () => {
+      if (appendToPipeline) await captureStepPreApplySnapshot(step, excelId);
       const requestStarted = performance.now();
       return postExcelMirror(liveEndpoint, { excelId, code: step.code }, 0, {
         // 저사양 PC: 실행 + 전/후 변경검출(전 시트 스냅샷 2회)까지 포함되므로 20초는 빠듯해
@@ -1130,6 +1155,7 @@ async function runLivePipelineStepSequentially(step, excelId, options = {}) {
     if (options.prehide !== false && typeof hideAllExcelMirrorWindows === "function") {
       try { await hideAllExcelMirrorWindows(); } catch (_) {}
     }
+    await captureStepPreApplySnapshot(step, excelId);
     const payload = { excelId, code: step.code || "" };
     if (options.restoreWindow === false && lang === "vba") payload.restoreWindow = false;
     const data = await postExcelMirror(endpoint, payload, 0, {
@@ -2083,7 +2109,7 @@ function renderPipeline() {
       <button class="step-edit ${editing ? 'active' : ''}" title="${editing ? '수정 모드 해제' : '수정'}">✎</button>
       <button class="step-del" title="삭제">✕</button>
     `;
-    item.querySelector(".step-toggle").onclick = (e) => {
+    item.querySelector(".step-toggle").onclick = async (e) => {
       e.stopPropagation();
       const busyReason = typeof pipelineEditBusyReason === "function" ? pipelineEditBusyReason() : "";
       if (busyReason) {
@@ -2096,11 +2122,30 @@ function renderPipeline() {
       if (typeof pushHistory === "function") pushHistory("단계 적용 여부 변경");
       const prevEnabled = isStepEnabled(state.pipeline[currentIdx]);
       const beforeToggleSnapshot = (state.pipeline || []).map(s => ({ ...s })); // [중단 복원] 변경 전
+      const fastLast = canFastEditLastPipelineStep(state.pipeline[currentIdx], currentIdx, beforeToggleSnapshot);
       state.pipeline[currentIdx] = { ...state.pipeline[currentIdx], enabled: !prevEnabled };
       const toggledStep = state.pipeline[currentIdx];
       renderPipeline();
       refreshRunButton();
       if (typeof scheduleLogicAutoBackup === "function") scheduleLogicAutoBackup("step-toggled");
+      if (fastLast) {
+        try {
+          if (prevEnabled) {
+            if (await restoreLastStepPreApplySnapshot(beforeToggleSnapshot[currentIdx], { message: "마지막 단계 OFF 반영 중..." })) {
+              noteLivePipelineApplied(state.pipeline);
+              if (typeof toast === "function") toast("마지막 단계만 빠르게 OFF 처리했습니다.", "success");
+              return;
+            }
+          } else if (_lastLiveAppliedSignature !== null &&
+              liveEnabledStepsSignature(beforeToggleSnapshot) === _lastLiveAppliedSignature) {
+            await applyLastEnabledStepFast(toggledStep, { steps: state.pipeline });
+            if (typeof toast === "function") toast("마지막 단계만 빠르게 ON 처리했습니다.", "success");
+            return;
+          }
+        } catch (err) {
+          console.warn("[pipeline] fast last-step toggle failed; falling back to full reconcile", err);
+        }
+      }
       reconcilePipelineSimulationAfterEdit({ affectedStep: toggledStep, restorePipeline: beforeToggleSnapshot }).catch(err => {
         // [0.5.2.2 §5.5] 라이브 반영 실패 — ON 표시인데 미적용인 '유령 상태'를 막기 위해 토글 원복.
         const idxNow = state.pipeline.findIndex(s => s.id === stepId);
@@ -2116,7 +2161,7 @@ function renderPipeline() {
       e.stopPropagation();
       toggleEditStep(step.id);
     };
-    item.querySelector(".step-del").onclick = (e) => {
+    item.querySelector(".step-del").onclick = async (e) => {
       e.stopPropagation();
       const busyReason = typeof pipelineEditBusyReason === "function" ? pipelineEditBusyReason() : "";
       if (busyReason) {
@@ -2130,6 +2175,7 @@ function renderPipeline() {
       if (state.editingStepId === stepId) state.editingStepId = null;
       const removedStep = state.pipeline[currentIdx];
       const beforeDeleteSnapshot = (state.pipeline || []).map(s => ({ ...s })); // [중단 복원] 삭제 전
+      const fastLast = canFastEditLastPipelineStep(removedStep, currentIdx, beforeDeleteSnapshot);
       // [필드] 이 스텝이 라이브에 '실제 적용된' 상태였는지 — 적용 실패(오류) 스텝은 라이브에 없으므로
       // 아래 reconcile 이 실패해도 부활시키면 안 된다(오류 스킬이 영영 안 지워지는 현상).
       const removedWasApplied = typeof getPipelineRuntimeStatus === "function"
@@ -2138,6 +2184,22 @@ function renderPipeline() {
       renderPipeline();
       refreshRunButton();
       if (typeof scheduleLogicAutoBackup === "function") scheduleLogicAutoBackup("step-deleted");
+      if (fastLast) {
+        if (!removedWasApplied || !isStepEnabled(removedStep)) {
+          noteLivePipelineApplied(state.pipeline);
+          if (typeof toast === "function") toast("마지막 미적용 단계만 삭제했습니다.", "success");
+          return;
+        }
+        try {
+          if (await restoreLastStepPreApplySnapshot(removedStep, { message: "마지막 단계 삭제 반영 중..." })) {
+            noteLivePipelineApplied(state.pipeline);
+            if (typeof toast === "function") toast("마지막 단계만 빠르게 삭제했습니다.", "success");
+            return;
+          }
+        } catch (err) {
+          console.warn("[pipeline] fast last-step delete failed; falling back to full reconcile", err);
+        }
+      }
       reconcilePipelineSimulationAfterEdit({ affectedStep: removedStep, restorePipeline: beforeDeleteSnapshot }).catch(err => {
         // [0.5.2.2 §5.5] 라이브 반영 실패 — UI 에선 지워졌는데 라이브엔 남는 어긋남 방지, 원위치 복원.
         // 단, 적용된 적 없는(오류/대기) 스텝은 라이브에 존재하지 않으므로 복원하지 않는다 —
@@ -2185,6 +2247,91 @@ function invalidateLivePipelineApplied() {
 // (invalidate 호출 이후엔 항상 null 이라 알 수 없으므로, 그 전에 읽어야 함).
 function isLivePipelineApplied() {
   return _lastLiveAppliedSignature !== null;
+}
+
+async function captureStepPreApplySnapshot(step, excelId) {
+  if (!step || !step.id || !excelId || typeof postExcelMirror !== "function") return null;
+  try {
+    // Do not pass name here. /api/excel/save with name uses SaveAs and mutates
+    // the live session path/name; without name it uses SaveCopyAs.
+    const snap = await postExcelMirror("/api/excel/save", { excelId });
+    if (snap && snap.downloadId) {
+      step._preApplySnapshot = {
+        resultId: snap.downloadId,
+        downloadUrl: snap.downloadUrl || "",
+        name: snap.name || "",
+        excelId,
+        capturedAt: Date.now(),
+      };
+      return step._preApplySnapshot;
+    }
+  } catch (err) {
+    console.warn("[pipeline] failed to capture pre-apply snapshot", err);
+  }
+  return null;
+}
+
+function lastLiveStepIndex(steps = state.pipeline) {
+  for (let i = (steps || []).length - 1; i >= 0; i--) {
+    const step = steps[i];
+    if (step && step.code && pipelineStepLiveLanguage(step)) return i;
+  }
+  return -1;
+}
+
+function canFastEditLastPipelineStep(step, idx, beforeSteps) {
+  if (!step || !step.code || !pipelineStepLiveLanguage(step)) return false;
+  const list = beforeSteps || state.pipeline || [];
+  if (idx < 0 || idx !== lastLiveStepIndex(list)) return false;
+  if (typeof getPipelineRuntimeStatus === "function") {
+    const st = getPipelineRuntimeStatus(step.id);
+    if (st && st.status && st.status !== "applied") return false;
+  }
+  return true;
+}
+
+async function restoreLastStepPreApplySnapshot(step, options = {}) {
+  const snap = step && step._preApplySnapshot;
+  if (!snap || !snap.resultId) return false;
+  let excelId = snap.excelId || null;
+  if (!excelId && step) {
+    const fileId = inferPipelineStepTargetFileId(step) || preferredVbaRunFileId();
+    if (fileId) excelId = await requirePipelineSessionExcelId(fileId, "스킬 빠른 복구");
+  }
+  if (!excelId) return false;
+  if (typeof beginExcelMirrorApplyLoading === "function") beginExcelMirrorApplyLoading(options.message || "마지막 단계 되돌리는 중...");
+  try {
+    const data = await postExcelMirror("/api/excel/replace", {
+      excelId,
+      resultId: snap.resultId,
+      readOnlyMirror: false,
+    }, 0, {
+      timeoutMs: 120000,
+      timeoutMessage: "마지막 단계 되돌리기 응답이 지연되어 중단했습니다. 전체 재적용으로 다시 시도해 주세요.",
+    });
+    if (data && data.liveSchema) {
+      try { applyLiveSchemaToFileCache(excelId, data.liveSchema); } catch (_) {}
+    }
+    if (typeof scheduleRestoreActiveExcelMirror === "function") scheduleRestoreActiveExcelMirror(120);
+    return true;
+  } finally {
+    if (typeof endExcelMirrorApplyLoading === "function") endExcelMirrorApplyLoading();
+  }
+}
+
+async function applyLastEnabledStepFast(step, options = {}) {
+  if (!step || !pipelineStepLiveLanguage(step)) return false;
+  const excelId = await requirePipelineSessionExcelId(
+    inferPipelineStepTargetFileId(step) || preferredVbaRunFileId(),
+    "마지막 단계 적용"
+  );
+  if (!excelId) return false;
+  const result = await runLivePipelineStepSequentially(step, excelId, {
+    timeoutMs: 90000,
+    prehide: true,
+  });
+  noteLivePipelineApplied(options.steps || state.pipeline);
+  return result || true;
 }
 
 function pipelineEditBusyReason() {
@@ -2647,6 +2794,42 @@ function refreshRunButton() {
 
 function getActivePipelineStepIds() {
   return (state.pipeline || []).filter(isStepEnabled).map(step => step && step.id).filter(Boolean);
+}
+
+function pipelineFailedStepIdFromError(err) {
+  const info = (err && (err._stepInfo || err.errorInfo)) || {};
+  if (info && info.stepId) return info.stepId;
+  const idx = Number(info && info.stepIdx);
+  if (Number.isInteger(idx) && idx >= 0 && state.pipeline && state.pipeline[idx]) {
+    return state.pipeline[idx].id || null;
+  }
+  if (typeof resolveRunnerRecoveryStepIndex === "function") {
+    const resolved = resolveRunnerRecoveryStepIndex(info || {});
+    if (Number.isInteger(resolved) && resolved >= 0 && state.pipeline && state.pipeline[resolved]) {
+      return state.pipeline[resolved].id || null;
+    }
+  }
+  return null;
+}
+
+function markPipelineRunFailureStatus(err, activeStepIds) {
+  const ids = (activeStepIds || []).filter(Boolean);
+  const failedId = pipelineFailedStepIdFromError(err);
+  const clearIds = [];
+  const errorIds = [];
+  ids.forEach(stepId => {
+    const runtime = getPipelineRuntimeStatus(stepId) || {};
+    if (runtime.status === "applied") return;
+    if (failedId) {
+      if (stepId === failedId) errorIds.push(stepId);
+      else if (runtime.status === "running") clearIds.push(stepId);
+      return;
+    }
+    if (runtime.status === "running") errorIds.push(stepId);
+  });
+  if (failedId && !ids.includes(failedId)) errorIds.push(failedId);
+  if (clearIds.length) setPipelineRuntimeStatus(clearIds, null);
+  if (errorIds.length) setPipelineRuntimeStatus(Array.from(new Set(errorIds)), "error", "\uC624\uB958");
 }
 
 function setGeneratorRunLoading(running, text) {
@@ -3131,7 +3314,7 @@ $("btn-run").onclick = async () => {
     setPipelineRuntimeStatus(activeStepIds, "applied", "\uC801\uC6A9\uB428");
     toast(`${state.pipeline.length}개 단계 실행 완료`, "success");
   } catch (err) {
-    setPipelineRuntimeStatus(activeStepIds, "error", "\uC624\uB958");
+    markPipelineRunFailureStatus(err, activeStepIds);
     renderExcelViewer();
     reportPipelineError(err);
   } finally {
@@ -3575,6 +3758,7 @@ $("runner-run-btn").onclick = () => {
       if (window.runnerSetDone) window.runnerSetDone();
     } catch (err) {
       renderExcelViewer();
+      markPipelineRunFailureStatus(err, getActivePipelineStepIds());
       reportPipelineError(err, { compatibilityCheck: true, runner: true });
       if (window.runnerSetRunning) window.runnerSetRunning(false);
     }

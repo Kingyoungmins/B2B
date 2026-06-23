@@ -8009,6 +8009,16 @@ class PythonComSkillContext:
             self._tick(1)
         # [중요] win32com 에서 rng.Sort(Header=...) 는 Header 인자가 무시돼 헤더행까지 정렬된다
         # (진단 확인). SortFields API(ws.Sort.Header)는 정상 동작하므로 이쪽을 쓴다. 다중키도 자연 지원.
+        # 수식 결과 기준 정렬은 저장 캐시가 0/빈값이면 내림차순이 안 먹은 것처럼 보인다.
+        # 정렬 직전 워크시트를 계산해 SortFields가 실제 표시값 기준으로 키를 잡게 한다.
+        try:
+            ws.Calculate()
+        except Exception:
+            for kr in key_rngs:
+                try:
+                    kr.Calculate()
+                except Exception:
+                    pass
         ws.Sort.SortFields.Clear()
         for i, kr in enumerate(key_rngs):
             # win32com 은 Add 의 named/positional Order 인자를 무시할 수 있어(asc 로 고정됨),

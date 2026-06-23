@@ -5,7 +5,7 @@ const src = fs.readFileSync(path.join(__dirname, "..", "scripts", "chat-ui.js"),
 const s = src.indexOf("function userExplicitlyRequestsVba");
 const after = src.indexOf("function numericArithmeticIntent", s + 10);
 let block = src.slice(s, after);
-block += "\nglobalThis.R = { vba: shouldRouteRequestToVba, py: shouldRouteRequestToPython, sheet: sheetOpIntent, sort: ctxSortIntent };";
+block += "\nglobalThis.R = { vba: shouldRouteRequestToVba, py: shouldRouteRequestToPython, sheet: sheetOpIntent, sort: ctxSortIntent, rangeCalc: simpleRangeArithmeticIntent };";
 eval(block);
 const R = globalThis.R;
 
@@ -47,6 +47,12 @@ ck("[제외] '매칭해서 정렬' → ctxSort FALSE", R.sort("가입번호 매�
 ck("[제외] '피벗으로 집계' 시트단어 없음 → sheetOp FALSE", R.sheet("지점별 매출 피벗으로 집계") === false);
 // 'A열 데이터 삭제'는 시트삭제가 아니라 내용삭제 — sheetOp 로 오인 안 함
 ck("[경계] '시트의 데이터 삭제' → sheetOp FALSE(내용삭제)", R.sheet("시트의 데이터 삭제해줘") === false);
+
+// [2026-06-23] 같은 시트의 E6:E16 값을 산술 계산해 D6:D16에 쓰는 단순 요청은 Python ctx.
+// VBA 모델이 "Network 이용현황(26년4월)"을 "Network 이용현황 (26 년 4 월)"로 바꾸던 회귀를 피한다.
+const simpleRangeCalc = "\uc120\ud0dd \ubc94\uc704: @\ubc94\uc704[\uc5d4\uc528 \uc790\ub8cc_IDC_26\ub1443\uc6d4 \uc0ac\uc6a9\ub0b4\uc5ed_26\ub1444\uc6d4\uccad\uad6c\ubd84\uc2e0\uaddc\uc13c\ud130 2.xlsx/Network \uc774\uc6a9\ud604\ud669(26\ub1444\uc6d4)!E6:E16] \ub370\uc774\ud130\uac12\uc744 1000000\uc73c\ub85c \ub098\ub208\uac12\uc744 \uc120\ud0dd \ubc94\uc704: @\ubc94\uc704[\uc5d4\uc528 \uc790\ub8cc_IDC_26\ub1443\uc6d4 \uc0ac\uc6a9\ub0b4\uc5ed_26\ub1444\uc6d4\uccad\uad6c\ubd84\uc2e0\uaddc\uc13c\ud130 2.xlsx/Network \uc774\uc6a9\ud604\ud669(26\ub1444\uc6d4)!D6:D16]\uc5ec\uae30\uc5d0 \uc785\ub825\ud574\uc918";
+ck("[range-calc] E6:E16 / 1000000 -> D6:D16 simpleRangeArithmetic TRUE", R.rangeCalc(simpleRangeCalc) === true);
+ck("[range-calc] E6:E16 / 1000000 -> D6:D16 routePython TRUE", R.py(simpleRangeCalc) === true && R.vba(simpleRangeCalc) === false);
 
 console.log("\n=== RESULT: " + pass + " PASS / " + fail + " FAIL ===");
 process.exit(fail ? 2 : 0);

@@ -500,9 +500,26 @@ function monthShiftIntent(text) {
   return false;
 }
 
+// "E6:E16 값을 1000000으로 나눈 값을 D6:D16에 입력" 같은 단순 범위 산술은 ctx.read/write가
+// 가장 안정적이다. VBA LLM은 한글+숫자 시트명에 공백을 끼우는 회귀가 반복됐으므로 Python 우선.
+function simpleRangeArithmeticIntent(text) {
+  const original = String(text || "");
+  const intent = routingIntentText(original);
+  const rangeRefs = original.match(/@범위\[[^\]]+\]/g) || [];
+  if (rangeRefs.length < 2) return false;
+  const hasArithmetic = /(나눈\s*값|나누|나눠|\/|÷|곱한\s*값|곱하|\*|×|더한\s*값|더해|빼|뺀\s*값|차감|[+\-]\s*\d+|\d+\s*(?:으로|로)\s*(?:나눈|나누|곱한|곱하))/i.test(intent);
+  const hasWrite = /(입력|작성|기입|채워|넣어|반영|써줘|붙여|write)/i.test(intent);
+  if (!hasArithmetic || !hasWrite) return false;
+  // 조건/매칭/집계/행삭제/피벗은 대량·복합 작업이므로 기존 VBA 라우팅에 맡긴다.
+  if (/(일치|매칭|같은|동일|찾아서|찾아|기준|조건|이면|일\s*때|경우|필터|추출|중복|행\s*삭제|행을\s*삭제|피벗|pivot|그룹|집계|합계|합산|개수|건수|여러\s*개|여러개|토큰|분리|병합)/i.test(intent)) {
+    return false;
+  }
+  return true;
+}
+
 // ctx 헬퍼가 결정적으로 처리하는(=Python 우선) 작업 묶음. 필요 시 안전한 헬퍼 작업을 여기에 더한다.
 function ctxHelperPreferredIntent(text) {
-  return sheetOpIntent(text) || ctxSortIntent(text) || monthShiftIntent(text);
+  return sheetOpIntent(text) || ctxSortIntent(text) || monthShiftIntent(text) || simpleRangeArithmeticIntent(text);
 }
 
 function shouldRouteRequestToVba(text) {
@@ -1163,7 +1180,9 @@ function pythonComStaticSafetyFailures(code, sourceUserMessage) {
     if (!usesCtxSort && pySort && writesBack) {
       failures.push("정렬은 ctx.sort(시트, 범위, key_col=열문자, has_header=True) 로 하세요. read→파이썬 정렬→write 는 헤더가 데이터와 섞이고 다른 열이 행 단위로 어긋납니다.");
     }
-    if (usesCtxSort && /has_header\s*=\s*False/.test(scanText)) {
+    const headerFalseOnRowOneRange = /ctx\.sort\s*\([\s\S]{0,240}["'][A-Z]{1,3}\$?1\s*:/i.test(scanText)
+      && /has_header\s*=\s*False/.test(scanText);
+    if (usesCtxSort && headerFalseOnRowOneRange) {
       failures.push("표 1행이 헤더이므로 ctx.sort 에 has_header=True(기본값)를 쓰세요 — has_header=False 는 헤더 행을 정렬에 포함시킵니다.");
     }
   }
@@ -2537,6 +2556,7 @@ async function sendChat() {
   const routeToSimplePythonStructure = routeToPython && shouldRouteSimpleStructureEditToPython(msg);
   const routeCtxHelper = routeToPython && typeof ctxHelperPreferredIntent === "function" && ctxHelperPreferredIntent(msg);
   const routeMonthShift = routeToPython && typeof monthShiftIntent === "function" && monthShiftIntent(msg);
+  const routeSimpleRangeArithmetic = routeToPython && typeof simpleRangeArithmeticIntent === "function" && simpleRangeArithmeticIntent(msg);
   const routeMultiValueLookup = typeof multiValueLookupIntent === "function" && multiValueLookupIntent(msg);
   const routeDuplicateRowDelete = typeof duplicateRowDeleteIntent === "function" && duplicateRowDeleteIntent(msg);
   const routeConditionalRowDelete = typeof conditionalRowDeleteIntent === "function" && conditionalRowDeleteIntent(msg);
@@ -2574,8 +2594,10 @@ async function sendChat() {
         routingHint = "사용자가 이번 요청에서 Python/COM 을 명시했습니다. 반드시 하나의 ```python def transform(ctx): 코드 블록만 작성하고 VBA(Sub B2BSkill())는 절대 출력하지 마세요. @범위/@컬럼의 파일명·시트명은 번역 없이 정확히 복사하세요.";
       } else if (routeMonthShift) {
         routingHint = "셀 텍스트의 월/날짜를 N개월 이동(예: '월 정보 +1', '다음달')하는 요청입니다. 반드시 ctx.shift_months(시트, 범위, N) 한 줄로 처리하세요(범위 안 모든 'N월'·앞 'YY년'·뒤 'D일'을 연도 넘김·말일 보정까지 자동 처리). 직접 정규식이나 루프를 짜지 말고, @시트/@범위의 시트명은 한 글자도 바꾸지 말고 그대로 쓰세요.";
+      } else if (routeSimpleRangeArithmetic) {
+        routingHint = "범위 값을 산술 계산해 다른 범위에 쓰는 단순 요청입니다. 반드시 Python ctx로 작성하고 VBA(Sub B2BSkill())는 출력하지 마세요. ctx.book(\"파일명.xlsx\").read(\"시트명\", \"E6:E16\")로 읽고 2차원 배열로 계산한 뒤 ctx.book(\"파일명.xlsx\").write(\"시트명\", \"D6\", out, overwrite_formulas=True)처럼 한 번에 쓰세요. @범위의 파일명·시트명·주소는 번역·영문화·띄어쓰기 보정 없이 그대로 사용하세요.";
       } else if (routeCtxHelper) {
-        routingHint = "시트 복사/복사후 이름변경/추가/삭제 또는 단순 정렬 요청입니다. 반드시 ctx 헬퍼를 쓰세요: ctx.copy_sheet(\"시트\", dst_book=\"대상.xlsx\", new_name=\"새이름\") / ctx.rename_sheet(\"기존\",\"새\") / ctx.add_sheet / ctx.delete_sheet / ctx.sort(시트, 범위, key_col=열문자, has_header=True). 값 배열 재작성이나 수기 COM 루프로 흉내내지 말고, @시트/@파일 이름은 한 글자도 바꾸지 말고 그대로 쓰세요.";
+        routingHint = "시트 복사/복사후 이름변경/추가/삭제 또는 단순 정렬 요청입니다. 반드시 ctx 헬퍼를 쓰세요: ctx.copy_sheet(\"시트\", dst_book=\"대상.xlsx\", new_name=\"새이름\") / ctx.rename_sheet(\"기존\",\"새\") / ctx.add_sheet / ctx.delete_sheet / ctx.sort(시트, 범위, key_col=열문자, has_header=True). 정렬에서 @범위가 L2:L8929처럼 키 열만 가리키면 그 열만 정렬하지 말고 표 전체 범위(예: A1:L8929)를 잡고 key_col=\"L\"로 정렬하세요. 범위가 1행 헤더를 포함하면 has_header=True, 2행부터 시작해 헤더가 없으면 has_header=False를 쓰세요. 값 배열 재작성이나 수기 COM 루프로 흉내내지 말고, @시트/@파일 이름은 한 글자도 바꾸지 말고 그대로 쓰세요.";
       } else {
         routingHint = "단순 행/열 삽입·삭제 또는 범위 내용 삭제 요청입니다. VBA 매크로가 아니라 Python COM으로 작성하세요. 행/열 자체 삭제·추가는 ctx.delete_rows/delete_cols/insert_rows/insert_cols 를 쓰고, 셀/범위의 내용만 지우는 요청은 ctx.clear 를 쓰세요. @범위의 파일명·시트명·주소는 번역하거나 바꾸지 말고 그대로 쓰세요.";
       }
