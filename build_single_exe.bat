@@ -2,9 +2,9 @@
 setlocal
 cd /d "%~dp0"
 
-set "APP_VERSION=0.5.10"
+set "APP_VERSION=0.5.11"
 set "PACKAGE_DIR=dist\B2B_ver%APP_VERSION%"
-set "PAYLOAD=build\b2b_ver0510_single_payload.zip"
+set "PAYLOAD=build\b2b_ver0511_single_payload.zip"
 set "OUT_EXE=dist\B2B_ver%APP_VERSION%_single.exe"
 set "CSC=%WINDIR%\Microsoft.NET\Framework64\v4.0.30319\csc.exe"
 

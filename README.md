@@ -6,6 +6,16 @@
 
 ## 최근 변경사항
 
+### ver0.5.11
+
+ver0.5.10 안정화 상태에서 자동 복구와 전체 실행 회귀를 보강한 후속 브랜치.
+
+- **전체 실행 VBA 오류 정보 보강**: VBA 파이프라인 중간 단계에서 일반 예외가 나도 `stepIdx`, `stepId`, `description`, `code`가 유지되도록 감싸서, 어느 단계가 실패했는지 복구 UI가 놓치지 않게 했습니다.
+- **에러 복구 언어 라우팅 수정**: VBA 단계가 실패한 뒤 사용자가 "python으로 짜"라고 요청하면 Python/ctx 복구안을 그대로 적용하고, 다시 VBA 자동 재생성으로 되돌리지 않게 했습니다. 사용자가 명시한 엔진 의도를 최우선으로 봅니다.
+- **누락된 중간 시트 복구 안내**: 저장된 스킬 전체 실행 중 이전 대화에는 있었지만 파이프라인에 없는 시트 생성 단계가 필요하면, 실패 단계를 막는 대신 대화 기록의 후보 스킬을 찾아 삽입/적용하도록 안내합니다.
+- **정적 안전검사 완화/정확도 개선**: 사용자가 강하게 진행 의도를 밝힌 경우 과도한 안전 재생성 루프를 줄이고, VBA/ctx 회귀 테스트를 추가했습니다.
+- **0.5.10 미반영 피벗 회귀 샘플 포함**: 피벗성 집계 테스트용 `test_data/피벗_샘플.xlsx`와 시나리오를 0.5.11 브랜치에 포함했습니다.
+
 ### ver0.5.10
 
 ver0.5.9 기반 후속 작업 브랜치.
@@ -372,12 +382,12 @@ build_exe.bat
 빌드 결과:
 
 ```text
-dist\B2B_ver0.5.10\B2B_ver0.5.10.exe   (네이티브 호스트)
-dist\B2B_ver0.5.10\B2B_Server.exe      (PyInstaller 서버)
-dist\B2B_ver0.5.10_portable.zip        (배포용 zip)
+dist\B2B_ver0.5.11\B2B_ver0.5.11.exe   (네이티브 호스트)
+dist\B2B_ver0.5.11\B2B_Server.exe      (PyInstaller 서버)
+dist\B2B_ver0.5.11_portable.zip        (배포용 zip)
 ```
 
-단일 self-extracting EXE가 필요하면 `build_single_exe.bat`을 추가 실행합니다 (`dist\B2B_ver0.5.10_single.exe`).
+단일 self-extracting EXE가 필요하면 `build_single_exe.bat`을 추가 실행합니다 (`dist\B2B_ver0.5.11_single.exe`).
 
 `dist/`와 `build/`는 git 추적 대상이 아닙니다.
 
@@ -466,7 +476,7 @@ ctx.write_grid(ws, [[123]], start_row=4, start_col=2)
 ## 디렉터리 구조
 
 ```text
-B2B_ver0.5.10/
+B2B_ver0.5.11/
 ├─ index.html
 ├─ serve_b2b.py
 ├─ launch_b2b.py
