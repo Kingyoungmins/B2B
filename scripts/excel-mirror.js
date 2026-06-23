@@ -1051,9 +1051,6 @@ function noteExcelComTimeout(err) {
 }
 
 async function forceRestartExcelMirrors(reason) {
-  // 강제 종료로 적용분이 날아가므로, '직전에 라이브 적용돼 있었는지'를 invalidate 전에 캡처(이후엔 항상 false).
-  // 재오픈 후 1회만 자동 재적용할지 판단에 쓴다.
-  const wasApplied = (typeof isLivePipelineApplied === "function") && isLivePipelineApplied();
   // [0.5.2.2] 라이브 세션이 사라지면 no-op 생략 시그니처를 무효화 — 다음 편집은 반드시 실제 재적용.
   if (typeof invalidateLivePipelineApplied === "function") { try { invalidateLivePipelineApplied(); } catch (_) {} }
   if (excelMirror.forceRestarting) return false;
@@ -1073,9 +1070,11 @@ async function forceRestartExcelMirrors(reason) {
     if (hasFiles && typeof preopenAllExcelMirrors === "function") {
       await preopenAllExcelMirrors(current);
       if (typeof toast === "function") toast("Excel 창을 다시 준비했습니다.", "success");
-      // 재오픈은 마지막 저장 상태(보통 적용 전)부터라 적용분이 유실됨 → 직전에 적용돼 있었으면 1회 자동 재적용.
-      // await 하지 않음: forceRestarting 을 먼저 풀어, 재적용 중 또 멈춰도(=applying) 재시작 큐가 막히지 않게 한다.
-      maybeAutoReapplyAfterRestart(wasApplied);
+      // 강제재시작은 항상 재오픈(=적용분 유실)이므로, 복구 경로와 '동일한 단일 자동재적용기'를 쓴다.
+      // (쿨다운 autoReapplyBlockedUntil 공유 → recover 경로와 이중 재적용 방지. await 안 함: 재시작 큐 차단 방지.)
+      if (typeof maybeAutoReapplyAfterRecover === "function") {
+        maybeAutoReapplyAfterRecover(excelMirror.activeExcelId || (typeof currentExcelId === "function" ? currentExcelId() : null));
+      }
     }
     return true;
   } finally {
@@ -1083,43 +1082,8 @@ async function forceRestartExcelMirrors(reason) {
   }
 }
 
-// 강제재시작으로 적용분이 유실됐을 때, 직전에 적용돼 있던 파이프라인을 '1회만' 자동 재적용한다.
-// - 적용 상태가 아니었으면(idle 재시작 등) 아무것도 하지 않음.
-// - 자동 재적용은 쿨다운(3분)으로 1회만: 재적용이 또 멈춰 재시작이 반복돼도 다시 자동 실행하지 않고 안내만 한다(무한 재시작 루프 방지).
-// - 1회 시도가 실패하면 재시도하지 않고 "직접 전체실행" 안내만 띄운다.
-async function maybeAutoReapplyAfterRestart(wasApplied) {
-  try {
-    if (!wasApplied) return;
-    const hasSteps = Array.isArray(state.pipeline) && state.pipeline.some(
-      s => s && s.code && (typeof isStepEnabled === "function" ? isStepEnabled(s) : s.enabled !== false)
-    );
-    if (!hasSteps) return;
-    const now = Date.now();
-    if (now < (excelMirror.autoReapplyCooldownUntil || 0)) {
-      // 최근에 이미 1회 자동 재적용을 시도함 → 또 하지 않고 안내만(루프 차단).
-      if (typeof toast === "function") toast("작업 상태가 초기화됐어요 — ▶ 전체 실행을 다시 눌러 주세요.", "error");
-      return;
-    }
-    excelMirror.autoReapplyCooldownUntil = now + 180000;  // 3분 내 재발 시 자동 재시도 금지
-    if (typeof runPipelineWithAutoRepair !== "function") return;
-    // 실제 ▶ 전체실행(btn-run)과 동일한 절차로 1회 재적용한다.
-    const ids = (typeof getActivePipelineStepIds === "function") ? getActivePipelineStepIds() : [];
-    if (typeof setGeneratorRunLoading === "function") setGeneratorRunLoading(true, "자동 재적용 준비 중...");
-    if (typeof setPipelineRuntimeStatus === "function") setPipelineRuntimeStatus(ids, "running", "자동 재적용 중");
-    if (typeof toast === "function") toast("재시작 후 작업을 자동으로 다시 적용합니다…", "success");
-    try {
-      if (typeof clearPipelineExecutionMemory === "function") clearPipelineExecutionMemory({ keepViewer: true });
-      await runPipelineWithAutoRepair({ source: "auto-restart-reapply" });
-      if (typeof setPipelineRuntimeStatus === "function") setPipelineRuntimeStatus(ids, "applied", "적용됨");
-      if (typeof toast === "function") toast("재시작 후 작업을 자동으로 다시 적용했습니다.", "success");
-    } catch (err) {
-      if (typeof setPipelineRuntimeStatus === "function") setPipelineRuntimeStatus(ids, "error", "오류");
-      if (typeof toast === "function") toast("자동 재적용에 실패했어요 — ▶ 전체 실행을 직접 눌러 주세요.", "error");
-    } finally {
-      if (typeof setGeneratorRunLoading === "function") setGeneratorRunLoading(false);
-    }
-  } catch (_) {}
-}
+// (중복 제거) 과거 forceRestart 전용 maybeAutoReapplyAfterRestart 는 복구 경로의 maybeAutoReapplyAfterRecover
+// 로 통합됨 — 쿨다운(autoReapplyBlockedUntil)·재적용기(reapplyVbaPipelineToLive)를 공유해 이중 적용을 막는다.
 
 // ---- 적용 중 로딩 애니메이션 (이슈: 적용 중엔 미러가 안 보이므로 엑셀 영역에 로딩 표시) ----
 const EXCEL_MIRROR_SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];

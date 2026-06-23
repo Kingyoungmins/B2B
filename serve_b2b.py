@@ -126,7 +126,7 @@ MAX_PIPELINE_JOBS = 40
 # 이 크기를 넘으면 중간 단계 스냅샷을 건너뛰고 "마지막 단계"만 저장한다(동일 파이프라인 재적용은 여전히 즉시).
 SNAPSHOT_INTERMEDIATE_MAX_BYTES = 8 * 1024 * 1024
 PIPELINE_JOB_TTL_SECONDS = 60 * 60
-APP_BUILD_STAMP = "b2b-0.5.11-20260623-recovery-routing"
+APP_BUILD_STAMP = "b2b-0.5.12-20260623-base"
 EXCEL_MIRROR_PROTECT_PASSWORD = "b2b_mirror_readonly"
 
 
@@ -1839,6 +1839,66 @@ def _shift_months_in_text(s, delta, current_year=2000):
     return "".join(out)
 
 
+# ---- 피벗/크로스탭 집계(순수 함수 — COM 불필요, 단위테스트 가능). ctx.pivot 2D 가 사용. ----
+def _pivot_to_num(v):
+    if isinstance(v, bool):
+        return None
+    if isinstance(v, (int, float)):
+        return float(v)
+    try:
+        return float(str(v).replace(",", ""))
+    except Exception:
+        return None
+
+
+def _pivot_agg(vals, name):
+    name = str(name or "sum").lower()
+    nums = [n for n in (_pivot_to_num(v) for v in vals) if n is not None]
+    if name == "count":
+        return len(vals)
+    if name in ("avg", "average", "mean"):
+        return (sum(nums) / len(nums)) if nums else 0
+    if name == "max":
+        return max(nums) if nums else ""
+    if name == "min":
+        return min(nums) if nums else ""
+    return sum(nums)
+
+
+def _pivot_sort_keys(keys):
+    # 숫자로 해석되면 숫자순(월 1,2,…), 아니면 문자순(지점 가나다). 혼재 시 숫자 먼저.
+    def _k(x):
+        n = _pivot_to_num(x)
+        return (0, n) if n is not None else (1, str(x))
+    return sorted(keys, key=_k)
+
+
+def _pivot_crosstab(data, g_i, c_i, v_i, agg, row_label="행"):
+    """2D 크로스탭 grid 생성. 반환: [[row_label, col1, col2, ...], [행키, agg, agg, ...], ...].
+    행키=group_by 값, 열키=column 값, 셀=value 의 agg. value 없으면 건수(count)."""
+    cells = {}
+    rkeys, ckeys = [], []
+    rseen, cseen = set(), set()
+    for r in data:
+        r = list(r)
+        rk = r[g_i] if (g_i is not None and g_i < len(r)) else ""
+        ck = r[c_i] if (c_i is not None and c_i < len(r)) else ""
+        if (rk is None or str(rk).strip() == "") and (ck is None or str(ck).strip() == ""):
+            continue  # 완전 빈 행 skip
+        if rk not in rseen:
+            rseen.add(rk); rkeys.append(rk)
+        if ck not in cseen:
+            cseen.add(ck); ckeys.append(ck)
+        v = r[v_i] if (v_i is not None and v_i < len(r)) else 1
+        cells.setdefault((rk, ck), []).append(v)
+    rkeys = _pivot_sort_keys(rkeys)
+    ckeys = _pivot_sort_keys(ckeys)
+    out = [[row_label] + list(ckeys)]
+    for rk in rkeys:
+        out.append([rk] + [(_pivot_agg(cells[(rk, ck)], agg) if (rk, ck) in cells else 0) for ck in ckeys])
+    return out, rkeys, ckeys
+
+
 @total_ordering
 class ExcelColumnNumber:
     """1-based Excel column number that is also safe as a Python row-list index."""
@@ -2012,6 +2072,15 @@ def _configure_read_only_mirror_input_block(app):
             pass
 
 
+def _show_excel_formula_bar(app):
+    """읽기 전용 미러에서도 실제 Excel처럼 수식 입력줄은 보이게 둔다."""
+    try:
+        app.DisplayFormulaBar = True
+        app.DisplayStatusBar = True
+    except Exception:
+        pass
+
+
 def _disable_excel_context_menus(app):
     """오버레이 엑셀에서 마우스 우클릭(컨텍스트) 메뉴를 막는다.
     msoBarTypePopup(2) CommandBar = 우클릭/컨텍스트 메뉴이므로 모두 비활성화한다.
@@ -2033,8 +2102,7 @@ def _disable_excel_context_menus(app):
 def _configure_excel_grid_window(app, wb=None):
     try:
         app.DisplayAlerts = False
-        app.DisplayFormulaBar = False
-        app.DisplayStatusBar = True
+        _show_excel_formula_bar(app)
         app.Interactive = True
         app.UserControl = True
         app.EnableEvents = True
@@ -2046,6 +2114,7 @@ def _configure_excel_grid_window(app, wb=None):
         app.CommandBars("Ribbon").Visible = False
     except Exception:
         pass
+    _show_excel_formula_bar(app)
     _disable_excel_context_menus(app)
     try:
         win = app.ActiveWindow
@@ -2085,11 +2154,7 @@ def _ensure_excel_workbook_view(app, wb=None, make_visible=True, activate=True, 
             app.ScreenUpdating = True
     except Exception:
         pass
-    try:
-        app.DisplayFormulaBar = False
-        app.DisplayStatusBar = True
-    except Exception:
-        pass
+    _show_excel_formula_bar(app)
     try:
         if activate and wb is not None:
             wb.Activate()
@@ -6532,6 +6597,7 @@ def _setup_isolated_pipeline_instance(session, excel_id, reset, work):
         targetWorkbook=_trace_workbook_info(ftarget),
     )
     opened = {target_name.lower()}
+    companions = []
     # 동반 워크북(다른 라이브 편집 세션의 현재 상태)
     for oid, other in list(EXCEL_SESSIONS.items()):
         if oid == excel_id or not other.get("liveEditable"):
@@ -6553,13 +6619,69 @@ def _setup_isolated_pipeline_instance(session, excel_id, reset, work):
         cpath = cdir / cname
         try:
             o_wb.SaveCopyAs(str(cpath))
-            excel_workbooks_open(fapp, str(cpath), read_only=False)
+            cwb, _ct = excel_workbooks_open(fapp, str(cpath), read_only=False)
             opened.add(cname.lower())
+            # [교차파일 유실 수정] 이 동반본을 '쓰기 대상'으로 변형하는 스텝(입력→출력 .Copy,
+            # 출력→입력 매칭쓰기 등)이 있으면, 실행 후 변경된 동반본을 그 라이브 세션으로 되돌려써야 한다.
+            # 안 하면 라우팅이 어느 세션을 ftarget 으로 잡았든 '다른 파일에 쓴 결과'가 통째로 버려진다
+            # (8↔22 가 판마다 깨지던 비결정 버그의 근본원인). _sync_modified_companions_into_live 가 반영.
+            companions.append({"excelId": oid, "name": cname, "wb": cwb})
             _vba_trace("pipeline.isolated.companion.opened", excelId=excel_id, isolatedPid=fpid, companionName=cname, companionPath=str(cpath))
         except Exception:
             _vba_trace("pipeline.isolated.companion.error", excelId=excel_id, isolatedPid=fpid, companionName=cname, companionPath=str(cpath))
             pass
-    return fapp, ftarget, fpid
+    return fapp, ftarget, fpid, companions
+
+
+def _sync_modified_companions_into_live(companions, excel_id, fpid, work):
+    """격리 인스턴스에서 '대상(ftarget)'이 아닌 동반 워크북이 변형됐으면(Saved=False),
+    그 변경을 해당 라이브 세션 워크북으로도 되돌려쓴다.
+    교차파일 스텝(입력↔출력 쓰기)이 어느 세션을 ftarget 으로 잡았든 결과가 버려지지 않게 한다.
+    (기존: ftarget 한 개만 라이브에 반영 → 쓰기 대상이 동반본이면 유실.)
+    호출자(EXCEL_LOCK 보유, fapp 워크북 아직 열림) 안에서만 사용한다."""
+    for comp in (companions or []):
+        cwb = comp.get("wb")
+        oid = comp.get("excelId")
+        cname = comp.get("name") or ""
+        if cwb is None or not oid:
+            continue
+        try:
+            if bool(cwb.Saved):
+                continue  # 읽기만 함(변경 없음) → 되돌려쓸 것 없음
+        except Exception:
+            continue
+        other = EXCEL_SESSIONS.get(oid)
+        if not other:
+            continue
+        try:
+            oapp, owb = session_workbook(other)
+        except Exception:
+            continue
+        try:
+            sdir = Path(work) / ("sync_" + uuid.uuid4().hex[:6])
+            sdir.mkdir(parents=True, exist_ok=True)
+            spath = sdir / (cname or "companion.xlsx")
+            cwb.SaveCopyAs(str(spath))
+            other["rev"] = int(other.get("rev") or 0) + 1  # 동반 스냅샷 신선도 무효화(다음 스텝이 최신 읽도록)
+            try:
+                _protect_workbook_for_read_only_mirror(owb, False)
+            except Exception:
+                pass
+            try:
+                oapp.ScreenUpdating = False
+            except Exception:
+                pass
+            _copy_source_workbook_into_target(oapp, owb, str(spath))
+            other["appliedStepSigs"] = None
+            try:
+                _restore_live_window(other, oapp, owb)
+            except Exception:
+                pass
+            _vba_trace("pipeline.companion.synced", excelId=excel_id, isolatedPid=fpid,
+                       companionExcelId=oid, companionName=cname)
+        except Exception as err:
+            _vba_trace("pipeline.companion.sync.error", excelId=excel_id, isolatedPid=fpid,
+                       companionExcelId=oid, companionName=cname, error=str(err))
 
 
 def _run_vba_pipeline_on_session_impl(excel_id, steps, reset=True, entry=None, view_sheet=None):
@@ -6611,8 +6733,9 @@ def _run_vba_pipeline_on_session_impl(excel_id, steps, reset=True, entry=None, v
             work = Path(tempfile.mkdtemp(prefix="b2b_isopipe_"))
             fapp = None
             fpid = None
+            companions = []
             try:
-                fapp, ftarget, fpid = _setup_isolated_pipeline_instance(session, excel_id, reset, work)
+                fapp, ftarget, fpid, companions = _setup_isolated_pipeline_instance(session, excel_id, reset, work)
                 try:
                     _protect_workbook_for_read_only_mirror(ftarget, False)
                 except Exception:
@@ -6683,6 +6806,9 @@ def _run_vba_pipeline_on_session_impl(excel_id, steps, reset=True, entry=None, v
                     resultPath=str(rpath),
                     liveWorkbook=_trace_workbook_info(wb),
                 )
+                # [교차파일 유실 수정] 이 스텝이 '다른 파일(동반본)'을 변형했으면 그 변경도
+                # 해당 라이브 세션으로 되돌려쓴다. (ftarget 한 개만 반영하던 한계 보완)
+                _sync_modified_companions_into_live(companions, excel_id, fpid, work)
                 session["appliedStepSigs"] = None
             finally:
                 try:
@@ -6705,7 +6831,15 @@ def _run_vba_pipeline_on_session_impl(excel_id, steps, reset=True, entry=None, v
                 except Exception:
                     pass
                 shutil.rmtree(work, ignore_errors=True)
-            return {"ok": True, "excelId": excel_id, "applied": len(run_steps)}
+            result = {"ok": True, "excelId": excel_id, "applied": len(run_steps)}
+            # [#5] 격리 적용도 라이브 미러 캐시(시트명/미리보기/차원)를 갱신하도록 경량 스키마를 함께 싣는다.
+            # 반영(_copy_source_workbook_into_target) 이후 라이브 wb 기준 → 새로 생긴 시트(추가/복사/피벗)가
+            # @멘션 목록에 안 뜨던 문제 해결. Python 단일 경로(_run_python_on_session_impl)와 동일 패턴.
+            try:
+                result["liveSchema"] = _live_preview_schema(wb)
+            except Exception:
+                pass
+            return result
         finally:
             # 라이브 창/상태 복원(대상 시트 활성화 포함).
             try:
@@ -7633,11 +7767,13 @@ class PythonComSkillContext:
         self._shared["structural"].append(f"filter_to_sheet:{sheet}->{dest_name}({len(matched)})")
         return dest_name
 
-    def pivot(self, sheet, group_by, value=None, agg="sum", dest_name=None, header_rows=1, after=None):
+    def pivot(self, sheet, group_by, value=None, agg="sum", dest_name=None, header_rows=1, after=None, column=None):
         """그룹별 집계 요약 표를 **새 시트(현재 활성 파일)**에 만든다(Python 집계 — 안정적).
         group_by/value 는 헤더명(권장) 또는 열 문자("C"). agg 는 sum/count/avg/max/min.
-          ctx.pivot("매출", group_by="회사", value="금액", agg="sum", dest_name="회사별합계")
-        "~별로 합계/개수/평균 내줘" 요청의 기본 수단(원본 보존)."""
+          ctx.pivot("매출", group_by="회사", value="금액", agg="sum", dest_name="회사별합계")  # 1D 그룹요약
+        column 을 주면 **2D 크로스탭**(행=group_by, 열=column, 셀=value 의 agg):
+          ctx.pivot("매출", group_by="지점", column="월", value="매출", agg="sum", dest_name="피벗_결과")
+        "~별로 합계/개수/평균", "행은 X 열은 Y 값은 Z 피벗" 요청의 기본 수단(원본 보존, 손코딩 금지)."""
         self._tick(2)
         grid = self.read(sheet)
         hr = max(1, int(header_rows or 1))
@@ -7656,6 +7792,24 @@ class PythonComSkillContext:
                 return n - 1 if n >= 1 else n
             except Exception:
                 raise PythonComSkillError(f"열 '{spec}' 을 헤더에서 찾지 못했습니다(헤더명 또는 열 문자를 쓰세요).")
+
+        if column is not None:
+            # 2D 크로스탭: 행=group_by, 열=column, 셀=value 의 agg. 모델이 손코딩하던 부분을 결정적으로 대체.
+            if isinstance(group_by, (list, tuple)):
+                raise PythonComSkillError("크로스탭(column 지정)은 group_by 를 하나만 받습니다.")
+            g_i = _col0(group_by)
+            c_i = _col0(column)
+            v_i = _col0(value) if value is not None else None
+            row_label = header[g_i] if (g_i is not None and g_i < len(header)) else str(group_by)
+            out, rkeys, ckeys = _pivot_crosstab(data, g_i, c_i, v_i, str(agg or "sum"), row_label=row_label)
+            name = str(dest_name or "피벗요약")
+            if name in _excel_collection_names(self._wb.Worksheets):
+                raise PythonComSkillError(f"시트 '{name}' 이 이미 있습니다. 다른 이름을 쓰거나 먼저 삭제하세요.")
+            self.add_sheet(name, after=after)
+            if out:
+                self.write(name, "A1", out, overwrite_formulas=True)
+            self._shared["structural"].append(f"pivot_crosstab:{sheet}->{name}({len(rkeys)}x{len(ckeys)})")
+            return name
 
         def _to_num(v):
             if isinstance(v, bool):
@@ -8747,12 +8901,19 @@ def _get_excel_hover_info_impl(excel_id):
     with EXCEL_LOCK:
         session = get_excel_session(excel_id)
         app, wb = session_workbook(session)
-        info = _range_formula_info(_excel_range_from_cursor(app))
+        info = None
+        try:
+            if session.get("liveEditable") and LIVE_FRAME_MODE:
+                info = _range_formula_info(wb.Windows(1).RangeSelection)
+        except Exception:
+            info = None
         if info is None:
             try:
                 info = _range_formula_info(app.Selection)
             except Exception:
                 info = None
+        if info is None:
+            info = _range_formula_info(_excel_range_from_cursor(app))
         info = info or {"sheet": "", "address": "", "formula": "", "value": "", "hasFormula": False}
         try:
             app.StatusBar = (

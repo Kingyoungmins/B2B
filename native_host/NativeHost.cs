@@ -96,6 +96,7 @@ namespace B2BNativeHost
         private volatile bool hostMinimized;
         private bool shuttingDown;
         private bool restartingServer;
+        private string lastDownloadDir = "";
         private DateTime lastServerRestartUtc = DateTime.MinValue;
         private int recentRestartCount;
         private bool debugHotkeyRegistered;
@@ -460,6 +461,7 @@ namespace B2BNativeHost
                         Program.Log("Web message failed: " + ex.Message);
                     }
                 };
+                webView.CoreWebView2.DownloadStarting += HandleDownloadStarting;
                 webView.CoreWebView2.NavigationCompleted += delegate
                 {
                     webReady = true;
@@ -614,6 +616,150 @@ namespace B2BNativeHost
                 Task ignore = RestartPythonServerAsync(false);
                 return;
             }
+        }
+
+        private void HandleDownloadStarting(object sender, CoreWebView2DownloadStartingEventArgs e)
+        {
+            try
+            {
+                string defaultPath = e.ResultFilePath ?? "";
+                string defaultName = Path.GetFileName(defaultPath);
+                if (String.IsNullOrWhiteSpace(defaultName)) defaultName = "download";
+
+                using (SaveFileDialog dialog = new SaveFileDialog())
+                {
+                    dialog.Title = "다운로드 저장";
+                    dialog.FileName = SafeDownloadFileName(defaultName);
+                    dialog.Filter = DownloadFilterForFile(defaultName);
+                    dialog.OverwritePrompt = true;
+                    dialog.AddExtension = true;
+
+                    string initialDir = "";
+                    try
+                    {
+                        if (!String.IsNullOrWhiteSpace(lastDownloadDir) && Directory.Exists(lastDownloadDir))
+                        {
+                            initialDir = lastDownloadDir;
+                        }
+                        else
+                        {
+                            string defaultDir = Path.GetDirectoryName(defaultPath);
+                            if (!String.IsNullOrWhiteSpace(defaultDir) && Directory.Exists(defaultDir))
+                            {
+                                initialDir = defaultDir;
+                            }
+                        }
+                    }
+                    catch
+                    {
+                    }
+                    if (String.IsNullOrWhiteSpace(initialDir))
+                    {
+                        string downloads = Path.Combine(
+                            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                            "Downloads"
+                        );
+                        initialDir = Directory.Exists(downloads)
+                            ? downloads
+                            : Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+                    }
+                    if (!String.IsNullOrWhiteSpace(initialDir)) dialog.InitialDirectory = initialDir;
+
+                    DialogResult result = dialog.ShowDialog(this);
+                    e.Handled = true;
+                    if (result == DialogResult.OK && !String.IsNullOrWhiteSpace(dialog.FileName))
+                    {
+                        e.ResultFilePath = dialog.FileName;
+                        lastDownloadDir = Path.GetDirectoryName(dialog.FileName) ?? "";
+                        AttachDownloadCompletionToast(e.DownloadOperation, dialog.FileName);
+                        Program.Log("Download save path selected: " + dialog.FileName);
+                    }
+                    else
+                    {
+                        e.Cancel = true;
+                        Program.Log("Download canceled by user");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Program.Log("Download dialog failed: " + ex.Message);
+            }
+        }
+
+        private void AttachDownloadCompletionToast(CoreWebView2DownloadOperation operation, string path)
+        {
+            if (operation == null) return;
+            string name = Path.GetFileName(path);
+            if (String.IsNullOrWhiteSpace(name)) name = "파일";
+            bool notified = false;
+            operation.StateChanged += delegate
+            {
+                if (notified) return;
+                try
+                {
+                    if (operation.State == CoreWebView2DownloadState.Completed)
+                    {
+                        notified = true;
+                        Program.Log("Download completed: " + path);
+                        NotifyWebToast("\"" + name + "\" 다운로드 완료", "success");
+                    }
+                    else if (operation.State == CoreWebView2DownloadState.Interrupted)
+                    {
+                        notified = true;
+                        string reason = "";
+                        try { reason = Convert.ToString(operation.InterruptReason); } catch { }
+                        Program.Log("Download interrupted: " + path + " " + reason);
+                        NotifyWebToast("\"" + name + "\" 다운로드 실패" + (String.IsNullOrWhiteSpace(reason) ? "" : ": " + reason), "error");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Program.Log("Download completion notify failed: " + ex.Message);
+                }
+            };
+        }
+
+        private void NotifyWebToast(string message, string type)
+        {
+            try
+            {
+                if (InvokeRequired)
+                {
+                    BeginInvoke(new Action<string, string>(NotifyWebToast), message, type);
+                    return;
+                }
+                if (!webReady || webView.CoreWebView2 == null) return;
+                string script = "if (typeof toast === 'function') toast(" + JsString(message) + "," + JsString(type) + ");";
+                webView.CoreWebView2.ExecuteScriptAsync(script);
+            }
+            catch (Exception ex)
+            {
+                Program.Log("NotifyWebToast failed: " + ex.Message);
+            }
+        }
+
+        private static string SafeDownloadFileName(string name)
+        {
+            string safe = String.IsNullOrWhiteSpace(name) ? "download" : name.Trim();
+            foreach (char ch in Path.GetInvalidFileNameChars())
+            {
+                safe = safe.Replace(ch, '_');
+            }
+            return String.IsNullOrWhiteSpace(safe) ? "download" : safe;
+        }
+
+        private static string DownloadFilterForFile(string name)
+        {
+            string ext = Path.GetExtension(name ?? "").ToLowerInvariant();
+            if (ext == ".zip") return "ZIP 파일 (*.zip)|*.zip|모든 파일 (*.*)|*.*";
+            if (ext == ".xlsx" || ext == ".xlsm" || ext == ".xls")
+            {
+                return "Excel 파일 (*.xlsx;*.xlsm;*.xls)|*.xlsx;*.xlsm;*.xls|모든 파일 (*.*)|*.*";
+            }
+            if (ext == ".csv") return "CSV 파일 (*.csv)|*.csv|모든 파일 (*.*)|*.*";
+            if (ext == ".json") return "JSON 파일 (*.json)|*.json|모든 파일 (*.*)|*.*";
+            return "모든 파일 (*.*)|*.*";
         }
 
         private void UpdateExcelLoading(string message)

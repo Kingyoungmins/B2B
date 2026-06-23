@@ -23,9 +23,10 @@ const copyName = '@범위[output_복사본_정산.xlsx/Sheet1!A1:A10] 셀 삭제
 check("파일명 '복사본'+단순삭제 → simple TRUE", R.simple(copyName) === true);
 check("파일명 '복사본'+단순삭제 → routeVba FALSE", R.vba(copyName) === false);
 
-// 3) 회귀: 진짜 피벗/집계 요청은 여전히 VBA
+// 3) [2026-06-23 변경] 피벗/크로스탭은 ctx.pivot(Python) 결정적 처리로 라우팅(손코딩 VBA 폐기).
 const pivot = '@범위[input.xlsx/매출!A1:D100] 지점별 매출 합계를 피벗으로 만들어줘';
-check("[회귀] 피벗 요청 → routeVba TRUE", R.vba(pivot) === true);
+check("[변경] 피벗 요청 → routeVba FALSE", R.vba(pivot) === false);
+check("[변경] 피벗 요청 → routePython TRUE", R.py(pivot) === true);
 
 // 4) [2026-06-23 갱신] 시트복사는 같은파일·교차파일 모두 Python(ctx.copy_sheet). ctx.book 이 파일명 공백을
 //    정규화 매칭하므로 교차파일도 동작(VBA Workbooks() 정확매칭은 모델 공백삽입에 실패).

@@ -5,7 +5,7 @@ const src = fs.readFileSync(path.join(__dirname, "..", "scripts", "chat-ui.js"),
 const s = src.indexOf("function userExplicitlyRequestsVba");
 const after = src.indexOf("function numericArithmeticIntent", s + 10);
 let block = src.slice(s, after);
-block += "\nglobalThis.R = { vba: shouldRouteRequestToVba, py: shouldRouteRequestToPython, sheet: sheetOpIntent, sort: ctxSortIntent, rangeCalc: simpleRangeArithmeticIntent };";
+block += "\nglobalThis.R = { vba: shouldRouteRequestToVba, py: shouldRouteRequestToPython, sheet: sheetOpIntent, sort: ctxSortIntent, rangeCalc: simpleRangeArithmeticIntent, pivot: pivotIntent };";
 eval(block);
 const R = globalThis.R;
 
@@ -40,6 +40,14 @@ ck("[교차파일] 출력 파일 시트 이름변경 → Python", R.py("출력 �
 const monthShift = "선택 범위: @범위[KB카드_x_26년06월_x.xlsx/2026년!B336:D336] 월 정보를 +1 해줘";
 ck("[월증감] '월 정보 +1' → Python", R.py(monthShift) === true && R.vba(monthShift) === false);
 ck("[월증감] '다음달로 변경' → Python", R.py("이 셀 날짜를 다음달로 변경해줘") === true);
+
+// [신고] 피벗/크로스탭 → Python (ctx.pivot 1D/2D)
+const crosstab = "행은 지점, 열은 월로, 값은 매출 합계인 피벗표 만들어줘";
+ck("[피벗] 2D 크로스탭 → Python", R.py(crosstab) === true && R.vba(crosstab) === false);
+ck("[피벗] '회사별 매출 합계' 1D → Python", R.py("회사별 매출 합계 요약해줘") === true);
+ck("[피벗] pivotIntent 감지", R.pivot(crosstab) === true && R.pivot("회사별 매출 합계 요약") === true);
+// 매칭/덮어쓰기는 피벗 아님 → VBA 유지(오인 금지)
+ck("[제외] 가입번호 매칭 행 덮어쓰기 → pivot FALSE", R.pivot("가입번호가 일치하는 행의 금액을 덮어써줘") === false);
 
 // 헬퍼로 안 풀리는 복합/매칭 작업은 시트/정렬 단어가 있어도 Python 강제 안 함(기존 라우팅 유지)
 ck("[제외] '시트 복사 후 가입번호 매칭해서 합산' → sheetOp FALSE", R.sheet("시트 복사 후 가입번호 매칭해서 합산") === false);

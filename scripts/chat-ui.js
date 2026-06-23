@@ -518,8 +518,21 @@ function simpleRangeArithmeticIntent(text) {
 }
 
 // ctx 헬퍼가 결정적으로 처리하는(=Python 우선) 작업 묶음. 필요 시 안전한 헬퍼 작업을 여기에 더한다.
+// 피벗/크로스탭/그룹요약 → ctx.pivot 으로 결정적 처리(1D group_by, 2D column). 손코딩(VBA/ctx) 대신.
+function pivotIntent(text) {
+  const intent = routingIntentText(String(text || ""));
+  if (/(피벗|pivot|유사\s*피벗|그룹\s*별|그룹별|집계표|요약표|크로스\s*탭|crosstab)/i.test(intent)) return true;
+  // "회사별 (매출) 합계/요약" — 별과 집계어 사이에 한 절(쉼표 전, 최대 12자) 끼어도 인정.
+  if (/(?:별|별로)\s*[^\n,.]{0,12}(합계|집계|요약|평균|개수|건수|총합)/i.test(intent)) return true;
+  // 2D 크로스탭 형태: 행 기준 + 열 기준 + 값/집계
+  if (/행\s*(?:으로|기준|라벨|은|는)/i.test(intent)
+      && /열\s*(?:로|으로|기준|배치|은|는)/i.test(intent)
+      && /(합계|집계|요약|평균|개수|건수|값\s*(?:은|는|으로))/i.test(intent)) return true;
+  return false;
+}
+
 function ctxHelperPreferredIntent(text) {
-  return sheetOpIntent(text) || ctxSortIntent(text) || monthShiftIntent(text) || simpleRangeArithmeticIntent(text);
+  return sheetOpIntent(text) || ctxSortIntent(text) || monthShiftIntent(text) || simpleRangeArithmeticIntent(text) || pivotIntent(text);
 }
 
 function shouldRouteRequestToVba(text) {
@@ -848,8 +861,10 @@ function vbaStaticSafetyFailures(code, sourceUserMessage) {
   }
   // 발신번호/ID 같은 식별자 피벗은 결과 열을 텍스트 서식으로 먼저 잡아야 한다.
   // 값을 쓴 뒤 NumberFormat="@"를 적용하면 Excel 이 이미 선행 0을 제거한 상태라 복구되지 않는다.
+  // 주의: 'ID' 는 단어경계(\bID\b)로 — 안 그러면 mIdx/bIdx 같은 루프 변수의 'Id' 에 오탐해
+  // 일반 숫자 피벗(지점/월/매출)을 '식별자 피벗'으로 잘못 보고 NumberFormat="@" 안전재생성을 유발한다.
   const idPivotIntent = /(피벗|pivot|그룹|요약|호유형|분리|열로)/i.test(String(sourceUserMessage || "") + "\n" + text)
-    && /(발신번호|전화번호|휴대폰|번호|ID|코드|계정)/i.test(String(sourceUserMessage || "") + "\n" + text);
+    && /(발신번호|전화번호|휴대폰|번호|\bID\b|코드|계정)/i.test(String(sourceUserMessage || "") + "\n" + text);
   if (idPivotIntent) {
     const fmtMatch = /(?:Columns\s*\(\s*(?:1|"A"|'A')\s*\)|Range\s*\(\s*["']A:A["']\s*\))\s*\.\s*NumberFormat\s*=\s*["']@["']/i.exec(text);
     const dataWriteMatch = /(?:Cells\s*\(\s*(?:outRow|outR|rowNo|rIdx|kIdx\s*\+\s*\d+)\s*,\s*1\s*\)\s*\.\s*(?:Value|Value2)|Range\s*\(\s*["']A[2-9]\d*:?)/i.exec(text);
@@ -2557,6 +2572,7 @@ async function sendChat() {
   const routeCtxHelper = routeToPython && typeof ctxHelperPreferredIntent === "function" && ctxHelperPreferredIntent(msg);
   const routeMonthShift = routeToPython && typeof monthShiftIntent === "function" && monthShiftIntent(msg);
   const routeSimpleRangeArithmetic = routeToPython && typeof simpleRangeArithmeticIntent === "function" && simpleRangeArithmeticIntent(msg);
+  const routePivot = routeToPython && typeof pivotIntent === "function" && pivotIntent(msg);
   const routeMultiValueLookup = typeof multiValueLookupIntent === "function" && multiValueLookupIntent(msg);
   const routeDuplicateRowDelete = typeof duplicateRowDeleteIntent === "function" && duplicateRowDeleteIntent(msg);
   const routeConditionalRowDelete = typeof conditionalRowDeleteIntent === "function" && conditionalRowDeleteIntent(msg);
@@ -2596,6 +2612,8 @@ async function sendChat() {
         routingHint = "셀 텍스트의 월/날짜를 N개월 이동(예: '월 정보 +1', '다음달')하는 요청입니다. 반드시 ctx.shift_months(시트, 범위, N) 한 줄로 처리하세요(범위 안 모든 'N월'·앞 'YY년'·뒤 'D일'을 연도 넘김·말일 보정까지 자동 처리). 직접 정규식이나 루프를 짜지 말고, @시트/@범위의 시트명은 한 글자도 바꾸지 말고 그대로 쓰세요.";
       } else if (routeSimpleRangeArithmetic) {
         routingHint = "범위 값을 산술 계산해 다른 범위에 쓰는 단순 요청입니다. 반드시 Python ctx로 작성하고 VBA(Sub B2BSkill())는 출력하지 마세요. ctx.book(\"파일명.xlsx\").read(\"시트명\", \"E6:E16\")로 읽고 2차원 배열로 계산한 뒤 ctx.book(\"파일명.xlsx\").write(\"시트명\", \"D6\", out, overwrite_formulas=True)처럼 한 번에 쓰세요. @범위의 파일명·시트명·주소는 번역·영문화·띄어쓰기 보정 없이 그대로 사용하세요.";
+      } else if (routePivot) {
+        routingHint = "그룹 요약/피벗/크로스탭 요청입니다. 직접 집계·정렬·헤더를 손코딩하지 말고 반드시 ctx.pivot 한 줄로 처리하세요. 1D 그룹요약: ctx.pivot(\"시트\", group_by=\"지점\", value=\"매출\", agg=\"sum\", dest_name=\"결과시트\"). 2D 크로스탭(행/열/값): ctx.pivot(\"시트\", group_by=\"지점\", column=\"월\", value=\"매출\", agg=\"sum\", dest_name=\"결과시트\"). agg는 sum/count/avg/max/min. group_by/column/value 는 헤더명을 쓰고, 시트명은 한 글자도 바꾸지 말고 그대로 쓰세요. dest_name 시트가 이미 있으면 다른 이름을 쓰세요.";
       } else if (routeCtxHelper) {
         routingHint = "시트 복사/복사후 이름변경/추가/삭제 또는 단순 정렬 요청입니다. 반드시 ctx 헬퍼를 쓰세요: ctx.copy_sheet(\"시트\", dst_book=\"대상.xlsx\", new_name=\"새이름\") / ctx.rename_sheet(\"기존\",\"새\") / ctx.add_sheet / ctx.delete_sheet / ctx.sort(시트, 범위, key_col=열문자, has_header=True). 정렬에서 @범위가 L2:L8929처럼 키 열만 가리키면 그 열만 정렬하지 말고 표 전체 범위(예: A1:L8929)를 잡고 key_col=\"L\"로 정렬하세요. 범위가 1행 헤더를 포함하면 has_header=True, 2행부터 시작해 헤더가 없으면 has_header=False를 쓰세요. 값 배열 재작성이나 수기 COM 루프로 흉내내지 말고, @시트/@파일 이름은 한 글자도 바꾸지 말고 그대로 쓰세요.";
       } else {

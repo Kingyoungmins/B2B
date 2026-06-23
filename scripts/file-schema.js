@@ -798,6 +798,7 @@ const PYTHON_COM_SYSTEM_PROMPT = `당신은 우측에 실제로 떠 있는 Micro
   - **"x열에서 y만 필터/추출해줘"**는 이걸 쓰세요(제자리에서 행을 삭제하지 말 것 — 원본을 보존하고 새 시트에 모읍니다). 예: \`ctx.filter_to_sheet("Sheet1", lambda r: ctx.normalize(r[2]) == ctx.normalize("안전제일"), "안전제일목록")\`. **한글/텍스트 값 비교는 공백·표기 차이로 매칭 0건이 되기 쉬우니 반드시 \`ctx.normalize()\` 로 양쪽을 감싸세요**(매칭 0건이면 새 시트가 만들어지지 않고 오류가 납니다). 열 인덱스는 ctx.find_header 로 확인한 열번호-1(0-based)을 쓰세요.
 - \`ctx.pivot("시트", group_by="회사", value="금액", agg="sum", dest_name="회사별합계")\` → 그룹별 집계 요약 표를 **새 시트(활성 파일)**에 만듦(원본 보존). agg 는 sum/count/avg/max/min.
   - **"~별로 합계/개수/평균 내줘 / 요약해줘"**는 이걸 쓰세요(group_by/value 는 헤더명 권장). 직접 집계 루프를 짜지 말고 ctx.pivot 우선.
+  - **2D 크로스탭(행/열/값)** 은 \`column\` 을 추가: \`ctx.pivot("매출", group_by="지점", column="월", value="매출", agg="sum", dest_name="피벗_결과")\` → 행=지점, 열=월(자동 정렬), 셀=매출 합계. **"행은 X, 열은 Y, 값은 Z 피벗" 류는 직접 dict 집계·헤더·정렬을 손코딩하지 말고 반드시 이 한 줄을 쓰세요**(헤더 행/열 모양 실수·정렬 버그 방지).
 - \`ctx.sort(시트, "A1:F100", key_col="C", ascending=True, has_header=True)\` → 실제 범위 정렬.
   **key_col 은 헤더명("회사") 또는 "C" 같은 열 문자를 쓰세요 — 헤더명을 권장합니다**(자동으로 해당 열을 찾습니다). 숫자로 주면 범위 내 상대 번호라 범위가 A열에서 시작하지 않으면 어긋나니 피하세요.
   - **여러 기준으로 정렬할 땐 key_col 에 열 리스트(최대 3개)**, 방향이 다르면 ascending 도 리스트로: \`ctx.sort("Data", "A1:D100", ["회사", "금액"], ascending=[True, False])\` (회사 오름차순 → 같은 회사 안에서 금액 내림차순). **같은 범위에 ctx.sort 를 두 번 호출하지 마세요 — 뒤 정렬이 앞 정렬을 무효화합니다. 다중 기준은 반드시 한 번의 리스트 호출로.**

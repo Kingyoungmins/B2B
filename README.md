@@ -6,6 +6,15 @@
 
 ## 최근 변경사항
 
+### ver0.5.12
+
+ver0.5.11 기반 작업 분기. 0.5.11에 누락돼 있던 직전 두 수정을 이식했습니다.
+
+- **새 시트가 @멘션 목록에 안 뜨던 문제 수정**: 격리 파이프라인(`_run_vba_pipeline_on_session_impl`)도 적용 응답에 경량 스키마(`liveSchema`)를 실어, VBA/교차파일로 만든 새 시트가 클라 시트 캐시·@멘션에 반영되게 했습니다(Python 단일 경로와 동일).
+- **자동 재적용(auto-reapply) 단일화**: 중복이던 `maybeAutoReapplyAfterRestart`를 제거하고 강제재시작도 복구 경로의 `maybeAutoReapplyAfterRecover` 하나를 쓰게 통합 — 쿨다운 공유로 이중 재적용을 막습니다.
+
+빌드 산출물(`build/`·`dist/`)은 복사에서 제외했으므로 소스(`launch_b2b.py` / `python serve_b2b.py`)로 구동되며, 배포 EXE가 필요하면 `build_exe.bat`으로 새로 빌드합니다.
+
 ### ver0.5.11
 
 ver0.5.10 안정화 상태에서 자동 복구와 전체 실행 회귀를 보강한 후속 브랜치.
@@ -382,12 +391,12 @@ build_exe.bat
 빌드 결과:
 
 ```text
-dist\B2B_ver0.5.11\B2B_ver0.5.11.exe   (네이티브 호스트)
-dist\B2B_ver0.5.11\B2B_Server.exe      (PyInstaller 서버)
-dist\B2B_ver0.5.11_portable.zip        (배포용 zip)
+dist\B2B_ver0.5.12\B2B_ver0.5.12.exe   (네이티브 호스트)
+dist\B2B_ver0.5.12\B2B_Server.exe      (PyInstaller 서버)
+dist\B2B_ver0.5.12_portable.zip        (배포용 zip)
 ```
 
-단일 self-extracting EXE가 필요하면 `build_single_exe.bat`을 추가 실행합니다 (`dist\B2B_ver0.5.11_single.exe`).
+단일 self-extracting EXE가 필요하면 `build_single_exe.bat`을 추가 실행합니다 (`dist\B2B_ver0.5.12_single.exe`).
 
 `dist/`와 `build/`는 git 추적 대상이 아닙니다.
 
@@ -476,7 +485,7 @@ ctx.write_grid(ws, [[123]], start_row=4, start_col=2)
 ## 디렉터리 구조
 
 ```text
-B2B_ver0.5.11/
+B2B_ver0.5.12/
 ├─ index.html
 ├─ serve_b2b.py
 ├─ launch_b2b.py
