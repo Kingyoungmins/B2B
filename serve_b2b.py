@@ -176,7 +176,7 @@ def _save_user_settings(data):
 
 
 def default_logic_backup_dir():
-    return user_config_dir() / "auto_backups"
+    return writable_app_dir() / "auto_backup"
 
 
 def logic_backup_dir():
@@ -191,6 +191,11 @@ def logic_backup_dir_info():
     settings = _load_user_settings()
     configured = str(settings.get("logicBackupDir") or "").strip()
     path = logic_backup_dir()
+    if not configured:
+        try:
+            path.mkdir(parents=True, exist_ok=True)
+        except Exception:
+            pass
     return {
         "ok": True,
         "path": str(path),

@@ -243,7 +243,7 @@ async function saveLogicAutoBackup(reason, seq) {
   if (seq !== logicAutoBackupSeq) return;
   logicAutoBackupLastAt = Date.now();
   try {
-    const name = timestampedLogicArchiveName(currentLogicSaveBaseName(defaultLogicBaseNameFromInputs()));
+    const name = timestampedLogicArchiveName(defaultLogicBaseNameFromInputs());
     const blob = createZipBlob(buildLogicZipEntries(name));
     const resp = await fetch("/api/logic/backup", {
       method: "POST",
