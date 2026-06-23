@@ -992,6 +992,11 @@ async function requestExcelApplyCancel() {
   }
 }
 
+function pipelineErrorMayHaveAppliedInExcel(err) {
+  const msg = String((err && err.message) || err || "");
+  return /응답이\s*지연|지연되어\s*중단|백그라운드에서\s*계속\s*적용|timeout|timed\s*out|abort|aborted|network\s*error/i.test(msg);
+}
+
 // 0.4.9 리모콘 모델: 생성된 VBA를 라이브 워크북에 즉시 주입 실행한다.
 // 파이프라인 재실행/시뮬레이터를 거치지 않으므로 초저지연이고, 결과는 우측 라이브 엑셀에 바로 보인다.
 function applyVbaStepToLiveExcel(step, excelId, options = {}) {
@@ -1079,12 +1084,20 @@ function applyVbaStepToLiveExcel(step, excelId, options = {}) {
       if (window.__activeVbaApply && window.__activeVbaApply.token === cancelToken) window.__activeVbaApply = null;
       const failedIdx = (state.pipeline || []).findIndex(s => s && s.id === step.id);
       attachPipelineStepError(err, step, failedIdx >= 0 ? failedIdx : (state.pipeline || []).length - 1);
-      setPipelineRuntimeStatus([step.id], "error", "오류");
+      const mayHaveApplied = pipelineErrorMayHaveAppliedInExcel(err);
+      setPipelineRuntimeStatus([step.id], mayHaveApplied ? "review" : "error", mayHaveApplied ? "확인 필요" : "오류");
       restoreVbaExcelAfterError(excelId);
       // [#2] 적용에 실패한(라이브에 들어가지 못한) 새 스텝은 파이프라인에서 제거한다.
       // 안 그러면 항상 raise 하는 깨진 스텝(예: "데이터가 없습니다")이 남아 이후 모든 재적용이
       // 그 스텝에서 또 실패 → 후속 작업이 전부 막히는 마비를 일으킨다(백엔드 경로와 동일하게 정리).
-      if (rollbackOnFailure && typeof rollbackAddedPipelineStep === "function") rollbackAddedPipelineStep(step.id);
+      // 단, 응답 지연/타임아웃은 Excel 백그라운드에서 실제 적용이 끝났을 수 있다. 이때 롤백하면
+      // 화면에는 결과가 있는데 파이프라인/자동저장에는 스텝이 빠지는 치명적 불일치가 생긴다.
+      if (rollbackOnFailure && !mayHaveApplied && typeof rollbackAddedPipelineStep === "function") {
+        rollbackAddedPipelineStep(step.id);
+      } else if (mayHaveApplied && appendToPipeline) {
+        if (typeof scheduleLogicAutoBackup === "function") scheduleLogicAutoBackup("step-timeout-preserved");
+        toast("응답 지연으로 성공 여부 확인이 필요해 스킬 단계는 삭제하지 않고 보존했습니다. Excel 화면을 확인하세요.", "error");
+      }
       renderPipeline();
       refreshRunButton();
       if (options.reportError !== false) reportPipelineError(err);
@@ -2072,6 +2085,11 @@ function renderPipeline() {
     `;
     item.querySelector(".step-toggle").onclick = (e) => {
       e.stopPropagation();
+      const busyReason = typeof pipelineEditBusyReason === "function" ? pipelineEditBusyReason() : "";
+      if (busyReason) {
+        if (typeof toast === "function") toast(busyReason, "error");
+        return;
+      }
       const stepId = step.id;
       const currentIdx = state.pipeline.findIndex(s => s.id === stepId);
       if (currentIdx < 0) return;
@@ -2100,6 +2118,11 @@ function renderPipeline() {
     };
     item.querySelector(".step-del").onclick = (e) => {
       e.stopPropagation();
+      const busyReason = typeof pipelineEditBusyReason === "function" ? pipelineEditBusyReason() : "";
+      if (busyReason) {
+        if (typeof toast === "function") toast(busyReason, "error");
+        return;
+      }
       const stepId = step.id;
       const currentIdx = state.pipeline.findIndex(s => s.id === stepId);
       if (currentIdx < 0) return;
@@ -2162,6 +2185,13 @@ function invalidateLivePipelineApplied() {
 // (invalidate 호출 이후엔 항상 null 이라 알 수 없으므로, 그 전에 읽어야 함).
 function isLivePipelineApplied() {
   return _lastLiveAppliedSignature !== null;
+}
+
+function pipelineEditBusyReason() {
+  if (window.__activeVbaApply && window.__activeVbaApply.token && !window.__activeVbaApply.token.cancelled) {
+    return "현재 Excel 적용 작업이 끝난 뒤 다시 시도하세요.";
+  }
+  return "";
 }
 
 // [#5] 라이브 COM 적용으로 구조가 바뀐 파일의 클라 스키마 캐시(미리보기 AoA/시트명/차원)를
@@ -2506,6 +2536,24 @@ async function reconcilePipelineSimulationAfterEdit(options = {}) {
           } catch (_) {}
           return result;
         })
+        .catch(async err => {
+          const restoreSteps = Array.isArray(options.restorePipeline) ? options.restorePipeline : null;
+          if (restoreSteps && !cancelToken.cancelled) {
+            try {
+              await reapplyVbaPipelineToLive(liveExcelId, {
+                steps: restoreSteps,
+                viewSheet: affectedStepViewSheetHint(options.affectedStep),
+              });
+              err.message = String(err && err.message ? err.message : err) +
+                "\n\n이전 스킬 목록으로 Excel 상태를 다시 복구했습니다. 삭제/토글은 적용되지 않았습니다.";
+            } catch (restoreErr) {
+              err.message = String(err && err.message ? err.message : err) +
+                "\n\n주의: 삭제/토글 실패 후 이전 스킬 목록 재적용도 실패했습니다. Excel 화면과 스킬 목록이 어긋날 수 있으니 전체 실행을 다시 눌러 동기화하세요." +
+                "\n복구 실패 상세: " + String(restoreErr && restoreErr.message ? restoreErr.message : restoreErr);
+            }
+          }
+          throw err;
+        })
         .finally(() => {
           if (window.__activeVbaApply && window.__activeVbaApply.token === cancelToken) window.__activeVbaApply = null;
         });
@@ -2677,22 +2725,39 @@ function createPipelineStepError(stepIdx, step, message, details) {
   return err;
 }
 
-function shouldForceVbaForPipelineRepair(step, reason, repairCount) {
+function choosePipelineRepairLanguage(step, reason, repairCount) {
   const language = inferPipelineStepLanguage(step);
-  if (language === "vba") return true;
-  if (reason && reason.forceLanguage === "vba") return true;
+  const forced = String((reason && reason.forceLanguage) || "").toLowerCase();
+  if (forced === "vba" || forced === "python") return forced;
   const source = pipelineStepRepairSourceMessage(step);
-  if (typeof shouldRouteRequestToVba === "function" && shouldRouteRequestToVba(source)) return true;
-  if (language === "python" && repairCount >= 1) return true;
+  const explicitVba = typeof userExplicitlyRequestsVba === "function" && userExplicitlyRequestsVba(source);
+  const explicitPython = typeof userExplicitlyRequestsPython === "function" && userExplicitlyRequestsPython(source);
+
+  // 전체실행 자동복구도 채팅 에러복구와 같은 원칙을 따른다.
+  // 저장된 Step이 VBA였다는 이유만으로 복구까지 VBA를 강제하면,
+  // ctx 로 고칠 수 있는 후보가 다시 VBA 재생성 루프에 갇혀 사용자가 같은 오류를 반복해서 보게 된다.
+  // 사용자가 원래 프롬프트에서 명시적으로 VBA/매크로를 요구한 경우에만 VBA를 보존한다.
+  if (language === "vba") {
+    if (explicitVba && !explicitPython) return "vba";
+    return "python";
+  }
+
+  if (explicitPython && !explicitVba) return "python";
+  if (typeof shouldRouteRequestToVba === "function" && shouldRouteRequestToVba(source)) return "vba";
+  if (language === "python" && repairCount >= 1) return "vba";
   const message = [
     reason && reason.message,
     reason && reason.errorInfo && reason.errorInfo.message,
     reason && reason.errorInfo && reason.errorInfo.rawError,
   ].filter(Boolean).join("\n");
   if (language === "python" && /(out\s*of\s*memory|memory|ram|응답\s*없|멈춤|다운|COM|RPC|macro|매크로|Excel)/i.test(message)) {
-    return true;
+    return "vba";
   }
-  return false;
+  return language === "vba" ? "python" : language;
+}
+
+function shouldForceVbaForPipelineRepair(step, reason, repairCount) {
+  return choosePipelineRepairLanguage(step, reason, repairCount) === "vba";
 }
 
 function pipelineRepairSystemPrompt(targetLanguage) {
@@ -2722,6 +2787,9 @@ function buildPipelineAutoRepairPrompt(step, stepIdx, reason, targetLanguage) {
     isVba
       ? "반드시 하나의 ```vba 코드 블록만 출력하고, Sub B2BSkill() 전체 구현을 포함하세요."
       : "반드시 하나의 ```python 코드 블록만 출력하고, def transform(ctx): 전체 구현을 포함하세요.",
+    isVba
+      ? "실패한 Step은 VBA로 복구해야 합니다. Python COM으로 전환하면 대용량/조건/필터/매칭 작업에서 저사양 VM이 멈출 수 있으므로 Python def transform(ctx)는 절대 작성하지 마세요."
+      : "실패한 Step이 VBA였더라도 이번 자동복구는 Python/ctx 로 작성하세요. ctx 헬퍼나 ctx.read/write 로 해결하고, 적용 전 안전검사에 걸려도 다시 VBA로 전환하지 않습니다.",
     "코드 밖 설명은 최소화하세요.",
     "",
     "## 원래 사용자 의도/대화 단서",
@@ -2762,8 +2830,11 @@ function buildPipelineAutoRepairPrompt(step, stepIdx, reason, targetLanguage) {
       "- 대상을 못 찾으면 Err.Raise vbObjectError + 513, \"B2BSkill\", \"사유\" 로 실패시키세요.",
     ].join("\n") : [
       "## Python COM 복구 필수 규칙",
+      "- 저장된 VBA Step이 실패한 뒤의 복구입니다. 기존 VBA를 그대로 고치려 하지 말고 현재 Python COM ctx API로 같은 작업을 다시 작성하세요.",
+      "- 사용자가 원래 요청에서 명시적으로 'vba로/매크로로'라고 한 경우가 아니라면 Python 복구 후보를 VBA로 되돌리지 마세요.",
+      "- 작업에 맞는 ctx 헬퍼가 있으면 헬퍼를 우선 사용하세요(ctx.copy_sheet/rename_sheet/add_sheet/delete_sheet/sort/filter_to_sheet/pivot/shift_months/delete_rows/delete_cols 등).",
       "- ctx.copy 로 값만 복사하지 마세요. 값/값만 요청은 ctx.read 후 ctx.write(..., overwrite_formulas=True) 흐름으로 작성하세요.",
-      "- 복잡한 피벗형 집계, 조건 다중 계산, 시트 전체 복사는 Python이 아니라 VBA로 복구해야 합니다.",
+      "- 대량 행 삭제는 가능한 한 행을 하나씩 지우는 긴 루프를 피하고 ctx 헬퍼/벌크 방식으로 작성하세요. 헬퍼로 처리할 수 없는 경우에는 실패를 숨기지 말고 raise ValueError로 알리세요.",
       "- 레거시 openpyxl ctx(sheet/rows/write_grid 등) 방언을 쓰지 말고 현재 Python COM ctx API만 사용하세요.",
     ].join("\n"),
     "/no_think",
@@ -2884,7 +2955,7 @@ function localRepairPipelineStep(step, failures) {
 async function autoRepairPipelineStep(stepIdx, reason, repairCount) {
   const step = state.pipeline && state.pipeline[stepIdx];
   if (!step || !step.code) throw createPipelineStepError(stepIdx, step, "자동 복구할 Step 코드를 찾지 못했습니다.");
-  const targetLanguage = shouldForceVbaForPipelineRepair(step, reason || {}, repairCount || 0) ? "vba" : inferPipelineStepLanguage(step);
+  const targetLanguage = choosePipelineRepairLanguage(step, reason || {}, repairCount || 0);
   const sourceUserMessage = pipelineStepRepairSourceMessage(step);
   const label = `Step ${stepIdx + 1} 자동 복구 중`;
   if (window.generatorSetProgress) window.generatorSetProgress(label + "...");
@@ -2896,7 +2967,9 @@ async function autoRepairPipelineStep(stepIdx, reason, repairCount) {
   toast(`${label}입니다.`, "success");
 
   const localRepair = localRepairPipelineStep(step, (reason && reason.failures) || (reason && reason.previousFailures) || []);
-  if (localRepair && localRepair.code) {
+  // targetLanguage=python 인 자동복구에서 로컬 VBA 수리가 끼어들면 사용자가 본 "VBA 실패 → ctx 복구"
+  // 원칙이 깨진다. 로컬 수리는 대상 언어와 일치할 때만 사용한다.
+  if (localRepair && localRepair.code && localRepair.language === targetLanguage) {
     const localFailures = pipelineStaticFailuresForCode(localRepair.code, localRepair.language, sourceUserMessage);
     if (!localFailures.length) {
       if (typeof pushHistory === "function") pushHistory("전체 실행 로컬 자동 복구");
@@ -2943,10 +3016,10 @@ async function autoRepairPipelineStep(stepIdx, reason, repairCount) {
 
   const candidateFailures = pipelineStaticFailuresForCode(code, language, sourceUserMessage);
   if (candidateFailures.length) {
-    if (language === "python" && targetLanguage !== "vba") {
+    if (language === "python" && targetLanguage === "python" && Number(repairCount || 0) < 1) {
       return autoRepairPipelineStep(stepIdx, {
         ...(reason || {}),
-        forceLanguage: "vba",
+        forceLanguage: "python",
         previousFailures: candidateFailures,
       }, Number(repairCount || 0) + 1);
     }
@@ -3022,6 +3095,13 @@ async function runPipelineWithAutoRepair(options = {}) {
       const info = (err && (err._stepInfo || err.errorInfo)) || {};
       const stepIdx = resolveRunnerRecoveryStepIndex(info);
       if (!Number.isInteger(stepIdx) || stepIdx < 0 || !state.pipeline[stepIdx]) throw err;
+      // 실패 원인이 "앞 단계에서 만들어졌어야 하는 중간 시트 누락"이면, 해당 Step 코드를
+      // Python/VBA 로 억지 자동복구하지 않는다. 대화 기록에 남은 시트 생성 후보를 사용자에게
+      // "삽입"하도록 보여주는 것이 정답이다. 그렇지 않으면 Step 3만 고쳐도 계속 같은 시트 없음
+      // 오류가 반복된다.
+      if (typeof findMissingDependencySkillSuggestion === "function" && findMissingDependencySkillSuggestion(info)) {
+        throw err;
+      }
       const step = state.pipeline[stepIdx];
       // 캡처한 복붙은 '사용자가 실제로 한 동작의 정확 좌표 재생'이 목적이다. LLM 자동복구로
       // 재생성하면 동작이 바뀌고(복붙 버그 재발) 같은 실패를 반복하며 "박힘" → 재생성하지 말고 그대로 보고.
@@ -3235,7 +3315,114 @@ function reportPipelineError(err, options) {
         }
       };
     }
+    if (typeof offerMissingDependencySkillCandidate === "function") {
+      try { offerMissingDependencySkillCandidate(info); } catch (suggestErr) { console.warn("[pipeline] missing dependency suggestion failed", suggestErr); }
+    }
     chatBox.scrollTop = chatBox.scrollHeight;
+  }
+}
+
+function pipelineExtractAssistantCode(text) {
+  if (typeof extractCode === "function") return extractCode(String(text || ""));
+  const m = /```(?:vba|vb|python|py|javascript|js)?\s*([\s\S]*?)```/i.exec(String(text || ""));
+  return m ? m[1].trim() : "";
+}
+
+function pipelineSheetLiteralsFromCode(code) {
+  const text = String(code || "");
+  const out = new Set();
+  const patterns = [
+    /\b(?:Worksheets|Sheets)\s*\(\s*["']([^"']+)["']\s*\)/gi,
+    /\b[A-Za-z_][A-Za-z0-9_]*\s*\.\s*Name\s*=\s*["']([^"']+)["']/gi,
+    /\bStrComp\s*\(\s*[^,\r\n)]*\.Name\s*,\s*["']([^"']+)["']/gi,
+    /\bctx\.(?:sheet|read|write|clear|sort|filter_to_sheet|pivot|add_sheet)\s*\(\s*["']([^"']+)["']/gi,
+  ];
+  for (const re of patterns) {
+    let m;
+    while ((m = re.exec(text)) !== null) {
+      if (m[1]) out.add(String(m[1]));
+    }
+  }
+  return [...out];
+}
+
+function pipelineCodeCreatesSheetNamed(code, sheetName) {
+  const text = String(code || "");
+  const escaped = String(sheetName || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  if (!escaped) return false;
+  const hasAdd = /\bWorksheets\s*\.\s*Add\b|\bSheets\s*\.\s*Add\b|\bctx\.add_sheet\s*\(|\bctx\.filter_to_sheet\s*\(|\bctx\.pivot\s*\(/i.test(text);
+  const namesSheet = new RegExp("\\.\\s*Name\\s*=\\s*[\"']" + escaped + "[\"']|new_name\\s*=\\s*[\"']" + escaped + "[\"']|[\"']" + escaped + "[\"']", "i").test(text);
+  return hasAdd && namesSheet;
+}
+
+function pipelinePriorStepCreatesSheet(stepIdx, sheetName) {
+  const idx = Number(stepIdx);
+  if (!Number.isInteger(idx) || idx <= 0) return false;
+  const steps = Array.isArray(state.pipeline) ? state.pipeline : [];
+  for (let i = 0; i < idx && i < steps.length; i += 1) {
+    if (pipelineCodeCreatesSheetNamed((steps[i] && steps[i].code) || "", sheetName)) return true;
+  }
+  return false;
+}
+
+function findChatHistorySheetCreationCandidate(sheetName, failedCode) {
+  const history = Array.isArray(state.chatHistory) ? state.chatHistory : [];
+  const failed = String(failedCode || "").trim();
+  for (let i = history.length - 1; i >= 0; i--) {
+    const item = history[i] || {};
+    if (item.role !== "assistant") continue;
+    const content = String(item.content || "");
+    const code = pipelineExtractAssistantCode(content);
+    if (!code || String(code).trim() === failed) continue;
+    if (!pipelineCodeCreatesSheetNamed(code, sheetName)) continue;
+    let sourceUserMessage = "";
+    for (let j = i - 1; j >= 0; j--) {
+      const prev = history[j] || {};
+      if (prev.role === "user") {
+        sourceUserMessage = String(prev.content || "");
+        if (!sourceUserMessage.includes("## 막힌 코드") && !/정적\s*안전\s*검사|안전\s*검사에서\s*막/i.test(sourceUserMessage)) break;
+      }
+    }
+    return { content, code, sourceUserMessage, historyIndex: i };
+  }
+  return null;
+}
+
+function findMissingDependencySkillSuggestion(info) {
+  const stepIdx = Number(info && info.stepIdx);
+  if (!Number.isInteger(stepIdx) || stepIdx < 0) return null;
+  const failedCode = String((info && info.code) || "");
+  const sheets = pipelineSheetLiteralsFromCode(failedCode);
+  if (!sheets.length) return null;
+  for (const sheetName of sheets) {
+    if (pipelinePriorStepCreatesSheet(stepIdx, sheetName)) continue;
+    const candidate = findChatHistorySheetCreationCandidate(sheetName, failedCode);
+    if (!candidate) continue;
+    return { stepIdx, sheetName, candidate, insertPos: stepIdx + 1 };
+  }
+  return null;
+}
+
+function offerMissingDependencySkillCandidate(info) {
+  const suggestion = findMissingDependencySkillSuggestion(info);
+  if (!suggestion) return;
+  window.__b2bMissingDependencySuggestions = window.__b2bMissingDependencySuggestions || new Set();
+  const { stepIdx, sheetName, candidate, insertPos } = suggestion;
+  const key = `${stepIdx}:${sheetName}`;
+  if (window.__b2bMissingDependencySuggestions.has(key)) return;
+  // 오류 문구가 백엔드 timeout/인코딩 문제로 뭉개져도, 실패 코드가 중간 시트를 전제로 하고
+  // 저장된 대화 기록에 그 시트를 만드는 후보가 있으면 복구 후보로 보여준다.
+  window.__b2bMissingDependencySuggestions.add(key);
+  addMessage(
+    "system",
+    `이 Step은 "${sheetName}" 시트가 이미 있다고 가정하지만, 현재 파이프라인 앞 단계에는 그 시트를 만드는 스킬이 없습니다.\n` +
+    `저장된 대화 기록에서 "${sheetName}" 시트를 만드는 후보 코드를 찾았습니다. 아래 후보의 "삽입"을 눌러 ${insertPos}번 위치(Step ${stepIdx + 1} 앞)에 넣은 뒤 전체실행을 다시 눌러 주세요.`
+  );
+  if (typeof addAssistantReply === "function") {
+    addAssistantReply(candidate.content, {
+      sourceUserMessage: candidate.sourceUserMessage,
+      suggestInsertPosition: insertPos,
+    });
   }
 }
 

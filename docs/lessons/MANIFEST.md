@@ -21,6 +21,9 @@ Generated from selected lesson documents in B2B_ver0.5.6 ~ B2B_ver0.5.9.
 | `15_v0510_idle_runtime_load.md` | 4476 |
 | `16_v0510_routing_mention_keyword_collision.md` | 3932 |
 | `17_v0510_vba_hidden_noop_smoke.md` | 3024 |
+| `18_v0510_force_restart_auto_reapply.md` | 7024 |
+| `19_v0510_text_month_date_shift.md` | 3567 |
+| `20_v0510_vba_codegen_quality_and_explicit_engine.md` | 5292 |
 | `by_version/v0.5.6/CHANGES_claude.md` | 14668 |
 | `by_version/v0.5.6/EXCEL_MIRROR_ARCHITECTURE.md` | 3215 |
 | `by_version/v0.5.6/PYTHON_ENGINE_RISKS.md` | 7599 |

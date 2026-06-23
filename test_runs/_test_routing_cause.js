@@ -5,7 +5,7 @@ const s = src.indexOf("function userExplicitlyRequestsVba");
 const pIdx = src.indexOf("function shouldRouteRequestToPython");
 const after = src.indexOf("function numericArithmeticIntent", pIdx + 10);
 let block = src.slice(s, after);
-block += "\nglobalThis.R = { vba: shouldRouteRequestToVba, py: shouldRouteRequestToPython, simple: shouldRouteSimpleStructureEditToPython };";
+block += "\nglobalThis.R = { vba: shouldRouteRequestToVba, py: shouldRouteRequestToPython, simple: shouldRouteSimpleStructureEditToPython, conditional: conditionalRowDeleteIntent };";
 eval(block);
 const R = globalThis.R;
 
@@ -27,9 +27,11 @@ check("파일명 '복사본'+단순삭제 → routeVba FALSE", R.vba(copyName) =
 const pivot = '@범위[input.xlsx/매출!A1:D100] 지점별 매출 합계를 피벗으로 만들어줘';
 check("[회귀] 피벗 요청 → routeVba TRUE", R.vba(pivot) === true);
 
-// 4) 회귀: 시트 전체 교차파일 복사는 여전히 VBA
+// 4) [2026-06-23 갱신] 시트복사는 같은파일·교차파일 모두 Python(ctx.copy_sheet). ctx.book 이 파일명 공백을
+//    정규화 매칭하므로 교차파일도 동작(VBA Workbooks() 정확매칭은 모델 공백삽입에 실패).
 const crossCopy = '@시트[a.xlsx/Sheet1] 시트 전체를 다른 파일로 복사해줘';
-check("[회귀] 시트전체 교차파일 복사 → routeVba TRUE", R.vba(crossCopy) === true);
+check("[변경] 교차파일 시트복사 → routeVba FALSE", R.vba(crossCopy) === false);
+check("[변경] 교차파일 시트복사 → routePython TRUE", R.py(crossCopy) === true);
 
 // 5) 회귀: 명시적 VBA 요청은 VBA
 check("[회귀] 'vba로 ... 지워줘' → routeVba TRUE", R.vba('vba로 @범위[a.xlsx/S!A1:A5] 지워줘') === true);
@@ -47,6 +49,13 @@ const duplicateDelete = "\u0045\uc5f4 \u004d\u0056\u004e\u004f\uc0c1\ud488\uba85
 check("[regression] conditional duplicate row delete -> routeVba TRUE", R.vba(duplicateDelete) === true);
 check("[regression] conditional duplicate row delete -> routePython FALSE", R.py(duplicateDelete) === false);
 check("[regression] conditional duplicate row delete -> simple FALSE", R.simple(duplicateDelete) === false);
+
+// 9) regression: selected column + date condition + row delete must go to VBA, not ctx/Python.
+const conditionalRowDelete = "\uc120\ud0dd\ud55c \uc5f4\uc5d0\uc11c 20260403 \uc774\uc804\uc774\uba74 \ud574\ub2f9 \ud589 \uc0ad\uc81c\ud574\uc918";
+check("[regression] conditional row delete intent detected", R.conditional(conditionalRowDelete) === true);
+check("[regression] conditional row delete -> routeVba TRUE", R.vba(conditionalRowDelete) === true);
+check("[regression] conditional row delete -> routePython FALSE", R.py(conditionalRowDelete) === false);
+check("[regression] conditional row delete -> simple FALSE", R.simple(conditionalRowDelete) === false);
 
 console.log("\n=== RESULT: " + pass + " PASS / " + fail + " FAIL ===");
 process.exit(fail ? 2 : 0);

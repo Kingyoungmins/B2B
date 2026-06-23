@@ -235,6 +235,14 @@ function userExplicitlyRequestsVba(text) {
   return /(?:^|[^\w])vba(?:[^\w]|$)|vba\s*(?:로|모드|버전|코드|작성|짜|해|써)|매크로|Sub\s+B2BSkill\s*\(/i.test(t);
 }
 
+// 사용자가 'python/파이썬/COM 으로 짜줘' 처럼 엔진을 명시했는지. [사용자 지시] 이 의도는
+// VBA 기본값/휴리스틱보다 최우선 — 채팅·에러복구창 양쪽에서 python 으로 생성하게 한다.
+// (실패하면 복구가 어차피 VBA 로 되돌리므로 안전망은 유지됨.)
+function userExplicitlyRequestsPython(text) {
+  const t = String(text || "");
+  return /(?:^|[^\w])python(?:[^\w]|$)|python\s*(?:으|로|모드|버전|코드|작성|짜|해|써)|파이썬|(?:^|[^\w])py\s*(?:으로|로)|(?:^|[^\w])com\s*(?:으로|로)|def\s+transform\s*\(/i.test(t);
+}
+
 function exactSheetNamesFromMentions(text) {
   const source = String(text || "");
   const names = new Set();
@@ -261,15 +269,136 @@ function exactSheetNamesFromMentions(text) {
   return [...names];
 }
 
+function exactSheetNameReminder(text) {
+  const sheets = exactSheetNamesFromMentions(text);
+  if (!sheets.length) return "";
+  return [
+    `정확 시트명(절대 변경 금지): ${sheets.map(s => `"${s}"`).join(", ")}`,
+    "위 시트명은 코드에 그대로 복사하세요. 번역/영문화/띄어쓰기 보정 금지.",
+    `"2026년"은 "2026 년"이 아니며, "통합인터넷(국제)"는 "통합internet(국제)"가 아닙니다.`,
+  ].join(" ");
+}
+
 function exactReferenceFailures(code, sourceUserMessage) {
   const failures = [];
   const source = String(sourceUserMessage || "");
   const text = String(code || "");
   if (!/@(?:범위|컬럼|시트)\[/.test(source)) return failures;
+  // 공백/_/- 만 다른 경우(모델이 한글 식별자에 공백을 끼우는 흔한 케이스, 예: "2026년"→"2026 년")는 통과.
+  // Python 런타임은 normalize_sheet_lookup 으로 정규화 매칭하고, VBA 는 vbaExactSheetReferenceFailures 가
+  // 별도로 정확(띄어쓰기 보정 없이) 검사하므로 이 완화가 VBA 정확성을 해치지 않는다.
+  const norm = (v) => String(v || "").toLowerCase().replace(/[\s_\-]+/g, "");
+  const normCode = norm(text);
   for (const sheetName of exactSheetNamesFromMentions(source)) {
-    if (!text.includes(sheetName)) {
-      failures.push(`요청의 정확한 시트명 "${sheetName}" 이 코드에 그대로 들어 있지 않습니다. @범위/@컬럼의 시트명은 번역하거나 영문화하지 말고 한 글자도 바꾸지 마세요.`);
+    if (text.includes(sheetName)) continue;
+    if (normCode.includes(norm(sheetName))) continue;
+    failures.push(`요청의 정확한 시트명 "${sheetName}" 이 코드에 그대로 들어 있지 않습니다. @범위/@컬럼의 시트명은 번역하거나 영문화하지 말고 한 글자도 바꾸지 마세요.`);
+  }
+  return failures;
+}
+
+function vbaSheetReferenceLiterals(code) {
+  const text = typeof _stripVbaCommentsForGate === "function"
+    ? _stripVbaCommentsForGate(code)
+    : String(code || "");
+  const literals = new Set();
+  const worksheetVars = new Set();
+
+  const wsDeclRe = /(?:\bDim|,)\s+([A-Za-z_][A-Za-z0-9_]*)\s+As\s+Worksheet\b/gi;
+  let wsDeclMatch;
+  while ((wsDeclMatch = wsDeclRe.exec(text)) !== null) {
+    worksheetVars.add(String(wsDeclMatch[1]).toLowerCase());
+  }
+
+  const wsLoopRe = /\bFor\s+Each\s+([A-Za-z_][A-Za-z0-9_]*)\s+In\s+[^\r\n:]*\bWorksheets\b/gi;
+  let wsLoopMatch;
+  while ((wsLoopMatch = wsLoopRe.exec(text)) !== null) {
+    worksheetVars.add(String(wsLoopMatch[1]).toLowerCase());
+  }
+
+  const wsSetRe = /\bSet\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*[^\r\n:]*\b(?:Worksheets|Sheets)\s*(?:\.Add|\()/gi;
+  let wsSetMatch;
+  while ((wsSetMatch = wsSetRe.exec(text)) !== null) {
+    worksheetVars.add(String(wsSetMatch[1]).toLowerCase());
+  }
+
+  const patterns = [
+    /\b(?:Worksheets|Sheets)\s*\(\s*["']([^"']+)["']\s*\)/gi,
+    /\b[A-Za-z_][A-Za-z0-9_]*\s*\.\s*Worksheets\s*\(\s*["']([^"']+)["']\s*\)/gi,
+    /\b[A-Za-z_][A-Za-z0-9_]*\s*\.\s*Sheets\s*\(\s*["']([^"']+)["']\s*\)/gi,
+  ];
+  for (const re of patterns) {
+    let m;
+    while ((m = re.exec(text)) !== null) {
+      if (m[1]) literals.add(String(m[1]));
     }
+  }
+
+  const wsNameLiteralRe = /\b([A-Za-z_][A-Za-z0-9_]*)\s*\.\s*Name\s*=\s*["']([^"']+)["']/gi;
+  let wsNameLiteralMatch;
+  while ((wsNameLiteralMatch = wsNameLiteralRe.exec(text)) !== null) {
+    const receiver = String(wsNameLiteralMatch[1]).toLowerCase();
+    if (worksheetVars.has(receiver) && wsNameLiteralMatch[2]) {
+      literals.add(String(wsNameLiteralMatch[2]));
+    }
+  }
+
+  const strCompLiteralRe = /\bStrComp\s*\(\s*([A-Za-z_][A-Za-z0-9_]*)\s*\.\s*Name\s*,\s*["']([^"']+)["']/gi;
+  let strCompLiteralMatch;
+  while ((strCompLiteralMatch = strCompLiteralRe.exec(text)) !== null) {
+    const receiver = String(strCompLiteralMatch[1]).toLowerCase();
+    if (worksheetVars.has(receiver) && strCompLiteralMatch[2]) {
+      literals.add(String(strCompLiteralMatch[2]));
+    }
+  }
+
+  // 변수에 정확 시트명을 담고 Worksheets(sheetName) 로 접근하는 생성물도 허용한다.
+  const assignments = new Map();
+  const assignRe = /\b([A-Za-z_][A-Za-z0-9_]*)\s*=\s*["']([^"']+)["']/gi;
+  let assignMatch;
+  while ((assignMatch = assignRe.exec(text)) !== null) {
+    assignments.set(String(assignMatch[1]).toLowerCase(), String(assignMatch[2]));
+  }
+  const wsVarRe = /\b(?:Worksheets|Sheets)\s*\(\s*([A-Za-z_][A-Za-z0-9_]*)\s*\)/gi;
+  let wsVarMatch;
+  while ((wsVarMatch = wsVarRe.exec(text)) !== null) {
+    const assigned = assignments.get(String(wsVarMatch[1]).toLowerCase());
+    if (assigned) literals.add(assigned);
+  }
+  const nameVarRe = /\b([A-Za-z_][A-Za-z0-9_]*)\s*\.\s*Name\s*=\s*([A-Za-z_][A-Za-z0-9_]*)\b/gi;
+  let nameVarMatch;
+  while ((nameVarMatch = nameVarRe.exec(text)) !== null) {
+    const receiver = String(nameVarMatch[1]).toLowerCase();
+    if (!worksheetVars.has(receiver)) continue;
+    const assigned = assignments.get(String(nameVarMatch[2]).toLowerCase());
+    if (assigned) literals.add(assigned);
+  }
+  const strCompVarRe = /\bStrComp\s*\(\s*([A-Za-z_][A-Za-z0-9_]*)\s*\.\s*Name\s*,\s*([A-Za-z_][A-Za-z0-9_]*)\b/gi;
+  let strCompVarMatch;
+  while ((strCompVarMatch = strCompVarRe.exec(text)) !== null) {
+    const receiver = String(strCompVarMatch[1]).toLowerCase();
+    if (!worksheetVars.has(receiver)) continue;
+    const assigned = assignments.get(String(strCompVarMatch[2]).toLowerCase());
+    if (assigned) literals.add(assigned);
+  }
+  return [...literals];
+}
+
+function vbaExactSheetReferenceFailures(code, sourceUserMessage) {
+  const source = String(sourceUserMessage || "");
+  if (!/@(?:범위|컬럼|시트)\[/.test(source)) return [];
+  const exactSheets = exactSheetNamesFromMentions(source);
+  if (!exactSheets.length) return [];
+  const literals = vbaSheetReferenceLiterals(code);
+  const literalSet = new Set(literals);
+  const failures = [];
+  for (const sheetName of exactSheets) {
+    if (literalSet.has(sheetName)) continue;
+    const used = literals.length ? literals.map(v => `"${v}"`).join(", ") : "없음";
+    failures.push(
+      `VBA 코드의 실제 시트 접근 구문에 요청의 정확한 시트명 "${sheetName}" 이 없습니다. ` +
+      `현재 감지된 시트명은 ${used} 입니다. @범위/@컬럼/@시트의 시트명은 번역·영문화·띄어쓰기 보정 없이 그대로 사용하세요.`
+    );
   }
   return failures;
 }
@@ -305,6 +434,7 @@ function shouldRouteSimpleStructureEditToPython(text) {
   const t = String(text || "");
   if (!t.trim()) return false;
   if (typeof duplicateRowDeleteIntent === "function" && duplicateRowDeleteIntent(t)) return false;
+  if (typeof conditionalRowDeleteIntent === "function" && conditionalRowDeleteIntent(t)) return false;
   const intent = routingIntentText(t);
   const hasDirectTarget = /@범위\[[^\]]+![^\]]+\]/i.test(t)
     || /\b[A-Z]{1,3}\s*:\s*[A-Z]{1,3}\b/i.test(t)
@@ -322,6 +452,59 @@ function shouldRouteSimpleStructureEditToPython(text) {
   return !/(일치|매칭|같은|동일|찾아서|찾아|조건|이면|일\s*때|경우|피벗|그룹|집계|합계|합산|개수|건수|정렬|복사|붙여\s*넣|붙여넣|덮어|갱신|업데이트|분리|토큰|환산|계산|입력|작성|채워|가져)/i.test(intent);
 }
 
+// [사용자 지시] 시트 복사/복사후 이름변경/추가/삭제, 단순 정렬처럼 'ctx 헬퍼가 결정적으로 처리하는' 작업은
+// VBA 로 손으로 짜지 말고 Python COM(ctx.copy_sheet/rename_sheet/add_sheet/delete_sheet/sort)으로 라우팅한다.
+// 헬퍼가 없는 복합/매칭/대량 루프 작업(중복행 삭제, 다중값 매칭 합산 등)은 안정성 위해 VBA 유지.
+function sheetOpIntent(text) {
+  const original = String(text || "");
+  const intent = routingIntentText(original);
+  // @시트[...] 는 '시트 자체'를 가리킨다(범위 아님). routingIntentText 가 이 멘션을 지워 '시트' 단어가
+  // 사라지므로, 멘션이 있으면 op 단어(복사/이름변경/추가/삭제)만으로도 시트 작업으로 인정한다.
+  const sheetMention = /@시트\[/.test(original);
+  if (!/(시트|탭|worksheet|sheet)/i.test(intent) && !sheetMention) return false;
+  // 매칭/집계/조건이 섞인 복합 작업은 단순 시트조작이 아니므로 기존 라우팅에 맡긴다(안정성).
+  if (/(일치|매칭|같은\s*값|동일\s*값|찾아서|피벗|pivot|집계|합계|합산|그룹|조건|이면|일\s*때|분리|토큰|split)/i.test(intent)) return false;
+  const clearLike = /(데이터|내용|값|범위)[^\n]{0,6}(삭제|제거|지워|비워|clear)/i.test(intent);
+  let copy, rename, add, del;
+  if (sheetMention) {
+    copy = /(복사|복제|copy)/i.test(intent);
+    rename = /(이름|명)[^\n]{0,8}(변경|바꾸|바꿔|수정)|rename/i.test(intent);
+    add = /(추가|생성|만들)|(?:add|insert)\s*(?:sheet|tab)/i.test(intent);
+    del = /(삭제|제거|지워|없애|delete)/i.test(intent) && !clearLike;
+  } else {
+    copy = /(시트|탭|worksheet|sheet)[^\n]{0,12}(복사|복제|copy)|(복사|복제|copy)[^\n]{0,12}(시트|탭|worksheet|sheet)/i.test(intent);
+    rename = /(시트|탭)[^\n]{0,12}(이름|명)[^\n]{0,8}(변경|바꾸|바꿔|수정)|rename\s*(?:sheet|tab)/i.test(intent);
+    add = /(시트|탭)[^\n]{0,8}(추가|생성|만들)|(?:add|insert)\s*(?:sheet|tab)/i.test(intent);
+    del = /(시트|탭)[^\n]{0,8}(삭제|제거|지워|없애|delete)/i.test(intent) && !clearLike;
+  }
+  // [2026-06-23] 시트 복사/이름변경/추가/삭제는 같은 파일·교차파일 모두 Python(ctx) 으로 보낸다.
+  // 교차파일은 ctx.book/dst_book/copy_sheet 가 처리하며, 파일명에 공백이 끼어도 정규화 매칭으로 찾는다
+  // (VBA 는 Workbooks() 가 정확 매칭이라 모델의 공백 삽입을 못 견뎌 오히려 실패함).
+  return copy || rename || add || del;
+}
+function ctxSortIntent(text) {
+  const intent = routingIntentText(String(text || ""));
+  if (!/(정렬|sort|오름차순|내림차순|순으로\s*정렬|순\s*정렬)/i.test(intent)) return false;
+  // 매칭/집계/피벗/조건/덮어쓰기가 섞인 복합 작업은 기존(VBA) 라우팅에 맡긴다.
+  if (/(일치|매칭|같은|동일|찾아|피벗|pivot|집계|합계|합산|그룹|조건|이면|일\s*때|덮어|갱신)/i.test(intent)) return false;
+  return true;
+}
+// "월 정보 +1 / 월 +1 / 다음달로 변경 / N개월 이동" 류 — ctx.shift_months 로 결정적 처리(모델이 VBA 정규식·
+// 한글에 공백을 끼워 매번 깨뜨리던 문제를 백엔드 헬퍼로 제거). Python 우선 라우팅.
+function monthShiftIntent(text) {
+  const intent = routingIntentText(String(text || ""));
+  if (/(월\s*정보|월|날짜)\s*(?:을|를|에|값)?\s*[+\-]\s*\d+/i.test(intent)) return true;
+  if (/[+\-]\s*\d+\s*개?월\s*(?:이동|증감|뒤|전|후|로|만큼)/i.test(intent)) return true;
+  if (/(월\s*정보|날짜)[^\n]{0,10}(더해|올려|늘려|증가|이동|증감|미뤄|당겨)/i.test(intent)) return true;
+  if (/(다음\s*달|지난\s*달|한\s*달\s*(?:뒤|전|후))\s*(?:로|으로)?\s*(?:바꿔|변경|이동|미뤄|당겨|해|처리|수정|업데이트)/i.test(intent)) return true;
+  return false;
+}
+
+// ctx 헬퍼가 결정적으로 처리하는(=Python 우선) 작업 묶음. 필요 시 안전한 헬퍼 작업을 여기에 더한다.
+function ctxHelperPreferredIntent(text) {
+  return sheetOpIntent(text) || ctxSortIntent(text) || monthShiftIntent(text);
+}
+
 function shouldRouteRequestToVba(text) {
   const t = String(text || "");
   if (!t.trim()) return false;
@@ -329,6 +512,7 @@ function shouldRouteRequestToVba(text) {
   const explicitVba = userExplicitlyRequestsVba(intent);
   const simplePythonStructureEdit = shouldRouteSimpleStructureEditToPython(t);
   const duplicateRowDelete = duplicateRowDeleteIntent(t);
+  const conditionalRowDelete = typeof conditionalRowDeleteIntent === "function" && conditionalRowDeleteIntent(t);
   const rangeRefs = t.match(/@범위\[/g) || [];                  // 구조 신호: 원문
   const explicitColumns = /![A-Z]{1,3}:[A-Z]{1,3}\]/i.test(t);  // 구조 신호: 원문(멘션 내 전체열)
   const pivotLike = /(피벗|pivot|유사\s*피벗|그룹\s*별|그룹별|집계표|요약표|크로스탭)/i.test(intent)
@@ -359,8 +543,9 @@ function shouldRouteRequestToVba(text) {
     && /(합계값|합계|합산|더해|sum|작성|입력|기입|채워|넣어|반영|가져)/i.test(intent)
     && (rangeRefs.length >= 3 || explicitColumns)
   );
-  if (explicitVba || duplicateRowDelete) return true;
+  if (explicitVba || duplicateRowDelete || conditionalRowDelete) return true;
   if (simplePythonStructureEdit) return false;
+  if (ctxHelperPreferredIntent(t)) return false;   // [사용자 지시] 시트 복사/이름변경/정렬 등 ctx 헬퍼 작업은 Python 우선
   if (pivotLike || pivotShape || keyedRowOverwrite || wholeSheetCrossCopy || multiValueLookupAggregate) return true;
   if (conditionMarkers.length >= 2 && (rowwiseWrite || colRefs.length >= 2)) return true;
   return conditionMarkers.length >= 1 && rowwiseWrite && colRefs.length >= 2;
@@ -372,6 +557,9 @@ function shouldRouteRequestToPython(text) {
   const intent = routingIntentText(t);  // 키워드 매칭은 멘션(파일명/시트명) 제거한 의도 텍스트로
   if (userExplicitlyRequestsVba(intent)) return false;
   if (duplicateRowDeleteIntent(t)) return false;
+  if (typeof conditionalRowDeleteIntent === "function" && conditionalRowDeleteIntent(t)) return false;
+  // [사용자 지시] 시트 복사/복사후 이름변경/추가/삭제·단순 정렬처럼 ctx 헬퍼가 결정적인 작업은 Python 우선.
+  if (ctxHelperPreferredIntent(t)) return true;
   // Python COM은 저사양 VM에서 COM 멈춤 리스크가 있으므로 단순한 1개 기능 요청에만 강제 라우팅한다.
   // 매칭/합산/조건/피벗/행삭제 같은 복합 작업은 기본 VBA 경로가 처리한다.
   if (shouldRouteSimpleStructureEditToPython(t)) return true;
@@ -424,6 +612,37 @@ function duplicateRowDeleteIntent(sourceUserMessage) {
   const rowDeleteShape = /(행|위에\s*있는|아래|먼저|EID|ID|키|코드|가입번호|고객번호|계약번호|수납금액|금액|보호|지우면\s*안|삭제하면\s*안|1\s*이상|>=\s*1)/i.test(s);
   const hasColumnRefs = requestedExcelColumnLetters(source).length >= 2;
   return rowDeleteShape || hasColumnRefs;
+}
+
+function conditionalRowDeleteIntent(sourceUserMessage) {
+  const source = String(sourceUserMessage || "");
+  const s = typeof routingIntentText === "function" ? routingIntentText(source) : source;
+  const rowDelete = /(행|row).{0,20}(삭제|지워|없애|제거|delete|remove)|(?:삭제|지워|없애|제거|delete|remove).{0,20}(행|row)/i.test(s);
+  if (!rowDelete) return false;
+  const hasCondition = /(이면|라면|일\s*때|인\s*경우|경우|조건|필터|이전|이후|보다\s*(?:작|크)|미만|초과|이상|이하|<=|>=|<|>|before|after|where|when|if)/i.test(s)
+    || /\b\d{6,8}\b/.test(s);
+  const hasColumnOrSelection = requestedExcelColumnLetters(source).length >= 1
+    || /@범위\[[^\]]+![^\]]+\]/i.test(source)
+    || /선택\s*(?:범위|열|컬럼|셀)|열\s*선택|선택한\s*열|해당\s*열/i.test(source);
+  return hasCondition && hasColumnOrSelection;
+}
+
+function filterToNewSheetIntent(sourceUserMessage) {
+  const source = String(sourceUserMessage || "");
+  const s = typeof routingIntentText === "function" ? routingIntentText(source) : source;
+  return /(?:필터|필터링|추출|골라|걸러|해당(?:하는)?\s*행|조건에\s*맞|만\s*(?:새|별도)|\d{4}\s*년|filter)/i.test(s)
+    && /(?:새\s*(?:시트|탭|sheet)|별도\s*(?:시트|탭|sheet)|넣어|작성|복사|옮겨|new\s*sheet)/i.test(s);
+}
+
+function userExplicitlyRequestsForceProceed(text) {
+  const source = String(text || "");
+  const s = typeof routingIntentText === "function" ? routingIntentText(source) : source;
+  return /(그냥|일단|무시하고|상관\s*없으니|위험해도|깨져도|덮어써도|안전\s*검사\s*무시|정적\s*검사\s*무시|가드\s*무시|강제(?:로)?|묻지\s*말고|질문하지\s*말고).{0,20}(해|하라|해줘|진행|실행|적용|돌려|처리)|(?:해|하라|해줘|진행|실행|적용|돌려|처리).{0,20}(그냥|일단|무시하고|상관\s*없으니|위험해도|깨져도|덮어써도|안전\s*검사\s*무시|정적\s*검사\s*무시|가드\s*무시|강제(?:로)?|묻지\s*말고|질문하지\s*말고)/i.test(s);
+}
+
+function isHardVbaStaticFailure(message) {
+  const m = String(message || "");
+  return /VBA 문법 오류|On Error Resume Next|MsgBox|InputBox|Shell|Workbooks\.Open|Application\.Quit|Save\/SaveAs\/Close|Continue For|CreateObject|ScreenUpdating\/Calculation\/EnableEvents\/DisplayAlerts|For Each 제어 변수|마지막 열 계산|열 번호를 암산|열 번호\(|요청에 없는 다중문자 열|VBA에는 Continue For|전체 시트' 요청이 아닌데/i.test(m);
 }
 
 function numericArithmeticIntent(text) {
@@ -506,17 +725,35 @@ function pythonDegenerateOutputFailure(code) {
 
 function codeHasBroadValueRewrite(code) {
   const text = String(code || "");
-  if (/\bUsedRange\s*\.Value\s*=/.test(text)) return true;
-  if (/\bRange\s*\([^'\n\r]*(lastCol|xlToLeft|Columns\.Count)[^'\n\r]*\)\s*\.Value\s*=/i.test(text)) return true;
-  if (/\bRange\s*\(\s*"[$]?[A-Z]+:[$]?[A-Z]+"\s*\)\s*\.Value\s*=/i.test(text)) return true;
-  if (/\bColumns\s*\([^)]*\)\s*\.Value\s*=/i.test(text)) return true;
+  const newSheetVars = new Set();
+  const newSheetRe = /\bSet\s+([A-Za-z_]\w*)\s*=\s*[^\n\r']*\bWorksheets\s*\.\s*Add\b/gi;
+  let newSheetMatch;
+  while ((newSheetMatch = newSheetRe.exec(text)) !== null) {
+    newSheetVars.add(String(newSheetMatch[1] || "").toLowerCase());
+  }
+  const isNewSheetWriteLine = (line) => {
+    if (!newSheetVars.size || !/\.\s*(?:Value|Value2)\s*=/.test(line)) return false;
+    return Array.from(newSheetVars).some(varName => {
+      const re = new RegExp("\\b" + varName + "\\s*\\.\\s*(?:Range|Cells)\\s*\\(", "i");
+      return re.test(line);
+    });
+  };
+  const scanText = text.split(/\r?\n/).filter(line => !isNewSheetWriteLine(line)).join("\n");
+  if (/\bUsedRange\s*\.Value\s*=/.test(scanText)) return true;
+  if (/\bRange\s*\([^'\n\r]*(lastCol|xlToLeft|Columns\.Count)[^'\n\r]*\)\s*\.Value\s*=/i.test(scanText)) return true;
+  if (/\bRange\s*\(\s*"[$]?[A-Z]+:[$]?[A-Z]+"\s*\)\s*\.Value\s*=/i.test(scanText)) return true;
+  if (/\bColumns\s*\([^)]*\)\s*\.Value\s*=/i.test(scanText)) return true;
 
   const broadRangeVars = new Set();
   const setRe = /\bSet\s+([A-Za-z_]\w*)\s*=\s*([^\n\r']+)/gi;
   let match;
-  while ((match = setRe.exec(text)) !== null) {
+  while ((match = setRe.exec(scanText)) !== null) {
     const varName = match[1];
     const expr = match[2] || "";
+    const targetsNewSheet = Array.from(newSheetVars).some(sheetVar =>
+      new RegExp("\\b" + sheetVar + "\\s*\\.\\s*(?:Range|Cells)\\s*\\(", "i").test(expr)
+    );
+    if (targetsNewSheet) continue;
     const isBroadRange = /\bUsedRange\b/i.test(expr)
       || (/\bRange\s*\(/i.test(expr) && /\b(lastCol|xlToLeft|Columns\.Count)\b/i.test(expr))
       || /\bRange\s*\(\s*"[$]?[A-Z]+:[$]?[A-Z]+"/i.test(expr)
@@ -528,11 +765,11 @@ function codeHasBroadValueRewrite(code) {
 
   for (const varName of broadRangeVars) {
     const writeRe = new RegExp("\\b" + varName + "\\s*\\.\\s*Value\\s*=", "i");
-    if (writeRe.test(text)) return true;
+    if (writeRe.test(scanText)) return true;
   }
 
   const roundTripRe = /\b([A-Za-z_]\w*)\s*=\s*([A-Za-z_]\w*)\s*\.Value\b[\s\S]{0,4000}\b\2\s*\.Value\s*=\s*\1\b/i;
-  const roundTrip = roundTripRe.exec(text);
+  const roundTrip = roundTripRe.exec(scanText);
   if (roundTrip) {
     const rangeVar = (roundTrip[2] || "").toLowerCase();
     return broadRangeVars.has(rangeVar);
@@ -566,14 +803,22 @@ function vbaStaticSafetyFailures(code, sourceUserMessage) {
   for (const [re, msg] of blocked) {
     if (re.test(text)) failures.push(msg);
   }
-  // 파일/네트워크용 CreateObject 금지(Scripting.Dictionary 는 허용).
+  if (/\b[A-Za-z_][A-Za-z0-9_]*\s*\([^()\r\n]*,\s*\)/.test(text)) {
+    failures.push("VBA 문법 오류: 함수/배열 호출에서 쉼표 뒤 인수가 비어 있습니다. 예: dataArr(1, ) 같은 코드는 실행할 수 없습니다.");
+  }
+  // 파일/네트워크용 CreateObject 금지.
+  // 허용 객체는 Excel 런타임 안에서 메모리 자료구조/문자열 처리만 수행하는 것에 한정한다.
   const coRe = /\bCreateObject\s*\(\s*["']([^"']+)["']\s*\)/gi;
   let m;
   while ((m = coRe.exec(text)) !== null) {
     const progId = String(m[1]).toLowerCase();
-    const allowedObjects = new Set(["scripting.dictionary", "system.collections.arraylist"]);
+    const allowedObjects = new Set([
+      "scripting.dictionary",
+      "system.collections.arraylist",
+      "vbscript.regexp",
+    ]);
     if (!allowedObjects.has(progId)) {
-      failures.push(`CreateObject("${m[1]}") 금지(Scripting.Dictionary/System.Collections.ArrayList 외 파일/네트워크 객체 생성 불가).`);
+      failures.push(`CreateObject("${m[1]}") 금지(Scripting.Dictionary/System.Collections.ArrayList/VBScript.RegExp 외 파일/네트워크 객체 생성 불가).`);
     }
   }
   const mutatesAppState = /\bApplication\s*\.\s*(?:ScreenUpdating|Calculation|EnableEvents|DisplayAlerts)\s*=/i.test(text);
@@ -634,6 +879,16 @@ function vbaStaticSafetyFailures(code, sourceUserMessage) {
       && /\bHasFormula\b/i.test(text)
       && /\b(?:rng|targetRng|dstRng|range|targetRange)\s*\.\s*(?:Value|Value2)\s*=\s*(?:outArr|arr|values|dataArr)\b/i.test(text)) {
     failures.push("수식 셀을 제외/보존해야 하는 VBA가 범위 전체를 배열로 다시 써서 수식 셀까지 값으로 바꿀 수 있습니다. HasFormula=False 인 셀만 개별 갱신하세요.");
+  }
+  if (typeof filterToNewSheetIntent === "function" && filterToNewSheetIntent(sourceUserMessage)) {
+    const createsSheet = /\bWorksheets\s*\.\s*Add\b/i.test(text);
+    const writesArrayToNewSheet = /\b(?:wsNew|newWs|wsOut|outWs|resultWs|dstWs)\s*\.\s*Range\s*\([^'\r\n]*\)\s*\.\s*(?:Value|Value2)\s*=\s*(?:outArr|dataArr|arr|resultArr|values)\b/i.test(text)
+      || /\bRange\s*\([^'\r\n]*\)\s*\.\s*(?:Value|Value2)\s*=\s*(?:outArr|dataArr|arr|resultArr|values)\b/i.test(text);
+    const preservesByCopy = /\.\s*Copy\b|Copy\s+Destination\s*:=|PasteSpecial/i.test(text);
+    const hasTextProtection = /\.\s*NumberFormat\s*=\s*["']@["']/i.test(text) && /\.\s*Text\b/i.test(text);
+    if (createsSheet && writesArrayToNewSheet && !preservesByCopy && !hasTextProtection) {
+      failures.push("필터 결과를 새 시트에 배열 Value로 다시 쓰면 긴 숫자 ID/번호가 과학표기나 15자리 손실로 바뀔 수 있습니다. 원본 행/범위를 Copy Destination으로 복사하거나, 식별자 컬럼은 쓰기 전에 NumberFormat=\"@\" 설정 후 .Text 값으로 보존하세요.");
+    }
   }
   const requestedCols = requestedExcelColumnLetters(sourceUserMessage);
   const requestedColIndices = new Set(requestedCols.map(excelColumnLetterToIndex).filter(Boolean));
@@ -723,6 +978,37 @@ function vbaStaticSafetyFailures(code, sourceUserMessage) {
       failures.push("조건부 중복 제거에서 삭제 대상이 0건이면 오류가 아니라 정상 no-op 으로 종료하세요. 이미 중복이 정리된 상태에서도 스킬 생성이 막히면 안 됩니다.");
     }
   }
+  if (typeof conditionalRowDeleteIntent === "function" && conditionalRowDeleteIntent(sourceUserMessage)) {
+    const rowDeleteLoop = /\bFor\b[\s\S]{0,1800}\b(?:Rows\s*\([^\n\r]*\)|EntireRow)\s*\.\s*Delete\b/i.test(text);
+    if (rowDeleteLoop && !/\bAutoFilter\b/i.test(text)) {
+      failures.push("조건부 행 삭제에서 Rows(...).Delete 를 루프 안에서 반복하면 큰 파일에서 앱이 멈춥니다. 임시 보조열에 삭제 대상만 표시한 뒤 AutoFilter + SpecialCells(xlCellTypeVisible).EntireRow.Delete 로 한 번에 삭제하세요.");
+    }
+    const visibleRangeVars = [];
+    const visibleRangeAssignRe = /\bSet\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*[^\r\n]*\.\s*SpecialCells\s*\(\s*xlCellTypeVisible\s*\)/gi;
+    let visibleRangeAssignMatch;
+    while ((visibleRangeAssignMatch = visibleRangeAssignRe.exec(text)) !== null) {
+      visibleRangeVars.push(String(visibleRangeAssignMatch[1] || ""));
+    }
+    const badVisibleOffsetDelete = /\.\s*SpecialCells\s*\(\s*xlCellTypeVisible\s*\)\s*\.\s*Offset\s*\(\s*1\s*,\s*0\s*\)\s*\.\s*Resize[\s\S]{0,600}\.\s*EntireRow\s*\.\s*Delete\b/i.test(text)
+      || visibleRangeVars.some(varName => new RegExp("\\b" + varName + "\\s*\\.\\s*Offset\\s*\\(\\s*1\\s*,\\s*0\\s*\\)\\s*\\.\\s*Resize[\\s\\S]{0,600}\\.\\s*EntireRow\\s*\\.\\s*Delete\\b", "i").test(text));
+    if (badVisibleOffsetDelete) {
+      failures.push("AutoFilter 후 SpecialCells(xlCellTypeVisible) 결과에 Offset/Resize 를 걸어 삭제하면 필터된 비연속 행에서 삭제 범위가 틀리거나 no-op 이 됩니다. 헤더를 제외한 명시적 데이터 본문 범위(hdrRow+1:lastRow)를 따로 잡고, 그 범위의 SpecialCells(xlCellTypeVisible).EntireRow.Delete 만 실행하세요.");
+    }
+    const dateConditionIntent = /\b20\d{6}\b|\d{4}[-/.]\d{1,2}[-/.]\d{1,2}|날짜|이전|이후|전이면|후이면/i.test(String(sourceUserMessage || ""));
+    const dateNormalizationCode = /\b(?:NormalizeDate|dateVal|yyyymmdd|DateSerial|IsDate|CDate|Format\$?)\b/i.test(text);
+    const handlesExcelDateSerial = /\bIsDate\s*\(|\bCDate\s*\(|\bDateSerial\s*\(\s*1899\s*,\s*12\s*,\s*30\s*\)|\bFormat\$?\s*\([^)]*["']yyyymmdd["']/i.test(text);
+    const treatsTimeSerialAsDate = /\b[A-Za-z_][A-Za-z0-9_]*\s*>\s*0\s+And\s+[A-Za-z_][A-Za-z0-9_]*\s*<\s*1\b[\s\S]{0,120}(?:86400|Excel\s+serial)/i.test(text);
+    if (dateConditionIntent && dateNormalizationCode && (!handlesExcelDateSerial || treatsTimeSerialAsDate)) {
+      failures.push("날짜 조건 행 삭제는 20260401 같은 8자리 값뿐 아니라 2026-03-31 텍스트와 Excel 실제 날짜 시리얼도 yyyymmdd 정수로 변환해야 합니다. 날짜 시리얼을 v>0 And v<1 로 처리하면 시간값으로 오판되어 실제 날짜 행이 살아남습니다. Range.Text 확인 후 Range.Value 의 IsDate/CDate 또는 DateSerial(1899,12,30)+CLng(value) 처리를 포함하세요.");
+    }
+    if (/\b(?:Range|Columns)\s*\(\s*["']\$?[A-Z]{1,3}:\$?[A-Z]{1,3}["']\s*\)\s*\.\s*(?:Value|Value2)\b/i.test(text)
+        || /\bRange\s*\(\s*(?:ws\.)?Cells\s*\(\s*1\s*,\s*1\s*\)\s*,\s*(?:ws\.)?Cells\s*\(\s*(?:ws\.)?Rows\.Count\s*,\s*(?:ws\.)?Columns\.Count\s*\)\s*\)\s*\.\s*(?:Value|Value2)\b/i.test(text)) {
+      failures.push("조건부 행 삭제에서 행 번호 없는 전체 열/전체 시트 값을 통째로 읽지 마세요. 선택/요청 열의 실제 lastRow까지만 읽고 보조열+AutoFilter로 삭제하세요.");
+    }
+    if (/\bIf\s+\w*(?:Delete|Del|Target|Match|Rows?)\w*\.Count\s*=\s*0\s+Then\s+Err\.Raise/i.test(text)) {
+      failures.push("조건부 행 삭제에서 삭제 대상이 0건이면 오류가 아니라 정상 no-op 으로 종료하세요.");
+    }
+  }
   const keyedOverwriteIntent = (
     /(가입번호|계약번호|청구번호|고객번호|ID|코드|키|key)/i.test(String(sourceUserMessage || ""))
     && /(일치|매칭|같은|동일|찾아서|찾아|기준으로|기준)/i.test(String(sourceUserMessage || ""))
@@ -746,6 +1032,9 @@ function vbaStaticSafetyFailures(code, sourceUserMessage) {
   const allSheetIntent = /(\b(all|every)\s+sheets?\b|전체\s*시트|모든\s*시트|전\s*시트|시트\s*전체)/i.test(String(sourceUserMessage || ""));
   if (!allSheetIntent && /\bFor\s+Each\s+\w+\s+In\s+(?:ActiveWorkbook\s*\.\s*)?Worksheets\b/i.test(text)) {
     failures.push("'전체 시트' 요청이 아닌데 For Each ... In Worksheets 로 모든 시트를 순회합니다. 요청한 특정 시트만 대상으로 하세요.");
+  }
+  if (userExplicitlyRequestsForceProceed(sourceUserMessage)) {
+    return failures.filter(isHardVbaStaticFailure);
   }
   return failures;
 }
@@ -887,6 +1176,9 @@ function pythonComMustUseVbaReason(code, sourceUserMessage) {
   if (typeof duplicateRowDeleteIntent === "function" && duplicateRowDeleteIntent(source)) {
     return "조건이 붙은 중복 행 삭제는 Python COM으로 넓은 범위를 읽거나 행 삭제를 반복하면 큰 파일에서 멈춥니다. 이 작업은 VBA 보조열+AutoFilter 방식으로 실행해야 합니다.";
   }
+  if (typeof conditionalRowDeleteIntent === "function" && conditionalRowDeleteIntent(source)) {
+    return "조건이 붙은 행 삭제는 Python COM으로 행을 반복 삭제하면 큰 파일에서 앱이 멈춥니다. 이 작업은 VBA 보조열+AutoFilter 일괄 삭제 방식으로 실행해야 합니다.";
+  }
   if (typeof multiValueLookupIntent === "function" && multiValueLookupIntent(source)) {
     return "한 셀 여러 값 분리 + 다른 파일 키 매칭 + 합산 후 열 쓰기 작업은 Python COM으로 실행하면 앱이 멈추거나 행 위치가 밀릴 수 있습니다. 이 작업은 VBA로 실행해야 합니다.";
   }
@@ -911,12 +1203,14 @@ function pythonComMustUseVbaReason(code, sourceUserMessage) {
 
 function buildPythonStaticSafetyRegenPrompt(code, failures, sourceUserMessage) {
   const fixList = failures.map(f => `- ${f}`).join("\n");
+  const exactSheetHint = exactSheetNameReminder(sourceUserMessage);
   return [
     "방금 생성한 Python 스킬이 적용 직전 정적 안전 검사에서 막혔습니다.",
     "원래 사용자 요청을 그대로 만족하되, 아래 위반을 모두 제거해 다시 작성하세요.",
     "",
     "## 원래 사용자 요청",
     String(sourceUserMessage || "(직전 요청 참조)"),
+    exactSheetHint ? "\n## 정확 시트명\n" + exactSheetHint : "",
     "",
     "## 막힌 이유(모두 고칠 것)",
     fixList,
@@ -952,14 +1246,32 @@ function duplicateRowDeleteVbaHint(sourceUserMessage) {
   ].join("\n");
 }
 
+function conditionalRowDeleteVbaHint(sourceUserMessage) {
+  if (!(typeof conditionalRowDeleteIntent === "function" && conditionalRowDeleteIntent(sourceUserMessage))) return "";
+  return [
+    "",
+    "## 대량 조건부 행 삭제 작성 규칙",
+    "- 이 요청은 조건부 '행 삭제'입니다. 반드시 VBA로 작성하세요.",
+    "- 선택한 열/요청 열의 실제 lastRow까지만 대상으로 하세요. 전체 열/전체 시트 끝까지 읽지 마세요.",
+    "- 20260403 같은 날짜 조건은 Range.Text 와 Range.Value 를 모두 안전하게 처리하고 yyyymmdd 정수로 정규화해 비교하세요.",
+    "- 날짜 정규화 함수는 셀 Range를 인자로 받아 먼저 cell.Text의 20260401/2026-03-31/2026/03/31 표기를 처리하고, 그 다음 cell.Value가 IsDate/CDate 이거나 Excel 날짜 시리얼(대략 20000~60000)이면 DateSerial(1899,12,30)+CLng(value) 또는 CDate(value)로 yyyymmdd를 만드세요. v > 0 And v < 1 은 시간 시리얼이지 날짜가 아니므로 날짜 판정에 쓰지 마세요.",
+    "- 삭제할 행 번호를 모은 뒤 For ... Rows(row).Delete 로 하나씩 지우지 마세요. 큰 파일에서 타임아웃됩니다.",
+    "- 빠른 삭제 패턴: 마지막 열+1 임시 보조열에 삭제 대상만 B2B_DELETE 표시 → 보조열 AutoFilter → 헤더를 제외한 명시적 데이터 본문 범위(hdrRow+1:lastRow)의 SpecialCells(xlCellTypeVisible).EntireRow.Delete 한 번 → 보조열 삭제/AutoFilter 해제.",
+    "- SpecialCells 결과에 Offset(1,0).Resize(...) 를 걸어 삭제 범위를 만들지 마세요. 필터 결과가 비연속이면 행 수가 틀려 삭제가 빠질 수 있습니다.",
+    "- 삭제 대상이 0건이면 오류를 내지 말고 정상 종료하세요.",
+  ].join("\n");
+}
+
 function buildStaticSafetyRegenPrompt(code, failures, sourceUserMessage) {
   const fixList = failures.map(f => `- ${f}`).join("\n");
+  const exactSheetHint = exactSheetNameReminder(sourceUserMessage);
   return [
     "방금 생성한 VBA 가 적용 직전 정적 안전 검사에서 막혔습니다.",
     "원래 사용자 요청을 그대로 만족하되, 아래 위반을 모두 제거해 VBA 를 다시 작성하세요.",
     "",
     "## 원래 사용자 요청",
     String(sourceUserMessage || "(직전 요청 참조)"),
+    exactSheetHint ? "\n## 정확 시트명\n" + exactSheetHint : "",
     "",
     "## 막힌 이유(모두 고칠 것)",
     fixList,
@@ -969,6 +1281,7 @@ function buildStaticSafetyRegenPrompt(code, failures, sourceUserMessage) {
     String(code || ""),
     "```",
     duplicateRowDeleteVbaHint(sourceUserMessage),
+    conditionalRowDeleteVbaHint(sourceUserMessage),
     "",
     "반드시 하나의 ```vba 코드 블록만 출력하세요. On Error Resume Next / MsgBox / InputBox / Shell /",
     "Workbooks.Open / Save·Close / Application.Quit / 무관한 전체 시트 순회를 쓰지 마세요.",
@@ -1042,6 +1355,7 @@ async function autoRegenerateForStaticSafety(code, failures, context) {
       sourceUserMessage,
       staticRegenAttempt: attempt,
       vbaFallbackTried: !!(context && context.vbaFallbackTried),
+      allowPythonRecovery: !!(context && context.allowPythonRecovery),
       autoApplyMode: context && context.autoApplyMode,
     });
     scrollChatToBottom();
@@ -1112,6 +1426,10 @@ async function autoRegenerateAsVbaFallback(code, failures, context) {
 function validateAssistantCodeBeforeApply(code, context) {
   context = context || {};
   const sourceUserMessage = context.sourceUserMessage || "";
+  const allowPythonRecovery = !!context.allowPythonRecovery;
+  const explicitPythonHere = typeof userExplicitlyRequestsPython === "function"
+    && userExplicitlyRequestsPython(sourceUserMessage)
+    && !(typeof userExplicitlyRequestsVba === "function" && userExplicitlyRequestsVba(sourceUserMessage));
   // ver0.5.2 4단계: Python COM 스킬은 전용 게이트로(서버 AST 게이트의 1차 방어선).
   const codeText = String(code || "");
   const isPythonSkill = /def\s+transform\s*\(\s*ctx\s*\)\s*:/.test(codeText) ||
@@ -1134,11 +1452,13 @@ function validateAssistantCodeBeforeApply(code, context) {
     if (isPythonSkill) {
       if (attemptsSoFar < PYTHON_STATIC_MAX_REGEN) {
         autoRegenerateForStaticSafety(code, commonFailures, { ...context, skillLanguage: "python" });
-      } else if (!context.vbaFallbackTried) {
+      } else if (!context.vbaFallbackTried && !explicitPythonHere && !allowPythonRecovery) {
         autoRegenerateAsVbaFallback(code, commonFailures, context);
       } else {
         showCodeGuardBlock(
-          "여러 번 다시 생성했지만 정확 참조/행 범위 문제가 남아 적용을 막았습니다:\n- " +
+          (explicitPythonHere || allowPythonRecovery
+            ? "사용자가 Python/COM 복구를 요청했거나 에러복구에서 Python/ctx 전환을 허용했으므로 VBA로 전환하지 않았습니다. 여러 번 다시 생성했지만 정확 참조/행 범위 문제가 남아 적용을 막았습니다:\n- "
+            : "여러 번 다시 생성했지만 정확 참조/행 범위 문제가 남아 적용을 막았습니다:\n- ") +
             commonFailures.join("\n- "),
           context,
         );
@@ -1156,7 +1476,9 @@ function validateAssistantCodeBeforeApply(code, context) {
   }
   if (isPythonSkill) {
     const mustUseVba = pythonComMustUseVbaReason(code, sourceUserMessage);
-    if (mustUseVba) {
+    // [사용자 지시] 사용자가 python/COM 을 명시했으면 위험작업이라도 VBA 강제전환하지 않고 python 유지
+    // (멈춤/실패 시 에러복구가 VBA 로 되돌림). 명시가 없을 때만 기존 안전 전환 동작.
+    if (mustUseVba && !explicitPythonHere && !allowPythonRecovery) {
       if (!context.vbaFallbackTried) {
         autoRegenerateAsVbaFallback(code, [mustUseVba], context);
       } else {
@@ -1169,13 +1491,15 @@ function validateAssistantCodeBeforeApply(code, context) {
       const attemptsSoFar = Number(context.staticRegenAttempt || 0);
       if (attemptsSoFar < PYTHON_STATIC_MAX_REGEN) {
         autoRegenerateForStaticSafety(code, pyFailures, { ...context, skillLanguage: "python" });
-      } else if (!context.vbaFallbackTried) {
+      } else if (!context.vbaFallbackTried && !explicitPythonHere && !allowPythonRecovery) {
         // Python 정적 제약을 2회(최초+재생성 1회) 통과하지 못함 → 같은 요청을
         // VBA 로 전환해 다시 시도한다(전역 엔진 설정은 그대로).
         autoRegenerateAsVbaFallback(code, pyFailures, context);
       } else {
         showCodeGuardBlock(
-          "여러 번 다시 생성했지만 안전하지 않은 패턴이 남아 적용을 막았습니다:\n- " +
+          (explicitPythonHere || allowPythonRecovery
+            ? "사용자가 Python/COM 복구를 요청했거나 에러복구에서 Python/ctx 전환을 허용했으므로 VBA로 전환하지 않았습니다. 여러 번 다시 생성했지만 안전하지 않은 패턴이 남아 적용을 막았습니다:\n- "
+            : "여러 번 다시 생성했지만 안전하지 않은 패턴이 남아 적용을 막았습니다:\n- ") +
             pyFailures.join("\n- "),
           context,
         );
@@ -1183,6 +1507,20 @@ function validateAssistantCodeBeforeApply(code, context) {
       return false;
     }
     return true; // 아래 VBA 전용 휴리스틱은 건너뜀
+  }
+  const vbaReferenceFailures = vbaExactSheetReferenceFailures(code, sourceUserMessage);
+  if (vbaReferenceFailures.length) {
+    const attemptsSoFar = Number(context.staticRegenAttempt || 0);
+    if (attemptsSoFar < VBA_STATIC_MAX_REGEN && !context.vbaFallbackTried) {
+      autoRegenerateForStaticSafety(code, vbaReferenceFailures, context);
+    } else {
+      showCodeGuardBlock(
+        "여러 번 다시 생성했지만 VBA 시트명이 요청과 다릅니다:\n- " +
+          vbaReferenceFailures.join("\n- "),
+        context,
+      );
+    }
+    return false;
   }
   // 0) VBA 런타임 안전 하드블록(On Error Resume Next, MsgBox, Workbooks.Open/.Save/.Close,
   //    Application.Quit, Shell, 무관 전체시트순회, 파일 CreateObject). 위반 시 자동 재생성.
@@ -1206,7 +1544,9 @@ function validateAssistantCodeBeforeApply(code, context) {
     }
     return false;
   }
-  if (codeHasBroadValueRewrite(code) && !/표\s*전체|시트\s*전체|UsedRange|전체\s*범위/i.test(sourceUserMessage)) {
+  if (codeHasBroadValueRewrite(code)
+      && !userExplicitlyRequestsForceProceed(sourceUserMessage)
+      && !/표\s*전체|시트\s*전체|UsedRange|전체\s*범위/i.test(sourceUserMessage)) {
     const message = "표 전체/UsedRange를 Value 배열로 다시 쓰는 VBA가 감지되어 적용을 막았습니다. 요청받은 대상 열/셀 범위만 한정해서 쓰는 코드로 다시 생성해 주세요.";
     showCodeGuardBlock(message, context);
     return false;
@@ -1228,9 +1568,14 @@ function latestUserRequestForSafety() {
     const content = String(item.content || item.text || item.message || "");
     if (!content) continue;
     if (content.includes("## 실패한 코드") || content.includes("## 상세 오류")) continue;
+    if (content.includes("## 막힌 코드") || /정적\s*안전\s*검사|안전\s*검사에서\s*막/i.test(content)) continue;
     return content;
   }
   return "";
+}
+
+function replyStepPrompt(replyContext) {
+  return (replyContext && replyContext.sourceUserMessage) || latestUserRequestForSafety();
 }
 
 // ---- 코드 미생성/주석-only 출력 감지 (Qwen 이 설명만 하거나 # 주석만 잔뜩 다는 문제) ----
@@ -1409,7 +1754,7 @@ function addAssistantReply(fullText, replyContext) {
       div.appendChild(actions);
 
       const runApply = () => {
-        const result = applyLogic({ id: uid(), prompt: latestUserRequestForSafety(), code, description: desc, language });
+        const result = applyLogic({ id: uid(), prompt: replyStepPrompt(replyContext), code, description: desc, language });
         applyBtn.disabled = true;
         insertBtn.disabled = true;
         rejectBtn.disabled = true;
@@ -1422,8 +1767,9 @@ function addAssistantReply(fullText, replyContext) {
         );
       };
       const runInsert = () => {
+        const preferredPosition = replyContext && Number(replyContext.suggestInsertPosition);
         openInsertPositionDialog(state.pipeline.length, (position) => {
-          const result = insertLogic({ id: uid(), prompt: latestUserRequestForSafety(), code, description: desc, language }, position);
+          const result = insertLogic({ id: uid(), prompt: replyStepPrompt(replyContext), code, description: desc, language }, position);
           applyBtn.disabled = true;
           insertBtn.disabled = true;
           rejectBtn.disabled = true;
@@ -1434,7 +1780,7 @@ function addAssistantReply(fullText, replyContext) {
             () => restoreActionButtonsAfterFailure([applyBtn, insertBtn, rejectBtn], insertBtn, "\u21B3 \uB2E4\uC2DC \uC0BD\uC785"),
             { actions }
           );
-        });
+        }, Number.isFinite(preferredPosition) ? preferredPosition : undefined);
       };
       applyBtn.onclick = () => {
         const validationContext = {
@@ -1513,10 +1859,13 @@ function createReasoningBox(text) {
   return box;
 }
 
-function openInsertPositionDialog(currentCount, onConfirm) {
+function openInsertPositionDialog(currentCount, onConfirm, preferredPosition) {
   const modal = $("modal");
   const maxPos = currentCount + 1;
-  const defaultPos = Math.max(1, currentCount); // 보통 마지막 단계 직전이 가장 자주 쓰임
+  const preferred = Number(preferredPosition);
+  const defaultPos = Number.isFinite(preferred)
+    ? Math.max(1, Math.min(maxPos, Math.floor(preferred)))
+    : Math.max(1, currentCount); // 보통 마지막 단계 직전이 가장 자주 쓰임
   modal.innerHTML = `
     <h3>몇 번째 단계에 삽입할까요?</h3>
     <p style="font-size:12px; color:#666; margin-bottom:10px">
@@ -1855,16 +2204,35 @@ async function requestErrorRecovery(stepIdx, errorInfo, userNote) {
     errorInfo && errorInfo.stack,
     recoveryNoteText,
   ].filter(Boolean).join("\n");
-  const shouldKeepVbaRecovery = /(?:^|\b)vba(?:\b|$)|매크로|Sub\s+B2BSkill\s*\(|End\s+Sub|VBA\s*실행\s*실패|B2B_RunSkill/i.test(recoverySignals);
-  let isVbaRecovery = recoveryLanguage === "vba" || shouldKeepVbaRecovery ||
-    (typeof getSkillEngine === "function" && getSkillEngine() === "vba");
-  let isPythonRecovery = !isVbaRecovery && recoveryLanguage === "python";
+  const failedStepLooksVba = recoveryLanguage === "vba" || /Sub\s+B2BSkill\s*\(|End\s+Sub|B2B_RunSkill/i.test(recoverySignals);
+  const failedStepLooksPython = recoveryLanguage === "python" || /def\s+transform\s*\(\s*ctx\s*\)\s*:|\bctx\.\w+\s*\(/i.test(recoverySignals);
+  // [사용자 지시] 에러복구에서는 "실패한 기존 Step 언어"보다 복구창의 사용자 메모가 우선이다.
+  // 특히 VBA 로 생성된 코드가 실패한 뒤 복구 후보가 Python/ctx 로 나왔으면 그대로 적용 가능해야 하며,
+  // 적용 직전 라우팅 규칙이 다시 VBA 로 되돌리면 안 된다. 사용자가 복구창에서 명시적으로 "vba로"라고
+  // 쓴 경우에만 VBA 복구를 강제한다.
+  const recoveryExplicitVba = (function () {
+    const intent = recoveryNoteText;
+    return typeof userExplicitlyRequestsVba === "function"
+      && userExplicitlyRequestsVba(intent)
+      && !(typeof userExplicitlyRequestsPython === "function" && userExplicitlyRequestsPython(intent));
+  })();
+  const recoveryExplicitPython = (function () {
+    const intent = recoveryNoteText;
+    return typeof userExplicitlyRequestsPython === "function"
+      && userExplicitlyRequestsPython(intent)
+      && !(typeof userExplicitlyRequestsVba === "function" && userExplicitlyRequestsVba(intent));
+  })();
+  const recoveryAllowsPython = !recoveryExplicitVba;
+  let isVbaRecovery = recoveryExplicitVba;
+  let isPythonRecovery = recoveryExplicitPython ||
+    (!isVbaRecovery && (failedStepLooksVba || failedStepLooksPython ||
+      (typeof getSkillEngine === "function" && getSkillEngine() === "python")));
   // [0.5.2.2 §4.2] Python COM 런타임 실패가 같은 step 에서 누적되면(기본 2회) Python COM 기반
   // 자체의 제약으로 판단하고 이번 복구부터 VBA 전환 생성을 시도한다(전역 엔진 설정은 불변).
   let vbaRuntimeSwitch = false;
   if (isPythonRecovery) {
     const pythonFailCount = notePythonRuntimeFailure(failedStep);
-    if (pythonFailCount >= PYTHON_RUNTIME_FAIL_VBA_THRESHOLD) {
+    if (!recoveryAllowsPython && pythonFailCount >= PYTHON_RUNTIME_FAIL_VBA_THRESHOLD) {
       vbaRuntimeSwitch = true;
       isVbaRecovery = true;
       isPythonRecovery = false;
@@ -1876,8 +2244,21 @@ async function requestErrorRecovery(stepIdx, errorInfo, userNote) {
     : (isPythonRecovery
       ? "Return exactly one Python code block that defines def transform(ctx):. Do not return JavaScript."
       : "Return exactly one JavaScript code block that defines function transform(inputs, output).");
+  const keepVbaRecoveryRule = isVbaRecovery
+    ? "실패한 Step은 VBA입니다. 복구도 반드시 VBA로 유지하세요. Python COM으로 전환하면 대용량/조건/필터/매칭 작업에서 저사양 VM이 멈출 수 있으므로 Python def transform(ctx)는 절대 작성하지 마세요."
+    : "";
+  const allowPythonRecoveryRule = isPythonRecovery && recoveryAllowsPython
+    ? "중요: 에러복구에서는 실패한 Step이 VBA였더라도 Python ctx 코드로 복구할 수 있습니다. 사용자가 복구창에서 명시적으로 VBA를 요구하지 않았으므로, ctx 헬퍼/ctx API로 해결 가능한 복구는 Python def transform(ctx): 로 작성하세요. 이후 적용 단계에서도 이 Python 복구 후보를 다시 VBA로 전환하지 않습니다."
+    : "";
   const useCompatibilityCheck = !!(errorInfo && errorInfo.compatibilityCheck);
-  const sourceUserMessage = latestUserRequestForSafety();
+  const sourceUserMessage = [
+    failedStep && failedStep.prompt,
+    latestUserRequestForSafety(),
+  ].filter(Boolean)[0] || "";
+  const recoveryApplySourceUserMessage = [
+    sourceUserMessage,
+    recoveryNoteText ? `에러복구 추가 설명: ${recoveryNoteText}` : "",
+  ].filter(Boolean).join("\n");
   const schemaSummary = useCompatibilityCheck && typeof buildSchemaSummary === "function" ? buildSchemaSummary() : "";
   const recentHistory = useCompatibilityCheck ? (state.chatHistory || [])
     .slice(-8)
@@ -1938,6 +2319,8 @@ async function requestErrorRecovery(stepIdx, errorInfo, userNote) {
       ? "대화 히스토리의 사용자 의도, 현재 파일 스키마, 수정 대상 코드, 아래 오류를 함께 분석해서 이 Step을 교체할 수정 코드를 다시 작성하세요."
       : "이 Step은 아직 파이프라인에 적용되지 못했습니다. 대화 히스토리의 사용자 의도, 현재 파일 스키마, 실패한 코드, 아래 오류를 함께 분석해서 적용 가능한 새 스킬 코드를 다시 작성하세요.",
     recoveryCodeRule,
+    keepVbaRecoveryRule,
+    allowPythonRecoveryRule,
     "오류 복구는 실패 원인만 고치는 작업입니다. 사용자의 최신 요청에 없는 대상 파일/시트 변경이나 무관한 전체 범위 재작성은 새로 추가하지 마세요.",
     "\"채워\", \"입력\", \"업데이트\", \"반영\"은 요청받은 대상 범위에 값을 쓰라는 뜻입니다. 그 대상 셀에 기존 수식이 있더라도 값으로 대체할 수 있습니다. 단, 표 끝의 합계/소계/부가세포함 같은 요약 행은 데이터 행이 아니므로 범위에서 제외하세요.",
     ...compatibilityPrompt,
@@ -2004,7 +2387,8 @@ async function requestErrorRecovery(stepIdx, errorInfo, userNote) {
     loading.remove();
     addAssistantReply(reply, {
       editTargetId: isExistingStep ? failedStep.id : null,
-      sourceUserMessage,
+      sourceUserMessage: recoveryApplySourceUserMessage,
+      allowPythonRecovery: recoveryAllowsPython,
       reasoning: reasoningText,
     });
     scrollChatToBottom();
@@ -2015,7 +2399,8 @@ async function requestErrorRecovery(stepIdx, errorInfo, userNote) {
       showThinkRetryPrompt(loading, {
         prompt,
         editTargetId: isExistingStep ? failedStep.id : null,
-        sourceUserMessage,
+        sourceUserMessage: recoveryApplySourceUserMessage,
+        allowPythonRecovery: recoveryAllowsPython,
         modeLabel: "(에러 복구) ",
         aiName,
         message: "Think 요청을 중단했습니다.",
@@ -2143,12 +2528,18 @@ async function sendChat() {
   loading.classList.add("streaming");
   // 외부 노출 시엔 내부 모델명을 표시하지 않고 LLM 으로 통일
   const aiName = settings.provider === "openai-compat" ? "ixi 모델" : "LLM";
-  const routeToVba = shouldRouteRequestToVba(msg);
-  const routeToPython = !routeToVba && shouldRouteRequestToPython(msg);
-  const routeToSimplePythonStructure = routeToPython && shouldRouteSimpleStructureEditToPython(msg);
   const explicitVbaRequest = userExplicitlyRequestsVba(msg);
+  // [사용자 지시] 채팅에서 python/COM 을 명시하면 VBA 기본값·휴리스틱보다 최우선으로 python 라우팅.
+  const explicitPythonRequest = !explicitVbaRequest
+    && typeof userExplicitlyRequestsPython === "function" && userExplicitlyRequestsPython(msg);
+  const routeToVba = !explicitPythonRequest && shouldRouteRequestToVba(msg);
+  const routeToPython = explicitPythonRequest || (!routeToVba && shouldRouteRequestToPython(msg));
+  const routeToSimplePythonStructure = routeToPython && shouldRouteSimpleStructureEditToPython(msg);
+  const routeCtxHelper = routeToPython && typeof ctxHelperPreferredIntent === "function" && ctxHelperPreferredIntent(msg);
+  const routeMonthShift = routeToPython && typeof monthShiftIntent === "function" && monthShiftIntent(msg);
   const routeMultiValueLookup = typeof multiValueLookupIntent === "function" && multiValueLookupIntent(msg);
   const routeDuplicateRowDelete = typeof duplicateRowDeleteIntent === "function" && duplicateRowDeleteIntent(msg);
+  const routeConditionalRowDelete = typeof conditionalRowDeleteIntent === "function" && conditionalRowDeleteIntent(msg);
   const modeLabel = editTargetId ? "(수정 모드) " : (routeToVba ? "(VBA 라우팅) " : (routeToPython ? "(Python 라우팅) " : ""));
   const thinkMode = typeof isThinkModeEnabled === "function" && isThinkModeEnabled();
   const abortController = new AbortController();
@@ -2165,23 +2556,40 @@ async function sendChat() {
     prompt = typeof augmentUserPromptWithMentions === "function"
       ? augmentUserPromptWithMentions(msg)
       : msg;
+    let routingHint = "";
+    if (routeToVba) {
+      if (explicitVbaRequest) {
+        routingHint = "사용자가 이번 요청에서 VBA/매크로를 명시했습니다. 반드시 하나의 ```vba 코드 블록(Sub B2BSkill())만 작성하고 Python def transform(ctx)는 절대 출력하지 마세요. @범위/@컬럼의 파일명·시트명은 번역 없이 정확히 복사하세요.";
+      } else if (routeDuplicateRowDelete) {
+        routingHint = "조건이 붙은 중복 행 삭제 요청입니다. 이번 응답은 반드시 VBA로 작성하세요. Python def transform(ctx)는 절대 출력하지 마세요. 30만 행 이상도 처리 가능해야 하므로 성능상 필요한 열만 각각 1열 배열로 읽는 방식을 우선하세요. 예: E열 상품명, M열 수납금액, T열 EID. 단, 실제 lastRow/lastCol 로 한정된 데이터 범위 읽기는 허용되며, 행 번호 없는 전체 열(A:T, E:T) 또는 전체 시트 끝까지 읽는 코드는 쓰지 마세요. 'E열에서 안전제일만'은 정확히 '안전제일'인 행만 대상으로 하고 '안전제일(망개통용)' 같은 접미사 값은 포함하지 마세요. 같은 EID에서 수납금액이 1 이상인 행은 삭제 금지, 수납금액 1 미만 중복은 위쪽 행부터 삭제하고 가장 아래쪽 1개만 남기세요. Rows(...).Delete를 루프 안에서 반복하지 말고, 임시 보조열에 삭제 대상만 표시한 뒤 AutoFilter + SpecialCells(xlCellTypeVisible).EntireRow.Delete로 한 번에 삭제하세요. 삭제 대상 0건은 오류가 아니라 정상 종료입니다. System.Collections.ArrayList는 정렬용으로 사용 가능하지만 버블정렬 이중 For는 쓰지 마세요.";
+      } else if (routeConditionalRowDelete) {
+        routingHint = "조건이 붙은 행 삭제 요청입니다. 이번 응답은 반드시 VBA로 작성하세요. Python def transform(ctx)는 절대 출력하지 마세요. 선택한 열/요청 열의 실제 lastRow까지만 대상으로 하고, 전체 시트 끝까지 읽지 마세요. 날짜/숫자 조건(예: 20260403 이전)은 Range.Text와 Range.Value를 모두 안전하게 비교하되, 20260401/2026-03-31/2026/03/31 텍스트와 Excel 실제 날짜 시리얼을 모두 yyyymmdd 정수로 정규화하세요. 날짜 정규화 함수는 값 Variant가 아니라 셀 Range를 인자로 받게 하고, v > 0 And v < 1 은 시간 시리얼이므로 날짜 판정에 쓰지 마세요. Rows(...).Delete를 루프 안에서 반복하지 말고, 임시 보조열(마지막 열+1)에 삭제 대상 행만 표시한 뒤 AutoFilter를 걸고, 헤더를 제외한 명시적 데이터 본문 범위(hdrRow+1:lastRow)의 SpecialCells(xlCellTypeVisible).EntireRow.Delete로 한 번에 삭제하세요. usedRng.SpecialCells(...).Offset(1,0).Resize(...) 패턴은 쓰지 마세요. 삭제 대상 0건은 오류가 아니라 정상 종료입니다.";
+      } else if (routeMultiValueLookup) {
+        routingHint = "한 셀에 여러 값이 들어 있는 열을 분해해 다른 파일 열과 정확 매칭하고 합산해 쓰는 요청입니다. 이번 응답은 반드시 VBA로 작성하세요. BP/BQ/AA 같은 다중문자 열은 숫자로 암산하지 말고 ws.Columns(\"BP\").Column 또는 ws.Cells(r, \"BP\")처럼 열 문자를 그대로 쓰세요. Excel VBA에는 Continue For가 없으므로 If Len(tok)>0 Then ... End If 구조를 쓰세요. 대상 H열 전체 범위를 배열로 다시 쓰지 말고, matchedAny=True인 데이터 행의 wsOut.Cells(r, \"H\").Value만 개별 갱신하세요. 매칭 없는 행, H열 기존 텍스트/수식, P열이 부가세포함/합계/소계 같은 요약 라벨인 행은 그대로 두세요.";
+      } else {
+        routingHint = "복합 조건/피벗성 집계/시트 전체 교차파일 복사/한 셀 여러 값 매칭 합산 요청은 저사양 PC에서 Python COM 경로가 멈추거나 행 위치가 밀릴 수 있으므로 이번 응답은 VBA로 작성합니다. 전체 열은 실제 데이터 범위로 한정하고, 합계/소계/부가세포함 같은 요약 행은 데이터 행에서 제외하세요. Excel VBA에는 Continue For가 없으므로 사용하지 마세요.";
+      }
+    } else if (routeToPython) {
+      if (explicitPythonRequest) {
+        routingHint = "사용자가 이번 요청에서 Python/COM 을 명시했습니다. 반드시 하나의 ```python def transform(ctx): 코드 블록만 작성하고 VBA(Sub B2BSkill())는 절대 출력하지 마세요. @범위/@컬럼의 파일명·시트명은 번역 없이 정확히 복사하세요.";
+      } else if (routeMonthShift) {
+        routingHint = "셀 텍스트의 월/날짜를 N개월 이동(예: '월 정보 +1', '다음달')하는 요청입니다. 반드시 ctx.shift_months(시트, 범위, N) 한 줄로 처리하세요(범위 안 모든 'N월'·앞 'YY년'·뒤 'D일'을 연도 넘김·말일 보정까지 자동 처리). 직접 정규식이나 루프를 짜지 말고, @시트/@범위의 시트명은 한 글자도 바꾸지 말고 그대로 쓰세요.";
+      } else if (routeCtxHelper) {
+        routingHint = "시트 복사/복사후 이름변경/추가/삭제 또는 단순 정렬 요청입니다. 반드시 ctx 헬퍼를 쓰세요: ctx.copy_sheet(\"시트\", dst_book=\"대상.xlsx\", new_name=\"새이름\") / ctx.rename_sheet(\"기존\",\"새\") / ctx.add_sheet / ctx.delete_sheet / ctx.sort(시트, 범위, key_col=열문자, has_header=True). 값 배열 재작성이나 수기 COM 루프로 흉내내지 말고, @시트/@파일 이름은 한 글자도 바꾸지 말고 그대로 쓰세요.";
+      } else {
+        routingHint = "단순 행/열 삽입·삭제 또는 범위 내용 삭제 요청입니다. VBA 매크로가 아니라 Python COM으로 작성하세요. 행/열 자체 삭제·추가는 ctx.delete_rows/delete_cols/insert_rows/insert_cols 를 쓰고, 셀/범위의 내용만 지우는 요청은 ctx.clear 를 쓰세요. @범위의 파일명·시트명·주소는 번역하거나 바꾸지 말고 그대로 쓰세요.";
+      }
+    }
+    const exactSheetHint = exactSheetNameReminder(msg);
+    if (exactSheetHint) {
+      routingHint = [routingHint, exactSheetHint].filter(Boolean).join("\n");
+    }
     const requestOptions = {
       editTargetId,
       reqId,
       thinkMode,
       forceEngine: routeToVba ? "vba" : (routeToPython ? "python" : undefined),
-      routingHint: routeToVba
-        ? (explicitVbaRequest
-          ? "사용자가 이번 요청에서 VBA/매크로를 명시했습니다. 반드시 하나의 ```vba 코드 블록(Sub B2BSkill())만 작성하고 Python def transform(ctx)는 절대 출력하지 마세요. @범위/@컬럼의 파일명·시트명은 번역 없이 정확히 복사하세요."
-          : (routeDuplicateRowDelete
-            ? "조건이 붙은 중복 행 삭제 요청입니다. 이번 응답은 반드시 VBA로 작성하세요. Python def transform(ctx)는 절대 출력하지 마세요. 30만 행 이상도 처리 가능해야 하므로 성능상 필요한 열만 각각 1열 배열로 읽는 방식을 우선하세요. 예: E열 상품명, M열 수납금액, T열 EID. 단, 실제 lastRow/lastCol 로 한정된 데이터 범위 읽기는 허용되며, 행 번호 없는 전체 열(A:T, E:T) 또는 전체 시트 끝까지 읽는 코드는 쓰지 마세요. 'E열에서 안전제일만'은 정확히 '안전제일'인 행만 대상으로 하고 '안전제일(망개통용)' 같은 접미사 값은 포함하지 마세요. 같은 EID에서 수납금액이 1 이상인 행은 삭제 금지, 수납금액 1 미만 중복은 위쪽 행부터 삭제하고 가장 아래쪽 1개만 남기세요. Rows(...).Delete를 루프 안에서 반복하지 말고, 임시 보조열에 삭제 대상만 표시한 뒤 AutoFilter + SpecialCells(xlCellTypeVisible).EntireRow.Delete로 한 번에 삭제하세요. 삭제 대상 0건은 오류가 아니라 정상 종료입니다. System.Collections.ArrayList는 정렬용으로 사용 가능하지만 버블정렬 이중 For는 쓰지 마세요."
-            : (routeMultiValueLookup
-            ? "한 셀에 여러 값이 들어 있는 열을 분해해 다른 파일 열과 정확 매칭하고 합산해 쓰는 요청입니다. 이번 응답은 반드시 VBA로 작성하세요. BP/BQ/AA 같은 다중문자 열은 숫자로 암산하지 말고 ws.Columns(\"BP\").Column 또는 ws.Cells(r, \"BP\")처럼 열 문자를 그대로 쓰세요. Excel VBA에는 Continue For가 없으므로 If Len(tok)>0 Then ... End If 구조를 쓰세요. 대상 H열 전체 범위를 배열로 다시 쓰지 말고, matchedAny=True인 데이터 행의 wsOut.Cells(r, \"H\").Value만 개별 갱신하세요. 매칭 없는 행, H열 기존 텍스트/수식, P열이 부가세포함/합계/소계 같은 요약 라벨인 행은 그대로 두세요."
-            : "복합 조건/피벗성 집계/시트 전체 교차파일 복사/한 셀 여러 값 매칭 합산 요청은 저사양 PC에서 Python COM 경로가 멈추거나 행 위치가 밀릴 수 있으므로 이번 응답은 VBA로 작성합니다. 전체 열은 실제 데이터 범위로 한정하고, 합계/소계/부가세포함 같은 요약 행은 데이터 행에서 제외하세요. Excel VBA에는 Continue For가 없으므로 사용하지 마세요."))
-          )
-        : (routeToPython
-          ? "단순 행/열 삽입·삭제 또는 범위 내용 삭제 요청입니다. VBA 매크로가 아니라 Python COM으로 작성하세요. 행/열 자체 삭제·추가는 ctx.delete_rows/delete_cols/insert_rows/insert_cols 를 쓰고, 셀/범위의 내용만 지우는 요청은 ctx.clear 를 쓰세요. @범위의 파일명·시트명·주소는 번역하거나 바꾸지 말고 그대로 쓰세요."
-          : ""),
+      routingHint,
       signal: abortController.signal,
       onDelta: (delta, full) => {
         streamView.setAnswer(full);

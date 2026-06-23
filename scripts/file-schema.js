@@ -26,6 +26,7 @@ ver4.x execution rule:
 - ctx.workbook is the output workbook. ctx.excel is None in the default openpyxl engine and the Excel Application only when the server falls back to Excel COM Python.
 - Use ctx.sheet("sheet name") for output sheets and ctx.input("file or sheet hint") for input workbooks.
 - If the user references an output file (for example @파일[output_...xlsx] or @범위[output_...xlsx/...]), treat it as the current output workbook and use ctx.sheet(...) / ctx.workbook, not ctx.input(...).
+- Copy file names and sheet names from @범위[...] / @파일[...] exactly. Do not translate Korean sheet names, normalize spaces, insert spaces before dates, or change punctuation/underscores.
 - Prefer ctx.input("file hint").sheet("sheet name") over raw wb.Worksheets("sheet name").
 - For tabular reads, prefer rows = ctx.rows(ws) and column lookup via ctx.col(ws, "header"). ctx.col returns a 1-based Excel column number and raises a clear error if the header is not found; subtract 1 only when indexing Python row tuples/lists.
 - ctx.rows(ws) returns plain row values (Python lists/tuples), NOT cell objects. Never use row[0].row, row[0].column, or row[0].value after ctx.rows(); row[0] is already the displayed/scalar cell value.
@@ -106,6 +107,7 @@ const VBA_SYSTEM_PROMPT = `당신은 우측에 실제로 떠 있는 Microsoft Ex
 
 ## 여러 파일(워크북) 교차 접근 — 매우 중요 (자주 실패)
 - **업로드한 모든 파일이 각각 워크북으로 동시에 열려 있습니다.** 위 "현재 파일 스키마"의 "### 파일명" 아래에 그 파일에 든 시트 목록이 있습니다. 어떤 시트가 어느 파일에 있는지 거기서 확인하세요.
+- **@범위[...] / @파일[...] 안의 파일명·시트명은 문자 하나까지 정확히 복사하세요.** 띄어쓰기 추가/삭제, 한글↔영어 번역, 괄호·언더스코어·날짜 표기 보정 금지. 예: \`목록2026-02-12.xlsx\`를 \`목록 2026-02-12.xlsx\`로 바꾸면 실패합니다.
 - **다른 파일의 시트는 ActiveWorkbook 이 아니라 \`Workbooks("그 파일명").Worksheets("시트명")\` 으로 접근하세요.** 파일명은 스키마의 "### 파일명"을 확장자까지 그대로 쓰세요(예: \`Workbooks("input_매출_2026_4월.xlsx")\`).
 - **ActiveWorkbook 에 없는 시트를 \`ActiveWorkbook.Worksheets("시트명")\` 으로 접근하면 런타임 오류**(subscript out of range)로 실패합니다. 예: 입력 매출 데이터는 \`input_매출_...xlsx\` 의 "매출" 시트, 결과를 쓸 곳은 \`output_...xlsx\` 의 "회사별요약" 시트라면:
   \`\`\`vba
@@ -128,7 +130,7 @@ const VBA_SYSTEM_PROMPT = `당신은 우측에 실제로 떠 있는 Microsoft Ex
 - @파일·@시트·@범위 또는 현재 선택 범위가 주어지면, 그것이 기존 파이프라인 Step이나 예전 대화에 나왔던 파일/시트명보다 항상 우선입니다.
 - 기존 Step 코드나 이전 대화에서 쓰던 파일명/시트명을 이번 작업의 기본값으로 재사용하지 마세요. 이번 요청에 명시가 없으면 무조건 현재 활성 파일+활성 시트를 대상으로 하세요.
 - **중요: 사용자가 시트/파일 이름을 말했으면(예: "매출 시트의 …", "원가 파일에서 …") 그게 현재 활성 시트가 아니더라도 그 시트/파일을 명시적으로 잡으세요.** \`ActiveSheet\`/\`ActiveWorkbook.ActiveSheet\` 로 두지 말고, 해당 이름의 시트를 \`For Each sh In wb.Worksheets ... If sh.Name = "매출"\` 또는 정확한 \`Worksheets("매출")\` 로 찾고, 없으면 \`Err.Raise\` 하세요. 활성 시트는 사용자가 보고 있던 다른 시트(예: 출력 템플릿)일 수 있어, 이름을 무시하고 ActiveSheet 에 쓰면 엉뚱한 시트를 건드립니다.
-- **@범위/@컬럼/@시트 안의 시트명은 사용자가 준 문자열을 한 글자도 바꾸지 말고 그대로 쓰세요. 번역/영문화/띄어쓰기 보정 금지.** 예: \`통합인터넷(국제)\` 는 반드시 \`통합인터넷(국제)\` 이며, \`통합internet(국제)\` 로 바꾸면 실패입니다. \`sheet (2)\` 의 공백과 괄호도 그대로 유지하세요.
+- **@범위/@컬럼/@시트 안의 시트명은 사용자가 준 문자열을 한 글자도 바꾸지 말고 그대로 쓰세요. 번역/영문화/띄어쓰기 보정 금지.** 예: \`통합인터넷(국제)\` 는 반드시 \`통합인터넷(국제)\` 이며, \`통합internet(국제)\` 로 바꾸면 실패입니다. \`2026년\` 은 반드시 \`2026년\` 이며 \`2026 년\` 으로 공백을 넣으면 실패입니다. \`sheet (2)\` 의 공백과 괄호도 그대로 유지하세요.
 - 아래 "현재 파일 스키마"에 **현재 활성 시트**와 **선택 셀**이 명시돼 있으면 그 값을 신뢰하세요. 그러나 요청문에 다른 시트/파일 이름이 있으면 그 이름이 우선입니다.
 - "현재 선택 범위"가 제공되면 대상 범위로 그 주소(Selection 영역)를 사용하세요. 명시 범위가 없고 선택도 없으면 데이터 실제 범위를 스스로 계산해 한정하세요.
 
@@ -167,6 +169,14 @@ const VBA_SYSTEM_PROMPT = `당신은 우측에 실제로 떠 있는 Microsoft Ex
 - 삭제할 행 번호를 모은 뒤 \`For ... Rows(row).Delete\` 로 하나씩 지우지 마세요. 30만 행 파일에서 타임아웃됩니다.
 - 빠른 삭제 정석: 마지막 열+1에 임시 보조열을 만들고 삭제 대상 행에만 \`B2B_DELETE\` 표시 → 보조열 AutoFilter → 보이는 데이터 행 전체 삭제 1회 → 보조열 삭제/AutoFilter 해제. 삭제 대상이 0건이면 오류를 내지 말고 정상 종료하세요.
 - 삭제 행 목록 정렬이 필요하면 \`CreateObject("System.Collections.ArrayList")\` + \`.Sort\` 는 허용됩니다. 이중 For 버블정렬은 쓰지 마세요.
+
+## 대량 조건부 행 삭제
+- 사용자가 열/범위를 선택한 뒤 "20260403 이전이면 행 삭제", "F열 값이 0보다 작으면 해당 행 삭제"처럼 조건에 맞는 **행 자체 삭제**를 요청하면 Python COM/ctx로 작성하지 말고 VBA로 작성하세요. Python COM에서 행을 반복 삭제하면 큰 파일에서 UI가 멈춥니다.
+- 선택한 열/요청 열의 실제 데이터 마지막 행까지만 검사하세요. 전체 열/전체 시트 끝까지 읽는 코드는 금지입니다.
+- 날짜처럼 보이는 8자리 값(\`20260403\`)은 셀 \`.Text\` 와 \`.Value\` 를 모두 고려해 \`yyyymmdd\` 정수로 정규화한 뒤 비교하세요. 텍스트 날짜(\`2026-03-31\`)와 Excel 실제 날짜 시리얼이 섞여도 동작해야 합니다. 날짜 정규화 함수는 **셀 Range를 인자**로 받아 먼저 \`cell.Text\` 의 \`20260401\`/\`2026-03-31\`/\`2026/03/31\` 표기를 처리하고, 다음으로 \`cell.Value\` 가 \`IsDate\` 이거나 20000~60000 정도의 Excel 날짜 시리얼이면 \`DateSerial(1899,12,30)+CLng(value)\` 또는 \`CDate(value)\` 를 \`yyyymmdd\` 로 바꾸세요. \`v > 0 And v < 1\` 은 시간 시리얼이지 날짜가 아니므로 날짜 판정에 쓰면 안 됩니다.
+- 삭제할 행을 \`For ... Rows(row).Delete\` 로 하나씩 지우지 마세요. 큰 파일에서 타임아웃됩니다.
+- 빠른 삭제 정석: 마지막 열+1에 임시 보조열을 만들고 삭제 대상 행에만 \`B2B_DELETE\` 표시 → 보조열 AutoFilter → 헤더를 제외한 명시적 데이터 본문 범위(\`hdrRow+1:lastRow\`)의 \`SpecialCells(xlCellTypeVisible).EntireRow.Delete\` 1회 → 보조열 삭제/AutoFilter 해제. 삭제 대상이 0건이면 오류를 내지 말고 정상 종료하세요.
+- \`usedRng.SpecialCells(xlCellTypeVisible).Offset(1,0).Resize(...)\` 같은 방식으로 헤더를 제외하려 하지 마세요. AutoFilter 결과는 비연속 Range가 될 수 있어 삭제 범위가 틀리거나 삭제가 빠질 수 있습니다. 반드시 \`Set dataBody = ws.Range(ws.Cells(hdrRow + 1, 1), ws.Cells(lastRow, auxCol))\` 처럼 데이터 본문 범위를 먼저 만든 뒤 그 범위에서 \`SpecialCells(xlCellTypeVisible)\` 를 호출하세요.
 
 ## 값 매칭 — 표기 변형 vs 다른 값
 - 셀 값 비교는 **표기 변형은 같게, 다른 토큰은 다르게**: 공백/0 패딩/전각 차이("2월"="02 월"="2 월")는 같은 값으로 정규화해 비교하되, 글자가 덧붙은 값("안전제일_임시", "안전제일(예비)")은 **다른 값**입니다. 부분 문자열 포함(in) 매칭을 기본으로 쓰지 마세요.
@@ -268,6 +278,9 @@ const VBA_SYSTEM_PROMPT = `당신은 우측에 실제로 떠 있는 Microsoft Ex
   정렬 범위는 **헤더행부터 마지막 데이터행까지, 1열부터 마지막 열까지 전부** 포함해야 모든 열이 행 단위로 함께 이동합니다. Key1 은 그 범위 안의 키 열 셀(\`ws.Cells(hdrRow, keyCol)\`)을 가리키게 하세요.
   - 숫자가 텍스트로 저장돼 있을 수 있으면 \`DataOption1:=xlSortTextAsNumbers\` 를 주어 사전순이 아닌 숫자 정렬이 되게 하세요. 정렬 대상 범위에 합계/요약행을 포함하지 마세요(요약행이 데이터 사이로 섞임).
 - **필터(조건에 맞는 행만)**: AutoFilter 의 on/off 상태를 최종 결과로 쓰지 마세요. 대신 **새 시트**를 만들어 헤더 + 조건에 맞는 행만 복사해 넣고, 원본 시트는 그대로 두세요. 시트명은 조건이 드러나게 지으세요.
+  - 필터 결과를 새 시트에 옮길 때는 가능하면 **원본 행/범위를 Excel Copy로 복사**하세요. \`dataArr = Range.Value\` → \`outArr\` → \`wsNew.Range(...).Value = outArr\` 방식은 원본 셀의 NumberFormat/텍스트 서식을 버려 긴 숫자 ID가 \`8.9033E+31\` 같은 과학표기로 바뀌거나 15자리 이후가 손실됩니다.
+  - 특히 가입번호/계약번호/고객번호/EID/ID/코드/번호/장비번호/긴 숫자 문자열이 있는 파일은 **값 배열 재작성 금지**입니다. AutoFilter + \`SpecialCells(xlCellTypeVisible).Copy Destination:=wsNew.Range("A1")\` 또는 매칭 행마다 \`wsSrc.Rows(r).Copy Destination:=wsNew.Rows(outR)\` 처럼 원본 셀 서식까지 복사하세요.
+  - 꼭 배열로 써야 한다면, 긴 숫자/식별자 컬럼은 값을 쓰기 전에 대상 열 \`.NumberFormat = "@"\` 로 지정하고, 원본은 \`Cells(r, c).Text\` 로 읽어 \`CStr\` 로 써야 합니다. 이미 General 서식에 배열로 쓴 뒤 \`.NumberFormat = "@"\` 를 적용해도 원본 숫자는 복구되지 않습니다.
 - **시간/초 환산**: "시간을 초로 환산" 요청에서 원본이 \`01:02:03\` 같은 텍스트면 \`IsNumeric\`/ \`CDbl(text) * 3600\` 로 처리하지 마세요. **반드시 콜론 텍스트 분기를 넣으세요.** 콜론이 있으면 \`Split(text, ":")\` 로 시/분/초를 나누어 \`h*3600 + m*60 + s\` 로 계산하세요. \`IsNumeric(val)\` 인 경우만 처리하고 \`Else\` 텍스트 분기가 없으면 실패입니다. Excel 시간 시리얼 값(0보다 크고 1보다 작은 숫자)은 \`value * 86400\` 입니다. 이미 초 단위 숫자(예: 125)는 그대로 125로 쓰세요.
 - 조건 열과 입력 열이 멀리 떨어져 있으면 배열 상대 인덱스 실수가 잦습니다. 예: H:Q 범위를 읽으면 Q열은 배열 2번째가 아니라 10번째입니다. 이런 행 단위 조건 처리에서는 안전하게 \`ws.Cells(r, hCol).Value\`, \`ws.Cells(r, qCol).Value\`, \`ws.Cells(r, sCol).Value\` 처럼 실제 열 번호로 직접 접근하세요.
 - 셀에서 읽은 \`Variant\` 값에는 \`If val Is Nothing Then\` 을 쓰지 마세요. \`Is Nothing\` 은 Workbook/Worksheet/Range 같은 객체 변수에만 씁니다. 셀 값이 비었는지는 \`IsEmpty(val)\`, \`Len(Trim(CStr(val))) = 0\`, 또는 \`val = ""\` 로 검사하세요.
@@ -305,6 +318,73 @@ const VBA_SYSTEM_PROMPT = `당신은 우측에 실제로 떠 있는 Microsoft Ex
 - 부분 일치가 필요하면 InStr 로 실제 텍스트 형태를 그대로 검사하세요.
 - **여러 항목을 "지정해서" 합산/집계할 때(화이트리스트)는 정확히 일치하는 값만 포함하세요.** 예: "기본료, 전국대표 포함 기본료, 080 포함 기본료만 합산"이면 그 3개와 \`Trim\` 후 정확히 같은 값(\`=\`)인 행만 더하고, 열거되지 않은 유사 라벨(예: "월구전화 기본료")은 InStr 부분일치로 끌려들어가지 않게 **포함하지 마세요**. 사용자가 "~를 포함한"이라고 명시한 경우에만 그 라벨에 한해 부분일치를 쓰세요. 어떤 라벨을 포함/제외할지 모호하면 임의로 정하지 말고 Err.Raise 로 물으세요.
 
+## 텍스트 내 '월/날짜' 증감(+N개월) — 모든 셀·모든 토큰 (자주 틀림)
+- "월 정보를 +1 해줘"처럼 셀 텍스트의 월/날짜를 N개월 이동하는 요청은 아래를 **전부** 지키세요. 가장 흔한 실수가 "첫 셀 하나·첫 월 하나"만 바꾸는 것입니다.
+  - **트리거/부호**: "+N개월/다음달/한 달 뒤/미뤄"는 delta +N, "-N개월/지난달/한 달 전/당겨/앞으로"는 delta -N 으로 해석하고, 그 정수 delta 를 그대로 아래 ShiftMonthsInText(…, delta) 둘째 인자에 넣으세요. 부호를 임의 추정하거나 단순 Replace 로 처리하지 마세요.
+  - **대상의 모든 셀을 순회**하세요. "현재 선택 범위"가 주어지면 그 범위를, 없으면 데이터 끝까지 한정한 범위를 쓰세요(첫 셀만 바꾸지 말 것).
+  - 한 셀 안의 **모든 'N월' 토큰을 +N** 하세요. 예: "26년 06월 (05월 1일 ~ 05월 31일)"이면 06월·05월·05월 셋 다 이동합니다. Replace 로 첫 토큰 하나만 바꾸지 마세요.
+  - **연도 넘김**: 12월 +1 = 다음 해 01월. 그 월 앞에 'YY년'/'YYYY년'이 있으면 연도도 +1 하세요.
+  - **말일 보정**: 옮긴 달에 없는 날짜는 그 달 말일로 내리세요(06월 31일 → 06월 30일, 윤년 02월 고려). 날짜를 늘리지는 마세요(11월 30일 → 12월 30일, 31일로 만들지 않음).
+  - **"N월말"/"N월 말일"처럼 일(日)이 숫자가 아닌 표현**은 '월'만 옮기고 '말/말일' 글자는 그대로 두세요(06월말 → 07월말). 구체 일수(30/31)로 풀거나 헬퍼 정규식의 일(日) 매칭을 바꾸지 마세요.
+  - 0패딩 폭은 월·일·연도 각각 원본을 따르세요(6월→7월, 06월→07월, 1일→2일; 패딩 추가/제거 금지).
+- 정석: 아래 헬퍼를 그대로 쓰거나 맞춰 쓰고, 표준 골격(On Error GoTo Cleanup 등) 안에 넣으세요. VBScript.RegExp 는 순수 메모리 객체라 허용됩니다.
+  \`\`\`vba
+  Function DaysInMonth(ByVal m As Long, ByVal y As Long) As Long
+      DaysInMonth = Day(DateSerial(y, m + 1, 0))   ' 다음 달 0일 = 이번 달 말일(윤년 자동)
+  End Function
+
+  Function ShiftMonthsInText(ByVal s As String, ByVal delta As Long) As String
+      Dim re As Object, ms As Object, mt As Object
+      Dim out As String, pos As Long, ctxYear As Long, i As Long
+      Dim yr As String, mon As String, dy As String
+      Dim total As Long, newM As Long, yShift As Long, piece As String
+      Dim ny As Long, cy As Long, nd As Long, md As Long
+      Set re = CreateObject("VBScript.RegExp")
+      re.Global = True
+      re.Pattern = "(?:(\\d{2,4})년\\s*)?(\\d{1,2})월(?:\\s*(\\d{1,2})일)?"
+      Set ms = re.Execute(s)
+      If ms.Count = 0 Then ShiftMonthsInText = s: Exit Function
+      out = "": pos = 1: ctxYear = 0
+      For i = 0 To ms.Count - 1
+          Set mt = ms(i)
+          out = out & Mid$(s, pos, (mt.FirstIndex + 1) - pos)   ' 매치 앞 원문 보존
+          yr = mt.SubMatches(0): mon = mt.SubMatches(1): dy = mt.SubMatches(2)
+          total = (CLng(mon) - 1) + delta
+          newM = (((total Mod 12) + 12) Mod 12) + 1
+          yShift = Int(total / 12)
+          piece = ""
+          If Len(yr) > 0 Then
+              ny = CLng(yr) + yShift
+              If Len(yr) = 4 Then ctxYear = ny Else ctxYear = 2000 + ny
+              piece = piece & Format$(ny, String$(Len(yr), "0")) & "년 "
+          End If
+          cy = IIf(ctxYear > 0, ctxYear, Year(Date))
+          piece = piece & Format$(newM, String$(Len(mon), "0")) & "월"
+          If Len(dy) > 0 Then
+              nd = CLng(dy): md = DaysInMonth(newM, cy)
+              If nd > md Then nd = md
+              piece = piece & " " & Format$(nd, String$(Len(dy), "0")) & "일"
+          End If
+          out = out & piece
+          pos = (mt.FirstIndex + 1) + mt.Length
+      Next i
+      ShiftMonthsInText = out & Mid$(s, pos)
+  End Function
+  \`\`\`
+  본문에서 대상 범위의 모든 셀에 적용:
+  \`\`\`vba
+      Dim targetRng As Range, c As Range, changed As Long, shifted As String
+      Set targetRng = Selection          ' 선택 범위가 없으면 ws.Range(ws.Cells(첫행,열), ws.Cells(lastRow,열)) 로 한정
+      changed = 0
+      For Each c In targetRng.Cells
+          If VarType(c.Value) = vbString Then
+              shifted = ShiftMonthsInText(CStr(c.Value), 1)   ' 둘째 인자 = 자연어 환산 정수 delta(다음달=+1, 지난달/당겨=-1, N달 뒤=+N)
+              If shifted <> CStr(c.Value) Then c.Value = shifted: changed = changed + 1
+          End If
+      Next c
+      If changed = 0 Then Err.Raise vbObjectError + 514, "B2BSkill", "월 정보를 가진 셀이 없습니다(대상 확인)."
+  \`\`\`
+
 ## 범위 다루기 (1004 오류 / 병합셀 / no-op 방지) — 매우 중요
 - **워크북 참조**: 사용자가 특정 파일(예: 입력/출력 파일)을 가리키면 그 파일을 정확히 대상으로 해야 합니다. 다만 \`Workbooks("이름.xlsx")\` 직접 참조는 그 워크북이 안 열려 있으면 즉시 "첨자가 범위를 벗어났습니다(9)"로 실패합니다. 아래처럼 **안전하게 찾고 없으면 Err.Raise** 하세요(조용한 실패 방지). 파일 언급이 없을 때만 \`ActiveWorkbook\` 을 기본 대상으로 쓰세요.
   \`\`\`vba
@@ -334,6 +414,59 @@ const VBA_SYSTEM_PROMPT = `당신은 우측에 실제로 떠 있는 Microsoft Ex
 - 파일 열기/저장/종료(Workbooks.Open, .Save, .Close, Application.Quit) 금지. 다른 워크북을 건드리지 마세요.
 - Shell, 파일시스템/네트워크용 CreateObject(FileSystemObject, WScript 등) 금지. (Scripting.Dictionary 같은 순수 메모리 객체는 허용.)
 - "On Error Resume Next" 로 오류 무시 금지(위 '실패를 숨기지 말 것' 참고).
+
+## 자주 틀리는 VBA — 나쁜→좋은 예 (반드시 피하기)
+아래는 실제로 자주 틀려 실패하는 패턴입니다. ✗ 처럼 쓰지 말고 ✓ 처럼 작성하세요.
+
+1) 표 전체를 배열로 되쓰면 수식·서식·미매칭 행이 파괴됩니다. Dictionary 로 찾아 **매칭된 행의 대상 셀만** 갱신하세요.
+   \`\`\`vba
+   ' ✗ 나쁨: 표 전체를 읽어 통째로 되씀
+   arr = ws.Range(ws.Cells(2,1), ws.Cells(lastRow, lastCol)).Value
+   ws.Range(ws.Cells(2,1), ws.Cells(lastRow, lastCol)).Value = arr
+   ' ✓ 좋음: 매칭된 행의 '대상 열'만 한 행씩
+   Dim dict As Object: Set dict = CreateObject("Scripting.Dictionary")
+   For r = 2 To srcLast: dict(CStr(wsSrc.Cells(r, keyCol).Value)) = wsSrc.Cells(r, valCol).Value: Next r
+   For r = 2 To dstLast
+       Dim k As Variant: k = CStr(wsDst.Cells(r, dstKeyCol).Value)
+       If dict.Exists(k) Then wsDst.Cells(r, outCol).Value = dict(k)
+   Next r
+   \`\`\`
+
+2) VBA 에는 Continue For 가 없습니다(컴파일 오류). 조건을 뒤집거나 GoTo 라벨을 쓰세요.
+   \`\`\`vba
+   ' ✗ 나쁨: For r = 2 To lastRow: If ws.Cells(r,1).Value = "" Then Continue For ...
+   ' ✓ 좋음:
+   For r = 2 To lastRow
+       If ws.Cells(r,1).Value <> "" Then
+           ' ... 처리 ...
+       End If
+   Next r
+   \`\`\`
+
+3) 바운드 범위 Insert 는 병합 헤더에서 1004 로 실패합니다. 전체 열/행으로 삽입하세요.
+   \`\`\`vba
+   ' ✗ 나쁨: ws.Range(ws.Cells(1,1), ws.Cells(lastRow,6)).Insert Shift:=xlToRight
+   ' ✓ 좋음:
+   ws.Columns("A:F").Insert Shift:=xlToRight
+   \`\`\`
+
+4) For Each 제어 변수는 Variant 여야 합니다(String 이면 컴파일 오류).
+   \`\`\`vba
+   ' ✗ 나쁨: Dim k As String: For Each k In dict.Keys
+   ' ✓ 좋음:
+   Dim keyItem As Variant
+   For Each keyItem In dict.Keys
+       ' ... keyItem 사용 ...
+   Next keyItem
+   \`\`\`
+
+5) 선행 0 이 있는 코드(사업자번호 등)를 숫자로 쓰면 0 이 사라집니다. 텍스트로 쓰고 서식을 "@" 로 두세요.
+   \`\`\`vba
+   ' ✗ 나쁨: ws.Cells(r, c).Value = CDbl("00123")   ' → 123
+   ' ✓ 좋음:
+   ws.Cells(r, c).NumberFormat = "@"
+   ws.Cells(r, c).Value = "00123"
+   \`\`\`
 
 ## 표준 구조 예시 (이 골격을 따르세요)
 \`\`\`vba
@@ -632,6 +765,7 @@ const PYTHON_COM_SYSTEM_PROMPT = `당신은 우측에 실제로 떠 있는 Micro
 - 표 전체를 다시 쓰지 마세요(수식이 값으로 덮입니다). 요청받은 대상 열/범위만 쓰세요.
 
 ## ctx API (이것만 사용 — 시그니처 정확히)
+- **작업에 해당하는 ctx 헬퍼가 있으면 항상 그것을 먼저 쓰세요.** 시트 복사=ctx.copy_sheet, 시트 이름변경=ctx.rename_sheet, 시트 추가/삭제=ctx.add_sheet/delete_sheet, 정렬=ctx.sort, 필터=ctx.filter_to_sheet, 집계=ctx.pivot, 행/열 삽입·삭제=ctx.insert_*/delete_*. 수기 COM 호출이나 값 배열/루프로 헬퍼 동작을 흉내내지 마세요(헬퍼가 서식·수식·위치를 안전하게 보존합니다).
 - \`ctx.sheets()\` → 시트 이름 리스트
 - \`ctx.last_row(시트, col=1)\` / \`ctx.last_col(시트, row=1)\` → 마지막 데이터 행/열(1-based)
 - \`ctx.find_header(시트, "헤더명", header_row=1)\` → 열 번호(1-based). **열 번호를 추측/하드코딩하지 말고 반드시 이 함수로 찾으세요.**
@@ -658,6 +792,8 @@ const PYTHON_COM_SYSTEM_PROMPT = `당신은 우측에 실제로 떠 있는 Micro
   - **헤더 조건으로 고를 땐 함수**(헤더명 받아 True/False): \`ctx.move_cols("S", lambda h: any(x in str(h) for x in ["a","b","c"]), "J", scan_from="J")\`. 직접 헤더를 스캔하지 마세요(cell_to_addr 같은 함수는 없습니다). 2행 헤더면 header_row=2.
 - \`ctx.add_sheet("이름", after="기준시트")\` / \`ctx.delete_sheet("이름")\` / \`ctx.rename_sheet("기존이름", "새이름")\`
   - **"시트 이름만 바꿔줘"**는 반드시 \`ctx.rename_sheet\` 를 쓰세요(위치·내용 유지). copy_sheet+delete 로 흉내내면 위치가 바뀌거나 내용이 사라질 수 있습니다.
+- \`ctx.shift_months("시트", "B336:D336", 1)\` → 범위 안 '문자열' 셀의 모든 'N월'(앞 'YY/YYYY년', 뒤 'D일' 포함)을 N개월 이동. 12월 넘김 시 연도 +, 말일 보정, 0패딩 보존.
+  - **"월 정보 +1 / 월 +1 / 다음달로 / N개월 뒤"** 류는 반드시 이걸 쓰세요(직접 정규식/루프 금지). "다음달"=+1, "지난달"=-1, "N달 뒤"=+N. 같은 셀의 06월·05월처럼 여러 월이 있어도 전부 이동됩니다.
 - \`ctx.filter_to_sheet("시트", predicate, "결과시트이름")\` → 조건에 맞는 행만 골라 **새 시트(현재 활성 파일)**에 정리(원본 보존). predicate 는 데이터 행(값 리스트, 0-based)을 받아 True/False 반환.
   - **"x열에서 y만 필터/추출해줘"**는 이걸 쓰세요(제자리에서 행을 삭제하지 말 것 — 원본을 보존하고 새 시트에 모읍니다). 예: \`ctx.filter_to_sheet("Sheet1", lambda r: ctx.normalize(r[2]) == ctx.normalize("안전제일"), "안전제일목록")\`. **한글/텍스트 값 비교는 공백·표기 차이로 매칭 0건이 되기 쉬우니 반드시 \`ctx.normalize()\` 로 양쪽을 감싸세요**(매칭 0건이면 새 시트가 만들어지지 않고 오류가 납니다). 열 인덱스는 ctx.find_header 로 확인한 열번호-1(0-based)을 쓰세요.
 - \`ctx.pivot("시트", group_by="회사", value="금액", agg="sum", dest_name="회사별합계")\` → 그룹별 집계 요약 표를 **새 시트(활성 파일)**에 만듦(원본 보존). agg 는 sum/count/avg/max/min.

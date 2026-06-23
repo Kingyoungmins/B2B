@@ -7,6 +7,12 @@ $("btn-save").onclick = () => {
 $("btn-load").onclick = () => {
   openLoadDialog();
 };
+const logicBackupDirButton = $("btn-backup-dir");
+if (logicBackupDirButton) {
+  logicBackupDirButton.onclick = () => {
+    chooseLogicAutoBackupDir();
+  };
+}
 $("btn-reset").onclick = async () => {
   // [사용자 요청] 초기화 = 띄운 Excel 전부 종료 + 프로그램 재시작처럼 동작.
   // confirm() 이 항상-위 Excel 미러 창 뒤에 가려져 화면이 굳어 보이는 문제(0.5.2.2 §7)가 있어
@@ -162,6 +168,64 @@ let logicAutoBackupSeq = 0;
 let logicAutoBackupLastAt = 0;
 const LOGIC_AUTO_BACKUP_MIN_INTERVAL_MS = 20000;
 const LOGIC_AUTO_BACKUP_DELAY_MS = 1500;
+
+function updateLogicBackupDirButton(info) {
+  const btn = $("btn-backup-dir");
+  if (!btn || !info || !info.path) return;
+  btn.title = `스킬 자동저장 폴더: ${info.path}`;
+}
+
+async function refreshLogicAutoBackupDirStatus() {
+  if (!window.fetch || location.protocol === "file:") return null;
+  try {
+    const resp = await fetch("/api/logic/backup-dir");
+    const data = await resp.json().catch(() => ({}));
+    if (resp.status === 404) throw new Error("현재 실행 중인 서버가 자동저장 폴더 API를 지원하지 않습니다. 프로그램을 완전히 종료한 뒤 다시 실행하세요.");
+    if (!resp.ok || !data.ok) throw new Error(data.error || `HTTP ${resp.status}`);
+    updateLogicBackupDirButton(data);
+    return data;
+  } catch (err) {
+    console.warn("Logic auto-backup dir status failed:", err);
+    return null;
+  }
+}
+
+async function chooseLogicAutoBackupDir() {
+  if (!window.fetch || location.protocol === "file:") {
+    toast("로컬 서버 실행 상태에서만 자동저장 폴더를 선택할 수 있습니다.", "error");
+    return;
+  }
+  const btn = $("btn-backup-dir");
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = "📁 선택 중...";
+  }
+  try {
+    const resp = await fetch("/api/logic/backup-dir/select", { method: "POST" });
+    const data = await resp.json().catch(() => ({}));
+    if (resp.status === 404) {
+      throw new Error("현재 실행 중인 서버가 자동저장 폴더 API를 지원하지 않습니다. 프로그램을 완전히 종료한 뒤 다시 실행하세요.");
+    }
+    if (data && data.cancelled) {
+      toast("자동저장 폴더 선택을 취소했습니다.", "success");
+      updateLogicBackupDirButton(data);
+      return;
+    }
+    if (!resp.ok || !data.ok) throw new Error(data.error || `HTTP ${resp.status}`);
+    updateLogicBackupDirButton(data);
+    toast(`스킬 자동저장 폴더를 변경했습니다: ${data.path}`, "success");
+  } catch (err) {
+    toast("자동저장 폴더 선택 실패: " + (err && err.message ? err.message : String(err)), "error");
+    console.warn("Logic auto-backup dir select failed:", err);
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = "📁 자동저장 폴더";
+    }
+  }
+}
+
+setTimeout(() => { refreshLogicAutoBackupDirStatus(); }, 0);
 
 function scheduleLogicAutoBackup(reason) {
   if (!state.pipeline || state.pipeline.length === 0) return;
@@ -610,7 +674,13 @@ function addHistoricAssistant(fullText) {
     div.appendChild(codeBlk);
     const badge = document.createElement("div");
     badge.style.cssText = "margin-top:6px; font-size:11px; color:#28a745; font-weight:bold;";
-    badge.textContent = "이미 적용된 단계";
+    const inPipeline = (state.pipeline || []).some(step => String((step && step.code) || "").trim() === String(code || "").trim());
+    if (inPipeline) {
+      badge.textContent = "파이프라인에 저장된 단계";
+    } else {
+      badge.style.color = "#b36b00";
+      badge.textContent = "대화 기록 코드 · 파이프라인 미저장";
+    }
     div.appendChild(badge);
   }
   $("chat-messages").appendChild(div);

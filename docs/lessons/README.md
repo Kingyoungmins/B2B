@@ -43,7 +43,10 @@
 | 값만 복사, 그냥 복사, 수식/서식 보존 혼동 | `07_v058_regression_scenarios.md`, `09_v059_copy_paste_capture_scenarios.md` |
 | 교차파일 복붙이 전체실행만 실패(보호 시트 오류)·복붙 캡처 동작/함정 | `14_v0510_cross_file_copy_paste_full_run.md`, `09_v059_copy_paste_capture_scenarios.md` |
 | 단순 작업이 엉뚱한 엔진(VBA/Python)으로 라우팅됨·엔진 선택 규칙 | `16_v0510_routing_mention_keyword_collision.md`, `01_project_readme_changelog.md` |
-| VBA 행/열 숨김·숨김해제가 적용됐는데 "변경 없음" 오류로 스킬 생성이 막힘 | `17_v0510_vba_hidden_noop_smoke.md` |
+| "변경 없음" 오류로 정상 작업(서식/숨김 등) 스킬 생성이 막힘 → 2026-06-23 해당 검증 로직 전부 제거(히스토리) | `17_v0510_vba_hidden_noop_smoke.md` |
+| 에러/강제재시작 후 적용분이 사라지고 ▶ 전체실행을 다시 눌러야 함·재시작 후 자동 재적용 | `18_v0510_force_restart_auto_reapply.md`, `15_v0510_idle_runtime_load.md` |
+| 셀 텍스트의 월/날짜를 +N(다음달 등) 했는데 첫 셀·첫 월만 바뀜·롤오버/말일보정 | `19_v0510_text_month_date_shift.md` |
+| VBA 기본 전환 후 코드 생성 품질 저하·에러 잦음 / "python·COM 으로 짜줘"를 우선 적용 | `20_v0510_vba_codegen_quality_and_explicit_engine.md`, `02_python_engine_risks.md` |
 | 피벗/유사 피벗, 선행 0 보존, 시간 환산 | `07_v058_regression_scenarios.md`, `04_vba_regression_checklist.md` |
 | VBA 생성 흐름 전체를 설명해야 함 | `05_chat_to_excel_flow_prompt.md` |
 | Excel 미러/네이티브 구조 파악 | `03_excel_mirror_architecture.md` |
@@ -83,6 +86,9 @@
 | `14_v0510_cross_file_copy_paste_full_run.md` | 2026-06-18 교차파일 전체실행 조사 세션에서 신규 작성(단일 원본 복사 아님) |
 | `16_v0510_routing_mention_keyword_collision.md` | 2026-06-22 라우팅 오분류(파일명 키워드 충돌) 조사 세션에서 신규 작성 |
 | `17_v0510_vba_hidden_noop_smoke.md` | 2026-06-22 VBA 행/열 숨김 상태 no-op 실패 조사 세션에서 신규 작성 |
+| `18_v0510_force_restart_auto_reapply.md` | 2026-06-22 강제재시작 후 적용분 유실/자동 재적용 조사 세션에서 신규 작성 |
+| `19_v0510_text_month_date_shift.md` | 2026-06-23 "월정보 +1 이 첫 셀·첫 월만 바뀜" 수정 세션에서 신규 작성 |
+| `20_v0510_vba_codegen_quality_and_explicit_engine.md` | 2026-06-23 VBA 기본 전환 코드품질 진단 + 명시 엔진(python/COM) 라우팅 세션에서 신규 작성 |
 | `by_version/v0.5.6/*` | `../B2B_ver0.5.6`의 교훈성 MD |
 | `by_version/v0.5.7/*` | `../B2B_ver0.5.7`의 교훈성 MD |
 | `by_version/v0.5.8/*` | `../B2B_ver0.5.8`의 교훈성 MD와 회귀 리포트 |

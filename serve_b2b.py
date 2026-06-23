@@ -143,8 +143,120 @@ def writable_app_dir():
     return Path(__file__).resolve().parent
 
 
+def user_config_dir():
+    env_dir = os.environ.get("B2B_USER_CONFIG_DIR")
+    if env_dir:
+        return Path(env_dir).expanduser().resolve()
+    if os.name == "nt":
+        base = os.environ.get("LOCALAPPDATA") or os.environ.get("APPDATA")
+        if base:
+            return Path(base) / "B2B_Billing_Agent"
+    return Path.home() / ".b2b_billing_agent"
+
+
+def logic_backup_settings_path():
+    return user_config_dir() / "settings.json"
+
+
+def _load_user_settings():
+    path = logic_backup_settings_path()
+    try:
+        if path.exists():
+            data = json.loads(path.read_text(encoding="utf-8"))
+            return data if isinstance(data, dict) else {}
+    except Exception:
+        pass
+    return {}
+
+
+def _save_user_settings(data):
+    path = logic_backup_settings_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data or {}, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def default_logic_backup_dir():
+    return user_config_dir() / "auto_backups"
+
+
 def logic_backup_dir():
-    return writable_app_dir() / "auto_backups"
+    settings = _load_user_settings()
+    configured = str(settings.get("logicBackupDir") or "").strip()
+    if configured:
+        return Path(configured).expanduser().resolve()
+    return default_logic_backup_dir()
+
+
+def logic_backup_dir_info():
+    settings = _load_user_settings()
+    configured = str(settings.get("logicBackupDir") or "").strip()
+    path = logic_backup_dir()
+    return {
+        "ok": True,
+        "path": str(path),
+        "custom": bool(configured),
+        "defaultPath": str(default_logic_backup_dir()),
+        "settingsPath": str(logic_backup_settings_path()),
+        "exists": path.exists(),
+    }
+
+
+def set_logic_backup_dir(path):
+    chosen = Path(str(path or "")).expanduser().resolve()
+    chosen.mkdir(parents=True, exist_ok=True)
+    if not chosen.is_dir():
+        raise ValueError(f"폴더가 아닙니다: {chosen}")
+    probe = chosen / f".b2b_write_test_{uuid.uuid4().hex}"
+    try:
+        probe.write_text("ok", encoding="utf-8")
+    finally:
+        try:
+            probe.unlink(missing_ok=True)
+        except Exception:
+            pass
+    settings = _load_user_settings()
+    settings["logicBackupDir"] = str(chosen)
+    _save_user_settings(settings)
+    return logic_backup_dir_info()
+
+
+def choose_logic_backup_dir_dialog():
+    try:
+        import tkinter as tk
+        from tkinter import filedialog
+    except Exception as err:
+        raise RuntimeError(f"폴더 선택 창을 열 수 없습니다(tkinter 없음): {err}") from err
+    root = tk.Tk()
+    root.withdraw()
+    try:
+        try:
+            root.attributes("-topmost", True)
+        except Exception:
+            pass
+        initial = str(logic_backup_dir())
+        selected = filedialog.askdirectory(
+            parent=root,
+            title="스킬 자동저장 폴더 선택",
+            initialdir=initial if Path(initial).exists() else str(default_logic_backup_dir().parent),
+            mustexist=False,
+        )
+    finally:
+        try:
+            root.destroy()
+        except Exception:
+            pass
+    if not selected:
+        info = logic_backup_dir_info()
+        info.update({"ok": False, "cancelled": True})
+        return info
+    return set_logic_backup_dir(selected)
+
+
+def reset_logic_backup_dir():
+    settings = _load_user_settings()
+    settings.pop("logicBackupDir", None)
+    _save_user_settings(settings)
+    return logic_backup_dir_info()
 
 
 def node_executable():
@@ -564,6 +676,9 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
                 },
             })
             return
+        if self.path.split("?")[0] == "/api/logic/backup-dir":
+            self.send_json(logic_backup_dir_info())
+            return
         if self.path.startswith("/api/workbooks/download/"):
             self.handle_backend_download()
             return
@@ -590,6 +705,18 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
             return
         if self.path == "/api/logic/backup":
             self.handle_logic_backup()
+            return
+        if self.path == "/api/logic/backup-dir/select":
+            try:
+                self.send_json(choose_logic_backup_dir_dialog())
+            except Exception as err:
+                self.send_json({"ok": False, "error": str(err)}, status=500)
+            return
+        if self.path == "/api/logic/backup-dir/reset":
+            try:
+                self.send_json(reset_logic_backup_dir())
+            except Exception as err:
+                self.send_json({"ok": False, "error": str(err)}, status=500)
             return
         if self.path == "/api/pipeline/run":
             self.handle_backend_pipeline_run()
@@ -1663,6 +1790,53 @@ def normalize_sheet_lookup(value):
     # ("인포콘_올인원_정렬" vs "인포콘올인원_정렬"). Keep this looser
     # matching scoped to sheet lookup only; data value matching remains stricter.
     return re.sub(r"[\s_\-]+", "", str(value or "").lower())
+
+
+def _days_in_month(month, year):
+    if month == 2:
+        return 29 if (year % 4 == 0 and (year % 100 != 0 or year % 400 == 0)) else 28
+    return 31 if month in (1, 3, 5, 7, 8, 10, 12) else 30
+
+
+# 'YY/YYYY년', 'N월', 'D일' 토큰. 데이터에 공백이 끼어도(예: "2026 년") 매칭되도록 \s* 허용.
+_MONTH_SHIFT_PAT = re.compile(r"(?:(\d{2,4})\s*년\s*)?(\d{1,2})\s*월(?:\s*(\d{1,2})\s*일)?")
+
+
+def _shift_months_in_text(s, delta, current_year=2000):
+    """문자열의 모든 'N월'(앞의 'YY/YYYY년', 뒤의 'D일' 포함)을 delta 개월 이동한다.
+    12월을 넘으면 연도 +, 말일 보정(없는 날짜는 그 달 말일로 내림, 윤년 고려), 0패딩 폭 보존.
+    이 로직을 백엔드 헬퍼(ctx.shift_months)로 두는 이유: LLM 이 VBA 정규식/한글에 공백을 끼워
+    매번 깨뜨리던 문제를 결정적으로 제거하기 위함. 매칭 없으면 원문 그대로 반환."""
+    s = str(s)
+    delta = int(delta)
+    out = []
+    pos = 0
+    ctx_year = 0
+    for mo in _MONTH_SHIFT_PAT.finditer(s):
+        out.append(s[pos:mo.start()])
+        yr = mo.group(1) or ""
+        mon = mo.group(2) or ""
+        dy = mo.group(3) or ""
+        total = (int(mon) - 1) + delta
+        new_m = (total % 12) + 1
+        y_shift = total // 12
+        piece = ""
+        if yr:
+            ny = int(yr) + y_shift
+            ctx_year = ny if len(yr) == 4 else 2000 + ny
+            piece += format(ny, "0%dd" % len(yr)) + "년 "
+        cy = ctx_year if ctx_year > 0 else current_year
+        piece += format(new_m, "0%dd" % len(mon)) + "월"
+        if dy:
+            nd = int(dy)
+            md = _days_in_month(new_m, cy)
+            if nd > md:
+                nd = md
+            piece += " " + format(nd, "0%dd" % len(dy)) + "일"
+        out.append(piece)
+        pos = mo.end()
+    out.append(s[pos:])
+    return "".join(out)
 
 
 @total_ordering
@@ -4706,22 +4880,52 @@ def _strip_vba_comment(line):
     return "".join(out)
 
 
-def _vba_allows_unchanged_fingerprint_success(code):
-    """Some VBA operations are intentionally idempotent and are not reflected in the
-    cell value/formula fingerprint. Example: Rows("3:5").Hidden = False succeeds
-    even when those rows are already visible. Treat only narrow structural state
-    setters as successful no-change operations; value/calculation tasks still use
-    the no-op guard below."""
-    text = "\n".join(_strip_vba_comment(line) for line in str(code or "").splitlines())
-    if not text.strip():
+def _looks_like_long_digit_identifier(value):
+    if not isinstance(value, str):
         return False
-    hidden_setter = re.search(
-        r"(?:\.\s*(?:Rows|Columns)\s*\([^)]*\)|\.\s*Entire(?:Row|Column)|\b(?:Rows|Columns)\s*\([^)]*\))"
-        r"\s*\.\s*Hidden\s*=\s*(?:True|False)\b",
-        text,
-        re.IGNORECASE,
-    )
-    return bool(hidden_setter)
+    s = value.strip()
+    if s.startswith("'"):
+        s = s[1:].strip()
+    return bool(re.fullmatch(r"\d{12,}", s))
+
+
+def _long_digit_identifier_columns(grid):
+    columns = set()
+    for row in grid or []:
+        if not isinstance(row, (list, tuple)):
+            continue
+        for idx, value in enumerate(row):
+            if _looks_like_long_digit_identifier(value):
+                columns.add(idx)
+    return sorted(columns)
+
+
+def _apply_com_text_format_for_long_digit_columns(ws, grid, start_row=1, start_col=1):
+    columns = _long_digit_identifier_columns(grid)
+    if not columns:
+        return
+    row_count = max(1, len(grid or []))
+    for idx in columns:
+        try:
+            col = int(start_col) + int(idx)
+            rng = ws.Range(ws.Cells(int(start_row), col), ws.Cells(int(start_row) + row_count - 1, col))
+            rng.NumberFormat = "@"
+        except Exception:
+            continue
+
+
+def _apply_openpyxl_text_format_for_long_digit_columns(raw_ws, grid, start_row=1, start_col=1):
+    columns = _long_digit_identifier_columns(grid)
+    if not columns:
+        return
+    row_count = max(1, len(grid or []))
+    for idx in columns:
+        col = int(start_col) + int(idx)
+        for row in range(int(start_row), int(start_row) + row_count):
+            try:
+                raw_ws.cell(row=row, column=col).number_format = "@"
+            except Exception:
+                continue
 
 
 def _validate_vba_source_before_inject(code):
@@ -4773,6 +4977,11 @@ def _validate_vba_source_before_inject(code):
             raise RuntimeError(
                 "VBA 문법 오류(%d행): Excel VBA는 Continue For를 지원하지 않습니다. "
                 "If Len(...) > 0 Then ... End If 또는 GoTo 라벨을 사용하세요." % idx
+            )
+        if re.search(r"\b[A-Za-z_][A-Za-z0-9_]*\s*\([^()\r\n]*,\s*\)", line):
+            raise RuntimeError(
+                "VBA 문법 오류(%d행): 함수/배열 호출에서 쉼표 뒤 인수가 비어 있습니다. "
+                "예: dataArr(1, ) 같은 코드는 실행할 수 없습니다." % idx
             )
         if re.search(r"\bAs(?:\s+New)?\s*$", line, re.IGNORECASE):
             raise RuntimeError("VBA 문법 오류(%d행): As 뒤의 자료형이 비어 있습니다." % idx)
@@ -6130,7 +6339,6 @@ def _run_vba_on_session_impl(excel_id, code, entry=None, restore_window=True):
             _protect_workbook_for_read_only_mirror(wb, False)
         except Exception:
             pass
-        before_fp = _workbook_change_fingerprint(wb)  # 실행 전 지문(변경 0건 검출용)
         try:
             _t = time.perf_counter()
             _prepare_vba_macro_run_window_state(session, app, wb)
@@ -6201,38 +6409,9 @@ def _run_vba_on_session_impl(excel_id, code, entry=None, restore_window=True):
                     _restore_live_window(session, app, wb)
                 except Exception:
                     pass
-        # 여기 도달 = 실행 자체는 예외 없이 끝남. 그런데 워크북이 전혀 안 바뀌었다면
-        # '적용됨'으로 잘못 보고되는 no-op 이므로 실패로 드러낸다(품질평가 issue 45/57/58).
-        after_fp = _workbook_change_fingerprint(wb)
-        if before_fp and after_fp and before_fp == after_fp:
-            if _vba_allows_unchanged_fingerprint_success(code):
-                try:
-                    _vba_trace(
-                        "vba.noop.allowed",
-                        excelId=excel_id,
-                        entry=entry,
-                        reason="idempotent-hidden-state",
-                    )
-                except Exception:
-                    pass
-                return {"ok": True, "excelId": excel_id, "entry": entry, "noChange": True}
-            _noop_msg = (
-                "VBA 가 실행됐지만 워크북에 아무 변경도 없습니다(대상 시트/범위/조건을 확인하세요). "
-                "'적용됨'으로 잘못 보고되지 않도록 실패로 처리했습니다."
-            )
-            _cause, _guide = _pipeline_error_guide("변경된 셀이 없습니다", code)
-            raise PipelineExecutionError({
-                "stepIdx": 0,
-                "stepId": None,
-                "description": "",
-                "code": code,
-                "language": "vba",
-                "message": _cause + '\n' + "💡 이렇게 요청해 보세요: " + _guide + '\n' + "(자세히: " + _noop_msg + ")",
-                "cause": _cause,
-                "promptGuide": _guide,
-                "rawError": _noop_msg,
-                "stack": "",
-            })
+        # [변경없음 검증 제거] VBA 가 예외 없이 끝났으면 성공으로 본다. 예전엔 실행 전후 워크북 지문을
+        # 비교해 '변경 0건'이면 실패 처리했으나, 서식만 바꾸는 작업(천단위 콤마 등)·숨김 해제처럼 값 지문에
+        # 안 잡히는 정상 작업까지 막아 더 불편해서 가드를 전부 들어냈다.
         return {"ok": True, "excelId": excel_id, "entry": entry}
 
 
@@ -6438,7 +6617,7 @@ def _run_vba_pipeline_on_session_impl(excel_id, steps, reset=True, entry=None, v
                     _protect_workbook_for_read_only_mirror(ftarget, False)
                 except Exception:
                     pass
-                for st in steps:
+                for fallback_idx, st in enumerate(steps):
                     code = (st.get("code") if isinstance(st, dict) else str(st)) or ""
                     if not code.strip():
                         continue
@@ -6455,10 +6634,27 @@ def _run_vba_pipeline_on_session_impl(excel_id, steps, reset=True, entry=None, v
                         codeHash=_trace_hash(code),
                         codeHead=_trace_text(code, 360),
                     )
-                    if str(lang).lower() == "python":
-                        _exec_python_com_skill(fapp, ftarget, session, code)
-                    else:
-                        _inject_and_run_vba(fapp, ftarget, code, entry)
+                    try:
+                        if str(lang).lower() == "python":
+                            _exec_python_com_skill(fapp, ftarget, session, code)
+                        else:
+                            _inject_and_run_vba(fapp, ftarget, code, entry)
+                    except PipelineExecutionError:
+                        raise
+                    except Exception as err:
+                        info = _vba_pipeline_step_info(st, fallback_idx, err)
+                        _vba_trace(
+                            "pipeline.step.error",
+                            excelId=excel_id,
+                            isolatedPid=fpid,
+                            stepIdx=info.get("stepIdx"),
+                            stepId=info.get("stepId"),
+                            language=info.get("language"),
+                            description=_trace_text(info.get("description") or "", 220),
+                            error=str(err),
+                            errorInfo=info,
+                        )
+                        raise PipelineExecutionError(info)
                     _vba_trace(
                         "pipeline.step.ok",
                         excelId=excel_id,
@@ -6969,6 +7165,26 @@ class PythonComSkillContext:
                 return matches[0].Worksheets(str(sheet))
         except Exception:
             pass
+        # 공백/언더스코어/하이픈만 다른 시트명도 매칭(모델이 '2026년'을 '2026 년'으로 공백 끼우는 흔한 케이스).
+        # normalize_sheet_lookup 으로 정규화해 '정확히 한 곳'에만 있을 때 따라간다.
+        try:
+            want = normalize_sheet_lookup(sheet)
+            cur = _excel_collection_names(self._wb.Worksheets)
+            nm = [n for n in cur if normalize_sheet_lookup(n) == want]
+            if len(nm) == 1:
+                return self._wb.Worksheets(nm[0])
+            cross = []
+            for owb in self._app.Workbooks:
+                try:
+                    for n in _excel_collection_names(owb.Worksheets):
+                        if normalize_sheet_lookup(n) == want:
+                            cross.append((owb, n))
+                except Exception:
+                    continue
+            if len(cross) == 1:
+                return cross[0][0].Worksheets(cross[0][1])
+        except Exception:
+            pass
         names = _excel_collection_names(self._wb.Worksheets)
         raise PythonComSkillError(
             f"시트 '{sheet}' 를 찾지 못했습니다. 사용 가능한 시트: {names}"
@@ -7157,6 +7373,10 @@ class PythonComSkillContext:
         rng = self._resize_rng(ws, anchor, rows, cols)
         self._tick(3)
         self._journal_save(ws, rng)
+        try:
+            _apply_com_text_format_for_long_digit_columns(ws, data, int(anchor.Row), int(anchor.Column))
+        except Exception:
+            pass
         rng.Value2 = data
         self._tick(1)
         return rows * cols
@@ -7300,6 +7520,38 @@ class PythonComSkillContext:
         rng.ClearContents()
         self._tick(1)
         return True
+
+    def shift_months(self, sheet, a1_range, delta=1):
+        """범위 안 '문자열' 셀의 모든 'N월'(앞 'YY/YYYY년', 뒤 'D일' 포함)을 delta 개월 이동한다.
+        예: "2026년 06월 (05월 1일 ~ 05월 31일)" + 1 → "2026년 07월 (06월 1일 ~ 06월 30일)".
+        12월 넘김 시 연도 +, 말일 보정(내림, 윤년), 0패딩 폭 보존. 서식/수식/숫자/날짜 셀은 그대로 둠.
+        '월 정보 +N / 다음달 / 한 달 뒤' 류 요청은 직접 정규식을 짜지 말고 반드시 이 헬퍼를 쓰세요."""
+        ws = self._ws(sheet)
+        rng = self._rng(ws, a1_range)
+        self._tick(2)
+        self._journal_save(ws, rng)
+        delta = int(delta)
+        nrows = int(rng.Rows.Count)
+        ncols = int(rng.Columns.Count)
+        data = rng.Value
+        changed = 0
+        for r in range(nrows):
+            for c in range(ncols):
+                if nrows == 1 and ncols == 1:
+                    v = data
+                else:
+                    row = data[r] if isinstance(data, (list, tuple)) else data
+                    v = row[c] if isinstance(row, (list, tuple)) else row
+                if not isinstance(v, str):
+                    continue
+                shifted = _shift_months_in_text(v, delta)
+                if shifted != v:
+                    rng.Cells(r + 1, c + 1).Value = shifted
+                    changed += 1
+        self._tick(1)
+        if changed == 0:
+            raise PythonComSkillError("월 정보를 가진 문자열 셀이 없습니다(대상 범위/시트를 확인하세요).")
+        return changed
 
     # ---- 구조 변경(저널 롤백 불가 → structural 표시) ----
     def insert_rows(self, sheet, row, count=1):
@@ -7836,6 +8088,22 @@ class PythonComSkillContext:
         except Exception:
             target = None
         if target is None:
+            # 공백/_/- 만 다른 파일명도 매칭(모델이 한글 파일명에 공백을 끼우는 케이스: '기업DW추출'→'기업 DW 추출').
+            # 정규화 후 '정확히 한 워크북'에만 맞을 때만 따라간다(모호하면 기존 에러).
+            try:
+                want = normalize_sheet_lookup(Path(key).stem)
+                nm = []
+                for wb in self._app.Workbooks:
+                    try:
+                        if normalize_sheet_lookup(Path(str(wb.Name)).stem) == want:
+                            nm.append(wb)
+                    except Exception:
+                        continue
+                if len(nm) == 1:
+                    target = nm[0]
+            except Exception:
+                pass
+        if target is None:
             raise PythonComSkillError(
                 f"워크북 '{workbook_name}' 이 열려 있지 않습니다. 업로드된 파일명을 그대로 쓰세요."
             )
@@ -8235,27 +8503,6 @@ def _active_sheet_snapshot(wb, prefer_workbook=False):
         ws = wb.Worksheets(names[0])
         ws.Activate()
     return ws.Name, _sheet_snapshot(ws)
-
-
-def _workbook_change_fingerprint(wb):
-    """VBA 실행 전후 비교용 워크북 지문. 모든 시트의 used-range 를 셀별 (value-or-formula)
-    로 직렬화한 dict. 실행 후 이 지문이 그대로면 '변경 0건'(아무 일도 안 한 것).
-    VBA 가 어느 시트를 건드릴지 모르므로 활성 시트만 보지 않고 전 시트를 본다.
-    실패는 조용히 무시(변경검출은 보조 안전망이지 핵심 실행 경로가 아님)."""
-    fp = {}
-    try:
-        names = _excel_collection_names(wb.Worksheets)
-    except Exception:
-        return fp
-    for name in names:
-        try:
-            ws = wb.Worksheets(name)
-            snap = _sheet_snapshot(ws)
-            # 셀별 key(value 또는 formula)만 추려 가볍게.
-            fp[name] = {addr: cell.get("key", "") for addr, cell in snap.items()}
-        except Exception:
-            continue
-    return fp
 
 
 def _left_mouse_button_down():
@@ -9278,6 +9525,7 @@ class ExcelSkillContext:
             return ws
         norm = [list(r or []) + [None] * (ncol - len(r or [])) for r in grid]
         rng = ws.Range(ws.Cells(start_row, start_col), ws.Cells(start_row + len(norm) - 1, start_col + ncol - 1))
+        _apply_com_text_format_for_long_digit_columns(ws, norm, start_row, start_col)
         rng.Value = norm
         return ws
 
@@ -9302,6 +9550,7 @@ class ExcelSkillContext:
         anchor = ws.Range(str(address)).Cells(1, 1)
         r0, c0 = int(anchor.Row), int(anchor.Column)
         rng = ws.Range(ws.Cells(r0, c0), ws.Cells(r0 + len(norm) - 1, c0 + ncol - 1))
+        _apply_com_text_format_for_long_digit_columns(ws, norm, r0, c0)
         rng.Value = norm
         if self._is_output_workbook(ws.Parent):
             self.last_output_sheet = ws.Name
@@ -10772,6 +11021,7 @@ class OpenpyxlSkillContext:
             has_merges = True  # 알 수 없으면 안전(기존) 경로
         total = len(grid)
         cell = raw.cell
+        _apply_openpyxl_text_format_for_long_digit_columns(raw, grid, start_row, start_col)
         report = self._progress if (total > 20000 and callable(self._progress)) else None
         for i, row in enumerate(grid):
             R = start_row + i
