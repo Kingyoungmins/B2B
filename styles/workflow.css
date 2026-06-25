@@ -1,0 +1,136 @@
+﻿  /* ============ WORKFLOW ============ */
+  .workflow-panel { display: flex; flex-direction: column; gap: 12px; }
+  .workflow-board {
+    background: linear-gradient(135deg, #FFF9FD 0%, #F7F2FE 100%);
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    padding: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .workflow-lane {
+    display: flex;
+    align-items: stretch;
+    gap: 10px;
+    overflow-x: auto;
+    padding-bottom: 4px;
+  }
+  .workflow-node {
+    flex: 0 0 200px;
+    min-height: 140px;
+    border: 1.5px dashed var(--border-strong);
+    border-radius: var(--r-md);
+    background: white;
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    transition: all 0.2s;
+  }
+  .workflow-node.drop-target { cursor: pointer; }
+  .workflow-node.drop-target:hover {
+    border-color: var(--m-400);
+    background: var(--m-50);
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+  }
+  .workflow-node.drop-target.drag-over {
+    border-color: var(--m-500);
+    background: var(--m-50);
+    transform: translateY(-2px);
+    box-shadow: 0 12px 32px rgba(255,0,128,0.18);
+  }
+  .workflow-node.filled {
+    border-style: solid;
+    border-color: var(--m-400);
+    box-shadow: 0 4px 14px rgba(255,0,128,0.12);
+  }
+  .workflow-node.output-node.filled {
+    border-color: var(--p-500);
+    box-shadow: 0 4px 14px rgba(121,40,202,0.15);
+  }
+  .workflow-node-title {
+    font-size: 12.5px;
+    font-weight: 700;
+    color: var(--ink-900);
+    letter-spacing: -0.01em;
+  }
+  .workflow-node-sub {
+    font-size: 11px;
+    color: var(--ink-400);
+    line-height: 1.5;
+    font-weight: 500;
+  }
+  .workflow-node-list {
+    display: flex; flex-direction: column; gap: 6px;
+    font-size: 11px; color: var(--ink-700);
+    min-height: 40px;
+  }
+  .workflow-pill {
+    border: 1px solid var(--border);
+    border-radius: var(--r-sm);
+    padding: 6px 10px;
+    background: var(--ink-50);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-weight: 500;
+  }
+  .workflow-node .btn-secondary,
+  .workflow-node .btn-primary { width: 100%; }
+  .workflow-drop-hint {
+    margin-top: auto;
+    border-top: 1px dashed var(--border);
+    padding-top: 10px;
+    font-size: 10.5px;
+    color: var(--ink-400);
+    line-height: 1.5;
+    font-weight: 500;
+  }
+  .workflow-connector {
+    flex: 0 0 32px;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--m-400);
+    font-size: 22px;
+    font-weight: 700;
+  }
+  .workflow-note {
+    font-size: 11.5px;
+    color: var(--ink-500);
+    line-height: 1.55;
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: var(--r-sm);
+    padding: 12px 14px;
+    font-weight: 500;
+  }
+  .workflow-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+  .workflow-actions button { flex: 1; min-width: 130px; }
+  .logic-dropzone {
+    border: 1.5px dashed var(--border-strong);
+    border-radius: var(--r-sm);
+    padding: 14px;
+    background: var(--ink-50);
+    text-align: center;
+    color: var(--ink-500);
+    font-size: 11.5px;
+    cursor: pointer;
+    font-weight: 500;
+    transition: all 0.15s;
+  }
+  .logic-dropzone:hover, .logic-dropzone.drag-over {
+    border-color: var(--m-400);
+    background: var(--m-50);
+    color: var(--m-600);
+  }
+  .logic-summary {
+    font-size: 11.5px;
+    color: var(--ink-500);
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: var(--r-sm);
+    padding: 12px 14px;
+    line-height: 1.6;
+    font-weight: 500;
+  }

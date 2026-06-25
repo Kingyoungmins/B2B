@@ -1,0 +1,64 @@
+{
+  "id": "raise_when_not_applied",
+  "title": "미적용인데 '적용됨'으로 보고되는 오류: 변경 0건/대상 없음이면 Err.Raise로 실패를 드러냄",
+  "checks_by_mode": {
+    "vba": {
+      "risk_rules": [
+        "raise_when_no_change",
+        "no_activecell_offset",
+        "single_sheet_scope"
+      ],
+      "must_match_any": [
+        {
+          "label": "변경 0건/미존재 시 Err.Raise",
+          "patterns": [
+            "Err\\s*\\.\\s*Raise\\b"
+          ]
+        }
+      ],
+      "must_not_match": [
+        "\\bMsgBox\\b",
+        "GoTo\\s+Cleanup\\b",
+        "For\\s+Each\\s+\\w+\\s+In\\s+(?:ActiveWorkbook\\s*\\.\\s*)?Worksheets"
+      ],
+      "windows_only": [
+        "대상이 없거나 변경 0건일 때 조용히 끝내지 않고 Err.Raise 로 실패가 드러나는지 확인."
+      ]
+    },
+    "python": {
+      "risk_rules": [
+        "raise_when_no_change",
+        "no_activecell_offset",
+        "single_sheet_scope"
+      ],
+      "must_match_any": [
+        {
+          "label": "변경 0건/미존재 시 raise",
+          "patterns": [
+            "\\braise\\b"
+          ]
+        }
+      ],
+      "windows_only": [
+        "대상이 없거나 변경 0건일 때 조용히 끝내지 않고 Err.Raise 로 실패가 드러나는지 확인."
+      ]
+    }
+  },
+  "variants": [
+    {
+      "id": "sort_must_raise_if_no_column",
+      "prompt": "회사별요약에서 '존재하지않는열' 헤더 기준으로 정렬해줘. 그 헤더가 없으면 조용히 끝내지 말고 오류를 내서 실패를 알려줘.",
+      "expected": "해당 헤더가 없으므로 Err.Raise 로 실패를 던진다. MsgBox/조용한 종료 없음."
+    },
+    {
+      "id": "delete_sheet_raise_if_missing",
+      "prompt": "'당월매출(통합)' 시트를 삭제해줘. 그런 시트가 없으면 아무 일도 안 한 채 '완료'라고 하지 말고 오류로 알려줘.",
+      "expected": "시트가 없으면 Err.Raise. 시트가 있으면 그 시트만 삭제. no-op 후 '적용됨' 보고 금지."
+    },
+    {
+      "id": "replace_raise_if_zero_match",
+      "prompt": "회사별요약 회사명에서 '없는회사'를 '대체'로 바꿔줘. 치환이 0건이면 변경 없음을 오류로 드러내줘.",
+      "expected": "치환 대상이 0건이면 Err.Raise. 매칭이 있으면 그만 치환."
+    }
+  ]
+}

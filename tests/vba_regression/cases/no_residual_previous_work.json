@@ -1,0 +1,57 @@
+{
+  "id": "no_residual_previous_work",
+  "title": "스킬삭제/후속 작업 잔존 방지: 이번 요청 하나만 수행(단일 프롬프트)",
+  "checks_by_mode": {
+    "vba": {
+      "risk_rules": [
+        "single_sheet_scope",
+        "no_destructive_clear_delete",
+        "no_activecell_offset"
+      ],
+      "must_not_match": [
+        "Step\\s*1",
+        "이전\\s*단계",
+        "\\.UsedRange\\s*\\.\\s*Clear",
+        "\\.Cells\\s*\\.\\s*Clear",
+        "For\\s+Each\\s+\\w+\\s+In\\s+(?:ActiveWorkbook\\s*\\.\\s*)?Worksheets"
+      ],
+      "windows_only": [
+        "이번 요청 외 과거 작업(초기화/삭제)이 섞이지 않았는지 확인."
+      ]
+    },
+    "python": {
+      "risk_rules": [
+        "single_sheet_scope",
+        "no_destructive_clear_delete",
+        "no_activecell_offset"
+      ],
+      "must_not_match": [
+        "Step\\s*1",
+        "이전\\s*단계",
+        "\\.delete_rows\\s*\\(",
+        "\\.delete_cols\\s*\\(",
+        "for\\s+\\w+\\s+in\\s+[\\w.]+\\.(?:worksheets|sheetnames)\\b"
+      ],
+      "windows_only": [
+        "이번 요청 외 과거 작업(초기화/삭제)이 섞이지 않았는지 확인."
+      ]
+    }
+  },
+  "variants": [
+    {
+      "id": "new_request_only",
+      "prompt": "이전 작업은 이미 적용돼 있어. 이번에는 월별실적 B4에 '1077'이라고만 써줘. 이전 작업을 다시 하거나 지우지 마.",
+      "expected": "월별실적!B4 에 1077 만 쓴다. 다른 셀/시트 초기화·삭제 없음."
+    },
+    {
+      "id": "replace_deleted_logic",
+      "prompt": "기존 스킬을 삭제한 뒤 새로 요청하는 작업이야. 회사별요약 시트의 매출(B)열만 비워줘. 예전 작업 내용은 반복하지 마.",
+      "expected": "회사별요약 B열만 비운다. 과거 단계 재실행이나 전체 초기화 없음. 마진/마진율 수식은 그대로."
+    },
+    {
+      "id": "do_not_reset_workbook",
+      "prompt": "이번 요청 하나만 수행해. 워크북 전체 초기화나 기존 결과 삭제 없이, 월별실적 B4의 값만 1077로 바꿔줘.",
+      "expected": "월별실적!B4 값만 변경. UsedRange/Cells Clear 같은 전체 초기화 없음."
+    }
+  ]
+}

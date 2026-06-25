@@ -1,0 +1,53 @@
+{
+  "id": "formula_cell_value_copy_null",
+  "title": "수식 있는 셀 복사 시 결과가 null로 들어가는 오류: 값/수식 보존 복사",
+  "checks_by_mode": {
+    "vba": {
+      "risk_rules": [
+        "value_copy_not_null",
+        "no_activecell_offset",
+        "single_sheet_scope"
+      ],
+      "must_not_match": [
+        "\\.Value2?\\s*=\\s*Empty\\b",
+        "For\\s+Each\\s+\\w+\\s+In\\s+(?:ActiveWorkbook\\s*\\.\\s*)?Worksheets"
+      ],
+      "windows_only": [
+        "복사 결과 셀이 null/빈값이 아니라 실제 마진 값/수식을 담는지 Excel 확인."
+      ]
+    },
+    "python": {
+      "risk_rules": [
+        "value_copy_not_null",
+        "no_activecell_offset",
+        "single_sheet_scope"
+      ],
+      "must_not_match": [
+        "\\.Value2?\\s*=\\s*(?:None|Empty)\\b",
+        "for\\s+\\w+\\s+in\\s+[\\w.]+\\.(?:worksheets|sheetnames)\\b",
+        "\\.Copy\\s*\\(",
+        "\\.PasteSpecial\\b"
+      ],
+      "windows_only": [
+        "복사 결과 셀이 null/빈값이 아니라 실제 마진 값/수식을 담는지 Excel 확인."
+      ]
+    }
+  },
+  "variants": [
+    {
+      "id": "copy_formula_result_elsewhere",
+      "prompt": "회사별요약에서 마진이 들어있는 D4:D23 값을 같은 시트 G4:G23으로 옮겨줘. 옮긴 결과가 빈칸(null)이 되지 않게 실제 값이 들어가야 해.",
+      "expected": "G4:G23 에 D열 마진의 실제 계산값(또는 수식)이 들어간다. null/0 이 아니다. 원본 D열 수식은 손상되지 않는다."
+    },
+    {
+      "id": "move_block_keep_values",
+      "prompt": "회사별요약 B3:E23 영역을 같은 시트 H열 쪽으로 복사하는데, 마진/마진율 수식 셀의 계산 결과가 null로 들어가는 문제가 없게 해줘. 값과 서식이 그대로 보여야 해.",
+      "expected": "H 열 이후로 복제된 범위가 값+서식을 그대로 보여준다. 마진/마진율 자리가 null/빈값이 아니다."
+    },
+    {
+      "id": "paste_special_values",
+      "prompt": "회사별요약 합계행(24행)의 SUM/AVERAGE 결과를 같은 시트 다른 위치에 '값으로' 붙여넣어줘. 수식 결과 숫자가 그대로 들어가야 하고 null이면 안 돼.",
+      "expected": "대상 위치에 24행 합계의 숫자 결과가 값으로 들어간다(수식 아님, null 아님). 원본 24행 수식은 그대로 유지."
+    }
+  ]
+}

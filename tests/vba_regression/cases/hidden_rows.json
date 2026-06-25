@@ -1,0 +1,55 @@
+{
+  "id": "hidden_rows",
+  "title": "행 숨김 처리(데이터 보존): 특정 행을 삭제하지 말고 row_dimensions.hidden 으로 숨김",
+  "checks_by_mode": {
+    "python": {
+      "risk_rules": ["hide_not_delete", "single_sheet_scope", "no_activecell_offset"],
+      "must_match_any": [
+        {
+          "label": "행 숨김(openpyxl row_dimensions.hidden)",
+          "patterns": [
+            "\\.row_dimensions\\s*\\[[^\\]]+\\]\\s*\\.\\s*hidden\\s*=\\s*True"
+          ]
+        }
+      ],
+      "must_not_match": [
+        "\\.delete_rows\\s*\\(",
+        "\\.Value\\s*=\\s*(?:None|\"\"|'')",
+        "for\\s+\\w+\\s+in\\s+[\\w.]+\\.(?:worksheets|sheetnames)\\b"
+      ]
+    }
+  },
+  "variants": [
+    {
+      "id": "hide_two_company_rows",
+      "prompt": "회사별요약에서 4행(ABC통신)과 5행(글로벌네트워크)을 화면에서 안 보이게 숨겨줘. 삭제하지 말고 숨김 처리만.",
+      "expected": "회사별요약 4·5행이 row_dimensions[..].hidden=True 로 숨겨진다. 행 데이터(회사명/마진 수식)는 삭제되지 않고 그대로.",
+      "assert": {
+        "assert_sheet": "회사별요약",
+        "expect_hidden_rows": [4, 5],
+        "expect_formula_preserved": ["회사별요약!D4", "회사별요약!D5"],
+        "expect_cells": {"회사별요약!A4": {"text": "ABC통신"}}
+      }
+    },
+    {
+      "id": "hide_summary_row",
+      "prompt": "회사별요약 합계/평균 행(24행)을 잠깐 숨겨줘. 지우면 안 되고 숨기기만.",
+      "expected": "24행이 hidden=True 로 숨겨진다. SUM/AVERAGE 수식은 그대로 보존.",
+      "assert": {
+        "assert_sheet": "회사별요약",
+        "expect_hidden_rows": [24],
+        "expect_formula_preserved": ["회사별요약!B24", "회사별요약!E24"]
+      }
+    },
+    {
+      "id": "hide_not_delete_emphasis",
+      "prompt": "회사별요약 6행을 숨겨줘. delete_rows 같은 삭제는 절대 쓰지 말고 행 숨김만 해.",
+      "expected": "6행이 hidden=True. delete_rows 미사용, 값/수식 불변.",
+      "assert": {
+        "assert_sheet": "회사별요약",
+        "expect_hidden_rows": [6],
+        "expect_no_change_to": ["회사별요약!A6", "회사별요약!D6"]
+      }
+    }
+  ]
+}
