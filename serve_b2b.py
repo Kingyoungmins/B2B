@@ -355,6 +355,33 @@ def cleanup_backend_runtime_files():
         pass
 
 
+def _other_b2b_backend_running():
+    """현재 프로세스 외 다른 B2B 백엔드(B2B_Server.exe 또는 serve_b2b.py python)가 살아있는지.
+    동시 백엔드(이중 실행/강제재시작 잔존)가 있으면 그 백엔드의 작업복사본을 우리가 지우면 안 되므로 가드용."""
+    try:
+        import psutil as _ps
+    except Exception:
+        return False
+    try:
+        me = os.getpid()
+        for p in _ps.process_iter(["pid", "name", "cmdline"]):
+            try:
+                if p.info.get("pid") == me:
+                    continue
+                nm = (p.info.get("name") or "").lower()
+                if nm == "b2b_server.exe":
+                    return True
+                if nm.startswith("python") or nm.startswith("pythonw"):
+                    cl = " ".join(p.info.get("cmdline") or [])
+                    if "serve_b2b" in cl:
+                        return True
+            except Exception:
+                continue
+    except Exception:
+        return False
+    return False
+
+
 def cleanup_stale_temp_artifacts(min_age_seconds=300, excel_diag_max_age_seconds=86400, mei_max_age_seconds=86400):
     """[디스크 누수 방지] 앱 시작 시 이전 실행(크래시/강제종료 포함)이 남긴 임시 작업물을 정리한다.
     새 프로세스라 활성 세션이 아직 없어 안전하다(종료-시 삭제보다 기능 리스크가 낮고, 매 시작마다 정리되므로
@@ -377,6 +404,9 @@ def cleanup_stale_temp_artifacts(min_age_seconds=300, excel_diag_max_age_seconds
         except Exception:
             self_mei = ""
         stats = {"dirs": 0, "files": 0, "bytes": 0, "failed": 0}
+        # [동시 백엔드 보호] 다른 B2B 백엔드가 살아있으면 그 백엔드의 작업복사본/단일임시/_MEI 를 우리가 지우면
+        # 그 세션이 깨진다(이중 실행/강제재시작 잔존 시). 이 경우 위험한 정리는 건너뛰고 Excel 진단 로그만 정리.
+        other_backend = _other_b2b_backend_running()
 
         def _age_ok(p, min_age):
             try:
@@ -409,7 +439,7 @@ def cleanup_stale_temp_artifacts(min_age_seconds=300, excel_diag_max_age_seconds
                 stats["failed"] += 1
 
         try:
-            if BACKEND_DIR.exists():
+            if (not other_backend) and BACKEND_DIR.exists():
                 for child in BACKEND_DIR.iterdir():
                     if child.name == "auto_backups":
                         continue
@@ -418,7 +448,7 @@ def cleanup_stale_temp_artifacts(min_age_seconds=300, excel_diag_max_age_seconds
         except Exception:
             pass
 
-        for pat in ("b2b_isopipe_*", "b2b_replace_*", "B2B_ver*_single_*", "b2b_nametest_*", "b2b_realtest_*"):
+        for pat in (() if other_backend else ("b2b_isopipe_*", "b2b_replace_*", "B2B_ver*_single_*", "b2b_nametest_*", "b2b_realtest_*")):
             try:
                 for d in temp.glob(pat):
                     if _age_ok(d, min_age_seconds):
@@ -427,7 +457,7 @@ def cleanup_stale_temp_artifacts(min_age_seconds=300, excel_diag_max_age_seconds
                 pass
 
         try:
-            for d in temp.glob("_MEI*"):
+            for d in (temp.glob("_MEI*") if not other_backend else []):
                 if d.is_dir() and _age_ok(d, mei_max_age_seconds):
                     _rm(d)
         except Exception:
@@ -452,7 +482,8 @@ def cleanup_stale_temp_artifacts(min_age_seconds=300, excel_diag_max_age_seconds
 
         try:
             _vba_trace("startup.temp_cleanup", removedDirs=stats["dirs"], removedFiles=stats["files"],
-                       freedMb=round(stats["bytes"] / (1024 * 1024), 1), failed=stats["failed"])
+                       freedMb=round(stats["bytes"] / (1024 * 1024), 1), failed=stats["failed"],
+                       otherBackend=bool(other_backend))
         except Exception:
             pass
         return stats
