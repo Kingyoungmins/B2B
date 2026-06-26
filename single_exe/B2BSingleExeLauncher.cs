@@ -99,19 +99,12 @@ namespace B2BSingleExe
             try
             {
                 string temp = Path.GetTempPath();
-                foreach (string dir in Directory.GetDirectories(temp, "B2B_ver0.5.14_single_*"))
+                // 이전 실행이 남긴 모든 버전의 단일 exe 임시 폴더 정리. 이 함수는 현재 실행 폴더를 만들기 '전'에
+                // 불리므로 여기 보이는 건 전부 죽은 실행의 잔재다. 사용 중(동시 실행 등)이면 잠겨서 예외 → 자연 스킵.
+                // (예전엔 1일 임계 + 자기 버전만 봐서 잔재가 수십 개씩 쌓였다.)
+                foreach (string dir in Directory.GetDirectories(temp, "B2B_ver*_single_*"))
                 {
-                    try
-                    {
-                        DirectoryInfo info = new DirectoryInfo(dir);
-                        if (DateTime.UtcNow - info.LastWriteTimeUtc > TimeSpan.FromDays(1))
-                        {
-                            info.Delete(true);
-                        }
-                    }
-                    catch
-                    {
-                    }
+                    try { Directory.Delete(dir, true); } catch { }
                 }
             }
             catch
@@ -121,12 +114,20 @@ namespace B2BSingleExe
 
         private static void CleanupExtract(string dir)
         {
-            try
+            // 내부 앱(네이티브 호스트)이 막 종료해도 자식(B2B_Server.exe 등) 핸들 해제에 잠깐 시간이 걸려
+            // 즉시 삭제가 실패할 수 있다. 짧게 재시도해 종료 직후 폴더가 남지 않게 한다.
+            for (int attempt = 0; attempt < 8; attempt++)
             {
-                if (Directory.Exists(dir)) Directory.Delete(dir, true);
-            }
-            catch
-            {
+                try
+                {
+                    if (!Directory.Exists(dir)) return;
+                    Directory.Delete(dir, true);
+                    return;
+                }
+                catch
+                {
+                    try { System.Threading.Thread.Sleep(400); } catch { }
+                }
             }
         }
 
