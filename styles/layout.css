@@ -1,0 +1,78 @@
+﻿  /* ============ MENU DRAWER ============ */
+  .menu-drawer {
+    position: fixed;
+    top: 0; left: 0; bottom: 0;
+    width: 0;
+    overflow: hidden;
+    background: var(--card);
+    border-right: 1px solid var(--border);
+    box-shadow: var(--shadow-lg);
+    z-index: 2500;
+    transition: width 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .menu-drawer.open { width: 272px; }
+  .menu-drawer-inner { width: 272px; height: 100%; display: flex; flex-direction: column; }
+  .menu-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 18px 20px;
+    font-weight: 700;
+    font-size: 14px;
+    border-bottom: 1px solid var(--border);
+  }
+  .menu-list { padding: 12px; display: flex; flex-direction: column; gap: 4px; }
+  .menu-item {
+    display: flex; align-items: center; gap: 12px;
+    padding: 12px 14px;
+    border: 1px solid transparent;
+    border-radius: var(--r-md);
+    background: transparent;
+    cursor: pointer;
+    color: var(--ink-500);
+    font-size: 13px;
+    font-weight: 500;
+    font-family: inherit;
+    transition: all 0.15s;
+  }
+  .menu-item:hover { background: var(--ink-50); color: var(--ink-900); }
+  .menu-item.active {
+    background: var(--grad-soft);
+    color: var(--m-700);
+    font-weight: 700;
+  }
+  .menu-scrim {
+    position: fixed; inset: 0;
+    background: rgba(15,10,30,0.35);
+    backdrop-filter: blur(2px);
+    z-index: 2400;
+    display: none;
+  }
+  .menu-scrim.show { display: block; }
+
+  /* ============ RESIZER ============ */
+  .resizer {
+    width: 8px;
+    background: transparent;
+    cursor: col-resize;
+    flex-shrink: 0;
+    position: relative;
+    border-radius: 4px;
+    transition: background 0.15s;
+  }
+  .resizer::before {
+    content: "";
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    width: 3px; height: 36px;
+    background: var(--ink-200);
+    border-radius: 999px;
+    transition: background 0.15s, height 0.15s;
+  }
+  .resizer:hover::before,
+  .resizer.dragging::before {
+    background: var(--m-500);
+    height: 52px;
+  }
+  body.resizing { cursor: col-resize !important; user-select: none !important; }
+  body.resizing iframe, body.resizing * { pointer-events: none; }
+  body.resizing .resizer { pointer-events: auto; }

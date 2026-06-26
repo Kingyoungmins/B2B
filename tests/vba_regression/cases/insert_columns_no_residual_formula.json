@@ -1,0 +1,71 @@
+{
+  "id": "insert_columns_no_residual_formula",
+  "title": "열 삽입 시 밀려난 셀의 수식이 잔존/중복 생성되는 오류: 전체 열 삽입으로 참조 보정",
+  "checks_by_mode": {
+    "vba": {
+      "risk_rules": [
+        "insert_no_residual_formula",
+        "no_activecell_offset",
+        "single_sheet_scope"
+      ],
+      "must_match_any": [
+        {
+          "label": "전체 열 삽입",
+          "patterns": [
+            "\\.Columns\\s*\\(\\s*[\\\"'][A-Z]+(?::[A-Z]+)?[\\\"']\\s*\\)\\s*\\.\\s*Insert\\b",
+            "\\.EntireColumn\\s*\\.\\s*Insert\\b"
+          ]
+        }
+      ],
+      "must_not_match": [
+        "\\.Range\\s*\\(\\s*\\.Cells\\s*\\([^)]*\\)\\s*,\\s*\\.Cells\\s*\\([^)]*\\)\\s*\\)\\.Insert\\b",
+        "\\.Formula(?:R1C1)?\\s*=\\s*[\\\"']=",
+        "For\\s+Each\\s+\\w+\\s+In\\s+(?:ActiveWorkbook\\s*\\.\\s*)?Worksheets"
+      ],
+      "windows_only": [
+        "회사별요약 A열 앞 6개 빈 열이 삽입되고 마진/마진율 수식 참조가 Excel 방식으로 자동 보정되며 새 열엔 수식이 없는지 확인."
+      ]
+    },
+    "python": {
+      "risk_rules": [
+        "insert_no_residual_formula",
+        "no_activecell_offset",
+        "single_sheet_scope"
+      ],
+      "must_match_any": [
+        {
+          "label": "전체 열 삽입",
+          "patterns": [
+            "\\.insert_cols\\s*\\("
+          ]
+        }
+      ],
+      "must_not_match": [
+        "\\.Value\\s*=\\s*[\\\"']=",
+        "for\\s+\\w+\\s+in\\s+[\\w.]+\\.(?:worksheets|sheetnames)\\b",
+        "\\.Copy\\s*\\(",
+        "\\.PasteSpecial\\b"
+      ],
+      "windows_only": [
+        "회사별요약 A열 앞 6개 빈 열이 삽입되고 마진/마진율 수식 참조가 Excel 방식으로 자동 보정되며 새 열엔 수식이 없는지 확인."
+      ]
+    }
+  },
+  "variants": [
+    {
+      "id": "insert_six_columns_front",
+      "prompt": "회사별요약 기존 데이터 앞(A열 앞)에 빈 열 6개를 삽입해줘. 옆으로 밀려난 마진/마진율 수식이 잔존하거나 새 수식이 잘못 생기지 않게, 전체 열 삽입으로 참조가 Excel 방식으로 자동 보정되게 해.",
+      "expected": "A열 앞에 빈 열 6개가 EntireColumn/Columns Insert 로 삽입되어 마진/마진율 수식 참조가 자동 보정된다. 삽입된 6개 열엔 수식이 없다."
+    },
+    {
+      "id": "insert_columns_no_new_formula",
+      "prompt": "회사별요약 맨 앞에 열 몇 개를 끼워넣되 그 새 열에는 수식을 넣지 마. 기존 마진/마진율 수식이 밀리면서 중복되거나 깨지면 안 돼.",
+      "expected": "맨 앞에 전체 열 삽입. 새 열은 비어 있고(수식 없음), 기존 D/E 수식은 자동 보정만 되고 중복 생성 없음."
+    },
+    {
+      "id": "insert_blank_columns_preserve",
+      "prompt": "회사별요약 A열 앞에 빈 열들을 삽입해줘. 기존 마진/마진율 수식 참조는 그대로 유지되어야 하고, 삽입된 빈 열에 옛날 수식이 남아있으면 안 돼.",
+      "expected": "A열 앞 전체 열 삽입으로 수식 참조 보존. 삽입 열엔 잔존 수식 없음."
+    }
+  ]
+}

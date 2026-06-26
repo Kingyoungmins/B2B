@@ -1,0 +1,136 @@
+{
+  "id": "multiturn_context",
+  "title": "멀티턴 맥락 처리: 분리 / 피드백 개선 / 실패 후 전환",
+  "checks_by_mode": {
+    "vba": {
+      "windows_only": [
+        "마지막 턴이 시나리오 의도대로 동작하는지(분리/개선/전환) 확인."
+      ]
+    },
+    "python": {
+      "windows_only": [
+        "마지막 턴이 시나리오 의도대로 동작하는지(분리/개선/전환) 확인."
+      ]
+    }
+  },
+  "variants": [
+    {
+      "id": "separate_unrelated_task",
+      "turns": [
+        {
+          "prompt": "회사별요약 시트의 매출(B)열에 매출 파일 기준 회사별 매출 합계를 채워줘."
+        },
+        {
+          "prompt": "원가 시트에서 상품별 단가 평균을 구해줘.",
+          "expected": "원가 시트의 상품별 단가 평균만 계산한다. 회사별요약 B열(매출)이나 매출 파일은 다시 건드리지 않는다.",
+          "checks_by_mode": {
+            "vba": {
+              "risk_rules": [
+                "no_activecell_offset"
+              ],
+              "must_not_match": [
+                "회사별요약",
+                "\\.Range\\s*\\(\\s*[\\\"']B4",
+                "For\\s+Each\\s+\\w+\\s+In\\s+(?:ActiveWorkbook\\s*\\.\\s*)?Worksheets"
+              ]
+            },
+            "python": {
+              "risk_rules": [
+                "no_activecell_offset"
+              ],
+              "must_not_match": [
+                "회사별요약",
+                "\\.Range\\s*\\(\\s*[\\\"']B4",
+                "for\\s+\\w+\\s+in\\s+[\\w.]+\\.(?:worksheets|sheetnames)\\b"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "feedback_refines_prior",
+      "turns": [
+        {
+          "prompt": "회사별요약 시트의 매출(B)열에 매출 파일 기준 회사별 매출 합계를 채워줘."
+        },
+        {
+          "prompt": "방금 채운 매출(B)열이 일부 회사에서 비어 보여. 회사명이 정확히 안 맞아서 그런 것 같으니 공백·괄호를 무시하고 다시 매칭해서 B열을 채워줘.",
+          "expected": "새 작업이 아니라 직전 '매출 B열 채우기'의 개선으로 인지한다. 회사명 정규화(공백/괄호 제거 등)를 적용해 회사별요약 B열을 다시 채운다. 마진/마진율 수식은 보존.",
+          "checks_by_mode": {
+            "vba": {
+              "risk_rules": [
+                "no_activecell_offset"
+              ],
+              "must_match_any": [
+                {
+                  "label": "회사별요약 B열 대상 + 회사명 정규화",
+                  "patterns": [
+                    "(?:Trim|Replace|LCase|UCase)\\s*\\("
+                  ]
+                }
+              ],
+              "must_not_match": [
+                "\\.UsedRange\\s*\\.\\s*Value\\s*=",
+                "For\\s+Each\\s+\\w+\\s+In\\s+(?:ActiveWorkbook\\s*\\.\\s*)?Worksheets"
+              ]
+            },
+            "python": {
+              "risk_rules": [
+                "no_activecell_offset"
+              ],
+              "must_match_any": [
+                {
+                  "label": "회사명 정규화(공백/괄호 무시 매칭)",
+                  "patterns": [
+                    "(?:\\.strip|\\.replace|\\.lower|\\.upper|ctx\\.normalize)\\s*\\(",
+                    "\\bre\\.(?:sub|match|search)\\s*\\("
+                  ]
+                }
+              ],
+              "must_not_match": [
+                "\\.Copy\\s*\\(",
+                "for\\s+\\w+\\s+in\\s+[\\w.]+\\.(?:worksheets|sheetnames)\\b"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "report_failure_then_do_next",
+      "turns": [
+        {
+          "prompt": "'당월매출(통합)' 시트의 매출을 회사별요약에 합쳐줘.",
+          "inject_assistant": "요청하신 '당월매출(통합)' 시트를 워크북에서 찾지 못해 작업을 완료하지 못했습니다. (런타임 오류 9: 첨자가 범위를 벗어났습니다 / Excel 1004) 시트 이름을 확인해 주세요."
+        },
+        {
+          "prompt": "그건 됐고, 원가 시트에서 회사별 원가 합계를 회사별요약 원가(C)열에 채워줘.",
+          "expected": "마지막 답은 회사별요약 C열에 원가 합계를 채우는 코드에 집중한다. 실패했던 '당월매출(통합)' 작업을 조용히 재시도하거나 끌어오지 않는다. 마진/마진율 수식 보존.",
+          "checks_by_mode": {
+            "vba": {
+              "risk_rules": [
+                "no_activecell_offset",
+                "single_sheet_scope"
+              ],
+              "must_not_match": [
+                "당월매출",
+                "For\\s+Each\\s+\\w+\\s+In\\s+(?:ActiveWorkbook\\s*\\.\\s*)?Worksheets"
+              ]
+            },
+            "python": {
+              "risk_rules": [
+                "no_activecell_offset",
+                "single_sheet_scope"
+              ],
+              "must_not_match": [
+                "당월매출",
+                "for\\s+\\w+\\s+in\\s+[\\w.]+\\.(?:worksheets|sheetnames)\\b"
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,68 @@
+// 라우팅 패치 검증: @멘션(파일명/시트명) 키워드 충돌 제거 후 동작 + 회귀.
+const fs = require("fs"), path = require("path");
+const src = fs.readFileSync(path.join(__dirname, "..", "scripts", "chat-ui.js"), "utf8");
+const s = src.indexOf("function userExplicitlyRequestsVba");
+const pIdx = src.indexOf("function shouldRouteRequestToPython");
+const after = src.indexOf("function numericArithmeticIntent", pIdx + 10);
+let block = src.slice(s, after);
+block += "\nglobalThis.R = { vba: shouldRouteRequestToVba, py: shouldRouteRequestToPython, simple: shouldRouteSimpleStructureEditToPython, conditional: conditionalRowDeleteIntent, rangeCalc: simpleRangeArithmeticIntent };";
+eval(block);
+const R = globalThis.R;
+
+let pass = 0, fail = 0;
+const check = (n, c) => { (c ? pass++ : fail++); console.log((c ? " OK  " : "FAIL ") + n); };
+
+// 1) 신고된 케이스: 파일명에 'LG작성' → 이제 Python COM 으로 라우팅돼야 함(수정 핵심)
+const reported = '선택 범위: @범위[output_HCN대사용_영총.사지.LG유플러스 정산내역_2026년03월_LG작성.xlsx/SO사업자별요금!H90:H104] 셀 삭제';
+check("[수정] 신고 케이스 simple→Python TRUE", R.simple(reported) === true);
+check("[수정] 신고 케이스 routeVba FALSE", R.vba(reported) === false);
+check("[수정] 신고 케이스 routePython TRUE", R.py(reported) === true);
+
+// 2) 파일명에 '복사본' 들어간 단순 삭제도 Python (키워드 충돌 일반 해결)
+const copyName = '@범위[output_복사본_정산.xlsx/Sheet1!A1:A10] 셀 삭제';
+check("파일명 '복사본'+단순삭제 → simple TRUE", R.simple(copyName) === true);
+check("파일명 '복사본'+단순삭제 → routeVba FALSE", R.vba(copyName) === false);
+
+// 3) [2026-06-23 변경] 피벗/크로스탭은 ctx.pivot(Python) 결정적 처리로 라우팅(손코딩 VBA 폐기).
+const pivot = '@범위[input.xlsx/매출!A1:D100] 지점별 매출 합계를 피벗으로 만들어줘';
+check("[변경] 피벗 요청 → routeVba FALSE", R.vba(pivot) === false);
+check("[변경] 피벗 요청 → routePython TRUE", R.py(pivot) === true);
+
+// 4) [2026-06-23 갱신] 시트복사는 같은파일·교차파일 모두 Python(ctx.copy_sheet). ctx.book 이 파일명 공백을
+//    정규화 매칭하므로 교차파일도 동작(VBA Workbooks() 정확매칭은 모델 공백삽입에 실패).
+const crossCopy = '@시트[a.xlsx/Sheet1] 시트 전체를 다른 파일로 복사해줘';
+check("[변경] 교차파일 시트복사 → routeVba FALSE", R.vba(crossCopy) === false);
+check("[변경] 교차파일 시트복사 → routePython TRUE", R.py(crossCopy) === true);
+
+// 5) 회귀: 명시적 VBA 요청은 VBA
+check("[회귀] 'vba로 ... 지워줘' → routeVba TRUE", R.vba('vba로 @범위[a.xlsx/S!A1:A5] 지워줘') === true);
+
+// 6) 회귀: 멘션 없는 '선택 범위 셀 삭제' → Python
+check("[회귀] '선택 범위 셀 삭제' → simple TRUE", R.simple('선택 범위 셀 삭제') === true);
+
+// 7) 회귀: 단순 삭제가 아니어도(매칭+합산) 파일명 무관하게 VBA/복합 라우팅 유지
+const complex = '@범위[a.xlsx/S!A1:A100] 가입번호가 일치하는 행의 금액을 합산해서 @범위[b.xlsx/S!H:H] 에 작성';
+check("[회귀] 매칭+합산 복합요청은 simple FALSE", R.simple(complex) === false);
+check("[회귀] 매칭+합산 복합요청은 routePython FALSE", R.py(complex) === false);
+
+// 8) regression: conditional duplicate row deletion must go to VBA, not Python COM.
+const duplicateDelete = "\u0045\uc5f4 \u004d\u0056\u004e\u004f\uc0c1\ud488\uba85\uc5d0\uc11c '\uc548\uc804\uc81c\uc77c'\ub9cc \u0054\uc5f4 '\u0045\u0049\u0044' \uc911\ubcf5\uac12\uc81c\uac70\ud574. \uc911\ubcf5\uac12 \uc81c\uac70\ud560\ub54c \ubc29\ubc95\uc740 \uc704\uc5d0 \uc788\ub294 \uac12\ubd80\ud130 \uc9c0\uc6cc. \ub300\uc2e0 \uc218\ub0a9\uae08\uc561\uc774 1 \uc774\uc0c1\uc778\uac70\ub294 \uc9c0\uc6b0\uba74 \uc548\ub3fc";
+check("[regression] conditional duplicate row delete -> routeVba TRUE", R.vba(duplicateDelete) === true);
+check("[regression] conditional duplicate row delete -> routePython FALSE", R.py(duplicateDelete) === false);
+check("[regression] conditional duplicate row delete -> simple FALSE", R.simple(duplicateDelete) === false);
+
+// 9) regression: selected column + date condition + row delete must go to VBA, not ctx/Python.
+const conditionalRowDelete = "\uc120\ud0dd\ud55c \uc5f4\uc5d0\uc11c 20260403 \uc774\uc804\uc774\uba74 \ud574\ub2f9 \ud589 \uc0ad\uc81c\ud574\uc918";
+check("[regression] conditional row delete intent detected", R.conditional(conditionalRowDelete) === true);
+check("[regression] conditional row delete -> routeVba TRUE", R.vba(conditionalRowDelete) === true);
+check("[regression] conditional row delete -> routePython FALSE", R.py(conditionalRowDelete) === false);
+check("[regression] conditional row delete -> simple FALSE", R.simple(conditionalRowDelete) === false);
+
+// 10) regression: simple same-sheet range arithmetic should use Python ctx to avoid VBA sheet-name spacing drift.
+const simpleRangeCalc = "\uc120\ud0dd \ubc94\uc704: @\ubc94\uc704[\uc5d4\uc528 \uc790\ub8cc_IDC_26\ub1443\uc6d4 \uc0ac\uc6a9\ub0b4\uc5ed_26\ub1444\uc6d4\uccad\uad6c\ubd84\uc2e0\uaddc\uc13c\ud130 2.xlsx/Network \uc774\uc6a9\ud604\ud669(26\ub1444\uc6d4)!E6:E16] \ub370\uc774\ud130\uac12\uc744 1000000\uc73c\ub85c \ub098\ub208\uac12\uc744 \uc120\ud0dd \ubc94\uc704: @\ubc94\uc704[\uc5d4\uc528 \uc790\ub8cc_IDC_26\ub1443\uc6d4 \uc0ac\uc6a9\ub0b4\uc5ed_26\ub1444\uc6d4\uccad\uad6c\ubd84\uc2e0\uaddc\uc13c\ud130 2.xlsx/Network \uc774\uc6a9\ud604\ud669(26\ub1444\uc6d4)!D6:D16]\uc5ec\uae30\uc5d0 \uc785\ub825\ud574\uc918";
+check("[regression] simple range arithmetic intent detected", R.rangeCalc(simpleRangeCalc) === true);
+check("[regression] simple range arithmetic -> routeVba FALSE", R.vba(simpleRangeCalc) === false);
+check("[regression] simple range arithmetic -> routePython TRUE", R.py(simpleRangeCalc) === true);
+
+console.log("\n=== RESULT: " + pass + " PASS / " + fail + " FAIL ===");
+process.exit(fail ? 2 : 0);

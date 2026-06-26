@@ -1,0 +1,51 @@
+{
+  "id": "column_move_values_null",
+  "title": "열 이동 시 헤더만 이동하고 값이 null로 오는 오류: 헤더+값 동반 이동",
+  "checks_by_mode": {
+    "vba": {
+      "risk_rules": [
+        "value_copy_not_null",
+        "no_activecell_offset",
+        "single_sheet_scope"
+      ],
+      "must_not_match": [
+        "For\\s+Each\\s+\\w+\\s+In\\s+(?:ActiveWorkbook\\s*\\.\\s*)?Worksheets"
+      ],
+      "windows_only": [
+        "이동된 열이 헤더와 실제 값을 함께 담고 null 이 아닌지 확인."
+      ]
+    },
+    "python": {
+      "risk_rules": [
+        "value_copy_not_null",
+        "no_activecell_offset",
+        "single_sheet_scope"
+      ],
+      "must_not_match": [
+        "for\\s+\\w+\\s+in\\s+[\\w.]+\\.(?:worksheets|sheetnames)\\b",
+        "\\.Copy\\s*\\(",
+        "\\.PasteSpecial\\b"
+      ],
+      "windows_only": [
+        "이동된 열이 헤더와 실제 값을 함께 담고 null 이 아닌지 확인."
+      ]
+    }
+  },
+  "variants": [
+    {
+      "id": "reorder_billing_columns",
+      "prompt": "매출 시트에서 금액(D)열을 건수(C)열 앞으로 옮겨줘. 헤더만 옮겨지고 값이 null로 비지 않게, 값까지 같이 이동해야 해.",
+      "expected": "금액 열이 건수 앞으로 이동하며 헤더와 1200행 값이 함께 따라온다. 빈칸/null 없음."
+    },
+    {
+      "id": "move_named_columns",
+      "prompt": "원가 시트의 '단가'와 '원가' 열 순서를 서로 바꿔줘. 값이 빠지지 않고 헤더와 데이터가 같이 이동해야 해.",
+      "expected": "단가↔원가 열이 자리 교환되며 각 열의 값이 헤더와 함께 이동한다. null 없음."
+    },
+    {
+      "id": "rearrange_keep_data",
+      "prompt": "회사별요약에서 원가(C)열을 매출(B)열 앞으로 재배치해줘. 마진/마진율 수식이 깨지지 않고, 값도 null 없이 따라와야 해.",
+      "expected": "C열이 B열 앞으로 이동하되 값이 함께 따라오고, 마진/마진율 수식 참조가 깨지지 않는다(가능하면 전체 열 이동으로 참조 보정)."
+    }
+  ]
+}

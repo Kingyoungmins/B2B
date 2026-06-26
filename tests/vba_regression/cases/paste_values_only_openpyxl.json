@@ -1,0 +1,42 @@
+{
+  "id": "paste_values_only_openpyxl",
+  "title": "값만 붙여넣기(openpyxl 재계산 없음): 수식 결과가 필요하면 Python으로 계산해 값 기입, 원본 수식 보존",
+  "checks_by_mode": {
+    "python": {
+      "risk_rules": ["value_copy_not_null", "single_sheet_scope", "no_activecell_offset"],
+      "must_not_match": [
+        "\\.Copy\\s*\\(",
+        "\\.PasteSpecial\\b",
+        "\\.Value2?\\s*=\\s*(?:None|Empty)\\b"
+      ]
+    }
+  },
+  "variants": [
+    {
+      "id": "write_count_total_value",
+      "prompt": "매출 시트 전체 건수 합계를 '값으로' 월별실적 B4에 적어줘. openpyxl은 수식을 재계산하지 않으니 합계는 직접 계산해서 숫자로 넣어. 수식 말고 값이어야 해.",
+      "expected": "월별실적!B4 에 매출 건수 합계(31139)가 숫자 값으로 들어간다(수식 아님, null 아님). 입력 파일/다른 수식은 불변.",
+      "assert": {
+        "expect_cells": {"월별실적!B4": {"value": 31139}},
+        "expect_no_change_to": ["회사별요약!B24"]
+      }
+    },
+    {
+      "id": "write_amount_total_value",
+      "prompt": "매출 금액 합계를 계산해서 그 결과 숫자만 월별실적 C4에 박아줘. 수식 필요 없고 값으로. 빈칸(null)이면 안 돼.",
+      "expected": "월별실적!C4 에 매출 금액 합계(3797128000)가 값으로 들어간다. null/수식 아님.",
+      "assert": {
+        "expect_cells": {"월별실적!C4": {"value": 3797128000}}
+      }
+    },
+    {
+      "id": "values_only_preserve_source_formula",
+      "prompt": "회사별요약 합계행(24행) 매출 합계를 '값으로' 월별실적 B5에 옮겨 적어줘. 단 회사별요약 24행의 SUM 수식 자체는 그대로 둬야 해. (openpyxl이라 그 SUM의 계산값은 직접 못 읽으니, 매출 시트 금액을 Python으로 합산해서 넣어.)",
+      "expected": "월별실적!B5 에 숫자 값이 들어가고, 회사별요약!B24 의 =SUM(B4:B23) 수식은 보존된다(값으로 덮이지 않음).",
+      "assert": {
+        "expect_formula_preserved": ["회사별요약!B24"],
+        "expect_cells": {"월별실적!B5": {"value": 3797128000, "approx": 0.0001}}
+      }
+    }
+  ]
+}

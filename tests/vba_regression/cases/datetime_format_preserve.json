@@ -1,0 +1,52 @@
+{
+  "id": "datetime_format_preserve",
+  "title": "날짜/시간 서식 값이 'false'로 출력되는 오류: 날짜/시간 값 보존",
+  "checks_by_mode": {
+    "vba": {
+      "risk_rules": [
+        "preserve_datetime",
+        "value_copy_not_null",
+        "no_activecell_offset"
+      ],
+      "must_not_match": [
+        "\\bCBool\\b",
+        "\\.Value2?\\s*=\\s*(?:True|False)\\b"
+      ],
+      "windows_only": [
+        "날짜/시간 셀이 'false'/True 가 아니라 원래 값+표시형식을 유지하는지 확인."
+      ]
+    },
+    "python": {
+      "risk_rules": [
+        "preserve_datetime",
+        "value_copy_not_null",
+        "no_activecell_offset"
+      ],
+      "must_not_match": [
+        "\\.Value2?\\s*=\\s*(?:True|False)\\b",
+        "\\.Copy\\s*\\(",
+        "\\.PasteSpecial\\b"
+      ],
+      "windows_only": [
+        "날짜/시간 셀이 'false'/True 가 아니라 원래 값+표시형식을 유지하는지 확인."
+      ]
+    }
+  },
+  "variants": [
+    {
+      "id": "copy_time_values",
+      "prompt": "고객정보 시트에서 날짜 형태 데이터를 다른 열로 옮길 때 'false'로 바뀌지 않게 값을 그대로 옮겨줘.",
+      "expected": "날짜 값이 boolean 으로 캐스팅되지 않고 원래 날짜 값/표시형식 그대로 복사된다."
+    },
+    {
+      "id": "preserve_date_on_load",
+      "prompt": "월별실적 시트에 월 라벨(1월~4월 등) 텍스트가 숫자/참거짓으로 깨지지 않게 그대로 유지해줘.",
+      "expected": "월 라벨이 원래 텍스트 그대로 유지된다. CBool/True·False 변환 없음."
+    },
+    {
+      "id": "datetime_no_boolean_cast",
+      "prompt": "데이터를 옮기되 날짜/시간 셀에 CBool 같은 불리언 변환을 절대 쓰지 마. 원래 값이 살아있어야 해.",
+      "expected": "어떤 날짜/시간 셀도 CBool 등으로 True/False 가 되지 않고 원래 값 유지."
+    }
+  ]
+}

@@ -1,0 +1,73 @@
+{
+  "id": "output_cell_target",
+  "title": "아웃풋셀 인식 오류: 지정 셀이 아닌 다른 셀에 결과값 출력 방지",
+  "checks_by_mode": {
+    "vba": {
+      "risk_rules": [
+        "explicit_output_cell",
+        "no_activecell_offset",
+        "single_sheet_scope"
+      ],
+      "must_match_any": [
+        {
+          "label": "월별실적!B4 명시 타깃",
+          "patterns": [
+            "\\.Range\\s*\\(\\s*[\\\"']B4[\\\"']\\s*\\)",
+            "\\.Cells\\s*\\(\\s*4\\s*,\\s*2\\s*\\)"
+          ]
+        }
+      ],
+      "must_not_match": [
+        "ActiveCell\\s*\\.\\s*Offset",
+        "Selection\\s*\\.\\s*Offset",
+        "\\.Range\\s*\\(\\s*[\\\"']A1[\\\"']\\s*\\)"
+      ],
+      "windows_only": [
+        "월별실적 시트 B4 에만 결과가 들어가고 인접 셀(B5/C4 등)은 불변인지 확인."
+      ]
+    },
+    "python": {
+      "risk_rules": [
+        "explicit_output_cell",
+        "no_activecell_offset",
+        "single_sheet_scope"
+      ],
+      "must_match_any": [
+        {
+          "label": "월별실적!B4 명시 타깃",
+          "patterns": [
+            "\\.Range\\s*\\(\\s*[\\\"']B4[\\\"']\\s*\\)",
+            "\\.Cells\\s*\\(\\s*4\\s*,\\s*2\\s*\\)"
+          ]
+        }
+      ],
+      "must_not_match": [
+        "\\.(?:End|Offset)\\s*\\(",
+        "\\.Range\\s*\\(\\s*[\\\"']A1[\\\"']\\s*\\)"
+      ],
+      "windows_only": [
+        "월별실적 시트 B4 에만 결과가 들어가고 인접 셀(B5/C4 등)은 불변인지 확인."
+      ]
+    }
+  },
+  "variants": [
+    {
+      "id": "selected_cell_here",
+      "prompt": "선택한 셀 여기에 1월 총 건수를 써줘.",
+      "exact_refs": [
+        "- 선택 셀: 파일 \"output_청구서_템플릿.xlsx\", 시트 \"월별실적\", 셀 \"B4\""
+      ],
+      "expected": "월별실적 시트 B4(1월 건수) 한 셀에만 값이 들어간다. 다른 셀은 불변."
+    },
+    {
+      "id": "explicit_sheet_address",
+      "prompt": "output_청구서_템플릿.xlsx 파일의 월별실적 시트 B4 셀에 1월 건수 합계를 출력해줘. 다른 셀은 건드리지 마.",
+      "expected": "월별실적!B4 한 셀에만 1월 건수 합계가 들어간다. D열 전월대비 수식 등 다른 셀은 불변."
+    },
+    {
+      "id": "avoid_nearby_cell",
+      "prompt": "월별실적 탭의 1월 건수 칸(B4)에만 값을 넣어줘. B5나 C4가 아니라 B4야.",
+      "expected": "월별실적!B4 에만 값. B5/C4 등 인접 셀에는 쓰지 않는다."
+    }
+  ]
+}
