@@ -355,6 +355,111 @@ def cleanup_backend_runtime_files():
         pass
 
 
+def cleanup_stale_temp_artifacts(min_age_seconds=300, excel_diag_max_age_seconds=86400, mei_max_age_seconds=86400):
+    """[디스크 누수 방지] 앱 시작 시 이전 실행(크래시/강제종료 포함)이 남긴 임시 작업물을 정리한다.
+    새 프로세스라 활성 세션이 아직 없어 안전하다(종료-시 삭제보다 기능 리스크가 낮고, 매 시작마다 정리되므로
+    누적이 한 실행분으로 한계가 잡힌다 = '재활용' 효과).
+    - BACKEND_DIR(b2b_backend_v044): live_*/prestep_*/excel_*/result_*/b2b_replace_*/uuid_*.xlsx 등 stale 작업물.
+      auto_backups(사용자 스킬 백업)는 보존.
+    - Temp 루트: b2b_isopipe_*/b2b_replace_*/B2B_ver*_single_*/b2b_*test_* (현재 실행 폴더는 보존).
+    - PyInstaller _MEI*: 충분히 오래된 것만(현재 _MEIPASS 제외) — 타 앱 오인삭제 최소화 위해 보수적 나이.
+    - Excel 진단 로그(Temp/Diagnostics/EXCEL): 오래된 파일(가장 큰 누적원).
+    동시 실행(드묾) 보호: min_age_seconds 이내 최근 항목은 건너뛴다."""
+    try:
+        now = time.time()
+        temp = Path(tempfile.gettempdir())
+        try:
+            self_exe = str(Path(sys.executable).resolve()).lower()
+        except Exception:
+            self_exe = ""
+        try:
+            self_mei = str(Path(getattr(sys, "_MEIPASS", "") or ".").resolve()).lower()
+        except Exception:
+            self_mei = ""
+        stats = {"dirs": 0, "files": 0, "bytes": 0, "failed": 0}
+
+        def _age_ok(p, min_age):
+            try:
+                return (now - p.stat().st_mtime) >= float(min_age)
+            except Exception:
+                return False
+
+        def _is_self(p):
+            try:
+                pr = str(p.resolve()).lower()
+            except Exception:
+                return False
+            return bool((self_exe and self_exe.startswith(pr)) or (self_mei and self_mei == pr) or (self_mei and self_mei.startswith(pr)))
+
+        def _rm(p):
+            if _is_self(p):
+                return
+            try:
+                if p.is_dir():
+                    shutil.rmtree(p, ignore_errors=True)
+                    stats["dirs"] += 1
+                elif p.is_file():
+                    try:
+                        stats["bytes"] += p.stat().st_size
+                    except Exception:
+                        pass
+                    p.unlink()
+                    stats["files"] += 1
+            except Exception:
+                stats["failed"] += 1
+
+        try:
+            if BACKEND_DIR.exists():
+                for child in BACKEND_DIR.iterdir():
+                    if child.name == "auto_backups":
+                        continue
+                    if _age_ok(child, min_age_seconds):
+                        _rm(child)
+        except Exception:
+            pass
+
+        for pat in ("b2b_isopipe_*", "b2b_replace_*", "B2B_ver*_single_*", "b2b_nametest_*", "b2b_realtest_*"):
+            try:
+                for d in temp.glob(pat):
+                    if _age_ok(d, min_age_seconds):
+                        _rm(d)
+            except Exception:
+                pass
+
+        try:
+            for d in temp.glob("_MEI*"):
+                if d.is_dir() and _age_ok(d, mei_max_age_seconds):
+                    _rm(d)
+        except Exception:
+            pass
+
+        try:
+            diag = temp / "Diagnostics" / "EXCEL"
+            if diag.exists():
+                for f in diag.rglob("*"):
+                    try:
+                        if f.is_file() and (now - f.stat().st_mtime) >= float(excel_diag_max_age_seconds):
+                            try:
+                                stats["bytes"] += f.stat().st_size
+                            except Exception:
+                                pass
+                            f.unlink()
+                            stats["files"] += 1
+                    except Exception:
+                        stats["failed"] += 1
+        except Exception:
+            pass
+
+        try:
+            _vba_trace("startup.temp_cleanup", removedDirs=stats["dirs"], removedFiles=stats["files"],
+                       freedMb=round(stats["bytes"] / (1024 * 1024), 1), failed=stats["failed"])
+        except Exception:
+            pass
+        return stats
+    except Exception:
+        return None
+
+
 def excel_available():
     return os.name == "nt" and pythoncom is not None and win32com is not None
 
@@ -15224,6 +15329,12 @@ def run_backend_pipeline_payload(payload, job_id=None):
 
 
 if __name__ == "__main__":
+    # [디스크 누수 방지] 시작 시 이전 실행 잔재(b2b_backend_v044 작업복사본/단일exe 임시/_MEI/Excel 진단로그) 정리.
+    # 데몬 스레드라 서버 기동을 지연시키지 않는다. 새 프로세스라 활성 세션이 없어 안전.
+    try:
+        threading.Thread(target=cleanup_stale_temp_artifacts, name="b2b-temp-cleanup", daemon=True).start()
+    except Exception:
+        pass
     start_runtime_maintenance_threads()
     with B2BThreadingTCPServer((HOST, PORT), B2BHandler) as httpd:
         print(f"B2B serving on http://{HOST}:{PORT}")
