@@ -452,7 +452,7 @@ def cleanup_stale_temp_artifacts(min_age_seconds=300, excel_diag_max_age_seconds
             pass
 
         # 2) Temp 루트 B2B 임시 폴더
-        for pat in (() if other_backend else ("b2b_isopipe_*", "b2b_replace_*", "B2B_ver*_single_*", "b2b_nametest_*", "b2b_realtest_*")):
+        for pat in (() if other_backend else ("b2b_isopipe_*", "b2b_replace_*", "b2b_vba_runner_*", "b2b_freshprobe_*", "B2B_ver*_single_*", "b2b_nametest_*", "b2b_realtest_*")):
             try:
                 for d in temp.glob(pat):
                     if _age_ok(d, min_age_seconds):
