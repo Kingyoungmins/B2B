@@ -7,6 +7,8 @@
 import os, sys, time, tempfile, shutil
 from pathlib import Path
 
+_REAL_GETTEMPDIR = tempfile.gettempdir  # 패치 전 원본 보관(케이스2 mkdtemp 용)
+
 sys.path.insert(0, r"C:\Users\Admin\Desktop\KGM_git\B2B_ver0.5.14")
 import serve_b2b as S
 
@@ -45,6 +47,8 @@ mk_file(fake / "Diagnostics" / "EXCEL" / "log_NEW.txt", NEW)  # 보존
 # 진짜 함수가 fake temp 를 보도록 패치
 S.BACKEND_DIR = backend
 tempfile.gettempdir = (lambda _orig=str(fake): _orig)
+# 단독 백엔드 경로(정리 수행)를 검증한다 — 동시 백엔드 가드는 별도(아래 케이스2).
+S._other_b2b_backend_running = (lambda: False)
 
 stats = S.cleanup_stale_temp_artifacts(min_age_seconds=300, excel_diag_max_age_seconds=300, mei_max_age_seconds=300)
 
@@ -71,5 +75,28 @@ for name, ok in checks:
     if not ok: fails += 1
 print("\nstats =", stats)
 shutil.rmtree(fake, ignore_errors=True)
+
+# ── 케이스 2: 동시 백엔드 가드 — other_backend=True 면 b2b_backend/single 보존, Excel 진단만 정리 ──
+tempfile.gettempdir = _REAL_GETTEMPDIR  # 케이스1 패치 해제(실제 temp 에 fake2 생성)
+fake2 = Path(tempfile.mkdtemp(prefix="b2b_cleanuptest2_"))
+backend2 = fake2 / "b2b_backend_v044"; backend2.mkdir(parents=True, exist_ok=True)
+mk_dir(backend2 / "live_OLD2", OLD)
+mk_dir(fake2 / "B2B_ver0.5.14_single_OLD2", OLD)
+mk_file(fake2 / "Diagnostics" / "EXCEL" / "log_OLD2.txt", OLD)
+S.BACKEND_DIR = backend2
+tempfile.gettempdir = (lambda _orig=str(fake2): _orig)
+S._other_b2b_backend_running = (lambda: True)   # 동시 백엔드 있음 가정
+S.cleanup_stale_temp_artifacts(min_age_seconds=300, excel_diag_max_age_seconds=300, mei_max_age_seconds=300)
+checks2 = [
+    ("[가드] 다른 백엔드 있으면 live_ 작업복사본 보존", (backend2 / "live_OLD2").exists()),
+    ("[가드] 다른 백엔드 있으면 single 임시 보존", (fake2 / "B2B_ver0.5.14_single_OLD2").exists()),
+    ("[가드] 그래도 Excel 진단 로그는 정리", not (fake2 / "Diagnostics" / "EXCEL" / "log_OLD2.txt").exists()),
+]
+for name, ok in checks2:
+    print((" OK  " if ok else "FAIL ") + name)
+    if not ok: fails += 1
+checks = checks + checks2
+shutil.rmtree(fake2, ignore_errors=True)
+
 print(f"\n=== RESULT: {len(checks)-fails}/{len(checks)} PASS ===")
 sys.exit(1 if fails else 0)
