@@ -65,6 +65,7 @@ PROXY_RETRY_BASE_DELAY = float(os.environ.get("B2B_PROXY_RETRY_BASE_DELAY", "0.6
 BACKEND_DIR = Path(tempfile.gettempdir()) / "b2b_backend_v044"
 WORKBOOKS = {}
 RESULTS = {}
+PIPELINE_PROGRESS = {}  # excelId -> {current, total, ts} : 전체실행 진행률(클라 폴링용, 락 불필요)
 DIFFS = {}
 PIPELINE_STEP_SNAPSHOTS = {}
 PIPELINE_JOBS = {}
@@ -890,6 +891,9 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
         if self.path.startswith("/api/pipeline/status/"):
             self.handle_pipeline_status()
             return
+        if self.path.startswith("/api/excel/pipeline-progress"):
+            self.handle_pipeline_progress()
+            return
         if self.path.startswith("/api/diff/"):
             self.handle_cached_diff()
             return
@@ -1182,6 +1186,16 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
                 job["cancelRequested"] = True
                 job["stage"] = "중단 요청됨"
         self.send_json({"ok": True, "jobId": job_id, "cancelRequested": job is not None})
+
+    def handle_pipeline_progress(self):
+        # 전체실행(격리 batch) 진행률 — 락 없이 PIPELINE_PROGRESS 만 읽어 즉시 응답(배치가 EXCEL_LOCK 쥔 동안에도 OK).
+        try:
+            qs = parse_qs(urlparse(self.path).query)
+            excel_id = (qs.get("excelId") or [""])[0]
+        except Exception:
+            excel_id = ""
+        prog = PIPELINE_PROGRESS.get(excel_id) or {}
+        self.send_json({"ok": True, "current": int(prog.get("current") or 0), "total": int(prog.get("total") or 0)})
 
     def handle_pipeline_status(self):
         job_id = self.path.rsplit("/", 1)[-1]
@@ -7345,10 +7359,17 @@ def _run_vba_pipeline_on_session_impl(excel_id, steps, reset=True, entry=None, v
                             sheet=str(sheet_name),
                             error=str(err),
                         )
+                _run_ord = 0
+                _run_total = len(run_steps)
                 for fallback_idx, st in enumerate(steps):
                     code = (st.get("code") if isinstance(st, dict) else str(st)) or ""
                     if not code.strip():
                         continue
+                    _run_ord += 1
+                    try:
+                        PIPELINE_PROGRESS[excel_id] = {"current": _run_ord, "total": _run_total, "ts": time.time()}
+                    except Exception:
+                        pass
                     lang = (st.get("language") if isinstance(st, dict) else "") or ""
                     _vba_trace(
                         "pipeline.step.start",
@@ -7497,6 +7518,10 @@ def _run_vba_pipeline_on_session_impl(excel_id, steps, reset=True, entry=None, v
                 except Exception:
                     pass
                 shutil.rmtree(work, ignore_errors=True)
+                try:
+                    PIPELINE_PROGRESS.pop(excel_id, None)  # 진행률 정리(성공/실패 공통)
+                except Exception:
+                    pass
             result = {"ok": True, "excelId": excel_id, "applied": len(run_steps)}
             result["stepSnapshots"] = step_snapshots  # [0.5.14] 스텝별 적용-전 스냅샷(클라가 _preApplySnapshot 로 사용)
             # [#5] 격리 적용도 라이브 미러 캐시(시트명/미리보기/차원)를 갱신하도록 경량 스키마를 함께 싣는다.
@@ -8556,6 +8581,17 @@ class PythonComSkillContext:
         ws = self._ws(sheet)
         self._tick(2)
         grid = self.read(sheet)  # used range 전체(헤더+데이터)
+        # [0.5.15] UsedRange 는 '첫 사용열'부터 시작한다 → A열이 비면 행 배열 인덱스가 그만큼 밀려서
+        # predicate 의 절대 열 인덱스(예: "E열"=r[4])가 한 칸씩 어긋난다(빈 A → r[4]가 F를 가리켜 0건 실패).
+        # 선두 빈 열 수만큼 None 패딩해 'A열=index0' 절대 기준으로 맞춘다. openpyxl 엔진은 UsedRange 가 이미
+        # A1 기준이라(11836) 패딩 불필요 — 이 보정으로 COM/openpyxl 엔진 동작이 일치한다. 출력도 같은 절대
+        # 열 위치(A1부터)로 기록되어 원본 열 정렬이 보존된다.
+        try:
+            _lead = int(ws.UsedRange.Column) - 1
+        except Exception:
+            _lead = 0
+        if _lead > 0:
+            grid = [[None] * _lead + list(r) for r in grid]
         hr = max(0, int(header_rows))
         header = [list(r) for r in grid[:hr]]
         matched = []
@@ -10858,6 +10894,15 @@ class ExcelSkillContext:
         # AutoFilter 대신 헤더 + 조건에 맞는 행을 새 시트로 복사(읽기전용 미러에서 안정적).
         ws = self._ws_of(sheet_or_name, workbook)
         rows = self.rows(ws)
+        # [0.5.15] COM UsedRange 는 '첫 사용열'부터 시작 → A열이 비면 행 인덱스가 밀려 predicate 의 절대 열
+        # 인덱스가 어긋난다. 선두 빈 열 수만큼 None 패딩해 'A열=index0' 으로 맞춘다(openpyxl 은 이미 A1 기준
+        # 이라 lead=0 → 무영향). 두 엔진의 filter_to_sheet 열 인덱싱을 일치시킨다.
+        try:
+            _lead = int(ws.UsedRange.Column) - 1
+        except Exception:
+            _lead = 0
+        if _lead > 0:
+            rows = [[None] * _lead + list(r) for r in rows]
         hr = max(0, int(header_rows or 0))
         header = rows[:hr]
         matched = []
@@ -12348,6 +12393,15 @@ class OpenpyxlSkillContext:
     def filter_to_sheet(self, sheet_or_name, predicate, dest_name, header_rows=1, workbook=None):
         ws = self._ws_of(sheet_or_name, workbook)
         rows = self.rows(ws)
+        # [0.5.15] COM UsedRange 는 '첫 사용열'부터 시작 → A열이 비면 행 인덱스가 밀려 predicate 의 절대 열
+        # 인덱스가 어긋난다. 선두 빈 열 수만큼 None 패딩해 'A열=index0' 으로 맞춘다(openpyxl 은 이미 A1 기준
+        # 이라 lead=0 → 무영향). 두 엔진의 filter_to_sheet 열 인덱싱을 일치시킨다.
+        try:
+            _lead = int(ws.UsedRange.Column) - 1
+        except Exception:
+            _lead = 0
+        if _lead > 0:
+            rows = [[None] * _lead + list(r) for r in rows]
         hr = max(0, int(header_rows or 0))
         header = rows[:hr]
         matched = []

@@ -987,15 +987,42 @@ async function runIsolatedLivePipelineSteps(sourceSteps, initialExcelId, options
       }
       // [0.5.14 batch] 그룹의 연속 스텝(혼합엔진 vba/python 포함)을 한 격리 인스턴스에서 순서대로 1콜에 실행.
       // 스텝당 격리 인스턴스를 새로 띄우던 기존 구조(N콜=N인스턴스, 저사양에서 수분+timeout N개)를 그룹당 1콜로.
-      const data = await postExcelMirror("/api/excel/run-vba-pipeline", {
-        excelId,
-        steps: group.steps,
-        reset: needReset,
-        viewSheet: options.viewSheet || null,
-      }, 0, {
-        timeoutMs: Math.max(600000, pipelineTimeoutMs(group.steps.length)),
-        timeoutMessage: pipelineTimeoutMessage,
-      });
+      // [진행률] 배치는 백엔드 한 콜이라 클라가 per-step 을 직접 못 본다 → 백엔드가 PIPELINE_PROGRESS 에 현재
+      // 스텝을 기록하고, 여기서 폴링해 실행기 UI 에 "N/총 단계 실행 중"만 표시한다(스킬명은 UI 깨짐 방지로 미표시).
+      const _progressBase = applied;            // 이전 그룹까지 완료한 스텝 수(전역 누계용)
+      const _progressTotal = activeSteps.length; // 전체 활성 스텝 수
+      let _progressTimer = null;
+      try {
+        if (typeof fetch === "function") {
+          _progressTimer = setInterval(() => {
+            try {
+              fetch("/api/excel/pipeline-progress?excelId=" + encodeURIComponent(excelId))
+                .then(r => r.json())
+                .then(pj => {
+                  if (pj && pj.total && typeof window !== "undefined" && typeof window.runnerSetProgress === "function") {
+                    const cur = Math.min(_progressTotal, _progressBase + (pj.current || 0));
+                    window.runnerSetProgress(cur + "/" + _progressTotal + " 단계 실행 중...");
+                  }
+                })
+                .catch(() => {});
+            } catch (_) {}
+          }, 800);
+        }
+      } catch (_) {}
+      let data;
+      try {
+        data = await postExcelMirror("/api/excel/run-vba-pipeline", {
+          excelId,
+          steps: group.steps,
+          reset: needReset,
+          viewSheet: options.viewSheet || null,
+        }, 0, {
+          timeoutMs: Math.max(600000, pipelineTimeoutMs(group.steps.length)),
+          timeoutMessage: pipelineTimeoutMessage,
+        });
+      } finally {
+        if (_progressTimer) { try { clearInterval(_progressTimer); } catch (_) {} }
+      }
       lastData = data;
       resetDone.add(group.fileId);
       applied += group.steps.length;
