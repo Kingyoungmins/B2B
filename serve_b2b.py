@@ -4107,6 +4107,20 @@ def _save_excel_session_impl(excel_id, name=None):
         }
 
 
+def _clean_session_workbook_name(name):
+    """스냅샷/결과 파일명에 붙는 우리 접두사(prestep_<32hex>_, <32hex>_)를 반복 제거해 원본 표시명을 복원한다.
+    워크북을 '이름'으로 비교/조회하는 VBA(wbIter.Name = "원본", Workbooks("원본"))가 깨지지 않도록 라이브 세션
+    워크북은 항상 이 깨끗한 이름으로 연다. 접두사가 복리로 쌓인 경우(prestep_..._prestep_..._원본)도 전부 벗긴다."""
+    base = Path(str(name or "")).name
+    n = base
+    prev = None
+    while n != prev:
+        prev = n
+        n = re.sub(r"^prestep_[0-9a-fA-F]{32}_", "", n)
+        n = re.sub(r"^[0-9a-fA-F]{32}_", "", n)
+    return n or base
+
+
 def _replace_excel_session_workbook_impl(excel_id, path, name=None, result_id=None, read_only_mirror=None):
     path = Path(path)
     if not path.exists():
@@ -4122,6 +4136,7 @@ def _replace_excel_session_workbook_impl(excel_id, path, name=None, result_id=No
         except Exception:
             active_sheet = None
         old_temp_path = session.get("openTempPath")
+        old_replace_dir = session.get("replaceOpenDir")  # [이름 보존] 직전 replace 가 만든 원본명 사본 디렉토리
         _rt_close = time.perf_counter()
         live_editable = bool(session.get("liveEditable"))
         if read_only_mirror or live_editable:
@@ -4141,6 +4156,11 @@ def _replace_excel_session_workbook_impl(excel_id, path, name=None, result_id=No
                 Path(old_temp_path).unlink(missing_ok=True)
             except Exception:
                 pass
+        if old_replace_dir:
+            try:
+                shutil.rmtree(old_replace_dir, ignore_errors=True)
+            except Exception:
+                pass
         if not read_only_mirror:
             app.Visible = True
         else:
@@ -4149,11 +4169,34 @@ def _replace_excel_session_workbook_impl(excel_id, path, name=None, result_id=No
         app.EnableEvents = False
         _park_excel_app_offscreen(app) if read_only_mirror else None
         _rt_open = time.perf_counter()
+        # [워크북 이름 보존] 스냅샷/결과 파일은 prestep_/uuid 접두사가 붙어, 그대로 열면 wb.Name 이 임시명이 되어
+        # 워크북을 '이름'으로 비교/조회하는 VBA(wbIter.Name = "원본", Workbooks("원본"))가 "파일 못 찾음"으로 깨진다
+        # (별칭은 Workbooks("name") 호출만 치환할 뿐 .Name 문자열 비교는 못 고침). 전체실행 격리경로가 work/t/원본명
+        # 으로 여는 것과 동형으로, 원본 표시명 사본을 만들어 그 사본을 열어 wb.Name 을 원본명으로 유지한다.
+        # handle_excel_replace 는 항상 name=path.name(= 스냅샷/결과 파일명, prestep_/uuid 접두사 포함)을 넘긴다.
+        # 따라서 name 이 있어도 그대로 쓰면 안 되고 반드시 접두사를 벗겨야 한다(이게 이전 버그 — if name 지름길).
+        # 접두사 패턴(prestep_<32hex>_, <32hex>_)은 우리 내부 마커라 사용자 파일명과 충돌하지 않는다.
+        clean_name = _clean_session_workbook_name(name or session.get("name") or path.name)
+        replace_open_path = path
+        replace_open_dir = None
+        try:
+            replace_open_dir = Path(tempfile.mkdtemp(prefix="b2b_replace_", dir=str(BACKEND_DIR)))
+            _clean_open = replace_open_dir / clean_name
+            shutil.copy2(str(path), str(_clean_open))
+            replace_open_path = _clean_open
+        except Exception:
+            replace_open_path = path  # 사본 실패 시 원본 경로로 폴백(이름은 임시명이지만 최소 동작 보장)
+            if replace_open_dir is not None:
+                try:
+                    shutil.rmtree(replace_open_dir, ignore_errors=True)
+                except Exception:
+                    pass
+                replace_open_dir = None
         new_wb, new_temp_path = excel_workbooks_open(
             app,
-            path,
+            replace_open_path,
             read_only=bool(read_only_mirror),
-            intended_name=name or session.get("name") or path,
+            intended_name=clean_name,
         )
         _rt["openMs"] = round((time.perf_counter() - _rt_open) * 1000, 1)
         if session.get("liveEditable") and LIVE_FRAME_MODE:
@@ -4176,10 +4219,13 @@ def _replace_excel_session_workbook_impl(excel_id, path, name=None, result_id=No
                 maximize_workbook=False if (session.get("nativeOverlay") or session.get("nativeParentHwnd")) else True,
             )
         session["workbook"] = new_wb
-        session["path"] = str(path)
+        # 워크북은 원본 표시명 사본(replace_open_path)으로 열었다 → 세션 path/name 도 그 깨끗한 사본 기준으로.
+        # session_workbook 가 재오픈(GetObject)해도 깨끗한 이름을 유지해, 이름 비교 VBA 가 안 깨진다.
+        session["path"] = str(replace_open_path)
         session["openPath"] = str(new_wb.FullName)
         session["openTempPath"] = str(new_temp_path) if new_temp_path else ""
-        session["name"] = name or path.name
+        session["replaceOpenDir"] = str(replace_open_dir) if replace_open_dir else ""
+        session["name"] = clean_name
         session["resultId"] = result_id
         session["readOnlyMirror"] = bool(read_only_mirror)
         session["hidden"] = False
@@ -5931,6 +5977,20 @@ def _diag_vba_log_line(msg):
 
 
 def _vba_trace_path():
+    # [트레이스 경로] 프로즌(PyInstaller)에서는 __file__ 이 임시폴더라 못 찾고, 특히 '단일 exe' 는
+    # B2B_Server.exe 자체가 임시폴더로 풀려 실행돼 sys.executable 옆도 임시폴더가 된다. 그래서 프로즌이면
+    # 포터블/단일/실행위치와 무관하게 항상 고정된 찾기 쉬운 위치(%LOCALAPPDATA%\B2B_logs)에 쓴다.
+    try:
+        if getattr(sys, "frozen", False):
+            base = os.environ.get("LOCALAPPDATA") or os.environ.get("APPDATA") or os.environ.get("TEMP") or str(Path.home())
+            d = Path(base) / "B2B_logs"
+            try:
+                d.mkdir(parents=True, exist_ok=True)
+            except Exception:
+                pass
+            return d / "vba_pipeline_trace.jsonl"
+    except Exception:
+        pass
     return Path(__file__).resolve().parent / "vba_pipeline_trace.jsonl"
 
 
@@ -7067,6 +7127,30 @@ def _run_vba_pipeline_on_session_impl(excel_id, steps, reset=True, entry=None, v
                         pass
                     _copy_source_workbook_into_target(app, wb, source)
                     session["appliedStepSigs"] = None
+                    # [SBAGENT-138] 리셋은 워크북을 '메모리'에서만 원본으로 되돌린다. 저사양 PC 는 다음 스텝 콜
+                    # 사이에 Excel COM 참조가 죽어 session_workbook 이 '디스크(작업복사본)'에서 재오픈하는데,
+                    # 그 파일은 아직 직전 실행 결과(예: Sheet1→06_DAS) 상태라 1단계가 "시트 못 찾음"으로 터졌다
+                    # (고사양은 참조가 살아 메모리 복원본을 봐서 정상). → 복원 직후 디스크에 저장해 재오픈해도
+                    # 항상 원본을 보장한다(직후 reset:false 격리 SaveCopyAs 도 pristine 을 복사).
+                    try:
+                        _da_prev = app.DisplayAlerts
+                    except Exception:
+                        _da_prev = None
+                    try:
+                        app.DisplayAlerts = False
+                    except Exception:
+                        pass
+                    try:
+                        wb.Save()
+                        _vba_trace("pipeline.reset.persisted", excelId=excel_id, workbook=_trace_workbook_info(wb))
+                    except Exception as _reset_save_err:
+                        _vba_trace("pipeline.reset.save.skip", excelId=excel_id, error=str(_reset_save_err))
+                    finally:
+                        if _da_prev is not None:
+                            try:
+                                app.DisplayAlerts = _da_prev
+                            except Exception:
+                                pass
                 return {"ok": True, "excelId": excel_id, "applied": 0}
 
             # 스텝 있음: 격리된 새 인스턴스에서 reset+실행 후 결과를 라이브에 반영.
