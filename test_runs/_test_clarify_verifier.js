@@ -6,7 +6,7 @@ const path = require("path");
 // oneShotImpl: callLLMOneShot 대역 함수 본문(문자열). 호출 여부는 globalThis.__called 로 추적.
 function loadVerifier(oneShotImpl) {
   const src = fs.readFileSync(path.join(__dirname, "..", "scripts", "chat-ui.js"), "utf8");
-  const start = src.indexOf("function clarifyVerifierLikelyUnderspecified");
+  const start = src.indexOf("function clarifyVerifierDeterministicQuestion");
   const end = src.indexOf("async function sendChat", start);
   let block = `
 globalThis.__called = false;
@@ -15,7 +15,7 @@ globalThis.callLLMOneShot = ${oneShotImpl};
 `;
   block += src.slice(start, end);
   block += `
-globalThis.__cv = { heur: clarifyVerifierLikelyUnderspecified, ask: clarifyVerifierAskIfNeeded };`;
+globalThis.__cv = { det: clarifyVerifierDeterministicQuestion, heur: clarifyVerifierLikelyUnderspecified, ask: clarifyVerifierAskIfNeeded };`;
   eval(block);
   return globalThis.__cv;
 }
@@ -35,6 +35,16 @@ async function main() {
   ck("[의심] '알아서 처리'", heur("알아서 적당히 처리해줘") === true);
   ck("[의심] 빈 동작", heur("이거 어떻게 좀 해봐") === true);
   ck("[경계] 빈 문자열", heur("") === false);
+  const naverAmbiguous =
+    "\u0040\uD30C\uC77C[\uB124\uC774\uBC84\uD074\uB77C\uC6B0\uB4DC_5\uC6D4 \uD2B8\uB798\uD53D.xlsx] " +
+    "\uC2DC\uD2B8\uBA85\uB4E4\uC740 '500164014578' \uC774\uB7F0\uC2DD\uC73C\uB85C \uC5EC\uB7EC\uAC1C \uC2DC\uD2B8\uAC00 \uAD6C\uC131\uB418\uC5B4\uC788\uC74C. " +
+    "\uAC01 \uC2DC\uD2B8\uC5D0\uC11C 3\uD589 \uD5E4\uB354 IN\uACFC OUT\uC744 \uCC38\uACE0\uD558\uC5EC OUT \uC5F4\uC5D0 \uD574\uB2F9\uD558\uB294 \uB370\uC774\uD130\uB294 " +
+    "\uC120\uD0DD \uBC94\uC704: \u0040\uBC94\uC704[\uC791\uC5C5\uC911.xlsx/\uD1B5\uD569(\uAD6D\uB0B4)!B:BI]\uC5D0 \uC801\uC5B4\uC57C\uD568. " +
+    "\uD5E4\uB354 \uAD04\uD638\uC548 \uBC88\uD638\uC640 \uC2DC\uD2B8\uBA85\uC744 \uB9E4\uCE6D\uD574\uC11C \uCC44\uC6CC\uC918.";
+  const naverExplicitOrder = naverAmbiguous + " \uD589\uC740 \uC18C\uC2A4 \uB370\uC774\uD130 \uC21C\uC11C\uB300\uB85C \uBD99\uC5EC\uB123\uC5B4.";
+  const detQ = globalThis.__cv.det(naverAmbiguous) || "";
+  ck("[추가질문] 여러 시트→대상 열 채우기에서 행 기준 누락 감지", /행은/.test(detQ) && /날짜|시간/.test(detQ));
+  ck("[통과] 행 순서 명시 시 추가질문 없음", globalThis.__cv.det(naverExplicitOrder) === null);
 
   // ── verifier: 구체 질의는 LLM 호출조차 안 한다(지연 0, 빡세지 않음) ─────
   {

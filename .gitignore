@@ -23,6 +23,7 @@ Thumbs.db
 
 # Local automatic skill backups
 auto_backups/
+auto_backup/
 
 # Local runtime/debug logs
 vba_pipeline_trace.jsonl

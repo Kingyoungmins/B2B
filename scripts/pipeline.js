@@ -869,7 +869,7 @@ function wirePipelineStepSnapshots(stepSnapshots, excelId, sourceSteps) {
       resultId: snap.downloadId,
       downloadUrl: snap.downloadUrl || "",
       name: snap.name || "",
-      excelId,
+      excelId: snap.excelId || excelId,   // 다파일 백그라운드 전체실행: 스냅샷별 세션 우선
       capturedAt: Date.now(),
     };
     orig._preApplySnapshot = snapObj;
@@ -924,7 +924,81 @@ async function runIsolatedLivePipelineSteps(sourceSteps, initialExcelId, options
   const pipelineTimeoutMs = n => Math.max(90000, Math.min(300000, 60000 + n * 30000));
   const pipelineTimeoutMessage = "스킬 파이프라인 실행 응답이 지연되어 중단했습니다. 저사양 PC에서는 백그라운드에서 계속 적용 중일 수 있으니 잠시 후 화면을 확인해 주세요.";
   try {
-    if (explicitResetFileIds.length) {
+    // [0.5.15 백그라운드 전체실행] 전체실행 버튼이 backgroundMode:true 로 호출하면, 그룹별 spawn+동기화(N콜)
+    // 대신 격리 인스턴스 1개에서 전 파일을 '원본'부터 처리하는 1콜로 보낸다(반복 spawn/sync = '멈춤' 주원인 제거).
+    // skipReset(suffix 이어실행)·기타 경로는 기존 per-group 유지. 성공/실패 모두 아래 공용 정리(mute해제/로딩종료)로
+    // fall-through (early-return 금지 — 그래야 정리·복원이 한 곳에서 일관 처리됨).
+    const useBg = options.backgroundMode === true && !skipReset && groups.length > 0;
+    if (useBg) {
+      const bgGroups = [];
+      for (const g of groups) {
+        const exId = await requirePipelineSessionExcelId(g.fileId, "스킬 전체실행");
+        bgGroups.push({ excelId: exId, steps: g.steps });
+      }
+      const resetExcelIds = [];
+      const addReset = id => { if (id && !resetExcelIds.includes(id)) resetExcelIds.push(id); };
+      bgGroups.forEach(g => addReset(g.excelId));
+      for (const rid of explicitResetFileIds) {
+        try { addReset(await requirePipelineSessionExcelId(rid, "워크북 리셋")); } catch (_) {}
+      }
+      const anchorExcelId = bgGroups[0].excelId;
+      lastTouchedExcelId = anchorExcelId;            // 실패 시 외부 catch 가 이 세션으로 스냅샷 wiring/복원
+      lastTouchedFileId = groups[0] ? groups[0].fileId : null;
+      bgGroups.forEach(g => {
+        if (!mutedExcelIds.includes(g.excelId) && typeof muteExcelMirrorForPipeline === "function") {
+          muteExcelMirrorForPipeline(g.excelId); mutedExcelIds.push(g.excelId);
+        }
+      });
+      if (!loadingStarted && typeof beginExcelMirrorApplyLoading === "function") {
+        beginExcelMirrorApplyLoading("스킬 전체실행 중...", { hideWindows: false, failsafeMs: 1800000 });
+        loadingStarted = true;
+      }
+      const allStepIds = activeSteps.map(s => s && s.id).filter(Boolean);
+      if (allStepIds.length) setPipelineRuntimeStatus(allStepIds, "running", "작업 중");
+      const totalSteps = bgGroups.reduce((n, g) => n + g.steps.length, 0);
+      // 진행률 폴링(anchor) — 1콜 전체에서 전역 current/total 로 매끄럽게 (그룹 경계 멈춤 없음)
+      let _bgTimer = null;
+      if (typeof fetch === "function") {
+        try {
+          _bgTimer = setInterval(() => {
+            try {
+              fetch("/api/excel/pipeline-progress?excelId=" + encodeURIComponent(anchorExcelId))
+                .then(r => r.json())
+                .then(pj => {
+                  if (pj && pj.total && typeof window !== "undefined" && typeof window.runnerSetProgress === "function") {
+                    window.runnerSetProgress(Math.min(pj.total, pj.current || 0) + "/" + pj.total + " 단계 실행 중...");
+                  }
+                }).catch(() => {});
+            } catch (_) {}
+          }, 800);
+        } catch (_) {}
+      }
+      try {
+        lastData = await postExcelMirror("/api/excel/run-full-pipeline", {
+          groups: bgGroups,
+          resetExcelIds,
+          viewSheet: options.viewSheet || null,
+        }, 0, {
+          timeoutMs: Math.max(600000, pipelineTimeoutMs(totalSteps)),
+          timeoutMessage: pipelineTimeoutMessage,
+        });
+      } finally {
+        if (_bgTimer) { try { clearInterval(_bgTimer); } catch (_) {} }
+      }
+      applied = (lastData && lastData.applied) || totalSteps;
+      if (allStepIds.length) setPipelineRuntimeStatus(allStepIds, "applied", "적용됨");
+      // 스텝-전 스냅샷 wiring(빠른복구/이어실행) — 다파일은 snap.excelId 로 정확히 매핑(없으면 anchor).
+      if (lastData && Array.isArray(lastData.stepSnapshots)) {
+        wirePipelineStepSnapshots(lastData.stepSnapshots, anchorExcelId, sourceSteps);
+      }
+      // 파일별 라이브 미러 캐시(시트명/미리보기) 갱신
+      if (lastData && lastData.perFileLiveSchema) {
+        for (const exId of Object.keys(lastData.perFileLiveSchema)) {
+          try { applyLiveSchemaToFileCache(exId, lastData.perFileLiveSchema[exId]); } catch (_) {}
+        }
+      }
+    }
+    if (!useBg && explicitResetFileIds.length) {
       for (const resetFileId of explicitResetFileIds) {
         const resetExcelId = await requirePipelineSessionExcelId(resetFileId, "워크북 리셋");
         lastTouchedFileId = resetFileId;
@@ -953,7 +1027,7 @@ async function runIsolatedLivePipelineSteps(sourceSteps, initialExcelId, options
         }
       }
     }
-    for (const group of groups) {
+    for (const group of (useBg ? [] : groups)) {
       const excelId = await requirePipelineSessionExcelId(group.fileId, "스킬 전체실행");
       lastTouchedFileId = group.fileId;
       lastTouchedExcelId = excelId;
@@ -1328,12 +1402,19 @@ function applyVbaStepToLiveExcel(step, excelId, options = {}) {
     .then(async () => {
       if (appendToPipeline) await captureStepPreApplySnapshot(step, excelId);
       const requestStarted = performance.now();
-      const liveTimeoutMs = liveLang === "python" ? 105000 : 45000;
-      return postExcelMirror(liveEndpoint, { excelId, code: step.code }, 0, {
-        // 저사양 PC: 실행 + 전/후 변경검출(전 시트 스냅샷 2회)까지 포함되므로 20초는 빠듯해
-        // '실패 표시 후 실제로는 적용되는' 상태 불일치를 만들었다 → 45초로 완화.
-        // Python COM 은 서버 쪽 제한(PY_SKILL_TIMEOUT + excel_call 여유)이 기본 90초라
-        // 클라이언트가 먼저 끊으면 "실패 표시 후 백그라운드 적용" 상태가 된다.
+      // [0.5.15 크래시 수정] VBA 단일 적용을 '라이브(임베드/오버레이) Excel'에서 직접 Application.Run 하면
+      // 간헐적 RPC 사망으로 백엔드 프로세스가 통째로 죽어(→ 네이티브 호스트 자동 재시작 = "앱이 내려갔다
+      // 올라옴") 사용자가 무서워한다. 전체실행과 동일하게 '격리 인스턴스'에서 이 1스텝만 reset:false(현재 라이브
+      // 상태 위)로 실행하고 결과만 반영한다 → 라이브 인스턴스에서 VBA 를 안 돌리므로 크래시가 사라진다.
+      // Python COM 은 이 RPC 사망을 일으키지 않으므로 기존 라이브 경로(/api/excel/run-python) 유지.
+      const isVbaApply = liveLang !== "python";
+      const reqUrl = isVbaApply ? "/api/excel/run-vba-pipeline" : liveEndpoint;
+      const reqBody = isVbaApply
+        ? { excelId, steps: [isolatedPipelineStepPayload(step, (state.pipeline || []).indexOf(step))], reset: false }
+        : { excelId, code: step.code };
+      // 격리는 인스턴스 spawn 이 포함돼 라이브 직접보다 느리다 → VBA 타임아웃을 넉넉히(저사양 대비).
+      const liveTimeoutMs = liveLang === "python" ? 105000 : 180000;
+      return postExcelMirror(reqUrl, reqBody, 0, {
         timeoutMs: liveTimeoutMs,
         timeoutMessage: "스킬 실행 응답이 지연되어 중단했습니다. 저사양 PC에서는 백그라운드에서 계속 적용 중일 수 있으니 잠시 후 화면을 확인해 주세요.",
       })
@@ -1419,22 +1500,24 @@ async function runLivePipelineStepSequentially(step, excelId, options = {}) {
   if (!["vba", "python"].includes(lang)) {
     throw new Error("라이브 전체실행에서 지원하지 않는 스킬 언어입니다: " + lang);
   }
-  const endpoint = lang === "python" ? "/api/excel/run-python" : "/api/excel/run-vba";
+  // [0.5.15 크래시 수정] VBA 는 라이브(임베드) Excel 에서 직접 Application.Run 하면 RPC 사망으로 백엔드가
+  // 통째 죽을 수 있다(앱 재시작). 마지막 스텝 fast-apply 도 격리 인스턴스에서 1스텝 reset:false(현재 상태 위)로
+  // 실행한다. Python COM 은 RPC 사망을 안 일으켜 기존 라이브 경로 유지.
+  const isVbaSeq = lang !== "python";
   const stepId = step.stepId || step.id || null;
   const stepIdx = Number.isInteger(step.stepIdx) ? step.stepIdx : -1;
-  const timeoutMs = Number(options.timeoutMs) || (lang === "python" ? 105000 : 90000);
+  const endpoint = isVbaSeq ? "/api/excel/run-vba-pipeline" : "/api/excel/run-python";
+  const timeoutMs = Number(options.timeoutMs) || (lang === "python" ? 105000 : 180000);
   if (stepId) setPipelineRuntimeStatus([stepId], "running", "작업 중");
   const requestStarted = performance.now();
   try {
-    // 단일 채팅 적용(applyVbaStepToLiveExcel)과 같은 Excel 상태로 맞춘다.
-    // Native/WebView에서 보이는 Excel 창을 호스트로 둔 채 Application.Run 하면
-    // 대상 .xlsx 직접 주입도, 임시 .xlsm runner도 "매크로 실행 불가"로 막히는 경우가 있다.
     if (options.prehide !== false && typeof hideAllExcelMirrorWindows === "function") {
       try { await hideAllExcelMirrorWindows(); } catch (_) {}
     }
     await captureStepPreApplySnapshot(step, excelId);
-    const payload = { excelId, code: step.code || "" };
-    if (options.restoreWindow === false && lang === "vba") payload.restoreWindow = false;
+    const payload = isVbaSeq
+      ? { excelId, steps: [isolatedPipelineStepPayload(step, stepIdx >= 0 ? stepIdx : (state.pipeline || []).indexOf(step))], reset: false }
+      : { excelId, code: step.code || "" };
     const data = await postExcelMirror(endpoint, payload, 0, {
       timeoutMs,
       timeoutMessage: "스킬 실행 응답이 지연되어 중단했습니다. 저사양 PC에서는 백그라운드에서 계속 적용 중일 수 있으니 잠시 후 화면을 확인해 주세요.",
@@ -1658,9 +1741,11 @@ function replaceLogicAt(stepId, newCode, newDescription, language) {
     language,
     trustedStatic: false,
   });
-  const lastBeforeIdx = lastLiveStepIndex(beforeReplaceSnapshot);
-  if ((idx < lastBeforeIdx || Number.isInteger(getPipelineResumeFromIndex())) &&
-      canUsePipelineCheckpointFromIndex(idx, beforeReplaceSnapshot, next)) {
+  // [0.5.15 Bug2 본수정] 마지막 스텝을 수정/에러복구해도 '그 스텝 직전 스냅샷'에서 이어실행한다(전체 재실행 금지).
+  // 예전엔 idx<lastBeforeIdx(=마지막이 아님)이거나 resume 보류 중일 때만 이어실행 → 마지막 스텝(예: 6단계)
+  // 수정/에러복구가 1단계부터 전체 재실행으로 떨어져 느리고 '멈춤'처럼 보였다. 이어실행 가능(=그 스텝 직전
+  // 스냅샷 보유)하면 마지막 스텝도 restore(그 스텝 직전 상태) + '그 스텝만' 재실행으로 처리한다.
+  if (canUsePipelineCheckpointFromIndex(idx, beforeReplaceSnapshot, next)) {
     if (typeof pushHistory === "function") pushHistory("단계 수정");
     state.pipeline = next;
     setPipelineRuntimeStatus(state.pipeline.slice(idx).filter(isStepEnabled).map(s => s && s.id).filter(Boolean), "running", "실행 중");
@@ -4167,7 +4252,7 @@ $("btn-run").onclick = async () => {
   setPipelineRuntimeStatus(activeStepIds, "running", "\uC2E4\uD589 \uC911");
   try {
     clearPipelineExecutionMemory({ keepViewer: true });
-    await runPipelineWithAutoRepair({ source: "generator", ignoreCheckpoint: true });
+    await runPipelineWithAutoRepair({ source: "generator", ignoreCheckpoint: true, backgroundMode: true });
     setPipelineRuntimeStatus(activeStepIds, "applied", "\uC801\uC6A9\uB428");
     toast(`${state.pipeline.length}개 단계 실행 완료`, "success");
   } catch (err) {
@@ -4651,7 +4736,7 @@ $("runner-run-btn").onclick = () => {
   setTimeout(async () => {
     try {
       clearPipelineExecutionMemory({ keepViewer: true });
-      await runPipelineWithAutoRepair({ source: "runner", ignoreCheckpoint: true });
+      await runPipelineWithAutoRepair({ source: "runner", ignoreCheckpoint: true, backgroundMode: true });
       setPipelineRuntimeStatus(activeStepIds, "applied", "적용됨");
       toast(`${state.pipeline.length}개 단계 실행 완료`, "success");
       if (window.runnerSetDone) window.runnerSetDone();

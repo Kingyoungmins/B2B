@@ -181,26 +181,22 @@ def default_logic_backup_dir():
 
 
 def logic_backup_dir():
-    settings = _load_user_settings()
-    configured = str(settings.get("logicBackupDir") or "").strip()
-    if configured:
-        return Path(configured).expanduser().resolve()
+    # [요청] 자동백업은 '항상 실행 중인 앱 위치'(writable_app_dir()/auto_backup)에 만든다.
+    # 예전엔 settings.logicBackupDir 고정 경로를 우선해, 실행 버전이 바뀌어도 백업이 옛 버전 폴더(예: 0.5.13)
+    # 에만 쌓였다. 이제 설정 경로는 무시하고 항상 실행 위치를 쓴다 → 0.5.15 를 돌리면 0.5.15/auto_backup 에 생김.
     return default_logic_backup_dir()
 
 
 def logic_backup_dir_info():
-    settings = _load_user_settings()
-    configured = str(settings.get("logicBackupDir") or "").strip()
-    path = logic_backup_dir()
-    if not configured:
-        try:
-            path.mkdir(parents=True, exist_ok=True)
-        except Exception:
-            pass
+    path = logic_backup_dir()  # 항상 실행 위치/auto_backup
+    try:
+        path.mkdir(parents=True, exist_ok=True)
+    except Exception:
+        pass
     return {
         "ok": True,
         "path": str(path),
-        "custom": bool(configured),
+        "custom": False,
         "defaultPath": str(default_logic_backup_dir()),
         "settingsPath": str(logic_backup_settings_path()),
         "exists": path.exists(),
@@ -981,6 +977,9 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
         if self.path == "/api/excel/run-vba-pipeline":
             self.handle_excel_run_vba_pipeline()
             return
+        if self.path == "/api/excel/run-full-pipeline":
+            self.handle_excel_run_full_pipeline()
+            return
         if self.path == "/api/excel/capture-copypaste":
             self.handle_excel_capture_copypaste()
             return
@@ -1478,6 +1477,37 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
             self.send_json({"ok": False, "error": str(err), "errorInfo": err.info}, status=400)
         except Exception as err:
             _vba_trace("http.run_vba_pipeline.error", traceId=trace_id, kind=type(err).__name__, error=str(err))
+            self.send_json({"ok": False, "error": str(err)}, status=500)
+
+    def handle_excel_run_full_pipeline(self):
+        # [0.5.15 백그라운드 전체실행] 그룹 전체를 1콜로 받아 격리 인스턴스 1개에서 처리(반복 spawn/sync 제거).
+        payload = self.read_json_body()
+        trace_id = uuid.uuid4().hex[:10]
+        groups = payload.get("groups") or []
+        reset_excel_ids = payload.get("resetExcelIds") or []
+        total = sum(len((g.get("steps") or [])) for g in groups)
+        _vba_trace(
+            "http.run_full_pipeline.request",
+            traceId=trace_id,
+            anchorExcelId=(groups[0].get("excelId") if groups else None),
+            groups=len(groups),
+            totalSteps=total,
+            resetExcelIds=list(reset_excel_ids),
+        )
+        try:
+            result = run_full_pipeline_single_instance(
+                groups,
+                reset_excel_ids=reset_excel_ids,
+                view_sheet=payload.get("viewSheet"),
+                entry=payload.get("entry"),
+            )
+            _vba_trace("http.run_full_pipeline.response", traceId=trace_id, ok=True, applied=result.get("applied"))
+            self.send_json(result)
+        except PipelineExecutionError as err:
+            _vba_trace("http.run_full_pipeline.error", traceId=trace_id, kind="PipelineExecutionError", error=str(err), errorInfo=err.info)
+            self.send_json({"ok": False, "error": str(err), "errorInfo": err.info}, status=400)
+        except Exception as err:
+            _vba_trace("http.run_full_pipeline.error", traceId=trace_id, kind=type(err).__name__, error=str(err))
             self.send_json({"ok": False, "error": str(err)}, status=500)
 
     def handle_excel_activate(self):
@@ -7579,6 +7609,314 @@ def run_vba_on_session(excel_id, code, entry=None, restore_window=True):
 
 def run_vba_pipeline_on_session(excel_id, steps, reset=True, entry=None, view_sheet=None):
     return excel_call(_run_vba_pipeline_on_session_impl, excel_id, steps, reset=reset, entry=entry, view_sheet=view_sheet, timeout=600)
+
+
+def _run_full_pipeline_single_instance_impl(groups, reset_excel_ids=None, view_sheet=None, entry=None):
+    """[0.5.15 백그라운드 전체실행] 격리 인스턴스 '1개'에서 관여 파일 전부를 '원본'부터 열고, 전 그룹·스텝을
+    순서대로 실행한 뒤, 변경된 파일만 라이브 세션에 '파일당 1회' 반영한다. 그룹마다 새 인스턴스를 spawn 하고
+    파일을 통째 동기화하던 오버헤드(전체실행 '멈춤'의 주원인)를 제거한다 — 실행 중 라이브 뷰는 갱신하지 않고
+    (클라가 창을 숨김) 끝에만 반영한다.
+      groups: [{"excelId","steps":[payload...]}]  연속 같은-파일 묶음(순서 보존). excelId = 대상 라이브 세션.
+      reset_excel_ids: '원본부터' 열어야 할 세션 전부(targets ∪ 교차참조). 모두 pristine 으로 열어 cross-file
+                       Workbooks("파일명") 참조가 격리 인스턴스 안에서 그대로 동작한다.
+    반환 {ok, applied, stepSnapshots(전역), perFileLiveSchema:{excelId:schema}}. 실패 시 라이브 무손상(반영 전 raise)."""
+    entry = (str(entry).strip() if entry else "") or VBA_SKILL_ENTRY
+    # 코드 있는 실행 스텝만 남기고 그룹 정규화 + 전역 총합(진행률용)
+    norm_groups = []
+    total_steps = 0
+    for g in (groups or []):
+        gsteps = [s for s in (g.get("steps") or [])
+                  if ((s.get("code") if isinstance(s, dict) else str(s)) or "").strip()]
+        if not gsteps:
+            continue
+        norm_groups.append({"excelId": g.get("excelId"), "steps": gsteps})
+        total_steps += len(gsteps)
+    if not norm_groups:
+        return {"ok": True, "applied": 0, "stepSnapshots": [], "perFileLiveSchema": {}}
+
+    anchor_excel_id = norm_groups[0]["excelId"]
+    # 열어야 할 세션 = 그룹 대상 ∪ reset 대상(교차참조 포함), 최초 등장 순서 유지
+    open_ids = []
+    for g in norm_groups:
+        if g["excelId"] and g["excelId"] not in open_ids:
+            open_ids.append(g["excelId"])
+    for sid in (reset_excel_ids or []):
+        if sid and sid not in open_ids:
+            open_ids.append(sid)
+
+    with EXCEL_LOCK:
+        sessions = {}        # excelId -> session
+        initial_views = {}   # excelId -> view state(끝에 복원)
+        for sid in open_ids:
+            s = get_excel_session(sid)
+            s["rev"] = int(s.get("rev") or 0) + 1
+            sessions[sid] = s
+            try:
+                a0, w0 = session_workbook(s)
+                initial_views[sid] = _capture_live_view_state(a0, w0, s)
+            except Exception:
+                initial_views[sid] = None
+
+        _ensure_vbom_access()
+        _disable_vba_break_on_all_errors()
+        work = Path(tempfile.mkdtemp(prefix="b2b_fullrun_"))
+        fapp = None
+        fpid = None
+        step_snapshots = []
+        byExcel = {}   # excelId -> {"wb","name","session"}
+        result = {"ok": True, "applied": 0, "stepSnapshots": step_snapshots, "perFileLiveSchema": {}}
+        try:
+            fapp = win32com.client.DispatchEx("Excel.Application")
+            _track_spawned_excel_app(fapp)
+            try:
+                fpid = _excel_process_id(fapp)
+            except Exception:
+                fpid = None
+            for attr, val in (("Visible", False), ("DisplayAlerts", False), ("EnableEvents", False), ("AskToUpdateLinks", False)):
+                try:
+                    setattr(fapp, attr, val)
+                except Exception:
+                    pass
+            _vba_trace("fullrun.setup.start", anchorExcelId=anchor_excel_id, isolatedPid=fpid,
+                       openIds=list(open_ids), groups=len(norm_groups), totalSteps=total_steps, work=str(work))
+
+            # 1) 관여 파일 전부 '원본'부터 1회 열기 (intended_name → VBA Workbooks("파일명") 교차참조 동작)
+            for sid in open_ids:
+                s = sessions[sid]
+                name = Path(str(s.get("name") or "")).name
+                if not name:
+                    try:
+                        _a, _w = session_workbook(s)
+                        name = Path(str(_w.Name)).name
+                    except Exception:
+                        name = "book_%s.xlsx" % uuid.uuid4().hex[:6]
+                src = s.get("sourcePath") or s.get("path")
+                tdir = work / ("t_" + uuid.uuid4().hex[:6])
+                tdir.mkdir(parents=True, exist_ok=True)
+                tpath = tdir / name
+                shutil.copy2(Path(src), tpath)
+                fwb, _t = excel_workbooks_open(fapp, str(tpath), read_only=False, intended_name=name)
+                try:
+                    _protect_workbook_for_read_only_mirror(fwb, False)
+                except Exception:
+                    pass
+                byExcel[sid] = {"wb": fwb, "name": name, "session": s}
+                _vba_trace("fullrun.file.opened", anchorExcelId=anchor_excel_id, isolatedPid=fpid,
+                           excelId=sid, name=name, targetPath=str(tpath))
+
+            # 1-b) 교차참조용 '동반 워크북': open_ids 에 없는 다른 라이브 세션도 (현재 상태로) 함께 열어 둔다.
+            # VBA 의 Workbooks("다른파일.xlsx") / Python ctx.book("…") 교차참조가 격리 인스턴스 안에서 해석되게
+            # 한다(구 per-group _setup_isolated_pipeline_instance 의 companion 과 동형). 안 열면 그 파일을 참조하는
+            # 스텝이 "워크북이 열려 있지 않습니다"로 실패한다. 변경되면 끝의 동기화에서 함께 라이브로 반영된다.
+            _opened_names = set(str(ent["name"]).lower() for ent in byExcel.values())
+            for oid, other in list(EXCEL_SESSIONS.items()):
+                if oid in byExcel or not other.get("liveEditable"):
+                    continue
+                try:
+                    _oa, o_wb = session_workbook(other)
+                except Exception:
+                    continue
+                cname = Path(str(other.get("name") or "")).name
+                if not cname:
+                    try:
+                        cname = Path(str(o_wb.Name)).name
+                    except Exception:
+                        cname = ""
+                if not cname or cname.lower() in _opened_names:
+                    continue
+                try:
+                    cdir = work / ("c_" + uuid.uuid4().hex[:6])
+                    cdir.mkdir(parents=True, exist_ok=True)
+                    cpath = cdir / cname
+                    o_wb.SaveCopyAs(str(cpath))  # 동반본은 '현재 라이브 상태'로(읽기 소스/교차쓰기 대상)
+                    cwb, _ct = excel_workbooks_open(fapp, str(cpath), read_only=False, intended_name=cname)
+                    try:
+                        _protect_workbook_for_read_only_mirror(cwb, False)
+                    except Exception:
+                        pass
+                    _opened_names.add(cname.lower())
+                    sessions[oid] = other
+                    byExcel[oid] = {"wb": cwb, "name": cname, "session": other}
+                    _vba_trace("fullrun.companion.opened", anchorExcelId=anchor_excel_id, isolatedPid=fpid,
+                               excelId=oid, name=cname, companionPath=str(cpath))
+                except Exception as _cerr:
+                    _vba_trace("fullrun.companion.error", anchorExcelId=anchor_excel_id, isolatedPid=fpid,
+                               excelId=oid, name=cname, error=str(_cerr))
+
+            # 2) 전 그룹·스텝 순서대로 실행 (ftarget = 그 그룹 파일의 wb)
+            ordinal = 0
+            for g in norm_groups:
+                gid = g["excelId"]
+                if gid not in byExcel:
+                    raise RuntimeError("full-run: 그룹 대상 세션이 열리지 않았습니다: %s" % gid)
+                ftarget = byExcel[gid]["wb"]
+                fsession = byExcel[gid]["session"]
+                for fallback_idx, st in enumerate(g["steps"]):
+                    code = (st.get("code") if isinstance(st, dict) else str(st)) or ""
+                    if not code.strip():
+                        continue
+                    ordinal += 1
+                    try:
+                        PIPELINE_PROGRESS[anchor_excel_id] = {"current": ordinal, "total": total_steps, "ts": time.time()}
+                    except Exception:
+                        pass
+                    lang = (st.get("language") if isinstance(st, dict) else "") or ""
+                    # 스텝-전 스냅샷(이어실행/빠른복구용) — ftarget 상태를 영속 RESULTS 로
+                    try:
+                        BACKEND_DIR.mkdir(parents=True, exist_ok=True)
+                        _snap_path = BACKEND_DIR / ("prestep_%s_%s" % (uuid.uuid4().hex, byExcel[gid]["name"]))
+                        ftarget.SaveCopyAs(str(_snap_path))
+                        _snap_rid = uuid.uuid4().hex
+                        RESULTS[_snap_rid] = {"path": str(_snap_path), "name": Path(_snap_path).name, "created": time.time()}
+                        step_snapshots.append({
+                            "excelId": gid,  # 다파일: 이 스냅샷이 속한 라이브 세션(클라 이어실행 정확 매핑)
+                            "stepIdx": st.get("stepIdx") if isinstance(st, dict) else None,
+                            "stepId": st.get("stepId") if isinstance(st, dict) else None,
+                            "downloadId": _snap_rid,
+                            "downloadUrl": "/api/workbooks/download/%s" % _snap_rid,
+                            "name": Path(_snap_path).name,
+                        })
+                    except Exception as _snap_err:
+                        _vba_trace("fullrun.step.snapshot.skip", anchorExcelId=anchor_excel_id, isolatedPid=fpid,
+                                   excelId=gid, error=str(_snap_err))
+                    # 대상 시트 활성화(있으면)
+                    if isinstance(st, dict):
+                        _sheet = st.get("targetSheetName") or st.get("targetSheet") or st.get("viewSheet")
+                        if _sheet:
+                            try:
+                                ftarget.Worksheets(str(_sheet)).Activate()
+                            except Exception:
+                                pass
+                    _vba_trace("fullrun.step.start", anchorExcelId=anchor_excel_id, isolatedPid=fpid,
+                               excelId=gid, ordinal=ordinal, total=total_steps, language=lang,
+                               stepIdx=st.get("stepIdx") if isinstance(st, dict) else None, codeHash=_trace_hash(code))
+                    try:
+                        if str(lang).lower() == "python":
+                            _exec_python_com_skill(fapp, ftarget, fsession, code,
+                                                   skip_static=bool(isinstance(st, dict) and st.get("trustedStatic") is True))
+                        else:
+                            _inject_and_run_vba(fapp, ftarget, code, entry)
+                    except PipelineExecutionError as _pe:
+                        try:
+                            if isinstance(getattr(_pe, "info", None), dict):
+                                _pe.info["stepSnapshots"] = list(step_snapshots)
+                        except Exception:
+                            pass
+                        raise
+                    except Exception as err:
+                        info = _vba_pipeline_step_info(st, fallback_idx, err)
+                        _vba_trace("fullrun.step.error", anchorExcelId=anchor_excel_id, isolatedPid=fpid,
+                                   excelId=gid, stepIdx=info.get("stepIdx"), error=str(err), errorInfo=info)
+                        try:
+                            info["stepSnapshots"] = list(step_snapshots)
+                        except Exception:
+                            pass
+                        raise PipelineExecutionError(info)
+                    _vba_trace("fullrun.step.ok", anchorExcelId=anchor_excel_id, isolatedPid=fpid, excelId=gid, ordinal=ordinal)
+
+            # 3) 변경된 파일만 라이브에 '파일당 1회' 반영 (읽기만 한 파일은 Saved=True → 스킵)
+            for sid, ent in byExcel.items():
+                fwb = ent["wb"]
+                try:
+                    changed = not bool(fwb.Saved)
+                except Exception:
+                    changed = True
+                if not changed:
+                    continue
+                s = ent["session"]
+                try:
+                    live_app, live_wb = session_workbook(s)
+                except Exception:
+                    _vba_trace("fullrun.sync.skip_nolive", anchorExcelId=anchor_excel_id, excelId=sid)
+                    continue
+                rdir = work / ("r_" + uuid.uuid4().hex[:6])
+                rdir.mkdir(parents=True, exist_ok=True)
+                rpath = rdir / ("result_" + ent["name"])
+                fwb.SaveCopyAs(str(rpath))
+                try:
+                    _protect_workbook_for_read_only_mirror(live_wb, False)
+                except Exception:
+                    pass
+                try:
+                    live_app.ScreenUpdating = False
+                except Exception:
+                    pass
+                _copy_source_workbook_into_target(live_app, live_wb, str(rpath))
+                s["appliedStepSigs"] = None
+                try:
+                    _protect_workbook_for_read_only_mirror(live_wb, True)
+                except Exception:
+                    pass
+                try:
+                    result["perFileLiveSchema"][sid] = _live_preview_schema(live_wb)
+                except Exception:
+                    pass
+                _vba_trace("fullrun.file.synced", anchorExcelId=anchor_excel_id, isolatedPid=fpid,
+                           excelId=sid, name=ent["name"], resultPath=str(rpath))
+
+            result["applied"] = ordinal
+            return result
+        finally:
+            # 격리 인스턴스 정리(1회) — 누수 방지(0.5.x 디스크 누수 교훈)
+            try:
+                if fapp is not None:
+                    _clear_workbook_name_aliases(fapp)
+            except Exception:
+                pass
+            try:
+                if fapp is not None:
+                    for w in list(fapp.Workbooks):
+                        try:
+                            w.Close(SaveChanges=False)
+                        except Exception:
+                            pass
+            except Exception:
+                pass
+            try:
+                if fapp is not None:
+                    fapp.Quit()
+            except Exception:
+                pass
+            try:
+                if fpid:
+                    os.system("taskkill /F /PID %s >NUL 2>&1" % fpid)
+            except Exception:
+                pass
+            shutil.rmtree(work, ignore_errors=True)
+            try:
+                PIPELINE_PROGRESS.pop(anchor_excel_id, None)
+            except Exception:
+                pass
+            # 라이브 창/뷰 복원(전 세션 — 동반 워크북 포함)
+            for sid in list(sessions.keys()):
+                s = sessions.get(sid)
+                if not s:
+                    continue
+                try:
+                    la, lw = session_workbook(s)
+                except Exception:
+                    continue
+                try:
+                    _restore_live_view_state(la, lw, initial_views.get(sid), s)
+                except Exception:
+                    pass
+                try:
+                    _restore_app_state(la)
+                except Exception:
+                    pass
+                try:
+                    _restore_live_protected_view(la, lw)
+                except Exception:
+                    pass
+                try:
+                    _restore_live_window(s, la, lw)
+                except Exception:
+                    pass
+
+
+def run_full_pipeline_single_instance(groups, reset_excel_ids=None, view_sheet=None, entry=None):
+    return excel_call(_run_full_pipeline_single_instance_impl, groups,
+                      reset_excel_ids=reset_excel_ids, view_sheet=view_sheet, entry=entry, timeout=3600)
 
 
 # ===== 복붙 캡처(녹화): 사용자의 Ctrl+C/Ctrl+V 를 역추적해 스킬 스텝으로 저장 =====

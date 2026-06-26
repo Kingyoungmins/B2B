@@ -543,7 +543,9 @@ function appendSameFormatSheetsIntent(text) {
 }
 
 function ctxHelperPreferredIntent(text) {
-  return sheetOpIntent(text) || ctxSortIntent(text) || monthShiftIntent(text) || simpleRangeArithmeticIntent(text) || pivotIntent(text) || appendSameFormatSheetsIntent(text);
+  return sheetOpIntent(text) || ctxSortIntent(text) || monthShiftIntent(text) || simpleRangeArithmeticIntent(text)
+    || pivotIntent(text) || appendSameFormatSheetsIntent(text)
+    || (typeof filterToNewSheetIntent === "function" && filterToNewSheetIntent(text));
 }
 
 function shouldRouteRequestToVba(text) {
@@ -1309,11 +1311,11 @@ function pythonComMustUseVbaReason(code, sourceUserMessage) {
     return "";
   }
   if (typeof ctxHelperPreferredIntent === "function" && ctxHelperPreferredIntent(source)
-      && /append_same_format_sheets\s*\(|ctx\.copy\s*\(|ctx\.sort\s*\(|ctx\.copy_sheet\s*\(/i.test(text)) {
+      && /append_same_format_sheets\s*\(|ctx\.copy\s*\(|ctx\.sort\s*\(|ctx\.copy_sheet\s*\(|ctx\.filter_to_sheet\s*\(/i.test(text)) {
     return "";
   }
   if (typeof filterToNewSheetIntent === "function" && filterToNewSheetIntent(source)) {
-    return "대용량 필터/값 찾기 후 새 시트 생성은 Python COM ctx.read/filter_to_sheet 로 실행하면 앱이 멈출 수 있습니다. 이 작업은 VBA AutoFilter + 네이티브 Copy 방식으로 실행해야 합니다.";
+    return "대용량 필터/값 찾기 후 새 시트 생성은 Python COM에서 전체 범위를 ctx.read로 직접 읽어 루프 처리하면 앱이 멈출 수 있습니다. 이 작업은 ctx.filter_to_sheet 헬퍼를 쓰거나 VBA AutoFilter + 네이티브 Copy 방식으로 실행해야 합니다.";
   }
   if (typeof duplicateRowDeleteIntent === "function" && duplicateRowDeleteIntent(source)) {
     return "조건이 붙은 중복 행 삭제는 Python COM으로 넓은 범위를 읽거나 행 삭제를 반복하면 큰 파일에서 멈춥니다. 이 작업은 VBA 보조열+AutoFilter 방식으로 실행해야 합니다.";
@@ -1414,12 +1416,16 @@ function filterToNewSheetVbaHint(sourceUserMessage) {
     "",
     "## 대용량 필터 후 새 시트 생성 작성 규칙",
     "- 이 요청은 특정 열 값/조건에 맞는 행을 새 시트로 복사하는 작업입니다. 반드시 VBA로 작성하세요.",
-    "- Python ctx.read/filter_to_sheet 방식은 큰 파일에서 앱이 멈출 수 있으므로 쓰지 마세요.",
+    "- Python ctx.read 로 전체 범위를 읽어 직접 필터링하는 방식은 큰 파일에서 앱이 멈출 수 있으므로 쓰지 마세요.",
     "- 전체 열/전체 시트 끝까지 읽지 말고, 요청 열의 실제 lastRow 또는 사용자가 제공한 마지막 행까지만 대상으로 하세요.",
     "- 원본 시트는 보존하고, 새 시트에 헤더와 필터된 행 전체를 복사하세요.",
+    "- AutoFilter Field 번호는 절대 열 번호가 아니라 필터 범위 안의 상대 번호입니다. 예: firstCol=1, targetCol=5 이면 filterField=targetCol-firstCol+1 입니다. Range가 E열부터 시작하면 Field:=1 입니다.",
+    "- 헤더 행은 1행으로 고정하지 말고 실제 헤더 행을 쓰세요. @범위가 E:E 이고 헤더가 2행이면 hdrRow=2, 데이터는 hdrRow+1부터입니다.",
     "- 행을 한 줄씩 쓰는 루프나 UsedRange.Value 배열 재작성 대신 AutoFilter + SpecialCells(xlCellTypeVisible).Copy Destination을 우선하세요.",
+    "- SpecialCells(xlCellTypeVisible)는 결과 0건이면 오류가 납니다. 호출 전에 Application.WorksheetFunction.Subtotal(103, 필터대상열_본문범위)로 보이는 데이터 행 수를 확인하고, 0건이면 새 시트에 헤더만 만들고 정상 종료하세요.",
     "- 긴 숫자 ID/계약번호/전화번호는 과학표기/15자리 손실이 나지 않도록 원본 Range.Copy로 형식과 텍스트 값을 보존하세요.",
-    "- 매칭 0건이면 새 시트에 헤더만 만들거나 명확한 Err.Raise로 사유를 알리고, 프로그램이 멈추는 루프를 만들지 마세요.",
+    "- 병합 해제 뒤 생긴 빈칸은 임의로 위 값으로 채우지 마세요. 현 상태에서 조건값이 실제로 들어 있는 행만 필터 대상입니다.",
+    "- 매칭 0건은 오류가 아니라 헤더만 있는 결과 시트 생성 후 정상 종료입니다. 프로그램이 멈추는 루프나 불필요한 재생성을 만들지 마세요.",
   ].join("\n");
 }
 
@@ -2403,12 +2409,9 @@ async function requestErrorRecovery(stepIdx, errorInfo, userNote) {
       && userExplicitlyRequestsPython(intent)
       && !(typeof userExplicitlyRequestsVba === "function" && userExplicitlyRequestsVba(intent));
   })();
-  const hardFilterToSheetRecovery = !recoveryExplicitPython
-    && typeof filterToNewSheetIntent === "function"
-    && filterToNewSheetIntent([
-      recoveryBaseSourceUserMessage,
-      recoveryNoteText ? `에러복구 추가 설명: ${recoveryNoteText}` : "",
-    ].filter(Boolean).join("\n"));
+  // filter_to_sheet is a native ctx helper. Do not force filter recovery back to VBA
+  // unless the later Python read-limit guard proves the generated code used a risky wide read.
+  const hardFilterToSheetRecovery = false;
   const recoveryAllowsPython = !recoveryExplicitVba && !hardFilterToSheetRecovery;
   let isVbaRecovery = recoveryExplicitVba || hardFilterToSheetRecovery;
   let isPythonRecovery = !hardFilterToSheetRecovery && (recoveryExplicitPython ||
@@ -2445,7 +2448,7 @@ async function requestErrorRecovery(stepIdx, errorInfo, userNote) {
     ? "중요: 에러복구에서는 실패한 Step이 VBA였더라도 Python ctx 코드로 복구할 수 있습니다. 사용자가 복구창에서 명시적으로 VBA를 요구하지 않았으므로, ctx 헬퍼/ctx API로 해결 가능한 복구는 Python def transform(ctx): 로 작성하세요. 이후 적용 단계에서도 이 Python 복구 후보를 다시 VBA로 전환하지 않습니다."
     : "";
   const hardFilterRecoveryRule = hardFilterToSheetRecovery
-    ? "중요: 이 Step은 대용량 열에서 특정 값을 찾아 새 시트를 만드는 작업입니다. Python ctx.read/filter_to_sheet 복구는 앱을 멈출 수 있으므로, 사용자가 명시적으로 Python을 요구하지 않는 한 이번 복구도 반드시 VBA AutoFilter + SpecialCells(xlCellTypeVisible).Copy Destination 방식으로 작성하세요."
+    ? "중요: 이 Step은 대용량 열에서 특정 값을 찾아 새 시트를 만드는 작업입니다. Python ctx.read 로 전체 범위를 읽는 복구는 앱을 멈출 수 있으므로, ctx.filter_to_sheet 헬퍼 또는 VBA AutoFilter + SpecialCells(xlCellTypeVisible).Copy Destination 방식으로 작성하세요."
     : "";
   const useCompatibilityCheck = !!(errorInfo && errorInfo.compatibilityCheck);
   const sourceUserMessage = recoveryBaseSourceUserMessage;
@@ -2517,6 +2520,7 @@ async function requestErrorRecovery(stepIdx, errorInfo, userNote) {
     allowPythonRecoveryRule,
     hardFilterRecoveryRule,
     "오류 복구는 실패 원인만 고치는 작업입니다. 사용자의 최신 요청에 없는 대상 파일/시트 변경이나 무관한 전체 범위 재작성은 새로 추가하지 마세요.",
+    "사용자에게 보여줄 설명은 '간결하되 친절하게' 쓰세요: ① 무엇이 왜 안 됐는지 한 문장, ② (있으면) 사용자가 확인/입력할 것 한두 문장. 그게 전부입니다. 장황한 배경 서술·같은 말 반복·과한 공감/사과·이모지 남발은 빼고, 짧은 문장으로 핵심만 또렷하게. (코드블록은 설명과 별개로 그대로 출력)",
     "\"채워\", \"입력\", \"업데이트\", \"반영\"은 요청받은 대상 범위에 값을 쓰라는 뜻입니다. 그 대상 셀에 기존 수식이 있더라도 값으로 대체할 수 있습니다. 단, 표 끝의 합계/소계/부가세포함 같은 요약 행은 데이터 행이 아니므로 범위에서 제외하세요.",
     ...compatibilityPrompt,
     recoveryCodeRule,
@@ -2707,9 +2711,25 @@ function getSmoothCharsPerFrame(remaining, elapsed) {
 //      (멘션·셀/열 참조·구체 동작이 하나라도 있으면 그냥 통과 → 평범한 요청엔 지연 0).
 //  (2) 의심될 때만 별도 LLM 에게 OK/되묻기를 맡기고, 그 LLM 도 '합리적 추론 가능하면 OK' 로 관대하게 판단.
 // 되묻기는 질의당 한 번만(보충 답변 턴은 검사를 건너뛰어 루프·막힘을 방지), 검증 실패 시엔 막지 않고 통과.
+function clarifyVerifierDeterministicQuestion(text) {
+  const s = String(text || "").trim();
+  if (!s) return null;
+  const hasMentions = /@(범위|시트|파일|컬럼)\[/.test(s);
+  const multiSheetCopy = /(여러\s*개\s*시트|여러\s*시트|각\s*시트|시트명(?:들)?|모든\s*시트)/i.test(s)
+    && /(복사|붙여|채워|입력|기입|반영|가져|매칭)/i.test(s)
+    && /(헤더|괄호\s*안|괄호안|IN|OUT|입력|출력|열|범위)/i.test(s);
+  const hasSourceAndDest = hasMentions && /@(파일|범위)\[/.test(s) && /@(?:범위|시트)\[/.test(s);
+  const rowAlignmentSpecified = /(행\s*순서|순서대로|그대로\s*(?:복사|붙여|채워)|같은\s*행|동일\s*행|A\s*열|시간\s*(?:기준|매칭)|날짜\s*(?:기준|매칭)|일자\s*(?:기준|매칭)|키\s*(?:기준|매칭)|기준\s*열)/i.test(s);
+  if (hasSourceAndDest && multiSheetCopy && !rowAlignmentSpecified) {
+    return "여러 시트의 값을 대상 열에 넣을 때, 행은 소스 데이터 순서 그대로 붙이면 될까요, 아니면 날짜/시간 같은 기준 열로 대상 행과 매칭해야 하나요?";
+  }
+  return null;
+}
+
 function clarifyVerifierLikelyUnderspecified(text) {
   const s = String(text || "").trim();
   if (!s) return false;
+  if (clarifyVerifierDeterministicQuestion(s)) return true;
   if (/@(범위|시트|파일|컬럼)\[/.test(s)) return false;                       // 대상 멘션 있음 → 구체적
   if (/!\$?[A-Z]{1,3}\$?\d*(?::\$?[A-Z]{1,3}\$?\d*)?\]/i.test(s)) return false; // 멘션 내 셀/범위
   const hasColOrCell = /[A-Z]{1,3}\s*열|\b[A-Z]{1,3}\d{1,7}\b/.test(s);
@@ -2721,6 +2741,8 @@ function clarifyVerifierLikelyUnderspecified(text) {
 async function clarifyVerifierAskIfNeeded(userMessage, options) {
   options = options || {};
   if (typeof callLLMOneShot !== "function") return null;
+  const deterministicQuestion = clarifyVerifierDeterministicQuestion(userMessage);
+  if (deterministicQuestion) return deterministicQuestion;
   if (!clarifyVerifierLikelyUnderspecified(userMessage)) return null;         // 명백히 구체적 → 되묻지 않음
   const schema = (typeof buildSchemaSummary === "function") ? buildSchemaSummary() : "";
   const sys = [
@@ -2835,7 +2857,7 @@ async function sendChat() {
       } else if (routeConditionalRowDelete) {
         routingHint = "조건이 붙은 행 삭제 요청입니다. 이번 응답은 반드시 VBA로 작성하세요. Python def transform(ctx)는 절대 출력하지 마세요. 선택한 열/요청 열의 실제 lastRow까지만 대상으로 하고, 전체 시트 끝까지 읽지 마세요. 날짜/숫자 조건(예: 20260403 이전)은 Range.Text와 Range.Value를 모두 안전하게 비교하되, 20260401/2026-03-31/2026/03/31 텍스트와 Excel 실제 날짜 시리얼을 모두 yyyymmdd 정수로 정규화하세요. 날짜 정규화 함수는 값 Variant가 아니라 셀 Range를 인자로 받게 하고, v > 0 And v < 1 은 시간 시리얼이므로 날짜 판정에 쓰지 마세요. Rows(...).Delete를 루프 안에서 반복하지 말고, 임시 보조열(마지막 열+1)에 삭제 대상 행만 표시한 뒤 AutoFilter를 걸고, 헤더를 제외한 명시적 데이터 본문 범위(hdrRow+1:lastRow)의 SpecialCells(xlCellTypeVisible).EntireRow.Delete로 한 번에 삭제하세요. usedRng.SpecialCells(...).Offset(1,0).Resize(...) 패턴은 쓰지 마세요. 삭제 대상 0건은 오류가 아니라 정상 종료입니다.";
       } else if (routeFilterToNewSheet) {
-        routingHint = "특정 열 값/조건으로 행을 찾아 새 시트에 복사하는 요청입니다. 이번 응답은 반드시 VBA로 작성하세요. Python def transform(ctx)는 절대 출력하지 마세요. 27만 행 이상 같은 큰 파일도 처리해야 하므로 ctx.read/filter_to_sheet 방식은 쓰지 말고 Excel AutoFilter + SpecialCells(xlCellTypeVisible).Copy Destination 방식으로 처리하세요. 전체 열/전체 시트 끝까지 읽지 말고 요청 열의 실제 lastRow와 헤더 행을 기준으로 데이터 범위를 한정하세요. 사용자가 마지막 행 번호를 제공했다면 그 행까지만 대상으로 쓰세요. 새 시트에는 헤더와 필터된 행 전체를 복사하고, 원본 시트는 보존하세요. 긴 숫자 ID/계약번호/전화번호는 원본 형식이 텍스트라면 텍스트 그대로 보존되도록 원본 범위를 네이티브 Copy로 옮기고, Value 배열 재작성으로 과학표기/15자리 손실을 만들지 마세요. 매칭 0건이면 오류가 아니라 빈 결과 시트 또는 명확한 Err.Raise로 처리하세요.";
+        routingHint = "특정 열 값/조건으로 행을 찾아 새 시트에 복사하는 요청입니다. 이번 응답은 반드시 VBA로 작성하세요. Python def transform(ctx)는 절대 출력하지 마세요. 27만 행 이상 같은 큰 파일도 처리해야 하므로 ctx.read 방식으로 전체 범위를 Python 배열에 올리지 말고 Excel AutoFilter + SpecialCells(xlCellTypeVisible).Copy Destination 방식으로 처리하세요. 전체 열/전체 시트 끝까지 읽지 말고 요청 열의 실제 lastRow와 헤더 행을 기준으로 데이터 범위를 한정하세요. 사용자가 마지막 행 번호를 제공했다면 그 행까지만 대상으로 쓰세요. AutoFilter Field 번호는 절대 열 번호가 아니라 필터 범위 안의 상대 번호입니다(targetCol-firstCol+1). Range가 E열부터 시작하면 Field:=1이고, A열부터 시작하면 E열은 Field:=5입니다. SpecialCells는 매칭 0건이면 오류가 나므로 호출 전에 Subtotal(103, 필터대상열 본문범위)로 보이는 데이터 행 수를 확인하고, 0건이면 새 시트에 헤더만 만들고 정상 종료하세요. 병합 해제 뒤 생긴 빈칸은 임의로 채우지 말고 현 상태에서 조건값이 실제로 들어 있는 행만 필터하세요. 새 시트에는 헤더와 필터된 행 전체를 복사하고, 원본 시트는 보존하세요. 긴 숫자 ID/계약번호/전화번호는 원본 형식이 텍스트라면 텍스트 그대로 보존되도록 원본 범위를 네이티브 Copy로 옮기고, Value 배열 재작성으로 과학표기/15자리 손실을 만들지 마세요.";
       } else if (routeMultiValueLookup) {
         routingHint = "한 셀에 여러 값이 들어 있는 열을 분해해 다른 파일 열과 정확 매칭하고 합산해 쓰는 요청입니다. 이번 응답은 반드시 VBA로 작성하세요. BP/BQ/AA 같은 다중문자 열은 숫자로 암산하지 말고 ws.Columns(\"BP\").Column 또는 ws.Cells(r, \"BP\")처럼 열 문자를 그대로 쓰세요. Excel VBA에는 Continue For가 없으므로 If Len(tok)>0 Then ... End If 구조를 쓰세요. 대상 H열 전체 범위를 배열로 다시 쓰지 말고, matchedAny=True인 데이터 행의 wsOut.Cells(r, \"H\").Value만 개별 갱신하세요. 매칭 없는 행, H열 기존 텍스트/수식, P열이 부가세포함/합계/소계 같은 요약 라벨인 행은 그대로 두세요.";
       } else {
@@ -2852,6 +2874,8 @@ async function sendChat() {
         routingHint = "동일 포맷의 여러 입력 파일 표를 출력 파일 새 시트에 헤더 1회만 남기고 이어붙이는 요청입니다. 반드시 Python ctx 헬퍼만 쓰고 VBA(Sub B2BSkill())는 출력하지 마세요. 출력 파일 ctx에서 ctx.book(\"출력파일.xlsx\").append_same_format_sheets([\"입력1.xlsx\", \"입력2.xlsx\"], dest_sheet=\"가입자별청구내역_통합\", src_sheet=None) 형태로 작성하세요. src_sheet가 명확히 'sheet'이면 src_sheet=\"sheet\"를 넘기고, 아니면 None으로 두어 각 입력 파일 첫 시트를 쓰세요. 이 헬퍼가 상단 30행에서 실제 헤더를 자동 탐지하고 첫 파일은 헤더 포함, 이후 파일은 헤더 다음 행부터 Excel 네이티브 Copy로 붙입니다. 자유 VBA로 hdrRow=1/A열 lastRow/1행 lastCol을 직접 짜지 마세요. 빈 새 시트가 생기거나 긴 가입번호/EID/날짜/회계 서식이 손상됩니다.";
       } else if (routePivot) {
         routingHint = "그룹 요약/피벗/크로스탭 요청입니다. 직접 집계·정렬·헤더를 손코딩하지 말고 반드시 ctx.pivot 한 줄로 처리하세요. 1D 그룹요약: ctx.pivot(\"시트\", group_by=\"지점\", value=\"매출\", agg=\"sum\", dest_name=\"결과시트\"). 2D 크로스탭(행/열/값): ctx.pivot(\"시트\", group_by=\"지점\", column=\"월\", value=\"매출\", agg=\"sum\", dest_name=\"결과시트\"). agg는 sum/count/avg/max/min. group_by/column/value 는 헤더명을 쓰고, 시트명은 한 글자도 바꾸지 말고 그대로 쓰세요. dest_name 시트가 이미 있으면 다른 이름을 쓰세요.";
+      } else if (routeFilterToNewSheet) {
+        routingHint = "특정 열 값/조건으로 행을 찾아 새 시트에 복사하는 요청입니다. 반드시 Python ctx.filter_to_sheet 헬퍼를 우선 사용하고 VBA(Sub B2BSkill())는 출력하지 마세요. 직접 ctx.read로 전체 범위를 읽어 Python 루프로 필터링하거나 ctx.write로 행을 재작성하지 마세요. 필터 대상 열은 ctx.find_header 또는 명시 열 주소로 정확히 찾고, 한글/텍스트 비교는 ctx.normalize(셀값) == ctx.normalize(\"조건값\") 형태로 비교하세요. 헤더가 2행이면 ctx.find_header(..., header_row=2)와 ctx.filter_to_sheet(..., header_rows=2)를 함께 쓰세요. 새 시트는 원본이 속한 워크북에 만들고, 원본 시트는 보존하세요. @범위/@시트의 파일명·시트명은 번역·영문화·띄어쓰기 보정 없이 그대로 사용하세요.";
       } else if (routeCtxHelper) {
         routingHint = "시트 복사/복사후 이름변경/추가/삭제 또는 단순 정렬 요청입니다. 반드시 ctx 헬퍼를 쓰세요: ctx.copy_sheet(\"시트\", dst_book=\"대상.xlsx\", new_name=\"새이름\") / ctx.rename_sheet(\"기존\",\"새\") / ctx.add_sheet / ctx.delete_sheet / ctx.sort(시트, 범위, key_col=열문자, has_header=True). 정렬에서 @범위가 L2:L8929처럼 키 열만 가리키면 그 열만 정렬하지 말고 표 전체 범위(예: A1:L8929)를 잡고 key_col=\"L\"로 정렬하세요. 범위가 1행 헤더를 포함하면 has_header=True, 2행부터 시작해 헤더가 없으면 has_header=False를 쓰세요. 정렬은 기존 셀 값·수식·날짜·회계 서식이 행과 함께 이동해야 하므로, ctx.read/sorted/ctx.write 또는 값 배열 재작성으로 흉내내지 마세요(EID/가입번호 같은 긴 숫자 텍스트가 8.90E+31 형태로 손실될 수 있음). @시트/@파일 이름은 한 글자도 바꾸지 말고 그대로 쓰세요.";
       } else {
