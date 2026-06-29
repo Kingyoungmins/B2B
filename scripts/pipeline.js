@@ -1386,6 +1386,16 @@ function applyVbaStepToLiveExcel(step, excelId, options = {}) {
   // [0.5.2.2] 언어에 따라 실행기 선택 — python(def transform(ctx)) 은 Python COM 라이브 엔진.
   const liveLang = step.language || (typeof inferPipelineStepLanguage === "function" ? inferPipelineStepLanguage(step) : "vba");
   const liveEndpoint = liveLang === "python" ? "/api/excel/run-python" : "/api/excel/run-vba";
+  try {
+    if (typeof traceClientUiEvent === "function") traceClientUiEvent("pipeline.apply_live.start", {
+      stepId: step.id || "",
+      excelId: excelId || "",
+      liveLang,
+      appendToPipeline,
+      pipelineLen: Array.isArray(state.pipeline) ? state.pipeline.length : -1,
+      desc: String(step.description || "").slice(0, 120),
+    });
+  } catch (_) {}
   let prehideMs = 0;
   let requestMs = 0;
   if (appendToPipeline && typeof pushHistory === "function") pushHistory("단계 추가");
@@ -1404,20 +1414,27 @@ function applyVbaStepToLiveExcel(step, excelId, options = {}) {
     liveLang === "python" ? "스킬 적용 중(Python)..." : "스킬 적용 중(VBA)...",
     { failsafeMs: liveLang === "python" ? 130000 : 110000 }
   );
+  try { if (typeof traceClientUiEvent === "function") traceClientUiEvent("pipeline.apply_live.loading_started", { stepId: step.id || "", liveLang }); } catch (_) {}
   const prehide = typeof hideAllExcelMirrorWindows === "function"
     ? (async () => {
         const started = performance.now();
+        try { if (typeof traceClientUiEvent === "function") traceClientUiEvent("pipeline.apply_live.prehide_start", { stepId: step.id || "" }); } catch (_) {}
         try {
           await hideAllExcelMirrorWindows();
         } catch (_) {
         } finally {
           prehideMs = performance.now() - started;
+          try { if (typeof traceClientUiEvent === "function") traceClientUiEvent("pipeline.apply_live.prehide_end", { stepId: step.id || "", prehideMs: Math.round(prehideMs) }); } catch (_) {}
         }
       })()
     : Promise.resolve();
   const promise = prehide
     .then(async () => {
-      if (appendToPipeline) await captureStepPreApplySnapshot(step, excelId);
+      if (appendToPipeline) {
+        try { if (typeof traceClientUiEvent === "function") traceClientUiEvent("pipeline.apply_live.snapshot_before", { stepId: step.id || "", excelId }); } catch (_) {}
+        await captureStepPreApplySnapshot(step, excelId);
+        try { if (typeof traceClientUiEvent === "function") traceClientUiEvent("pipeline.apply_live.snapshot_after", { stepId: step.id || "", hasSnapshot: !!step._preApplySnapshot }); } catch (_) {}
+      }
       const requestStarted = performance.now();
       // [0.5.15 크래시 수정] VBA 단일 적용을 '라이브(임베드/오버레이) Excel'에서 직접 Application.Run 하면
       // 간헐적 RPC 사망으로 백엔드 프로세스가 통째로 죽어(→ 네이티브 호스트 자동 재시작 = "앱이 내려갔다
@@ -1431,12 +1448,14 @@ function applyVbaStepToLiveExcel(step, excelId, options = {}) {
         : { excelId, code: step.code };
       // 격리는 인스턴스 spawn 이 포함돼 라이브 직접보다 느리다 → VBA 타임아웃을 넉넉히(저사양 대비).
       const liveTimeoutMs = liveLang === "python" ? 105000 : 180000;
+      try { if (typeof traceClientUiEvent === "function") traceClientUiEvent("pipeline.apply_live.request_before", { stepId: step.id || "", endpoint: reqUrl, timeoutMs: liveTimeoutMs }); } catch (_) {}
       return postExcelMirror(reqUrl, reqBody, 0, {
         timeoutMs: liveTimeoutMs,
         timeoutMessage: "스킬 실행 응답이 지연되어 중단했습니다. 저사양 PC에서는 백그라운드에서 계속 적용 중일 수 있으니 잠시 후 화면을 확인해 주세요.",
       })
         .then(data => {
           requestMs = performance.now() - requestStarted;
+          try { if (typeof traceClientUiEvent === "function") traceClientUiEvent("pipeline.apply_live.request_after", { stepId: step.id || "", endpoint: reqUrl, requestMs: Math.round(requestMs), ok: !!(data && data.ok !== false) }); } catch (_) {}
           return data;
         });
     })
@@ -1471,6 +1490,7 @@ function applyVbaStepToLiveExcel(step, excelId, options = {}) {
         server: (data && data.debugTimings) || {},
       });
       if (showToasts) toast(`"${step.description}" 적용됨`, "success");
+      try { if (typeof traceClientUiEvent === "function") traceClientUiEvent("pipeline.apply_live.done", { stepId: step.id || "", totalClientMs: Math.round(performance.now() - perfStartedAt) }); } catch (_) {}
       return true;
     })
     .catch(err => {
@@ -1501,6 +1521,7 @@ function applyVbaStepToLiveExcel(step, excelId, options = {}) {
       renderPipeline();
       refreshRunButton();
       if (options.reportError !== false) reportPipelineError(err);
+      try { if (typeof traceClientUiEvent === "function") traceClientUiEvent("pipeline.apply_live.error", { stepId: step.id || "", message: String((err && err.message) || err || "").slice(0, 500) }); } catch (_) {}
       throw err;
     });
   if (showToasts) toast(`"${step.description}" 단계를 라이브 Excel에 적용 중...`, "success");

@@ -1188,17 +1188,29 @@ function pythonComStaticSafetyFailures(code, sourceUserMessage) {
     }
     const recv = Array.from(ctxAliases).join("|");
     // 들여쓰기 인식: '루프 헤더보다 깊게 들여쓴 줄'만 루프 본문으로 본다.
-    // (이전 정규식은 들여쓰기를 안 봐서, 루프 "다음에" 오는 ctx.write() — 권장 패턴 —
-    //  까지 루프 안으로 오인해 for 루프가 있으면 사실상 무조건 차단됐다.)
-    const loopWriteRe = new RegExp(
-      "^([ \\t]*)(?:for|while)\\s[^\\n]*:[ \\t]*\\n" +   // 루프 헤더(들여쓰기 캡처)
-      "(?:(?:\\1[ \\t]+[^\\n]*)?\\n)*?" +                 // 본문: 더 깊은 들여쓰기 줄/빈 줄만 통과
-      "\\1[ \\t]+[^\\n]*\\b(?:" + recv + ")" +
-      "(?:\\s*\\.\\s*book\\s*\\([^\\n]*?\\))?" +          // ctx.book("...").write(...) 체이닝 포함
-      "\\s*\\.\\s*(?:write|write_cell|write_formulas|insert_rows|insert_cols|merge|unmerge|sort)\\s*\\(",
-      "m"
+    // [성능 수정] 이전엔 본문 전체를 한 정규식으로 매칭했는데 "(?:(?:\1[ \t]+...)?\n)*?" 의
+    // '옵션 안 별표'가 catastrophic backtracking 을 일으켜, else/try/except 로 본문이 길어진
+    // 코드의 [적용] 정적검사가 수 분간 멈췄다(저사양일수록 심함 — run-python 은 1초인데 검사가 수분).
+    // 같은 의미를 줄 단위 스캔으로 대체한다 — 백트래킹 불가능, O(줄수).
+    const ctxWriteRe = new RegExp(
+      "\\b(?:" + recv + ")\\s*(?:\\.\\s*book\\s*\\([^\\n]*?\\))?" +   // ctx 또는 ctx.book("...") 체이닝
+      "\\s*\\.\\s*(?:write|write_cell|write_formulas|insert_rows|insert_cols|merge|unmerge|sort)\\s*\\("
     );
-    if (loopWriteRe.test(scanText)) { // 루프 본문의 주석("# ctx.write 는 밖에서") 오탐 방지
+    const _gateLines = scanText.split("\n");
+    const _indentLen = (s) => /^[ \t]*/.exec(s)[0].length;
+    let _loopWriteHit = false;
+    for (let _i = 0; _i < _gateLines.length && !_loopWriteHit; _i++) {
+      const _h = /^([ \t]*)(?:for|while)\s[^\n]*:[ \t]*$/.exec(_gateLines[_i]);
+      if (!_h) continue;                              // 루프 헤더 줄이 아니면 skip
+      const _headIndent = _h[1].length;
+      for (let _j = _i + 1; _j < _gateLines.length; _j++) {
+        const _ln = _gateLines[_j];
+        if (_ln.trim() === "") continue;              // 빈 줄 — 아직 본문
+        if (_indentLen(_ln) <= _headIndent) break;    // 들여쓰기가 헤더 이하로 빠짐 — 본문 끝
+        if (ctxWriteRe.test(_ln)) { _loopWriteHit = true; break; }  // 루프 본문에서 ctx 쓰기 반복
+      }
+    }
+    if (_loopWriteHit) { // 루프 본문 주석("# ctx.write 는 밖에서")은 _stripPythonCommentsForGate 가 이미 제거
       failures.push("루프 안에서 ctx 쓰기 함수를 반복 호출하면 안 됩니다. 값을 2차원 리스트로 모은 뒤 ctx.write() 한 번으로 쓰세요.");
     }
   }
@@ -1604,6 +1616,27 @@ function validateAssistantCodeBeforeApply(code, context) {
   const codeText = String(code || "");
   const isPythonSkill = /def\s+transform\s*\(\s*ctx\s*\)\s*:/.test(codeText) ||
     (/\bctx\.\w+\s*\(/.test(codeText) && !/\bSub\s+\w+\s*\(/i.test(codeText));
+  try {
+    if (typeof traceClientUiEvent === "function") traceClientUiEvent("apply.validate.start", {
+      mode: context.autoApplyMode || "",
+      language: isPythonSkill ? "python" : "vba",
+      codeHash: String(codeText.length) + ":" + String(codeText.charCodeAt(0) || 0),
+      sourceLen: sourceUserMessage.length,
+    });
+  } catch (_) {}
+  const traceValidationStage = (name, fn) => {
+    const started = performance.now();
+    try {
+      return fn();
+    } finally {
+      try {
+        if (typeof traceClientUiEvent === "function") traceClientUiEvent("apply.validate.stage", {
+          stage: name,
+          ms: Math.round(performance.now() - started),
+        });
+      } catch (_) {}
+    }
+  };
   if (isPythonSkill && userExplicitlyRequestsVba(sourceUserMessage)) {
     const reason = "사용자가 이번 요청에서 VBA/매크로로 작성하라고 명시했는데 Python COM 코드가 생성되었습니다. Python 으로 적용하지 않고 VBA 매크로로 다시 생성합니다.";
     if (!context.vbaFallbackTried) {
@@ -1614,8 +1647,8 @@ function validateAssistantCodeBeforeApply(code, context) {
     return false;
   }
   const commonFailures = [
-    ...exactReferenceFailures(code, sourceUserMessage),
-    ...wholeColumnCountRowTwoFailures(code, sourceUserMessage),
+    ...traceValidationStage("exactReferenceFailures", () => exactReferenceFailures(code, sourceUserMessage)),
+    ...traceValidationStage("wholeColumnCountRowTwoFailures", () => wholeColumnCountRowTwoFailures(code, sourceUserMessage)),
   ];
   if (commonFailures.length) {
     const attemptsSoFar = Number(context.staticRegenAttempt || 0);
@@ -1642,10 +1675,11 @@ function validateAssistantCodeBeforeApply(code, context) {
         context,
       );
     }
+    try { if (typeof traceClientUiEvent === "function") traceClientUiEvent("apply.validate.block", { reason: "commonFailures", count: commonFailures.length }); } catch (_) {}
     return false;
   }
   if (isPythonSkill) {
-    const mustUseVba = pythonComMustUseVbaReason(code, sourceUserMessage);
+    const mustUseVba = traceValidationStage("pythonComMustUseVbaReason", () => pythonComMustUseVbaReason(code, sourceUserMessage));
     // [사용자 지시] 사용자가 python/COM 을 명시했으면 위험작업이라도 VBA 강제전환하지 않고 python 유지
     // (멈춤/실패 시 에러복구가 VBA 로 되돌림). 명시가 없을 때만 기존 안전 전환 동작.
     const hardVbaReason = typeof isHardPythonComVbaReason === "function" && isHardPythonComVbaReason(mustUseVba);
@@ -1655,9 +1689,10 @@ function validateAssistantCodeBeforeApply(code, context) {
       } else {
         showCodeGuardBlock(mustUseVba, context);
       }
+      try { if (typeof traceClientUiEvent === "function") traceClientUiEvent("apply.validate.block", { reason: "pythonMustUseVba" }); } catch (_) {}
       return false;
     }
-    const pyFailures = pythonComStaticSafetyFailures(code, sourceUserMessage);
+    const pyFailures = traceValidationStage("pythonComStaticSafetyFailures", () => pythonComStaticSafetyFailures(code, sourceUserMessage));
     if (pyFailures.length) {
       const attemptsSoFar = Number(context.staticRegenAttempt || 0);
       if (attemptsSoFar < PYTHON_STATIC_MAX_REGEN) {
@@ -1675,11 +1710,13 @@ function validateAssistantCodeBeforeApply(code, context) {
           context,
         );
       }
+      try { if (typeof traceClientUiEvent === "function") traceClientUiEvent("apply.validate.block", { reason: "pythonStatic", count: pyFailures.length }); } catch (_) {}
       return false;
     }
+    try { if (typeof traceClientUiEvent === "function") traceClientUiEvent("apply.validate.ok", { language: "python" }); } catch (_) {}
     return true; // 아래 VBA 전용 휴리스틱은 건너뜀
   }
-  const vbaReferenceFailures = vbaExactSheetReferenceFailures(code, sourceUserMessage);
+  const vbaReferenceFailures = traceValidationStage("vbaExactSheetReferenceFailures", () => vbaExactSheetReferenceFailures(code, sourceUserMessage));
   if (vbaReferenceFailures.length) {
     const attemptsSoFar = Number(context.staticRegenAttempt || 0);
     if (attemptsSoFar < VBA_STATIC_MAX_REGEN && !context.vbaFallbackTried) {
@@ -1691,11 +1728,12 @@ function validateAssistantCodeBeforeApply(code, context) {
         context,
       );
     }
+    try { if (typeof traceClientUiEvent === "function") traceClientUiEvent("apply.validate.block", { reason: "vbaReference", count: vbaReferenceFailures.length }); } catch (_) {}
     return false;
   }
   // 0) VBA 런타임 안전 하드블록(On Error Resume Next, MsgBox, Workbooks.Open/.Save/.Close,
   //    Application.Quit, Shell, 무관 전체시트순회, 파일 CreateObject). 위반 시 자동 재생성.
-  const safetyFailures = vbaStaticSafetyFailures(code, sourceUserMessage);
+  const safetyFailures = traceValidationStage("vbaStaticSafetyFailures", () => vbaStaticSafetyFailures(code, sourceUserMessage));
   if (safetyFailures.length) {
     const attemptsSoFar = Number(context.staticRegenAttempt || 0);
     if (context.vbaFallbackTried) {
@@ -1713,21 +1751,26 @@ function validateAssistantCodeBeforeApply(code, context) {
         context,
       );
     }
+    try { if (typeof traceClientUiEvent === "function") traceClientUiEvent("apply.validate.block", { reason: "vbaStatic", count: safetyFailures.length }); } catch (_) {}
     return false;
   }
-  if (codeHasBroadValueRewrite(code)
+  const broadValueRewrite = traceValidationStage("codeHasBroadValueRewrite", () => codeHasBroadValueRewrite(code));
+  if (broadValueRewrite
       && !userExplicitlyRequestsForceProceed(sourceUserMessage)
       && !/표\s*전체|시트\s*전체|UsedRange|전체\s*범위/i.test(sourceUserMessage)) {
     const message = "표 전체/UsedRange를 Value 배열로 다시 쓰는 VBA가 감지되어 적용을 막았습니다. 요청받은 대상 열/셀 범위만 한정해서 쓰는 코드로 다시 생성해 주세요.";
     showCodeGuardBlock(message, context);
+    try { if (typeof traceClientUiEvent === "function") traceClientUiEvent("apply.validate.block", { reason: "broadValueRewrite" }); } catch (_) {}
     return false;
   }
   // VBA 응답에도 같은 줄 도배(degenerate) 가드를 적용한다(Python 쪽은 COM 게이트가 담당).
-  const degen = pythonDegenerateOutputFailure(code);
+  const degen = traceValidationStage("pythonDegenerateOutputFailure", () => pythonDegenerateOutputFailure(code));
   if (degen) {
     showCodeGuardBlock(degen, context);
+    try { if (typeof traceClientUiEvent === "function") traceClientUiEvent("apply.validate.block", { reason: "degenerateOutput" }); } catch (_) {}
     return false;
   }
+  try { if (typeof traceClientUiEvent === "function") traceClientUiEvent("apply.validate.ok", { language: "vba" }); } catch (_) {}
   return true;
 }
 
@@ -1890,6 +1933,7 @@ function addAssistantReply(fullText, replyContext) {
         }
       };
       editApplyBtn.onclick = () => {
+        try { if (typeof traceClientUiEvent === "function") traceClientUiEvent("apply.button.click", { action: "edit", disabled: !!editApplyBtn.disabled }); } catch (_) {}
         const validationContext = {
           ...(replyContext || {}),
           autoApplyMode: "edit",
@@ -1897,6 +1941,7 @@ function addAssistantReply(fullText, replyContext) {
           onForceApply: runEditApply,
         };
         if (!validateAssistantCodeBeforeApply(code, validationContext)) return;
+        try { if (typeof traceClientUiEvent === "function") traceClientUiEvent("apply.button.run_apply", { action: "edit" }); } catch (_) {}
         runEditApply();
       };
       if (replyContext && replyContext.autoApplyMode === "edit") {
@@ -1954,6 +1999,7 @@ function addAssistantReply(fullText, replyContext) {
         }, Number.isFinite(preferredPosition) ? preferredPosition : undefined);
       };
       applyBtn.onclick = () => {
+        try { if (typeof traceClientUiEvent === "function") traceClientUiEvent("apply.button.click", { action: "apply", disabled: !!applyBtn.disabled }); } catch (_) {}
         const validationContext = {
           ...(replyContext || {}),
           autoApplyMode: "apply",
@@ -1961,9 +2007,11 @@ function addAssistantReply(fullText, replyContext) {
           onForceApply: runApply,
         };
         if (!validateAssistantCodeBeforeApply(code, validationContext)) return;
+        try { if (typeof traceClientUiEvent === "function") traceClientUiEvent("apply.button.run_apply", { action: "apply" }); } catch (_) {}
         runApply();
       };
       insertBtn.onclick = () => {
+        try { if (typeof traceClientUiEvent === "function") traceClientUiEvent("apply.button.click", { action: "insert", disabled: !!insertBtn.disabled }); } catch (_) {}
         const validationContext = {
           ...(replyContext || {}),
           autoApplyMode: "insert",
@@ -1971,6 +2019,7 @@ function addAssistantReply(fullText, replyContext) {
           onForceApply: runInsert,
         };
         if (!validateAssistantCodeBeforeApply(code, validationContext)) return;
+        try { if (typeof traceClientUiEvent === "function") traceClientUiEvent("apply.button.run_apply", { action: "insert" }); } catch (_) {}
         runInsert();
       };
       rejectBtn.onclick = () => {

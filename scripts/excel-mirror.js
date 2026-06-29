@@ -63,7 +63,33 @@ function publishNativeUiBusy(active, label) {
 // 120ms 이상 길어지는 작업만 오버레이로 표시한다. 빠른 탭 전환은 깜빡임을 줄이고,
 // 느린 Excel COM 작업은 사용자가 "지금 조작 불가"임을 명확히 볼 수 있게 한다.
 // 안전장치: 어떤 버그로 해제가 누락돼도 토큰마다 90초 후 자동 해제된다.
-const uiBusy = { count: 0, el: null, since: 0, guardInstalled: false };
+const uiBusy = { count: 0, el: null, since: 0, guardInstalled: false, lastBlockedTraceAt: 0 };
+
+function traceClientUiEvent(event, fields = {}) {
+  const now = Date.now();
+  const overlay = uiBusy.el;
+  const snapshot = {
+    clientTs: new Date(now).toISOString(),
+    perfMs: Math.round(performance.now()),
+    uiBusyCount: uiBusy.count,
+    uiBusyHeldMs: uiBusy.count > 0 && uiBusy.since ? now - uiBusy.since : 0,
+    overlayShown: !!(overlay && overlay.classList && overlay.classList.contains("show")),
+    excelApplying: !!excelMirror.applying,
+    hasApplyBusyToken: !!excelMirror.applyBusyToken,
+    activeExcelId: excelMirror.activeExcelId || "",
+    nativeShell: typeof isNativeExcelShell === "function" ? !!isNativeExcelShell() : false,
+    ...fields,
+  };
+  try { console.debug("[client-trace]", event, snapshot); } catch (_) {}
+  try {
+    fetch("/api/client/trace", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ event, fields: snapshot }),
+      keepalive: true,
+    }).catch(() => {});
+  } catch (_) {}
+}
 
 function _ensureUiBusyOverlay() {
   if (uiBusy.el) return uiBusy.el;
@@ -141,6 +167,15 @@ function _installUiBusyInputGuard() {
       const overlay = uiBusy.el;
       if (!isUiBusy() || !overlay || !overlay.classList.contains("show")) return;
       if (overlay.contains(e.target)) return;
+      const now = Date.now();
+      if (now - (uiBusy.lastBlockedTraceAt || 0) > 2000) {
+        uiBusy.lastBlockedTraceAt = now;
+        traceClientUiEvent("ui.busy.input_blocked", {
+          inputType: type,
+          targetTag: e.target && e.target.tagName ? e.target.tagName : "",
+          targetClass: e.target && e.target.className ? String(e.target.className).slice(0, 160) : "",
+        });
+      }
       e.stopPropagation();
       e.preventDefault();
     }, true);
@@ -154,6 +189,12 @@ function isUiBusy() {
 function beginUiBusy(label = "작업 중...", options = {}) {
   uiBusy.count += 1;
   if (uiBusy.count === 1) uiBusy.since = Date.now();
+  traceClientUiEvent("ui.busy.begin", {
+    label,
+    showDelayMs: Math.max(0, Number(options.showDelayMs ?? 120)),
+    failsafeMs: Math.max(1000, Number(options.failsafeMs || 90000)),
+    hasStop: typeof options.onStop === "function",
+  });
   const showDelayMs = Math.max(0, Number(options.showDelayMs ?? 120));
   try {
     const el = _ensureUiBusyOverlay();
@@ -201,7 +242,11 @@ function beginUiBusy(label = "작업 중...", options = {}) {
 }
 
 function endUiBusy(token, opts = {}) {
-  if (!token || token.released) return;
+  if (!token || token.released) {
+    traceClientUiEvent("ui.busy.end_ignored", { hasToken: !!token, alreadyReleased: !!(token && token.released) });
+    return;
+  }
+  traceClientUiEvent("ui.busy.end", { failsafe: !!opts.failsafe, silentComplete: !!opts.silentComplete });
   token.released = true;
   clearTimeout(token.showTimer);
   clearTimeout(token.timer);
@@ -1153,6 +1198,13 @@ function showExcelApplyCancelButton(show) {
 // 적용 시작: 모든 미러 창을 숨기고(park) 네이티브 패널의 로딩 애니메이션을 돌린다.
 // (미러를 숨겨야 적용 중 여러 Excel 창이 앞으로 튀어나오지 않고, 패널의 로딩 표시가 보인다.)
 function beginExcelMirrorApplyLoading(message, options = {}) {
+  traceClientUiEvent("excel.apply_loading.begin", {
+    message: message || "적용 반영 중...",
+    requestedFailsafeMs: options.failsafeMs || "",
+    existingToken: !!excelMirror.applyBusyToken,
+    forceHideWindows: options.forceHideWindows === true,
+    hideWindowsOption: options.hideWindows,
+  });
   excelMirror.applying = true;
   if (!excelMirror.applyBusyToken && typeof beginUiBusy === "function") {
     excelMirror.applyBusyToken = beginUiBusy(message || "적용 반영 중...", {
@@ -1176,6 +1228,10 @@ function beginExcelMirrorApplyLoading(message, options = {}) {
   if (typeof showExcelApplyCancelButton === "function") showExcelApplyCancelButton(true);
   const label = message || "적용 반영 중...";
   const hideWindows = options.forceHideWindows === true || (!isNativeExcelShell() && options.hideWindows !== false);
+  traceClientUiEvent("excel.apply_loading.hide_decision", {
+    hideWindows,
+    nativeShell: isNativeExcelShell(),
+  });
   if (hideWindows && typeof hideAllExcelMirrorWindows === "function") {
     hideAllExcelMirrorWindows().catch(() => {});
   }
@@ -1193,6 +1249,11 @@ function beginExcelMirrorApplyLoading(message, options = {}) {
 }
 
 function endExcelMirrorApplyLoading() {
+  traceClientUiEvent("excel.apply_loading.end", {
+    hadToken: !!excelMirror.applyBusyToken,
+    hadTimer: !!excelMirror.applyLoadingTimer,
+    applying: !!excelMirror.applying,
+  });
   if (excelMirror.applyBusyToken && typeof endUiBusy === "function") {
     endUiBusy(excelMirror.applyBusyToken, { silentComplete: true });
     excelMirror.applyBusyToken = null;

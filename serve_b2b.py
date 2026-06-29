@@ -980,6 +980,9 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
         if self.path == "/api/pipeline/cancel":
             self.handle_pipeline_cancel()
             return
+        if self.path == "/api/client/trace":
+            self.handle_client_trace()
+            return
         if self.path == "/api/excel/open":
             self.handle_excel_open()
             return
@@ -1098,6 +1101,23 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
             # NativeHost/WebView can close before cleanup responses are flushed.
             # Treat this as a normal shutdown/reset race instead of printing errors.
             return
+
+    def handle_client_trace(self):
+        try:
+            payload = self.read_json_body()
+            event = re.sub(r"[^a-zA-Z0-9_.:-]+", "_", str(payload.get("event") or "unknown"))[:120]
+            fields = payload.get("fields") if isinstance(payload.get("fields"), dict) else {}
+            clean = {}
+            for key, value in fields.items():
+                key = re.sub(r"[^a-zA-Z0-9_.:-]+", "_", str(key))[:80]
+                if isinstance(value, (str, int, float, bool)) or value is None:
+                    clean[key] = value if not isinstance(value, str) else value[:500]
+                else:
+                    clean[key] = json.dumps(value, ensure_ascii=False, default=str)[:500]
+            _perf_trace("client." + event, **clean)
+            self.send_json({"ok": True})
+        except Exception as err:
+            self.send_json({"ok": False, "error": str(err)}, status=500)
 
     def handle_current_view_diff(self):
         try:
@@ -4306,6 +4326,21 @@ def _save_excel_session_impl(excel_id, name=None):
                 _protect_workbook_for_read_only_mirror(wb, False)
             except Exception:
                 pass
+        # [멈춤 방지/측정] 적용-前 스냅샷 저장이 라이브(숨김) Excel 에서 분 단위로 블록되던 4분 구간 — 트레이스에
+        # 안 남아 안 보였다. 외부링크 '업데이트?' 모달, 저장-전 재계산, '다른이름저장' 알림이 숨김 창에서 사용자
+        # 입력을 기다리며 멈출 수 있어, 저장 동안 모달 억제 + 재계산 없이 저장하고 소요 ms 를 남긴다.
+        _save_t0 = time.perf_counter()
+        for _attr, _val in (("DisplayAlerts", False), ("AskToUpdateLinks", False), ("EnableEvents", False)):
+            try:
+                setattr(app, _attr, _val)
+            except Exception:
+                pass
+        _save_calc_prev = None
+        try:
+            _save_calc_prev = app.Calculation
+            app.Calculation = -4135  # xlCalculationManual (저장-전 재계산 회피)
+        except Exception:
+            _save_calc_prev = None
         if name:
             BACKEND_DIR.mkdir(parents=True, exist_ok=True)
             safe_name = Path(str(name)).name
@@ -4323,6 +4358,23 @@ def _save_excel_session_impl(excel_id, name=None):
                 safe_name += result_path.suffix or ".xlsx"
             result_path = BACKEND_DIR / f"{uuid.uuid4().hex}_{safe_name}"
             wb.SaveCopyAs(str(result_path))
+        try:
+            if _save_calc_prev is not None:
+                app.Calculation = _save_calc_prev
+        except Exception:
+            pass
+        # [측정] 스냅샷 저장 소요 + 외부링크 수(분 단위 블록의 유력 원인) 기록 → 다음 실행에서 4분이 여기인지 확정.
+        _save_link_n = 0
+        try:
+            _ls = wb.LinkSources(1)  # xlExcelLinks
+            _save_link_n = len(_ls) if _ls is not None else 0
+        except Exception:
+            _save_link_n = -1
+        try:
+            _vba_trace("excel.save.snapshot", excelId=excel_id, name=safe_name,
+                       ms=round((time.perf_counter() - _save_t0) * 1000, 1), linkCount=_save_link_n)
+        except Exception:
+            pass
         if read_only_mirror:
             try:
                 _protect_workbook_for_read_only_mirror(wb, True)
@@ -5957,6 +6009,23 @@ def _alias_ephemeral_excel_open_sheet_name(app, requested_name):
     return unique[0] if len(unique) == 1 else requested
 
 
+def _strip_empty_vba_loops(code):
+    """본문이 비어 있는 `For Each <var> In <expr> … Next` 루프를 제거한다.
+    LLM 이 워크북 찾기 보일러플레이트에 `Dim sh As Worksheet … For Each sh In Application.Workbooks / Next sh`
+    같은 '빈 + 타입 안 맞는' 루프를 끼워넣는 경우가 있는데, Workbooks(=Workbook 컬렉션)를 Worksheet 변수로
+    순회해 런타임 13(형식 불일치)으로 첫 실행이 실패 → 느린 LLM 에러복구 재생성을 유발했다. 빈 루프는 아무
+    동작도 안 하므로 제거해도 무해하고, 이 헛생성으로 인한 실패-재생성 사이클을 없앤다."""
+    text = str(code or "")
+    if not re.search(r"For\s+Each", text, re.I):
+        return text
+    # For Each 한 줄 → (빈 줄들) → Next 한 줄 (사이에 실제 문장이 없는 경우만) 제거.
+    return re.sub(
+        r"(?im)^[ \t]*For\s+Each\s+\w+\s+In\s+[^\r\n]+\r?\n(?:[ \t]*\r?\n)*[ \t]*Next\b[^\r\n]*\r?\n?",
+        "",
+        text,
+    )
+
+
 def _normalize_vba_workbook_literals(app, code):
     """Patch workbook filename string literals to the actual open workbook name.
 
@@ -6589,6 +6658,7 @@ def _inject_and_run_vba(app, wb, code, entry):
         return
     original_code = code
     code = _extract_vba_source_for_injection(code, entry)
+    code = _strip_empty_vba_loops(code)  # 빈 For Each(워크북 헛순회 등) 제거 → 형식불일치 실패-재생성 사이클 차단
     _vba_trace(
         "vba.code.normalized",
         workbook=_trace_workbook_info(wb),
