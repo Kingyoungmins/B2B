@@ -984,6 +984,7 @@ async function runIsolatedLivePipelineSteps(sourceSteps, initialExcelId, options
           groups: bgGroups,
           resetExcelIds,
           viewSheet: options.viewSheet || null,
+          outputMode: options.outputMode || "sync",   // 실행기='file'(라이브 미반영+파일출력), 생성기='sync'
         }, 0, {
           // [저사양 거짓실패 방지] 백그라운드 전체실행은 1콜에 전 스텝 실행 + 스텝별 스냅샷 + 최종 동기화(통째 시트
           // 교체)까지 포함된다. 저사양 PC 에선 75스텝급이 10분(기존)을 훌쩍 넘겨, 'N/N' 후 동기화 중에 타임아웃으로
@@ -1000,10 +1001,17 @@ async function runIsolatedLivePipelineSteps(sourceSteps, initialExcelId, options
       if (lastData && Array.isArray(lastData.stepSnapshots)) {
         wirePipelineStepSnapshots(lastData.stepSnapshots, anchorExcelId, sourceSteps);
       }
-      // 파일별 라이브 미러 캐시(시트명/미리보기) 갱신
+      // 파일별 라이브 미러 캐시(시트명/미리보기) 갱신 (sync 모드 — file 모드는 perFileLiveSchema 비어있음)
       if (lastData && lastData.perFileLiveSchema) {
         for (const exId of Object.keys(lastData.perFileLiveSchema)) {
           try { applyLiveSchemaToFileCache(exId, lastData.perFileLiveSchema[exId]); } catch (_) {}
+        }
+      }
+      // [실행기 파일출력] 결과 파일 목록을 기억(다운로드 버튼 연결) + 완료 안내. 라이브엔 미반영(뷰 없음).
+      if (lastData && Array.isArray(lastData.outputFiles) && lastData.outputFiles.length) {
+        try { window.lastRunnerOutputs = lastData.outputFiles; } catch (_) {}
+        if (typeof window !== "undefined" && typeof window.runnerSetProgress === "function") {
+          window.runnerSetProgress("완료 — 결과 " + lastData.outputFiles.length + "개 파일 저장됨 (다운로드 가능)");
         }
       }
     }
@@ -4745,7 +4753,7 @@ $("runner-run-btn").onclick = () => {
   setTimeout(async () => {
     try {
       clearPipelineExecutionMemory({ keepViewer: true });
-      await runPipelineWithAutoRepair({ source: "runner", ignoreCheckpoint: true, backgroundMode: true });
+      await runPipelineWithAutoRepair({ source: "runner", ignoreCheckpoint: true, backgroundMode: true, outputMode: "file" });
       setPipelineRuntimeStatus(activeStepIds, "applied", "적용됨");
       toast(`${state.pipeline.length}개 단계 실행 완료`, "success");
       if (window.runnerSetDone) window.runnerSetDone();
@@ -4758,6 +4766,24 @@ $("runner-run-btn").onclick = () => {
   }, 650);
 };
 $("runner-download-btn").onclick = () => {
+  // [실행기 파일출력] 직전 실행이 파일출력(outputMode:file)이면 그 결과 파일들을 직접 받는다.
+  // (file 모드는 라이브를 안 건드려서 기존 zip 다운로드는 옛 상태라 안 됨.)
+  const outs = (typeof window !== "undefined" && Array.isArray(window.lastRunnerOutputs)) ? window.lastRunnerOutputs : null;
+  if (outs && outs.length) {
+    outs.forEach((o, i) => {
+      if (!o || !o.downloadUrl) return;
+      setTimeout(() => {
+        try {
+          const a = document.createElement("a");
+          a.href = o.downloadUrl;
+          a.download = o.name || "";
+          document.body.appendChild(a); a.click(); a.remove();
+        } catch (_) {}
+      }, i * 300);  // 다중 파일 다운로드 간격
+    });
+    if (typeof toast === "function") toast(`결과 ${outs.length}개 파일을 다운로드합니다.`, "success");
+    return;
+  }
   if (typeof downloadAllFilesZip === "function") downloadAllFilesZip($("runner-download-btn"));
   else openDownloadModal();
 };

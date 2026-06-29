@@ -180,6 +180,11 @@ def default_logic_backup_dir():
     return writable_app_dir() / "auto_backup"
 
 
+def default_output_dir():
+    # [실행기 파일출력] 전체실행 결과를 라이브에 반영하는 대신 파일로 저장하는 위치(실행 중인 앱 폴더/output).
+    return writable_app_dir() / "output"
+
+
 def logic_backup_dir():
     # [요청] 자동백업은 '항상 실행 중인 앱 위치'(writable_app_dir()/auto_backup)에 만든다.
     # 예전엔 settings.logicBackupDir 고정 경로를 우선해, 실행 버전이 바뀌어도 백업이 옛 버전 폴더(예: 0.5.13)
@@ -1540,6 +1545,7 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
                 reset_excel_ids=reset_excel_ids,
                 view_sheet=payload.get("viewSheet"),
                 entry=payload.get("entry"),
+                output_mode=(payload.get("outputMode") or "sync"),
             )
             _vba_trace("http.run_full_pipeline.response", traceId=trace_id, ok=True, applied=result.get("applied"))
             self.send_json(result)
@@ -7651,7 +7657,7 @@ def run_vba_pipeline_on_session(excel_id, steps, reset=True, entry=None, view_sh
     return excel_call(_run_vba_pipeline_on_session_impl, excel_id, steps, reset=reset, entry=entry, view_sheet=view_sheet, timeout=600)
 
 
-def _run_full_pipeline_single_instance_impl(groups, reset_excel_ids=None, view_sheet=None, entry=None):
+def _run_full_pipeline_single_instance_impl(groups, reset_excel_ids=None, view_sheet=None, entry=None, output_mode="sync"):
     """[0.5.15 백그라운드 전체실행] 격리 인스턴스 '1개'에서 관여 파일 전부를 '원본'부터 열고, 전 그룹·스텝을
     순서대로 실행한 뒤, 변경된 파일만 라이브 세션에 '파일당 1회' 반영한다. 그룹마다 새 인스턴스를 spawn 하고
     파일을 통째 동기화하던 오버헤드(전체실행 '멈춤'의 주원인)를 제거한다 — 실행 중 라이브 뷰는 갱신하지 않고
@@ -7704,7 +7710,7 @@ def _run_full_pipeline_single_instance_impl(groups, reset_excel_ids=None, view_s
         fpid = None
         step_snapshots = []
         byExcel = {}   # excelId -> {"wb","name","session"}
-        result = {"ok": True, "applied": 0, "stepSnapshots": step_snapshots, "perFileLiveSchema": {}}
+        result = {"ok": True, "applied": 0, "stepSnapshots": step_snapshots, "perFileLiveSchema": {}, "outputFiles": []}
         try:
             fapp = win32com.client.DispatchEx("Excel.Application")
             _track_spawned_excel_app(fapp)
@@ -7867,15 +7873,42 @@ def _run_full_pipeline_single_instance_impl(groups, reset_excel_ids=None, view_s
                 if _changed:
                     _to_sync.append((sid, ent))
             _sync_total = len(_to_sync)
+            _is_file_mode = (str(output_mode) == "file")
             for _sync_i, (sid, ent) in enumerate(_to_sync, start=1):
                 try:
                     PIPELINE_PROGRESS[anchor_excel_id] = {"current": total_steps, "total": total_steps,
-                                                          "phase": "syncing", "syncCurrent": _sync_i,
-                                                          "syncTotal": _sync_total, "ts": time.time()}
+                                                          "phase": ("saving" if _is_file_mode else "syncing"),
+                                                          "syncCurrent": _sync_i, "syncTotal": _sync_total, "ts": time.time()}
                 except Exception:
                     pass
                 fwb = ent["wb"]
                 s = ent["session"]
+                if _is_file_mode:
+                    # [실행기 파일출력] 라이브 동기화(통째 시트 교체) 생략 — 결과를 output 폴더에 저장 + 다운로드용
+                    # RESULTS 등록. 라이브 wb 는 안 건드린다(무손상·빠름). 뷰 미반영이라 perFileLiveSchema 도 스킵.
+                    try:
+                        out_dir = default_output_dir()
+                        out_dir.mkdir(parents=True, exist_ok=True)
+                        _stem = Path(ent["name"]).stem
+                        _suf = Path(ent["name"]).suffix or ".xlsx"
+                        _ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+                        out_path = out_dir / ("결과_%s_%s%s" % (_stem, _ts, _suf))
+                        if out_path.exists():
+                            out_path = out_dir / ("결과_%s_%s_%s%s" % (_stem, _ts, uuid.uuid4().hex[:6], _suf))
+                        fwb.SaveCopyAs(str(out_path))
+                        _rid = uuid.uuid4().hex
+                        RESULTS[_rid] = {"path": str(out_path), "name": out_path.name, "created": time.time()}
+                        result["outputFiles"].append({
+                            "excelId": sid, "name": out_path.name, "path": str(out_path),
+                            "downloadId": _rid, "downloadUrl": "/api/workbooks/download/%s" % _rid,
+                        })
+                        _vba_trace("fullrun.file.saved", anchorExcelId=anchor_excel_id, isolatedPid=fpid,
+                                   excelId=sid, name=ent["name"], outputPath=str(out_path))
+                    except Exception as _save_err:
+                        _vba_trace("fullrun.file.save_error", anchorExcelId=anchor_excel_id, isolatedPid=fpid,
+                                   excelId=sid, name=ent["name"], error=str(_save_err))
+                    continue
+                # output_mode == "sync" (생성기): 기존 라이브 동기화
                 try:
                     live_app, live_wb = session_workbook(s)
                 except Exception:
@@ -7966,9 +7999,10 @@ def _run_full_pipeline_single_instance_impl(groups, reset_excel_ids=None, view_s
                     pass
 
 
-def run_full_pipeline_single_instance(groups, reset_excel_ids=None, view_sheet=None, entry=None):
+def run_full_pipeline_single_instance(groups, reset_excel_ids=None, view_sheet=None, entry=None, output_mode="sync"):
     return excel_call(_run_full_pipeline_single_instance_impl, groups,
-                      reset_excel_ids=reset_excel_ids, view_sheet=view_sheet, entry=entry, timeout=3600)
+                      reset_excel_ids=reset_excel_ids, view_sheet=view_sheet, entry=entry,
+                      output_mode=output_mode, timeout=3600)
 
 
 # ===== 복붙 캡처(녹화): 사용자의 Ctrl+C/Ctrl+V 를 역추적해 스킬 스텝으로 저장 =====

@@ -25,6 +25,9 @@ Thumbs.db
 auto_backups/
 auto_backup/
 
+# Runner file-output results
+output/
+
 # Local runtime/debug logs
 vba_pipeline_trace.jsonl
 runtime_load_trace.jsonl

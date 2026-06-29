@@ -41,7 +41,12 @@ async function postExcelMirror(url, payload) {
       excelId: g.excelId, stepIdx: s.stepIdx, stepId: s.stepId,
       downloadId: "dl_" + s.stepId, downloadUrl: "/api/workbooks/download/dl_" + s.stepId, name: s.stepId + ".xlsx",
     })),
-    perFileLiveSchema: { "excel:fileA": { sheets: [] }, "excel:fileB": { sheets: [] } },
+    perFileLiveSchema: payload.outputMode === "file" ? {} : { "excel:fileA": { sheets: [] }, "excel:fileB": { sheets: [] } },
+    // 실행기 파일출력 모드: 결과 파일 목록 반환(라이브 미반영)
+    outputFiles: payload.outputMode === "file"
+      ? [{ excelId: "excel:fileA", name: "결과_A.xlsx", path: "out/결과_A.xlsx", downloadId: "o_A", downloadUrl: "/api/workbooks/download/o_A" },
+         { excelId: "excel:fileB", name: "결과_B.xlsx", path: "out/결과_B.xlsx", downloadId: "o_B", downloadUrl: "/api/workbooks/download/o_B" }]
+      : [],
   };
 }
 function syncStepPreApplySnapshot(step, snap) { if (step && snap) step._preApplySnapshot = { ...snap }; }
@@ -101,6 +106,19 @@ async function main() {
      schemaApplied.includes("excel:fileA") && schemaApplied.includes("excel:fileB"));
   ck("[bg] 공용 정리 fall-through(loading종료/mute해제 균형)",
      loadingStarted === 1 && loadingEnded >= 1 && muted >= 1 && unmuted >= 1);
+  ck("[bg] outputMode 기본=sync(생성기)", p.outputMode === "sync");
+
+  // ── 실행기 파일출력 모드(outputMode:"file") ──
+  calls = []; statuses = []; muted = 0; unmuted = 0; loadingStarted = 0; loadingEnded = 0; schemaApplied = [];
+  globalThis.window = {};  // lastRunnerOutputs 저장 확인용
+  const r2 = await runIsolatedLivePipelineSteps(steps, "excel:fileA", {
+    backgroundMode: true, outputMode: "file", resetFileIds: ["fileA", "fileB"],
+  });
+  const p2 = (calls[0] && calls[0].payload) || {};
+  ck("[file] payload outputMode=file", p2.outputMode === "file");
+  ck("[file] 결과 outputFiles 2개", r2 && Array.isArray(r2.outputFiles) && r2.outputFiles.length === 2);
+  ck("[file] window.lastRunnerOutputs 저장(다운로드 연결)",
+     Array.isArray(window.lastRunnerOutputs) && window.lastRunnerOutputs.length === 2);
 
   console.log(`\n=== RESULT: ${pass} PASS / ${fail} FAIL ===`);
   process.exit(fail ? 1 : 0);
