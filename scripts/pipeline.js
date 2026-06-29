@@ -4765,23 +4765,35 @@ $("runner-run-btn").onclick = () => {
     }
   }, 650);
 };
-$("runner-download-btn").onclick = () => {
-  // [실행기 파일출력] 직전 실행이 파일출력(outputMode:file)이면 그 결과 파일들을 직접 받는다.
-  // (file 모드는 라이브를 안 건드려서 기존 zip 다운로드는 옛 상태라 안 됨.)
+$("runner-download-btn").onclick = async () => {
+  // [실행기 파일출력] 직전 실행이 파일출력(outputMode:file)이면, 변경된 '모든' 파일(수정된 입력 포함)을
+  // 한 zip(전체 다운로드)으로 받는다 — 기존 전체 다운로드와 동일하게 /api/workbooks/archive(서버 zip) 사용.
+  // (file 모드는 라이브를 안 건드려서 기존 collectAllDownloadFiles 기반 zip 은 옛 상태라 안 맞음 → outputFiles 사용.)
   const outs = (typeof window !== "undefined" && Array.isArray(window.lastRunnerOutputs)) ? window.lastRunnerOutputs : null;
   if (outs && outs.length) {
-    outs.forEach((o, i) => {
-      if (!o || !o.downloadUrl) return;
-      setTimeout(() => {
-        try {
-          const a = document.createElement("a");
-          a.href = o.downloadUrl;
-          a.download = o.name || "";
-          document.body.appendChild(a); a.click(); a.remove();
-        } catch (_) {}
-      }, i * 300);  // 다중 파일 다운로드 간격
-    });
-    if (typeof toast === "function") toast(`결과 ${outs.length}개 파일을 다운로드합니다.`, "success");
+    const btn = $("runner-download-btn");
+    const original = btn ? btn.textContent : "";
+    try {
+      if (btn) { btn.disabled = true; btn.textContent = "ZIP 생성 중..."; }
+      const filename = (typeof archiveFilename === "function") ? archiveFilename() : ("결과_" + Date.now() + ".zip");
+      const resp = await fetch("/api/workbooks/archive", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          filename,
+          files: outs.map(o => ({ role: "output", downloadId: o.downloadId, name: o.name })),
+        }),
+      });
+      if (!resp.ok) throw new Error("HTTP " + resp.status);
+      const blob = await resp.blob();
+      if (typeof downloadArchiveBlob === "function") downloadArchiveBlob(blob, filename);
+      if (typeof toast === "function") toast(`결과 ${outs.length}개 파일을 zip 으로 다운로드합니다.`, "success");
+    } catch (err) {
+      if (typeof toast === "function") toast("결과 다운로드 오류: " + (err && err.message ? err.message : err), "error");
+      console.error(err);
+    } finally {
+      if (btn) { btn.textContent = original || "📥 전체 파일 다운로드"; if (typeof refreshRunButton === "function") refreshRunButton(); else btn.disabled = false; }
+    }
     return;
   }
   if (typeof downloadAllFilesZip === "function") downloadAllFilesZip($("runner-download-btn"));

@@ -61,6 +61,21 @@ try:
     print("output 파일:", [f.name for f in files], "| 시트합집합:", sorted(sheets_in_outputs))
     res["결과시트_포함"] = ("A결과" in sheets_in_outputs and "B결과" in sheets_in_outputs)
     res["RESULTS_등록"] = all((o.get("downloadId") in S.RESULTS) for o in ofs)
+    # 전체 다운로드(한 zip) 경로 검증: outputFiles(downloadId)로 archive 묶기 → zip 안에 결과 2파일
+    try:
+        import zipfile
+        arc_path, _fn = S.build_workbook_archive({
+            "filename": "결과_전체.zip",
+            "files": [{"role": "output", "downloadId": o["downloadId"], "name": o["name"]} for o in ofs],
+        })
+        with zipfile.ZipFile(str(arc_path)) as zf:
+            names = zf.namelist()
+        res["전체zip_2파일"] = (len(names) == 2)
+        print("전체 zip 항목:", names)
+        try: Path(arc_path).unlink()
+        except Exception: pass
+    except Exception as e:
+        print("archive 예외:", repr(e)[:160]); res["전체zip_2파일"] = False
     for sid in ("exA", "exB"):
         try: del S.EXCEL_SESSIONS[sid]
         except Exception: pass
@@ -78,6 +93,7 @@ checks = [
     ("output 폴더에 결과 2파일", res.get("output_2개")),
     ("결과 시트(A결과/B결과) 파일에 포함", res.get("결과시트_포함")),
     ("RESULTS 에 다운로드 등록", res.get("RESULTS_등록")),
+    ("전체 다운로드(한 zip)에 결과 2파일", res.get("전체zip_2파일")),
 ]
 fails = 0
 print("\n=== 판정 ===")

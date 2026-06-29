@@ -286,6 +286,19 @@ def hidden_subprocess_kwargs():
     }
 
 
+def _kill_pid_quiet(pid):
+    # [검은창 제거] taskkill 을 os.system 으로 부르면 cmd.exe 콘솔창이 깜빡 떴다 사라진다(생성기 VBA 적용 시
+    # 격리 인스턴스 정리에서 발생). subprocess + CREATE_NO_WINDOW 로 창 없이 종료한다.
+    try:
+        if not pid:
+            return
+        subprocess.run(["taskkill", "/F", "/PID", str(int(pid))],
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                       **hidden_subprocess_kwargs())
+    except Exception:
+        pass
+
+
 def cleanup_node_worker():
     global NODE_WORKER
     worker = NODE_WORKER
@@ -7590,7 +7603,7 @@ def _run_vba_pipeline_on_session_impl(excel_id, steps, reset=True, entry=None, v
                     pass
                 try:
                     if fpid:
-                        os.system("taskkill /F /PID %s >NUL 2>&1" % fpid)
+                        _kill_pid_quiet(fpid)
                 except Exception:
                     pass
                 shutil.rmtree(work, ignore_errors=True)
@@ -7964,7 +7977,7 @@ def _run_full_pipeline_single_instance_impl(groups, reset_excel_ids=None, view_s
                 pass
             try:
                 if fpid:
-                    os.system("taskkill /F /PID %s >NUL 2>&1" % fpid)
+                    _kill_pid_quiet(fpid)
             except Exception:
                 pass
             shutil.rmtree(work, ignore_errors=True)
