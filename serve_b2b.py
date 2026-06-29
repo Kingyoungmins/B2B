@@ -1227,7 +1227,14 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
         except Exception:
             excel_id = ""
         prog = PIPELINE_PROGRESS.get(excel_id) or {}
-        self.send_json({"ok": True, "current": int(prog.get("current") or 0), "total": int(prog.get("total") or 0)})
+        self.send_json({
+            "ok": True,
+            "current": int(prog.get("current") or 0),
+            "total": int(prog.get("total") or 0),
+            "phase": str(prog.get("phase") or "running"),
+            "syncCurrent": int(prog.get("syncCurrent") or 0),
+            "syncTotal": int(prog.get("syncTotal") or 0),
+        })
 
     def handle_pipeline_status(self):
         job_id = self.path.rsplit("/", 1)[-1]
@@ -7848,14 +7855,26 @@ def _run_full_pipeline_single_instance_impl(groups, reset_excel_ids=None, view_s
                     _vba_trace("fullrun.step.ok", anchorExcelId=anchor_excel_id, isolatedPid=fpid, excelId=gid, ordinal=ordinal)
 
             # 3) 변경된 파일만 라이브에 '파일당 1회' 반영 (읽기만 한 파일은 Saved=True → 스킵)
+            # [저사양 거짓실패 방지] 이 '최종 동기화'(통째 시트 교체)는 저사양에서 수 분 걸릴 수 있는데, 진행률이
+            # 스텝만 추적하면 클라가 'N/N'에서 멈춰보이다 타임아웃으로 거짓 실패한다. 동기화 단계도 진행률에 실어
+            # (phase=syncing) 클라가 '결과 반영 중'을 표시하고 활동 중임을 알 수 있게 한다.
+            _to_sync = []
             for sid, ent in byExcel.items():
-                fwb = ent["wb"]
                 try:
-                    changed = not bool(fwb.Saved)
+                    _changed = not bool(ent["wb"].Saved)
                 except Exception:
-                    changed = True
-                if not changed:
-                    continue
+                    _changed = True
+                if _changed:
+                    _to_sync.append((sid, ent))
+            _sync_total = len(_to_sync)
+            for _sync_i, (sid, ent) in enumerate(_to_sync, start=1):
+                try:
+                    PIPELINE_PROGRESS[anchor_excel_id] = {"current": total_steps, "total": total_steps,
+                                                          "phase": "syncing", "syncCurrent": _sync_i,
+                                                          "syncTotal": _sync_total, "ts": time.time()}
+                except Exception:
+                    pass
+                fwb = ent["wb"]
                 s = ent["session"]
                 try:
                     live_app, live_wb = session_workbook(s)

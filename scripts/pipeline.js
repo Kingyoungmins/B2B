@@ -965,8 +965,14 @@ async function runIsolatedLivePipelineSteps(sourceSteps, initialExcelId, options
               fetch("/api/excel/pipeline-progress?excelId=" + encodeURIComponent(anchorExcelId))
                 .then(r => r.json())
                 .then(pj => {
-                  if (pj && pj.total && typeof window !== "undefined" && typeof window.runnerSetProgress === "function") {
-                    window.runnerSetProgress(Math.min(pj.total, pj.current || 0) + "/" + pj.total + " 단계 실행 중...");
+                  if (pj && typeof window !== "undefined" && typeof window.runnerSetProgress === "function") {
+                    if (pj.phase === "syncing") {
+                      // 최종 동기화(통째 시트 교체) 단계 — 저사양에선 수 분 걸린다. 'N/N'에서 멈춘 듯 안 보이게.
+                      const st = pj.syncTotal ? (" (" + Math.min(pj.syncTotal, pj.syncCurrent || 0) + "/" + pj.syncTotal + ")") : "";
+                      window.runnerSetProgress("결과 반영 중" + st + "...");
+                    } else if (pj.total) {
+                      window.runnerSetProgress(Math.min(pj.total, pj.current || 0) + "/" + pj.total + " 단계 실행 중...");
+                    }
                   }
                 }).catch(() => {});
             } catch (_) {}
@@ -979,7 +985,10 @@ async function runIsolatedLivePipelineSteps(sourceSteps, initialExcelId, options
           resetExcelIds,
           viewSheet: options.viewSheet || null,
         }, 0, {
-          timeoutMs: Math.max(600000, pipelineTimeoutMs(totalSteps)),
+          // [저사양 거짓실패 방지] 백그라운드 전체실행은 1콜에 전 스텝 실행 + 스텝별 스냅샷 + 최종 동기화(통째 시트
+          // 교체)까지 포함된다. 저사양 PC 에선 75스텝급이 10분(기존)을 훌쩍 넘겨, 'N/N' 후 동기화 중에 타임아웃으로
+          // 거짓 실패했다. 스텝수 비례로 넉넉히(최소 30분, 스텝당 30초). 서버 excel_call(60분)보다는 작게 유지.
+          timeoutMs: Math.min(3300000, Math.max(1800000, totalSteps * 30000)),
           timeoutMessage: pipelineTimeoutMessage,
         });
       } finally {
