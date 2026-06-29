@@ -437,14 +437,23 @@ def cleanup_stale_temp_artifacts(min_age_seconds=300, excel_diag_max_age_seconds
             except Exception:
                 stats["failed"] += 1
 
-        # 1) BACKEND_DIR 내부 stale 작업물 (auto_backups 만 보존) — 단독 백엔드일 때만
+        # 1) BACKEND_DIR 내부 stale 작업물 (auto_backups 보존)
+        # 단독 백엔드면 전부 정리. 다른 백엔드가 살아있어도 '전이성 작업물'(prestep_/result_/live_/b2b_replace_/
+        # excel_)은 stale 면 정리한다 — 이들은 한 콜에서 수초만 쓰이고 stale 면 그 실행은 이미 끝났다(=multi-version
+        # 테스트 중에도 큰 prestep 스냅샷이 안 쌓임). 반면 '{uuid}_원본사본'은 라이브 세션이 워크북을 여는 동안 계속
+        # 필요하므로 단독 백엔드일 때만 지운다(다른 세션의 리셋 원본 깨짐 방지).
         try:
-            if (not other_backend) and BACKEND_DIR.exists():
+            if BACKEND_DIR.exists():
+                _transient_prefixes = ("prestep_", "result_", "live_", "b2b_replace_", "excel_")
                 for child in BACKEND_DIR.iterdir():
                     if child.name == "auto_backups":
                         continue
-                    if _age_ok(child, min_age_seconds):
-                        _rm(child)
+                    if not _age_ok(child, min_age_seconds):
+                        continue
+                    is_transient = any(child.name.startswith(pfx) for pfx in _transient_prefixes)
+                    if other_backend and not is_transient:
+                        continue  # 다른 백엔드 생존 시 원본사본/기타는 보존
+                    _rm(child)
         except Exception:
             pass
 
@@ -456,6 +465,30 @@ def cleanup_stale_temp_artifacts(min_age_seconds=300, excel_diag_max_age_seconds
                         _rm(d)
             except Exception:
                 pass
+
+        # 2-b) WebView2 사용자데이터(B2B_WebView2/ver044_<pid>): '죽은 pid' 폴더 삭제(살아있는 인스턴스 보존).
+        # NativeHost 도 시작 시 정리하지만(죽은 pid 즉시), 백엔드에서도 백스톱으로 정리한다 — Chromium 캐시가
+        # 실행마다 ver044_<pid> 로 쌓여 수백 MB 누수하던 문제. dead-pid 검사라 다른 백엔드 생존과 무관하게 안전.
+        try:
+            wv = temp / "B2B_WebView2"
+            if wv.exists():
+                try:
+                    import psutil as _ps
+                except Exception:
+                    _ps = None
+                for d in wv.glob("ver044_*"):
+                    if not d.is_dir():
+                        continue
+                    alive = False
+                    try:
+                        wv_pid = int(d.name.split("_", 1)[1])
+                        alive = bool(_ps and _ps.pid_exists(wv_pid))
+                    except Exception:
+                        alive = False
+                    if not alive:
+                        _rm(d)
+        except Exception:
+            pass
 
         # 3) PyInstaller _MEI* (보수적 나이, 현재 _MEIPASS 제외)
         try:

@@ -9,7 +9,7 @@ from pathlib import Path
 
 _REAL_GETTEMPDIR = tempfile.gettempdir  # 패치 전 원본 보관(케이스2 mkdtemp 용)
 
-sys.path.insert(0, r"C:\Users\Admin\Desktop\KGM_git\B2B_ver0.5.14")
+sys.path.insert(0, r"C:\Users\Admin\Desktop\KGM_git\B2B_ver0.5.15")
 import serve_b2b as S
 
 fake = Path(tempfile.mkdtemp(prefix="b2b_cleanuptest_"))
@@ -37,12 +37,15 @@ mk_file(backend / "prestep_OLD_a.xlsx", OLD)      # 삭제 대상
 mk_file(backend / "deadbeef_src.xlsx", OLD)       # 삭제 대상(uuid_ 소스)
 # Temp 루트
 mk_dir(fake / "b2b_isopipe_OLD", OLD)             # 삭제
-mk_dir(fake / "B2B_ver0.5.14_single_OLD", OLD)    # 삭제
-mk_dir(fake / "B2B_ver0.5.14_single_NEW", NEW)    # 보존(최근)
+mk_dir(fake / "B2B_ver0.5.15_single_OLD", OLD)    # 삭제
+mk_dir(fake / "B2B_ver0.5.15_single_NEW", NEW)    # 보존(최근)
 mk_dir(fake / "_MEIOLD", OLD)                     # 삭제(보수적 나이 충족)
 mk_dir(fake / "_MEINEW", NEW)                     # 보존(최근)
 mk_file(fake / "Diagnostics" / "EXCEL" / "log_OLD.txt", OLD)  # 삭제
 mk_file(fake / "Diagnostics" / "EXCEL" / "log_NEW.txt", NEW)  # 보존
+# WebView2 사용자데이터(B2B_WebView2/ver044_<pid>): 죽은 pid 삭제 / 살아있는 pid 보존
+mk_dir(fake / "B2B_WebView2" / "ver044_99999999", OLD)               # 죽은 pid → 삭제
+mk_dir(fake / "B2B_WebView2" / ("ver044_" + str(os.getpid())), OLD)  # 현재(살아있는) pid → 보존
 
 # 진짜 함수가 fake temp 를 보도록 패치
 S.BACKEND_DIR = backend
@@ -62,12 +65,14 @@ checks = [
     ("prestep_OLD 삭제",         gone(backend / "prestep_OLD_a.xlsx")),
     ("uuid_ 소스 삭제",          gone(backend / "deadbeef_src.xlsx")),
     ("b2b_isopipe_OLD 삭제",     gone(fake / "b2b_isopipe_OLD")),
-    ("single_OLD 삭제",          gone(fake / "B2B_ver0.5.14_single_OLD")),
-    ("single_NEW 보존(최근)",    kept(fake / "B2B_ver0.5.14_single_NEW")),
+    ("single_OLD 삭제",          gone(fake / "B2B_ver0.5.15_single_OLD")),
+    ("single_NEW 보존(최근)",    kept(fake / "B2B_ver0.5.15_single_NEW")),
     ("_MEIOLD 삭제",             gone(fake / "_MEIOLD")),
     ("_MEINEW 보존(최근)",       kept(fake / "_MEINEW")),
     ("Excel진단 OLD 삭제",       gone(fake / "Diagnostics" / "EXCEL" / "log_OLD.txt")),
     ("Excel진단 NEW 보존",       kept(fake / "Diagnostics" / "EXCEL" / "log_NEW.txt")),
+    ("webview2 죽은 pid 삭제",   gone(fake / "B2B_WebView2" / "ver044_99999999")),
+    ("webview2 산 pid 보존",     kept(fake / "B2B_WebView2" / ("ver044_" + str(os.getpid())))),
 ]
 fails = 0
 for name, ok in checks:
@@ -80,17 +85,23 @@ shutil.rmtree(fake, ignore_errors=True)
 tempfile.gettempdir = _REAL_GETTEMPDIR  # 케이스1 패치 해제(실제 temp 에 fake2 생성)
 fake2 = Path(tempfile.mkdtemp(prefix="b2b_cleanuptest2_"))
 backend2 = fake2 / "b2b_backend_v044"; backend2.mkdir(parents=True, exist_ok=True)
-mk_dir(backend2 / "live_OLD2", OLD)
-mk_dir(fake2 / "B2B_ver0.5.14_single_OLD2", OLD)
+mk_dir(backend2 / "live_OLD2", OLD)                 # 전이성 → 다른 백엔드여도 정리
+mk_file(backend2 / "prestep_OLD2_x.xlsx", OLD)      # 전이성 → 다른 백엔드여도 정리
+mk_file(backend2 / "cafebabe2_src.xlsx", OLD)       # uuid_ 원본사본 → 다른 백엔드면 보존
+mk_dir(fake2 / "B2B_ver0.5.15_single_OLD2", OLD)
 mk_file(fake2 / "Diagnostics" / "EXCEL" / "log_OLD2.txt", OLD)
+mk_dir(fake2 / "B2B_WebView2" / "ver044_99999998", OLD)  # 죽은 pid → 가드 무관 삭제
 S.BACKEND_DIR = backend2
 tempfile.gettempdir = (lambda _orig=str(fake2): _orig)
 S._other_b2b_backend_running = (lambda: True)   # 동시 백엔드 있음 가정
 S.cleanup_stale_temp_artifacts(min_age_seconds=300, excel_diag_max_age_seconds=300, mei_max_age_seconds=300)
 checks2 = [
-    ("[가드] 다른 백엔드 있으면 live_ 작업복사본 보존", (backend2 / "live_OLD2").exists()),
-    ("[가드] 다른 백엔드 있으면 single 임시 보존", (fake2 / "B2B_ver0.5.14_single_OLD2").exists()),
-    ("[가드] 그래도 Excel 진단 로그는 정리", not (fake2 / "Diagnostics" / "EXCEL" / "log_OLD2.txt").exists()),
+    ("[가드] 전이성 live_ 은 다른 백엔드여도 정리", not (backend2 / "live_OLD2").exists()),
+    ("[가드] 전이성 prestep_ 은 다른 백엔드여도 정리", not (backend2 / "prestep_OLD2_x.xlsx").exists()),
+    ("[가드] uuid_ 원본사본은 다른 백엔드면 보존", (backend2 / "cafebabe2_src.xlsx").exists()),
+    ("[가드] single 임시 보존", (fake2 / "B2B_ver0.5.15_single_OLD2").exists()),
+    ("[가드] Excel 진단 로그는 정리", not (fake2 / "Diagnostics" / "EXCEL" / "log_OLD2.txt").exists()),
+    ("[가드] webview2 죽은 pid 는 가드와 무관하게 삭제", not (fake2 / "B2B_WebView2" / "ver044_99999998").exists()),
 ]
 for name, ok in checks2:
     print((" OK  " if ok else "FAIL ") + name)
