@@ -4418,6 +4418,24 @@ def _clean_session_workbook_name(name):
     return n or base
 
 
+def _resolve_live_identity_name(session_name, incoming_name, path_name):
+    """결과/스냅샷을 '같은 라이브 세션'에 교체-로드(result-edit / 스냅샷 복원)할 때, 라이브 워크북이
+    유지해야 할 '논리적 정체성 이름'을 고른다.
+
+    실행기 파일출력 전체실행은 결과를 '결과_<원본stem>_<타임스탬프>[_<6hex난수>].xlsx' 로 저장한다(다운로드용
+    이름). 이걸 result-edit 로 라이브에 되불러올 때 그 데코명을 그대로 wb.Name 으로 쓰면, @멘션(원본명)·
+    VBA(Workbooks("원본"))·`If wb.Name = "원본"` 정확비교가 전부 '파일 못 찾음' 으로 깨진다.
+    _clean_session_workbook_name 은 우리 '접두사'(prestep_/<32hex>_)만 벗기므로 '결과_..._난수' 데코는 못 벗긴다.
+
+    replace 는 항상 '기존 세션을 이어서' 콘텐츠만 바꾸는 것이라, 라이브의 정체성은 '원래 세션 이름' 이다.
+    따라서 세션에 이미 깨끗한 이름이 있으면 그것을 최우선 보존하고, 없을 때만 들어온 파일명을 접두사 정리해 쓴다.
+    스냅샷 복원(prestep_<hex>_원본)도 세션 이름(원본)과 동일 결과라 회귀가 없다."""
+    existing = _clean_session_workbook_name(session_name or "")
+    if existing:
+        return existing
+    return _clean_session_workbook_name(incoming_name or path_name or "")
+
+
 def _replace_excel_session_workbook_impl(excel_id, path, name=None, result_id=None, read_only_mirror=None):
     path = Path(path)
     if not path.exists():
@@ -4473,7 +4491,10 @@ def _replace_excel_session_workbook_impl(excel_id, path, name=None, result_id=No
         # handle_excel_replace 는 항상 name=path.name(= 스냅샷/결과 파일명, prestep_/uuid 접두사 포함)을 넘긴다.
         # 따라서 name 이 있어도 그대로 쓰면 안 되고 반드시 접두사를 벗겨야 한다(이게 이전 버그 — if name 지름길).
         # 접두사 패턴(prestep_<32hex>_, <32hex>_)은 우리 내부 마커라 사용자 파일명과 충돌하지 않는다.
-        clean_name = _clean_session_workbook_name(name or session.get("name") or path.name)
+        # [정체성 보존] 세션의 기존 원본 이름을 최우선 보존한다. 실행기 결과명(결과_<stem>_<ts>[_난수])은
+        # 접두사 패턴이 아니라 _clean_session_workbook_name 으로 못 벗겨지므로, 그대로 쓰면 라이브 wb.Name 이
+        # 데코명이 되어 @멘션/VBA 가 '파일 못 찾음' 된다. → _resolve_live_identity_name 이 세션 원본명을 보존.
+        clean_name = _resolve_live_identity_name(session.get("name"), name, path.name)
         replace_open_path = path
         replace_open_dir = None
         try:
@@ -4646,7 +4667,9 @@ def _replace_excel_session_workbook_impl(excel_id, path, name=None, result_id=No
         return {
             "ok": True,
             "excelId": excel_id,
-            "name": name or path.name,
+            # [정체성 보존] 데코된 결과 파일명(name/path.name) 대신, 라이브가 실제로 유지하는 깨끗한 원본명을
+            # 돌려준다 → 파일탭/표시명이 결과_..._난수 로 새지 않고, 클라가 @멘션용으로 쓰는 이름과 일치한다.
+            "name": clean_name,
             "path": str(path),
             "sheetNames": sheets,
             "readOnlyMirror": bool(read_only_mirror),
