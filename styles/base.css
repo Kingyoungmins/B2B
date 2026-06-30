@@ -108,3 +108,15 @@ http://scripts.sil.org/OFL
   html.native-shell .resizer {
     display: none !important;
   }
+
+  /* [0.5.16 #1] 실행기(runner)는 헤드리스 — 브라우저 모드에서 우측 Excel 뷰를 숨기고 좌측을 풀폭으로.
+     (네이티브 셸은 호스트가 B2B_RUNNER_MODE 로 우측 패널을 접어 처리하고, .right 는 위에서 이미 숨김) */
+  body.page-runner-active .right,
+  body.page-runner-active .resizer {
+    display: none !important;
+  }
+  body.page-runner-active .left {
+    flex: 1 1 100% !important;
+    width: 100% !important;
+    min-width: 0;
+  }

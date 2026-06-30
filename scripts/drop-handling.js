@@ -570,6 +570,7 @@ window.runnerSetRunning = function(running) {
   if (!node) return;
   node.classList.toggle("running", !!running);
   if (running) node.classList.remove("done");
+  if (running) { const _eb = document.getElementById("runner-edit-result-btn"); if (_eb) _eb.disabled = true; }  // [#2] 실행 중 비활성
   if (sub && running) sub.textContent = "실행 중...";
   if (statState) statState.textContent = running ? "실행 중" : "준비";
   if (badge) {
@@ -609,6 +610,8 @@ window.runnerSetDone = function() {
     badge.classList.add("done");
     badge.textContent = "완료";
   }
+  // [#2] 실행 완료 + 결과(outputFiles) 있으면 '결과 편집하기' 활성화.
+  { const _eb = document.getElementById("runner-edit-result-btn"); if (_eb) _eb.disabled = !(Array.isArray(window.lastRunnerOutputs) && window.lastRunnerOutputs.length); }
   setTimeout(() => {
     node.classList.remove("done");
     if (sub) sub.textContent = "실행 준비";

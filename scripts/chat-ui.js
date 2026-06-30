@@ -542,9 +542,44 @@ function appendSameFormatSheetsIntent(text) {
   return hasManyFiles && hasAppend && (hasHeaderOnce || /동일(?:한)?\s*포맷|같은\s*포맷|가입자별청구내역/i.test(intent)) && hasOutputSheet;
 }
 
+// [0.5.16] ctx 헬퍼가 결정적으로 처리하는 추가 작업들 — Python 우선 라우팅(헬퍼가 있는데 기본엔진 VBA 로
+// 새던 것 수정). 행/열 숨김·숨김해제, VLOOKUP/조인, 단순 중복제거, 셀 분리, 합계행.
+function hideUnhideIntent(text) {
+  const intent = routingIntentText(String(text || ""));
+  return /(행|열|컬럼|column|row)[^\n]{0,12}(숨김|숨겨|감춰|숨기|hide|보이게|표시|unhide)/i.test(intent)
+      || /(숨김|숨겨|감춰|숨기|hide|보이게|표시|unhide)[^\n]{0,12}(행|열|컬럼|column|row)/i.test(intent);
+}
+function lookupJoinIntent(text) {
+  const intent = routingIntentText(String(text || ""));
+  // '한 셀에 여러 값' 분리+합산 매칭은 ctx.lookup 으로 안 되므로 제외(그건 VBA multiValueLookup 유지).
+  if (/(한\s*셀|셀\s*안|셀안|여러\s*값|병합|줄\s*바꿈|줄바꿈|split)/i.test(intent)) return false;
+  const lookupWord = /(vlookup|lookup|조인|join|매핑|단가(?:표)?\s*(?:에서|를|을|로|적용|매칭|붙)|찾아\s*(?:와|서)\s*(?:채워|넣어|기입|작성|가져)|매칭(?:해|하여|해서)?\s*(?:가져|채워|넣어|기입|작성))/i.test(intent);
+  return lookupWord && /(채워|넣어|기입|작성|가져|붙여|반영|매핑|매칭|적용)/i.test(intent);
+}
+function dedupeIntent(text) {
+  const intent = routingIntentText(String(text || ""));
+  // 조건부(수납금액 보호 등) 복잡 중복삭제는 기존 VBA(duplicateRowDeleteIntent)에 맡긴다.
+  if (typeof duplicateRowDeleteIntent === "function" && duplicateRowDeleteIntent(text)
+      && /(보호|지우면\s*안|삭제하면\s*안|1\s*이상|>=\s*1|수납금액|먼저|위에\s*있는|아래쪽\s*1개)/i.test(intent)) return false;
+  return /(중복|duplicate)[^\n]{0,16}(제거|삭제|지워|없애|정리|remove|delete|dedupe)/i.test(intent)
+      || /(제거|삭제|지워|없애|정리)[^\n]{0,12}(중복|duplicate)/i.test(intent);
+}
+function splitColumnIntent(text) {
+  const intent = routingIntentText(String(text || ""));
+  if (/(한\s*셀에\s*여러|병합)/i.test(intent)) return false;
+  return /(셀|열|컬럼|값)[^\n]{0,16}(분리|나눠|나누|쪼개|split|분할|구분)/i.test(intent)
+      || /(분리|나눠|나누|쪼개|split|분할)[^\n]{0,12}(셀|열|컬럼|값|기준|구분자)/i.test(intent);
+}
+function totalRowIntent(text) {
+  const intent = routingIntentText(String(text || ""));
+  return /(합계|총합|소계|total)[^\n]{0,12}(행|줄)[^\n]{0,12}(추가|만들|넣어|작성|기록|생성)/i.test(intent)
+      || /(맨\s*(?:아래|밑)|표\s*끝|마지막\s*행\s*(?:아래|밑))[^\n]{0,16}(합계|총합|소계|sum)/i.test(intent);
+}
+
 function ctxHelperPreferredIntent(text) {
   return sheetOpIntent(text) || ctxSortIntent(text) || monthShiftIntent(text) || simpleRangeArithmeticIntent(text)
     || pivotIntent(text) || appendSameFormatSheetsIntent(text)
+    || hideUnhideIntent(text) || lookupJoinIntent(text) || dedupeIntent(text) || splitColumnIntent(text) || totalRowIntent(text)
     || (typeof filterToNewSheetIntent === "function" && filterToNewSheetIntent(text));
 }
 
@@ -2881,6 +2916,11 @@ async function sendChat() {
   const routeDuplicateRowDelete = typeof duplicateRowDeleteIntent === "function" && duplicateRowDeleteIntent(msg);
   const routeConditionalRowDelete = typeof conditionalRowDeleteIntent === "function" && conditionalRowDeleteIntent(msg);
   const routeFilterToNewSheet = typeof filterToNewSheetIntent === "function" && filterToNewSheetIntent(msg);
+  const routeLookupJoin = routeToPython && typeof lookupJoinIntent === "function" && lookupJoinIntent(msg);
+  const routeDedupe = routeToPython && typeof dedupeIntent === "function" && dedupeIntent(msg);
+  const routeSplitColumn = routeToPython && typeof splitColumnIntent === "function" && splitColumnIntent(msg);
+  const routeTotalRow = routeToPython && typeof totalRowIntent === "function" && totalRowIntent(msg);
+  const routeHideUnhide = routeToPython && typeof hideUnhideIntent === "function" && hideUnhideIntent(msg);
   const modeLabel = editTargetId ? "(수정 모드) " : (routeToVba ? "(VBA 라우팅) " : (routeToPython ? "(Python 라우팅) " : ""));
   const thinkMode = typeof isThinkModeEnabled === "function" && isThinkModeEnabled();
   const abortController = new AbortController();
@@ -2925,6 +2965,16 @@ async function sendChat() {
         routingHint = "그룹 요약/피벗/크로스탭 요청입니다. 직접 집계·정렬·헤더를 손코딩하지 말고 반드시 ctx.pivot 한 줄로 처리하세요. 1D 그룹요약: ctx.pivot(\"시트\", group_by=\"지점\", value=\"매출\", agg=\"sum\", dest_name=\"결과시트\"). 2D 크로스탭(행/열/값): ctx.pivot(\"시트\", group_by=\"지점\", column=\"월\", value=\"매출\", agg=\"sum\", dest_name=\"결과시트\"). agg는 sum/count/avg/max/min. group_by/column/value 는 헤더명을 쓰고, 시트명은 한 글자도 바꾸지 말고 그대로 쓰세요. dest_name 시트가 이미 있으면 다른 이름을 쓰세요.";
       } else if (routeFilterToNewSheet) {
         routingHint = "특정 열 값/조건으로 행을 찾아 새 시트에 복사하는 요청입니다. 반드시 Python ctx.filter_to_sheet 헬퍼를 우선 사용하고 VBA(Sub B2BSkill())는 출력하지 마세요. 직접 ctx.read로 전체 범위를 읽어 Python 루프로 필터링하거나 ctx.write로 행을 재작성하지 마세요. 필터 대상 열은 ctx.find_header 또는 명시 열 주소로 정확히 찾고, 한글/텍스트 비교는 ctx.normalize(셀값) == ctx.normalize(\"조건값\") 형태로 비교하세요. 헤더가 2행이면 ctx.find_header(..., header_row=2)와 ctx.filter_to_sheet(..., header_rows=2)를 함께 쓰세요. 새 시트는 원본이 속한 워크북에 만들고, 원본 시트는 보존하세요. @범위/@시트의 파일명·시트명은 번역·영문화·띄어쓰기 보정 없이 그대로 사용하세요.";
+      } else if (routeLookupJoin) {
+        routingHint = "다른 시트/표(단가표 등)에서 키로 값을 찾아 채우는 VLOOKUP/조인 요청입니다. 직접 read→딕셔너리→write 로 손코딩하지 말고 반드시 ctx.lookup 한 줄로 처리하세요: ctx.lookup(\"청구내역\", key_col=\"상품\", into_col=\"단가\", table_sheet=\"단가표\", table_key_col=\"상품\", table_val_col=\"단가\"). 열은 헤더명/열문자/번호 모두 되고, 키 비교는 헬퍼가 normalize 로 안전 매칭합니다. VBA(Sub B2BSkill())는 출력하지 마세요.";
+      } else if (routeTotalRow) {
+        routingHint = "표 끝에 합계/소계 행을 추가하는 요청입니다. 행 위치·SUM 범위를 손코딩하지 말고 반드시 ctx.add_total_row 로 처리하세요: ctx.add_total_row(\"청구내역\", sum_cols=[\"금액\",\"수량\"], label_col=\"회사\", label=\"합계\"). 헬퍼가 마지막 데이터행 바로 아래에 =SUM(데이터범위) 를 넣습니다. VBA(Sub B2BSkill())는 출력하지 마세요.";
+      } else if (routeDedupe) {
+        routingHint = "키 기준 단순 중복 행 제거 요청입니다. 반드시 ctx.dedupe 로 처리하세요: ctx.dedupe(\"청구내역\", key_cols=[\"가입번호\"], keep=\"last\"). 비교는 normalize 기준이고 헤더는 보존됩니다. VBA(Sub B2BSkill())는 출력하지 마세요.";
+      } else if (routeSplitColumn) {
+        routingHint = "한 셀을 구분자로 나눠 여러 열로 분리하는 요청입니다(예: '1001/홍길동' → 가입번호/고객명). 반드시 ctx.split_column 으로 처리하세요: ctx.split_column(\"청구내역\", col=\"가입번호/고객명\", delimiter=\"/\", into=[\"가입번호\",\"고객명\"]). 원본 열 오른쪽에 새 열이 생깁니다. VBA(Sub B2BSkill())는 출력하지 마세요.";
+      } else if (routeHideUnhide) {
+        routingHint = "행/열 숨김 또는 숨김 해제 요청입니다. 반드시 ctx.hide_cols / ctx.hide_rows 로 처리하세요: 숨기기 ctx.hide_cols(\"시트\", \"C:E\", hidden=True), 숨김 해제 ctx.hide_cols(\"시트\", \"C:E\", hidden=False) (행은 ctx.hide_rows). VBA(Sub B2BSkill())는 출력하지 마세요. @범위/@시트 이름은 그대로 쓰세요.";
       } else if (routeCtxHelper) {
         routingHint = "시트 복사/복사후 이름변경/추가/삭제 또는 단순 정렬 요청입니다. 반드시 ctx 헬퍼를 쓰세요: ctx.copy_sheet(\"시트\", dst_book=\"대상.xlsx\", new_name=\"새이름\") / ctx.rename_sheet(\"기존\",\"새\") / ctx.add_sheet / ctx.delete_sheet / ctx.sort(시트, 범위, key_col=열문자, has_header=True). 정렬에서 @범위가 L2:L8929처럼 키 열만 가리키면 그 열만 정렬하지 말고 표 전체 범위(예: A1:L8929)를 잡고 key_col=\"L\"로 정렬하세요. 범위가 1행 헤더를 포함하면 has_header=True, 2행부터 시작해 헤더가 없으면 has_header=False를 쓰세요. 정렬은 기존 셀 값·수식·날짜·회계 서식이 행과 함께 이동해야 하므로, ctx.read/sorted/ctx.write 또는 값 배열 재작성으로 흉내내지 마세요(EID/가입번호 같은 긴 숫자 텍스트가 8.90E+31 형태로 손실될 수 있음). @시트/@파일 이름은 한 글자도 바꾸지 말고 그대로 쓰세요.";
       } else {

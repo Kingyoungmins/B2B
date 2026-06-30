@@ -8077,7 +8077,11 @@ def _run_full_pipeline_single_instance_impl(groups, reset_excel_ids=None, view_s
                 except Exception:
                     pass
                 try:
-                    _restore_live_window(s, la, lw)
+                    # [#1 헤드리스] 실행기 파일출력(output_mode="file")은 라이브를 안 건드리고 화면에도 안 띄운다.
+                    # _restore_live_window 는 app.Visible=True 로 창을 강제로 띄우므로, file 모드에선 건너뛴다
+                    # (안 그러면 실행기 전체실행 끝에 업로드한 원본 Excel 이 떠버린다). sync(생성기)는 기존대로 복원.
+                    if str(output_mode) != "file":
+                        _restore_live_window(s, la, lw)
                 except Exception:
                     pass
 
@@ -9720,6 +9724,170 @@ class PythonComSkillContext:
         rng.NumberFormat = str(fmt)
         self._shared["structural"].append(f"number_format:{sheet}:{a1_range}")
         return True
+
+    # ---- 데이터 헬퍼(조인/합계/중복/분리/치환) ----
+    def _resolve_col(self, sheet, col, header_row=1):
+        """열 지정을 1-based 번호로 해석한다. 'A' 같은 열 문자 / 1 같은 번호 / 헤더명 모두 허용."""
+        if isinstance(col, bool):
+            raise PythonComSkillError("열 지정이 잘못되었습니다.")
+        if isinstance(col, (int, float)):
+            return int(col)
+        s = str(col).strip()
+        if re.fullmatch(r"[A-Za-z]{1,3}", s):
+            return self._col_index(s)
+        return self.find_header(sheet, s, header_row=int(header_row))
+
+    def lookup(self, sheet, key_col, into_col, table_sheet, table_key_col, table_val_col, header_row=1, default=None):
+        """VLOOKUP/조인: sheet 의 key_col 값을 table_sheet 의 table_key_col 에서 찾아 그 행의 table_val_col 값을
+        sheet 의 into_col 에 채운다(단가표→청구내역 단가 매칭 등). 키 비교는 normalize(공백/전각/대소문자/숫자-텍스트
+        차이 무시)로 안전. 열은 'A' 문자/번호/헤더명 모두 허용. 미매칭은 default(없으면 빈칸). 반환: 매칭된 행 수."""
+        kcol = self._resolve_col(sheet, key_col, header_row)
+        icol = self._resolve_col(sheet, into_col, header_row)
+        tkcol = self._resolve_col(table_sheet, table_key_col, header_row)
+        tvcol = self._resolve_col(table_sheet, table_val_col, header_row)
+        hr = int(header_row)
+        t_last = self.last_row(table_sheet, tkcol)
+        table_map = {}
+        if t_last > hr:
+            tkl, tvl = _col_letter(tkcol), _col_letter(tvcol)
+            keys = [r[0] for r in self.read(table_sheet, "%s%d:%s%d" % (tkl, hr + 1, tkl, t_last))]
+            vals = [r[0] for r in self.read(table_sheet, "%s%d:%s%d" % (tvl, hr + 1, tvl, t_last))]
+            for k, v in zip(keys, vals):
+                nk = self.normalize(k)
+                if nk != "" and nk not in table_map:
+                    table_map[nk] = v
+        last = self.last_row(sheet, kcol)
+        if last <= hr:
+            return 0
+        kcl, icl = _col_letter(kcol), _col_letter(icol)
+        src_keys = [r[0] for r in self.read(sheet, "%s%d:%s%d" % (kcl, hr + 1, kcl, last))]
+        out, matched = [], 0
+        for k in src_keys:
+            nk = self.normalize(k)
+            if nk in table_map:
+                out.append([table_map[nk]]); matched += 1
+            else:
+                out.append([default if default is not None else ""])
+        self.write(sheet, "%s%d" % (icl, hr + 1), out)
+        return matched
+
+    def add_total_row(self, sheet, sum_cols, label_col=None, label="합계", header_row=1):
+        """표 끝(마지막 데이터행 바로 아래)에 합계 행을 만든다. sum_cols(열 리스트/단일)에 =SUM(데이터범위) 수식을
+        넣고, label_col 이 있으면 그 셀에 label 을 쓴다. 열은 'A'/번호/헤더명 허용. 반환: 합계행 번호."""
+        cols = sum_cols if isinstance(sum_cols, (list, tuple)) else [sum_cols]
+        hr = int(header_row)
+        idx = [self._resolve_col(sheet, c, hr) for c in cols]
+        last = hr
+        for c in idx:
+            last = max(last, self.last_row(sheet, c))
+        if last <= hr:
+            raise PythonComSkillError("합계를 만들 데이터 행이 없습니다.")
+        total_row = last + 1
+        if label_col is not None:
+            lcl = _col_letter(self._resolve_col(sheet, label_col, hr))
+            self.write(sheet, "%s%d" % (lcl, total_row), [[label]])
+        for c in idx:
+            cl = _col_letter(c)
+            self.write_formulas(sheet, "%s%d" % (cl, total_row),
+                                [["=SUM(%s%d:%s%d)" % (cl, hr + 1, cl, last)]])
+        return total_row
+
+    def dedupe(self, sheet, key_cols, header_row=1, keep="first"):
+        """key_cols(열 리스트/단일) 조합이 같은 중복 행을 삭제한다. keep='first'면 처음 것, 'last'면 마지막 것을
+        남긴다. 비교는 normalize 기준. 헤더 행은 보존. 반환: 삭제된 행 수.
+        (행 단위 삭제라 중복이 매우 많은 대용량은 느림 — 그 경우 VBA AutoFilter 경로 권장)"""
+        cols = key_cols if isinstance(key_cols, (list, tuple)) else [key_cols]
+        hr = int(header_row)
+        idx = [self._resolve_col(sheet, c, hr) for c in cols]
+        last = hr
+        for c in idx:
+            last = max(last, self.last_row(sheet, c))
+        if last <= hr:
+            return 0
+        keycells = []
+        for c in idx:
+            cl = _col_letter(c)
+            keycells.append([r[0] for r in self.read(sheet, "%s%d:%s%d" % (cl, hr + 1, cl, last))])
+        n = last - hr
+        seen, dup_rows = set(), []
+        order = range(n) if str(keep) != "last" else range(n - 1, -1, -1)
+        for i in order:
+            key = tuple(self.normalize(keycells[j][i]) for j in range(len(idx)))
+            if all(k == "" for k in key):
+                continue
+            if key in seen:
+                dup_rows.append(hr + 1 + i)
+            else:
+                seen.add(key)
+        removed = 0
+        for r in sorted(set(dup_rows), reverse=True):
+            self.delete_rows(sheet, r, 1)
+            removed += 1
+        return removed
+
+    def split_column(self, sheet, col, delimiter, into=None, header_row=1):
+        """col 셀을 delimiter 로 나눠 col 바로 오른쪽의 새 열들에 기록한다(예: "1001/홍길동" → 가입번호 / 고객명).
+        into 가 있으면 그 개수만큼 새 열을 만들고 헤더로 쓴다(없으면 가장 많은 조각 수만큼). 원본 col 은 보존.
+        열은 'A'/번호/헤더명 허용. 반환: 처리한 데이터 행 수."""
+        ccol = self._resolve_col(sheet, col, header_row)
+        hr = int(header_row)
+        last = self.last_row(sheet, ccol)
+        if last <= hr:
+            return 0
+        cl = _col_letter(ccol)
+        src = [r[0] for r in self.read(sheet, "%s%d:%s%d" % (cl, hr + 1, cl, last))]
+        d = str(delimiter)
+        parts = [(str("" if v is None else v).split(d) if d != "" else [str("" if v is None else v)]) for v in src]
+        width = len(into) if into else max((len(p) for p in parts), default=1)
+        if width < 1:
+            width = 1
+        self.insert_cols(sheet, ccol + 1, width)
+        for j in range(width):
+            tcl = _col_letter(ccol + 1 + j)
+            if into and j < len(into):
+                self.write(sheet, "%s%d" % (tcl, hr), [[into[j]]])
+            self.write(sheet, "%s%d" % (tcl, hr + 1), [[(p[j] if j < len(p) else "")] for p in parts])
+        return len(src)
+
+    def replace(self, sheet, a1_range, find, repl, match_entire=False):
+        """범위 안 셀에서 find 를 repl 로 바꾼다(부분 치환, match_entire=True면 셀 전체 일치만). 수식 셀은 보존.
+        반환: 바뀐 셀 수."""
+        ws = self._ws(sheet)
+        rng = self._rng(ws, a1_range)
+        self._tick(2)
+        vals = _range_matrix(rng.Value2)
+        formulas = _range_matrix(rng.Formula)
+        find_s = str(find)
+        repl_s = "" if repl is None else str(repl)
+        changed = 0
+        out = []
+        for ri, row in enumerate(vals):
+            orow = []
+            for ci, v in enumerate(row):
+                fcell = formulas[ri][ci] if (ri < len(formulas) and ci < len(formulas[ri])) else None
+                if isinstance(fcell, str) and fcell.startswith("="):
+                    orow.append(fcell)  # 수식 그대로 보존
+                    continue
+                if v is None:
+                    orow.append("")
+                    continue
+                sv = str(v)
+                if match_entire:
+                    if sv == find_s:
+                        orow.append(repl_s); changed += 1
+                    else:
+                        orow.append(v)
+                else:
+                    if find_s != "" and find_s in sv:
+                        orow.append(sv.replace(find_s, repl_s)); changed += 1
+                    else:
+                        orow.append(v)
+            out.append(orow)
+        if changed:
+            self._journal_save(ws, rng)
+            rng.Formula = out  # 값셀만 치환, 수식셀은 위에서 원래 수식 유지
+            self._tick(1)
+        return changed
 
     # ---- 교차 파일 ----
     def book(self, workbook_name):

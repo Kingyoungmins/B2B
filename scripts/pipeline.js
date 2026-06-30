@@ -880,7 +880,11 @@ function wirePipelineStepSnapshots(stepSnapshots, excelId, sourceSteps) {
 }
 
 async function runIsolatedLivePipelineSteps(sourceSteps, initialExcelId, options = {}) {
+  const _runPerfT0 = performance.now();  // [F8] 전체실행 소요 측정(디버그 패널 기록용)
   const startIndex = Number.isInteger(Number(options.startIndex)) ? Math.max(0, Number(options.startIndex)) : 0;
+  // [이어실행 라벨] 중간 스텝 수정/토글로 startIndex 이후만 부분 재실행할 땐 오버레이를 '전체실행 중'이 아니라
+  // '실행 중'으로 보여준다(부분 실행인데 '전체실행'으로 오해되는 것 방지).
+  const _applyLoadingLabel = startIndex > 0 ? "스킬 실행 중..." : "스킬 전체실행 중...";
   const skipReset = options.skipReset === true;
   const activeSteps = activePipelineSteps(sourceSteps)
     .filter(step => (sourceSteps || state.pipeline || []).indexOf(step) >= startIndex)
@@ -950,7 +954,7 @@ async function runIsolatedLivePipelineSteps(sourceSteps, initialExcelId, options
         }
       });
       if (!loadingStarted && typeof beginExcelMirrorApplyLoading === "function") {
-        beginExcelMirrorApplyLoading("스킬 전체실행 중...", { hideWindows: false, failsafeMs: 1800000 });
+        beginExcelMirrorApplyLoading(_applyLoadingLabel, { hideWindows: false, failsafeMs: 1800000 });
         loadingStarted = true;
       }
       const allStepIds = activeSteps.map(s => s && s.id).filter(Boolean);
@@ -1025,7 +1029,7 @@ async function runIsolatedLivePipelineSteps(sourceSteps, initialExcelId, options
           mutedExcelIds.push(resetExcelId);
         }
         if (!loadingStarted && typeof beginExcelMirrorApplyLoading === "function") {
-          beginExcelMirrorApplyLoading("스킬 전체실행 중...", { hideWindows: false, failsafeMs: 330000 });
+          beginExcelMirrorApplyLoading(_applyLoadingLabel, { hideWindows: false, failsafeMs: 330000 });
           loadingStarted = true;
         }
         const resetData = await postExcelMirror("/api/excel/run-vba-pipeline", {
@@ -1053,7 +1057,7 @@ async function runIsolatedLivePipelineSteps(sourceSteps, initialExcelId, options
         mutedExcelIds.push(excelId);
       }
       if (!loadingStarted && typeof beginExcelMirrorApplyLoading === "function") {
-        beginExcelMirrorApplyLoading("스킬 전체실행 중...", { hideWindows: false, failsafeMs: 330000 });
+        beginExcelMirrorApplyLoading(_applyLoadingLabel, { hideWindows: false, failsafeMs: 330000 });
         loadingStarted = true;
       }
       // [0.5.14 batch] 첫 그룹이면 reset:true 한 번. 백엔드가 격리 인스턴스를 pristine sourcePath 에서 열고
@@ -1137,7 +1141,26 @@ async function runIsolatedLivePipelineSteps(sourceSteps, initialExcelId, options
         restoreFileId: lastTouchedFileId || null,
       });
     }
-    noteLivePipelineApplied(sourceSteps);
+    // [#3] 실행기 파일출력(outputMode:"file")은 라이브를 안 건드린다(무손상) → '라이브 적용됨'으로 기록하면
+    // 거짓 시그니처가 돼 이후 마지막 스텝 on/off fast-path 가 어긋난 baseline 에서 돌아 플레이키해진다(ON 안 먹힘/
+    // 보류). 이 경우 라이브 적용 장부를 무효화 → 생성기에서의 토글/편집은 결정적 full reconcile 로 라이브에
+    // 반영(또는 '최종 반영 보기' #2 버튼으로 명시 동기화). sync(생성기)는 기존대로 적용됨 기록.
+    if (options && options.outputMode === "file") {
+      if (typeof invalidateLivePipelineApplied === "function") invalidateLivePipelineApplied();
+    } else {
+      noteLivePipelineApplied(sourceSteps);
+    }
+    // [F8] 전체실행도 디버그 패널에 소요/단계수를 기록한다 — 기존엔 단일 적용만 기록돼 전체실행 시 F8 이 비어 보였다.
+    try {
+      const _elapsed = Math.round(performance.now() - _runPerfT0);
+      recordVbaDebugTiming({
+        action: (options && options.outputMode === "file") ? "runner-full-run" : "full-run",
+        steps: applied,
+        startRequestMs: _elapsed,
+        totalClientMs: _elapsed,
+        server: (lastData && lastData.debugTimings) || {},
+      });
+    } catch (_) {}
     const result = lastData || { ok: true, applied };
     if (result && typeof result === "object") {
       result.clientRestoreFileId = lastTouchedFileId || null;
@@ -2602,6 +2625,25 @@ function renderPipeline() {
           refreshRunButton();
           markPipelinePendingFromIndex(resumeBeforeToggle, { label: "보류" });
           if (typeof reportPipelineError === "function") reportPipelineError(err2);
+        }
+        return;
+      }
+      // [#3] 라이브가 '알려진 적용 상태'가 아니면(예: 실행기 파일출력 전체실행 직후 — 라이브 무손상이라 시그니처를
+      // invalidate) fast 토글/체크포인트-보류를 쓰지 말고 곧장 full reconcile(reset→enabled 재적용)로 라이브에
+      // 결정적으로 반영한다. 거짓 baseline 위 fast 토글이 'ON 안 먹힘/보류'로 플레이키하던 것을 제거(이 reconcile
+      // 이 끝나면 시그니처가 채워져 다음 토글부터는 기존 빠른 경로). #2 '최종 반영 보기'를 먼저 눌렀다면 이미
+      // 시그니처가 있어 이 분기는 안 탄다.
+      if (_lastLiveAppliedSignature === null && pipelineStepLiveLanguage(beforeToggleSnapshot[currentIdx])) {
+        try {
+          await reconcilePipelineSimulationAfterEdit({ affectedStep: toggledStep, restorePipeline: beforeToggleSnapshot });
+        } catch (err) {
+          const idxNow = state.pipeline.findIndex(s => s.id === stepId);
+          if (idxNow >= 0) {
+            state.pipeline[idxNow] = { ...state.pipeline[idxNow], enabled: prevEnabled };
+            renderPipeline();
+            refreshRunButton();
+          }
+          if (typeof reportPipelineError === "function") reportPipelineError(err);
         }
         return;
       }
@@ -4301,6 +4343,68 @@ $("btn-run").onclick = async () => {
     setGeneratorRunLoading(false);
   }
 };
+
+// [#2 결과 편집하기 — 실행기 버튼] 누르면 (1) 생성기로 전환하고 (2) 실행기(헤드리스/파일출력)가 만든 결과
+// 파일(최종본)을 라이브 세션에 '가볍게 불러오기'(/api/excel/replace, 재계산 없음)해서 편집 가능 상태로 띄운다.
+// 실행기 전체실행이 만든 스텝별 스냅샷이 그대로 라이브에 wiring 돼 있어 불러온 뒤 ON/OFF·이어실행 편집이 바로
+// 된다(전체 재실행 불필요). 실행기 결과가 없으면 생성기 sync 재적용으로 폴백.
+// (#3: 불러온 뒤 noteLivePipelineApplied 로 시그니처를 채워 토글 fast-path 정합)
+(function () {
+  const btn = (typeof $ === "function") ? $("runner-edit-result-btn") : null;
+  if (!btn) return;
+  btn.onclick = async () => {
+    if (btn.disabled) return;
+    // 실행기 버튼 → 즉시 생성기로 전환(헤드리스 해제·우측 패널 펼침). 이후 결과를 라이브에 불러와 보여준다.
+    if (typeof setPage === "function") setPage("generator");
+    const hasSteps = Array.isArray(state.pipeline) && state.pipeline.some(s => s && s.code && s.enabled !== false);
+    if (!hasSteps) { if (typeof toast === "function") toast("라이브에 반영할 활성 스킬 단계가 없습니다.", "error"); return; }
+    const busyReason = typeof pipelineEditBusyReason === "function" ? pipelineEditBusyReason() : "";
+    if (busyReason) { if (typeof toast === "function") toast(busyReason, "error"); return; }
+    const outs = (typeof window !== "undefined" && Array.isArray(window.lastRunnerOutputs))
+      ? window.lastRunnerOutputs.filter(o => o && o.excelId && o.downloadId) : [];
+    const activeStepIds = getPipelineExecutionStepIds();
+    if (typeof setGeneratorRunLoading === "function") {
+      setGeneratorRunLoading(true, outs.length ? "최종 결과를 라이브에 불러오는 중..." : "최종 상태를 라이브에 반영 중...");
+    }
+    setPipelineRuntimeStatus(activeStepIds, "running", "반영 중");
+    try {
+      if (outs.length) {
+        // 가벼운 경로: 실행기 결과 파일(최종본)을 각 라이브 세션에 불러오기(재계산 없음 — 스냅샷-복원과 동일 메커니즘).
+        let loaded = 0, lastExcelId = null;
+        for (const o of outs) {
+          try {
+            await postExcelMirror("/api/excel/replace", { excelId: o.excelId, resultId: o.downloadId, readOnlyMirror: false }, 0, {
+              timeoutMs: 120000,
+              timeoutMessage: "결과 불러오기 응답이 지연되어 중단했습니다.",
+            });
+            loaded++; lastExcelId = o.excelId;
+          } catch (e) { console.warn("[#2] 결과 불러오기 실패:", o && o.name, e); }
+        }
+        if (!loaded) throw new Error("결과 파일을 라이브에 불러오지 못했습니다. 실행기에서 전체실행을 다시 해주세요.");
+        clearPipelineResumeFromIndex();
+        noteLivePipelineApplied(state.pipeline);  // 라이브 = 최종(전 스텝 적용) → 토글 fast-path 정합
+        setPipelineRuntimeStatus(activeStepIds, "applied", "적용됨");
+        if (lastExcelId && typeof showOnlyExcelMirrorWindow === "function") {
+          try { await showOnlyExcelMirrorWindow(lastExcelId, { force: true }); } catch (_) {}
+        }
+        if (typeof toast === "function") toast("실행기 결과(최종본)를 라이브에 불러왔습니다. 이제 편집/ON·OFF가 가능합니다.", "success");
+      } else {
+        // 폴백: 실행기 결과가 없으면 생성기 sync 재적용(라이브 reset→재적용)으로 최종 상태를 만든다.
+        clearPipelineResumeFromIndex();
+        clearPipelineExecutionMemory({ keepViewer: true });
+        await runPipelineWithAutoRepair({ source: "generator", ignoreCheckpoint: true, backgroundMode: true });
+        setPipelineRuntimeStatus(activeStepIds, "applied", "적용됨");
+        if (typeof toast === "function") toast("실행기 결과가 없어 재적용으로 최종 상태를 띄웠습니다. 편집/ON·OFF 가능합니다.", "success");
+      }
+    } catch (err) {
+      markPipelineRunFailureStatus(err, activeStepIds);
+      renderExcelViewer();
+      reportPipelineError(err);
+    } finally {
+      if (typeof setGeneratorRunLoading === "function") setGeneratorRunLoading(false);
+    }
+  };
+})();
 
 // [복붙 캡처] 우측 라이브 엑셀에서 Ctrl+C(복사) → Ctrl+V(붙여넣기) 한 직후 이 버튼을 누르면,
 // 서버가 클립보드(소스 범위)와 현재 선택영역(붙여넣은 대상)을 역추적해 ctx.paste_copied(...) 스킬 단계로

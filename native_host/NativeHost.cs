@@ -48,23 +48,36 @@ namespace B2BNativeHost
         [STAThread]
         static void Main()
         {
-            Application.ThreadException += delegate(object sender, ThreadExceptionEventArgs e) { ShowFatal(e.Exception); };
-            AppDomain.CurrentDomain.UnhandledException += delegate(object sender, UnhandledExceptionEventArgs e)
+            // [0.5.16] 단일 인스턴스 가드 — 두 번 켜지면(또는 이전 게 덜 닫혔으면) 백엔드가 둘 떠서, 한쪽을
+            // 닫아도 다른 인스턴스의 Excel 이 orphan 으로 남는다("종료해도 Excel 이 안 죽음"의 원인). 이미 실행
+            // 중이면 두 번째는 띄우지 않는다.
+            bool createdNew;
+            using (System.Threading.Mutex instanceMutex = new System.Threading.Mutex(true, "B2B_NativeHost_SingleInstance_v1", out createdNew))
             {
-                Exception ex = e.ExceptionObject as Exception;
-                ShowFatal(ex ?? new Exception(Convert.ToString(e.ExceptionObject)));
-            };
-            try
-            {
-                Log("Native host starting");
-                Application.EnableVisualStyles();
-                Application.SetCompatibleTextRenderingDefault(false);
-                Application.Run(new MainForm());
-                Log("Native host stopped");
-            }
-            catch (Exception ex)
-            {
-                ShowFatal(ex);
+                if (!createdNew)
+                {
+                    try { MessageBox.Show("B2B 빌링 Agent 가 이미 실행 중입니다.\n기존 창을 사용해 주세요.", "B2B", MessageBoxButtons.OK, MessageBoxIcon.Information); }
+                    catch { }
+                    return;
+                }
+                Application.ThreadException += delegate(object sender, ThreadExceptionEventArgs e) { ShowFatal(e.Exception); };
+                AppDomain.CurrentDomain.UnhandledException += delegate(object sender, UnhandledExceptionEventArgs e)
+                {
+                    Exception ex = e.ExceptionObject as Exception;
+                    ShowFatal(ex ?? new Exception(Convert.ToString(e.ExceptionObject)));
+                };
+                try
+                {
+                    Log("Native host starting");
+                    Application.EnableVisualStyles();
+                    Application.SetCompatibleTextRenderingDefault(false);
+                    Application.Run(new MainForm());
+                    Log("Native host stopped");
+                }
+                catch (Exception ex)
+                {
+                    ShowFatal(ex);
+                }
             }
         }
     }
@@ -622,10 +635,33 @@ namespace B2BNativeHost
                 UpdateUiBusyLock(message);
                 return;
             }
+            if (message.StartsWith("B2B_RUNNER_MODE\t", StringComparison.Ordinal))
+            {
+                SetRunnerMode(message);
+                return;
+            }
             if (message == "B2B_RESTART_SERVER")
             {
                 Task ignore = RestartPythonServerAsync(false);
                 return;
+            }
+        }
+
+        // [0.5.16 #1] 실행기(runner)는 헤드리스 — 우측 패널(파일탭+Excel 영역)을 접어 WebView 가 창을 꽉 채운다.
+        // 생성기로 돌아오면 다시 펼치고 미러 좌표를 재발행한다. (Excel 오버레이 자체는 웹이 hideAll 로 숨김)
+        private bool runnerModeActive;
+        private void SetRunnerMode(string message)
+        {
+            string[] parts = message.Split('\t');
+            bool runner = parts.Length > 1 && parts[1] == "1";
+            if (runner == runnerModeActive) return;
+            runnerModeActive = runner;
+            try { if (split != null) split.Panel2Collapsed = runner; } catch { }
+            if (!runner)
+            {
+                // 펼친 직후 미러 좌표 재발행(접혀 있는 동안 bounds 가 안 바뀌어 재주입 생략되는 것 방지).
+                lastNativeBoundsKey = "";
+                try { PublishNativeBounds(); } catch { }
             }
         }
 

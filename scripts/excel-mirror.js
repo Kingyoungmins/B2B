@@ -57,6 +57,14 @@ function publishNativeUiBusy(active, label) {
   bridge.postMessage(["B2B_UI_BUSY", active ? "1" : "0", enc(label || "")].join("\t"));
 }
 
+// [0.5.16 #1] 실행기(runner)는 헤드리스 — 네이티브 셸의 우측 패널(파일탭+Excel 영역)을 접어 WebView 가
+// 화면을 꽉 채우게 호스트에 알린다. 생성기로 돌아오면 다시 펼친다. (Excel 오버레이 자체는 웹이 hideAll 로 숨김)
+function publishNativeRunnerMode(isRunner) {
+  const bridge = window.chrome && window.chrome.webview;
+  if (!bridge || typeof bridge.postMessage !== "function") return;
+  try { bridge.postMessage(["B2B_RUNNER_MODE", isRunner ? "1" : "0"].join("\t")); } catch (_) {}
+}
+
 // ---- 전역 작업 잠금(busy gate) ----
 // Excel 창 로딩/스킬 적용/전환/복구 같은 COM 직렬 작업이 도는 동안 다른 클릭이 끼어들면
 // 큐가 꼬여 탭/창 상태가 어긋난다 → 작업 중에는 포인터 입력을 즉시 차단하고,
@@ -464,19 +472,20 @@ async function openCurrentWorkbookInExcel() {
     if (target.file.backendDownloadUrl && isBackendResultDownloadUrl(target.file.backendDownloadUrl)) {
       const resultId = extractResultIdFromDownloadUrl(target.file.backendDownloadUrl);
       // 리모콘 모델(0.4.9): 읽기전용 미러 대신 작업용 복사본을 편집가능 라이브로 연다.
-      data = await postExcelMirror("/api/excel/open-result", { resultId, liveEditable: true, ...mirrorRect });
+      data = await postExcelMirror("/api/excel/open-result", { resultId, liveEditable: true, deferVisible: !!excelMirror.runnerHeadless, ...mirrorRect });
     } else {
       if (!target.file.backendWorkbookId) throw new Error("백엔드 workbookId가 없습니다.");
       // 리모콘 모델(0.4.9): 업로드된 실제 파일의 작업용 복사본을 편집가능 라이브로 연다.
-      data = await postExcelMirror("/api/excel/open", { workbookId: target.file.backendWorkbookId, liveEditable: true, ...mirrorRect });
+      data = await postExcelMirror("/api/excel/open", { workbookId: target.file.backendWorkbookId, liveEditable: true, deferVisible: !!excelMirror.runnerHeadless, ...mirrorRect });
     }
     excelMirror.sessionsByFileId[target.fileId] = data.excelId;
     excelMirror.sessionLastUsedByFileId[target.fileId] = Date.now();
     excelMirror.activeExcelId = data.excelId;
     suppressExcelMirrorSelection(1000);
     updateMirrorShellStatus(`Excel 연결됨: ${workbookDisplayName(target.file, "파일")}`);
-    toast("실제 Excel 창을 열었습니다.", "success");
-    excelMirror.hiddenByExcelId[data.excelId] = false;
+    // [0.5.16 #1] 실행기 헤드리스: 숨겨서 열었으니 표시/토스트 생략(showOnly 는 가드돼 no-op).
+    if (!excelMirror.runnerHeadless) toast("실제 Excel 창을 열었습니다.", "success");
+    excelMirror.hiddenByExcelId[data.excelId] = !!excelMirror.runnerHeadless;
     await showOnlyExcelMirrorWindow(data.excelId, { force: true });
     await pollExcelMirrorChanges(data.excelId, { baselineOnly: true });
     startExcelMirrorPolling();
@@ -546,6 +555,7 @@ function excelMirrorAllowsViewSwitch(options) {
 // 지정한 파일의 미러 세션을 보장(없으면 연다). 활성화/최상단 올리기는 makeActive 일 때만.
 // 다른 미러를 숨기지 않으므로 모두 같은 위치에 스택된다.
 async function ensureExcelMirrorSession(fileId, { makeActive = false, deferVisible = false } = {}) {
+  if (excelMirror.runnerHeadless) { deferVisible = true; makeActive = false; }  // [0.5.16 #1] 실행기 헤드리스: 숨겨서 열고 표시 안 함
   if (!fileId) return null;
   const file = typeof getFile === "function" ? getFile(fileId) : null;
   if (!file) return null;
@@ -1003,6 +1013,7 @@ function restoreExcelMirrorIdFromOptions(options = {}) {
 }
 
 async function restoreActiveExcelMirrorWindow(options = {}) {
+  if (excelMirror.runnerHeadless) return false;  // [0.5.16 #1] 실행기 헤드리스: 미러 복원(위치/raise) 안 함
   if (isNativeExcelShell() && options.preserveFocus) {
     return false;
   }
@@ -1027,6 +1038,7 @@ async function restoreActiveExcelMirrorWindow(options = {}) {
 }
 
 async function recoverExcelMirrorWindow(excelId = currentExcelId() || excelMirror.activeExcelId, options = {}) {
+  if (excelMirror.runnerHeadless) return false;  // [0.5.16 #1] 실행기 헤드리스: Excel 복구/표시 안 함(전체실행 후 폴링이 이걸 불러 떠버림)
   const _rbusy = typeof beginUiBusy === "function" ? beginUiBusy("Excel 창 복구 중...", { showDelayMs: 120, silentComplete: true }) : null;
   try {
   if (!excelId) return false;
@@ -1460,6 +1472,7 @@ async function pollExcelFormulaInfo(excelId) {
 }
 
 async function pollExcelMirrorChanges(excelId, options = {}) {
+  if (excelMirror.runnerHeadless) return;  // [0.5.16 #1] 실행기 헤드리스: active-sync 폴링/표시 안 함
   if (!excelId || excelMirror.polling) return;
   if (!options.baselineOnly && Date.now() < excelMirror.mutedUntil) return;
   excelMirror.polling = true;
@@ -1685,6 +1698,7 @@ function excelMirrorScreenRect() {
 
 async function positionExcelMirrorWindow(excelId = currentExcelId(), options = {}) {
   if (!excelId) return false;
+  if (excelMirror.runnerHeadless) return false;  // [0.5.16 #1] 실행기 헤드리스: Excel 오버레이 배치 안 함
   const rect = excelMirrorScreenRect();
   if (!rect) return false;
   const key = `${excelId}:${rect.left}:${rect.top}:${rect.width}:${rect.height}`;
@@ -1702,6 +1716,7 @@ async function positionExcelMirrorWindow(excelId = currentExcelId(), options = {
 
 async function showOnlyExcelMirrorWindow(excelId = currentExcelId(), options = {}) {
   if (!excelId) return false;
+  if (excelMirror.runnerHeadless) return false;  // [0.5.16 #1] 실행기 헤드리스: Excel 오버레이 표시 안 함
   const rect = excelMirrorScreenRect();
   if (!rect) return false;
   // UI 주도 전환: 이후 잠시 동안 폴링의 active-sync 를 무시하고(이전 탭으로 바운스 방지),
@@ -1743,6 +1758,7 @@ function invalidateExcelMirrorPositionTracking(excelId) {
 }
 
 async function raiseExcelMirrorWindow(excelId = currentExcelId(), options = {}) {
+  if (excelMirror.runnerHeadless) return false;  // [0.5.16 #1] 실행기 헤드리스: Excel 띄우기(raise) 안 함
   if (isNativeExcelShell() && !isNativeExcelOverlayShell()) return false;
   if (!excelId) return false;
   // 호스트 창이 비활성(최소화/알트탭/다른 앱)인 동안엔 강제로 최상단에 올리지 않는다.
