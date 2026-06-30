@@ -996,6 +996,20 @@ function vbaStaticSafetyFailures(code, sourceUserMessage) {
       failures.push("필터 결과를 새 시트에 배열 Value로 다시 쓰면 긴 숫자 ID/번호가 과학표기나 15자리 손실로 바뀔 수 있습니다. 원본 행/범위를 Copy Destination으로 복사하거나, 식별자 컬럼은 쓰기 전에 NumberFormat=\"@\" 설정 후 .Text 값으로 보존하세요.");
     }
   }
+  // [EID/긴 숫자 텍스트 손상 방지] '<var> = <멀티셀 범위>.Value' 로 읽어 '<범위>.Value = <var>' 로 되쓰는
+  // 라운드트립은 긴 숫자 텍스트(EID/가입번호 32자리 등)를 8.9E+31 로 손상시킨다(서로 다른 값이 같은 수로
+  // 뭉개져 정렬 불가). 변수명(srcData 등)과 무관하게, 멀티셀 범위 읽기→.Value 되쓰기 패턴을 잡는다.
+  {
+    const arrReadVars = [];
+    const arrReadRe = /^[ \t]*([A-Za-z_]\w*)\s*=\s*[^\n]*(?:Cells\s*\([^\n]*Cells\s*\(|Range\s*\([^\n]*:|UsedRange)[^\n]*\.\s*(?:Value|Value2)\s*\r?$/gim;
+    let arm;
+    while ((arm = arrReadRe.exec(text)) !== null) arrReadVars.push(arm[1]);
+    const movesArrayByValue = arrReadVars.some(v =>
+      new RegExp("\\.\\s*(?:Value|Value2)\\s*=\\s*" + v + "\\b", "i").test(text));
+    if (movesArrayByValue) {
+      failures.push("범위를 .Value 배열로 읽어 다른 범위에 .Value 로 되쓰면 긴 숫자 텍스트(EID/가입번호 등 16자리+)가 8.9E+31 처럼 손상돼 정렬이 깨집니다. 데이터 이동은 원본 범위를 네이티브 .Copy Destination:= 로 복사하거나, 값만 필요하면 .Copy 후 PasteSpecial Paste:=xlPasteValuesAndNumberFormats 로 옮기세요(긴 텍스트·서식 보존).");
+    }
+  }
   const requestedCols = requestedExcelColumnLetters(sourceUserMessage);
   const requestedColIndices = new Set(requestedCols.map(excelColumnLetterToIndex).filter(Boolean));
   const requestedMultiCols = requestedCols.filter(c => c.length >= 2);
