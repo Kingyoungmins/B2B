@@ -4371,21 +4371,37 @@ $("btn-run").onclick = async () => {
       if (outs.length) {
         // 가벼운 경로: 실행기 결과 파일(최종본)을 각 라이브 세션에 불러오기(재계산 없음 — 스냅샷-복원과 동일 메커니즘).
         let loaded = 0, lastExcelId = null;
+        const loadedExcelIds = [];
         for (const o of outs) {
           try {
             await postExcelMirror("/api/excel/replace", { excelId: o.excelId, resultId: o.downloadId, readOnlyMirror: false }, 0, {
               timeoutMs: 120000,
               timeoutMessage: "결과 불러오기 응답이 지연되어 중단했습니다.",
             });
-            loaded++; lastExcelId = o.excelId;
+            loaded++; lastExcelId = o.excelId; loadedExcelIds.push(o.excelId);
           } catch (e) { console.warn("[#2] 결과 불러오기 실패:", o && o.name, e); }
         }
         if (!loaded) throw new Error("결과 파일을 라이브에 불러오지 못했습니다. 실행기에서 전체실행을 다시 해주세요.");
         clearPipelineResumeFromIndex();
         noteLivePipelineApplied(state.pipeline);  // 라이브 = 최종(전 스텝 적용) → 토글 fast-path 정합
         setPipelineRuntimeStatus(activeStepIds, "applied", "적용됨");
-        if (lastExcelId && typeof showOnlyExcelMirrorWindow === "function") {
-          try { await showOnlyExcelMirrorWindow(lastExcelId, { force: true }); } catch (_) {}
+        // [교차파일 뷰 결정성] 여러 파일을 로드했을 때, '마지막에 로드된 파일'(백엔드 나열 순서에 좌우 → 플래키)이
+        // 아니라 '마지막으로 실행된 스텝이 건드린 파일'을 보여준다(라이브 단일적용과 대칭). 예: 마지막 스텝이
+        // ctx.book("B").add_sheet("새시트") 면 B 를 표시 → 방금 만든 새 시트가 항상 보인다(안 보였다 보였다 하던 원인).
+        let viewExcelId = lastExcelId;
+        try {
+          const enabled = activePipelineSteps(state.pipeline);
+          const lastStep = enabled.length ? enabled[enabled.length - 1] : null;
+          const lastFileId = lastStep && typeof inferPipelineStepTargetFileId === "function"
+            ? inferPipelineStepTargetFileId(lastStep) : null;
+          if (lastFileId) {
+            const match = loadedExcelIds.find(eid =>
+              (typeof fileIdForExcelMirrorId === "function" ? fileIdForExcelMirrorId(eid) : null) === lastFileId);
+            if (match) viewExcelId = match;
+          }
+        } catch (_) {}
+        if (viewExcelId && typeof showOnlyExcelMirrorWindow === "function") {
+          try { await showOnlyExcelMirrorWindow(viewExcelId, { force: true }); } catch (_) {}
         }
         if (typeof toast === "function") toast("실행기 결과(최종본)를 라이브에 불러왔습니다. 이제 편집/ON·OFF가 가능합니다.", "success");
       } else {
