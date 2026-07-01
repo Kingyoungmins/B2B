@@ -576,10 +576,28 @@ function totalRowIntent(text) {
       || /(맨\s*(?:아래|밑)|표\s*끝|마지막\s*행\s*(?:아래|밑))[^\n]{0,16}(합계|총합|소계|sum)/i.test(intent);
 }
 
+// [0.5.17] 단순 '값 채우기/쓰기' — 특정 셀/열/범위에 값을 입력(계산·매칭·조건 없음)은 ctx.write 로
+// 결정적 처리(Python). 헬퍼가 있는데 기본엔진이 VBA 라, "셀값 채워"가 모델(클로드 포함) 무관하게 VBA 로
+// 새던 것 수정. simpleRangeArithmeticIntent(산술+범위2개)와 달리 '산술 없는 순수 값 쓰기'를 담당한다.
+function simpleValueWriteIntent(text) {
+  const original = String(text || "");
+  const intent = routingIntentText(original);
+  if (!intent.trim()) return false;
+  const hasWrite = /(입력|작성|기입|채워|채우|넣어|반영|써\s*줘|write)/i.test(intent);
+  if (!hasWrite) return false;
+  // 계산/매칭/조건/집계/삭제/피벗/교차·복사 등 복합은 기존 경로(VBA/전용 인텐트)에 맡긴다 — 회귀 방지.
+  if (/(일치|매칭|같은|동일|찾아서|찾아|기준|조건|이면|일\s*때|경우|필터|추출|중복|삭제|제거|피벗|pivot|그룹|집계|합계|합산|평균|개수|건수|누적|소계|총계|여러\s*개|여러개|토큰|분리|병합|나눈|나누|곱한|곱하|더한|빼|차감|수식|함수|countif|sumif|복사|붙여|시트\s*전체|전체\s*시트|다른\s*파일|교차)/i.test(intent)) {
+    return false;
+  }
+  // 대상 신호(열/셀주소/범위/@멘션/'셀'·'칸'·'여기')가 있어야 오탐 감소.
+  return /([A-Z]{1,3}\s*열|[A-Z]{1,3}\d+\b|@(?:범위|시트|컬럼|파일)\s*\[|셀|칸|범위|여기)/i.test(original);
+}
+
 function ctxHelperPreferredIntent(text) {
   return sheetOpIntent(text) || ctxSortIntent(text) || monthShiftIntent(text) || simpleRangeArithmeticIntent(text)
     || pivotIntent(text) || appendSameFormatSheetsIntent(text)
     || hideUnhideIntent(text) || lookupJoinIntent(text) || dedupeIntent(text) || splitColumnIntent(text) || totalRowIntent(text)
+    || simpleValueWriteIntent(text)
     || (typeof filterToNewSheetIntent === "function" && filterToNewSheetIntent(text));
 }
 

@@ -5,7 +5,7 @@ const src = fs.readFileSync(path.join(__dirname, "..", "scripts", "chat-ui.js"),
 const s = src.indexOf("function userExplicitlyRequestsVba");
 const after = src.indexOf("function numericArithmeticIntent", s + 10);
 let block = src.slice(s, after);
-block += "\nglobalThis.R = { vba: shouldRouteRequestToVba, py: shouldRouteRequestToPython, sheet: sheetOpIntent, sort: ctxSortIntent, rangeCalc: simpleRangeArithmeticIntent, pivot: pivotIntent, append: appendSameFormatSheetsIntent };";
+block += "\nglobalThis.R = { vba: shouldRouteRequestToVba, py: shouldRouteRequestToPython, sheet: sheetOpIntent, sort: ctxSortIntent, rangeCalc: simpleRangeArithmeticIntent, pivot: pivotIntent, append: appendSameFormatSheetsIntent, valWrite: simpleValueWriteIntent };";
 eval(block);
 const R = globalThis.R;
 
@@ -66,6 +66,18 @@ ck("[range-calc] E6:E16 / 1000000 -> D6:D16 routePython TRUE", R.py(simpleRangeC
 const appendSameFormat = "5개 입력 파일에 동일한 포맷의 표가 있고 가입자별청구내역 하나의 헤더만 남기고 헤더 아래값을 연결하여 출력 파일의 새 시트에 하나의 표로 만들어줘";
 ck("[append] same-format multi-file append intent TRUE", R.append(appendSameFormat) === true);
 ck("[append] same-format multi-file append -> Python", R.py(appendSameFormat) === true && R.vba(appendSameFormat) === false);
+
+// [0.5.17] 단순 값 채우기(계산·매칭·조건 없음) → Python ctx.write. '기본엔진 VBA 로 새던' 케이스 수정.
+ck("[값쓰기] 'H열에 0을 채워줘' → Python", R.py("H열에 0을 채워줘") === true && R.vba("H열에 0을 채워줘") === false);
+ck("[값쓰기] 'J5에 100 넣어줘' → Python", R.py("J5에 100 넣어줘") === true && R.vba("J5에 100 넣어줘") === false);
+ck("[값쓰기] '이 셀에 완료라고 입력해줘' → Python", R.py("이 셀에 완료라고 입력해줘") === true);
+ck("[값쓰기] intent 감지", R.valWrite("H열에 0을 채워줘") === true);
+// 복합/매칭/조건/집계/삭제는 값쓰기로 오인하지 말 것 → 기존 경로(VBA) 유지(회귀 방지)
+ck("[제외] '가입번호 일치 행 채워' → 값쓰기 FALSE", R.valWrite("가입번호 일치하는 행에 값 채워줘") === false);
+ck("[제외] 키매칭 행 갱신 → VBA 유지", R.vba("가입번호가 일치하는 행 전체의 금액을 채워 갱신해줘") === true);
+ck("[제외] 'F열 합계를 J5에 채워' → 값쓰기 FALSE(집계)", R.valWrite("F열 합계를 J5에 채워줘") === false);
+ck("[제외] 'F열 100만 미만 행 삭제' → 값쓰기 FALSE", R.valWrite("F열이 100만원 미만이면 행 삭제해줘") === false);
+ck("[제외] 대상신호 없는 '값 채워' → 값쓰기 FALSE(오탐방지)", R.valWrite("값 채워줘") === false);
 
 console.log("\n=== RESULT: " + pass + " PASS / " + fail + " FAIL ===");
 process.exit(fail ? 2 : 0);
