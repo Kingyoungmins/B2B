@@ -21,6 +21,8 @@ const excelMirror = {
   activeSyncMutedUntil: 0,
   pendingChatRange: null,
   selectionChatTimer: null,
+  selectionTimer: null,      // [0.5.17] 선택→채팅 빠른 반영용 경량 폴 타이머
+  selectionPolling: false,
   zOrderTimers: [],
   lastRaiseAt: 0,
   positionTimer: null,
@@ -1429,6 +1431,17 @@ function startExcelMirrorPolling() {
       pollExcelMirrorChanges(excelId).catch(err => console.warn("Excel mirror poll failed:", err));
     }
   }, isNativeExcelShell() ? EXCEL_MIRROR_POLL_MS : 450);
+  if (!excelMirror.selectionTimer) {
+    // [0.5.17] 행/열/셀 선택 → 채팅 반영을 빠르게. 무거운 changes 폴(2200ms, active-sync=탭 따라가기 포함)과
+    // 분리해, 현재 탭의 Selection 만 가볍게 자주 읽는다(탭 전환 로직은 안 건드려 회귀 위험 없음).
+    // Selection.Address 읽기는 hover-info(수식표시줄)처럼 포커스를 끊지 않는다.
+    excelMirror.selectionTimer = setInterval(() => {
+      if (document.hidden || excelMirror.hostActive === false) return;
+      if (isNativeExcelShell() && Date.now() < (excelMirror.quietUntil || 0)) return;
+      const excelId = currentExcelId();
+      if (excelId) pollExcelSelection(excelId).catch(() => {});
+    }, isNativeExcelShell() ? 550 : 400);
+  }
   if (!excelMirror.formulaInfoTimer) {
     // [#1] 네이티브 셸에서도 수식 표시줄을 갱신한다. hover-info 는 Selection 읽기 + StatusBar 쓰기뿐이라
     // 포커스를 끊지 않는다(changes 폴은 이미 네이티브에서 돈다). 적용 중(quietUntil)엔 건너뛰고,
@@ -1450,9 +1463,36 @@ function stopExcelMirrorPolling() {
     clearInterval(excelMirror.pollTimer);
     excelMirror.pollTimer = null;
   }
+  if (excelMirror.selectionTimer) {
+    clearInterval(excelMirror.selectionTimer);
+    excelMirror.selectionTimer = null;
+  }
   if (excelMirror.formulaInfoTimer) {
     clearInterval(excelMirror.formulaInfoTimer);
     excelMirror.formulaInfoTimer = null;
+  }
+}
+
+// [0.5.17] 현재 탭의 Selection 만 가볍게 읽어 선택→채팅 반영을 빠르게 한다. active-sync(탭 따라가기)는
+// 하지 않으므로(무거운 changes 폴이 담당) 탭 회귀 등 회귀 위험이 없다. 선택이 '바뀐 경우에만' 채팅에 반영.
+async function pollExcelSelection(excelId) {
+  if (!excelId || excelMirror.selectionPolling) return;
+  if (excelMirror.runnerHeadless) return;  // 실행기 헤드리스: 미러 없음
+  if (Date.now() < excelMirror.mutedUntil) return;  // 적용/전환 중 억제
+  excelMirror.selectionPolling = true;
+  try {
+    const data = await postExcelMirror("/api/excel/selection", { excelId });
+    if (!data || !data.address) return;
+    const fileId = fileIdForExcelMirrorId(excelId);
+    // 현재 탭의 선택만 반영(다른 탭/스테일 방지). syncSelectionFromExcel 도 동일 가드가 있다.
+    if (!fileId || fileId !== state.currentFileId) return;
+    const appendToChat = shouldAppendExcelSelectionFromPoll(excelId, data.sheet, data.address, {});
+    syncSelectionFromExcel(data.sheet, data.address, { appendToChat, fileId, excelId });
+  } catch (err) {
+    if (isMissingExcelSessionError(err)) forgetExcelMirrorSession(excelId);
+    // 그 외 오류는 조용히(폴 실패는 다음 틱에서 회복)
+  } finally {
+    excelMirror.selectionPolling = false;
   }
 }
 

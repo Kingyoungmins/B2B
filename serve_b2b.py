@@ -1022,6 +1022,9 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
         if self.path == "/api/excel/changes":
             self.handle_excel_changes()
             return
+        if self.path == "/api/excel/selection":
+            self.handle_excel_selection()
+            return
         if self.path == "/api/excel/run-vba":
             self.handle_excel_run_vba()
             return
@@ -1696,6 +1699,13 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
         payload = self.read_json_body()
         try:
             self.send_json(poll_excel_session_changes(payload.get("excelId")))
+        except Exception as err:
+            self.send_json({"ok": False, "error": str(err)}, status=400)
+
+    def handle_excel_selection(self):
+        payload = self.read_json_body()
+        try:
+            self.send_json(poll_excel_session_selection(payload.get("excelId")))
         except Exception as err:
             self.send_json({"ok": False, "error": str(err)}, status=400)
 
@@ -10736,6 +10746,34 @@ def _get_excel_hover_info_impl(excel_id):
 
 def poll_excel_session_changes(excel_id):
     return excel_call(_poll_excel_session_changes_impl, excel_id, timeout=60)
+
+
+def _read_excel_session_selection_impl(excel_id):
+    """[0.5.17] 현재 탭의 선택(Selection)만 가볍게 읽는다 — active-sync(포그라운드/탭 따라가기)·복사소스
+    스냅샷·셀 diff 없이 최소 COM 만. 행/열/셀 선택이 채팅에 빨리 뜨도록 하는 전용 경량 폴 대상.
+    무거운 /api/excel/changes(2200ms) 는 그대로 두어 탭 전환 로직 회귀 위험이 없다."""
+    with EXCEL_LOCK:
+        session = get_excel_session(excel_id)
+        app, wb = session_workbook(session)
+        frame_mode = bool(session.get("liveEditable")) and LIVE_FRAME_MODE
+        sheet_name = _active_sheet_name(wb, prefer_workbook=frame_mode)
+        addr = ""
+        try:
+            if frame_mode:
+                # 활성화 없이도 이 세션 창의 선택을 읽는다(app.Selection 은 다른 워크북일 수 있음).
+                addr = _excel_address(wb.Windows(1).RangeSelection).replace("$", "")
+            else:
+                addr = _excel_address(app.Selection).replace("$", "")
+        except Exception:
+            try:
+                addr = _excel_address(app.Selection).replace("$", "")
+            except Exception:
+                pass
+        return {"ok": True, "excelId": excel_id, "sheet": sheet_name, "address": addr}
+
+
+def poll_excel_session_selection(excel_id):
+    return excel_call(_read_excel_session_selection_impl, excel_id, timeout=30)
 
 
 def get_excel_hover_info(excel_id):
