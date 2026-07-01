@@ -76,11 +76,10 @@ function addFileMentions(items, file, fileMeta) {
   const sheetNames = Array.isArray(file.sheetNames) && file.sheetNames.length
     ? file.sheetNames
     : Object.keys(file.sheets || {});
+  // [0.5.17 사용자 지시] @멘션 자동완성에는 파일·시트만 노출한다(컬럼 제외 — 컬럼까지 나오면 목록이 길어져
+  // 파일/시트를 고르기 불편). 사용자가 @컬럼[...] 을 직접 타이핑하면 augmentUserPromptWithMentions 가 그대로 해석.
   sheetNames.forEach(sheet => {
     items.push({ type: "sheet", label: sheet, token: `@시트[${file.name}/${sheet}]`, meta: `시트 · ${file.name}` });
-    getSheetColumns(file, sheet).forEach(colName => {
-      items.push({ type: "column", label: colName, token: `@컬럼[${file.name}/${sheet}/${colName}]`, meta: `컬럼 · ${file.name}/${sheet}` });
-    });
   });
 }
 

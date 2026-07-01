@@ -79,5 +79,15 @@ ck("[제외] 'F열 합계를 J5에 채워' → 값쓰기 FALSE(집계)", R.valWr
 ck("[제외] 'F열 100만 미만 행 삭제' → 값쓰기 FALSE", R.valWrite("F열이 100만원 미만이면 행 삭제해줘") === false);
 ck("[제외] 대상신호 없는 '값 채워' → 값쓰기 FALSE(오탐방지)", R.valWrite("값 채워줘") === false);
 
+// [0.5.17] 시트 이름변경 감지 강화 — '이름/명' 없이 자연스럽게 말해도, 긴 새 이름이어도 Python(ctx)
+ck("[시트명] '이 시트를 3월로 바꿔줘' → Python", R.py("이 시트를 3월로 바꿔줘") === true && R.vba("이 시트를 3월로 바꿔줘") === false);
+ck("[시트명] 'Sheet1을 요약으로 바꿔줘' → Python", R.py("Sheet1을 요약으로 바꿔줘") === true);
+ck("[시트명] '시트 이름을 2026년 5월로 변경' → Python", R.py("시트 이름을 2026년 5월로 변경") === true);
+ck("[시트명] '시트명을 2026으로 변경해줘' → Python", R.py("시트명을 2026으로 변경해줘") === true);
+ck("[시트명] '@시트[a.xlsx/Sheet1] 을 3월로 바꿔줘' → Python", R.py("@시트[a.xlsx/Sheet1] 을 3월로 바꿔줘") === true);
+// 내용/서식 변경은 시트이름변경으로 오인 금지(기존 경로 유지)
+ck("[제외] '시트의 데이터를 3월로 바꿔' → sheetOp FALSE", R.sheet("시트의 데이터를 3월로 바꿔줘") === false);
+ck("[제외] '시트 색을 빨강으로 바꿔' → sheetOp FALSE", R.sheet("이 시트 색을 빨강으로 바꿔줘") === false);
+
 console.log("\n=== RESULT: " + pass + " PASS / " + fail + " FAIL ===");
 process.exit(fail ? 2 : 0);

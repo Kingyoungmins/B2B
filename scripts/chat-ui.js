@@ -467,15 +467,24 @@ function sheetOpIntent(text) {
   // 매칭/집계/조건이 섞인 복합 작업은 단순 시트조작이 아니므로 기존 라우팅에 맡긴다(안정성).
   if (/(일치|매칭|같은\s*값|동일\s*값|찾아서|피벗|pivot|집계|합계|합산|그룹|조건|이면|일\s*때|분리|토큰|split)/i.test(intent)) return false;
   const clearLike = /(데이터|내용|값|범위)[^\n]{0,6}(삭제|제거|지워|비워|clear)/i.test(intent);
+  // [0.5.17] 이름변경 감지 강화: (1) "이름/명 … 변경/바꾸" 사이 간격을 넉넉히(긴 새이름 "2026년 5월로" 허용),
+  // (2) "이름/명" 단어 없이 자연스럽게 말한 "X(으)로 바꿔/변경"도 인정 — "이 시트를 3월로 바꿔줘",
+  // "Sheet1을 요약으로 바꿔줘", "@시트[…]을 3월로 바꿔줘" 가 VBA 로 새던 것 수정. 단 내용/서식 변경은 제외.
+  const contentOrFormatChange = /(데이터|내용|값|셀|행|열|칸|범위|서식|형식|색|색상|글꼴|폰트|정렬|너비|높이|테두리)/i.test(intent);
+  const renameSignal = (
+    /(이름|명|rename)[^\n]{0,20}(변경|바꾸|바꿔|수정|rename)/i.test(intent)
+    || /(변경|수정)[^\n]{0,12}(이름|명)/i.test(intent)
+    || (/(?:으로|로)\s*(?:이름\s*(?:을|를)?\s*)?(변경|바꾸|바꿔|수정)/i.test(intent) && !contentOrFormatChange)
+  );
   let copy, rename, add, del;
   if (sheetMention) {
     copy = /(복사|복제|copy)/i.test(intent);
-    rename = /(이름|명)[^\n]{0,8}(변경|바꾸|바꿔|수정)|rename/i.test(intent);
+    rename = renameSignal;
     add = /(추가|생성|만들)|(?:add|insert)\s*(?:sheet|tab)/i.test(intent);
     del = /(삭제|제거|지워|없애|delete)/i.test(intent) && !clearLike;
   } else {
     copy = /(시트|탭|worksheet|sheet)[^\n]{0,12}(복사|복제|copy)|(복사|복제|copy)[^\n]{0,12}(시트|탭|worksheet|sheet)/i.test(intent);
-    rename = /(시트|탭)[^\n]{0,12}(이름|명)[^\n]{0,8}(변경|바꾸|바꿔|수정)|rename\s*(?:sheet|tab)/i.test(intent);
+    rename = renameSignal;
     add = /(시트|탭)[^\n]{0,8}(추가|생성|만들)|(?:add|insert)\s*(?:sheet|tab)/i.test(intent);
     del = /(시트|탭)[^\n]{0,8}(삭제|제거|지워|없애|delete)/i.test(intent) && !clearLike;
   }
