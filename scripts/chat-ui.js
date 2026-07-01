@@ -602,11 +602,25 @@ function simpleValueWriteIntent(text) {
   return /([A-Z]{1,3}\s*열|[A-Z]{1,3}\d+\b|@(?:범위|시트|컬럼|파일)\s*\[|셀|칸|범위|여기)/i.test(original);
 }
 
+// [0.5.17] 열(컬럼) 이동/재배치/맞바꾸기 → ctx.move_cols 로 결정적 처리(Python). VBA 로 보내면 모델이 병합
+// 제목/헤더 위에서 Columns.Cut/Insert 를 짜다 1004(병합된 셀에서는 실행할 수 없습니다)로 통째 실패하던 것을
+// 대체한다(move_cols 는 네이티브 copy + 병합안전 insert/delete 라 병합 헤더가 있어도 안전 — 라이브 COM 검증됨).
+function columnMoveIntent(text) {
+  const intent = routingIntentText(String(text || ""));
+  const hasColumn = /([A-Z]{1,3}\s*열|열\s*(?:을|를|들|순서|위치)|컬럼|칼럼|column)/i.test(intent);
+  if (!hasColumn) return false;
+  const moveVerb = /(이동|옮기|옮겨|reorder|재배치|(?:순서|위치|자리)\s*(?:를)?\s*(?:변경|바꾸|바꿔|조정)|앞으로|뒤로|맨\s*(?:앞|뒤)|사이에|맞바꾸|맞바꿔|바꿔\s*치|swap)/i.test(intent);
+  if (!moveVerb) return false;
+  // 매칭/집계/피벗/조건/삭제는 열이동이 아님 → 기존 경로 유지(회귀 방지).
+  if (/(일치|매칭|찾아서|찾아|기준으로|피벗|pivot|그룹\s*별|그룹별|집계|합산|조건|이면|일\s*때|삭제|제거)/i.test(intent)) return false;
+  return true;
+}
+
 function ctxHelperPreferredIntent(text) {
   return sheetOpIntent(text) || ctxSortIntent(text) || monthShiftIntent(text) || simpleRangeArithmeticIntent(text)
     || pivotIntent(text) || appendSameFormatSheetsIntent(text)
     || hideUnhideIntent(text) || lookupJoinIntent(text) || dedupeIntent(text) || splitColumnIntent(text) || totalRowIntent(text)
-    || simpleValueWriteIntent(text)
+    || simpleValueWriteIntent(text) || columnMoveIntent(text)
     || (typeof filterToNewSheetIntent === "function" && filterToNewSheetIntent(text));
 }
 
@@ -2962,6 +2976,7 @@ async function sendChat() {
   const routeSplitColumn = routeToPython && typeof splitColumnIntent === "function" && splitColumnIntent(msg);
   const routeTotalRow = routeToPython && typeof totalRowIntent === "function" && totalRowIntent(msg);
   const routeHideUnhide = routeToPython && typeof hideUnhideIntent === "function" && hideUnhideIntent(msg);
+  const routeColumnMove = routeToPython && typeof columnMoveIntent === "function" && columnMoveIntent(msg);
   const modeLabel = editTargetId ? "(수정 모드) " : (routeToVba ? "(VBA 라우팅) " : (routeToPython ? "(Python 라우팅) " : ""));
   const thinkMode = typeof isThinkModeEnabled === "function" && isThinkModeEnabled();
   const abortController = new AbortController();
@@ -3016,6 +3031,8 @@ async function sendChat() {
         routingHint = "한 셀을 구분자로 나눠 여러 열로 분리하는 요청입니다(예: '1001/홍길동' → 가입번호/고객명). 반드시 ctx.split_column 으로 처리하세요: ctx.split_column(\"청구내역\", col=\"가입번호/고객명\", delimiter=\"/\", into=[\"가입번호\",\"고객명\"]). 원본 열 오른쪽에 새 열이 생깁니다. VBA(Sub B2BSkill())는 출력하지 마세요.";
       } else if (routeHideUnhide) {
         routingHint = "행/열 숨김 또는 숨김 해제 요청입니다. 반드시 ctx.hide_cols / ctx.hide_rows 로 처리하세요: 숨기기 ctx.hide_cols(\"시트\", \"C:E\", hidden=True), 숨김 해제 ctx.hide_cols(\"시트\", \"C:E\", hidden=False) (행은 ctx.hide_rows). VBA(Sub B2BSkill())는 출력하지 마세요. @범위/@시트 이름은 그대로 쓰세요.";
+      } else if (routeColumnMove) {
+        routingHint = "열(컬럼)을 다른 위치로 이동/재배치/맞바꾸는 요청입니다. 직접 Columns.Cut/Insert 나 값 배열 재작성으로 짜지 말고 반드시 ctx.move_cols 로 처리하세요: ctx.move_cols(\"시트\", [\"금액\",\"할인\"], \"합계\", header_row=1) — 열목록을 기준열(합계) '앞'으로 헤더+데이터 통째 이동(원본 제거, 인덱스 시프트 자동). 옮길 열과 기준열(before) 모두 헤더명 또는 열문자(\"D\")를 쓸 수 있습니다. 헤더가 2행이면 header_row=2. 두 열 맞바꾸기는 뒤 열을 앞 열 앞으로 옮기면 됩니다(예: D와 E 맞바꾸기 → ctx.move_cols(\"시트\", [\"E\"], \"D\")). move_cols 는 병합 제목/헤더가 있어도 네이티브 copy+병합안전 삽입/삭제로 안전하게 처리하니 UnMerge 를 직접 짜지 마세요. VBA(Sub B2BSkill())는 출력하지 말고, @시트 이름은 한 글자도 바꾸지 마세요.";
       } else if (routeCtxHelper) {
         routingHint = "시트 복사/복사후 이름변경/추가/삭제 또는 단순 정렬 요청입니다. 반드시 ctx 헬퍼를 쓰세요: ctx.copy_sheet(\"시트\", dst_book=\"대상.xlsx\", new_name=\"새이름\") / ctx.rename_sheet(\"기존\",\"새\") / ctx.add_sheet / ctx.delete_sheet / ctx.sort(시트, 범위, key_col=열문자, has_header=True). 정렬에서 @범위가 L2:L8929처럼 키 열만 가리키면 그 열만 정렬하지 말고 표 전체 범위(예: A1:L8929)를 잡고 key_col=\"L\"로 정렬하세요. 범위가 1행 헤더를 포함하면 has_header=True, 2행부터 시작해 헤더가 없으면 has_header=False를 쓰세요. 정렬은 기존 셀 값·수식·날짜·회계 서식이 행과 함께 이동해야 하므로, ctx.read/sorted/ctx.write 또는 값 배열 재작성으로 흉내내지 마세요(EID/가입번호 같은 긴 숫자 텍스트가 8.90E+31 형태로 손실될 수 있음). @시트/@파일 이름은 한 글자도 바꾸지 말고 그대로 쓰세요.";
       } else {

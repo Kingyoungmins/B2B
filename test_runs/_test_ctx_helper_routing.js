@@ -5,7 +5,7 @@ const src = fs.readFileSync(path.join(__dirname, "..", "scripts", "chat-ui.js"),
 const s = src.indexOf("function userExplicitlyRequestsVba");
 const after = src.indexOf("function numericArithmeticIntent", s + 10);
 let block = src.slice(s, after);
-block += "\nglobalThis.R = { vba: shouldRouteRequestToVba, py: shouldRouteRequestToPython, sheet: sheetOpIntent, sort: ctxSortIntent, rangeCalc: simpleRangeArithmeticIntent, pivot: pivotIntent, append: appendSameFormatSheetsIntent, valWrite: simpleValueWriteIntent };";
+block += "\nglobalThis.R = { vba: shouldRouteRequestToVba, py: shouldRouteRequestToPython, sheet: sheetOpIntent, sort: ctxSortIntent, rangeCalc: simpleRangeArithmeticIntent, pivot: pivotIntent, append: appendSameFormatSheetsIntent, valWrite: simpleValueWriteIntent, colMove: columnMoveIntent };";
 eval(block);
 const R = globalThis.R;
 
@@ -88,6 +88,16 @@ ck("[시트명] '@시트[a.xlsx/Sheet1] 을 3월로 바꿔줘' → Python", R.py
 // 내용/서식 변경은 시트이름변경으로 오인 금지(기존 경로 유지)
 ck("[제외] '시트의 데이터를 3월로 바꿔' → sheetOp FALSE", R.sheet("시트의 데이터를 3월로 바꿔줘") === false);
 ck("[제외] '시트 색을 빨강으로 바꿔' → sheetOp FALSE", R.sheet("이 시트 색을 빨강으로 바꿔줘") === false);
+
+// [0.5.17] 열(컬럼) 이동/재배치/맞바꾸기 → Python(ctx.move_cols, 병합 안전). VBA 병합 1004 회피.
+ck("[열이동] 'D열을 G열 앞으로 옮겨줘' → Python", R.py("D열을 G열 앞으로 옮겨줘") === true && R.vba("D열을 G열 앞으로 옮겨줘") === false);
+ck("[열이동] '금액 열을 합계 앞으로 이동' → Python", R.py("금액 열을 합계 앞으로 이동해줘") === true);
+ck("[열이동] '열 순서를 바꿔줘' → Python", R.py("열 순서를 바꿔줘") === true);
+ck("[열이동] 'D열과 E열 맞바꿔줘' → Python", R.py("D열과 E열 맞바꿔줘") === true);
+ck("[열이동] intent 감지", R.colMove("D열을 G열 앞으로 옮겨줘") === true);
+// 매칭/집계는 열이동으로 오인 금지(기존 경로 유지)
+ck("[제외] '일치 열을 앞으로 옮겨' → colMove FALSE(매칭)", R.colMove("가입번호 일치하는 열을 앞으로 옮겨줘") === false);
+ck("[제외] '매출 열 지점별 집계' → colMove FALSE", R.colMove("매출 열을 지점별로 옮겨 집계해줘") === false);
 
 console.log("\n=== RESULT: " + pass + " PASS / " + fail + " FAIL ===");
 process.exit(fail ? 2 : 0);

@@ -9272,15 +9272,20 @@ class PythonComSkillContext:
         header_row: 헤더가 몇 행인지(2행 헤더면 2). scan_from: 그 열부터만 스캔(예: "J")."""
         ws = self._ws(sheet)
         self._tick(2)
+        hr = max(1, int(header_row or 1))
 
         def _idx_of(spec):
             s = str(spec).strip()
             if re.fullmatch(r"[A-Za-z]{1,3}", s):
                 return self._col_index(s)
-            return int(spec)
+            try:
+                return int(spec)
+            except (TypeError, ValueError):
+                pass
+            # 헤더명도 허용(columns 인자와 동일). LLM 이 before/scan_from 에 "합계" 같은 헤더명을 넘기는 경우 대비.
+            return self.find_header(sheet, s, header_row=hr)
 
         before_idx = _idx_of(before)
-        hr = max(1, int(header_row or 1))
 
         if callable(columns):
             last_c = self.last_col(sheet, hr)
