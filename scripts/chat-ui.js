@@ -1662,6 +1662,26 @@ function showCodeGuardBlock(message, context) {
   scrollChatToBottom({ force: true });   // 가드 안내/강제적용 버튼은 항상 보이도록(#18)
 }
 
+// [사용자 지시] VBA 전환 재생성까지 실패("뻑나면")하면, 게이트를 우회해 '원본 Python 코드'를 그대로
+// 강제 적용한다(VBA 는 아무리 굴려도 안 되는 케이스가 있어 사용자가 직접 빠져나올 수 있게).
+function applyForcedPythonFallback(pythonCode, context) {
+  context = context || {};
+  const prompt = (typeof replyStepPrompt === "function") ? replyStepPrompt(context) : (context.sourceUserMessage || "");
+  const result = applyLogic({
+    id: uid(),
+    prompt,
+    code: String(pythonCode || ""),
+    description: context.originalPythonDesc || "원본 Python 스킬(강제 적용)",
+    language: "python",
+  });
+  if (result && result.error) {
+    toast("강제 적용 실패: " + result.error, "error");
+  } else {
+    toast("원본 Python 코드를 강제로 적용했습니다.", "success");
+  }
+  return result;
+}
+
 // 정적 안전 위반 시 Qwen 을 자동 재호출해 고친 코드를 받아 다시 검사 흐름에 태운다.
 // addAssistantReply 가 새 코드에 대해 validateAssistantCodeBeforeApply 를 다시 호출하므로
 // staticRegenAttempt 카운터로 무한 재생성을 막는다(언어별 MAX_REGEN 회까지).
@@ -1747,11 +1767,13 @@ async function autoRegenerateAsVbaFallback(code, failures, context) {
     });
     streamView.flush();
     loading.remove();
-    // vbaFallbackTried: VBA 쪽 게이트도 끝내 막히면 다시 python 으로 돌아오지 않고 최종 차단.
+    // vbaFallbackTried: VBA 쪽 게이트도 끝내 막히면, 최종 차단 대신 '원본 Python 강제 적용'을 열어준다.
+    // → 원본 Python 코드(이 함수의 code 인자)를 보존해 다음 검증 컨텍스트로 넘긴다.
     addAssistantReply(reply, {
       sourceUserMessage,
       staticRegenAttempt: 0,
       vbaFallbackTried: true,
+      originalPythonCode: (context && context.originalPythonCode) || code,
       autoApplyMode: (context && context.autoApplyMode) || "apply",
     });
     scrollChatToBottom();
@@ -1776,6 +1798,25 @@ function validateAssistantCodeBeforeApply(code, context) {
   const codeText = String(code || "");
   const isPythonSkill = /def\s+transform\s*\(\s*ctx\s*\)\s*:/.test(codeText) ||
     (/\bctx\.\w+\s*\(/.test(codeText) && !/\bSub\s+\w+\s*\(/i.test(codeText));
+  // [사용자 지시] 'VBA 적용실패 → 에러복구가 Python 으로 다시 짠' 코드(recoveredFromVba)는
+  // '강제적용과 동일하게' 게이트 없이 무조건 적용한다. 이게 없으면 read 과다 등으로 다시 VBA 로
+  // 튕기고, 그 VBA 가 또 실패하면 복구가 다시 Python → … VBA↔Python 무한 루프가 된다.
+  // (하드 안전은 서버 AST 게이트가 최종 판정하므로 클라 정적검사를 건너뛰어도 위험코드는 서버가 막는다.
+  //  순수 Python→Python 복구는 이 우회 대상이 아니라 기존 게이트를 그대로 거친다 — allowPythonRecovery
+  //  가드 때문에 어차피 VBA 로 튕기지 않아 루프가 안 생김.)
+  if (isPythonSkill && allowPythonRecovery && context.recoveredFromVba) {
+    try { if (typeof traceClientUiEvent === "function") traceClientUiEvent("apply.validate.ok", { language: "python", bypass: "pythonRecoveryForce" }); } catch (_) {}
+    return true;
+  }
+  // [사용자 지시] 이 코드가 'VBA 전환 재생성' 결과(vbaFallbackTried)인데 게이트에 또 막히면,
+  // 최종 차단 화면의 강제적용 버튼이 '원본 Python' 을 적용하도록 바꾼다(VBA 는 아무리 굴려도 안 되니까).
+  if (context.originalPythonCode && context.vbaFallbackTried && !isPythonSkill && typeof applyLogic === "function") {
+    context = {
+      ...context,
+      forceLabel: "원본 Python 코드로 강제 적용",
+      onForceApply: () => applyForcedPythonFallback(context.originalPythonCode, context),
+    };
+  }
   try {
     if (typeof traceClientUiEvent === "function") traceClientUiEvent("apply.validate.start", {
       mode: context.autoApplyMode || "",
@@ -1855,6 +1896,16 @@ function validateAssistantCodeBeforeApply(code, context) {
     const pyFailures = traceValidationStage("pythonComStaticSafetyFailures", () => pythonComStaticSafetyFailures(code, sourceUserMessage));
     if (pyFailures.length) {
       const attemptsSoFar = Number(context.staticRegenAttempt || 0);
+      // [사용자 지시] 'read 과다(큰 표를 ctx.read 로 올려 가공)' 계열은 Python 재생성으로 안 고쳐진다
+      // (패턴상 VBA/네이티브가 정답). → Python 재생성을 건너뛰고 '바로' VBA 로 전환한다.
+      //   VBA 도 뻑나면, autoRegenerateAsVbaFallback 가 넘긴 originalPythonCode 로 최종 화면에서
+      //   '원본 Python 강제 적용' 버튼이 뜬다(위 vbaFallbackTried 오버라이드).
+      const readTooHeavy = pyFailures.some(f => /큰\s*표를\s*ctx\.read\s*로\s*Python\s*리스트에\s*올려/.test(String(f)));
+      if (readTooHeavy && !context.vbaFallbackTried && !explicitPythonHere && !allowPythonRecovery) {
+        autoRegenerateAsVbaFallback(code, pyFailures, { ...context, originalPythonCode: code });
+        try { if (typeof traceClientUiEvent === "function") traceClientUiEvent("apply.validate.block", { reason: "pythonReadTooHeavyStraightToVba" }); } catch (_) {}
+        return false;
+      }
       if (attemptsSoFar < PYTHON_STATIC_MAX_REGEN) {
         autoRegenerateForStaticSafety(code, pyFailures, { ...context, skillLanguage: "python" });
       } else if (!context.vbaFallbackTried && !explicitPythonHere && !allowPythonRecovery) {
@@ -2797,6 +2848,8 @@ async function requestErrorRecovery(stepIdx, errorInfo, userNote) {
       editTargetId: isExistingStep ? failedStep.id : null,
       sourceUserMessage: recoveryApplySourceUserMessage,
       allowPythonRecovery: recoveryAllowsPython,
+      // VBA 로 짠 Step 이 실패해 Python 으로 복구하는 경우 → 적용을 무조건 통과시켜 VBA↔Python 루프 차단.
+      recoveredFromVba: failedStepLooksVba && isPythonRecovery,
       reasoning: reasoningText,
     });
     scrollChatToBottom();
@@ -2809,6 +2862,7 @@ async function requestErrorRecovery(stepIdx, errorInfo, userNote) {
         editTargetId: isExistingStep ? failedStep.id : null,
         sourceUserMessage: recoveryApplySourceUserMessage,
         allowPythonRecovery: recoveryAllowsPython,
+        recoveredFromVba: failedStepLooksVba && isPythonRecovery,
         modeLabel: "(에러 복구) ",
         aiName,
         message: "Think 요청을 중단했습니다.",
