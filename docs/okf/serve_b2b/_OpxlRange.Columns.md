@@ -9,7 +9,7 @@ signature: "(self)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
 version: "0.5.18"
-loc: "serve_b2b.py:12209-12210"
+loc: "serve_b2b.py:12289-12290"
 
 # ── 입출력 ──
 inputs:
@@ -33,6 +33,7 @@ called_by:
   - "PythonComSkillContext.hide_cols"
   - "PythonComSkillContext.insert_cols"
   - "PythonComSkillContext.sort"
+  - "PythonComSkillContext.swap_cols"
 reads:
   - "self._c1"
   - "self._c2"
@@ -49,7 +50,7 @@ timestamp: "0.5.18-gen"
 
 ## 관계
 - 호출: 없음
-- 피호출(영향 전파 경로): `ExcelSkillContext.sort`, `ExcelWorksheetProxy.delete_cols`, `ExcelWorksheetProxy.insert_cols`, `PythonComSkillContext.delete_cols`, `PythonComSkillContext.hide_cols`, `PythonComSkillContext.insert_cols`, `PythonComSkillContext.sort`
+- 피호출(영향 전파 경로): `ExcelSkillContext.sort`, `ExcelWorksheetProxy.delete_cols`, `ExcelWorksheetProxy.insert_cols`, `PythonComSkillContext.delete_cols`, `PythonComSkillContext.hide_cols`, `PythonComSkillContext.insert_cols`, `PythonComSkillContext.sort`, `PythonComSkillContext.swap_cols`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

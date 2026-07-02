@@ -8,7 +8,7 @@ signature: "(text)"
 role: "사용자에게 되묻는 정상적인 명확화 질문이면 재생성하지 않는다."
 role_source: banner
 version: "0.5.18"
-loc: "chat-ui.js:1905-1905"
+loc: "chat-ui.js:1935-1935"
 
 # ── 입출력 ──
 inputs:

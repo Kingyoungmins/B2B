@@ -8,7 +8,7 @@ signature: "(function ()"
 role: "[사용자 지시] 에러복구에서는 \"실패한 기존 Step 언어\"보다 복구창의 사용자 메모가 우선이다."
 role_source: banner
 version: "0.5.18"
-loc: "chat-ui.js:2555-2555"
+loc: "chat-ui.js:2585-2585"
 
 # ── 입출력 ──
 inputs:

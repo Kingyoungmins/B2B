@@ -35,6 +35,7 @@ calls_external:
   - "text"
 called_by:
   - "PythonComSkillContext.copy"
+  - "PythonComSkillContext.copy_values"
 reads:
   - "self.book"
 writes: []
@@ -50,7 +51,7 @@ Resolve "workbook.xlsx!Sheet1" into a context + sheet name.
 
 ## 관계
 - 호출: `book`
-- 피호출(영향 전파 경로): `PythonComSkillContext.copy`
+- 피호출(영향 전파 경로): `PythonComSkillContext.copy`, `PythonComSkillContext.copy_values`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

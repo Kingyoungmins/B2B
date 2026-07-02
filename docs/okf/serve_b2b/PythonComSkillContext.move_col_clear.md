@@ -55,7 +55,8 @@ calls_external:
   - "src"
   - "src_i"
   - "src_rng"
-called_by: []
+called_by:
+  - "PythonComSkillContext.copy_col"
 reads:
   - "self._resolve_col"
   - "self._shared"
@@ -78,7 +79,7 @@ timestamp: "0.5.18-gen"
 
 ## 관계
 - 호출: `Cells`, `Range`, `_col_letter`, `_resolve_col`, `_tick`, `_ws`, `append`, `clear`, `copy`, `header_row`, `last_row`, `sheet`
-- 피호출(영향 전파 경로): 없음
+- 피호출(영향 전파 경로): `PythonComSkillContext.copy_col`
 
 ## 실패/예외
 - `PythonComSkillError`

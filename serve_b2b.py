@@ -9390,6 +9390,86 @@ class PythonComSkillContext:
         self._shared["structural"].append(f"move_col_clear:{sheet}:{src_l}->{dst_l}@{start}")
         return True
 
+    def copy_col(self, sheet, src, dst, header_row=None):
+        """열 → 열 '복사'(원본 유지). 값+수식+서식+세로병합 보존, 상단 제목의 가로 병합은 자동 회피,
+        대상 열 병합은 먼저 정리 → '병합된 셀에서는 실행할 수 없습니다'(1004) 없이 복사. move_col_clear 와
+        동일 안전장치이되 원본을 비우지 않는다. '한 열을 다른 열로 (서식째) 복사' 요청용."""
+        return self.move_col_clear(sheet, src, dst, header_row=header_row, clear_source=False)
+
+    def copy_values(self, src_sheet, src_range, dst_sheet, dst_cell):
+        """'값으로 복사'(계산 결과값 + 서식/숫자서식/테두리/병합 보존, 수식은 넣지 않음).
+        ctx.copy 는 수식을 그대로 옮겨 상대참조가 시프트되지만(예: 제목이 =다른시트!A2 이면 J로 옮길 때 =..!J2 로
+        어긋남), 이 함수는 소스의 '결과값'만 넣어 참조 시프트가 없다(긴 텍스트/EID 도 숫자서식 동반이라 안전).
+        '원문 텍스트 그대로/값으로 복사' 요청용. 서식은 유지하되 수식은 값으로 고정하고 싶을 때."""
+        src_ctx, src_name = self._ctx_and_sheet_from_spec(src_sheet)
+        dst_ctx, dst_name = self._ctx_and_sheet_from_spec(dst_sheet)
+        src_ws = src_ctx._ws(src_name)
+        dst_ws = dst_ctx._ws(dst_name)
+        src = src_ctx._rng(src_ws, src_range)
+        dst = dst_ctx._rng(dst_ws, dst_cell)
+        self._tick(2)
+        try:
+            dst_target = self._resize_rng(dst.Worksheet, dst, int(src.Rows.Count), int(src.Columns.Count))
+            dst_ctx._journal_save(dst_ws, dst_target)
+        except Exception:
+            self._shared["structural"].append(f"copy_values:{dst_sheet}!{dst_cell}")
+        src.Copy()
+        try:
+            dst.PasteSpecial(Paste=-4104)   # xlPasteAll: 서식+테두리+병합+숫자서식(+수식)
+            dst.PasteSpecial(Paste=12)      # xlPasteValuesAndNumberFormats: 수식→계산값(참조 시프트 제거, EID 안전)
+        finally:
+            try:
+                self._app.CutCopyMode = False
+            except Exception:
+                pass
+        return True
+
+    def swap_cols(self, sheet, col_a, col_b, header_row=None):
+        """인접한 두 열의 위치를 서로 맞바꾼다. Excel 네이티브 Cut/Insert 로 옮겨 **수식 참조가 자동 보정**된다
+        (=SUM(D..) 등이 #REF! 로 깨지지 않음 — copy+delete 방식의 한계 해결). 제목처럼 두 열에 걸친 '가로 병합'은
+        먼저 임시 해제하고 스왑 후 되돌려 1004 를 피한다. (인접하지 않은 열 재배치는 move_cols 를 쓰세요.)"""
+        ws = self._ws(sheet)
+        self._tick(2)
+        a = self._resolve_col(sheet, col_a, header_row or 1)
+        b = self._resolve_col(sheet, col_b, header_row or 1)
+        if a == b:
+            return True
+        lo, hi = min(a, b), max(a, b)
+        if hi - lo != 1:
+            raise PythonComSkillError("swap_cols 는 인접한 두 열만 지원합니다(떨어진 열은 move_cols 사용).")
+        # 두 열에 걸친 '가로(여러 열) 병합'(제목 등) 임시 해제 → 스왑 후 재병합(범위는 스왑해도 동일).
+        try:
+            cap = min(int(ws.UsedRange.Row) + int(ws.UsedRange.Rows.Count) - 1, 60)
+        except Exception:
+            cap = 60
+        saved, seen = [], set()
+        for r in range(1, cap + 1):
+            for col in (lo, hi):
+                try:
+                    ma = ws.Cells(r, col).MergeArea
+                    if int(ma.Columns.Count) > 1:
+                        addr = str(ma.Address)
+                        if addr not in seen:
+                            seen.add(addr)
+                            saved.append(addr)
+                            ma.UnMerge()
+                except Exception:
+                    pass
+        # 스왑: 뒤 열(hi)을 잘라 앞 열(lo) 앞에 삽입(잘라낸 셀 삽입) → 참조 자동 보정.
+        ws.Columns(hi).Cut()
+        ws.Columns(lo).Insert(-4161)   # Shift:=xlToRight
+        for addr in saved:
+            try:
+                ws.Range(addr).Merge()
+            except Exception:
+                pass
+        try:
+            self._app.CutCopyMode = False
+        except Exception:
+            pass
+        self._shared["structural"].append(f"swap_cols:{sheet}:{_col_letter(lo)}<->{_col_letter(hi)}")
+        return True
+
     def add_sheet(self, name, after=None):
         self._tick(3)
         names = _excel_collection_names(self._wb.Worksheets)

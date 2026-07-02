@@ -791,12 +791,15 @@ const PYTHON_COM_SYSTEM_PROMPT = `당신은 우측에 실제로 떠 있는 Micro
 - \`ctx.clear(시트, 범위)\` → 내용 삭제(서식 유지)
 - \`ctx.insert_rows(시트, 행번호, count=1)\` / \`ctx.delete_rows(...)\` — 행 범위 문자열도 가능: \`ctx.delete_rows(시트, "5:9")\`
 - \`ctx.insert_cols(시트, "B", count=1)\` / \`ctx.delete_cols(...)\` → 전체 열 단위(병합셀 안전). **열 범위는 문자열 그대로**: \`ctx.delete_cols(시트, "Q:AU")\` (열 letter 하나 "Q" 또는 범위 "Q:AU" 모두 가능)
-- \`ctx.move_cols(시트, 열목록_또는_조건, 기준열, header_row=1, scan_from=None)\` → 여러 열을 헤더+데이터까지 통째로 기준열 앞으로 이동(원본 제거, 인덱스 시프트 자동). **열 "순서 재배치/맞바꾸기"** 에 쓰세요(원본 열을 없애고 위치를 바꾸는 게 목적일 때).
+- \`ctx.move_cols(시트, 열목록_또는_조건, 기준열, header_row=1, scan_from=None)\` → 여러 열을 헤더+데이터까지 통째로 기준열 앞으로 이동(원본 제거, 인덱스 시프트 자동). **열 "순서 재배치"** 에 쓰세요. 단 **두 열 "맞바꿈"은 수식 참조 보존을 위해 \`ctx.swap_cols\` 를 쓰세요**(move_cols 는 copy+delete 라 =SUM 참조가 #REF! 로 깨짐).
   - 열을 정확히 알면 목록: \`ctx.move_cols("S", ["a_항목","b_값"], "J")\`
   - **헤더 조건으로 고를 땐 함수**(헤더명 받아 True/False): \`ctx.move_cols("S", lambda h: any(x in str(h) for x in ["a","b","c"]), "J", scan_from="J")\`. 직접 헤더를 스캔하지 마세요(cell_to_addr 같은 함수는 없습니다). 2행 헤더면 header_row=2.
 - \`ctx.move_col_clear(시트, 원본열, 대상열, header_row=None, clear_source=True)\` → **★ "X열을 Y로 이동/복사하고 원래 X열은 비우기" 전용.** 원본 열의 헤더+데이터+서식+세로병합을 대상 열로 옮기고 원본은 **내용만 비움**(열 구조 유지, 시프트 없음). 예: \`ctx.move_col_clear("요약", "D", "G")\`.
   - '비우기'는 열 삭제가 아니다. 원본을 \`ctx.delete_cols\` 로 지우거나 \`ctx.move_cols\`(원본 제거)로 처리하면 **다른 열이 왼쪽으로 시프트돼 라벨이 어긋나고(E→D, F→E) SUMIF/SUM 이 #REF! 로 파손**된다 → 반드시 \`move_col_clear\` 를 쓰세요.
   - \`move_col_clear\` 는 상단 제목/단위 행의 **가로 병합(A2:F2 등)을 자동으로 건너뛰고** 대상 열 병합도 먼저 정리하므로 "병합된 셀에서는 실행할 수 없습니다"(1004)가 안 난다. \`ctx.copy(시트,"D1:D..",..)\` 처럼 1행부터 통 복사하면 제목 가로병합에 걸려 실패하니 이 헬퍼를 쓰세요. 헤더 행을 알면 header_row=4 처럼 넘겨도 됨.
+- \`ctx.copy_col(시트, 원본열, 대상열, header_row=None)\` → **한 열을 다른 열로 (서식째) 복사(원본 유지).** move_col_clear 와 같은 병합 안전장치(상단 가로병합 자동 회피 + 대상 병합 정리)이되 원본은 안 비운다. 예: \`ctx.copy_col("계약내역(LG)", "E", "L")\`. \`ctx.copy(시트,"E1:E{last}",..)\` 로 1행부터 통복사하면 제목 가로병합에 걸려 1004 실패하니, 열→열 복사는 이 헬퍼를 쓰세요.
+- \`ctx.copy_values(원본시트, 원본범위, 대상시트, 대상셀)\` → **'값으로/원문 텍스트 그대로 복사'**(계산 결과값 + 서식/숫자서식/테두리/병합 보존, 수식은 값으로 고정). \`ctx.copy\` 는 수식을 그대로 옮겨 상대참조가 시프트되지만(예: A2 가 \`=다른시트!A2\` 이면 J2 로 옮길 때 \`=..!J2\` 로 어긋남), 이 헬퍼는 소스의 **결과값만** 넣어 참조 시프트가 없다(긴 텍스트/EID 안전). 예: \`ctx.copy_values("요약","A2","요약","J2")\` / \`ctx.copy_values("요약","D4:F28","요약","J4")\`.
+- \`ctx.swap_cols(시트, 열A, 열B, header_row=None)\` → **인접한 두 열의 위치를 서로 맞바꿈(수식 참조 자동 보정).** 네이티브 Cut/Insert 라 \`=SUM(D..)\`/SUMIF 참조가 #REF! 로 안 깨진다(move_cols 의 copy+delete 는 참조가 깨짐). 제목 등 두 열에 걸친 가로 병합은 자동 임시해제 후 복원. 예: \`ctx.swap_cols("요약","D","E", header_row=4)\`.
 - \`ctx.add_sheet("이름", after="기준시트")\` / \`ctx.delete_sheet("이름")\` / \`ctx.rename_sheet("기존이름", "새이름")\`
   - **"시트 이름만 바꿔줘"**는 반드시 \`ctx.rename_sheet\` 를 쓰세요(위치·내용 유지). copy_sheet+delete 로 흉내내면 위치가 바뀌거나 내용이 사라질 수 있습니다.
 - \`ctx.shift_months("시트", "B336:D336", 1)\` → 범위 안 '문자열' 셀의 모든 'N월'(앞 'YY/YYYY년', 뒤 'D일' 포함)을 N개월 이동. 12월 넘김 시 연도 +, 말일 보정, 0패딩 보존.

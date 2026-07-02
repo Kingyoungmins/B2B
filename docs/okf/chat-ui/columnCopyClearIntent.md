@@ -27,6 +27,7 @@ calls_external:
   - "String"
   - "test"
 called_by:
+  - "columnCopyIntent"
   - "columnMoveIntent"
   - "ctxHelperPreferredIntent"
   - "sendChat"
@@ -45,7 +46,7 @@ timestamp: "0.5.18-gen"
 
 ## 관계
 - 호출: `routingIntentText`
-- 피호출(영향 전파 경로): `columnMoveIntent`, `ctxHelperPreferredIntent`, `sendChat`, `wholeColumnCountRowTwoFailures`
+- 피호출(영향 전파 경로): `columnCopyIntent`, `columnMoveIntent`, `ctxHelperPreferredIntent`, `sendChat`, `wholeColumnCountRowTwoFailures`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

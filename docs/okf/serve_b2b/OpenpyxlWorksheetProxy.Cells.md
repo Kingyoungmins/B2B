@@ -9,7 +9,7 @@ signature: "(self, r, c)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
 version: "0.5.18"
-loc: "serve_b2b.py:12518-12520"
+loc: "serve_b2b.py:12598-12600"
 
 # ── 입출력 ──
 inputs:
@@ -43,6 +43,7 @@ called_by:
   - "PythonComSkillContext.move_col_clear"
   - "PythonComSkillContext.paste_copied"
   - "PythonComSkillContext.shift_months"
+  - "PythonComSkillContext.swap_cols"
   - "_apply_com_text_format_for_long_digit_columns"
   - "_capture_copypaste_on_session_impl"
   - "_excel_output_preview_sheets"
@@ -67,7 +68,7 @@ timestamp: "0.5.18-gen"
 
 ## 관계
 - 호출: `flush_pending_rows`
-- 피호출(영향 전파 경로): `ExcelSkillContext._write_grid`, `ExcelSkillContext.set_range`, `ExcelSkillContext.value`, `ExcelWorksheetProxy.append`, `ExcelWorksheetProxy.cell`, `PythonComSkillContext.append_same_format_sheets`, `PythonComSkillContext.find_header`, `PythonComSkillContext.last_col`, `PythonComSkillContext.last_row`, `PythonComSkillContext.move_col_clear`, `PythonComSkillContext.paste_copied`, `PythonComSkillContext.shift_months`, `_apply_com_text_format_for_long_digit_columns`, `_capture_copypaste_on_session_impl`, `_excel_output_preview_sheets`, `_live_preview_schema`, `_range_formula_info`, `_sheet_snapshot`, `inspect_workbook_with_excel`, `load_workbook_aoa_with_excel`
+- 피호출(영향 전파 경로): `ExcelSkillContext._write_grid`, `ExcelSkillContext.set_range`, `ExcelSkillContext.value`, `ExcelWorksheetProxy.append`, `ExcelWorksheetProxy.cell`, `PythonComSkillContext.append_same_format_sheets`, `PythonComSkillContext.find_header`, `PythonComSkillContext.last_col`, `PythonComSkillContext.last_row`, `PythonComSkillContext.move_col_clear`, `PythonComSkillContext.paste_copied`, `PythonComSkillContext.shift_months`, `PythonComSkillContext.swap_cols`, `_apply_com_text_format_for_long_digit_columns`, `_capture_copypaste_on_session_impl`, `_excel_output_preview_sheets`, `_live_preview_schema`, `_range_formula_info`, `_sheet_snapshot`, `inspect_workbook_with_excel`, `load_workbook_aoa_with_excel`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

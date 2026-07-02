@@ -8,7 +8,7 @@ signature: "(code, failures, context)"
 role: "정적 안전 위반 시 Qwen 을 자동 재호출해 고친 코드를 받아 다시 검사 흐름에 태운다."
 role_source: banner
 version: "0.5.18"
-loc: "chat-ui.js:1614-1614"
+loc: "chat-ui.js:1644-1644"
 
 # ── 입출력 ──
 inputs:

@@ -5,7 +5,7 @@ const src = fs.readFileSync(path.join(__dirname, "..", "scripts", "chat-ui.js"),
 const s = src.indexOf("function userExplicitlyRequestsVba");
 const after = src.indexOf("function numericArithmeticIntent", s + 10);
 let block = src.slice(s, after);
-block += "\nglobalThis.R = { vba: shouldRouteRequestToVba, py: shouldRouteRequestToPython, sheet: sheetOpIntent, sort: ctxSortIntent, rangeCalc: simpleRangeArithmeticIntent, pivot: pivotIntent, append: appendSameFormatSheetsIntent, valWrite: simpleValueWriteIntent, colMove: columnMoveIntent, copyClear: columnCopyClearIntent };";
+block += "\nglobalThis.R = { vba: shouldRouteRequestToVba, py: shouldRouteRequestToPython, sheet: sheetOpIntent, sort: ctxSortIntent, rangeCalc: simpleRangeArithmeticIntent, pivot: pivotIntent, append: appendSameFormatSheetsIntent, valWrite: simpleValueWriteIntent, colMove: columnMoveIntent, copyClear: columnCopyClearIntent, swap: columnSwapIntent, copyVals: copyValuesIntent, colCopy: columnCopyIntent };";
 eval(block);
 const R = globalThis.R;
 
@@ -108,6 +108,21 @@ ck("[copy+clear] '값 복사 후 원본 지워' 도 감지", R.copyClear("D열�
 // 순수 이동(원본 비우기 언급 없음)은 여전히 move_cols
 ck("[구분] '원본 비우기' 없는 순수 이동 → colMove TRUE, copyClear FALSE",
    R.colMove("D열을 G열 앞으로 옮겨줘") === true && R.copyClear("D열을 G열 앞으로 옮겨줘") === false);
+
+// [0.5.18] eval 3/4/5 라우팅 — 값복사(copy_values) / 열복사(copy_col) / 열맞바꿈(swap_cols)
+// eval5: 두 열 맞바꿈 → swap (move_cols 아님)
+ck("[swap] 'D열과 E열 위치를 서로 맞바꿔' → Python", R.py("D열과 E열의 위치를 서로 맞바꿔줘") === true);
+ck("[swap] swap intent 감지", R.swap("D열과 E열의 위치를 서로 맞바꿔줘") === true);
+ck("[swap] 맞바꿈은 move_cols 아님(colMove FALSE)", R.colMove("D열과 E열의 위치를 서로 맞바꿔줘") === false);
+// eval3: 원문 텍스트/값 그대로 복사 → copy_values
+ck("[copyVals] 'A2 제목 텍스트를 J2로 원문 그대로 복사' → Python", R.py("A2 제목 텍스트를 J2로 원문 그대로 복사") === true);
+ck("[copyVals] copyValues intent 감지", R.copyVals("A2 제목 텍스트를 J2로 원문 그대로 복사") === true);
+ck("[copyVals] 'D:F 계산 결과 값을 J:L에 값으로 복사' 감지", R.copyVals("D:F 계산 결과 값을 J:L에 값으로 복사") === true);
+// eval4: 열→열 서식째 복사 → copy_col (값복사/맞바꿈/원본비우기 아님)
+ck("[colCopy] 'E열을 L열로 복사(서식 보존)' → Python", R.py("E열 날짜 값을 L열로 복사하고 서식을 보존") === true);
+ck("[colCopy] columnCopy intent 감지", R.colCopy("E열을 L열로 복사해줘") === true);
+// eval1: '범위 복사(수식/서식 보존)'는 새 인텐트에 안 걸리고 기본 ctx.copy 경로 유지(회귀 방지)
+ck("[유지] 'A4:H28 범위를 J4로 복사' → copyVals/colCopy FALSE", R.copyVals("A4:H28 범위를 J4:Q28에 수식 서식 보존해 복사") === false && R.colCopy("A4:H28 범위를 J4:Q28에 수식 서식 보존해 복사") === false);
 
 console.log("\n=== RESULT: " + pass + " PASS / " + fail + " FAIL ===");
 process.exit(fail ? 2 : 0);

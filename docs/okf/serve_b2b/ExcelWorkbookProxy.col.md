@@ -9,7 +9,7 @@ signature: "(self, sheet_or_name, header, header_rows=20)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
 version: "0.5.18"
-loc: "serve_b2b.py:11310-11311"
+loc: "serve_b2b.py:11390-11391"
 
 # ── 입출력 ──
 inputs:
@@ -49,6 +49,7 @@ called_by:
   - "PythonComSkillContext.insert_cols"
   - "PythonComSkillContext.last_row"
   - "PythonComSkillContext.split_column"
+  - "PythonComSkillContext.swap_cols"
   - "_OpxlCellProxy.__init__"
   - "_OpxlCopiedFloat.__new__"
   - "_OpxlCopiedInt.__new__"
@@ -78,7 +79,7 @@ timestamp: "0.5.18-gen"
 
 ## 관계
 - 호출: 없음
-- 피호출(영향 전파 경로): `ExcelSkillContext.display_value`, `ExcelSkillContext.value`, `ExcelWorkbookProxy.display_value`, `ExcelWorkbookProxy.value`, `OpenpyxlSkillContext.display_value`, `OpenpyxlSkillContext.value`, `OpenpyxlWorkbookProxy.display_value`, `OpenpyxlWorkbookProxy.value`, `OpenpyxlWorksheetProxy.delete_cols`, `OpenpyxlWorksheetProxy.delete_rows`, `OpenpyxlWorksheetProxy.insert_cols`, `OpenpyxlWorksheetProxy.insert_rows`, `PythonComSkillContext._resolve_col`, `PythonComSkillContext.delete_cols`, `PythonComSkillContext.insert_cols`, `PythonComSkillContext.last_row`, `PythonComSkillContext.split_column`, `_OpxlCellProxy.__init__`, `_OpxlCopiedFloat.__new__`, `_OpxlCopiedInt.__new__`, `_OpxlFormulaString.__new__`, `_apply_com_text_format_for_long_digit_columns`, `_apply_openpyxl_text_format_for_long_digit_columns`, `_opxl_coord`, `_opxl_coord_from_row_col`, `_opxl_display_cell_value`, `_opxl_eval_formula`, `_opxl_get_cached_cell_value`, `_opxl_merged_anchor`, `_opxl_range_values`, `_opxl_write_cell`
+- 피호출(영향 전파 경로): `ExcelSkillContext.display_value`, `ExcelSkillContext.value`, `ExcelWorkbookProxy.display_value`, `ExcelWorkbookProxy.value`, `OpenpyxlSkillContext.display_value`, `OpenpyxlSkillContext.value`, `OpenpyxlWorkbookProxy.display_value`, `OpenpyxlWorkbookProxy.value`, `OpenpyxlWorksheetProxy.delete_cols`, `OpenpyxlWorksheetProxy.delete_rows`, `OpenpyxlWorksheetProxy.insert_cols`, `OpenpyxlWorksheetProxy.insert_rows`, `PythonComSkillContext._resolve_col`, `PythonComSkillContext.delete_cols`, `PythonComSkillContext.insert_cols`, `PythonComSkillContext.last_row`, `PythonComSkillContext.split_column`, `PythonComSkillContext.swap_cols`, `_OpxlCellProxy.__init__`, `_OpxlCopiedFloat.__new__`, `_OpxlCopiedInt.__new__`, `_OpxlFormulaString.__new__`, `_apply_com_text_format_for_long_digit_columns`, `_apply_openpyxl_text_format_for_long_digit_columns`, `_opxl_coord`, `_opxl_coord_from_row_col`, `_opxl_display_cell_value`, `_opxl_eval_formula`, `_opxl_get_cached_cell_value`, `_opxl_merged_anchor`, `_opxl_range_values`, `_opxl_write_cell`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

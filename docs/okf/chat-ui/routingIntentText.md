@@ -28,8 +28,11 @@ calls_external:
 called_by:
   - "appendSameFormatSheetsIntent"
   - "columnCopyClearIntent"
+  - "columnCopyIntent"
   - "columnMoveIntent"
+  - "columnSwapIntent"
   - "conditionalRowDeleteIntent"
+  - "copyValuesIntent"
   - "ctxSortIntent"
   - "dedupeIntent"
   - "duplicateRowDeleteIntent"
@@ -62,7 +65,7 @@ timestamp: "0.5.18-gen"
 
 ## 관계
 - 호출: 없음
-- 피호출(영향 전파 경로): `appendSameFormatSheetsIntent`, `columnCopyClearIntent`, `columnMoveIntent`, `conditionalRowDeleteIntent`, `ctxSortIntent`, `dedupeIntent`, `duplicateRowDeleteIntent`, `filterToNewSheetIntent`, `hideUnhideIntent`, `lookupJoinIntent`, `monthShiftIntent`, `pivotIntent`, `sheetOpIntent`, `shouldRouteRequestToPython`, `shouldRouteRequestToVba`, `shouldRouteSimpleStructureEditToPython`, `simpleRangeArithmeticIntent`, `simpleValueWriteIntent`, `splitColumnIntent`, `totalRowIntent`, `userExplicitlyRequestsForceProceed`, `wholeColumnCountRowTwoFailures`
+- 피호출(영향 전파 경로): `appendSameFormatSheetsIntent`, `columnCopyClearIntent`, `columnCopyIntent`, `columnMoveIntent`, `columnSwapIntent`, `conditionalRowDeleteIntent`, `copyValuesIntent`, `ctxSortIntent`, `dedupeIntent`, `duplicateRowDeleteIntent`, `filterToNewSheetIntent`, `hideUnhideIntent`, `lookupJoinIntent`, `monthShiftIntent`, `pivotIntent`, `sheetOpIntent`, `shouldRouteRequestToPython`, `shouldRouteRequestToVba`, `shouldRouteSimpleStructureEditToPython`, `simpleRangeArithmeticIntent`, `simpleValueWriteIntent`, `splitColumnIntent`, `totalRowIntent`, `userExplicitlyRequestsForceProceed`, `wholeColumnCountRowTwoFailures`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

@@ -9,7 +9,7 @@ signature: "(self, sheet, a1_range)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
 version: "0.5.18"
-loc: "serve_b2b.py:9795-9801"
+loc: "serve_b2b.py:9875-9881"
 
 # ── 입출력 ──
 inputs:

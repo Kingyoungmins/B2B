@@ -33,6 +33,7 @@ calls_external:
 called_by:
   - "PythonComSkillContext.clear"
   - "PythonComSkillContext.copy"
+  - "PythonComSkillContext.copy_values"
   - "PythonComSkillContext.merge"
   - "PythonComSkillContext.paste_copied"
   - "PythonComSkillContext.replace"
@@ -56,7 +57,7 @@ timestamp: "0.5.18-gen"
 
 ## 관계
 - 호출: `_range_matrix`, `_tick`, `append`
-- 피호출(영향 전파 경로): `PythonComSkillContext.clear`, `PythonComSkillContext.copy`, `PythonComSkillContext.merge`, `PythonComSkillContext.paste_copied`, `PythonComSkillContext.replace`, `PythonComSkillContext.shift_months`, `PythonComSkillContext.sort`, `PythonComSkillContext.write`, `PythonComSkillContext.write_formulas`
+- 피호출(영향 전파 경로): `PythonComSkillContext.clear`, `PythonComSkillContext.copy`, `PythonComSkillContext.copy_values`, `PythonComSkillContext.merge`, `PythonComSkillContext.paste_copied`, `PythonComSkillContext.replace`, `PythonComSkillContext.shift_months`, `PythonComSkillContext.sort`, `PythonComSkillContext.write`, `PythonComSkillContext.write_formulas`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

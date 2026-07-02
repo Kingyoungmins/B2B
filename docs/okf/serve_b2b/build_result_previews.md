@@ -8,7 +8,7 @@ signature: "(inputs, output, current, diffs=None, forced_value_cells=None)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
 version: "0.5.18"
-loc: "serve_b2b.py:15620-15652"
+loc: "serve_b2b.py:15700-15732"
 
 # ── 입출력 ──
 inputs:

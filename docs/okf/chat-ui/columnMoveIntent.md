@@ -8,7 +8,7 @@ signature: "(text)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
 version: "0.5.18"
-loc: "chat-ui.js:622-622"
+loc: "chat-ui.js:651-651"
 
 # ── 입출력 ──
 inputs:
@@ -23,6 +23,8 @@ raises: []
 # ── 유기적 관계 ──
 calls:
   - "columnCopyClearIntent"
+  - "columnCopyIntent"
+  - "columnSwapIntent"
   - "routingIntentText"
 calls_external:
   - "String"
@@ -45,7 +47,7 @@ timestamp: "0.5.18-gen"
 - 없음(정적 분석 기준)
 
 ## 관계
-- 호출: `columnCopyClearIntent`, `routingIntentText`
+- 호출: `columnCopyClearIntent`, `columnCopyIntent`, `columnSwapIntent`, `routingIntentText`
 - 피호출(영향 전파 경로): `ctxHelperPreferredIntent`, `sendChat`, `wholeColumnCountRowTwoFailures`
 
 ## 실패/예외

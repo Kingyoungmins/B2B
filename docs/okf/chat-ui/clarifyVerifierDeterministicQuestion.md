@@ -8,7 +8,7 @@ signature: "(text)"
 role: "── 검증(명확화) 에이전트 ───────────────────────────────────────────────"
 role_source: banner
 version: "0.5.18"
-loc: "chat-ui.js:2869-2869"
+loc: "chat-ui.js:2899-2899"
 
 # ── 입출력 ──
 inputs:

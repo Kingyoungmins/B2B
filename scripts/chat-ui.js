@@ -619,12 +619,41 @@ function columnCopyClearIntent(text) {
   return true;
 }
 
+// [0.5.18] 인접 두 열 '맞바꿈' → ctx.swap_cols(네이티브 Cut/Insert, 수식 참조 자동보정). move_cols(copy+delete)는
+// =SUM(D..) 등 참조가 #REF! 로 파손됨(eval rearrange_keep_data 실패).
+function columnSwapIntent(text) {
+  const intent = routingIntentText(String(text || ""));
+  if (!/([A-Z]{1,3}\s*열|열|컬럼|칼럼|column)/i.test(intent)) return false;
+  return /(맞바꾸|맞바꿔|서로\s*바꾸|서로\s*바꿔|자리\s*(?:를)?\s*바꾸|자리\s*바꿔|위치\s*(?:를)?\s*(?:서로\s*)?바꾸|위치\s*(?:를)?\s*(?:서로\s*)?바꿔|swap)/i.test(intent);
+}
+
+// [0.5.18] 범위/셀을 '값으로/원문 텍스트 그대로' 복사 → ctx.copy_values(서식 보존, 수식 시프트 없음). ctx.copy 는
+// 수식을 그대로 옮겨 상대참조가 시프트됨(eval preserve_date_on_load 실패).
+function copyValuesIntent(text) {
+  const intent = routingIntentText(String(text || ""));
+  if (!/(복사|copy)/i.test(intent)) return false;
+  if (!/(값으로|값만|원문|텍스트\s*그대로|그대로\s*(?:복사|유지)|계산\s*(?:결과|값)|결과\s*값)/i.test(intent)) return false;
+  if (/(일치|매칭|피벗|pivot|집계|중복|삭제|합산)/i.test(intent)) return false;
+  return true;
+}
+
+// [0.5.18] 한 열을 다른 열로 (서식째) 복사 → ctx.copy_col(병합 안전, 원본 유지). ctx.copy 로 1행부터 통복사하면
+// 제목 가로병합에 걸려 1004(eval copy_time_values 실패). 값복사/원본비우기/맞바꿈은 각자 경로.
+function columnCopyIntent(text) {
+  const intent = routingIntentText(String(text || ""));
+  if (!/([A-Z]{1,3}\s*열|컬럼|칼럼|column)/i.test(intent)) return false;
+  if (!/(복사|copy)/i.test(intent)) return false;
+  if (columnCopyClearIntent(text) || copyValuesIntent(text) || columnSwapIntent(text)) return false;
+  if (/(일치|매칭|피벗|pivot|집계|중복|삭제|합산)/i.test(intent)) return false;
+  return true;
+}
+
 function columnMoveIntent(text) {
   const intent = routingIntentText(String(text || ""));
   const hasColumn = /([A-Z]{1,3}\s*열|열\s*(?:을|를|들|순서|위치)|컬럼|칼럼|column)/i.test(intent);
   if (!hasColumn) return false;
-  // "원래 열은 비우기" 변형은 move(원본삭제)가 아니라 copy+clear → columnCopyClearIntent 로 넘긴다.
-  if (columnCopyClearIntent(text)) return false;
+  // 원본비우기(copy+clear)·맞바꿈(swap)·단순복사(copy_col)는 move(원본삭제) 아님 → 각자 경로로.
+  if (columnCopyClearIntent(text) || columnSwapIntent(text) || columnCopyIntent(text)) return false;
   const moveVerb = /(이동|옮기|옮겨|reorder|재배치|(?:순서|위치|자리)\s*(?:를)?\s*(?:변경|바꾸|바꿔|조정)|앞으로|뒤로|맨\s*(?:앞|뒤)|사이에|맞바꾸|맞바꿔|바꿔\s*치|swap)/i.test(intent);
   if (!moveVerb) return false;
   // 매칭/집계/피벗/조건/삭제는 열이동이 아님 → 기존 경로 유지(회귀 방지).
@@ -637,6 +666,7 @@ function ctxHelperPreferredIntent(text) {
     || pivotIntent(text) || appendSameFormatSheetsIntent(text)
     || hideUnhideIntent(text) || lookupJoinIntent(text) || dedupeIntent(text) || splitColumnIntent(text) || totalRowIntent(text)
     || simpleValueWriteIntent(text) || columnMoveIntent(text) || columnCopyClearIntent(text)
+    || columnSwapIntent(text) || copyValuesIntent(text) || columnCopyIntent(text)
     || (typeof filterToNewSheetIntent === "function" && filterToNewSheetIntent(text));
 }
 
@@ -2994,6 +3024,9 @@ async function sendChat() {
   const routeHideUnhide = routeToPython && typeof hideUnhideIntent === "function" && hideUnhideIntent(msg);
   const routeColumnMove = routeToPython && typeof columnMoveIntent === "function" && columnMoveIntent(msg);
   const routeColumnCopyClear = routeToPython && typeof columnCopyClearIntent === "function" && columnCopyClearIntent(msg);
+  const routeColumnSwap = routeToPython && typeof columnSwapIntent === "function" && columnSwapIntent(msg);
+  const routeCopyValues = routeToPython && typeof copyValuesIntent === "function" && copyValuesIntent(msg);
+  const routeColumnCopy = routeToPython && typeof columnCopyIntent === "function" && columnCopyIntent(msg);
   const modeLabel = editTargetId ? "(수정 모드) " : (routeToVba ? "(VBA 라우팅) " : (routeToPython ? "(Python 라우팅) " : ""));
   const thinkMode = typeof isThinkModeEnabled === "function" && isThinkModeEnabled();
   const abortController = new AbortController();
@@ -3050,6 +3083,12 @@ async function sendChat() {
         routingHint = "행/열 숨김 또는 숨김 해제 요청입니다. 반드시 ctx.hide_cols / ctx.hide_rows 로 처리하세요: 숨기기 ctx.hide_cols(\"시트\", \"C:E\", hidden=True), 숨김 해제 ctx.hide_cols(\"시트\", \"C:E\", hidden=False) (행은 ctx.hide_rows). VBA(Sub B2BSkill())는 출력하지 마세요. @범위/@시트 이름은 그대로 쓰세요.";
       } else if (routeColumnCopyClear) {
         routingHint = "'X열을 Y로 이동/복사하고 원래 열은 비우기' 요청입니다. '비우기'는 열 삭제가 아닙니다 — 원본을 ctx.delete_cols 로 지우거나 ctx.move_cols(원본 제거)로 처리하면 다른 열이 왼쪽으로 시프트돼 라벨이 어긋나고(E→D, F→E) SUMIF/SUM 수식이 #REF! 로 파손됩니다. 반드시 한 줄로: ctx.move_col_clear(\"시트\", \"D\", \"G\") — 원본 열의 헤더+데이터+서식+세로병합을 대상 열로 옮기고 원본은 내용만 비웁니다(열 구조 유지, 시프트 없음). 상단 제목/단위 행의 가로 병합(A2:F2 등)은 자동으로 건너뛰고 대상 열 병합도 먼저 정리하므로 '병합된 셀에서는 실행할 수 없습니다'(1004) 오류가 없습니다. 열은 헤더명 또는 열문자로, 헤더 행을 알면 header_row=4 처럼 넘겨도 됩니다. 직접 insert_cols/copy/clear 로 D1 부터 통 복사하지 마세요(제목 가로병합에 걸려 실패). VBA(Sub B2BSkill())는 출력하지 말고 @시트 이름은 그대로 쓰세요.";
+      } else if (routeColumnSwap) {
+        routingHint = "인접한 두 열의 '위치를 서로 맞바꿈' 요청입니다. move_cols 나 copy+delete 로 하면 =SUM(D..)/SUMIF 등 수식 참조가 #REF! 로 깨집니다. 반드시 ctx.swap_cols(\"시트\", \"D\", \"E\", header_row=4) 를 쓰세요 — 네이티브 Cut/Insert 로 옮겨 수식 참조가 Excel 방식으로 자동 보정되고, 제목처럼 두 열에 걸친 가로 병합은 자동으로 임시 해제 후 복원해 1004 도 없습니다. 열은 헤더명 또는 열문자. VBA(Sub B2BSkill())는 출력하지 마세요.";
+      } else if (routeCopyValues) {
+        routingHint = "'값으로/원문 텍스트 그대로 복사' 요청입니다. ctx.copy 는 수식을 그대로 옮겨 상대참조가 시프트되므로(예: 셀이 =다른시트!A2 이면 J로 옮길 때 =..!J2 로 어긋남) 쓰지 마세요. 반드시 ctx.copy_values(\"시트\", \"A2\", \"시트\", \"J2\") (또는 범위 \"D4:F28\"→\"J4\") 를 쓰세요 — 계산 결과값 + 서식/숫자서식/테두리/병합을 넣고 수식은 값으로 고정합니다(참조 시프트 없음, 긴 텍스트/EID 안전). VBA(Sub B2BSkill())는 출력하지 마세요.";
+      } else if (routeColumnCopy) {
+        routingHint = "한 열을 다른 열로 (서식째) 복사하는 요청입니다. ctx.copy 로 \"E1:E{last}\" 처럼 1행부터 통 복사하면 제목/헤더 가로병합에 걸려 1004 로 실패합니다. 반드시 ctx.copy_col(\"시트\", \"E\", \"L\") 를 쓰세요 — 상단 가로병합을 자동 회피하고 대상 열 병합을 정리한 뒤 값+수식+서식+세로병합을 복사합니다(원본 유지). 헤더 행을 알면 header_row=4. VBA(Sub B2BSkill())는 출력하지 마세요.";
       } else if (routeColumnMove) {
         routingHint = "열(컬럼)을 다른 위치로 이동/재배치/맞바꾸는 요청입니다. 직접 Columns.Cut/Insert 나 값 배열 재작성으로 짜지 말고 반드시 ctx.move_cols 로 처리하세요: ctx.move_cols(\"시트\", [\"금액\",\"할인\"], \"합계\", header_row=1) — 열목록을 기준열(합계) '앞'으로 헤더+데이터 통째 이동(원본 제거, 인덱스 시프트 자동). 옮길 열과 기준열(before) 모두 헤더명 또는 열문자(\"D\")를 쓸 수 있습니다. 헤더가 2행이면 header_row=2. 두 열 맞바꾸기는 뒤 열을 앞 열 앞으로 옮기면 됩니다(예: D와 E 맞바꾸기 → ctx.move_cols(\"시트\", [\"E\"], \"D\")). move_cols 는 병합 제목/헤더가 있어도 네이티브 copy+병합안전 삽입/삭제로 안전하게 처리하니 UnMerge 를 직접 짜지 마세요. VBA(Sub B2BSkill())는 출력하지 말고, @시트 이름은 한 글자도 바꾸지 마세요.";
       } else if (routeCtxHelper) {
