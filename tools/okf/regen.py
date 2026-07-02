@@ -7,7 +7,7 @@
 
 사용:  python tools/okf/regen.py [--out docs/okf]
 """
-import subprocess, sys, re, argparse
+import subprocess, sys, re, argparse, shutil
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]   # <repo>/tools/okf/regen.py → <repo>
@@ -41,6 +41,9 @@ def main():
     ver = app_version()
     srcs = sources()
     print(f"[OKF] version={ver}, sources={len(srcs)}개")
+    # [결정성] 먼저 출력 폴더를 비운다 — 안 그러면 함수 삭제/라인시프트(__L 접미사 변화) 때 옛 문서가
+    # orphan 으로 남아 check_okf 가 계속 어긋난다고 경고한다. (out 은 항상 docs/okf 전용이라 안전)
+    shutil.rmtree(args.out, ignore_errors=True)
     cmd = [sys.executable, str(GEN), *srcs, "--out", args.out, "--version", ver]
     return subprocess.call(cmd)
 
