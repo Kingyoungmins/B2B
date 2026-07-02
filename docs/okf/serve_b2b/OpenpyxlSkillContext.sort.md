@@ -1,0 +1,98 @@
+---
+type: method
+title: OpenpyxlSkillContext.sort
+module: serve_b2b.py
+lang: python
+extraction: ast
+class: OpenpyxlSkillContext
+signature: "(self, sheet_or_name, by, ascending=True, header=True, workbook=None)"
+role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
+role_source: none
+version: "0.5.18"
+loc: "serve_b2b.py:13087-13132"
+
+# ── 입출력 ──
+inputs:
+  - "self"
+  - "sheet_or_name"
+  - "by"
+  - "ascending"
+  - "header"
+  - "workbook"
+returns: "(추정)"
+
+# ── 사이드이펙트 (정적 추정) ──
+side_effects:
+  - "상태 변경(전역/세션): self.last_output_sheet"
+raises:
+  - "RuntimeError"
+
+# ── 유기적 관계 ──
+calls:
+  - "_col0"
+  - "_is_output_workbook"
+  - "_num"
+  - "_write_grid"
+  - "_ws_of"
+  - "append"
+  - "cell"
+  - "normalize"
+  - "range"
+  - "rows"
+calls_external:
+  - "RuntimeError"
+  - "_cellkey"
+  - "a"
+  - "asc_list"
+  - "ascending"
+  - "bool"
+  - "by"
+  - "c_idx"
+  - "getattr"
+  - "head"
+  - "isinstance"
+  - "k"
+  - "len"
+  - "list"
+  - "max"
+  - "padded"
+  - "r"
+  - "r_idx"
+  - "rel"
+  - "rels"
+  - "rev"
+  - "set"
+  - "sheet_or_name"
+  - "tuple"
+  - "v"
+  - "workbook"
+  - "ws"
+called_by:
+  - "_browser_content_target"
+reads:
+  - "self._col0"
+  - "self._is_output_workbook"
+  - "self._num"
+  - "self._write_grid"
+  - "self._ws_of"
+  - "self.normalize"
+  - "self.rows"
+writes:
+  - "self.last_output_sheet"
+affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
+timestamp: "0.5.18-gen"
+---
+
+## 역할
+(추정) 역할 주석 없음 — 담당자 1줄 보완 필요  _(자동 추정 — 확인 필요)_
+
+## 사이드이펙트 & 주의
+- 상태 변경(전역/세션): self.last_output_sheet
+- 변경 상태 `self.last_output_sheet` — 수정 시 이 상태를 읽는 곳 동반 점검.
+
+## 관계
+- 호출: `_col0`, `_is_output_workbook`, `_num`, `_write_grid`, `_ws_of`, `append`, `cell`, `normalize`, `range`, `rows`
+- 피호출(영향 전파 경로): `_browser_content_target`
+
+## 실패/예외
+- `RuntimeError`

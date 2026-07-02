@@ -1,0 +1,92 @@
+---
+type: function
+title: inspect_workbook_with_excel
+module: serve_b2b.py
+lang: python
+extraction: ast
+signature: "(path, source_error=None)"
+role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
+role_source: none
+version: "0.5.18"
+loc: "serve_b2b.py:14774-14860"
+
+# ── 입출력 ──
+inputs:
+  - "path"
+  - "source_error"
+returns: "(추정)"
+
+# ── 사이드이펙트 (정적 추정) ──
+side_effects:
+  - "Excel COM 조작(파괴적일 수 있음)"
+  - "파일시스템 변경/IO"
+raises: []
+
+# ── 유기적 관계 ──
+calls:
+  - "Cells"
+  - "Range"
+  - "Worksheets"
+  - "_excel_collection_names"
+  - "_range_matrix"
+  - "_track_spawned_excel_app"
+  - "append"
+  - "cell_to_json"
+  - "excel_available"
+  - "excel_workbooks_open"
+  - "inspect_workbook_fallback"
+  - "max_row"
+  - "range"
+  - "value"
+  - "values"
+calls_external:
+  - "Address"
+  - "Close"
+  - "DispatchEx"
+  - "PREVIEW_ROWS"
+  - "Path"
+  - "Quit"
+  - "app"
+  - "bool"
+  - "format_row"
+  - "int"
+  - "len"
+  - "max"
+  - "max_col"
+  - "min"
+  - "out_row"
+  - "path"
+  - "preview_cols"
+  - "preview_rows"
+  - "row_values"
+  - "sheet_idx"
+  - "source_error"
+  - "startswith"
+  - "str"
+  - "temp_path"
+  - "unlink"
+  - "used_cols"
+  - "used_rows"
+called_by:
+  - "inspect_workbook"
+reads:
+  - "PREVIEW_COLS"
+  - "PREVIEW_ROWS"
+writes: []
+affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
+timestamp: "0.5.18-gen"
+---
+
+## 역할
+(추정) 역할 주석 없음 — 담당자 1줄 보완 필요  _(자동 추정 — 확인 필요)_
+
+## 사이드이펙트 & 주의
+- Excel COM 조작(파괴적일 수 있음)
+- 파일시스템 변경/IO
+
+## 관계
+- 호출: `Cells`, `Range`, `Worksheets`, `_excel_collection_names`, `_range_matrix`, `_track_spawned_excel_app`, `append`, `cell_to_json`, `excel_available`, `excel_workbooks_open`, `inspect_workbook_fallback`, `max_row`, `range`, `value`, `values`
+- 피호출(영향 전파 경로): `inspect_workbook`
+
+## 실패/예외
+- `(명시적 raise 없음/미탐지)`

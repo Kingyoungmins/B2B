@@ -1,0 +1,21 @@
+name: OKF 최신성 (warn-only)
+
+# OKF(docs/okf) 가 현재 코드와 동기화돼 있는지 검사한다.
+# 순수 파싱(ast/정규식)이라 win32com/Excel 없이 어떤 러너에서도 돈다.
+# 현재는 warn-only(항상 통과) — 안정화 후 check_okf.py 에 --strict 를 붙여 게이트로 승격.
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  okf-staleness:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: OKF 최신성 검사 (warn-only)
+        run: python tools/okf/check_okf.py
+        # 게이트로 승격하려면 위 줄을: python tools/okf/check_okf.py --strict

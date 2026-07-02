@@ -1,0 +1,11 @@
+#!/bin/sh
+# OKF 최신성 pre-commit 훅 (warn-only).
+# 설치:  cp tools/okf/hooks/pre-commit .git/hooks/pre-commit && chmod +x .git/hooks/pre-commit
+#   (또는 Windows Git Bash 에서 위와 동일)
+#
+# 코드가 바뀌었는데 docs/okf 를 재생성 안 했으면 경고만 하고 커밋은 통과시킨다(개발 흐름 방해 금지).
+# 강제(불일치 시 커밋 차단)하려면 아래 줄에 --strict 를 붙이고 exit 코드를 존중하도록 바꾼다.
+
+python tools/okf/check_okf.py
+# 게이트로 승격:  python tools/okf/check_okf.py --strict || exit 1
+exit 0
