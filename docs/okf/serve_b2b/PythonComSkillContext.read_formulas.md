@@ -9,7 +9,7 @@ signature: "(self, sheet, a1_range)"
 role: "범위의 수식 문자열을 2차원 리스트로 읽는다(수식 없는 셀은 값)."
 role_source: docstring
 version: "0.5.18"
-loc: "serve_b2b.py:8755-8766"
+loc: "serve_b2b.py:8786-8797"
 
 # ── 입출력 ──
 inputs:

@@ -9,7 +9,7 @@ signature: "(self, sheet, a1)"
 role: "단일 셀 읽기(write_cell 와 대칭). 스칼라 값 반환(빈 셀은 None)."
 role_source: docstring
 version: "0.5.18"
-loc: "serve_b2b.py:8749-8753"
+loc: "serve_b2b.py:8780-8784"
 
 # ── 입출력 ──
 inputs:

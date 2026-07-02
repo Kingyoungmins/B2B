@@ -9,7 +9,7 @@ signature: "(self, src_sheet, src_range, dst_sheet, dst_cell, src_book=None, dst
 role: "[복붙 캡처 재생] 사용자가 라이브 Excel에서 Ctrl+C/Ctrl+V 한 동작을 그대로 재현한다."
 role_source: docstring
 version: "0.5.18"
-loc: "serve_b2b.py:8903-9005"
+loc: "serve_b2b.py:8934-9036"
 
 # ── 입출력 ──
 inputs:

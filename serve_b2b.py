@@ -8689,6 +8689,37 @@ class PythonComSkillContext:
         self._tick(2)
         return int(ws.Cells(int(row), ws.Columns.Count).End(_XL_TO_LEFT).Column)
 
+    def used_last_row(self, sheet):
+        """시트 '사용 범위' 마지막 행(1-based). 특정 열 기준 last_row(col=N) 은 그 열이 희소/병합이면 표 하단을
+        놓쳐 과소산정한다(예: A열이 아래쪽 비어 22 를 주지만 실제 표는 28행). '시트 전체/사용 범위'를 복사·처리할
+        땐 이걸 쓴다. UsedRange 와 각 열 End(xlUp) 최대 중 큰 값으로 보수적으로 잡는다(정형 표에 안전)."""
+        ws = self._ws(sheet)
+        self._tick(2)
+        best = 1
+        try:
+            best = int(ws.UsedRange.Row) + int(ws.UsedRange.Rows.Count) - 1
+        except Exception:
+            pass
+        try:
+            last_c = self.used_last_col(sheet)
+            rows_n = int(ws.Rows.Count)
+            for c in range(1, min(last_c, 64) + 1):   # 상한 64열(정형 표 커버, 성능 보호)
+                r = int(ws.Cells(rows_n, c).End(_XL_UP).Row)
+                if r > best:
+                    best = r
+        except Exception:
+            pass
+        return max(1, best)
+
+    def used_last_col(self, sheet):
+        """시트 '사용 범위' 마지막 열(1-based). 특정 행 기준 last_col 이 그 행 병합/빈칸으로 과소산정하는 것 방지."""
+        ws = self._ws(sheet)
+        self._tick(2)
+        try:
+            return max(1, int(ws.UsedRange.Column) + int(ws.UsedRange.Columns.Count) - 1)
+        except Exception:
+            return 1
+
     def find_header(self, sheet, header_text, header_row=1):
         """헤더 행에서 헤더 텍스트로 열 번호(1-based)를 찾는다. 없으면 오류.
         열 번호를 추측/하드코딩하지 말고 반드시 이 함수를 쓸 것."""

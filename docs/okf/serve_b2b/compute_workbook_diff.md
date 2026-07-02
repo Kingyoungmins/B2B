@@ -8,7 +8,7 @@ signature: "(before_sheets, after_sheets)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
 version: "0.5.18"
-loc: "serve_b2b.py:15828-15840"
+loc: "serve_b2b.py:15859-15871"
 
 # ── 입출력 ──
 inputs:

@@ -9,7 +9,7 @@ signature: "(self, src_books, dest_sheet='통합', src_sheet=None, header_row=No
 role: "동일 포맷 여러 입력 파일의 표를 현재 워크북 새 시트에 이어붙인다."
 role_source: docstring
 version: "0.5.18"
-loc: "serve_b2b.py:9704-9832"
+loc: "serve_b2b.py:9735-9863"
 
 # ── 입출력 ──
 inputs:
@@ -43,6 +43,8 @@ calls:
   - "last_row"
   - "raw"
   - "row"
+  - "used_last_col"
+  - "used_last_row"
 calls_external:
   - "Add"
   - "Copy"
@@ -104,7 +106,7 @@ timestamp: "0.5.18-gen"
 - Excel COM 조작(파괴적일 수 있음)
 
 ## 관계
-- 호출: `Cells`, `Range`, `Worksheets`, `_excel_collection_names`, `_shaped_matrix`, `_tick`, `_ws`, `append`, `book`, `header_row`, `last_col`, `last_row`, `raw`, `row`
+- 호출: `Cells`, `Range`, `Worksheets`, `_excel_collection_names`, `_shaped_matrix`, `_tick`, `_ws`, `append`, `book`, `header_row`, `last_col`, `last_row`, `raw`, `row`, `used_last_col`, `used_last_row`
 - 피호출(영향 전파 경로): 없음
 
 ## 실패/예외

@@ -770,7 +770,8 @@ const PYTHON_COM_SYSTEM_PROMPT = `당신은 우측에 실제로 떠 있는 Micro
 ## ctx API (이것만 사용 — 시그니처 정확히)
 - **작업에 해당하는 ctx 헬퍼가 있으면 항상 그것을 먼저 쓰세요.** 시트 복사=ctx.copy_sheet, 시트 이름변경=ctx.rename_sheet, 시트 추가/삭제=ctx.add_sheet/delete_sheet, 정렬=ctx.sort, 필터=ctx.filter_to_sheet, 집계=ctx.pivot, 행/열 삽입·삭제=ctx.insert_*/delete_*, 값 매칭/조인(VLOOKUP)=ctx.lookup, 합계행=ctx.add_total_row, 중복제거=ctx.dedupe, 셀 분리=ctx.split_column, 찾기/바꾸기=ctx.replace, 행/열 숨김·숨김해제=ctx.hide_cols/hide_rows(hidden=False). 수기 COM 호출이나 값 배열/루프로 헬퍼 동작을 흉내내지 마세요(헬퍼가 서식·수식·위치를 안전하게 보존합니다).
 - \`ctx.sheets()\` → 시트 이름 리스트
-- \`ctx.last_row(시트, col=1)\` / \`ctx.last_col(시트, row=1)\` → 마지막 데이터 행/열(1-based)
+- \`ctx.last_row(시트, col=1)\` / \`ctx.last_col(시트, row=1)\` → 마지막 데이터 행/열(1-based). **주의: 특정 열 기준이라 그 열이 희소/병합이면 표 하단을 놓쳐 과소산정**합니다(예: A열이 아래쪽 비어 22 를 주지만 실제 표는 28행).
+- \`ctx.used_last_row(시트)\` / \`ctx.used_last_col(시트)\` → **시트 '사용 범위' 기준** 마지막 행/열. **"시트 전체/사용 범위를 복사·처리"할 땐 특정 열 last_row 대신 이걸 쓰세요**(하단행 누락 방지). 예: 사용범위 복사 → \`last = ctx.used_last_row("요약"); ctx.copy("요약", "A1:H"+str(last), "요약_수식보존", "A1")\`. (시트 '전체'를 그대로 복제하려면 last_row 계산 없이 \`ctx.copy_sheet\` 가 더 안전.)
 - \`ctx.find_header(시트, "헤더명", header_row=1)\` → 열 번호(1-based). **열 번호를 추측/하드코딩하지 말고 반드시 이 함수로 찾으세요.**
 - \`ctx.read(시트, "B2:D100")\` → 2차원 리스트(값). 범위 생략 시 전체 사용범위. **반환 리스트는 0-based** — values[0][0] 이 범위의 좌상단 셀.
 - \`ctx.read_cell(시트, "B2")\` → 단일 셀 값(스칼라, 빈 셀은 None). write_cell 의 읽기 짝.

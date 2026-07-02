@@ -9,7 +9,7 @@ signature: "(self, sheet, group_by, value=None, agg='sum', dest_name=None, heade
 role: "그룹별 집계 요약 표를 **새 시트(현재 활성 파일)**에 만든다(Python 집계 — 안정적)."
 role_source: docstring
 version: "0.5.18"
-loc: "serve_b2b.py:9175-9280"
+loc: "serve_b2b.py:9206-9311"
 
 # ── 입출력 ──
 inputs:

@@ -9,7 +9,7 @@ signature: "(self, sheet, a1_range)"
 role: "범위에 수식이 하나라도 있으면 True."
 role_source: docstring
 version: "0.5.18"
-loc: "serve_b2b.py:8768-8774"
+loc: "serve_b2b.py:8799-8805"
 
 # ── 입출력 ──
 inputs:

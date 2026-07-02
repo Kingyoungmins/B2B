@@ -9,7 +9,7 @@ signature: "(self, sheet, col, header_row=1)"
 role: "열 지정을 1-based 번호로 해석한다. 'A' 같은 열 문자 / 1 같은 번호 / 헤더명 모두 허용."
 role_source: docstring
 version: "0.5.18"
-loc: "serve_b2b.py:9940-9949"
+loc: "serve_b2b.py:9971-9980"
 
 # ── 입출력 ──
 inputs:
