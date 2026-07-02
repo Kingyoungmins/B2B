@@ -28,6 +28,7 @@ calls:
   - "_stripVbaCommentsForGate"
   - "add"
   - "appendSameFormatSheetsIntent"
+  - "clearDataIntent"
   - "codeHasBroadValueRewrite"
   - "colIndex"
   - "columnCopyClearIntent"
@@ -43,6 +44,7 @@ calls:
   - "dynamicRangeTextIsWide"
   - "estimateCells"
   - "excelColumnLetterToIndex"
+  - "fillSumColIntent"
   - "filterToNewSheetIntent"
   - "hideUnhideIntent"
   - "isBenignRepeatedCodeLine"
@@ -128,7 +130,7 @@ timestamp: "0.5.18-gen"
 - 없음(정적 분석 기준)
 
 ## 관계
-- 호출: `_indentLen`, `_stripPythonCommentsForGate`, `_stripVbaCommentsForGate`, `add`, `appendSameFormatSheetsIntent`, `codeHasBroadValueRewrite`, `colIndex`, `columnCopyClearIntent`, `columnCopyIntent`, `columnMoveIntent`, `columnSwapIntent`, `conditionalRowDeleteIntent`, `copyValuesIntent`, `ctxHelperPreferredIntent`, `ctxSortIntent`, `dedupeIntent`, `duplicateRowDeleteIntent`, `dynamicRangeTextIsWide`, `estimateCells`, `excelColumnLetterToIndex`, `filterToNewSheetIntent`, `hideUnhideIntent`, `isBenignRepeatedCodeLine`, `isHardVbaStaticFailure`, `isNewSheetWriteLine`, `lookupJoinIntent`, `monthShiftIntent`, `multiValueLookupIntent`, `negativeSignLossFailures`, `numericArithmeticIntent`, `pivotIntent`, `push`, `pythonComStaticSafetyFailures`, `pythonDegenerateOutputFailure`, `requestedExcelColumnLetters`, `routingIntentText`, `sheetOpIntent`, `shouldRouteRequestToPython`, `shouldRouteRequestToVba`, `shouldRouteSimpleStructureEditToPython`, `simpleRangeArithmeticIntent`, `simpleValueWriteIntent`, `splitColumnIntent`, `totalRowIntent`, `userExplicitlyRequestsForceProceed`, `userExplicitlyRequestsVba`, `userRequestsAbsoluteValue`, `userRequestsSort`, `vbaStaticSafetyFailures`
+- 호출: `_indentLen`, `_stripPythonCommentsForGate`, `_stripVbaCommentsForGate`, `add`, `appendSameFormatSheetsIntent`, `clearDataIntent`, `codeHasBroadValueRewrite`, `colIndex`, `columnCopyClearIntent`, `columnCopyIntent`, `columnMoveIntent`, `columnSwapIntent`, `conditionalRowDeleteIntent`, `copyValuesIntent`, `ctxHelperPreferredIntent`, `ctxSortIntent`, `dedupeIntent`, `duplicateRowDeleteIntent`, `dynamicRangeTextIsWide`, `estimateCells`, `excelColumnLetterToIndex`, `fillSumColIntent`, `filterToNewSheetIntent`, `hideUnhideIntent`, `isBenignRepeatedCodeLine`, `isHardVbaStaticFailure`, `isNewSheetWriteLine`, `lookupJoinIntent`, `monthShiftIntent`, `multiValueLookupIntent`, `negativeSignLossFailures`, `numericArithmeticIntent`, `pivotIntent`, `push`, `pythonComStaticSafetyFailures`, `pythonDegenerateOutputFailure`, `requestedExcelColumnLetters`, `routingIntentText`, `sheetOpIntent`, `shouldRouteRequestToPython`, `shouldRouteRequestToVba`, `shouldRouteSimpleStructureEditToPython`, `simpleRangeArithmeticIntent`, `simpleValueWriteIntent`, `splitColumnIntent`, `totalRowIntent`, `userExplicitlyRequestsForceProceed`, `userExplicitlyRequestsVba`, `userRequestsAbsoluteValue`, `userRequestsSort`, `vbaStaticSafetyFailures`
 - 피호출(영향 전파 경로): `validateAssistantCodeBeforeApply`
 
 ## 실패/예외

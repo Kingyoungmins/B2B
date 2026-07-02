@@ -9004,13 +9004,23 @@ class PythonComSkillContext:
                 except Exception:
                     pass
 
-    def clear(self, sheet, a1_range):
-        """범위 내용 삭제(서식 유지). 수식 포함 여부와 무관하게 저널에 백업 후 삭제."""
+    def clear(self, sheet, a1_range, keep_formulas=False):
+        """범위 내용 삭제(서식 유지). keep_formulas=True 면 '수식 셀은 남기고 값(상수) 셀만' 비운다
+        ("데이터만 비우고 수식은 유지" 요청용 — 세로/가로 축 실수 없이 결정적). 저널에 백업 후 삭제."""
         ws = self._ws(sheet)
         rng = self._rng(ws, a1_range)
         self._tick(2)
         self._journal_save(ws, rng)
-        rng.ClearContents()
+        if keep_formulas:
+            # 상수(값)만 지우고 수식은 보존. 대상에 상수가 하나도 없으면 SpecialCells 가 오류 → 조용히 종료.
+            try:
+                consts = rng.SpecialCells(2)  # xlCellTypeConstants
+            except Exception:
+                consts = None
+            if consts is not None:
+                consts.ClearContents()
+        else:
+            rng.ClearContents()
         self._tick(1)
         return True
 
@@ -9469,6 +9479,44 @@ class PythonComSkillContext:
             pass
         self._shared["structural"].append(f"swap_cols:{sheet}:{_col_letter(lo)}<->{_col_letter(hi)}")
         return True
+
+    def fill_sum_col(self, sheet, dest_col, src_cols, header_row=None):
+        """합계 열(dest_col)을 원본 열들(src_cols)의 합계 '수식'으로 채운다. dest_col 이 2행 등으로 '세로 병합'된
+        표(계정별 그룹)면 **병합 블록 단위로** `=SUM(src_top:src_bottom)+...` 를 병합 top 에 넣는다(골든의 그룹
+        합계와 일치). 원본 셀이 숫자가 아닌 **라벨/비데이터 행은 건너뛴다**(단위·소제목을 수식으로 덮지 않음).
+        header_row 를 주면 그 헤더 병합 '아래' 데이터부터 처리해 헤더/라벨 행을 안전하게 보존한다."""
+        ws = self._ws(sheet)
+        self._tick(2)
+        dcol = self._resolve_col(sheet, dest_col, header_row or 1)
+        src_list = src_cols if isinstance(src_cols, (list, tuple)) else [src_cols]
+        scols = [self._resolve_col(sheet, c, header_row or 1) for c in src_list]
+        hr = int(header_row) if header_row else 1
+        hma = ws.Cells(hr, dcol).MergeArea            # 헤더 셀(병합이면 그 높이만큼) 아래부터 데이터
+        start = int(hma.Row) + int(hma.Rows.Count)
+        last = self.last_row(sheet, col=scols[0])
+        if last < start:
+            raise PythonComSkillError(f"'{sheet}' 합계 대상 데이터가 없습니다(시작 {start}, 마지막 {last}).")
+        r, n = start, 0
+        while r <= last:
+            ma = ws.Cells(r, dcol).MergeArea
+            top = int(ma.Row)
+            bottom = top + int(ma.Rows.Count) - 1
+            has_num = False
+            for sc in scols:
+                for rr in range(top, bottom + 1):
+                    v = ws.Cells(rr, sc).Value
+                    if isinstance(v, (int, float)) and not isinstance(v, bool):
+                        has_num = True
+                        break
+                if has_num:
+                    break
+            if has_num:
+                parts = [f"SUM({_col_letter(sc)}{top}:{_col_letter(sc)}{bottom})" for sc in scols]
+                ws.Cells(top, dcol).Formula = "=" + "+".join(parts)
+                n += 1
+            r = bottom + 1
+        self._shared["structural"].append(f"fill_sum_col:{sheet}:{_col_letter(dcol)}={[_col_letter(c) for c in scols]}")
+        return n
 
     def add_sheet(self, name, after=None):
         self._tick(3)

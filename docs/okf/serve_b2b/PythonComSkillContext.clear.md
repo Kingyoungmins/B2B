@@ -5,17 +5,18 @@ module: serve_b2b.py
 lang: python
 extraction: ast
 class: PythonComSkillContext
-signature: "(self, sheet, a1_range)"
-role: "범위 내용 삭제(서식 유지). 수식 포함 여부와 무관하게 저널에 백업 후 삭제."
+signature: "(self, sheet, a1_range, keep_formulas=False)"
+role: "범위 내용 삭제(서식 유지). keep_formulas=True 면 '수식 셀은 남기고 값(상수) 셀만' 비운다"
 role_source: docstring
 version: "0.5.18"
-loc: "serve_b2b.py:9007-9015"
+loc: "serve_b2b.py:9007-9025"
 
 # ── 입출력 ──
 inputs:
   - "self"
   - "sheet"
   - "a1_range"
+  - "keep_formulas"
 returns: "(추정)"
 
 # ── 사이드이펙트 (정적 추정) ──
@@ -32,6 +33,7 @@ calls:
   - "sheet"
 calls_external:
   - "ClearContents"
+  - "SpecialCells"
   - "a1_range"
   - "rng"
   - "ws"
@@ -56,7 +58,7 @@ timestamp: "0.5.18-gen"
 ---
 
 ## 역할
-범위 내용 삭제(서식 유지). 수식 포함 여부와 무관하게 저널에 백업 후 삭제.
+범위 내용 삭제(서식 유지). keep_formulas=True 면 '수식 셀은 남기고 값(상수) 셀만' 비운다
 
 ## 사이드이펙트 & 주의
 - 없음(정적 분석 기준)

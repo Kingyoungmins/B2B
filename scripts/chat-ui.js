@@ -661,12 +661,36 @@ function columnMoveIntent(text) {
   return true;
 }
 
+// [0.5.18] '열/데이터만 비우기(수식 유지)' → ctx.clear(범위, keep_formulas=?). write+formula_mask 로 배열을 짜다
+// 세로/가로 축을 뒤집어 changed=0 되던 것(eval replace_deleted_logic) 대체 — 한 줄 결정적.
+function clearDataIntent(text) {
+  const intent = routingIntentText(String(text || ""));
+  if (!/(비우|비워|비운|지우|지워|clear|초기화)/i.test(intent)) return false;
+  if (!(/(데이터|내용|값|셀)/i.test(intent) || /[A-Z]{1,3}\s*열/i.test(intent))) return false;
+  // 행/열 '삭제'(구조 제거)·조건부 행삭제·중복/필터는 제외 → 기존 경로.
+  if (/(행\s*(?:을|를)?\s*삭제|열\s*(?:을|를)?\s*삭제|행\s*삭제|중복|필터|조건|이면|일\s*때)/i.test(intent)) return false;
+  return true;
+}
+
+// [0.5.18] '합계 열에 여러 열 합계 수식 채우기'(병합 그룹 단위) → ctx.fill_sum_col. 단순 =D+E 를 헤더/라벨행까지
+// 채우고 병합 그룹 SUM 을 놓치던 것(eval feedback_refines_prior / formula_result_check_not_overwrite) 대체.
+function fillSumColIntent(text) {
+  const intent = routingIntentText(String(text || ""));
+  if (!/([A-Z]{1,3}\s*열|합계\s*열|컬럼)/i.test(intent)) return false;
+  const sumFill = /(합계|소계|더한|합산|합\s*을|[A-Z]\s*[+＋]\s*[A-Z])/i.test(intent)
+    && /(수식|채우|채워|입력|넣|기입|작성)/i.test(intent);
+  if (!sumFill) return false;
+  if (/(일치|매칭|피벗|pivot|중복|삭제)/i.test(intent)) return false;
+  return true;
+}
+
 function ctxHelperPreferredIntent(text) {
   return sheetOpIntent(text) || ctxSortIntent(text) || monthShiftIntent(text) || simpleRangeArithmeticIntent(text)
     || pivotIntent(text) || appendSameFormatSheetsIntent(text)
     || hideUnhideIntent(text) || lookupJoinIntent(text) || dedupeIntent(text) || splitColumnIntent(text) || totalRowIntent(text)
     || simpleValueWriteIntent(text) || columnMoveIntent(text) || columnCopyClearIntent(text)
     || columnSwapIntent(text) || copyValuesIntent(text) || columnCopyIntent(text)
+    || clearDataIntent(text) || fillSumColIntent(text)
     || (typeof filterToNewSheetIntent === "function" && filterToNewSheetIntent(text));
 }
 
@@ -3027,6 +3051,8 @@ async function sendChat() {
   const routeColumnSwap = routeToPython && typeof columnSwapIntent === "function" && columnSwapIntent(msg);
   const routeCopyValues = routeToPython && typeof copyValuesIntent === "function" && copyValuesIntent(msg);
   const routeColumnCopy = routeToPython && typeof columnCopyIntent === "function" && columnCopyIntent(msg);
+  const routeClearData = routeToPython && typeof clearDataIntent === "function" && clearDataIntent(msg);
+  const routeFillSumCol = routeToPython && typeof fillSumColIntent === "function" && fillSumColIntent(msg);
   const modeLabel = editTargetId ? "(수정 모드) " : (routeToVba ? "(VBA 라우팅) " : (routeToPython ? "(Python 라우팅) " : ""));
   const thinkMode = typeof isThinkModeEnabled === "function" && isThinkModeEnabled();
   const abortController = new AbortController();
@@ -3089,8 +3115,12 @@ async function sendChat() {
         routingHint = "'값으로/원문 텍스트 그대로 복사' 요청입니다. ctx.copy 는 수식을 그대로 옮겨 상대참조가 시프트되므로(예: 셀이 =다른시트!A2 이면 J로 옮길 때 =..!J2 로 어긋남) 쓰지 마세요. 반드시 ctx.copy_values(\"시트\", \"A2\", \"시트\", \"J2\") (또는 범위 \"D4:F28\"→\"J4\") 를 쓰세요 — 계산 결과값 + 서식/숫자서식/테두리/병합을 넣고 수식은 값으로 고정합니다(참조 시프트 없음, 긴 텍스트/EID 안전). VBA(Sub B2BSkill())는 출력하지 마세요.";
       } else if (routeColumnCopy) {
         routingHint = "한 열을 다른 열로 (서식째) 복사하는 요청입니다. ctx.copy 로 \"E1:E{last}\" 처럼 1행부터 통 복사하면 제목/헤더 가로병합에 걸려 1004 로 실패합니다. 반드시 ctx.copy_col(\"시트\", \"E\", \"L\") 를 쓰세요 — 상단 가로병합을 자동 회피하고 대상 열 병합을 정리한 뒤 값+수식+서식+세로병합을 복사합니다(원본 유지). 헤더 행을 알면 header_row=4. VBA(Sub B2BSkill())는 출력하지 마세요.";
+      } else if (routeClearData) {
+        routingHint = "'특정 열/범위의 데이터(값)만 비우기' 요청입니다. write 로 배열([[...]])을 만들어 지우려 하지 마세요 — 세로/가로 축을 뒤집어 아무것도 안 지워지는(changed=0) 실수가 잦습니다. 반드시 ctx.clear(\"시트\", \"B5:B{last}\") 한 줄로 하세요(범위는 실제 데이터 시작행부터). 수식 셀은 남기고 값 셀만 비우려면 ctx.clear(\"시트\", \"B5:B{last}\", keep_formulas=True) 를 쓰세요. 헤더/라벨 행은 범위에서 제외하고, 다른 시트/열은 건드리지 마세요. VBA(Sub B2BSkill())는 출력하지 마세요.";
+      } else if (routeFillSumCol) {
+        routingHint = "'합계 열에 여러 열의 합계 수식 채우기' 요청입니다. 요약표는 계정이 2행씩 세로 병합된 경우가 많아 단순 =D행+E행 을 넣으면 병합 그룹 합계가 틀리고 헤더/라벨 행을 덮습니다. 반드시 ctx.fill_sum_col(\"시트\", \"F\", [\"D\",\"E\"], header_row=4) 를 쓰세요 — 대상 열(F)의 병합 블록 단위로 =SUM(D_top:D_bottom)+SUM(E_top:E_bottom) 를 넣고, 원본이 숫자가 아닌 라벨 행은 자동으로 건너뜁니다. header_row 는 스키마의 헤더 행(예: 4)을 그대로 넘기세요(데이터는 그 아래부터). VBA(Sub B2BSkill())는 출력하지 마세요.";
       } else if (routeColumnMove) {
-        routingHint = "열(컬럼)을 다른 위치로 이동/재배치/맞바꾸는 요청입니다. 직접 Columns.Cut/Insert 나 값 배열 재작성으로 짜지 말고 반드시 ctx.move_cols 로 처리하세요: ctx.move_cols(\"시트\", [\"금액\",\"할인\"], \"합계\", header_row=1) — 열목록을 기준열(합계) '앞'으로 헤더+데이터 통째 이동(원본 제거, 인덱스 시프트 자동). 옮길 열과 기준열(before) 모두 헤더명 또는 열문자(\"D\")를 쓸 수 있습니다. 헤더가 2행이면 header_row=2. 두 열 맞바꾸기는 뒤 열을 앞 열 앞으로 옮기면 됩니다(예: D와 E 맞바꾸기 → ctx.move_cols(\"시트\", [\"E\"], \"D\")). move_cols 는 병합 제목/헤더가 있어도 네이티브 copy+병합안전 삽입/삭제로 안전하게 처리하니 UnMerge 를 직접 짜지 마세요. VBA(Sub B2BSkill())는 출력하지 말고, @시트 이름은 한 글자도 바꾸지 마세요.";
+        routingHint = "열(컬럼)을 다른 위치로 '이동/재배치'하는 요청입니다(원본을 없애고 순서를 바꾸는 것이 목적). 직접 Columns.Cut/Insert 나 값 배열 재작성으로 짜지 말고 반드시 ctx.move_cols 로 처리하세요: ctx.move_cols(\"시트\", [\"금액\",\"할인\"], \"합계\", header_row=1) — 열목록을 기준열(합계) '앞'으로 헤더+데이터 통째 이동(원본 제거, 인덱스 시프트 자동). 옮길 열과 기준열(before) 모두 헤더명 또는 열문자(\"D\"). 헤더가 2행이면 header_row=2. (두 열 '맞바꿈'은 move_cols 가 아니라 ctx.swap_cols 를 쓰세요 — 수식 참조가 보존됩니다.) move_cols 는 병합 제목/헤더가 있어도 안전하니 UnMerge 를 직접 짜지 마세요. VBA(Sub B2BSkill())는 출력하지 말고, @시트 이름은 한 글자도 바꾸지 마세요.";
       } else if (routeCtxHelper) {
         routingHint = "시트 복사/복사후 이름변경/추가/삭제 또는 단순 정렬 요청입니다. 반드시 ctx 헬퍼를 쓰세요: ctx.copy_sheet(\"시트\", dst_book=\"대상.xlsx\", new_name=\"새이름\") / ctx.rename_sheet(\"기존\",\"새\") / ctx.add_sheet / ctx.delete_sheet / ctx.sort(시트, 범위, key_col=열문자, has_header=True). 정렬에서 @범위가 L2:L8929처럼 키 열만 가리키면 그 열만 정렬하지 말고 표 전체 범위(예: A1:L8929)를 잡고 key_col=\"L\"로 정렬하세요. 범위가 1행 헤더를 포함하면 has_header=True, 2행부터 시작해 헤더가 없으면 has_header=False를 쓰세요. 정렬은 기존 셀 값·수식·날짜·회계 서식이 행과 함께 이동해야 하므로, ctx.read/sorted/ctx.write 또는 값 배열 재작성으로 흉내내지 마세요(EID/가입번호 같은 긴 숫자 텍스트가 8.90E+31 형태로 손실될 수 있음). @시트/@파일 이름은 한 글자도 바꾸지 말고 그대로 쓰세요.";
       } else {

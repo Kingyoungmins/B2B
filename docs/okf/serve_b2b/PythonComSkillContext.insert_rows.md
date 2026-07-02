@@ -9,7 +9,7 @@ signature: "(self, sheet, row, count=1)"
 role: "---- 구조 변경(저널 롤백 불가 → structural 표시) ----"
 role_source: banner
 version: "0.5.18"
-loc: "serve_b2b.py:9050-9062"
+loc: "serve_b2b.py:9060-9072"
 
 # ── 입출력 ──
 inputs:

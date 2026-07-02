@@ -8,7 +8,7 @@ signature: "(app, wb=None)"
 role: "Close/Quit 직전에 Excel 이 빈 회색 top-level 창을 복원하지 못하게 먼저 숨긴다."
 role_source: docstring
 version: "0.5.18"
-loc: "serve_b2b.py:14009-14031"
+loc: "serve_b2b.py:14057-14079"
 
 # ── 입출력 ──
 inputs:

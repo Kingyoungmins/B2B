@@ -5,7 +5,7 @@ const src = fs.readFileSync(path.join(__dirname, "..", "scripts", "chat-ui.js"),
 const s = src.indexOf("function userExplicitlyRequestsVba");
 const after = src.indexOf("function numericArithmeticIntent", s + 10);
 let block = src.slice(s, after);
-block += "\nglobalThis.R = { vba: shouldRouteRequestToVba, py: shouldRouteRequestToPython, sheet: sheetOpIntent, sort: ctxSortIntent, rangeCalc: simpleRangeArithmeticIntent, pivot: pivotIntent, append: appendSameFormatSheetsIntent, valWrite: simpleValueWriteIntent, colMove: columnMoveIntent, copyClear: columnCopyClearIntent, swap: columnSwapIntent, copyVals: copyValuesIntent, colCopy: columnCopyIntent };";
+block += "\nglobalThis.R = { vba: shouldRouteRequestToVba, py: shouldRouteRequestToPython, sheet: sheetOpIntent, sort: ctxSortIntent, rangeCalc: simpleRangeArithmeticIntent, pivot: pivotIntent, append: appendSameFormatSheetsIntent, valWrite: simpleValueWriteIntent, colMove: columnMoveIntent, copyClear: columnCopyClearIntent, swap: columnSwapIntent, copyVals: copyValuesIntent, colCopy: columnCopyIntent, clearData: clearDataIntent, fillSum: fillSumColIntent };";
 eval(block);
 const R = globalThis.R;
 
@@ -123,6 +123,15 @@ ck("[colCopy] 'E열을 L열로 복사(서식 보존)' → Python", R.py("E열 �
 ck("[colCopy] columnCopy intent 감지", R.colCopy("E열을 L열로 복사해줘") === true);
 // eval1: '범위 복사(수식/서식 보존)'는 새 인텐트에 안 걸리고 기본 ctx.copy 경로 유지(회귀 방지)
 ck("[유지] 'A4:H28 범위를 J4로 복사' → copyVals/colCopy FALSE", R.copyVals("A4:H28 범위를 J4:Q28에 수식 서식 보존해 복사") === false && R.colCopy("A4:H28 범위를 J4:Q28에 수식 서식 보존해 복사") === false);
+
+// [0.5.18] eval: 데이터만 비우기(clear) / 합계열 그룹 SUM(fill_sum_col)
+ck("[clear] '요약 B열 데이터만 비우고' → Python", R.py("요약 시트 B열 데이터만 비우고 예전 작업은 반복하지 마") === true);
+ck("[clear] clearData intent 감지", R.clearData("요약 시트 B열 데이터만 비우고") === true);
+ck("[clear] '시트 데이터 삭제'(내용지우기)도 감지", R.clearData("이 열 내용을 지워줘") === true);
+ck("[제외] '행 삭제'는 clearData 아님", R.clearData("F열이 100만 미만인 행을 삭제해줘") === false);
+ck("[fillSum] 'F열에 D+E 합계 수식 채워' → Python", R.py("요약 F열에 D+E 합계 수식을 다시 채워") === true);
+ck("[fillSum] fillSumCol intent 감지", R.fillSum("F열(합계)에 각 행 D+E 수식을 채워") === true);
+ck("[제외] '합계 행 추가'는 fillSumCol 아님(열 아님)", R.fillSum("맨 아래 합계 행 추가해줘") === false);
 
 console.log("\n=== RESULT: " + pass + " PASS / " + fail + " FAIL ===");
 process.exit(fail ? 2 : 0);
