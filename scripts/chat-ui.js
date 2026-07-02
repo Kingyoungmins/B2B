@@ -2932,18 +2932,8 @@ function clarifyVerifierDeterministicQuestion(text) {
   if (hasSourceAndDest && multiSheetCopy && !rowAlignmentSpecified) {
     return "여러 시트의 값을 대상 열에 넣을 때, 행은 소스 데이터 순서 그대로 붙이면 될까요, 아니면 날짜/시간 같은 기준 열로 대상 행과 매칭해야 하나요?";
   }
-  // [집계 경계 모호] '소계 총액/합계' 처럼 소계를 다시 합산하는 요청은, 표 맨 아래에 이미 있는
-  // '합계/총계' 행을 범위에 포함하느냐에 따라 값이 두 배로 갈린다(동작이 아니라 의도의 문제).
-  // 동작 키워드가 있어 underspecified 게이트는 통과해버리므로, 여기서 결정적으로 한 번만 되묻는다.
-  // 명시적 범위(D6:D19)나 '합계 행 포함/제외'·'소계까지만' 이 이미 적혀 있으면 되묻지 않는다.
-  const aggregatesSubtotals = /소\s*계/.test(s)
-    && /(총액|총계|합계|합산|더[해한]|\bsum\b)/i.test(s);
-  const explicitRange = /[A-Z]{1,3}\$?\d{1,7}\s*:\s*\$?[A-Z]{1,3}\$?\d{0,7}/i.test(s); // D6:D19 등
-  const boundaryDecided = /(합계|총계)\s*행\s*(?:은|는|도)?\s*(포함|제외|빼|넣|말고|없이|만)/.test(s)
-    || /(소계|데이터|항목)\s*(?:행)?\s*(?:까지|만)/.test(s);
-  if (aggregatesSubtotals && !explicitRange && !boundaryDecided) {
-    return "'소계'를 합산할 때, 표 맨 아래에 이미 있는 '합계/총계' 행도 범위에 포함할까요, 아니면 소계 항목 행까지만 더할까요? (합계 행까지 포함하면 값이 약 두 배가 될 수 있어요.)";
-  }
+  // 집계 경계(합계 행 이중 합산 등)는 단어가 아니라 '데이터 구조'로 판단한다 → clarifyVerifierAskIfNeeded 의
+  // 구조 다이제스트 + LLM 경로에서 처리(여기서 키워드로 잡지 않는다).
   return null;
 }
 
@@ -2959,21 +2949,123 @@ function clarifyVerifierLikelyUnderspecified(text) {
   return true;                                                                // 대상·동작 모두 불명확 → 의심
 }
 
+// ── [데이터 구조 다이제스트] 검증의 근거를 '요청 단어'가 아니라 '실제 시트 구조'에서 뽑는다.
+//    합산 시 이중계산을 유발하는 합계/총계/소계 행, 부가세 안내 행, 구분 제목(■), 상단 병합 제목 등
+//    '지뢰'를 위치와 함께 요약해 LLM 검증자에게 넘긴다(문구는 LLM 이 의미로 해석 → 키워드 매칭 폐기).
+function _clarifyCellText(v) { return String(v == null ? "" : v).trim(); }
+function _clarifyRowHasNumber(row) {
+  for (let c = 0; c < (row ? row.length : 0); c++) {
+    const v = row[c];
+    if (typeof v === "number" && isFinite(v)) return true;
+    if (typeof v === "string") {
+      const n = v.replace(/[,\s₩원%()]/g, "");
+      if (n && n !== "-" && !isNaN(Number(n))) return true;
+    }
+  }
+  return false;
+}
+function _clarifyRowLeftLabel(row) {
+  for (let c = 0; c < Math.min(row ? row.length : 0, 3); c++) {
+    const t = _clarifyCellText(row[c]);
+    if (t) return t;
+  }
+  return "";
+}
+// aoa → { text, hasLandmarks, totalRows[] }. 순수 함수(테스트 가능).
+function buildSheetStructureDigest(aoa, sheetName) {
+  const res = { text: "", hasLandmarks: false, totalRows: [] };
+  if (!aoa || !aoa.length) return res;
+  const TOTAL = /^(합\s*계|총\s*계|총합계|총\s*합|소\s*계|누\s*계|계|total|sum)$/i;
+  let nCols = 0;
+  for (const r of aoa) if (r && r.length > nCols) nCols = r.length;
+  let firstDataRow = null;
+  for (let r = 0; r < aoa.length; r++) {
+    if (_clarifyRowHasNumber(aoa[r] || [])) { firstDataRow = r + 1; break; }
+  }
+  const landmarks = [];
+  for (let r = 0; r < aoa.length; r++) {
+    const row = aoa[r] || [];
+    const label = _clarifyRowLeftLabel(row);
+    const rowStr = row.map(_clarifyCellText).join(" ");
+    let kind = null, isTotal = false;
+    if (r >= 4 && TOTAL.test(label)) {
+      // 라벨 우측에 값/내용이 있어야 진짜 '총계 행'(헤더의 '합계' 컬럼명과 구분)
+      const hasContent = _clarifyRowHasNumber(row) || row.slice(3).some(v => _clarifyCellText(v));
+      if (hasContent) { kind = "합계/총계/소계 행(합산 시 이중계산 위험)"; isTotal = true; }
+    }
+    if (!kind && /부가세/.test(rowStr) && /(별도|포함)/.test(rowStr)) kind = "부가세 안내 행";
+    if (!kind && label.startsWith("■")) kind = "구분 제목 행";
+    if (kind) {
+      landmarks.push({ row: r + 1, label: label || "(빈 라벨)", kind });
+      if (isTotal) res.totalRows.push(r + 1);
+    }
+  }
+  const lines = [];
+  lines.push(`[${sheetName || "대상 시트"}] 약 ${aoa.length}행 × ${nCols}열`
+    + (firstDataRow ? `, 숫자 데이터 시작 ≈ ${firstDataRow}행` : ""));
+  if (landmarks.length) {
+    res.hasLandmarks = true;
+    lines.push("표 안의 특이 행(합산/집계 시 주의):");
+    landmarks.slice(0, 12).forEach(l => lines.push(`  · ${l.row}행 "${l.label}" — ${l.kind}`));
+    if (landmarks.length > 12) lines.push(`  · … 외 ${landmarks.length - 12}개`);
+  } else {
+    lines.push("표 안에 합계/총계/소계·부가세 등 특이 행 없음(평범한 표).");
+  }
+  res.text = lines.join("\n");
+  return res;
+}
+// 되물음 대상 시트 추정: @범위[파일/시트!범위] / @시트[..] / "○○ 시트" / 현재 활성 시트.
+function _clarifyResolveSheet(text) {
+  const s = String(text || "");
+  let m = /@(?:범위|시트|컬럼)\[[^\]]*?\/([^\/!\]\[]+)!/.exec(s);   // @범위[파일/요약!F:F]
+  if (m && m[1]) return m[1].trim();
+  m = /[\/!]([^\/!\]\[]+?)!\$?[A-Z]{1,3}(?:\$?\d|:)/i.exec(s);      // .../요약!J4 또는 요약!F:F
+  if (m && m[1]) return m[1].trim();
+  m = /@시트\[[^\]]*?([^\/!\]\[]+)\]/.exec(s);
+  if (m && m[1]) return m[1].trim();
+  m = /([가-힣A-Za-z0-9_()]+)\s*시트/.exec(s);                       // "요약 시트"
+  if (m && m[1]) return m[1].trim();
+  return (typeof state !== "undefined" && state && state.currentSheet) ? state.currentSheet : null;
+}
+function _clarifyGetAoa(sheet) {
+  if (typeof state === "undefined" || !state) return null;
+  const f = (typeof getFile === "function") ? getFile(state.currentFileId) : null;
+  const sh = sheet || state.currentSheet;
+  return (f && f.sheets && sh && f.sheets[sh]) ? f.sheets[sh] : null;
+}
+
 async function clarifyVerifierAskIfNeeded(userMessage, options) {
   options = options || {};
   if (typeof callLLMOneShot !== "function") return null;
   const deterministicQuestion = clarifyVerifierDeterministicQuestion(userMessage);
   if (deterministicQuestion) return deterministicQuestion;
-  if (!clarifyVerifierLikelyUnderspecified(userMessage)) return null;         // 명백히 구체적 → 되묻지 않음
-  const schema = (typeof buildSchemaSummary === "function") ? buildSchemaSummary() : "";
+
+  // [데이터 다이제스트] 대상 시트의 실제 구조를 뽑아 LLM 에게 근거로 준다.
+  const resolveSheet = options.resolveSheet || _clarifyResolveSheet;
+  const getAoa = options.getAoa || _clarifyGetAoa;
+  let digest = { text: "", hasLandmarks: false, totalRows: [] };
+  try {
+    const sheet = resolveSheet(String(userMessage || ""));
+    const aoa = options.aoa || (typeof getAoa === "function" ? getAoa(sheet) : null);
+    digest = buildSheetStructureDigest(aoa, sheet);
+  } catch (_) { /* 데이터 못 보면 다이제스트 없이 진행 */ }
+
+  // 게이트: '데이터에 지뢰가 있음'(구조) 또는 '요청이 막연함'(휴리스틱)일 때만 LLM 검증.
+  // → 평범한 표 + 구체 요청이면 LLM 호출 없이 통과(지연 0). 단어에 의존하지 않는다.
+  const vague = clarifyVerifierLikelyUnderspecified(userMessage);
+  if (!digest.hasLandmarks && !vague) return null;
+
+  const schema = options.schema || (typeof buildSchemaSummary === "function" ? buildSchemaSummary() : "");
   const sys = [
-    "당신은 Excel 자동화 스킬을 '만들기 전에' 사용자 요청이 정확한 스킬을 짜기에 충분한지만 점검하는 검증자입니다.",
+    "당신은 Excel 자동화 스킬을 '만들기 전에' 요청이 정확한 스킬을 짜기에 충분한지 점검하는 검증자입니다.",
     "코드는 절대 작성하지 말고, 아래 둘 중 하나만 출력하세요:",
-    "- 충분히 구체적이면 정확히 'OK' 한 단어만.",
-    "- 핵심 정보가 빠졌거나 서로 모순되면 'ASK: ' 뒤에 사용자가 답하기 쉬운 한국어 질문 한 문장.",
-    "매우 관대하게 판단하세요. 대상 파일/시트/열이 무엇인지, 무엇을 어디에 쓸지, 또는 지시가 서로 모순되어 '그게 없으면 스킬을 못 짜는' 경우에만 ASK 하세요.",
-    "조금 부족해도 합리적으로 추론 가능하면 무조건 OK 하세요. 사용자를 귀찮게 하지 마세요. 질문은 절대 두 개 이상 하지 마세요.",
-    schema ? ("참고용 현재 업로드 파일/시트/열:\n" + schema) : "",
+    "- 지금 그대로 정확한 스킬을 짤 수 있으면 정확히 'OK' 한 단어만.",
+    "- 결과가 틀리거나 의도가 갈릴 수 있으면 'ASK: ' 뒤에 사용자가 답하기 쉬운 한국어 질문 한 문장.",
+    "매우 관대하게 판단하세요. 합리적으로 추론 가능하면 무조건 OK. 질문은 최대 한 개.",
+    "특히 아래 '대상 시트 구조'를 근거로 판단하세요. 사용자가 표현을 어떻게 했든(합계/합/소계 총액/합을 구해 등 무관), 뜻이 '어떤 열/범위를 합산·집계'하는 것인데 그 범위 안에 이미 '합계/총계/소계' 행이 들어가 이중계산으로 값이 크게 달라질 수 있으면, 그 합계 행을 포함할지 각 항목 행까지만 더할지 ASK 로 되물으세요.",
+    "단, 사용자가 범위(예: F5:F19)나 포함/제외를 이미 지정했거나, 표에 그런 특이 행이 없으면 OK 하세요. 합산이 아닌 작업(정렬·삭제·서식 등)이면 특이 행이 있어도 OK.",
+    digest.text ? ("### 대상 시트 구조(실제 데이터 기반)\n" + digest.text) : "",
+    schema ? ("### 참고용 업로드 파일/시트/열\n" + schema) : "",
   ].filter(Boolean).join("\n");
   let reply = "";
   try {

@@ -9549,6 +9549,51 @@ class PythonComSkillContext:
         self._shared["structural"].append(f"fill_sum_col:{sheet}:{_col_letter(dcol)}={[_col_letter(c) for c in scols]}")
         return n
 
+    def sum_column(self, sheet, col, header_row=None, exclude_total_rows=True):
+        """열(col: 열문자 'F' / 헤더명 '합계' / 열번호 6)의 숫자 값을 더해 **합계 값을 반환**한다.
+        write 하지 않음 — 반환값을 ctx.write_cell 로 원하는 셀에 넣으세요.
+
+        exclude_total_rows=True(기본): 표 안에 이미 있는 '합계/총계/소계' 행을 자동 제외해 **이중계산을 막는다.**
+          - 총계 행 판정은 라벨 컬럼을 추측하지 말 것: 이 함수가 각 행의 왼쪽 라벨 영역(A~C)을 스캔한다
+            (실제로 라벨이 A열에 있는데 코드가 C열을 보다 못 거르는 실수를 원천 차단).
+          - 첫 총계 행이 항목 블록의 '끝'이다: 그 아래 꼬리(부가세·검산·단위 표기 등)까지 다 더하는 것을 막기
+            위해, 첫 총계 행 '위'의 항목 행들만 더한다. 총계 행이 없으면 데이터 끝까지 더한다.
+        exclude_total_rows=False: 데이터 범위 전체(총계 행 포함)를 그대로 더한다.
+        header_row 를 주면 그 헤더(병합 포함) '아래'부터 시작한다(헤더/제목 오합산 방지).
+          예) total = ctx.sum_column("요약", "합계", header_row=4); ctx.write_cell("요약", "J15", total)"""
+        ws = self._ws(sheet)
+        self._tick(2)
+        tcol = self._resolve_col(sheet, col, header_row or 1)
+        if header_row:
+            hr = int(header_row)
+            hma = ws.Cells(hr, tcol).MergeArea
+            start = int(hma.Row) + int(hma.Rows.Count)
+        else:
+            start = 1
+        last = self.last_row(sheet, col=tcol)
+        if last < start:
+            return 0.0
+        L = _col_letter(tcol)
+        vals = self.read(sheet, f"{L}{start}:{L}{last}")
+        labels = self.read(sheet, f"A{start}:C{last}")
+        total = 0.0
+        excluded = 0
+        for i in range(len(vals)):
+            row_labels = labels[i] if (labels and i < len(labels)) else []
+            if _is_total_label(row_labels):
+                excluded += 1
+                if exclude_total_rows:
+                    break            # 첫 총계 행 = 항목 블록의 끝(그 아래 꼬리 무시)
+            n = _coerce_number(vals[i][0] if vals[i] else None)
+            if n is not None:
+                total += n
+        try:
+            _vba_trace("python_com.sum_column", sheet=str(sheet), col=L, start=start, last=last,
+                       exclude_total_rows=bool(exclude_total_rows), excluded=excluded, total=total)
+        except Exception:
+            pass
+        return total
+
     def add_sheet(self, name, after=None):
         self._tick(3)
         names = _excel_collection_names(self._wb.Worksheets)
@@ -10600,6 +10645,41 @@ def _col_letter(n):
         n, r = divmod(n - 1, 26)
         s = chr(65 + r) + s
     return s or "A"
+
+
+# '합계/총계/소계/누계/계' 총계 행 판정(라벨이 어느 열에 있든 왼쪽 라벨 영역을 스캔).
+# 클라 buildSheetStructureDigest 의 TOTAL 정규식과 동일 규칙 — 둘이 어긋나면 안 됨.
+_TOTAL_LABEL_RE = re.compile(r"^(합\s*계|총\s*계|총합계|총\s*합|소\s*계|누\s*계|계|total|sum)$", re.I)
+
+
+def _is_total_label(cells):
+    """행의 라벨 셀들(보통 A~C) 중 하나라도 '합계/총계/소계/누계/계' 면 True."""
+    for v in (cells or []):
+        if v is None:
+            continue
+        t = str(v).strip()
+        if t and _TOTAL_LABEL_RE.match(t):
+            return True
+    return False
+
+
+def _coerce_number(v):
+    """셀 값을 숫자로. bool·라벨·빈칸은 None. 콤마·통화·괄호(음수) 표기 허용."""
+    if isinstance(v, bool):
+        return None
+    if isinstance(v, (int, float)):
+        return float(v)
+    if isinstance(v, str):
+        s = v.strip().replace(",", "").replace(" ", "").replace("₩", "").replace("원", "").replace("%", "")
+        neg = s.startswith("(") and s.endswith(")")
+        if neg:
+            s = "-" + s[1:-1]
+        if s and s not in ("-", "+"):
+            try:
+                return float(s)
+            except Exception:
+                return None
+    return None
 
 
 # 스냅샷이 읽을 최대 범위(거대/부풀린 UsedRange 방어). 변경 감지용이라 이 정도면 충분.

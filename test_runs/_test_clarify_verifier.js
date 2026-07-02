@@ -15,7 +15,7 @@ globalThis.callLLMOneShot = ${oneShotImpl};
 `;
   block += src.slice(start, end);
   block += `
-globalThis.__cv = { det: clarifyVerifierDeterministicQuestion, heur: clarifyVerifierLikelyUnderspecified, ask: clarifyVerifierAskIfNeeded };`;
+globalThis.__cv = { det: clarifyVerifierDeterministicQuestion, heur: clarifyVerifierLikelyUnderspecified, ask: clarifyVerifierAskIfNeeded, digest: buildSheetStructureDigest };`;
   eval(block);
   return globalThis.__cv;
 }
@@ -46,22 +46,64 @@ async function main() {
   ck("[추가질문] 여러 시트→대상 열 채우기에서 행 기준 누락 감지", /행은/.test(detQ) && /날짜|시간/.test(detQ));
   ck("[통과] 행 순서 명시 시 추가질문 없음", globalThis.__cv.det(naverExplicitOrder) === null);
 
-  // ── 집계 경계 모호(소계+합계): 합계행 포함 여부를 결정적으로 되묻는다 ─────────
-  const { det } = loadVerifier("async () => 'OK'");
-  const sumQ = det("요약 시트 D열 소계 총액을 구하는 SUM 수식을 J5에 넣으세요. 나중에 D열이 바뀌면 자동 갱신되어야 합니다.") || "";
-  ck("[추가질문] '소계 총액' 집계 → 합계행 포함 여부 되물음", /합계.*(?:행|포함)|두\s*배/.test(sumQ));
-  ck("[추가질문] '소계 합계' 도 되물음", /합계/.test(det("D열 소계 합계 내줘") || ""));
-  ck("[통과] 명시 범위(D6:D19) 주면 안 되물음", det("D6:D19 소계 합계를 J5에 넣어줘") === null);
-  ck("[통과] '합계 행은 제외' 명시하면 안 되물음", det("소계 총액을 구하되 맨 아래 합계 행은 제외하고 J5에") === null);
-  ck("[통과] '소계 항목까지만' 명시하면 안 되물음", det("소계 항목 행까지만 합산해서 J5에") === null);
-  ck("[통과] 소계 없는 일반 합계는 안 되물음", det("B열 합계를 C에 써줘") === null);
-  ck("[통과] 소계 행 '추가'는 집계가 아니라 안 되물음", det("각 그룹마다 소계 행 추가해줘") === null);
+  // ── 구조 다이제스트(순수): 근거를 '단어'가 아니라 '실제 데이터'에서 뽑는다 ─────────
+  // 상단 헤더(1~4행) + 데이터(5~) + 맨 아래 '합계' 총계 행(엑셀 7행)이 있는 표
+  const aoaWithTotal = [
+    ["요약"], [null], [null], ["구분", "명칭", null, null, null, "합계"],
+    ["서초", "A", null, null, null, 100],
+    ["동작", "B", null, null, null, 200],
+    ["합계", null, null, null, null, 300],   // ← 본문 총계 행 (엑셀 7행)
+  ];
+  const aoaNoTotal = [
+    ["요약"], [null], [null], ["구분", "명칭", null, null, null, "값"],
+    ["서초", "A", null, null, null, 100],
+    ["동작", "B", null, null, null, 200],
+    ["강남", "C", null, null, null, 400],
+  ];
+  const { digest } = loadVerifier("async () => 'OK'");
+  const dWith = digest(aoaWithTotal, "요약");
+  const dNo = digest(aoaNoTotal, "요약");
+  ck("[다이제스트] 총계 행 있으면 hasLandmarks=true", dWith.hasLandmarks === true);
+  ck("[다이제스트] 총계 행 위치(7행) 포착", dWith.totalRows.indexOf(7) >= 0 && /7행/.test(dWith.text));
+  ck("[다이제스트] 헤더의 '합계' 컬럼명은 총계 행으로 오인 안 함", dWith.totalRows.indexOf(4) < 0);
+  ck("[다이제스트] 평범한 표는 hasLandmarks=false", dNo.hasLandmarks === false && dNo.totalRows.length === 0);
 
-  // ── verifier: 구체 질의는 LLM 호출조차 안 한다(지연 0, 빡세지 않음) ─────
+  const jReq = "요약 시트 F열 데이터 합계를 J4에 값으로 적어줘";
+
+  // ── verifier: 시트에 총계 행이 '실재'하면(표현 무관) LLM 검증 → 되묻는다 ──────────
+  {
+    const { ask } = loadVerifier("async (sys) => { globalThis.__called = true; globalThis.__sys = sys; return 'ASK: 맨 아래 합계 행도 포함할까요?'; }");
+    globalThis.__called = false; globalThis.__sys = "";
+    const r = await ask(jReq, { aoa: aoaWithTotal });
+    ck("[되묻기] 총계 행 실재 → LLM 호출되어 되물음", globalThis.__called === true && /합계 행도 포함/.test(r || ""));
+    ck("[근거주입] LLM 프롬프트에 실제 시트 구조(7행 합계)가 들어감", /7행/.test(globalThis.__sys) && /특이 행|합계\/총계\/소계/.test(globalThis.__sys));
+  }
+  // 다양한 표현이어도 동일하게 동작(단어에 의존하지 않음): "합을 구해서"/@범위 멘션
+  {
+    const { ask } = loadVerifier("async () => { globalThis.__called = true; return 'ASK: 합계 행 포함 여부?'; }");
+    globalThis.__called = false;
+    const r = await ask("@범위[a.xlsx/요약!F:F] 합을 구해서 @범위[a.xlsx/요약!J4]에 써줘", { aoa: aoaWithTotal });
+    ck("[표현무관] '합을 구해서'+멘션도 총계 행 있으면 되물음", globalThis.__called === true && /합계/.test(r || ""));
+  }
+  // ── verifier: 총계 행 있어도 LLM 이 OK(정렬 등 비합산·이미 지정)면 통과 ──────────
+  {
+    const { ask } = loadVerifier("async () => 'OK'");
+    const r = await ask(jReq, { aoa: aoaWithTotal });
+    ck("[관대] 총계 행 있어도 LLM 이 OK 면 통과", r === null);
+  }
+  // ── verifier: 총계 행 없는 평범한 표 + 구체 요청 → LLM 미호출(빠른 통과) ──────────
   {
     const { ask } = loadVerifier("async () => { globalThis.__called = true; return 'ASK: ?'; }");
+    globalThis.__called = false;
+    const r = await ask(jReq, { aoa: aoaNoTotal });
+    ck("[비호출] 평범한 표 + 구체 요청은 LLM 미호출", globalThis.__called === false && r === null);
+  }
+  // ── verifier: 데이터 못 보는(aoa 없음) 구체 질의도 미호출 ─────────────────────
+  {
+    const { ask } = loadVerifier("async () => { globalThis.__called = true; return 'ASK: ?'; }");
+    globalThis.__called = false;
     const r = await ask("B열 합계를 C에 써줘");
-    ck("[비호출] 구체 질의는 verifier LLM 미호출", globalThis.__called === false && r === null);
+    ck("[비호출] 데이터 없고 구체적이면 미호출", globalThis.__called === false && r === null);
   }
   // ── verifier: 모호 질의 + LLM 이 OK → 되묻지 않음 ─────────────────────
   {
