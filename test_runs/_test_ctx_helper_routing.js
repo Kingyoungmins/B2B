@@ -5,7 +5,7 @@ const src = fs.readFileSync(path.join(__dirname, "..", "scripts", "chat-ui.js"),
 const s = src.indexOf("function userExplicitlyRequestsVba");
 const after = src.indexOf("function numericArithmeticIntent", s + 10);
 let block = src.slice(s, after);
-block += "\nglobalThis.R = { vba: shouldRouteRequestToVba, py: shouldRouteRequestToPython, sheet: sheetOpIntent, sort: ctxSortIntent, rangeCalc: simpleRangeArithmeticIntent, pivot: pivotIntent, append: appendSameFormatSheetsIntent, valWrite: simpleValueWriteIntent, colMove: columnMoveIntent };";
+block += "\nglobalThis.R = { vba: shouldRouteRequestToVba, py: shouldRouteRequestToPython, sheet: sheetOpIntent, sort: ctxSortIntent, rangeCalc: simpleRangeArithmeticIntent, pivot: pivotIntent, append: appendSameFormatSheetsIntent, valWrite: simpleValueWriteIntent, colMove: columnMoveIntent, copyClear: columnCopyClearIntent };";
 eval(block);
 const R = globalThis.R;
 
@@ -98,6 +98,16 @@ ck("[열이동] intent 감지", R.colMove("D열을 G열 앞으로 옮겨줘") ==
 // 매칭/집계는 열이동으로 오인 금지(기존 경로 유지)
 ck("[제외] '일치 열을 앞으로 옮겨' → colMove FALSE(매칭)", R.colMove("가입번호 일치하는 열을 앞으로 옮겨줘") === false);
 ck("[제외] '매출 열 지점별 집계' → colMove FALSE", R.colMove("매출 열을 지점별로 옮겨 집계해줘") === false);
+
+// [0.5.18] "X열을 Y로 이동/복사하고 원래 X열은 비우기" → copy+clear(원본 삭제/move 아님). eval 파손 케이스 방어.
+const cc = "요약 시트에서 D열을 G열로 이동하고 원래 D열은 비우세요";
+ck("[copy+clear] '이동+원본 비우기' → Python", R.py(cc) === true && R.vba(cc) === false);
+ck("[copy+clear] copyClear intent 감지", R.copyClear(cc) === true);
+ck("[copy+clear] 이 변형은 move_cols 아님(colMove FALSE)", R.colMove(cc) === false);
+ck("[copy+clear] '값 복사 후 원본 지워' 도 감지", R.copyClear("D열을 G열로 복사하고 원본은 지워줘") === true);
+// 순수 이동(원본 비우기 언급 없음)은 여전히 move_cols
+ck("[구분] '원본 비우기' 없는 순수 이동 → colMove TRUE, copyClear FALSE",
+   R.colMove("D열을 G열 앞으로 옮겨줘") === true && R.copyClear("D열을 G열 앞으로 옮겨줘") === false);
 
 console.log("\n=== RESULT: " + pass + " PASS / " + fail + " FAIL ===");
 process.exit(fail ? 2 : 0);

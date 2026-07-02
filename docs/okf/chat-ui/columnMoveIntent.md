@@ -5,10 +5,10 @@ module: chat-ui.js
 lang: js
 extraction: regex   # 정규식 근사
 signature: "(text)"
-role: "[0.5.17] 열(컬럼) 이동/재배치/맞바꾸기 → ctx.move_cols 로 결정적 처리(Python). VBA 로 보내면 모델이 병합"
-role_source: banner
+role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
+role_source: none
 version: "0.5.18"
-loc: "chat-ui.js:608-608"
+loc: "chat-ui.js:622-622"
 
 # ── 입출력 ──
 inputs:
@@ -22,9 +22,11 @@ raises: []
 
 # ── 유기적 관계 ──
 calls:
+  - "columnCopyClearIntent"
   - "routingIntentText"
 calls_external:
   - "String"
+  - "move"
   - "test"
 called_by:
   - "ctxHelperPreferredIntent"
@@ -37,13 +39,13 @@ timestamp: "0.5.18-gen"
 ---
 
 ## 역할
-[0.5.17] 열(컬럼) 이동/재배치/맞바꾸기 → ctx.move_cols 로 결정적 처리(Python). VBA 로 보내면 모델이 병합
+(추정) 역할 주석 없음 — 담당자 1줄 보완 필요  _(자동 추정 — 확인 필요)_
 
 ## 사이드이펙트 & 주의
 - 없음(정적 분석 기준)
 
 ## 관계
-- 호출: `routingIntentText`
+- 호출: `columnCopyClearIntent`, `routingIntentText`
 - 피호출(영향 전파 경로): `ctxHelperPreferredIntent`, `sendChat`, `wholeColumnCountRowTwoFailures`
 
 ## 실패/예외

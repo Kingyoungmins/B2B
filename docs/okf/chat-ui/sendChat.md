@@ -8,7 +8,7 @@ signature: "()"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
 version: "0.5.18"
-loc: "chat-ui.js:2908-2908"
+loc: "chat-ui.js:2924-2924"
 
 # ── 입출력 ──
 inputs: []
@@ -31,6 +31,7 @@ calls:
   - "callLLM"
   - "clarifyVerifierAskIfNeeded"
   - "clearViewerDragSelection"
+  - "columnCopyClearIntent"
   - "columnMoveIntent"
   - "conditionalRowDeleteIntent"
   - "ctxHelperPreferredIntent"
@@ -75,6 +76,8 @@ calls_external:
   - "add_total_row"
   - "append_same_format_sheets"
   - "book"
+  - "clear"
+  - "copy"
   - "copy_sheet"
   - "debug"
   - "dedupe"
@@ -83,7 +86,9 @@ calls_external:
   - "find_header"
   - "flush"
   - "hide_cols"
+  - "insert_cols"
   - "join"
+  - "last_row"
   - "lookup"
   - "move_cols"
   - "normalize"
@@ -95,10 +100,6 @@ calls_external:
   - "setReasoning"
   - "setStatus"
   - "shift_months"
-  - "sort"
-  - "split_column"
-  - "stopped"
-  - "transform"
 called_by: []
 reads:
   - "state.editingStepId"
@@ -116,7 +117,7 @@ timestamp: "0.5.18-gen"
 - DOM/브라우저 전역 조작
 
 ## 관계
-- 호출: `$`, `add`, `addAssistantReply`, `addMessage`, `appendSameFormatSheetsIntent`, `augmentUserPromptWithMentions`, `bindChatHistoryEntryToMessage`, `callLLM`, `clarifyVerifierAskIfNeeded`, `clearViewerDragSelection`, `columnMoveIntent`, `conditionalRowDeleteIntent`, `ctxHelperPreferredIntent`, `dedupeIntent`, `duplicateRowDeleteIntent`, `escapeHtml`, `exactSheetNameReminder`, `filterToNewSheetIntent`, `hideUnhideIntent`, `isThinkModeEnabled`, `lookupJoinIntent`, `monthShiftIntent`, `multiValueLookupIntent`, `pivotIntent`, `scrollChatToBottom`, `setupStreamingAssistantMessage`, `shouldRouteRequestToPython`, `shouldRouteRequestToVba`, `shouldRouteSimpleStructureEditToPython`, `showThinkRetryPrompt`, `simpleRangeArithmeticIntent`, `splitColumnIntent`, `toast`, `totalRowIntent`, `userExplicitlyRequestsForceProceed`, `userExplicitlyRequestsPython`, `userExplicitlyRequestsVba`
+- 호출: `$`, `add`, `addAssistantReply`, `addMessage`, `appendSameFormatSheetsIntent`, `augmentUserPromptWithMentions`, `bindChatHistoryEntryToMessage`, `callLLM`, `clarifyVerifierAskIfNeeded`, `clearViewerDragSelection`, `columnCopyClearIntent`, `columnMoveIntent`, `conditionalRowDeleteIntent`, `ctxHelperPreferredIntent`, `dedupeIntent`, `duplicateRowDeleteIntent`, `escapeHtml`, `exactSheetNameReminder`, `filterToNewSheetIntent`, `hideUnhideIntent`, `isThinkModeEnabled`, `lookupJoinIntent`, `monthShiftIntent`, `multiValueLookupIntent`, `pivotIntent`, `scrollChatToBottom`, `setupStreamingAssistantMessage`, `shouldRouteRequestToPython`, `shouldRouteRequestToVba`, `shouldRouteSimpleStructureEditToPython`, `showThinkRetryPrompt`, `simpleRangeArithmeticIntent`, `splitColumnIntent`, `toast`, `totalRowIntent`, `userExplicitlyRequestsForceProceed`, `userExplicitlyRequestsPython`, `userExplicitlyRequestsVba`
 - 피호출(영향 전파 경로): 없음
 
 ## 실패/예외

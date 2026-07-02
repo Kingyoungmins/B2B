@@ -791,9 +791,10 @@ const PYTHON_COM_SYSTEM_PROMPT = `당신은 우측에 실제로 떠 있는 Micro
 - \`ctx.clear(시트, 범위)\` → 내용 삭제(서식 유지)
 - \`ctx.insert_rows(시트, 행번호, count=1)\` / \`ctx.delete_rows(...)\` — 행 범위 문자열도 가능: \`ctx.delete_rows(시트, "5:9")\`
 - \`ctx.insert_cols(시트, "B", count=1)\` / \`ctx.delete_cols(...)\` → 전체 열 단위(병합셀 안전). **열 범위는 문자열 그대로**: \`ctx.delete_cols(시트, "Q:AU")\` (열 letter 하나 "Q" 또는 범위 "Q:AU" 모두 가능)
-- \`ctx.move_cols(시트, 열목록_또는_조건, 기준열, header_row=1, scan_from=None)\` → 여러 열을 헤더+데이터까지 통째로 기준열 앞으로 이동(원본 제거, 인덱스 시프트 자동).
+- \`ctx.move_cols(시트, 열목록_또는_조건, 기준열, header_row=1, scan_from=None)\` → 여러 열을 헤더+데이터까지 통째로 기준열 앞으로 이동(원본 제거, 인덱스 시프트 자동). **열 "순서 재배치/맞바꾸기"** 에 쓰세요(원본 열을 없애고 위치를 바꾸는 게 목적일 때).
   - 열을 정확히 알면 목록: \`ctx.move_cols("S", ["a_항목","b_값"], "J")\`
   - **헤더 조건으로 고를 땐 함수**(헤더명 받아 True/False): \`ctx.move_cols("S", lambda h: any(x in str(h) for x in ["a","b","c"]), "J", scan_from="J")\`. 직접 헤더를 스캔하지 마세요(cell_to_addr 같은 함수는 없습니다). 2행 헤더면 header_row=2.
+- **★ "X열을 Y로 이동/복사하고 원래 X열은 비우기"는 move_cols/delete_cols 가 아니라 copy + clear 입니다.** '비우기'는 열 삭제가 아니므로, 원본 열을 \`ctx.delete_cols\` 로 지우거나 \`ctx.move_cols\`(원본 제거)로 처리하면 **다른 열이 왼쪽으로 시프트돼 라벨이 어긋나고(E→D, F→E) SUMIF/SUM 이 #REF! 로 파손**됩니다. 반드시: \`last = ctx.last_row(시트, col=원본열번호)\` → \`ctx.insert_cols(시트, "Y")\` → \`ctx.copy(시트, "X1:X"+str(last), 시트, "Y1")\` → \`ctx.clear(시트, "X1:X"+str(last))\`(원본은 내용만 비움, 열은 유지). copy 후 delete 가 아니라 clear 를 쓰세요.
 - \`ctx.add_sheet("이름", after="기준시트")\` / \`ctx.delete_sheet("이름")\` / \`ctx.rename_sheet("기존이름", "새이름")\`
   - **"시트 이름만 바꿔줘"**는 반드시 \`ctx.rename_sheet\` 를 쓰세요(위치·내용 유지). copy_sheet+delete 로 흉내내면 위치가 바뀌거나 내용이 사라질 수 있습니다.
 - \`ctx.shift_months("시트", "B336:D336", 1)\` → 범위 안 '문자열' 셀의 모든 'N월'(앞 'YY/YYYY년', 뒤 'D일' 포함)을 N개월 이동. 12월 넘김 시 연도 +, 말일 보정, 0패딩 보존.

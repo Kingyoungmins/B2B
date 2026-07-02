@@ -1,18 +1,18 @@
 ---
 type: endpoint
-title: _stripVbaCommentsForGate
+title: columnCopyClearIntent
 module: chat-ui.js
 lang: js
 extraction: regex   # 정규식 근사
-signature: "(code)"
-role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
-role_source: none
+signature: "(text)"
+role: "[0.5.17] 열(컬럼) 이동/재배치/맞바꾸기 → ctx.move_cols 로 결정적 처리(Python). VBA 로 보내면 모델이 병합"
+role_source: banner
 version: "0.5.18"
-loc: "chat-ui.js:1240-1240"
+loc: "chat-ui.js:611-611"
 
 # ── 입출력 ──
 inputs:
-  - "code"
+  - "text"
 returns: "(추정)"
 
 # ── 사이드이펙트 (정적 추정) ──
@@ -21,17 +21,15 @@ side_effects:
 raises: []
 
 # ── 유기적 관계 ──
-calls: []
+calls:
+  - "routingIntentText"
 calls_external:
   - "String"
-  - "join"
-  - "map"
-  - "slice"
-  - "split"
   - "test"
 called_by:
-  - "vbaSheetReferenceLiterals"
-  - "vbaStaticSafetyFailures"
+  - "columnMoveIntent"
+  - "ctxHelperPreferredIntent"
+  - "sendChat"
   - "wholeColumnCountRowTwoFailures"
 reads: []
 writes: []
@@ -40,14 +38,14 @@ timestamp: "0.5.18-gen"
 ---
 
 ## 역할
-(추정) 역할 주석 없음 — 담당자 1줄 보완 필요  _(자동 추정 — 확인 필요)_
+[0.5.17] 열(컬럼) 이동/재배치/맞바꾸기 → ctx.move_cols 로 결정적 처리(Python). VBA 로 보내면 모델이 병합
 
 ## 사이드이펙트 & 주의
 - 없음(정적 분석 기준)
 
 ## 관계
-- 호출: 없음
-- 피호출(영향 전파 경로): `vbaSheetReferenceLiterals`, `vbaStaticSafetyFailures`, `wholeColumnCountRowTwoFailures`
+- 호출: `routingIntentText`
+- 피호출(영향 전파 경로): `columnMoveIntent`, `ctxHelperPreferredIntent`, `sendChat`, `wholeColumnCountRowTwoFailures`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

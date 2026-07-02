@@ -8,7 +8,7 @@ signature: "(text)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
 version: "0.5.18"
-loc: "chat-ui.js:619-619"
+loc: "chat-ui.js:635-635"
 
 # ── 입출력 ──
 inputs:
@@ -23,6 +23,7 @@ raises: []
 # ── 유기적 관계 ──
 calls:
   - "appendSameFormatSheetsIntent"
+  - "columnCopyClearIntent"
   - "columnMoveIntent"
   - "ctxSortIntent"
   - "dedupeIntent"
@@ -56,7 +57,7 @@ timestamp: "0.5.18-gen"
 - 없음(정적 분석 기준)
 
 ## 관계
-- 호출: `appendSameFormatSheetsIntent`, `columnMoveIntent`, `ctxSortIntent`, `dedupeIntent`, `filterToNewSheetIntent`, `hideUnhideIntent`, `lookupJoinIntent`, `monthShiftIntent`, `pivotIntent`, `sheetOpIntent`, `simpleRangeArithmeticIntent`, `simpleValueWriteIntent`, `splitColumnIntent`, `totalRowIntent`
+- 호출: `appendSameFormatSheetsIntent`, `columnCopyClearIntent`, `columnMoveIntent`, `ctxSortIntent`, `dedupeIntent`, `filterToNewSheetIntent`, `hideUnhideIntent`, `lookupJoinIntent`, `monthShiftIntent`, `pivotIntent`, `sheetOpIntent`, `simpleRangeArithmeticIntent`, `simpleValueWriteIntent`, `splitColumnIntent`, `totalRowIntent`
 - 피호출(영향 전파 경로): `pythonComMustUseVbaReason`, `sendChat`, `shouldRouteRequestToPython`, `shouldRouteRequestToVba`, `wholeColumnCountRowTwoFailures`
 
 ## 실패/예외
