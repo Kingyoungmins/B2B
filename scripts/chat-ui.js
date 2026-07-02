@@ -2932,6 +2932,18 @@ function clarifyVerifierDeterministicQuestion(text) {
   if (hasSourceAndDest && multiSheetCopy && !rowAlignmentSpecified) {
     return "여러 시트의 값을 대상 열에 넣을 때, 행은 소스 데이터 순서 그대로 붙이면 될까요, 아니면 날짜/시간 같은 기준 열로 대상 행과 매칭해야 하나요?";
   }
+  // [집계 경계 모호] '소계 총액/합계' 처럼 소계를 다시 합산하는 요청은, 표 맨 아래에 이미 있는
+  // '합계/총계' 행을 범위에 포함하느냐에 따라 값이 두 배로 갈린다(동작이 아니라 의도의 문제).
+  // 동작 키워드가 있어 underspecified 게이트는 통과해버리므로, 여기서 결정적으로 한 번만 되묻는다.
+  // 명시적 범위(D6:D19)나 '합계 행 포함/제외'·'소계까지만' 이 이미 적혀 있으면 되묻지 않는다.
+  const aggregatesSubtotals = /소\s*계/.test(s)
+    && /(총액|총계|합계|합산|더[해한]|\bsum\b)/i.test(s);
+  const explicitRange = /[A-Z]{1,3}\$?\d{1,7}\s*:\s*\$?[A-Z]{1,3}\$?\d{0,7}/i.test(s); // D6:D19 등
+  const boundaryDecided = /(합계|총계)\s*행\s*(?:은|는|도)?\s*(포함|제외|빼|넣|말고|없이|만)/.test(s)
+    || /(소계|데이터|항목)\s*(?:행)?\s*(?:까지|만)/.test(s);
+  if (aggregatesSubtotals && !explicitRange && !boundaryDecided) {
+    return "'소계'를 합산할 때, 표 맨 아래에 이미 있는 '합계/총계' 행도 범위에 포함할까요, 아니면 소계 항목 행까지만 더할까요? (합계 행까지 포함하면 값이 약 두 배가 될 수 있어요.)";
+  }
   return null;
 }
 
