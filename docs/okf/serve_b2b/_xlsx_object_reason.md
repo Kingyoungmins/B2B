@@ -8,7 +8,7 @@ signature: "(path)"
 role: "openpyxl 로 다시 저장하면 유실되는 '객체'가 있으면 사유, 없으면 빈 문자열."
 role_source: docstring
 version: "0.5.18"
-loc: "serve_b2b.py:15910-15927"
+loc: "serve_b2b.py:15955-15972"
 
 # ── 입출력 ──
 inputs:

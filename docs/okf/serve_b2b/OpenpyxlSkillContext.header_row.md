@@ -9,7 +9,7 @@ signature: "(self, sheet_or_name=None, workbook=None, header_rows=20)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
 version: "0.5.18"
-loc: "serve_b2b.py:12987-12995"
+loc: "serve_b2b.py:13032-13040"
 
 # ── 입출력 ──
 inputs:
@@ -43,6 +43,7 @@ called_by:
   - "PythonComSkillContext.dedupe"
   - "PythonComSkillContext.find_header"
   - "PythonComSkillContext.lookup"
+  - "PythonComSkillContext.move_col_clear"
   - "PythonComSkillContext.split_column"
 reads:
   - "self.rows"
@@ -59,7 +60,7 @@ timestamp: "0.5.18-gen"
 
 ## 관계
 - 호출: `rows`
-- 피호출(영향 전파 경로): `ExcelSkillContext.data_start_row`, `ExcelSkillContext.pivot`, `OpenpyxlSkillContext.data_start_row`, `OpenpyxlSkillContext.pivot`, `PythonComSkillContext._resolve_col`, `PythonComSkillContext.add_total_row`, `PythonComSkillContext.append_same_format_sheets`, `PythonComSkillContext.dedupe`, `PythonComSkillContext.find_header`, `PythonComSkillContext.lookup`, `PythonComSkillContext.split_column`
+- 피호출(영향 전파 경로): `ExcelSkillContext.data_start_row`, `ExcelSkillContext.pivot`, `OpenpyxlSkillContext.data_start_row`, `OpenpyxlSkillContext.pivot`, `PythonComSkillContext._resolve_col`, `PythonComSkillContext.add_total_row`, `PythonComSkillContext.append_same_format_sheets`, `PythonComSkillContext.dedupe`, `PythonComSkillContext.find_header`, `PythonComSkillContext.lookup`, `PythonComSkillContext.move_col_clear`, `PythonComSkillContext.split_column`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

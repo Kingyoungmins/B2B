@@ -9,7 +9,7 @@ signature: "(self)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
 version: "0.5.18"
-loc: "serve_b2b.py:11172-11174"
+loc: "serve_b2b.py:11217-11219"
 
 # ── 입출력 ──
 inputs:
@@ -26,6 +26,7 @@ calls: []
 calls_external:
   - "Clear"
 called_by:
+  - "PythonComSkillContext.move_col_clear"
   - "_cleanup_excel_sessions_impl"
   - "_cleanup_stale_copy_source"
   - "_force_restart_excel_sessions_direct"
@@ -49,7 +50,7 @@ timestamp: "0.5.18-gen"
 
 ## 관계
 - 호출: 없음
-- 피호출(영향 전파 경로): `_cleanup_excel_sessions_impl`, `_cleanup_stale_copy_source`, `_force_restart_excel_sessions_direct`, `cleanup_backend_runtime_files`, `cleanup_excel_sessions`, `cleanup_node_worker`, `ensure_node_worker`, `run_backend_pipeline_payload`
+- 피호출(영향 전파 경로): `PythonComSkillContext.move_col_clear`, `_cleanup_excel_sessions_impl`, `_cleanup_stale_copy_source`, `_force_restart_excel_sessions_direct`, `cleanup_backend_runtime_files`, `cleanup_excel_sessions`, `cleanup_node_worker`, `ensure_node_worker`, `run_backend_pipeline_payload`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

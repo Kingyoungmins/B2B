@@ -9,7 +9,7 @@ signature: "(self, a1, a2=None)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
 version: "0.5.18"
-loc: "serve_b2b.py:12595-12608"
+loc: "serve_b2b.py:12640-12653"
 
 # ── 입출력 ──
 inputs:
@@ -60,6 +60,7 @@ called_by:
   - "PythonComSkillContext._rollback"
   - "PythonComSkillContext.append_same_format_sheets"
   - "PythonComSkillContext.find_header"
+  - "PythonComSkillContext.move_col_clear"
   - "PythonComSkillContext.paste_copied"
   - "_activate_excel_session_impl"
   - "_apply_com_text_format_for_long_digit_columns"
@@ -86,7 +87,7 @@ timestamp: "0.5.18-gen"
 
 ## 관계
 - 호출: `_opxl_coord`, `flush_pending_rows`, `replace`
-- 피호출(영향 전파 경로): `ExcelSkillContext._write_grid`, `ExcelSkillContext.range`, `ExcelSkillContext.set_range`, `ExcelWorksheetProxy.append`, `ExcelWorksheetProxy.delete_cols`, `ExcelWorksheetProxy.delete_rows`, `ExcelWorksheetProxy.insert_cols`, `ExcelWorksheetProxy.insert_rows`, `OpenpyxlSkillContext.range`, `PythonComSkillContext._resize_rng`, `PythonComSkillContext._rng`, `PythonComSkillContext._rollback`, `PythonComSkillContext.append_same_format_sheets`, `PythonComSkillContext.find_header`, `PythonComSkillContext.paste_copied`, `_activate_excel_session_impl`, `_apply_com_text_format_for_long_digit_columns`, `_capture_copypaste_on_session_impl`, `_excel_output_preview_sheets`, `_live_preview_schema`, `_restore_live_view_state`, `_sheet_snapshot`, `inspect_workbook_with_excel`, `load_workbook_aoa_with_excel`
+- 피호출(영향 전파 경로): `ExcelSkillContext._write_grid`, `ExcelSkillContext.range`, `ExcelSkillContext.set_range`, `ExcelWorksheetProxy.append`, `ExcelWorksheetProxy.delete_cols`, `ExcelWorksheetProxy.delete_rows`, `ExcelWorksheetProxy.insert_cols`, `ExcelWorksheetProxy.insert_rows`, `OpenpyxlSkillContext.range`, `PythonComSkillContext._resize_rng`, `PythonComSkillContext._rng`, `PythonComSkillContext._rollback`, `PythonComSkillContext.append_same_format_sheets`, `PythonComSkillContext.find_header`, `PythonComSkillContext.move_col_clear`, `PythonComSkillContext.paste_copied`, `_activate_excel_session_impl`, `_apply_com_text_format_for_long_digit_columns`, `_capture_copypaste_on_session_impl`, `_excel_output_preview_sheets`, `_live_preview_schema`, `_restore_live_view_state`, `_sheet_snapshot`, `inspect_workbook_with_excel`, `load_workbook_aoa_with_excel`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

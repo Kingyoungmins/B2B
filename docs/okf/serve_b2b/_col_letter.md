@@ -8,7 +8,7 @@ signature: "(n)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
 version: "0.5.18"
-loc: "serve_b2b.py:10391-10398"
+loc: "serve_b2b.py:10436-10443"
 
 # ── 입출력 ──
 inputs:
@@ -34,6 +34,7 @@ called_by:
   - "PythonComSkillContext.delete_cols"
   - "PythonComSkillContext.insert_cols"
   - "PythonComSkillContext.lookup"
+  - "PythonComSkillContext.move_col_clear"
   - "PythonComSkillContext.move_cols"
   - "PythonComSkillContext.split_column"
   - "_excel_output_preview_sheets"
@@ -53,7 +54,7 @@ timestamp: "0.5.18-gen"
 
 ## 관계
 - 호출: 없음
-- 피호출(영향 전파 경로): `PythonComSkillContext._resize_rng`, `PythonComSkillContext.add_total_row`, `PythonComSkillContext.dedupe`, `PythonComSkillContext.delete_cols`, `PythonComSkillContext.insert_cols`, `PythonComSkillContext.lookup`, `PythonComSkillContext.move_cols`, `PythonComSkillContext.split_column`, `_excel_output_preview_sheets`, `_r1c1_to_a1`, `_sheet_snapshot`
+- 피호출(영향 전파 경로): `PythonComSkillContext._resize_rng`, `PythonComSkillContext.add_total_row`, `PythonComSkillContext.dedupe`, `PythonComSkillContext.delete_cols`, `PythonComSkillContext.insert_cols`, `PythonComSkillContext.lookup`, `PythonComSkillContext.move_col_clear`, `PythonComSkillContext.move_cols`, `PythonComSkillContext.split_column`, `_excel_output_preview_sheets`, `_r1c1_to_a1`, `_sheet_snapshot`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

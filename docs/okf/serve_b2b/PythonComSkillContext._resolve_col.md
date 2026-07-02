@@ -9,7 +9,7 @@ signature: "(self, sheet, col, header_row=1)"
 role: "열 지정을 1-based 번호로 해석한다. 'A' 같은 열 문자 / 1 같은 번호 / 헤더명 모두 허용."
 role_source: docstring
 version: "0.5.18"
-loc: "serve_b2b.py:9767-9776"
+loc: "serve_b2b.py:9812-9821"
 
 # ── 입출력 ──
 inputs:
@@ -45,6 +45,7 @@ called_by:
   - "PythonComSkillContext.add_total_row"
   - "PythonComSkillContext.dedupe"
   - "PythonComSkillContext.lookup"
+  - "PythonComSkillContext.move_col_clear"
   - "PythonComSkillContext.split_column"
 reads:
   - "self._col_index"
@@ -62,7 +63,7 @@ timestamp: "0.5.18-gen"
 
 ## 관계
 - 호출: `_col_index`, `col`, `find_header`, `header_row`, `sheet`
-- 피호출(영향 전파 경로): `PythonComSkillContext.add_total_row`, `PythonComSkillContext.dedupe`, `PythonComSkillContext.lookup`, `PythonComSkillContext.split_column`
+- 피호출(영향 전파 경로): `PythonComSkillContext.add_total_row`, `PythonComSkillContext.dedupe`, `PythonComSkillContext.lookup`, `PythonComSkillContext.move_col_clear`, `PythonComSkillContext.split_column`
 
 ## 실패/예외
 - `PythonComSkillError`

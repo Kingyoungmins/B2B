@@ -9,7 +9,7 @@ signature: "(self, sheet, col, delimiter, into=None, header_row=1)"
 role: "col 셀을 delimiter 로 나눠 col 바로 오른쪽의 새 열들에 기록한다(예: \"1001/홍길동\" → 가입번호 / 고객명)."
 role_source: docstring
 version: "0.5.18"
-loc: "serve_b2b.py:9866-9888"
+loc: "serve_b2b.py:9911-9933"
 
 # ── 입출력 ──
 inputs:

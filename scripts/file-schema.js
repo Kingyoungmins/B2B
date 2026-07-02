@@ -794,7 +794,9 @@ const PYTHON_COM_SYSTEM_PROMPT = `당신은 우측에 실제로 떠 있는 Micro
 - \`ctx.move_cols(시트, 열목록_또는_조건, 기준열, header_row=1, scan_from=None)\` → 여러 열을 헤더+데이터까지 통째로 기준열 앞으로 이동(원본 제거, 인덱스 시프트 자동). **열 "순서 재배치/맞바꾸기"** 에 쓰세요(원본 열을 없애고 위치를 바꾸는 게 목적일 때).
   - 열을 정확히 알면 목록: \`ctx.move_cols("S", ["a_항목","b_값"], "J")\`
   - **헤더 조건으로 고를 땐 함수**(헤더명 받아 True/False): \`ctx.move_cols("S", lambda h: any(x in str(h) for x in ["a","b","c"]), "J", scan_from="J")\`. 직접 헤더를 스캔하지 마세요(cell_to_addr 같은 함수는 없습니다). 2행 헤더면 header_row=2.
-- **★ "X열을 Y로 이동/복사하고 원래 X열은 비우기"는 move_cols/delete_cols 가 아니라 copy + clear 입니다.** '비우기'는 열 삭제가 아니므로, 원본 열을 \`ctx.delete_cols\` 로 지우거나 \`ctx.move_cols\`(원본 제거)로 처리하면 **다른 열이 왼쪽으로 시프트돼 라벨이 어긋나고(E→D, F→E) SUMIF/SUM 이 #REF! 로 파손**됩니다. 반드시: \`last = ctx.last_row(시트, col=원본열번호)\` → \`ctx.insert_cols(시트, "Y")\` → \`ctx.copy(시트, "X1:X"+str(last), 시트, "Y1")\` → \`ctx.clear(시트, "X1:X"+str(last))\`(원본은 내용만 비움, 열은 유지). copy 후 delete 가 아니라 clear 를 쓰세요.
+- \`ctx.move_col_clear(시트, 원본열, 대상열, header_row=None, clear_source=True)\` → **★ "X열을 Y로 이동/복사하고 원래 X열은 비우기" 전용.** 원본 열의 헤더+데이터+서식+세로병합을 대상 열로 옮기고 원본은 **내용만 비움**(열 구조 유지, 시프트 없음). 예: \`ctx.move_col_clear("요약", "D", "G")\`.
+  - '비우기'는 열 삭제가 아니다. 원본을 \`ctx.delete_cols\` 로 지우거나 \`ctx.move_cols\`(원본 제거)로 처리하면 **다른 열이 왼쪽으로 시프트돼 라벨이 어긋나고(E→D, F→E) SUMIF/SUM 이 #REF! 로 파손**된다 → 반드시 \`move_col_clear\` 를 쓰세요.
+  - \`move_col_clear\` 는 상단 제목/단위 행의 **가로 병합(A2:F2 등)을 자동으로 건너뛰고** 대상 열 병합도 먼저 정리하므로 "병합된 셀에서는 실행할 수 없습니다"(1004)가 안 난다. \`ctx.copy(시트,"D1:D..",..)\` 처럼 1행부터 통 복사하면 제목 가로병합에 걸려 실패하니 이 헬퍼를 쓰세요. 헤더 행을 알면 header_row=4 처럼 넘겨도 됨.
 - \`ctx.add_sheet("이름", after="기준시트")\` / \`ctx.delete_sheet("이름")\` / \`ctx.rename_sheet("기존이름", "새이름")\`
   - **"시트 이름만 바꿔줘"**는 반드시 \`ctx.rename_sheet\` 를 쓰세요(위치·내용 유지). copy_sheet+delete 로 흉내내면 위치가 바뀌거나 내용이 사라질 수 있습니다.
 - \`ctx.shift_months("시트", "B336:D336", 1)\` → 범위 안 '문자열' 셀의 모든 'N월'(앞 'YY/YYYY년', 뒤 'D일' 포함)을 N개월 이동. 12월 넘김 시 연도 +, 말일 보정, 0패딩 보존.

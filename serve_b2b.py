@@ -9345,6 +9345,51 @@ class PythonComSkillContext:
         self._shared["structural"].append(f"move_cols:{sheet}:{src_idx}->{before}")
         return True
 
+    def move_col_clear(self, sheet, src, dst, header_row=None, clear_source=True):
+        """한 열의 내용(헤더+데이터+서식+세로병합)을 다른 열로 옮기고 원래 열은 '비운다'(열 구조는 유지 —
+        삭제/시프트 없음). '열 이동+원본 비우기' 전용. (열 순서 재배치는 move_cols 를 쓰세요.)
+
+        상단 제목/단위 행의 '가로 병합'(예: A2:F2)을 자동으로 건너뛰고 복사하므로 '병합된 셀에서는 실행할 수
+        없습니다'(1004)가 나지 않는다. 대상 열의 기존 병합도 먼저 정리한다. header_row 를 주면 그 행부터,
+        없으면 원본 열이 가로 병합에 안 걸리는 첫 행부터 복사한다."""
+        ws = self._ws(sheet)
+        self._tick(2)
+        src_i = self._resolve_col(sheet, src, header_row or 1)
+        dst_i = self._resolve_col(sheet, dst, header_row or 1)
+        src_l, dst_l = _col_letter(src_i), _col_letter(dst_i)
+        last = self.last_row(sheet, col=src_i)
+        if last < 1:
+            raise PythonComSkillError(f"'{sheet}' {src_l}열에 데이터가 없습니다.")
+        # 시작행: 지정 header_row 우선. 없으면 상단에서 원본 열이 '가로(여러 열) 병합'에 걸리는 구간을 건너뛴
+        # 첫 행(제목/단위 행 회피). 부분 병합 복사 1004 의 원인을 결정적으로 제거한다.
+        if header_row:
+            start = max(1, int(header_row))
+        else:
+            start = 1
+            r, cap = 1, min(int(last), 40)
+            while r <= cap:
+                ma = ws.Cells(r, src_i).MergeArea
+                try:
+                    wide = int(ma.Columns.Count) > 1
+                except Exception:
+                    wide = False
+                if wide:
+                    start = int(ma.Row) + int(ma.Rows.Count)  # 그 가로병합 '바로 아래'
+                    r = start
+                else:
+                    r += 1
+        src_rng = f"{src_l}{start}:{src_l}{last}"
+        # 대상 열 병합 정리(붙여넣기 충돌 방지) — G 등 대상에 기존 병합이 있어도 안전.
+        try:
+            ws.Range(f"{dst_l}{start}:{dst_l}{last}").UnMerge()
+        except Exception:
+            pass
+        self.copy(sheet, src_rng, sheet, f"{dst_l}{start}")   # 값+수식+서식+세로병합 보존
+        if clear_source:
+            self.clear(sheet, src_rng)                        # 원본은 내용만 비움(열 유지, 시프트 없음)
+        self._shared["structural"].append(f"move_col_clear:{sheet}:{src_l}->{dst_l}@{start}")
+        return True
+
     def add_sheet(self, name, after=None):
         self._tick(3)
         names = _excel_collection_names(self._wb.Worksheets)

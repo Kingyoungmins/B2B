@@ -54,6 +54,7 @@ calls_external:
   - "src_ws"
   - "str"
 called_by:
+  - "PythonComSkillContext.move_col_clear"
   - "PythonComSkillContext.move_cols"
   - "_opxl_copy_cell_presentation"
 reads:
@@ -75,7 +76,7 @@ Excel 네이티브 복사(값+수식+서식+병합 보존). '복사/복붙' 요�
 
 ## 관계
 - 호출: `_ctx_and_sheet_from_spec`, `_journal_save`, `_resize_rng`, `_rng`, `_tick`, `_vba_trace`, `_ws`, `append`
-- 피호출(영향 전파 경로): `PythonComSkillContext.move_cols`, `_opxl_copy_cell_presentation`
+- 피호출(영향 전파 경로): `PythonComSkillContext.move_col_clear`, `PythonComSkillContext.move_cols`, `_opxl_copy_cell_presentation`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

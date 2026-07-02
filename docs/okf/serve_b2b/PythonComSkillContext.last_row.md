@@ -45,6 +45,7 @@ called_by:
   - "PythonComSkillContext.append_same_format_sheets"
   - "PythonComSkillContext.dedupe"
   - "PythonComSkillContext.lookup"
+  - "PythonComSkillContext.move_col_clear"
   - "PythonComSkillContext.split_column"
 reads:
   - "_XL_UP"
@@ -63,7 +64,7 @@ timestamp: "0.5.18-gen"
 
 ## 관계
 - 호출: `Cells`, `_tick`, `_vba_trace`, `_ws`, `col`, `row`, `sheet`
-- 피호출(영향 전파 경로): `PythonComSkillContext.add_total_row`, `PythonComSkillContext.append_same_format_sheets`, `PythonComSkillContext.dedupe`, `PythonComSkillContext.lookup`, `PythonComSkillContext.split_column`
+- 피호출(영향 전파 경로): `PythonComSkillContext.add_total_row`, `PythonComSkillContext.append_same_format_sheets`, `PythonComSkillContext.dedupe`, `PythonComSkillContext.lookup`, `PythonComSkillContext.move_col_clear`, `PythonComSkillContext.split_column`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`
