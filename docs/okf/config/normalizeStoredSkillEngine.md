@@ -24,6 +24,7 @@ raises: []
 calls:
   - "normalizeSkillEngine"
 calls_external:
+  - "Python"
   - "String"
   - "toLowerCase"
   - "trim"

@@ -60,7 +60,7 @@ const IXI_SERVER_PRESETS = [
 
 const SETTINGS_KEY = "mvno_llm_settings_v4";
 const SETTINGS_KEY_MIGRATE = ["mvno_llm_settings_v3", "mvno_llm_settings_v2", "mvno_llm_settings_v1"];
-const DEFAULT_SKILL_ENGINE = "vba";
+const DEFAULT_SKILL_ENGINE = "python";
 const SKILL_ENGINE_LABELS = {
   python: "Python",
   vba: "VBA",
@@ -154,9 +154,8 @@ function normalizeSkillEngine(value) {
 function normalizeStoredSkillEngine(parsed) {
   const raw = String((parsed && parsed.skillEngine) || "").trim().toLowerCase();
   if (parsed && parsed.skillEngineUserSet === true) return normalizeSkillEngine(raw);
-  // 0.5.10부터 기본 엔진은 VBA다. 0.5.9 이하에서 기본값처럼 저장된 "python"은
-  // 새 기본값으로 올리고, 이미 VBA로 저장된 환경만 그대로 유지한다.
-  if (raw === "vba") return "vba";
+  // 0.5.18부터 기본 엔진은 Python(COM)이다. 사용자가 직접 고른 적이 없으면(비 user-set) 항상 현재 기본값을
+  // 따른다 — 과거 기본값(VBA)으로 저장돼 있어도 새 기본(Python)으로 올린다. 명시적으로 VBA를 고른 사용자만 유지.
   return DEFAULT_SKILL_ENGINE;
 }
 

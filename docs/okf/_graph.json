@@ -17506,7 +17506,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "config.js:163-163",
+      "loc": "config.js:162-162",
       "signature": "(network, value, parsed)",
       "calls": [],
       "side_effects": [
@@ -17521,7 +17521,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "config.js:172-172",
+      "loc": "config.js:171-171",
       "signature": "(value, parsed)",
       "calls": [],
       "side_effects": [
@@ -17536,7 +17536,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "config.js:182-182",
+      "loc": "config.js:181-181",
       "signature": "(upstream)",
       "calls": [],
       "side_effects": [
@@ -17551,7 +17551,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "config.js:188-188",
+      "loc": "config.js:187-187",
       "signature": "(id)",
       "calls": [],
       "side_effects": [
@@ -17566,7 +17566,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "config.js:192-192",
+      "loc": "config.js:191-191",
       "signature": "(upstream)",
       "calls": [
         "getIxiServerPresetById",
@@ -17584,7 +17584,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "config.js:196-196",
+      "loc": "config.js:195-195",
       "signature": "(network, value, networkDefaults, parsed)",
       "calls": [],
       "side_effects": [
@@ -17599,7 +17599,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "config.js:207-207",
+      "loc": "config.js:206-206",
       "signature": "(value)",
       "calls": [],
       "side_effects": [
@@ -17614,7 +17614,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "config.js:213-213",
+      "loc": "config.js:212-212",
       "signature": "(network, value, parsed)",
       "calls": [],
       "side_effects": [
@@ -17629,7 +17629,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "config.js:222-222",
+      "loc": "config.js:221-221",
       "signature": "()",
       "calls": [
         "defaultIxiSettings",
@@ -17647,7 +17647,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "config.js:248-248",
+      "loc": "config.js:247-247",
       "signature": "()",
       "calls": [
         "updateModelLabel",
@@ -17666,7 +17666,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "config.js:255-255",
+      "loc": "config.js:254-254",
       "signature": "()",
       "calls": [
         "getIxiServerLabel"
@@ -17683,7 +17683,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "config.js:269-269",
+      "loc": "config.js:268-268",
       "signature": "()",
       "calls": [],
       "side_effects": [
@@ -17698,7 +17698,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "config.js:273-273",
+      "loc": "config.js:272-272",
       "signature": "()",
       "calls": [
         "isThinkModeEnabled"
@@ -17715,7 +17715,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "config.js:286-286",
+      "loc": "config.js:285-285",
       "signature": "()",
       "calls": [
         "isThinkModeEnabled",
@@ -17735,7 +17735,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "config.js:307-307",
+      "loc": "config.js:306-306",
       "signature": "()",
       "calls": [
         "normalizeSkillEngine"
@@ -17752,7 +17752,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "config.js:311-311",
+      "loc": "config.js:310-310",
       "signature": "(engine, options = {})",
       "calls": [
         "normalizeSkillEngine",
@@ -17772,7 +17772,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "config.js:325-325",
+      "loc": "config.js:324-324",
       "signature": "()",
       "calls": [
         "getSkillEngine",
@@ -17790,7 +17790,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "config.js:329-329",
+      "loc": "config.js:328-328",
       "signature": "()",
       "calls": [
         "getSkillEngine"
@@ -17807,7 +17807,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "config.js:340-340",
+      "loc": "config.js:339-339",
       "signature": "()",
       "calls": [
         "toggleSkillEngine",

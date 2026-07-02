@@ -8,7 +8,7 @@ signature: "(network, value, parsed)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
 version: "0.5.18"
-loc: "config.js:163-163"
+loc: "config.js:162-162"
 
 # ── 입출력 ──
 inputs:
