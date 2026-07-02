@@ -9594,6 +9594,93 @@ class PythonComSkillContext:
             pass
         return total
 
+    def copy_key_blocks(self, src_sheet, dst_sheet, key_col, first_col, last_col,
+                        src_scan=None, dst_scan=None, on_mismatch="skip"):
+        """'가입번호'처럼 키가 여러 행 세로병합 블록을 이루는 표에서, 대상의 각 키 블록에 소스의
+        같은 키 블록 '전체(모든 행)'를 서식·병합 그대로 복사한다. ★ Range.Find 로 블록 첫 행 1줄만
+        복사돼 소계 등 나머지 행이 유실되던 문제를 근본 해결(가입번호=1:N 병합블록 매칭).
+
+        - src_sheet/dst_sheet: 시트명 또는 "파일.xlsx!시트" 교차파일 스펙(ctx 는 대상 파일에 바인딩).
+        - key_col: 키(가입번호) 열(문자/헤더명/번호). first_col~last_col: 복사할 데이터 열(키 열 포함 권장).
+        - src_scan/dst_scan: 키를 훑을 A1 범위(예 "B3:B345"/"B4:B89"). 생략 시 키 열 사용범위.
+        - 소스/대상 모두 키 열이 블록 단위 세로병합(맨 윗셀에만 값)인 표를 가정한다.
+        - 블록 높이가 소스≠대상이면 기본 건너뛰고(on_mismatch="skip") 보고한다(아래 블록 침범 방지).
+          on_mismatch="src" 면 소스 높이대로 복사(대상 아래 행을 덮을 수 있으니 주의).
+        반환: {"copied": 복사수, "missing": [소스에 없는 키...], "height_mismatch": [(키,소스h,대상h)...]}
+          예) ctx.copy_key_blocks("531...로우데이터.xlsx!sheet", "콜센터", "B", "B", "N", "B3:B345", "B4:B89")
+        """
+        src_ctx, src_name = self._ctx_and_sheet_from_spec(src_sheet)
+        dst_ctx, dst_name = self._ctx_and_sheet_from_spec(dst_sheet)
+        ws_s = src_ctx._ws(src_name)
+        ws_d = dst_ctx._ws(dst_name)
+        self._tick(3)
+        kc_s = int(src_ctx._resolve_col(src_name, key_col, 1))
+        fc_s = int(src_ctx._resolve_col(src_name, first_col, 1))
+        lc_s = int(src_ctx._resolve_col(src_name, last_col, 1))
+        kc_d = int(dst_ctx._resolve_col(dst_name, key_col, 1))
+        fc_d = int(dst_ctx._resolve_col(dst_name, first_col, 1))
+        lc_d = int(dst_ctx._resolve_col(dst_name, last_col, 1))
+
+        def blocks(ws, kc, scan):
+            # 키 열의 (병합)블록을 위→아래로: (정규화키, 블록top행, 블록높이) 목록
+            if scan:
+                rng = ws.Range(str(scan))
+                r0 = int(rng.Row); r1 = r0 + int(rng.Rows.Count) - 1
+            else:
+                r0 = 1; r1 = int(ws.Cells(ws.Rows.Count, kc).End(_XL_UP).Row)
+            out = []
+            r = r0
+            while r <= r1:
+                ma = ws.Cells(r, kc).MergeArea
+                top = int(ma.Row); h = int(ma.Rows.Count)
+                if top == r:
+                    nk = _norm_key(ws.Cells(top, kc).Value)
+                    if nk:
+                        out.append((nk, top, h))
+                    r = top + h
+                else:
+                    r = max(top + h, r + 1)   # 스캔이 블록 중간에서 시작한 경우 블록 끝으로 점프
+            return out
+
+        src_map = {}
+        for nk, top, h in blocks(ws_s, kc_s, src_scan):
+            if nk not in src_map:            # 소스에 같은 키가 여럿이면 첫 블록(Find 와 동일)
+                src_map[nk] = (top, h)
+
+        copied = 0
+        missing = []
+        mism = []
+        for nk, dtop, dh in blocks(ws_d, kc_d, dst_scan):
+            info = src_map.get(nk)
+            if info is None:
+                missing.append(nk)
+                continue
+            stop, sh = info
+            if sh != dh:
+                mism.append((nk, sh, dh))
+                if on_mismatch == "skip":
+                    continue
+            use_h = sh if on_mismatch == "src" else min(sh, dh)
+            dst_area = ws_d.Range(ws_d.Cells(dtop, fc_d), ws_d.Cells(dtop + use_h - 1, lc_d))
+            try:
+                dst_area.UnMerge()           # 소스 병합/서식을 그대로 입히기 위해 대상 블록 먼저 병합 해제
+            except Exception:
+                pass
+            src_area = ws_s.Range(ws_s.Cells(stop, fc_s), ws_s.Cells(stop + use_h - 1, lc_s))
+            src_area.Copy(ws_d.Cells(dtop, fc_d))   # 값+수식+서식+병합 보존(네이티브 복사)
+            copied += 1
+        try:
+            self._app.CutCopyMode = False
+        except Exception:
+            pass
+        self._shared["structural"].append(f"copy_key_blocks:{dst_name}!{_col_letter(kc_d)} x{copied}")
+        try:
+            _vba_trace("python_com.copy_key_blocks", src=str(src_name), dst=str(dst_name),
+                       copied=copied, missing=len(missing), mismatch=len(mism))
+        except Exception:
+            pass
+        return {"copied": copied, "missing": missing, "height_mismatch": mism}
+
     def add_sheet(self, name, after=None):
         self._tick(3)
         names = _excel_collection_names(self._wb.Worksheets)
@@ -10680,6 +10767,15 @@ def _coerce_number(v):
             except Exception:
                 return None
     return None
+
+
+def _norm_key(v):
+    """블록 키(가입번호 등) 정규화 — 숫자로 저장돼 있어도 텍스트 키와 매칭되도록 정수문자열로."""
+    if v is None or isinstance(v, bool):
+        return ""
+    if isinstance(v, float) and v.is_integer():
+        return str(int(v))
+    return str(v).strip()
 
 
 # 스냅샷이 읽을 최대 범위(거대/부풀린 UsedRange 방어). 변경 감지용이라 이 정도면 충분.
