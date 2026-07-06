@@ -1992,6 +1992,11 @@ function toggleEditStep(stepId) {
     state.editingStepId = stepId;
     const idx = state.pipeline.findIndex(s => s.id === stepId);
     toast(`Step ${idx + 1} 수정 모드 활성화 — 채팅으로 수정 사항을 입력하세요`, "success");
+    // 이 스텝을 만든 '원 요청' 말풍선으로 채팅을 스크롤하고 잠깐 강조(어떻게 요청했는지 바로 보이게).
+    if (typeof scrollChatToStepRequest === "function") {
+      const step = state.pipeline[idx];
+      setTimeout(() => scrollChatToStepRequest(step), 0);
+    }
   }
   renderPipeline();
   if (typeof renderEditingBanner === "function") renderEditingBanner();

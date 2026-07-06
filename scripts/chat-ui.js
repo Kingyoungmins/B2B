@@ -97,6 +97,144 @@ function scrollChatToBottom(opts) {
   });
 }
 
+// ---- [스킬 수정 → 원 요청으로 스크롤] ----
+// 스텝 수정 모드에 들어갈 때, 그 스텝을 만든 '사용자 요청' 말풍선으로 채팅을 스크롤하고 잠깐 강조한다.
+// 매칭 근거: 저장/복원되는 step.prompt(사용자 요청) 를 화면의 user 말풍선 텍스트와 비교(정규화).
+function _chatNormForMatch(s) {
+  return String(s || "")
+    .replace(/\[정확\s*참조\][\s\S]*$/, "")        // 자동 첨부된 정확참조 블록 제거
+    .replace(/\[사용자\s*보충\s*설명\]/g, " ")
+    .replace(/\[규칙\s*수정\]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 400);
+}
+function _chatMatchScore(stepText, msgText) {
+  const a = _chatNormForMatch(stepText), b = _chatNormForMatch(msgText);
+  if (!a || !b) return 0;
+  if (a === b) return 1;
+  if (a.includes(b) || b.includes(a)) return 0.92;
+  if (typeof similarity === "function") return similarity(a, b) * 0.85;
+  return 0;
+}
+function _chatMsgPlainText(div) {
+  // × 삭제버튼 등 자식 요소 텍스트는 제외하고 말풍선 본문만.
+  let t = "";
+  div.childNodes.forEach(n => {
+    if (n.nodeType === 3) t += n.textContent;
+    else if (n.nodeType === 1 && !n.classList.contains("msg-del")) t += n.textContent;
+  });
+  return (t || div.textContent || "").replace(/×\s*$/, "").trim();
+}
+function _flashChatMessage(div) {
+  if (!div) return;
+  try { div.scrollIntoView({ behavior: "smooth", block: "center" }); } catch (_) { div.scrollIntoView(); }
+  _chatAutoStick = false;                 // 위로 올라간 상태 유지(스트리밍 없을 때라 안전)
+  div.classList.remove("chat-flash");
+  void div.offsetWidth;                    // 리플로우로 애니메이션 재시작
+  div.classList.add("chat-flash");
+  setTimeout(() => div.classList.remove("chat-flash"), 2000);
+}
+function _normCodeForMatch(s) {
+  // 헤더 주석/공백 차이를 흡수해 스텝 코드와 말풍선 코드블록을 비교하기 위한 정규화.
+  return String(s || "").replace(/\r/g, "").replace(/[ \t]+/g, " ").trim();
+}
+// [순수 코어] 스텝을 채팅 엔트리(display 순서 [{role, text, code}])에 매칭 → 스크롤할 엔트리 인덱스.
+// 다단계 폴백(예전 저장 스킬은 prompt 없고 코드가 대화에 없을 수 있어 순서 폴백까지 둔다):
+//   1) 코드 매칭(그 스텝 코드를 담은 assistant → 바로 앞 user)
+//   2) prompt(사용자 요청) 텍스트 매칭
+//   3) description(제네릭 아님) 을 assistant 제목과 매칭
+//   4) 순서 폴백: stepIdx 번째 '코드 있는 assistant' 의 앞 user
+// 자동 생성된 '재생성/복구' 프롬프트(사용자 실제 요청 아님)인지 — 이런 말풍선으로 이동하면 혼란스럽다.
+function _isSyntheticRequest(text) {
+  const s = String(text || "");
+  return /정적\s*안전\s*검사|안전\s*검사에서\s*막|방금\s*생성한|##\s*실패한\s*코드|##\s*상세\s*오류|##\s*막힌\s*코드|원래\s*사용자\s*요청|Python\s*스킬이\s*정적|VBA\s*로\s*전환|안전\s*재생성|실행\s*중\s*오류가\s*발생|Python\s*(?:→|->)\s*VBA/i.test(s);
+}
+function _matchStepToChatIndex(step, entries, stepIdx) {
+  if (!step || !Array.isArray(entries) || !entries.length) return -1;
+  // 코드 말풍선 앞의 '진짜' 사용자 요청을 찾는다. 자동 재생성/복구 프롬프트는 건너뛰고 더 앞으로.
+  const nearestUserBefore = (i) => {
+    let firstUser = -1;
+    for (let j = i - 1; j >= 0; j--) {
+      if (entries[j].role !== "user") continue;
+      if (firstUser < 0) firstUser = j;
+      if (!_isSyntheticRequest(entries[j].text)) return j;
+    }
+    return firstUser >= 0 ? firstUser : i;   // 전부 자동 프롬프트면 그나마 가까운 user
+  };
+  const wc = _normCodeForMatch(step.code);
+  if (wc && wc.length >= 20) {
+    for (let i = 0; i < entries.length; i++) {
+      if (entries[i].role !== "assistant") continue;
+      const c = _normCodeForMatch(entries[i].code || "");
+      if (c && (c === wc || c.includes(wc) || wc.includes(c))) return nearestUserBefore(i);
+    }
+  }
+  const want = step.prompt || "";
+  if (_chatNormForMatch(want)) {
+    let best = -1, bestScore = 0;
+    for (let i = 0; i < entries.length; i++) {
+      if (entries[i].role !== "user" || _isSyntheticRequest(entries[i].text)) continue;
+      const sc = _chatMatchScore(want, entries[i].text || "");
+      if (sc > bestScore) { bestScore = sc; best = i; }
+    }
+    if (best >= 0 && bestScore >= 0.5) return best;
+  }
+  const desc = _chatNormForMatch(step.description || "");
+  if (desc && desc !== "스킬 생성" && desc !== "스킬 수정" && desc.length >= 4) {
+    for (let i = 0; i < entries.length; i++) {
+      if (entries[i].role !== "assistant") continue;
+      const t = _chatNormForMatch(entries[i].text || "");
+      if (t && t.includes(desc)) return nearestUserBefore(i);
+    }
+  }
+  if (typeof stepIdx === "number" && stepIdx >= 0) {
+    let count = -1;
+    for (let i = 0; i < entries.length; i++) {
+      if (entries[i].role === "assistant" && _normCodeForMatch(entries[i].code || "")) {
+        if (++count === stepIdx) return nearestUserBefore(i);
+      }
+    }
+  }
+  return -1;
+}
+// [말풍선 표시 정리] 저장된 대화를 다시 그릴 때, 내부 프롬프트 스캐폴딩은 감추고 '사용자가 직접 친 부분'만
+// 보여준다(프롬프트/히스토리 원문은 그대로 유지 — 표시만 정리). 반환이 빈 문자열이면 그 말풍선은 숨긴다.
+//  - 자동 재생성/에러복구 프롬프트(Step N 실행 중 오류 / ## 실패한 코드·상세 오류·스택 / 정적 안전 검사 /
+//    방금 생성한 / Python→VBA): 사용자가 적은 '추가 설명' 메모만 남기고 나머지는 감춘다(메모 없으면 숨김).
+//  - 일반 요청: 자동 첨부되는 [정확 참조]…[정확 참조 사용 규칙 - 강제] 블록과 [규칙 수정]/[사용자 보충 설명]
+//    래퍼 라벨을 제거하고, 사용자가 실제로 친 요청만 남긴다.
+function cleanChatDisplayText(content) {
+  let s = String(content || "");
+  const isRecovery = /Step\s+\d+\s+실행\s*중\s*오류|##\s*실패한\s*(?:Step|코드)|##\s*상세\s*오류|정적\s*안전\s*검사|안전\s*검사에서\s*막|방금\s*생성한|Python\s*스킬이\s*정적|Python\s*(?:→|->)\s*VBA/i.test(s);
+  if (isRecovery) {
+    const m = /##\s*★?\s*사용자\s*추가\s*설명[^\n]*\n(?:[^\n]*\n)?([\s\S]*?)(?=\n\s*(?:##|Step\s+\d+\s+실행)|$)/.exec(s);
+    return m ? m[1].trim() : "";               // 사용자 메모만, 없으면 숨김
+  }
+  s = s.replace(/\n*\[정확\s*참조\][\s\S]*$/i, "");   // 자동 첨부 참조/강제규칙 블록 제거
+  s = s.replace(/^\s*\[규칙\s*수정\]\s*/i, "");        // 래퍼 라벨 제거(내용은 유지)
+  s = s.replace(/\[사용자\s*보충\s*설명\]\s*/gi, "");
+  return s.trim();
+}
+// 스텝의 원 요청 말풍선을 찾아 스크롤+강조. 못 찾으면 false.
+function scrollChatToStepRequest(step) {
+  try {
+    const container = $("chat-messages");
+    if (!container || !step) return false;
+    const msgs = Array.from(container.querySelectorAll(".msg"));
+    const entries = msgs.map(div => {
+      const role = div.classList.contains("user") ? "user"
+        : div.classList.contains("assistant") ? "assistant" : "system";
+      const pre = div.querySelector("pre.code-block, pre, code");
+      return { role, text: _chatMsgPlainText(div), code: pre ? pre.textContent : "" };
+    });
+    const stepIdx = (state.pipeline || []).findIndex(s => s && s.id === step.id);
+    const idx = _matchStepToChatIndex(step, entries, stepIdx);
+    if (idx >= 0 && msgs[idx]) { _flashChatMessage(msgs[idx]); return true; }
+  } catch (_) {}
+  return false;
+}
+
 // ---- 대화 기억(히스토리) 삭제 ----
 // 잘못된 턴이 히스토리에 남아 다음 생성을 오염시키는 문제("기존작업 잔존")의 UI 해소책.
 // llm-api 가 push 시 histId 를 붙이고, 여기서 메시지 말풍선과 연결해 × 버튼으로 제거한다.

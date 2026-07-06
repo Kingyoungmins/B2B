@@ -66,6 +66,13 @@
     animation: msgIn 0.25s ease;
   }
   @keyframes msgIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+  /* [스킬 수정 시 해당 요청으로 스크롤] 원 요청 말풍선을 잠깐 강조해 어디로 이동했는지 눈에 띄게 한다. */
+  @keyframes chatFlash {
+    0%   { box-shadow: 0 0 0 3px rgba(255,196,0,0.0); }
+    15%  { box-shadow: 0 0 0 3px rgba(255,196,0,0.95); }
+    100% { box-shadow: 0 0 0 3px rgba(255,196,0,0.0); }
+  }
+  .msg.chat-flash { animation: chatFlash 1.8s ease-out; }
   .msg.user {
     background: var(--grad);
     color: white;

@@ -667,7 +667,9 @@ function renderChatFromHistory() {
   addMessage("system", `저장된 대화 ${state.chatHistory.length}개 복원 · 이어서 질문 가능`);
   state.chatHistory.forEach(msg => {
     if (msg.role === "user") {
-      addMessage("user", msg.content);
+      // 내부 프롬프트 스캐폴딩([정확 참조]·에러복구·재생성 등)은 감추고 사용자가 친 부분만 표시.
+      const shown = (typeof cleanChatDisplayText === "function") ? cleanChatDisplayText(msg.content) : msg.content;
+      if (shown && shown.trim()) addMessage("user", shown);
     } else if (msg.role === "assistant") {
       addHistoricAssistant(msg.content);
     }
@@ -685,16 +687,14 @@ function addHistoricAssistant(fullText) {
     codeBlk.className = "code-block";
     codeBlk.textContent = code;
     div.appendChild(codeBlk);
-    const badge = document.createElement("div");
-    badge.style.cssText = "margin-top:6px; font-size:11px; color:#28a745; font-weight:bold;";
     const inPipeline = (state.pipeline || []).some(step => String((step && step.code) || "").trim() === String(code || "").trim());
     if (inPipeline) {
+      const badge = document.createElement("div");
+      badge.style.cssText = "margin-top:6px; font-size:11px; color:#28a745; font-weight:bold;";
       badge.textContent = "파이프라인에 저장된 단계";
-    } else {
-      badge.style.color = "#b36b00";
-      badge.textContent = "대화 기록 코드 · 파이프라인 미저장";
+      div.appendChild(badge);
     }
-    div.appendChild(badge);
+    // '대화 기록 코드 · 파이프라인 미저장' 안내는 지저분해 표시하지 않는다(미저장이면 배지 없음).
   }
   $("chat-messages").appendChild(div);
   $("chat-messages").scrollTop = $("chat-messages").scrollHeight;
