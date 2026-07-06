@@ -8734,7 +8734,10 @@ class PythonComSkillContext:
 
     def find_header(self, sheet, header_text, header_row=1):
         """헤더 행에서 헤더 텍스트로 열 번호(1-based)를 찾는다. 없으면 오류.
-        열 번호를 추측/하드코딩하지 말고 반드시 이 함수를 쓸 것."""
+        열 번호를 추측/하드코딩하지 말고 반드시 이 함수를 쓸 것.
+        지정 행에서 못 찾으면 '인접 행(±)'도 훑는다 — 2행 병합/멀티행 헤더에서 하위 헤더가 다른 행에
+        있는 경우(예: 4행 '매 출 액' 병합 아래 5행 '국제')를 구제한다. (사용자가 열문자를 직접 주면
+        find_header 로 다시 찾지 말고 그 열을 그대로 쓰는 게 가장 안전하다.)"""
         ws = self._ws(sheet)
         row = int(header_row)
         last_col = self.last_col(sheet, row)
@@ -8753,11 +8756,37 @@ class PythonComSkillContext:
             for idx, text in enumerate(headers, start=1):
                 if normalize_text(text) == ntarget:
                     return idx
+        # 인접 행 스캔(2행 병합/멀티행 헤더 구제): 지정 행 위/아래를 한 번에 읽어 정확→정규화 순으로,
+        # 지정 행에 '가까운 행부터' 매칭한다(오탐 최소화: 부분포함은 인접 행엔 적용하지 않는다).
+        top = max(1, row - 4)
+        bottom = row + 2
+        wcols = max(1, min(int(self.used_last_col(sheet)), 256))
+        try:
+            wrng = ws.Range(ws.Cells(top, 1), ws.Cells(bottom, wcols))
+            self._tick(2)
+            wmatrix = _range_matrix(wrng.Value2)
+        except Exception:
+            wmatrix = []
+        order = sorted(range(len(wmatrix)), key=lambda i: abs((top + i) - row))
+        for pass_norm in (False, True):
+            for i in order:
+                if top + i == row:
+                    continue   # 지정 행은 위에서 이미 확인함
+                cells = wmatrix[i] or []
+                for idx, v in enumerate(cells, start=1):
+                    t = str(v).strip() if v is not None else ""
+                    if not t:
+                        continue
+                    if not pass_norm and t == target:
+                        return idx
+                    if pass_norm and ntarget and normalize_text(t) == ntarget:
+                        return idx
+        # 마지막: 지정 행 부분포함(가장 느슨)
         for idx, text in enumerate(headers, start=1):
             if target and target in text:
                 return idx
         raise PythonComSkillError(
-            f"'{sheet}' 시트 {row}행에서 헤더 '{header_text}' 를 찾지 못했습니다. 실제 헤더: {headers}"
+            f"'{sheet}' 시트 {row}행 및 인접 행에서 헤더 '{header_text}' 를 찾지 못했습니다. 실제 헤더: {headers}"
         )
 
     def read(self, sheet, a1_range=None):
@@ -9692,6 +9721,105 @@ class PythonComSkillContext:
         except Exception:
             pass
         return {"copied": copied, "missing": missing, "height_mismatch": mism}
+
+    def sum_where(self, sheet, value_col, conditions, header_row=None):
+        """조건(AND 전부 만족)에 맞는 행의 value_col 숫자를 합산해 값을 반환한다(쓰기 X → 반환값을
+        ctx.write_cell 로 넣기). ★ 조건부 집계는 큰 표를 통째로 ctx.read 하지 말고 이 헬퍼를 쓸 것 —
+        필요한 열만 좁게 읽어 계산하므로 대용량 표에서도 정적검사('큰 표를 ctx.read...')에 안 걸린다.
+        - value_col / 조건 열: 열문자('M')·헤더명·번호 다 됨.
+        - conditions: [(열, 값), ...] 또는 [(열, op, 값), ...]. op 생략 시 '=='(정규화 텍스트 일치).
+          op ∈ {'==','!=','contains','>','>=','<','<='}. 텍스트는 normalize 로 비교(공백/전각 차이 흡수).
+        - header_row 를 주면 그 다음 행부터(헤더/제목 행 제외). 헤더가 5행이면 header_row=5.
+          예) t = ctx.sum_where("SO사업자별요금","M",[("D","인터넷"),("G","매 출")],header_row=5)
+              ctx.write_cell("SO사업자별요금","AG4", t)"""
+        ws = self._ws(sheet)
+        self._tick(2)
+        vc = int(self._resolve_col(sheet, value_col, header_row or 1))
+        norm_conds = []
+        for cond in (conditions or []):
+            if len(cond) == 2:
+                col, op, val = cond[0], "==", cond[1]
+            else:
+                col, op, val = cond[0], cond[1], cond[2]
+            norm_conds.append((int(self._resolve_col(sheet, col, header_row or 1)), str(op), val))
+        start = (int(header_row) + 1) if header_row else 1
+        last = self.last_row(sheet, col=vc)
+        if last < start:
+            return 0.0
+        need = {vc} | {c for (c, _, _) in norm_conds}
+        colvals = {}
+        for c in need:                      # 필요한 열만 각각 '좁게' 읽는다(광폭 read 회피)
+            L = _col_letter(c)
+            colvals[c] = self.read(sheet, f"{L}{start}:{L}{last}")
+        total = 0.0
+        for i in range(last - start + 1):
+            def cell(c):
+                col = colvals[c]
+                return col[i][0] if (i < len(col) and col[i]) else None
+            if all(_cond_match(cell(c), op, val) for (c, op, val) in norm_conds):
+                num = _coerce_number(cell(vc))
+                if num is not None:
+                    total += num
+        try:
+            _vba_trace("python_com.sum_where", sheet=str(sheet), value=_col_letter(vc),
+                       conds=len(norm_conds), start=start, last=last, total=total)
+        except Exception:
+            pass
+        return total
+
+    def sum_lookup(self, src_sheet, src_key_col, src_val_col, dst_sheet, dst_key_col, dst_out_col,
+                   header_row=None, dst_start_row=None):
+        """키 매칭 합산(교차/동일 파일): src 의 (키→값)을 모은 뒤, dst 각 행의 키에 해당하는 값을 합산해
+        dst_out_col 같은 행에 쓴다. ★ dst 키 셀에 여러 토큰(줄바꿈/공백/콤마 구분)이 있으면 각각 분리해
+        모두 더한다(한 셀에 가입번호가 여러 개인 KT/HCN 케이스). 전체 문자열로만 매칭해 0건 되던 문제 해결.
+        - *_sheet: 시트명 또는 "파일.xlsx!시트"(교차파일). *_col: 열문자/헤더명/번호.
+        - header_row: src·dst 공통 헤더행(그 다음 행부터). dst_start_row 로 dst 시작행을 따로 줄 수 있음.
+        반환: {"filled": 값 채운 행 수, "src_keys": 소스 키 수}.
+          예) ctx.sum_lookup("input.xlsx!Sheet1","BP","BQ","SO사업자별요금","P","H", header_row=1, dst_start_row=6)"""
+        src_ctx, src_name = self._ctx_and_sheet_from_spec(src_sheet)
+        dst_ctx, dst_name = self._ctx_and_sheet_from_spec(dst_sheet)
+        ws_d = dst_ctx._ws(dst_name)
+        self._tick(3)
+        skc = int(src_ctx._resolve_col(src_name, src_key_col, header_row or 1))
+        svc = int(src_ctx._resolve_col(src_name, src_val_col, header_row or 1))
+        dkc = int(dst_ctx._resolve_col(dst_name, dst_key_col, header_row or 1))
+        doc = int(dst_ctx._resolve_col(dst_name, dst_out_col, header_row or 1))
+        s_start = (int(header_row) + 1) if header_row else 1
+        # 키 열이 병합/희소면 End(xlUp) 이 표 하단을 놓쳐 과소산정한다 → used_last_row 로 보정.
+        s_last = max(src_ctx.last_row(src_name, col=skc), src_ctx.used_last_row(src_name))
+        skL, svL = _col_letter(skc), _col_letter(svc)
+        keys = src_ctx.read(src_name, f"{skL}{s_start}:{skL}{s_last}") if s_last >= s_start else []
+        vals = src_ctx.read(src_name, f"{svL}{s_start}:{svL}{s_last}") if s_last >= s_start else []
+        kmap = {}
+        for i in range(len(keys)):
+            num = _coerce_number(vals[i][0] if (i < len(vals) and vals[i]) else None)
+            if num is None:
+                continue
+            for tok in _split_key_tokens(keys[i][0] if keys[i] else None):
+                kmap[tok] = kmap.get(tok, 0.0) + num
+        d_start = int(dst_start_row) if dst_start_row else s_start
+        d_last = max(dst_ctx.last_row(dst_name, col=dkc), dst_ctx.used_last_row(dst_name))
+        dkL = _col_letter(dkc)
+        dkeys = dst_ctx.read(dst_name, f"{dkL}{d_start}:{dkL}{d_last}") if d_last >= d_start else []
+        filled = 0
+        for i in range(len(dkeys)):
+            toks = _split_key_tokens(dkeys[i][0] if dkeys[i] else None)
+            if not toks:
+                continue
+            s, hit = 0.0, False
+            for tok in toks:
+                if tok in kmap:
+                    s += kmap[tok]; hit = True
+            if hit:
+                ws_d.Cells(d_start + i, doc).Value = round(s, 4)
+                filled += 1
+        self._shared["structural"].append(f"sum_lookup:{dst_name}!{dkL}->{_col_letter(doc)} x{filled}")
+        try:
+            _vba_trace("python_com.sum_lookup", src=str(src_name), dst=str(dst_name),
+                       filled=filled, src_keys=len(kmap))
+        except Exception:
+            pass
+        return {"filled": filled, "src_keys": len(kmap)}
 
     def add_sheet(self, name, after=None):
         self._tick(3)
@@ -10788,6 +10916,39 @@ def _norm_key(v):
     if isinstance(v, float) and v.is_integer():
         return str(int(v))
     return str(v).strip()
+
+
+def _cond_match(cell, op, target):
+    """sum_where 조건 비교. 비교연산자는 숫자로, 그 외는 normalize 텍스트로."""
+    op = str(op or "==")
+    if op in (">", ">=", "<", "<="):
+        a = _coerce_number(cell)
+        b = _coerce_number(target)
+        if a is None or b is None:
+            return False
+        return {">": a > b, ">=": a >= b, "<": a < b, "<=": a <= b}[op]
+    cs = normalize_text("" if cell is None else str(cell))
+    ts = normalize_text("" if target is None else str(target))
+    if op == "contains":
+        return bool(ts) and ts in cs
+    if op == "!=":
+        return cs != ts
+    return cs == ts   # ==(기본)
+
+
+def _split_key_tokens(v):
+    """한 셀 안 다중 키(가입번호 등)를 분리 — 줄바꿈/공백/콤마/세미콜론/슬래시 구분. 각 토큰은 _norm_key."""
+    if v is None:
+        return []
+    s = str(v).strip()
+    if not s:
+        return []
+    out = []
+    for p in re.split(r"[\s,;/]+", s):
+        p = p.strip()
+        if p:
+            out.append(_norm_key(p))
+    return out
 
 
 # 스냅샷이 읽을 최대 범위(거대/부풀린 UsedRange 방어). 변경 감지용이라 이 정도면 충분.

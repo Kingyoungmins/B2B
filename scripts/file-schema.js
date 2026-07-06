@@ -772,7 +772,9 @@ const PYTHON_COM_SYSTEM_PROMPT = `당신은 우측에 실제로 떠 있는 Micro
 - \`ctx.sheets()\` → 시트 이름 리스트
 - \`ctx.last_row(시트, col=1)\` / \`ctx.last_col(시트, row=1)\` → 마지막 데이터 행/열(1-based). **주의: 특정 열 기준이라 그 열이 희소/병합이면 표 하단을 놓쳐 과소산정**합니다(예: A열이 아래쪽 비어 22 를 주지만 실제 표는 28행).
 - \`ctx.used_last_row(시트)\` / \`ctx.used_last_col(시트)\` → **시트 '사용 범위' 기준** 마지막 행/열. **"시트 전체/사용 범위를 복사·처리"할 땐 특정 열 last_row 대신 이걸 쓰세요**(하단행 누락 방지). 예: 사용범위 복사 → \`last = ctx.used_last_row("요약"); ctx.copy("요약", "A1:H"+str(last), "요약_수식보존", "A1")\`. (시트 '전체'를 그대로 복제하려면 last_row 계산 없이 \`ctx.copy_sheet\` 가 더 안전.)
-- \`ctx.find_header(시트, "헤더명", header_row=1)\` → 열 번호(1-based). **열 번호를 추측/하드코딩하지 말고 반드시 이 함수로 찾으세요.**
+- \`ctx.find_header(시트, "헤더명", header_row=1)\` → 열 번호(1-based). **열 번호를 추측/하드코딩하지 말고 반드시 이 함수로 찾으세요.** (지정 행에서 못 찾으면 인접 행도 자동으로 훑어 2행 병합 헤더를 구제합니다.)
+  - **★ 사용자가 열 문자를 직접 준 경우(예: "K열(국제)", "M열 합계")는 그 열을 그대로 쓰세요 — find_header 로 이름을 다시 찾지 마세요.** 병합/멀티행 헤더에서 그 이름이 지정한 헤더행에 없어 find_header 가 실패할 수 있습니다. 예: "K열" → \`k = ctx._resolve_col(sheet, "K")\` 또는 그냥 "K" 를 범위 문자열에 직접 사용.
+  - **열 문자↔번호를 절대 암산하지 마세요**(BG는 57이 아니라 59, BP는 58이 아니라 68). 열문자는 그대로 쓰거나 find_header/헤더명으로 찾으세요.
 - \`ctx.read(시트, "B2:D100")\` → 2차원 리스트(값). 범위 생략 시 전체 사용범위. **반환 리스트는 0-based** — values[0][0] 이 범위의 좌상단 셀.
 - \`ctx.read_cell(시트, "B2")\` → 단일 셀 값(스칼라, 빈 셀은 None). write_cell 의 읽기 짝.
 - \`ctx.read_formulas(시트, 범위)\` → 수식 문자열 2차원 리스트(수식 없으면 값)
@@ -809,6 +811,10 @@ const PYTHON_COM_SYSTEM_PROMPT = `당신은 우측에 실제로 떠 있는 Micro
 - \`ctx.sum_column(시트, 열, header_row=None, exclude_total_rows=True)\` → **★ "○○ 열 합계/합/총액을 구해줘" 류는 직접 루프로 더하지 말고 이 헬퍼를 쓰세요.** 열의 숫자 값을 더한 **합계 값을 반환**(쓰기 X → 반환값을 \`ctx.write_cell\` 로 넣기). 열은 열문자('F')·헤더명('합계')·번호 다 됨.
   - \`exclude_total_rows=True\`(기본): 표 안에 이미 있는 **'합계/총계/소계' 행을 자동 제외**해 이중계산(값 두 배)을 막는다. **총계 행 라벨이 어느 열(A/C 등)에 있는지 절대 추측하지 마세요** — 이 헬퍼가 각 행의 왼쪽 라벨 영역(A~C)을 스캔합니다(직접 \`ctx.read("C..")\` 로 라벨을 찾다 A열에 있는 '합계'를 놓쳐 F열 전체를 더하는 실수 원천 차단). 첫 총계 행을 항목 블록의 '끝'으로 보아 그 아래 꼬리(부가세·검산·단위표기)까지 더하지 않는다.
   - 예: \`total = ctx.sum_column("요약", "합계", header_row=4); ctx.write_cell("요약", "J15", total)\` → 요약 F열(합계) 항목만 더해 J15에 값으로. 사용자가 "합계 행도 포함"이라 하면 \`exclude_total_rows=False\`.
+- \`ctx.sum_where(시트, 합산열, conditions, header_row=None)\` → **★ "A열이 X이고 B열이 Y인 행의 C열 합계"처럼 조건(AND) 여러 개로 거른 합산은 이 헬퍼를 쓰세요.** 큰 표를 \`ctx.read\` 로 통째로 올리면 정적검사('큰 표를 ctx.read...')에 막히는데, 이 헬퍼는 **필요한 열만 좁게 읽어** 계산하므로 안 막힙니다. 합계 '값'을 반환(쓰기 X).
+  - conditions=\`[(열, 값), ...]\` 또는 \`[(열, op, 값), ...]\`. op 생략 시 정규화 텍스트 일치. op∈{'==','!=','contains','>','>=','<','<='}. 예: \`t = ctx.sum_where("SO사업자별요금", "M", [("D","인터넷"),("G","매 출")], header_row=5); ctx.write_cell("SO사업자별요금","AG4", t)\`.
+- \`ctx.sum_lookup(원본시트, 원본키열, 원본값열, 대상시트, 대상키열, 대상출력열, header_row=None, dst_start_row=None)\` → **★ "키(가입번호)로 다른 표를 찾아 값 합산해 같은 행에 쓰기".** 원본 (키→값)을 모아, 대상 각 행의 키에 해당하는 값을 합산해 대상 출력열 같은 행에 씁니다. **대상 키 셀에 여러 토큰(줄바꿈/공백/콤마 구분)이 있으면 각각 분리해 모두 더합니다**(한 셀에 가입번호가 여러 개인 KT/HCN 케이스 — 전체 문자열로만 매칭해 0건 되던 문제 해결). 교차파일은 "파일.xlsx!시트" 스펙. 반환 \`{filled, src_keys}\`.
+  - 예: \`ctx.sum_lookup("input.xlsx!Sheet1", "BP", "BQ", "SO사업자별요금", "P", "H", header_row=1, dst_start_row=6)\`. 직접 Dictionary/루프로 짜지 말고(토큰분리·병합·열암산 실수 방지) 이 한 줄을 쓰세요.
 - \`ctx.add_sheet("이름", after="기준시트")\` / \`ctx.delete_sheet("이름")\` / \`ctx.rename_sheet("기존이름", "새이름")\`
   - **"시트 이름만 바꿔줘"**는 반드시 \`ctx.rename_sheet\` 를 쓰세요(위치·내용 유지). copy_sheet+delete 로 흉내내면 위치가 바뀌거나 내용이 사라질 수 있습니다.
 - \`ctx.shift_months("시트", "B336:D336", 1)\` → 범위 안 '문자열' 셀의 모든 'N월'(앞 'YY/YYYY년', 뒤 'D일' 포함)을 N개월 이동. 12월 넘김 시 연도 +, 말일 보정, 0패딩 보존.
@@ -817,6 +823,7 @@ const PYTHON_COM_SYSTEM_PROMPT = `당신은 우측에 실제로 떠 있는 Micro
   - **"x열에서 y만 필터/추출해줘"**는 이걸 쓰세요(제자리에서 행을 삭제하지 말 것 — 원본을 보존하고 새 시트에 모읍니다). 예: \`ctx.filter_to_sheet("Sheet1", lambda r: ctx.normalize(r[2]) == ctx.normalize("안전제일"), "안전제일목록")\`. **한글/텍스트 값 비교는 공백·표기 차이로 매칭 0건이 되기 쉬우니 반드시 \`ctx.normalize()\` 로 양쪽을 감싸세요**(매칭 0건이면 새 시트가 만들어지지 않고 오류가 납니다). 열 인덱스는 ctx.find_header 로 확인한 열번호-1(0-based)을 쓰세요.
 - \`ctx.pivot("시트", group_by="회사", value="금액", agg="sum", dest_name="회사별합계")\` → 그룹별 집계 요약 표를 **새 시트(활성 파일)**에 만듦(원본 보존). agg 는 sum/count/avg/max/min.
   - **"~별로 합계/개수/평균 내줘 / 요약해줘"**는 이걸 쓰세요(group_by/value 는 헤더명 권장). 직접 집계 루프를 짜지 말고 ctx.pivot 우선.
+  - **★ 교차파일 주의: "input 파일에 새 시트" 처럼 다른 파일이 대상이면 읽기·쓰기·시트생성을 모두 그 파일 ctx 로 하세요.** \`src = ctx.book("input....xlsx"); src.pivot(...)\` 처럼. \`src\` 로 읽고 \`ctx.add_sheet/ctx.write\`(기본=출력 파일)로 쓰면 시트가 엉뚱한 파일에 생깁니다. 또 \`ctx.read("F:I")\` 로 여러 열을 읽었으면 값 인덱스를 맞추세요(F→row[0], I→row[3]) — 또는 pivot 에 헤더명을 줘서 인덱스 실수를 피하세요.
   - **2D 크로스탭(행/열/값)** 은 \`column\` 을 추가: \`ctx.pivot("매출", group_by="지점", column="월", value="매출", agg="sum", dest_name="피벗_결과")\` → 행=지점, 열=월(자동 정렬), 셀=매출 합계. **"행은 X, 열은 Y, 값은 Z 피벗" 류는 직접 dict 집계·헤더·정렬을 손코딩하지 말고 반드시 이 한 줄을 쓰세요**(헤더 행/열 모양 실수·정렬 버그 방지).
 - \`ctx.sort(시트, "A1:F100", key_col="C", ascending=True, has_header=True)\` → 실제 범위 정렬.
   **key_col 은 헤더명("회사") 또는 "C" 같은 열 문자를 쓰세요 — 헤더명을 권장합니다**(자동으로 해당 열을 찾습니다). 숫자로 주면 범위 내 상대 번호라 범위가 A열에서 시작하지 않으면 어긋나니 피하세요.
