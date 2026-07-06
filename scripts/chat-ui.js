@@ -801,6 +801,8 @@ function multiValueLookupIntent(sourceUserMessage) {
 function duplicateRowDeleteIntent(sourceUserMessage) {
   const source = String(sourceUserMessage || "");
   const s = typeof routingIntentText === "function" ? routingIntentText(source) : source;
+  // "중복 지우지 마 / 삭제하지 말고 / 제거하지 마" = 삭제를 '하지 말라'는 뜻 → 삭제 작업이 아니다.
+  if (/(?:지우|삭제|제거|없애)\s*(?:지|하지)\s*(?:마|말|않)/.test(s)) return false;
   const duplicateDelete = /(?:중복\s*값?|중복값|duplicate).{0,24}(?:제거|삭제|지워|없애|remove|delete)|(?:제거|삭제|지워|없애|remove|delete).{0,24}(?:중복\s*값?|중복값|duplicate)/i.test(s);
   if (!duplicateDelete) return false;
   const rowDeleteShape = /(행|위에\s*있는|아래|먼저|EID|ID|키|코드|가입번호|고객번호|계약번호|수납금액|금액|보호|지우면\s*안|삭제하면\s*안|1\s*이상|>=\s*1)/i.test(s);
@@ -811,6 +813,7 @@ function duplicateRowDeleteIntent(sourceUserMessage) {
 function conditionalRowDeleteIntent(sourceUserMessage) {
   const source = String(sourceUserMessage || "");
   const s = typeof routingIntentText === "function" ? routingIntentText(source) : source;
+  if (/(?:지우|삭제|제거|없애)\s*(?:지|하지)\s*(?:마|말|않)/.test(s)) return false;  // "삭제하지 마" = 삭제 작업 아님
   const rowDelete = /(행|row).{0,20}(삭제|지워|없애|제거|delete|remove)|(?:삭제|지워|없애|제거|delete|remove).{0,20}(행|row)/i.test(s);
   if (!rowDelete) return false;
   const hasCondition = /(이면|라면|일\s*때|인\s*경우|경우|조건|필터|이전|이후|보다\s*(?:작|크)|미만|초과|이상|이하|<=|>=|<|>|before|after|where|when|if)/i.test(s)
@@ -1476,9 +1479,22 @@ function pythonComStaticSafetyFailures(code, sourceUserMessage) {
   return failures;
 }
 
+// 전용(네이티브) ctx 헬퍼를 쓰는 코드인지. 이 헬퍼들은 '읽기루프/행삭제 반복'이 아니라 Range 기반
+// 한 번의 연산이라 큰 파일에서 멈출 위험이 없다 → 헬퍼가 있는 작업은 VBA 로 강제 전환하지 않는다.
+// (read/write/write_cell/write_formulas/book 같은 '원시' 는 제외 — 오용/루프 가능. 그건 정적 안전
+//  게이트가 별도로 계속 검사한다. 이 함수는 '의도 기반 VBA 강제'만 건너뛴다.)
+function codeUsesSafeCtxHelper(code) {
+  return /\bctx\s*\.\s*(?:copy_key_blocks|copy_values|copy_col|copy_sheet|paste_copied|copy|move_col_clear|move_cols|swap_cols|sort|pivot|filter_to_sheet|fill_sum_col|sum_column|append_same_format_sheets|shift_months|clear|delete_cols|delete_rows|insert_rows|insert_cols|merge|unmerge|add_sheet|rename_sheet|delete_sheet)\s*\(/i.test(String(code || ""));
+}
+
 function pythonComMustUseVbaReason(code, sourceUserMessage) {
   const source = String(sourceUserMessage || "");
   const text = String(code || "");
+  // [결정적] 생성 코드가 이미 전용 ctx 헬퍼를 쓰면 그게 정답 경로다. 소스 문구가 뭐든(예: "중복이라고
+  // 지우지 마" 처럼 삭제 키워드가 섞여도) VBA 로 강제 전환하지 않는다. → "헬퍼가 있는 건 VBA 없이 실행".
+  if (codeUsesSafeCtxHelper(text)) {
+    return "";
+  }
   if (typeof appendSameFormatSheetsIntent === "function" && appendSameFormatSheetsIntent(source)) {
     return "";
   }
