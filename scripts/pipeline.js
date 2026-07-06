@@ -4941,7 +4941,6 @@ $("runner-download-btn").onclick = async () => {
   else openDownloadModal();
 };
 $("runner-load-btn").onclick = () => openLoadDialog();
-$("runner-open-generator").onclick = () => setPage("generator");
 
 setupDrop($("drop-logic"), $("logic-files"), async (files) => {
   try {

@@ -144,6 +144,19 @@ def writable_app_dir():
     return Path(__file__).resolve().parent
 
 
+def b2b_logs_dir():
+    """트레이스 로그 저장 폴더 — 프로즌/개발 무관하게 항상 %LOCALAPPDATA%\\B2B_logs 로 고정.
+    (없으면 만든다. LOCALAPPDATA 없으면 APPDATA→TEMP→홈 순 폴백.)"""
+    base = (os.environ.get("LOCALAPPDATA") or os.environ.get("APPDATA")
+            or os.environ.get("TEMP") or str(Path.home()))
+    d = Path(base) / "B2B_logs"
+    try:
+        d.mkdir(parents=True, exist_ok=True)
+    except Exception:
+        pass
+    return d
+
+
 def user_config_dir():
     env_dir = os.environ.get("B2B_USER_CONFIG_DIR")
     if env_dir:
@@ -3234,7 +3247,7 @@ def _health_excel_diagnostics():
 
 
 def _perf_trace_path():
-    return writable_app_dir() / "runtime_load_trace.jsonl"
+    return b2b_logs_dir() / "runtime_load_trace.jsonl"
 
 
 def _process_perf_snapshot(pid):
@@ -6324,21 +6337,9 @@ def _diag_vba_log_line(msg):
 
 
 def _vba_trace_path():
-    # [트레이스 경로] 프로즌(PyInstaller)에서는 __file__ 이 임시폴더라 못 찾고, 특히 '단일 exe' 는
-    # B2B_Server.exe 자체가 임시폴더로 풀려 실행돼 sys.executable 옆도 임시폴더가 된다. 그래서 프로즌이면
-    # 포터블/단일/실행위치와 무관하게 항상 고정된 찾기 쉬운 위치(%LOCALAPPDATA%\B2B_logs)에 쓴다.
-    try:
-        if getattr(sys, "frozen", False):
-            base = os.environ.get("LOCALAPPDATA") or os.environ.get("APPDATA") or os.environ.get("TEMP") or str(Path.home())
-            d = Path(base) / "B2B_logs"
-            try:
-                d.mkdir(parents=True, exist_ok=True)
-            except Exception:
-                pass
-            return d / "vba_pipeline_trace.jsonl"
-    except Exception:
-        pass
-    return Path(__file__).resolve().parent / "vba_pipeline_trace.jsonl"
+    # [트레이스 경로] 프로즌/개발/포터블/단일exe/실행위치와 무관하게 항상 고정된 찾기 쉬운 위치
+    # (%LOCALAPPDATA%\B2B_logs)에 쓴다. (프로즌에서 __file__ 이 임시폴더라 repo 옆을 못 쓰는 문제도 해결)
+    return b2b_logs_dir() / "vba_pipeline_trace.jsonl"
 
 
 def _trace_text(value, limit=500):
@@ -6386,6 +6387,17 @@ def _vba_trace(event, **fields):
             f.write(json.dumps(payload, ensure_ascii=False, default=str) + "\n")
     except Exception:
         pass
+
+
+def _reset_trace_logs():
+    """프로그램 시작 시 이전 실행의 트레이스 로그를 비운다(누적 방지). 저장 위치는 %LOCALAPPDATA%\\B2B_logs."""
+    for p in (_perf_trace_path(), _vba_trace_path()):
+        try:
+            p.parent.mkdir(parents=True, exist_ok=True)
+            with open(p, "w", encoding="utf-8"):
+                pass   # 내용만 비운다(파일은 남겨 append 경로가 그대로 동작)
+        except Exception:
+            pass
 
 
 def _diag_prerun_window_state(app, context_wb):
@@ -16590,6 +16602,9 @@ def run_backend_pipeline_payload(payload, job_id=None):
 
 
 if __name__ == "__main__":
+    # [트레이스 초기화] 시작 시 runtime_load_trace / vba_pipeline_trace 를 비우고(누적 방지)
+    # 저장 위치를 %LOCALAPPDATA%\B2B_logs 로 통일한다.
+    _reset_trace_logs()
     # [디스크 누수 방지] 시작 시 이전 실행 잔재(b2b_backend_v044 작업복사본/단일exe 임시/_MEI/Excel 진단로그) 정리.
     # 데몬 스레드라 서버 기동을 지연시키지 않는다. 새 프로세스라 활성 세션이 없어 안전.
     try:
