@@ -392,9 +392,23 @@ def _other_b2b_backend_running():
         return False
     try:
         me = os.getpid()
+        # [onefile 오탐 방지] PyInstaller onefile exe 는 '부트로더 부모' + '앱 자식' 두 프로세스가 모두
+        # B2B_Server.exe 다. 자식(우리 코드)이 자기 부모 부트로더를 '다른 백엔드'로 오인하면 other_backend=True
+        # 가 되어 시작 정리에서 업로드 작업본({uuid}_*.xlsx)을 영영 건너뛴다. 자기 프로세스 트리(자신·부모·자식)는
+        # 제외하고 '진짜 별개 백엔드'만 카운트한다(별도로 두 번 실행하면 그건 트리 밖이라 정상 감지됨).
+        skip = {me}
+        try:
+            skip.add(os.getppid())
+        except Exception:
+            pass
+        try:
+            for c in _ps.Process(me).children(recursive=True):
+                skip.add(c.pid)
+        except Exception:
+            pass
         for p in _ps.process_iter(["pid", "name", "cmdline"]):
             try:
-                if p.info.get("pid") == me:
+                if p.info.get("pid") in skip:
                     continue
                 nm = (p.info.get("name") or "").lower()
                 if nm == "b2b_server.exe":
@@ -3611,6 +3625,19 @@ def start_runtime_maintenance_threads():
     if RUNTIME_SAMPLER_STARTED:
         return
     RUNTIME_SAMPLER_STARTED = True
+    # [시작 유지관리 통합] 진입점이 둘이다: 프로즌 exe(entry=launch_b2b.py)와 직접 실행(python serve_b2b.py).
+    # 예전엔 트레이스 리셋/이전 실행 잔재 정리를 serve_b2b.__main__ 에만 뒀는데, 프로즌 exe 는 launch_b2b.py 를
+    # 진입점으로 serve_b2b 를 '모듈로 import' 만 하므로 그 __main__ 이 실행되지 않아 정리가 아예 안 돌았다
+    # (→ %TEMP%\b2b_backend_v044 에 업로드 작업본 xlsx 누적, 트레이스 로그도 안 비워짐). 두 진입점이 모두
+    # 호출하는 이 함수(멱등)로 옮겨 진입점이 갈려도 한 번은 반드시 실행되게 한다.
+    try:
+        _reset_trace_logs()
+    except Exception:
+        pass
+    try:
+        threading.Thread(target=cleanup_stale_temp_artifacts, name="b2b-temp-cleanup", daemon=True).start()
+    except Exception:
+        pass
     thread = threading.Thread(target=_runtime_maintenance_loop, name="b2b-runtime-maintenance", daemon=True)
     thread.start()
 
@@ -16840,15 +16867,9 @@ def run_backend_pipeline_payload(payload, job_id=None):
 
 
 if __name__ == "__main__":
-    # [트레이스 초기화] 시작 시 runtime_load_trace / vba_pipeline_trace 를 비우고(누적 방지)
-    # 저장 위치를 %LOCALAPPDATA%\B2B_logs 로 통일한다.
-    _reset_trace_logs()
-    # [디스크 누수 방지] 시작 시 이전 실행 잔재(b2b_backend_v044 작업복사본/단일exe 임시/_MEI/Excel 진단로그) 정리.
-    # 데몬 스레드라 서버 기동을 지연시키지 않는다. 새 프로세스라 활성 세션이 없어 안전.
-    try:
-        threading.Thread(target=cleanup_stale_temp_artifacts, name="b2b-temp-cleanup", daemon=True).start()
-    except Exception:
-        pass
+    # [시작 유지관리] 트레이스 리셋 + 이전 실행 잔재 정리 + 런타임 유지관리 루프는 모두
+    # start_runtime_maintenance_threads() 안으로 통합됐다(멱등). 프로즌 exe 진입점(launch_b2b.py)도
+    # 이 함수를 호출하므로 진입점이 갈려도 정리가 누락되지 않는다.
     start_runtime_maintenance_threads()
     with B2BThreadingTCPServer((HOST, PORT), B2BHandler) as httpd:
         print(f"B2B serving on http://{HOST}:{PORT}")
