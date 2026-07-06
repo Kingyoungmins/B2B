@@ -5889,6 +5889,46 @@ def _strip_generated_workbook_prefix(value):
     return _GENERATED_WORKBOOK_PREFIX_RE.sub("", text)
 
 
+# [월/날짜만 다른 저장 스킬 재사용] 4월용으로 저장한 스킬을 5월 파일에 돌릴 때처럼, 파일명의 '바뀌는' 부분
+# (날짜·월·년·분기·버전·앞머리 순번)만 제거해 '같은 템플릿'을 같게 본다. 공백/언더바/괄호는 기존 정규화가
+# 이미 처리하므로 여기선 '월/날짜류'만 추가로 지운다.
+_VOLATILE_NAME_TOKENS = [
+    (re.compile(r"\d{4}\s*[-_.]?\s*\d{1,2}\s*[-_.]?\s*\d{1,2}\s*일?"), " "),   # 2026-03-01 / 20260301
+    (re.compile(r"\d{2,4}\s*년"), " "),                                        # 2026년 / 26년
+    (re.compile(r"\d{1,2}\s*월"), " "),                                        # 3월 / 03월
+    (re.compile(r"\d{1,2}\s*분기"), " "),                                      # 1분기
+    (re.compile(r"(?<![A-Za-z0-9])v?\d+(?:\.\d+)+", re.I), " "),               # 버전 1.2 / v1.2.3
+    (re.compile(r"(?:^|(?<=[\s_\-]))\d{1,3}(?=\s*[.\s_\-])"), " "),            # 앞머리 순번 "03." "05."
+    (re.compile(r"(?<!\d)\d{6,8}(?!\d)"), " "),                                # YYMMDD/YYYYMMDD 류
+]
+
+
+def _stable_workbook_key(name):
+    """'같은 템플릿, 다른 월/날짜/버전' 파일을 같게 보기 위한 안정 키(소문자·기호제거)."""
+    s = str(name or "")
+    try:
+        s = unquote(s)
+    except Exception:
+        pass
+    s = Path(s).stem                              # 디렉토리/확장자 제거
+    s = _strip_generated_workbook_prefix(s)
+    s = s.lower()
+    for rx, rep in _VOLATILE_NAME_TOKENS:
+        s = rx.sub(rep, s)
+    s = re.sub(r"[\s_\-().\[\]]+", "", s)
+    return s
+
+
+def _match_workbook_by_stable_key(names, requested):
+    """열린 워크북 이름들 중 requested 와 '월/날짜 무시 안정 키'가 같은 것이 '정확히 하나'면 그 이름 반환.
+    (엉뚱한 파일 오매칭 방지: 유일 매칭일 때만. 키가 너무 짧으면(<4) 매칭 안 함.)"""
+    want = _stable_workbook_key(requested)
+    if len(want) < 4:
+        return None
+    hits = [n for n in (names or []) if _stable_workbook_key(n) == want]
+    return hits[0] if len(hits) == 1 else None
+
+
 def _workbook_name_lookup_keys(value):
     """Return conservative lookup keys for workbook-name resolution.
 
@@ -5948,7 +5988,17 @@ def _resolve_open_workbook_name(app, requested_name):
             return name
     req_keys = _workbook_name_lookup_keys(requested)
     matches = [name for name in names if req_keys & _workbook_name_lookup_keys(name)]
-    return matches[0] if len(matches) == 1 else requested
+    if len(matches) == 1:
+        return matches[0]
+    # [월/날짜만 다른 저장 스킬 재사용] 안정 키(날짜·월·버전·순번 제거)로 '유일' 매칭이면 그 파일로 바인딩.
+    stable = _match_workbook_by_stable_key(names, requested)
+    if stable and stable != requested:
+        try:
+            _vba_trace("workbook.stable_key_match", requested=str(requested), matched=str(stable))
+        except Exception:
+            pass
+        return stable
+    return requested
 
 
 # [포맷 위장 파일 별칭] .xls 로 위장한 HTML/CSV/xlsx 는 excel_compatible_open_path 가 excel_open_<uuid>.<ext> 로
@@ -8587,6 +8637,16 @@ class PythonComSkillContext:
                 return cross[0][0].Worksheets(cross[0][1])
         except Exception:
             pass
+        # [월/날짜만 다른 시트명] 시트 이름에 월/날짜가 들어간 경우(예 '2026년04월정산'), 안정 키(월/날짜 제거)로
+        # 현재 워크북에서 '유일' 매칭이면 그 시트로. 모호하면 매칭 안 함(아래 오류 유지).
+        try:
+            cur = _excel_collection_names(self._wb.Worksheets)
+            st = _match_workbook_by_stable_key(cur, sheet)
+            if st:
+                _vba_trace("python_com.sheet.stable_key_match", requested=str(sheet), matched=str(st))
+                return self._wb.Worksheets(st)
+        except Exception:
+            pass
         names = _excel_collection_names(self._wb.Worksheets)
         raise PythonComSkillError(
             f"시트 '{sheet}' 를 찾지 못했습니다. 사용 가능한 시트: {names}"
@@ -10453,6 +10513,23 @@ class PythonComSkillContext:
                         try:
                             if str(wb.Name) == aliased:
                                 target = wb
+                                break
+                        except Exception:
+                            continue
+            except Exception:
+                pass
+        if target is None:
+            # [월/날짜만 다른 저장 스킬 재사용] 4월용 스킬을 5월 파일에 돌릴 때: 날짜·월·버전·순번을 뺀
+            # 안정 키로 '유일' 매칭이면 그 파일로 바인딩(모호하면 매칭 안 함 → 아래 오류 유지).
+            try:
+                names = [str(wb.Name) for wb in self._app.Workbooks]
+                stable = _match_workbook_by_stable_key(names, key)
+                if stable:
+                    for wb in self._app.Workbooks:
+                        try:
+                            if str(wb.Name) == stable:
+                                target = wb
+                                _vba_trace("python_com.book.stable_key_match", requested=str(key), matched=str(stable))
                                 break
                         except Exception:
                             continue
