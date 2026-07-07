@@ -7,8 +7,8 @@ extraction: regex   # 정규식 근사
 signature: "(stepIdx)"
 role: "특정 step 직전(=steps[0..stepIdx-1] 이 적용된) 입력/출력 상태를 계산해서 반환."
 role_source: banner
-version: "0.5.18"
-loc: "pipeline.js:1916-1916"
+version: "0.5.19"
+loc: "pipeline.js:1931-1931"
 
 # ── 입출력 ──
 inputs:
@@ -54,7 +54,7 @@ reads:
   - "state.pipeline"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.18-gen"
+timestamp: "0.5.19-gen"
 ---
 
 ## 역할

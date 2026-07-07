@@ -7,8 +7,8 @@ extraction: ast
 signature: "(value)"
 role: "Normalize workbook names for generated-code lookups."
 role_source: docstring
-version: "0.5.18"
-loc: "serve_b2b.py:5852-5866"
+version: "0.5.19"
+loc: "serve_b2b.py:5907-5921"
 
 # ── 입출력 ──
 inputs:
@@ -38,7 +38,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.18-gen"
+timestamp: "0.5.19-gen"
 ---
 
 ## 역할

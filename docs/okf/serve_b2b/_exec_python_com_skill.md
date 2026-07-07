@@ -4,11 +4,11 @@ title: _exec_python_com_skill
 module: serve_b2b.py
 lang: python
 extraction: ast
-signature: "(app, wb, session, code, skip_static=False)"
+signature: "(app, wb, session, code, skip_static=False, timeout_s=None)"
 role: "샌드박스 exec + 데드라인 트레이서로 생성 Python 스킬을 실행한다."
 role_source: docstring
-version: "0.5.18"
-loc: "serve_b2b.py:10428-10484"
+version: "0.5.19"
+loc: "serve_b2b.py:10839-10896"
 
 # ── 입출력 ──
 inputs:
@@ -17,6 +17,7 @@ inputs:
   - "session"
   - "code"
   - "skip_static"
+  - "timeout_s"
 returns: "(추정)"
 
 # ── 사이드이펙트 (정적 추정) ──
@@ -46,6 +47,7 @@ calls_external:
   - "dict"
   - "err"
   - "exec"
+  - "float"
   - "fn"
   - "get"
   - "monotonic"
@@ -53,6 +55,7 @@ calls_external:
   - "session"
   - "settrace"
   - "str"
+  - "timeout_s"
   - "wb"
 called_by:
   - "_run_excel_python_pipeline_impl"
@@ -65,7 +68,7 @@ reads:
   - "_PY_SAFE_BUILTINS"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.18-gen"
+timestamp: "0.5.19-gen"
 ---
 
 ## 역할

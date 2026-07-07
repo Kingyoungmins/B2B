@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(page)"
 role: "==================================================================="
 role_source: banner
-version: "0.5.18"
+version: "0.5.19"
 loc: "menu.js:4-4"
 
 # ── 입출력 ──
@@ -46,7 +46,7 @@ writes:
   - "currentPage"
   - "excelMirror.runnerHeadless"
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.18-gen"
+timestamp: "0.5.19-gen"
 ---
 
 ## 역할

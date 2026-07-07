@@ -7,8 +7,8 @@ extraction: regex   # 정규식 근사
 signature: "(text)"
 role: "[0.5.17] 열(컬럼) 이동/재배치/맞바꾸기 → ctx.move_cols 로 결정적 처리(Python). VBA 로 보내면 모델이 병합"
 role_source: banner
-version: "0.5.18"
-loc: "chat-ui.js:611-611"
+version: "0.5.19"
+loc: "chat-ui.js:749-749"
 
 # ── 입출력 ──
 inputs:
@@ -35,7 +35,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.18-gen"
+timestamp: "0.5.19-gen"
 ---
 
 ## 역할

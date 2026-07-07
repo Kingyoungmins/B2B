@@ -7,8 +7,8 @@ extraction: ast
 signature: "(wb, prefer_workbook=False)"
 role: "활성 시트 '이름만' — 풀스냅샷 없이. 라이브 폴링 경량 경로용."
 role_source: docstring
-version: "0.5.18"
-loc: "serve_b2b.py:10704-10725"
+version: "0.5.19"
+loc: "serve_b2b.py:11203-11224"
 
 # ── 입출력 ──
 inputs:
@@ -34,7 +34,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.18-gen"
+timestamp: "0.5.19-gen"
 ---
 
 ## 역할

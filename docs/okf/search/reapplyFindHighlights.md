@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "()"
 role: "시뮬레이터가 다시 렌더링되면 강조도 다시 적용"
 role_source: banner
-version: "0.5.18"
+version: "0.5.19"
 loc: "search.js:136-136"
 
 # ── 입출력 ──
@@ -27,7 +27,7 @@ called_by: []
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.18-gen"
+timestamp: "0.5.19-gen"
 ---
 
 ## 역할

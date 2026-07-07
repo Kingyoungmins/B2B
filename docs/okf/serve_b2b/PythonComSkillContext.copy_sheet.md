@@ -8,8 +8,8 @@ class: PythonComSkillContext
 signature: "(self, src_sheet, dst_book=None, new_name=None, before=None, after=None)"
 role: "시트 1장을 통째로 복사한다(서식·수식·값 보존). dst_book 을 주면 다른 파일로 복사(교차 파일)."
 role_source: docstring
-version: "0.5.18"
-loc: "serve_b2b.py:9584-9733"
+version: "0.5.19"
+loc: "serve_b2b.py:9967-10116"
 
 # ── 입출력 ──
 inputs:
@@ -86,7 +86,7 @@ reads:
   - "self.book"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.18-gen"
+timestamp: "0.5.19-gen"
 ---
 
 ## 역할

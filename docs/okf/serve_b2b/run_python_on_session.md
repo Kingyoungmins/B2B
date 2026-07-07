@@ -4,16 +4,17 @@ title: run_python_on_session
 module: serve_b2b.py
 lang: python
 extraction: ast
-signature: "(excel_id, code)"
+signature: "(excel_id, code, extended=False)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
-version: "0.5.18"
-loc: "serve_b2b.py:10543-10560"
+version: "0.5.19"
+loc: "serve_b2b.py:10956-10982"
 
 # ── 입출력 ──
 inputs:
   - "excel_id"
   - "code"
+  - "extended"
 returns: "(추정)"
 
 # ── 사이드이펙트 (정적 추정) ──
@@ -31,9 +32,12 @@ calls:
 calls_external:
   - "PY_SKILL_TIMEOUT_S"
   - "RuntimeError"
+  - "bool"
   - "code"
+  - "deadline_s"
   - "err"
   - "excel_id"
+  - "extended"
   - "int"
   - "max"
   - "str"
@@ -41,10 +45,11 @@ calls_external:
 called_by:
   - "B2BHandler.handle_excel_run_python"
 reads:
+  - "PY_SKILL_RECOVERY_TIMEOUT_S"
   - "PY_SKILL_TIMEOUT_S"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.18-gen"
+timestamp: "0.5.19-gen"
 ---
 
 ## 역할

@@ -7,8 +7,8 @@ extraction: regex   # 정규식 근사
 signature: "(affected)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
-version: "0.5.18"
-loc: "pipeline.js:3371-3371"
+version: "0.5.19"
+loc: "pipeline.js:3391-3391"
 
 # ── 입출력 ──
 inputs:
@@ -31,7 +31,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.18-gen"
+timestamp: "0.5.19-gen"
 ---
 
 ## 역할

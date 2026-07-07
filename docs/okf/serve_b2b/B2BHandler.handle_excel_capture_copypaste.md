@@ -8,8 +8,8 @@ class: B2BHandler
 signature: "(self)"
 role: "[복붙 캡처] 사용자가 라이브 Excel에서 방금 한 Ctrl+C/Ctrl+V 를 역추적해"
 role_source: docstring
-version: "0.5.18"
-loc: "serve_b2b.py:1466-1477"
+version: "0.5.19"
+loc: "serve_b2b.py:1507-1518"
 
 # ── 입출력 ──
 inputs:
@@ -42,7 +42,7 @@ reads:
   - "self.send_json"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.18-gen"
+timestamp: "0.5.19-gen"
 ---
 
 ## 역할

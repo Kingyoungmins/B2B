@@ -7,8 +7,8 @@ extraction: ast
 signature: "(output_path, input_paths_by_name, output_item, output_wb_record, input_wb_records, payload, resume_from)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
-version: "0.5.18"
-loc: "serve_b2b.py:14305-14356"
+version: "0.5.19"
+loc: "serve_b2b.py:14804-14855"
 
 # ── 입출력 ──
 inputs:
@@ -60,7 +60,7 @@ reads:
 writes:
   - "RESULTS"
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.18-gen"
+timestamp: "0.5.19-gen"
 ---
 
 ## 역할

@@ -8,8 +8,8 @@ class: PythonComSkillContext
 signature: "(self, sheet, row=1)"
 role: "해당 행 기준 마지막 데이터 열(1-based)."
 role_source: docstring
-version: "0.5.18"
-loc: "serve_b2b.py:8686-8690"
+version: "0.5.19"
+loc: "serve_b2b.py:8809-8813"
 
 # ── 입출력 ──
 inputs:
@@ -36,6 +36,7 @@ calls_external:
   - "int"
 called_by:
   - "PythonComSkillContext.append_same_format_sheets"
+  - "PythonComSkillContext.copy_key_blocks"
   - "PythonComSkillContext.find_header"
   - "PythonComSkillContext.move_cols"
 reads:
@@ -44,7 +45,7 @@ reads:
   - "self._ws"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.18-gen"
+timestamp: "0.5.19-gen"
 ---
 
 ## 역할
@@ -55,7 +56,7 @@ timestamp: "0.5.18-gen"
 
 ## 관계
 - 호출: `Cells`, `_tick`, `_ws`, `row`, `sheet`
-- 피호출(영향 전파 경로): `PythonComSkillContext.append_same_format_sheets`, `PythonComSkillContext.find_header`, `PythonComSkillContext.move_cols`
+- 피호출(영향 전파 경로): `PythonComSkillContext.append_same_format_sheets`, `PythonComSkillContext.copy_key_blocks`, `PythonComSkillContext.find_header`, `PythonComSkillContext.move_cols`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

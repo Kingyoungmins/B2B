@@ -7,8 +7,8 @@ extraction: regex   # 정규식 근사
 signature: "()"
 role: "[#19] 진행 중인 단일 VBA 적용을 취소하고 안전 복귀한다."
 role_source: banner
-version: "0.5.18"
-loc: "pipeline.js:1362-1362"
+version: "0.5.19"
+loc: "pipeline.js:1369-1369"
 
 # ── 입출력 ──
 inputs: []
@@ -43,7 +43,7 @@ reads:
 writes:
   - "pipeline"
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.18-gen"
+timestamp: "0.5.19-gen"
 ---
 
 ## 역할

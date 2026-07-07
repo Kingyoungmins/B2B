@@ -7,8 +7,8 @@ extraction: regex   # 정규식 근사
 signature: "(fullText, replyContext)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
-version: "0.5.18"
-loc: "chat-ui.js:2048-2048"
+version: "0.5.19"
+loc: "chat-ui.js:2255-2255"
 
 # ── 입출력 ──
 inputs:
@@ -50,6 +50,7 @@ calls:
   - "validateAssistantCodeBeforeApply"
 calls_external:
   - "Number"
+  - "String"
   - "appendChild"
   - "click"
   - "createElement"
@@ -58,6 +59,7 @@ calls_external:
   - "join"
   - "replace"
   - "setTimeout"
+  - "toLowerCase"
   - "trim"
 called_by:
   - "autoRegenerateAsVbaFallback"
@@ -71,7 +73,7 @@ reads:
   - "state.pipeline"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.18-gen"
+timestamp: "0.5.19-gen"
 ---
 
 ## 역할

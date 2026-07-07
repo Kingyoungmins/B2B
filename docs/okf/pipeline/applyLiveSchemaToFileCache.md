@@ -7,8 +7,8 @@ extraction: regex   # 정규식 근사
 signature: "(excelId, schema)"
 role: "[#5] 라이브 COM 적용으로 구조가 바뀐 파일의 클라 스키마 캐시(미리보기 AoA/시트명/차원)를"
 role_source: banner
-version: "0.5.18"
-loc: "pipeline.js:3073-3073"
+version: "0.5.19"
+loc: "pipeline.js:3093-3093"
 
 # ── 입출력 ──
 inputs:
@@ -39,7 +39,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.18-gen"
+timestamp: "0.5.19-gen"
 ---
 
 ## 역할

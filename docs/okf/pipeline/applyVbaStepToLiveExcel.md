@@ -7,8 +7,8 @@ extraction: regex   # 정규식 근사
 signature: "(step, excelId, options = {})"
 role: "0.4.9 리모콘 모델: 생성된 VBA를 라이브 워크북에 즉시 주입 실행한다."
 role_source: banner
-version: "0.5.18"
-loc: "pipeline.js:1404-1404"
+version: "0.5.19"
+loc: "pipeline.js:1411-1411"
 
 # ── 입출력 ──
 inputs:
@@ -54,6 +54,7 @@ calls:
   - "toast"
   - "traceClientUiEvent"
 calls_external:
+  - "Python"
   - "String"
   - "async"
   - "false"
@@ -74,7 +75,7 @@ reads:
   - "state.pipeline"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.18-gen"
+timestamp: "0.5.19-gen"
 ---
 
 ## 역할

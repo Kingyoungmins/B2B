@@ -7,8 +7,8 @@ extraction: ast
 signature: "(session, excel_id, app, current_wb)"
 role: "다른 라이브 세션들의 '현재(편집 반영된) 상태'를 스냅샷해서 이 인스턴스에 읽기전용으로 동반 오픈한다."
 role_source: docstring
-version: "0.5.18"
-loc: "serve_b2b.py:7010-7113"
+version: "0.5.19"
+loc: "serve_b2b.py:7114-7217"
 
 # ── 입출력 ──
 inputs:
@@ -70,7 +70,7 @@ reads:
   - "EXCEL_SESSIONS"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.18-gen"
+timestamp: "0.5.19-gen"
 ---
 
 ## 역할

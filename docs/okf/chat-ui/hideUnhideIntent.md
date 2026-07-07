@@ -7,8 +7,8 @@ extraction: regex   # 정규식 근사
 signature: "(text)"
 role: "[0.5.16] ctx 헬퍼가 결정적으로 처리하는 추가 작업들 — Python 우선 라우팅(헬퍼가 있는데 기본엔진 VBA 로"
 role_source: banner
-version: "0.5.18"
-loc: "chat-ui.js:556-556"
+version: "0.5.19"
+loc: "chat-ui.js:694-694"
 
 # ── 입출력 ──
 inputs:
@@ -33,7 +33,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.18-gen"
+timestamp: "0.5.19-gen"
 ---
 
 ## 역할

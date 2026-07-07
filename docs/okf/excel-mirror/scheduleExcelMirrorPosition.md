@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(force = false)"
 role: "A방식: 단일 Excel 앱 창만 관리하므로 활성 세션 기준으로 한 번만 위치를 보정한다."
 role_source: banner
-version: "0.5.18"
+version: "0.5.19"
 loc: "excel-mirror.js:1835-1835"
 
 # ── 입출력 ──
@@ -40,7 +40,7 @@ reads: []
 writes:
   - "excelMirror.positionTimer"
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.18-gen"
+timestamp: "0.5.19-gen"
 ---
 
 ## 역할

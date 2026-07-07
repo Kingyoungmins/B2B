@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(message, options = {})"
 role: "적용 시작: 모든 미러 창을 숨기고(park) 네이티브 패널의 로딩 애니메이션을 돌린다."
 role_source: banner
-version: "0.5.18"
+version: "0.5.19"
 loc: "excel-mirror.js:1214-1214"
 
 # ── 입출력 ──
@@ -54,7 +54,7 @@ writes:
   - "excelMirror.applyLoadingTimer"
   - "excelMirror.applying"
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.18-gen"
+timestamp: "0.5.19-gen"
 ---
 
 ## 역할

@@ -7,8 +7,8 @@ extraction: ast
 signature: "()"
 role: "라이브 편집 워크북을 한 Excel 프로세스 안에 모으기 위한 앱 전용 Excel.Application."
 role_source: docstring
-version: "0.5.18"
-loc: "serve_b2b.py:3819-3848"
+version: "0.5.19"
+loc: "serve_b2b.py:3874-3903"
 
 # ── 입출력 ──
 inputs: []
@@ -38,7 +38,7 @@ reads:
 writes:
   - "LIVE_EXCEL_APP"
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.18-gen"
+timestamp: "0.5.19-gen"
 ---
 
 ## 역할

@@ -7,8 +7,8 @@ extraction: regex   # 정규식 근사
 signature: "(replyContext)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
-version: "0.5.18"
-loc: "chat-ui.js:1951-1951"
+version: "0.5.19"
+loc: "chat-ui.js:2158-2158"
 
 # ── 입출력 ──
 inputs:
@@ -26,12 +26,13 @@ calls:
 calls_external: []
 called_by:
   - "addAssistantReply"
+  - "applyForcedPythonFallback"
   - "runApply"
   - "runInsert"
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.18-gen"
+timestamp: "0.5.19-gen"
 ---
 
 ## 역할
@@ -42,7 +43,7 @@ timestamp: "0.5.18-gen"
 
 ## 관계
 - 호출: `latestUserRequestForSafety`
-- 피호출(영향 전파 경로): `addAssistantReply`, `runApply`, `runInsert`
+- 피호출(영향 전파 경로): `addAssistantReply`, `applyForcedPythonFallback`, `runApply`, `runInsert`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

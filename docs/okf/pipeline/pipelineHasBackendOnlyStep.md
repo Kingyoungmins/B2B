@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(steps = state.pipeline)"
 role: "켜진 스텝 중 라이브 실행 불가(레거시 python/기타) 스텝이 있는가 — 있으면 전체 백엔드 라우팅."
 role_source: banner
-version: "0.5.18"
+version: "0.5.19"
 loc: "pipeline.js:105-105"
 
 # ── 입출력 ──
@@ -35,7 +35,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.18-gen"
+timestamp: "0.5.19-gen"
 ---
 
 ## 역할

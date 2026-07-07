@@ -7,8 +7,8 @@ extraction: regex   # 정규식 근사
 signature: "(userMessage, options)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
-version: "0.5.18"
-loc: "chat-ui.js:2950-2950"
+version: "0.5.19"
+loc: "chat-ui.js:3252-3252"
 
 # ── 입출력 ──
 inputs:
@@ -24,6 +24,7 @@ raises: []
 # ── 유기적 관계 ──
 calls:
   - "buildSchemaSummary"
+  - "buildSheetStructureDigest"
   - "callLLMOneShot"
   - "clarifyVerifierDeterministicQuestion"
   - "clarifyVerifierLikelyUnderspecified"
@@ -31,8 +32,10 @@ calls_external:
   - "String"
   - "exec"
   - "filter"
+  - "getAoa"
   - "join"
   - "replace"
+  - "resolveSheet"
   - "slice"
   - "trim"
 called_by:
@@ -40,7 +43,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.18-gen"
+timestamp: "0.5.19-gen"
 ---
 
 ## 역할
@@ -50,7 +53,7 @@ timestamp: "0.5.18-gen"
 - 없음(정적 분석 기준)
 
 ## 관계
-- 호출: `buildSchemaSummary`, `callLLMOneShot`, `clarifyVerifierDeterministicQuestion`, `clarifyVerifierLikelyUnderspecified`
+- 호출: `buildSchemaSummary`, `buildSheetStructureDigest`, `callLLMOneShot`, `clarifyVerifierDeterministicQuestion`, `clarifyVerifierLikelyUnderspecified`
 - 피호출(영향 전파 경로): `sendChat`
 
 ## 실패/예외

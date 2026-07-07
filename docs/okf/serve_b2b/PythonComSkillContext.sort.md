@@ -8,8 +8,8 @@ class: PythonComSkillContext
 signature: "(self, sheet, a1_range, key_col, ascending=True, has_header=True)"
 role: "실제 범위 정렬. key_col 은 범위 내 1-based 열 번호/'B' 열 문자, 또는 이들의 리스트(다중키)."
 role_source: docstring
-version: "0.5.18"
-loc: "serve_b2b.py:9865-9927"
+version: "0.5.19"
+loc: "serve_b2b.py:10248-10310"
 
 # ── 입출력 ──
 inputs:
@@ -76,7 +76,7 @@ reads:
   - "self.find_header"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.18-gen"
+timestamp: "0.5.19-gen"
 ---
 
 ## 역할

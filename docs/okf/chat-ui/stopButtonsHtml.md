@@ -7,8 +7,8 @@ extraction: regex   # 정규식 근사
 signature: "()"
 role: "#10: think 모드면 '생각 중단'(thinking 만 끊고 답변 받기) + '요청 중단'(전체 종료) 두 버튼,"
 role_source: banner
-version: "0.5.18"
-loc: "chat-ui.js:2295-2295"
+version: "0.5.19"
+loc: "chat-ui.js:2507-2507"
 
 # ── 입출력 ──
 inputs: []
@@ -28,7 +28,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.18-gen"
+timestamp: "0.5.19-gen"
 ---
 
 ## 역할

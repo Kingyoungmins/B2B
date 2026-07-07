@@ -8,8 +8,8 @@ class: ExcelWorksheetProxy
 signature: "(self, row=None, column=None, value=_EXCEL_NO_CELL_VALUE)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
-version: "0.5.18"
-loc: "serve_b2b.py:11335-11339"
+version: "0.5.19"
+loc: "serve_b2b.py:11834-11838"
 
 # ── 입출력 ──
 inputs:
@@ -40,12 +40,14 @@ called_by:
   - "OpenpyxlWorksheetProxy._write_translated_formula"
   - "OpenpyxlWorksheetProxy.append"
   - "OpenpyxlWorksheetProxy.flush_pending_rows"
+  - "PythonComSkillContext.sum_where"
   - "_OpxlCellProxy._cell"
   - "_OpxlCellProxy.value"
   - "_OpxlRange._get_value"
   - "_OpxlRange._set_value"
   - "_OpxlRowProxy.values"
   - "_apply_openpyxl_text_format_for_long_digit_columns"
+  - "_cond_match"
   - "_opxl_copy_cell_presentation"
   - "_opxl_display_cell_value"
   - "_opxl_get_cached_cell_value"
@@ -57,7 +59,7 @@ reads:
   - "self._worksheet"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.18-gen"
+timestamp: "0.5.19-gen"
 ---
 
 ## 역할
@@ -68,7 +70,7 @@ timestamp: "0.5.18-gen"
 
 ## 관계
 - 호출: `Cells`, `row`
-- 피호출(영향 전파 경로): `ExcelCellProxy.__init__`, `OpenpyxlSkillContext._write_grid`, `OpenpyxlSkillContext.sort`, `OpenpyxlWorksheetProxy._write_translated_formula`, `OpenpyxlWorksheetProxy.append`, `OpenpyxlWorksheetProxy.flush_pending_rows`, `_OpxlCellProxy._cell`, `_OpxlCellProxy.value`, `_OpxlRange._get_value`, `_OpxlRange._set_value`, `_OpxlRowProxy.values`, `_apply_openpyxl_text_format_for_long_digit_columns`, `_opxl_copy_cell_presentation`, `_opxl_display_cell_value`, `_opxl_get_cached_cell_value`, `_opxl_write_cell`, `_range_formula_info`, `write_result_workbook`
+- 피호출(영향 전파 경로): `ExcelCellProxy.__init__`, `OpenpyxlSkillContext._write_grid`, `OpenpyxlSkillContext.sort`, `OpenpyxlWorksheetProxy._write_translated_formula`, `OpenpyxlWorksheetProxy.append`, `OpenpyxlWorksheetProxy.flush_pending_rows`, `PythonComSkillContext.sum_where`, `_OpxlCellProxy._cell`, `_OpxlCellProxy.value`, `_OpxlRange._get_value`, `_OpxlRange._set_value`, `_OpxlRowProxy.values`, `_apply_openpyxl_text_format_for_long_digit_columns`, `_cond_match`, `_opxl_copy_cell_presentation`, `_opxl_display_cell_value`, `_opxl_get_cached_cell_value`, `_opxl_write_cell`, `_range_formula_info`, `write_result_workbook`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

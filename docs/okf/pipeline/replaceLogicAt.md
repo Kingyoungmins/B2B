@@ -4,11 +4,11 @@ title: replaceLogicAt
 module: pipeline.js
 lang: js
 extraction: regex   # 정규식 근사
-signature: "(stepId, newCode, newDescription, language)"
+signature: "(stepId, newCode, newDescription, language, opts)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
-version: "0.5.18"
-loc: "pipeline.js:1789-1789"
+version: "0.5.19"
+loc: "pipeline.js:1800-1800"
 
 # ── 입출력 ──
 inputs:
@@ -16,6 +16,7 @@ inputs:
   - "newCode"
   - "newDescription"
   - "language"
+  - "opts"
 returns: "(추정)"
 
 # ── 사이드이펙트 (정적 추정) ──
@@ -49,7 +50,9 @@ calls:
   - "toast"
   - "vbaTargetExcelId"
 calls_external:
+  - "String"
   - "error"
+  - "extendedTimeout"
   - "filter"
   - "find"
   - "findIndex"
@@ -58,6 +61,8 @@ calls_external:
   - "restore"
   - "slice"
   - "then"
+  - "toLowerCase"
+  - "trustedStatic"
 called_by:
   - "addAssistantReply"
   - "runEditApply"
@@ -66,7 +71,7 @@ reads:
 writes:
   - "pipeline"
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.18-gen"
+timestamp: "0.5.19-gen"
 ---
 
 ## 역할

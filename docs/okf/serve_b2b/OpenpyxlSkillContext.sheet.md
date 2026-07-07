@@ -8,8 +8,8 @@ class: OpenpyxlSkillContext
 signature: "(self, name=None, workbook=None)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
-version: "0.5.18"
-loc: "serve_b2b.py:13046-13084"
+version: "0.5.19"
+loc: "serve_b2b.py:13545-13583"
 
 # ── 입출력 ──
 inputs:
@@ -95,6 +95,8 @@ called_by:
   - "PythonComSkillContext.shift_months"
   - "PythonComSkillContext.sort"
   - "PythonComSkillContext.split_column"
+  - "PythonComSkillContext.sum_column"
+  - "PythonComSkillContext.sum_where"
   - "PythonComSkillContext.swap_cols"
   - "PythonComSkillContext.unmerge"
   - "PythonComSkillContext.used_last_col"
@@ -120,7 +122,7 @@ writes:
   - "self._last_sheet_workbook_raw"
   - "self.last_output_sheet"
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.18-gen"
+timestamp: "0.5.19-gen"
 ---
 
 ## 역할
@@ -132,7 +134,7 @@ timestamp: "0.5.18-gen"
 
 ## 관계
 - 호출: `_default_workbook`, `_find_sheet_name`, `_is_output_workbook`, `_unwrap_workbook`, `add`, `append`, `raw`, `values`
-- 피호출(영향 전파 경로): `ExcelSkillContext._merge_pivot_grid_into_base`, `ExcelSkillContext._ws_of`, `ExcelSkillContext.range`, `ExcelSkillContext.rows`, `ExcelSkillContext.sheet_like`, `ExcelWorksheetsProxy.__call__`, `OpenpyxlSkillContext._merge_pivot_grid_into_base`, `OpenpyxlSkillContext._ws_of`, `OpenpyxlSkillContext.range`, `OpenpyxlSkillContext.sheet_like`, `OpenpyxlWorkbookProxy.__getitem__`, `PythonComSkillContext._resolve_col`, `PythonComSkillContext._ws`, `PythonComSkillContext.add_total_row`, `PythonComSkillContext.clear`, `PythonComSkillContext.copy_col`, `PythonComSkillContext.dedupe`, `PythonComSkillContext.delete_cols`, `PythonComSkillContext.delete_rows`, `PythonComSkillContext.fill_sum_col`, `PythonComSkillContext.filter_to_sheet`, `PythonComSkillContext.find_header`, `PythonComSkillContext.formula_mask`, `PythonComSkillContext.has_formulas`, `PythonComSkillContext.hide_cols`, `PythonComSkillContext.hide_rows`, `PythonComSkillContext.insert_cols`, `PythonComSkillContext.insert_rows`, `PythonComSkillContext.last_col`, `PythonComSkillContext.last_row`, `PythonComSkillContext.lookup`, `PythonComSkillContext.merge`, `PythonComSkillContext.move_col_clear`, `PythonComSkillContext.move_cols`, `PythonComSkillContext.pivot`, `PythonComSkillContext.read`, `PythonComSkillContext.read_cell`, `PythonComSkillContext.read_formulas`, `PythonComSkillContext.replace`, `PythonComSkillContext.set_number_format`, `PythonComSkillContext.shift_months`, `PythonComSkillContext.sort`, `PythonComSkillContext.split_column`, `PythonComSkillContext.swap_cols`, `PythonComSkillContext.unmerge`, `PythonComSkillContext.used_last_col`, `PythonComSkillContext.used_last_row`, `PythonComSkillContext.used_range`, `PythonComSkillContext.write`, `PythonComSkillContext.write_cell`, `PythonComSkillContext.write_formulas`, `_OpenpyxlSheetsProxy.__call__`, `_OpenpyxlSheetsProxy.__getitem__`, `_activate_excel_session_impl`, `_restore_live_view_state`, `activate_excel_session`
+- 피호출(영향 전파 경로): `ExcelSkillContext._merge_pivot_grid_into_base`, `ExcelSkillContext._ws_of`, `ExcelSkillContext.range`, `ExcelSkillContext.rows`, `ExcelSkillContext.sheet_like`, `ExcelWorksheetsProxy.__call__`, `OpenpyxlSkillContext._merge_pivot_grid_into_base`, `OpenpyxlSkillContext._ws_of`, `OpenpyxlSkillContext.range`, `OpenpyxlSkillContext.sheet_like`, `OpenpyxlWorkbookProxy.__getitem__`, `PythonComSkillContext._resolve_col`, `PythonComSkillContext._ws`, `PythonComSkillContext.add_total_row`, `PythonComSkillContext.clear`, `PythonComSkillContext.copy_col`, `PythonComSkillContext.dedupe`, `PythonComSkillContext.delete_cols`, `PythonComSkillContext.delete_rows`, `PythonComSkillContext.fill_sum_col`, `PythonComSkillContext.filter_to_sheet`, `PythonComSkillContext.find_header`, `PythonComSkillContext.formula_mask`, `PythonComSkillContext.has_formulas`, `PythonComSkillContext.hide_cols`, `PythonComSkillContext.hide_rows`, `PythonComSkillContext.insert_cols`, `PythonComSkillContext.insert_rows`, `PythonComSkillContext.last_col`, `PythonComSkillContext.last_row`, `PythonComSkillContext.lookup`, `PythonComSkillContext.merge`, `PythonComSkillContext.move_col_clear`, `PythonComSkillContext.move_cols`, `PythonComSkillContext.pivot`, `PythonComSkillContext.read`, `PythonComSkillContext.read_cell`, `PythonComSkillContext.read_formulas`, `PythonComSkillContext.replace`, `PythonComSkillContext.set_number_format`, `PythonComSkillContext.shift_months`, `PythonComSkillContext.sort`, `PythonComSkillContext.split_column`, `PythonComSkillContext.sum_column`, `PythonComSkillContext.sum_where`, `PythonComSkillContext.swap_cols`, `PythonComSkillContext.unmerge`, `PythonComSkillContext.used_last_col`, `PythonComSkillContext.used_last_row`, `PythonComSkillContext.used_range`, `PythonComSkillContext.write`, `PythonComSkillContext.write_cell`, `PythonComSkillContext.write_formulas`, `_OpenpyxlSheetsProxy.__call__`, `_OpenpyxlSheetsProxy.__getitem__`, `_activate_excel_session_impl`, `_restore_live_view_state`, `activate_excel_session`
 
 ## 실패/예외
 - `RuntimeError`

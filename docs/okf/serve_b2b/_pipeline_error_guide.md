@@ -7,8 +7,8 @@ extraction: ast
 signature: "(message, code='')"
 role: "난해한 엔진 예외를 (원인, 프롬프트 작성 가이드) 한국어 쌍으로 변환한다."
 role_source: docstring
-version: "0.5.18"
-loc: "serve_b2b.py:799-867"
+version: "0.5.19"
+loc: "serve_b2b.py:840-908"
 
 # ── 입출력 ──
 inputs:
@@ -38,7 +38,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.18-gen"
+timestamp: "0.5.19-gen"
 ---
 
 ## 역할

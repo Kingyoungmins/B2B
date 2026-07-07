@@ -8,8 +8,8 @@ class: PythonComSkillContext
 signature: "(self, sheet, a1_start, values, overwrite_formulas=True)"
 role: "2차원 리스트를 시작 셀 기준으로 한 번에 쓴다(COM 1회)."
 role_source: docstring
-version: "0.5.18"
-loc: "serve_b2b.py:8817-8849"
+version: "0.5.19"
+loc: "serve_b2b.py:8969-9001"
 
 # ── 입출력 ──
 inputs:
@@ -80,7 +80,7 @@ reads:
   - "self._ws"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.18-gen"
+timestamp: "0.5.19-gen"
 ---
 
 ## 역할

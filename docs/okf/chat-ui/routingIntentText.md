@@ -7,8 +7,8 @@ extraction: regex   # 정규식 근사
 signature: "(text)"
 role: "라우팅 '의도' 판정용: @범위/@컬럼/@시트[...] 안의 파일명·시트명·범위를 제거한다."
 role_source: banner
-version: "0.5.18"
-loc: "chat-ui.js:431-431"
+version: "0.5.19"
+loc: "chat-ui.js:569-569"
 
 # ── 입출력 ──
 inputs:
@@ -56,7 +56,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.18-gen"
+timestamp: "0.5.19-gen"
 ---
 
 ## 역할

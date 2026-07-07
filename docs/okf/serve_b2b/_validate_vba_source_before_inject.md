@@ -7,8 +7,8 @@ extraction: ast
 signature: "(code)"
 role: "VBE 디버거를 띄우는 명백한 컴파일 오류는 Excel에 주입하기 전에 차단한다."
 role_source: docstring
-version: "0.5.18"
-loc: "serve_b2b.py:5530-5636"
+version: "0.5.19"
+loc: "serve_b2b.py:5585-5691"
 
 # ── 입출력 ──
 inputs:
@@ -47,7 +47,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.18-gen"
+timestamp: "0.5.19-gen"
 ---
 
 ## 역할

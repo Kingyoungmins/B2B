@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(fileRef, sheetName, srcStart, srcCount, destStart)"
 role: "컬럼 범위 [srcStart, srcStart+srcCount) 를 destStart 위치로 복사."
 role_source: banner
-version: "0.5.18"
+version: "0.5.19"
 loc: "sheet-ops.js:185-185"
 
 # ── 입출력 ──
@@ -41,7 +41,7 @@ called_by: []
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.18-gen"
+timestamp: "0.5.19-gen"
 ---
 
 ## 역할
