@@ -27,6 +27,92 @@ BASE_DIR = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
 HEARTBEAT_TIMEOUT_SECONDS = int(os.environ.get("B2B_HEARTBEAT_TIMEOUT_SECONDS", "90"))
 EMPTY_CLIENT_GRACE_SECONDS = int(os.environ.get("B2B_EMPTY_CLIENT_GRACE_SECONDS", "5"))
 
+# ── 버전 체크 ──────────────────────────────────────────────────────────────
+CURRENT_VERSION  = "0.5.19"
+VERSION_CHECK_URL = "https://lgupluscorp.sharepoint.com/sites/o365m_00058572/Shared%20Documents/AX-Cell/version.txt?web=0"
+DOWNLOAD_URL      = ""   # TODO: AXCell 랜딩 페이지 URL (다운로드 버튼 있는 페이지)
+
+import platform as _platform
+FONT = "Malgun Gothic" if _platform.system() == "Windows" else "NanumGothic"
+
+
+def check_for_update() -> None:
+    try:
+        if VERSION_CHECK_URL:
+            # ▶ 쉐어포인트로 전환 시: VERSION_CHECK_URL에 직접경로?web=0 입력하면 여기로 동작
+            with urllib.request.urlopen(VERSION_CHECK_URL, timeout=3) as r:
+                latest = r.read().decode().strip()
+        else:
+            # ▶ 로컬 테스트: 프로그램과 같은 폴더의 version.txt 읽기
+            local_ver = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent)) / "version.txt"
+            if not local_ver.exists():
+                return
+            latest = local_ver.read_text(encoding="utf-8").strip()
+        if latest == CURRENT_VERSION:
+            return
+
+        import tkinter as tk
+
+        C_BG     = "#FFFFFF"
+        C_INK    = "#0F0A1E"
+        C_MUTED  = "#5B5270"
+        C_MAG    = "#FF0080"
+        C_MAG_HV = "#E00072"
+        C_PILL   = "#FFF0F9"
+        C_BORDER = "#FFE0F2"
+
+        W, H = 420, 272
+        root = tk.Tk()
+        root.title("업데이트 안내")
+        root.resizable(False, False)
+        root.attributes("-topmost", True)
+        root.configure(bg=C_BG)
+
+        # 화면 중앙 배치
+        root.update_idletasks()
+        x = (root.winfo_screenwidth()  - W) // 2
+        y = (root.winfo_screenheight() - H) // 2
+        root.geometry(f"{W}x{H}+{x}+{y}")
+
+        # ── 헤더: 마젠타 배경 + Label ─────────────────────
+        hdr = tk.Frame(root, bg=C_MAG)
+        hdr.pack(fill="x")
+        tk.Label(hdr, text="새로운 버전이 출시되었습니다",
+                 font=(FONT, 14), bg=C_MAG, fg="white",
+                 pady=20).pack()
+
+        # ── 바디 ──────────────────────────────────────────
+        body = tk.Frame(root, bg=C_BG)
+        body.pack(fill="both", expand=True, padx=36)
+
+        tk.Label(body,
+                 text="마당 B2B portal을 통해\n최신 버전을 다운로드 해주세요.",
+                 font=(FONT, 13), bg=C_BG, fg=C_INK,
+                 justify="center").pack(pady=(22, 12))
+
+        # 버전 뱃지
+        pill = tk.Frame(body, bg=C_PILL, highlightbackground=C_BORDER,
+                        highlightthickness=1)
+        pill.pack(pady=(0, 20))
+        tk.Label(pill,
+                 text=f"{CURRENT_VERSION}  →  {latest}",
+                 font=(FONT, 12), bg=C_PILL, fg=C_MAG,
+                 padx=16, pady=6).pack()
+
+        # 닫기 버튼
+        tk.Button(body, text="닫기", width=16,
+                  command=lambda: sys.exit(0),
+                  font=(FONT, 13),
+                  bg=C_MAG, fg="white", relief="flat",
+                  activebackground=C_MAG_HV, activeforeground="white",
+                  cursor="hand2", pady=8, bd=0).pack()
+
+        root.protocol("WM_DELETE_WINDOW", lambda: sys.exit(0))
+        root.mainloop()
+    except Exception:
+        pass  # 체크 실패 시 앱 정상 실행
+# ──────────────────────────────────────────────────────────────────────────
+
 
 def candidate_ports() -> list[int]:
     requested = int(os.environ.get("B2B_PORT", str(DEFAULT_PORT)))
@@ -181,8 +267,8 @@ def show_control_window(url: str, on_close) -> None:
     root.geometry("360x150")
     root.resizable(False, False)
 
-    tk.Label(root, text="B2B 업무망 실행 중", font=("Malgun Gothic", 12, "bold")).pack(pady=(18, 6))
-    tk.Label(root, text=url, font=("Malgun Gothic", 9)).pack(pady=(0, 12))
+    tk.Label(root, text="B2B 업무망 실행 중", font=(FONT, 12, "bold")).pack(pady=(18, 6))
+    tk.Label(root, text=url, font=(FONT, 9)).pack(pady=(0, 12))
 
     button_frame = tk.Frame(root)
     button_frame.pack()
@@ -203,6 +289,7 @@ def show_control_window(url: str, on_close) -> None:
 
 
 def main() -> int:
+    check_for_update()
     if not (BASE_DIR / "index.html").exists():
         print(f"Missing app file: {BASE_DIR / 'index.html'}", file=sys.stderr)
         return 1
