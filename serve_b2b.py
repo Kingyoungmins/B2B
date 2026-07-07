@@ -428,8 +428,9 @@ def cleanup_stale_temp_artifacts(min_age_seconds=300, excel_diag_max_age_seconds
     """[디스크 누수 방지] 앱 시작 시 이전 실행(크래시/강제종료 포함)이 남긴 임시 작업물을 정리한다.
     새 프로세스라 활성 세션이 아직 없어 안전하다(종료-시 삭제보다 기능 리스크가 낮고, 매 시작마다 정리되므로
     누적이 한 실행분으로 한계가 잡힌다 = '재활용' 효과).
-    - BACKEND_DIR(b2b_backend_v044): live_*/prestep_*/excel_*/result_*/b2b_replace_*/uuid_*.xlsx 등 stale 작업물.
-      auto_backups(사용자 스킬 백업)·pipeline_step_snapshots(런타임 정리 담당)는 BACKEND_DIR 정리에서 함께 비워진다.
+    - BACKEND_DIR(b2b_backend_v044): 단독 백엔드면 폴더 전체를 무조건 비운다(나이 게이트/예외 없음) — 재시작 시
+      파일을 새로 업로드하므로 여기 남은 건 전부 이전 실행의 죽은 작업물. 진짜 스킬 백업은 여기가 아니라
+      writable_app_dir()/auto_backup(앱 폴더)에 있어 무관. 다른 백엔드가 살아있을 때만 전이성 stale 만 정리.
     - Temp 루트: b2b_isopipe_*/b2b_replace_*/B2B_ver*_single_*/b2b_*test_* (현재 실행 폴더는 보존).
     - PyInstaller _MEI*: 충분히 오래된 것만(현재 _MEIPASS 제외) — 타 앱 오인삭제 최소화 위해 보수적 나이.
     - Excel 진단 로그(Temp/Diagnostics/EXCEL): 오래된 파일(가장 큰 누적원).
@@ -482,23 +483,24 @@ def cleanup_stale_temp_artifacts(min_age_seconds=300, excel_diag_max_age_seconds
             except Exception:
                 stats["failed"] += 1
 
-        # 1) BACKEND_DIR 내부 stale 작업물 (auto_backups 보존)
-        # 단독 백엔드면 전부 정리. 다른 백엔드가 살아있어도 '전이성 작업물'(prestep_/result_/live_/b2b_replace_/
-        # excel_)은 stale 면 정리한다 — 이들은 한 콜에서 수초만 쓰이고 stale 면 그 실행은 이미 끝났다(=multi-version
-        # 테스트 중에도 큰 prestep 스냅샷이 안 쌓임). 반면 '{uuid}_원본사본'은 라이브 세션이 워크북을 여는 동안 계속
-        # 필요하므로 단독 백엔드일 때만 지운다(다른 세션의 리셋 원본 깨짐 방지).
+        # 1) BACKEND_DIR 내부 작업물
+        # [사용자 지시] 단독 백엔드(정상 재시작)면 여기 든 건 전부 이전 실행의 죽은 작업물이다(재시작 시 파일을
+        # 새로 업로드하므로 남길 게 없다) → 나이 게이트/auto_backups 예외 없이 폴더 전체를 무조건 비운다.
+        # (진짜 스킬 백업은 여기가 아니라 writable_app_dir()/auto_backup 앱 폴더에 있어 영향 없음.)
+        # 예외: 다른 B2B 백엔드가 '실제로' 살아있으면 그 세션이 워크북을 여기서 열고 있어(예: b2b_replace_/uuid_
+        # 사본) 통째로 지우면 그 Excel 이 깨진다 → 이 경우만 stale 한 '전이성 작업물'만 보수적으로 정리한다.
         try:
             if BACKEND_DIR.exists():
-                _transient_prefixes = ("prestep_", "result_", "live_", "b2b_replace_", "excel_")
-                for child in BACKEND_DIR.iterdir():
-                    if child.name == "auto_backups":
-                        continue
-                    if not _age_ok(child, min_age_seconds):
-                        continue
-                    is_transient = any(child.name.startswith(pfx) for pfx in _transient_prefixes)
-                    if other_backend and not is_transient:
-                        continue  # 다른 백엔드 생존 시 원본사본/기타는 보존
-                    _rm(child)
+                if not other_backend:
+                    for child in BACKEND_DIR.iterdir():
+                        _rm(child)   # 전부 삭제(auto_backups 포함, 나이 무관)
+                else:
+                    _transient_prefixes = ("prestep_", "result_", "live_", "b2b_replace_", "excel_")
+                    for child in BACKEND_DIR.iterdir():
+                        if not _age_ok(child, min_age_seconds):
+                            continue
+                        if any(child.name.startswith(pfx) for pfx in _transient_prefixes):
+                            _rm(child)   # 다른 백엔드 생존 시엔 전이성 stale 만(원본사본/기타 보존)
         except Exception:
             pass
 
@@ -511,9 +513,11 @@ def cleanup_stale_temp_artifacts(min_age_seconds=300, excel_diag_max_age_seconds
             except Exception:
                 pass
 
-        # 2-b) WebView2 사용자데이터(B2B_WebView2/ver044_<pid>): '죽은 pid' 폴더 삭제(살아있는 인스턴스 보존).
+        # 2-b) WebView2 사용자데이터(B2B_WebView2/verNNN_<pid>): '죽은 pid' 폴더 삭제(살아있는 인스턴스 보존).
         # NativeHost 도 시작 시 정리하지만(죽은 pid 즉시), 백엔드에서도 백스톱으로 정리한다 — Chromium 캐시가
-        # 실행마다 ver044_<pid> 로 쌓여 수백 MB 누수하던 문제. dead-pid 검사라 다른 백엔드 생존과 무관하게 안전.
+        # 실행마다 verNNN_<pid> 로 쌓여 수백 MB 누수하던 문제. [수정] 예전엔 'ver044_' 만 글롭해 구버전 폴더
+        # (ver043_ 등)가 영영 안 지워졌다 → 'ver*_*' 로 넓혀 모든 버전 마커를 잡는다. dead-pid 검사라 살아있는
+        # 인스턴스(현재/다른 백엔드)는 보존되고 다른 백엔드 생존과도 무관하게 안전.
         try:
             wv = temp / "B2B_WebView2"
             if wv.exists():
@@ -521,12 +525,12 @@ def cleanup_stale_temp_artifacts(min_age_seconds=300, excel_diag_max_age_seconds
                     import psutil as _ps
                 except Exception:
                     _ps = None
-                for d in wv.glob("ver044_*"):
+                for d in wv.glob("ver*_*"):
                     if not d.is_dir():
                         continue
                     alive = False
                     try:
-                        wv_pid = int(d.name.split("_", 1)[1])
+                        wv_pid = int(d.name.rsplit("_", 1)[1])
                         alive = bool(_ps and _ps.pid_exists(wv_pid))
                     except Exception:
                         alive = False
@@ -535,10 +539,20 @@ def cleanup_stale_temp_artifacts(min_age_seconds=300, excel_diag_max_age_seconds
         except Exception:
             pass
 
-        # 3) PyInstaller _MEI* (보수적 나이, 현재 _MEIPASS 제외)
+        # 3) PyInstaller _MEI* (현재 _MEIPASS 는 _rm 의 _is_self 가 보존)
+        # B2B 자신의 onefile 추출본은 datas 로 serve_b2b.py 를 포함한다 → 그 마커로 '우리 것'을 식별해 나이 무관
+        # 즉시 삭제한다(크래시/강제종료로 남은 우리 _MEI 잔재를 재실행 때 확실히 청소). 마커가 없는 _MEI(다른
+        # PyInstaller 앱의 것)는 오인 삭제 방지를 위해 종전대로 보수적 나이(기본 24h)만. 둘 다 단독 백엔드일 때만.
         try:
             for d in (temp.glob("_MEI*") if not other_backend else []):
-                if d.is_dir() and _age_ok(d, mei_max_age_seconds):
+                if not d.is_dir():
+                    continue
+                is_b2b_own = False
+                try:
+                    is_b2b_own = (d / "serve_b2b.py").exists()
+                except Exception:
+                    is_b2b_own = False
+                if is_b2b_own or _age_ok(d, mei_max_age_seconds):
                     _rm(d)
         except Exception:
             pass
@@ -1539,6 +1553,7 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
             self.send_json(run_python_on_session(
                 payload.get("excelId"),
                 payload.get("code") or "",
+                extended=bool(payload.get("extendedTimeout")),
             ))
         except Exception as err:
             self.send_json({"ok": False, "error": str(err)}, status=500)
@@ -7707,6 +7722,7 @@ def _run_vba_pipeline_on_session_impl(excel_id, steps, reset=True, entry=None, v
                                 session,
                                 code,
                                 skip_static=bool(isinstance(st, dict) and st.get("trustedStatic") is True),
+                                timeout_s=_step_extended_timeout_s(st),
                             )
                         else:
                             _inject_and_run_vba(fapp, ftarget, code, entry)
@@ -8044,7 +8060,8 @@ def _run_full_pipeline_single_instance_impl(groups, reset_excel_ids=None, view_s
                     try:
                         if str(lang).lower() == "python":
                             _exec_python_com_skill(fapp, ftarget, fsession, code,
-                                                   skip_static=bool(isinstance(st, dict) and st.get("trustedStatic") is True))
+                                                   skip_static=bool(isinstance(st, dict) and st.get("trustedStatic") is True),
+                                                   timeout_s=_step_extended_timeout_s(st))
                         else:
                             _inject_and_run_vba(fapp, ftarget, code, entry)
                     except PipelineExecutionError as _pe:
@@ -8553,6 +8570,13 @@ def run_capture_copypaste(excel_id, values_only=False):
 PY_SKILL_ENTRY = "transform"
 PY_COM_BUDGET = int(os.environ.get("B2B_PY_COM_BUDGET", "400"))
 PY_SKILL_TIMEOUT_S = float(os.environ.get("B2B_PY_SKILL_TIMEOUT", "75"))
+# [복구/강제 Python] VBA 실패→에러복구가 Python 으로 다시 짠 코드나 '원본 Python 강제 적용' 경로는
+# (1) 대용량이라 다시 VBA 로 튕기면 VBA↔Python 무한 루프가 되고 (2) 75초 데드라인에 잘리면 또 실패한다.
+# 그래서 이 경로만 데드라인을 크게 확장한다. 완전 무한(타임아웃 제거)은 STA 워커가 영구 정지될 위험이
+# 있어(무한 루프 코드면 앱 재시작 필요) '넉넉한 유한값'을 쓴다. 기본 540초(9분) — 파이프라인 복구 경로의
+# 바깥 excel_call 상한(run-vba-pipeline=600초)보다 작아 그 안에서 완주하도록 잡았다(더 늘리려면 그 상한도
+# 함께 올려야 함). 실행 안전은 정적검사 우회와 무관하게 런타임 샌드박스(_PY_SAFE_BUILTINS/safe_globals)가 지킨다.
+PY_SKILL_RECOVERY_TIMEOUT_S = float(os.environ.get("B2B_PY_SKILL_RECOVERY_TIMEOUT", "540"))
 PY_READ_MAX_CELLS = int(os.environ.get("B2B_PY_READ_MAX_CELLS", "6000000"))
 
 _PY_SAFE_BUILTINS = {
@@ -8587,14 +8611,14 @@ class PythonComSkillContext:
     - 대상 워크북은 세션에 고정(pinned)되어 ActiveWorkbook 에 의존하지 않는다.
     """
 
-    def __init__(self, app, wb, session, _shared=None):
+    def __init__(self, app, wb, session, _shared=None, timeout_s=None):
         self._app = app
         self._wb = wb
         self._session = session
         if _shared is None:
             _shared = {
                 "com_calls": 0,
-                "deadline": time.monotonic() + PY_SKILL_TIMEOUT_S,
+                "deadline": time.monotonic() + (float(timeout_s) if timeout_s else PY_SKILL_TIMEOUT_S),
                 "journal": [],          # (ws_name, address, formulas_2d)
                 "structural": [],       # 롤백 불가 구조 변경 설명 목록
                 "books": {},
@@ -10801,12 +10825,24 @@ def _python_com_static_check(code):
         raise PythonComSkillError("정적 검사 위반:\n- " + "\n- ".join(unique))
 
 
-def _exec_python_com_skill(app, wb, session, code, skip_static=False):
+def _step_extended_timeout_s(st):
+    """스텝 dict 이 extendedTimeout=True(VBA→Python 복구/강제 대용량)면 확장 데드라인(초)을, 아니면 None 을
+    돌려준다. 파이프라인 스텝 실행 경로에서 이 스텝만 75초 데드라인 대신 복구용 데드라인을 쓰게 한다."""
+    try:
+        if isinstance(st, dict) and st.get("extendedTimeout") is True:
+            return PY_SKILL_RECOVERY_TIMEOUT_S
+    except Exception:
+        pass
+    return None
+
+
+def _exec_python_com_skill(app, wb, session, code, skip_static=False, timeout_s=None):
     """샌드박스 exec + 데드라인 트레이서로 생성 Python 스킬을 실행한다.
-    반환: ctx.summary(). 실패 시 저널 롤백 후 PythonComSkillError 재전파."""
+    반환: ctx.summary(). 실패 시 저널 롤백 후 PythonComSkillError 재전파.
+    timeout_s: 지정 시 ctx/트레이서 데드라인을 이 값(초)으로 확장(복구/강제 대용량 경로)."""
     if not skip_static:
         _python_com_static_check(code)
-    ctx = PythonComSkillContext(app, wb, session)
+    ctx = PythonComSkillContext(app, wb, session, timeout_s=timeout_s)
     safe_globals = {
         "__builtins__": dict(_PY_SAFE_BUILTINS),
         "re": re,
@@ -10823,7 +10859,7 @@ def _exec_python_com_skill(app, wb, session, code, skip_static=False):
     if not callable(fn):
         raise PythonComSkillError(f"def {PY_SKILL_ENTRY}(ctx): 함수를 찾지 못했습니다.")
 
-    deadline = time.monotonic() + PY_SKILL_TIMEOUT_S
+    deadline = time.monotonic() + (float(timeout_s) if timeout_s else PY_SKILL_TIMEOUT_S)
     counter = {"n": 0}
 
     def _tracer(frame, event, arg):
@@ -10860,9 +10896,10 @@ def _exec_python_com_skill(app, wb, session, code, skip_static=False):
     return ctx.summary()
 
 
-def _run_python_on_session_impl(excel_id, code):
+def _run_python_on_session_impl(excel_id, code, skip_static=False, timeout_s=None):
     """라이브 세션에 떠 있는 실제 워크북에 Python COM 스킬을 실행한다(VBA 경로와 동일한 외피:
-    동반 워크북 보장 → 보호 해제 → 실행 → 앱 상태/보호/창 복구). 변경 검출은 ctx 저널이 담당."""
+    동반 워크북 보장 → 보호 해제 → 실행 → 앱 상태/보호/창 복구). 변경 검출은 ctx 저널이 담당.
+    skip_static/timeout_s: 복구·강제 대용량 경로에서 정적검사 우회 + 데드라인 확장."""
     if not (code or "").strip():
         raise RuntimeError("Python 코드가 비어 있습니다.")
     run_t0 = time.perf_counter()
@@ -10885,7 +10922,7 @@ def _run_python_on_session_impl(excel_id, code):
         except Exception:
             pass
         try:
-            summary = _exec_python_com_skill(app, wb, session, code)
+            summary = _exec_python_com_skill(app, wb, session, code, skip_static=skip_static, timeout_s=timeout_s)
         finally:
             _restore_app_state(app)
             try:
@@ -10916,10 +10953,19 @@ def _run_python_on_session_impl(excel_id, code):
         return result
 
 
-def run_python_on_session(excel_id, code):
-    timeout = max(45, int(PY_SKILL_TIMEOUT_S) + 15)
+def run_python_on_session(excel_id, code, extended=False):
+    # extended=True: VBA 실패→복구 Python / 원본 Python 강제적용 경로. 정적검사 우회 + 데드라인 확장으로
+    # 대용량 작업이 다시 VBA 로 튕기거나 75초에 잘리지 않고 끝까지 실행된다. 외부 excel_call 타임아웃은
+    # 내부 데드라인보다 크게 잡아(+60s), 내부 데드라인이 먼저 발동하도록 한다(정상 예외 경로).
+    if extended:
+        deadline_s = PY_SKILL_RECOVERY_TIMEOUT_S
+        timeout = int(deadline_s) + 60
+    else:
+        deadline_s = None
+        timeout = max(45, int(PY_SKILL_TIMEOUT_S) + 15)
     try:
-        return excel_call(_run_python_on_session_impl, excel_id, code, timeout=timeout)
+        return excel_call(_run_python_on_session_impl, excel_id, code,
+                          skip_static=bool(extended), timeout_s=deadline_s, timeout=timeout)
     except TimeoutError as err:
         _vba_trace("python_com.run.timeout", excelId=excel_id, timeout=timeout, error=str(err)[:1000])
         try:
@@ -15044,6 +15090,7 @@ def _run_excel_python_pipeline_impl(payload, job_id=None):
                         None,
                         original_code,
                         skip_static=bool(step.get("trustedStatic") is True),
+                        timeout_s=_step_extended_timeout_s(step),
                     )
                 else:
                     stage_label = "compile"

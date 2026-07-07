@@ -806,6 +806,8 @@ function isolatedPipelineStepPayload(step, stepIdx) {
     targetFileId: step && step.targetFileId || null,
     targetSheetName: targetSheetName || null,
     trustedStatic: step && step.trustedStatic === true,
+    // VBA→Python 복구/강제 대용량 스텝 → 백엔드가 정적검사 우회 + 데드라인 확장으로 완주(다시 VBA 로 안 튕김).
+    extendedTimeout: step && step.extendedTimeout === true,
   };
 }
 
@@ -925,7 +927,12 @@ async function runIsolatedLivePipelineSteps(sourceSteps, initialExcelId, options
   let lastData = null;
   let lastTouchedFileId = null;
   let lastTouchedExcelId = null;
-  const pipelineTimeoutMs = n => Math.max(90000, Math.min(300000, 60000 + n * 30000));
+  // 복구/강제(extendedTimeout) 스텝이 하나라도 있으면 클라 HTTP 타임아웃 상한(기본 5분)을 백엔드 확장
+  // 데드라인(기본 20분)보다 크게 잡아, 대용량 완주 도중에 클라가 먼저 끊지 않게 한다.
+  const anyExtendedStep = activeSteps.some(s => s && s.extendedTimeout === true);
+  const pipelineTimeoutMs = n => anyExtendedStep
+    ? Math.max(1320000, 60000 + n * 30000)
+    : Math.max(90000, Math.min(300000, 60000 + n * 30000));
   const pipelineTimeoutMessage = "스킬 파이프라인 실행 응답이 지연되어 중단했습니다. 저사양 PC에서는 백그라운드에서 계속 적용 중일 수 있으니 잠시 후 화면을 확인해 주세요.";
   try {
     // [0.5.15 백그라운드 전체실행] 전체실행 버튼이 backgroundMode:true 로 호출하면, 그룹별 spawn+동기화(N콜)
@@ -1409,6 +1416,9 @@ function applyVbaStepToLiveExcel(step, excelId, options = {}) {
   // [0.5.2.2] 언어에 따라 실행기 선택 — python(def transform(ctx)) 은 Python COM 라이브 엔진.
   const liveLang = step.language || (typeof inferPipelineStepLanguage === "function" ? inferPipelineStepLanguage(step) : "vba");
   const liveEndpoint = liveLang === "python" ? "/api/excel/run-python" : "/api/excel/run-vba";
+  // [복구/강제 대용량] 이 스텝이 VBA→Python 복구 결과이거나 '원본 Python 강제적용'이면 백엔드가 정적검사를
+  // 우회하고 데드라인을 확장해 완주시킨다(다시 VBA 로 튕기는 무한 루프 방지). 클라 HTTP/로딩 타임아웃도 함께 확장.
+  const wantExtended = liveLang === "python" && !!(step && step.extendedTimeout);
   try {
     if (typeof traceClientUiEvent === "function") traceClientUiEvent("pipeline.apply_live.start", {
       stepId: step.id || "",
@@ -1435,7 +1445,7 @@ function applyVbaStepToLiveExcel(step, excelId, options = {}) {
   window.__activeVbaApply = { token: cancelToken, excelId, stepId: step.id };
   if (typeof beginExcelMirrorApplyLoading === "function") beginExcelMirrorApplyLoading(
     liveLang === "python" ? "스킬 적용 중(Python)..." : "스킬 적용 중(VBA)...",
-    { failsafeMs: liveLang === "python" ? 130000 : 110000 }
+    { failsafeMs: liveLang === "python" ? (wantExtended ? 1350000 : 130000) : 110000 }
   );
   try { if (typeof traceClientUiEvent === "function") traceClientUiEvent("pipeline.apply_live.loading_started", { stepId: step.id || "", liveLang }); } catch (_) {}
   const prehide = typeof hideAllExcelMirrorWindows === "function"
@@ -1468,9 +1478,10 @@ function applyVbaStepToLiveExcel(step, excelId, options = {}) {
       const reqUrl = isVbaApply ? "/api/excel/run-vba-pipeline" : liveEndpoint;
       const reqBody = isVbaApply
         ? { excelId, steps: [isolatedPipelineStepPayload(step, (state.pipeline || []).indexOf(step))], reset: false }
-        : { excelId, code: step.code };
+        : { excelId, code: step.code, extendedTimeout: wantExtended };
       // 격리는 인스턴스 spawn 이 포함돼 라이브 직접보다 느리다 → VBA 타임아웃을 넉넉히(저사양 대비).
-      const liveTimeoutMs = liveLang === "python" ? 105000 : 180000;
+      // 복구/강제 Python(wantExtended)은 백엔드 데드라인(기본 20분)보다 크게 잡아 도중에 끊기지 않게 한다.
+      const liveTimeoutMs = liveLang === "python" ? (wantExtended ? 1320000 : 105000) : 180000;
       try { if (typeof traceClientUiEvent === "function") traceClientUiEvent("pipeline.apply_live.request_before", { stepId: step.id || "", endpoint: reqUrl, timeoutMs: liveTimeoutMs }); } catch (_) {}
       return postExcelMirror(reqUrl, reqBody, 0, {
         timeoutMs: liveTimeoutMs,
@@ -1786,7 +1797,7 @@ function insertLogic(step, position) {
   }
 }
 
-function replaceLogicAt(stepId, newCode, newDescription, language) {
+function replaceLogicAt(stepId, newCode, newDescription, language, opts) {
   const idx = state.pipeline.findIndex(s => s.id === stepId);
   if (idx < 0) {
     toast("수정 대상 단계를 찾지 못했습니다", "error");
@@ -1795,12 +1806,16 @@ function replaceLogicAt(stepId, newCode, newDescription, language) {
   const originalStep = state.pipeline[idx];
   const beforeReplaceSnapshot = (state.pipeline || []).map(s => ({ ...s }));
   const next = state.pipeline.slice();
+  // VBA 실패→에러복구가 Python 으로 다시 짠 스텝(recoveredFromVba)은 대용량이라 다시 VBA 로 튕기면 안 되고
+  // (무한 루프) 75초에 잘려도 안 된다 → trustedStatic(정적검사 우회) + extendedTimeout(데드라인 확장)을 켠다.
+  const recoveredFromVba = !!(opts && opts.recoveredFromVba && String(language).toLowerCase() === "python");
   next[idx] = normalizeStep({
     ...next[idx],
     code: newCode,
     description: newDescription || next[idx].description,
     language,
-    trustedStatic: false,
+    trustedStatic: recoveredFromVba,
+    extendedTimeout: recoveredFromVba,
   });
   // [0.5.15 Bug2 본수정] 마지막 스텝을 수정/에러복구해도 '그 스텝 직전 스냅샷'에서 이어실행한다(전체 재실행 금지).
   // 예전엔 idx<lastBeforeIdx(=마지막이 아님)이거나 resume 보류 중일 때만 이어실행 → 마지막 스텝(예: 6단계)

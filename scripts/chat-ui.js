@@ -1827,6 +1827,8 @@ function applyForcedPythonFallback(pythonCode, context) {
     code: String(pythonCode || ""),
     description: context.originalPythonDesc || "원본 Python 스킬(강제 적용)",
     language: "python",
+    // 강제 적용은 대용량이 전제(VBA 로는 안 풀림) → 백엔드 정적검사 우회 + 데드라인 확장으로 완주시킨다.
+    extendedTimeout: true,
   });
   if (result && result.error) {
     toast("강제 적용 실패: " + result.error, "error");
@@ -2284,7 +2286,9 @@ function addAssistantReply(fullText, replyContext) {
       div.appendChild(actions);
 
       const runEditApply = () => {
-        const result = replaceLogicAt(editTargetId, code, desc, language);
+        const result = replaceLogicAt(editTargetId, code, desc, language,
+          // 기존 스텝의 VBA 실패→Python 에러복구도 대용량 완주(정적검사 우회+데드라인 확장)를 허용한다.
+          { recoveredFromVba: !!(replyContext && replyContext.recoveredFromVba && String(language).toLowerCase() === "python") });
         if (result && !result.error) {
           editApplyBtn.disabled = true;
           rejectBtn.disabled = true;
@@ -2335,7 +2339,10 @@ function addAssistantReply(fullText, replyContext) {
       div.appendChild(actions);
 
       const runApply = () => {
-        const result = applyLogic({ id: uid(), prompt: replyStepPrompt(replyContext), code, description: desc, language });
+        const result = applyLogic({ id: uid(), prompt: replyStepPrompt(replyContext), code, description: desc, language,
+          // VBA 실패→에러복구가 Python 으로 다시 짠 코드(recoveredFromVba)는 대용량이라 다시 VBA 로 튕기면
+          // 안 되고 75초에 잘려도 안 된다 → 백엔드 정적검사 우회 + 데드라인 확장으로 완주.
+          extendedTimeout: !!(replyContext && replyContext.recoveredFromVba && language === "python") });
         applyBtn.disabled = true;
         insertBtn.disabled = true;
         rejectBtn.disabled = true;

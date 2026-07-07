@@ -502,18 +502,21 @@ namespace B2BNativeHost
             try
             {
                 Directory.CreateDirectory(baseDir);
-                // [디스크 누수 수정] ver044_<pid> 폴더 중 '죽은 pid'(지금 안 도는 프로세스)의 것은 즉시 삭제한다.
+                // [디스크 누수 수정] verNNN_<pid> 폴더 중 '죽은 pid'(지금 안 도는 프로세스)의 것은 즉시 삭제한다.
                 // 예전엔 2일 임계라, 매일 여러 번 실행/크래시·강제종료로 2일 안 된 폴더가 수백 MB 쌓였다(WebView2
                 // 캐시). 현재 프로세스 폴더는 아래에서 생성되므로 이 목록에 없고, 살아있는 다른 인스턴스 폴더는
                 // pid 검사로 보존(잠겨 있으면 Delete 가 실패해 한 번 더 보호된다).
-                foreach (string dir in Directory.GetDirectories(baseDir, "ver044_*"))
+                // [수정] 예전엔 'ver044_' 만 잡아 구버전 폴더(ver043_ 등)가 영영 안 지워졌다 → 'ver*_*' 로 넓히고
+                // pid 는 마지막 '_' 뒤 세그먼트로 파싱(마커 길이 무관). 죽은 pid 검사라 버전 무관하게 안전.
+                foreach (string dir in Directory.GetDirectories(baseDir, "ver*_*"))
                 {
                     try
                     {
                         bool dead = true;
                         string nm = Path.GetFileName(dir);
+                        int us = nm.LastIndexOf('_');
                         int pid;
-                        if (nm.Length > 7 && Int32.TryParse(nm.Substring(7), out pid))
+                        if (us >= 0 && us + 1 < nm.Length && Int32.TryParse(nm.Substring(us + 1), out pid))
                         {
                             try { using (Process.GetProcessById(pid)) { dead = false; } }
                             catch { dead = true; }
