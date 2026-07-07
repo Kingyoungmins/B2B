@@ -132,6 +132,7 @@ function buildLogicZipEntries(name) {
       // [설명 유실 수정] 카드 라벨은 description 이 제네릭("스킬 생성")이면 prompt(사용자 요청)로
       // 폴백한다. prompt 를 저장하지 않아 불러오면 라벨이 "스킬 생성"으로 남던 문제 → prompt 를 함께 보존.
       prompt: s.prompt || null,
+      title: s.title || null,   // [사용자 편집 이름] 카드 라벨을 직접 편집한 이름 → zip 에 보존, 불러오면 그 이름으로 표시
       enabled: isStepEnabled(s),
       language: s.language || "javascript",
       stepFile: stepFiles[idx],
@@ -592,6 +593,7 @@ async function loadLogicFiles(files) {
       id: s.id || uid(),
       description: s.description || `Step ${idx + 1}`,
       prompt: s.prompt || null,   // [설명 유실 수정] 저장된 사용자 요청을 복원 → 카드 라벨 폴백/에러복구가 live 와 동일하게 동작
+      title: s.title || null,     // [사용자 편집 이름] 저장된 편집 이름 복원 → 불러오면 편집한 이름으로 표시
       enabled: s.enabled !== false,
       language,
       code,

@@ -18,6 +18,23 @@ async function downloadCurrentWorkbookFile(fileId) {
     ? excelMirrorSessionIdForFileId(fileId)
     : null;
   try {
+    // [스킬 반영본 다운로드] 실행기 전체실행(파일모드)은 '격리 인스턴스'에 적용하고 결과를 window.lastRunnerOutputs
+    // 에만 기록한다 — 라이브 미러/file.backendDownloadUrl 은 원본 그대로다(예전엔 /api/excel/save 로 라이브를
+    // 저장하거나 소스 URL 로 폴백해 '원본'이 받아졌다). 직전 실행 결과에서 이 파일 항목을 찾아 그 결과 URL 을
+    // 최우선으로 받는다. 결과 파일명은 '결과_..._타임스탬프' 라 이름 매칭이 안 되므로 excelId(=라이브 세션 id)로
+    // 매칭한다(전체실행 결과 불러오기가 쓰는 fileIdForExcelMirrorId 매핑과 동일).
+    const runOuts = (typeof window !== "undefined" && Array.isArray(window.lastRunnerOutputs)) ? window.lastRunnerOutputs : [];
+    const runMatch = runOuts.find(o => o && o.downloadId && o.excelId && (
+      (excelId && String(o.excelId) === String(excelId)) ||
+      (typeof fileIdForExcelMirrorId === "function" && fileIdForExcelMirrorId(o.excelId) === fileId)
+    ));
+    if (runMatch) {
+      const rurl = runMatch.downloadUrl || ("/api/workbooks/download/" + encodeURIComponent(runMatch.downloadId));
+      downloadBackendOutput(rurl, filename);
+      toast(`"${filename}" 다운로드 시작 (스킬 반영본)`, "success");
+      return;
+    }
+    // 실행 결과가 없으면(=라이브에 직접 적용한 경우) 라이브 세션의 현재 상태를 저장해 받는다(= 반영본).
     if (excelId && typeof postExcelMirror === "function") {
       const saved = await postExcelMirror("/api/excel/save", { excelId });
       if (saved.downloadUrl) {

@@ -2775,25 +2775,21 @@ async function requestErrorRecovery(stepIdx, errorInfo, userNote) {
       language: errorInfo && errorInfo.language,
     };
   }
-  const hasExplicitFailedTarget = !!(errorInfo && (
-    Number(errorInfo.stepIdx) >= 0 ||
-    errorInfo.stepId ||
-    errorInfo.code ||
-    errorInfo.description
-  ));
   if (!failedStep || !failedStep.code) {
-    // 특정 step을 못 짚었으면 적용 가능한 마지막 단계를 복구 대상으로 추정한다.
-    if (!hasExplicitFailedTarget) {
-      const enabledSteps = (state.pipeline || []).filter(s => s && s.enabled !== false && s.code);
-      const guess = enabledSteps[enabledSteps.length - 1];
-      if (guess) {
-        failedStep = guess;
-        stepIdx = state.pipeline.indexOf(guess);
-      }
+    // [버그수정] 예전엔 명시 타깃(stepIdx/stepId/설명)이 하나라도 있으면 이 '마지막 단계 추정' 폴백을
+    // 건너뛰었다. 그래서 그 타깃 step 이 파이프라인에 없거나 errorInfo.code 가 비어 있으면(예: 라이브
+    // 적용 실패 후 롤백된 step, 아직 파이프라인에 안 올라간 chat 재생성 코드) 곧바로 "복구에 사용할 스킬
+    // 코드를 찾지 못했습니다" 로 막혔다. 이제 코드를 못 찾으면 타깃 유무와 무관하게 '적용 가능한 마지막
+    // 단계(코드 있는)'를 복구 대상으로 추정한다(대개 방금 실패한 그 step 이라 정확하다).
+    const enabledSteps = (state.pipeline || []).filter(s => s && s.enabled !== false && s.code);
+    const guess = enabledSteps[enabledSteps.length - 1];
+    if (guess) {
+      failedStep = guess;
+      stepIdx = state.pipeline.indexOf(guess);
     }
   }
   if (!failedStep || !failedStep.code) {
-    toast("복구에 사용할 스킬 코드를 찾지 못했습니다.", "error");
+    toast("복구에 사용할 스킬 코드를 찾지 못했습니다(파이프라인에 코드가 있는 단계가 없습니다). 채팅에서 스킬을 먼저 만들어 적용해 주세요.", "error");
     return;
   }
   const isExistingStep = stepIdx >= 0 && state.pipeline[stepIdx] === failedStep;
@@ -2848,7 +2844,11 @@ async function requestErrorRecovery(stepIdx, errorInfo, userNote) {
     const readLimitRuntime = !recoveryExplicitPython
       && isPythonComReadLimitRuntimeError((errorInfo && errorInfo.message) || "");
     const pythonFailCount = notePythonRuntimeFailure(failedStep);
-    if (readLimitRuntime || (!recoveryAllowsPython && pythonFailCount >= PYTHON_RUNTIME_FAIL_VBA_THRESHOLD)) {
+    // [버그수정] 예전엔 이 누적-실패 전환을 '!recoveryAllowsPython' 으로 가드했는데, 이 블록(isPythonRecovery)
+    // 에 오면 recoveryAllowsPython 은 사실상 항상 true(그렇지 않으면 애초에 VBA 복구로 갈렸음) → 조건이 죽어
+    // Python 이 몇 번을 실패해도 계속 Python 만 재시도했다. 이제 '사용자가 명시적으로 Python 을 요구한 경우'만
+    // 제외하고, 같은 step 에서 Python 런타임 실패가 임계치(기본 2회) 쌓이면 VBA 매크로로 전환한다.
+    if (readLimitRuntime || (!recoveryExplicitPython && pythonFailCount >= PYTHON_RUNTIME_FAIL_VBA_THRESHOLD)) {
       vbaRuntimeSwitch = true;
       isVbaRecovery = true;
       isPythonRecovery = false;

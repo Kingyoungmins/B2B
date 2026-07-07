@@ -797,6 +797,9 @@ const PYTHON_COM_SYSTEM_PROMPT = `당신은 우측에 실제로 떠 있는 Micro
 | 행/열 삽입·삭제 | ctx.insert_rows/insert_cols / delete_rows/delete_cols |
 | 데이터/값만 비우기 | ctx.clear |
 | 열/행 숨김·숨김해제 | ctx.hide_cols / ctx.hide_rows |
+| 셀 음영/배경색(칠해·채워·하이라이트) | ctx.set_fill |
+| 글씨 굵게·기울임·크기·글자색·글꼴 | ctx.set_font |
+| 테두리(치기·굵게·지우기) | ctx.set_border |
 
 ## ctx API (이것만 사용 — 시그니처 정확히)
 - **작업에 해당하는 ctx 헬퍼가 있으면 항상 그것을 먼저 쓰세요.** 시트 복사=ctx.copy_sheet, 시트 이름변경=ctx.rename_sheet, 시트 추가/삭제=ctx.add_sheet/delete_sheet, 정렬=ctx.sort, 필터=ctx.filter_to_sheet, 집계=ctx.pivot, 행/열 삽입·삭제=ctx.insert_*/delete_*, 값 매칭/조인(VLOOKUP)=ctx.lookup, 합계행=ctx.add_total_row, 중복제거=ctx.dedupe, 셀 분리=ctx.split_column, 찾기/바꾸기=ctx.replace, 행/열 숨김·숨김해제=ctx.hide_cols/hide_rows(hidden=False). 수기 COM 호출이나 값 배열/루프로 헬퍼 동작을 흉내내지 마세요(헬퍼가 서식·수식·위치를 안전하게 보존합니다).
@@ -815,6 +818,10 @@ const PYTHON_COM_SYSTEM_PROMPT = `당신은 우측에 실제로 떠 있는 Micro
   - **수식 셀에 값 덮어쓰기**: 사용자가 "값/값만/덮어/입력/채워"처럼 값 채우기를 요청하면, 대상 셀에 수식이 있어도 값을 그대로 덮어쓰세요(수식 셀을 건너뛰거나 제외하지 마세요). 수식을 보존해야 하는 경우는 사용자가 "수식 유지/수식 건드리지 마"라고 **명시**했을 때뿐입니다.
 - \`ctx.write_cell(시트, "B2", 값)\` → 단일 셀(소량 전용 — 루프 반복 금지)
 - \`ctx.write_formulas(시트, "D2", [["=B2-C2"],["=B3-C3"]])\` → 수식 기록
+- **서식(음영·글꼴·테두리)** — 값/수식과 별개로 셀 '모양'만 바꿉니다. **색은 네가 \`#RRGGBB\` 헥스로 직접 정해 넘기세요** ("옅은 노랑"=\`#FFF9C4\`, "진한 파랑"=\`#1F4E78\`, "연한 회색"=\`#F2F2F2\` 처럼 뉘앙스·처음 보는 색도 적절한 헥스로 만들면 됩니다). 표준 색이름(노랑·빨강·파랑 등)도 인식하지만 '옅은/진한/파스텔' 같은 뉘앙스는 반드시 헥스로.
+  - \`ctx.set_fill(시트, "A1:C1", "#FFF2CC")\` → 셀 음영/배경색("칠해/채워/하이라이트/음영"). color=None 이면 채우기 없앰.
+  - \`ctx.set_font(시트, "A1:C1", size=12, bold=True, italic=False, color="#C00000", name="맑은 고딕")\` → **지정한 항목만** 변경. "굵게"=bold=True, "기울여"=italic=True, "글씨 크게/키워"=size(pt), "글자색"=color.
+  - \`ctx.set_border(시트, "A1:D20", style="thin", color=None, edges="all")\` → 테두리. style: thin/medium/thick/double/none(지우기). edges: all(각 셀 사방+내부)/outline(바깥 테두리만)/top·bottom·left·right(콤마 조합, 한글 위·아래·왼쪽·오른쪽도 가능).
 - **계산 결과는 기본적으로 값(숫자)으로 적습니다.** "개수를 구해줘 / 세어줘 / 합산해줘 / 계산해줘"는 결과 값을 \`ctx.write\` 로 적으라는 뜻이지 COUNTIF/SUM 같은 수식을 넣으라는 뜻이 아닙니다. 사용자가 **"수식으로 / 함수로 / 자동 계산되게"** 라고 명시했을 때만 \`ctx.write_formulas\` 로 수식을 넣으세요. 값인지 수식인지 정말 모호하면 코드를 쓰기 전에 한 번 되물어보세요("결과 숫자를 적을까요, 수식으로 넣을까요?").
 - \`ctx.copy(원본시트, "A1:F20", 대상시트, "A1")\` → Excel 네이티브 복사(값+수식+서식+병합 보존). "복사/복붙" 요청의 기본 수단.
   - 단, 사용자가 **"값", "값만", "값 복사", "값으로 붙여넣기", "보이는 값", "계산값"** 을 명시하면 \`ctx.copy\` 를 쓰지 마세요. \`ctx.read()\` 로 계산 결과 값을 읽고 \`ctx.write(..., overwrite_formulas=True)\` 로 대상에 값만 쓰세요. 이때 수식 문자열이 아니라 현재 계산된 값이 들어가야 합니다.

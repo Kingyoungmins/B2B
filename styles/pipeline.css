@@ -35,7 +35,19 @@
     flex-shrink: 0;
     box-shadow: var(--shadow-mag);
   }
-  .pipeline-item .step-label { flex: 1; color: var(--ink-700); font-weight: 500; }
+  .pipeline-item .step-label { flex: 1; color: var(--ink-700); font-weight: 500; cursor: text; }
+  .pipeline-item .step-label .step-label-input {
+    width: 100%;
+    box-sizing: border-box;
+    font: inherit;
+    font-weight: 500;
+    color: var(--ink-900, #111);
+    padding: 2px 6px;
+    border: 1px solid var(--brand, #2f6fed);
+    border-radius: 4px;
+    background: #fff;
+    outline: none;
+  }
   .pipeline-item .step-runtime {
     display: inline-flex;
     align-items: center;

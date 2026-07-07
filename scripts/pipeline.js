@@ -2556,6 +2556,9 @@ function flashFilled() {
 // 스킬 카드 라벨: 제목(description)이 비었거나 제네릭("스킬 생성")이거나 코드 첫 줄이면
 // 사용자 요청(step.prompt)으로 폴백 → 어떤 스킬인지 알아볼 수 있게(삭제/관리 편의).
 function pipelineStepLabel(step, idx) {
+  // [사용자 편집 이름 우선] 사용자가 카드 라벨을 직접 편집하면 step.title 에 저장된다 → 항상 그걸 먼저 보여준다.
+  const userTitle = String((step && step.title) || "").trim();
+  if (userTitle) return userTitle.length > 70 ? userTitle.slice(0, 70) + "…" : userTitle;
   let d = String((step && step.description) || "").trim();
   const looksGeneric = !d || d === "스킬 생성" || d === "스킬 수정";
   const looksLikeCode = /^(sub\b|end\s+sub|def\s|function\b|dim\b|application\.|set\s|for\s|if\s|'|\/\/|#)/i.test(d);
@@ -2602,6 +2605,48 @@ function renderPipeline() {
       <button class="step-edit ${editing ? 'active' : ''}" title="${editing ? '수정 모드 해제' : '수정'}">✎</button>
       <button class="step-del" title="삭제">✕</button>
     `;
+    // [사용자 요청] 카드 라벨 더블클릭 → 이름 직접 편집(step.title 에 저장). 빈 값이면 자동 라벨로 복귀.
+    // 편집한 이름은 자동백업/스킬 zip 저장에 함께 실려(save-load), 나중에 불러오면 그 이름으로 보인다.
+    const labelEl = item.querySelector(".step-label");
+    if (labelEl) {
+      labelEl.title = pipelineStepLabel(step, idx) + " · 더블클릭하여 이름 편집";
+      labelEl.ondblclick = (e) => {
+        e.stopPropagation();
+        if (labelEl.querySelector("input")) return;
+        const curr = String(step.title || "").trim() || pipelineStepLabel(step, idx);
+        const input = document.createElement("input");
+        input.className = "step-label-input";
+        input.type = "text";
+        input.value = curr;
+        input.maxLength = 200;
+        labelEl.textContent = "";
+        labelEl.appendChild(input);
+        input.focus();
+        input.select();
+        let done = false;
+        const commit = (save) => {
+          if (done) return;
+          done = true;
+          if (save) {
+            const v = input.value.trim();
+            const si = state.pipeline.findIndex(s => s && s.id === step.id);
+            if (si >= 0) {
+              if (typeof pushHistory === "function") pushHistory("단계 이름 편집");
+              state.pipeline[si].title = v || null;   // 빈 값 → null(자동 라벨로 복귀)
+              if (typeof scheduleLogicAutoBackup === "function") scheduleLogicAutoBackup("step-renamed");
+            }
+          }
+          renderPipeline();
+        };
+        input.onkeydown = (ev) => {
+          ev.stopPropagation();
+          if (ev.key === "Enter") { ev.preventDefault(); commit(true); }
+          else if (ev.key === "Escape") { ev.preventDefault(); commit(false); }
+        };
+        input.onblur = () => commit(true);
+        input.onclick = (ev) => ev.stopPropagation();
+      };
+    }
     item.querySelector(".step-toggle").onclick = async (e) => {
       e.stopPropagation();
       const busyReason = typeof pipelineEditBusyReason === "function" ? pipelineEditBusyReason() : "";

@@ -8602,6 +8602,50 @@ class PythonComSkillError(RuntimeError):
     pass
 
 
+# 서식 헬퍼용 색 이름(한글/영문) → 16진. Excel .Color 는 RGB() 롱값(r + g*256 + b*65536)이다.
+_COLOR_NAMES = {
+    "빨강": "FF0000", "빨간": "FF0000", "적색": "FF0000", "red": "FF0000",
+    "주황": "FFA500", "주황색": "FFA500", "orange": "FFA500",
+    "노랑": "FFFF00", "노란": "FFFF00", "황색": "FFFF00", "yellow": "FFFF00",
+    "연두": "90EE90", "연두색": "90EE90", "lightgreen": "90EE90",
+    "초록": "008000", "녹색": "008000", "green": "008000",
+    "하늘": "87CEEB", "하늘색": "87CEEB", "skyblue": "87CEEB",
+    "파랑": "0000FF", "파란": "0000FF", "청색": "0000FF", "blue": "0000FF",
+    "남색": "000080", "navy": "000080",
+    "보라": "800080", "보라색": "800080", "purple": "800080",
+    "분홍": "FFC0CB", "핑크": "FFC0CB", "pink": "FFC0CB",
+    "갈색": "A52A2A", "brown": "A52A2A",
+    "연회색": "D3D3D3", "밝은회색": "D3D3D3", "lightgray": "D3D3D3", "lightgrey": "D3D3D3",
+    "회색": "808080", "그레이": "808080", "gray": "808080", "grey": "808080",
+    "검정": "000000", "검은": "000000", "흑색": "000000", "black": "000000",
+    "흰색": "FFFFFF", "하양": "FFFFFF", "white": "FFFFFF",
+}
+
+
+def _parse_excel_color(c):
+    """색 입력을 Excel .Color 롱값으로 변환. '#RRGGBB'/'RRGGBB'/색이름(노랑·red 등)/정수 지원.
+    None 또는 빈 값이면 None(호출자가 '채우기 없음' 등으로 처리). 이해 못하면 PythonComSkillError."""
+    if c is None:
+        return None
+    if isinstance(c, bool):
+        return None
+    if isinstance(c, int):
+        return int(c)
+    s = str(c).strip()
+    if not s:
+        return None
+    named = _COLOR_NAMES.get(s.lower())
+    if named:
+        s = named
+    s = s.lstrip("#").strip()
+    if re.fullmatch(r"[0-9A-Fa-f]{6}", s):
+        r = int(s[0:2], 16)
+        g = int(s[2:4], 16)
+        b = int(s[4:6], 16)
+        return r + g * 256 + b * 65536
+    raise PythonComSkillError(f"색상 값을 이해하지 못했습니다: {c!r} (예: '#FFFF00' 또는 '노랑')")
+
+
 class PythonComSkillContext:
     """생성된 Python 스킬에 노출되는 유일한 능력(capability).
 
@@ -9186,6 +9230,101 @@ class PythonComSkillContext:
                     Path(opened_src_temp).unlink(missing_ok=True)
                 except Exception:
                     pass
+
+    def set_fill(self, sheet, a1_range, color=None):
+        """셀 음영/배경색 설정. color 는 '#RRGGBB'/'노랑'·'red' 같은 색이름/정수. None 이면 '채우기 없음'.
+        예: ctx.set_fill("매출", "A1:C1", "노랑") / ctx.set_fill("매출", "A2:A10", "#DDEBF7")."""
+        ws = self._ws(sheet)
+        rng = self._rng(ws, a1_range)
+        self._tick(2)
+        col = _parse_excel_color(color)
+        try:
+            if col is None:
+                rng.Interior.ColorIndex = -4142   # xlColorIndexNone (채우기 없음)
+            else:
+                rng.Interior.Color = int(col)
+        except Exception as e:
+            raise PythonComSkillError(f"셀 음영 적용 실패({a1_range}): {e}")
+        self._shared["structural"].append(f"set_fill:{sheet}!{a1_range}={color}")
+        return int(rng.Cells.Count)
+
+    def set_font(self, sheet, a1_range, size=None, bold=None, italic=None, color=None, name=None):
+        """글꼴 서식. 지정한 항목만 바꾼다 — size(pt 숫자)/bold/italic(True·False)/color(색)/name(글꼴명).
+        예: ctx.set_font("매출","A1:C1", bold=True, size=12) / ctx.set_font("매출","B2", italic=True, color="빨강")."""
+        ws = self._ws(sheet)
+        rng = self._rng(ws, a1_range)
+        self._tick(2)
+        f = rng.Font
+        try:
+            if name is not None:
+                f.Name = str(name)
+            if size is not None:
+                f.Size = float(size)
+            if bold is not None:
+                f.Bold = bool(bold)
+            if italic is not None:
+                f.Italic = bool(italic)
+            cc = _parse_excel_color(color)
+            if cc is not None:
+                f.Color = int(cc)
+        except Exception as e:
+            raise PythonComSkillError(f"글꼴 서식 적용 실패({a1_range}): {e}")
+        self._shared["structural"].append(f"set_font:{sheet}!{a1_range}")
+        return int(rng.Cells.Count)
+
+    def set_border(self, sheet, a1_range, style="thin", color=None, edges="all"):
+        """테두리. style: thin/medium/thick/double/none(지우기). edges: all(각 셀 사방+내부)/outline(바깥 테두리만)/
+        top·bottom·left·right(콤마 조합, 한글 위·아래·왼쪽·오른쪽도 가능). 예: ctx.set_border("매출","A1:D20") /
+        ctx.set_border("매출","A1:D1", style="thick", edges="bottom")."""
+        ws = self._ws(sheet)
+        rng = self._rng(ws, a1_range)
+        self._tick(2)
+        XL_CONTINUOUS, XL_DOUBLE, XL_NONE = 1, -4119, -4142
+        XL_THIN, XL_MEDIUM, XL_THICK = 2, -4138, 4
+        st = str(style or "thin").lower().strip()
+        if st in ("none", "없음", "지우기", "clear", "off"):
+            line_style, weight = XL_NONE, XL_THIN
+        elif st in ("double", "이중"):
+            line_style, weight = XL_DOUBLE, XL_THICK
+        elif st in ("medium", "중간"):
+            line_style, weight = XL_CONTINUOUS, XL_MEDIUM
+        elif st in ("thick", "굵은", "두꺼운"):
+            line_style, weight = XL_CONTINUOUS, XL_THICK
+        else:   # thin / 얇은 / 기본
+            line_style, weight = XL_CONTINUOUS, XL_THIN
+        cc = _parse_excel_color(color)
+        # xlEdgeLeft/Top/Bottom/Right = 7/8/9/10, xlInsideVertical/Horizontal = 11/12
+        edge_ids = {"left": 7, "top": 8, "bottom": 9, "right": 10}
+        korean_edge = {"왼쪽": "left", "좌": "left", "위": "top", "상": "top",
+                       "아래": "bottom", "하": "bottom", "오른쪽": "right", "우": "right"}
+
+        def _apply_edge(idx):
+            try:
+                b = rng.Borders(idx)
+                b.LineStyle = line_style
+                if line_style != XL_NONE:
+                    b.Weight = weight
+                    if cc is not None:
+                        b.Color = int(cc)
+            except Exception:
+                pass   # 단일 셀에 내부선(11/12) 등 적용 불가 케이스는 조용히 건너뜀
+        try:
+            spec = str(edges or "all").lower().strip()
+            if spec in ("all", "전체", "모두"):
+                for idx in (7, 8, 9, 10, 11, 12):
+                    _apply_edge(idx)
+            elif spec in ("outline", "바깥", "외곽", "테두리", "outside"):
+                for idx in (7, 8, 9, 10):
+                    _apply_edge(idx)
+            else:
+                for nm in [x.strip() for x in spec.replace("|", ",").split(",") if x.strip()]:
+                    en = korean_edge.get(nm, nm)
+                    if en in edge_ids:
+                        _apply_edge(edge_ids[en])
+        except Exception as e:
+            raise PythonComSkillError(f"테두리 적용 실패({a1_range}): {e}")
+        self._shared["structural"].append(f"set_border:{sheet}!{a1_range}:{style}:{edges}")
+        return int(rng.Cells.Count)
 
     def clear(self, sheet, a1_range, keep_formulas=False):
         """범위 내용 삭제(서식 유지). keep_formulas=True 면 '수식 셀은 남기고 값(상수) 셀만' 비운다

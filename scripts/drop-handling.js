@@ -512,8 +512,8 @@ function renderRunnerWorkflow() {
   if (outputNode) outputNode.classList.toggle("filled", !!state.output);
   if (logicNode) logicNode.classList.toggle("filled", state.pipeline.length > 0);
   if (resultNode) resultNode.classList.toggle("filled", !!state.output && activeStepCount > 0);
-  setNodeStatus(inputNode, state.inputs.length > 0, "파일 수정", () => openRunnerFileEditor("input"));
-  setNodeStatus(outputNode, state.outputTemplates.length > 0, "파일 수정", () => openRunnerFileEditor("output"));
+  setNodeStatus(inputNode, state.inputs.length > 0, "파일 수정/다운", () => openRunnerFileEditor("input"));
+  setNodeStatus(outputNode, state.outputTemplates.length > 0, "파일 수정/다운", () => openRunnerFileEditor("output"));
   setNodeStatus(logicNode, state.pipeline.length > 0, "스킬 수정", () => {
     if (typeof setPage === "function") setPage("generator");
   });
