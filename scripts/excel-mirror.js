@@ -1890,7 +1890,11 @@ async function postExcelMirror(path, body, attempt = 0, options = {}) {
   let timeoutId = null;
   const controller = options.timeoutMs ? new AbortController() : null;
   if (controller) {
-    timeoutId = setTimeout(() => controller.abort(), Math.max(1000, Number(options.timeoutMs) || 0));
+    // [버그수정] setTimeout 지연은 32-bit(2^31-1=2147483647ms≈24.8일)를 넘으면 오버플로로 '즉시' 발동해
+    // 요청을 바로 abort → 백엔드가 성공해도 클라가 '응답 지연 중단'으로 오인한다(대용량 무제한 타임아웃을
+    // 2592000000ms 로 줬다가 이 현상 발생). 안전 상한(2147483647)으로 클램프한다.
+    const _delay = Math.min(2147483647, Math.max(1000, Number(options.timeoutMs) || 0));
+    timeoutId = setTimeout(() => controller.abort(), _delay);
   }
   try {
     resp = await fetch(path, {

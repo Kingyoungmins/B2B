@@ -928,7 +928,7 @@ async function runIsolatedLivePipelineSteps(sourceSteps, initialExcelId, options
   let lastTouchedFileId = null;
   let lastTouchedExcelId = null;
   // [사용자 지시] Python 대용량(60만 행 등) 완주를 위해 클라 HTTP 타임아웃을 사실상 제거(30일). 백엔드도 무제한.
-  const pipelineTimeoutMs = () => 2592000000;
+  const pipelineTimeoutMs = () => 2000000000;
   const pipelineTimeoutMessage = "스킬 파이프라인 실행 응답이 지연되어 중단했습니다. 저사양 PC에서는 백그라운드에서 계속 적용 중일 수 있으니 잠시 후 화면을 확인해 주세요.";
   try {
     // [0.5.15 백그라운드 전체실행] 전체실행 버튼이 backgroundMode:true 로 호출하면, 그룹별 spawn+동기화(N콜)
@@ -1477,7 +1477,7 @@ function applyVbaStepToLiveExcel(step, excelId, options = {}) {
         : { excelId, code: step.code, extendedTimeout: wantExtended };
       // 격리는 인스턴스 spawn 이 포함돼 라이브 직접보다 느리다 → VBA 타임아웃을 넉넉히(저사양 대비).
       // 복구/강제 Python(wantExtended)은 백엔드 데드라인(기본 20분)보다 크게 잡아 도중에 끊기지 않게 한다.
-      const liveTimeoutMs = liveLang === "python" ? 2592000000 : 180000;  // [사용자 지시] Python 타임아웃 사실상 제거(30일)
+      const liveTimeoutMs = liveLang === "python" ? 2000000000 : 180000;  // [사용자 지시] Python 타임아웃 사실상 제거(30일)
       try { if (typeof traceClientUiEvent === "function") traceClientUiEvent("pipeline.apply_live.request_before", { stepId: step.id || "", endpoint: reqUrl, timeoutMs: liveTimeoutMs }); } catch (_) {}
       return postExcelMirror(reqUrl, reqBody, 0, {
         timeoutMs: liveTimeoutMs,
@@ -3259,7 +3259,7 @@ async function reapplyVbaPipelineToLive(excelId, options = {}) {
       targetSheetName: st.targetSheetName || null,
       trustedStatic: st.trustedStatic === true,
     });
-    const pipelineTimeoutMs = () => 2592000000;  // [사용자 지시] 타임아웃 사실상 제거(30일)
+    const pipelineTimeoutMs = () => 2000000000;  // [사용자 지시] 타임아웃 사실상 제거(30일)
     const pipelineTimeoutMessage = "스킬 파이프라인 실행 응답이 지연되어 중단했습니다. 저사양 PC에서는 백그라운드에서 계속 적용 중일 수 있으니 잠시 후 화면을 확인해 주세요.";
     let data = null;
     // VBA 포함: 일반 전체실행/실행기 전체실행/재적용 모두 같은 격리 파이프라인을 탄다.
