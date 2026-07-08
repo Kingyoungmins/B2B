@@ -460,7 +460,463 @@ function openRunnerFileEditor(role) {
   });
 }
 
+function runnerMappingFileId(file, idx, role) {
+  if (role === "output") {
+    return typeof outputTemplateFileId === "function" ? outputTemplateFileId(idx) : "output:" + idx;
+  }
+  return "input:" + workbookDisplayName(file, `입력 파일 ${idx + 1}`);
+}
+
+function runnerMappingKnownFiles() {
+  const out = [];
+  (state.inputs || []).forEach((file, idx) => {
+    if (!file) return;
+    out.push({
+      id: runnerMappingFileId(file, idx, "input"),
+      file,
+      name: workbookDisplayName(file, `입력 파일 ${idx + 1}`),
+      role: "input",
+    });
+  });
+  (state.outputTemplates || []).forEach((tpl, idx) => {
+    const file = tpl && tpl.file;
+    if (!file) return;
+    out.push({
+      id: runnerMappingFileId(file, idx, "output"),
+      file,
+      name: workbookDisplayName(file, `출력 파일 ${idx + 1}`),
+      role: "output",
+    });
+  });
+  if (state.output && !(state.outputTemplates && state.outputTemplates.length)) {
+    out.push({ id: "output", file: state.output, name: workbookDisplayName(state.output, "출력 파일"), role: "output" });
+  }
+  return out;
+}
+
+function runnerMappingSheetNames(file) {
+  return (file && (file.sheetNames || Object.keys(file.sheets || {}))) || [];
+}
+
+function runnerMappingNorm(value) {
+  if (typeof normalizeText === "function") return normalizeText(value);
+  return String(value || "").trim().toLowerCase().replace(/\s+/g, "");
+}
+
+function runnerMappingStem(value) {
+  return runnerMappingNorm(String(value || "").replace(/\.[^.]+$/, ""));
+}
+
+function runnerMappingKey(book, sheet) {
+  return `${String(book || "").trim()}\u0000${String(sheet || "").trim()}`;
+}
+
+function runnerAddRequirement(map, book, sheet, source) {
+  const cleanBook = String(book || "").trim();
+  const cleanSheet = String(sheet || "").trim();
+  if (!cleanBook && !cleanSheet) return;
+  const key = runnerMappingKey(cleanBook, cleanSheet);
+  if (!map.has(key)) map.set(key, { key, book: cleanBook, sheet: cleanSheet, source: source || "" });
+}
+
+function runnerLooksLikeA1Address(value) {
+  const s = String(value || "").trim();
+  if (!s) return false;
+  if (/^\$?[A-Z]{1,3}\$?\d+$/i.test(s)) return true;
+  if (/^\$?[A-Z]{1,3}\$?\d+:\$?[A-Z]{1,3}\$?\d+$/i.test(s)) return true;
+  if (/^\$?[A-Z]{1,3}:\$?[A-Z]{1,3}$/i.test(s)) return true;
+  if (/^\$?[A-Z]{1,3}\$?\d*:\$?[A-Z]{1,3}\$?\d*$/i.test(s)) return true;
+  if (/^R\d+C\d+(?::R\d+C\d+)?$/i.test(s)) return true;
+  return false;
+}
+
+function runnerAddGeneratedSheet(list, book, sheet) {
+  const cleanSheet = String(sheet || "").trim();
+  if (!cleanSheet || runnerLooksLikeA1Address(cleanSheet) || cleanSheet.toLowerCase().endsWith(".xlsx")) return;
+  list.push({ book: String(book || "").trim(), sheet: cleanSheet });
+}
+
+function runnerIsGeneratedSheet(generated, book, sheet) {
+  const cleanSheet = String(sheet || "").trim();
+  if (!cleanSheet) return false;
+  const cleanBook = String(book || "").trim();
+  return (generated || []).some(item => {
+    if (runnerMappingNorm(item.sheet) !== runnerMappingNorm(cleanSheet)) return false;
+    return !item.book || !cleanBook || runnerMappingNorm(item.book) === runnerMappingNorm(cleanBook);
+  });
+}
+
+function runnerExtractGeneratedSheetsFromCode(code) {
+  const src = String(code || "");
+  const generated = [];
+  let m;
+
+  const pyDirectAdd = /ctx\.book\(\s*["']([^"']+)["']\s*\)\s*\.\s*(?:add_sheet|create_sheet|ensure_sheet)\(\s*["']([^"']+)["']/gi;
+  while ((m = pyDirectAdd.exec(src))) runnerAddGeneratedSheet(generated, m[1], m[2]);
+  const pyDirectRename = /ctx\.book\(\s*["']([^"']+)["']\s*\)\s*\.\s*rename_sheet\(\s*["'][^"']+["']\s*,\s*["']([^"']+)["']/gi;
+  while ((m = pyDirectRename.exec(src))) runnerAddGeneratedSheet(generated, m[1], m[2]);
+  const pyActiveAdd = /ctx\.(?:add_sheet|create_sheet|ensure_sheet)\(\s*["']([^"']+)["']/gi;
+  while ((m = pyActiveAdd.exec(src))) runnerAddGeneratedSheet(generated, "", m[1]);
+  const pyActiveRename = /ctx\.rename_sheet\(\s*["'][^"']+["']\s*,\s*["']([^"']+)["']/gi;
+  while ((m = pyActiveRename.exec(src))) runnerAddGeneratedSheet(generated, "", m[1]);
+
+  const pyVars = new Map();
+  const pyAssign = /\b([A-Za-z_][A-Za-z0-9_]*)\s*=\s*ctx\.book\(\s*["']([^"']+)["']\s*\)/g;
+  while ((m = pyAssign.exec(src))) pyVars.set(m[1], m[2]);
+  pyVars.forEach((book, varName) => {
+    const esc = varName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    let mm;
+    const addRe = new RegExp(`\\b${esc}\\s*\\.\\s*(?:add_sheet|create_sheet|ensure_sheet)\\(\\s*["']([^"']+)["']`, "g");
+    while ((mm = addRe.exec(src))) runnerAddGeneratedSheet(generated, book, mm[1]);
+    const renameRe = new RegExp(`\\b${esc}\\s*\\.\\s*rename_sheet\\(\\s*["'][^"']+["']\\s*,\\s*["']([^"']+)["']`, "g");
+    while ((mm = renameRe.exec(src))) runnerAddGeneratedSheet(generated, book, mm[1]);
+  });
+
+  const vbaLiteralVars = new Map();
+  const vbaAssign = /\b([A-Za-z_][A-Za-z0-9_]*)\s*=\s*["']([^"']+)["']/g;
+  while ((m = vbaAssign.exec(src))) vbaLiteralVars.set(String(m[1] || "").toLowerCase(), m[2]);
+  const vbaNameLiteral = /\.Name\s*=\s*["']([^"']+)["']/gi;
+  while ((m = vbaNameLiteral.exec(src))) runnerAddGeneratedSheet(generated, "", m[1]);
+  const vbaNameVar = /\.Name\s*=\s*([A-Za-z_][A-Za-z0-9_]*)/gi;
+  while ((m = vbaNameVar.exec(src))) {
+    const val = vbaLiteralVars.get(String(m[1] || "").toLowerCase());
+    if (val) runnerAddGeneratedSheet(generated, "", val);
+  }
+
+  return generated;
+}
+
+function runnerAddPairedCodeRequirements(map, code, shouldSkip) {
+  const src = String(code || "");
+  let m;
+  const pyDirect = /ctx\.book\(\s*["']([^"']+)["']\s*\)\s*\.\s*(?:read|write|write_cell|copy|sort|delete_rows|delete_cols|last_row|last_col|find_header)\(\s*["']([^"']+)["']/gi;
+  while ((m = pyDirect.exec(src))) {
+    if (!runnerLooksLikeA1Address(m[2]) && !(shouldSkip && shouldSkip(m[1], m[2]))) {
+      runnerAddRequirement(map, m[1], m[2], "python-pair");
+    }
+  }
+
+  const pyVars = new Map();
+  const pyAssign = /\b([A-Za-z_][A-Za-z0-9_]*)\s*=\s*ctx\.book\(\s*["']([^"']+)["']\s*\)/g;
+  while ((m = pyAssign.exec(src))) pyVars.set(m[1], m[2]);
+  pyVars.forEach((book, varName) => {
+    const esc = varName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const re = new RegExp(`\\b${esc}\\s*\\.\\s*(?:read|write|write_cell|copy|sort|delete_rows|delete_cols|last_row|last_col|find_header)\\(\\s*["']([^"']+)["']`, "g");
+    let mm;
+    while ((mm = re.exec(src))) {
+      if (!runnerLooksLikeA1Address(mm[1]) && !(shouldSkip && shouldSkip(book, mm[1]))) {
+        runnerAddRequirement(map, book, mm[1], "python-var-pair");
+      }
+    }
+  });
+
+  const vbaDirect = /Workbooks\(\s*["']([^"']+)["']\s*\)(?:\.[A-Za-z_][A-Za-z0-9_]*){0,4}\.Worksheets\(\s*["']([^"']+)["']\s*\)/gi;
+  while ((m = vbaDirect.exec(src))) {
+    if (!runnerLooksLikeA1Address(m[2]) && !(shouldSkip && shouldSkip(m[1], m[2]))) {
+      runnerAddRequirement(map, m[1], m[2], "vba-pair");
+    }
+  }
+}
+
+function runnerExtractMappingRequirements() {
+  const map = new Map();
+  const steps = state.pipeline || [];
+  const generatedSheets = [];
+  for (const step of steps) {
+    if (!step || !step.code) continue;
+    const text = [step.prompt, step.description, step.code].filter(Boolean).join("\n");
+    const generatedHere = runnerExtractGeneratedSheetsFromCode(step.code);
+    const shouldSkipRequirement = (book, sheet) =>
+      runnerIsGeneratedSheet(generatedSheets, book, sheet) || runnerIsGeneratedSheet(generatedHere, book, sheet);
+    let m;
+    const refRe = /@(?:범위|시트|컬럼)\s*\[([^\]\r\n/]+)\/([^\]!\r\n]+)(?:![^\]\r\n]+)?\]/g;
+    while ((m = refRe.exec(text))) {
+      if (!shouldSkipRequirement(m[1], m[2])) runnerAddRequirement(map, m[1], m[2], "ref");
+    }
+    runnerAddPairedCodeRequirements(map, step.code, shouldSkipRequirement);
+
+    const names = [];
+    try {
+      if (typeof pipelineCollectWorkbookNames === "function") {
+        pipelineCollectWorkbookNames(text).forEach(n => { if (n && !names.includes(n)) names.push(n); });
+      }
+      if (typeof pipelinePythonSourceWorkbookNames === "function") {
+        pipelinePythonSourceWorkbookNames(step.code).forEach(n => { if (n && !names.includes(n)) names.push(n); });
+      }
+      if (typeof pipelinePythonTargetWorkbookNames === "function") {
+        pipelinePythonTargetWorkbookNames(step).forEach(n => { if (n && !names.includes(n)) names.push(n); });
+      }
+      if (typeof pipelineVbaTargetWorkbookNames === "function") {
+        pipelineVbaTargetWorkbookNames(step.code).forEach(n => { if (n && !names.includes(n)) names.push(n); });
+      }
+    } catch (_) {}
+
+    const sheets = [];
+    try {
+      if (typeof pipelineTargetSheetNames === "function") {
+        pipelineTargetSheetNames(step).forEach(s => { if (s && !sheets.includes(s)) sheets.push(s); });
+      }
+      if (typeof pipelineSheetLiteralsFromCode === "function") {
+        pipelineSheetLiteralsFromCode(step.code).forEach(s => { if (s && !sheets.includes(s)) sheets.push(s); });
+      }
+    } catch (_) {}
+    if (step.targetSheetName && !runnerLooksLikeA1Address(step.targetSheetName) && !sheets.includes(step.targetSheetName)) {
+      sheets.push(step.targetSheetName);
+    }
+    const candidateSheets = sheets.filter(sheet =>
+      sheet &&
+      !runnerLooksLikeA1Address(sheet) &&
+      !String(sheet).toLowerCase().endsWith(".xlsx")
+    );
+
+    if (step.targetFileId && String(step.targetFileId).startsWith("input:")) {
+      const savedBook = String(step.targetFileId).slice(6);
+      if (step.targetSheetName && !runnerLooksLikeA1Address(step.targetSheetName)) {
+        if (!shouldSkipRequirement(savedBook, step.targetSheetName)) {
+          runnerAddRequirement(map, savedBook, step.targetSheetName, "target");
+        }
+      } else if (candidateSheets.length === 1 && !shouldSkipRequirement(savedBook, candidateSheets[0])) {
+        runnerAddRequirement(map, savedBook, candidateSheets[0], "target");
+      }
+      else runnerAddRequirement(map, savedBook, "", "target");
+    }
+
+    names.forEach(name => {
+      const hasNamedRequirement = Array.from(map.values()).some(req => req.book === name);
+      if (!hasNamedRequirement) runnerAddRequirement(map, name, "", "code-book");
+    });
+    if (!names.length) {
+      candidateSheets
+        .filter(sheet => !shouldSkipRequirement("", sheet))
+        .forEach(sheet => runnerAddRequirement(map, "", sheet, "sheet"));
+    }
+    generatedSheets.push(...generatedHere);
+  }
+  return Array.from(map.values()).slice(0, 40);
+}
+
+function runnerMappingScoreFile(requiredName, item) {
+  if (!requiredName || !item) return 0;
+  const req = runnerMappingNorm(requiredName);
+  const cur = runnerMappingNorm(item.name);
+  const reqStem = runnerMappingStem(requiredName);
+  const curStem = runnerMappingStem(item.name);
+  if (req === cur) return 100;
+  if (reqStem === curStem) return 96;
+  if (reqStem && curStem && (reqStem.includes(curStem) || curStem.includes(reqStem))) return 78;
+  const tokens = reqStem.split(/[_\-\s.()]+/).filter(t => t && t.length >= 2);
+  if (!tokens.length) return 0;
+  const hit = tokens.filter(t => curStem.includes(t)).length;
+  return Math.round((hit / tokens.length) * 70);
+}
+
+function runnerFindAutoFile(req, files) {
+  if (!files.length) return null;
+  if (req.book && typeof pipelineFileIdByWorkbookName === "function") {
+    const fid = pipelineFileIdByWorkbookName(req.book);
+    const exact = fid && files.find(f => f.id === fid);
+    if (exact) return { item: exact, score: 100 };
+  }
+  if (req.sheet) {
+    const bySheet = files.filter(item => runnerMappingSheetNames(item.file).some(s => runnerMappingNorm(s) === runnerMappingNorm(req.sheet)));
+    if (bySheet.length === 1 && !req.book) return { item: bySheet[0], score: 86 };
+  }
+  const scored = files
+    .map(item => ({ item, score: runnerMappingScoreFile(req.book, item) }))
+    .sort((a, b) => b.score - a.score);
+  return scored[0] && scored[0].score >= 45 ? scored[0] : null;
+}
+
+function runnerFindSheet(req, file, preferredSheet) {
+  const sheets = runnerMappingSheetNames(file);
+  if (!sheets.length) return "";
+  if (preferredSheet && sheets.includes(preferredSheet)) return preferredSheet;
+  if (req.sheet) {
+    const exact = sheets.find(s => s === req.sheet);
+    if (exact) return exact;
+    const norm = runnerMappingNorm(req.sheet);
+    const normalized = sheets.find(s => runnerMappingNorm(s) === norm);
+    if (normalized) return normalized;
+  }
+  return sheets.length === 1 ? sheets[0] : "";
+}
+
+function runnerCurrentMappingSignature() {
+  const files = runnerMappingKnownFiles().map(item => [
+    item.id,
+    item.name,
+    ...runnerMappingSheetNames(item.file),
+  ].join("|"));
+  const steps = (state.pipeline || []).map(s => [s && s.id, s && s.targetFileId, s && s.targetSheetName, s && s.code].join("|"));
+  return JSON.stringify({ files, steps });
+}
+
+function runnerResetMappingIfSourceChanged() {
+  // 실행 동안은 state.pipeline 이 '매핑본'으로 잠시 교체돼 코드 시그니처가 달라진다 — 이때 소스 변경으로
+  // 오인해 매핑을 초기화하면 안 된다(실행 후 원본 복원 시 시그니처도 원래대로 돌아온다).
+  if (state.runnerMappingRunActive) return;
+  const sig = runnerCurrentMappingSignature();
+  if (state.runnerMappingSignature !== sig) {
+    state.runnerMappingSignature = sig;
+    state.runnerMappingChecked = false;
+    state.runnerMappings = {};
+  }
+}
+
+function runnerBuildMappingRows() {
+  const reqs = runnerExtractMappingRequirements();
+  const files = runnerMappingKnownFiles();
+  return reqs.map(req => {
+    const stored = state.runnerMappings && state.runnerMappings[req.key];
+    let fileItem = stored && files.find(item => item.id === stored.fileId);
+    let score = stored && fileItem ? 100 : 0;
+    if (!fileItem) {
+      const auto = runnerFindAutoFile(req, files);
+      fileItem = auto && auto.item;
+      score = auto && auto.score || 0;
+    }
+    const sheet = fileItem ? runnerFindSheet(req, fileItem.file, stored && stored.sheet) : "";
+    let status = "bad";
+    let statusText = "선택 필요";
+    if (fileItem && (!req.sheet || sheet)) {
+      const sheetExact = !req.sheet || sheet === req.sheet || runnerMappingNorm(sheet) === runnerMappingNorm(req.sheet);
+      if ((score >= 95 || !req.book) && sheetExact) {
+        status = "ok";
+        statusText = "자동 확인";
+      } else {
+        status = "warn";
+        statusText = "확인 필요";
+      }
+    }
+    return { req, files, fileItem, sheet, score, status, statusText };
+  });
+}
+
+function runnerMappingHasBlockingMissing() {
+  if (!state.runnerMappingChecked) return false;
+  return runnerBuildMappingRows().some(row => row.status === "bad");
+}
+
+function runnerRenderMappingPanel() {
+  const grid = $("runner-main-grid");
+  const panel = $("runner-mapping-panel");
+  const table = $("runner-mapping-table");
+  const badge = $("runner-mapping-badge");
+  if (!grid || !panel || !table) return;
+  const show = !!state.runnerMappingChecked;
+  panel.hidden = !show;
+  grid.classList.toggle("mapping-visible", show);
+  if (!show) return;
+
+  const rows = runnerBuildMappingRows();
+  const counts = rows.reduce((acc, row) => {
+    acc[row.status] = (acc[row.status] || 0) + 1;
+    return acc;
+  }, {});
+  if (badge) {
+    if (!rows.length) badge.textContent = "확인할 항목 없음";
+    else badge.textContent = `자동 ${counts.ok || 0} · 확인 ${counts.warn || 0} · 선택 ${counts.bad || 0}`;
+  }
+  if (!rows.length) {
+    table.innerHTML = `<div class="runner-mapping-empty">스킬에서 명시적인 파일·시트 참조를 찾지 못했습니다. 현재 실행 대상 기준으로 진행합니다.</div>`;
+    return;
+  }
+  table.innerHTML = rows.map((row, idx) => {
+    const fileOptions = [`<option value="">파일 선택</option>`].concat(row.files.map(item =>
+      `<option value="${escapeHtml(item.id)}" ${row.fileItem && row.fileItem.id === item.id ? "selected" : ""}>${escapeHtml(item.name)}</option>`
+    )).join("");
+    const sheets = row.fileItem ? runnerMappingSheetNames(row.fileItem.file) : [];
+    const sheetOptions = [`<option value="">시트 선택</option>`].concat(sheets.map(sheet =>
+      `<option value="${escapeHtml(sheet)}" ${row.sheet === sheet ? "selected" : ""}>${escapeHtml(sheet)}</option>`
+    )).join("");
+    return `
+      <div class="runner-mapping-row" data-idx="${idx}" data-status="${row.status}">
+        <div class="runner-mapping-need">
+          <div class="runner-mapping-label">스킬이 찾는 대상</div>
+          <div class="runner-mapping-file" title="${escapeHtml(row.req.book || "파일 미지정")}">${escapeHtml(row.req.book || "현재 대상 파일")}</div>
+          <div class="runner-mapping-sheet" title="${escapeHtml(row.req.sheet || "시트 미지정")}">${escapeHtml(row.req.sheet || "시트 자동")}</div>
+        </div>
+        <div class="runner-mapping-arrow">→</div>
+        <div class="runner-mapping-actual">
+          <div class="runner-mapping-label">실제 사용할 대상</div>
+          <div class="runner-mapping-selects">
+            <select class="runner-mapping-select runner-map-file" data-idx="${idx}">${fileOptions}</select>
+            <select class="runner-mapping-select runner-map-sheet" data-idx="${idx}" ${row.fileItem ? "" : "disabled"}>${sheetOptions}</select>
+          </div>
+        </div>
+        <div class="runner-mapping-status ${row.status}">${row.statusText}</div>
+      </div>
+    `;
+  }).join("");
+
+  table.querySelectorAll(".runner-map-file").forEach(sel => {
+    sel.onchange = () => {
+      const idx = Number(sel.dataset.idx);
+      const row = rows[idx];
+      const fileItem = row.files.find(item => item.id === sel.value);
+      const sheet = fileItem ? runnerFindSheet(row.req, fileItem.file, "") : "";
+      state.runnerMappings[row.req.key] = { fileId: sel.value || "", sheet };
+      runnerRenderMappingPanel();
+      renderRunnerWorkflow();
+    };
+  });
+  table.querySelectorAll(".runner-map-sheet").forEach(sel => {
+    sel.onchange = () => {
+      const idx = Number(sel.dataset.idx);
+      const row = rows[idx];
+      state.runnerMappings[row.req.key] = {
+        fileId: row.fileItem ? row.fileItem.id : "",
+        sheet: sel.value || "",
+      };
+      runnerRenderMappingPanel();
+      renderRunnerWorkflow();
+    };
+  });
+}
+
+window.runnerShowMappingPanel = function() {
+  runnerResetMappingIfSourceChanged();
+  state.runnerMappingChecked = true;
+  runnerRenderMappingPanel();
+  renderRunnerWorkflow();
+};
+
+function runnerReplaceLiteral(text, from, to) {
+  const src = String(text || "");
+  const a = String(from || "");
+  const b = String(to || "");
+  if (!a || !b || a === b) return src;
+  const esc = a.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return src.replace(new RegExp(`(["'])${esc}\\1`, "g"), (_, quote) => `${quote}${b}${quote}`);
+}
+
+window.buildRunnerMappedPipeline = function(steps) {
+  if (!state.runnerMappingChecked) return steps || state.pipeline;
+  const rows = runnerBuildMappingRows().filter(row => row.fileItem && (!row.req.sheet || row.sheet));
+  if (!rows.length) return steps || state.pipeline;
+  return (steps || state.pipeline || []).map(step => {
+    if (!step || !step.code) return step;
+    let code = String(step.code || "");
+    let targetFileId = step.targetFileId || null;
+    let targetSheetName = step.targetSheetName || null;
+    const stepText = [step.prompt, step.description, step.code, step.targetFileId, step.targetSheetName].filter(Boolean).join("\n");
+    rows.forEach(row => {
+      const actualName = row.fileItem ? row.fileItem.name : "";
+      if (row.req.book && actualName) code = runnerReplaceLiteral(code, row.req.book, actualName);
+      if (row.req.sheet && row.sheet) code = runnerReplaceLiteral(code, row.req.sheet, row.sheet);
+      const touchesBook = row.req.book && stepText.includes(row.req.book);
+      const touchesSheet = row.req.sheet && stepText.includes(row.req.sheet);
+      if (touchesBook || (!row.req.book && touchesSheet)) {
+        targetFileId = row.fileItem.id;
+        if (row.sheet) targetSheetName = row.sheet;
+      }
+    });
+    return { ...step, code, targetFileId, targetSheetName, runnerMapped: true };
+  });
+};
+
 function renderRunnerWorkflow() {
+  runnerResetMappingIfSourceChanged();
   const inputNode = $("runner-input-node");
   const outputNode = $("runner-output-node");
   const logicNode = $("runner-logic-node");
@@ -524,16 +980,26 @@ function renderRunnerWorkflow() {
   setCount("runner-logic-count", state.pipeline.length);
 
   const runnable = (state.inputs.length > 0 || !!state.output) && activeStepCount > 0;
+  const mappingChecked = !!state.runnerMappingChecked;
+  const mappingMissing = runnerMappingHasBlockingMissing();
+  const waitingForMapping = runnable && !mappingChecked;
+  const readyToRun = runnable && mappingChecked && !mappingMissing;
+  const centerLabel = resultNode && resultNode.querySelector(".runner-center-label");
+  if (centerLabel && !resultNode?.classList.contains("running") && !resultNode?.classList.contains("done")) {
+    centerLabel.textContent = mappingChecked ? "실행하기" : "파일확인";
+  }
   const centerSub = $("runner-center-sub");
   if (centerSub && !resultNode?.classList.contains("running") && !resultNode?.classList.contains("done")) {
-    centerSub.textContent = runnable ? "실행 준비" : "대기 중";
+    centerSub.textContent = !runnable ? "대기 중" : waitingForMapping ? "매핑 확인" : mappingMissing ? "선택 필요" : "실행 준비";
   }
   const heroBadge = $("runner-hero-badge");
   const isRunnerBusy = resultNode && resultNode.classList.contains("running");
   const isRunnerDone = resultNode && resultNode.classList.contains("done");
   if (heroBadge && !isRunnerBusy && !isRunnerDone) {
     heroBadge.classList.remove("ready", "running", "done");
-    if (runnable) { heroBadge.classList.add("ready"); heroBadge.textContent = "실행 준비 완료"; }
+    if (readyToRun) { heroBadge.classList.add("ready"); heroBadge.textContent = "실행 준비 완료"; }
+    else if (mappingMissing) { heroBadge.textContent = "매핑 선택 필요"; }
+    else if (waitingForMapping) { heroBadge.textContent = "파일 확인 필요"; }
     else { heroBadge.textContent = "대기 중"; }
   }
 
@@ -544,7 +1010,7 @@ function renderRunnerWorkflow() {
   if (statInputs) statInputs.textContent = state.inputs.length;
   if (statTemplate) statTemplate.textContent = state.outputTemplates.length || "–";
   if (statSteps) statSteps.textContent = state.pipeline.length;
-  if (statState) statState.textContent = runnable ? "준비완료" : "준비";
+  if (statState) statState.textContent = !runnable ? "준비" : waitingForMapping ? "파일확인" : mappingMissing ? "선택필요" : "준비완료";
 
   if (summary) {
     const current = state.currentFileId ? (getFile(state.currentFileId)?.name || "") + " / " + (state.currentSheet || "-") : "미리보기 없음";
@@ -553,13 +1019,14 @@ function renderRunnerWorkflow() {
       : `<span class="runner-summary-ico">●</span><span>아직 로드된 파일과 스킬이 없습니다.</span>`;
   }
 
-  if (runBtn) runBtn.disabled = !runnable;
+  if (runBtn) runBtn.disabled = !runnable || (mappingChecked && mappingMissing);
   if (downloadBtn) {
     const hasDownloadableFiles = typeof collectAllDownloadFiles === "function"
       ? collectAllDownloadFiles().length > 0
       : !!state.output;
     downloadBtn.disabled = !hasDownloadableFiles;
   }
+  runnerRenderMappingPanel();
 }
 
 window.runnerSetRunning = function(running) {

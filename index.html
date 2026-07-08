@@ -170,84 +170,99 @@
             <div class="runner-hero-badge" id="runner-hero-badge">대기 중</div>
           </div>
 
-          <div class="runner-flow">
-            <svg class="runner-triangle-lines" viewBox="0 0 500 460" preserveAspectRatio="none" aria-hidden="true">
-              <defs>
-                <linearGradient id="tri-grad" x1="0" y1="0" x2="1" y2="1">
-                  <stop offset="0%" stop-color="#FF0080" stop-opacity="0.55"></stop>
-                  <stop offset="100%" stop-color="#7928CA" stop-opacity="0.55"></stop>
-                </linearGradient>
-              </defs>
-              <polygon class="tri-outline" points="80,80 420,80 250,400" fill="none" stroke="url(#tri-grad)" stroke-width="2" stroke-dasharray="5 6" stroke-linejoin="round"></polygon>
-              <line class="tri-spoke" x1="80" y1="80" x2="250" y2="230" stroke="url(#tri-grad)" stroke-width="1.5" stroke-dasharray="3 5"></line>
-              <line class="tri-spoke" x1="420" y1="80" x2="250" y2="230" stroke="url(#tri-grad)" stroke-width="1.5" stroke-dasharray="3 5"></line>
-              <line class="tri-spoke" x1="250" y1="400" x2="250" y2="230" stroke="url(#tri-grad)" stroke-width="1.5" stroke-dasharray="3 5"></line>
-            </svg>
+          <div class="runner-main-grid" id="runner-main-grid">
+            <div class="runner-left-stack">
+              <div class="runner-flow">
+                <svg class="runner-triangle-lines" viewBox="0 0 500 460" preserveAspectRatio="none" aria-hidden="true">
+                  <defs>
+                    <linearGradient id="tri-grad" x1="0" y1="0" x2="1" y2="1">
+                      <stop offset="0%" stop-color="#FF0080" stop-opacity="0.55"></stop>
+                      <stop offset="100%" stop-color="#7928CA" stop-opacity="0.55"></stop>
+                    </linearGradient>
+                  </defs>
+                  <polygon class="tri-outline" points="80,80 420,80 250,400" fill="none" stroke="url(#tri-grad)" stroke-width="2" stroke-dasharray="5 6" stroke-linejoin="round"></polygon>
+                  <line class="tri-spoke" x1="80" y1="80" x2="250" y2="230" stroke="url(#tri-grad)" stroke-width="1.5" stroke-dasharray="3 5"></line>
+                  <line class="tri-spoke" x1="420" y1="80" x2="250" y2="230" stroke="url(#tri-grad)" stroke-width="1.5" stroke-dasharray="3 5"></line>
+                  <line class="tri-spoke" x1="250" y1="400" x2="250" y2="230" stroke="url(#tri-grad)" stroke-width="1.5" stroke-dasharray="3 5"></line>
+                </svg>
 
-            <div class="runner-circle runner-pos-1 drop-target" id="runner-input-node" data-role="input">
-              <div class="runner-circle-inner">
-                <span class="runner-circle-num">1</span>
-                <span class="runner-circle-label">입력 파일</span>
-                <span class="runner-circle-count" id="runner-input-count">0</span>
+                <div class="runner-circle runner-pos-1 drop-target" id="runner-input-node" data-role="input">
+                  <div class="runner-circle-inner">
+                    <span class="runner-circle-num">1</span>
+                    <span class="runner-circle-label">입력 파일</span>
+                    <span class="runner-circle-count" id="runner-input-count">0</span>
+                  </div>
+                  <span class="runner-circle-status" data-status="empty">비어있음</span>
+                </div>
+
+                <div class="runner-circle runner-pos-2 drop-target" id="runner-output-node" data-role="output">
+                  <div class="runner-circle-inner">
+                    <span class="runner-circle-num">2</span>
+                    <span class="runner-circle-label">출력 템플릿</span>
+                    <span class="runner-circle-count" id="runner-output-count">—</span>
+                  </div>
+                  <span class="runner-circle-status" data-status="empty">비어있음</span>
+                </div>
+
+                <div class="runner-circle runner-pos-3" id="runner-logic-node" data-role="logic">
+                  <div class="runner-circle-inner">
+                    <span class="runner-circle-num">3</span>
+                    <span class="runner-circle-label">스킬</span>
+                    <span class="runner-circle-count" id="runner-logic-count">0</span>
+                  </div>
+                  <span class="runner-circle-status" data-status="empty">비어있음</span>
+                  <input type="file" id="logic-files" accept=".zip,.json,.js,.py,text/javascript,application/json" multiple="" style="display:none">
+                </div>
+
+                <div class="runner-circle runner-pos-4 runner-center" id="runner-result-node" data-role="result">
+                  <div class="runner-progress-ring" aria-hidden="true"></div>
+                  <button class="runner-center-btn" id="runner-run-btn" type="button" disabled="">
+                    <span class="runner-circle-num">4</span>
+                    <span class="runner-center-label">파일확인</span>
+                    <span class="runner-center-sub" id="runner-center-sub">대기 중</span>
+                  </button>
+                </div>
+
+                <!-- hidden lists kept for JS compatibility -->
+                <div style="display:none">
+                  <div id="runner-input-list"></div>
+                  <div id="runner-output-list"></div>
+                  <div id="runner-logic-list"></div>
+                  <div id="runner-result-list"></div>
+                  <div id="drop-logic"></div>
+                </div>
               </div>
-              <span class="runner-circle-status" data-status="empty">비어있음</span>
-            </div>
 
-            <div class="runner-circle runner-pos-2 drop-target" id="runner-output-node" data-role="output">
-              <div class="runner-circle-inner">
-                <span class="runner-circle-num">2</span>
-                <span class="runner-circle-label">출력 템플릿</span>
-                <span class="runner-circle-count" id="runner-output-count">—</span>
+              <div class="runner-stats">
+                <div class="runner-stat">
+                  <div class="runner-stat-label">입력 파일</div>
+                  <div class="runner-stat-value" id="runner-stat-inputs">0</div>
+                </div>
+                <div class="runner-stat">
+                  <div class="runner-stat-label">템플릿</div>
+                  <div class="runner-stat-value" id="runner-stat-template">—</div>
+                </div>
+                <div class="runner-stat">
+                  <div class="runner-stat-label">스킬 단계</div>
+                  <div class="runner-stat-value" id="runner-stat-steps">0</div>
+                </div>
+                <div class="runner-stat">
+                  <div class="runner-stat-label">상태</div>
+                  <div class="runner-stat-value" id="runner-stat-state">준비</div>
+                </div>
               </div>
-              <span class="runner-circle-status" data-status="empty">비어있음</span>
             </div>
 
-            <div class="runner-circle runner-pos-3" id="runner-logic-node" data-role="logic">
-              <div class="runner-circle-inner">
-                <span class="runner-circle-num">3</span>
-                <span class="runner-circle-label">스킬</span>
-                <span class="runner-circle-count" id="runner-logic-count">0</span>
+            <section class="runner-mapping-panel" id="runner-mapping-panel" hidden>
+              <div class="runner-mapping-head">
+                <div>
+                  <div class="runner-mapping-title">파일·시트 매핑 확인</div>
+                  <div class="runner-mapping-sub">선택을 바꾸면 바로 실행 매핑에 반영됩니다.</div>
+                </div>
+                <div class="runner-mapping-badge" id="runner-mapping-badge">확인 중</div>
               </div>
-              <span class="runner-circle-status" data-status="empty">비어있음</span>
-              <input type="file" id="logic-files" accept=".zip,.json,.js,.py,text/javascript,application/json" multiple="" style="display:none">
-            </div>
-
-            <div class="runner-circle runner-pos-4 runner-center" id="runner-result-node" data-role="result">
-              <div class="runner-progress-ring" aria-hidden="true"></div>
-              <button class="runner-center-btn" id="runner-run-btn" type="button" disabled="">
-                <span class="runner-circle-num">4</span>
-                <span class="runner-center-label">실행하기</span>
-                <span class="runner-center-sub" id="runner-center-sub">대기 중</span>
-              </button>
-            </div>
-
-            <!-- hidden lists kept for JS compatibility -->
-            <div style="display:none">
-              <div id="runner-input-list"></div>
-              <div id="runner-output-list"></div>
-              <div id="runner-logic-list"></div>
-              <div id="runner-result-list"></div>
-              <div id="drop-logic"></div>
-            </div>
-          </div>
-
-          <div class="runner-stats">
-            <div class="runner-stat">
-              <div class="runner-stat-label">입력 파일</div>
-              <div class="runner-stat-value" id="runner-stat-inputs">0</div>
-            </div>
-            <div class="runner-stat">
-              <div class="runner-stat-label">템플릿</div>
-              <div class="runner-stat-value" id="runner-stat-template">—</div>
-            </div>
-            <div class="runner-stat">
-              <div class="runner-stat-label">스킬 단계</div>
-              <div class="runner-stat-value" id="runner-stat-steps">0</div>
-            </div>
-            <div class="runner-stat">
-              <div class="runner-stat-label">상태</div>
-              <div class="runner-stat-value" id="runner-stat-state">준비</div>
-            </div>
+              <div class="runner-mapping-table" id="runner-mapping-table"></div>
+            </section>
           </div>
 
           <div class="logic-summary" id="runner-summary">

@@ -4411,18 +4411,31 @@ def _save_excel_session_impl(excel_id, name=None):
             safe_name = Path(str(name)).name
             if not Path(safe_name).suffix:
                 safe_name += Path(session["path"]).suffix or ".xlsx"
+            safe_name = _promote_csv_multisheet_name(safe_name, wb)   # CSV 멀티시트 → .xlsx
             result_path = BACKEND_DIR / f"{uuid.uuid4().hex}_{safe_name}"
-            wb.SaveAs(str(result_path))
+            if Path(safe_name).suffix.lower() == ".xlsx":
+                wb.SaveAs(str(result_path), FileFormat=51)            # 명시 변환(멀티시트 보존)
+            else:
+                wb.SaveAs(str(result_path))
             session["path"] = str(result_path)
             session["name"] = safe_name
         else:
             BACKEND_DIR.mkdir(parents=True, exist_ok=True)
-            result_path = Path(session["path"])
-            safe_name = Path(session.get("name") or result_path.name).name
+            _src_path = Path(session["path"])
+            safe_name = Path(session.get("name") or _src_path.name).name
             if not Path(safe_name).suffix:
-                safe_name += result_path.suffix or ".xlsx"
-            result_path = BACKEND_DIR / f"{uuid.uuid4().hex}_{safe_name}"
-            wb.SaveCopyAs(str(result_path))
+                safe_name += _src_path.suffix or ".xlsx"
+            _promoted = _promote_csv_multisheet_name(safe_name, wb)
+            result_path = BACKEND_DIR / f"{uuid.uuid4().hex}_{_promoted}"
+            if _promoted != safe_name:
+                # CSV 멀티시트 → xlsx 변환. SaveCopyAs 는 CSV 포맷을 유지하므로 SaveAs(경로 재지정) 필요 →
+                # 멀티시트 파일은 사실상 xlsx 이므로 세션도 xlsx 로 코히어런트 갱신.
+                wb.SaveAs(str(result_path), FileFormat=51)
+                session["path"] = str(result_path)
+                session["name"] = _promoted
+                safe_name = _promoted
+            else:
+                wb.SaveCopyAs(str(result_path))
         try:
             if _save_calc_prev is not None:
                 app.Calculation = _save_calc_prev
@@ -7875,7 +7888,7 @@ def run_vba_on_session(excel_id, code, entry=None, restore_window=True):
 
 
 def run_vba_pipeline_on_session(excel_id, steps, reset=True, entry=None, view_sheet=None):
-    return excel_call(_run_vba_pipeline_on_session_impl, excel_id, steps, reset=reset, entry=entry, view_sheet=view_sheet, timeout=600)
+    return excel_call(_run_vba_pipeline_on_session_impl, excel_id, steps, reset=reset, entry=entry, view_sheet=view_sheet, timeout=PY_UNLIMITED_OUTER_S)
 
 
 def _run_full_pipeline_single_instance_impl(groups, reset_excel_ids=None, view_sheet=None, entry=None, output_mode="sync"):
@@ -8113,11 +8126,24 @@ def _run_full_pipeline_single_instance_impl(groups, reset_excel_ids=None, view_s
                         out_dir.mkdir(parents=True, exist_ok=True)
                         _stem = Path(ent["name"]).stem
                         _suf = Path(ent["name"]).suffix or ".xlsx"
+                        # [CSV 새시트 버그] CSV/TSV 는 시트 하나만 담는다 → 스킬이 새 시트(예: 필터→새시트)를 추가했는데
+                        # 원본 .csv 로 저장하면 그 포맷을 유지해 시트가 붕괴(기존 시트 덮어써짐). 멀티시트면 .xlsx 로 승격.
+                        # SaveCopyAs 는 현재(CSV) 포맷을 유지하므로 승격 시엔 SaveAs FileFormat=51(xlOpenXMLWorkbook)로 변환 저장.
+                        try:
+                            _multi = int(fwb.Worksheets.Count) > 1
+                        except Exception:
+                            _multi = False
+                        _promote_xlsx = _multi and _suf.lower() in (".csv", ".tsv")
+                        if _promote_xlsx:
+                            _suf = ".xlsx"
                         _ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
                         out_path = out_dir / ("결과_%s_%s%s" % (_stem, _ts, _suf))
                         if out_path.exists():
                             out_path = out_dir / ("결과_%s_%s_%s%s" % (_stem, _ts, uuid.uuid4().hex[:6], _suf))
-                        fwb.SaveCopyAs(str(out_path))
+                        if _promote_xlsx:
+                            fwb.SaveAs(str(out_path), FileFormat=51)
+                        else:
+                            fwb.SaveCopyAs(str(out_path))
                         _rid = uuid.uuid4().hex
                         RESULTS[_rid] = {"path": str(out_path), "name": out_path.name, "created": time.time()}
                         result["outputFiles"].append({
@@ -8228,7 +8254,7 @@ def _run_full_pipeline_single_instance_impl(groups, reset_excel_ids=None, view_s
 def run_full_pipeline_single_instance(groups, reset_excel_ids=None, view_sheet=None, entry=None, output_mode="sync"):
     return excel_call(_run_full_pipeline_single_instance_impl, groups,
                       reset_excel_ids=reset_excel_ids, view_sheet=view_sheet, entry=entry,
-                      output_mode=output_mode, timeout=3600)
+                      output_mode=output_mode, timeout=PY_UNLIMITED_OUTER_S)
 
 
 # ===== 복붙 캡처(녹화): 사용자의 Ctrl+C/Ctrl+V 를 역추적해 스킬 스텝으로 저장 =====
@@ -8569,15 +8595,34 @@ def run_capture_copypaste(excel_id, values_only=False):
 
 PY_SKILL_ENTRY = "transform"
 PY_COM_BUDGET = int(os.environ.get("B2B_PY_COM_BUDGET", "400"))
-PY_SKILL_TIMEOUT_S = float(os.environ.get("B2B_PY_SKILL_TIMEOUT", "75"))
-# [복구/강제 Python] VBA 실패→에러복구가 Python 으로 다시 짠 코드나 '원본 Python 강제 적용' 경로는
-# (1) 대용량이라 다시 VBA 로 튕기면 VBA↔Python 무한 루프가 되고 (2) 75초 데드라인에 잘리면 또 실패한다.
-# 그래서 이 경로만 데드라인을 크게 확장한다. 완전 무한(타임아웃 제거)은 STA 워커가 영구 정지될 위험이
-# 있어(무한 루프 코드면 앱 재시작 필요) '넉넉한 유한값'을 쓴다. 기본 540초(9분) — 파이프라인 복구 경로의
-# 바깥 excel_call 상한(run-vba-pipeline=600초)보다 작아 그 안에서 완주하도록 잡았다(더 늘리려면 그 상한도
-# 함께 올려야 함). 실행 안전은 정적검사 우회와 무관하게 런타임 샌드박스(_PY_SAFE_BUILTINS/safe_globals)가 지킨다.
-PY_SKILL_RECOVERY_TIMEOUT_S = float(os.environ.get("B2B_PY_SKILL_RECOVERY_TIMEOUT", "540"))
-PY_READ_MAX_CELLS = int(os.environ.get("B2B_PY_READ_MAX_CELLS", "6000000"))
+# [사용자 지시] Python COM 실행 타임아웃/셀 제한을 기본 '무제한(0)'으로 둔다. 60만 행 같은 정상 대용량 작업이
+# 데드라인(75초)/셀 상한(6M)에 걸려 안 돌던 문제 → 0=무제한이 기본. (필요하면 env 로 유한값을 다시 줄 수 있다.)
+# 안전: 무제한이면 무한 루프 코드가 STA 워커를 영구 정지시킬 수 있으나(앱 재시작 필요) while True 등은 정적검사가,
+# import/파일접근은 런타임 샌드박스(_PY_SAFE_BUILTINS/safe_globals)가 막는다.
+PY_SKILL_TIMEOUT_S = float(os.environ.get("B2B_PY_SKILL_TIMEOUT", "0"))                    # 0 = 무제한(데드라인 없음)
+PY_SKILL_RECOVERY_TIMEOUT_S = float(os.environ.get("B2B_PY_SKILL_RECOVERY_TIMEOUT", "0"))  # 0 = 무제한
+PY_READ_MAX_CELLS = int(os.environ.get("B2B_PY_READ_MAX_CELLS", "0"))                      # 0 = 무제한(셀 상한 없음)
+# excel_call 등 '바깥' 큐 타임아웃에 쓸 '사실상 무제한' 유한값(무제한 설정 시). 30일.
+PY_UNLIMITED_OUTER_S = 30 * 24 * 3600
+
+
+def _py_skill_deadline(timeout_s=None):
+    """Python 스킬 실행 데드라인(monotonic). 유효 타임아웃이 0/음수면 무제한(inf)."""
+    eff = float(timeout_s) if timeout_s else PY_SKILL_TIMEOUT_S
+    return float("inf") if eff <= 0 else (time.monotonic() + eff)
+
+
+def _promote_csv_multisheet_name(name, wb):
+    """파일명이 .csv/.tsv 인데 워크북에 시트가 2개 이상이면 .xlsx 로 바꾼다.
+    CSV 는 시트를 하나만 담으므로, 스킬이 새 시트(예: 필터→새시트)를 추가한 결과를 .csv 로 저장하면
+    시트가 붕괴(기존 시트 덮어써짐)한다. 이 경우 .xlsx 로 승격해 저장측이 SaveAs(FileFormat=51) 하게 한다."""
+    try:
+        p = Path(str(name))
+        if p.suffix.lower() in (".csv", ".tsv") and int(wb.Worksheets.Count) > 1:
+            return p.stem + ".xlsx"
+    except Exception:
+        pass
+    return str(name)
 
 _PY_SAFE_BUILTINS = {
     "len": len, "range": range, "enumerate": enumerate, "zip": zip,
@@ -8662,7 +8707,7 @@ class PythonComSkillContext:
         if _shared is None:
             _shared = {
                 "com_calls": 0,
-                "deadline": time.monotonic() + (float(timeout_s) if timeout_s else PY_SKILL_TIMEOUT_S),
+                "deadline": _py_skill_deadline(timeout_s),
                 "journal": [],          # (ws_name, address, formulas_2d)
                 "structural": [],       # 롤백 불가 구조 변경 설명 목록
                 "books": {},
@@ -8951,7 +8996,7 @@ class PythonComSkillContext:
         rng = self._rng(ws, a1_range) if a1_range else ws.UsedRange
         self._tick(3)
         cells = int(rng.Rows.Count) * int(rng.Columns.Count)
-        if cells > PY_READ_MAX_CELLS:
+        if PY_READ_MAX_CELLS > 0 and cells > PY_READ_MAX_CELLS:
             raise PythonComSkillError(
                 f"읽기 범위가 너무 큽니다({cells:,}셀 > {PY_READ_MAX_CELLS:,}). "
                 "Python COM은 단순 작업용으로 보수적으로 제한됩니다. 범위를 더 좁히거나 VBA 경로를 사용하세요."
@@ -8985,7 +9030,7 @@ class PythonComSkillContext:
         rng = self._rng(ws, a1_range)
         self._tick(3)
         cells = int(rng.Rows.Count) * int(rng.Columns.Count)
-        if cells > PY_READ_MAX_CELLS:
+        if PY_READ_MAX_CELLS > 0 and cells > PY_READ_MAX_CELLS:
             raise PythonComSkillError(
                 f"읽기 범위가 너무 큽니다({cells:,}셀 > {PY_READ_MAX_CELLS:,}). "
                 "Python COM은 단순 작업용으로 보수적으로 제한됩니다. 범위를 더 좁히거나 VBA 경로를 사용하세요."
@@ -9498,9 +9543,13 @@ class PythonComSkillContext:
         """그룹별 집계 요약 표를 **새 시트(현재 활성 파일)**에 만든다(Python 집계 — 안정적).
         group_by/value 는 헤더명(권장) 또는 열 문자("C"). agg 는 sum/count/avg/max/min.
           ctx.pivot("매출", group_by="회사", value="금액", agg="sum", dest_name="회사별합계")  # 1D 그룹요약
-        column 을 주면 **2D 크로스탭**(행=group_by, 열=column, 셀=value 의 agg):
+        ★ **다중 키·다중 값 지원**: group_by/value/agg 에 '리스트'를 주면 여러 기준으로 묶고 여러 값을 한 번에 집계한다
+          (열 순서 = 그룹키들 + 값들). 예: "회사·지점별 매출 합계와 건수 개수":
+          ctx.pivot("매출", group_by=["회사","지점"], value=["매출","건수"], agg=["sum","count"], dest_name="요약")
+          → 헤더 [회사, 지점, 매출_sum, 건수_count]. value=None 이면 개수(count). agg 를 하나만 주면 모든 값에 적용.
+        column 을 주면 **2D 크로스탭**(행=group_by, 열=column, 셀=value 의 agg; 크로스탭은 group_by 하나만):
           ctx.pivot("매출", group_by="지점", column="월", value="매출", agg="sum", dest_name="피벗_결과")
-        "~별로 합계/개수/평균", "행은 X 열은 Y 값은 Z 피벗" 요청의 기본 수단(원본 보존, 손코딩 금지)."""
+        "~별로 합계/개수/평균", "A·B별로 X합계·Y개수", "행은 X 열은 Y 값은 Z 피벗" 요청의 기본 수단(원본 보존, 손코딩 금지)."""
         self._tick(2)
         grid = self.read(sheet)
         hr = max(1, int(header_rows or 1))
@@ -10998,7 +11047,7 @@ def _exec_python_com_skill(app, wb, session, code, skip_static=False, timeout_s=
     if not callable(fn):
         raise PythonComSkillError(f"def {PY_SKILL_ENTRY}(ctx): 함수를 찾지 못했습니다.")
 
-    deadline = time.monotonic() + (float(timeout_s) if timeout_s else PY_SKILL_TIMEOUT_S)
+    deadline = _py_skill_deadline(timeout_s)
     counter = {"n": 0}
 
     def _tracer(frame, event, arg):
@@ -11096,12 +11145,12 @@ def run_python_on_session(excel_id, code, extended=False):
     # extended=True: VBA 실패→복구 Python / 원본 Python 강제적용 경로. 정적검사 우회 + 데드라인 확장으로
     # 대용량 작업이 다시 VBA 로 튕기거나 75초에 잘리지 않고 끝까지 실행된다. 외부 excel_call 타임아웃은
     # 내부 데드라인보다 크게 잡아(+60s), 내부 데드라인이 먼저 발동하도록 한다(정상 예외 경로).
-    if extended:
-        deadline_s = PY_SKILL_RECOVERY_TIMEOUT_S
-        timeout = int(deadline_s) + 60
+    deadline_s = PY_SKILL_RECOVERY_TIMEOUT_S if extended else None
+    eff = float(deadline_s) if deadline_s else PY_SKILL_TIMEOUT_S   # 내부 데드라인(0=무제한)
+    if eff <= 0:
+        timeout = PY_UNLIMITED_OUTER_S            # 무제한 → 바깥 큐 타임아웃도 사실상 무제한(30일)
     else:
-        deadline_s = None
-        timeout = max(45, int(PY_SKILL_TIMEOUT_S) + 15)
+        timeout = max(45, int(eff) + 60)          # 내부 데드라인보다 크게 잡아 내부가 먼저 발동
     try:
         return excel_call(_run_python_on_session_impl, excel_id, code,
                           skip_static=bool(extended), timeout_s=deadline_s, timeout=timeout)

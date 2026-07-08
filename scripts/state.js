@@ -16,6 +16,10 @@ const state = {
   selectionAnchor: null,
   selectedSheets: [],
   pipeline: [],
+  runnerMappingChecked: false,
+  runnerMappingSignature: "",
+  runnerMappings: {},
+  runnerMappingRunActive: false,   // 실행 동안만 true — state.pipeline 매핑본 스왑 중 소스변경 오인 리셋 방지
   logicSaveBaseName: "",
   history: { undo: [], redo: [], limit: 80 },
   chatHistory: [],

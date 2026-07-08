@@ -30,6 +30,24 @@
   .runner-hero-badge.done { background: #D1FAE5; color: #065F46; border-color: #A7F3D0; }
 
   /* ============ RUNNER TRIANGLE LAYOUT ============ */
+  .runner-main-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 14px;
+    align-items: start;
+  }
+  .runner-main-grid.mapping-visible {
+    grid-template-columns: minmax(330px, 0.82fr) minmax(420px, 1.18fr);
+  }
+  .runner-left-stack {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .runner-main-grid.mapping-visible .runner-flow {
+    max-width: 500px;
+  }
   .runner-flow {
     position: relative;
     width: 100%;
@@ -254,8 +272,157 @@
     box-shadow: 0 10px 30px rgba(16,185,129,0.4), inset 0 1px 0 rgba(255,255,255,0.2);
   }
 
+  /* ============ RUNNER FILE MAPPING ============ */
+  .runner-mapping-panel {
+    min-width: 0;
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    background: white;
+    box-shadow: var(--shadow-sm);
+    overflow: hidden;
+  }
+  .runner-mapping-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border);
+    background: linear-gradient(135deg, rgba(255,0,128,0.07), rgba(121,40,202,0.06));
+  }
+  .runner-mapping-title {
+    font-size: 13px;
+    font-weight: 800;
+    color: var(--ink-900);
+    letter-spacing: -0.02em;
+  }
+  .runner-mapping-sub {
+    margin-top: 3px;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--ink-400);
+    letter-spacing: -0.01em;
+  }
+  .runner-mapping-badge {
+    flex-shrink: 0;
+    padding: 5px 10px;
+    border-radius: var(--r-full);
+    font-size: 10.5px;
+    font-weight: 800;
+    color: var(--m-700);
+    background: white;
+    border: 1px solid var(--border);
+  }
+  .runner-mapping-table {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px;
+    max-height: 520px;
+    overflow: auto;
+  }
+  .runner-mapping-row {
+    display: grid;
+    grid-template-columns: minmax(150px, 1fr) 18px minmax(190px, 1.15fr) auto;
+    gap: 8px;
+    align-items: center;
+    padding: 10px;
+    border: 1px solid var(--border);
+    border-radius: var(--r-sm);
+    background: #fff;
+  }
+  .runner-mapping-row[data-status="ok"] { background: linear-gradient(135deg, #fff, #F4FFF9); }
+  .runner-mapping-row[data-status="warn"] { background: linear-gradient(135deg, #fff, #FFFCF0); }
+  .runner-mapping-row[data-status="bad"] { background: linear-gradient(135deg, #fff, #FFF5F8); }
+  .runner-mapping-need,
+  .runner-mapping-actual {
+    min-width: 0;
+  }
+  .runner-mapping-label {
+    font-size: 10px;
+    font-weight: 800;
+    color: var(--ink-400);
+    margin-bottom: 4px;
+  }
+  .runner-mapping-file {
+    font-size: 11.2px;
+    font-weight: 700;
+    color: var(--ink-900);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .runner-mapping-sheet {
+    margin-top: 2px;
+    font-size: 10.5px;
+    font-weight: 600;
+    color: var(--ink-500);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .runner-mapping-arrow {
+    text-align: center;
+    color: var(--m-400);
+    font-size: 15px;
+    font-weight: 900;
+  }
+  .runner-mapping-selects {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .runner-mapping-select {
+    width: 100%;
+    min-width: 0;
+    border: 1px solid var(--border);
+    border-radius: var(--r-sm);
+    background: white;
+    color: var(--ink-800);
+    font-family: inherit;
+    font-size: 11px;
+    font-weight: 650;
+    padding: 7px 9px;
+    outline: none;
+  }
+  .runner-mapping-select:focus {
+    border-color: var(--m-400);
+    box-shadow: 0 0 0 3px rgba(255,0,128,0.08);
+  }
+  .runner-mapping-status {
+    justify-self: end;
+    white-space: nowrap;
+    padding: 5px 8px;
+    border-radius: var(--r-full);
+    font-size: 10.5px;
+    font-weight: 800;
+    border: 1px solid transparent;
+  }
+  .runner-mapping-status.ok { color: #047857; background: #D1FAE5; border-color: #A7F3D0; }
+  .runner-mapping-status.warn { color: #92400E; background: #FEF3C7; border-color: #FDE68A; }
+  .runner-mapping-status.bad { color: #BE123C; background: #FFE4EC; border-color: #FFB8D1; }
+  .runner-mapping-empty {
+    padding: 22px 14px;
+    text-align: center;
+    color: var(--ink-400);
+    font-size: 11.5px;
+    font-weight: 600;
+    border: 1px dashed var(--border);
+    border-radius: var(--r-sm);
+    background: var(--ink-50);
+  }
+
   @media (max-width: 520px) {
     .runner-flow { max-width: 340px; }
+  }
+
+  @media (max-width: 1120px) {
+    .runner-main-grid.mapping-visible {
+      grid-template-columns: 1fr;
+    }
+    .runner-main-grid.mapping-visible .runner-flow {
+      max-width: 620px;
+    }
   }
 
   .runner-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }

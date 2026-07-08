@@ -927,12 +927,8 @@ async function runIsolatedLivePipelineSteps(sourceSteps, initialExcelId, options
   let lastData = null;
   let lastTouchedFileId = null;
   let lastTouchedExcelId = null;
-  // 복구/강제(extendedTimeout) 스텝이 하나라도 있으면 클라 HTTP 타임아웃 상한(기본 5분)을 백엔드 확장
-  // 데드라인(기본 20분)보다 크게 잡아, 대용량 완주 도중에 클라가 먼저 끊지 않게 한다.
-  const anyExtendedStep = activeSteps.some(s => s && s.extendedTimeout === true);
-  const pipelineTimeoutMs = n => anyExtendedStep
-    ? Math.max(1320000, 60000 + n * 30000)
-    : Math.max(90000, Math.min(300000, 60000 + n * 30000));
+  // [사용자 지시] Python 대용량(60만 행 등) 완주를 위해 클라 HTTP 타임아웃을 사실상 제거(30일). 백엔드도 무제한.
+  const pipelineTimeoutMs = () => 2592000000;
   const pipelineTimeoutMessage = "스킬 파이프라인 실행 응답이 지연되어 중단했습니다. 저사양 PC에서는 백그라운드에서 계속 적용 중일 수 있으니 잠시 후 화면을 확인해 주세요.";
   try {
     // [0.5.15 백그라운드 전체실행] 전체실행 버튼이 backgroundMode:true 로 호출하면, 그룹별 spawn+동기화(N콜)
@@ -1481,7 +1477,7 @@ function applyVbaStepToLiveExcel(step, excelId, options = {}) {
         : { excelId, code: step.code, extendedTimeout: wantExtended };
       // 격리는 인스턴스 spawn 이 포함돼 라이브 직접보다 느리다 → VBA 타임아웃을 넉넉히(저사양 대비).
       // 복구/강제 Python(wantExtended)은 백엔드 데드라인(기본 20분)보다 크게 잡아 도중에 끊기지 않게 한다.
-      const liveTimeoutMs = liveLang === "python" ? (wantExtended ? 1320000 : 105000) : 180000;
+      const liveTimeoutMs = liveLang === "python" ? 2592000000 : 180000;  // [사용자 지시] Python 타임아웃 사실상 제거(30일)
       try { if (typeof traceClientUiEvent === "function") traceClientUiEvent("pipeline.apply_live.request_before", { stepId: step.id || "", endpoint: reqUrl, timeoutMs: liveTimeoutMs }); } catch (_) {}
       return postExcelMirror(reqUrl, reqBody, 0, {
         timeoutMs: liveTimeoutMs,
@@ -3263,7 +3259,7 @@ async function reapplyVbaPipelineToLive(excelId, options = {}) {
       targetSheetName: st.targetSheetName || null,
       trustedStatic: st.trustedStatic === true,
     });
-    const pipelineTimeoutMs = n => Math.max(90000, Math.min(300000, 60000 + n * 30000));
+    const pipelineTimeoutMs = () => 2592000000;  // [사용자 지시] 타임아웃 사실상 제거(30일)
     const pipelineTimeoutMessage = "스킬 파이프라인 실행 응답이 지연되어 중단했습니다. 저사양 PC에서는 백그라운드에서 계속 적용 중일 수 있으니 잠시 후 화면을 확인해 주세요.";
     let data = null;
     // VBA 포함: 일반 전체실행/실행기 전체실행/재적용 모두 같은 격리 파이프라인을 탄다.
@@ -4267,6 +4263,7 @@ async function runPipelineWithAutoRepair(options = {}) {
   let repairsDone = 0;
   const repairsByStep = new Map();
   let lastErr = null;
+  const pipelineForRepair = runOptions.pipeline || state.pipeline;
 
   const resumeIdx = getPipelineResumeFromIndex();
   if (Number.isInteger(resumeIdx) && !runOptions.ignoreCheckpoint) {
@@ -4277,12 +4274,12 @@ async function runPipelineWithAutoRepair(options = {}) {
   // LLM 으로 재생성하며 느려지고("스텝2 자동복구 오래걸림") 원본 코드를 갈아치웠다 — 이게 문제의 한 축.
   // VBA 가 포함된 파이프라인은 정적 게이트 자동복구(실행 전 재생성)를 건너뛰고 저장된 코드를 그대로
   // 실행한다(위험 VBA 의 Cleanup 누락 등은 happy-path 에선 문제 없고, 실패 시엔 서버가 상태를 복원).
-  const _pipelineHasVba = (state.pipeline || []).some(
+  const _pipelineHasVba = (pipelineForRepair || []).some(
     s => s && s.code && String(s.language || "").toLowerCase() !== "python"
   );
 
   while (repairsDone <= PIPELINE_AUTO_REPAIR_MAX_REPAIRS) {
-    const preflight = _pipelineHasVba ? null : findPipelineStaticPreflightFailure(state.pipeline);
+    const preflight = _pipelineHasVba ? null : findPipelineStaticPreflightFailure(runOptions.pipeline || state.pipeline);
     if (preflight) {
       const key = preflight.step.id || `idx:${preflight.idx}`;
       const count = repairsByStep.get(key) || 0;
@@ -4948,18 +4945,40 @@ function showRunnerPipelineError(err, options) {
 $("runner-run-btn").onclick = () => {
   if ($("runner-run-btn").disabled) return;
   clearRunnerPipelineError();
+  if (!state.runnerMappingChecked) {
+    if (typeof window.runnerShowMappingPanel === "function") {
+      window.runnerShowMappingPanel();
+    } else {
+      state.runnerMappingChecked = true;
+    }
+    return;
+  }
+  if (typeof runnerMappingHasBlockingMissing === "function" && runnerMappingHasBlockingMissing()) {
+    toast("선택 필요 항목을 먼저 매핑해 주세요.", "error");
+    return;
+  }
   // [생성기 전체실행과 로직 일치] 실행 전 '실행 중' / 성공 후 '적용됨' 으로 스텝 상태를 동일하게 갱신한다.
   // (실행 자체는 양쪽 다 runPipelineWithAutoRepair 로 동일. 실행기는 이 상태 표시만 빠져 있었다.)
   // [전체실행 = 항상 원본부터] 보류 체크포인트를 무시·초기화해 reset(원본복원)을 건너뛰지 않게 한다(생성기와 동일).
   clearPipelineResumeFromIndex();
   const activeStepIds = getPipelineExecutionStepIds();
+  const runnerPipeline = typeof window.buildRunnerMappedPipeline === "function"
+    ? window.buildRunnerMappedPipeline(state.pipeline)
+    : state.pipeline;
   if (window.runnerSetRunning) window.runnerSetRunning(true);
   setPipelineRuntimeStatus(activeStepIds, "running", "실행 중");
   // Give the UI a tick to paint the ring, then execute
   setTimeout(async () => {
+    // [매핑 일관성] 실행 '동안만' state.pipeline 을 매핑본으로 교체한다. 이러면 자동복구(runPipelineWithAutoRepair
+    // 내부)와 체크포인트 이어실행(runPipelineSuffixFromCheckpoint 는 state.pipeline 을 읽음)까지 전부 '치환된 코드
+    // (실제 파일/시트명)'로 동작한다 → 도중 실패 후 복구/이어실행이 옛 이름으로 되돌아 또 실패하는 것을 막는다.
+    // finally 에서 원본을 되돌려 저장 스킬 코드(제네릭 이름)는 그대로 보존한다(save/재매핑에 치환본이 새지 않음).
+    const __originalPipeline = state.pipeline;
+    const __useMapped = runnerPipeline && runnerPipeline !== state.pipeline;
+    if (__useMapped) { state.runnerMappingRunActive = true; state.pipeline = runnerPipeline; }
     try {
       clearPipelineExecutionMemory({ keepViewer: true });
-      await runPipelineWithAutoRepair({ source: "runner", ignoreCheckpoint: true, backgroundMode: true, outputMode: "file" });
+      await runPipelineWithAutoRepair({ source: "runner", ignoreCheckpoint: true, backgroundMode: true, outputMode: "file", pipeline: runnerPipeline });
       setPipelineRuntimeStatus(activeStepIds, "applied", "적용됨");
       toast(`${state.pipeline.length}개 단계 실행 완료`, "success");
       if (window.runnerSetDone) window.runnerSetDone();
@@ -4968,6 +4987,8 @@ $("runner-run-btn").onclick = () => {
       markPipelineRunFailureStatus(err, activeStepIds);
       reportPipelineError(err, { compatibilityCheck: true, runner: true });
       if (window.runnerSetRunning) window.runnerSetRunning(false);
+    } finally {
+      if (__useMapped) { state.pipeline = __originalPipeline; state.runnerMappingRunActive = false; }
     }
   }, 650);
 };

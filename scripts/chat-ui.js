@@ -1605,7 +1605,11 @@ function pythonComStaticSafetyFailures(code, sourceUserMessage) {
         dynamicWideRead = /\.\s*read\s*\(\s*[^,\n]+,\s*(?:rng|range_|a1|src_range|read_range)\w*\b/i.test(scanText)
           && /\blast_col\b|col_letter|UsedRange/i.test(scanText);
       }
-      if ((riskyRead || dynamicWideRead) && hasPythonTransform) {
+      // [사용자 지시] '셀 갯수/큰 표 read' 를 이유로 Python 을 막지 않는다 — 대용량이어도 Python 으로 시도하게
+      // 둔다(타임아웃·셀 상한도 무제한으로 풀림). 예전엔 riskyRead/dynamicWideRead 를 '큰 표 read 금지' 실패로
+      // 올려 VBA 로 강제 전환했으나, 이제 그 강제는 하지 않는다(느릴 수 있으나 사용자가 감수). env 로 재활성 가능.
+      if ((riskyRead || dynamicWideRead) && hasPythonTransform
+          && typeof window !== "undefined" && window.B2B_BLOCK_BIG_PYTHON_READ === true) {
         failures.push(
           "큰 표를 ctx.read 로 Python 리스트에 올려 가공한 뒤 ctx.write 로 다시 쓰지 마세요. "
           + "대용량 파일에서 WebView/COM 응답이 멈추고 긴 숫자·날짜·서식이 손실될 수 있습니다. "
