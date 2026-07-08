@@ -1,0 +1,68 @@
+{
+  "version": 3,
+  "type": "mvno-logic",
+  "name": "mapping_test_saved_skill_3_inputs",
+  "saveBaseName": "mapping_test_saved_skill",
+  "createdAt": "2026-07-08T05:25:28.100801+00:00",
+  "stepCount": 4,
+  "pipeline": [
+    {
+      "id": "mapping-step-1",
+      "description": "SalesData? ResultSheet? ?? ??",
+      "prompt": "Copy @range[expected_sales.xlsx/SalesData!A2:D5] into @range[expected_output.xlsx/ResultSheet!A2:E5] with BaseAmount.",
+      "title": "SalesData? ResultSheet? ?? ??",
+      "enabled": true,
+      "language": "python",
+      "stepFile": "mapping_test_saved_skill_step_1.py",
+      "code": "def transform(ctx):\n    sales = ctx.book(\"expected_sales.xlsx\")\n    out = ctx.book(\"expected_output.xlsx\")\n    rows = sales.read(\"SalesData\", \"A2:D5\")\n    result = []\n    for row in rows:\n        code = row[0] if len(row) > 0 else \"\"\n        name = row[1] if len(row) > 1 else \"\"\n        qty = row[2] if len(row) > 2 and isinstance(row[2], (int, float)) else 0\n        unit = row[3] if len(row) > 3 and isinstance(row[3], (int, float)) else 0\n        result.append([code, name, qty, unit, qty * unit])\n    out.write(\"ResultSheet\", \"A2\", result)\n",
+      "targetFileId": "output:0",
+      "targetSheetName": "ResultSheet",
+      "trustedStatic": true
+    },
+    {
+      "id": "mapping-step-2",
+      "description": "AdjustData? ResultSheet? ??",
+      "prompt": "Apply @range[expected_adjustments.xlsx/AdjustData!A2:B5] to @range[expected_output.xlsx/ResultSheet!F2:G5].",
+      "title": "AdjustData? ResultSheet? ??",
+      "enabled": true,
+      "language": "python",
+      "stepFile": "mapping_test_saved_skill_step_2.py",
+      "code": "def transform(ctx):\n    adj = ctx.book(\"expected_adjustments.xlsx\")\n    out = ctx.book(\"expected_output.xlsx\")\n    adj_rows = adj.read(\"AdjustData\", \"A2:B5\")\n    adjustments = {}\n    for row in adj_rows:\n        if row and row[0] not in (None, \"\"):\n            adjustments[str(row[0])] = row[1] if len(row) > 1 and isinstance(row[1], (int, float)) else 0\n    base_rows = out.read(\"ResultSheet\", \"A2:E5\")\n    write_rows = []\n    for row in base_rows:\n        code = str(row[0]) if row and row[0] not in (None, \"\") else \"\"\n        base_amount = row[4] if len(row) > 4 and isinstance(row[4], (int, float)) else 0\n        adjustment = adjustments.get(code, 0)\n        write_rows.append([adjustment, base_amount + adjustment])\n    out.write(\"ResultSheet\", \"F2\", write_rows)\n",
+      "targetFileId": "output:0",
+      "targetSheetName": "ResultSheet",
+      "trustedStatic": true
+    },
+    {
+      "id": "mapping-step-3",
+      "description": "CodeMap? ResultSheet? ??",
+      "prompt": "Map @range[expected_codes.xlsx/CodeMap!A2:B5] to @range[expected_output.xlsx/ResultSheet!H2:H5].",
+      "title": "CodeMap? ResultSheet? ??",
+      "enabled": true,
+      "language": "python",
+      "stepFile": "mapping_test_saved_skill_step_3.py",
+      "code": "def transform(ctx):\n    codes = ctx.book(\"expected_codes.xlsx\")\n    out = ctx.book(\"expected_output.xlsx\")\n    code_rows = codes.read(\"CodeMap\", \"A2:B5\")\n    category_by_code = {}\n    for row in code_rows:\n        if row and row[0] not in (None, \"\"):\n            category_by_code[str(row[0])] = row[1] if len(row) > 1 else \"\"\n    result_codes = out.read(\"ResultSheet\", \"A2:A5\")\n    categories = []\n    for row in result_codes:\n        code = str(row[0]) if row and row[0] not in (None, \"\") else \"\"\n        categories.append([category_by_code.get(code, \"\")])\n    out.write(\"ResultSheet\", \"H2\", categories)\n",
+      "targetFileId": "output:0",
+      "targetSheetName": "ResultSheet",
+      "trustedStatic": true
+    },
+    {
+      "id": "mapping-step-4",
+      "description": "Validation_Result ??",
+      "prompt": "Create Validation_Result sheet from expected_output.xlsx/ResultSheet.",
+      "title": "Validation_Result ??",
+      "enabled": true,
+      "language": "python",
+      "stepFile": "mapping_test_saved_skill_step_4.py",
+      "code": "def transform(ctx):\n    out = ctx.book(\"expected_output.xlsx\")\n    rows = out.read(\"ResultSheet\", \"A2:H5\")\n    try:\n        out.add_sheet(\"Validation_Result\")\n    except Exception:\n        pass\n    total = 0\n    filled = 0\n    for row in rows:\n        if row and row[0] not in (None, \"\"):\n            filled += 1\n        if len(row) > 6 and isinstance(row[6], (int, float)):\n            total += row[6]\n    out.write(\"Validation_Result\", \"A1\", [[\"Check\", \"Value\"], [\"Rows\", filled], [\"FinalAmountTotal\", total]])\n",
+      "targetFileId": "output:0",
+      "targetSheetName": "Validation_Result",
+      "trustedStatic": true
+    }
+  ],
+  "chatHistory": [
+    {
+      "role": "user",
+      "content": "? ?? ??? ??, ??, ???? ?? ??? ?? ??? ???? ???."
+    }
+  ]
+}

@@ -511,8 +511,24 @@ function runnerMappingKey(book, sheet) {
   return `${String(book || "").trim()}\u0000${String(sheet || "").trim()}`;
 }
 
+function runnerCleanWorkbookRequirementName(value) {
+  let clean = String(value || "").trim();
+  if (!/\.xls(?:x|m|b)?$/i.test(clean)) return clean;
+  // Loose workbook-name extraction can over-capture English prose, e.g.
+  // "Create Validation_Result sheet from expected_output.xlsx". Keep Korean
+  // filenames with spaces intact, but trim obvious English prose prefixes.
+  const lastToken = /([^\s\\/:*?"<>|\[\]]+\.xls(?:x|m|b)?)$/i.exec(clean);
+  if (lastToken && lastToken.index > 0) {
+    const prefix = clean.slice(0, lastToken.index).trim();
+    if (/\b(?:from|to|into|copy|create|created|sheet|file|workbook|output|input|target|source)\b/i.test(prefix)) {
+      clean = lastToken[1];
+    }
+  }
+  return clean;
+}
+
 function runnerAddRequirement(map, book, sheet, source) {
-  const cleanBook = String(book || "").trim();
+  const cleanBook = runnerCleanWorkbookRequirementName(book);
   const cleanSheet = String(sheet || "").trim();
   if (!cleanBook && !cleanSheet) return;
   const key = runnerMappingKey(cleanBook, cleanSheet);
@@ -682,8 +698,11 @@ function runnerExtractMappingRequirements() {
     }
 
     names.forEach(name => {
-      const hasNamedRequirement = Array.from(map.values()).some(req => req.book === name);
-      if (!hasNamedRequirement) runnerAddRequirement(map, name, "", "code-book");
+      const cleanName = runnerCleanWorkbookRequirementName(name);
+      const hasNamedRequirement = Array.from(map.values()).some(req =>
+        runnerMappingNorm(req.book) === runnerMappingNorm(cleanName)
+      );
+      if (!hasNamedRequirement) runnerAddRequirement(map, cleanName, "", "code-book");
     });
     if (!names.length) {
       candidateSheets
