@@ -664,6 +664,13 @@ async function preopenAllExcelMirrors(selectedFileId, options = {}) {
     // Excel 이 새 창을 전면에 올려) 선택 미러 위에 '빈 회색'으로 남을 수 있다(파일 1개면 rest 가 없어 이 현상
     // 없음). 모두 연 뒤 선택 창만 다시 확실히 표시해(나머지 재숨김) 정리한다 — 선택은 이미 보이므로 재배치 없이
     // 나머지만 숨긴다(force 없음).
+    try {
+      if (typeof traceClientUiEvent === "function") traceClientUiEvent("mirror.preopen_done", {
+        selected: String(selected), restCount: rest.length, headless: !!excelMirror.runnerHeadless,
+        seqOk: excelMirror.preopenSeq === seq,
+        sessions: Object.keys(excelMirror.sessionsByFileId || {}).length,
+      });
+    } catch (_) {}
     if (excelMirror.preopenSeq === seq && rest.length && !excelMirror.runnerHeadless) {
       const _sel = excelMirror.sessionsByFileId[selected];
       if (_sel) {
@@ -1779,6 +1786,13 @@ async function showOnlyExcelMirrorWindow(excelId = currentExcelId(), options = {
   const wasHidden = !!excelMirror.hiddenByExcelId[excelId];
   const skipPosition = !options.force && !wasHidden && excelMirror.positionedKeyByExcelId[excelId] === key;
   const data = await postExcelMirror("/api/excel/show-only", { excelId, ...rect, skipPosition });
+  try {
+    if (typeof traceClientUiEvent === "function") traceClientUiEvent("mirror.show_only", {
+      excelId, wasHidden, skipPosition, force: !!options.force,
+      hiddenIds: (data.hiddenIds || []).join(","),
+      sessions: Object.keys(excelMirror.sessionsByFileId || {}).length,
+    });
+  } catch (_) {}
   excelMirror.positionedKeyByExcelId[excelId] = key;
   excelMirror.hiddenByExcelId[excelId] = false;
   (data.hiddenIds || []).forEach(id => {
