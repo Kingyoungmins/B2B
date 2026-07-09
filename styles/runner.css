@@ -401,8 +401,7 @@
     margin-top: 5px;
   }
   .runner-mapping-sheet-map .runner-mapping-sheet-chip {
-    flex: 0 1 auto;
-    min-width: 0;
+    flex: 0 0 auto;
   }
   .runner-mapping-sheet-map .runner-mapping-select {
     flex: 1 1 auto;

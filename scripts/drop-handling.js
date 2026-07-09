@@ -951,6 +951,12 @@ function runnerMappingHasBlockingMissing() {
   return runnerGroupMappingRowsByFile(runnerBuildMappingRows()).some(g => g.status === "bad");
 }
 
+// 칩에 보여줄 라벨: 10자까지는 그대로, 넘으면 10자 + …(전체 이름은 title 툴팁으로).
+function runnerChipLabel(value) {
+  const t = String(value == null ? "" : value);
+  return t.length > 10 ? t.slice(0, 10) + "…" : t;
+}
+
 function runnerRenderMappingPanel() {
   const grid = $("runner-main-grid");
   const panel = $("runner-mapping-panel");
@@ -982,7 +988,7 @@ function runnerRenderMappingPanel() {
     // 왼쪽: 스킬이 찾는 시트들을 '요청 시트명 그대로' 칩으로만 표시.
     const sheetChips = sheetMembers.length
       ? sheetMembers.map(m =>
-          `<span class="runner-mapping-sheet-chip" title="${escapeHtml(m.req.sheet)}">${escapeHtml(m.req.sheet)}</span>`
+          `<span class="runner-mapping-sheet-chip" title="${escapeHtml(m.req.sheet)}">${escapeHtml(runnerChipLabel(m.req.sheet))}</span>`
         ).join("")
       : `<span class="runner-mapping-sheet-chip">시트 자동</span>`;
     // 오른쪽: 각 시트마다 [요청 시트 칩] ↔ [실제 파일의 시트 드롭다운]. 자동 해결된 시트는 드롭다운이 미리 선택됨.
@@ -992,7 +998,7 @@ function runnerRenderMappingPanel() {
       )).join("");
       const chipCls = m.sheet ? "ok" : "warn";
       return `<div class="runner-mapping-sheet-map">
-            <span class="runner-mapping-sheet-chip ${chipCls}" title="${escapeHtml(m.req.sheet)}">${escapeHtml(m.req.sheet)}</span>
+            <span class="runner-mapping-sheet-chip ${chipCls}" title="${escapeHtml(m.req.sheet)}">${escapeHtml(runnerChipLabel(m.req.sheet))}</span>
             <span class="runner-mapping-sheet-link">↔</span>
             <select class="runner-mapping-select runner-map-sheet2" data-key="${escapeHtml(m.req.key)}" data-gidx="${gidx}" ${g.fileItem ? "" : "disabled"}>${opts}</select>
           </div>`;
