@@ -588,15 +588,28 @@ function runnerExtractGeneratedSheetsFromCode(code) {
     while ((mm = renameRe.exec(src))) runnerAddGeneratedSheet(generated, book, mm[1]);
   });
 
+  // VBA 는 '=' 가 대입/비교 겸용이라 `.Name = "X"` 가 시트 생성/이름지정일 수도,
+  // `If sh.Name = "X" Then ...`(기존 시트 찾기) 같은 '비교문'일 수도 있다. 비교문을 생성으로
+  // 오판하면 그 시트가 '필수 업로드'에서 잘못 제외돼 매핑 UI 에 '시트 자동'(빈 시트)으로 뜬다.
+  // If/ElseIf/While/Until/Then/Case 문맥의 .Name= 은 생성으로 보지 않는다(라인 단위로 판정).
+  const vbaIsComparisonLine = line =>
+    /(?:^|[\s:])(?:if|elseif|#if|while|until)\b/i.test(line) ||
+    /\bthen\b/i.test(line) ||
+    /(?:^|[\s:])case\b/i.test(line);
   const vbaLiteralVars = new Map();
-  const vbaAssign = /\b([A-Za-z_][A-Za-z0-9_]*)\s*=\s*["']([^"']+)["']/g;
-  while ((m = vbaAssign.exec(src))) vbaLiteralVars.set(String(m[1] || "").toLowerCase(), m[2]);
-  const vbaNameLiteral = /\.Name\s*=\s*["']([^"']+)["']/gi;
-  while ((m = vbaNameLiteral.exec(src))) runnerAddGeneratedSheet(generated, "", m[1]);
-  const vbaNameVar = /\.Name\s*=\s*([A-Za-z_][A-Za-z0-9_]*)/gi;
-  while ((m = vbaNameVar.exec(src))) {
-    const val = vbaLiteralVars.get(String(m[1] || "").toLowerCase());
-    if (val) runnerAddGeneratedSheet(generated, "", val);
+  const vbaAssignLine = /^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*["']([^"']+)["']\s*$/;  // 단독 대입문만
+  for (const line of src.split(/\r?\n/)) {
+    const av = vbaAssignLine.exec(line);
+    if (av) vbaLiteralVars.set(String(av[1] || "").toLowerCase(), av[2]);
+    if (vbaIsComparisonLine(line)) continue;  // 비교문은 생성 아님 → 스킵
+    let mm;
+    const litRe = /\.Name\s*=\s*["']([^"']+)["']/gi;
+    while ((mm = litRe.exec(line))) runnerAddGeneratedSheet(generated, "", mm[1]);
+    const varRe = /\.Name\s*=\s*([A-Za-z_][A-Za-z0-9_]*)/gi;
+    while ((mm = varRe.exec(line))) {
+      const val = vbaLiteralVars.get(String(mm[1] || "").toLowerCase());
+      if (val) runnerAddGeneratedSheet(generated, "", val);
+    }
   }
 
   return generated;
@@ -710,6 +723,18 @@ function runnerExtractMappingRequirements() {
         .forEach(sheet => runnerAddRequirement(map, "", sheet, "sheet"));
     }
     generatedSheets.push(...generatedHere);
+  }
+  // 같은 시트를 이미 '구체 파일 + 시트'로 요구하고 있으면, 파일 없는 '시트만' 요구는 중복이므로 제거.
+  // (파일별 타깃은 input: 브랜치가, 시트만 항목은 python 스텝의 !names 브랜치가 각각 넣어 겹칠 수 있다.)
+  const coveredSheets = new Set(
+    Array.from(map.values())
+      .filter(req => req.book && req.sheet)
+      .map(req => runnerMappingNorm(req.sheet))
+  );
+  for (const [key, req] of Array.from(map.entries())) {
+    if (!req.book && req.sheet && coveredSheets.has(runnerMappingNorm(req.sheet))) {
+      map.delete(key);
+    }
   }
   return Array.from(map.values()).slice(0, 40);
 }

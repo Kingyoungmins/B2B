@@ -59,5 +59,38 @@ ck("(2c) 생성시트 'Validation_Result' 는 요구 아님",
 ck("(2d) 빈 시트(시트 자동) 행이 아예 없음(모든 요구가 시트 지정됨)",
    reqs.every(r => String(r.sheet).trim().length > 0), asStr);
 
+// ── (D) VBA `If sh.Name = "X" Then`(기존 시트 찾기 비교문)이 생성시트로 오탐되면
+//        그 시트가 요구에서 빠져 UI 에 '시트 자동'(빈 시트)으로 뜬다. 실제 사용자 스킬 재현. ──
+const VBA_FIND = `Sub B2BSkill()
+    Dim wb As Workbook, sh As Worksheet, ws As Worksheet
+    For Each wb In Application.Workbooks
+        If wb.Name = "input_v056_청구내역.xlsx" Then Exit For
+    Next wb
+    For Each sh In wb.Worksheets
+        If sh.Name = "청구내역" Then Set ws = sh: Exit For
+    Next sh
+    ws.Range("G14").Value = 100
+End Sub`;
+const PY_CELL = `def transform(ctx):\n    ctx.write_cell("청구내역", "I17", 200)`;
+// (D1) 비교문 .Name= 은 생성으로 보지 않음
+const genFind = runnerExtractGeneratedSheetsFromCode(VBA_FIND);
+ck("(D1) VBA 'If sh.Name=\"청구내역\" Then' 는 생성시트 아님", genFind.length === 0, genFind);
+// (D2) 단독 대입(Add 후 이름지정)은 여전히 생성으로 감지
+const VBA_ADD = `Sub B2BSkill()\n    Dim ws As Worksheet\n    Set ws = Worksheets.Add\n    ws.Name = "요약결과"\nEnd Sub`;
+ck("(D2) VBA 'ws.Name=\"요약결과\"'(단독 대입) 는 생성시트로 감지",
+   runnerExtractGeneratedSheetsFromCode(VBA_ADD).some(g => g.sheet === "요약결과"),
+   runnerExtractGeneratedSheetsFromCode(VBA_ADD));
+// (D3) 사용자 스킬 구조로 추출 → 요구 1개, 시트='청구내역'(빈 시트 아님)
+G.state = { pipeline: [
+  { id: "s1", language: "vba", code: VBA_FIND, targetFileId: "input:input_v056_청구내역.xlsx", targetSheetName: "청구내역" },
+  { id: "s5", language: "python", code: PY_CELL, targetFileId: "input:input_v056_청구내역.xlsx", targetSheetName: "청구내역" },
+]};
+const reqs2 = runnerExtractMappingRequirements();
+const s2 = reqs2.map(r => `${r.book}/${r.sheet}`);
+ck("(D3) 요구 정확히 1개", reqs2.length === 1, s2);
+ck("(D4) 시트가 '청구내역'으로 잡힘(‘시트 자동’ 아님)",
+   reqs2.some(r => norm(r.book) === "input_v056_청구내역.xlsx" && norm(r.sheet) === "청구내역"), s2);
+ck("(D5) 파일 없는 '시트만' 중복행 없음", !reqs2.some(r => !String(r.book).trim()), s2);
+
 console.log(`\n=== RESULT: ${fail ? fail + " FAIL" : "ALL PASS"} (${pass}/${pass + fail}) ===`);
 process.exit(fail ? 1 : 0);
