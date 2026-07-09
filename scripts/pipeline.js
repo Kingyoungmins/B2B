@@ -1248,7 +1248,12 @@ async function runVbaPipelinePreferLive(options = {}) {
   // 복사본으로만 열므로 둘 다 해결된다.
   const hasCrossFileStep = activeSteps.some(s =>
     pipelineStepReadsOtherFile(s) || (pipelinePythonMutatedBookNames(s.code).length > 0));
-  if (hasVbaStep || hasCrossFileStep) {
+  // [실행기 파일출력] outputMode:"file"(실행기 전체실행)은 라이브를 안 건드리고 결과 파일(outputFiles)을
+  // 만들어야 한다. 그러나 이 함수는 hasVbaStep/교차파일일 때만 격리 배치(run_full_pipeline)로 위임하고,
+  // 단일파일 Python 은 아래 라이브 순차 적용 루프(applyVbaStepToLiveExcel)로 빠져 라이브만 갱신되고
+  // outputFiles 가 안 생겼다(→ '결과 편집하기' 비활성). VBA 는 이 위임 덕에 정상 동작했던 것 = VBA 와의 차이.
+  // outputMode:"file" 이면 종류와 무관하게 격리 배치 경로로 보내 결과 파일을 만들고 라이브는 건드리지 않는다.
+  if (hasVbaStep || hasCrossFileStep || options.outputMode === "file") {
     // 사용자가 확인한 실패 케이스의 공통점은 전체실행에서 라이브 임베드 Excel 인스턴스가
     // Application.Run 을 거부하는 것이다. VBA 가 하나라도 있으면(또는 교차파일 복붙이면) 새 비임베드
     // Excel 에서 순서대로 실행한 뒤 결과 워크북만 라이브로 복사한다. Python COM 스텝이 섞여도 같은
