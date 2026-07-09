@@ -3228,6 +3228,19 @@ async function reapplyVbaPipelineToLive(excelId, options = {}) {
   if (!resetFileIds.length) {
     throw new Error("작업 대상 파일을 결정할 수 없습니다. 파일 탭을 먼저 선택해 Excel 창을 띄운 뒤 다시 시도해 주세요.");
   }
+  // [실행기 파일출력] outputMode:"file" = 라이브 미반영 + 결과 파일(outputFiles) 생성.
+  // 기존엔 VBA 포함 파이프라인만 격리 배치(run_full_pipeline) 경로를 타서, Python 전용 실행기 전체실행은
+  // 라이브에 그대로 반영되고 outputFiles 가 없어 '결과 편집하기' 버튼이 활성화되지 않았다(예: CSV "E열 합산").
+  // Python/VBA 무관하게 격리 배치 경로로 보내 결과 파일을 만들고(=버튼 활성화), 라이브는 건드리지 않는다.
+  if (options.outputMode === "file") {
+    if (window.runnerSetRunning) window.runnerSetRunning(true);
+    return await runIsolatedLivePipelineSteps(sourceSteps, excelId, {
+      ...options,
+      resetFileIds,
+      fallbackFileId,
+      viewSheet: options.viewSheet || null,
+    });
+  }
   if (window.runnerSetRunning) window.runnerSetRunning(true);
   if (!hasVbaStep && typeof muteExcelMirrorForPipeline === "function") muteExcelMirrorForPipeline(excelId);
   if (!hasVbaStep && typeof beginExcelMirrorApplyLoading === "function") {
