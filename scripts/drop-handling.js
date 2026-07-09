@@ -724,17 +724,23 @@ function runnerExtractMappingRequirements() {
     }
     generatedSheets.push(...generatedHere);
   }
-  // 같은 시트를 이미 '구체 파일 + 시트'로 요구하고 있으면, 파일 없는 '시트만' 요구는 중복이므로 제거.
-  // (파일별 타깃은 input: 브랜치가, 시트만 항목은 python 스텝의 !names 브랜치가 각각 넣어 겹칠 수 있다.)
-  const coveredSheets = new Set(
-    Array.from(map.values())
-      .filter(req => req.book && req.sheet)
-      .map(req => runnerMappingNorm(req.sheet))
+  // ── 오탐/중복 정리 ──
+  const hasSpreadsheetExt = name => /\.(?:xls[xmb]?|csv|tsv)$/i.test(String(name || "").trim());
+  const coveredSheets = new Set(   // '구체 파일 + 시트'로 이미 요구되는 시트명
+    Array.from(map.values()).filter(req => req.book && req.sheet).map(req => runnerMappingNorm(req.sheet))
+  );
+  const booksWithSheet = new Set(  // '시트까지' 요구가 있는 파일명
+    Array.from(map.values()).filter(req => req.book && req.sheet).map(req => runnerMappingNorm(req.book))
   );
   for (const [key, req] of Array.from(map.entries())) {
-    if (!req.book && req.sheet && coveredSheets.has(runnerMappingNorm(req.sheet))) {
-      map.delete(key);
-    }
+    const emptySheet = !String(req.sheet || "").trim();
+    // (1) 파일 없는 '시트만' 요구가, 같은 시트를 '구체 파일+시트'로 이미 요구하면 중복 → 제거.
+    if (!req.book && req.sheet && coveredSheets.has(runnerMappingNorm(req.sheet))) { map.delete(key); continue; }
+    // (2) '파일'처럼 안 생긴(스프레드시트 확장자 없는) book 이 시트 없이 요구로 잡힌 건 대개 VBA `.Name="시트"`
+    //     비교/이름지정에서 시트명이 워크북명으로 샌 오탐(예: 올인원중복제거값/세부내역/피벗_결과) → 제거.
+    if (req.book && emptySheet && !hasSpreadsheetExt(req.book)) { map.delete(key); continue; }
+    // (3) 같은 파일을 '시트까지' 요구하는 항목이 있으면, 그 파일의 '빈 시트' 중복 요구는 제거.
+    if (req.book && emptySheet && booksWithSheet.has(runnerMappingNorm(req.book))) { map.delete(key); continue; }
   }
   return Array.from(map.values()).slice(0, 40);
 }

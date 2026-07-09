@@ -92,5 +92,29 @@ ck("(D4) 시트가 '청구내역'으로 잡힘(‘시트 자동’ 아님)",
    reqs2.some(r => norm(r.book) === "input_v056_청구내역.xlsx" && norm(r.sheet) === "청구내역"), s2);
 ck("(D5) 파일 없는 '시트만' 중복행 없음", !reqs2.some(r => !String(r.book).trim()), s2);
 
+// ── (E) VBA `.Name="시트"` 비교/이름지정에서 시트명이 '워크북명'으로 새어 파일 요구로 잡히던 오탐 ──
+//        (실제 KGM 33단계 스킬: 올인원중복제거값/세부내역/피벗_결과 시트가 '올려야 할 파일'로 뜸)
+const VBA_SHEETLEAK = `Sub B2BSkill()
+    Dim wb As Workbook, sh As Worksheet, wbOut As Workbook
+    For Each sh In ActiveWorkbook.Worksheets
+        If sh.Name = "올인원중복제거값" Then
+            Set wbOut = wb
+            Exit For
+        End If
+    Next sh
+    wb.Worksheets(1).Name = "세부내역"
+    ActiveWorkbook.Range("A1").Value = 1
+End Sub`;
+G.state = { pipeline: [
+  { id: "e1", language: "vba", code: VBA_SHEETLEAK, targetFileId: "input:원본_DSMC.xlsx", targetSheetName: "202605_SS001643" },
+]};
+const reqs3 = runnerExtractMappingRequirements();
+const s3 = reqs3.map(r => `${r.book}/${r.sheet}`);
+const hasExt = n => /\.(?:xls[xmb]?|csv|tsv)$/i.test(String(n || ""));
+ck("(E1) 시트명(올인원중복제거값)이 파일 요구로 안 뜸", !reqs3.some(r => norm(r.book) === "올인원중복제거값"), s3);
+ck("(E2) 시트명(세부내역)이 파일 요구로 안 뜸", !reqs3.some(r => norm(r.book) === "세부내역"), s3);
+ck("(E3) 확장자 없는 book-only 요구가 아예 없음", !reqs3.some(r => r.book && !String(r.sheet).trim() && !hasExt(r.book)), s3);
+ck("(E4) 실제 파일 요구(원본_DSMC.xlsx/202605_SS001643)는 유지", reqs3.some(r => hasExt(r.book) && norm(r.book) === "원본_dsmc.xlsx"), s3);
+
 console.log(`\n=== RESULT: ${fail ? fail + " FAIL" : "ALL PASS"} (${pass}/${pass + fail}) ===`);
 process.exit(fail ? 1 : 0);
