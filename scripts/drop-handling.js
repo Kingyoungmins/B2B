@@ -903,22 +903,24 @@ function runnerRenderMappingPanel() {
     )).join("");
     const sheetsInFile = g.fileItem ? runnerMappingSheetNames(g.fileItem.file) : [];
     const sheetMembers = g.members.filter(m => m.req.sheet);
-    // 이 파일이 필요로 하는 시트들을 칩으로 표기(자동 해결되면 → 실제시트, 못 찾으면 확인 표시).
+    // 왼쪽: 스킬이 찾는 시트들을 '요청 시트명 그대로' 칩으로만 표시.
     const sheetChips = sheetMembers.length
-      ? sheetMembers.map(m => {
-          const resolved = m.sheet;
-          const cls = resolved ? "ok" : "warn";
-          const arrow = resolved && runnerMappingNorm(resolved) !== runnerMappingNorm(m.req.sheet) ? " → " + escapeHtml(resolved) : "";
-          const title = resolved ? `${m.req.sheet}${arrow ? " → " + resolved : ""}` : `${m.req.sheet} (시트 확인 필요)`;
-          return `<span class="runner-mapping-sheet-chip ${cls}" title="${escapeHtml(title)}">${escapeHtml(m.req.sheet)}${arrow}</span>`;
-        }).join("")
+      ? sheetMembers.map(m =>
+          `<span class="runner-mapping-sheet-chip" title="${escapeHtml(m.req.sheet)}">${escapeHtml(m.req.sheet)}</span>`
+        ).join("")
       : `<span class="runner-mapping-sheet-chip">시트 자동</span>`;
-    // 파일은 매핑됐는데 못 찾은 시트는 직접 고를 수 있게 오버라이드 셀렉트를 준다.
-    const overrideSelects = g.fileItem ? sheetMembers.filter(m => !m.sheet).map(m => {
+    // 오른쪽: 각 시트마다 [요청 시트 칩] ↔ [실제 파일의 시트 드롭다운]. 자동 해결된 시트는 드롭다운이 미리 선택됨.
+    const sheetMaps = sheetMembers.map(m => {
       const opts = [`<option value="">시트 선택</option>`].concat(sheetsInFile.map(s =>
-        `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`)).join("");
-      return `<div class="runner-mapping-sheet-override"><span title="${escapeHtml(m.req.sheet)}">${escapeHtml(m.req.sheet)} →</span><select class="runner-mapping-select runner-map-sheet2" data-key="${escapeHtml(m.req.key)}" data-gidx="${gidx}">${opts}</select></div>`;
-    }).join("") : "";
+        `<option value="${escapeHtml(s)}" ${runnerMappingNorm(m.sheet) === runnerMappingNorm(s) ? "selected" : ""}>${escapeHtml(s)}</option>`
+      )).join("");
+      const chipCls = m.sheet ? "ok" : "warn";
+      return `<div class="runner-mapping-sheet-map">
+            <span class="runner-mapping-sheet-chip ${chipCls}" title="${escapeHtml(m.req.sheet)}">${escapeHtml(m.req.sheet)}</span>
+            <span class="runner-mapping-sheet-link">↔</span>
+            <select class="runner-mapping-select runner-map-sheet2" data-key="${escapeHtml(m.req.key)}" data-gidx="${gidx}" ${g.fileItem ? "" : "disabled"}>${opts}</select>
+          </div>`;
+    }).join("");
     return `
       <div class="runner-mapping-row" data-gidx="${gidx}" data-status="${g.status}">
         <div class="runner-mapping-need">
@@ -928,10 +930,10 @@ function runnerRenderMappingPanel() {
         </div>
         <div class="runner-mapping-arrow">→</div>
         <div class="runner-mapping-actual">
-          <div class="runner-mapping-label">실제 사용할 파일</div>
+          <div class="runner-mapping-label">실제 사용할 파일 / 시트</div>
           <div class="runner-mapping-selects">
             <select class="runner-mapping-select runner-map-file2" data-gidx="${gidx}">${fileOptions}</select>
-            ${overrideSelects}
+            ${sheetMaps}
           </div>
         </div>
         <div class="runner-mapping-status ${g.status}">${escapeHtml(g.statusText)}</div>
