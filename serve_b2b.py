@@ -8964,6 +8964,50 @@ class PythonComSkillContext:
         except Exception:
             return 1
 
+    def first_empty_col(self, sheet, after=None, header_row=1):
+        """'빈 보조열'을 찾아 그 열 '문자'(예 "N")를 돌려준다. after(마지막 데이터 열, 예 "L")를 주면 그 다음
+        열부터, 안 주면 데이터가 시작된 뒤부터 오른쪽으로 훑어 '헤더행~사용범위 마지막 행'까지 완전히 빈 첫
+        열을 찾는다. "옆 빈 열/빈 보조열에 계산해 넣어줘" 요청에서 데이터 옆 첫 칸이 이미 합계(=SUM) 등으로
+        차 있어 그걸 덮어쓰는 사고를 막는다(그 열은 건너뛰고 진짜 빈 열을 고른다).
+          예: col = ctx.first_empty_col("SO사업자별요금", after="L")   # -> "N" (M 은 합계열이라 건너뜀)
+              ctx.write_cell(sheet, f"{col}8", "행별MAX"); ctx.write(sheet, f"{col}9", out)"""
+        ws = self._ws(sheet)
+        self._tick(2)
+        hr = max(1, int(header_row or 1))
+        last_r = max(hr, self.used_last_row(sheet))
+        last_c = max(1, self.used_last_col(sheet))
+
+        def _col_empty(c):
+            try:
+                vals = ws.Range(ws.Cells(hr, c), ws.Cells(last_r, c)).Value
+            except Exception:
+                return True
+            if not isinstance(vals, (tuple, list)):
+                return vals in (None, "")
+            for row in vals:
+                v = row[0] if isinstance(row, (tuple, list)) else row
+                if v not in (None, ""):
+                    return False
+            return True
+
+        start = 1
+        if after is not None:
+            s = str(after).strip()
+            try:
+                start = (self._col_index(s) if re.fullmatch(r"[A-Za-z]{1,3}", s) else int(s)) + 1
+            except Exception:
+                start = 1
+        seen_data = after is not None   # after 를 주면 이미 데이터 뒤로 간주(선행 빈 열 무시)
+        c = max(1, int(start))
+        while c <= last_c + 2:
+            if _col_empty(c):
+                if seen_data:
+                    return _col_letter(c)
+            else:
+                seen_data = True
+            c += 1
+        return _col_letter(last_c + 1)
+
     def find_header(self, sheet, header_text, header_row=1):
         """헤더 행에서 헤더 텍스트로 열 번호(1-based)를 찾는다. 없으면 오류.
         열 번호를 추측/하드코딩하지 말고 반드시 이 함수를 쓸 것.
@@ -9593,6 +9637,15 @@ class PythonComSkillContext:
             for i, h in enumerate(header):
                 if str(h).strip() == s:
                     return i
+            # 슬래시-별칭("전화번호/회선번호/ID") — 모델이 후보 이름을 슬래시로 묶어 주는 경우, 각 후보를
+            # 헤더에서 시도한다(정확 헤더명이 먼저 매칭되므로 실제 "A/B" 헤더는 위에서 이미 잡힘).
+            if "/" in s:
+                for alias in (a.strip() for a in s.split("/")):
+                    if not alias:
+                        continue
+                    for i, h in enumerate(header):
+                        if str(h).strip() == alias:
+                            return i
             if re.fullmatch(r"[A-Za-z]{1,3}", s):
                 return self._col_index(s) - 1
             try:
@@ -9677,6 +9730,22 @@ class PythonComSkillContext:
         if name in _excel_collection_names(self._wb.Worksheets):
             raise PythonComSkillError(f"시트 '{name}' 이 이미 있습니다. 다른 이름을 쓰거나 먼저 삭제하세요.")
         self.add_sheet(name, after=after)
+        # [앞자리0 보존] 그룹키 열에 '0으로 시작하는 숫자 문자열'(전화번호/가입번호 등)이 있으면, 그 열을 먼저
+        # 텍스트(@) 서식으로 지정한 뒤 쓴다 — 그래야 write 시 숫자로 강제 변환돼 앞자리 0 이 사라지는 것을 막는다.
+        # (원본 열이 텍스트라 read 가 "010..." 문자열을 돌려준 경우에만 트리거. 원본이 이미 숫자면 보존할 0 이 없음.)
+        try:
+            n_out = len(out)
+            for kc in range(len(gidx)):
+                needs_text = any(
+                    isinstance(key[kc] if kc < len(key) else "", str)
+                    and str(key[kc])[:1] == "0" and str(key[kc])[1:].isdigit()
+                    for key in order
+                )
+                if needs_text and n_out >= 2:
+                    cl = _col_letter(kc + 1)
+                    self._ws(name).Range(f"{cl}2:{cl}{n_out}").NumberFormat = "@"
+        except Exception:
+            pass
         if out:
             self.write(name, "A1", out, overwrite_formulas=True)
         self._shared["structural"].append(f"pivot:{sheet}->{name}({len(order)})")
