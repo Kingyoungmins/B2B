@@ -150,6 +150,8 @@ ck("(F2) 교차파일: CCU 는 202605(원본_DSMC 소유)로 요구되지 않음
    !reqs4.some(r => /ccu|목록/i.test(r.book) && norm(r.sheet) === "202605_ss001643"), s4);
 ck("(F3) 202605 는 원본_DSMC 요구로 유지",
    reqs4.some(r => norm(r.book) === "원본_dsmc.xlsx" && norm(r.sheet) === "202605_ss001643"), s4);
+ck("(F4) CCU 는 자기 시트('교체된 CCU 목록')로 요구됨(시트 자동 아님)",
+   reqs4.some(r => /목록/.test(r.book) && norm(r.sheet) === "교체된 ccu 목록"), s4);
 
 console.log(`\n=== RESULT: ${fail ? fail + " FAIL" : "ALL PASS"} (${pass}/${pass + fail}) ===`);
 process.exit(fail ? 1 : 0);

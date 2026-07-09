@@ -662,18 +662,21 @@ function runnerAddPairedCodeRequirements(map, code, shouldSkip) {
   }
 }
 
-// 코드에서 '어떤 시트가 어떤 워크북 소유인지'를 뽑는다(교차파일 오귀속 방지).
-// 예: VBA `Set wbDst=Workbooks("원본_DSMC")` + `wbDst.Worksheets("202605")` → 202605 는 원본_DSMC 소유.
-// 저장된 스텝의 targetFileId 가 CCU 인데 targetSheetName 이 202605(=원본_DSMC 소유)면, 202605 를 CCU 요구로
-// 짝지으면 안 된다(교차파일 쓰기 대상 시트이지 CCU 가 가진 시트가 아님). 반환: Map<normSheet, Set<normBook>>.
+// 코드에서 '어떤 시트가 어떤 워크북 소유인지' (book,sheet) 쌍을 뽑는다(교차파일 오귀속 방지 + 자기 시트 회수).
+// 예: VBA `Set wbDst=Workbooks("원본_DSMC")` + `wbDst.Worksheets("202605")` → (원본_DSMC, 202605).
+//     `Set wbSrc=Workbooks("CCU")` + `wbSrc.Worksheets("교체된 CCU 목록")` → (CCU, 교체된 CCU 목록).
+// 저장된 스텝의 targetFileId=CCU 인데 targetSheetName=202605(원본_DSMC 소유)면 202605 를 CCU 요구로 짝짓지 않고,
+// 대신 CCU 가 코드상 실제 쓰는 시트(교체된 CCU 목록)를 요구로 넣는다. 반환: [{book, sheet}] (원본 표기, 중복 제거).
 function runnerSheetOwnersFromCode(code) {
   const src = String(code || "");
-  const owners = new Map();
+  const pairs = [];
+  const seen = new Set();
   const add = (book, sheet) => {
-    const b = runnerMappingNorm(book), s = runnerMappingNorm(sheet);
-    if (!b || !s || runnerLooksLikeA1Address(sheet)) return;
-    if (!owners.has(s)) owners.set(s, new Set());
-    owners.get(s).add(b);
+    if (!book || !sheet || runnerLooksLikeA1Address(sheet)) return;
+    const key = runnerMappingNorm(book) + " " + runnerMappingNorm(sheet);
+    if (!runnerMappingNorm(book) || !runnerMappingNorm(sheet) || seen.has(key)) return;
+    seen.add(key);
+    pairs.push({ book, sheet });
   };
   let m;
   const vbaDirect = /Workbooks\(\s*["']([^"']+)["']\s*\)\s*\.\s*Worksheets\(\s*["']([^"']+)["']\s*\)/gi;
@@ -700,7 +703,7 @@ function runnerSheetOwnersFromCode(code) {
     let mm;
     while ((mm = re.exec(src))) add(book, mm[1]);
   });
-  return owners;
+  return pairs;
 }
 
 function runnerExtractMappingRequirements() {
@@ -757,15 +760,27 @@ function runnerExtractMappingRequirements() {
     if (step.targetFileId && String(step.targetFileId).startsWith("input:")) {
       const savedBook = String(step.targetFileId).slice(6);
       // [교차파일 오귀속 방지] targetSheetName 이 코드상 '다른 워크북 소유' 시트면(예: targetFile=CCU 인데
-      // 202605 는 원본_DSMC 의 쓰기 대상 시트), CCU 요구에 202605 를 짝지으면 안 된다 → 시트 없이 파일만 요구.
-      const owners = runnerSheetOwnersFromCode(step.code);
-      const ownerSet = step.targetSheetName ? owners.get(runnerMappingNorm(step.targetSheetName)) : null;
-      const sheetBelongsElsewhere = ownerSet && ownerSet.size > 0 && !ownerSet.has(runnerMappingNorm(savedBook));
+      // 202605 는 원본_DSMC 의 쓰기 대상 시트), CCU 요구에 202605 를 짝지으면 안 된다. 대신 CCU 가 코드상
+      // 실제 쓰는 자기 시트(교체된 CCU 목록)를 요구로 넣어, 원본_DSMC 처럼 시트 칩↔드롭다운이 뜨게 한다.
+      const ownerPairs = runnerSheetOwnersFromCode(step.code);
+      const nSaved = runnerMappingNorm(savedBook);
+      const nTarget = runnerMappingNorm(step.targetSheetName || "");
+      const targetOwnerBooks = step.targetSheetName
+        ? ownerPairs.filter(p => runnerMappingNorm(p.sheet) === nTarget).map(p => runnerMappingNorm(p.book))
+        : [];
+      const sheetBelongsElsewhere = targetOwnerBooks.length > 0 && !targetOwnerBooks.includes(nSaved);
       if (step.targetSheetName && !runnerLooksLikeA1Address(step.targetSheetName) && !sheetBelongsElsewhere) {
         if (!shouldSkipRequirement(savedBook, step.targetSheetName)) {
           runnerAddRequirement(map, savedBook, step.targetSheetName, "target");
         }
-      } else if (!sheetBelongsElsewhere && candidateSheets.length === 1 && !shouldSkipRequirement(savedBook, candidateSheets[0])) {
+      } else if (sheetBelongsElsewhere) {
+        // 이 파일이 코드상 실제로 다루는 자기 시트를 요구로(교차파일 소스 파일의 진짜 시트). 없으면 파일만.
+        const ownSheets = Array.from(new Set(
+          ownerPairs.filter(p => runnerMappingNorm(p.book) === nSaved).map(p => p.sheet)
+        )).filter(s => !shouldSkipRequirement(savedBook, s));
+        if (ownSheets.length) ownSheets.forEach(s => runnerAddRequirement(map, savedBook, s, "target-own"));
+        else runnerAddRequirement(map, savedBook, "", "target");
+      } else if (candidateSheets.length === 1 && !shouldSkipRequirement(savedBook, candidateSheets[0])) {
         runnerAddRequirement(map, savedBook, candidateSheets[0], "target");
       }
       else runnerAddRequirement(map, savedBook, "", "target");
