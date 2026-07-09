@@ -660,6 +660,16 @@ async function preopenAllExcelMirrors(selectedFileId, options = {}) {
       }
       done += 1;
     }
+    // [빈 회색 Excel 수정] 나머지 파일을 백그라운드로 여는 동안 새로 뜬 Excel 창이(deferVisible 로 열어도
+    // Excel 이 새 창을 전면에 올려) 선택 미러 위에 '빈 회색'으로 남을 수 있다(파일 1개면 rest 가 없어 이 현상
+    // 없음). 모두 연 뒤 선택 창만 다시 확실히 표시해(나머지 재숨김) 정리한다 — 선택은 이미 보이므로 재배치 없이
+    // 나머지만 숨긴다(force 없음).
+    if (excelMirror.preopenSeq === seq && rest.length && !excelMirror.runnerHeadless) {
+      const _sel = excelMirror.sessionsByFileId[selected];
+      if (_sel) {
+        try { await showOnlyExcelMirrorWindow(_sel); } catch (_) {}
+      }
+    }
     updateMirrorShellStatus();
     if (failures.length) {
       const msg = `${failures.length}개 파일의 Excel 창을 열지 못했습니다. 파일 목록에서 다시 확인해 주세요.`;
