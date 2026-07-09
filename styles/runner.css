@@ -365,6 +365,49 @@
     color: var(--m-400);
     font-weight: 700;
   }
+  .runner-mapping-sheets {
+    margin-top: 4px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 3px;
+  }
+  .runner-mapping-sheet-chip {
+    font-size: 9.5px;
+    font-weight: 600;
+    color: var(--ink-500);
+    background: rgba(0, 0, 0, 0.04);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 1px 7px;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .runner-mapping-sheet-chip.ok {
+    color: var(--m-400);
+    border-color: var(--m-400);
+    background: rgba(214, 51, 132, 0.06);
+  }
+  .runner-mapping-sheet-chip.warn {
+    color: #a85a00;
+    border-color: #e6ad5a;
+    background: #fff5e6;
+  }
+  .runner-mapping-sheet-override {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-top: 5px;
+    font-size: 10px;
+    color: var(--ink-500);
+  }
+  .runner-mapping-sheet-override > span {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 130px;
+  }
   .runner-mapping-arrow {
     text-align: center;
     color: var(--m-400);

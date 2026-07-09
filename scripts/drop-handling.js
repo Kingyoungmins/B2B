@@ -842,9 +842,37 @@ function runnerBuildMappingRows() {
   });
 }
 
+// per-(book,sheet) 행들을 '파일별 1행'으로 접는다. 한 파일이 여러 시트를 쓰면 그 파일 한 줄에
+// 시트들을 함께 보여준다(사용자는 '올려야 할 파일'을 파일 단위로 한눈에 보고 매핑). 내부 매핑
+// (state.runnerMappings / buildRunnerMappedPipeline)은 여전히 per-(book,sheet) 키로 동작한다.
+function runnerGroupMappingRowsByFile(rows) {
+  const groups = [];
+  const byKey = new Map();
+  (rows || []).forEach(row => {
+    const gkey = runnerMappingNorm(row.req.book) || " __nofile__";
+    let g = byKey.get(gkey);
+    if (!g) {
+      g = { gkey, book: row.req.book || "", files: row.files, fileItem: row.fileItem || null, members: [] };
+      byKey.set(gkey, g);
+      groups.push(g);
+    }
+    if (!g.fileItem && row.fileItem) g.fileItem = row.fileItem;   // 파일 매핑은 그룹 공통
+    g.members.push(row);
+  });
+  groups.forEach(g => {
+    const sheetMembers = g.members.filter(m => m.req.sheet);
+    if (!g.fileItem) { g.status = "bad"; g.statusText = "파일 선택 필요"; return; }
+    const unresolved = sheetMembers.filter(m => !m.sheet);
+    if (unresolved.length) { g.status = "warn"; g.statusText = "시트 확인"; }
+    else if (g.members.every(m => m.status === "ok")) { g.status = "ok"; g.statusText = "자동 확인"; }
+    else { g.status = "warn"; g.statusText = "확인 필요"; }
+  });
+  return groups;
+}
+
 function runnerMappingHasBlockingMissing() {
   if (!state.runnerMappingChecked) return false;
-  return runnerBuildMappingRows().some(row => row.status === "bad");
+  return runnerGroupMappingRowsByFile(runnerBuildMappingRows()).some(g => g.status === "bad");
 }
 
 function runnerRenderMappingPanel() {
@@ -859,78 +887,81 @@ function runnerRenderMappingPanel() {
   if (!show) return;
 
   const rows = runnerBuildMappingRows();
-  const counts = rows.reduce((acc, row) => {
-    acc[row.status] = (acc[row.status] || 0) + 1;
-    return acc;
-  }, {});
+  const groups = runnerGroupMappingRowsByFile(rows);
+  const counts = groups.reduce((acc, g) => { acc[g.status] = (acc[g.status] || 0) + 1; return acc; }, {});
   if (badge) {
-    if (!rows.length) badge.textContent = "확인할 항목 없음";
-    else badge.textContent = `자동 ${counts.ok || 0} · 확인 ${counts.warn || 0} · 선택 ${counts.bad || 0}`;
+    if (!groups.length) badge.textContent = "확인할 항목 없음";
+    else badge.textContent = `파일 ${groups.length}개 · 자동 ${counts.ok || 0} · 확인 ${counts.warn || 0} · 선택 ${counts.bad || 0}`;
   }
-  if (!rows.length) {
+  if (!groups.length) {
     table.innerHTML = `<div class="runner-mapping-empty">스킬에서 명시적인 파일·시트 참조를 찾지 못했습니다. 현재 실행 대상 기준으로 진행합니다.</div>`;
     return;
   }
-  table.innerHTML = rows.map((row, idx) => {
-    const fileOptions = [`<option value="">파일 선택</option>`].concat(row.files.map(item =>
-      `<option value="${escapeHtml(item.id)}" ${row.fileItem && row.fileItem.id === item.id ? "selected" : ""}>${escapeHtml(item.name)}</option>`
+  table.innerHTML = groups.map((g, gidx) => {
+    const fileOptions = [`<option value="">파일 선택</option>`].concat(g.files.map(item =>
+      `<option value="${escapeHtml(item.id)}" ${g.fileItem && g.fileItem.id === item.id ? "selected" : ""}>${escapeHtml(item.name)}</option>`
     )).join("");
-    const sheets = row.fileItem ? runnerMappingSheetNames(row.fileItem.file) : [];
-    const sheetOptions = [`<option value="">시트 선택</option>`].concat(sheets.map(sheet =>
-      `<option value="${escapeHtml(sheet)}" ${row.sheet === sheet ? "selected" : ""}>${escapeHtml(sheet)}</option>`
-    )).join("");
-    // 왼쪽 '스킬이 찾는 대상' 시트 표기: req.sheet 가 명시되면 그대로,
-    // 없으면 '시트 자동' 옆에 실제로 자동 감지된 시트(row.sheet)를 함께 보여준다.
-    let needSheetHtml, needSheetTitle;
-    if (row.req.sheet) {
-      needSheetHtml = escapeHtml(row.req.sheet);
-      needSheetTitle = row.req.sheet;
-    } else if (row.sheet) {
-      needSheetHtml = `시트 자동 <span class="runner-mapping-sheet-auto">· ${escapeHtml(row.sheet)}</span>`;
-      needSheetTitle = `시트 자동 감지: ${row.sheet}`;
-    } else {
-      needSheetHtml = "시트 자동";
-      needSheetTitle = "시트 미지정 (자동)";
-    }
+    const sheetsInFile = g.fileItem ? runnerMappingSheetNames(g.fileItem.file) : [];
+    const sheetMembers = g.members.filter(m => m.req.sheet);
+    // 이 파일이 필요로 하는 시트들을 칩으로 표기(자동 해결되면 → 실제시트, 못 찾으면 확인 표시).
+    const sheetChips = sheetMembers.length
+      ? sheetMembers.map(m => {
+          const resolved = m.sheet;
+          const cls = resolved ? "ok" : "warn";
+          const arrow = resolved && runnerMappingNorm(resolved) !== runnerMappingNorm(m.req.sheet) ? " → " + escapeHtml(resolved) : "";
+          const title = resolved ? `${m.req.sheet}${arrow ? " → " + resolved : ""}` : `${m.req.sheet} (시트 확인 필요)`;
+          return `<span class="runner-mapping-sheet-chip ${cls}" title="${escapeHtml(title)}">${escapeHtml(m.req.sheet)}${arrow}</span>`;
+        }).join("")
+      : `<span class="runner-mapping-sheet-chip">시트 자동</span>`;
+    // 파일은 매핑됐는데 못 찾은 시트는 직접 고를 수 있게 오버라이드 셀렉트를 준다.
+    const overrideSelects = g.fileItem ? sheetMembers.filter(m => !m.sheet).map(m => {
+      const opts = [`<option value="">시트 선택</option>`].concat(sheetsInFile.map(s =>
+        `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`)).join("");
+      return `<div class="runner-mapping-sheet-override"><span title="${escapeHtml(m.req.sheet)}">${escapeHtml(m.req.sheet)} →</span><select class="runner-mapping-select runner-map-sheet2" data-key="${escapeHtml(m.req.key)}" data-gidx="${gidx}">${opts}</select></div>`;
+    }).join("") : "";
     return `
-      <div class="runner-mapping-row" data-idx="${idx}" data-status="${row.status}">
+      <div class="runner-mapping-row" data-gidx="${gidx}" data-status="${g.status}">
         <div class="runner-mapping-need">
-          <div class="runner-mapping-label">스킬이 찾는 대상</div>
-          <div class="runner-mapping-file" title="${escapeHtml(row.req.book || "파일 미지정")}">${escapeHtml(row.req.book || "현재 대상 파일")}</div>
-          <div class="runner-mapping-sheet" title="${escapeHtml(needSheetTitle)}">${needSheetHtml}</div>
+          <div class="runner-mapping-label">스킬이 찾는 파일</div>
+          <div class="runner-mapping-file" title="${escapeHtml(g.book || "파일 미지정")}">${escapeHtml(g.book || "현재 대상 파일")}</div>
+          <div class="runner-mapping-sheets">${sheetChips}</div>
         </div>
         <div class="runner-mapping-arrow">→</div>
         <div class="runner-mapping-actual">
-          <div class="runner-mapping-label">실제 사용할 대상</div>
+          <div class="runner-mapping-label">실제 사용할 파일</div>
           <div class="runner-mapping-selects">
-            <select class="runner-mapping-select runner-map-file" data-idx="${idx}">${fileOptions}</select>
-            <select class="runner-mapping-select runner-map-sheet" data-idx="${idx}" ${row.fileItem ? "" : "disabled"}>${sheetOptions}</select>
+            <select class="runner-mapping-select runner-map-file2" data-gidx="${gidx}">${fileOptions}</select>
+            ${overrideSelects}
           </div>
         </div>
-        <div class="runner-mapping-status ${row.status}">${row.statusText}</div>
+        <div class="runner-mapping-status ${g.status}">${escapeHtml(g.statusText)}</div>
       </div>
     `;
   }).join("");
 
-  table.querySelectorAll(".runner-map-file").forEach(sel => {
+  // 파일 선택 → 그 파일 그룹의 '모든' (book,sheet) 요구 키에 fileId + 자동해결 시트를 채운다.
+  table.querySelectorAll(".runner-map-file2").forEach(sel => {
     sel.onchange = () => {
-      const idx = Number(sel.dataset.idx);
-      const row = rows[idx];
-      const fileItem = row.files.find(item => item.id === sel.value);
-      const sheet = fileItem ? runnerFindSheet(row.req, fileItem.file, "") : "";
-      state.runnerMappings[row.req.key] = { fileId: sel.value || "", sheet };
+      const gidx = Number(sel.dataset.gidx);
+      const g = groups[gidx];
+      if (!g) return;
+      const fileItem = g.files.find(item => item.id === sel.value);
+      g.members.forEach(m => {
+        const sheet = fileItem ? runnerFindSheet(m.req, fileItem.file, "") : "";
+        state.runnerMappings[m.req.key] = { fileId: sel.value || "", sheet };
+      });
       runnerRenderMappingPanel();
       renderRunnerWorkflow();
     };
   });
-  table.querySelectorAll(".runner-map-sheet").forEach(sel => {
+  // 못 찾은 시트 직접 선택(파일은 그룹 매핑 유지).
+  table.querySelectorAll(".runner-map-sheet2").forEach(sel => {
     sel.onchange = () => {
-      const idx = Number(sel.dataset.idx);
-      const row = rows[idx];
-      state.runnerMappings[row.req.key] = {
-        fileId: row.fileItem ? row.fileItem.id : "",
-        sheet: sel.value || "",
-      };
+      const gidx = Number(sel.dataset.gidx);
+      const g = groups[gidx];
+      const key = sel.dataset.key;
+      if (!g || !key) return;
+      state.runnerMappings[key] = { fileId: g.fileItem ? g.fileItem.id : "", sheet: sel.value || "" };
       runnerRenderMappingPanel();
       renderRunnerWorkflow();
     };
