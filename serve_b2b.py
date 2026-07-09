@@ -4057,13 +4057,13 @@ def _open_excel_session_impl(
                     _set_excel_window_owner(app, native_host_hwnd)     # owner (프레임 그대로 유지)
                 if defer_visible:
                     if frame_hwnd:
-                        # 프레임은 파킹 상태 그대로 두고, 인스턴스 Visible 만 1회 켠다.
-                        # (모든 라이브 프레임이 화면 밖이라 시각적 변화 없음. 이후 표시는 전부 프레임 단위.)
-                        try:
-                            if not bool(app.Visible):
-                                app.Visible = True
-                        except Exception:
-                            pass
+                        # [빈 회색 프레임 수정] 예전엔 여기서 app.Visible=True 를 켰지만(모든 프레임이 파킹됐다는
+                        # 가정), 공유 인스턴스가 이미 보이는 상태에서 '다음' 워크북이 열리면 그 새 프레임이 파킹
+                        # 되기 전에 잠깐 떠서 회색 빈 프레임으로 남았다(특히 실행기 헤드리스: 표시는 안 하는데
+                        # 인스턴스만 켜져 있어 2번째 파일부터 프레임이 샘. 1개일 땐 인스턴스가 계속 숨김이라 안 뜸).
+                        # defer_visible 은 '이 창을 지금 보이지 말라'는 뜻이므로 인스턴스 Visible 을 여기서 켜지
+                        # 않는다 — 실제 표시가 필요할 때(showOnly → _present_live_session_frame)에서 켠다.
+                        pass
                     else:
                         try:
                             app.Visible = False
