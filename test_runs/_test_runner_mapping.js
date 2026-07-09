@@ -76,5 +76,18 @@ ck("(C5) step4: 출력 파일/ResultSheet 는 실제값으로 치환",
    m4.includes('"actual_output_template_2026_06.xlsx"') && m4.includes('"ActualResult"') && !m4.includes('"ResultSheet"'), m4);
 ck("(C6) 원본 step 객체는 불변(치환은 사본에)", step1.code === STEP1);
 
+// ── (D) 시트가 해결 안 돼도(빈 sheet) 파일이 매핑됐으면 파일명은 반드시 치환 ──
+//   (뻑남 수정: 예전엔 시트 미해결 행을 통째로 버려 옛 파일명이 남아 "워크북이 열려 있지 않습니다"로 실패)
+G.runnerBuildMappingRows = () => ([
+  { req: { book: "expected_output.xlsx", sheet: "ResultSheet", key: "kD" },
+    fileItem: { id: "output:0", name: "actual_output_template_2026_06.xlsx" }, sheet: "" },  // 시트 미해결(빈)
+]);
+const STEPD = 'def transform(ctx):\n    out = ctx.book("expected_output.xlsx")\n    out.write("ResultSheet", "A1", [[1]])';
+const stepD = { id: "sD", code: STEPD, targetFileId: "input:expected_output.xlsx", targetSheetName: "ResultSheet" };
+G.state.pipeline = [stepD];
+const mD = window.buildRunnerMappedPipeline([stepD])[0].code;
+ck("(D1) 시트 미해결이어도 파일명 치환됨", mD.includes('"actual_output_template_2026_06.xlsx"') && !mD.includes('"expected_output.xlsx"'), mD);
+ck("(D2) 미해결 시트는 원래 이름 유지(치환 안 함)", mD.includes('"ResultSheet"'), mD);
+
 console.log(`\n=== RESULT: ${fail ? fail + " FAIL" : "ALL PASS"} (${pass}/${pass + fail}) ===`);
 process.exit(fail ? 1 : 0);

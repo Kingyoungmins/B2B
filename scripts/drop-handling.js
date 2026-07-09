@@ -1070,7 +1070,10 @@ function runnerReplaceLiteral(text, from, to) {
 
 window.buildRunnerMappedPipeline = function(steps) {
   if (!state.runnerMappingChecked) return steps || state.pipeline;
-  const rows = runnerBuildMappingRows().filter(row => row.fileItem && (!row.req.sheet || row.sheet));
+  // [뻑남 수정] 예전엔 '시트까지 해결된 행'만 남겨서, 시트가 안 잡히면 그 행을 통째로 버려 파일명조차
+  // 치환 안 됐다 → 코드에 옛 파일명(expected_output.xlsx)이 남아 "워크북이 열려 있지 않습니다"로 실패.
+  // 이제 '파일이 매핑된 행'은 모두 남겨 파일명을 반드시 치환하고(시트는 해결됐을 때만 치환) 파일 누락 실패를 막는다.
+  const rows = runnerBuildMappingRows().filter(row => row.fileItem);
   if (!rows.length) return steps || state.pipeline;
   return (steps || state.pipeline || []).map(step => {
     if (!step || !step.code) return step;
