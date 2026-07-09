@@ -8787,6 +8787,38 @@ class PythonComSkillContext:
                 return self._wb.Worksheets(st)
         except Exception:
             pass
+        # [CSV/긴 파일명] Excel 시트명은 31자 제한이라, 파일명(stem)으로 시트가 만들어지는 CSV 등에서
+        # 모델이 풀네임(>31자)을 시트명으로 쓰면 실제 시트(31자로 잘린 이름)와 어긋난다.
+        # 요청명을 31자로 자른 값(정확/정규화 일치) 또는 접두 관계로 '유일' 매칭이면 그 시트로 따라간다.
+        try:
+            req = str(sheet)
+            cur = _excel_collection_names(self._wb.Worksheets)
+            trunc = req[:31]
+            cand = [n for n in cur
+                    if n == trunc or normalize_sheet_lookup(n) == normalize_sheet_lookup(trunc)]
+            if not cand:
+                rn = normalize_sheet_lookup(req)
+
+                def _pref(n):
+                    nn = normalize_sheet_lookup(n)
+                    return bool(rn) and bool(nn) and (rn.startswith(nn) or nn.startswith(rn))
+
+                cand = [n for n in cur if _pref(n)]
+            uniq = list(dict.fromkeys(cand))
+            if len(uniq) == 1:
+                _vba_trace("python_com.sheet.truncated_match", requested=req, matched=uniq[0])
+                return self._wb.Worksheets(uniq[0])
+        except Exception:
+            pass
+        # [단일 시트 안전망] 워크북에 시트가 하나뿐이면(대표적으로 CSV) 요청 시트명이 어긋나도 그 시트로.
+        # 여러 시트면 모호하므로 아래 오류를 유지한다(엉뚱한 시트에 쓰는 사고 방지).
+        try:
+            only = _excel_collection_names(self._wb.Worksheets)
+            if len(only) == 1:
+                _vba_trace("python_com.sheet.single_fallback", requested=str(sheet), matched=only[0])
+                return self._wb.Worksheets(only[0])
+        except Exception:
+            pass
         names = _excel_collection_names(self._wb.Worksheets)
         raise PythonComSkillError(
             f"시트 '{sheet}' 를 찾지 못했습니다. 사용 가능한 시트: {names}"
