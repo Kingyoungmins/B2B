@@ -361,6 +361,10 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
+  .runner-mapping-sheet-auto {
+    color: var(--m-400);
+    font-weight: 700;
+  }
   .runner-mapping-arrow {
     text-align: center;
     color: var(--m-400);

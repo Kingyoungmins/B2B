@@ -848,12 +848,25 @@ function runnerRenderMappingPanel() {
     const sheetOptions = [`<option value="">시트 선택</option>`].concat(sheets.map(sheet =>
       `<option value="${escapeHtml(sheet)}" ${row.sheet === sheet ? "selected" : ""}>${escapeHtml(sheet)}</option>`
     )).join("");
+    // 왼쪽 '스킬이 찾는 대상' 시트 표기: req.sheet 가 명시되면 그대로,
+    // 없으면 '시트 자동' 옆에 실제로 자동 감지된 시트(row.sheet)를 함께 보여준다.
+    let needSheetHtml, needSheetTitle;
+    if (row.req.sheet) {
+      needSheetHtml = escapeHtml(row.req.sheet);
+      needSheetTitle = row.req.sheet;
+    } else if (row.sheet) {
+      needSheetHtml = `시트 자동 <span class="runner-mapping-sheet-auto">· ${escapeHtml(row.sheet)}</span>`;
+      needSheetTitle = `시트 자동 감지: ${row.sheet}`;
+    } else {
+      needSheetHtml = "시트 자동";
+      needSheetTitle = "시트 미지정 (자동)";
+    }
     return `
       <div class="runner-mapping-row" data-idx="${idx}" data-status="${row.status}">
         <div class="runner-mapping-need">
           <div class="runner-mapping-label">스킬이 찾는 대상</div>
           <div class="runner-mapping-file" title="${escapeHtml(row.req.book || "파일 미지정")}">${escapeHtml(row.req.book || "현재 대상 파일")}</div>
-          <div class="runner-mapping-sheet" title="${escapeHtml(row.req.sheet || "시트 미지정")}">${escapeHtml(row.req.sheet || "시트 자동")}</div>
+          <div class="runner-mapping-sheet" title="${escapeHtml(needSheetTitle)}">${needSheetHtml}</div>
         </div>
         <div class="runner-mapping-arrow">→</div>
         <div class="runner-mapping-actual">
