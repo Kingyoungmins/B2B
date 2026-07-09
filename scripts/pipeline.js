@@ -2721,13 +2721,19 @@ function renderPipeline() {
               if (typeof toast === "function") toast("마지막 단계만 빠르게 OFF 처리했습니다.", "success");
               return;
             }
-            state.pipeline = beforeToggleSnapshot;
-            renderPipeline();
-            refreshRunButton();
-            if (typeof toast === "function") {
-              toast("마지막 단계 OFF용 스냅샷을 찾지 못해 ON/OFF 변경을 취소했습니다. 전체실행을 다시 완료한 뒤 시도해 주세요.", "error");
+            // [스냅샷 없음 폴백] 실행기 파일출력 결과를 '결과 편집하기'로 불러온 뒤엔 라이브에 스텝별 OFF용
+            // 스냅샷이 없다(스냅샷은 격리 실행분이라 replace 로드 상태와 어긋남). 취소/에러 대신 full reconcile
+            // (reset→enabled 재적용)로 결정적으로 반영한다(느리지만 정확). state.pipeline 은 이미 OFF 가 반영된 상태.
+            try {
+              await reconcilePipelineSimulationAfterEdit({ affectedStep: toggledStep, restorePipeline: beforeToggleSnapshot });
+              return;
+            } catch (err2) {
+              state.pipeline = beforeToggleSnapshot;
+              renderPipeline();
+              refreshRunButton();
+              if (typeof reportPipelineError === "function") reportPipelineError(err2);
+              return;
             }
-            return;
           } else if (_lastLiveAppliedSignature !== null &&
               liveEnabledStepsSignature(beforeToggleSnapshot) === _lastLiveAppliedSignature) {
             await applyLastEnabledStepFast(toggledStep, { steps: state.pipeline });
@@ -2827,14 +2833,19 @@ function renderPipeline() {
           if (typeof toast === "function") toast("마지막 미적용 단계만 삭제했습니다.", "success");
           return;
         }
-        const at = Math.max(0, Math.min(currentIdx, state.pipeline.length));
-        state.pipeline.splice(at, 0, removedStep);
-        renderPipeline();
-        refreshRunButton();
-        if (typeof toast === "function") {
-          toast("마지막 단계 삭제용 스냅샷을 찾지 못해 삭제를 취소했습니다. 전체실행 완료 후 다시 시도해 주세요.", "error");
+        // [스냅샷 없음 폴백] 파일출력 결과를 '결과 편집하기'로 불러온 뒤엔 라이브에 삭제용 스냅샷이 없다.
+        // 취소/에러 대신 full reconcile 로 결정적으로 반영한다. state.pipeline 은 이미 삭제가 반영된 상태.
+        try {
+          await reconcilePipelineSimulationAfterEdit({ affectedStep: removedStep, restorePipeline: beforeDeleteSnapshot });
+          return;
+        } catch (err2) {
+          const at = Math.max(0, Math.min(currentIdx, state.pipeline.length));
+          state.pipeline.splice(at, 0, removedStep);
+          renderPipeline();
+          refreshRunButton();
+          if (typeof reportPipelineError === "function") reportPipelineError(err2);
+          return;
         }
-        return;
       }
       if (!fastLast && removedWasApplied && isStepEnabled(removedStep) && pipelineStepLiveLanguage(removedStep)) {
         try {
