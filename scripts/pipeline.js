@@ -1017,6 +1017,9 @@ async function runIsolatedLivePipelineSteps(sourceSteps, initialExcelId, options
       // [실행기 파일출력] 결과 파일 목록을 기억(다운로드 버튼 연결) + 완료 안내. 라이브엔 미반영(뷰 없음).
       if (lastData && Array.isArray(lastData.outputFiles) && lastData.outputFiles.length) {
         try { window.lastRunnerOutputs = lastData.outputFiles; } catch (_) {}
+        // [빠른 OFF/삭제] 스텝별 pre-apply 스냅샷을 보관해 둔다. '결과 편집하기'로 결과를 라이브에 불러온 뒤
+        // 마지막 단계 OFF/삭제가 이 스냅샷으로 '재실행 없이' 즉시 되돌리게 재연결하기 위함(없으면 reconcile 재적용).
+        try { window.lastRunnerStepSnapshots = Array.isArray(lastData.stepSnapshots) ? lastData.stepSnapshots : []; } catch (_) {}
         if (typeof window !== "undefined" && typeof window.runnerSetProgress === "function") {
           window.runnerSetProgress("완료 — 결과 " + lastData.outputFiles.length + "개 파일 저장됨 (다운로드 가능)");
         }
@@ -4474,6 +4477,14 @@ $("btn-run").onclick = async () => {
         }
         if (!loaded) throw new Error("결과 파일을 라이브에 불러오지 못했습니다. 실행기에서 전체실행을 다시 해주세요.");
         clearPipelineResumeFromIndex();
+        // [빠른 OFF/삭제] 실행기 전체실행이 만든 스텝별 pre-apply 스냅샷을 '지금 라이브에 불러온' state.pipeline
+        // 스텝에 재연결한다. 이러면 마지막 단계 OFF/삭제가 reconcile(reset+재적용) 없이 스냅샷 되돌림으로 즉시 처리된다.
+        try {
+          if (Array.isArray(window.lastRunnerStepSnapshots) && window.lastRunnerStepSnapshots.length
+              && typeof wirePipelineStepSnapshots === "function") {
+            wirePipelineStepSnapshots(window.lastRunnerStepSnapshots, lastExcelId, state.pipeline);
+          }
+        } catch (_) {}
         noteLivePipelineApplied(state.pipeline);  // 라이브 = 최종(전 스텝 적용) → 토글 fast-path 정합
         setPipelineRuntimeStatus(activeStepIds, "applied", "적용됨");
         // [교차파일 뷰 결정성] 여러 파일을 로드했을 때, '마지막에 로드된 파일'(백엔드 나열 순서에 좌우 → 플래키)이
