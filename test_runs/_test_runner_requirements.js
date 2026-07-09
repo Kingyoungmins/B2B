@@ -116,5 +116,40 @@ ck("(E2) 시트명(세부내역)이 파일 요구로 안 뜸", !reqs3.some(r => 
 ck("(E3) 확장자 없는 book-only 요구가 아예 없음", !reqs3.some(r => r.book && !String(r.sheet).trim() && !hasExt(r.book)), s3);
 ck("(E4) 실제 파일 요구(원본_DSMC.xlsx/202605_SS001643)는 유지", reqs3.some(r => hasExt(r.book) && norm(r.book) === "원본_dsmc.xlsx"), s3);
 
+// ── (F) 교차파일 오귀속: 소스 시트가 대상 파일에 '복사 생성'되거나(copy_sheet dst_book), 다른 파일 소유
+//        시트가 targetSheet 로 저장된 경우, 그 파일의 '필수 시트'로 잡히면 안 된다(실제 KGM 33단계 패턴). ──
+const PY_COPYSHEET = `def transform(ctx):\n    ctx.copy_sheet("202605_SS001643", dst_book="KG모빌리티.xlsx")`;
+const VBA_RENAME_COPIED = `Sub B2BSkill()
+    Dim wb As Workbook, i As Long
+    Set wb = Application.Workbooks("KG모빌리티.xlsx")
+    For i = 1 To wb.Worksheets.Count
+        If Left(wb.Worksheets(i).Name, 6) = "202605" Then
+            wb.Worksheets(i).Name = "세부내역"
+        End If
+    Next i
+End Sub`;
+const VBA_CROSSFILE = `Sub B2BSkill()
+    Dim wbDst As Workbook, wsDst As Worksheet, wbSrc As Workbook, wsSrc As Worksheet
+    Set wbDst = Workbooks("원본_DSMC.xlsx")
+    Set wsDst = wbDst.Worksheets("202605_SS001643")
+    Set wbSrc = Workbooks("교체된 CCU 목록.xlsx")
+    Set wsSrc = wbSrc.Worksheets("교체된 CCU 목록")
+    wsSrc.Range("A1:C10").Copy wsDst.Range("A1")
+End Sub`;
+G.state = { pipeline: [
+  { id: "f0", language: "python", code: `def transform(ctx):\n    ctx.write_cell("202605_SS001643", "A1", 1)`, targetFileId: "input:원본_DSMC.xlsx", targetSheetName: "202605_SS001643" },
+  { id: "f1", language: "python", code: PY_COPYSHEET, targetFileId: "input:원본_DSMC.xlsx", targetSheetName: null },
+  { id: "f2", language: "vba", code: VBA_RENAME_COPIED, targetFileId: "input:KG모빌리티.xlsx", targetSheetName: "202605_SS001643" },
+  { id: "f3", language: "vba", code: VBA_CROSSFILE, targetFileId: "input:교체된 CCU 목록.xlsx", targetSheetName: "202605_SS001643" },
+]};
+const reqs4 = runnerExtractMappingRequirements();
+const s4 = reqs4.map(r => `${r.book}/${r.sheet}`);
+ck("(F1) copy_sheet 대상(KG모빌리티)+202605 는 요구 아님(복사 생성)",
+   !reqs4.some(r => norm(r.book) === "kg모빌리티.xlsx" && norm(r.sheet) === "202605_ss001643"), s4);
+ck("(F2) 교차파일: CCU 는 202605(원본_DSMC 소유)로 요구되지 않음",
+   !reqs4.some(r => /ccu|목록/i.test(r.book) && norm(r.sheet) === "202605_ss001643"), s4);
+ck("(F3) 202605 는 원본_DSMC 요구로 유지",
+   reqs4.some(r => norm(r.book) === "원본_dsmc.xlsx" && norm(r.sheet) === "202605_ss001643"), s4);
+
 console.log(`\n=== RESULT: ${fail ? fail + " FAIL" : "ALL PASS"} (${pass}/${pass + fail}) ===`);
 process.exit(fail ? 1 : 0);

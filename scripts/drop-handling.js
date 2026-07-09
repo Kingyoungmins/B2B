@@ -588,6 +588,21 @@ function runnerExtractGeneratedSheetsFromCode(code) {
     while ((mm = renameRe.exec(src))) runnerAddGeneratedSheet(generated, book, mm[1]);
   });
 
+  // [교차파일 복사] ctx.copy_sheet("소스시트", dst_book="대상파일"[, new_name="Y"]) 는 대상파일에 그 시트를
+  // '새로 만든다'(예: 원본→KG모빌리티). 대상파일 입장에선 업로드해야 할 기존 시트가 아니라 생성 시트다.
+  // (ctx.copy_sheet / ctx.book("소스").copy_sheet 둘 다 커버. 파일명에 괄호가 있어도 안전하게 근처 창에서 추출.)
+  const copyCallRe = /\bcopy_sheet\s*\(/gi;
+  let cc;
+  while ((cc = copyCallRe.exec(src))) {
+    const near = src.slice(cc.index, cc.index + 400);
+    const srcM = /copy_sheet\s*\(\s*["']([^"']+)["']/.exec(near);
+    const dstM = /dst_book\s*=\s*["']([^"']+)["']/.exec(near);
+    if (srcM && dstM) {
+      const nameM = /new_name\s*=\s*["']([^"']+)["']/.exec(near);
+      runnerAddGeneratedSheet(generated, dstM[1], nameM ? nameM[1] : srcM[1]);
+    }
+  }
+
   // VBA 는 '=' 가 대입/비교 겸용이라 `.Name = "X"` 가 시트 생성/이름지정일 수도,
   // `If sh.Name = "X" Then ...`(기존 시트 찾기) 같은 '비교문'일 수도 있다. 비교문을 생성으로
   // 오판하면 그 시트가 '필수 업로드'에서 잘못 제외돼 매핑 UI 에 '시트 자동'(빈 시트)으로 뜬다.
@@ -647,6 +662,47 @@ function runnerAddPairedCodeRequirements(map, code, shouldSkip) {
   }
 }
 
+// 코드에서 '어떤 시트가 어떤 워크북 소유인지'를 뽑는다(교차파일 오귀속 방지).
+// 예: VBA `Set wbDst=Workbooks("원본_DSMC")` + `wbDst.Worksheets("202605")` → 202605 는 원본_DSMC 소유.
+// 저장된 스텝의 targetFileId 가 CCU 인데 targetSheetName 이 202605(=원본_DSMC 소유)면, 202605 를 CCU 요구로
+// 짝지으면 안 된다(교차파일 쓰기 대상 시트이지 CCU 가 가진 시트가 아님). 반환: Map<normSheet, Set<normBook>>.
+function runnerSheetOwnersFromCode(code) {
+  const src = String(code || "");
+  const owners = new Map();
+  const add = (book, sheet) => {
+    const b = runnerMappingNorm(book), s = runnerMappingNorm(sheet);
+    if (!b || !s || runnerLooksLikeA1Address(sheet)) return;
+    if (!owners.has(s)) owners.set(s, new Set());
+    owners.get(s).add(b);
+  };
+  let m;
+  const vbaDirect = /Workbooks\(\s*["']([^"']+)["']\s*\)\s*\.\s*Worksheets\(\s*["']([^"']+)["']\s*\)/gi;
+  while ((m = vbaDirect.exec(src))) add(m[1], m[2]);
+  const vbaVars = new Map();
+  const setWb = /Set\s+([A-Za-z_]\w*)\s*=\s*(?:Application\.)?Workbooks\(\s*["']([^"']+)["']\s*\)/gi;
+  while ((m = setWb.exec(src))) vbaVars.set(m[1].toLowerCase(), m[2]);
+  const loopWb = /If\s+[A-Za-z_]\w*\.Name\s*=\s*["']([^"']+)["'][\s\S]{0,80}?Set\s+([A-Za-z_]\w*)\s*=\s*[A-Za-z_]\w*/gi;
+  while ((m = loopWb.exec(src))) vbaVars.set(m[2].toLowerCase(), m[1]);
+  vbaVars.forEach((book, varLc) => {
+    const esc = varLc.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const re = new RegExp(`\\b${esc}\\s*\\.\\s*Worksheets\\(\\s*["']([^"']+)["']`, "gi");
+    let mm;
+    while ((mm = re.exec(src))) add(book, mm[1]);
+  });
+  const pyDirect = /ctx\.book\(\s*["']([^"']+)["']\s*\)\s*\.\s*(?:read|write|write_cell|copy|sort|clear|find_header|last_row|last_col)\(\s*["']([^"']+)["']/gi;
+  while ((m = pyDirect.exec(src))) add(m[1], m[2]);
+  const pyVars = new Map();
+  const pyAssign = /\b([A-Za-z_]\w*)\s*=\s*ctx\.book\(\s*["']([^"']+)["']\s*\)/g;
+  while ((m = pyAssign.exec(src))) pyVars.set(m[1], m[2]);
+  pyVars.forEach((book, varName) => {
+    const esc = varName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const re = new RegExp(`\\b${esc}\\s*\\.\\s*(?:read|write|write_cell|copy|sort|clear|find_header|last_row|last_col)\\(\\s*["']([^"']+)["']`, "g");
+    let mm;
+    while ((mm = re.exec(src))) add(book, mm[1]);
+  });
+  return owners;
+}
+
 function runnerExtractMappingRequirements() {
   const map = new Map();
   const steps = state.pipeline || [];
@@ -700,11 +756,16 @@ function runnerExtractMappingRequirements() {
 
     if (step.targetFileId && String(step.targetFileId).startsWith("input:")) {
       const savedBook = String(step.targetFileId).slice(6);
-      if (step.targetSheetName && !runnerLooksLikeA1Address(step.targetSheetName)) {
+      // [교차파일 오귀속 방지] targetSheetName 이 코드상 '다른 워크북 소유' 시트면(예: targetFile=CCU 인데
+      // 202605 는 원본_DSMC 의 쓰기 대상 시트), CCU 요구에 202605 를 짝지으면 안 된다 → 시트 없이 파일만 요구.
+      const owners = runnerSheetOwnersFromCode(step.code);
+      const ownerSet = step.targetSheetName ? owners.get(runnerMappingNorm(step.targetSheetName)) : null;
+      const sheetBelongsElsewhere = ownerSet && ownerSet.size > 0 && !ownerSet.has(runnerMappingNorm(savedBook));
+      if (step.targetSheetName && !runnerLooksLikeA1Address(step.targetSheetName) && !sheetBelongsElsewhere) {
         if (!shouldSkipRequirement(savedBook, step.targetSheetName)) {
           runnerAddRequirement(map, savedBook, step.targetSheetName, "target");
         }
-      } else if (candidateSheets.length === 1 && !shouldSkipRequirement(savedBook, candidateSheets[0])) {
+      } else if (!sheetBelongsElsewhere && candidateSheets.length === 1 && !shouldSkipRequirement(savedBook, candidateSheets[0])) {
         runnerAddRequirement(map, savedBook, candidateSheets[0], "target");
       }
       else runnerAddRequirement(map, savedBook, "", "target");
