@@ -1,5 +1,7 @@
-# [실측] ctx.clear_filter: 시트 자동필터(AutoFilter) 해제 — 필터 조건으로 숨은 행 복원 + 드롭다운 제거.
-# ("필터 풀어줘" 요청에 헬퍼가 없어 LLM 이 거부·실패하던 것 대응.)
+# [실측] 필터 헬퍼 3종 (실제 Excel COM)
+#  - ctx.enable_filter : 필터 드롭다운만 켜기(숨김 없음)
+#  - ctx.apply_filter  : '눈으로만' 특정 값만 보이기(엑셀 필터 체크박스처럼 — 행 삭제 아님, 데이터 보존)
+#  - ctx.clear_filter  : 필터 해제(숨은 행 전부 복원 + 드롭다운 제거)
 import sys
 sys.path.insert(0, r"C:\Users\Admin\Desktop\KGM_git\B2B_ver0.5.19")
 import win32com.client as w
@@ -12,31 +14,47 @@ app.DisplayAlerts = False
 fails = 0
 def ck(name, cond, got=None):
     global fails
-    print((" OK  " if cond else "FAIL ") + name + ("" if cond else f"  got={got!r}"))
+    print((" OK  " if cond else "FAIL ") + name + ("" if cond else " got=" + repr(got)))
     if not cond: fails += 1
 
 class Ctx(C):
     def __init__(s, wb, app): s._wb = wb; s._app = app; s._shared = {"structural": [], "deadline": float("inf")}
     def _tick(s, n=1): pass
 
+def hidden(ws): return [r for r in range(2, 7) if ws.Rows(r).Hidden]
+
 try:
     wb = app.Workbooks.Add(); ws = wb.Worksheets(1); ws.Name = "상품번호별"
-    ws.Range("A1").Value = "상품"; ws.Range("B1").Value = "값"
-    for i, (p, v) in enumerate([("A", 1), ("B", 2), ("A", 3), ("C", 4)], 2):
-        ws.Cells(i, 1).Value = p; ws.Cells(i, 2).Value = v
-    ws.Range("A1:B5").AutoFilter(Field=1, Criteria1="A")   # 상품=A 만 표시(B,C 행 숨김)
-    ck("(1) 필터 적용됨(FilterMode)", bool(ws.FilterMode) is True, ws.FilterMode)
-    ck("(2) 숨은 행 있음", sum(1 for r in range(2, 6) if ws.Rows(r).Hidden) > 0)
+    ws.Range("A1").Value = "상품"; ws.Range("B1").Value = "상태"
+    # 2완료 3진행 4취소 5완료 6보류
+    for i, (p, st) in enumerate([("P1", "완료"), ("P2", "진행"), ("P3", "취소"), ("P4", "완료"), ("P5", "보류")], 2):
+        ws.Cells(i, 1).Value = p; ws.Cells(i, 2).Value = st
     f = Ctx(wb, app)
-    name = f.clear_filter("상품번호별")
-    ck("(3) clear_filter 반환 시트명", name == "상품번호별", name)
-    ck("(4) AutoFilter 제거됨(AutoFilterMode False)", bool(ws.AutoFilterMode) is False, ws.AutoFilterMode)
-    ck("(5) 모든 데이터 행 복원(숨은 행 0)", sum(1 for r in range(2, 6) if ws.Rows(r).Hidden) == 0)
-    ws2 = wb.Worksheets.Add(); ws2.Name = "nofilter"; ws2.Range("A1").Value = "x"
-    ck("(6) 필터 없는 시트도 오류 없이 통과", f.clear_filter("nofilter") == "nofilter")
+
+    # enable_filter: 드롭다운만 켜기(숨김 없음)
+    f.enable_filter("상품번호별")
+    ck("(1) enable_filter: AutoFilter 켜짐, 숨은 행 없음", bool(ws.AutoFilterMode) is True and hidden(ws) == [], (ws.AutoFilterMode, hidden(ws)))
+
+    # apply_filter 단일값: 완료만 보이기
+    f.apply_filter("상품번호별", "상태", "완료")
+    h = hidden(ws)
+    ck("(2) apply_filter 단일: 완료(2,5) 보임", 2 not in h and 5 not in h, h)
+    ck("(3) apply_filter 단일: 비완료(3,4,6) 숨김", all(r in h for r in (3, 4, 6)), h)
+    ck("(4) 데이터 보존(취소 값 그대로)", ws.Cells(4, 2).Value == "취소", ws.Cells(4, 2).Value)
+
+    # apply_filter 다중값: 완료+진행
+    f.apply_filter("상품번호별", "상태", ["완료", "진행"])
+    h = hidden(ws)
+    ck("(5) apply_filter 다중: 완료·진행(2,3,5) 보임", all(r not in h for r in (2, 3, 5)), h)
+    ck("(6) apply_filter 다중: 취소·보류(4,6) 숨김", 4 in h and 6 in h, h)
+
+    # clear_filter: 전부 복원
+    f.clear_filter("상품번호별")
+    ck("(7) clear_filter: 숨은 행 0으로 복원", hidden(ws) == [], hidden(ws))
+    ck("(8) clear_filter: AutoFilter 제거", bool(ws.AutoFilterMode) is False, ws.AutoFilterMode)
 finally:
     try: app.Quit()
     except Exception: pass
 
-print(f"\n=== RESULT: {'ALL PASS' if fails==0 else str(fails)+' FAIL'} ===")
+print("\n=== RESULT: " + ("ALL PASS" if fails == 0 else str(fails) + " FAIL") + " ===")
 sys.exit(1 if fails else 0)

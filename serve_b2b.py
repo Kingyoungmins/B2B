@@ -9606,6 +9606,69 @@ class PythonComSkillContext:
         self._shared["structural"].append("clear_filter:%s(%s)" % (ws.Name, "ok" if cleared else "none"))
         return ws.Name
 
+    def enable_filter(self, sheet=None, header_row=1):
+        """시트 헤더행에 자동필터(필터 드롭다운)를 켠다 — 조건 없이 '필터 기능만' 활성화한다(이미 켜져 있으면 유지).
+        "필터 켜줘/활성화/필터 걸어줘(조건 없이)" 요청에 쓴다. 특정 값만 보이게 하려면 ctx.apply_filter 를 쓴다.
+        sheet 생략 시 활성 시트."""
+        self._tick(2)
+        ws = self._ws(sheet) if sheet is not None else self._wb.ActiveSheet
+        hr = max(1, int(header_row or 1))
+        last_r = max(hr, self.used_last_row(ws.Name))
+        last_c = max(1, self.used_last_col(ws.Name))
+        try:
+            if not bool(ws.AutoFilterMode):
+                # 인자 없는 AutoFilter() 토글은 win32com 에서 안 켜지는 경우가 있어, Field=1 로 명시 지정한다
+                # (조건 없이 필드만 주면 필터 드롭다운만 켜지고 모든 행은 그대로 보인다).
+                ws.Range(ws.Cells(hr, 1), ws.Cells(last_r, last_c)).AutoFilter(Field=1)
+        except Exception:
+            pass
+        self._shared["structural"].append("enable_filter:%s" % ws.Name)
+        return ws.Name
+
+    def apply_filter(self, sheet, column, values, header_row=1):
+        """'눈으로만' 특정 값만 보이게 필터를 건다 — 데이터를 지우지 않고, 조건에 안 맞는 행을 화면에서 '숨김'
+        처리한다(원본 보존; ctx.clear_filter 로 언제든 복원). 행을 실제로 지우거나 새 시트로 빼는 게 아니라,
+        사용자가 화면에서 특정 값만 보게 하는 용도다.
+          column: 헤더명(권장) 또는 열 문자("C")/번호.  values: 보일 값 하나 또는 여러 개(리스트).
+          예: ctx.apply_filter("상품번호별", "상태", ["완료","진행"])   # 상태가 완료/진행인 행만 보임
+        (행 삭제·추출이 아니라 '표시 필터'가 필요할 때만. 조건에 맞는 행만 '추출'해 새 시트로 옮기려면
+         ctx.filter_to_sheet 를 쓴다.)"""
+        self._tick(2)
+        ws = self._ws(sheet)
+        hr = max(1, int(header_row or 1))
+        last_r = max(hr, self.used_last_row(ws.Name))
+        last_c = max(1, self.used_last_col(ws.Name))
+
+        def _col1(spec):
+            s = str(spec).strip()
+            try:
+                return int(self.find_header(ws.Name, s, header_row=hr))
+            except Exception:
+                pass
+            if re.fullmatch(r"[A-Za-z]{1,3}", s):
+                return self._col_index(s)
+            try:
+                return int(spec)
+            except Exception:
+                raise PythonComSkillError("필터 열 '%s' 을 찾지 못했습니다(헤더명 또는 열 문자를 쓰세요)." % spec)
+
+        field = _col1(column)   # 범위를 A열부터 잡으므로 Field = 시트 열번호
+        rng = ws.Range(ws.Cells(hr, 1), ws.Cells(last_r, last_c))
+        vals = list(values) if isinstance(values, (list, tuple)) else [values]
+        vals = [("" if v is None else str(v)) for v in vals]
+        # 기존 조건이 걸려 있으면 초기화(중첩/누적 방지)
+        try:
+            if bool(ws.AutoFilterMode) and bool(ws.FilterMode):
+                ws.ShowAllData()
+        except Exception:
+            pass
+        if len(vals) == 1:
+            rng.AutoFilter(Field=field, Criteria1=vals[0])
+        else:
+            rng.AutoFilter(Field=field, Criteria1=vals, Operator=7)  # xlFilterValues (여러 값 허용)
+        self._shared["structural"].append("apply_filter:%s[%s]=%s" % (ws.Name, column, ",".join(vals)[:60]))
+        return ws.Name
+
     def filter_to_sheet(self, sheet, predicate, dest_name, header_rows=1, after=None):
         """조건에 맞는 행만 골라 **새 시트(현재 활성 파일)**에 정리한다 — 원본은 그대로 둔다.
         predicate(row) 는 데이터 행(값 리스트, 0-based 인덱스)을 받아 True/False 를 반환.
