@@ -9850,6 +9850,76 @@ class PythonComSkillContext:
         self._shared["structural"].append(f"pivot:{sheet}->{name}({len(order)})")
         return name
 
+    def native_pivot(self, sheet, group_by, value=None, agg="sum", dest_name=None, column=None, header_rows=1):
+        """엑셀 '진짜 피벗테이블(PivotTable 개체)'을 새 시트에 만든다 — 원본 데이터와 연결돼 '새로 고침'이
+        되고 필드 배치가 살아있는 피벗이다(값만 찍는 요약표는 ctx.pivot). 사용자가 "진짜 피벗/새로고침 되는
+        피벗/피벗테이블로 만들어줘/슬라이서" 를 원할 때만 쓴다. (COM 특성상 값-표 피벗보다 불안정할 수 있음.)
+          group_by: 행 필드(헤더명, 리스트 가능).  value: 값 필드(헤더명; None 이면 개수).  agg: sum/count/avg/max/min.
+          column: 주면 열 필드(크로스탭).  dest_name: 새 시트 이름.
+          예: ctx.native_pivot("매출", group_by=["회사","지점"], value="금액", agg="sum", dest_name="피벗")"""
+        self._tick(2)
+        ws = self._ws(sheet)
+        hr = max(1, int(header_rows or 1))
+        last_r = max(hr, self.used_last_row(ws.Name))
+        last_c = max(1, self.used_last_col(ws.Name))
+        hdr_vals = ws.Range(ws.Cells(hr, 1), ws.Cells(hr, last_c)).Value
+        if isinstance(hdr_vals, (tuple, list)):
+            row0 = hdr_vals[0] if (hdr_vals and isinstance(hdr_vals[0], (tuple, list))) else hdr_vals
+            headers = [("" if v is None else str(v)).strip() for v in row0]
+        else:
+            headers = [("" if hdr_vals is None else str(hdr_vals)).strip()]
+
+        def _fname(spec):
+            s = str(spec).strip()
+            if s in headers:
+                return s
+            if "/" in s:
+                for a in (x.strip() for x in s.split("/")):
+                    if a in headers:
+                        return a
+            idx = None
+            if re.fullmatch(r"[A-Za-z]{1,3}", s):
+                idx = self._col_index(s)
+            else:
+                try:
+                    idx = int(s)
+                except Exception:
+                    idx = None
+            if idx and 1 <= idx <= len(headers) and headers[idx - 1]:
+                return headers[idx - 1]
+            raise PythonComSkillError("피벗 필드 '%s' 을 헤더에서 찾지 못했습니다(헤더명 또는 열 문자를 쓰세요)." % spec)
+
+        name = str(dest_name or "피벗")
+        if name in _excel_collection_names(self._wb.Worksheets):
+            raise PythonComSkillError("시트 '%s' 이 이미 있습니다. 다른 이름을 쓰거나 먼저 삭제하세요." % name)
+        src = ws.Range(ws.Cells(hr, 1), ws.Cells(last_r, last_c))
+        self.add_sheet(name)
+        pt_ws = self._ws(name)
+        XL_DB, XL_ROW, XL_COL = 1, 1, 2
+        AGG = {"sum": -4157, "count": -4112, "avg": -4106, "average": -4106, "mean": -4106, "max": -4136, "min": -4139}
+        pt_name = "PT_" + uuid.uuid4().hex[:8]
+        cache = self._wb.PivotCaches().Create(SourceType=XL_DB, SourceData=src)
+        pt = cache.CreatePivotTable(TableDestination=pt_ws.Cells(1, 1), TableName=pt_name)
+        groups = list(group_by) if isinstance(group_by, (list, tuple)) else [group_by]
+        for g in groups:
+            pt.PivotFields(_fname(g)).Orientation = XL_ROW
+        if column is not None:
+            pt.PivotFields(_fname(column)).Orientation = XL_COL
+        values = list(value) if isinstance(value, (list, tuple)) else [value]
+        aggs = list(agg) if isinstance(agg, (list, tuple)) else [agg] * len(values)
+        while len(aggs) < len(values):
+            aggs.append(aggs[-1] if aggs else "sum")
+        for v, a in zip(values, aggs):
+            an = str(a or "sum").lower()
+            fn = AGG.get(an, -4157)
+            if v is None:
+                pt.AddDataField(pt.PivotFields(_fname(groups[0])), "개수", -4112)
+            else:
+                fnm = _fname(v)
+                pt.AddDataField(pt.PivotFields(fnm), ("%s_%s" % (fnm, an))[:250], fn)
+        self._shared["structural"].append("native_pivot:%s->%s" % (ws.Name, name))
+        return name
+
     def normalize(self, value):
         """텍스트 정규화(공백/표기 차이 제거). 값 비교 보조용."""
         return normalize_text(value)
