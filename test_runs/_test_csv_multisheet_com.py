@@ -1,7 +1,7 @@
 # [실측] CSV 에 새 시트를 추가한 워크북을 저장할 때: SaveCopyAs(.xlsx)는 CSV 포맷 유지로 시트가 붕괴(버그),
 # SaveAs FileFormat=51 은 멀티시트 보존(수정). + _promote_csv_multisheet_name 헬퍼 검증.
 import sys, os, tempfile
-sys.path.insert(0, r"C:\Users\Admin\Desktop\KGM_git\B2B_ver0.5.19")
+sys.path.insert(0, r"C:\Users\Admin\Desktop\KGM_git\B2B_ver0.6.0")
 import win32com.client as w
 import serve_b2b as S
 

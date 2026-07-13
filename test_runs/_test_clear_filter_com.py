@@ -3,7 +3,7 @@
 #  - ctx.apply_filter  : '눈으로만' 특정 값만 보이기(엑셀 필터 체크박스처럼 — 행 삭제 아님, 데이터 보존)
 #  - ctx.clear_filter  : 필터 해제(숨은 행 전부 복원 + 드롭다운 제거)
 import sys
-sys.path.insert(0, r"C:\Users\Admin\Desktop\KGM_git\B2B_ver0.5.19")
+sys.path.insert(0, r"C:\Users\Admin\Desktop\KGM_git\B2B_ver0.6.0")
 import win32com.client as w
 import serve_b2b as S
 

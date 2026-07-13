@@ -2,7 +2,7 @@
 # 다중 키(행 필드 여러 개) + 다중 값(데이터 필드 여러 개) + 개수/크로스탭/새로고침 검증. 값은 GetPivotData 로 확인
 # (DataBodyRange 는 소계·총합을 포함하므로 단순 합산으로 검증하면 안 됨).
 import sys
-sys.path.insert(0, r"C:\Users\Admin\Desktop\KGM_git\B2B_ver0.5.19")
+sys.path.insert(0, r"C:\Users\Admin\Desktop\KGM_git\B2B_ver0.6.0")
 import win32com.client as w
 import serve_b2b as S
 
