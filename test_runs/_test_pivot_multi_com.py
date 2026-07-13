@@ -1,4 +1,5 @@
-# [실측] ctx.pivot 다중키·다중값 피벗이 실제 Excel COM 에서 올바른 표를 만드는지 검증.
+# [실측] 값-표 피벗(_pivot_value_table, = ctx.pivot 의 native 실패 시 폴백)의 다중키·다중값 표를 검증.
+# (ctx.pivot 은 이제 기본이 진짜 피벗테이블이라, 값-표 레이아웃은 폴백 메서드로 직접 테스트.)
 import sys
 sys.path.insert(0, r"C:\Users\Admin\Desktop\KGM_git\B2B_ver0.5.19")
 import win32com.client as w
@@ -29,7 +30,7 @@ try:
     ctx = S.PythonComSkillContext(app, wb, {})
 
     # 다중키(회사,지점) × 다중값(매출 sum, 건수 count)
-    name = ctx.pivot("매출", group_by=["회사", "지점"], value=["매출", "건수"], agg=["sum", "count"], dest_name="요약")
+    name = ctx._pivot_value_table("매출", group_by=["회사", "지점"], value=["매출", "건수"], agg=["sum", "count"], dest_name="요약")
     ck("pivot 반환 시트명", name == "요약", name)
     out = ctx.read("요약")
     hdr = [str(x) for x in out[0]]
@@ -43,7 +44,7 @@ try:
     ck("그룹 4개(회사×지점 조합)", len(out) - 1 == 4, len(out) - 1)
 
     # 단일키 다중값도 확인
-    name2 = ctx.pivot("매출", group_by="회사", value=["매출", "건수"], agg=["sum", "sum"], dest_name="요약2")
+    name2 = ctx._pivot_value_table("매출", group_by="회사", value=["매출", "건수"], agg=["sum", "sum"], dest_name="요약2")
     out2 = ctx.read("요약2")
     b2 = {str(r[0]): (r[1], r[2]) for r in out2[1:]}
     ck("단일키: A = 매출 180, 건수 6", b2.get("A") == (180, 6), b2.get("A"))

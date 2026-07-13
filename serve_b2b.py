@@ -9714,8 +9714,9 @@ class PythonComSkillContext:
         self._shared["structural"].append(f"filter_to_sheet:{sheet}->{dest_name}({len(matched)})")
         return dest_name
 
-    def pivot(self, sheet, group_by, value=None, agg="sum", dest_name=None, header_rows=1, after=None, column=None):
-        """그룹별 집계 요약 표를 **새 시트(현재 활성 파일)**에 만든다(Python 집계 — 안정적).
+    def _pivot_value_table(self, sheet, group_by, value=None, agg="sum", dest_name=None, header_rows=1, after=None, column=None):
+        """[내부/폴백] 그룹별 집계 '값 표'를 새 시트에 만든다(Python 집계 — 안정적). ctx.pivot 이 진짜
+        피벗테이블(native_pivot) 생성에 실패했을 때 이 값-표로 폴백한다. 직접 호출도 가능(값-표 강제).
         group_by/value 는 헤더명(권장) 또는 열 문자("C"). agg 는 sum/count/avg/max/min.
           ctx.pivot("매출", group_by="회사", value="금액", agg="sum", dest_name="회사별합계")  # 1D 그룹요약
         ★ **다중 키·다중 값 지원**: group_by/value/agg 에 '리스트'를 주면 여러 기준으로 묶고 여러 값을 한 번에 집계한다
@@ -9919,6 +9920,29 @@ class PythonComSkillContext:
                 pt.AddDataField(pt.PivotFields(fnm), ("%s_%s" % (fnm, an))[:250], fn)
         self._shared["structural"].append("native_pivot:%s->%s" % (ws.Name, name))
         return name
+
+    def pivot(self, sheet, group_by, value=None, agg="sum", dest_name=None, header_rows=1, after=None, column=None):
+        """그룹별 집계 피벗을 새 시트에 만든다. **기본은 엑셀 '진짜 피벗테이블(PivotTable 개체)'**(원본과 연결돼
+        새로 고침 가능)로 만들고, 그게 실패하면 자동으로 '값 표'로 폴백한다 — 호출부는 ctx.pivot 하나만 쓰면 된다.
+        인자: group_by/value/agg 에 '리스트'를 주면 다중 키·다중 값(agg 하나면 모든 값에 적용), value=None 은 개수,
+        column 은 열 필드(2D 크로스탭), dest_name 은 새 시트명.
+        "~별 합계/개수/평균/요약/피벗" 요청의 기본 수단(원본 보존, 손코딩 집계 금지). 값-표만 강제하려면
+        ctx._pivot_value_table, 항상 진짜 피벗만 원하면 ctx.native_pivot 을 직접 호출."""
+        eff = str(dest_name) if dest_name else "피벗요약"
+        try:
+            return self.native_pivot(sheet, group_by, value=value, agg=agg, dest_name=eff, column=column, header_rows=header_rows)
+        except Exception as _e:
+            # 진짜 피벗 실패 → 부분 생성됐을 dest 시트 정리 후 값-표로 폴백(호출부는 그대로 결과를 얻음)
+            try:
+                if eff in _excel_collection_names(self._wb.Worksheets):
+                    self._wb.Worksheets(eff).Delete()
+            except Exception:
+                pass
+            try:
+                _vba_trace("python_com.pivot.fallback_value_table", sheet=str(sheet), dest=eff, error=str(_e)[:200])
+            except Exception:
+                pass
+            return self._pivot_value_table(sheet, group_by, value=value, agg=agg, dest_name=eff, header_rows=header_rows, after=after, column=column)
 
     def normalize(self, value):
         """텍스트 정규화(공백/표기 차이 제거). 값 비교 보조용."""
