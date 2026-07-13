@@ -942,8 +942,8 @@ function runnerGroupMappingRowsByFile(rows) {
     const unresolved = sheetMembers.filter(m => !m.sheet);
     if (unresolved.length) { g.status = "warn"; g.statusText = "시트 확인"; return; }
     // 파일+시트 모두 해결됨 → 초록(ok). 어떻게 해결됐는지에 따라 라벨만 구분.
-    if (g.userSet) { g.status = "ok"; g.statusText = "사용자 확인"; }                          // 사람이 직접 지정
-    else if (g.members.every(m => m.status === "ok")) { g.status = "ok"; g.statusText = "자동 확인"; }  // 정확 자동
+    if (g.userSet) { g.status = "ok"; g.statusText = "사용자 확인 완료"; }                      // 사람이 직접 지정
+    else if (g.members.every(m => m.status === "ok")) { g.status = "ok"; g.statusText = "정확 매칭"; }  // 정확 자동
     else { g.status = "ok"; g.statusText = "AI 자동매칭"; }                                     // 유사도 자동(예전 '확인 필요')
   });
   return groups;
