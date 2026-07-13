@@ -914,7 +914,7 @@ function runnerBuildMappingRows() {
         statusText = "확인 필요";
       }
     }
-    return { req, files, fileItem, sheet, score, status, statusText };
+    return { req, files, fileItem, sheet, score, status, statusText, userSet: !!(stored && stored.userSet) };
   });
 }
 
@@ -936,12 +936,15 @@ function runnerGroupMappingRowsByFile(rows) {
     g.members.push(row);
   });
   groups.forEach(g => {
+    g.userSet = g.members.some(m => m.userSet);   // 사람이 직접 파일/시트를 고른 그룹
     const sheetMembers = g.members.filter(m => m.req.sheet);
     if (!g.fileItem) { g.status = "bad"; g.statusText = "파일 선택 필요"; return; }
     const unresolved = sheetMembers.filter(m => !m.sheet);
-    if (unresolved.length) { g.status = "warn"; g.statusText = "시트 확인"; }
-    else if (g.members.every(m => m.status === "ok")) { g.status = "ok"; g.statusText = "자동 확인"; }
-    else { g.status = "warn"; g.statusText = "확인 필요"; }
+    if (unresolved.length) { g.status = "warn"; g.statusText = "시트 확인"; return; }
+    // 파일+시트 모두 해결됨 → 초록(ok). 어떻게 해결됐는지에 따라 라벨만 구분.
+    if (g.userSet) { g.status = "ok"; g.statusText = "사용자 확인"; }                          // 사람이 직접 지정
+    else if (g.members.every(m => m.status === "ok")) { g.status = "ok"; g.statusText = "자동 확인"; }  // 정확 자동
+    else { g.status = "ok"; g.statusText = "AI 자동매칭"; }                                     // 유사도 자동(예전 '확인 필요')
   });
   return groups;
 }
@@ -1035,7 +1038,7 @@ function runnerRenderMappingPanel() {
       const fileItem = g.files.find(item => item.id === sel.value);
       g.members.forEach(m => {
         const sheet = fileItem ? runnerFindSheet(m.req, fileItem.file, "") : "";
-        state.runnerMappings[m.req.key] = { fileId: sel.value || "", sheet };
+        state.runnerMappings[m.req.key] = { fileId: sel.value || "", sheet, userSet: !!sel.value };  // 사람이 직접 파일 지정 → '사용자 확인'
       });
       runnerRenderMappingPanel();
       renderRunnerWorkflow();
@@ -1049,7 +1052,7 @@ function runnerRenderMappingPanel() {
       const g = groups[gidx];
       const m = g && g.members[mi];
       if (!g || !m) return;
-      state.runnerMappings[m.req.key] = { fileId: g.fileItem ? g.fileItem.id : "", sheet: sel.value || "" };
+      state.runnerMappings[m.req.key] = { fileId: g.fileItem ? g.fileItem.id : "", sheet: sel.value || "", userSet: true };  // 사람이 직접 시트 변경 → '사용자 확인'
       runnerRenderMappingPanel();
       renderRunnerWorkflow();
     };
