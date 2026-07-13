@@ -9732,11 +9732,25 @@ class PythonComSkillContext:
         header = list(grid[hr - 1]) if len(grid) >= hr else []
         data = grid[hr:]
 
+        # [중복 헤더] 같은 헤더가 여러 개면 2번째부터 '헤더명2','헤더명3' 으로 지목 가능(엑셀 피벗과 동일).
+        _seen = {}
+        _dnames = []
+        for h in header:
+            hs = str(h).strip()
+            if hs in _seen:
+                _seen[hs] += 1
+                _dnames.append("%s%d" % (hs, _seen[hs]))
+            else:
+                _seen[hs] = 1
+                _dnames.append(hs)
+
         def _col0(spec):
             s = str(spec).strip()
             for i, h in enumerate(header):
                 if str(h).strip() == s:
                     return i
+            if s in _dnames:               # '상품명2' 등 중복-리네임 이름 → 그 위치의 열
+                return _dnames.index(s)
             # 슬래시-별칭("전화번호/회선번호/ID") — 모델이 후보 이름을 슬래시로 묶어 주는 경우, 각 후보를
             # 헤더에서 시도한다(정확 헤더명이 먼저 매칭되므로 실제 "A/B" 헤더는 위에서 이미 잡힘).
             if "/" in s:
@@ -9746,6 +9760,8 @@ class PythonComSkillContext:
                     for i, h in enumerate(header):
                         if str(h).strip() == alias:
                             return i
+                    if alias in _dnames:
+                        return _dnames.index(alias)
             if re.fullmatch(r"[A-Za-z]{1,3}", s):
                 return self._col_index(s) - 1
             try:
@@ -9819,7 +9835,7 @@ class PythonComSkillContext:
 
         out_header = []
         for n, i in enumerate(gidx):
-            out_header.append(header[i] if (i is not None and i < len(header)) else ("그룹%d" % (n + 1)))
+            out_header.append(_dnames[i] if (i is not None and i < len(_dnames)) else ("그룹%d" % (n + 1)))
         for v, a in zip(values, aggs):
             out_header.append((str(v) if v is not None else "값") + "_" + ("avg" if a in ("average", "mean") else a))
         out = [out_header]
@@ -9870,14 +9886,30 @@ class PythonComSkillContext:
         else:
             headers = [("" if hdr_vals is None else str(hdr_vals)).strip()]
 
+        # [중복 헤더] 엑셀 피벗은 같은 헤더가 2개면 2번째를 '헤더명2'(3번째는 '헤더명3')로 자동 리네임한다
+        # (예: 상품명 두 열 → 필드 '상품명', '상품명2'). 필드명 목록을 엑셀과 동일하게 만들어 매칭한다.
+        seen = {}
+        field_names = []
+        for h in headers:
+            if h in seen:
+                seen[h] += 1
+                field_names.append("%s%d" % (h, seen[h]))
+            else:
+                seen[h] = 1
+                field_names.append(h)
+
         def _fname(spec):
             s = str(spec).strip()
-            if s in headers:
+            if s in field_names:                 # '상품명2' 등 엑셀 중복-리네임 필드명
                 return s
+            if s in headers:                     # 원본 헤더명 → 그 위치의 필드명(중복이면 첫 번째)
+                return field_names[headers.index(s)]
             if "/" in s:
                 for a in (x.strip() for x in s.split("/")):
-                    if a in headers:
+                    if a in field_names:
                         return a
+                    if a in headers:
+                        return field_names[headers.index(a)]
             idx = None
             if re.fullmatch(r"[A-Za-z]{1,3}", s):
                 idx = self._col_index(s)
@@ -9886,8 +9918,8 @@ class PythonComSkillContext:
                     idx = int(s)
                 except Exception:
                     idx = None
-            if idx and 1 <= idx <= len(headers) and headers[idx - 1]:
-                return headers[idx - 1]
+            if idx and 1 <= idx <= len(field_names) and field_names[idx - 1]:
+                return field_names[idx - 1]     # 열 문자/번호 → 그 위치의 (중복 반영) 필드명
             raise PythonComSkillError("피벗 필드 '%s' 을 헤더에서 찾지 못했습니다(헤더명 또는 열 문자를 쓰세요)." % spec)
 
         name = str(dest_name or "피벗")
