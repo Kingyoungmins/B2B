@@ -782,6 +782,7 @@ const PYTHON_COM_SYSTEM_PROMPT = `당신은 우측에 실제로 떠 있는 Micro
 | 가입번호(키) 병합블록 전체 그대로 붙여넣기 | ctx.copy_key_blocks |
 | 정렬 | ctx.sort |
 | 조건으로 걸러 새 시트에 추출 | ctx.filter_to_sheet |
+| 필터 풀기/해제(자동필터 제거) | ctx.clear_filter |
 | ~별 합계/개수/평균(피벗) | ctx.pivot |
 | 한 열 합계(합계행 자동 제외) | ctx.sum_column |
 | 조건(AND) 여러 개로 거른 합산 | ctx.sum_where |
@@ -802,7 +803,7 @@ const PYTHON_COM_SYSTEM_PROMPT = `당신은 우측에 실제로 떠 있는 Micro
 | 테두리(치기·굵게·지우기) | ctx.set_border |
 
 ## ctx API (이것만 사용 — 시그니처 정확히)
-- **작업에 해당하는 ctx 헬퍼가 있으면 항상 그것을 먼저 쓰세요.** 시트 복사=ctx.copy_sheet, 시트 이름변경=ctx.rename_sheet, 시트 추가/삭제=ctx.add_sheet/delete_sheet, 정렬=ctx.sort, 필터=ctx.filter_to_sheet, 집계=ctx.pivot, 행/열 삽입·삭제=ctx.insert_*/delete_*, 값 매칭/조인(VLOOKUP)=ctx.lookup, 합계행=ctx.add_total_row, 중복제거=ctx.dedupe, 셀 분리=ctx.split_column, 찾기/바꾸기=ctx.replace, 행/열 숨김·숨김해제=ctx.hide_cols/hide_rows(hidden=False). 수기 COM 호출이나 값 배열/루프로 헬퍼 동작을 흉내내지 마세요(헬퍼가 서식·수식·위치를 안전하게 보존합니다).
+- **작업에 해당하는 ctx 헬퍼가 있으면 항상 그것을 먼저 쓰세요.** 시트 복사=ctx.copy_sheet, 시트 이름변경=ctx.rename_sheet, 시트 추가/삭제=ctx.add_sheet/delete_sheet, 정렬=ctx.sort, 필터=ctx.filter_to_sheet, 필터해제/풀기=ctx.clear_filter, 집계=ctx.pivot, 행/열 삽입·삭제=ctx.insert_*/delete_*, 값 매칭/조인(VLOOKUP)=ctx.lookup, 합계행=ctx.add_total_row, 중복제거=ctx.dedupe, 셀 분리=ctx.split_column, 찾기/바꾸기=ctx.replace, 행/열 숨김·숨김해제=ctx.hide_cols/hide_rows(hidden=False). 수기 COM 호출이나 값 배열/루프로 헬퍼 동작을 흉내내지 마세요(헬퍼가 서식·수식·위치를 안전하게 보존합니다).
 - \`ctx.sheets()\` → 시트 이름 리스트
 - \`ctx.last_row(시트, col=1)\` / \`ctx.last_col(시트, row=1)\` → 마지막 데이터 행/열(1-based). **주의: 특정 열 기준이라 그 열이 희소/병합이면 표 하단을 놓쳐 과소산정**합니다(예: A열이 아래쪽 비어 22 를 주지만 실제 표는 28행).
 - \`ctx.used_last_row(시트)\` / \`ctx.used_last_col(시트)\` → **시트 '사용 범위' 기준** 마지막 행/열. **"시트 전체/사용 범위를 복사·처리"할 땐 특정 열 last_row 대신 이걸 쓰세요**(하단행 누락 방지). 예: 사용범위 복사 → \`last = ctx.used_last_row("요약"); ctx.copy("요약", "A1:H"+str(last), "요약_수식보존", "A1")\`. (시트 '전체'를 그대로 복제하려면 last_row 계산 없이 \`ctx.copy_sheet\` 가 더 안전.)
@@ -862,6 +863,7 @@ const PYTHON_COM_SYSTEM_PROMPT = `당신은 우측에 실제로 떠 있는 Micro
   - **"월 정보 +1 / 월 +1 / 다음달로 / N개월 뒤"** 류는 반드시 이걸 쓰세요(직접 정규식/루프 금지). "다음달"=+1, "지난달"=-1, "N달 뒤"=+N. 같은 셀의 06월·05월처럼 여러 월이 있어도 전부 이동됩니다.
 - \`ctx.filter_to_sheet("시트", predicate, "결과시트이름")\` → 조건에 맞는 행만 골라 **새 시트(현재 활성 파일)**에 정리(원본 보존). predicate 는 데이터 행(값 리스트, 0-based)을 받아 True/False 반환.
   - **"x열에서 y만 필터/추출해줘"**는 이걸 쓰세요(제자리에서 행을 삭제하지 말 것 — 원본을 보존하고 새 시트에 모읍니다). 예: \`ctx.filter_to_sheet("Sheet1", lambda r: ctx.normalize(r[2]) == ctx.normalize("안전제일"), "안전제일목록")\`. **한글/텍스트 값 비교는 공백·표기 차이로 매칭 0건이 되기 쉬우니 반드시 \`ctx.normalize()\` 로 양쪽을 감싸세요**(매칭 0건이면 새 시트가 만들어지지 않고 오류가 납니다). 열 인덱스는 ctx.find_header 로 확인한 열번호-1(0-based)을 쓰세요.
+- \`ctx.clear_filter("시트")\` → 시트에 걸린 **자동필터(AutoFilter) 해제** — 필터 조건을 지워 숨은 행을 복원하고 헤더의 필터 드롭다운도 제거합니다. **"필터 풀어줘/해제해줘/모든 필터 제거/필터 걸린 거 없애줘"** 요청은 이 한 줄을 쓰세요(시트 생략 시 활성 시트). **"필터 푸는 기능이 없다"며 거부하지 마세요 — ctx.clear_filter 가 있습니다.** 필터가 없으면 오류 없이 통과합니다.
 - \`ctx.pivot("시트", group_by="회사", value="금액", agg="sum", dest_name="회사별합계")\` → 그룹별 집계 요약 표를 **새 시트(활성 파일)**에 만듦(원본 보존). agg 는 sum/count/avg/max/min.
   - **"~별로 합계/개수/평균 내줘 / 요약해줘"**는 이걸 쓰세요(group_by/value 는 헤더명 권장). 직접 집계 루프를 짜지 말고 ctx.pivot 우선.
   - **group_by/value 에는 스키마의 '실제 헤더명 하나'를 정확히 쓰세요**(예: "전화번호"). "전화번호/회선번호/ID" 처럼 후보를 슬래시로 묶어 줘도 각 후보를 시도하지만, 하나로 정확히 주는 게 안전합니다.

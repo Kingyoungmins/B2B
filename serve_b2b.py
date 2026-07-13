@@ -9570,6 +9570,42 @@ class PythonComSkillContext:
         self._shared["structural"].append(f"delete_cols:{sheet}:{col_letter}+{count}")
         return True
 
+    def clear_filter(self, sheet=None):
+        """시트에 걸린 자동필터(AutoFilter)를 해제한다 — 필터 조건을 모두 지워 숨은 행을 복원하고, 헤더의 필터
+        드롭다운(화살표)도 제거한다. **"필터 풀어줘/해제해줘/모든 필터 제거/필터 걸린 거 없애줘"** 요청에 이걸 쓴다
+        (기능 없다고 거부하지 말 것). 표(ListObject) 안의 필터 조건도 함께 해제한다. sheet 생략 시 활성 시트.
+        필터가 하나도 없으면 조용히 통과(오류 아님)."""
+        self._tick(2)
+        ws = self._ws(sheet) if sheet is not None else self._wb.ActiveSheet
+        cleared = False
+        # 1) 표(ListObject) 안의 필터 조건 해제(숨은 행 복원)
+        try:
+            for lo in ws.ListObjects:
+                try:
+                    af = lo.AutoFilter
+                    if af is not None and bool(af.FilterMode):
+                        af.ShowAllData()
+                        cleared = True
+                except Exception:
+                    pass
+        except Exception:
+            pass
+        # 2) 시트 자동필터: 활성 조건 먼저 해제(숨은 행 복원) → 필터 드롭다운 자체 제거
+        try:
+            if bool(ws.FilterMode):
+                ws.ShowAllData()
+                cleared = True
+        except Exception:
+            pass
+        try:
+            if bool(ws.AutoFilterMode):
+                ws.AutoFilterMode = False
+                cleared = True
+        except Exception:
+            pass
+        self._shared["structural"].append("clear_filter:%s(%s)" % (ws.Name, "ok" if cleared else "none"))
+        return ws.Name
+
     def filter_to_sheet(self, sheet, predicate, dest_name, header_rows=1, after=None):
         """조건에 맞는 행만 골라 **새 시트(현재 활성 파일)**에 정리한다 — 원본은 그대로 둔다.
         predicate(row) 는 데이터 행(값 리스트, 0-based 인덱스)을 받아 True/False 를 반환.
