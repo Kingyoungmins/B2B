@@ -997,10 +997,13 @@ function runnerRenderMappingPanel() {
         `<option value="${escapeHtml(s)}" ${runnerMappingNorm(m.sheet) === runnerMappingNorm(s) ? "selected" : ""}>${escapeHtml(s)}</option>`
       )).join("");
       const chipCls = m.sheet ? "ok" : "warn";
+      // data-key 에 req.key(널 문자   구분자 포함)를 넣으면 HTML 속성에서 널이 U+FFFD 로 바뀌어
+      // 핸들러의 키가 실제 키와 안 맞았다 → 선택이 저장돼도 반영 안 됨(클릭은 되는데 선택 안 되는 증상).
+      // 멤버 인덱스(data-mi)로만 넘기고, 실제 키는 핸들러에서 g.members[mi].req.key 로 직접 얻는다.
       return `<div class="runner-mapping-sheet-map">
             <span class="runner-mapping-sheet-chip ${chipCls}" title="${escapeHtml(m.req.sheet)}">${escapeHtml(runnerChipLabel(m.req.sheet))}</span>
             <span class="runner-mapping-sheet-link">↔</span>
-            <select class="runner-mapping-select runner-map-sheet2" data-key="${escapeHtml(m.req.key)}" data-gidx="${gidx}" ${g.fileItem ? "" : "disabled"}>${opts}</select>
+            <select class="runner-mapping-select runner-map-sheet2" data-mi="${g.members.indexOf(m)}" data-gidx="${gidx}" ${g.fileItem ? "" : "disabled"}>${opts}</select>
           </div>`;
     }).join("");
     return `
@@ -1038,14 +1041,15 @@ function runnerRenderMappingPanel() {
       renderRunnerWorkflow();
     };
   });
-  // 못 찾은 시트 직접 선택(파일은 그룹 매핑 유지).
+  // 시트 직접 선택(파일은 그룹 매핑 유지). 키는 DOM 속성이 아니라 멤버에서 직접 얻는다(널 문자 키 훼손 회피).
   table.querySelectorAll(".runner-map-sheet2").forEach(sel => {
     sel.onchange = () => {
       const gidx = Number(sel.dataset.gidx);
+      const mi = Number(sel.dataset.mi);
       const g = groups[gidx];
-      const key = sel.dataset.key;
-      if (!g || !key) return;
-      state.runnerMappings[key] = { fileId: g.fileItem ? g.fileItem.id : "", sheet: sel.value || "" };
+      const m = g && g.members[mi];
+      if (!g || !m) return;
+      state.runnerMappings[m.req.key] = { fileId: g.fileItem ? g.fileItem.id : "", sheet: sel.value || "" };
       runnerRenderMappingPanel();
       renderRunnerWorkflow();
     };
