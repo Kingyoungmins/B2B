@@ -2780,7 +2780,8 @@ function renderPipeline() {
           return;
         }
       }
-      if (!fastLast && pipelineStepLiveLanguage(beforeToggleSnapshot[currentIdx])) {
+      if (!fastLast && pipelineStepLiveLanguage(beforeToggleSnapshot[currentIdx])
+          && !pipelineStepWritesCrossFile(beforeToggleSnapshot[currentIdx])) {
         try {
           if (await restorePipelineToCheckpointAndHold(currentIdx, beforeToggleSnapshot, {
             message: "선택한 단계 직전 상태로 되돌리는 중...",
