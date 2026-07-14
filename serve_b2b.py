@@ -292,6 +292,12 @@ def hidden_subprocess_kwargs():
         return {}
     startupinfo = subprocess.STARTUPINFO()
     startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+    # [모래시계 수정] CREATE_NO_WINDOW/USESHOWWINDOW 는 콘솔 '창'만 숨기고, Windows 가
+    # CreateProcess 때 기본으로 켜는 '앱 시작 중' 피드백 커서(화살표+빙글이)는 못 막는다.
+    # 유지관리 루프가 tasklist/taskkill 을 주기적으로 띄울 때마다 유휴 상태에서도 커서가
+    # 돌았다 풀렸다 반복돼 보였다. 시작 피드백을 명시적으로 끈다.
+    # (subprocess.STARTF_FORCEOFFFEEDBACK 상수는 Python 3.13+ — 구버전은 winbase.h 값 0x80)
+    startupinfo.dwFlags |= getattr(subprocess, "STARTF_FORCEOFFFEEDBACK", 0x00000080)
     startupinfo.wShowWindow = 0
     return {
         "startupinfo": startupinfo,
@@ -3245,6 +3251,34 @@ def _force_kill_pid(pid):
 def _is_pid_alive(pid):
     if not pid or os.name != "nt":
         return False
+    # [모래시계 수정] 부모(native host) 생존 감시가 이 함수를 1초마다 부른다. 매번 tasklist 를
+    # 새 프로세스로 띄우면 비용도 크고 시작 피드백 커서가 유휴 상태에서 계속 깜빡였다.
+    # 프로세스를 만들지 않는 확인(psutil → OpenProcess)을 먼저 쓰고, tasklist 는 최후 폴백.
+    if psutil is not None:
+        try:
+            return bool(psutil.pid_exists(int(pid)))
+        except Exception:
+            pass
+    try:
+        import ctypes
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+        STILL_ACTIVE = 259
+        ERROR_ACCESS_DENIED = 5
+        handle = kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, int(pid))
+        if handle:
+            try:
+                exit_code = ctypes.c_ulong(0)
+                if kernel32.GetExitCodeProcess(handle, ctypes.byref(exit_code)):
+                    return exit_code.value == STILL_ACTIVE
+                return True  # 열렸는데 조회 실패 → 살아있다고 본다(부모 오탐 종료 방지)
+            finally:
+                kernel32.CloseHandle(handle)
+        if ctypes.get_last_error() == ERROR_ACCESS_DENIED:
+            return True  # 접근 거부 = 프로세스는 존재함
+        # 그 외(87 INVALID_PARAMETER=죽은 pid 등)는 단정하지 않고 tasklist 폴백으로 확정
+    except Exception:
+        pass
     try:
         completed = subprocess.run(
             ["tasklist", "/FI", f"PID eq {int(pid)}", "/NH"],
