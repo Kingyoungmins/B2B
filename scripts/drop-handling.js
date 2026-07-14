@@ -623,6 +623,37 @@ function runnerExtractGeneratedSheetsFromCode(code) {
     if (name) runnerAddGeneratedSheet(generated, receiverBook(m[1]), name);
   }
 
+  // [한전 스킬셋] 시트를 '만들어내는' 그 밖의 헬퍼 — filter_to_sheet(원본, 조건, "새시트"),
+  // pivot/native_pivot(dest_name=, 기본 "피벗요약"). 목적지 시트는 업로드 요구가 아니라 산출물인데
+  // 여기 없어서 filter_to_sheet 산출(무선간선망/고압모계기/고압자계기)이 '필요 시트'로 잘못 떴다.
+  const creatorRe = /((?:ctx\s*\.\s*book\(\s*["'][^"']+["']\s*\))|[A-Za-z_][A-Za-z0-9_]*)\s*\.\s*(filter_to_sheet|pivot|native_pivot)\s*\(/g;
+  while ((m = creatorRe.exec(src))) {
+    const bookName = receiverBook(m[1]);
+    const fn = m[2];
+    const win = src.slice(m.index, m.index + 400);
+    const kw = /(?:dest_name|new_name)\s*=\s*(["'])([^"']+)\1/.exec(win);
+    if (kw) {
+      runnerAddGeneratedSheet(generated, bookName, kw[2]);
+      continue;
+    }
+    const kwVar = /(?:dest_name|new_name)\s*=\s*([A-Za-z_][A-Za-z0-9_]*)\s*[,)]/.exec(win);
+    if (kwVar) {
+      const name = resolvePyName(kwVar[1]);
+      if (name) runnerAddGeneratedSheet(generated, bookName, name);
+      continue;
+    }
+    if (fn === "filter_to_sheet") {
+      // 3번째 위치 인자 — 조건 람다에 괄호/콤마가 섞이므로 '닫는 괄호 바로 앞의 문자열 리터럴'
+      // (콤마 뒤 리터럴 + `)` 또는 `, header_rows=` 꼬리)로 판정. LLM 생성 조건은 대부분
+      // == "값" / in ["a","b"] 형태라 리터럴+`)` 오탐 위험은 낮다.
+      const direct = /,\s*(["'])([^"']+)\1\s*(?:\)|,\s*(?:header_rows|after)\s*=)/.exec(win);
+      if (direct) runnerAddGeneratedSheet(generated, bookName, direct[2]);
+    } else {
+      // pivot/native_pivot 에 dest_name 이 없으면 기본 산출 시트 "피벗요약"
+      runnerAddGeneratedSheet(generated, bookName, "피벗요약");
+    }
+  }
+
   // [교차파일 복사] ctx.copy_sheet("소스시트", dst_book="대상파일"[, new_name="Y"]) 는 대상파일에 그 시트를
   // '새로 만든다'(예: 원본→KG모빌리티). 대상파일 입장에선 업로드해야 할 기존 시트가 아니라 생성 시트다.
   // (ctx.copy_sheet / ctx.book("소스").copy_sheet 둘 다 커버. 파일명에 괄호가 있어도 안전하게 근처 창에서 추출.)
