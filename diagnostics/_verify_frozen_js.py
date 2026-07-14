@@ -11,9 +11,10 @@ for e in r.toc:
     names.append(str(nm))
 
 CHECKS = {
-    "scripts\\click-recovery.js": ["__b2bClickRecovery", "clickrecovery=0", "합성"],
-    "scripts\\debug-panel.js": ["__b2bSynthetic", "복구", "클릭 진단"],
+    "scripts\\click-recovery.js": ["__b2bClickRecovery", "pendClicks", "DOUBLE_MS"],
+    "scripts\\debug-panel.js": ["__b2bSynthetic", "선클릭"],
     "index.html": ["click-recovery.js"],
+    "serve_b2b.py": ["STARTF_FORCEOFFFEEDBACK", "_is_pid_alive"],
 }
 
 fails = 0
