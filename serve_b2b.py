@@ -8110,6 +8110,25 @@ def _run_full_pipeline_single_instance_impl(groups, reset_excel_ids=None, view_s
                     _vba_trace("fullrun.companion.error", anchorExcelId=anchor_excel_id, isolatedPid=fpid,
                                excelId=oid, name=cname, error=str(_cerr))
 
+            # [적용됨-미반영 수정] 실패 '시점'의 관여 파일 전체 상태(=마지막 완료 스텝까지 반영본)를
+            # 파일별로 스냅샷해 오류에 동봉한다. 기존 stepSnapshots 는 '실패 스텝의 파일' 것만 있어,
+            # 다파일/교차파일 스킬에서 클라 복원이 그 파일 하나만 되돌리고 나머지는 원본으로 남는데
+            # 라벨은 인덱스 기준 '적용됨'이라 UI-라이브 불일치가 났다. 전 파일 스냅샷이면 복원 후
+            # 'Step1~(N-1) 적용됨' 표시가 모든 파일에서 실제와 일치한다(companion 포함 — byExcel 전체).
+            def _capture_fail_state_snapshots():
+                snaps = []
+                for _sid, _ent in byExcel.items():
+                    try:
+                        _p = BACKEND_DIR / ("prestep_%s_%s" % (uuid.uuid4().hex, _ent["name"]))
+                        _ent["wb"].SaveCopyAs(str(_p))
+                        _rid = uuid.uuid4().hex
+                        RESULTS[_rid] = {"path": str(_p), "name": Path(_p).name, "created": time.time()}
+                        snaps.append({"excelId": _sid, "downloadId": _rid})
+                    except Exception as _fs_err:
+                        _vba_trace("fullrun.failstate.snapshot.skip", anchorExcelId=anchor_excel_id,
+                                   excelId=_sid, error=str(_fs_err))
+                return snaps
+
             # 2) 전 그룹·스텝 순서대로 실행 (ftarget = 그 그룹 파일의 wb)
             ordinal = 0
             for g in norm_groups:
@@ -8168,6 +8187,7 @@ def _run_full_pipeline_single_instance_impl(groups, reset_excel_ids=None, view_s
                         try:
                             if isinstance(getattr(_pe, "info", None), dict):
                                 _pe.info["stepSnapshots"] = list(step_snapshots)
+                                _pe.info["failStateSnapshots"] = _capture_fail_state_snapshots()
                         except Exception:
                             pass
                         raise
@@ -8177,6 +8197,7 @@ def _run_full_pipeline_single_instance_impl(groups, reset_excel_ids=None, view_s
                                    excelId=gid, stepIdx=info.get("stepIdx"), error=str(err), errorInfo=info)
                         try:
                             info["stepSnapshots"] = list(step_snapshots)
+                            info["failStateSnapshots"] = _capture_fail_state_snapshots()
                         except Exception:
                             pass
                         raise PipelineExecutionError(info)

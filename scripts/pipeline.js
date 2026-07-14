@@ -1046,6 +1046,10 @@ async function runIsolatedLivePipelineSteps(sourceSteps, initialExcelId, options
         } catch (_) {}
       }
       try {
+        // [적용됨-미반영 수정] bg 1콜 시작 전 이전 실행의 스냅샷을 비운다 — 실패가 errorInfo 없이 끝나면
+        // (타임아웃/네트워크/비스텝 500) 옛 실행의 stale 스냅샷으로 오복원되어 '적용됨' 거짓 표시가 났다.
+        // 이번 실행의 스냅샷은 성공(stepSnapshots)/실패(errorInfo.stepSnapshots) 모두에서 새로 wiring 된다.
+        (sourceSteps || state.pipeline || []).forEach(s => { if (s && s._preApplySnapshot) delete s._preApplySnapshot; });
         lastData = await postExcelMirror("/api/excel/run-full-pipeline", {
           groups: bgGroups,
           resetExcelIds,
@@ -1058,6 +1062,11 @@ async function runIsolatedLivePipelineSteps(sourceSteps, initialExcelId, options
           timeoutMs: Math.min(3300000, Math.max(1800000, totalSteps * 30000)),
           timeoutMessage: pipelineTimeoutMessage,
         });
+      } catch (bgErr) {
+        // [적용됨-미반영 수정] bg 1콜 실패 = 백엔드가 라이브 동기화 '전에' raise → 라이브는 전 파일 무손상.
+        // 복원/마킹 단계가 이 사실을 알고 '전 파일 복원 검증' 없이는 적용됨을 찍지 않도록 태깅한다.
+        try { bgErr._liveUntouched = true; } catch (_) {}
+        throw bgErr;
       } finally {
         if (_bgTimer) { try { clearInterval(_bgTimer); } catch (_) {} }
       }
@@ -3132,17 +3141,84 @@ async function restorePipelineCheckpointForSuffix(startIdx, beforeSteps, options
   if (!restoreSteps.length) return false;
   const label = options.message || "선택한 단계 직전 상태로 되돌리는 중...";
   let restored = 0;
+  const restoredExcelIds = new Set();
   for (const step of restoreSteps) {
     const ok = await restoreLastStepPreApplySnapshot(step, { message: label });
-    if (ok) restored += 1;
+    if (ok) {
+      restored += 1;
+      const sid = step && step._preApplySnapshot && step._preApplySnapshot.excelId;
+      if (sid) restoredExcelIds.add(sid);
+    }
   }
-  return restored === restoreSteps.length;
+  // 전부 성공 시 '복원된 세션 집합'(truthy)을 반환 — 호출자가 커버리지 검증에 쓴다.
+  return restored === restoreSteps.length ? restoredExcelIds : false;
+}
+
+// [적용됨-미반영 수정] prefix(0..start-1) 스텝들이 변형하는 파일의 라이브 세션이 전부
+// restoredExcelIds 에 포함되는지 검증. bg 전체실행 실패(라이브 무손상)에서 실패 스텝 파일
+// 하나만 복원해 놓고 인덱스 기준으로 '적용됨'을 찍으면 나머지 파일은 원본인데 라벨만
+// 적용됨이 되는 거짓 표시(+거짓 시그니처 고착)가 났다 — 커버 안 되면 마킹 금지.
+async function verifyPrefixRestoreCoverage(start, restoredExcelIds) {
+  if (!(restoredExcelIds instanceof Set)) return false;
+  try {
+    const prefixFileIds = new Set();
+    (state.pipeline || []).slice(0, start).forEach(s => {
+      if (!s || !s.code || !isStepEnabled(s)) return;
+      const fid = inferPipelineStepTargetFileId(s);
+      if (fid) prefixFileIds.add(fid);
+      try { crossWriteDestinationFileIds(s.code).forEach(f => prefixFileIds.add(f)); } catch (_) {}
+      try { crossOutputFileIdsReferencedInCode(s.code).forEach(f => prefixFileIds.add(f)); } catch (_) {}
+    });
+    for (const fid of prefixFileIds) {
+      let exId = null;
+      try { exId = await excelIdForPipelineFileId(fid); } catch (_) { exId = null; }
+      if (!exId) continue;               // 라이브 세션이 없는 파일은 화면 불일치 자체가 없음
+      if (!restoredExcelIds.has(exId)) return false;
+    }
+    return true;
+  } catch (_) {
+    return false;
+  }
 }
 
 async function restorePipelineToCheckpointAndHold(startIdx, beforeSteps, options = {}) {
-  const ok = await restorePipelineCheckpointForSuffix(startIdx, beforeSteps, options);
-  if (!ok) return false;
   const start = Math.max(0, Number(startIdx) | 0);
+  const liveUntouched = options.failState && options.failState.liveUntouched === true;
+  const failSnaps = options.failState && Array.isArray(options.failState.failStateSnapshots)
+    ? options.failState.failStateSnapshots.filter(s => s && s.excelId && s.downloadId)
+    : [];
+  let restoredExcelIds = null;
+  if (failSnaps.length) {
+    // [적용됨-미반영 수정] 백엔드가 실패 '시점'의 관여 파일 전체 스냅샷을 동봉 — 라이브 세션 전부를
+    // 그 상태(=마지막 완료 스텝까지 반영본)로 복원한다. 다파일/교차파일 스킬에서도 'Step1~N-1
+    // 적용됨' 표시가 모든 파일에서 실제 라이브와 일치하게 된다.
+    restoredExcelIds = new Set();
+    let okAll = true;
+    for (const snap of failSnaps) {
+      const ok = await restoreLastStepPreApplySnapshot(
+        { _preApplySnapshot: { resultId: snap.downloadId, excelId: snap.excelId } },
+        { message: options.message || "실패 직전 상태로 되돌리는 중..." });
+      if (ok) restoredExcelIds.add(snap.excelId);
+      else okAll = false;
+    }
+    if (!okAll && liveUntouched) {
+      if (typeof invalidateLivePipelineApplied === "function") { try { invalidateLivePipelineApplied(); } catch (_) {} }
+      return false;
+    }
+  } else {
+    const res = await restorePipelineCheckpointForSuffix(startIdx, beforeSteps, options);
+    if (!res) return false;
+    restoredExcelIds = res instanceof Set ? res : new Set();
+  }
+  if (liveUntouched) {
+    // bg 전체실행 실패(라이브 전 파일 무손상) 컨텍스트: prefix 파일 전부가 복원됐을 때만 '적용됨' 마킹.
+    // (토글/삭제/이어실행 등 라이브가 이미 적용 상태인 편집 컨텍스트는 기존 동작 유지 — 이 검증 미적용.)
+    const covered = await verifyPrefixRestoreCoverage(start, restoredExcelIds);
+    if (!covered) {
+      if (typeof invalidateLivePipelineApplied === "function") { try { invalidateLivePipelineApplied(); } catch (_) {} }
+      return false;
+    }
+  }
   markPipelinePendingFromIndex(start, { label: options.pendingLabel || "보류" });
   noteLivePipelineApplied((state.pipeline || []).slice(0, start));
   if (typeof toast === "function") {
@@ -4480,6 +4556,9 @@ async function runPipelineWithAutoRepair(options = {}) {
             message: `Step ${stepIdx + 1} 직전 상태로 되돌리는 중...`,
             pendingLabel: "오류 후 보류",
             toast: `Step ${stepIdx + 1} 직전 상태로 복구했습니다. 실패한 단계부터 보류 상태입니다.`,
+            // [적용됨-미반영 수정] bg 전체실행 실패(라이브 무손상)면 백엔드의 전-파일 실패시점
+            // 스냅샷으로 복원하고, prefix 파일 커버리지가 검증될 때만 '적용됨'을 찍는다.
+            failState: { ...info, liveUntouched: !!(err && err._liveUntouched) },
           });
           if (restoredToCheckpoint && err && typeof err === "object") {
             err._stepInfo = {
