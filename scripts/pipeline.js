@@ -4393,7 +4393,12 @@ async function runPipelineWithAutoRepair(options = {}) {
       }
       const step = state.pipeline[stepIdx];
       let restoredToCheckpoint = false;
-      if (step && pipelineStepLiveLanguage(step)) {
+      // [SBAGENT-198] 실행기 headless 전체실행(파일출력)은 라이브를 건드리지 않으므로 실패 시 체크포인트
+      // 복원이 불필요하다. 복원 경로(/api/excel/replace)는 headless 가드 없이 백엔드가 app.Visible=True 로
+      // excel_open_<hash> 작업사본 창을 화면에 띄우고, 무변형 라이브 세션을 격리 실행 중간 스냅샷으로
+      // 교체까지 하므로 실행기에서는 건너뛴다(에러 보고/복구 UI 는 그대로 동작).
+      const _runnerHeadlessNow = typeof excelMirror !== "undefined" && excelMirror && !!excelMirror.runnerHeadless;
+      if (!_runnerHeadlessNow && step && pipelineStepLiveLanguage(step)) {
         try {
           restoredToCheckpoint = await restorePipelineToCheckpointAndHold(stepIdx, state.pipeline, {
             message: `Step ${stepIdx + 1} 직전 상태로 되돌리는 중...`,

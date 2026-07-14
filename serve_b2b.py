@@ -742,12 +742,16 @@ def _cleanup_excel_sessions_impl():
             _force_kill_pid(pid)
 
 
-def _force_restart_excel_sessions_direct():
+def _force_restart_excel_sessions_direct(wait=False):
     """COM 큐를 '우회'하는 응급 복구. 공유 EXCEL.EXE 가 모달/행으로 굳으면 모든 excel_call 이
     타임아웃되고 일반 close-all 조차 같은 큐에 줄을 서서 들어가지 못한다(단일 인스턴스의 단일 장애점).
     여기서는 COM 호출 없이 세션에 저장해 둔 pid 만으로 프로세스를 강제 종료하고 상태를 비운다.
     워커 스레드가 EXCEL_LOCK 을 쥔 채 멈춰 있을 수 있으므로 락은 짧게만 시도하고 실패해도 진행한다
-    (프로세스가 죽으면 굳어 있던 COM 호출도 오류로 풀려난다)."""
+    (프로세스가 죽으면 굳어 있던 COM 호출도 오류로 풀려난다).
+
+    wait=True 는 종료(/api/app/shutdown) 전용: kill 완료까지 이 스레드에서 기다린다.
+    백그라운드 kill 인 채로 응답하면 호스트가 응답을 받자마자 서버를 죽여 kill 스레드가
+    함께 죽고 EXCEL.EXE 고아가 남는 경합이 있다."""
     acquired = False
     try:
         acquired = EXCEL_LOCK.acquire(timeout=2)
@@ -825,7 +829,10 @@ def _force_restart_excel_sessions_direct():
                 except Exception:
                     pass
 
-    threading.Thread(target=_kill_and_cleanup, name="b2b-force-restart-kill", daemon=True).start()
+    if wait:
+        _kill_and_cleanup()
+    else:
+        threading.Thread(target=_kill_and_cleanup, name="b2b-force-restart-kill", daemon=True).start()
     return {"ok": True, "killing": len(pids), "sessions": len(sessions)}
 
 
@@ -1096,6 +1103,33 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
         if self.path == "/api/excel/close-all-async":
             self.send_json({"ok": True})
             threading.Thread(target=cleanup_excel_sessions, name="b2b-excel-close-all", daemon=True).start()
+            return
+        if self.path == "/api/app/shutdown":
+            # [빠른 종료] 종료 버튼은 '초기화'와 같은 강제 경로를 쓴다 — graceful wb.Close 는
+            # 대형 파일에서 건당 수 초 + COM 큐 대기라 창 닫기가 수십 초 굳어 보였다. 세션은
+            # 작업복사본 + SaveChanges:=False 라 강제 kill 로 잃는 데이터가 없다('초기화'와 동일 근거).
+            # wait=True 로 kill 완료 후 응답해야 호스트의 서버 kill 과 경합하지 않는다(고아 방지).
+            # 응답 뒤에는 os._exit 로 즉시 내려간다 — atexit 의 graceful 재정리(cleanup_excel_sessions)가
+            # 이미 죽인 Excel 을 상대로 COM 대기를 다시 시작하는 것을 막는다.
+            try:
+                _force_restart_excel_sessions_direct(wait=True)
+            except Exception:
+                pass
+            try:
+                cleanup_node_worker()
+            except Exception:
+                pass
+            try:
+                cleanup_backend_runtime_files()
+            except Exception:
+                pass
+            self.send_json({"ok": True})
+
+            def _exit_soon():
+                time.sleep(0.5)  # 응답이 소켓으로 전달될 여유
+                os._exit(0)
+
+            threading.Thread(target=_exit_soon, name="b2b-app-shutdown-exit", daemon=True).start()
             return
         if self.path == "/api/excel/force-restart":
             # COM 큐 '우회' 응급 복구(공유 Excel 행/모달 고착 시). excel_call 을 쓰지 않는다.
@@ -10495,14 +10529,18 @@ class PythonComSkillContext:
         """시트 이름만 변경한다(위치·내용 유지). '복사/이동'이 아니라 순수 이름 변경 전용."""
         ws = self._ws(old_name)
         self._tick(1)
+        # Excel 시트명 31자 제한 — 초과분은 자른다(시트 '생성' 경로들과 동일 정책).
+        # 실행기 매핑이 rename 목적지 리터럴을 긴 실제 시트명으로 치환해도 0x800A03EC 로 죽지 않고,
+        # 이후 긴 이름 조회는 _ws 의 31자-절단 폴백이 같은 시트를 찾아준다.
+        eff_new = str(new_name)[:31]
         names = _excel_collection_names(self._wb.Worksheets)
-        if str(new_name) != str(old_name) and str(new_name) in names:
-            raise PythonComSkillError(f"시트 '{new_name}' 이 이미 있습니다. 다른 이름을 쓰세요.")
+        if eff_new != str(old_name) and eff_new in names:
+            raise PythonComSkillError(f"시트 '{eff_new}' 이 이미 있습니다. 다른 이름을 쓰세요.")
         try:
-            ws.Name = str(new_name)
+            ws.Name = eff_new
         except Exception as e:
             raise PythonComSkillError(f"시트 이름 변경 실패: {e}")
-        self._shared["structural"].append(f"rename_sheet:{old_name}->{new_name}")
+        self._shared["structural"].append(f"rename_sheet:{old_name}->{eff_new}")
         return True
 
     def delete_sheet(self, name):

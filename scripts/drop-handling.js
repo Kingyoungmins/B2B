@@ -588,6 +588,41 @@ function runnerExtractGeneratedSheetsFromCode(code) {
     while ((mm = renameRe.exec(src))) runnerAddGeneratedSheet(generated, book, mm[1]);
   });
 
+  // [SBAGENT-198] Python '변수 인자' 해석 — `new_name = "sheet1"` 처럼 단독 대입한 리터럴 변수를
+  // rename_sheet/add_sheet 류에 넘기는 패턴도 생성시트로 인식한다(VBA vbaLiteralVars 와 동일 원리).
+  // 위 정규식들은 인라인 리터럴만 잡아, `book.rename_sheet(old_name, new_name)` 변수 호출이 사각지대였다
+  // → "sheet1" 이 생성시트로 등록되지 않아 매핑 요구로 남고, 실행기 매핑이 rename '목적지' 리터럴까지
+  //   실제 시트명(31자 초과)으로 치환해 rename 이 0x800A03EC 로 터졌다(첫 시트→sheet1 스킬 회귀).
+  const pyLiteralVars = new Map();
+  const pyAssignLine = /^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(["'])([^"'\r\n]+)\2\s*(?:#.*)?$/;
+  for (const line of src.split(/\r?\n/)) {
+    const av = pyAssignLine.exec(line);
+    if (av) pyLiteralVars.set(av[1], av[3]);
+  }
+  const resolvePyName = expr => {
+    const s = String(expr || "").trim();
+    const lit = /^(["'])([^"']+)\1$/.exec(s);
+    if (lit) return lit[2];
+    return /^[A-Za-z_][A-Za-z0-9_]*$/.test(s) ? (pyLiteralVars.get(s) || "") : "";
+  };
+  const receiverBook = recv => {
+    const r = String(recv || "").trim();
+    const viaBook = /^ctx\s*\.\s*book\(\s*["']([^"']+)["']\s*\)$/.exec(r);
+    if (viaBook) return viaBook[1];
+    if (r === "ctx") return "";
+    return pyVars.get(r) || "";
+  };
+  const anyRename = /((?:ctx\s*\.\s*book\(\s*["'][^"']+["']\s*\))|[A-Za-z_][A-Za-z0-9_]*)\s*\.\s*rename_sheet\(\s*[^,()\r\n]+?\s*,\s*(?:new_name\s*=\s*)?((["'])[^"']*\3|[A-Za-z_][A-Za-z0-9_]*)\s*[),]/g;
+  while ((m = anyRename.exec(src))) {
+    const name = resolvePyName(m[2]);
+    if (name) runnerAddGeneratedSheet(generated, receiverBook(m[1]), name);
+  }
+  const anyAddVar = /((?:ctx\s*\.\s*book\(\s*["'][^"']+["']\s*\))|[A-Za-z_][A-Za-z0-9_]*)\s*\.\s*(?:add_sheet|create_sheet|ensure_sheet)\(\s*(?:(?:sheet|name)\s*=\s*)?([A-Za-z_][A-Za-z0-9_]*)\s*[,)]/g;
+  while ((m = anyAddVar.exec(src))) {
+    const name = resolvePyName(m[2]);
+    if (name) runnerAddGeneratedSheet(generated, receiverBook(m[1]), name);
+  }
+
   // [교차파일 복사] ctx.copy_sheet("소스시트", dst_book="대상파일"[, new_name="Y"]) 는 대상파일에 그 시트를
   // '새로 만든다'(예: 원본→KG모빌리티). 대상파일 입장에선 업로드해야 할 기존 시트가 아니라 생성 시트다.
   // (ctx.copy_sheet / ctx.book("소스").copy_sheet 둘 다 커버. 파일명에 괄호가 있어도 안전하게 근처 창에서 추출.)
