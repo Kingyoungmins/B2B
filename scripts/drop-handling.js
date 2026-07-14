@@ -695,6 +695,27 @@ function runnerAddPairedCodeRequirements(map, code, shouldSkip) {
       runnerAddRequirement(map, m[1], m[2], "vba-pair");
     }
   }
+
+  // [복붙 캡처] ctx.paste_copied('소스시트','범위','대상시트','셀', src_book='A', dst_book='B') —
+  // 소스/대상 시트도 그 파일의 '필요 시트'다. 이걸 안 뽑으면 복붙 스킬 파일이 '시트 자동'으로만 떠서
+  // 스킬이 실제로 어떤 시트를 쓰는지(좌측)도, 다른 달 파일에서 어떤 시트로 바꿀지(우측)도 안 보였다.
+  const pasteRe = /\bpaste_copied\s*\(/g;
+  let pc;
+  while ((pc = pasteRe.exec(src))) {
+    const near = src.slice(pc.index, pc.index + 500);
+    const argM = /paste_copied\s*\(\s*(["'])([^"']+)\1\s*,\s*(["'])[^"']*\3\s*,\s*(["'])([^"']+)\4/.exec(near);
+    if (!argM) continue;
+    const srcSheet = argM[2];
+    const dstSheet = argM[5];
+    const srcBookM = /src_book\s*=\s*["']([^"']+)["']/.exec(near);
+    const dstBookM = /dst_book\s*=\s*["']([^"']+)["']/.exec(near);
+    if (srcBookM && srcSheet && !runnerLooksLikeA1Address(srcSheet) && !(shouldSkip && shouldSkip(srcBookM[1], srcSheet))) {
+      runnerAddRequirement(map, srcBookM[1], srcSheet, "paste-src");
+    }
+    if (dstBookM && dstSheet && !runnerLooksLikeA1Address(dstSheet) && !(shouldSkip && shouldSkip(dstBookM[1], dstSheet))) {
+      runnerAddRequirement(map, dstBookM[1], dstSheet, "paste-dst");
+    }
+  }
 }
 
 // 코드에서 '어떤 시트가 어떤 워크북 소유인지' (book,sheet) 쌍을 뽑는다(교차파일 오귀속 방지 + 자기 시트 회수).
@@ -1030,11 +1051,22 @@ function runnerRenderMappingPanel() {
         ).join("")
       : `<span class="runner-mapping-sheet-chip">시트 자동</span>`;
     // 오른쪽: 각 시트마다 [요청 시트 칩] ↔ [실제 파일의 시트 드롭다운]. 자동 해결된 시트는 드롭다운이 미리 선택됨.
-    const sheetMaps = sheetMembers.map(m => {
-      const opts = [`<option value="">시트 선택</option>`].concat(sheetsInFile.map(s =>
-        `<option value="${escapeHtml(s)}" ${runnerMappingNorm(m.sheet) === runnerMappingNorm(s) ? "selected" : ""}>${escapeHtml(s)}</option>`
+    // '시트 자동' 그룹(명시 시트 요구 없음)에도 페어를 렌더한다 — 좌측 칩은 '시트 자동',
+    // 우측 드롭다운은 실제로 쓰일 시트(단일 시트면 그 시트가 미리 선택)를 보여주고 직접 바꿀 수 있다.
+    const pairMembers = sheetMembers.length ? sheetMembers : g.members.slice(0, 1);
+    const sheetMaps = pairMembers.map(m => {
+      const isAuto = !m.req.sheet;
+      const opts = [`<option value="">${isAuto ? "시트 자동(첫 시트)" : "시트 선택"}</option>`].concat(sheetsInFile.map(s =>
+        `<option value="${escapeHtml(s)}" ${m.sheet && runnerMappingNorm(m.sheet) === runnerMappingNorm(s) ? "selected" : ""}>${escapeHtml(s)}</option>`
       )).join("");
-      const chipCls = m.sheet ? "ok" : "warn";
+      const chipCls = isAuto ? "" : (m.sheet ? "ok" : "warn");
+      if (isAuto) {
+        return `<div class="runner-mapping-sheet-map">
+            <span class="runner-mapping-sheet-chip" title="스킬이 시트를 이름으로 지정하지 않아 자동(첫/유일 시트)으로 처리합니다. 드롭다운에서 직접 지정할 수 있습니다.">시트 자동</span>
+            <span class="runner-mapping-sheet-link">↔</span>
+            <select class="runner-mapping-select runner-map-sheet2" data-mi="${g.members.indexOf(m)}" data-gidx="${gidx}" ${g.fileItem ? "" : "disabled"}>${opts}</select>
+          </div>`;
+      }
       // data-key 에 req.key(널 문자   구분자 포함)를 넣으면 HTML 속성에서 널이 U+FFFD 로 바뀌어
       // 핸들러의 키가 실제 키와 안 맞았다 → 선택이 저장돼도 반영 안 됨(클릭은 되는데 선택 안 되는 증상).
       // 멤버 인덱스(data-mi)로만 넘기고, 실제 키는 핸들러에서 g.members[mi].req.key 로 직접 얻는다.
