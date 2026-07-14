@@ -29,7 +29,7 @@
     }
   } catch (_) {}
 
-  var DOUBLE_MS = 400;      // 두 눌림이 이 시간 안이면 더블클릭
+  var DOUBLE_MS = 500;      // 두 눌림이 이 시간 안이면 더블클릭(Windows 기본 더블클릭 시간)
   var SUPPRESS_MS = 1200;   // 눌림 후 이 시간 안에 오는 '진짜 click' 은 중복으로 보고 삼킴
   var state = { enabled: true, synthCount: 0, dblCount: 0, swallowed: 0, lastSynthAt: 0 };
 
