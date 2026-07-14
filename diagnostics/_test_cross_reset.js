@@ -27,6 +27,7 @@ const needed = [
   "pipelineStepWritesCrossFile",
   "pipelineFileIdByWorkbookName",
   "pipelineKnownFiles",
+  "pipelineStableWorkbookKey",   // pipelineFileIdByWorkbookName 4단계(안정키) 의존
 ];
 const sandbox = {
   console,
@@ -42,6 +43,11 @@ const sandbox = {
   },
 };
 vm.createContext(sandbox);
+// 안정키 토큰 상수(4단계 매칭 의존) 먼저 로드
+{
+  const cs = src.indexOf("const PIPELINE_VOLATILE_NAME_TOKENS");
+  vm.runInContext(src.slice(cs, src.indexOf("];", cs) + 2), sandbox);
+}
 needed.forEach(fn => vm.runInContext(extract(fn), sandbox));
 
 // 사용자의 실제 스킬 코드

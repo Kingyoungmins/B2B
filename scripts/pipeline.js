@@ -353,6 +353,31 @@ function pipelineWorkbookNameKey(value, options = {}) {
   return text;
 }
 
+// [\uC2A4\uD0AC \uC218\uC815 \uC7AC\uBC14\uC778\uB529] '\uAC19\uC740 \uD15C\uD50C\uB9BF, \uB2E4\uB978 \uC6D4/\uB0A0\uC9DC/\uBC84\uC804' \uD30C\uC77C\uBA85\uC744 \uAC19\uAC8C \uBCF4\uB294 \uC548\uC815 \uD0A4 \u2014
+// \uBC31\uC5D4\uB4DC serve_b2b.py \uC758 _VOLATILE_NAME_TOKENS/_stable_workbook_key \uC640 \uBC18\uB4DC\uC2DC \uB3D9\uC77C \uADDC\uCE59 \uC720\uC9C0(\uBE44\uB300\uCE6D\uC774 \uACE7 \uBC84\uADF8).
+// 6\uC6D4(2606) \uD30C\uC77C\uB85C \uC800\uC7A5\uD55C \uC2A4\uD0AC\uC744 7\uC6D4(2607) \uD30C\uC77C\uB9CC \uC62C\uB824 '\uC218\uC815'\uD558\uBA74, \uAE30\uC874 3\uB2E8(\uC815\uD655/\uC815\uADDC\uD654/\uC5B4\uAC04) \uB9E4\uCE6D\uC774
+// \uC804\uBD80 \uC2E4\uD328\uD574 \uB300\uC0C1\uC774 \uD604\uC7AC \uD0ED\uC73C\uB85C \uD3F4\uBC31\uB410\uACE0, \uB2E4\uD30C\uC77C \uC2A4\uD0AC\uC740 \uACA9\uB9AC \uC2E4\uD589\uC5D0 \uB098\uBA38\uC9C0 \uD30C\uC77C\uC774 \uC544\uC608 \uC548 \uC5F4\uB824
+// "\uC6CC\uD06C\uBD81\uC774 \uC5F4\uB824 \uC788\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4"\uB85C \uD130\uC84C\uB2E4(\uD55C\uC804 Step11\u00B72606\u21922607 \uC81C\uBCF4\uC758 \uACF5\uD1B5 \uBFCC\uB9AC).
+const PIPELINE_VOLATILE_NAME_TOKENS = [
+  [/\d{4}\s*[-_.]?\s*\d{1,2}\s*[-_.]?\s*\d{1,2}\s*\uC77C?/g, " "],   // 2026-03-01 / 20260301
+  [/\d{2,4}\s*\uB144/g, " "],                                          // 2026\uB144 / 26\uB144
+  [/\d{1,2}\s*\uC6D4/g, " "],                                          // 3\uC6D4 / 03\uC6D4
+  [/\d{1,2}\s*\uBD84\uAE30/g, " "],                                        // 1\uBD84\uAE30
+  [/(?<![A-Za-z0-9])v?\d+(?:\.\d+)+/gi, " "],                      // \uBC84\uC804 1.2 / v1.2.3
+  [/(?:^|(?<=[\s_\-]))\d{1,3}(?=\s*[.\s_\-])/g, " "],              // \uC55E\uBA38\uB9AC \uC21C\uBC88 "03." "05."
+  [/(?<!\d)\d{6,8}(?!\d)/g, " "],                                  // YYMMDD/YYYYMMDD \uB958
+  [/\(\s*\d{1,3}\s*\)\s*$/g, " "],                                 // \uC911\uBCF5 \uB2E4\uC6B4\uB85C\uB4DC "(2)"
+  [/[-_\s]*(?:\uBCF5\uC0AC\uBCF8|copy)\s*(?:\(\s*\d{1,3}\s*\))?\s*$/gi, " "],  // "- \uBCF5\uC0AC\uBCF8"
+];
+function pipelineStableWorkbookKey(value) {
+  let s = pipelineDecodeWorkbookName(value).trim();
+  s = s.replace(/\.[^.]+$/, "");                                                   // \uD655\uC7A5\uC790 \uC81C\uAC70
+  s = s.replace(/^(?:[0-9a-f]{12,}|excel_open_[0-9a-f]{12,}|live_reset_[0-9a-f]{12,})[_-]+/i, ""); // \uC0DD\uC131 \uC811\uB450 \uD574\uC2DC
+  s = s.toLowerCase();
+  for (const [rx, rep] of PIPELINE_VOLATILE_NAME_TOKENS) s = s.replace(rx, rep);
+  return s.replace(/[\s_\-().\[\]]+/g, "");
+}
+
 function pipelineKnownFiles() {
   const files = [];
   const seen = new Set();
@@ -399,9 +424,17 @@ function pipelineFileIdByWorkbookName(name) {
     pipelineWorkbookNameKey(item.displayName) === key));
   if (normalized) return normalized;
   const stem = pipelineWorkbookNameKey(wanted, { stem: true });
-  return pickUnique(files.filter(item =>
+  const byStem = pickUnique(files.filter(item =>
     pipelineWorkbookNameKey(item.name, { stem: true }) === stem ||
     pipelineWorkbookNameKey(item.displayName, { stem: true }) === stem));
+  if (byStem) return byStem;
+  // [스킬 수정 재바인딩] 4단계: 월·날짜·버전 무시 안정키 — '유일' 일치일 때만(모호하면 null 유지).
+  // 백엔드 _match_workbook_by_stable_key 와 동일 가드: 키가 너무 짧으면(<4) 매칭 금지.
+  const stable = pipelineStableWorkbookKey(wanted);
+  if (!stable || stable.length < 4) return null;
+  return pickUnique(files.filter(item =>
+    pipelineStableWorkbookKey(item.name) === stable ||
+    pipelineStableWorkbookKey(item.displayName) === stable));
 }
 
 function pipelineFileIdsBySheetName(sheetName) {
