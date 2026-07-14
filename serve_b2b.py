@@ -6023,6 +6023,10 @@ _VOLATILE_NAME_TOKENS = [
     (re.compile(r"(?<![A-Za-z0-9])v?\d+(?:\.\d+)+", re.I), " "),               # 버전 1.2 / v1.2.3
     (re.compile(r"(?:^|(?<=[\s_\-]))\d{1,3}(?=\s*[.\s_\-])"), " "),            # 앞머리 순번 "03." "05."
     (re.compile(r"(?<!\d)\d{6,8}(?!\d)"), " "),                                # YYMMDD/YYYYMMDD 류
+    # 브라우저/윈도우 중복 다운로드 접미사 — "파일 (2).xlsx", "파일 - 복사본.xlsx".
+    # 괄호 자체는 뒤 정규화가 지우지만 안의 숫자가 키에 남아 매칭이 깨졌다(한전 청구세부내역 재다운로드 케이스).
+    (re.compile(r"\(\s*\d{1,3}\s*\)\s*$"), " "),
+    (re.compile(r"[-_\s]*(?:복사본|copy)\s*(?:\(\s*\d{1,3}\s*\))?\s*$", re.I), " "),
 ]
 
 
@@ -11173,8 +11177,20 @@ class PythonComSkillContext:
             except Exception:
                 pass
         if target is None:
+            # [지원성] 어떤 파일이 열려 있는지 함께 알려줘야 이름 불일치(중복다운로드 접미사·본부별
+            # 파일명 차이 등)를 사용자가/지원팀이 바로 식별할 수 있다.
+            open_names = []
+            try:
+                open_names = [str(wb.Name) for wb in self._app.Workbooks]
+            except Exception:
+                pass
+            hint = ""
+            if open_names:
+                shown = ", ".join(f"'{n}'" for n in open_names[:6])
+                more = f" 외 {len(open_names) - 6}개" if len(open_names) > 6 else ""
+                hint = f" 현재 열린 파일: {shown}{more}."
             raise PythonComSkillError(
-                f"워크북 '{workbook_name}' 이 열려 있지 않습니다. 업로드된 파일명을 그대로 쓰세요."
+                f"워크북 '{workbook_name}' 이 열려 있지 않습니다. 업로드된 파일명을 그대로 쓰세요.{hint}"
             )
         sub = PythonComSkillContext(self._app, target, self._session, _shared=self._shared)
         self._shared["books"][key] = sub
