@@ -1,4 +1,4 @@
-# exe(CArchive)에서 scripts/debug-panel.js 를 추출해 클릭진단 마커가 들어갔는지 확인.
+# exe(CArchive)에서 프런트 스크립트를 추출해 최신 변경이 들어갔는지 확인.
 import os
 from PyInstaller.archive.readers import CArchiveReader
 
@@ -10,19 +10,29 @@ for e in r.toc:
     nm = e[-1] if isinstance(e, (list, tuple)) else e
     names.append(str(nm))
 
-cands = [n for n in names if "debug-panel" in n]
-print("debug-panel entries:", cands)
+CHECKS = {
+    "scripts\\click-recovery.js": ["__b2bClickRecovery", "clickrecovery=0", "합성"],
+    "scripts\\debug-panel.js": ["__b2bSynthetic", "복구", "클릭 진단"],
+    "index.html": ["click-recovery.js"],
+}
 
-target = cands[0] if cands else None
-if not target:
-    print("scripts js sample:", [n for n in names if n.endswith(".js")][:8])
-else:
+fails = 0
+for target, markers in CHECKS.items():
+    if target not in names:
+        print("MISS 엔트리 없음:", target)
+        fails += 1
+        continue
     data = r.extract(target)
     if isinstance(data, tuple):
         data = data[1] if len(data) > 1 else data[0]
     if isinstance(data, str):
         data = data.encode("utf-8", "ignore")
     txt = data.decode("utf-8", "ignore")
-    for m in ["__b2bClickProbe", "NOCLICK-정지", "클릭 진단"]:
-        print(("  OK  " if m in txt else "MISS ") + m)
-    print("len =", len(txt))
+    print("[" + target + "] len=" + str(len(txt)))
+    for m in markers:
+        ok = m in txt
+        print(("  OK  " if ok else "  MISS ") + m)
+        if not ok:
+            fails += 1
+
+print("\n=== " + ("ALL BUNDLED" if fails == 0 else str(fails) + " MISSING") + " ===")
