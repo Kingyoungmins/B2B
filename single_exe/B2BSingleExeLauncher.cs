@@ -9,9 +9,9 @@ namespace B2BSingleExe
 {
     internal static class Program
     {
-        private const string Version = "0.6.0";
+        private const string Version = "0.6.1";
         private const string ResourceName = "payload.zip";
-        private const string MainExeName = "B2B_ver0.6.0.exe";
+        private const string MainExeName = "B2B_ver0.6.1.exe";
 
         [STAThread]
         private static int Main(string[] args)
@@ -24,7 +24,7 @@ namespace B2BSingleExe
 
                 string extractDir = Path.Combine(
                     Path.GetTempPath(),
-                    "B2B_ver0.6.0_single_" + Process.GetCurrentProcess().Id + "_" + DateTime.UtcNow.Ticks
+                    "B2B_ver0.6.1_single_" + Process.GetCurrentProcess().Id + "_" + DateTime.UtcNow.Ticks
                 );
                 Directory.CreateDirectory(extractDir);
 

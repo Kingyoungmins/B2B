@@ -1,7 +1,7 @@
 # [실측] 값-표 피벗(_pivot_value_table, = ctx.pivot 의 native 실패 시 폴백)의 다중키·다중값 표를 검증.
 # (ctx.pivot 은 이제 기본이 진짜 피벗테이블이라, 값-표 레이아웃은 폴백 메서드로 직접 테스트.)
 import sys
-sys.path.insert(0, r"C:\Users\Admin\Desktop\KGM_git\B2B_ver0.6.0")
+sys.path.insert(0, r"C:\Users\Admin\Desktop\KGM_git\B2B_ver0.6.1")
 import win32com.client as w
 import serve_b2b as S
 

@@ -1,7 +1,7 @@
 # [실측][SBAGENT-198] rename_sheet 31자 초과 이름 — 예전엔 0x800A03EC 로 실패, 이제 31자로 잘라 성공.
 # 이후 '긴 이름' 조회는 _ws 의 31자-절단 폴백이 같은 시트를 찾는지까지 검증.
 import sys
-sys.path.insert(0, r"C:\Users\Admin\Desktop\KGM_git\B2B_ver0.6.0")
+sys.path.insert(0, r"C:\Users\Admin\Desktop\KGM_git\B2B_ver0.6.1")
 import win32com.client as w
 import serve_b2b as S
 

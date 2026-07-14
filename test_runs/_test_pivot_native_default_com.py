@@ -1,6 +1,6 @@
 # [실측] ctx.pivot 기본 동작: 진짜 피벗테이블 우선, native 실패 시 값-표 폴백 (실제 Excel COM).
 import sys
-sys.path.insert(0, r"C:\Users\Admin\Desktop\KGM_git\B2B_ver0.6.0")
+sys.path.insert(0, r"C:\Users\Admin\Desktop\KGM_git\B2B_ver0.6.1")
 import win32com.client as w
 import serve_b2b as S
 

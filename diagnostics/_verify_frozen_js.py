@@ -2,7 +2,7 @@
 import os
 from PyInstaller.archive.readers import CArchiveReader
 
-EXE = os.path.join(os.path.dirname(__file__), "..", "dist", "B2B_ver0.6.0", "B2B_Server.exe")
+EXE = os.path.join(os.path.dirname(__file__), "..", "dist", "B2B_ver0.6.1", "B2B_Server.exe")
 r = CArchiveReader(os.path.abspath(EXE))
 
 names = []

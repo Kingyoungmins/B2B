@@ -2,7 +2,7 @@
 #  ② ctx.first_empty_col: '빈 보조열'을 찾을 때 데이터 옆 합계(=SUM) 열을 건너뛰고 진짜 빈 열을 고르는가 (E-01)
 #  ③ ctx.pivot: 슬래시-별칭 group_by 매칭 + 전화번호 앞자리0(텍스트 키) 보존 (B-05)
 import sys
-sys.path.insert(0, r"C:\Users\Admin\Desktop\KGM_git\B2B_ver0.6.0")
+sys.path.insert(0, r"C:\Users\Admin\Desktop\KGM_git\B2B_ver0.6.1")
 import win32com.client as w
 import serve_b2b as S
 

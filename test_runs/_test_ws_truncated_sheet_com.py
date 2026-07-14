@@ -1,7 +1,7 @@
 # [실측] 긴 파일명 CSV → Excel 시트명 31자 절단. ctx._ws 가 모델이 쓴 풀 stem(>31자)을 실제 시트로
 # 자가치유하는지 실제 Excel COM 으로 검증. (1) CSV 단일시트, (2) 다중시트 절단매칭, (3) 모호하면 에러.
 import sys, os, tempfile
-sys.path.insert(0, r"C:\Users\Admin\Desktop\KGM_git\B2B_ver0.6.0")
+sys.path.insert(0, r"C:\Users\Admin\Desktop\KGM_git\B2B_ver0.6.1")
 import win32com.client as w
 import serve_b2b as S
 
