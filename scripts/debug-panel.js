@@ -174,6 +174,7 @@
     renderClick();
   }
   function clkClick(e) {
+    if (e && e.__b2bSynthetic) { renderClick(); return; } // 복구망이 만든 클릭은 실제로 세지 않음(진단 정직성)
     clk.click++;
     if (clkCur && !clkCur.done) { clkCur.click = true; clkCur.dtClick = Math.round(e.timeStamp - clkCur.t); }
     renderClick();
@@ -189,10 +190,11 @@
   function renderClick() {
     if (!clickBox || (panel && panel.hidden)) return; // 숨김 상태면 카운트만, DOM 갱신 skip
     const recent = clkRecent.slice().reverse().map(l => clkEsc(l)).join("<br>");
+    const rec = (window.__b2bClickRecovery && window.__b2bClickRecovery.synthCount) || 0;
     clickBox.innerHTML =
       `<div style="font-size:11px;line-height:1.55">` +
       `<div><strong>클릭 진단</strong> · down ${clk.down} · up ${clk.up} · click ${clk.click} · dbl ${clk.dbl}</div>` +
-      `<div>OK <b>${clk.ok}</b> | 이동 <b>${clk.moved}</b> | 정지 <b>${clk.still}</b> | UP누락 <b>${clk.upMiss}</b> | 타깃≠ <b>${clk.other}</b></div>` +
+      `<div>OK <b>${clk.ok}</b> | 이동 <b>${clk.moved}</b> | 정지 <b>${clk.still}</b> | UP누락 <b>${clk.upMiss}</b> | 타깃≠ <b>${clk.other}</b> · 복구 <b>${rec}</b></div>` +
       `<div style="opacity:.8">focus=${document.hasFocus() ? "Y" : "N"} · active=${clkEsc(clkTag(document.activeElement))}</div>` +
       (recent ? `<div style="margin-top:4px;font-family:Consolas,monospace;opacity:.9">${recent}</div>` : "") +
       `</div>`;
