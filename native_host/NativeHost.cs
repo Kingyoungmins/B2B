@@ -1418,14 +1418,17 @@ namespace B2BNativeHost
                 HideAllExcelMirrors();
                 if (!string.IsNullOrEmpty(appUrl))
                 {
-                    string closeUrl = "http://127.0.0.1:" + port + "/api/excel/close-all";
+                    // [빠른 종료] graceful close-all(wb.Close, 대형 파일 건당 수 초 + COM 큐 대기,
+                    // 최악 35초)은 종료 버튼이 수십 초 굳어 보이는 원인이었다. '초기화'와 같은 강제
+                    // 정리 엔드포인트로 교체 — 서버가 앱 소유 EXCEL.EXE 를 pid 로 즉시 kill 하고
+                    // (작업복사본 + SaveChanges:=False 라 데이터 손실 없음) kill 완료 후에 응답하므로
+                    // '동기로 기다려야 고아가 안 남는다'는 기존 불변식은 그대로 유지된다.
+                    // 타임아웃은 taskkill(프로세스당 최대 3초) 여러 개 여유로 15초.
+                    string closeUrl = "http://127.0.0.1:" + port + "/api/app/shutdown";
                     HttpWebRequest req = (HttpWebRequest)WebRequest.Create(closeUrl);
                     req.Method = "POST";
-                    // 종료 시 close-all 은 반드시 동기로 기다린다(비동기화하면 서버 kill 과 경합해
-                    // 공유 EXCEL.EXE 가 고아로 남는다). 서버 내부 Excel 정리 타임아웃(20s)보다
-                    // 짧으면 정리 중인 서버를 먼저 죽여 Excel 이 남을 수 있으므로 여유를 둔다.
-                    req.Timeout = 35000;
-                    req.ReadWriteTimeout = 35000;
+                    req.Timeout = 15000;
+                    req.ReadWriteTimeout = 15000;
                     byte[] body = Encoding.UTF8.GetBytes("{}");
                     req.ContentType = "application/json";
                     req.ContentLength = body.Length;
@@ -1434,12 +1437,12 @@ namespace B2BNativeHost
                         stream.Write(body, 0, body.Length);
                     }
                     using (req.GetResponse()) { }
-                    Program.Log("Excel close-all completed");
+                    Program.Log("App shutdown endpoint completed");
                 }
             }
             catch (Exception ex)
             {
-                Program.Log("Excel close-all failed: " + ex.Message);
+                Program.Log("App shutdown failed: " + ex.Message);
                 TryPostShutdownJson("/api/excel/force-restart", 8000);
             }
             HideExcelChildren();
