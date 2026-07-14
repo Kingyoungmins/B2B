@@ -750,6 +750,32 @@ function crossOutputFileIdsReferencedInCode(code) {
   return ids;
 }
 
+// 교차파일 '쓰기 대상' 파일 id — ctx.copy_sheet(..., dst_book="X.xlsx") / paste_copied(..., dst_book="X.xlsx").
+// crossOutputFileIdsReferencedInCode 는 '출력 템플릿'만 잡지만, 시트를 '입력 파일'로 복사하는 경우엔
+// 그 입력 파일도 리셋 대상이어야 한다(안 그러면 스텝 삭제 후에도 붙여넣은 시트가 안 지워진다).
+// pipelineFileIdByWorkbookName 으로 입력·출력 모두에서 이름을 fileId 로 해석한다.
+function crossWriteDestinationFileIds(code) {
+  const text = String(code || "");
+  if (!text) return [];
+  const ids = [];
+  const seen = new Set();
+  const addName = name => {
+    const fid = typeof pipelineFileIdByWorkbookName === "function" ? pipelineFileIdByWorkbookName(name) : null;
+    if (fid && !seen.has(fid)) { seen.add(fid); ids.push(fid); }
+  };
+  let m;
+  const reDst = /dst_book\s*=\s*["']([^"']+)["']/gi;
+  while ((m = reDst.exec(text))) addName(m[1]);
+  return ids;
+}
+
+// 이 스텝이 '다른 파일에 쓰는' 교차파일 스텝인가(dst_book 대상이 알려진 파일로 해석되면).
+// 빠른(마지막 스텝) 삭제 스냅샷 복구는 대상 파일만 되돌려 교차 목적지를 놓치므로, 이런 스텝은
+// 전체 reconcile(목적지까지 리셋)로 보낸다.
+function pipelineStepWritesCrossFile(step) {
+  return crossWriteDestinationFileIds((step && step.code) || "").length > 0;
+}
+
 
 function preferredVbaRunFileId() {
   if (state.currentFileId && typeof getFile === "function" && getFile(state.currentFileId)) {
@@ -2850,7 +2876,8 @@ function renderPipeline() {
           return;
         }
       }
-      if (!fastLast && removedWasApplied && isStepEnabled(removedStep) && pipelineStepLiveLanguage(removedStep)) {
+      if (!fastLast && removedWasApplied && isStepEnabled(removedStep) && pipelineStepLiveLanguage(removedStep)
+          && !pipelineStepWritesCrossFile(removedStep)) {
         try {
           if (await restorePipelineToCheckpointAndHold(currentIdx, beforeDeleteSnapshot, {
             message: "선택한 단계 직전 상태로 되돌리는 중...",
@@ -2958,6 +2985,9 @@ function lastLiveStepIndex(steps = state.pipeline) {
 
 function canFastEditLastPipelineStep(step, idx, beforeSteps) {
   if (!step || !step.code || !pipelineStepLiveLanguage(step)) return false;
+  // 교차파일 쓰기 스텝(dst_book)은 빠른 스냅샷 복구가 대상 파일만 되돌려 교차 목적지를 놓친다.
+  // 전체 reconcile 로 보내 목적지까지 pristine 으로 리셋되게 한다.
+  if (pipelineStepWritesCrossFile(step)) return false;
   const list = beforeSteps || state.pipeline || [];
   if (idx < 0 || idx !== lastLiveStepIndex(list)) return false;
   if (typeof getPipelineRuntimeStatus === "function") {
@@ -3240,7 +3270,11 @@ async function reapplyVbaPipelineToLive(excelId, options = {}) {
   allLiveSteps.forEach(s => {
     addResetTarget(stepTargetFileId(s));
     crossOutputFileIdsReferencedInCode(s.code).forEach(addResetTarget);
+    crossWriteDestinationFileIds(s.code).forEach(addResetTarget); // 교차파일 쓰기 대상(입력 파일 포함)
   });
+  // [교차파일 삭제 원복] 삭제/토글된 스텝의 교차 쓰기 대상 — 코드가 사라져도 그 파일을 pristine 으로
+  // 되돌려야 붙여넣은 시트가 지워진다(호출자가 affectedStep 목적지를 extraResetFileIds 로 넘김).
+  (options.extraResetFileIds || []).forEach(addResetTarget);
   if (!resetFileIds.length && fallbackFileId) addResetTarget(fallbackFileId);
   // [리뷰⑥] 대상 폴백 체인이 전부 비면(세션 강제종료 직후 등) null 이 흘러가 '창을 열지 못해'류의
   // 엉뚱한 에러가 났다 — 원인을 그대로 말하는 에러로 교체.
@@ -3522,7 +3556,18 @@ async function reconcilePipelineSimulationAfterEdit(options = {}) {
       // [#19] 토글/삭제발 재적용에도 취소 토큰을 등록해 '작업 중단' 버튼이 뜨고 동작하게 한다.
       const cancelToken = { cancelled: false };
       window.__activeVbaApply = { token: cancelToken, excelId: liveExcelId, restorePipeline: options.restorePipeline || null };
-      return reapplyVbaPipelineToLive(liveExcelId, { steps: stepsForReconcile, viewSheet: affectedStepViewSheetHint(options.affectedStep) })
+      // [교차파일 삭제 원복] 방금 삭제/편집된 스텝(affectedStep)이 다른 파일에 썼다면(dst_book),
+      // 남은 스텝 코드엔 그 참조가 없어 리셋에서 빠진다. 그 목적지를 명시적으로 리셋 대상에 추가한다.
+      const extraResetFileIds = [];
+      if (options.affectedStep && options.affectedStep.code) {
+        crossWriteDestinationFileIds(options.affectedStep.code).forEach(fid => {
+          if (fid && !extraResetFileIds.includes(fid)) extraResetFileIds.push(fid);
+        });
+        crossOutputFileIdsReferencedInCode(options.affectedStep.code).forEach(fid => {
+          if (fid && !extraResetFileIds.includes(fid)) extraResetFileIds.push(fid);
+        });
+      }
+      return reapplyVbaPipelineToLive(liveExcelId, { steps: stepsForReconcile, viewSheet: affectedStepViewSheetHint(options.affectedStep), extraResetFileIds })
         .then(result => {
           // [P1] 활성창 기본 — 뷰 이동은 '실제 변경된 스텝의 대상 파일'로만(출력으로 무조건 점프 금지).
           try {
