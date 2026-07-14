@@ -1425,13 +1425,38 @@ function restoreVbaExcelAfterError(excelId, options = {}) {
   if (typeof scheduleRestoreActiveExcelMirror === "function") scheduleRestoreActiveExcelMirror(0, restoreOptions);
 }
 
+// [중단 자체 멈춤 수정] 협조적 복귀가 유예 내 안 끝날 때의 강제 중단 — '초기화' 버튼과 동일한
+// 큐-우회 강제 재시작(forceRestartExcelMirrors → /api/excel/force-restart): 앱 소유 EXCEL.EXE
+// pid 를 죽이면 굳어 있던 COM 호출이 RPC 오류로 풀려나고, 세션 재오픈 + 단일 자동재적용기가
+// 상태를 복원한다. 어느 계층이 굳어 있어도 유한 시간 안에 끝난다.
+async function escalateExcelStopToForceRestart() {
+  try {
+    if (typeof forceRestartExcelMirrors === "function") {
+      await forceRestartExcelMirrors("작업이 응답하지 않아 강제 중단합니다 — Excel 세션을 재시작합니다...");
+      return true;
+    }
+  } catch (_) {}
+  try {
+    await fetch("/api/excel/force-restart", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
+    return true;
+  } catch (_) {}
+  return false;
+}
+
 // [#19] 진행 중인 단일 VBA 적용을 취소하고 안전 복귀한다.
 // 서버 매크로는 EXCEL_LOCK 동기 실행이라 즉시 인터럽트가 불가하다(한계). 대신 진행 단계의 결과를
 // 무시(취소 토큰)하고, 원본 리셋 + 남은 enabled 스텝 재적용으로 '이전 정상 상태'로 되돌린다.
 // 실행 중이던 매크로의 부분 변경은 이 재적용이 덮어써서 오류 상태로 남지 않게 한다.
 async function requestExcelApplyCancel() {
   const active = window.__activeVbaApply;
-  if (!active || !active.token || active.token.cancelled) return false;
+  if (!active || !active.token || active.token.cancelled) {
+    // [중단 자체 멈춤 수정] 이미 중단 절차가 도는 중에 또 요청됐다 = 복귀가 굳었다는 신호 → 즉시 강제 중단.
+    if (window.__excelStopInProgress) {
+      await escalateExcelStopToForceRestart();
+      return true;
+    }
+    return false;
+  }
   active.token.cancelled = true;
   toast("작업 중단 요청 — 이전 상태로 되돌리는 중...", "error");
   // 낙관적으로 추가/수정됐던 진행 단계를 파이프라인에서 제거하거나 이전 내용으로 복원.
@@ -1452,15 +1477,33 @@ async function requestExcelApplyCancel() {
   if (typeof refreshRunButton === "function") refreshRunButton();
   const excelId = active.excelId || (typeof vbaTargetExcelId === "function" ? vbaTargetExcelId() : null);
   window.__activeVbaApply = null;
+  window.__excelStopInProgress = true;
+  // [중단 자체 멈춤 수정] 복귀 재적용은 '멈춘 원 작업'과 같은 단일 COM 워커 큐(FIFO)에 줄을 서므로,
+  // 원 작업이 COM 안에서 굳어 있으면 복귀가 영영 시작되지 않는다("작업 중단 중"에서 멈춤).
+  // 유예(10초) 내 복귀가 안 끝나면 강제 재시작으로 승격해 어떤 경우에도 유한 시간 안에 끝낸다.
+  const STOP_GRACE_MS = 10000;
   try {
     if (excelId && typeof reapplyVbaPipelineToLive === "function") {
-      await reapplyVbaPipelineToLive(excelId, { steps: state.pipeline });
+      const restore = reapplyVbaPipelineToLive(excelId, { steps: state.pipeline });
+      const raced = await Promise.race([
+        restore.then(() => "ok", err => ({ err })),
+        new Promise(resolve => setTimeout(() => resolve("timeout"), STOP_GRACE_MS)),
+      ]);
+      if (raced === "timeout") {
+        restore.then(() => {}, () => {});  // 큐가 풀린 뒤 죽은 세션 상대로 늦게 실패해도 조용히 무시
+        await escalateExcelStopToForceRestart();
+        toast("작업을 강제 중단했습니다. Excel 창을 다시 준비하는 중입니다...", "success");
+        return true;
+      }
+      if (raced && raced.err) throw raced.err;
     }
     toast("작업을 중단하고 이전 상태로 되돌렸습니다.", "success");
     return true;
   } catch (err) {
     toast("중단 후 복귀 중 오류: " + ((err && err.message) || err), "error");
     return false;
+  } finally {
+    window.__excelStopInProgress = false;
   }
 }
 

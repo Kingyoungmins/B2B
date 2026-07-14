@@ -766,6 +766,21 @@ def _force_restart_excel_sessions_direct(wait=False):
                 EXCEL_LOCK.release()
             except Exception:
                 pass
+    # [작업 중단 강제화] 진행 중이던 파이프라인 잡을 종료로 마킹 — 강제 재시작 후에도 클라 폴링이
+    # status=running 에 영영 매달리지 않게 한다. 굳었던 실행 스레드는 pid kill 로 COM 오류가 나며
+    # 깨어나 자체 실패 처리를 하지만, 그와 무관하게 폴링부터 즉시 풀어준다(errorInfo.cancelled
+    # 형식은 raise_if_pipeline_cancelled 와 동일 — 프론트는 '사용자 중단'으로 조용히 복귀).
+    try:
+        with PIPELINE_JOBS_LOCK:
+            for _job in PIPELINE_JOBS.values():
+                if _job.get("status") not in ("done", "error"):
+                    _job["cancelRequested"] = True
+                    _job["status"] = "error"
+                    _job["errorInfo"] = {"cancelled": True, "stepIdx": -1,
+                                         "message": "작업이 강제 중단되었습니다(Excel 세션 재시작)."}
+                    _job["updated"] = time.time()
+    except Exception:
+        pass
     global LIVE_EXCEL_APP, PYTHON_SKILL_APP, PYTHON_SKILL_APP_PID, PYTHON_SKILL_APP_LAST_USED
     # COM 프록시 전역을 그냥 None 으로 떨어뜨리면 마지막 참조 해제(Release)가 이 HTTP 스레드에서
     # 일어난다. 행 상태의 STA 워커로 마샬링되는 Release 는 같이 굳을 수 있으므로(초기화가 영영
