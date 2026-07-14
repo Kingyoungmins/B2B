@@ -1,22 +1,24 @@
 /* click-recovery.js
- * 원격(VDI 등)에서 mouseup(뗌) 신호가 유실돼도 클릭이 먹게 하는 안전망.
+ * 원격(VDI 등)에서 mouseup(뗌) 신호가 유실돼도 클릭이 '즉시' 먹게 하는 안전망.
  *
- * 배경: 브라우저는 mousedown + mouseup 을 둘 다 봐야 click 을 만든다. 원격 입력
- *       채널이 mouseup 을 흘리면(진단상 UP누락) 버튼이 안 눌린 것으로 처리된다.
+ * 배경: 브라우저는 mousedown + mouseup 둘 다 봐야 click 을 만든다. 원격 채널이 mouseup 을
+ *       흘리면(진단상 UP누락 ~7%) 버튼이 안 눌린다. 반면 mousedown 은 유실이 거의 없다.
  *
- * 원리: mousedown 이후 실제 mouseup/click 이 안 왔는데, 다음 마우스 이동에서
- *       버튼이 이미 떼진 게 확인되면(=up 유실) 원래 대상에 click 을 합성한다.
- *       pointerup(마우스와 별개 파이프라인)도 보조 경로로 사용한다.
+ * 방식(눌림-즉시): mousedown 이 오면 그 자리에서 바로 click 을 만들어 버튼을 실행한다.
+ *   - 뒤따라오는 '진짜 click'(뗌이 정상일 때 발생)은 삼켜서 중복 실행을 막는다.
+ *   - 더블클릭은 '두 번 연속 눌림'을 감지해 직접 dblclick 을 만들고, 진짜 dblclick 은 삼킨다.
+ *     → 파일탭 전환·단계명 편집 같은 더블클릭 기능이 그대로 동작한다.
+ *   이전 버전처럼 mouseup/pointerup/이동을 '기다리지' 않으므로 지연이 없다.
  *
  * 안전장치:
  *   - 왼쪽 버튼만.
- *   - 실제 mouseup/click 이 오면 즉시 취소(중복 발화 방지).
- *   - down→검출 사이 이동이 크면(드래그) 합성 안 함(리사이저·파일매핑·선택 무영향).
- *   - preventDefault/stopPropagation 절대 호출 안 함.
- *   - 정상 PC 에선 mouseup 이 항상 먼저 도착 → pending 이 즉시 해제되어 발화 안 함(inert).
- *   - 합성 이벤트에 e.__b2bSynthetic=true 표시(진단 카운터가 실제 클릭과 구분).
+ *   - 글자 입력/선택 영역(input[text]·textarea·select·contenteditable)은 건드리지 않음.
+ *   - 키보드(Enter)로 발생하는 click·앱이 코드로 부르는 el.click() 은 삼키지 않음
+ *     (직전 mousedown 이 없으므로 대기목록에 매칭되지 않음).
+ *   - 합성 이벤트엔 e.__b2bSynthetic=true 표시(진단/자기이벤트 구분).
+ *   - preventDefault 는 '중복 진짜 click/dblclick 을 삼킬 때만' 사용.
  *
- * 끄기: URL 에 ?clickrecovery=0  또는  window.__b2bClickRecovery.disable()
+ * 끄기: URL ?clickrecovery=0  또는  window.__b2bClickRecovery.disable()
  */
 (function setupClickRecovery() {
   if (window.__b2bClickRecovery) return;
@@ -27,86 +29,96 @@
     }
   } catch (_) {}
 
-  var SLOP = 8;         // 이 px 초과 이동은 드래그로 보고 합성 안 함
-  var MAX_AGE = 2000;   // 이보다 오래된 pending 은 무시(ms)
-  var POINTER_WAIT = 70; // pointerup 후 실제 up/click 을 기다리는 시간(ms)
-  var pending = null;   // { target, x, y, t }
-  var state = { enabled: true, synthCount: 0, lastSynthAt: 0 };
+  var DOUBLE_MS = 400;      // 두 눌림이 이 시간 안이면 더블클릭
+  var SUPPRESS_MS = 1200;   // 눌림 후 이 시간 안에 오는 '진짜 click' 은 중복으로 보고 삼킴
+  var state = { enabled: true, synthCount: 0, dblCount: 0, swallowed: 0, lastSynthAt: 0 };
+
+  var pendClicks = []; // 삼켜야 할 진짜 click 대기: { t, target }
+  var pendDbls = [];   // 삼켜야 할 진짜 dblclick 대기: { t, target }
+  var lastDown = null; // { t, target } — 더블 감지용
+
+  function isEditable(el) {
+    if (!el || typeof el.closest !== "function") return false;
+    return !!el.closest(
+      "input:not([type=button]):not([type=submit]):not([type=reset]):not([type=checkbox]):not([type=radio])," +
+      "textarea, select, option, [contenteditable=''], [contenteditable=\"true\"], [contenteditable=true]"
+    );
+  }
+  function related(a, b) {
+    if (!a || !b) return false;
+    if (a === b) return true;
+    try { return (a.contains && a.contains(b)) || (b.contains && b.contains(a)); } catch (_) { return false; }
+  }
+  function prune(arr, now) {
+    while (arr.length && now - arr[0].t > SUPPRESS_MS) arr.shift();
+  }
+  function takeMatch(arr, target, now) {
+    prune(arr, now);
+    for (var i = arr.length - 1; i >= 0; i--) {          // 최신 것부터 매칭
+      if (related(arr[i].target, target)) { arr.splice(i, 1); return true; }
+    }
+    return false;
+  }
+  function dispatch(type, target, x, y) {
+    var ev = new MouseEvent(type, {
+      bubbles: true, cancelable: true, view: window,
+      button: 0, buttons: 0, clientX: x, clientY: y, detail: type === "dblclick" ? 2 : 1
+    });
+    ev.__b2bSynthetic = true;
+    target.dispatchEvent(ev);
+  }
 
   function onDown(e) {
     if (e.button !== 0) return;
-    pending = { target: e.target, x: e.clientX, y: e.clientY, t: e.timeStamp };
-  }
-  function onRealUpOrClick(e) {
-    if (e && e.__b2bSynthetic) return; // 우리가 만든 이벤트는 무시
-    pending = null;                    // 실제 뗌/클릭 도착 → 합성 불필요
-  }
-  function synthClick(g) {
-    var target = g.target;
-    if (!target || (target.nodeType === 1 && !document.contains(target))) {
-      target = document.elementFromPoint(g.x, g.y);
-    }
-    if (!target) return false;
-    var opts = {
-      bubbles: true, cancelable: true, view: window,
-      button: 0, buttons: 0, clientX: g.x, clientY: g.y
-    };
-    try {
-      var up = new MouseEvent("mouseup", opts); up.__b2bSynthetic = true;
-      var clk = new MouseEvent("click", opts); clk.__b2bSynthetic = true;
-      target.dispatchEvent(up);
-      target.dispatchEvent(clk);
-    } catch (_) {
-      try { if (typeof target.click === "function") target.click(); } catch (__) { return false; }
-    }
+    var target = e.target;
+    if (!target || isEditable(target)) return;
+    var now = e.timeStamp;
+    var x = e.clientX, y = e.clientY;
+
+    // 눌림 즉시 click 합성 → 버튼 실행. 뒤따르는 진짜 click 은 삼킬 예정.
+    pendClicks.push({ t: now, target: target });
+    dispatch("click", target, x, y);
     state.synthCount++;
-    state.lastSynthAt = g.t;
-    return true;
-  }
-  function tryRecover(g, x, y) {
-    if (!g) return;
-    if (x != null && y != null) {
-      if (Math.abs(x - g.x) > SLOP || Math.abs(y - g.y) > SLOP) return; // 드래그 → 제외
+    state.lastSynthAt = now;
+
+    // 두 번 연속 눌림 → dblclick 합성. 진짜 dblclick 은 삼킬 예정.
+    if (lastDown && now - lastDown.t <= DOUBLE_MS && related(lastDown.target, target)) {
+      pendDbls.push({ t: now, target: target });
+      dispatch("dblclick", target, x, y);
+      state.dblCount++;
+      lastDown = null; // 3연타가 매번 dbl 되지 않도록 초기화
+    } else {
+      lastDown = { t: now, target: target };
     }
-    synthClick(g);
   }
 
-  function onMove(e) {
-    if (!pending) return;
-    if ((e.buttons & 1) !== 0) return;         // 왼쪽 버튼 여전히 눌림 → 대기
-    var g = pending;
-    pending = null;                            // 한 제스처당 1회
-    if (e.timeStamp - g.t > MAX_AGE) return;   // 오래됨 → 무시
-    tryRecover(g, e.clientX, e.clientY);
+  function onRealClick(e) {
+    if (e.__b2bSynthetic) return;           // 우리가 만든 것
+    if (e.button !== 0) return;
+    if (takeMatch(pendClicks, e.target, e.timeStamp)) {
+      e.stopImmediatePropagation();
+      e.preventDefault();
+      state.swallowed++;
+    }
   }
-  function onPointerUp(e) {
-    if (!pending) return;
-    if (e.pointerType && e.pointerType !== "mouse") return;
-    if (typeof e.button === "number" && e.button !== 0) return;
-    var g = pending;
-    // 잠깐 기다렸다가 그 사이 실제 mouseup/click 이 안 오면(=여전히 pending 이 g) 보충
-    setTimeout(function () {
-      if (pending !== g) return;
-      pending = null;
-      if (e.timeStamp - g.t > MAX_AGE) return;
-      tryRecover(g, null, null);               // pointerup 좌표 기준 이동은 down 좌표와 사실상 동일
-    }, POINTER_WAIT);
+  function onRealDbl(e) {
+    if (e.__b2bSynthetic) return;
+    if (takeMatch(pendDbls, e.target, e.timeStamp)) {
+      e.stopImmediatePropagation();
+      e.preventDefault();
+    }
   }
 
   window.addEventListener("mousedown", onDown, true);
-  window.addEventListener("mouseup", onRealUpOrClick, true);
-  window.addEventListener("click", onRealUpOrClick, true);
-  window.addEventListener("mousemove", onMove, true);
-  window.addEventListener("pointerup", onPointerUp, true);
+  window.addEventListener("click", onRealClick, true);
+  window.addEventListener("dblclick", onRealDbl, true);
 
   state.disable = function () {
     state.enabled = false;
     window.removeEventListener("mousedown", onDown, true);
-    window.removeEventListener("mouseup", onRealUpOrClick, true);
-    window.removeEventListener("click", onRealUpOrClick, true);
-    window.removeEventListener("mousemove", onMove, true);
-    window.removeEventListener("pointerup", onPointerUp, true);
-    pending = null;
+    window.removeEventListener("click", onRealClick, true);
+    window.removeEventListener("dblclick", onRealDbl, true);
+    pendClicks = []; pendDbls = []; lastDown = null;
   };
   window.__b2bClickRecovery = state;
 })();

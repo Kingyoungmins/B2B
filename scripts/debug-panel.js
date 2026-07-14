@@ -179,7 +179,7 @@
     if (clkCur && !clkCur.done) { clkCur.click = true; clkCur.dtClick = Math.round(e.timeStamp - clkCur.t); }
     renderClick();
   }
-  function clkDbl() { clk.dbl++; renderClick(); }
+  function clkDbl(e) { if (e && e.__b2bSynthetic) { renderClick(); return; } clk.dbl++; renderClick(); }
   function resetClick() {
     clk.down = clk.up = clk.click = clk.dbl = 0;
     clk.ok = clk.moved = clk.still = clk.upMiss = clk.other = 0;
@@ -191,10 +191,12 @@
     if (!clickBox || (panel && panel.hidden)) return; // 숨김 상태면 카운트만, DOM 갱신 skip
     const recent = clkRecent.slice().reverse().map(l => clkEsc(l)).join("<br>");
     const rec = (window.__b2bClickRecovery && window.__b2bClickRecovery.synthCount) || 0;
+    // '선클릭'=눌림 즉시 대신 쏜 클릭 수(≈down). UP누락 은 여전히 실제 뗌 드롭을 보여주지만
+    // 선클릭이 눌림에서 이미 버튼을 실행하므로 그 드롭이 클릭 실패로 이어지지 않는다.
     clickBox.innerHTML =
       `<div style="font-size:11px;line-height:1.55">` +
       `<div><strong>클릭 진단</strong> · down ${clk.down} · up ${clk.up} · click ${clk.click} · dbl ${clk.dbl}</div>` +
-      `<div>OK <b>${clk.ok}</b> | 이동 <b>${clk.moved}</b> | 정지 <b>${clk.still}</b> | UP누락 <b>${clk.upMiss}</b> | 타깃≠ <b>${clk.other}</b> · 복구 <b>${rec}</b></div>` +
+      `<div>OK <b>${clk.ok}</b> | 이동 <b>${clk.moved}</b> | 정지 <b>${clk.still}</b> | UP누락 <b>${clk.upMiss}</b> | 타깃≠ <b>${clk.other}</b> · 선클릭 <b>${rec}</b></div>` +
       `<div style="opacity:.8">focus=${document.hasFocus() ? "Y" : "N"} · active=${clkEsc(clkTag(document.activeElement))}</div>` +
       (recent ? `<div style="margin-top:4px;font-family:Consolas,monospace;opacity:.9">${recent}</div>` : "") +
       `</div>`;
