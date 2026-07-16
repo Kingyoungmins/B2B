@@ -10208,9 +10208,12 @@ class PythonComSkillContext:
                 return field_names[idx - 1]     # 열 문자/번호 → 그 위치의 (중복 반영) 필드명
             raise PythonComSkillError("피벗 필드 '%s' 을 헤더에서 찾지 못했습니다(헤더명 또는 열 문자를 쓰세요)." % spec)
 
-        name = str(dest_name or "피벗")
+        name = str(dest_name or "피벗")[:31]   # Excel 시트명 31자 — 조회(_ws 절단 폴백)와 대칭
+        # [항상 진짜 피벗] 같은 스킬을 다시 적용하면 dest 시트가 남아 있는데, 예전엔 여기서 raise 하고
+        # ctx.pivot 이 조용히 값-표로 폴백해 "1회차만 진짜 피벗, 2회차부터 가짜"가 됐다(실측 재현).
+        # 재실행은 '같은 피벗을 다시 만드는 것'이 의도이므로, 우리가 만든 dest 는 지우고 다시 만든다.
         if name in _excel_collection_names(self._wb.Worksheets):
-            raise PythonComSkillError("시트 '%s' 이 이미 있습니다. 다른 이름을 쓰거나 먼저 삭제하세요." % name)
+            self._wb.Worksheets(name).Delete()
         src = ws.Range(ws.Cells(hr, 1), ws.Cells(last_r, last_c))
         self.add_sheet(name)
         pt_ws = self._ws(name)
@@ -10245,22 +10248,30 @@ class PythonComSkillContext:
         인자: group_by/value/agg 에 '리스트'를 주면 다중 키·다중 값(agg 하나면 모든 값에 적용), value=None 은 개수,
         column 은 열 필드(2D 크로스탭), dest_name 은 새 시트명.
         "~별 합계/개수/평균/요약/피벗" 요청의 기본 수단(원본 보존, 손코딩 집계 금지). 값-표만 강제하려면
-        ctx._pivot_value_table, 항상 진짜 피벗만 원하면 ctx.native_pivot 을 직접 호출."""
-        eff = str(dest_name) if dest_name else "피벗요약"
+        ctx._pivot_value_table 을 직접 호출."""
+        eff = (str(dest_name) if dest_name else "피벗요약")[:31]
         try:
             return self.native_pivot(sheet, group_by, value=value, agg=agg, dest_name=eff, column=column, header_rows=header_rows)
+        except PythonComSkillError:
+            raise                                   # 필드 못 찾음 등 우리 검증 오류는 그대로(원인이 명확)
         except Exception as _e:
-            # 진짜 피벗 실패 → 부분 생성됐을 dest 시트 정리 후 값-표로 폴백(호출부는 그대로 결과를 얻음)
+            # [항상 진짜 피벗] 예전엔 여기서 값-표로 조용히 폴백해, 같은 명령인데 어떤 땐 진짜 피벗·어떤 땐
+            # 가짜 표가 나왔다(사용자 제보). 이제 폴백하지 않고 원인을 말하는 오류로 끝낸다 — 조용한 강등보다
+            # 정직한 실패가 낫고, 자동복구/사용자가 원인을 보고 고칠 수 있다.
             try:
                 if eff in _excel_collection_names(self._wb.Worksheets):
-                    self._wb.Worksheets(eff).Delete()
+                    self._wb.Worksheets(eff).Delete()   # 부분 생성분 정리
             except Exception:
                 pass
             try:
-                _vba_trace("python_com.pivot.fallback_value_table", sheet=str(sheet), dest=eff, error=str(_e)[:200])
+                _vba_trace("python_com.pivot.native_failed", sheet=str(sheet), dest=eff, error=str(_e)[:200])
             except Exception:
                 pass
-            return self._pivot_value_table(sheet, group_by, value=value, agg=agg, dest_name=eff, header_rows=header_rows, after=after, column=column)
+            msg = str(_e)
+            hint = ""
+            if "적어도 두 행" in msg or "at least two rows" in msg.lower():
+                hint = " 원본에 집계할 데이터 행이 없습니다(헤더만 있는지 확인하세요)."
+            raise PythonComSkillError("피벗테이블 생성 실패: %s%s" % (msg[:300], hint))
 
     def normalize(self, value):
         """텍스트 정규화(공백/표기 차이 제거). 값 비교 보조용."""

@@ -1,4 +1,6 @@
-# [실측] ctx.pivot 기본 동작: 진짜 피벗테이블 우선, native 실패 시 값-표 폴백 (실제 Excel COM).
+# [실측] ctx.pivot 계약: '항상 진짜 피벗테이블'. 값-표로 조용히 폴백하지 않는다(실제 Excel COM).
+# 배경: 예전엔 native 실패 시 값-표로 폴백해, 같은 명령인데 1회차는 진짜 피벗·2회차부터 값-표가
+#       나왔다(dest 시트 잔존 → native 가 "이미 있습니다"로 실패 → 폴백). 사용자 제보로 폴백 제거.
 import sys
 sys.path.insert(0, r"C:\Users\Admin\Desktop\KGM_git\B2B_ver0.6.1")
 import win32com.client as w
@@ -15,7 +17,7 @@ def ck(n, c, g=None):
     if not c: fails += 1
 
 class Ctx(C):
-    def __init__(s, wb, app): s._wb = wb; s._app = app; s._shared = {"structural": [], "deadline": float("inf")}
+    def __init__(s, wb, app): s._wb = wb; s._app = app; s._session = None; s._shared = {"structural": [], "deadline": float("inf"), "books": {}, "journal": []}
     def _tick(s, n=1): pass
 
 class CtxFail(Ctx):
@@ -28,21 +30,43 @@ def setup():
         ws.Cells(i, 1).Value = co; ws.Cells(i, 2).Value = amt
     return wb, ws
 
+def is_native(wb, name):
+    return int(wb.Worksheets(name).PivotTables().Count) >= 1
+
 try:
     # (1) 기본: ctx.pivot -> 진짜 PivotTable
     wb, ws = setup(); f = Ctx(wb, app)
     ck("(1) 기본 pivot 시트 생성", f.pivot("매출", group_by="회사", value="금액", agg="sum", dest_name="P") == "P")
-    ck("(2) 기본 pivot = 진짜 PivotTable 개체", int(wb.Worksheets("P").PivotTables().Count) >= 1, wb.Worksheets("P").PivotTables().Count)
+    ck("(2) 기본 pivot = 진짜 PivotTable 개체", is_native(wb, "P"), wb.Worksheets("P").PivotTables().Count)
     ck("(3) 값 정확(GetPivotData 회사A=600)", wb.Worksheets("P").PivotTables(1).GetPivotData("금액", "회사", "A").Value == 600)
+
+    # (4~6) [회귀 방지 핵심] 같은 명령 재실행 — 매번 '진짜 피벗'이어야 한다(예전엔 2회차부터 값-표)
+    for n in (2, 3):
+        f.pivot("매출", group_by="회사", value="금액", agg="sum", dest_name="P")
+        ck("(%d) 재실행 %d회차도 진짜 피벗" % (2 + n, n), is_native(wb, "P"), "값-표로 강등됨")
+    ck("(6) 재실행해도 피벗 시트 1개(중복 생성 없음)", sum(1 for x in wb.Worksheets if x.Name == "P") == 1)
     wb.Close(False)
-    # (2) native 실패 -> 값-표 폴백
+
+    # (7~8) native 가 진짜로 실패하면: 값-표로 조용히 폴백하지 말고 원인을 말하는 오류
     wb2, ws2 = setup(); ff = CtxFail(wb2, app)
-    ck("(4) 폴백 시트 생성", ff.pivot("매출", group_by="회사", value="금액", agg="sum", dest_name="PV") == "PV")
-    pv = wb2.Worksheets("PV")
-    ck("(5) 폴백은 PivotTable 개체 아님(값 표)", int(pv.PivotTables().Count) == 0, pv.PivotTables().Count)
-    d = {str(pv.Cells(r, 1).Value): pv.Cells(r, 2).Value for r in (2, 3)}
-    ck("(6) 폴백 값-표 값 정확(A=600,B=50)", d.get("A") == 600 and d.get("B") == 50, d)
-    ck("(7) 폴백 시트 정확히 1개(부분시트 정리로 중복 없음)", sum(1 for x in wb2.Worksheets if x.Name == "PV") == 1)
+    try:
+        ff.pivot("매출", group_by="회사", value="금액", agg="sum", dest_name="PV")
+        ck("(7) native 실패 시 오류로 끝남(값-표 폴백 금지)", False, "폴백해서 성공 반환함")
+    except S.PythonComSkillError as e:
+        ck("(7) native 실패 시 오류로 끝남(값-표 폴백 금지)", "피벗테이블 생성 실패" in str(e), str(e)[:80])
+    ck("(8) 실패 시 가짜 값-표 시트를 남기지 않음",
+       not any(x.Name == "PV" for x in wb2.Worksheets), "PV 시트가 남음")
+
+    # (9) 데이터 0행(헤더만) → 원인 안내가 붙은 오류
+    wb3 = app.Workbooks.Add(); ws3 = wb3.Worksheets(1); ws3.Name = "빈표"
+    ws3.Range("A1").Value = "회사"; ws3.Range("B1").Value = "금액"
+    f3 = Ctx(wb3, app)
+    try:
+        f3.pivot("빈표", group_by="회사", value="금액", agg="sum", dest_name="Z")
+        ck("(9) 0행이면 원인 안내 오류", False, "오류 없이 통과함")
+    except S.PythonComSkillError as e:
+        ck("(9) 0행이면 원인 안내 오류", "데이터 행이 없습니다" in str(e), str(e)[:110])
+    wb3.Close(False)
     wb2.Close(False)
 finally:
     try: app.Quit()
