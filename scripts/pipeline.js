@@ -657,12 +657,22 @@ function bindPipelineStepTargetContext(step) {
 // ctx 의 '읽기 전용' 메서드. 이외의 메서드 호출은 변형(쓰기/삭제/구조변경)으로 본다.
 const PIPELINE_CTX_READER_METHODS = new Set(["read", "sheets", "used_range", "has_formulas", "formula_mask", "book"]);
 
-// VAR = ctx.book("X")  ->  { VAR: "X" }
+// VAR = ctx.book("X" | 변수)  ->  { VAR: "X" }
+// 파일명을 변수로 넘기는 형태(src_ctx = ctx.book(src_file))까지 푼다. LLM 은 파일이 둘 이상이
+// 되는 순간 반드시 변수를 쓰므로(src_file/tgt_file), 리터럴만 보면 교차파일 스킬이 통째로
+// 미탐이었다 — 대상 추론(inferPipelineStepTargetFileId)이 저장된 옛 targetFileId 를 그대로
+// 믿어 '엉뚱한 파일에 실행'되고, crossWriteDestinationFileIds 도 비어 리셋이 목적지를 못 되돌린다
+// (SBAGENT-171: 매핑 패널만 고치고 실행 경로는 리터럴 전용으로 남았던 반쪽 수정).
 function pipelinePythonBookVarNames(code) {
+  const text = String(code || "");
   const map = {};
+  const vars = typeof pipelineConstStringVars === "function" ? pipelineConstStringVars(text) : {};
   let m;
-  const re = /([A-Za-z_]\w*)\s*=\s*ctx\.book\s*\(\s*["']([^"']+)["']\s*\)/g;
-  while ((m = re.exec(String(code || "")))) map[m[1]] = m[2];
+  const re = /([A-Za-z_]\w*)\s*=\s*ctx\.book\s*\(\s*([^()\r\n]+?)\s*\)/g;
+  while ((m = re.exec(text))) {
+    const name = typeof pipelineResolvePyArg === "function" ? pipelineResolvePyArg(m[2], vars) : null;
+    if (name) map[m[1]] = name;
+  }
   return map;
 }
 
@@ -674,9 +684,14 @@ function pipelinePythonMutatedBookNames(code) {
   const names = [];
   const add = n => { if (n && !names.includes(n)) names.push(n); };
   let m;
-  // (a) 직접 체이닝: ctx.book("X").<method>(
-  const chain = /ctx\.book\s*\(\s*["']([^"']+)["']\s*\)\s*\.\s*([A-Za-z_]\w*)\s*\(/g;
-  while ((m = chain.exec(text))) { if (!PIPELINE_CTX_READER_METHODS.has(m[2])) add(m[1]); }
+  // (a) 직접 체이닝: ctx.book("X" | 변수).<method>(  — 인자가 변수여도 해석한다.
+  const constVars = typeof pipelineConstStringVars === "function" ? pipelineConstStringVars(text) : {};
+  const chain = /ctx\.book\s*\(\s*([^()\r\n]+?)\s*\)\s*\.\s*([A-Za-z_]\w*)\s*\(/g;
+  while ((m = chain.exec(text))) {
+    if (PIPELINE_CTX_READER_METHODS.has(m[2])) continue;
+    const name = typeof pipelineResolvePyArg === "function" ? pipelineResolvePyArg(m[1], constVars) : null;
+    if (name) add(name);
+  }
   // (b) 변수 경유: VAR = ctx.book("X"); VAR.<method>(
   const vars = pipelinePythonBookVarNames(text);
   for (const v of Object.keys(vars)) {

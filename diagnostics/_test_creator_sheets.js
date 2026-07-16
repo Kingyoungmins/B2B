@@ -78,5 +78,15 @@ ck("(C2) b = ctx.book(변수); b.rename_sheet", isG(gen(TF + `b = ctx.book(targe
   ck("(P2-c) 인접 인자 훔침 없음(피벗요약 오등록 금지)", isG(g, "", "피벗요약") === false);
 }
 
+// ── [회귀] VBA `&` 문자열 연결은 이름을 확정할 수 없다 → 등록 금지(오탐 방지) ──────────
+// `wsNew.Name = base & "_" & idx` 에서 base 만 떼서 등록하면, 실제로 만들어지지도 않는 접두사가
+// 생성시트가 돼 '진짜 필요한 시트 요구'를 지워버린다. 오탐은 미탐보다 나쁘다.
+{
+  const dyn = ['    base = "C_611"', '    wsNew.Name = base & "_" & idx'].join("\n");
+  ck("(AMP) & 연결은 생성시트로 등록 안 함", isG(gen(dyn), "", "C_611") === false, gen(dyn));
+  const plain = ['    base = "C_611"', "    wsNew.Name = base"].join("\n");
+  ck("(AMP-대조) 순수 변수는 정상 등록", isG(gen(plain), "", "C_611") === true, gen(plain));
+}
+
 console.log("\n=== RESULT: " + (fails === 0 ? "ALL PASS" : fails + " FAIL") + " ===");
 process.exit(fails ? 1 : 0);

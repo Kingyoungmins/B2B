@@ -799,8 +799,12 @@ function runnerExtractGeneratedSheetsFromCode(code) {
     let mm;
     const litRe = /\.Name\s*=\s*["']([^"']+)["']/gi;
     while ((mm = litRe.exec(line))) runnerAddGeneratedSheet(generated, "", mm[1]);
-    const varRe = /\.Name\s*=\s*([A-Za-z_][A-Za-z0-9_]*)/gi;
+    // `.Name = 변수` — 단, 뒤에 `&`(문자열 연결)가 붙으면 변수 하나만 떼서 등록하면 안 된다.
+    // `wsNew.Name = base & "_" & idx` 에서 base 만 잡으면 실제로 만들어지지도 않는 접두사가
+    // 생성시트로 등록된다(오탐은 미탐보다 나쁘다 — 멀쩡한 시트 요구를 지워버린다).
+    const varRe = /\.Name\s*=\s*([A-Za-z_][A-Za-z0-9_]*)\s*(&|$|')/gi;
     while ((mm = varRe.exec(line))) {
+      if (mm[2] === "&") continue;            // 동적 조합 → 이름을 확정할 수 없으므로 등록 안 함
       const val = vbaLiteralVars.get(String(mm[1] || "").toLowerCase());
       if (val) runnerAddGeneratedSheet(generated, "", val);
     }

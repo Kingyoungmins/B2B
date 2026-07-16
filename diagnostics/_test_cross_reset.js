@@ -134,5 +134,24 @@ const call = (fn, ...args) =>
   ck("(9b) 교차 뒤쪽만 남으면 suffix 도 교차 아님", call("pipelineSuffixWritesCrossFile", [steps[0]], 0) === false);
 }
 
+// ── [회귀 P0 / SBAGENT-171 실행경로] ctx.book(변수) 를 pipeline.js 도 풀어야 한다 ────────
+// 매핑 패널(drop-handling)만 고치고 여기(pipeline)를 리터럴 전용으로 남기면, 화면은 맞는데
+// 실제 실행 대상이 틀린다 — 저장된 옛 targetFileId 를 그대로 믿어 엉뚱한 파일에 쓰고,
+// 리셋 대상에서도 목적지가 빠져 되돌리기가 안 된다(무성 오동작).
+{
+  const STEP = [
+    "def transform(ctx):",
+    '    src_file = "input_원가_2026_4월.xlsx"',
+    '    tgt_file = "input_매출_2026_4월.xlsx"',
+    "    src_ctx = ctx.book(src_file)",
+    "    tgt_ctx = ctx.book(tgt_file)",
+    '    rows = src_ctx.read("원가", "A1:C9")',
+    '    tgt_ctx.write("요약", "A1", rows)',
+  ].join("\n");
+  const mutated = call("pipelinePythonMutatedBookNames", STEP);
+  ck("(P0) 변수 ctx.book 의 '변형 대상' 인식", mutated.includes("input_매출_2026_4월.xlsx"), mutated);
+  ck("(P0-b) 읽기 전용 소스는 변형 대상 아님", !mutated.includes("input_원가_2026_4월.xlsx"), mutated);
+}
+
 console.log("\n=== RESULT: " + (fails === 0 ? "ALL PASS" : fails + " FAIL") + " ===");
 process.exit(fails ? 1 : 0);
