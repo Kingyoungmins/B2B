@@ -527,19 +527,19 @@ def cleanup_stale_temp_artifacts(min_age_seconds=300, excel_diag_max_age_seconds
         try:
             wv = temp / "B2B_WebView2"
             if wv.exists():
-                try:
-                    import psutil as _ps
-                except Exception:
-                    _ps = None
                 for d in wv.glob("ver*_*"):
                     if not d.is_dir():
                         continue
-                    alive = False
+                    # [반쪽 수정 보완] 예전엔 psutil 단독 판정(_ps and _ps.pid_exists)이라, psutil 이 없는
+                    # 오프라인 frozen 빌드(build_exe_offline.bat 은 wheelhouse 에 psutil 이 없다)에서는
+                    # 모든 폴더가 alive=False 로 떨어져 '지금 쓰고 있는' WebView2 프로필까지 지웠다.
+                    # _is_pid_alive 는 psutil → ctypes(OpenProcess) → tasklist 사다리라 psutil 없이도 정확하다.
+                    alive = True   # 판정 실패 시엔 지우지 않는다(사용 중 프로필 삭제 방지)
                     try:
                         wv_pid = int(d.name.rsplit("_", 1)[1])
-                        alive = bool(_ps and _ps.pid_exists(wv_pid))
+                        alive = _is_pid_alive(wv_pid)
                     except Exception:
-                        alive = False
+                        alive = False   # 폴더명이 pid 형식이 아니면 옛 잔재 → 정리 대상
                     if not alive:
                         _rm(d)
         except Exception:
@@ -3302,32 +3302,46 @@ def _is_pid_alive(pid):
         return False
     # [모래시계 수정] 부모(native host) 생존 감시가 이 함수를 1초마다 부른다. 매번 tasklist 를
     # 새 프로세스로 띄우면 비용도 크고 시작 피드백 커서가 유휴 상태에서 계속 깜빡였다.
-    # 프로세스를 만들지 않는 확인(psutil → OpenProcess)을 먼저 쓰고, tasklist 는 최후 폴백.
+    # 프로세스를 만들지 않는 확인을 먼저 쓰고, tasklist 는 최후 폴백.
+    #
+    # [259 오판 수정] 판정은 WaitForSingleObject 로 한다 — 프로세스 핸들은 '종료되면 시그널'되므로
+    # 종료코드와 무관하게 정확하다. GetExitCodeProcess/psutil.pid_exists 는 종료코드 259(STILL_ACTIVE)로
+    # 죽은 프로세스의 핸들을 누군가(EDR/WerFault/런처) 쥐고 있으면 영영 '살아있음'으로 오판했고,
+    # 그러면 부모감시가 발화하지 않아 서버·Excel 이 고아로 남고 reap 은 무의미한 taskkill 을 반복했다.
+    try:
+        import ctypes
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel32.OpenProcess.restype = ctypes.c_void_p          # 핸들 절단 방지(기본 c_int)
+        kernel32.OpenProcess.argtypes = [ctypes.c_uint32, ctypes.c_int, ctypes.c_uint32]
+        kernel32.WaitForSingleObject.restype = ctypes.c_uint32
+        kernel32.WaitForSingleObject.argtypes = [ctypes.c_void_p, ctypes.c_uint32]
+        kernel32.CloseHandle.argtypes = [ctypes.c_void_p]
+        SYNCHRONIZE = 0x00100000
+        PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+        ERROR_ACCESS_DENIED = 5
+        WAIT_OBJECT_0 = 0x00000000   # 시그널됨 = 이미 종료
+        WAIT_TIMEOUT = 0x00000102    # 미시그널 = 실행 중
+        handle = kernel32.OpenProcess(SYNCHRONIZE | PROCESS_QUERY_LIMITED_INFORMATION, 0, int(pid))
+        if handle:
+            try:
+                rc = kernel32.WaitForSingleObject(handle, 0)
+                if rc == WAIT_TIMEOUT:
+                    return True
+                if rc == WAIT_OBJECT_0:
+                    return False
+                # WAIT_FAILED 등은 단정하지 않고 아래 폴백으로 확정
+            finally:
+                kernel32.CloseHandle(handle)
+        elif ctypes.get_last_error() == ERROR_ACCESS_DENIED:
+            return True  # 접근 거부 = 프로세스는 존재함
+        # 그 외(87 INVALID_PARAMETER=죽은 pid 등)는 단정하지 않고 폴백으로 확정
+    except Exception:
+        pass
     if psutil is not None:
         try:
             return bool(psutil.pid_exists(int(pid)))
         except Exception:
             pass
-    try:
-        import ctypes
-        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
-        PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
-        STILL_ACTIVE = 259
-        ERROR_ACCESS_DENIED = 5
-        handle = kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, int(pid))
-        if handle:
-            try:
-                exit_code = ctypes.c_ulong(0)
-                if kernel32.GetExitCodeProcess(handle, ctypes.byref(exit_code)):
-                    return exit_code.value == STILL_ACTIVE
-                return True  # 열렸는데 조회 실패 → 살아있다고 본다(부모 오탐 종료 방지)
-            finally:
-                kernel32.CloseHandle(handle)
-        if ctypes.get_last_error() == ERROR_ACCESS_DENIED:
-            return True  # 접근 거부 = 프로세스는 존재함
-        # 그 외(87 INVALID_PARAMETER=죽은 pid 등)는 단정하지 않고 tasklist 폴백으로 확정
-    except Exception:
-        pass
     try:
         completed = subprocess.run(
             ["tasklist", "/FI", f"PID eq {int(pid)}", "/NH"],
@@ -6031,18 +6045,76 @@ def _strip_generated_workbook_prefix(value):
 # (날짜·월·년·분기·버전·앞머리 순번)만 제거해 '같은 템플릿'을 같게 본다. 공백/언더바/괄호는 기존 정규화가
 # 이미 처리하므로 여기선 '월/날짜류'만 추가로 지운다.
 _VOLATILE_NAME_TOKENS = [
-    (re.compile(r"\d{4}\s*[-_.]?\s*\d{1,2}\s*[-_.]?\s*\d{1,2}\s*일?"), " "),   # 2026-03-01 / 20260301
+    # 구분자 있는 날짜(2026-03-01 / 2026_3_1 / 2026 03 01). 구분자 없는 20260301·202606·260607 은
+    # 아래 '날짜 모양' 토큰이 맡는다. 예전엔 구분자가 선택이라 이 정규식이 임의의 6~8자리 숫자
+    # (거래처코드 500255 = "5002"+"5"+"5")를 날짜로 먹어치워 식별번호가 통째로 사라졌다.
+    (re.compile(r"(?<!\d)(\d{4})[-_.\s]+(\d{1,2})[-_.\s]+(\d{1,2})\s*일?(?!\d)"),
+     lambda m: " " if _looks_like_ymd(m.group(1), m.group(2), m.group(3)) else m.group(0)),
     (re.compile(r"\d{2,4}\s*년"), " "),                                        # 2026년 / 26년
     (re.compile(r"\d{1,2}\s*월"), " "),                                        # 3월 / 03월
     (re.compile(r"\d{1,2}\s*분기"), " "),                                      # 1분기
     (re.compile(r"(?<![A-Za-z0-9])v?\d+(?:\.\d+)+", re.I), " "),               # 버전 1.2 / v1.2.3
-    (re.compile(r"(?:^|(?<=[\s_\-]))\d{1,3}(?=\s*[.\s_\-])"), " "),            # 앞머리 순번 "03." "05."
-    (re.compile(r"(?<!\d)\d{6,8}(?!\d)"), " "),                                # YYMMDD/YYYYMMDD 류
-    # 브라우저/윈도우 중복 다운로드 접미사 — "파일 (2).xlsx", "파일 - 복사본.xlsx".
-    # 괄호 자체는 뒤 정규화가 지우지만 안의 숫자가 키에 남아 매칭이 깨졌다(한전 청구세부내역 재다운로드 케이스).
-    (re.compile(r"\(\s*\d{1,3}\s*\)\s*$"), " "),
-    (re.compile(r"[-_\s]*(?:복사본|copy)\s*(?:\(\s*\d{1,3}\s*\))?\s*$", re.I), " "),
+    # 시각(10_55_33 / 09:23:01) — 실제 배포 파일명이 "..._2026-07-14 10_55_33_DSMC_..." 라
+    # 월 재바인딩에 반드시 필요하다. 예전엔 아래 순번 토큰이 이름 중간의 1~3자리를 닥치는 대로
+    # 지우면서 '우연히' 시각까지 지워 동작했는데, 그 부작용으로 지점번호 같은 식별자도 함께
+    # 사라졌다(다른 실체 파일이 같은 키가 됨) → 시각은 시각으로 정확히 지운다.
+    (re.compile(r"(?<!\d)(\d{1,2})[:_.\-](\d{1,2})[:_.\-](\d{1,2})(?!\d)"),
+     lambda m: " " if _looks_like_hms(m.group(1), m.group(2), m.group(3)) else m.group(0)),
+    # 앞머리 순번 "03." "05." — 이름 '중간'의 번호(지점 105 결산)는 식별자이므로 보존한다.
+    (re.compile(r"^\d{1,3}(?=\s*[.\s_\-])"), " "),
+    # YYMMDD/YYYYMM/YYYYMMDD '날짜 모양'일 때만 제거. 예전엔 6~8자리 숫자를 무조건 지워
+    # 거래처코드·계약번호(500255 vs 610344)까지 같은 키가 돼 서로 다른 파일이 '유일 매칭'으로
+    # 조용히 오매칭됐다.
+    (re.compile(r"(?<!\d)(?:\d{8}|\d{6})(?!\d)"), lambda m: " " if _looks_like_date_number(m.group(0)) else m.group(0)),
 ]
+
+# 접미사 토큰은 서로 조합될 수 있어("X (2) - 복사본") 아래 고정점 루프에서 반복 적용한다.
+_VOLATILE_SUFFIX_TOKENS = [
+    # 브라우저/윈도우 중복 다운로드 접미사 — "파일 (2).xlsx". 항상 구분자 뒤에 붙으므로 구분자를
+    # 요구한다: 의미 있는 말미 일련번호("명세서(2)" = 2사업소)까지 흡수하면 안 된다.
+    (re.compile(r"[\s_\-]+\(\s*\d{1,3}\s*\)\s*$"), " "),
+    # "파일 - 복사본.xlsx" / "file - Copy.xlsx". 구분자를 요구한다: 예전엔 좌측 경계가 없어
+    # 'hardcopy' 의 어미까지 잘려 'hard' 와 키가 충돌했다.
+    (re.compile(r"[-_\s]+(?:복사본|copy)\s*$", re.I), " "),
+]
+
+
+def _looks_like_hms(hour, minute, second):
+    """파일명에 찍히는 시각(10_55_33)인지 — 00~23 / 00~59 / 00~59 만 참."""
+    try:
+        hh, mm, ss = int(hour), int(minute), int(second)
+    except Exception:
+        return False
+    return 0 <= hh <= 23 and 0 <= mm <= 59 and 0 <= ss <= 59
+
+
+def _looks_like_ymd(year, month, day):
+    """구분자 있는 날짜(2026-03-01)인지 — 연 1900~2199 / 월 1~12 / 일 1~31 만 참."""
+    try:
+        y, mm, dd = int(year), int(month), int(day)
+    except Exception:
+        return False
+    return 1900 <= y <= 2199 and 1 <= mm <= 12 and 1 <= dd <= 31
+
+
+def _looks_like_date_number(digits):
+    """YYMMDD(260607) / YYYYMM(202606) / YYYYMMDD(20260607) 처럼 날짜로 읽히는 숫자만 True."""
+    def _ok(mm, dd=None):
+        if not 1 <= mm <= 12:
+            return False
+        return dd is None or 1 <= dd <= 31
+    try:
+        if len(digits) == 6:
+            if _ok(int(digits[2:4]), int(digits[4:6])):        # YYMMDD
+                return True
+            year = int(digits[0:4])                            # YYYYMM
+            return 1900 <= year <= 2199 and _ok(int(digits[4:6]))
+        if len(digits) == 8:
+            year = int(digits[0:4])                            # YYYYMMDD
+            return 1900 <= year <= 2199 and _ok(int(digits[4:6]), int(digits[6:8]))
+    except Exception:
+        return False
+    return False
 
 
 def _stable_workbook_key(name):
@@ -6055,8 +6127,17 @@ def _stable_workbook_key(name):
     s = Path(s).stem                              # 디렉토리/확장자 제거
     s = _strip_generated_workbook_prefix(s)
     s = s.lower()
+    s = re.sub(r"[​-‍﻿]", "", s)   # zero-width(다운로드 경로에서 섞여 들어옴)
     for rx, rep in _VOLATILE_NAME_TOKENS:
         s = rx.sub(rep, s)
+    # 접미사는 조합될 수 있다("X (2) - 복사본"). 예전엔 목록 순서대로 1회씩만 적용해
+    # 복사본 제거 후 드러나는 "(2)" 가 다시 처리되지 않아 흡수가 되다 말다 했다.
+    for _ in range(4):
+        prev = s
+        for rx, rep in _VOLATILE_SUFFIX_TOKENS:
+            s = rx.sub(rep, s)
+        if s == prev:
+            break
     s = re.sub(r"[\s_\-().\[\]]+", "", s)
     return s
 
