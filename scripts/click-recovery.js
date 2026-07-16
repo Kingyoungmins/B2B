@@ -26,9 +26,9 @@
  * 안전장치:
  *   - 왼쪽 버튼만. 진짜 입력(isTrusted)만 반응.
  *   - 글자 입력/선택 영역(input[text]·textarea·select·contenteditable)은 건드리지 않음.
- *   - 드래그 핸들(#resizer 등)은 합성 제외 — 누르자마자 click 이 나가면 드래그가 오발화된다.
  *   - 더블클릭 합성은 두 눌림이 DOUBLE_SLOP 안일 때만 — 리사이저를 연속으로 다시 잡을 때
- *     엉뚱한 dblclick(폭 리셋)이 나가던 것을 막는다.
+ *     엉뚱한 dblclick(폭 리셋)이 나가던 것을 막는다. (거리 제한이 리사이저 오발화의 실제 해법이라
+ *     드래그 핸들을 합성에서 통째로 빼지는 않는다 — '눌림만으로 클릭'은 전 요소에서 유지.)
  *   - 수정자 키(Ctrl/Shift/Alt/Meta)를 합성 이벤트에 복사 — 빠지면 Ctrl+클릭 다중선택이
  *     단일선택으로 뭉개진다.
  *   - 합성 이벤트엔 e.__b2bSynthetic=true 표시(진단/자기이벤트 구분).
@@ -48,7 +48,6 @@
   var DOUBLE_MS = 500;      // 두 눌림이 이 시간 안이면 더블클릭(Windows 기본 더블클릭 시간)
   var DOUBLE_SLOP = 6;      // 두 눌림이 이 픽셀 안이어야 더블클릭(리사이저 재파지 오발화 방지)
   var MAX_PEND = 16;        // 뗌 유실로 안 쓰인 대기가 무한히 쌓이지 않게 하는 상한
-  var DRAG_HANDLE_SEL = "#resizer, .resizer, [data-no-click-synth]";
   var state = { enabled: true, synthCount: 0, dblCount: 0, swallowed: 0, lastSynthAt: 0 };
 
   var pendClicks = []; // 삼켜야 할 진짜 click 대기: { target }
@@ -61,10 +60,6 @@
       "input:not([type=button]):not([type=submit]):not([type=reset]):not([type=checkbox]):not([type=radio])," +
       "textarea, select, option, [contenteditable=''], [contenteditable=\"true\"], [contenteditable=true]"
     );
-  }
-  function isDragHandle(el) {
-    if (!el || typeof el.closest !== "function") return false;
-    try { return !!el.closest(DRAG_HANDLE_SEL); } catch (_) { return false; }
   }
   function related(a, b) {
     if (!a || !b) return false;
@@ -102,7 +97,7 @@
   function onDown(e) {
     if (e.button !== 0 || !e.isTrusted) return;
     var target = e.target;
-    if (!target || isEditable(target) || isDragHandle(target)) return;
+    if (!target || isEditable(target)) return;
     var now = e.timeStamp;
 
     var isDbl = !!(lastDown &&

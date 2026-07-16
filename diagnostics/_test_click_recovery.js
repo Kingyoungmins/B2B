@@ -189,13 +189,14 @@ function makeHarness() {
   ck("(S11) 먼 두 눌림은 dblclick 아님", dbls === 0 && h.dbl === 0, { d: dbls, s: h.dbl });
 }
 
-// S12: 드래그 핸들(#resizer)은 눌림-즉시 합성 제외 — 누르자마자 click 이 나가면 드래그가 오발화
+// S12: '눌림만으로 클릭'은 드래그 핸들(#resizer 등)에서도 유지한다 — 이 앱의 기본 동작이라
+//      특정 요소만 빼지 않는다. 리사이저 오발화의 실제 해법은 위 S11 의 거리 제한(DOUBLE_SLOP).
 {
   const h = makeHarness();
   const rez = h.makeEl("div", { dragHandle: true });
   let clicks = 0; rez.addEventListener("click", () => clicks++);
   h.fireReal(rez, "mousedown", { button: 0 });
-  ck("(S12) 드래그 핸들 합성 제외", h.synth === 0 && clicks === 0, { s: h.synth, c: clicks });
+  ck("(S12) 드래그 핸들에서도 눌림-즉시 클릭 유지", h.synth === 1 && clicks === 1, { s: h.synth, c: clicks });
 }
 
 // S13: 키보드(Enter) click 은 detail===0 — 남아있는 옛 대기가 잡아먹으면 안 됨
