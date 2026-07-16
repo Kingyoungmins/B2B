@@ -10725,7 +10725,10 @@ class PythonComSkillContext:
         # Excel 시트명 31자 제한 — 초과분은 자른다(시트 '생성' 경로들과 동일 정책).
         # 실행기 매핑이 rename 목적지 리터럴을 긴 실제 시트명으로 치환해도 0x800A03EC 로 죽지 않고,
         # 이후 긴 이름 조회는 _ws 의 31자-절단 폴백이 같은 시트를 찾아준다.
-        eff_new = str(new_name)[:31]
+        # [비대칭 수정] 절단만 하고 '금지문자'는 add_sheet 와 달리 그대로 넘겨서, 이름에 / : [ ] * ? \
+        # 가 있으면(예: "매출/원가 요약") ws.Name 대입을 COM 이 거부해 '시트 이름 변경 실패'로 죽었다.
+        # 생성 경로(add_sheet)와 같은 정규화를 적용해 정책을 일치시킨다.
+        eff_new = re.sub(r"[\[\]:*?/\\]", "_", str(new_name))[:31]
         names = _excel_collection_names(self._wb.Worksheets)
         if eff_new != str(old_name) and eff_new in names:
             raise PythonComSkillError(f"시트 '{eff_new}' 이 이미 있습니다. 다른 이름을 쓰세요.")
