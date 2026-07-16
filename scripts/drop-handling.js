@@ -562,6 +562,30 @@ function runnerIsGeneratedSheet(generated, book, sheet) {
   });
 }
 
+// 여는 괄호 위치(openIdx)에서 짝이 맞는 닫는 괄호까지 = '그 호출의 인자 목록'만 반환.
+// 고정 길이(400자) 창은 호출 경계를 안 지켜 인접 호출의 dest_name/new_name 을 훔친다.
+// 문자열 리터럴 안의 괄호는 세지 않는다(조건 람다에 괄호·콤마가 흔하다).
+function runnerSliceCallArgs(src, openIdx) {
+  const text = String(src || "");
+  if (text[openIdx] !== "(") return "";
+  let depth = 0;
+  let quote = "";
+  for (let i = openIdx; i < text.length && i - openIdx < 4000; i++) {
+    const c = text[i];
+    if (quote) {
+      if (c === quote && text[i - 1] !== "\\") quote = "";
+      continue;
+    }
+    if (c === '"' || c === "'") { quote = c; continue; }
+    if (c === "(") depth++;
+    else if (c === ")") {
+      depth--;
+      if (depth === 0) return text.slice(openIdx, i + 1);
+    }
+  }
+  return "";
+}
+
 function runnerExtractGeneratedSheetsFromCode(code) {
   const src = String(code || "");
   const generated = [];
@@ -576,9 +600,30 @@ function runnerExtractGeneratedSheetsFromCode(code) {
   const pyActiveRename = /ctx\.rename_sheet\(\s*["'][^"']+["']\s*,\s*["']([^"']+)["']/gi;
   while ((m = pyActiveRename.exec(src))) runnerAddGeneratedSheet(generated, "", m[1]);
 
+  // [SBAGENT-198 반쪽 수정 보완] `name = "시트"` / `target_file = "03.xlsx"` 처럼 단독 대입한
+  // 문자열 변수 맵. 아래 '모든' 패턴이 리터럴/변수를 함께 받도록 맨 앞에서 한 번만 만든다.
+  // 예전엔 시트명 변수만 풀고 '파일명 변수'는 안 봐서 ctx.book(변수).<헬퍼> 가 통째로 미탐이었다.
+  const pyLiteralVars = new Map();
+  const pyAssignLine = /^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(["'])([^"'\r\n]+)\2\s*(?:#.*)?$/;
+  for (const line of src.split(/\r?\n/)) {
+    const av = pyAssignLine.exec(line);
+    if (av) pyLiteralVars.set(av[1], av[3]);
+  }
+  const resolvePyName = expr => {
+    const s = String(expr || "").trim();
+    const lit = /^(["'])([^"']+)\1$/.exec(s);
+    if (lit) return lit[2];
+    return /^[A-Za-z_][A-Za-z0-9_]*$/.test(s) ? (pyLiteralVars.get(s) || "") : "";
+  };
+
   const pyVars = new Map();
-  const pyAssign = /\b([A-Za-z_][A-Za-z0-9_]*)\s*=\s*ctx\.book\(\s*["']([^"']+)["']\s*\)/g;
-  while ((m = pyAssign.exec(src))) pyVars.set(m[1], m[2]);
+  // ctx.book 인자가 변수여도 잡는다(b = ctx.book(target_file)) — 리터럴만 보던 탓에
+  // '수신자 변수의 출처'를 몰라 b.add_sheet("리터럴") 이 미탐이었다.
+  const pyAssign = /\b([A-Za-z_][A-Za-z0-9_]*)\s*=\s*ctx\.book\(\s*([^()\r\n]+?)\s*\)/g;
+  while ((m = pyAssign.exec(src))) {
+    const bookName = resolvePyName(m[2]);
+    if (bookName) pyVars.set(m[1], bookName);
+  }
   pyVars.forEach((book, varName) => {
     const esc = varName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     let mm;
@@ -593,44 +638,48 @@ function runnerExtractGeneratedSheetsFromCode(code) {
   // 위 정규식들은 인라인 리터럴만 잡아, `book.rename_sheet(old_name, new_name)` 변수 호출이 사각지대였다
   // → "sheet1" 이 생성시트로 등록되지 않아 매핑 요구로 남고, 실행기 매핑이 rename '목적지' 리터럴까지
   //   실제 시트명(31자 초과)으로 치환해 rename 이 0x800A03EC 로 터졌다(첫 시트→sheet1 스킬 회귀).
-  const pyLiteralVars = new Map();
-  const pyAssignLine = /^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(["'])([^"'\r\n]+)\2\s*(?:#.*)?$/;
-  for (const line of src.split(/\r?\n/)) {
-    const av = pyAssignLine.exec(line);
-    if (av) pyLiteralVars.set(av[1], av[3]);
-  }
-  const resolvePyName = expr => {
-    const s = String(expr || "").trim();
-    const lit = /^(["'])([^"']+)\1$/.exec(s);
-    if (lit) return lit[2];
-    return /^[A-Za-z_][A-Za-z0-9_]*$/.test(s) ? (pyLiteralVars.get(s) || "") : "";
-  };
+  // 수신자: ctx.book("리터럴") | ctx.book(변수) | 변수 | ctx.
+  // 예전엔 ctx.book( 뒤에 '따옴표 리터럴'만 허용해, ctx.book(target_file).rename_sheet(...) 는
+  // 정규식 자체가 매칭되지 않아 생성시트가 등록되지 않았다(한전 Step22). 그러면 매핑이 그 시트를
+  // '업로드된 파일에 있어야 할 시트'로 요구하고, 단일시트 파일이면 Sheet1 과 짝지어져
+  // rename_sheet("Sheet1","Sheet1") 로 목적지 리터럴까지 치환 — 오류도 없이 조용히 이름이 안 바뀐다.
+  const RECV = '((?:ctx\\s*\\.\\s*book\\(\\s*[^()\\r\\n]+?\\s*\\))|[A-Za-z_][A-Za-z0-9_]*)';
   const receiverBook = recv => {
     const r = String(recv || "").trim();
-    const viaBook = /^ctx\s*\.\s*book\(\s*["']([^"']+)["']\s*\)$/.exec(r);
-    if (viaBook) return viaBook[1];
+    const viaBook = /^ctx\s*\.\s*book\(\s*(.+?)\s*\)$/.exec(r);
+    if (viaBook) return resolvePyName(viaBook[1]);   // 리터럴·변수 모두 해석
     if (r === "ctx") return "";
     return pyVars.get(r) || "";
   };
-  const anyRename = /((?:ctx\s*\.\s*book\(\s*["'][^"']+["']\s*\))|[A-Za-z_][A-Za-z0-9_]*)\s*\.\s*rename_sheet\(\s*[^,()\r\n]+?\s*,\s*(?:new_name\s*=\s*)?((["'])[^"']*\3|[A-Za-z_][A-Za-z0-9_]*)\s*[),]/g;
+  const anyRename = new RegExp(
+    RECV + '\\s*\\.\\s*rename_sheet\\(\\s*[^,()\\r\\n]+?\\s*,\\s*(?:new_name\\s*=\\s*)?((["\'])[^"\']*\\3|[A-Za-z_][A-Za-z0-9_]*)\\s*[),]', 'g');
   while ((m = anyRename.exec(src))) {
     const name = resolvePyName(m[2]);
     if (name) runnerAddGeneratedSheet(generated, receiverBook(m[1]), name);
   }
-  const anyAddVar = /((?:ctx\s*\.\s*book\(\s*["'][^"']+["']\s*\))|[A-Za-z_][A-Za-z0-9_]*)\s*\.\s*(?:add_sheet|create_sheet|ensure_sheet)\(\s*(?:(?:sheet|name)\s*=\s*)?([A-Za-z_][A-Za-z0-9_]*)\s*[,)]/g;
+  const anyAddVar = new RegExp(
+    RECV + '\\s*\\.\\s*(?:add_sheet|create_sheet|ensure_sheet)\\(\\s*(?:(?:sheet|name)\\s*=\\s*)?([A-Za-z_][A-Za-z0-9_]*)\\s*[,)]', 'g');
   while ((m = anyAddVar.exec(src))) {
     const name = resolvePyName(m[2]);
     if (name) runnerAddGeneratedSheet(generated, receiverBook(m[1]), name);
+  }
+  // ctx.book(변수).add_sheet("리터럴") — 리터럴 인자는 위 anyAddVar(변수 전용)가 안 잡는다.
+  const anyAddLit = new RegExp(
+    RECV + '\\s*\\.\\s*(?:add_sheet|create_sheet|ensure_sheet)\\(\\s*(?:(?:sheet|name)\\s*=\\s*)?(["\'])([^"\']+)\\2', 'g');
+  while ((m = anyAddLit.exec(src))) {
+    runnerAddGeneratedSheet(generated, receiverBook(m[1]), m[3]);
   }
 
   // [한전 스킬셋] 시트를 '만들어내는' 그 밖의 헬퍼 — filter_to_sheet(원본, 조건, "새시트"),
   // pivot/native_pivot(dest_name=, 기본 "피벗요약"). 목적지 시트는 업로드 요구가 아니라 산출물인데
   // 여기 없어서 filter_to_sheet 산출(무선간선망/고압모계기/고압자계기)이 '필요 시트'로 잘못 떴다.
-  const creatorRe = /((?:ctx\s*\.\s*book\(\s*["'][^"']+["']\s*\))|[A-Za-z_][A-Za-z0-9_]*)\s*\.\s*(filter_to_sheet|pivot|native_pivot)\s*\(/g;
+  const creatorRe = new RegExp(RECV + '\\s*\\.\\s*(filter_to_sheet|pivot|native_pivot)\\s*\\(', 'g');
   while ((m = creatorRe.exec(src))) {
     const bookName = receiverBook(m[1]);
     const fn = m[2];
-    const win = src.slice(m.index, m.index + 400);
+    // [P2] 창을 '이 호출의 인자 목록'으로 한정한다. 예전엔 무조건 400자를 잘라, 인접 호출의
+    // dest_name/new_name 을 훔쳐 엉뚱한 시트를 산출물로 등록하거나(오탐) 반대로 놓쳤다.
+    const win = runnerSliceCallArgs(src, creatorRe.lastIndex - 1) || src.slice(m.index, m.index + 400);
     const kw = /(?:dest_name|new_name)\s*=\s*(["'])([^"']+)\1/.exec(win);
     if (kw) {
       runnerAddGeneratedSheet(generated, bookName, kw[2]);
@@ -647,7 +696,17 @@ function runnerExtractGeneratedSheetsFromCode(code) {
       // (콤마 뒤 리터럴 + `)` 또는 `, header_rows=` 꼬리)로 판정. LLM 생성 조건은 대부분
       // == "값" / in ["a","b"] 형태라 리터럴+`)` 오탐 위험은 낮다.
       const direct = /,\s*(["'])([^"']+)\1\s*(?:\)|,\s*(?:header_rows|after)\s*=)/.exec(win);
-      if (direct) runnerAddGeneratedSheet(generated, bookName, direct[2]);
+      if (direct) {
+        runnerAddGeneratedSheet(generated, bookName, direct[2]);
+      } else {
+        // 3번째 위치 인자가 '변수'인 경우(filter_to_sheet(src, cond, dest)) — kwarg 변수만 보던
+        // 탓에 모든 수신자에서 미탐이었다. 창이 이 호출 인자로 한정돼 있어 안전하게 볼 수 있다.
+        const directVar = /,\s*([A-Za-z_][A-Za-z0-9_]*)\s*(?:\)|,\s*(?:header_rows|after)\s*=)/.exec(win);
+        if (directVar) {
+          const name = resolvePyName(directVar[1]);
+          if (name) runnerAddGeneratedSheet(generated, bookName, name);
+        }
+      }
     } else {
       // pivot/native_pivot 에 dest_name 이 없으면 기본 산출 시트 "피벗요약"
       runnerAddGeneratedSheet(generated, bookName, "피벗요약");
