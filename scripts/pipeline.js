@@ -524,22 +524,56 @@ function pipelineCollectWorkbookNames(text) {
   return names;
 }
 
+// VBA 문자열 변수 맵: `x = "A.xlsx"` / `Dim x As String: x = "A.xlsx"` / `Const x = "A.xlsx"`.
+// LLM 이 VBA 에서 압도적으로 쓰는 관용구가 이것이다:
+//     Dim wbDstName As String: wbDstName = "대상.xlsx"
+//     For Each wb In Application.Workbooks
+//         If wb.Name = wbDstName Then Set wbDst = wb: Exit For
+// 리터럴만 보던 정규식은 이 형태에서 대상 추론이 통째로 실패했다. 단일 워크북 폴백이 답을
+// 맞춰줘서 안 보였을 뿐이고, 폴백이 안 듣는 '파일 2개 이상'(=교차파일 스킬)이 정확히
+// 버그가 터지는 조건이다.
+function pipelineVbaStringVars(code) {
+  const vars = new Map();
+  const lines = String(code || "").split(/\r?\n/);
+  // `If ... Then` 안의 `=` 는 비교지 대입이 아니다 — 대입으로 오인하면 안 된다.
+  const isCompare = line => /(?:^|[\s:])(?:if|elseif|#if|while|until)\b/i.test(line) || /\bthen\b/i.test(line);
+  const assign = /(?:^|:)\s*(?:Const\s+)?([A-Za-z_]\w*)\s*=\s*"([^"\r\n]+)"\s*(?::|$)/i;
+  const dimAssign = /^\s*(?:Dim|Const)\s+([A-Za-z_]\w*)\s+As\s+\w+\s*:\s*\1\s*=\s*"([^"\r\n]+)"/i;
+  for (const line of lines) {
+    if (isCompare(line)) continue;
+    let mm = dimAssign.exec(line);
+    if (mm) { vars.set(mm[1].toLowerCase(), mm[2]); continue; }
+    mm = assign.exec(line);
+    if (mm) vars.set(mm[1].toLowerCase(), mm[2]);
+  }
+  return vars;
+}
+
 function pipelineVbaTargetWorkbookNames(code) {
   const text = String(code || "");
   const names = [];
   const add = value => { if (value && !names.includes(value)) names.push(value); };
   const isTargetVar = name => /(?:dst|dest|target|tgt|out|output)$/i.test(String(name || ""));
+  const strVars = pipelineVbaStringVars(text);
+  // 리터럴이면 그대로, 변수면 문자열 맵에서 해석.
+  const lit = tok => {
+    const s = String(tok || "").trim();
+    const q = /^"([^"]+)"$/.exec(s);
+    if (q) return q[1];
+    return strVars.get(s.toLowerCase()) || "";
+  };
   let m;
-  const directSet = /Set\s+([A-Za-z_]\w*)\s*=\s*(?:Application\.)?Workbooks\s*\(\s*"([^"]+)"\s*\)/gi;
+  const directSet = /Set\s+([A-Za-z_]\w*)\s*=\s*(?:Application\.)?Workbooks\s*\(\s*("[^"]+"|[A-Za-z_]\w*)\s*\)/gi;
   while ((m = directSet.exec(text))) {
-    if (isTargetVar(m[1])) add(m[2]);
+    if (isTargetVar(m[1])) add(lit(m[2]));
   }
-  const loopSet = /If\s+[^"\r\n]*?\.Name\s*=\s*"([^"]+)"[\s\S]{0,260}?Set\s+([A-Za-z_]\w*)\s*=\s*wb\b/gi;
+  // `.Name = "리터럴"` 뿐 아니라 `.Name = wbDstName`(변수)도 받는다.
+  const loopSet = /If\s+[^"\r\n]*?\.Name\s*=\s*("[^"]+"|[A-Za-z_]\w*)[\s\S]{0,260}?Set\s+([A-Za-z_]\w*)\s*=\s*wb\b/gi;
   while ((m = loopSet.exec(text))) {
-    if (isTargetVar(m[2])) add(m[1]);
+    if (isTargetVar(m[2])) add(lit(m[1]));
   }
-  const targetComment = /(?:대상|출력|붙여넣|목적지)[^\r\n]{0,80}(?:워크북|파일)[\s\S]{0,420}?\.Name\s*=\s*"([^"]+)"/gi;
-  while ((m = targetComment.exec(text))) add(m[1]);
+  const targetComment = /(?:대상|출력|붙여넣|목적지)[^\r\n]{0,80}(?:워크북|파일)[\s\S]{0,420}?\.Name\s*=\s*("[^"]+"|[A-Za-z_]\w*)/gi;
+  while ((m = targetComment.exec(text))) add(lit(m[1]));
   if (!names.length) {
     const all = pipelineCollectWorkbookNames(text);
     if (all.length === 1) add(all[0]);

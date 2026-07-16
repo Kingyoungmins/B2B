@@ -34,6 +34,9 @@ const needed = [
   "pipelineResolvePyArg",
   "pipelinePythonBookVarNames",  // ctx.book("X").<변형> 감지 의존
   "pipelinePythonMutatedBookNames",
+  "pipelineCollectWorkbookNames",   // VBA 대상 추론 폴백 의존
+  "pipelineVbaStringVars",          // Dim x As String: x = "..." 해석
+  "pipelineVbaTargetWorkbookNames",
   // inferPipelineStepTargetFileId 는 의존 체인이 커서 로드하지 않는다(typeof 가드로 생략됨).
   // 자기파일 제외는 step.targetFileId 경로로 검증한다.
   "crossWriteDestinationFileIds",
@@ -151,6 +154,40 @@ const call = (fn, ...args) =>
   const mutated = call("pipelinePythonMutatedBookNames", STEP);
   ck("(P0) 변수 ctx.book 의 '변형 대상' 인식", mutated.includes("input_매출_2026_4월.xlsx"), mutated);
   ck("(P0-b) 읽기 전용 소스는 변형 대상 아님", !mutated.includes("input_원가_2026_4월.xlsx"), mutated);
+}
+
+// ── [회귀 P1] VBA 관용구: Dim n As String: n = "..." + For Each / If wb.Name = n ────────
+// LLM 이 VBA 에서 압도적으로 쓰는 형태(SBAGENT-138 step8/13 실사용). 리터럴만 보던 정규식은
+// 대상 추론이 통째로 실패했는데, '단일 워크북 폴백'이 답을 맞춰줘서 안 보였다.
+// 폴백이 안 듣는 '파일 2개 이상'(= 교차파일 스킬)이 정확히 버그가 터지는 조건이다.
+{
+  const VBA = [
+    "Sub B2BSkill()",
+    "    Dim wbDst As Workbook, wbSrc As Workbook, wb As Workbook",
+    '    Dim wbDstName As String: wbDstName = "대상_파일.xlsx"',
+    '    Dim wbSrcName As String: wbSrcName = "소스_파일.xlsx"',
+    "    For Each wb In Application.Workbooks",
+    "        If wb.Name = wbDstName Then Set wbDst = wb: Exit For",
+    "    Next wb",
+    "    For Each wb In Application.Workbooks",
+    "        If wb.Name = wbSrcName Then Set wbSrc = wb: Exit For",
+    "    Next wb",
+    "End Sub",
+  ].join("\n");
+  const t = call("pipelineVbaTargetWorkbookNames", VBA);
+  ck("(P1) Dim+콜론 대입 변수로 대상 워크북 추론", t.includes("대상_파일.xlsx"), t);
+  ck("(P1-b) 소스는 대상으로 오인 안 함", !t.includes("소스_파일.xlsx"), t);
+  // 대조군: 리터럴 직접 비교(기존 동작 보존)
+  const LIT = [
+    "    For Each wb In Application.Workbooks",
+    '        If wb.Name = "직접_대상.xlsx" Then Set wbDst = wb: Exit For',
+    "    Next wb",
+    '    Dim other As String: other = "소스_파일.xlsx"',
+  ].join("\n");
+  ck("(P1-c) 리터럴 비교는 기존대로", call("pipelineVbaTargetWorkbookNames", LIT).includes("직접_대상.xlsx"));
+  // 비교문의 `=` 를 대입으로 오인하면 안 됨
+  const vars = call("pipelineVbaStringVars", VBA);
+  ck("(P1-d) If 안의 = 는 대입 아님", !Array.from(vars.keys ? vars.keys() : []).includes("wb.name"));
 }
 
 console.log("\n=== RESULT: " + (fails === 0 ? "ALL PASS" : fails + " FAIL") + " ===");
