@@ -16260,10 +16260,18 @@ def inspect_workbook(path):
         cached_wb = openpyxl_load_workbook_compatible(path, read_only=True, data_only=True)
     except Exception as err:
         if excel_available():
-            try:
-                return inspect_workbook_with_excel(path, source_error=err)
-            except Exception as excel_err:
-                return inspect_workbook_fallback(path, f"{err}; excel: {excel_err}")
+            # [실제 시트명 보존] 위장 파일(확장자 .xlsx, 내용 OLE/HTML)은 openpyxl 이 못 읽어 이 분기로 온다.
+            # COM 검사가 일시 실패(업로드 순간 Excel 바쁨/spawn 실패)하면 폴백이 시트명을 지어내
+            # '<32hex>_파일명' 이 매핑 UI 에 그대로 떴다(고객 화면 실측 — 실제 시트명은 'Sheet1').
+            # 일시 실패가 대부분이므로 짧게 1회 재시도해 진짜 시트명을 최대한 확보한다.
+            last_excel_err = None
+            for _attempt in range(2):
+                try:
+                    return inspect_workbook_with_excel(path, source_error=err)
+                except Exception as excel_err:
+                    last_excel_err = excel_err
+                    time.sleep(1.2)
+            return inspect_workbook_fallback(path, f"{err}; excel: {last_excel_err}")
         return inspect_workbook_fallback(path, err)
     try:
         sheets = {}
@@ -16309,7 +16317,10 @@ def inspect_workbook(path):
 
 
 def inspect_workbook_fallback(path, err=None):
-    sheet_name = Path(path).stem or "Sheet1"
+    # [실제 시트명 보존] 끝내 검사가 안 되면 시트명을 알 수 없다 — 저장 파일명 stem 을 그대로 쓰면
+    # 내부 해시 접두('<32hex>_원본명')가 사용자에게 노출된다. csv_sheet_name 이 그 접두를 벗겨 주므로
+    # 최소한 사용자가 알아보는 이름(원본 파일명)으로 표기한다(requiresExcel=True 라 이후 실제 스키마로 대체됨).
+    sheet_name = csv_sheet_name(path) or "Sheet1"
     return {
         "sheetNames": [sheet_name],
         "sheets": {
