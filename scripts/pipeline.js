@@ -2103,6 +2103,18 @@ function replaceLogicAt(stepId, newCode, newDescription, language, opts) {
     trustedStatic: recoveredFromVba,
     extendedTimeout: recoveredFromVba,
   });
+  // [재바인딩 되새김] 저장 스킬의 targetFileId 는 만들어진 달 그대로다(예: input:…202606…).
+  // 다른 달 파일만 올린 채 수정하면 코드/실행은 안정키로 이번 달에 재바인딩되는데 targetFileId 는
+  // 옛 달로 남아, 한 스킬의 스텝들이 서로 다른 달 파일을 대상으로 갈리는 일이 있었다.
+  // 유일하게 해석될 때만(모호하면 null) 되새겨 대상 판정을 일치시킨다.
+  try {
+    const tid = next[idx].targetFileId;
+    if (tid && typeof getFile === "function" && !getFile(tid) &&
+        typeof pipelineResolveSavedTargetFileId === "function") {
+      const rebound = pipelineResolveSavedTargetFileId(tid);
+      if (rebound && rebound !== tid) next[idx].targetFileId = rebound;
+    }
+  } catch (_) {}
   // [0.5.15 Bug2 본수정] 마지막 스텝을 수정/에러복구해도 '그 스텝 직전 스냅샷'에서 이어실행한다(전체 재실행 금지).
   // 예전엔 idx<lastBeforeIdx(=마지막이 아님)이거나 resume 보류 중일 때만 이어실행 → 마지막 스텝(예: 6단계)
   // 수정/에러복구가 1단계부터 전체 재실행으로 떨어져 느리고 '멈춤'처럼 보였다. 이어실행 가능(=그 스텝 직전
