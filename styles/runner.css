@@ -399,6 +399,16 @@
     align-items: center;
     gap: 5px;
     margin-top: 5px;
+    /* 안내문(runner-mapping-sheet-note)이 칩/드롭다운 옆에 끼지 않고 아랫줄로 내려가게 한다. */
+    flex-wrap: wrap;
+  }
+  /* '시트 자동'인 이유 안내 — 스킬 코드에 시트명이 없어 첫 시트 기준으로 만들어졌음을 알린다. */
+  .runner-mapping-sheet-note {
+    flex: 1 0 100%;
+    font-size: 9.5px;
+    line-height: 1.45;
+    color: var(--ink-400);
+    margin-top: 1px;
   }
   .runner-mapping-sheet-map .runner-mapping-sheet-chip {
     flex: 0 0 auto;

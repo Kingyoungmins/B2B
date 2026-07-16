@@ -1159,8 +1159,8 @@ function runnerRenderMappingPanel() {
         ).join("")
       : `<span class="runner-mapping-sheet-chip">시트 자동</span>`;
     // 오른쪽: 각 시트마다 [요청 시트 칩] ↔ [실제 파일의 시트 드롭다운]. 자동 해결된 시트는 드롭다운이 미리 선택됨.
-    // '시트 자동' 그룹(명시 시트 요구 없음)에도 페어를 렌더한다 — 좌측 칩은 '시트 자동',
-    // 우측 드롭다운은 실제로 쓰일 시트(단일 시트면 그 시트가 미리 선택)를 보여주고 직접 바꿀 수 있다.
+    // '시트 자동' 그룹(스킬 코드에 시트명이 없음)에도 선택은 열어 두되, 왜 '자동'인지 안내를 붙인다.
+    // 예전엔 안내 없이 드롭다운만 있어서, 스킬이 시트명을 안 가진 사실 자체가 안 보였다.
     const pairMembers = sheetMembers.length ? sheetMembers : g.members.slice(0, 1);
     const sheetMaps = pairMembers.map(m => {
       const isAuto = !m.req.sheet;
@@ -1170,9 +1170,10 @@ function runnerRenderMappingPanel() {
       const chipCls = isAuto ? "" : (m.sheet ? "ok" : "warn");
       if (isAuto) {
         return `<div class="runner-mapping-sheet-map">
-            <span class="runner-mapping-sheet-chip" title="스킬이 시트를 이름으로 지정하지 않아 자동(첫/유일 시트)으로 처리합니다. 드롭다운에서 직접 지정할 수 있습니다.">시트 자동</span>
+            <span class="runner-mapping-sheet-chip" title="스킬 코드에 시트명이 없어 기본은 첫 번째 시트입니다.">시트 자동</span>
             <span class="runner-mapping-sheet-link">↔</span>
             <select class="runner-mapping-select runner-map-sheet2" data-mi="${g.members.indexOf(m)}" data-gidx="${gidx}" ${g.fileItem ? "" : "disabled"}>${opts}</select>
+            <div class="runner-mapping-sheet-note">* 스킬 생성 당시 명확한 시트명이 제공되지 않아 첫 번째 시트 기준으로 생성되었습니다. 다른 시트를 쓰려면 직접 골라 주세요.</div>
           </div>`;
       }
       // data-key 에 req.key(널 문자   구분자 포함)를 넣으면 HTML 속성에서 널이 U+FFFD 로 바뀌어
