@@ -3632,11 +3632,37 @@ function beginMappedPipelineRun() {
   }
   if (!mapped || mapped === original) return noop;  // 매핑 미확인/치환 대상 없음 → 기존 동작 그대로
   state.runnerMappingRunActive = true;
+  // [치환본 저장 방지] 원본을 별도 보관 — 저장(save-load.pipelineForSave)이 실행 중에도 이걸 쓴다.
+  // 그냥 지역변수로만 들고 있으면, 실행 중 renderPipeline→ensurePipelineStepIds 가 state.pipeline 을
+  // '새 배열'로 갈아끼우는 순간 원본 참조가 끊겨 복원이 어긋난다(치환본이 정본으로 굳어 저장에 샘).
+  state.pipelineOriginalDuringRun = original;
   state.pipeline = mapped;
   return {
     steps: mapped,
     restore: () => {
-      if (state.pipeline === mapped) state.pipeline = original;
+      // 실행 중 스텝이 교체됐을 수 있으므로(자동복구·편집), '지금 파이프라인'의 변경을 id 기준으로
+      // 원본에 옮겨 담은 뒤 되돌린다 — 원본 이름은 지키고 사용자의 수정분은 잃지 않는다.
+      const current = state.pipeline;
+      if (Array.isArray(current) && current !== original) {
+        const mappedById = new Map(mapped.map(s => [s && s.id, s]));
+        const merged = current.map(cur => {
+          if (!cur || !cur.id) return cur;
+          const mappedStep = mappedById.get(cur.id);
+          const originalStep = original.find(o => o && o.id === cur.id);
+          if (!originalStep) return cur;                 // 실행 중 새로 생긴 스텝 → 그대로 둔다
+          // 실행 중 코드가 '매핑본 그대로'였다면 원본 코드로 되돌린다(치환 흔적 제거).
+          // 코드가 매핑본과 다르면 = 실행 중 실제로 바뀐 것 → 그 변경을 유지한다.
+          if (mappedStep && cur.code === mappedStep.code) {
+            return { ...cur, code: originalStep.code, targetFileId: originalStep.targetFileId,
+                     targetSheetName: originalStep.targetSheetName, runnerMapped: undefined };
+          }
+          return { ...cur, runnerMapped: undefined };
+        });
+        state.pipeline = merged;
+      } else {
+        state.pipeline = original;
+      }
+      state.pipelineOriginalDuringRun = null;
       state.runnerMappingRunActive = false;
     },
   };
@@ -5526,20 +5552,16 @@ $("runner-run-btn").onclick = () => {
   // [전체실행 = 항상 원본부터] 보류 체크포인트를 무시·초기화해 reset(원본복원)을 건너뛰지 않게 한다(생성기와 동일).
   clearPipelineResumeFromIndex();
   const activeStepIds = getPipelineExecutionStepIds();
-  const runnerPipeline = typeof window.buildRunnerMappedPipeline === "function"
-    ? window.buildRunnerMappedPipeline(state.pipeline)
-    : state.pipeline;
   if (window.runnerSetRunning) window.runnerSetRunning(true);
   setPipelineRuntimeStatus(activeStepIds, "running", "실행 중");
   // Give the UI a tick to paint the ring, then execute
   setTimeout(async () => {
-    // [매핑 일관성] 실행 '동안만' state.pipeline 을 매핑본으로 교체한다. 이러면 자동복구(runPipelineWithAutoRepair
-    // 내부)와 체크포인트 이어실행(runPipelineSuffixFromCheckpoint 는 state.pipeline 을 읽음)까지 전부 '치환된 코드
-    // (실제 파일/시트명)'로 동작한다 → 도중 실패 후 복구/이어실행이 옛 이름으로 되돌아 또 실패하는 것을 막는다.
-    // finally 에서 원본을 되돌려 저장 스킬 코드(제네릭 이름)는 그대로 보존한다(save/재매핑에 치환본이 새지 않음).
-    const __originalPipeline = state.pipeline;
-    const __useMapped = runnerPipeline && runnerPipeline !== state.pipeline;
-    if (__useMapped) { state.runnerMappingRunActive = true; state.pipeline = runnerPipeline; }
+    // [매핑 일관성] 실행 '동안만' state.pipeline 을 매핑본으로 교체한다(자동복구·이어실행이 state.pipeline 을
+    // 읽으므로). 복원/원본보관은 beginMappedPipelineRun 이 전담 — 예전엔 여기서 지역변수로만 원본을 들고 있어,
+    // 실행 중 renderPipeline→ensurePipelineStepIds 가 state.pipeline 을 새 배열로 갈아끼우면 복원이 어긋나
+    // 치환본(날짜 박힌 파일명 + 세션 전용 해시 시트명)이 저장 스킬에 그대로 새어 나갔다(실측 확인).
+    const __mapRun = beginMappedPipelineRun();
+    const runnerPipeline = __mapRun.steps;
     try {
       clearPipelineExecutionMemory({ keepViewer: true });
       await runPipelineWithAutoRepair({ source: "runner", ignoreCheckpoint: true, backgroundMode: true, outputMode: "file", pipeline: runnerPipeline });
@@ -5552,7 +5574,7 @@ $("runner-run-btn").onclick = () => {
       reportPipelineError(err, { compatibilityCheck: true, runner: true });
       if (window.runnerSetRunning) window.runnerSetRunning(false);
     } finally {
-      if (__useMapped) { state.pipeline = __originalPipeline; state.runnerMappingRunActive = false; }
+      __mapRun.restore();
     }
   }, 650);
 };

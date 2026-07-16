@@ -20,6 +20,7 @@ const state = {
   runnerMappingSignature: "",
   runnerMappings: {},
   runnerMappingRunActive: false,   // 실행 동안만 true — state.pipeline 매핑본 스왑 중 소스변경 오인 리셋 방지
+  pipelineOriginalDuringRun: null, // 매핑본 스왑 중 '제네릭 이름 원본' — 저장(save-load)이 항상 이걸 쓴다(치환본 저장 방지)
   logicSaveBaseName: "",
   history: { undo: [], redo: [], limit: 80 },
   chatHistory: [],

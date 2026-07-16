@@ -112,8 +112,32 @@ function timestampedLogicArchiveName(baseName) {
   return `${base}${stepPart}_${logicBackupTimestamp()}`;
 }
 
+// [치환본 저장 방지] 실행 중에는 state.pipeline 이 '매핑본'(실제 파일/시트명으로 치환된 사본)으로
+// 잠시 교체된다. 저장(수동 '스킬 저장' + 지연 실행되는 자동백업)이 그때 찍히면 저장 스킬에
+// 날짜 박힌 파일명과 그 세션에서만 유효한 시트명(예: <해시>_원본명)이 영구히 박혀 버린다
+// → 다음 달 재사용 불가 + 다시 올리면 옛 이름·새 이름이 둘 다 요구로 잡혀 매핑이 폭증(실측 확인).
+// 저장은 언제나 '제네릭 이름의 원본'을 써야 하므로, 실행 중이면 원본 배열을 되찾아 쓴다.
+function pipelineForSave() {
+  try {
+    if (state.runnerMappingRunActive && Array.isArray(state.pipelineOriginalDuringRun)) {
+      return state.pipelineOriginalDuringRun;
+    }
+  } catch (_) {}
+  return state.pipeline;
+}
+
 function buildLogicZipEntries(name) {
   const safeBase = safeLogicBaseName(name);
+  const statePipeline = state.pipeline;
+  state.pipeline = pipelineForSave();          // 저장 동안만 원본 기준
+  try {
+    return _buildLogicZipEntriesImpl(safeBase, name);
+  } finally {
+    state.pipeline = statePipeline;
+  }
+}
+
+function _buildLogicZipEntriesImpl(safeBase, name) {
   const stepFiles = state.pipeline.map((s, idx) => {
     const lang = s && s.language ? s.language : "javascript";
     return `${safeBase}_step_${idx + 1}.${lang === "python" ? "py" : "js"}`;
