@@ -23,7 +23,7 @@ function extract(name) {
 const sb = { console };
 vm.createContext(sb);
 ["runnerMappingNorm", "runnerLooksLikeA1Address", "runnerAddGeneratedSheet",
- "runnerIsGeneratedSheet", "runnerSliceCallArgs", "runnerExtractGeneratedSheetsFromCode"].forEach(f => vm.runInContext(extract(f), sb));
+ "runnerIsGeneratedSheet", "runnerSliceCallArgs", "runnerPyBookVarMap", "runnerExtractGeneratedSheetsFromCode"].forEach(f => vm.runInContext(extract(f), sb));
 const gen = c => vm.runInContext("runnerExtractGeneratedSheetsFromCode(" + JSON.stringify(c) + ")", sb);
 const isG = (g, b, s) => vm.runInContext("runnerIsGeneratedSheet(" + JSON.stringify(g) + "," + JSON.stringify(b) + "," + JSON.stringify(s) + ")", sb);
 

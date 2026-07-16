@@ -23,7 +23,7 @@ function extract(name) {
 const sandbox = { console };
 vm.createContext(sandbox);
 ["runnerMappingNorm", "runnerMappingKey", "runnerCleanWorkbookRequirementName",
- "runnerAddRequirement", "runnerLooksLikeA1Address", "runnerAddPairedCodeRequirements"].forEach(fn =>
+ "runnerAddRequirement", "runnerLooksLikeA1Address", "runnerPyBookVarMap", "runnerAddPairedCodeRequirements"].forEach(fn =>
   vm.runInContext(extract(fn), sandbox));
 
 function reqs(code, skips) {

@@ -24,7 +24,7 @@ function extract(name) {
 const sandbox = { console };
 vm.createContext(sandbox);
 ["runnerMappingNorm", "runnerLooksLikeA1Address", "runnerAddGeneratedSheet",
- "runnerIsGeneratedSheet", "runnerExtractGeneratedSheetsFromCode"].forEach(fn =>
+ "runnerIsGeneratedSheet", "runnerSliceCallArgs", "runnerPyBookVarMap", "runnerExtractGeneratedSheetsFromCode"].forEach(fn =>
   vm.runInContext(extract(fn), sandbox));
 const gen = code => vm.runInContext("runnerExtractGeneratedSheetsFromCode(" + JSON.stringify(code) + ")", sandbox);
 const isGen = (g, book, sheet) =>

@@ -562,6 +562,36 @@ function runnerIsGeneratedSheet(generated, book, sheet) {
   });
 }
 
+// `VAR = ctx.book(<리터럴 또는 변수>)` 를 { VAR: "실제 파일명" } 으로 푼다.
+// 세 추출기(생성시트/요구시트/시트소유자)가 같은 규칙을 쓰도록 한 곳에 모았다 —
+// 예전엔 같은 로직이 3벌 복제돼 있었고 ctx.book( 뒤에 '따옴표 리터럴'만 허용했다. 그래서
+//     src_file = "A.xlsx"; src_ctx = ctx.book(src_file); src_ctx.read("콜센터", ...)
+// 처럼 파일명을 변수로 넘기면 수신자의 소속 파일을 몰라, 그 시트 요구가 엉뚱한 파일에
+// 붙었다(SBAGENT-171: 'sheet' 시트가 로우데이터 파일이 아니라 콜센터 파일에 요구됨).
+function runnerPyBookVarMap(src) {
+  const text = String(src || "");
+  const literals = new Map();
+  const assignLine = /^\s*([A-Za-z_]\w*)\s*=\s*(["'])([^"'\r\n]+)\2\s*(?:#.*)?$/;
+  for (const line of text.split(/\r?\n/)) {
+    const av = assignLine.exec(line);
+    if (av) literals.set(av[1], av[3]);
+  }
+  const resolve = expr => {
+    const s = String(expr || "").trim();
+    const lit = /^(["'])([^"']+)\1$/.exec(s);
+    if (lit) return lit[2];
+    return /^[A-Za-z_]\w*$/.test(s) ? (literals.get(s) || "") : "";
+  };
+  const books = new Map();
+  const re = /\b([A-Za-z_]\w*)\s*=\s*ctx\.book\(\s*([^()\r\n]+?)\s*\)/g;
+  let m;
+  while ((m = re.exec(text))) {
+    const name = resolve(m[2]);
+    if (name) books.set(m[1], name);
+  }
+  return books;
+}
+
 // 여는 괄호 위치(openIdx)에서 짝이 맞는 닫는 괄호까지 = '그 호출의 인자 목록'만 반환.
 // 고정 길이(400자) 창은 호출 경계를 안 지켜 인접 호출의 dest_name/new_name 을 훔친다.
 // 문자열 리터럴 안의 괄호는 세지 않는다(조건 람다에 괄호·콤마가 흔하다).
@@ -616,14 +646,10 @@ function runnerExtractGeneratedSheetsFromCode(code) {
     return /^[A-Za-z_][A-Za-z0-9_]*$/.test(s) ? (pyLiteralVars.get(s) || "") : "";
   };
 
-  const pyVars = new Map();
   // ctx.book 인자가 변수여도 잡는다(b = ctx.book(target_file)) — 리터럴만 보던 탓에
   // '수신자 변수의 출처'를 몰라 b.add_sheet("리터럴") 이 미탐이었다.
-  const pyAssign = /\b([A-Za-z_][A-Za-z0-9_]*)\s*=\s*ctx\.book\(\s*([^()\r\n]+?)\s*\)/g;
-  while ((m = pyAssign.exec(src))) {
-    const bookName = resolvePyName(m[2]);
-    if (bookName) pyVars.set(m[1], bookName);
-  }
+  // 세 추출기가 같은 규칙을 쓰도록 공용 헬퍼 사용(예전엔 3벌 복제라 한 곳만 고치면 반쪽이 됐다).
+  const pyVars = runnerPyBookVarMap(src);
   pyVars.forEach((book, varName) => {
     const esc = varName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     let mm;
@@ -765,9 +791,9 @@ function runnerAddPairedCodeRequirements(map, code, shouldSkip) {
     }
   }
 
-  const pyVars = new Map();
-  const pyAssign = /\b([A-Za-z_][A-Za-z0-9_]*)\s*=\s*ctx\.book\(\s*["']([^"']+)["']\s*\)/g;
-  while ((m = pyAssign.exec(src))) pyVars.set(m[1], m[2]);
+  // 파일명을 변수로 넘긴 ctx.book(src_file) 도 푼다(runnerPyBookVarMap) — 리터럴만 보던 탓에
+  // 시트 요구가 엉뚱한 파일에 붙었다(SBAGENT-171).
+  const pyVars = runnerPyBookVarMap(src);
   pyVars.forEach((book, varName) => {
     const esc = varName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     const re = new RegExp(`\\b${esc}\\s*\\.\\s*(?:read|write|write_cell|copy|sort|delete_rows|delete_cols|last_row|last_col|find_header)\\(\\s*["']([^"']+)["']`, "g");
@@ -840,9 +866,8 @@ function runnerSheetOwnersFromCode(code) {
   });
   const pyDirect = /ctx\.book\(\s*["']([^"']+)["']\s*\)\s*\.\s*(?:read|write|write_cell|copy|sort|clear|find_header|last_row|last_col)\(\s*["']([^"']+)["']/gi;
   while ((m = pyDirect.exec(src))) add(m[1], m[2]);
-  const pyVars = new Map();
-  const pyAssign = /\b([A-Za-z_]\w*)\s*=\s*ctx\.book\(\s*["']([^"']+)["']\s*\)/g;
-  while ((m = pyAssign.exec(src))) pyVars.set(m[1], m[2]);
+  // 파일명 변수(ctx.book(tgt_file))도 푼다 — 세 추출기가 같은 규칙을 쓰게 통일.
+  const pyVars = runnerPyBookVarMap(src);
   pyVars.forEach((book, varName) => {
     const esc = varName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     const re = new RegExp(`\\b${esc}\\s*\\.\\s*(?:read|write|write_cell|copy|sort|clear|find_header|last_row|last_col)\\(\\s*["']([^"']+)["']`, "g");
