@@ -616,6 +616,15 @@ function runnerSliceCallArgs(src, openIdx) {
   return "";
 }
 
+// [스킬 기본값] '이 시트는 치환하지 말고 스킬 코드에 적힌 값 그대로 실행하라'는 사용자의 명시적 선택.
+// 매핑은 스킬 코드의 시트 리터럴을 실제 시트명으로 바꿔치기하는데(runnerReplaceLiteral), 그 판단이
+// 틀리면 원래 잘 돌던 스킬이 깨진다(SBAGENT-198 계열). 그럴 때 사용자가 치환을 꺼서 스킬에
+// 일임할 수 있는 탈출구다. 저장은 되지만 치환에는 쓰이지 않는 센티넬 값.
+const RUNNER_SHEET_SKILL_DEFAULT = "__b2b_skill_default__";
+function runnerIsSkillDefaultSheet(v) {
+  return String(v || "") === RUNNER_SHEET_SKILL_DEFAULT;
+}
+
 function runnerExtractGeneratedSheetsFromCode(code) {
   const src = String(code || "");
   const generated = [];
@@ -1121,10 +1130,17 @@ function runnerBuildMappingRows() {
       score = auto && auto.score || 0;
       rebound = !!(auto && auto.rebound);
     }
-    const sheet = fileItem ? runnerFindSheet(req, fileItem.file, stored && stored.sheet) : "";
+    // [스킬 기본값] 사용자가 '치환하지 말라'고 명시한 시트 — sheet 를 비워 두면
+    // buildRunnerMappedPipeline 의 `if (row.req.sheet && row.sheet)` 가 걸러 치환이 일어나지 않는다.
+    // 다만 '선택 필요'(bad)로 떨어져 실행이 막히면 안 되므로 상태는 정상으로 둔다.
+    const skillDefault = !!(stored && runnerIsSkillDefaultSheet(stored.sheet));
+    const sheet = (fileItem && !skillDefault) ? runnerFindSheet(req, fileItem.file, stored && stored.sheet) : "";
     let status = "bad";
     let statusText = "선택 필요";
-    if (fileItem && (!req.sheet || sheet)) {
+    if (fileItem && skillDefault) {
+      status = "ok";
+      statusText = "스킬 기본값";
+    } else if (fileItem && (!req.sheet || sheet)) {
       const sheetExact = !req.sheet || sheet === req.sheet || runnerMappingNorm(sheet) === runnerMappingNorm(req.sheet);
       if ((score >= 95 || !req.book) && sheetExact) {
         status = "ok";
@@ -1135,7 +1151,7 @@ function runnerBuildMappingRows() {
         statusText = rebound ? "확인 필요(다른 달 추정)" : "확인 필요";
       }
     }
-    return { req, files, fileItem, sheet, score, status, statusText, rebound, userSet: !!(stored && stored.userSet) };
+    return { req, files, fileItem, sheet, score, status, statusText, rebound, skillDefault, userSet: !!(stored && stored.userSet) };
   });
 }
 
@@ -1221,8 +1237,11 @@ function runnerRenderMappingPanel() {
     const pairMembers = sheetMembers.length ? sheetMembers : g.members.slice(0, 1);
     const sheetMaps = pairMembers.map(m => {
       const isAuto = !m.req.sheet;
-      const opts = [`<option value="">${isAuto ? "시트 자동(첫 시트)" : "시트 선택"}</option>`].concat(sheetsInFile.map(s =>
-        `<option value="${escapeHtml(s)}" ${m.sheet && runnerMappingNorm(m.sheet) === runnerMappingNorm(s) ? "selected" : ""}>${escapeHtml(s)}</option>`
+      // '스킬 기본값' = 치환하지 않고 스킬 코드에 적힌 값 그대로 실행(원래 돌던 스킬용 탈출구).
+      const skillDefaultOpt =
+        `<option value="${RUNNER_SHEET_SKILL_DEFAULT}" ${m.skillDefault ? "selected" : ""}>스킬 기본값(그대로 실행)</option>`;
+      const opts = [`<option value="">${isAuto ? "시트 자동(첫 시트)" : "시트 선택"}</option>`, skillDefaultOpt].concat(sheetsInFile.map(s =>
+        `<option value="${escapeHtml(s)}" ${!m.skillDefault && m.sheet && runnerMappingNorm(m.sheet) === runnerMappingNorm(s) ? "selected" : ""}>${escapeHtml(s)}</option>`
       )).join("");
       const chipCls = isAuto ? "" : (m.sheet ? "ok" : "warn");
       if (isAuto) {
@@ -1323,7 +1342,9 @@ window.buildRunnerMappedPipeline = function(steps) {
     const stepText = [step.prompt, step.description, step.code, step.targetFileId, step.targetSheetName].filter(Boolean).join("\n");
     rows.forEach(row => {
       const actualName = row.fileItem ? row.fileItem.name : "";
+      // 파일명 치환은 '스킬 기본값'에서도 유지한다 — 안 하면 옛 파일명이 남아 워크북을 못 찾는다.
       if (row.req.book && actualName) code = runnerReplaceLiteral(code, row.req.book, actualName);
+      // 시트는 사용자가 '스킬 기본값'을 고르면 손대지 않는다(row.sheet 가 비어 있음).
       if (row.req.sheet && row.sheet) code = runnerReplaceLiteral(code, row.req.sheet, row.sheet);
       const touchesBook = row.req.book && stepText.includes(row.req.book);
       const touchesSheet = row.req.sheet && stepText.includes(row.req.sheet);
