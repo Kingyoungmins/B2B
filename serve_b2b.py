@@ -88,6 +88,9 @@ PYTHON_SKILL_APP_REAP_CHECK_AT = 0.0
 # [0.5.2 이식] 이 앱이 DispatchEx 로 띄운 모든 EXCEL.EXE pid. 세션 기록 전에 열기가 실패하면
 # 고아 Excel 이 남는데, 강제 정리(초기화/force-restart)가 세션 pid 만 죽이면 영영 안 닫힘 → 전부 추적.
 SPAWNED_EXCEL_PIDS = set()
+# 진행 중인 비동기 force-restart kill 스레드(종료 시 join 해 고아 방지).
+_KILL_INFLIGHT = []
+_KILL_INFLIGHT_LOCK = threading.Lock()
 EXCEL_LAST_REAP_AT = 0.0
 EXCEL_REAP_INTERVAL_SECONDS = float(os.environ.get("B2B_EXCEL_REAP_INTERVAL", "300"))
 NATIVE_HOST_PID = int(os.environ.get("B2B_NATIVE_HOST_PID") or "0")
@@ -847,8 +850,33 @@ def _force_restart_excel_sessions_direct(wait=False):
     if wait:
         _kill_and_cleanup()
     else:
-        threading.Thread(target=_kill_and_cleanup, name="b2b-force-restart-kill", daemon=True).start()
+        # [종료 경합] 비동기 kill 은 데몬 스레드라, 직후 /api/app/shutdown 이 os._exit 하면 그대로
+        # 잘려 아직 taskkill 이 발행되지 않은 EXCEL.EXE 가 고아로 남는다('작업 중단 → 2단계
+        # force-restart → 곧바로 X 종료'는 자연스러운 순서라 실제로 겹친다).
+        # 종료가 기다릴 수 있도록 진행 중인 kill 스레드를 등록해 둔다.
+        t = threading.Thread(target=_kill_and_cleanup, name="b2b-force-restart-kill", daemon=True)
+        with _KILL_INFLIGHT_LOCK:
+            _KILL_INFLIGHT.append(t)
+        t.start()
     return {"ok": True, "killing": len(pids), "sessions": len(sessions)}
+
+
+def _join_inflight_kills(timeout):
+    """진행 중인 비동기 force-restart kill 스레드를 기다린다(종료 경로 전용)."""
+    deadline = time.time() + max(0.0, float(timeout or 0))
+    with _KILL_INFLIGHT_LOCK:
+        threads = [t for t in _KILL_INFLIGHT if t.is_alive()]
+    for t in threads:
+        remain = deadline - time.time()
+        if remain <= 0:
+            break
+        try:
+            t.join(timeout=remain)
+        except Exception:
+            pass
+    with _KILL_INFLIGHT_LOCK:
+        _KILL_INFLIGHT[:] = [t for t in _KILL_INFLIGHT if t.is_alive()]
+    return not _KILL_INFLIGHT
 
 
 atexit.register(cleanup_node_worker)
@@ -1130,6 +1158,13 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
                 _force_restart_excel_sessions_direct(wait=True)
             except Exception:
                 pass
+            # 직전에 '작업 중단 2단계'/초기화가 띄운 비동기 kill 이 아직 돌고 있으면 그것도 기다린다.
+            # 그 스레드가 이미 SPAWNED/세션을 비운 뒤라 위 wait=True 는 빈 스냅샷만 보고 즉시 끝나는데,
+            # 그대로 os._exit 하면 아직 taskkill 이 안 나간 EXCEL.EXE 가 고아로 남았다.
+            try:
+                _join_inflight_kills(8)
+            except Exception:
+                pass
             try:
                 cleanup_node_worker()
             except Exception:
@@ -1142,6 +1177,18 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
 
             def _exit_soon():
                 time.sleep(0.5)  # 응답이 소켓으로 전달될 여유
+                # [등록 중 pid 경합] 위 정리는 SPAWNED_EXCEL_PIDS 스냅샷 시점 기준이다. 그 직후
+                # 완료된 DispatchEx(전체실행 격리 인스턴스/companion)가 _track_spawned_excel_app 으로
+                # '이미 비운' 집합에 pid 를 넣으면, kill 대상에서 빠진 채 os._exit → 숨김 EXCEL.EXE 가
+                # 영구 고아로 남는다(다음 실행은 새 프로세스라 이전 pid 를 모른다). 나가기 직전 한 번 더 쓸어담는다.
+                try:
+                    stragglers = {int(p) for p in list(SPAWNED_EXCEL_PIDS) if p}
+                    for pid in stragglers:
+                        if _is_pid_alive(pid):
+                            _perf_trace("shutdown.straggler_kill", pid=int(pid))
+                            _force_kill_pid(pid)
+                except Exception:
+                    pass
                 os._exit(0)
 
             threading.Thread(target=_exit_soon, name="b2b-app-shutdown-exit", daemon=True).start()
@@ -6140,6 +6187,31 @@ def _stable_workbook_key(name):
             break
     s = re.sub(r"[\s_\-().\[\]]+", "", s)
     return s
+
+
+def _user_facing_workbook_names(app):
+    """사용자에게 보여줄 수 있는(=코드에 그대로 써도 되는) 열린 워크북 이름만.
+
+    내부 작업본/변환본(excel_open_<uuid>.<ext>, <hash>_원본명.xlsx, live_reset_<hash>_…)과
+    개인 매크로 통합문서(PERSONAL.XLSB) 같은 애드인은 제외한다. 이 목록은 오류 힌트에 실려
+    LLM 재시도 루프로 되먹여지므로, 내부명이 새어 나가면 모델이 그 이름을 코드에 박아
+    (사용자 원본명 별칭 체계를 우회) 다음 실행에서 깨진다.
+    """
+    names = []
+    try:
+        raw = [str(wb.Name) for wb in app.Workbooks]
+    except Exception:
+        return names
+    for name in raw:
+        stem = str(Path(name).stem)
+        if re.match(r"^(?:excel_open_|live_reset_)[0-9a-f]{8,}", stem, re.I):
+            continue
+        if re.match(r"^[0-9a-f]{12,}[_-]", stem):
+            continue
+        if stem.upper() in ("PERSONAL", "PERSONAL.XLSB"):
+            continue
+        names.append(name)
+    return names
 
 
 def _match_workbook_by_stable_key(names, requested):
@@ -11231,19 +11303,39 @@ class PythonComSkillContext:
         self._tick(2)
         target = None
         requested_keys = _workbook_name_lookup_keys(key)
+        # [정확명 우선] 예전엔 정확명·stem·별칭키를 한 루프에서 같이 보고 '첫 히트'에 break 했다.
+        # 그래서 '정산.csv' 를 요청해도 컬렉션 순서상 앞에 있는 '정산.xlsx'(stem 동일, 확장자만 다름)가
+        # 가로채, 정확히 그 이름으로 열려 있는 파일을 두고 엉뚱한 워크북에 썼다.
+        # 정확명 → 별칭키 → stem 순으로 '패스를 나눠' 본다(_resolve_open_workbook_name 과 같은 원칙).
         try:
-            for wb in self._app.Workbooks:
+            books = list(self._app.Workbooks)
+        except Exception:
+            books = []
+
+        def _pick(pred):
+            for wb in books:
                 try:
-                    wb_name = str(wb.Name)
-                    if (wb_name == key
-                            or str(Path(wb_name).stem) == str(Path(key).stem)
-                            or (_workbook_name_lookup_keys(wb_name) & requested_keys)):
-                        target = wb
-                        break
+                    if pred(str(wb.Name)):
+                        return wb
                 except Exception:
                     continue
-        except Exception:
-            target = None
+            return None
+
+        target = _pick(lambda n: n == key)
+        if target is None:
+            target = _pick(lambda n: bool(_workbook_name_lookup_keys(n) & requested_keys))
+        if target is None:
+            # stem 매칭(확장자 무시)은 가장 느슨하므로 '유일할 때만' 따라간다 —
+            # 확장자만 다른 동명 파일이 둘 이상이면 모호하므로 조용히 아무거나 잡지 않는다.
+            stem_hits = []
+            for wb in books:
+                try:
+                    if str(Path(str(wb.Name)).stem) == str(Path(key).stem):
+                        stem_hits.append(wb)
+                except Exception:
+                    continue
+            if len(stem_hits) == 1:
+                target = stem_hits[0]
         if target is None:
             # 공백/_/- 만 다른 파일명도 매칭(모델이 한글 파일명에 공백을 끼우는 케이스: '기업DW추출'→'기업 DW 추출').
             # 정규화 후 '정확히 한 워크북'에만 맞을 때만 따라간다(모호하면 기존 에러).
@@ -11296,9 +11388,12 @@ class PythonComSkillContext:
         if target is None:
             # [지원성] 어떤 파일이 열려 있는지 함께 알려줘야 이름 불일치(중복다운로드 접미사·본부별
             # 파일명 차이 등)를 사용자가/지원팀이 바로 식별할 수 있다.
+            # 단, 내부 작업본 이름(excel_open_<uuid>, <hash>_원본명, PERSONAL.XLSB 등)은 보여주면 안 된다 —
+            # 이 에러는 적용 게이트의 LLM 재시도 루프로 되먹임되므로, 모델이 그 내부명을 그대로 코드에
+            # 박아버리면(별칭 체계 우회) 재실행 때 uuid 가 달라져 반드시 깨진다.
             open_names = []
             try:
-                open_names = [str(wb.Name) for wb in self._app.Workbooks]
+                open_names = _user_facing_workbook_names(self._app)
             except Exception:
                 pass
             hint = ""

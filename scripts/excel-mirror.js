@@ -1091,6 +1091,31 @@ async function recoverExcelMirrorWindow(excelId = currentExcelId() || excelMirro
 // 복구가 워크북을 '파일에서 다시 열었다'(reopened) = 메모리에 적용돼 있던 스킬 결과가
 // 사라진 상태. 파이프라인은 '적용됨'인데 화면은 원본이라 어긋나므로, 적용된 VBA 스텝을
 // 자동으로 재적용해 상태를 일치시킨다. (반복 실패 루프 방지를 위해 쿨다운 2분)
+// [적용됨-미반영 괴리] 창을 다시 열었는데(=라이브는 pristine 원본) 자동재적용이 스킵되면,
+// 파이프라인은 여전히 '적용됨'으로 표시되고 step._preApplySnapshot(죽은 세션 id)·resume 인덱스도
+// 살아남는다. 그 상태에서 다음 스킬을 적용하면 reset:false 로 '원본 위에' 그 스텝만 실행돼,
+// 앞 스텝 결과(정렬/필터)를 전제로 한 계산이 조용히 틀린 값을 낸다(가장 위험한 실패 모드).
+// → 재적용을 못 했으면 상태를 사실대로 되돌린다(적용됨 표시 해제 + 스냅샷/이어실행 폐기).
+function markLivePipelineOutOfSync(reason) {
+  try {
+    const steps = (state.pipeline || []).filter(s => s && s.code);
+    if (!steps.length) return;
+    if (typeof setPipelineRuntimeStatus === "function") {
+      setPipelineRuntimeStatus(steps.map(s => s.id), null);
+    }
+    steps.forEach(s => { if (s._preApplySnapshot) delete s._preApplySnapshot; });
+    if (typeof setPipelineResumeFromIndex === "function") setPipelineResumeFromIndex(null);
+    else window.__pipelineResumeFromIndex = null;
+    if (typeof invalidateLivePipelineApplied === "function") invalidateLivePipelineApplied();
+    if (typeof renderPipeline === "function") renderPipeline();
+    if (typeof refreshRunButton === "function") refreshRunButton();
+    if (typeof toast === "function") {
+      toast("Excel 창을 다시 열어 적용 상태가 풀렸습니다. '전체실행'으로 다시 적용해 주세요.", "error");
+    }
+    traceClientUiEvent("pipeline.live_out_of_sync", { reason: String(reason || ""), steps: steps.length });
+  } catch (_) {}
+}
+
 function maybeAutoReapplyAfterRecover(excelId) {
   try {
     if (!excelId) return;
@@ -1102,9 +1127,9 @@ function maybeAutoReapplyAfterRecover(excelId) {
       return;
     }
     const now = Date.now();
-    if (now < (excelMirror.autoReapplyBlockedUntil || 0)) return;
+    if (now < (excelMirror.autoReapplyBlockedUntil || 0)) return markLivePipelineOutOfSync("cooldown");
     excelMirror.autoReapplyBlockedUntil = now + 120000;
-    if (typeof reapplyVbaPipelineToLive !== "function") return;
+    if (typeof reapplyVbaPipelineToLive !== "function") return markLivePipelineOutOfSync("no-reapply");
     if (typeof toast === "function") toast("Excel 창을 다시 열어, 적용돼 있던 스킬을 자동으로 재적용합니다.", "success");
     reapplyVbaPipelineToLive(excelId).catch(err => {
       console.warn("auto reapply after recover failed:", err);

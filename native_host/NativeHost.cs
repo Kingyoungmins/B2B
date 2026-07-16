@@ -1423,12 +1423,17 @@ namespace B2BNativeHost
                     // 정리 엔드포인트로 교체 — 서버가 앱 소유 EXCEL.EXE 를 pid 로 즉시 kill 하고
                     // (작업복사본 + SaveChanges:=False 라 데이터 손실 없음) kill 완료 후에 응답하므로
                     // '동기로 기다려야 고아가 안 남는다'는 기존 불변식은 그대로 유지된다.
-                    // 타임아웃은 taskkill(프로세스당 최대 3초) 여러 개 여유로 15초.
+                    // 타임아웃 예산: 서버측 정리는 EXCEL_LOCK 대기(2s) + pid당 taskkill(최대 3s, 순차)
+                    // + 생존확인(3s) + 진행 중이던 비동기 kill join(최대 8s) + 임시파일/노드워커 정리.
+                    // pid 가 4개(공유 라이브 + python skill + 격리 전체실행 + companion)면 15초로는 모자라,
+                    // 타임아웃 → 폴백(빈 상태로 즉시 ok) → 서버 Kill 로 '정리 중인 서버'를 끊어 Excel 이
+                    // 고아로 남았다(구 코드의 35s > 서버 내부 20s 라는 예산 관계가 축소하며 깨진 것).
+                    // 정리 중에도 창은 이미 숨겨져 사용자는 종료된 것으로 보이므로 넉넉히 준다.
                     string closeUrl = "http://127.0.0.1:" + port + "/api/app/shutdown";
                     HttpWebRequest req = (HttpWebRequest)WebRequest.Create(closeUrl);
                     req.Method = "POST";
-                    req.Timeout = 15000;
-                    req.ReadWriteTimeout = 15000;
+                    req.Timeout = 40000;
+                    req.ReadWriteTimeout = 40000;
                     byte[] body = Encoding.UTF8.GetBytes("{}");
                     req.ContentType = "application/json";
                     req.ContentLength = body.Length;
@@ -1443,7 +1448,26 @@ namespace B2BNativeHost
             catch (Exception ex)
             {
                 Program.Log("App shutdown failed: " + ex.Message);
-                TryPostShutdownJson("/api/excel/force-restart", 8000);
+                // [구/신 혼합] rootDir 에 구버전 B2B_Server.exe 가 남은 채 호스트만 갱신되면
+                // /api/app/shutdown 이 404 다. 구 서버의 force-restart 는 wait 파라미터가 없어
+                // 무조건 백그라운드 kill 후 즉시 응답 → 곧바로 serverProcess.Kill() 이 그 스레드를
+                // 끊어 Excel 이 고아로 남는다(구 호스트는 동기 close-all(35s)이라 안전했으므로
+                // 이 조합에서만 생기는 회귀). 404 면 구 서버가 확실하므로 '동기' close-all 로 되돌린다.
+                bool notFound = false;
+                WebException wex = ex as WebException;
+                if (wex != null && wex.Response is HttpWebResponse)
+                {
+                    notFound = ((HttpWebResponse)wex.Response).StatusCode == HttpStatusCode.NotFound;
+                }
+                if (notFound)
+                {
+                    Program.Log("Old server detected (404) — falling back to synchronous close-all");
+                    TryPostShutdownJson("/api/excel/close-all", 35000);
+                }
+                else
+                {
+                    TryPostShutdownJson("/api/excel/force-restart", 8000);
+                }
             }
             HideExcelChildren();
             try

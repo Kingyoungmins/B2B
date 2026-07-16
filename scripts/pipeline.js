@@ -3502,6 +3502,12 @@ function pipelineEditBusyReason() {
   if (window.__activeVbaApply && window.__activeVbaApply.token && !window.__activeVbaApply.token.cancelled) {
     return "현재 Excel 적용 작업이 끝난 뒤 다시 시도하세요.";
   }
+  // [중단 중 편집 차단] 취소 시작 즉시 __activeVbaApply=null 로 비우므로 여기서 ""(=편집 가능)를
+  // 돌려줘, 되돌리는 동안 토글/삭제/새 적용이 통과했다. 그 새 작업이 COM 큐에 줄서 있다가
+  // 승격이 나면 EXCEL.EXE kill 로 함께 폭파돼 스텝이 오류/불일치 상태로 남았다.
+  if (window.__excelStopInProgress) {
+    return "작업을 중단하고 이전 상태로 되돌리는 중입니다. 잠시 후 다시 시도하세요.";
+  }
   return "";
 }
 
