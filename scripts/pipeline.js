@@ -3459,7 +3459,18 @@ async function restorePipelineToCheckpointAndHold(startIdx, beforeSteps, options
   return true;
 }
 
+// [매핑 보존] '수정 이후 부분만 이어실행'도 매핑본으로 돈다 — 안 그러면 수정 스텝은 새 코드로,
+// 뒤 스텝들은 저장 스킬의 옛 파일명으로 실행돼 그 파일이 안 열린 채 "워크북이 열려 있지 않습니다".
 async function runPipelineSuffixFromCheckpoint(startIdx, options = {}) {
+  const __mapRun = beginMappedPipelineRun();
+  try {
+    return await _runPipelineSuffixFromCheckpointImpl(startIdx, options);
+  } finally {
+    __mapRun.restore();
+  }
+}
+
+async function _runPipelineSuffixFromCheckpointImpl(startIdx, options = {}) {
   const start = Math.max(0, Number(startIdx) | 0);
   const steps = state.pipeline || [];
   if (start >= steps.length) {
@@ -3598,11 +3609,56 @@ function applyLiveSchemaToFileCache(excelId, schema) {
   if (typeof syncFileMetadata === "function") { try { syncFileMetadata(f); } catch (_) {} }
 }
 
+// [매핑 보존] 실행기에서 사용자가 확정한 파일·시트 매핑을 '생성기 재실행'에도 적용한다.
+// 실행기 실행 버튼과 동일한 방식: 실행 '동안만' state.pipeline 을 매핑본으로 교체하고 finally 로 복원
+// (자동복구·체크포인트 이어실행이 state.pipeline 을 읽으므로 교체해야 전부 치환된 코드로 동작).
+//
+// 왜 필요한가: 매핑은 실행기 실행 버튼에서만 적용됐다. 그래서 '실행기 매핑 전체실행(성공) →
+// 결과 편집하기 → 생성기에서 스텝 수정 → 수정 이후 재실행' 하면 저장 스킬의 옛 파일명 리터럴
+// (예: 02...2026-07-07...)이 그대로 나가 대상 추론이 실패하고 현재 탭으로 폴백 →
+// 격리 인스턴스에 그 파일이 안 열려 "워크북이 열려 있지 않습니다"로 죽었다.
+// 도서/시내처럼 기계가 고를 수 없어 사람이 지정한 매핑은 자동 추론으로 대체 불가라 반드시 재사용해야 한다.
+function beginMappedPipelineRun() {
+  const original = state.pipeline;
+  const noop = { steps: original, restore: () => {} };
+  if (state.runnerMappingRunActive) return noop;   // 실행기 실행 중이면 이미 매핑본으로 교체돼 있음
+  let mapped = original;
+  try {
+    if (typeof window !== "undefined" && typeof window.buildRunnerMappedPipeline === "function") {
+      mapped = window.buildRunnerMappedPipeline(original) || original;
+    }
+  } catch (_) {
+    return noop;
+  }
+  if (!mapped || mapped === original) return noop;  // 매핑 미확인/치환 대상 없음 → 기존 동작 그대로
+  state.runnerMappingRunActive = true;
+  state.pipeline = mapped;
+  return {
+    steps: mapped,
+    restore: () => {
+      if (state.pipeline === mapped) state.pipeline = original;
+      state.runnerMappingRunActive = false;
+    },
+  };
+}
+
 // 0.4.9 리모콘 모델: VBA 엔진에서 토글/삭제/편집/순서변경 등으로 파이프라인이 바뀌면
 // 라이브 워크북을 원본으로 리셋한 뒤 enabled VBA 스텝을 순서대로 다시 적용한다.
 
 
+// [매핑 보존] 수정 후 적용 / ON·OFF / 삽입 등 편집발 재적용의 최종 관문. 호출자가 steps 를 명시하지
+// 않은 경우(replaceLogicAt·insertLogic 의 직접 호출 등) 여기서 매핑본으로 교체한다. 명시한 경우는
+// 상위(reconcile)가 이미 교체했으므로 건드리지 않는다.
 async function reapplyVbaPipelineToLive(excelId, options = {}) {
+  const __mapRun = options.steps ? null : beginMappedPipelineRun();
+  try {
+    return await _reapplyVbaPipelineToLiveImpl(excelId, options);
+  } finally {
+    if (__mapRun) __mapRun.restore();
+  }
+}
+
+async function _reapplyVbaPipelineToLiveImpl(excelId, options = {}) {
   const perfStartedAt = performance.now();
   let prehideMs = 0;
   let requestMs = 0;
@@ -3905,6 +3961,18 @@ function affectedStepViewFileId(affected) {
 }
 
 async function reconcilePipelineSimulationAfterEdit(options = {}) {
+  // [매핑 보존] 편집(수정/토글/삭제/삽입)발 재실행도 실행기에서 확정한 매핑을 쓴다 — 안 그러면
+  // 저장 스킬의 옛 파일명 리터럴이 그대로 나가 대상 추론 실패 → 현재 탭 폴백 → "워크북이 열려 있지 않습니다".
+  // 호출자가 steps 를 명시하지 않은 경우에만 교체한다(명시했으면 그 배열의 정체성을 존중).
+  const __mapRun = options.steps ? null : beginMappedPipelineRun();
+  try {
+    return await _reconcilePipelineSimulationAfterEditImpl(options);
+  } finally {
+    if (__mapRun) __mapRun.restore();
+  }
+}
+
+async function _reconcilePipelineSimulationAfterEditImpl(options = {}) {
   // 라이브 엔진(vba/python COM) + 라이브 세션이면 파이프라인 재동기화를 라이브 리셋+재적용으로 처리.
   // (주의: 이 분기를 안 타면 백엔드 openpyxl 경로로 빠져 '라이브 Excel 은 리셋되지 않는' 상태가 된다 —
   //  python 엔진 강제 후 토글 OFF 가 해제되지 않던 버그의 원인. vba 단독 체크 금지.)

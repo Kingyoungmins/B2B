@@ -1094,13 +1094,17 @@ function runnerFindSheet(req, file, preferredSheet) {
   return sheets.length === 1 ? sheets[0] : "";
 }
 
+// [매핑 보존] 시그니처는 '어떤 파일이 올라와 있나 + 어떤 스킬이 로드돼 있나'만 본다.
+// 예전엔 파일의 '시트 목록'과 스텝 '코드/targetFileId'까지 넣어서, 매핑과 무관한 정상 변화에도
+// 사용자가 직접 확정한 매핑(도서/시내처럼 기계가 절대 못 고르는 것)이 통째로 초기화됐다:
+//   · '결과 편집하기'로 결과를 불러오면 스킬이 만든 새 시트 때문에 시트 목록이 바뀜 → 초기화
+//   · 스텝 코드를 한 글자(청구계정번호 등) 고치면 코드가 바뀜 → 초기화
+// 그 뒤 재실행은 매핑 없이 돌아 대상 추론 실패 → 현재 탭으로 조용히 폴백 → "워크북이 열려 있지 않습니다".
+// 매핑은 (파일명,시트명) 키라 요구가 바뀌면 옛 항목은 그냥 조회되지 않고(무해), 저장된 fileId 가
+// 사라진 파일이면 runnerBuildMappingRows 가 자동매칭으로 되돌린다 — 즉 통째 초기화할 이유가 없다.
 function runnerCurrentMappingSignature() {
-  const files = runnerMappingKnownFiles().map(item => [
-    item.id,
-    item.name,
-    ...runnerMappingSheetNames(item.file),
-  ].join("|"));
-  const steps = (state.pipeline || []).map(s => [s && s.id, s && s.targetFileId, s && s.targetSheetName, s && s.code].join("|"));
+  const files = runnerMappingKnownFiles().map(item => [item.id, item.name].join("|"));
+  const steps = (state.pipeline || []).map(s => (s && s.id) || "");
   return JSON.stringify({ files, steps });
 }
 
