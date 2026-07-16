@@ -28,21 +28,34 @@ function extractFn(name) {
 }
 
 function makeSandbox() {
-  const calls = { escalate: 0, restore: 0, toasts: [] };
+  const calls = { escalate: 0, restore: 0, toasts: [], progressPolls: 0 };
+  // 진행률 스텁: 케이스가 sb.progress 를 바꾸면 그 값이 폴링에 보인다(백엔드 스텝당 갱신 모사).
   const sb = {
-    console, setTimeout, clearTimeout, Promise,
+    console, setTimeout, clearTimeout, Promise, Date, encodeURIComponent,
     window: {},
     state: { pipeline: [] },
+    progress: { ok: true, phase: "running", current: 0, total: 0, syncCurrent: 0, syncTotal: 0 },
     toast: (m) => calls.toasts.push(m),
     renderPipeline: () => {}, refreshRunButton: () => {},
     setPipelineRuntimeStatus: () => {},
     vbaTargetExcelId: () => "ex1",
     forceRestartExcelMirrors: async () => { calls.escalate++; return true; },
-    fetch: async () => { calls.escalate++; return { ok: true }; },
+    // 진행률 조회와 강제중단(force-restart)은 같은 fetch 를 쓰므로 URL 로 구분한다.
+    fetch: async (url) => {
+      if (String(url).indexOf("pipeline-progress") >= 0) {
+        calls.progressPolls++;
+        return { ok: true, json: async () => sb.progress };
+      }
+      calls.escalate++;
+      return { ok: true };
+    },
     reapplyVbaPipelineToLive: null, // 케이스별 주입
     calls,
   };
   vm.createContext(sb);
+  vm.runInContext(extractFn("fetchExcelPipelineProgress"), sb);
+  vm.runInContext(extractFn("excelPipelineProgressSignature"), sb);
+  vm.runInContext(extractFn("waitRestoreOrStall"), sb);
   vm.runInContext(extractFn("escalateExcelStopToForceRestart"), sb);
   vm.runInContext(extractFn("requestExcelApplyCancel"), sb);
   return sb;
@@ -59,17 +72,51 @@ const run = sb => vm.runInContext("requestExcelApplyCancel()", sb);
     ck("(S1) 정상 복귀: true + 승격 0", r === true && sb.calls.escalate === 0 && sb.calls.restore === 1, sb.calls);
     ck("(S1) 진행 플래그 해제", sb.window.__excelStopInProgress === false);
   }
-  // S2: 복귀가 영영 안 끝남(멈춘 큐) → 10초 뒤 강제 재시작으로 종료
+  // S2: 복귀가 영영 안 끝나고 '진행도 없음'(멈춘 큐: 복귀가 시작조차 못 함) → 강제 재시작으로 종료
   {
     const sb = makeSandbox();
     sb.reapplyVbaPipelineToLive = () => new Promise(() => {}); // never settles
+    sb.progress = { ok: true, phase: "running", current: 0, total: 0, syncCurrent: 0, syncTotal: 0 }; // 요지부동
     sb.window.__activeVbaApply = { token: { cancelled: false }, excelId: "ex1" };
     const t0 = Date.now();
     const r = await run(sb);
     const dt = Date.now() - t0;
-    ck("(S2) 무기한 복귀 → 강제 중단으로 종료", r === true && sb.calls.escalate === 1, { r, calls: sb.calls });
-    ck("(S2) 유예(~10초) 내외 종료", dt >= 9500 && dt < 20000, dt);
+    ck("(S2) 무진행 복귀 → 강제 중단으로 종료", r === true && sb.calls.escalate === 1, { r, calls: sb.calls });
+    ck("(S2) 정체 판정(~20초) 내외 종료", dt >= 19000 && dt < 30000, dt);
     ck("(S2) 강제 중단 안내 토스트", sb.calls.toasts.some(m => /강제 중단/.test(m)), sb.calls.toasts);
+    ck("(S2) 진행률을 실제로 폴링", sb.calls.progressPolls >= 5, sb.calls.progressPolls);
+  }
+  // S2b: [회귀] '느리지만 진행 중'인 복귀는 승격하면 안 된다 —
+  //      예전 10초 고정 유예에선 저사양의 정상 복귀(격리 spawn+리셋+재적용+동기화)가 전부 강제 kill 됐다.
+  {
+    const sb = makeSandbox();
+    let done;
+    sb.reapplyVbaPipelineToLive = () => new Promise(res => { done = res; });
+    sb.window.__activeVbaApply = { token: { cancelled: false }, excelId: "ex1" };
+    // 25초 동안 5초마다 스텝이 하나씩 진행(= 백엔드가 스텝당 진행률 갱신) 후 완료.
+    let step = 0;
+    const tick = setInterval(() => { sb.progress = { ok: true, phase: "running", current: ++step, total: 6, syncCurrent: 0, syncTotal: 0 }; }, 5000);
+    setTimeout(() => { clearInterval(tick); done({ ok: true }); }, 25000);
+    const t0 = Date.now();
+    const r = await run(sb);
+    const dt = Date.now() - t0;
+    ck("(S2b) 느린 정상 복귀: 승격 안 함", r === true && sb.calls.escalate === 0, { r, calls: sb.calls });
+    ck("(S2b) 복귀 완료까지 기다림(25초)", dt >= 24000 && dt < 32000, dt);
+    ck("(S2b) 정상 복귀 토스트", sb.calls.toasts.some(m => /되돌렸습니다/.test(m)), sb.calls.toasts);
+  }
+  // S2c: 진행하다가 도중에 굳으면(스텝 진행 뒤 정체) 그때는 승격한다.
+  {
+    const sb = makeSandbox();
+    sb.reapplyVbaPipelineToLive = () => new Promise(() => {});
+    sb.window.__activeVbaApply = { token: { cancelled: false }, excelId: "ex1" };
+    sb.progress = { ok: true, phase: "running", current: 1, total: 6, syncCurrent: 0, syncTotal: 0 };
+    setTimeout(() => { sb.progress = { ok: true, phase: "running", current: 2, total: 6, syncCurrent: 0, syncTotal: 0 }; }, 4000);
+    // 4초에 한 번 움직이고 그 뒤 영영 정지 → 정체 판정으로 승격
+    const t0 = Date.now();
+    const r = await run(sb);
+    const dt = Date.now() - t0;
+    ck("(S2c) 진행하다 굳으면 승격", r === true && sb.calls.escalate === 1, { r, calls: sb.calls });
+    ck("(S2c) 마지막 진행 시점 기준으로 판정", dt >= 23000 && dt < 34000, dt);
   }
   // S3: 중단 진행 중 재요청 → 즉시 승격
   {

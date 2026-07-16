@@ -359,22 +359,66 @@ function pipelineWorkbookNameKey(value, options = {}) {
 // \uC804\uBD80 \uC2E4\uD328\uD574 \uB300\uC0C1\uC774 \uD604\uC7AC \uD0ED\uC73C\uB85C \uD3F4\uBC31\uB410\uACE0, \uB2E4\uD30C\uC77C \uC2A4\uD0AC\uC740 \uACA9\uB9AC \uC2E4\uD589\uC5D0 \uB098\uBA38\uC9C0 \uD30C\uC77C\uC774 \uC544\uC608 \uC548 \uC5F4\uB824
 // "\uC6CC\uD06C\uBD81\uC774 \uC5F4\uB824 \uC788\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4"\uB85C \uD130\uC84C\uB2E4(\uD55C\uC804 Step11\u00B72606\u21922607 \uC81C\uBCF4\uC758 \uACF5\uD1B5 \uBFCC\uB9AC).
 const PIPELINE_VOLATILE_NAME_TOKENS = [
-  [/\d{4}\s*[-_.]?\s*\d{1,2}\s*[-_.]?\s*\d{1,2}\s*\uC77C?/g, " "],   // 2026-03-01 / 20260301
+  // \uAD6C\uBD84\uC790 \uC788\uB294 \uB0A0\uC9DC\uB9CC(2026-03-01). \uAD6C\uBD84\uC790 \uC5C6\uB294 20260301\u00B7202606\u00B7260607 \uC740 \uC544\uB798 '\uB0A0\uC9DC \uBAA8\uC591' \uD1A0\uD070\uC774 \uB2F4\uB2F9.
+  // \uC608\uC804\uC5D4 \uAD6C\uBD84\uC790\uAC00 \uC120\uD0DD\uC774\uB77C \uC784\uC758\uC758 6~8\uC790\uB9AC \uC22B\uC790(\uAC70\uB798\uCC98\uCF54\uB4DC 500255 = "5002"+"5"+"5")\uAE4C\uC9C0 \uB0A0\uC9DC\uB85C \uBA39\uC5C8\uB2E4.
+  [/(?<!\d)(\d{4})[-_.\s]+(\d{1,2})[-_.\s]+(\d{1,2})\s*\uC77C?(?!\d)/g,
+    (m, y, mm, dd) => (pipelineLooksLikeYmd(y, mm, dd) ? " " : m)],
   [/\d{2,4}\s*\uB144/g, " "],                                          // 2026\uB144 / 26\uB144
   [/\d{1,2}\s*\uC6D4/g, " "],                                          // 3\uC6D4 / 03\uC6D4
   [/\d{1,2}\s*\uBD84\uAE30/g, " "],                                        // 1\uBD84\uAE30
   [/(?<![A-Za-z0-9])v?\d+(?:\.\d+)+/gi, " "],                      // \uBC84\uC804 1.2 / v1.2.3
-  [/(?:^|(?<=[\s_\-]))\d{1,3}(?=\s*[.\s_\-])/g, " "],              // \uC55E\uBA38\uB9AC \uC21C\uBC88 "03." "05."
-  [/(?<!\d)\d{6,8}(?!\d)/g, " "],                                  // YYMMDD/YYYYMMDD \uB958
-  [/\(\s*\d{1,3}\s*\)\s*$/g, " "],                                 // \uC911\uBCF5 \uB2E4\uC6B4\uB85C\uB4DC "(2)"
-  [/[-_\s]*(?:\uBCF5\uC0AC\uBCF8|copy)\s*(?:\(\s*\d{1,3}\s*\))?\s*$/gi, " "],  // "- \uBCF5\uC0AC\uBCF8"
+  // \uC2DC\uAC01(10_55_33) \u2014 \uC2E4\uC81C \uBC30\uD3EC \uD30C\uC77C\uBA85 "..._2026-07-14 10_55_33_DSMC_..." \uB54C\uBB38\uC5D0 \uD544\uC694.
+  // \uC608\uC804\uC5D4 \uC544\uB798 \uC21C\uBC88 \uD1A0\uD070\uC774 \uC774\uB984 \uC911\uAC04 1~3\uC790\uB9AC\uB97C \uB2E5\uCE58\uB294 \uB300\uB85C \uC9C0\uC6CC '\uC6B0\uC5F0\uD788' \uC2DC\uAC01\uB3C4 \uC9C0\uC6E0\uB294\uB370,
+  // \uADF8 \uBD80\uC791\uC6A9\uC73C\uB85C \uC9C0\uC810\uBC88\uD638 \uAC19\uC740 \uC2DD\uBCC4\uC790\uAE4C\uC9C0 \uC0AC\uB77C\uC84C\uB2E4 \u2192 \uC2DC\uAC01\uC740 \uC2DC\uAC01\uC73C\uB85C \uC815\uD655\uD788 \uC9C0\uC6B4\uB2E4.
+  [/(?<!\d)(\d{1,2})[:_.\-](\d{1,2})[:_.\-](\d{1,2})(?!\d)/g,
+    (m, h, mi, s) => (pipelineLooksLikeHms(h, mi, s) ? " " : m)],
+  // \uC55E\uBA38\uB9AC \uC21C\uBC88 "03." "05." \u2014 \uC774\uB984 '\uC911\uAC04' \uBC88\uD638(\uC9C0\uC810 105 \uACB0\uC0B0)\uB294 \uC2DD\uBCC4\uC790\uB77C \uBCF4\uC874.
+  [/^\d{1,3}(?=\s*[.\s_\-])/g, " "],
+  // \uB0A0\uC9DC \uBAA8\uC591(YYMMDD/YYYYMM/YYYYMMDD)\uC77C \uB54C\uB9CC \uC81C\uAC70 \u2014 \uAC70\uB798\uCC98\uCF54\uB4DC\u00B7\uACC4\uC57D\uBC88\uD638 \uBCF4\uC874.
+  [/(?<!\d)(?:\d{8}|\d{6})(?!\d)/g, m => (pipelineLooksLikeDateNumber(m) ? " " : m)],
 ];
+
+// \uC811\uBBF8\uC0AC\uB294 \uC11C\uB85C \uC870\uD569\uB41C\uB2E4("X (2) - \uBCF5\uC0AC\uBCF8") \u2192 \uACE0\uC815\uC810\uAE4C\uC9C0 \uBC18\uBCF5 \uC801\uC6A9(\uBC31\uC5D4\uB4DC _VOLATILE_SUFFIX_TOKENS \uC640 \uD328\uB9AC\uD2F0).
+const PIPELINE_VOLATILE_SUFFIX_TOKENS = [
+  // \uBE0C\uB77C\uC6B0\uC800 \uC911\uBCF5 \uB2E4\uC6B4\uB85C\uB4DC "(2)" \uB294 \uD56D\uC0C1 \uAD6C\uBD84\uC790 \uB4A4 \u2192 \uAD6C\uBD84\uC790 \uC694\uAD6C(\uC758\uBBF8 \uC788\uB294 "\uBA85\uC138\uC11C(2)" \uB294 \uBCF4\uC874).
+  [/[\s_\-]+\(\s*\d{1,3}\s*\)\s*$/g, " "],
+  // "- \uBCF5\uC0AC\uBCF8" / " - Copy" \u2014 \uAD6C\uBD84\uC790 \uC694\uAD6C(\uC88C\uCE21 \uACBD\uACC4 \uC5C6\uC73C\uBA74 'hardcopy' \u2192 'hard' \uB85C \uD0A4 \uCDA9\uB3CC).
+  [/[-_\s]+(?:\uBCF5\uC0AC\uBCF8|copy)\s*$/gi, " "],
+];
+
+function pipelineLooksLikeHms(h, mi, s) {
+  const hh = Number(h), mm = Number(mi), ss = Number(s);
+  return hh >= 0 && hh <= 23 && mm >= 0 && mm <= 59 && ss >= 0 && ss <= 59;
+}
+function pipelineLooksLikeYmd(y, mm, dd) {
+  const year = Number(y), month = Number(mm), day = Number(dd);
+  return year >= 1900 && year <= 2199 && month >= 1 && month <= 12 && day >= 1 && day <= 31;
+}
+function pipelineLooksLikeDateNumber(digits) {
+  const ok = (mm, dd) => mm >= 1 && mm <= 12 && (dd == null || (dd >= 1 && dd <= 31));
+  if (digits.length === 6) {
+    if (ok(Number(digits.slice(2, 4)), Number(digits.slice(4, 6)))) return true;   // YYMMDD
+    const y = Number(digits.slice(0, 4));                                          // YYYYMM
+    return y >= 1900 && y <= 2199 && ok(Number(digits.slice(4, 6)), null);
+  }
+  if (digits.length === 8) {
+    const y = Number(digits.slice(0, 4));                                          // YYYYMMDD
+    return y >= 1900 && y <= 2199 && ok(Number(digits.slice(4, 6)), Number(digits.slice(6, 8)));
+  }
+  return false;
+}
 function pipelineStableWorkbookKey(value) {
   let s = pipelineDecodeWorkbookName(value).trim();
   s = s.replace(/\.[^.]+$/, "");                                                   // \uD655\uC7A5\uC790 \uC81C\uAC70
   s = s.replace(/^(?:[0-9a-f]{12,}|excel_open_[0-9a-f]{12,}|live_reset_[0-9a-f]{12,})[_-]+/i, ""); // \uC0DD\uC131 \uC811\uB450 \uD574\uC2DC
   s = s.toLowerCase();
+  s = s.replace(/[​-‍﻿]/g, "");  // zero-width — 2·3단(pipelineWorkbookNameKey)과 정규화 일치
   for (const [rx, rep] of PIPELINE_VOLATILE_NAME_TOKENS) s = s.replace(rx, rep);
+  for (let i = 0; i < 4; i++) {                 // 접미사 조합("X (2) - 복사본")까지 흡수
+    const prev = s;
+    for (const [rx, rep] of PIPELINE_VOLATILE_SUFFIX_TOKENS) s = s.replace(rx, rep);
+    if (s === prev) break;
+  }
   return s.replace(/[\s_\-().\[\]]+/g, "");
 }
 
@@ -947,6 +991,18 @@ async function runIsolatedLivePipelineSteps(sourceSteps, initialExcelId, options
   // '실행 중'으로 보여준다(부분 실행인데 '전체실행'으로 오해되는 것 방지).
   const _applyLoadingLabel = startIndex > 0 ? "스킬 실행 중..." : "스킬 전체실행 중...";
   const skipReset = options.skipReset === true;
+  // [중단 승격 후 이중 재적용 방지] '작업 중단'이 강제 재시작으로 승격하면 이 복귀는 버려진다.
+  // 그런데 promise 결과만 무시될 뿐 실행은 계속돼, await 경계에서 깨어나 세션을 새로 열고(없으면
+  // ensureExcelMirrorForFileId 가 만든다) 남은 리셋/그룹을 마저 실행했다. 승격 쪽 자동재적용과
+  // 같은 파일에 두 번 쓰는 경합(교차파일 중복 기록)의 원인 → 경계마다 스스로 중단한다.
+  const _restoreEpoch = options.restoreEpoch;
+  const _throwIfAbandoned = () => {
+    if (_restoreEpoch == null) return;
+    if (typeof window === "undefined" || window.__excelRestoreEpoch === _restoreEpoch) return;
+    const err = new Error("중단 승격으로 이 복귀는 취소됐습니다");
+    err.__abandonedRestore = true;
+    throw err;
+  };
   const activeSteps = activePipelineSteps(sourceSteps)
     .filter(step => (sourceSteps || state.pipeline || []).indexOf(step) >= startIndex)
     .filter(step => step && step.code && pipelineStepLiveLanguage(step));
@@ -1095,6 +1151,7 @@ async function runIsolatedLivePipelineSteps(sourceSteps, initialExcelId, options
     }
     if (!useBg && explicitResetFileIds.length) {
       for (const resetFileId of explicitResetFileIds) {
+        _throwIfAbandoned();
         const resetExcelId = await requirePipelineSessionExcelId(resetFileId, "워크북 리셋");
         lastTouchedFileId = resetFileId;
         lastTouchedExcelId = resetExcelId;
@@ -1123,6 +1180,7 @@ async function runIsolatedLivePipelineSteps(sourceSteps, initialExcelId, options
       }
     }
     for (const group of (useBg ? [] : groups)) {
+      _throwIfAbandoned();
       const excelId = await requirePipelineSessionExcelId(group.fileId, "스킬 전체실행");
       lastTouchedFileId = group.fileId;
       lastTouchedExcelId = excelId;
@@ -1438,6 +1496,53 @@ function restoreVbaExcelAfterError(excelId, options = {}) {
 // 큐-우회 강제 재시작(forceRestartExcelMirrors → /api/excel/force-restart): 앱 소유 EXCEL.EXE
 // pid 를 죽이면 굳어 있던 COM 호출이 RPC 오류로 풀려나고, 세션 재오픈 + 단일 자동재적용기가
 // 상태를 복원한다. 어느 계층이 굳어 있어도 유한 시간 안에 끝난다.
+// [중단 오승격 수정] 백엔드 진행률(스텝당 1회 갱신). /api/excel/pipeline-progress 는 EXCEL_LOCK 을
+// 잡지 않아 COM 이 굳어 있는 동안에도 즉시 응답한다 — '진짜 멈춤' 판정에 쓸 수 있는 유일한 신호.
+async function fetchExcelPipelineProgress(excelId) {
+  if (!excelId || typeof fetch !== "function") return null;
+  try {
+    const resp = await fetch("/api/excel/pipeline-progress?excelId=" + encodeURIComponent(excelId));
+    if (!resp || !resp.ok) return null;
+    const data = await resp.json();
+    if (!data || data.ok === false) return null;
+    return data;
+  } catch (_) {
+    return null;
+  }
+}
+
+function excelPipelineProgressSignature(p) {
+  if (!p) return null;
+  return [p.phase || "", p.current || 0, p.total || 0, p.syncCurrent || 0, p.syncTotal || 0].join("/");
+}
+
+// 복귀가 끝날 때까지 기다리되, 진행이 stallMs 동안 '한 발짝도' 못 나가면 멈춤으로 본다.
+// 예전엔 총 경과 10초로만 판단해서, 저사양에서 정상적으로 느린 복귀(격리 인스턴스 spawn + 리셋 +
+// 전 스텝 재적용 + 동기화)까지 전부 강제 재시작으로 승격됐다("멈춘 경우만"이 아니라 "느린 경우 전부").
+// 한계: 진행률은 폴링 대상 excelId 기준이라, 다른 세션에서만 진행되는 다파일 복귀는 움직임이 안 보여
+// stallMs 뒤 승격될 수 있다(그래도 종전 10초 고정보다 관대). 진짜 멈춤의 즉시 탈출은 '중단' 재클릭.
+async function waitRestoreOrStall(restore, excelId, opts) {
+  const o = opts || {};
+  const POLL_MS = o.pollMs || 1500;
+  const STALL_MS = o.stallMs || 20000;
+  let settled = null;
+  restore.then(
+    () => { settled = { ok: true }; },
+    err => { settled = { err: err || new Error("복귀 실패") }; }
+  );
+  let lastSig = null;
+  let lastMoveAt = Date.now();
+  for (;;) {
+    await new Promise(r => setTimeout(r, POLL_MS));
+    if (settled) return settled.err ? { err: settled.err } : "ok";
+    const sig = excelPipelineProgressSignature(await fetchExcelPipelineProgress(excelId));
+    if (settled) return settled.err ? { err: settled.err } : "ok";
+    const now = Date.now();
+    if (sig !== null && sig !== lastSig) { lastSig = sig; lastMoveAt = now; }
+    if (now - lastMoveAt >= STALL_MS) return "stalled";
+  }
+}
+
 async function escalateExcelStopToForceRestart() {
   try {
     if (typeof forceRestartExcelMirrors === "function") {
@@ -1489,19 +1594,21 @@ async function requestExcelApplyCancel() {
   window.__excelStopInProgress = true;
   // [중단 자체 멈춤 수정] 복귀 재적용은 '멈춘 원 작업'과 같은 단일 COM 워커 큐(FIFO)에 줄을 서므로,
   // 원 작업이 COM 안에서 굳어 있으면 복귀가 영영 시작되지 않는다("작업 중단 중"에서 멈춤).
-  // 유예(10초) 내 복귀가 안 끝나면 강제 재시작으로 승격해 어떤 경우에도 유한 시간 안에 끝낸다.
-  const STOP_GRACE_MS = 10000;
+  // → 승격은 하되 '시계'가 아니라 '진행'으로 판단한다(waitRestoreOrStall). 예전엔 총 10초 고정이라
+  //   저사양에서 정상적으로 느린 복귀까지 전부 강제 재시작으로 날려서, 원 증상보다 더 나빴다
+  //   (버려진 복귀의 이중 재적용 + '적용됨' 표시와 실제 pristine 의 괴리 → 다음 적용이 조용히 오답).
   try {
     if (excelId && typeof reapplyVbaPipelineToLive === "function") {
-      const restore = reapplyVbaPipelineToLive(excelId, { steps: state.pipeline });
-      const raced = await Promise.race([
-        restore.then(() => "ok", err => ({ err })),
-        new Promise(resolve => setTimeout(() => resolve("timeout"), STOP_GRACE_MS)),
-      ]);
-      if (raced === "timeout") {
-        restore.then(() => {}, () => {});  // 큐가 풀린 뒤 죽은 세션 상대로 늦게 실패해도 조용히 무시
+      // 승격 시 버려지는 복귀가 계속 살아 세션을 새로 열고 남은 리셋/그룹을 마저 실행하면
+      // 승격 쪽 자동재적용과 같은 파일에 두 번 쓴다(교차파일 중복 기록). epoch 로 무효화한다.
+      const epoch = (window.__excelRestoreEpoch = (window.__excelRestoreEpoch || 0) + 1);
+      const restore = reapplyVbaPipelineToLive(excelId, { steps: state.pipeline, restoreEpoch: epoch });
+      const raced = await waitRestoreOrStall(restore, excelId);
+      if (raced === "stalled") {
+        window.__excelRestoreEpoch = epoch + 1;  // 버려진 복귀 무효화(경계마다 스스로 중단)
+        restore.then(() => {}, () => {});        // 큐가 풀린 뒤 죽은 세션 상대로 늦게 실패해도 조용히 무시
         await escalateExcelStopToForceRestart();
-        toast("작업을 강제 중단했습니다. Excel 창을 다시 준비하는 중입니다...", "success");
+        toast("작업이 응답하지 않아 강제 중단했습니다. Excel 창을 다시 준비하는 중입니다...", "success");
         return true;
       }
       if (raced && raced.err) throw raced.err;
