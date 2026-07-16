@@ -1264,6 +1264,16 @@ function runnerChipLabel(value) {
   return t.length > 10 ? t.slice(0, 10) + "…" : t;
 }
 
+// [표시명 정리] 확장자와 실제 내용이 다른 위장 파일(예: .xlsx 인데 내용은 구형 .xls/HTML — 한전
+// 시스템 추출물)은 호환 변환을 거치며 시트명이 '<32hex>_원본파일명'으로 파생된다. 진짜 xlsx 는
+// 파일 안의 시트명이 그대로라 이런 접두가 없다(같은 화면에서 한국전력공사만 깨끗했던 이유).
+// 실행·치환·저장(value)은 실제 시트명을 그대로 쓰고, 사용자가 고르는 '라벨'만 해시를 벗겨 보여준다.
+function runnerDisplaySheetName(name) {
+  const s = String(name == null ? "" : name);
+  const cleaned = s.replace(/^(?:excel_open_|live_reset_|prestep_)?[0-9a-f]{12,}[_-]+/i, "");
+  return cleaned || s;
+}
+
 function runnerRenderMappingPanel() {
   const grid = $("runner-main-grid");
   const panel = $("runner-mapping-panel");
@@ -1291,11 +1301,18 @@ function runnerRenderMappingPanel() {
       `<option value="${escapeHtml(item.id)}" ${g.fileItem && g.fileItem.id === item.id ? "selected" : ""}>${escapeHtml(item.name)}</option>`
     )).join("");
     const sheetsInFile = g.fileItem ? runnerMappingSheetNames(g.fileItem.file) : [];
+    // 표시 라벨 충돌 방지: 서로 다른 실제 시트가 같은 정리명으로 겹치면(드묾) 그 시트들은 원래 이름 유지.
+    const displayCount = {};
+    sheetsInFile.forEach(s => { const d = runnerDisplaySheetName(s); displayCount[d] = (displayCount[d] || 0) + 1; });
+    const sheetOptionLabel = s => {
+      const d = runnerDisplaySheetName(s);
+      return (d !== s && displayCount[d] > 1) ? s : d;
+    };
     const sheetMembers = g.members.filter(m => m.req.sheet);
-    // 왼쪽: 스킬이 찾는 시트들을 '요청 시트명 그대로' 칩으로만 표시.
+    // 왼쪽: 스킬이 찾는 시트들을 칩으로 표시(해시 접두는 표시에서만 정리 — 툴팁에 원래 이름).
     const sheetChips = sheetMembers.length
       ? sheetMembers.map(m =>
-          `<span class="runner-mapping-sheet-chip" title="${escapeHtml(m.req.sheet)}">${escapeHtml(runnerChipLabel(m.req.sheet))}</span>`
+          `<span class="runner-mapping-sheet-chip" title="${escapeHtml(m.req.sheet)}">${escapeHtml(runnerChipLabel(runnerDisplaySheetName(m.req.sheet)))}</span>`
         ).join("")
       : `<span class="runner-mapping-sheet-chip">시트 자동</span>`;
     // 오른쪽: 각 시트마다 [요청 시트 칩] ↔ [실제 파일의 시트 드롭다운]. 자동 해결된 시트는 드롭다운이 미리 선택됨.
@@ -1308,7 +1325,7 @@ function runnerRenderMappingPanel() {
       const skillDefaultOpt =
         `<option value="${RUNNER_SHEET_SKILL_DEFAULT}" ${m.skillDefault ? "selected" : ""}>스킬 기본값(그대로 실행)</option>`;
       const opts = [`<option value="">${isAuto ? "시트 자동(첫 시트)" : "시트 선택"}</option>`, skillDefaultOpt].concat(sheetsInFile.map(s =>
-        `<option value="${escapeHtml(s)}" ${!m.skillDefault && m.sheet && runnerMappingNorm(m.sheet) === runnerMappingNorm(s) ? "selected" : ""}>${escapeHtml(s)}</option>`
+        `<option value="${escapeHtml(s)}" title="${escapeHtml(s)}" ${!m.skillDefault && m.sheet && runnerMappingNorm(m.sheet) === runnerMappingNorm(s) ? "selected" : ""}>${escapeHtml(sheetOptionLabel(s))}</option>`
       )).join("");
       const chipCls = isAuto ? "" : (m.sheet ? "ok" : "warn");
       if (isAuto) {
@@ -1323,7 +1340,7 @@ function runnerRenderMappingPanel() {
       // 핸들러의 키가 실제 키와 안 맞았다 → 선택이 저장돼도 반영 안 됨(클릭은 되는데 선택 안 되는 증상).
       // 멤버 인덱스(data-mi)로만 넘기고, 실제 키는 핸들러에서 g.members[mi].req.key 로 직접 얻는다.
       return `<div class="runner-mapping-sheet-map">
-            <span class="runner-mapping-sheet-chip ${chipCls}" title="${escapeHtml(m.req.sheet)}">${escapeHtml(runnerChipLabel(m.req.sheet))}</span>
+            <span class="runner-mapping-sheet-chip ${chipCls}" title="${escapeHtml(m.req.sheet)}">${escapeHtml(runnerChipLabel(runnerDisplaySheetName(m.req.sheet)))}</span>
             <span class="runner-mapping-sheet-link">↔</span>
             <select class="runner-mapping-select runner-map-sheet2" data-mi="${g.members.indexOf(m)}" data-gidx="${gidx}" ${g.fileItem ? "" : "disabled"}>${opts}</select>
           </div>`;
