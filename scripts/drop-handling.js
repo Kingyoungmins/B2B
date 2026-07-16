@@ -763,10 +763,38 @@ function runnerExtractGeneratedSheetsFromCode(code) {
     /\bthen\b/i.test(line) ||
     /(?:^|[\s:])case\b/i.test(line);
   const vbaLiteralVars = new Map();
-  const vbaAssignLine = /^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*["']([^"']+)["']\s*$/;  // 단독 대입문만
-  for (const line of src.split(/\r?\n/)) {
+  // `baseName = "C_611769344898"` — 단독 대입문. VBA 는 `:` 로 문장을 이어 쓸 수 있어
+  // (`newName = baseName: idx = 1`) 꼬리를 허용한다.
+  const vbaAssignLine = /^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*["']([^"']+)["']\s*(?::.*)?$/;
+  // `newName = baseName` — 변수→변수 대입. 예전엔 이 한 단계를 못 넘어 사슬이 끊겼다:
+  //   baseName = "C_611769344898"   ← 잡힘
+  //   newName  = baseName: idx = 1  ← 못 잡음(변수 대입 + `:` 꼬리)
+  //   wsNew.Name = newName          ← newName 을 몰라 생성시트로 등록 실패
+  // 그러면 스킬이 '만드는' 시트를 매핑이 '업로드에 있어야 할 시트'로 요구한다(SBAGENT-138).
+  const vbaAliasLine = /^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*([A-Za-z_][A-Za-z0-9_]*)\s*(?::.*)?$/;
+  const vbaAliases = [];
+  const vbaLines = src.split(/\r?\n/);
+  // 1) 변수부터 전부 수집 — 대입이 사용보다 뒤에 나와도 해석되게 두 패스로 나눈다.
+  for (const line of vbaLines) {
+    if (vbaIsComparisonLine(line)) continue;   // `If sh.Name = newName Then` 은 대입이 아니다
     const av = vbaAssignLine.exec(line);
-    if (av) vbaLiteralVars.set(String(av[1] || "").toLowerCase(), av[2]);
+    if (av) { vbaLiteralVars.set(String(av[1] || "").toLowerCase(), av[2]); continue; }
+    const al = vbaAliasLine.exec(line);
+    if (al) vbaAliases.push([String(al[1] || "").toLowerCase(), String(al[2] || "").toLowerCase()]);
+  }
+  // 2) 별칭 사슬 해소(newName ← baseName ← "C_...") — 더 이상 안 늘 때까지.
+  for (let i = 0; i < 4; i++) {
+    let changed = false;
+    for (const [dst, srcVar] of vbaAliases) {
+      if (!vbaLiteralVars.has(dst) && vbaLiteralVars.has(srcVar)) {
+        vbaLiteralVars.set(dst, vbaLiteralVars.get(srcVar));
+        changed = true;
+      }
+    }
+    if (!changed) break;
+  }
+  // 3) 시트 생성/이름지정 검출
+  for (const line of vbaLines) {
     if (vbaIsComparisonLine(line)) continue;  // 비교문은 생성 아님 → 스킵
     let mm;
     const litRe = /\.Name\s*=\s*["']([^"']+)["']/gi;
