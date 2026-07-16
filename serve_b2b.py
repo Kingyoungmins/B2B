@@ -6436,8 +6436,14 @@ def _normalize_vba_workbook_literals(app, code):
         escaped = actual.replace(quote_ch, quote_ch + quote_ch)
         return quote_ch + escaped + quote_ch
 
-    if ".xls" in text.lower():
-        text = re.sub(r'(["\'])([^"\']+\.xlsm?|[^"\']+\.xlsx|[^"\']+\.xlsb)\1', repl_workbook, text, flags=re.I)
+    # [엔진 비대칭 수정] 게이트와 정규식이 .xls 계열만 봐서, .csv/.tsv/.html 로 등록된 파일은
+    # 별칭(_WB_NAME_ALIASES)이 멀쩡히 있는데도 VBA 리터럴이 치환되지 않았다.
+    # 도달 경로: 탭 구분인데 이름이 .csv 면 sniff 가 .tsv 를 반환해 excel_open_<uuid>.tsv 로 리네임
+    # 오픈된다 → VBA Workbooks("정산.csv") 는 '첨자가 범위를 벗어났습니다'로 죽는데, 같은 파일이
+    # Python ctx.book("정산.csv") 에선 별칭을 타서 성공하는 엔진별 갈림이었다.
+    # (별칭이 없으면 repl_workbook 이 원문을 그대로 돌려주므로 확장해도 안전하다.)
+    if re.search(r"\.(?:xls[xmb]?|csv|tsv|html?)\b", text, re.I):
+        text = re.sub(r'(["\'])([^"\']+\.(?:xls[xmb]?|csv|tsv|html?))\1', repl_workbook, text, flags=re.I)
 
     if "excel_open_" not in text.lower():
         return text
@@ -8017,9 +8023,23 @@ def _run_vba_pipeline_on_session_impl(excel_id, steps, reset=True, entry=None, v
                         language=lang,
                     )
                 # 결과 저장 → 라이브 대상 워크북에 시트 교체로 반영(라이브에선 VBA 안 돌리므로 안전).
+                # [CSV 무성 데이터 손실] 승격이 다운로드 경로에만 걸려 있어 여기가 뚫려 있었다.
+                # data.csv 세션에 스킬이 시트를 추가하면 SaveCopyAs 는 CSV 포맷을 유지해 ActiveSheet
+                # 1장만 기록하고, 그 1장짜리 스냅샷을 _copy_source_workbook_into_target 이 되돌리며
+                # 라이브의 '모든 시트를 Delete' 한다 → 추가 시트 + 비활성 원본 시트가 통째로 소실.
+                # DisplayAlerts=False 라 Excel 의 "CSV는 시트 1장만" 경고도 안 뜨고, 사후 무결성 검사는
+                # 스냅샷(1장) ⊆ 라이브(1장) 이라 통과해 구조적으로 못 잡는다.
                 result_name = Path(str(session.get("name") or "result.xlsx")).name
-                rpath = work / ("result_" + result_name)
-                ftarget.SaveCopyAs(str(rpath))
+                _promoted_name = _promote_csv_multisheet_name(result_name, ftarget)
+                rpath = work / ("result_" + _promoted_name)
+                if _promoted_name != result_name:
+                    # SaveCopyAs 는 현재(CSV) 포맷을 유지하므로 승격엔 SaveAs(경로 재지정)가 필요하다.
+                    ftarget.SaveAs(str(rpath), FileFormat=51)
+                    # 세션도 xlsx 로 코히어런트 갱신(다운로드 경로 4574-4580 과 동일 정책) —
+                    # 멀티시트가 된 이상 이 파일은 사실상 xlsx 다.
+                    session["name"] = _promoted_name
+                else:
+                    ftarget.SaveCopyAs(str(rpath))
                 try:
                     _protect_workbook_for_read_only_mirror(wb, False)
                 except Exception:
@@ -8880,7 +8900,12 @@ def _promote_csv_multisheet_name(name, wb):
     try:
         p = Path(str(name))
         if p.suffix.lower() in (".csv", ".tsv") and int(wb.Worksheets.Count) > 1:
-            return p.stem + ".xlsx"
+            stem = p.stem
+            # 이중 확장자("a.xlsx.csv")면 stem 이 "a.xlsx" 라 그대로 붙이면 "a.xlsx.xlsx" 가 된다.
+            # 이미 스프레드시트 확장자로 끝나면 덧붙이지 않는다(포맷은 어차피 51 로 저장).
+            if Path(stem).suffix.lower() in (".xlsx", ".xlsm", ".xlsb", ".xls"):
+                return stem
+            return stem + ".xlsx"
     except Exception:
         pass
     return str(name)
