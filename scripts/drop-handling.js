@@ -928,7 +928,16 @@ function runnerFindAutoFile(req, files) {
   if (req.book && typeof pipelineFileIdByWorkbookName === "function") {
     const fid = pipelineFileIdByWorkbookName(req.book);
     const exact = fid && files.find(f => f.id === fid);
-    if (exact) return { item: exact, score: 100 };
+    if (exact) {
+      // [점수 구분] 예전엔 무조건 100 이라, 월·날짜 무시 '안정키 재바인딩'(4단계)으로 잡힌 근사
+      // 매칭도 초록 '정확 매칭/자동 확인'으로 떠 사용자 검토 게이트가 사라졌다. 이름이 실제로
+      // 같을 때만 100(정확)이고, 재바인딩이면 90(=95 미만 → '확인 필요')으로 낮춰 노출한다.
+      const nameOf = f => (typeof workbookDisplayName === "function" ? workbookDisplayName(f.file, "") : (f.file && f.file.name)) || "";
+      const sameName = typeof pipelineWorkbookNameKey === "function"
+        ? pipelineWorkbookNameKey(nameOf(exact)) === pipelineWorkbookNameKey(req.book)
+        : nameOf(exact) === req.book;
+      return { item: exact, score: sameName ? 100 : 90, rebound: !sameName };
+    }
   }
   if (req.sheet) {
     const bySheet = files.filter(item => runnerMappingSheetNames(item.file).some(s => runnerMappingNorm(s) === runnerMappingNorm(req.sheet)));
@@ -937,7 +946,13 @@ function runnerFindAutoFile(req, files) {
   const scored = files
     .map(item => ({ item, score: runnerMappingScoreFile(req.book, item) }))
     .sort((a, b) => b.score - a.score);
-  return scored[0] && scored[0].score >= 45 ? scored[0] : null;
+  if (!scored[0] || scored[0].score < 45) return null;
+  // [모호성 가드] pipelineFileIdByWorkbookName 은 후보가 둘 이상이면 일부러 null 을 준다
+  // ('잘못된 파일에 실행'이 최악이라 모호하면 사용자에게 묻는 원칙). 그런데 그 null 이 이 폴백으로
+  // 내려와 동점 1위(=업로드 순서상 첫 파일)를 조용히 골라, 지난달 파일에 실행되는 일이 있었다.
+  // 1위와 2위가 사실상 같은 점수면 자동 선택하지 않고 사용자 선택으로 넘긴다.
+  if (scored[1] && scored[0].score - scored[1].score < 5) return null;
+  return scored[0];
 }
 
 function runnerFindSheet(req, file, preferredSheet) {
@@ -983,10 +998,12 @@ function runnerBuildMappingRows() {
     const stored = state.runnerMappings && state.runnerMappings[req.key];
     let fileItem = stored && files.find(item => item.id === stored.fileId);
     let score = stored && fileItem ? 100 : 0;
+    let rebound = false;   // 월·날짜 무시 안정키로 '다른 달 파일'에 이어붙인 근사 매칭인가
     if (!fileItem) {
       const auto = runnerFindAutoFile(req, files);
       fileItem = auto && auto.item;
       score = auto && auto.score || 0;
+      rebound = !!(auto && auto.rebound);
     }
     const sheet = fileItem ? runnerFindSheet(req, fileItem.file, stored && stored.sheet) : "";
     let status = "bad";
@@ -998,10 +1015,11 @@ function runnerBuildMappingRows() {
         statusText = "자동 확인";
       } else {
         status = "warn";
-        statusText = "확인 필요";
+        // 다른 달 파일에 이어붙인 경우엔 이유를 보여준다(사용자가 맞는지 눈으로 확인하도록).
+        statusText = rebound ? "확인 필요(다른 달 추정)" : "확인 필요";
       }
     }
-    return { req, files, fileItem, sheet, score, status, statusText, userSet: !!(stored && stored.userSet) };
+    return { req, files, fileItem, sheet, score, status, statusText, rebound, userSet: !!(stored && stored.userSet) };
   });
 }
 
