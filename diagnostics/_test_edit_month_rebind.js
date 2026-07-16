@@ -53,7 +53,10 @@ function makeSandbox(inputNames) {
   ["pipelineDecodeWorkbookName", "pipelineWorkbookNameKey", "pipelineKnownFiles",
    "pipelineFileIdByWorkbookName", "pipelineResolveSavedTargetFileId", "pipelineStableWorkbookKey"]
     .forEach(f => vm.runInContext(extractFn(f), sb));
+  // 이름토큰 + 접미사토큰 + 날짜판정 헬퍼 — pipelineStableWorkbookKey 가 전부 참조한다.
   vm.runInContext(extractConst("PIPELINE_VOLATILE_NAME_TOKENS"), sb);
+  vm.runInContext(extractConst("PIPELINE_VOLATILE_SUFFIX_TOKENS"), sb);
+  ["pipelineLooksLikeHms", "pipelineLooksLikeYmd", "pipelineLooksLikeDateNumber"].forEach(f => vm.runInContext(extractFn(f), sb));
   // pipelineStableWorkbookKey 는 const 앞에 정의되어도 hoisting 으로 동작하지만, 위 순서로 재정의해 확실히.
   vm.runInContext(extractFn("pipelineStableWorkbookKey"), sb);
   return sb;

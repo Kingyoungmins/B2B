@@ -2,6 +2,10 @@
 // targetFileId/워크북명 해석이 클라이언트 계층에서 어떻게 실패하는지 실측.
 // 실제 소스(pipeline.js / excel-viewer.js / drop-handling.js / fuzzy.js)에서
 // 함수를 브레이스 매칭으로 추출해 vm 에서 '진짜 코드'를 실행한다(_test_cross_reset.js 기법).
+// ※ [상태] 이 파일은 '수정 전 버그 재현용' 스크립트다(테스트 아님). 안정키 재바인딩(ab5dbad)이
+//    들어간 뒤로는 (5)(6) 같은 `=== null` 단언이 FAIL 로 뜨는데, 그건 회귀가 아니라
+//    '버그가 고쳐졌다'는 뜻이다(2606 요청이 2607 로 재바인딩됨 = 의도한 동작).
+//    회귀 검증은 diagnostics/_test_edit_month_rebind.js 가 담당한다(그쪽이 ALL PASS 여야 한다).
 const fs = require("fs");
 const path = require("path");
 const vm = require("vm");
@@ -83,6 +87,16 @@ const fromPipeline = [
   "inferPipelineStepTargetFileId", // pipeline.js:623
 ];
 fromPipeline.forEach(fn => vm.runInContext(extract(pipelineSrc, fn), sandbox));
+// 4단계(안정키) 의존 로드 — 이 스크립트는 pipelineFileIdByWorkbookName 을 부르는데
+// 그 안이 pipelineStableWorkbookKey 를 참조한다(없으면 ReferenceError 로 즉사).
+// 토큰 2종 + 날짜/시각 판정 헬퍼까지 한 덩어리로(끝 경계 = pipelineStableWorkbookKey).
+{
+  const cs = pipelineSrc.indexOf("const PIPELINE_VOLATILE_NAME_TOKENS");
+  const ce = pipelineSrc.indexOf("function pipelineStableWorkbookKey", cs);
+  if (cs < 0 || ce < 0) throw new Error("안정키 토큰 블록을 찾지 못함");
+  vm.runInContext(pipelineSrc.slice(cs, ce), sandbox);
+  vm.runInContext(extract(pipelineSrc, "pipelineStableWorkbookKey"), sandbox);
+}
 // const 라인 추출(함수 아님): PIPELINE_CTX_READER_METHODS
 const ctxReaderConst = /const PIPELINE_CTX_READER_METHODS = new Set\(\[[^\]]*\]\);/.exec(pipelineSrc);
 if (!ctxReaderConst) throw new Error("PIPELINE_CTX_READER_METHODS not found");

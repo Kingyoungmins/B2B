@@ -43,10 +43,14 @@ const sandbox = {
   },
 };
 vm.createContext(sandbox);
-// 안정키 토큰 상수(4단계 매칭 의존) 먼저 로드
+// 안정키 토큰 상수(4단계 매칭 의존) 먼저 로드 — 이름토큰 + 접미사토큰 + 날짜판정 헬퍼까지
+// 한 덩어리로(끝 경계 = pipelineStableWorkbookKey). 토큰만 집어오면 그 함수가 참조하는
+// PIPELINE_VOLATILE_SUFFIX_TOKENS/pipelineLooksLike* 가 없어 ReferenceError 로 죽는다.
 {
   const cs = src.indexOf("const PIPELINE_VOLATILE_NAME_TOKENS");
-  vm.runInContext(src.slice(cs, src.indexOf("];", cs) + 2), sandbox);
+  const ce = src.indexOf("function pipelineStableWorkbookKey", cs);
+  if (cs < 0 || ce < 0) throw new Error("안정키 토큰 블록을 찾지 못함");
+  vm.runInContext(src.slice(cs, ce), sandbox);
 }
 needed.forEach(fn => vm.runInContext(extract(fn), sandbox));
 

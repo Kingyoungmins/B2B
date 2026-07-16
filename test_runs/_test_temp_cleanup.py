@@ -9,7 +9,7 @@ from pathlib import Path
 
 _REAL_GETTEMPDIR = tempfile.gettempdir  # 패치 전 원본 보관(케이스2 mkdtemp 용)
 
-sys.path.insert(0, r"C:\Users\Admin\Desktop\KGM_git\B2B_ver0.5.18")
+sys.path.insert(0, r"C:\Users\Admin\Desktop\KGM_git\B2B_ver0.6.1")
 import serve_b2b as S
 
 fake = Path(tempfile.mkdtemp(prefix="b2b_cleanuptest_"))
@@ -37,8 +37,8 @@ mk_file(backend / "prestep_OLD_a.xlsx", OLD)      # 삭제 대상
 mk_file(backend / "deadbeef_src.xlsx", OLD)       # 삭제 대상(uuid_ 소스)
 # Temp 루트
 mk_dir(fake / "b2b_isopipe_OLD", OLD)             # 삭제
-mk_dir(fake / "B2B_ver0.5.15_single_OLD", OLD)    # 삭제
-mk_dir(fake / "B2B_ver0.5.15_single_NEW", NEW)    # 보존(최근)
+mk_dir(fake / "B2B_ver0.6.1_single_OLD", OLD)    # 삭제
+mk_dir(fake / "B2B_ver0.6.1_single_NEW", NEW)    # 보존(최근)
 mk_dir(fake / "_MEIOLD", OLD)                     # 삭제(보수적 나이 충족, 마커 없음)
 mk_dir(fake / "_MEINEW", NEW)                     # 보존(최근, 마커 없음=타 앱 오인 방지)
 mk_dir(fake / "_MEIB2BOWN", NEW)                  # B2B 자신(serve_b2b.py 마커) → 최근이어도 삭제
@@ -68,8 +68,8 @@ checks = [
     ("prestep_OLD 삭제",         gone(backend / "prestep_OLD_a.xlsx")),
     ("uuid_ 소스 삭제",          gone(backend / "deadbeef_src.xlsx")),
     ("b2b_isopipe_OLD 삭제",     gone(fake / "b2b_isopipe_OLD")),
-    ("single_OLD 삭제",          gone(fake / "B2B_ver0.5.15_single_OLD")),
-    ("single_NEW 보존(최근)",    kept(fake / "B2B_ver0.5.15_single_NEW")),
+    ("single_OLD 삭제",          gone(fake / "B2B_ver0.6.1_single_OLD")),
+    ("single_NEW 보존(최근)",    kept(fake / "B2B_ver0.6.1_single_NEW")),
     ("_MEIOLD 삭제",             gone(fake / "_MEIOLD")),
     ("_MEINEW 보존(최근·마커없음)", kept(fake / "_MEINEW")),
     ("_MEI B2B자신(마커) 최근이어도 삭제", gone(fake / "_MEIB2BOWN")),
@@ -93,7 +93,7 @@ backend2 = fake2 / "b2b_backend_v044"; backend2.mkdir(parents=True, exist_ok=Tru
 mk_dir(backend2 / "live_OLD2", OLD)                 # 전이성 → 다른 백엔드여도 정리
 mk_file(backend2 / "prestep_OLD2_x.xlsx", OLD)      # 전이성 → 다른 백엔드여도 정리
 mk_file(backend2 / "cafebabe2_src.xlsx", OLD)       # uuid_ 원본사본 → 다른 백엔드면 보존
-mk_dir(fake2 / "B2B_ver0.5.15_single_OLD2", OLD)
+mk_dir(fake2 / "B2B_ver0.6.1_single_OLD2", OLD)
 mk_file(fake2 / "Diagnostics" / "EXCEL" / "log_OLD2.txt", OLD)
 mk_dir(fake2 / "B2B_WebView2" / "ver044_99999998", OLD)  # 죽은 pid → 가드 무관 삭제
 S.BACKEND_DIR = backend2
@@ -104,7 +104,7 @@ checks2 = [
     ("[가드] 전이성 live_ 은 다른 백엔드여도 정리", not (backend2 / "live_OLD2").exists()),
     ("[가드] 전이성 prestep_ 은 다른 백엔드여도 정리", not (backend2 / "prestep_OLD2_x.xlsx").exists()),
     ("[가드] uuid_ 원본사본은 다른 백엔드면 보존", (backend2 / "cafebabe2_src.xlsx").exists()),
-    ("[가드] single 임시 보존", (fake2 / "B2B_ver0.5.15_single_OLD2").exists()),
+    ("[가드] single 임시 보존", (fake2 / "B2B_ver0.6.1_single_OLD2").exists()),
     ("[가드] Excel 진단 로그는 정리", not (fake2 / "Diagnostics" / "EXCEL" / "log_OLD2.txt").exists()),
     ("[가드] webview2 죽은 pid 는 가드와 무관하게 삭제", not (fake2 / "B2B_WebView2" / "ver044_99999998").exists()),
 ]

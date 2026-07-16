@@ -8,7 +8,7 @@
 import sys, io, tempfile, shutil
 from pathlib import Path
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
-sys.path.insert(0, r"C:\Users\Admin\Desktop\KGM_git\B2B_ver0.5.15")
+sys.path.insert(0, r"C:\Users\Admin\Desktop\KGM_git\B2B_ver0.6.1")
 import openpyxl
 import pythoncom; pythoncom.CoInitialize()
 import win32com.client as win32
