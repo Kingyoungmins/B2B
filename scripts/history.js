@@ -112,23 +112,28 @@ function restoreHistorySnapshot(snapshot) {
 
 function undoHistory() {
   if (!state.history || !state.history.undo.length) return;
+  const previousSteps = (state.pipeline || []).slice();  // 복원 '전' 스텝 — 교차 목적지 리셋용
   state.history.redo.push(makeHistorySnapshot("redo"));
   restoreHistorySnapshot(state.history.undo.pop());
-  reconcileHistoryRestore();
+  reconcileHistoryRestore(previousSteps);
   toast("이전 작업으로 되돌렸습니다.", "success");
 }
 
 function redoHistory() {
   if (!state.history || !state.history.redo.length) return;
+  const previousSteps = (state.pipeline || []).slice();
   state.history.undo.push(makeHistorySnapshot("undo"));
   restoreHistorySnapshot(state.history.redo.pop());
-  reconcileHistoryRestore();
+  reconcileHistoryRestore(previousSteps);
   toast("되돌린 작업을 다시 적용했습니다.", "success");
 }
 
-function reconcileHistoryRestore() {
+// previousSteps = 되돌리기/다시하기 '직전'의 파이프라인. 이걸 안 넘기면 사라진 스텝의 교차파일
+// 목적지(dst_book)가 리셋 대상에서 빠져, 교차 스킬을 Ctrl+Z 로 되돌려도 붙여넣은 시트가
+// 그대로 남았다(✕ 삭제는 정리되는데 undo 만 안 되던 비대칭).
+function reconcileHistoryRestore(previousSteps) {
   if (typeof reconcilePipelineSimulationAfterEdit !== "function") return;
-  reconcilePipelineSimulationAfterEdit({ steps: state.pipeline }).catch(err => {
+  reconcilePipelineSimulationAfterEdit({ steps: state.pipeline, previousSteps: previousSteps || [] }).catch(err => {
     if (typeof reportPipelineError === "function") reportPipelineError(err);
     else console.error(err);
   });

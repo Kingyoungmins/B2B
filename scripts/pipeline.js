@@ -819,10 +819,18 @@ function crossOutputFileIdsReferencedInCode(code) {
   const ids = [];
   (state.outputTemplates || []).forEach((tpl, idx) => {
     const name = tpl && tpl.file && tpl.file.name;
+    if (!name) return;
     const nameKey = pipelineWorkbookNameKey(name);
-    if (name && (text.includes(name) || pipelineCollectWorkbookNames(text).some(ref => pipelineWorkbookNameKey(ref) === nameKey))) {
-      ids.push(typeof outputTemplateFileId === "function" ? outputTemplateFileId(idx) : "output:" + idx);
-    }
+    // [반쪽 수정 보완] 안정키(월·날짜 무시) 단계가 여기만 빠져 있었다. 실행 측은 안정키로 살아나
+    // (백엔드 _resolve_open_workbook_name 이 옛 리터럴을 새 출력에 재바인딩) 쓰기는 성공하는데,
+    // 리셋 대상 계산만 옛 이름 기준이라 토글 OFF/삭제가 출력에 안 먹고 재실행 시 중복 기록됐다.
+    // (6월 스킬의 Workbooks("출력_202606.xlsx") ↔ 7월 템플릿 "출력_202607.xlsx")
+    const stableKey = typeof pipelineStableWorkbookKey === "function" ? pipelineStableWorkbookKey(name) : "";
+    const refs = pipelineCollectWorkbookNames(text);
+    const hit = text.includes(name)
+      || refs.some(ref => pipelineWorkbookNameKey(ref) === nameKey)
+      || (stableKey.length >= 4 && refs.some(ref => pipelineStableWorkbookKey(ref) === stableKey));
+    if (hit) ids.push(typeof outputTemplateFileId === "function" ? outputTemplateFileId(idx) : "output:" + idx);
   });
   return ids;
 }
@@ -831,18 +839,45 @@ function crossOutputFileIdsReferencedInCode(code) {
 // crossOutputFileIdsReferencedInCode 는 '출력 템플릿'만 잡지만, 시트를 '입력 파일'로 복사하는 경우엔
 // 그 입력 파일도 리셋 대상이어야 한다(안 그러면 스텝 삭제 후에도 붙여넣은 시트가 안 지워진다).
 // pipelineFileIdByWorkbookName 으로 입력·출력 모두에서 이름을 fileId 로 해석한다.
-function crossWriteDestinationFileIds(code) {
-  const text = String(code || "");
+// 주석/독스트링 안의 dst_book 리터럴까지 매칭하면, 실제로는 아무것도 안 쓰는 스텝이 '교차'로
+// 오판돼 토글마다 전체 pristine 리셋+재적용을 타고(대형 파이프라인에서 수 배 느려짐) 파이프라인
+// 밖에서 만든 상태까지 날아간다. 코드 문맥만 남긴다(문자열 리터럴은 dst_book 값 자체라 보존).
+function pipelineStripCodeComments(code) {
+  return String(code || "")
+    .replace(/"""[\s\S]*?"""|'''[\s\S]*?'''/g, " ")   // python 독스트링
+    .replace(/^\s*#.*$/gm, " ")                        // python 주석
+    .replace(/^\s*'.*$/gm, " ")                        // VBA 주석
+    .replace(/\/\*[\s\S]*?\*\//g, " ");                // 블록 주석
+}
+
+function crossWriteDestinationFileIds(code, options = {}) {
+  const text = pipelineStripCodeComments(code);
   if (!text) return [];
   const ids = [];
   const seen = new Set();
+  // 스텝 자신의 대상 파일은 '교차'가 아니다(같은 파일 복사에 dst_book 을 명시하는 복붙 캡처 스텝이
+  // 전부 교차로 오판돼, 빠른 토글/삭제 경로를 통째로 잃었다).
+  const selfFileId = options.selfFileId || null;
   const addName = name => {
     const fid = typeof pipelineFileIdByWorkbookName === "function" ? pipelineFileIdByWorkbookName(name) : null;
-    if (fid && !seen.has(fid)) { seen.add(fid); ids.push(fid); }
+    if (!fid || fid === selfFileId || seen.has(fid)) return;
+    seen.add(fid);
+    ids.push(fid);
+  };
+  const vars = typeof pipelineConstStringVars === "function" ? pipelineConstStringVars(text) : {};
+  const addToken = token => {
+    const resolved = typeof pipelineResolvePyArg === "function" ? pipelineResolvePyArg(token, vars) : null;
+    if (resolved) addName(resolved);
   };
   let m;
-  const reDst = /dst_book\s*=\s*["']([^"']+)["']/gi;
-  while ((m = reDst.exec(text))) addName(m[1]);
+  // dst_book="X.xlsx" 뿐 아니라 변수 전달(dst = "매출.xlsx"; ..., dst_book=dst)도 해석한다.
+  const reDst = /dst_book\s*=\s*([^,()\s]+)/gi;
+  while ((m = reDst.exec(text))) addToken(m[1]);
+  // ctx.book("X.xlsx").write(...) 류 — 정식 지원하는 교차 쓰기 방언인데 여기 연결이 빠져 있었다.
+  // (스텝이 주 ctx 도 함께 변형하면 대상 추론이 A 를 반환해 B 가 어디에서도 리셋되지 않았다.)
+  if (typeof pipelinePythonMutatedBookNames === "function") {
+    pipelinePythonMutatedBookNames(text).forEach(addName);
+  }
   return ids;
 }
 
@@ -850,7 +885,20 @@ function crossWriteDestinationFileIds(code) {
 // 빠른(마지막 스텝) 삭제 스냅샷 복구는 대상 파일만 되돌려 교차 목적지를 놓치므로, 이런 스텝은
 // 전체 reconcile(목적지까지 리셋)로 보낸다.
 function pipelineStepWritesCrossFile(step) {
-  return crossWriteDestinationFileIds((step && step.code) || "").length > 0;
+  // 자기 대상 파일에 쓰는 건 교차가 아니다 — 대상 추론이 되면 그 파일은 제외하고 판단한다.
+  const selfFileId = (step && step.targetFileId)
+    || (typeof inferPipelineStepTargetFileId === "function" ? inferPipelineStepTargetFileId(step) : null);
+  return crossWriteDestinationFileIds((step && step.code) || "", { selfFileId }).length > 0;
+}
+
+// 체크포인트 빠른경로는 startIdx '이후 전 스텝'을 되돌린다. 그런데 스텝별 _preApplySnapshot 은
+// 그 스텝의 '대상 세션'만 캡처돼 교차 목적지 스냅샷은 어디에도 없다.
+// 그래서 조작한 스텝이 교차가 아니어도, 되돌려지는 suffix 안에 교차 스텝이 하나라도 있으면
+// 목적지가 더러운 채 남는다(UI=보류인데 라이브=적용됨, 재실행 시 '원가 (2)' 중복).
+// → suffix 전체를 보고 하나라도 교차면 빠른경로를 포기하고 전체 reconcile 로 보낸다.
+function pipelineSuffixWritesCrossFile(steps, startIdx) {
+  const list = steps || state.pipeline || [];
+  return list.slice(Math.max(0, startIdx)).some(s => s && s.code && pipelineStepWritesCrossFile(s));
 }
 
 
@@ -1387,7 +1435,23 @@ async function runVbaPipelinePreferLive(options = {}) {
     // Application.Run 을 거부하는 것이다. VBA 가 하나라도 있으면(또는 교차파일 복붙이면) 새 비임베드
     // Excel 에서 순서대로 실행한 뒤 결과 워크북만 라이브로 복사한다. Python COM 스텝이 섞여도 같은
     // 격리 파이프라인 안에서 순서를 유지한다.
-    return runIsolatedLivePipelineSteps(steps, excelId, options);
+    //
+    // [교차 목적지 리셋 전파] 격리 배치는 '그룹 대상'(스텝의 변형 파일)만 pristine sourcePath 에서 열고,
+    // 그 밖의 라이브 세션은 '현재 라이브 상태'로 companion 오픈한다. dst_book 교차 스텝의 그룹 대상은
+    // 소스(A)이므로 목적지(B, 입력 파일)는 리셋 대상에 없었고, 라이브에 이미 적용된 상태면 전체실행마다
+    // '원가 (2)', (3)… 이 누적됐다(reapply 경로만 목적지를 리셋하던 반쪽 수정).
+    const crossResetFileIds = [];
+    (steps || []).forEach(s => {
+      if (!s || !s.code) return;
+      const selfFileId = s.targetFileId
+        || (typeof inferPipelineStepTargetFileId === "function" ? inferPipelineStepTargetFileId(s) : null);
+      crossWriteDestinationFileIds(s.code, { selfFileId }).forEach(fid => {
+        if (fid && !crossResetFileIds.includes(fid)) crossResetFileIds.push(fid);
+      });
+    });
+    const mergedResetFileIds = Array.from(new Set([...(options.resetFileIds || []), ...crossResetFileIds]));
+    return runIsolatedLivePipelineSteps(steps, excelId,
+      mergedResetFileIds.length ? { ...options, resetFileIds: mergedResetFileIds } : options);
   }
   // 전체실행도 "채팅에서 생성 → 적용"과 같은 단일 적용 함수를 스텝 순서대로 재사용한다.
   // 별도 reapply 전용 적용기를 태우면 Native Excel 창 숨김/복원/표시 타이밍이 달라져
@@ -2973,7 +3037,7 @@ function renderPipeline() {
         }
       }
       if (!fastLast && pipelineStepLiveLanguage(beforeToggleSnapshot[currentIdx])
-          && !pipelineStepWritesCrossFile(beforeToggleSnapshot[currentIdx])) {
+          && !pipelineSuffixWritesCrossFile(beforeToggleSnapshot, currentIdx)) {
         try {
           if (await restorePipelineToCheckpointAndHold(currentIdx, beforeToggleSnapshot, {
             message: "선택한 단계 직전 상태로 되돌리는 중...",
@@ -3070,7 +3134,7 @@ function renderPipeline() {
         }
       }
       if (!fastLast && removedWasApplied && isStepEnabled(removedStep) && pipelineStepLiveLanguage(removedStep)
-          && !pipelineStepWritesCrossFile(removedStep)) {
+          && !pipelineSuffixWritesCrossFile(beforeDeleteSnapshot, currentIdx)) {
         try {
           if (await restorePipelineToCheckpointAndHold(currentIdx, beforeDeleteSnapshot, {
             message: "선택한 단계 직전 상태로 되돌리는 중...",
@@ -3395,6 +3459,11 @@ function canUsePipelineCheckpointFromIndex(startIdx, beforeSteps, nextSteps) {
   const start = Math.max(0, Number(startIdx) | 0);
   const steps = nextSteps || state.pipeline || [];
   if (!pipelineUsesLiveSkill(steps) || pipelineHasBackendOnlyStep(steps)) return false;
+  // [교차파일 목적지 누락] 이 빠른경로는 '대상 세션' 스냅샷만 되돌리므로 교차 목적지가 더러운 채
+  // 남는다. 토글/삭제엔 가드가 있었지만 스킬 '수정'·'삽입' 경로는 여기로 선점돼 가드가 없었다.
+  // '수정 전' 코드(beforeSteps)와 '수정 후' 코드(steps) 양쪽을 봐야 한다 — 수정으로 dst_book 호출
+  // 자체가 사라지면 옛 목적지는 next 어디에도 안 남아 영영 리셋되지 않는다(삭제 버그의 재현).
+  if (pipelineSuffixWritesCrossFile(beforeSteps, start) || pipelineSuffixWritesCrossFile(steps, start)) return false;
   const existingResume = getPipelineResumeFromIndex();
   if (Number.isInteger(existingResume) && existingResume <= start) return true;
   return (beforeSteps || []).slice(start).some(step => step && step._preApplySnapshot && step._preApplySnapshot.resultId);
@@ -3816,17 +3885,24 @@ async function reconcilePipelineSimulationAfterEdit(options = {}) {
       // [#19] 토글/삭제발 재적용에도 취소 토큰을 등록해 '작업 중단' 버튼이 뜨고 동작하게 한다.
       const cancelToken = { cancelled: false };
       window.__activeVbaApply = { token: cancelToken, excelId: liveExcelId, restorePipeline: options.restorePipeline || null };
-      // [교차파일 삭제 원복] 방금 삭제/편집된 스텝(affectedStep)이 다른 파일에 썼다면(dst_book),
-      // 남은 스텝 코드엔 그 참조가 없어 리셋에서 빠진다. 그 목적지를 명시적으로 리셋 대상에 추가한다.
+      // [교차파일 삭제 원복] 삭제/편집된 스텝이 다른 파일에 썼다면(dst_book), 남은 스텝 코드엔 그
+      // 참조가 없어 리셋에서 빠진다 → 그 목적지를 명시적으로 리셋 대상에 추가한다.
+      // affectedStep 만 보면 구멍이 남았다:
+      //   · undo/redo(reconcileHistoryRestore)는 affectedStep 을 못 넘겨 리셋 대상이 아예 빈다.
+      //   · '수정'으로 dst_book 호출 자체가 사라지면 옛 목적지는 next 어디에도 안 남는다.
+      // → '편집 전 파이프라인(restorePipeline/previousSteps)' 전체의 교차 목적지를 함께 넣는다.
+      //   (현재 스텝들의 목적지는 reapply 가 이미 리셋하므로 중복은 무해하다.)
       const extraResetFileIds = [];
-      if (options.affectedStep && options.affectedStep.code) {
-        crossWriteDestinationFileIds(options.affectedStep.code).forEach(fid => {
-          if (fid && !extraResetFileIds.includes(fid)) extraResetFileIds.push(fid);
-        });
-        crossOutputFileIdsReferencedInCode(options.affectedStep.code).forEach(fid => {
-          if (fid && !extraResetFileIds.includes(fid)) extraResetFileIds.push(fid);
-        });
-      }
+      const addExtra = fid => { if (fid && !extraResetFileIds.includes(fid)) extraResetFileIds.push(fid); };
+      const extraSources = [];
+      if (options.affectedStep && options.affectedStep.code) extraSources.push(options.affectedStep);
+      (options.previousSteps || options.restorePipeline || []).forEach(s => {
+        if (s && s.code) extraSources.push(s);
+      });
+      extraSources.forEach(s => {
+        crossWriteDestinationFileIds(s.code).forEach(addExtra);
+        crossOutputFileIdsReferencedInCode(s.code).forEach(addExtra);
+      });
       return reapplyVbaPipelineToLive(liveExcelId, { steps: stepsForReconcile, viewSheet: affectedStepViewSheetHint(options.affectedStep), extraResetFileIds })
         .then(result => {
           // [P1] 활성창 기본 — 뷰 이동은 '실제 변경된 스텝의 대상 파일'로만(출력으로 무조건 점프 금지).
