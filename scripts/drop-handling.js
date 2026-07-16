@@ -460,6 +460,69 @@ function openRunnerFileEditor(role) {
   });
 }
 
+// [실행기 스킬 편집기] '스킬 수정'은 입력/출력의 '파일 수정/다운'과 같은 자리·같은 방식이어야 한다 —
+// 예전엔 곧장 생성기로 화면을 전환해 버려서, 올린 스킬 zip 을 빼거나 다른 zip 으로 바꿀 수단이 없었다.
+// 여기서는 (1) 올린 스킬 확인 (2) 제거(=파이프라인 비우기) (3) 다른 zip 올리기 (4) 필요하면 생성기에서 편집.
+function openRunnerLogicEditor() {
+  const modal = $("modal");
+  if (!modal) return;
+  const steps = state.pipeline || [];
+  const name = state.logicSaveBaseName || "불러온 스킬";
+  const enabled = steps.filter(s => s && s.enabled !== false).length;
+  modal.innerHTML = `
+    <h3>스킬 수정</h3>
+    <p style="font-size:12px; color:#666; margin-bottom:10px">실행기에 연결된 스킬을 확인하고, 제거하거나 다른 스킬로 바꿀 수 있습니다.</p>
+    <div class="runner-file-editor-list">
+      ${steps.length ? `
+        <div class="file-chip">
+          <div class="chip-icon">ZIP</div>
+          <div class="chip-body">
+            <div class="chip-name" title="${escapeHtml(name)}">${escapeHtml(name)}</div>
+            <div class="chip-meta">${steps.length}단계 · 활성 ${enabled}개</div>
+          </div>
+          <button class="chip-view" id="runner-logic-edit" type="button">단계 편집</button>
+          <button class="chip-remove" id="runner-logic-remove" type="button" title="스킬 제거">×</button>
+        </div>` : `<div class="pipeline-empty">업로드된 스킬이 없습니다. 아래에서 스킬(zip)을 올려주세요.</div>`}
+    </div>
+    <div class="row" style="margin-top:14px; gap:8px">
+      <button class="btn-secondary" id="runner-logic-upload" type="button">스킬(zip) 올리기</button>
+      <button class="btn-secondary" id="modal-cancel" type="button">닫기</button>
+    </div>
+  `;
+  $("modal-bg").classList.add("show");
+  $("modal-cancel").onclick = () => $("modal-bg").classList.remove("show");
+  const upload = $("runner-logic-upload");
+  if (upload) upload.onclick = () => { const inp = $("logic-files"); if (inp) inp.click(); };
+  const edit = $("runner-logic-edit");
+  if (edit) edit.onclick = () => {
+    $("modal-bg").classList.remove("show");
+    if (typeof setPage === "function") setPage("generator");   // 단계 편집 UI 는 생성기에만 있음
+  };
+  const remove = $("runner-logic-remove");
+  if (remove) remove.onclick = () => {
+    if (typeof clearRunnerLogic === "function") clearRunnerLogic();
+    openRunnerLogicEditor();
+  };
+}
+
+// 올린 스킬을 비운다(파이프라인 + 매핑 + 대화). 파일은 건드리지 않는다 — 스킬만 교체하는 흐름.
+function clearRunnerLogic() {
+  if (typeof pushHistory === "function") { try { pushHistory("스킬 제거"); } catch (_) {} }
+  state.pipeline = [];
+  state.editingStepId = null;
+  state.logicSaveBaseName = "";      // 다음에 올리는 스킬 이름과 섞이지 않게
+  state.runnerMappings = {};
+  state.runnerMappingChecked = false;
+  state.runnerMappingSignature = "";
+  if (typeof clearPipelineResumeFromIndex === "function") { try { clearPipelineResumeFromIndex(); } catch (_) {} }
+  // 불러온 스킬이 사라졌으니 '라이브에 적용됨' 장부도 무효화(다음 실행이 no-op 으로 건너뛰지 않게).
+  if (typeof invalidateLivePipelineApplied === "function") { try { invalidateLivePipelineApplied(); } catch (_) {} }
+  if (typeof renderPipeline === "function") renderPipeline();
+  if (typeof refreshRunButton === "function") refreshRunButton();
+  if (typeof renderRunnerWorkflow === "function") renderRunnerWorkflow();
+  if (typeof toast === "function") toast("스킬을 제거했습니다. 다른 스킬(zip)을 올릴 수 있습니다.", "success");
+}
+
 function runnerMappingFileId(file, idx, role) {
   if (role === "output") {
     return typeof outputTemplateFileId === "function" ? outputTemplateFileId(idx) : "output:" + idx;
@@ -1416,9 +1479,7 @@ function renderRunnerWorkflow() {
   if (resultNode) resultNode.classList.toggle("filled", !!state.output && activeStepCount > 0);
   setNodeStatus(inputNode, state.inputs.length > 0, "파일 수정/다운", () => openRunnerFileEditor("input"));
   setNodeStatus(outputNode, state.outputTemplates.length > 0, "파일 수정/다운", () => openRunnerFileEditor("output"));
-  setNodeStatus(logicNode, state.pipeline.length > 0, "스킬 수정", () => {
-    if (typeof setPage === "function") setPage("generator");
-  });
+  setNodeStatus(logicNode, state.pipeline.length > 0, "스킬 수정", () => openRunnerLogicEditor());
 
   const setCount = (id, val) => { const el = $(id); if (el) el.textContent = val; };
   setCount("runner-input-count", state.inputs.length);
