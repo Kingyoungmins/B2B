@@ -190,5 +190,24 @@ const call = (fn, ...args) =>
   ck("(P1-d) If 안의 = 는 대입 아님", !Array.from(vars.keys ? vars.keys() : []).includes("wb.name"));
 }
 
+// [UCAP 회귀] 파일명에 괄호/공백이 있어도 dst_book 교차 쓰기를 인식해야 한다.
+// (bare 토큰 정규식이 ')' 에서 끊겨 "output)_LG_CNS_..." 를 못 잡던 실측 버그 — 삽입 후
+//  재실행 때 출력 파일이 리셋/복원 대상에서 빠져 copy_sheet 시트가 중복으로 쌓였다.)
+{
+  const parenName = "output)_LG_CNS_마곡_UCAP521606858760_26년03월_청구_고객.xlsx";
+  sandbox.state.inputs.push({ name: parenName });
+  const c1 = 'def transform(ctx):\n    ctx.copy_sheet("VIEW", dst_book="' + parenName + '")';
+  const ids1 = vm.runInContext("crossWriteDestinationFileIds(" + JSON.stringify(c1) + ")", sandbox);
+  ck("(U1) 괄호 포함 파일명 dst_book 인식(UCAP)", ids1.length === 1 && ids1[0].includes("output)_LG_CNS"), ids1);
+  const spaceName = "월별 정산 결과.xlsx";
+  sandbox.state.inputs.push({ name: spaceName });
+  const c2 = 'def transform(ctx):\n    ctx.copy_sheet("VIEW", dst_book="' + spaceName + '")';
+  const ids2 = vm.runInContext("crossWriteDestinationFileIds(" + JSON.stringify(c2) + ")", sandbox);
+  ck("(U2) 공백 포함 파일명 dst_book 인식", ids2.length === 1 && ids2[0].includes("월별 정산"), ids2);
+  const c3 = 'def transform(ctx):\n    dst = "' + parenName + '"\n    ctx.copy_sheet("VIEW", dst_book=dst)';
+  const ids3 = vm.runInContext("crossWriteDestinationFileIds(" + JSON.stringify(c3) + ")", sandbox);
+  ck("(U3) 변수 전달 dst_book 여전히 인식(비회귀)", ids3.length === 1, ids3);
+}
+
 console.log("\n=== RESULT: " + (fails === 0 ? "ALL PASS" : fails + " FAIL") + " ===");
 process.exit(fails ? 1 : 0);

@@ -749,8 +749,10 @@ function runnerExtractGeneratedSheetsFromCode(code) {
     if (r === "ctx") return "";
     return pyVars.get(r) || "";
   };
+  // [괄호 시트명 수정] 첫 인자(옛 이름)에 따옴표 문자열을 우선 매칭 — 시트명에 괄호/콤마가 있으면
+  // (실존: "(2) LGU+") bare 토큰 패턴이 중간에서 끊겨 새 이름 캡처가 어긋나 생성시트 등록이 실패했다.
   const anyRename = new RegExp(
-    RECV + '\\s*\\.\\s*rename_sheet\\(\\s*[^,()\\r\\n]+?\\s*,\\s*(?:new_name\\s*=\\s*)?((["\'])[^"\']*\\3|[A-Za-z_][A-Za-z0-9_]*)\\s*[),]', 'g');
+    RECV + '\\s*\\.\\s*rename_sheet\\(\\s*(?:"[^"]*"|\\\'[^\\\']*\\\'|[^,()\\r\\n]+?)\\s*,\\s*(?:new_name\\s*=\\s*)?((["\'])[^"\']*\\3|[A-Za-z_][A-Za-z0-9_]*)\\s*[),]', 'g');
   while ((m = anyRename.exec(src))) {
     const name = resolvePyName(m[2]);
     if (name) runnerAddGeneratedSheet(generated, receiverBook(m[1]), name);

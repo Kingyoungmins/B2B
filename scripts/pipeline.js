@@ -920,7 +920,11 @@ function crossWriteDestinationFileIds(code, options = {}) {
   };
   let m;
   // dst_book="X.xlsx" 뿐 아니라 변수 전달(dst = "매출.xlsx"; ..., dst_book=dst)도 해석한다.
-  const reDst = /dst_book\s*=\s*([^,()\s]+)/gi;
+  // [괄호/공백 파일명 수정] 따옴표 문자열을 '우선' 통째로 매칭해야 한다 — bare 토큰 패턴만 쓰면
+  // 파일명에 괄호·공백이 있을 때(실측: "output)_LG_CNS_..." 처럼 ')' 포함) 토큰이 중간에서 잘려
+  // 교차 쓰기 인식이 실패했고, 그러면 삽입/토글의 빠른경로 가드와 리셋 집합에서 출력 파일이 빠져
+  // copy_sheet 재실행 때 시트가 중복으로 쌓였다.
+  const reDst = /dst_book\s*=\s*("[^"]*"|'[^']*'|[^,()\s]+)/gi;
   while ((m = reDst.exec(text))) addToken(m[1]);
   // ctx.book("X.xlsx").write(...) 류 — 정식 지원하는 교차 쓰기 방언인데 여기 연결이 빠져 있었다.
   // (스텝이 주 ctx 도 함께 변형하면 대상 추론이 A 를 반환해 B 가 어디에서도 리셋되지 않았다.)
