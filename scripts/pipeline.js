@@ -2932,6 +2932,10 @@ function renderPipeline() {
   if (state.editingStepId && !state.pipeline.some(s => s.id === state.editingStepId)) {
     state.editingStepId = null;
   }
+  if (state.renamingStepId && !state.pipeline.some(s => s.id === state.renamingStepId)) {
+    state.renamingStepId = null;
+    state.renamingDraft = null;
+  }
   list.innerHTML = "";
   const frag = document.createDocumentFragment();
   state.pipeline.forEach((step, idx) => {
@@ -2948,35 +2952,35 @@ function renderPipeline() {
     item.innerHTML = `
       <div class="step-n">${idx+1}</div>
       <div class="step-label" title="${escapeHtml(pipelineStepLabel(step, idx))}">${escapeHtml(pipelineStepLabel(step, idx))}${runtimeBadge}</div>
-      <button class="step-rename" title="단계 이름 바꾸기">가</button>
+      <button class="step-rename" title="단계 이름 바꾸기">이름</button>
       <button class="step-toggle ${isStepEnabled(step) ? 'active' : ''}" title="계산 반영 여부">${isStepEnabled(step) ? 'ON' : 'OFF'}</button>
       <button class="step-edit ${editing ? 'active' : ''}" title="${editing ? '수정 모드 해제' : '수정'}">✎</button>
       <button class="step-del" title="삭제">✕</button>
     `;
     // [사용자 요청] 카드 라벨 이름 편집(step.title 에 저장). 빈 값이면 자동 라벨로 복귀.
     // 편집한 이름은 자동백업/스킬 zip 저장에 함께 실려(save-load), 나중에 불러오면 그 이름으로 보인다.
-    // [이름 버튼 추가] 더블클릭은 두 클릭 사이에 renderPipeline 재렌더(실행 배지 갱신 등)가 끼면 라벨
-    // 요소가 교체돼 브라우저가 dblclick 으로 묶지 못한다(간헐 "안 열림"의 원인 — 특히 실행 중/원격).
-    // 그래서 전용 🏷 버튼(우측 ✎ '스킬 수정'과 다른 아이콘·위치)을 추가하고 더블클릭도 그대로 유지.
+    // [상태 기반 편집] ✎ 편집모드(state.editingStepId)와 같은 원리로 state.renamingStepId 에 둔다.
+    // 예전엔 입력칸이 DOM 에만 있어서, 실행 배지 폴링 등으로 renderPipeline 이 한 번만 스쳐도 입력칸이
+    // 소리 없이 사라졌다("눌러도 무변화" / "두 번 클릭해야 먹힘"의 정체). 이제 재렌더돼도 유지된다.
     const labelEl = item.querySelector(".step-label");
-    const openLabelRename = () => {
-      if (!labelEl || labelEl.querySelector("input")) return;
-      const curr = String(step.title || "").trim() || pipelineStepLabel(step, idx);
+    const renaming = state.renamingStepId === step.id;
+    if (labelEl && renaming) {
       const input = document.createElement("input");
       input.className = "step-label-input";
       input.type = "text";
-      input.value = curr;
+      input.value = state.renamingDraft != null
+        ? String(state.renamingDraft)
+        : (String(step.title || "").trim() || pipelineStepLabel(step, idx));
       input.maxLength = 200;
       labelEl.textContent = "";
       labelEl.appendChild(input);
-      input.focus();
-      input.select();
-      let done = false;
+      input.oninput = () => { state.renamingDraft = input.value; };   // 재렌더 시 값 보존
       const commit = (save) => {
-        if (done) return;
-        done = true;
+        if (state.renamingStepId !== step.id) return;   // 이미 처리됨
+        const v = String(input.value || "").trim();
+        state.renamingStepId = null;
+        state.renamingDraft = null;
         if (save) {
-          const v = input.value.trim();
           const si = state.pipeline.findIndex(s => s && s.id === step.id);
           if (si >= 0) {
             if (typeof pushHistory === "function") pushHistory("단계 이름 편집");
@@ -2993,23 +2997,26 @@ function renderPipeline() {
       };
       input.onblur = () => commit(true);
       input.onclick = (ev) => ev.stopPropagation();
+    }
+    const openLabelRename = () => {
+      if (state.renamingStepId === step.id) return;
+      state.renamingStepId = step.id;
+      state.renamingDraft = null;              // 첫 렌더에서 현재 이름으로 채움 + 전체선택
+      state.renamingSelectAll = true;
+      renderPipeline();
     };
-    if (labelEl) {
-      labelEl.title = pipelineStepLabel(step, idx) + " · '가' 버튼 또는 더블클릭으로 이름 편집";
+    if (labelEl && !renaming) {
+      labelEl.title = pipelineStepLabel(step, idx) + " · '이름' 버튼 또는 더블클릭으로 이름 편집";
       labelEl.ondblclick = (e) => { e.stopPropagation(); openLabelRename(); };
-      // 더블클릭 경로도 같은 포커스 레이스가 있다(라벨 div 로 포커스 이동 시도 → 입력칸 blur → 즉시 닫힘).
-      // 단, 열린 입력칸 안의 클릭(커서 이동/선택)은 막으면 안 되므로 INPUT 타깃은 제외.
+      // [포커스 레이스] 클릭 복구망(눌림-즉시 합성 click)에선 onclick 이 mousedown '중'에 돌아,
+      // 직후 기본 mousedown 동작(포커스 이동)이 새 입력칸 포커스를 뺏는다 → 기본 동작 차단.
       labelEl.onmousedown = (e) => {
         if (!(e.target && e.target.tagName === "INPUT")) e.preventDefault();
       };
     }
     const renameBtn = item.querySelector(".step-rename");
     if (renameBtn) {
-      // [무변화 버그 수정] 클릭 복구망은 '눌림 즉시' 합성 click 을 쏘므로 onclick(입력칸 열기+focus)이
-      // mousedown '중'에 실행된다. 그 직후 버튼의 기본 mousedown 동작(버튼으로 포커스 이동)이
-      // 입력칸 포커스를 도로 뺏어 input.onblur → 즉시 커밋/닫힘 → "눌러도 아무 변화 없음"이 됐다.
-      // mousedown 기본 동작을 막아 입력칸이 포커스를 유지하게 한다.
-      renameBtn.onmousedown = (e) => e.preventDefault();
+      renameBtn.onmousedown = (e) => e.preventDefault();   // 포커스 뺏김 방지(위와 동일)
       renameBtn.onclick = (e) => { e.stopPropagation(); openLabelRename(); };
     }
     item.querySelector(".step-toggle").onclick = async (e) => {
@@ -3241,6 +3248,23 @@ function renderPipeline() {
     frag.appendChild(item);
   });
   list.appendChild(frag);
+  // [상태 기반 이름 편집] 재렌더로 입력칸 요소가 새로 만들어지면 포커스를 되돌려 준다.
+  // 첫 오픈(renamingSelectAll)엔 전체선택, 이후 재렌더에는 커서를 끝으로(타이핑 방해 최소화).
+  if (state.renamingStepId) {
+    const renameInput = list.querySelector(".step-label-input");
+    if (renameInput && document.activeElement !== renameInput) {
+      try {
+        renameInput.focus();
+        if (state.renamingSelectAll) {
+          state.renamingSelectAll = false;
+          renameInput.select();
+        } else {
+          const n = renameInput.value.length;
+          renameInput.setSelectionRange(n, n);
+        }
+      } catch (_) {}
+    }
+  }
   if (typeof renderEditingBanner === "function") renderEditingBanner();
   renderRunnerWorkflow();
 }
