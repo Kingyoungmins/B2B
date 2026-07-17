@@ -553,6 +553,55 @@ function normalizeLoadedLogicCode(code, language) {
   return out.join("\n").trim() + "\n";
 }
 
+// [SBAGENT-209] 순수 내부 작업본 이름인지 — excel_open_<hash>.xls 처럼 원본명이 전혀 안 남은 형태만.
+// (<hash>_원본명.xlsx 는 원본명이 박혀 있어 기존 접두어 제거/별칭 해석으로 이미 동작 → 건드리지 않음.)
+function isInternalTempWorkbookName(name) {
+  const stem = String(name || "").replace(/\.[^.]+$/, "");
+  return /^(?:excel_open_|live_reset_|prestep_)[0-9a-f]{8,}$/i.test(stem) || /^[0-9a-f]{12,}$/i.test(stem);
+}
+
+// [SBAGENT-209] 복붙 캡처가 코드에 박아 저장한 '내부 작업본 이름' 수리(구버전 저장 스킬 하위호환).
+// 내부명은 캡처한 라이브 세션이 사라지면 어떤 업로드와도 매칭될 수 없어, 실행기 파일확인에
+// 영원히 채울 수 없는 '파일 선택 필요' 행이 뜨고 재생(paste_copied)도 그 이름의 워크북을 못 찾아 깨진다.
+//  - dst_book 내부명 + 스텝에 targetFileId 有 → kwarg 제거. paste_copied 는 dst_book 생략 시 스텝
+//    자신의 대상 세션 워크북에 붙여넣고, 캡처는 targetFileId 를 '붙여넣은 파일'로 고정하므로 동치다.
+//  - src_book 내부명 → 파이프라인에서 소스시트를 targetSheetName 으로 쓰는 input: 파일이 '정확히
+//    하나'면 그 파일명으로 치환(모호하면 현행 유지 — 사용자가 파일확인에서 직접 고를 수 있다).
+function repairPasteCopiedInternalBookNames(steps) {
+  const list = Array.isArray(steps) ? steps : [];
+  const sheetOwners = new Map(); // 소스시트(소문자) -> Set(input: 파일명)
+  for (const s of list) {
+    if (!s || !s.targetFileId || !String(s.targetFileId).startsWith("input:")) continue;
+    const book = String(s.targetFileId).slice(6);
+    const sheet = String(s.targetSheetName || "").trim();
+    if (!book || !sheet) continue;
+    const key = sheet.toLowerCase();
+    if (!sheetOwners.has(key)) sheetOwners.set(key, new Set());
+    sheetOwners.get(key).add(book);
+  }
+  let touched = 0;
+  for (const s of list) {
+    if (!s || !s.code || !/paste_copied\s*\(/i.test(String(s.code))) continue;
+    let code = String(s.code);
+    const before = code;
+    if (s.targetFileId) {
+      code = code.replace(/,\s*dst_book\s*=\s*(["'])([^"']*)\1/gi,
+        (whole, q, name) => (isInternalTempWorkbookName(name) ? "" : whole));
+    }
+    code = code.replace(
+      /(paste_copied\s*\(\s*(["'])([^"']+)\2[^\n]*?src_book\s*=\s*)(["'])([^"']*)\4/gi,
+      (whole, head, q1, srcSheet, q2, srcBook) => {
+        if (!isInternalTempWorkbookName(srcBook)) return whole;
+        const owners = sheetOwners.get(String(srcSheet).trim().toLowerCase());
+        if (!owners || owners.size !== 1) return whole;
+        const owner = String(Array.from(owners)[0]).replace(/["'\\]/g, "");
+        return head + q2 + owner + q2;
+      });
+    if (code !== before) { s.code = code; touched++; }
+  }
+  return touched;
+}
+
 async function loadLogicFiles(files) {
   if (files.length === 0) return;
   files = await normalizeLoadedFiles(files);
@@ -660,6 +709,12 @@ async function loadLogicFiles(files) {
       trustedStatic: s.trustedStatic !== false, // 불러온 zip/json 스킬은 작성자가 확인한 저장본으로 취급
     };
   });
+
+  // [SBAGENT-209] 구버전 캡처가 저장한 내부 작업본 이름(excel_open_<hash>.xls) 수리 — 로드 시 1회.
+  try {
+    const repairedN = repairPasteCopiedInternalBookNames(resolvedPipeline);
+    if (repairedN) console.log("[load] 복붙 내부 작업본 이름 수리:", repairedN, "단계");
+  } catch (_) {}
 
   loadLogic({ ...data, pipeline: resolvedPipeline }, manifestFile.name, {
     externallyLoaded,

@@ -6301,6 +6301,10 @@ def _resolve_open_workbook_name(app, requested_name):
 # Workbooks("500255...xls") 가 'subscript out of range' 로 실패한다. 열 때 '등록명→실제명' 별칭을 앱(pid)별로
 # 저장해 두고, VBA 리터럴 치환에서 그 별칭으로 실제명을 풀어준다(시트명은 이미 실제명이라 안 건드림).
 _WB_NAME_ALIASES = {}  # pid -> { lookup_key(등록명): set(실제 wb.Name) }
+# [SBAGENT-209] 역방향(실제 wb.Name → 등록명). 복붙 캡처가 코드에 '실제 라이브명'(excel_open_<hash>.xls)을
+# 박아 저장하면, 그 세션이 죽은 뒤엔 어떤 파일과도 매칭 불가 — 실행기 파일확인에 영원히 못 채우는
+# 요구가 뜨고 재생도 깨진다. 캡처는 이 역별칭으로 사용자 원본명을 코드에 쓴다.
+_WB_NAME_REVERSE_ALIASES = {}  # pid -> { 실제 wb.Name: 등록명(사용자 파일명) }
 
 
 def _stash_workbook_name_alias(app, intended_name, actual_name):
@@ -6319,6 +6323,7 @@ def _stash_workbook_name_alias(app, intended_name, actual_name):
         aliases = _WB_NAME_ALIASES.setdefault(int(pid), {})
         for key in intended_keys:
             aliases.setdefault(key, set()).add(actual)
+        _WB_NAME_REVERSE_ALIASES.setdefault(int(pid), {})[actual] = intended
     except Exception:
         pass
 
@@ -6328,8 +6333,39 @@ def _clear_workbook_name_aliases(app):
         pid = _excel_process_id(app)
         if pid:
             _WB_NAME_ALIASES.pop(int(pid), None)
+            _WB_NAME_REVERSE_ALIASES.pop(int(pid), None)
     except Exception:
         pass
+
+
+def _user_facing_workbook_name_for_live(app, live_name):
+    """라이브 wb.Name → 사용자 파일명(코드에 그대로 저장해도 되는 이름).
+
+    내부 작업본명(excel_open_<hash>.<ext>, live_reset_<hash>_…, <hash>_원본명.xlsx)이면
+    ① 열 때 저장한 등록명→실제명 별칭의 역방향으로 원본명을 찾고,
+    ② <hash>_원본명 형태면 생성 접두어를 벗긴다. 못 풀면 그대로 반환(현행 유지).
+    재생 시엔 반대로 _alias_open_workbook_name 이 사용자명→실제명을 풀므로 왕복이 성립한다."""
+    name = str(live_name or "")
+    if not name:
+        return name
+    stem = str(Path(name).stem)
+    internal = bool(
+        re.match(r"^(?:excel_open_|live_reset_|prestep_)[0-9a-f]{8,}", stem, re.I)
+        or re.match(r"^[0-9a-f]{12,}([_-]|$)", stem)
+    )
+    if not internal:
+        return name
+    try:
+        pid = _excel_process_id(app)
+        rev = _WB_NAME_REVERSE_ALIASES.get(int(pid)) if pid else None
+        if rev and name in rev:
+            return rev[name]
+    except Exception:
+        pass
+    stripped = _GENERATED_WORKBOOK_PREFIX_RE.sub("", name)
+    if stripped and stripped != name:
+        return stripped
+    return name
 
 
 def _alias_open_workbook_name(app, requested_name):
@@ -8823,19 +8859,28 @@ def _capture_copypaste_on_session_impl(excel_id, values_only=False):
             dims_match = True
         else:
             dims_match = (src_rows == sel_rows and src_cols == sel_cols)
+        # [SBAGENT-209] 코드에 박는 워크북 이름은 반드시 '사용자 파일명'이어야 한다. 위장 파일(.xls=OLE/HTML)은
+        # 라이브 wb.Name 이 excel_open_<hash>.xls 라서, 그대로 저장하면 세션이 죽은 뒤 어떤 파일과도 매칭 불가 —
+        # 실행기 파일확인에 영원히 못 채우는 요구 행이 뜨고 재생도 깨진다. 역별칭으로 원본명을 되찾아 쓴다.
+        src_book_out = _user_facing_workbook_name_for_live(app, source["book"])
+        dst_book_out = _user_facing_workbook_name_for_live(app, dst_book)
+        if src_book_out != source["book"] or dst_book_out != dst_book:
+            _vba_trace("capture.copypaste.display_names", excelId=excel_id,
+                       srcLive=source["book"], srcOut=src_book_out,
+                       dstLive=dst_book, dstOut=dst_book_out)
         if values_only:
             step_code = (
                 "def transform(ctx):\n"
                 "    # [복붙 캡처] 사용자가 라이브 Excel에서 직접 복사/붙여넣기한 동작 재현(값만 붙여넣기)\n"
                 "    ctx.paste_copied(%r, %r, %r, %r, src_book=%r, dst_book=%r, values_only=True)\n"
-                % (source["sheet"], source["range"], dst_sheet, dst_cell, source["book"], dst_book)
+                % (source["sheet"], source["range"], dst_sheet, dst_cell, src_book_out, dst_book_out)
             )
         else:
             step_code = (
                 "def transform(ctx):\n"
                 "    # [복붙 캡처] 사용자가 라이브 Excel에서 직접 복사/붙여넣기한 동작 재현(값+수식+서식 보존)\n"
                 "    ctx.paste_copied(%r, %r, %r, %r, src_book=%r, dst_book=%r)\n"
-                % (source["sheet"], source["range"], dst_sheet, dst_cell, source["book"], dst_book)
+                % (source["sheet"], source["range"], dst_sheet, dst_cell, src_book_out, dst_book_out)
             )
         desc = "%s복붙: %s!%s → %s!%s%s" % (
             "값만 " if values_only else "",
