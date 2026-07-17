@@ -75,6 +75,11 @@ EXCEL_QUEUE = None
 EXCEL_THREAD = None
 LIVE_EXCEL_APP = None  # 라이브 편집 세션들이 공유하는 앱 전용 Excel.Application
 LAST_COPY_SOURCE = {}  # 복사(Ctrl+C) 중 스냅샷한 클립보드 소스 {"source":{book,sheet,range}, "ts":monotonic}
+# [최소화 중 미러 유출] 네이티브 호스트가 최소화되어 있는 동안엔 어떤 경로도 미러 창을
+# 화면에 띄우면 안 된다(오버레이는 최상위 창이라 호스트가 사라지면 '따로 뜬' 것처럼 보임).
+# C#(HandleHostResize)이 /api/excel/host-state 로 갱신하고, 표시 계열 엔드포인트가 이 플래그를
+# 존중한다 — hide-all '이후'에 완료되는 열기/위치/복구가 창을 되띄우던 레이스의 단일 차단점.
+HOST_MINIMIZED = {"v": False}
                        # — 붙여넣기/탭전환으로 클립보드 Link 가 사라진 뒤 복붙 캡처가 소스를 복구하는 폴백.
 COPY_SOURCE_SNAPSHOT_THROTTLE_SECONDS = float(os.environ.get("B2B_COPY_SOURCE_SNAPSHOT_THROTTLE", "5"))
 # 단일 Excel 인스턴스(SDI)에서 워크북마다 생기는 최상위 프레임을 "세션별 hwnd"로 직접 제어하는 모드.
@@ -1110,6 +1115,19 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
         if self.path == "/api/excel/hide-all":
             self.send_json(hide_all_excel_sessions())
             return
+        if self.path == "/api/excel/host-state":
+            payload = self.read_json_body()
+            HOST_MINIMIZED["v"] = bool(payload.get("minimized"))
+            _vba_trace("excel.host_state", minimized=HOST_MINIMIZED["v"])
+            if HOST_MINIMIZED["v"]:
+                # 최소화 통지와 동시에 일괄 숨김(별도 hide-all 호출과 중복돼도 무해).
+                try:
+                    self.send_json(hide_all_excel_sessions())
+                except Exception:
+                    self.send_json({"ok": True})
+            else:
+                self.send_json({"ok": True})
+            return
         if self.path == "/api/excel/hide-inactive":
             self.send_json(hide_inactive_excel_sessions())
             return
@@ -1529,7 +1547,7 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
             self.send_json({"ok": False, "error": "workbook not found"}, status=404)
             return
         try:
-            self.send_json(open_excel_session(
+            self.send_json(self._hide_if_host_minimized(open_excel_session(
                 Path(wb_record["path"]),
                 name=wb_record.get("name"),
                 workbook_id=workbook_id,
@@ -1550,9 +1568,21 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
                 native_host_hwnd=payload.get("nativeHostHwnd"),
                 native_overlay=bool(payload.get("nativeOverlay")),
                 defer_visible=bool(payload.get("deferVisible")),
-            ))
+            )))
         except Exception as err:
             self.send_json({"ok": False, "error": str(err)}, status=500)
+
+    def _hide_if_host_minimized(self, data):
+        """열기(수 초 소요)가 최소화 '이후'에 끝나면 hide-all 을 이미 지나쳐 창이 화면에 남는다
+        (업로드 → 곧바로 최소화 실측). 열기 완료 시점에 재확인해 즉시 숨긴다."""
+        try:
+            if HOST_MINIMIZED["v"] and isinstance(data, dict) and data.get("excelId"):
+                hide_excel_session(data.get("excelId"))
+                data["hiddenByHostMinimized"] = True
+                _vba_trace("excel.open.hidden_host_minimized", excelId=data.get("excelId"))
+        except Exception:
+            pass
+        return data
 
     def handle_excel_open_result(self):
         payload = self.read_json_body()
@@ -1562,7 +1592,7 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
             self.send_json({"ok": False, "error": "result not found"}, status=404)
             return
         try:
-            self.send_json(open_excel_session(
+            self.send_json(self._hide_if_host_minimized(open_excel_session(
                 path,
                 name=path.name,
                 result_id=result_id,
@@ -1583,7 +1613,7 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
                 native_host_hwnd=payload.get("nativeHostHwnd"),
                 native_overlay=bool(payload.get("nativeOverlay")),
                 defer_visible=bool(payload.get("deferVisible")),
-            ))
+            )))
         except Exception as err:
             self.send_json({"ok": False, "error": str(err)}, status=500)
 
@@ -1736,7 +1766,17 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
             _vba_trace("http.run_full_pipeline.error", traceId=trace_id, kind=type(err).__name__, error=str(err))
             self.send_json({"ok": False, "error": str(err)}, status=500)
 
+    def _reject_show_while_host_minimized(self):
+        """호스트 최소화 중엔 표시 계열 요청을 조용히 스킵(True 반환 시 호출측은 응답 완료).
+        복원 시 C#/JS 가 강제 재배치(force)를 다시 보내므로 스킵해도 상태가 어긋나지 않는다."""
+        if HOST_MINIMIZED["v"]:
+            self.send_json({"ok": True, "skipped": "host-minimized"})
+            return True
+        return False
+
     def handle_excel_activate(self):
+        if self._reject_show_while_host_minimized():
+            return
         payload = self.read_json_body()
         try:
             self.send_json(activate_excel_session(
@@ -1748,6 +1788,8 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
             self.send_json({"ok": False, "error": str(err)}, status=400)
 
     def handle_excel_position(self):
+        if self._reject_show_while_host_minimized():
+            return
         payload = self.read_json_body()
         try:
             self.send_json(position_excel_session(
@@ -1772,6 +1814,8 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
             self.send_json({"ok": False, "error": str(err)}, status=400)
 
     def handle_excel_show_only(self):
+        if self._reject_show_while_host_minimized():
+            return
         payload = self.read_json_body()
         try:
             self.send_json(show_only_excel_session(
@@ -1796,6 +1840,8 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
             self.send_json({"ok": False, "error": str(err)}, status=400)
 
     def handle_excel_recover(self):
+        if self._reject_show_while_host_minimized():
+            return
         payload = self.read_json_body()
         try:
             self.send_json(recover_excel_session(
@@ -1819,6 +1865,8 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
             self.send_json({"ok": False, "error": str(err)}, status=400)
 
     def handle_excel_raise(self):
+        if self._reject_show_while_host_minimized():
+            return
         payload = self.read_json_body()
         try:
             self.send_json(raise_excel_session(payload.get("excelId")))

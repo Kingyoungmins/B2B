@@ -1207,6 +1207,10 @@ namespace B2BNativeHost
                         WindowState = FormWindowState.Maximized;
                         return;
                     }
+                    // [최소화 중 미러 유출] 백엔드에 '호스트 최소화'를 먼저 알린다 — hide-all '이후'에
+                    // 완료되는 열기(업로드 직후 미리열기 수 초)나 위치/복구 폴링이 창을 되띄우던 레이스를
+                    // 백엔드 표시 게이트가 막는다. (hide-all 은 기존처럼 함께 전송.)
+                    PostHostMinimizedState(true);
                     HideAllExcelMirrors();
                 }
                 lastWindowState = WindowState;
@@ -1223,12 +1227,48 @@ namespace B2BNativeHost
             PublishNativeBounds();
             if (restoredFromMinimized)
             {
+                // 복원 재배치가 백엔드 표시 게이트에 막히지 않도록 '최소화 해제'를 먼저 알린다.
+                PostHostMinimizedState(false);
                 // [필드 추가#2] 최소화 복귀 직후엔 JS 가 아직 옛 패널 rect 를 들고 있어 미러가
                 // 엉뚱한 위치에 따로 뜰 수 있다 — 위치 재계산(force)을 먼저 시키고 잠시 뒤 복원한다.
                 ExecuteWebScript(
                     "if (typeof scheduleExcelMirrorPosition === 'function') scheduleExcelMirrorPosition(true);" +
                     "if (typeof scheduleRestoreActiveExcelMirror === 'function') scheduleRestoreActiveExcelMirror(240, { preserveFocus: true });");
             }
+        }
+
+        private void PostHostMinimizedState(bool minimized)
+        {
+            // 표시 게이트의 단일 진실원(백엔드 HOST_MINIMIZED) 갱신. 실패해도 hide-all/복원 스크립트가
+            // 기존 동작을 유지하므로 치명적이지 않다(로그만 남김).
+            int statePort = port;
+            string stateAppUrl = appUrl;
+            Task.Run(delegate
+            {
+                try
+                {
+                    if (String.IsNullOrEmpty(stateAppUrl) || statePort <= 0) return;
+                    string url = "http://127.0.0.1:" + statePort + "/api/excel/host-state";
+                    HttpWebRequest req = (HttpWebRequest)WebRequest.Create(url);
+                    req.Method = "POST";
+                    req.ContentType = "application/json";
+                    req.Timeout = 1500;
+                    req.ReadWriteTimeout = 1500;
+                    byte[] body = Encoding.UTF8.GetBytes(minimized ? "{\"minimized\":true}" : "{\"minimized\":false}");
+                    req.ContentLength = body.Length;
+                    using (Stream s = req.GetRequestStream())
+                    {
+                        s.Write(body, 0, body.Length);
+                    }
+                    using (req.GetResponse())
+                    {
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Program.Log("host-state post failed: " + ex.Message);
+                }
+            });
         }
 
         private void ExecuteWebScript(string script)
