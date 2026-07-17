@@ -583,7 +583,12 @@ function runnerCleanWorkbookRequirementName(value) {
   const lastToken = /([^\s\\/:*?"<>|\[\]]+\.xls(?:x|m|b)?)$/i.exec(clean);
   if (lastToken && lastToken.index > 0) {
     const prefix = clean.slice(0, lastToken.index).trim();
-    if (/\b(?:from|to|into|copy|create|created|sheet|file|workbook|output|input|target|source)\b/i.test(prefix)) {
+    // [앞부분 잘림 수정] 산문 판정은 '공백으로 구분된 독립 단어'일 때만. 예전 \b 부분일치는
+    // "input)_기업DW추출_131 통화상세내역(마스킹)_2026-03-13 10_02_56_….xlsx" 처럼 파일명 자체가
+    // input/output 으로 시작하고 공백(타임스탬프)을 품으면 마지막 토큰만 남겨 — 요구 파일명이
+    // "10_02_56_….xlsx" 로 잘리고, 그 잘린 이름이 자동매칭 점수·실행 치환에까지 쓰였다.
+    const prose = /^(?:from|to|into|copy|create|created|sheet|file|workbook|output|input|target|source)[.,:;]?$/i;
+    if (prefix.split(/\s+/).some(t => prose.test(t))) {
       clean = lastToken[1];
     }
   }
