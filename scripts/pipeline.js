@@ -2952,7 +2952,7 @@ function renderPipeline() {
     item.innerHTML = `
       <div class="step-n">${idx+1}</div>
       <div class="step-label" title="${escapeHtml(pipelineStepLabel(step, idx))}">${escapeHtml(pipelineStepLabel(step, idx))}${runtimeBadge}</div>
-      <button class="step-rename" title="단계 이름 바꾸기">이름</button>
+      <button class="step-rename" title="스킬명 바꾸기">스킬명</button>
       <button class="step-toggle ${isStepEnabled(step) ? 'active' : ''}" title="계산 반영 여부">${isStepEnabled(step) ? 'ON' : 'OFF'}</button>
       <button class="step-edit ${editing ? 'active' : ''}" title="${editing ? '수정 모드 해제' : '수정'}">✎</button>
       <button class="step-del" title="삭제">✕</button>
@@ -3006,7 +3006,7 @@ function renderPipeline() {
       renderPipeline();
     };
     if (labelEl && !renaming) {
-      labelEl.title = pipelineStepLabel(step, idx) + " · '이름' 버튼 또는 더블클릭으로 이름 편집";
+      labelEl.title = pipelineStepLabel(step, idx) + " · '스킬명' 버튼 또는 더블클릭으로 이름 편집";
       labelEl.ondblclick = (e) => { e.stopPropagation(); openLabelRename(); };
       // [포커스 레이스] 클릭 복구망(눌림-즉시 합성 click)에선 onclick 이 mousedown '중'에 돌아,
       // 직후 기본 mousedown 동작(포커스 이동)이 새 입력칸 포커스를 뺏는다 → 기본 동작 차단.
