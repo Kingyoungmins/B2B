@@ -80,7 +80,14 @@ try:
     ck("(7) 일반 쓰기 비회귀", summary.get("writes", 0) >= 1, summary)
     wb.Close(False)
 finally:
+    _pid = S._excel_process_id(app)
     try: app.Quit()
+    except Exception: pass
+    del app
+    import gc; gc.collect()
+    # [좀비 방지 실측] 예외 경로에서 COM 참조가 남으면 Quit 후에도 EXCEL.EXE 가 '보이는 빈 창'으로
+    # 남는다(회색 Excel — 최소화 이슈 조사 중 발견). 테스트는 항상 강제 종료로 마무리한다.
+    try: S._force_kill_pid(_pid)
     except Exception: pass
 
 print()

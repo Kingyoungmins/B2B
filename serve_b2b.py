@@ -5640,6 +5640,19 @@ def _hide_all_excel_sessions_impl():
             hidden += 1
         except Exception:
             pass
+    # [최소화 회색 창] 세션에 속하지 않은 '우리가 띄운' Excel 창(격리 실행 워커, 복원 경로가
+    # app.Visible=True 로 띄운 작업사본, Quit 실패 잔존 등)은 위 루프가 못 덮는다 — 호스트가
+    # 최소화되면 그 창이 워크북 0개짜리 회색 'Excel' 로 화면에 드러난다(실측: 결과 편집 후 최소화).
+    # SPAWNED_EXCEL_PIDS 는 우리가 만든 프로세스만 추적하므로, 사용자가 직접 연 Excel 은 건드리지
+    # 않으면서 세션 외 소유 pid 의 창을 전부 숨긴다.
+    try:
+        session_pids = {int(s.get("pid") or 0) for s in sessions}
+        for pid in {int(p) for p in list(SPAWNED_EXCEL_PIDS) if p}:
+            if pid in session_pids:
+                continue
+            _hide_excel_windows_for_pid(pid)
+    except Exception:
+        pass
     return {"ok": True, "hidden": hidden}
 
 
