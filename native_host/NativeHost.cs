@@ -164,6 +164,8 @@ namespace B2BNativeHost
         [DllImport("user32.dll")]
         private static extern IntPtr GetForegroundWindow();
         [DllImport("user32.dll")]
+        private static extern bool SetForegroundWindow(IntPtr hWnd);
+        [DllImport("user32.dll")]
         private static extern bool EnableWindow(IntPtr hWnd, bool bEnable);
 
         [DllImport("user32.dll")]
@@ -670,70 +672,154 @@ namespace B2BNativeHost
 
         private void HandleDownloadStarting(object sender, CoreWebView2DownloadStartingEventArgs e)
         {
-            try
+            // [저장 대화상자 안 뜸] WebView2 의 DownloadStarting 안에서 모달 SaveFileDialog 를 '동기'로
+            // 띄우면(중첩 메시지 루프) 재진입/포커스 문제로 대화상자가 안 뜨거나 Excel 오버레이 뒤에
+            // 가려질 수 있다(실측: '다운로드 시작' 토스트만 뜨고 폴더 선택창이 안 뜸 → 저장 실패).
+            // Microsoft 권장대로 deferral 을 잡고, 핸들러는 즉시 반환한 뒤 BeginInvoke 로 대화상자를
+            // 띄운다(WebView2 가 내부 처리를 끝낸 다음 UI 스레드에서). 오버레이 가림은 대화상자 직전
+            // 호스트를 강제 포그라운드로 올려 방지한다.
+            CoreWebView2Deferral deferral = null;
+            try { deferral = e.GetDeferral(); }
+            catch (Exception ex) { Program.Log("Download deferral failed: " + ex.Message); }
+
+            string defaultPath = "";
+            try { defaultPath = e.ResultFilePath ?? ""; } catch { }
+
+            Action showDialog = delegate
             {
-                string defaultPath = e.ResultFilePath ?? "";
-                string defaultName = Path.GetFileName(defaultPath);
-                if (String.IsNullOrWhiteSpace(defaultName)) defaultName = "download";
-
-                using (SaveFileDialog dialog = new SaveFileDialog())
+                bool completedOk = false;
+                try
                 {
-                    dialog.Title = "다운로드 저장";
-                    dialog.FileName = SafeDownloadFileName(defaultName);
-                    dialog.Filter = DownloadFilterForFile(defaultName);
-                    dialog.OverwritePrompt = true;
-                    dialog.AddExtension = true;
+                    string defaultName = Path.GetFileName(defaultPath);
+                    if (String.IsNullOrWhiteSpace(defaultName)) defaultName = "download";
 
-                    string initialDir = "";
-                    try
+                    // 대화상자가 오버레이 Excel 뒤에 열리지 않도록 호스트를 먼저 포그라운드로.
+                    ForceHostForeground();
+
+                    using (SaveFileDialog dialog = new SaveFileDialog())
                     {
-                        if (!String.IsNullOrWhiteSpace(lastDownloadDir) && Directory.Exists(lastDownloadDir))
+                        dialog.Title = "다운로드 저장";
+                        dialog.FileName = SafeDownloadFileName(defaultName);
+                        dialog.Filter = DownloadFilterForFile(defaultName);
+                        dialog.OverwritePrompt = true;
+                        dialog.AddExtension = true;
+
+                        string initialDir = "";
+                        try
                         {
-                            initialDir = lastDownloadDir;
+                            if (!String.IsNullOrWhiteSpace(lastDownloadDir) && Directory.Exists(lastDownloadDir))
+                            {
+                                initialDir = lastDownloadDir;
+                            }
+                            else
+                            {
+                                string defaultDir = Path.GetDirectoryName(defaultPath);
+                                if (!String.IsNullOrWhiteSpace(defaultDir) && Directory.Exists(defaultDir))
+                                {
+                                    initialDir = defaultDir;
+                                }
+                            }
+                        }
+                        catch
+                        {
+                        }
+                        if (String.IsNullOrWhiteSpace(initialDir))
+                        {
+                            string downloads = Path.Combine(
+                                Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                                "Downloads"
+                            );
+                            initialDir = Directory.Exists(downloads)
+                                ? downloads
+                                : Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+                        }
+                        if (!String.IsNullOrWhiteSpace(initialDir)) dialog.InitialDirectory = initialDir;
+
+                        DialogResult result = dialog.ShowDialog(this);
+                        e.Handled = true;
+                        if (result == DialogResult.OK && !String.IsNullOrWhiteSpace(dialog.FileName))
+                        {
+                            e.ResultFilePath = dialog.FileName;
+                            lastDownloadDir = Path.GetDirectoryName(dialog.FileName) ?? "";
+                            AttachDownloadCompletionToast(e.DownloadOperation, dialog.FileName);
+                            Program.Log("Download save path selected: " + dialog.FileName);
+                            completedOk = true;
                         }
                         else
                         {
-                            string defaultDir = Path.GetDirectoryName(defaultPath);
-                            if (!String.IsNullOrWhiteSpace(defaultDir) && Directory.Exists(defaultDir))
-                            {
-                                initialDir = defaultDir;
-                            }
+                            e.Cancel = true;
+                            Program.Log("Download canceled by user");
+                            // '다운로드 시작' 토스트가 이미 떴으므로 취소를 알려 오해를 막는다.
+                            NotifyWebToast("저장을 취소했습니다.", "info");
                         }
                     }
-                    catch
+                }
+                catch (Exception ex)
+                {
+                    Program.Log("Download dialog failed: " + ex.Message);
+                    try { e.Cancel = true; } catch { }
+                    NotifyWebToast("저장 대화상자를 열지 못했습니다. 다시 시도해 주세요.", "error");
+                }
+                finally
+                {
+                    if (deferral != null)
                     {
+                        try { deferral.Complete(); } catch { }
                     }
-                    if (String.IsNullOrWhiteSpace(initialDir))
-                    {
-                        string downloads = Path.Combine(
-                            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-                            "Downloads"
-                        );
-                        initialDir = Directory.Exists(downloads)
-                            ? downloads
-                            : Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
-                    }
-                    if (!String.IsNullOrWhiteSpace(initialDir)) dialog.InitialDirectory = initialDir;
+                    if (!completedOk) { /* 취소/실패: 별도 처리 없음(위에서 e.Cancel 설정) */ }
+                }
+            };
 
-                    DialogResult result = dialog.ShowDialog(this);
-                    e.Handled = true;
-                    if (result == DialogResult.OK && !String.IsNullOrWhiteSpace(dialog.FileName))
-                    {
-                        e.ResultFilePath = dialog.FileName;
-                        lastDownloadDir = Path.GetDirectoryName(dialog.FileName) ?? "";
-                        AttachDownloadCompletionToast(e.DownloadOperation, dialog.FileName);
-                        Program.Log("Download save path selected: " + dialog.FileName);
-                    }
-                    else
-                    {
-                        e.Cancel = true;
-                        Program.Log("Download canceled by user");
-                    }
+            try
+            {
+                if (deferral != null) BeginInvoke(showDialog);   // 핸들러 반환 후 UI 스레드에서 실행
+                else showDialog();                               // deferral 미지원 폴백(기존 동기 동작)
+            }
+            catch (Exception ex)
+            {
+                Program.Log("Download dialog dispatch failed: " + ex.Message);
+                try { showDialog(); } catch { }
+            }
+        }
+
+        private void ForceHostForeground()
+        {
+            // 오버레이 Excel 이 포그라운드일 때 SaveFileDialog 가 그 뒤에 열리는 것을 막는다.
+            // 포그라운드 락을 우회하기 위해 현재 포그라운드 스레드에 입력을 붙여 합법적으로 전환한다.
+            try
+            {
+                if (WindowState == FormWindowState.Minimized)
+                {
+                    WindowState = FormWindowState.Maximized;
+                }
+                IntPtr host = this.Handle;
+                IntPtr fg = GetForegroundWindow();
+                uint thisThread = GetCurrentThreadId();
+                uint fgThread = 0;
+                if (fg != IntPtr.Zero)
+                {
+                    uint fgPid;
+                    fgThread = GetWindowThreadProcessId(fg, out fgPid);
+                }
+                bool attached = false;
+                if (fgThread != 0 && fgThread != thisThread)
+                {
+                    attached = AttachThreadInput(thisThread, fgThread, true);
+                }
+                try
+                {
+                    BringToFront();
+                    Activate();
+                    SetForegroundWindow(host);
+                }
+                finally
+                {
+                    if (attached) AttachThreadInput(thisThread, fgThread, false);
                 }
             }
             catch (Exception ex)
             {
-                Program.Log("Download dialog failed: " + ex.Message);
+                Program.Log("ForceHostForeground failed: " + ex.Message);
             }
         }
 
