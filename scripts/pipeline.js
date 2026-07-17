@@ -2948,51 +2948,59 @@ function renderPipeline() {
     item.innerHTML = `
       <div class="step-n">${idx+1}</div>
       <div class="step-label" title="${escapeHtml(pipelineStepLabel(step, idx))}">${escapeHtml(pipelineStepLabel(step, idx))}${runtimeBadge}</div>
+      <button class="step-rename" title="단계 이름 바꾸기">🏷</button>
       <button class="step-toggle ${isStepEnabled(step) ? 'active' : ''}" title="계산 반영 여부">${isStepEnabled(step) ? 'ON' : 'OFF'}</button>
       <button class="step-edit ${editing ? 'active' : ''}" title="${editing ? '수정 모드 해제' : '수정'}">✎</button>
       <button class="step-del" title="삭제">✕</button>
     `;
-    // [사용자 요청] 카드 라벨 더블클릭 → 이름 직접 편집(step.title 에 저장). 빈 값이면 자동 라벨로 복귀.
+    // [사용자 요청] 카드 라벨 이름 편집(step.title 에 저장). 빈 값이면 자동 라벨로 복귀.
     // 편집한 이름은 자동백업/스킬 zip 저장에 함께 실려(save-load), 나중에 불러오면 그 이름으로 보인다.
+    // [이름 버튼 추가] 더블클릭은 두 클릭 사이에 renderPipeline 재렌더(실행 배지 갱신 등)가 끼면 라벨
+    // 요소가 교체돼 브라우저가 dblclick 으로 묶지 못한다(간헐 "안 열림"의 원인 — 특히 실행 중/원격).
+    // 그래서 전용 🏷 버튼(우측 ✎ '스킬 수정'과 다른 아이콘·위치)을 추가하고 더블클릭도 그대로 유지.
     const labelEl = item.querySelector(".step-label");
-    if (labelEl) {
-      labelEl.title = pipelineStepLabel(step, idx) + " · 더블클릭하여 이름 편집";
-      labelEl.ondblclick = (e) => {
-        e.stopPropagation();
-        if (labelEl.querySelector("input")) return;
-        const curr = String(step.title || "").trim() || pipelineStepLabel(step, idx);
-        const input = document.createElement("input");
-        input.className = "step-label-input";
-        input.type = "text";
-        input.value = curr;
-        input.maxLength = 200;
-        labelEl.textContent = "";
-        labelEl.appendChild(input);
-        input.focus();
-        input.select();
-        let done = false;
-        const commit = (save) => {
-          if (done) return;
-          done = true;
-          if (save) {
-            const v = input.value.trim();
-            const si = state.pipeline.findIndex(s => s && s.id === step.id);
-            if (si >= 0) {
-              if (typeof pushHistory === "function") pushHistory("단계 이름 편집");
-              state.pipeline[si].title = v || null;   // 빈 값 → null(자동 라벨로 복귀)
-              if (typeof scheduleLogicAutoBackup === "function") scheduleLogicAutoBackup("step-renamed");
-            }
+    const openLabelRename = () => {
+      if (!labelEl || labelEl.querySelector("input")) return;
+      const curr = String(step.title || "").trim() || pipelineStepLabel(step, idx);
+      const input = document.createElement("input");
+      input.className = "step-label-input";
+      input.type = "text";
+      input.value = curr;
+      input.maxLength = 200;
+      labelEl.textContent = "";
+      labelEl.appendChild(input);
+      input.focus();
+      input.select();
+      let done = false;
+      const commit = (save) => {
+        if (done) return;
+        done = true;
+        if (save) {
+          const v = input.value.trim();
+          const si = state.pipeline.findIndex(s => s && s.id === step.id);
+          if (si >= 0) {
+            if (typeof pushHistory === "function") pushHistory("단계 이름 편집");
+            state.pipeline[si].title = v || null;   // 빈 값 → null(자동 라벨로 복귀)
+            if (typeof scheduleLogicAutoBackup === "function") scheduleLogicAutoBackup("step-renamed");
           }
-          renderPipeline();
-        };
-        input.onkeydown = (ev) => {
-          ev.stopPropagation();
-          if (ev.key === "Enter") { ev.preventDefault(); commit(true); }
-          else if (ev.key === "Escape") { ev.preventDefault(); commit(false); }
-        };
-        input.onblur = () => commit(true);
-        input.onclick = (ev) => ev.stopPropagation();
+        }
+        renderPipeline();
       };
+      input.onkeydown = (ev) => {
+        ev.stopPropagation();
+        if (ev.key === "Enter") { ev.preventDefault(); commit(true); }
+        else if (ev.key === "Escape") { ev.preventDefault(); commit(false); }
+      };
+      input.onblur = () => commit(true);
+      input.onclick = (ev) => ev.stopPropagation();
+    };
+    if (labelEl) {
+      labelEl.title = pipelineStepLabel(step, idx) + " · 🏷 버튼 또는 더블클릭으로 이름 편집";
+      labelEl.ondblclick = (e) => { e.stopPropagation(); openLabelRename(); };
+    }
+    const renameBtn = item.querySelector(".step-rename");
+    if (renameBtn) {
+      renameBtn.onclick = (e) => { e.stopPropagation(); openLabelRename(); };
     }
     item.querySelector(".step-toggle").onclick = async (e) => {
       e.stopPropagation();
