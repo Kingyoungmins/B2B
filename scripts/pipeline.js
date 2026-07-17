@@ -3567,7 +3567,20 @@ async function runFromCheckpointAfterEdit(startIdx, beforeSteps, options = {}) {
     const restored = await restorePipelineCheckpointForSuffix(start, beforeSteps, {
       message: options.restoreMessage || "수정 위치 직전 상태로 되돌리는 중...",
     });
-    if (!restored) return false;
+    if (!restored) {
+      // [수정 미반영 수정(판교테크윈 실측)] 복원 실패가 조용히 false 로 끝나면 수정 코드가 '아예
+      // 실행되지 않은' 채 호출 UI(finalizeActionButtonFromResult)가 '✓ 수정 적용됨'으로 표시했다.
+      // 'W가 빈 행만 채우기' 같은 조건부 스킬은 옛 실행이 채운 값이 그대로 남아 산출물에 수정이
+      // 안 보인다(오류도 없음). → pristine 리셋 + 전체 재적용으로 폴백해 수정본을 반드시 실행한다.
+      const excelId = (typeof vbaTargetExcelId === "function" && vbaTargetExcelId())
+        || (typeof currentExcelId === "function" && currentExcelId());
+      if (excelId && typeof reapplyVbaPipelineToLive === "function") {
+        if (typeof toast === "function") toast("이전 상태 복원에 실패해 스킬 전체를 처음부터 다시 적용합니다...", "info");
+        await reapplyVbaPipelineToLive(excelId);
+        return true;
+      }
+      throw new Error("수정 위치 직전 상태로 복원하지 못해 재실행을 중단했습니다. '전체 실행'으로 다시 적용해 주세요.");
+    }
   }
   markPipelinePendingFromIndex(start, { label: "보류" });
   return runPipelineSuffixFromCheckpoint(start, options);
@@ -3584,7 +3597,13 @@ function canUsePipelineCheckpointFromIndex(startIdx, beforeSteps, nextSteps) {
   if (pipelineSuffixWritesCrossFile(beforeSteps, start) || pipelineSuffixWritesCrossFile(steps, start)) return false;
   const existingResume = getPipelineResumeFromIndex();
   if (Number.isInteger(existingResume) && existingResume <= start) return true;
-  return (beforeSteps || []).slice(start).some(step => step && step._preApplySnapshot && step._preApplySnapshot.resultId);
+  // [수정 미반영 수정] 예전 .some(뒤쪽 '아무' 스텝이나 스냅샷 보유)의 결함: 시작 스텝 스냅샷이
+  // 없고 뒤 스텝 것만 있으면, 복원이 '뒤 스텝 직전'(=시작 스텝이 이미 반영된 상태)으로 되돌아가
+  // 시작..뒤 구간이 중복/무효 실행된다 — 'W가 빈 행만 채우기' 같은 조건부 스킬은 아무것도 못 쓰고
+  // 옛 값이 남는다(판교테크윈 실측). 이어실행 대상(활성+코드) 전부가 자기 직전 스냅샷을 가질 때만
+  // 빠른경로를 탄다(아니면 pristine 전체 재적용 경로로 — 느리지만 항상 옳다).
+  const suffix = (beforeSteps || []).slice(start).filter(s => s && s.code && isStepEnabled(s));
+  return suffix.length > 0 && suffix.every(s => s._preApplySnapshot && s._preApplySnapshot.resultId);
 }
 
 async function applyLastEnabledStepFast(step, options = {}) {

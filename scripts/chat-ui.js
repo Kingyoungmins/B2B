@@ -326,6 +326,15 @@ function finalizeActionButtonFromResult(button, result, doneText, onFailure, opt
           button.classList.add("error");
           return;
         }
+        if (value === false) {
+          // [\uC218\uC815 \uBBF8\uBC18\uC601 \uC218\uC815] '\uC870\uC6A9\uD55C \uBB34\uC2E4\uD589'(\uCCB4\uD06C\uD3EC\uC778\uD2B8 \uBCF5\uC6D0 \uC2E4\uD328 \uB4F1)\uC774 false \uB85C \uB3CC\uC544\uC624\uB294\uB370
+          // \uC774\uB97C \uC131\uACF5\uCC98\uB7FC '\u2713 \uC801\uC6A9\uB428'\uC73C\uB85C \uCE60\uD558\uBA74, \uC218\uC815\uC774 \uBC18\uC601 \uC548 \uB41C \uC0B0\uCD9C\uBB3C\uC774 \uADF8\uB300\uB85C \uB098\uAC04\uB2E4(\uC2E4\uCE21).
+          button.textContent = "\uC801\uC6A9 \uC2E4\uD328";
+          button.classList.remove("pending");
+          button.classList.add("error");
+          if (typeof onFailure === "function") onFailure();
+          return;
+        }
         button.textContent = doneText || "\u2713 \uC801\uC6A9\uB428";
         button.classList.remove("pending");
       })
