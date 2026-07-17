@@ -1871,12 +1871,16 @@ async function autoRegenerateForStaticSafety(code, failures, context) {
     streamView.flush();
     loading.remove();
     // 새 응답을 일반 흐름으로 렌더 → 원래 "적용" 동작이면 자동으로 다시 검사/적용한다.
+    // [증상 A/B 수정] 수정 모드에서 재생성되면 editTargetId 를 반드시 이어받아야 '수정 적용(in-place)'이
+    // 유지된다. 예전엔 이 함수가 editTargetId 를 안 넘겨(대조: autoRegenerateForMissingCode 는 넘김),
+    // 수정한 스텝의 정적검사/VBA→Python 재작성 결과가 '적용(append)'으로 둔갑해 새 스텝이 붙었다.
     addAssistantReply(reply, {
       sourceUserMessage,
       staticRegenAttempt: attempt,
       vbaFallbackTried: !!(context && context.vbaFallbackTried),
       allowPythonRecovery: !!(context && context.allowPythonRecovery),
       autoApplyMode: context && context.autoApplyMode,
+      editTargetId: context && context.editTargetId,
     });
     scrollChatToBottom();
   } catch (err) {
@@ -1929,12 +1933,14 @@ async function autoRegenerateAsVbaFallback(code, failures, context) {
     loading.remove();
     // vbaFallbackTried: VBA 쪽 게이트도 끝내 막히면, 최종 차단 대신 '원본 Python 강제 적용'을 열어준다.
     // → 원본 Python 코드(이 함수의 code 인자)를 보존해 다음 검증 컨텍스트로 넘긴다.
+    // [증상 A/B 수정] 수정 모드였다면 editTargetId 이어받아 in-place 유지(append 로 새는 것 방지).
     addAssistantReply(reply, {
       sourceUserMessage,
       staticRegenAttempt: 0,
       vbaFallbackTried: true,
       originalPythonCode: (context && context.originalPythonCode) || code,
       autoApplyMode: (context && context.autoApplyMode) || "apply",
+      editTargetId: context && context.editTargetId,
     });
     scrollChatToBottom();
   } catch (err) {
@@ -2732,7 +2738,12 @@ function clearPythonRuntimeFailures() {
 }
 
 function resolveErrorRecoveryStepIndex(stepIdx, errorInfo) {
-  const hasIdentity = !!(errorInfo && (errorInfo.stepId || errorInfo.code));
+  // 우선순위: 정확 식별자(stepId → code) → 설명 → '숫자 인덱스' 폴백.
+  // [증상 B 수정] 예전엔 stepId/code 가 '있는데 안 맞으면'(hasIdentity) 곧바로 -1 을 반환해,
+  // 바로 아래의 신뢰 가능한 숫자 인덱스 폴백(state.pipeline[24] = 25단계)에 도달조차 못 했다.
+  // 그 결과 isExistingStep=false → editTargetId=null → 수정이 'in-place 교체'가 아니라 '새 스텝
+  // append'(25 오류인데 30으로 추가)로 새어 나갔다. 병렬 함수 resolveRunnerRecoveryStepIndex 는
+  // '숫자 우선'이라 서로 모순됐다 — 여기서도 숫자 폴백을 반드시 시도한다.
   if (errorInfo && errorInfo.stepId) {
     const byId = state.pipeline.findIndex(step => step && step.id === errorInfo.stepId);
     if (byId >= 0) return byId;
@@ -2741,7 +2752,6 @@ function resolveErrorRecoveryStepIndex(stepIdx, errorInfo) {
     const byCode = state.pipeline.findIndex(step => step && step.code === errorInfo.code);
     if (byCode >= 0) return byCode;
   }
-  if (hasIdentity) return -1;
   if (errorInfo && errorInfo.description) {
     const byDesc = state.pipeline.findIndex(step => step && step.description === errorInfo.description);
     if (byDesc >= 0) return byDesc;
