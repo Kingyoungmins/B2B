@@ -6846,6 +6846,15 @@ def _reset_trace_logs():
                 pass   # 내용만 비운다(파일은 남겨 append 경로가 그대로 동작)
         except Exception:
             pass
+    # [로그 누적 방지] VBA 러너 실패 진단 로그도 시작 시 비운다 — append 만 해 재시작을 넘어
+    # 무한히 컸다(작성 경로와 동일한 __file__ 기준 경로라 프로즌/개발 모두 일치).
+    try:
+        p = Path(__file__).resolve().parent / "vba_runner_fail.log"
+        if p.exists():
+            with open(p, "w", encoding="utf-8"):
+                pass
+    except Exception:
+        pass
 
 
 def _diag_prerun_window_state(app, context_wb):

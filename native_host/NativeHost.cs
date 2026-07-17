@@ -33,6 +33,22 @@ namespace B2BNativeHost
             }
         }
 
+        private static void RotateLogAtStartup()
+        {
+            try
+            {
+                string prev = LogPath + ".1";
+                if (File.Exists(LogPath))
+                {
+                    try { File.Delete(prev); } catch { }
+                    try { File.Move(LogPath, prev); } catch { }
+                }
+            }
+            catch
+            {
+            }
+        }
+
         private static void ShowFatal(Exception ex)
         {
             Log("FATAL " + ex);
@@ -60,6 +76,10 @@ namespace B2BNativeHost
                     catch { }
                     return;
                 }
+                // [로그 누적 방지] native_host.log 는 append 만 해 재시작을 넘어 무한히 컸다.
+                // 직전 실행분만 .1 로 남기고 새로 시작한다(지원용 직전 로그 보존 + 크기 상한).
+                // 반드시 단일 인스턴스 확인 '뒤'에 — 두 번째 인스턴스가 실행 중인 본체의 로그를 옮기면 안 된다.
+                RotateLogAtStartup();
                 Application.ThreadException += delegate(object sender, ThreadExceptionEventArgs e) { ShowFatal(e.Exception); };
                 AppDomain.CurrentDomain.UnhandledException += delegate(object sender, UnhandledExceptionEventArgs e)
                 {
