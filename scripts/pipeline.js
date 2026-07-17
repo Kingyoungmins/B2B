@@ -2948,7 +2948,7 @@ function renderPipeline() {
     item.innerHTML = `
       <div class="step-n">${idx+1}</div>
       <div class="step-label" title="${escapeHtml(pipelineStepLabel(step, idx))}">${escapeHtml(pipelineStepLabel(step, idx))}${runtimeBadge}</div>
-      <button class="step-rename" title="단계 이름 바꾸기">🏷</button>
+      <button class="step-rename" title="단계 이름 바꾸기">가</button>
       <button class="step-toggle ${isStepEnabled(step) ? 'active' : ''}" title="계산 반영 여부">${isStepEnabled(step) ? 'ON' : 'OFF'}</button>
       <button class="step-edit ${editing ? 'active' : ''}" title="${editing ? '수정 모드 해제' : '수정'}">✎</button>
       <button class="step-del" title="삭제">✕</button>
@@ -2995,11 +2995,21 @@ function renderPipeline() {
       input.onclick = (ev) => ev.stopPropagation();
     };
     if (labelEl) {
-      labelEl.title = pipelineStepLabel(step, idx) + " · 🏷 버튼 또는 더블클릭으로 이름 편집";
+      labelEl.title = pipelineStepLabel(step, idx) + " · '가' 버튼 또는 더블클릭으로 이름 편집";
       labelEl.ondblclick = (e) => { e.stopPropagation(); openLabelRename(); };
+      // 더블클릭 경로도 같은 포커스 레이스가 있다(라벨 div 로 포커스 이동 시도 → 입력칸 blur → 즉시 닫힘).
+      // 단, 열린 입력칸 안의 클릭(커서 이동/선택)은 막으면 안 되므로 INPUT 타깃은 제외.
+      labelEl.onmousedown = (e) => {
+        if (!(e.target && e.target.tagName === "INPUT")) e.preventDefault();
+      };
     }
     const renameBtn = item.querySelector(".step-rename");
     if (renameBtn) {
+      // [무변화 버그 수정] 클릭 복구망은 '눌림 즉시' 합성 click 을 쏘므로 onclick(입력칸 열기+focus)이
+      // mousedown '중'에 실행된다. 그 직후 버튼의 기본 mousedown 동작(버튼으로 포커스 이동)이
+      // 입력칸 포커스를 도로 뺏어 input.onblur → 즉시 커밋/닫힘 → "눌러도 아무 변화 없음"이 됐다.
+      // mousedown 기본 동작을 막아 입력칸이 포커스를 유지하게 한다.
+      renameBtn.onmousedown = (e) => e.preventDefault();
       renameBtn.onclick = (e) => { e.stopPropagation(); openLabelRename(); };
     }
     item.querySelector(".step-toggle").onclick = async (e) => {

@@ -36,20 +36,23 @@
     box-shadow: var(--shadow-mag);
   }
   .pipeline-item .step-label { flex: 1; color: var(--ink-700); font-weight: 500; cursor: text; }
-  /* 단계 이름 바꾸기(🏷) — 우측 ✎(코드 수정)과 헷갈리지 않게 라벨 바로 옆 + 다른 아이콘.
-     평소엔 옅게, 카드에 마우스 올리면 또렷하게. */
+  /* 단계 이름 바꾸기('가') — 우측 ✎(코드 수정)과 같은 톤앤매너(단색 글리프·같은 hover),
+     아이콘·위치(라벨 바로 옆)로만 구분한다. */
   .pipeline-item .step-rename {
-    border: 0;
     background: transparent;
+    border: none;
+    color: var(--ink-300);
     cursor: pointer;
-    font-size: 12px;
+    font-family: inherit;
+    padding: 2px 6px;
+    border-radius: 4px;
+    transition: all 0.15s;
+    font-size: 11.5px;
+    font-weight: 700;
     line-height: 1;
-    padding: 2px 3px;
-    opacity: 0.35;
     flex-shrink: 0;
   }
-  .pipeline-item:hover .step-rename { opacity: 0.8; }
-  .pipeline-item .step-rename:hover { opacity: 1; transform: scale(1.15); }
+  .pipeline-item .step-rename:hover { color: var(--m-600); background: var(--m-50); }
   .pipeline-item .step-label .step-label-input {
     width: 100%;
     box-sizing: border-box;
