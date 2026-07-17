@@ -2685,6 +2685,7 @@ function showThinkRetryPrompt(container, context) {
       addAssistantReply(reply, { editTargetId, sourceUserMessage, reasoning: "" });
       scrollChatToBottom();
     } catch (err) {
+      try { streamView.flush(); } catch (_) {}   // [24시간 버벅임 수정] 오류/중단에도 타자기 RAF 정지 보장
       container.classList.remove("streaming", "loading");
       if (err && err.name === "AbortError") {
         streamView.stopped();
@@ -3038,6 +3039,7 @@ async function requestErrorRecovery(stepIdx, errorInfo, userNote) {
     });
     scrollChatToBottom();
   } catch (err) {
+    try { streamView.flush(); } catch (_) {}   // [24시간 버벅임 수정] 오류/중단에도 타자기 RAF 정지 보장
     loading.classList.remove("streaming");
     loading.classList.remove("loading");
     if (err && err.name === "AbortError" && thinkMode) {
@@ -3107,7 +3109,10 @@ function createSmoothTextRenderer(el, emptyText, onRender) {
     lastTs = ts;
     const remaining = target.length - shown.length;
     if (remaining <= 0) {
-      schedule();
+      // [24시간 버벅임 수정] 다 그렸으면 루프를 '정지'한다. 예전엔 여기서 schedule()을 다시 불러
+      // 60fps 헛돌기가 영원히 돌았다 — flush() 없이 끝나는 오류/중단 경로에서는 아무도 안 꺼줘서,
+      // 실패한 채팅이 하나 생길 때마다 영구 RAF 루프가 하나씩 쌓여 장시간 구동 시 점점 무거워졌다.
+      // 스트리밍으로 target 이 더 자라면 setTarget() 이 schedule() 을 다시 불러 재개된다.
       return;
     }
     const charsPerFrame = getSmoothCharsPerFrame(remaining, elapsed);
@@ -3509,6 +3514,7 @@ async function sendChat() {
     console.debug(`[B2B#5] req#${reqId} addAssistantReply 렌더 (reply length=${reply ? reply.length : 0})`);
     scrollChatToBottom();
   } catch (err) {
+    try { streamView.flush(); } catch (_) {}   // [24시간 버벅임 수정] 오류/중단에도 타자기 RAF 정지 보장
     loading.classList.remove("streaming");
     loading.classList.remove("loading");
     if (err && err.name === "AbortError" && thinkMode && stopThinkingRequested) {
