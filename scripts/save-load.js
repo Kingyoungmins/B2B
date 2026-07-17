@@ -65,15 +65,43 @@ function stripLogicTimestampSuffix(name) {
   return safeLogicBaseName(base || "logic");
 }
 
+// [A안: 입력 바뀌면 이름도 따라오게] '기억된 저장 이름'은 그 이름을 만든 '입력 파일 세트'에 묶는다.
+// 지금 올라온 입력이 그때와 다르면 기억된 이름을 쓰지 않고 현재 입력 파일명을 기본값으로 제안한다.
+// (예전엔 이름만 localStorage 에 영구 저장 → 한화테크윈으로 여러 번 저장하면 다른 파일로 새 스킬을
+//  만들어도 계속 '한화테크윈'이 기본값으로 떴다.)
+function currentInputSignature() {
+  try {
+    const names = ((state && state.inputs) || [])
+      .map(f => (typeof workbookDisplayName === "function" ? workbookDisplayName(f, "") : (f && f.name) || ""))
+      .map(n => String(n || "").replace(/\.(xls[xmb]?|csv|tsv)$/i, "").trim().toLowerCase())
+      .filter(Boolean)
+      .sort();
+    if (!names.length) {
+      const t = ((state && state.outputTemplates) || []).map(x => x && x.file && x.file.name).filter(Boolean);
+      if (t.length) return t.map(n => String(n).toLowerCase()).sort().join("|");
+      if (state && state.output && state.output.name) return String(state.output.name).toLowerCase();
+      return "";
+    }
+    return names.join("|");
+  } catch (_) { return ""; }
+}
+
 function currentLogicSaveBaseName(fallback) {
-  const fromState = state && state.logicSaveBaseName ? state.logicSaveBaseName : "";
-  let fromStorage = "";
-  try { fromStorage = localStorage.getItem("b2b_logic_save_base_name") || ""; } catch (_) {}
-  const remembered = fromState || fromStorage;
-  // 명시적으로 기억된 이름이 있으면 그걸 쓰되, 옛 기본값 "logic" 이면 호출자 fallback(입력 파일명)을 우선.
-  const chosen = (remembered && remembered.trim().toLowerCase() !== "logic")
-    ? remembered
-    : (fallback || remembered || "logic");
+  const curSig = currentInputSignature();
+  // 서명이 유효(비어있거나 == 현재)한 이름만 후보로 본다. 서명이 비어있으면(입력 없이 저장/불러온
+  // 이전 상태) 판별 불가 → 그대로 존중한다(입력을 나중에 올린 흐름 보호).
+  const sigOk = sig => !sig || !curSig || sig === curSig;
+  let name = "";
+  if (state && state.logicSaveBaseName && sigOk(state.logicSaveInputSig || "")) {
+    name = state.logicSaveBaseName;        // 이번 세션에서 저장/불러온 이름(같은 입력 세트일 때)
+  } else {
+    try {
+      const st = localStorage.getItem("b2b_logic_save_input_sig") || "";
+      if (sigOk(st)) name = localStorage.getItem("b2b_logic_save_base_name") || "";
+    } catch (_) {}
+  }
+  // 이름이 없거나 옛 기본값 "logic" 이면 호출자 fallback(=현재 입력 파일명)을 쓴다.
+  const chosen = (name && name.trim().toLowerCase() !== "logic") ? name : (fallback || name || "logic");
   return stripLogicTimestampSuffix(chosen || "logic");
 }
 
@@ -100,8 +128,14 @@ function defaultLogicBaseNameFromInputs() {
 
 function rememberLogicSaveBaseName(name) {
   const base = stripLogicTimestampSuffix(name || "logic");
+  const sig = currentInputSignature();
   state.logicSaveBaseName = base;
-  try { localStorage.setItem("b2b_logic_save_base_name", base); } catch (_) {}
+  state.logicSaveInputSig = sig;
+  try {
+    localStorage.setItem("b2b_logic_save_base_name", base);
+    // [A안] 이 이름이 어떤 입력 세트에서 나왔는지 함께 저장 → 다음에 입력이 다르면 이 이름을 안 쓴다.
+    localStorage.setItem("b2b_logic_save_input_sig", sig);
+  } catch (_) {}
   return base;
 }
 
