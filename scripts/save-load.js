@@ -758,6 +758,16 @@ function loadLogic(data, filename, meta) {
   renderChatFromHistory();
   refreshChatState();
   refreshRunButton();
+  // [실행기 스킬 편집기] '스킬 수정' 모달의 [스킬(zip) 올리기]로 업로드한 경우, 열려 있는 모달을
+  // 새 스킬로 다시 그린다 — 안 그러면 상태는 로드됐는데 모달 목록만 "업로드된 스킬이 없습니다"로
+  // 남아 '업로드가 안 된 것처럼' 보인다(삭제 → 재업로드 실측). 모달 내용으로 편집기인지 식별.
+  try {
+    const bg = document.getElementById("modal-bg");
+    if (document.getElementById("runner-logic-upload") && bg && bg.classList.contains("show")
+        && typeof openRunnerLogicEditor === "function") {
+      openRunnerLogicEditor();
+    }
+  } catch (_) {}
   const label = data.name || filename;
   const n = state.pipeline.length;
   const extInfo = meta && meta.externallyLoaded > 0
