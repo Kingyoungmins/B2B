@@ -9042,6 +9042,10 @@ class PythonComSkillContext:
                 "journal": [],          # (ws_name, address, formulas_2d)
                 "structural": [],       # 롤백 불가 구조 변경 설명 목록
                 "books": {},
+                # [SBAGENT-209 후속] 대상 시트에서 '비어있지 않은 데이터'를 실제로 읽었는가.
+                # 조건부 스킬(예: '소계 행이 있으면 삭제')이 이번 파일엔 해당 없어 아무것도 안 바꾼
+                # '정상 무변경'과, 엉뚱한 시트를 읽어 아무것도 못 한 '오타겟 무변경'을 구분하는 증거.
+                "read_nonempty": False,
             }
         self._shared = _shared
 
@@ -9409,6 +9413,7 @@ class PythonComSkillContext:
                 "Python COM은 단순 작업용으로 보수적으로 제한됩니다. 범위를 더 좁히거나 VBA 경로를 사용하세요."
             )
         out = self._shaped_matrix(rng, rng.Value2)
+        self._note_read_evidence(out)
         try:
             ms = (time.perf_counter() - t0) * 1000
             if ms >= 200 or cells >= 100000:
@@ -9442,7 +9447,21 @@ class PythonComSkillContext:
                 f"읽기 범위가 너무 큽니다({cells:,}셀 > {PY_READ_MAX_CELLS:,}). "
                 "Python COM은 단순 작업용으로 보수적으로 제한됩니다. 범위를 더 좁히거나 VBA 경로를 사용하세요."
             )
-        return self._shaped_matrix(rng, rng.Formula)
+        out = self._shaped_matrix(rng, rng.Formula)
+        self._note_read_evidence(out)
+        return out
+
+    def _note_read_evidence(self, matrix):
+        """읽은 매트릭스에 비어있지 않은 값이 하나라도 있으면 '실데이터를 읽었다'는 증거를 남긴다.
+        (any 는 첫 값에서 조기 종료 — 큰 읽기에도 추가 비용 미미. 무변경 게이트가 이 증거로
+        '조건 미해당 정상 무변경'과 '오타겟 무변경'을 구분한다.)"""
+        if self._shared.get("read_nonempty"):
+            return
+        try:
+            if any(v is not None and str(v).strip() != "" for row in (matrix or []) for v in row):
+                self._shared["read_nonempty"] = True
+        except Exception:
+            pass
 
     def has_formulas(self, sheet, a1_range):
         """범위에 수식이 하나라도 있으면 True."""
@@ -11787,6 +11806,16 @@ def _exec_python_com_skill(app, wb, session, code, skip_static=False, timeout_s=
         sys.settrace(None)
 
     if not ctx._changed():
+        # [SBAGENT-209 후속] 조건부 스킬의 '정상 무변경'은 성공이다.
+        # 실측: '소계 행이 있으면 삭제' 스킬이 새 달 파일(소계 없음)에서 아무것도 안 바꾸자
+        # 이 게이트가 실패로 처리해 전체실행이 Step 8 에서 죽었다. 대상 시트에서 실데이터를
+        # 읽은 증거(read_nonempty)가 있으면 오타겟이 아니라 '조건 미해당' — 성공으로 통과시킨다.
+        # 아무것도 못 읽고 무변경이면(엉뚱한 시트/빈 시트) 기존대로 실패 유지('적용됨' 거짓 방지).
+        if ctx._shared.get("read_nonempty"):
+            _vba_trace("python_com.no_change_ok", comCalls=ctx._shared.get("com_calls"))
+            summary = ctx.summary()
+            summary["noChange"] = True
+            return summary
         raise PythonComSkillError(
             "스킬이 실행됐지만 워크북에 아무 변경도 없습니다(대상 시트/범위/조건을 확인하세요). "
             "'적용됨'으로 잘못 보고되지 않도록 실패로 처리했습니다."
