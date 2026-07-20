@@ -101,6 +101,9 @@ EXCEL_REAP_INTERVAL_SECONDS = float(os.environ.get("B2B_EXCEL_REAP_INTERVAL", "3
 NATIVE_HOST_PID = int(os.environ.get("B2B_NATIVE_HOST_PID") or "0")
 DISABLE_PARENT_WATCH = os.environ.get("B2B_DISABLE_PARENT_WATCH", "").strip().lower() in ("1", "true", "yes")
 PARENT_WATCH_GRACE_SECONDS = float(os.environ.get("B2B_PARENT_WATCH_GRACE_SECONDS", "10"))
+# 부모(native host) 생존 확인 주기. 1초마다 볼 필요가 없어 30초로 완화 — grace(10s)와 합쳐
+# 호스트 사망 후 최악 ~60초 안에 고아 Excel 정리·자가종료가 이뤄지면 충분하다.
+PARENT_WATCH_INTERVAL_SECONDS = float(os.environ.get("B2B_PARENT_WATCH_INTERVAL", "30"))
 PARENT_WATCH_MISSING_SINCE = 0.0
 HEALTH_EXCEL_DIAG_INTERVAL_SECONDS = float(os.environ.get("B2B_HEALTH_EXCEL_DIAG_INTERVAL", "60"))
 HEALTH_LAST_EXCEL_DIAG_AT = 0.0
@@ -109,6 +112,10 @@ PERF_LOG_INTERVAL_SECONDS = float(os.environ.get("B2B_PERF_LOG_INTERVAL", "60"))
 PERF_LAST_LOG_AT = 0.0
 RUNTIME_SAMPLER_INTERVAL_SECONDS = float(os.environ.get("B2B_RUNTIME_SAMPLER_INTERVAL", "30"))
 RUNTIME_SAMPLER_STARTED = False
+# [유휴 무기록] 샘플러가 마지막으로 본 활동 시그니처와 그 시각. 유휴(큐 비고 실행중 작업 없고
+# 카운트 불변)면 runtime.sample 을 아예 수집·기록하지 않아 켜두기만 한 상태에서 트레이스가 안 자란다.
+RUNTIME_LAST_ACTIVITY_SIG = None
+RUNTIME_LAST_ACTIVITY_AT = 0.0
 HOUSEKEEPING_INTERVAL_SECONDS = float(os.environ.get("B2B_EXCEL_CLEANUP_INTERVAL", "600"))
 HOUSEKEEPING_RUNNING = False
 HOUSEKEEPING_LAST_RUN_AT = 0.0
@@ -3680,6 +3687,19 @@ def _sample_lock_contended():
 
 
 def _runtime_sampler_once():
+    global RUNTIME_LAST_ACTIVITY_SIG, RUNTIME_LAST_ACTIVITY_AT
+    # 유휴 판단은 진단 수집(엑셀 pid 조회 등)보다 먼저, 싸게 얻을 수 있는 신호만으로 한다.
+    # 실행중 작업/큐가 있으면 항상 기록하고, 그 외에는 카운트 시그니처가 직전과 달라졌을 때만
+    # 기록한다(작업이 끝나 카운트가 정착하는 마지막 1회까지는 기록되고 이후 침묵).
+    sig = json.dumps({
+        "counts": _runtime_counts_snapshot(),
+        "queue": _excel_queue_size() or 0,
+        "running": _pipeline_job_stats().get("running", 0),
+    }, sort_keys=True)
+    if not _pipeline_is_busy() and sig == RUNTIME_LAST_ACTIVITY_SIG:
+        return
+    RUNTIME_LAST_ACTIVITY_SIG = sig
+    RUNTIME_LAST_ACTIVITY_AT = time.time()
     diagnostics = _excel_runtime_diagnostics(reap=False, log=False) if excel_available() else None
     excel_pids = set()
     if diagnostics:
@@ -3765,21 +3785,29 @@ def _run_low_risk_housekeeping():
     finally:
         HOUSEKEEPING_LAST_DURATION_MS = round((time.perf_counter() - started) * 1000, 1)
         HOUSEKEEPING_RUNNING = False
-        _perf_trace(
-            "runtime.housekeeping",
-            durationMs=HOUSEKEEPING_LAST_DURATION_MS,
-            skippedReason=HOUSEKEEPING_LAST_SKIPPED_REASON,
-            error=HOUSEKEEPING_ERROR,
-            detail=detail,
-        )
+        # [유휴 무기록] 아무것도 정리하지 않은 정기 하우스키핑까지 매번 기록하면 유휴 상태에서도
+        # 10분마다 트레이스가 자란다. 오류·실제 정리 발생·최근 활동 중 하나일 때만 남긴다.
+        did_work = bool(detail.get("copySourceCleared")) or bool((detail.get("snapshots") or {}).get("removed"))
+        recent_activity = (time.time() - float(RUNTIME_LAST_ACTIVITY_AT or 0)) < max(60.0, HOUSEKEEPING_INTERVAL_SECONDS)
+        if HOUSEKEEPING_ERROR or did_work or recent_activity:
+            _perf_trace(
+                "runtime.housekeeping",
+                durationMs=HOUSEKEEPING_LAST_DURATION_MS,
+                skippedReason=HOUSEKEEPING_LAST_SKIPPED_REASON,
+                error=HOUSEKEEPING_ERROR,
+                detail=detail,
+            )
 
 
 def _runtime_maintenance_loop():
     next_sample = 0.0
+    next_parent_watch = 0.0
     next_housekeeping = time.time() + max(60.0, HOUSEKEEPING_INTERVAL_SECONDS)
     while True:
         now = time.time()
-        _native_parent_watch_once(now)
+        if now >= next_parent_watch:
+            _native_parent_watch_once(now)
+            next_parent_watch = now + max(1.0, PARENT_WATCH_INTERVAL_SECONDS)
         if now >= next_sample:
             try:
                 _runtime_sampler_once()
