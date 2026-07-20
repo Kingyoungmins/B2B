@@ -1,0 +1,1011 @@
+{
+  "version": 4,
+  "type": "mvno-logic",
+  "name": "전체스킬셋 한전_0720_25단계_2026-07-20-14-25-26",
+  "saveBaseName": "전체스킬셋 한전_0720",
+  "createdAt": "2026-07-20T05:25:26.988Z",
+  "stepCount": 25,
+  "requiredFiles": [
+    {
+      "fileId": "input:한국전력공사_202606_v1.1_DSMC_260710.xlsx",
+      "role": "input",
+      "name": "한국전력공사_202606_v1.1_DSMC_260710.xlsx",
+      "requiredSheets": [
+        "상품번호별",
+        "청구계정별"
+      ],
+      "originalSheets": [
+        "상품번호별",
+        "청구계정별"
+      ],
+      "handle": "@@FILE_1@@"
+    },
+    {
+      "fileId": "input:02. 한전_AMI_유선간선망_청구세부내역_2026-07-14 13_07_47_DSMC_260714.xlsx",
+      "role": "input",
+      "name": "02. 한전_AMI_유선간선망_청구세부내역_2026-07-14 13_07_47_DSMC_260714.xlsx",
+      "requiredSheets": [],
+      "originalSheets": [
+        "02. 한전_AMI_유선간선망_청구세부내역_2026-07-14 13_07_47_DSMC_260714"
+      ],
+      "handle": "@@FILE_2@@"
+    },
+    {
+      "fileId": "input:03. 한전_AMI_무선인입망합산_청구세부내역_2026-07-14 13_11_11_DSMC_260714.xlsx",
+      "role": "input",
+      "name": "03. 한전_AMI_무선인입망합산_청구세부내역_2026-07-14 13_11_11_DSMC_260714.xlsx",
+      "requiredSheets": [],
+      "originalSheets": [
+        "03. 한전_AMI_무선인입망합산_청구세부내역_2026-07-14 13_11_11_DSMC_260714"
+      ],
+      "handle": "@@FILE_3@@"
+    }
+  ],
+  "generatedSheets": [
+    {
+      "fileId": "input:한국전력공사_202606_v1.1_DSMC_260710.xlsx",
+      "sheet": "고압자계기"
+    },
+    {
+      "fileId": "input:한국전력공사_202606_v1.1_DSMC_260710.xlsx",
+      "sheet": "무선간선망"
+    },
+    {
+      "fileId": "input:한국전력공사_202606_v1.1_DSMC_260710.xlsx",
+      "sheet": "고압모계기"
+    },
+    {
+      "fileId": "input:02. 한전_AMI_유선간선망_청구세부내역_2026-07-14 13_07_47_DSMC_260714.xlsx",
+      "sheet": "Sheet1"
+    },
+    {
+      "fileId": "input:02. 한전_AMI_유선간선망_청구세부내역_2026-07-14 13_07_47_DSMC_260714.xlsx",
+      "sheet": "유선간선망"
+    },
+    {
+      "fileId": "input:03. 한전_AMI_무선인입망합산_청구세부내역_2026-07-14 13_11_11_DSMC_260714.xlsx",
+      "sheet": "Sheet1"
+    },
+    {
+      "fileId": "input:03. 한전_AMI_무선인입망합산_청구세부내역_2026-07-14 13_11_11_DSMC_260714.xlsx",
+      "sheet": "무선인입망"
+    }
+  ],
+  "unresolvedRefs": [
+    "01. 한전_DAS_배전자동화_청구세부내역_2026-07-12 19_00_54_DSMC_260712.xlsx"
+  ],
+  "pipeline": [
+    {
+      "id": "wmhakbvj",
+      "description": "스킬 생성",
+      "prompt": "@시트[한국전력공사_202606_v1.1_DSMC_260710.xlsx/상품번호별] 의 데이터에서, 서비스, 본부명, 청구계정번호, 상품번호, 상품번호(한전), 가입자번호, 요금제코드, 요금제명, 개통상태, 상태변경일, 최초개통일, 모델명, 단말일련번호, 사용량(Mbyte), 개통대리점코드, 개통대리점명, 기본료, 부가세, 청구금액 항목의 데이터가 아닌 다른 열의 데이터들은 모두 삭제해줘. 필요 없는 데이터야. 내가 말한 데이터만 딱 들어가게끔 해줘. 그리고 현재의 BA열인 상품번호(맨 마지막)은 삭제해줘.",
+      "title": "불필요한 데이터 제거 (원본 파일 정제)",
+      "enabled": true,
+      "language": "python",
+      "stepFile": "전체스킬셋 한전_0720_25단계_2026-07-20-14-25-26_step_1.py",
+      "code": "# 전체스킬셋 한전_25단계_2026-07-14-13-03-32\n# Step 1: 스킬 생성\n# Created: 2026-07-14T04:03:32.558Z\n# 서울본부_한전 AMI 4개 인입망 스킬셋_저압인입망빼고_15단계_2026-07-12-20-33-07\n# Step 1: 스킬 생성\n# Created: 2026-07-12T11:33:07.813Z\ndef transform(ctx):\n    book = ctx.book(\"@@FILE_1@@\")\n    sheet = \"상품번호별\"\n    keep_headers = [\n        \"서비스\", \"본부명\", \"청구계정번호\", \"상품번호\", \"상품번호(한전)\", \n        \"가입자번호\", \"요금제코드\", \"요금제명\", \"개통상태\", \"상태변경일\", \n        \"최초개통일\", \"모델명\", \"단말일련번호\", \"사용량(Mbyte)\", \n        \"개통대리점코드\", \"개통대리점명\", \"기본료\", \"부가세\", \"청구금액\", \"비고\"\n    ]\n    \n    # BA열 (53열) 은 명시적으로 삭제 대상\n    ba_col_idx = 53 \n    \n    def idx_to_col(c):\n        s = \"\"\n        while c > 0:\n            c, r = divmod(c - 1, 26)\n            s = chr(65 + r) + s\n        return s\n        \n    keep_indices = set()\n    for h in keep_headers:\n        try:\n            col_idx = book.find_header(sheet, h, header_row=1)\n            if col_idx != ba_col_idx: # BA열은 유지 목록에서 제외\n                keep_indices.add(col_idx)\n        except Exception:\n            raise ValueError(f\"헤더 '{h}'를 찾을 수 없습니다.\")\n            \n    last_col_idx = book.used_last_col(sheet)\n    all_indices = set(range(1, last_col_idx + 1))\n    delete_indices = sorted(list(all_indices - keep_indices), reverse=True)\n    \n    if not delete_indices:\n        raise ValueError(\"삭제할 열이 없습니다.\")\n        \n    for idx in delete_indices:\n        col_letter = idx_to_col(idx)\n        book.delete_cols(sheet, col_letter)\n",
+      "targetFileId": "input:한국전력공사_202606_v1.1_DSMC_260710.xlsx",
+      "targetSheetName": "상품번호별",
+      "trustedStatic": true
+    },
+    {
+      "id": "kdenopk5",
+      "description": "스킬 생성",
+      "prompt": "@시트[한국전력공사_202606_v1.1_DSMC_260710.xlsx/상품번호별]  기본료, 부가세, 청구금액 열을 숫자 쉼표 형식으로 바꿔줘",
+      "title": "쉼표 숫자 형식 (기본료·부가세·청구금액)",
+      "enabled": true,
+      "language": "python",
+      "stepFile": "전체스킬셋 한전_0720_25단계_2026-07-20-14-25-26_step_2.py",
+      "code": "# 전체스킬셋 한전_25단계_2026-07-14-13-03-32\n# Step 2: 스킬 생성\n# Created: 2026-07-14T04:03:32.558Z\n# 서울본부_한전 AMI 4개 인입망 스킬셋_저압인입망빼고_15단계_2026-07-12-20-33-07\n# Step 2: 스킬 생성\n# Created: 2026-07-12T11:33:07.813Z\n# 한전 AMI 무선인입 빼고_15단계_2026-07-12-19-43-52\n# Step 2: 스킬 생성\n# Created: 2026-07-12T10:43:52.702Z\ndef transform(ctx):\n    sheet = \"상품번호별\"\n    headers = [\"기본료\", \"부가세\", \"청구금액\"]\n    hdr_row = 1\n    last_row = ctx.used_last_row(sheet)\n    \n    if last_row <= hdr_row:\n        raise ValueError(\"데이터가 없습니다.\")\n\n    def idx_to_col(c):\n        s = \"\"\n        while c > 0:\n            c, r = divmod(c - 1, 26)\n            s = chr(65 + r) + s\n        return s\n\n    for h in headers:\n        col_idx = ctx.find_header(sheet, h, header_row=hdr_row)\n        col_letter = idx_to_col(col_idx)\n        range_str = f\"{col_letter}{hdr_row + 1}:{col_letter}{last_row}\"\n        ctx.set_number_format(sheet, range_str, \"#,##0\")\n",
+      "targetFileId": "input:한국전력공사_202606_v1.1_DSMC_260710.xlsx",
+      "targetSheetName": "상품번호별",
+      "trustedStatic": true
+    },
+    {
+      "id": "o7ga7bq5",
+      "description": "\"상품번호별\" 시트에서 청구계정번호가 각각 512102405339, 612192188403, 614691497553인 데이터를 세 개의 새 시트(\"무선간선망\", \"고압모계기\", \"",
+      "prompt": "@시트[한국전력공사_202606_v1.1_DSMC_260710.xlsx/상품번호별] 에서 청구계정번호가 512102399264인 데이터들만 별도의 시트로 복사해줘. 그리고 시트명은 '무선간선망'으로 해줘\n\n@시트[한국전력공사_202606_v1.1_DSMC_260710.xlsx/상품번호별] 에서 청구계정번호가 150714053572인 데이터들만 별도의 시트로 복사해줘. 그리고 시트명은 '고압모계기'으로 해줘\n\n@시트[한국전력공사_202606_v1.1_DSMC_260710.xlsx/상품번호별] 에서 청구계정번호가 618655363784인 데이터들만 별도의 시트로 복사해줘. 그리고 시트명은 '고압자계기'로 해줘",
+      "title": "필요 데이터만 추출 (서울본부 기준 · 무선간선망/고압모계기/고압자계기) [타본부 SKILL 저장]",
+      "enabled": true,
+      "language": "python",
+      "stepFile": "전체스킬셋 한전_0720_25단계_2026-07-20-14-25-26_step_3.py",
+      "code": "def transform(ctx):\n    book = ctx.book(\"@@FILE_1@@\")\n    sheet = \"상품번호별\"\n    header_row = 1\n\n    col_idx = book.find_header(sheet, \"청구계정번호\", header_row=header_row) - 1\n\n    book.filter_to_sheet(sheet, lambda r: str(r[col_idx]) == \"512102405339\", \"무선간선망\")\n    book.filter_to_sheet(sheet, lambda r: str(r[col_idx]) == \"612192188403\", \"고압모계기\")\n    book.filter_to_sheet(sheet, lambda r: str(r[col_idx]) == \"614691497553\", \"고압자계기\")",
+      "targetFileId": "input:한국전력공사_202606_v1.1_DSMC_260710.xlsx",
+      "targetSheetName": "상품번호별",
+      "trustedStatic": true
+    },
+    {
+      "id": "fucbrtop",
+      "description": "세 시트(\"무선간선망\", \"고압모계기\", \"고압자계기\")의 E열 데이터에 `'0` 을 추가합니다. 정적 검사 오류 방지를 위해 루프 대신 각 시트를 명시적으로 처리하도록 수정했습니",
+      "prompt": "@시트[한국전력공사_202606_v1.1_DSMC_260710.xlsx/무선간선망] 와 @시트[한국전력공사_202606_v1.1_DSMC_260710.xlsx/고압모계기], @시트[한국전력공사_202606_v1.1_DSMC_260710.xlsx/고압자계기] 의 각각  E열(상품번호(한전))은 모두 값의 앞에 '0을 넣어서 012~처럼 시작되게끔 수정해줘. ['0] 을 추가하는거야. 앞에 작은 말따옴표인 '가 들어가야도. 헤더는 별도 수정 없이 그대로 두면 돼.",
+      "title": "서식 정리 (E열 상품번호(한전) 앞자리 '0 추가)",
+      "enabled": true,
+      "language": "python",
+      "stepFile": "전체스킬셋 한전_0720_25단계_2026-07-20-14-25-26_step_4.py",
+      "code": "# 전체스킬셋 한전_25단계_2026-07-14-13-03-32\n# Step 4: 세 시트(\"무선간선망\", \"고압모계기\", \"고압자계기\")의 E열 데이터에 `'0` 을 추가합니다. 정적 검사 오류 방지를 위해 루프 대신 각 시트를 명시적으로 처리하도록 수정했습니\n# Created: 2026-07-14T04:03:32.558Z\n# 서울본부_한전 AMI 4개 인입망 스킬셋_저압인입망빼고_15단계_2026-07-12-20-33-07\n# Step 4: 세 시트(\"무선간선망\", \"고압모계기\", \"고압자계기\")의 E열 데이터에 `'0` 을 추가합니다. 정적 검사 오류 방지를 위해 루프 대신 각 시트를 명시적으로 처리하도록 수정했습니\n# Created: 2026-07-12T11:33:07.813Z\n# 한전 AMI 무선인입 빼고_15단계_2026-07-12-19-43-52\n# Step 4: 세 시트(\"무선간선망\", \"고압모계기\", \"고압자계기\")의 E열 데이터에 `'0` 을 추가합니다. 정적 검사 오류 방지를 위해 루프 대신 각 시트를 명시적으로 처리하도록 수정했습니\n# Created: 2026-07-12T10:43:52.702Z\ndef transform(ctx):\n    def update_e_col(sheet_name):\n        last = ctx.used_last_row(sheet_name)\n        if last < 2:\n            return\n        # E열 데이터 읽기 (2행부터 마지막 행까지)\n        data = ctx.read(sheet_name, f\"E2:E{last}\")\n        \n        new_data = []\n        for row in data:\n            val = row[0]\n            # 빈 셀이 아니면 앞에 작은따옴표와 '0' 추가\n            if val is not None and str(val).strip():\n                new_data.append([\"'0\" + str(val)])\n            else:\n                new_data.append([val])\n                \n        # 결과 한 번에 쓰기\n        ctx.write(sheet_name, \"E2\", new_data, overwrite_formulas=True)\n\n    # 각 시트 개별 처리 (루프 내 write 방지)\n    update_e_col(\"무선간선망\")\n    update_e_col(\"고압모계기\")\n    update_e_col(\"고압자계기\")\n",
+      "targetFileId": "input:한국전력공사_202606_v1.1_DSMC_260710.xlsx",
+      "targetSheetName": "고압자계기",
+      "trustedStatic": true
+    },
+    {
+      "id": "8qtg4en0",
+      "description": "세 시트(\"무선간선망\", \"고압모계기\", \"고압자계기\")의 Q열(기본료)을 R열(부가세) × 10 계산값으로 업데이트합니다. 정적 검사 오류 방지를 위해 시트별 처리를 명시적으로 ",
+      "prompt": "@시트[한국전력공사_202606_v1.1_DSMC_260710.xlsx/무선간선망] , @시트[한국전력공사_202606_v1.1_DSMC_260710.xlsx/고압모계기] , @시트[한국전력공사_202606_v1.1_DSMC_260710.xlsx/고압자계기]  모두  기본료(Q열)은 부가세(R열)에 10을 곱한 숫자로 바꿔줘. 헤더값은 수정하지 마",
+      "title": "기본료 = 부가세 × 10",
+      "enabled": true,
+      "language": "python",
+      "stepFile": "전체스킬셋 한전_0720_25단계_2026-07-20-14-25-26_step_5.py",
+      "code": "# 전체스킬셋 한전_25단계_2026-07-14-13-03-32\n# Step 5: 세 시트(\"무선간선망\", \"고압모계기\", \"고압자계기\")의 Q열(기본료)을 R열(부가세) × 10 계산값으로 업데이트합니다. 정적 검사 오류 방지를 위해 시트별 처리를 명시적으로 \n# Created: 2026-07-14T04:03:32.558Z\n# 서울본부_한전 AMI 4개 인입망 스킬셋_저압인입망빼고_15단계_2026-07-12-20-33-07\n# Step 5: 세 시트(\"무선간선망\", \"고압모계기\", \"고압자계기\")의 Q열(기본료)을 R열(부가세) × 10 계산값으로 업데이트합니다. 정적 검사 오류 방지를 위해 시트별 처리를 명시적으로 \n# Created: 2026-07-12T11:33:07.813Z\n# 한전 AMI 무선인입 빼고_15단계_2026-07-12-19-43-52\n# Step 5: 세 시트(\"무선간선망\", \"고압모계기\", \"고압자계기\")의 Q열(기본료)을 R열(부가세) × 10 계산값으로 업데이트합니다. 정적 검사 오류 방지를 위해 시트별 처리를 명시적으로 \n# Created: 2026-07-12T10:43:52.702Z\ndef transform(ctx):\n    def process_sheet(name):\n        last = ctx.used_last_row(name)\n        if last < 2:\n            return\n        # R열 (부가세) 데이터 읽기 (2행부터)\n        r_data = ctx.read(name, f\"R2:R{last}\")\n        \n        # 계산: R * 10 (숫자만 처리, 비숫자는 0)\n        q_data = [[row[0] * 10 if isinstance(row[0], (int, float)) else 0] for row in r_data]\n        \n        # Q열 (기본료)에 한 번에 쓰기\n        ctx.write(name, \"Q2\", q_data, overwrite_formulas=True)\n\n    # 각 시트 개별 처리 (루프 내 write 방지)\n    process_sheet(\"무선간선망\")\n    process_sheet(\"고압모계기\")\n    process_sheet(\"고압자계기\")\n",
+      "targetFileId": "input:한국전력공사_202606_v1.1_DSMC_260710.xlsx",
+      "targetSheetName": "고압자계기",
+      "trustedStatic": true
+    },
+    {
+      "id": "ni8ftffn",
+      "description": "세 시트 헤더에 회색 음영 적용",
+      "prompt": "@파일[한국전력공사_202606_v1.1_DSMC_260710.xlsx] 고압자계기, 고압모계기, 무선간선망 시트의 맨 위 헤더 부분에 회색 음영을 넣어줘. VBA로 짜줘",
+      "title": "회색 헤더 적용 (VBA)",
+      "enabled": true,
+      "language": "vba",
+      "stepFile": "전체스킬셋 한전_0720_25단계_2026-07-20-14-25-26_step_6.js",
+      "code": "// 전체스킬셋 한전_25단계_2026-07-14-13-03-32\n// Step 6: 세 시트 헤더에 회색 음영 적용\n// Created: 2026-07-14T04:03:32.558Z\n// 서울본부_한전 AMI 4개 인입망 스킬셋_저압인입망빼고_15단계_2026-07-12-20-33-07\n// Step 6: 세 시트 헤더에 회색 음영 적용\n// Created: 2026-07-12T11:33:07.813Z\n// 한전 AMI 무선인입 빼고_15단계_2026-07-12-19-43-52\n// Step 6: 세 시트 헤더에 회색 음영 적용\n// Created: 2026-07-12T10:43:52.702Z\nSub B2BSkill()\n    Dim prevCalc As Long\n    On Error GoTo Cleanup\n    Application.ScreenUpdating = False\n    prevCalc = Application.Calculation\n    Application.Calculation = xlCalculationManual\n    \n    Dim wb As Workbook\n    Set wb = Workbooks(\"@@FILE_1@@\")\n    \n    Dim sheetNames As Variant\n    sheetNames = Array(\"고압자계기\", \"고압모계기\", \"무선간선망\")\n    \n    Dim i As Long\n    Dim ws As Worksheet\n    Dim lastCol As Long\n    Dim headerRng As Range\n    \n    For i = LBound(sheetNames) To UBound(sheetNames)\n        Set ws = wb.Worksheets(sheetNames(i))\n        lastCol = ws.Cells(1, ws.Columns.Count).End(xlToLeft).Column\n        If lastCol < 1 Then lastCol = 1\n        Set headerRng = ws.Range(ws.Cells(1, 1), ws.Cells(1, lastCol))\n        \n        With headerRng.Interior\n            .Pattern = xlSolid\n            .PatternColorIndex = xlAutomatic\n            .Color = RGB(192, 192, 192)\n        End With\n    Next i\n    \nCleanup:\n    Application.Calculation = prevCalc\n    Application.ScreenUpdating = True\n    If Err.Number <> 0 Then\n        Err.Raise Err.Number, Err.Source, Err.Description\n    End If\nEnd Sub",
+      "targetFileId": "input:한국전력공사_202606_v1.1_DSMC_260710.xlsx",
+      "targetSheetName": "고압자계기",
+      "trustedStatic": true
+    },
+    {
+      "id": "ob5s1leb",
+      "description": "두 시트(\"상품번호별\", \"청구계정별\")를 삭제합니다.",
+      "prompt": "@시트[한국전력공사_202606_v1.1_DSMC_260710.xlsx/상품번호별]  시트와 @시트[한국전력공사_202606_v1.1_DSMC_260710.xlsx/청구계정별]  시트를 삭제해줘",
+      "title": "필요없는 시트 삭제 (상품번호별·청구계정별)",
+      "enabled": true,
+      "language": "python",
+      "stepFile": "전체스킬셋 한전_0720_25단계_2026-07-20-14-25-26_step_7.py",
+      "code": "# 전체스킬셋 한전_25단계_2026-07-14-13-03-32\n# Step 7: 두 시트(\"상품번호별\", \"청구계정별\")를 삭제합니다.\n# Created: 2026-07-14T04:03:32.558Z\n# 서울본부_한전 AMI 4개 인입망 스킬셋_저압인입망빼고_15단계_2026-07-12-20-33-07\n# Step 7: 두 시트(\"상품번호별\", \"청구계정별\")를 삭제합니다.\n# Created: 2026-07-12T11:33:07.813Z\n# 한전 AMI 무선인입 빼고_15단계_2026-07-12-19-43-52\n# Step 7: 두 시트(\"상품번호별\", \"청구계정별\")를 삭제합니다.\n# Created: 2026-07-12T10:43:52.702Z\ndef transform(ctx):\n    ctx.delete_sheet(\"상품번호별\")\n    ctx.delete_sheet(\"청구계정별\")\n",
+      "targetFileId": "input:한국전력공사_202606_v1.1_DSMC_260710.xlsx",
+      "targetSheetName": "고압자계기",
+      "trustedStatic": true
+    },
+    {
+      "id": "9whetdh4",
+      "description": "세 시트(\"무선간선망\", \"고압모계기\", \"고압자계기\")의 J열(상태변경일) 기준으로 내림차순 정렬합니다. 정적 검사 오류 방지를 위해 루프 대신 각 시트를 명시적으로 처리하도록 ",
+      "prompt": "@시트[한국전력공사_202606_v1.1_DSMC_260710.xlsx/무선간선망] , @시트[한국전력공사_202606_v1.1_DSMC_260710.xlsx/고압모계기] , @시트[한국전력공사_202606_v1.1_DSMC_260710.xlsx/고압자계기]  모두 상태변경일자(J열) 기준으로 내림차순 해줘",
+      "title": "상태변경일자(J열) 내림차순 정렬",
+      "enabled": true,
+      "language": "python",
+      "stepFile": "전체스킬셋 한전_0720_25단계_2026-07-20-14-25-26_step_8.py",
+      "code": "# 전체스킬셋 한전_25단계_2026-07-14-13-03-32\n# Step 8: 세 시트(\"무선간선망\", \"고압모계기\", \"고압자계기\")의 J열(상태변경일) 기준으로 내림차순 정렬합니다. 정적 검사 오류 방지를 위해 루프 대신 각 시트를 명시적으로 처리하도록 \n# Created: 2026-07-14T04:03:32.558Z\n# 서울본부_한전 AMI 4개 인입망 스킬셋_저압인입망빼고_15단계_2026-07-12-20-33-07\n# Step 8: 세 시트(\"무선간선망\", \"고압모계기\", \"고압자계기\")의 J열(상태변경일) 기준으로 내림차순 정렬합니다. 정적 검사 오류 방지를 위해 루프 대신 각 시트를 명시적으로 처리하도록 \n# Created: 2026-07-12T11:33:07.813Z\n# 한전 AMI 무선인입 빼고_15단계_2026-07-12-19-43-52\n# Step 8: 세 시트(\"무선간선망\", \"고압모계기\", \"고압자계기\")의 J열(상태변경일) 기준으로 내림차순 정렬합니다. 정적 검사 오류 방지를 위해 루프 대신 각 시트를 명시적으로 처리하도록 \n# Created: 2026-07-12T10:43:52.702Z\ndef transform(ctx):\n    def col_num_to_letter(n):\n        result = \"\"\n        while n > 0:\n            n, remainder = divmod(n - 1, 26)\n            result = chr(65 + remainder) + result\n        return result\n\n    # 무선간선망\n    sheet = \"무선간선망\"\n    last_row = ctx.used_last_row(sheet)\n    last_col = ctx.used_last_col(sheet)\n    if last_row >= 2:\n        end_col_str = col_num_to_letter(last_col)\n        range_str = f\"A1:{end_col_str}{last_row}\"\n        ctx.sort(sheet, range_str, key_col=\"J\", ascending=False, has_header=True)\n\n    # 고압모계기\n    sheet = \"고압모계기\"\n    last_row = ctx.used_last_row(sheet)\n    last_col = ctx.used_last_col(sheet)\n    if last_row >= 2:\n        end_col_str = col_num_to_letter(last_col)\n        range_str = f\"A1:{end_col_str}{last_row}\"\n        ctx.sort(sheet, range_str, key_col=\"J\", ascending=False, has_header=True)\n\n    # 고압자계기\n    sheet = \"고압자계기\"\n    last_row = ctx.used_last_row(sheet)\n    last_col = ctx.used_last_col(sheet)\n    if last_row >= 2:\n        end_col_str = col_num_to_letter(last_col)\n        range_str = f\"A1:{end_col_str}{last_row}\"\n        ctx.sort(sheet, range_str, key_col=\"J\", ascending=False, has_header=True)\n",
+      "targetFileId": "input:한국전력공사_202606_v1.1_DSMC_260710.xlsx",
+      "targetSheetName": "고압자계기",
+      "trustedStatic": true
+    },
+    {
+      "id": "8oimnnes",
+      "description": "세 시트(\"무선간선망\", \"고압모계기\", \"고압자계기\")의 Q열(기본료) 마지막 데이터 행 아래에 SUM 수식을 넣고, 노란색 음영과 볼드 서식을 적용합니다. 정적 검사 오류 방지",
+      "prompt": "@시트[한국전력공사_202606_v1.1_DSMC_260710.xlsx/무선간선망] , @시트[한국전력공사_202606_v1.1_DSMC_260710.xlsx/고압모계기] , @시트[한국전력공사_202606_v1.1_DSMC_260710.xlsx/고압자계기]  모두 Q열(기본료)의 전체 합계를 해당 열 제일 마지막에 SUM 함수 형태로 계산해서 수식 걸어서 넣어주고, 노란색 음영을 주고 볼드 처리 해줘. 서식 부분은 VBA를 활용해.",
+      "title": "Q열(기본료) SUM 합계 · 노란 음영 · 볼드 (VBA)",
+      "enabled": true,
+      "language": "vba",
+      "stepFile": "전체스킬셋 한전_0720_25단계_2026-07-20-14-25-26_step_9.js",
+      "code": "// 전체스킬셋 한전_25단계_2026-07-14-13-03-32\n// Step 9: 세 시트(\"무선간선망\", \"고압모계기\", \"고압자계기\")의 Q열(기본료) 마지막 데이터 행 아래에 SUM 수식을 넣고, 노란색 음영과 볼드 서식을 적용합니다. 정적 검사 오류 방지\n// Created: 2026-07-14T04:03:32.558Z\n// 서울본부_한전 AMI 4개 인입망 스킬셋_저압인입망빼고_15단계_2026-07-12-20-33-07\n// Step 9: 세 시트(\"무선간선망\", \"고압모계기\", \"고압자계기\")의 Q열(기본료) 마지막 데이터 행 아래에 SUM 수식을 넣고, 노란색 음영과 볼드 서식을 적용합니다. 정적 검사 오류 방지\n// Created: 2026-07-12T11:33:07.813Z\n// 한전 AMI 무선인입 빼고_15단계_2026-07-12-19-43-52\n// Step 9: 세 시트(\"무선간선망\", \"고압모계기\", \"고압자계기\")의 Q열(기본료) 마지막 데이터 행 아래에 SUM 수식을 넣고, 노란색 음영과 볼드 서식을 적용합니다. 정적 검사 오류 방지\n// Created: 2026-07-12T10:43:52.702Z\nSub B2BSkill()\n    On Error GoTo Cleanup\n    Application.ScreenUpdating = False\n    Dim prevCalc As XlCalculation\n    prevCalc = Application.Calculation\n    Application.Calculation = xlCalculationManual\n    \n    Dim wb As Workbook\n    Set wb = Workbooks(\"@@FILE_1@@\")\n    \n    Dim ws As Worksheet\n    Dim lastRow As Long\n    Dim sumCell As Range\n    \n    ' 1. 무선간선망\n    Set ws = wb.Worksheets(\"무선간선망\")\n    lastRow = ws.Cells(ws.Rows.Count, 17).End(xlUp).Row\n    If lastRow < 2 Then Err.Raise vbObjectError + 513, \"B2BSkill\", \"무선간선망 시트에 데이터가 없습니다.\"\n    Set sumCell = ws.Cells(lastRow + 1, 17)\n    sumCell.Formula = \"=SUM(Q2:Q\" & lastRow & \")\"\n    With sumCell\n        .Interior.Color = RGB(255, 255, 0)\n        .Font.Bold = True\n    End With\n    \n    ' 2. 고압모계기\n    Set ws = wb.Worksheets(\"고압모계기\")\n    lastRow = ws.Cells(ws.Rows.Count, 17).End(xlUp).Row\n    If lastRow < 2 Then Err.Raise vbObjectError + 513, \"B2BSkill\", \"고압모계기 시트에 데이터가 없습니다.\"\n    Set sumCell = ws.Cells(lastRow + 1, 17)\n    sumCell.Formula = \"=SUM(Q2:Q\" & lastRow & \")\"\n    With sumCell\n        .Interior.Color = RGB(255, 255, 0)\n        .Font.Bold = True\n    End With\n    \n    ' 3. 고압자계기\n    Set ws = wb.Worksheets(\"고압자계기\")\n    lastRow = ws.Cells(ws.Rows.Count, 17).End(xlUp).Row\n    If lastRow < 2 Then Err.Raise vbObjectError + 513, \"B2BSkill\", \"고압자계기 시트에 데이터가 없습니다.\"\n    Set sumCell = ws.Cells(lastRow + 1, 17)\n    sumCell.Formula = \"=SUM(Q2:Q\" & lastRow & \")\"\n    With sumCell\n        .Interior.Color = RGB(255, 255, 0)\n        .Font.Bold = True\n    End With\n    \nCleanup:\n    Application.Calculation = prevCalc\n    Application.ScreenUpdating = True\n    If Err.Number <> 0 Then Err.Raise Err.Number, Err.Source, Err.Description\nEnd Sub",
+      "targetFileId": "input:한국전력공사_202606_v1.1_DSMC_260710.xlsx",
+      "targetSheetName": "고압자계기",
+      "trustedStatic": true
+    },
+    {
+      "id": "pxhlmn2j",
+      "description": "세 시트의 Q열~S열(기본료, 부가세, 청구금액) 데이터 영역에 숫자 쉼표 형식(`#,##0`)을 적용합니다.",
+      "prompt": "@시트[한국전력공사_202606_v1.1_DSMC_260710.xlsx/무선간선망] , @시트[한국전력공사_202606_v1.1_DSMC_260710.xlsx/고압모계기] , @시트[한국전력공사_202606_v1.1_DSMC_260710.xlsx/고압자계기] 의 각 Q열~S열(기본료, 부가세, 청구금액)을 숫자 쉼표 형식으로 바꿔줘",
+      "title": "쉼표 숫자 형식(#,##0) 재적용",
+      "enabled": true,
+      "language": "python",
+      "stepFile": "전체스킬셋 한전_0720_25단계_2026-07-20-14-25-26_step_10.py",
+      "code": "# 전체스킬셋 한전_25단계_2026-07-14-13-03-32\n# Step 10: 세 시트의 Q열~S열(기본료, 부가세, 청구금액) 데이터 영역에 숫자 쉼표 형식(`#,##0`)을 적용합니다.\n# Created: 2026-07-14T04:03:32.558Z\n# 서울본부_한전 AMI 4개 인입망 스킬셋_저압인입망빼고_15단계_2026-07-12-20-33-07\n# Step 10: 세 시트의 Q열~S열(기본료, 부가세, 청구금액) 데이터 영역에 숫자 쉼표 형식(`#,##0`)을 적용합니다.\n# Created: 2026-07-12T11:33:07.813Z\n# 한전 AMI 무선인입 빼고_15단계_2026-07-12-19-43-52\n# Step 15: 세 시트의 Q열~S열(기본료, 부가세, 청구금액) 데이터 영역에 숫자 쉼표 형식(`#,##0`)을 적용합니다.\n# Created: 2026-07-12T10:43:52.702Z\ndef transform(ctx):\n    sheets = [\"무선간선망\", \"고압모계기\", \"고압자계기\"]\n    for sheet in sheets:\n        last = ctx.last_row(sheet, col=17)  # Q열(17) 기준 마지막 행\n        if last >= 2:\n            ctx.set_number_format(sheet, f\"Q2:S{last}\", \"#,##0\")\n",
+      "targetFileId": "input:한국전력공사_202606_v1.1_DSMC_260710.xlsx",
+      "targetSheetName": "고압모계기",
+      "trustedStatic": true
+    },
+    {
+      "id": "9v0ccoi2",
+      "description": "스킬 생성",
+      "prompt": "@시트[02. 한전_AMI_유선간선망_청구세부내역_2026-07-07 09_23_01_DSMC_260707.xlsx/Sheet1]의  1~9행을 삭제해줘",
+      "title": "유선간선망 RAW · Sheet1 1~9행 삭제",
+      "enabled": true,
+      "language": "python",
+      "stepFile": "전체스킬셋 한전_0720_25단계_2026-07-20-14-25-26_step_11.py",
+      "code": "# 전체스킬셋 한전_25단계_2026-07-14-13-03-32\n# Step 11: 스킬 생성\n# Created: 2026-07-14T04:03:32.558Z\n# 서울본부_한전 AMI 4개 인입망 스킬셋_저압인입망빼고_15단계_2026-07-12-20-33-07\n# Step 11: 스킬 생성\n# Created: 2026-07-12T11:33:07.813Z\ndef transform(ctx):\n    target_book = ctx.book(\"02. 한전_AMI_유선간선망_청구세부내역_2026-07-07 09_23_01_DSMC_260707.xlsx\")\n    target_sheet = \"Sheet1\"\n    \n    # 1~9행 삭제\n    target_book.delete_rows(target_sheet, \"1:9\")\n",
+      "targetFileId": "input:02. 한전_AMI_유선간선망_청구세부내역_2026-07-07 09_23_01_DSMC_260707.xlsx",
+      "targetSheetName": "Sheet1",
+      "trustedStatic": true
+    },
+    {
+      "id": "g2pkqu26",
+      "description": "스킬 생성",
+      "prompt": "@시트[02. 한전_AMI_유선간선망_청구세부내역_2026-07-07 09_23_01_DSMC_260707.xlsx/Sheet1] 의 이름을 유선간선망 으로 바꿔줘",
+      "title": "시트명을 '유선간선망'으로 변경",
+      "enabled": true,
+      "language": "python",
+      "stepFile": "전체스킬셋 한전_0720_25단계_2026-07-20-14-25-26_step_12.py",
+      "code": "# 전체스킬셋 한전_25단계_2026-07-14-13-03-32\n# Step 12: 스킬 생성\n# Created: 2026-07-14T04:03:32.558Z\n# 서울본부_한전 AMI 4개 인입망 스킬셋_저압인입망빼고_15단계_2026-07-12-20-33-07\n# Step 12: 스킬 생성\n# Created: 2026-07-12T11:33:07.813Z\ndef transform(ctx):\n    target_book = ctx.book(\"02. 한전_AMI_유선간선망_청구세부내역_2026-07-07 09_23_01_DSMC_260707.xlsx\")\n    target_book.rename_sheet(\"Sheet1\", \"유선간선망\")\n",
+      "targetFileId": "input:02. 한전_AMI_유선간선망_청구세부내역_2026-07-07 09_23_01_DSMC_260707.xlsx",
+      "targetSheetName": "Sheet1",
+      "trustedStatic": true
+    },
+    {
+      "id": "ntd3vbe8",
+      "description": "지정된 파일의 \"유선간선망\" 시트에서 \"효력발생일자\" 열을 기준으로 내림차순 정렬합니다.",
+      "prompt": "@시트[02. 한전_AMI_유선간선망_청구세부내역_2026-07-07 09_23_01_DSMC_260707.xlsx/유선간선망] 의 효력발생일자 기준으로 내림차순해줘",
+      "title": "효력발생일자 기준 내림차순 정렬",
+      "enabled": true,
+      "language": "python",
+      "stepFile": "전체스킬셋 한전_0720_25단계_2026-07-20-14-25-26_step_13.py",
+      "code": "# 전체스킬셋 한전_25단계_2026-07-14-13-03-32\n# Step 13: 지정된 파일의 \"유선간선망\" 시트에서 \"효력발생일자\" 열을 기준으로 내림차순 정렬합니다.\n# Created: 2026-07-14T04:03:32.558Z\n# 서울본부_한전 AMI 4개 인입망 스킬셋_저압인입망빼고_15단계_2026-07-12-20-33-07\n# Step 13: 지정된 파일의 \"유선간선망\" 시트에서 \"효력발생일자\" 열을 기준으로 내림차순 정렬합니다.\n# Created: 2026-07-12T11:33:07.813Z\ndef transform(ctx):\n    book = ctx.book(\"02. 한전_AMI_유선간선망_청구세부내역_2026-07-07 09_23_01_DSMC_260707.xlsx\")\n    sheet = \"유선간선망\"\n    \n    last_row = book.used_last_row(sheet)\n    last_col = book.used_last_col(sheet)\n    \n    def col_to_letter(n):\n        s = \"\"\n        while n > 0:\n            n, r = divmod(n - 1, 26)\n            s = chr(65 + r) + s\n        return s\n        \n    range_end = f\"{col_to_letter(last_col)}{last_row}\"\n    sort_range = f\"A1:{range_end}\"\n    \n    book.sort(sheet, sort_range, key_col=\"효력발생일자\", ascending=False, has_header=True)\n",
+      "targetFileId": "input:02. 한전_AMI_유선간선망_청구세부내역_2026-07-07 09_23_01_DSMC_260707.xlsx",
+      "targetSheetName": "유선간선망",
+      "trustedStatic": true
+    },
+    {
+      "id": "3edsl12j",
+      "description": "T열 합계 수식 및 서식 적용",
+      "prompt": "@시트[02. 한전_AMI_유선간선망_청구세부내역_2026-07-07 09_23_01_DSMC_260707.xlsx/유선간선망]의 T열(기본료)의 전체 합계를 해당 열 제일 마지막에 SUM 함수 형태로 계산해서 수식 걸어서 넣어주고, 노란색 음영을 주고 볼드 처리 해줘. 서식 부분은 VBA를 활용해.",
+      "title": "T열(기본료) SUM 합계 · 노란 음영 · 볼드 (VBA)",
+      "enabled": true,
+      "language": "vba",
+      "stepFile": "전체스킬셋 한전_0720_25단계_2026-07-20-14-25-26_step_14.js",
+      "code": "// 전체스킬셋 한전_25단계_2026-07-14-13-03-32\n// Step 14: T열 합계 수식 및 서식 적용\n// Created: 2026-07-14T04:03:32.558Z\n// 서울본부_한전 AMI 4개 인입망 스킬셋_저압인입망빼고_15단계_2026-07-12-20-33-07\n// Step 14: T열 합계 수식 및 서식 적용\n// Created: 2026-07-12T11:33:07.813Z\nSub B2BSkill()\n    Dim wb As Workbook\n    Dim ws As Worksheet\n    Dim lastRow As Long\n    Dim sumCell As Range\n    Dim prevScreenUpdating As Boolean\n    \n    On Error GoTo Cleanup\n    prevScreenUpdating = Application.ScreenUpdating\n    Application.ScreenUpdating = False\n    \n    ' 대상 워크북 설정\n    Set wb = Workbooks(\"02. 한전_AMI_유선간선망_청구세부내역_2026-07-07 09_23_01_DSMC_260707.xlsx\")\n    \n    ' 대상 시트 설정\n    Set ws = wb.Worksheets(\"유선간선망\")\n    \n    ' T열의 마지막 데이터 행 찾기\n    lastRow = ws.Cells(ws.Rows.Count, \"T\").End(xlUp).Row\n    \n    ' 데이터가 1행도 없거나 헤더만 있는 경우 처리\n    If lastRow < 2 Then\n        Err.Raise vbObjectError + 513, \"B2BSkill\", \"T열에 데이터가 없습니다.\"\n    End If\n    \n    ' 합계 셀 설정 (마지막 데이터 행의 바로 아래)\n    Set sumCell = ws.Cells(lastRow + 1, \"T\")\n    \n    ' SUM 수식 입력 (T2부터 마지막 행까지)\n    sumCell.Formula = \"=SUM(T2:T\" & lastRow & \")\"\n    \n    ' 서식 적용: 노란색 배경, 볼드\n    With sumCell\n        .Interior.Color = RGB(255, 255, 0) ' 노란색\n        .Font.Bold = True\n    End With\n    \nCleanup:\n    Application.ScreenUpdating = prevScreenUpdating\n    If Err.Number <> 0 Then\n        Err.Raise Err.Number, Err.Source, Err.Description\n    End If\nEnd Sub",
+      "targetFileId": "input:02. 한전_AMI_유선간선망_청구세부내역_2026-07-07 09_23_01_DSMC_260707.xlsx",
+      "targetSheetName": "유선간선망",
+      "trustedStatic": true
+    },
+    {
+      "id": "tb8051vn",
+      "description": "스킬 생성",
+      "prompt": "@시트[01. 한전_DAS_배전자동화_청구세부내역_2026-07-12 19_00_54_DSMC_260712.xlsx/Sheet1] 의 1~9행을 삭제해줘",
+      "title": "배전자동화 RAW Sheet1 1~9행 삭제",
+      "enabled": true,
+      "language": "python",
+      "stepFile": "전체스킬셋 한전_0720_25단계_2026-07-20-14-25-26_step_15.py",
+      "code": "# 전체스킬셋 한전_25단계_2026-07-14-13-03-32\n# Step 15: 스킬 생성\n# Created: 2026-07-14T04:03:32.558Z\ndef transform(ctx):\n    book = ctx.book(\"01. 한전_DAS_배전자동화_청구세부내역_2026-07-12 19_00_54_DSMC_260712.xlsx\")\n    book.delete_rows(\"Sheet1\", \"1:9\")\n",
+      "targetFileId": "input:01. 한전_DAS_배전자동화_청구세부내역_2026-07-12 19_00_54_DSMC_260712.xlsx",
+      "targetSheetName": "Sheet1",
+      "trustedStatic": true
+    },
+    {
+      "id": "9y8pytgn",
+      "description": "스킬 생성",
+      "prompt": "@시트[01. 한전_DAS_배전자동화_청구세부내역_2026-07-12 19_00_54_DSMC_260712.xlsx/Sheet1] 의 이름을 배전자동화 로 바꿔줘",
+      "title": "시트명을 '배전자동화'로 변경",
+      "enabled": true,
+      "language": "python",
+      "stepFile": "전체스킬셋 한전_0720_25단계_2026-07-20-14-25-26_step_16.py",
+      "code": "# 전체스킬셋 한전_25단계_2026-07-14-13-03-32\n# Step 16: 스킬 생성\n# Created: 2026-07-14T04:03:32.558Z\ndef transform(ctx):\n    book = ctx.book(\"01. 한전_DAS_배전자동화_청구세부내역_2026-07-12 19_00_54_DSMC_260712.xlsx\")\n    book.rename_sheet(\"Sheet1\", \"배전자동화\")\n",
+      "targetFileId": "input:01. 한전_DAS_배전자동화_청구세부내역_2026-07-12 19_00_54_DSMC_260712.xlsx",
+      "targetSheetName": "Sheet1",
+      "trustedStatic": true
+    },
+    {
+      "id": "b46yscse",
+      "description": "스킬 생성",
+      "prompt": "@시트[01. 한전_DAS_배전자동화_청구세부내역_2026-07-12 19_00_54_DSMC_260712.xlsx/배전자동화] 의 효력발생일자 기준으로 내림차순해줘",
+      "title": "효력발생일자 기준 내림차순 정렬",
+      "enabled": true,
+      "language": "python",
+      "stepFile": "전체스킬셋 한전_0720_25단계_2026-07-20-14-25-26_step_17.py",
+      "code": "# 전체스킬셋 한전_25단계_2026-07-14-13-03-32\n# Step 17: 스킬 생성\n# Created: 2026-07-14T04:03:32.558Z\ndef transform(ctx):\n    book = ctx.book(\"01. 한전_DAS_배전자동화_청구세부내역_2026-07-12 19_00_54_DSMC_260712.xlsx\")\n    sheet = \"배전자동화\"\n    last_row = book.used_last_row(sheet)\n    last_col = book.used_last_col(sheet)\n    \n    def col_letter(n):\n        s = \"\"\n        while n:\n            n, r = divmod(n - 1, 26)\n            s = chr(65 + r) + s\n        return s\n    \n    range_str = f\"A1:{col_letter(last_col)}{last_row}\"\n    book.sort(sheet, range_str, key_col=\"효력발생일자\", ascending=False, has_header=True)\n",
+      "targetFileId": "input:01. 한전_DAS_배전자동화_청구세부내역_2026-07-12 19_00_54_DSMC_260712.xlsx",
+      "targetSheetName": "배전자동화",
+      "trustedStatic": true
+    },
+    {
+      "id": "h5qwpyg0",
+      "description": "스킬 생성",
+      "prompt": "@시트[01. 한전_DAS_배전자동화_청구세부내역_2026-07-12 19_00_54_DSMC_260712.xlsx/배전자동화] 의 R열 의 전체 합계를 해당 열 제일 마지막에 SUM 함수 형태로 계산해서 수식 걸어서 넣어주고, 노란색 음영을 주고 볼드 처리 해줘. 서식 부분은 VBA를 활용해.",
+      "title": "기본요금 열 SUM 합계 · 노란 음영 · 볼드 (VBA)",
+      "enabled": true,
+      "language": "vba",
+      "stepFile": "전체스킬셋 한전_0720_25단계_2026-07-20-14-25-26_step_18.js",
+      "code": "// 전체스킬셋 한전_25단계_2026-07-14-13-03-32\n// Step 18: 스킬 생성\n// Created: 2026-07-14T04:03:32.558Z\nSub B2BSkill()\n    Dim wb As Workbook\n    Dim ws As Worksheet\n    Dim lastRow As Long\n    Dim sumRow As Long\n    Dim prevCalc As XlCalculation\n    \n    On Error GoTo Cleanup\n    prevCalc = Application.Calculation\n    Application.ScreenUpdating = False\n    Application.Calculation = xlCalculationManual\n    \n    ' 워크북 참조\n    Set wb = Workbooks(\"01. 한전_DAS_배전자동화_청구세부내역_2026-07-12 19_00_54_DSMC_260712.xlsx\")\n    \n    ' 시트 참조\n    Set ws = wb.Worksheets(\"배전자동화\")\n    \n    ' R열 마지막 데이터 행 찾기\n    lastRow = ws.Cells(ws.Rows.Count, \"R\").End(xlUp).Row\n    \n    ' 데이터가 헤더만 있는 경우 확인\n    If lastRow < 2 Then\n        Err.Raise vbObjectError + 513, \"B2BSkill\", \"R열에 합계할 데이터가 없습니다.\"\n    End If\n    \n    ' 합계 행 설정\n    sumRow = lastRow + 1\n    \n    ' SUM 수식 및 서식 적용\n    With ws.Cells(sumRow, \"R\")\n        .Formula = \"=SUM(R2:R\" & lastRow & \")\"\n        .Interior.Color = vbYellow\n        .Font.Bold = True\n    End With\n    \nCleanup:\n    Application.Calculation = prevCalc\n    Application.ScreenUpdating = True\n    If Err.Number <> 0 Then\n        Err.Raise Err.Number, Err.Source, Err.Description\n    End If\nEnd Sub",
+      "targetFileId": "input:01. 한전_DAS_배전자동화_청구세부내역_2026-07-12 19_00_54_DSMC_260712.xlsx",
+      "targetSheetName": "배전자동화",
+      "trustedStatic": true
+    },
+    {
+      "id": "be3o3oad",
+      "description": "스킬 생성",
+      "prompt": "@시트[03. 한전_AMI_무선인입망합산_청구세부내역_2026-07-12 19_01_11_DSMC_260712.xlsx/Sheet1] 시트의 1~9행을 삭제합니다.",
+      "title": "[무선인입망] Sheet1 1~9행 삭제",
+      "enabled": true,
+      "language": "python",
+      "stepFile": "전체스킬셋 한전_0720_25단계_2026-07-20-14-25-26_step_19.py",
+      "code": "# 전체스킬셋 한전_25단계_2026-07-14-13-03-32\n# Step 19: 스킬 생성\n# Created: 2026-07-14T04:03:32.558Z\ndef transform(ctx):\n    b = ctx.book(\"03. 한전_AMI_무선인입망합산_청구세부내역_2026-07-12 19_01_11_DSMC_260712.xlsx\")\n    b.delete_rows(\"Sheet1\", \"1:9\")\n",
+      "targetFileId": "input:03. 한전_AMI_무선인입망합산_청구세부내역_2026-07-12 19_01_11_DSMC_260712.xlsx",
+      "targetSheetName": "Sheet1",
+      "trustedStatic": true
+    },
+    {
+      "id": "sa0nymwp",
+      "description": "지정된 파일의 `Sheet1` 시트 B열(2행~최종행)을 한 번에 읽어, 12번째 문자부터 `all` 이 들어간 셀은 `SMGW-C`, 나머지는 `저압인입망`으로 변환한 뒤 일괄 ",
+      "prompt": "선택 범위: @범위[03. 한전_AMI_무선인입망합산_청구세부내역_2026-07-12 19_01_11_DSMC_260712.xlsx/Sheet1!B:B] 의  12번째부터 시작하는 글자가 all 이라면 해당 데이터를 'SMGW-C'로, all이 아니라면 '저압인입망'으로 바꿔줘.\nall이 들어간게 SMGW-C형이고, 아닌 거가 저압인입망이야",
+      "title": "SMGW-C형 vs 저압인입망 구분",
+      "enabled": true,
+      "language": "python",
+      "stepFile": "전체스킬셋 한전_0720_25단계_2026-07-20-14-25-26_step_20.py",
+      "code": "# 전체스킬셋 한전_25단계_2026-07-14-13-03-32\n# Step 20: 지정된 파일의 `Sheet1` 시트 B열(2행~최종행)을 한 번에 읽어, 12번째 문자부터 `all` 이 들어간 셀은 `SMGW-C`, 나머지는 `저압인입망`으로 변환한 뒤 일괄 \n# Created: 2026-07-14T04:03:32.558Z\ndef transform(ctx):\n    b = ctx.book(\"03. 한전_AMI_무선인입망합산_청구세부내역_2026-07-12 19_01_11_DSMC_260712.xlsx\")\n    sheet = \"Sheet1\"\n    last = b.used_last_row(sheet)\n    if last < 2:\n        raise ValueError(\"처리할 데이터 행이 없습니다.\")\n        \n    vals = b.read(sheet, f\"B2:B{last}\")\n    out = []\n    for v in vals:\n        s = str(v[0] or \"\")\n        # 12번째 문자(index 11)부터 \"all\" 로 시작하는지 확인(대소문자 무관)\n        if len(s) > 11 and s[11:14].lower() == \"all\":\n            out.append([\"SMGW-C\"])\n        else:\n            out.append([\"저압인입망\"])\n            \n    b.write(sheet, \"B2\", out)\n",
+      "targetFileId": "input:03. 한전_AMI_무선인입망합산_청구세부내역_2026-07-12 19_01_11_DSMC_260712.xlsx",
+      "targetSheetName": "Sheet1",
+      "trustedStatic": true
+    },
+    {
+      "id": "nhay8d02",
+      "description": "스킬 생성",
+      "prompt": "선택 범위: @범위[03. 한전_AMI_무선인입망합산_청구세부내역_2026-07-12 19_01_11_DSMC_260712.xlsx/Sheet1!B1] 헤더값은 '구분'으로 바꿔줘",
+      "title": "B1 헤더값을 '구분'으로 변경",
+      "enabled": true,
+      "language": "python",
+      "stepFile": "전체스킬셋 한전_0720_25단계_2026-07-20-14-25-26_step_21.py",
+      "code": "# 전체스킬셋 한전_25단계_2026-07-14-13-03-32\n# Step 21: 스킬 생성\n# Created: 2026-07-14T04:03:32.558Z\ndef transform(ctx):\n    ctx.write_cell(\"Sheet1\", \"B1\", \"구분\")\n",
+      "targetFileId": "input:03. 한전_AMI_무선인입망합산_청구세부내역_2026-07-12 19_01_11_DSMC_260712.xlsx",
+      "targetSheetName": "Sheet1",
+      "trustedStatic": true
+    },
+    {
+      "id": "1c8vubal",
+      "description": "스킬 생성",
+      "prompt": "@시트[03. 한전_AMI_무선인입망합산_청구세부내역_2026-07-12 19_01_11_DSMC_260712.xlsx/Sheet1]  의 시트 이름을 '무선간선망'으로 바꿔줘",
+      "title": "시트이름을 무선인입망으로 변경",
+      "enabled": true,
+      "language": "python",
+      "stepFile": "전체스킬셋 한전_0720_25단계_2026-07-20-14-25-26_step_22.py",
+      "code": "# 전체스킬셋 한전_25단계_2026-07-14-13-03-32\n# Step 22: 스킬 생성\n# Created: 2026-07-14T04:03:32.558Z\ndef transform(ctx):\n    target_file = \"03. 한전_AMI_무선인입망합산_청구세부내역_2026-07-12 19_01_11_DSMC_260712.xlsx\"\n    ctx.book(target_file).rename_sheet(\"Sheet1\", \"무선인입망\")\n",
+      "targetFileId": "input:03. 한전_AMI_무선인입망합산_청구세부내역_2026-07-12 19_01_11_DSMC_260712.xlsx",
+      "targetSheetName": "Sheet1",
+      "trustedStatic": true
+    },
+    {
+      "id": "q2o7b262",
+      "description": "지정된 파일의 \"무선인입망\" 시트에서 \"개통일자(V3)\" 열(G열)을 기준으로 데이터를 내림차순으로 정렬합니다.",
+      "prompt": "@시트[03. 한전_AMI_무선인입망합산_청구세부내역_2026-07-12 19_01_11_DSMC_260712.xlsx/무선인입망] 개통일자 기준으로 내림차순 해줘",
+      "title": "개통일자(G열) 내림차순 정렬",
+      "enabled": true,
+      "language": "python",
+      "stepFile": "전체스킬셋 한전_0720_25단계_2026-07-20-14-25-26_step_23.py",
+      "code": "# 전체스킬셋 한전_25단계_2026-07-14-13-03-32\n# Step 23: 지정된 파일의 \"무선인입망\" 시트에서 \"개통일자(V3)\" 열(G열)을 기준으로 데이터를 내림차순으로 정렬합니다.\n# Created: 2026-07-14T04:03:32.558Z\ndef transform(ctx):\n    sheet = \"무선인입망\"\n    last_row = ctx.used_last_row(sheet)\n    last_col = ctx.used_last_col(sheet)\n    \n    if last_row < 1:\n        raise ValueError(\"데이터가 없습니다.\")\n\n    def col_letter(n):\n        s = \"\"\n        while n:\n            n, r = divmod(n - 1, 26)\n            s = chr(65 + r) + s\n        return s\n    \n    range_str = f\"A1:{col_letter(last_col)}{last_row}\"\n    \n    # G열이 개통일자(V3) 열입니다. 내림차순 정렬.\n    ctx.sort(sheet, range_str, key_col=\"G\", ascending=False, has_header=True)\n",
+      "targetFileId": "input:03. 한전_AMI_무선인입망합산_청구세부내역_2026-07-12 19_01_11_DSMC_260712.xlsx",
+      "targetSheetName": "무선인입망",
+      "trustedStatic": true
+    },
+    {
+      "id": "nm40nae0",
+      "description": "지정된 파일의 \"무선인입망\" 시트에서 \"가입상태변경일자(V3)\" 열(F열)을 기준으로 데이터를 내림차순으로 정렬합니다.",
+      "prompt": "@시트[03. 한전_AMI_무선인입망합산_청구세부내역_2026-07-12 19_01_11_DSMC_260712.xlsx/무선인입망] 상태변경일자 기준으로 내림차순으로 정렬해줘",
+      "title": "상태변경일자(F열) 내림차순 정렬",
+      "enabled": true,
+      "language": "python",
+      "stepFile": "전체스킬셋 한전_0720_25단계_2026-07-20-14-25-26_step_24.py",
+      "code": "# 전체스킬셋 한전_25단계_2026-07-14-13-03-32\n# Step 24: 지정된 파일의 \"무선인입망\" 시트에서 \"가입상태변경일자(V3)\" 열(F열)을 기준으로 데이터를 내림차순으로 정렬합니다.\n# Created: 2026-07-14T04:03:32.558Z\ndef transform(ctx):\n    sheet = \"무선인입망\"\n    last_row = ctx.used_last_row(sheet)\n    last_col = ctx.used_last_col(sheet)\n    \n    if last_row < 1:\n        raise ValueError(\"데이터가 없습니다.\")\n\n    def col_letter(n):\n        s = \"\"\n        while n:\n            n, r = divmod(n - 1, 26)\n            s = chr(65 + r) + s\n        return s\n    \n    range_str = f\"A1:{col_letter(last_col)}{last_row}\"\n    \n    # F열이 가입상태변경일자(V3) 열입니다. 내림차순 정렬.\n    ctx.sort(sheet, range_str, key_col=\"F\", ascending=False, has_header=True)\n",
+      "targetFileId": "input:03. 한전_AMI_무선인입망합산_청구세부내역_2026-07-12 19_01_11_DSMC_260712.xlsx",
+      "targetSheetName": "무선인입망",
+      "trustedStatic": true
+    },
+    {
+      "id": "93fzx5oq",
+      "description": "J열(기본요금) 합계 수식 및 서식 적용",
+      "prompt": "선택 범위: @범위[03. 한전_AMI_무선인입망합산_청구세부내역_2026-07-12 19_01_11_DSMC_260712.xlsx/무선인입망!J:J]의 전체 SUM 값을 맨 J열의 마지막 행에 붙여주고(엑셀 함수 SUM 형태로), 볼드 처리해주고 노란색 음영 표기해줘. VBA로 짜",
+      "title": null,
+      "enabled": true,
+      "language": "vba",
+      "stepFile": "전체스킬셋 한전_0720_25단계_2026-07-20-14-25-26_step_25.js",
+      "code": "// 전체스킬셋 한전_25단계_2026-07-14-13-03-32\n// Step 25: J열(기본요금) 합계 수식 및 서식 적용\n// Created: 2026-07-14T04:03:32.558Z\nSub B2BSkill()\n    On Error GoTo Cleanup\n    Application.ScreenUpdating = False\n    Application.Calculation = xlCalculationManual\n\n    Dim wb As Workbook\n    Set wb = Workbooks(\"03. 한전_AMI_무선인입망합산_청구세부내역_2026-07-12 19_01_11_DSMC_260712.xlsx\")\n\n    Dim ws As Worksheet\n    Set ws = wb.Worksheets(\"무선인입망\")\n\n    Dim lastRow As Long\n    lastRow = ws.Cells(ws.Rows.Count, \"J\").End(xlUp).Row\n\n    If lastRow < 2 Then\n        Err.Raise vbObjectError + 513, \"B2BSkill\", \"J열에 합산할 데이터가 부족합니다.\"\n    End If\n\n    Dim sumCell As Range\n    Set sumCell = ws.Cells(lastRow + 1, \"J\")\n\n    sumCell.Formula = \"=SUM(J2:J\" & lastRow & \")\"\n    sumCell.Font.Bold = True\n    sumCell.Interior.Color = vbYellow\n\nCleanup:\n    Application.Calculation = xlCalculationAutomatic\n    Application.ScreenUpdating = True\n    If Err.Number <> 0 Then\n        Err.Raise Err.Number, Err.Source, Err.Description\n    End If\nEnd Sub",
+      "targetFileId": "input:03. 한전_AMI_무선인입망합산_청구세부내역_2026-07-12 19_01_11_DSMC_260712.xlsx",
+      "targetSheetName": "무선인입망",
+      "trustedStatic": true
+    }
+  ],
+  "chatHistory": [
+    {
+      "role": "user",
+      "content": "@시트[한국전력공사_202606_v1.1_DSMC_260710.xlsx/상품번호별] 의 데이터에서, 서비스, 본부명, 청구계정번호, 상품번호, 상품번호(한전), 가입자번호, 요금제코드, 요금제명, 개통상태, 상태변경일, 최초개통일, 모델명, 단말일련번호, 사용량(Mbyte), 개통대리점코드, 개통대리점명, 기본료, 부가세, 청구금액 항목의 데이터가 아닌 다른 열의 데이터들은 모두 삭제해줘. 필요 없는 데이터야. 내가 말한 데이터만 딱 들어가게끔 해줘. 그리고 현재의 BA열인 상품번호(맨 마지막)은 삭제해줘.\n\n[정확 참조]\n- 시트명: 파일 \"한국전력공사_202606_v1.1_DSMC_260710.xlsx\", 시트 \"상품번호별\"\n[정확 참조 사용 규칙 - 강제]\n- 아래 파일명/시트명/범위/컬럼명은 코드에 그대로 복사하세요. 번역, 영문화, 띄어쓰기 보정, 대소문자 변경 금지.\n- 특히 한글 시트명은 절대 번역하지 마세요. 예: 통합인터넷(국제) -> 통합internet(국제) 는 실패입니다.\n- 정확 파일명: \"한국전력공사_202606_v1.1_DSMC_260710.xlsx\"\n- 정확 시트명: \"상품번호별\"",
+      "histId": "nqq0w8bt"
+    },
+    {
+      "role": "assistant",
+      "content": "\n\n요청하신 열(`서비스`, `본부명`, `청구계정번호`, `상품번호`, `상품번호(한전)`, `가입자번호`, `요금제코드`, `요금제명`, `개통상태`, `상태변경일`, `최초개통일`, `모델명`, `단말일련번호`, `사용량(Mbyte)`, `개통대리점코드`, `개통대리점명`, `기본료`, `부가세`, `청구금액`)만 남기고 나머지 모든 열(포함 `BA열`)을 오른쪽에서 왼쪽 순으로 삭제합니다.\n\n```python\ndef transform(ctx):\n    sheet = \"상품번호별\"\n    keep_headers = [\n        \"서비스\", \"본부명\", \"청구계정번호\", \"상품번호\", \"상품번호(한전)\", \n        \"가입자번호\", \"요금제코드\", \"요금제명\", \"개통상태\", \"상태변경일\", \n        \"최초개통일\", \"모델명\", \"단말일련번호\", \"사용량(Mbyte)\", \n        \"개통대리점코드\", \"개통대리점명\", \"기본료\", \"부가세\", \"청구금액\"\n    ]\n    \n    hdr_row = 1\n    last_col_idx = ctx.used_last_col(sheet)\n    \n    def idx_to_col(c):\n        s = \"\"\n        while c > 0:\n            c, r = divmod(c - 1, 26)\n            s = chr(65 + r) + s\n        return s\n        \n    keep_indices = set()\n    for h in keep_headers:\n        try:\n            col_idx = ctx.find_header(sheet, h, header_row=hdr_row)\n            keep_indices.add(col_idx)\n        except Exception:\n            raise ValueError(f\"헤더 '{h}'를 찾을 수 없습니다.\")\n            \n    all_indices = set(range(1, last_col_idx + 1))\n    delete_indices = sorted(list(all_indices - keep_indices), reverse=True)\n    \n    if not delete_indices:\n        raise ValueError(\"삭제할 열이 없습니다.\")\n        \n    for idx in delete_indices:\n        col_letter = idx_to_col(idx)\n        ctx.delete_cols(sheet, col_letter)\n```",
+      "histId": "g8fwg2tp"
+    },
+    {
+      "role": "user",
+      "content": "@시트[한국전력공사_202606_v1.1_DSMC_260710.xlsx/상품번호별]  기본료, 부가세, 청구금액 열을 숫자 쉼표 형식으로 바꿔줘\n\n[정확 참조]\n- 시트명: 파일 \"한국전력공사_202606_v1.1_DSMC_260710.xlsx\", 시트 \"상품번호별\"\n[정확 참조 사용 규칙 - 강제]\n- 아래 파일명/시트명/범위/컬럼명은 코드에 그대로 복사하세요. 번역, 영문화, 띄어쓰기 보정, 대소문자 변경 금지.\n- 특히 한글 시트명은 절대 번역하지 마세요. 예: 통합인터넷(국제) -> 통합internet(국제) 는 실패입니다.\n- 정확 파일명: \"한국전력공사_202606_v1.1_DSMC_260710.xlsx\"\n- 정확 시트명: \"상품번호별\"",
+      "histId": "rd42tvaj"
+    },
+    {
+      "role": "assistant",
+      "content": "\n\n```python\ndef transform(ctx):\n    sheet = \"상품번호별\"\n    headers = [\"기본료\", \"부가세\", \"청구금액\"]\n    hdr_row = 1\n    last_row = ctx.used_last_row(sheet)\n    \n    if last_row <= hdr_row:\n        raise ValueError(\"데이터가 없습니다.\")\n\n    def idx_to_col(c):\n        s = \"\"\n        while c > 0:\n            c, r = divmod(c - 1, 26)\n            s = chr(65 + r) + s\n        return s\n\n    for h in headers:\n        col_idx = ctx.find_header(sheet, h, header_row=hdr_row)\n        col_letter = idx_to_col(col_idx)\n        range_str = f\"{col_letter}{hdr_row + 1}:{col_letter}{last_row}\"\n        ctx.set_number_format(sheet, range_str, \"#,##0\")\n```",
+      "histId": "vsx5lxv9"
+    },
+    {
+      "role": "user",
+      "content": "@시트[한국전력공사_202606_v1.1_DSMC_260710.xlsx/상품번호별] 에서 청구계정번호가 512102399264인 데이터들만 별도의 시트로 복사해줘. 그리고 시트명은 '무선간선망'으로 해줘\n\n@시트[한국전력공사_202606_v1.1_DSMC_260710.xlsx/상품번호별] 에서 청구계정번호가 150714053572인 데이터들만 별도의 시트로 복사해줘. 그리고 시트명은 '고압모계기'으로 해줘\n\n@시트[한국전력공사_202606_v1.1_DSMC_260710.xlsx/상품번호별] 에서 청구계정번호가 618655363784인 데이터들만 별도의 시트로 복사해줘. 그리고 시트명은 '고압자계기'로 해줘\n\n[정확 참조]\n- 시트명: 파일 \"한국전력공사_202606_v1.1_DSMC_260710.xlsx\", 시트 \"상품번호별\"\n[정확 참조 사용 규칙 - 강제]\n- 아래 파일명/시트명/범위/컬럼명은 코드에 그대로 복사하세요. 번역, 영문화, 띄어쓰기 보정, 대소문자 변경 금지.\n- 특히 한글 시트명은 절대 번역하지 마세요. 예: 통합인터넷(국제) -> 통합internet(국제) 는 실패입니다.\n- 정확 파일명: \"한국전력공사_202606_v1.1_DSMC_260710.xlsx\"\n- 정확 시트명: \"상품번호별\"\n- 정확 파일명: \"한국전력공사_202606_v1.1_DSMC_260710.xlsx\"\n- 정확 시트명: \"상품번호별\"\n- 정확 파일명: \"한국전력공사_202606_v1.1_DSMC_260710.xlsx\"\n- 정확 시트명: \"상품번호별\"",
+      "histId": "g8bexfs6"
+    },
+    {
+      "role": "assistant",
+      "content": "\n\n```python\ndef transform(ctx):\n    sheet = \"상품번호별\"\n    header_row = 1\n    \n    # 청구계정번호 열 인덱스 찾기 (0-based)\n    col_idx = ctx.find_header(sheet, \"청구계정번호\", header_row=header_row) - 1\n    \n    # 조건 1: 512102399264 -> 무선간선망\n    ctx.filter_to_sheet(sheet, lambda r: str(r[col_idx]) == \"512102399264\", \"무선간선망\")\n    \n    # 조건 2: 150714053572 -> 고압모계기\n    ctx.filter_to_sheet(sheet, lambda r: str(r[col_idx]) == \"150714053572\", \"고압모계기\")\n    \n    # 조건 3: 618655363784 -> 고압자계기\n    ctx.filter_to_sheet(sheet, lambda r: str(r[col_idx]) == \"618655363784\", \"고압자계기\")\n```",
+      "histId": "1ouw6irt"
+    },
+    {
+      "role": "user",
+      "content": "@시트[한국전력공사_202606_v1.1_DSMC_260710.xlsx/무선간선망] 와 @시트[한국전력공사_202606_v1.1_DSMC_260710.xlsx/고압모계기]의 각각  E열(상품번호(한전))은  헤더를 제외하고는 모두 앞에 '0을 넣어서 012~처럼 시작되게끔 수정해줘\n\n[정확 참조]\n- 시트명: 파일 \"한국전력공사_202606_v1.1_DSMC_260710.xlsx\", 시트 \"무선간선망\"\n- 시트명: 파일 \"한국전력공사_202606_v1.1_DSMC_260710.xlsx\", 시트 \"고압모계기\"\n[정확 참조 사용 규칙 - 강제]\n- 아래 파일명/시트명/범위/컬럼명은 코드에 그대로 복사하세요. 번역, 영문화, 띄어쓰기 보정, 대소문자 변경 금지.\n- 특히 한글 시트명은 절대 번역하지 마세요. 예: 통합인터넷(국제) -> 통합internet(국제) 는 실패입니다.\n- 정확 파일명: \"한국전력공사_202606_v1.1_DSMC_260710.xlsx\"\n- 정확 시트명: \"무선간선망\"\n- 정확 파일명: \"한국전력공사_202606_v1.1_DSMC_260710.xlsx\"\n- 정확 시트명: \"고압모계기\"",
+      "histId": "88qbcpq4"
+    },
+    {
+      "role": "assistant",
+      "content": "\n\n```python\ndef transform(ctx):\n    sheets = [\"무선간선망\", \"고압모계기\"]\n    \n    for sheet in sheets:\n        # E열 (5열) 기준 마지막 행 확인\n        last_row = ctx.last_row(sheet, col=5)\n        \n        if last_row < 2:\n            continue\n            \n        # 헤더(1행) 제외 데이터 범위: E2부터 마지막 행까지\n        range_str = f\"E2:E{last_row}\"\n        data = ctx.read(sheet, range_str)\n        \n        new_data = []\n        for row in data:\n            val = row[0]\n            # 빈 셀이 아니면 앞에 '0' 추가\n            if val is not None and str(val).strip() != \"\":\n                new_val = \"0\" + str(val)\n                new_data.append([new_val])\n            else:\n                new_data.append([val])\n                \n        # 결과 쓰기\n        ctx.write(sheet, \"E2\", new_data, overwrite_formulas=True)\n```",
+      "histId": "omdx4akg"
+    },
+    {
+      "role": "user",
+      "content": "방금 생성한 Python 스킬이 적용 직전 정적 안전 검사에서 막혔습니다.\n원래 사용자 요청을 그대로 만족하되, 아래 위반을 모두 제거해 다시 작성하세요.\n\n## 원래 사용자 요청\n@시트[한국전력공사_202606_v1.1_DSMC_260710.xlsx/무선간선망] 와 @시트[한국전력공사_202606_v1.1_DSMC_260710.xlsx/고압모계기]의 각각  E열(상품번호(한전))은  헤더를 제외하고는 모두 앞에 '0을 넣어서 012~처럼 시작되게끔 수정해줘\n\n## 정확 시트명\n정확 시트명(절대 변경 금지): \"무선간선망\", \"고압모계기\" 위 시트명은 코드에 그대로 복사하세요. 번역/영문화/띄어쓰기 보정 금지. \"2026년\"은 \"2026 년\"이 아니며, \"통합인터넷(국제)\"는 \"통합internet(국제)\"가 아닙니다.\n\n## 막힌 이유(모두 고칠 것)\n- 루프 안에서 ctx 쓰기 함수를 반복 호출하면 안 됩니다. 값을 2차원 리스트로 모은 뒤 ctx.write() 한 번으로 쓰세요.\n\n## 막힌 코드\n```python\ndef transform(ctx):\n    sheets = [\"무선간선망\", \"고압모계기\"]\n    \n    for sheet in sheets:\n        # E열 (5열) 기준 마지막 행 확인\n        last_row = ctx.last_row(sheet, col=5)\n        \n        if last_row < 2:\n            continue\n            \n        # 헤더(1행) 제외 데이터 범위: E2부터 마지막 행까지\n        range_str = f\"E2:E{last_row}\"\n        data = ctx.read(sheet, range_str)\n        \n        new_data = []\n        for row in data:\n            val = row[0]\n            # 빈 셀이 아니면 앞에 '0' 추가\n            if val is not None and str(val).strip() != \"\":\n                new_val = \"0\" + str(val)\n                new_data.append([new_val])\n            else:\n                new_data.append([val])\n                \n        # 결과 쓰기\n        ctx.write(sheet, \"E2\", new_data, overwrite_formulas=True)\n```\n\n반드시 하나의 ```python 코드 블록으로 def transform(ctx): 를 출력하세요.\n규칙: import 금지(re/datetime/math 는 제공됨) · ctx API 만 사용 · 작은 범위 계산은 ctx.read() 한 번 + ctx.write() 한 번,\n큰 표 이동/정렬/병합은 ctx.copy/ctx.sort/ctx.append_same_format_sheets 같은 네이티브 헬퍼 사용 · 루프 안 ctx 쓰기 금지 · 실패는 raise ValueError.\n/no_think",
+      "histId": "isshuhvo"
+    },
+    {
+      "role": "assistant",
+      "content": "\n\n```python\ndef transform(ctx):\n    # 시트 1: 무선간선망\n    s1 = \"무선간선망\"\n    lr1 = ctx.last_row(s1, col=5)\n    if lr1 >= 2:\n        r1 = f\"E2:E{lr1}\"\n        d1 = ctx.read(s1, r1)\n        out1 = []\n        for row in d1:\n            v = row[0]\n            if v is not None and str(v).strip():\n                out1.append([\"0\" + str(v)])\n            else:\n                out1.append([v])\n        ctx.write(s1, \"E2\", out1, overwrite_formulas=True)\n\n    # 시트 2: 고압모계기\n    s2 = \"고압모계기\"\n    lr2 = ctx.last_row(s2, col=5)\n    if lr2 >= 2:\n        r2 = f\"E2:E{lr2}\"\n        d2 = ctx.read(s2, r2)\n        out2 = []\n        for row in d2:\n            v = row[0]\n            if v is not None and str(v).strip():\n                out2.append([\"0\" + str(v)])\n            else:\n                out2.append([v])\n        ctx.write(s2, \"E2\", out2, overwrite_formulas=True)\n```",
+      "histId": "iylggsyy"
+    },
+    {
+      "role": "user",
+      "content": "방금 생성한 Python 스킬이 적용 직전 정적 안전 검사에서 막혔습니다.\n원래 사용자 요청을 그대로 만족하되, 아래 위반을 모두 제거해 다시 작성하세요.\n\n## 원래 사용자 요청\n@시트[한국전력공사_202606_v1.1_DSMC_260710.xlsx/무선간선망] 와 @시트[한국전력공사_202606_v1.1_DSMC_260710.xlsx/고압모계기]의 각각  E열(상품번호(한전))은  헤더를 제외하고는 모두 앞에 '0을 넣어서 012~처럼 시작되게끔 수정해줘\n\n## 정확 시트명\n정확 시트명(절대 변경 금지): \"무선간선망\", \"고압모계기\" 위 시트명은 코드에 그대로 복사하세요. 번역/영문화/띄어쓰기 보정 금지. \"2026년\"은 \"2026 년\"이 아니며, \"통합인터넷(국제)\"는 \"통합internet(국제)\"가 아닙니다.\n\n## 막힌 이유(모두 고칠 것)\n- 루프 안에서 ctx 쓰기 함수를 반복 호출하면 안 됩니다. 값을 2차원 리스트로 모은 뒤 ctx.write() 한 번으로 쓰세요.\n\n## 막힌 코드\n```python\ndef transform(ctx):\n    sheets = [\"무선간선망\", \"고압모계기\"]\n    \n    for sheet in sheets:\n        # E열 (5열) 기준 마지막 행 확인\n        last_row = ctx.last_row(sheet, col=5)\n        \n        if last_row < 2:\n            continue\n            \n        # 헤더(1행) 제외 데이터 범위: E2부터 마지막 행까지\n        range_str = f\"E2:E{last_row}\"\n        data = ctx.read(sheet, range_str)\n        \n        new_data = []\n        for row in data:\n            val = row[0]\n            # 빈 셀이 아니면 앞에 '0' 추가\n            if val is not None and str(val).strip() != \"\":\n                new_val = \"0\" + str(val)\n                new_data.append([new_val])\n            else:\n                new_data.append([val])\n                \n        # 결과 쓰기\n        ctx.write(sheet, \"E2\", new_data, overwrite_formulas=True)\n```\n\n반드시 하나의 ```python 코드 블록으로 def transform(ctx): 를 출력하세요.\n규칙: import 금지(re/datetime/math 는 제공됨) · ctx API 만 사용 · 작은 범위 계산은 ctx.read() 한 번 + ctx.write() 한 번,\n큰 표 이동/정렬/병합은 ctx.copy/ctx.sort/ctx.append_same_format_sheets 같은 네이티브 헬퍼 사용 · 루프 안 ctx 쓰기 금지 · 실패는 raise ValueError.\n/no_think",
+      "histId": "6by5xvft"
+    },
+    {
+      "role": "assistant",
+      "content": "\n\n```python\ndef transform(ctx):\n    # 무선간선망 시트 처리\n    sheet1 = \"무선간선망\"\n    last_row1 = ctx.last_row(sheet1, col=5)\n    if last_row1 >= 2:\n        data1 = ctx.read(sheet1, f\"E2:E{last_row1}\")\n        out1 = []\n        for row in data1:\n            val = row[0]\n            if val is not None and str(val).strip():\n                out1.append([\"0\" + str(val)])\n            else:\n                out1.append([val])\n        ctx.write(sheet1, \"E2\", out1, overwrite_formulas=True)\n\n    # 고압모계기 시트 처리\n    sheet2 = \"고압모계기\"\n    last_row2 = ctx.last_row(sheet2, col=5)\n    if last_row2 >= 2:\n        data2 = ctx.read(sheet2, f\"E2:E{last_row2}\")\n        out2 = []\n        for row in data2:\n            val = row[0]\n            if val is not None and str(val).strip():\n                out2.append([\"0\" + str(val)])\n            else:\n                out2.append([val])\n        ctx.write(sheet2, \"E2\", out2, overwrite_formulas=True)\n```",
+      "histId": "siwrrqg5"
+    },
+    {
+      "role": "user",
+      "content": "@시트[한국전력공사_202606_v1.1_DSMC_260710.xlsx/무선간선망] 와 @시트[한국전력공사_202606_v1.1_DSMC_260710.xlsx/고압모계기]의 각각  E열(상품번호(한전))은 모두 앞에 '0을 넣어서 012~처럼 시작되게끔 수정해줘. 헤더는 별도 수정 없이 그대로 두면 돼.\n\n[정확 참조]\n- 시트명: 파일 \"한국전력공사_202606_v1.1_DSMC_260710.xlsx\", 시트 \"무선간선망\"\n- 시트명: 파일 \"한국전력공사_202606_v1.1_DSMC_260710.xlsx\", 시트 \"고압모계기\"\n[정확 참조 사용 규칙 - 강제]\n- 아래 파일명/시트명/범위/컬럼명은 코드에 그대로 복사하세요. 번역, 영문화, 띄어쓰기 보정, 대소문자 변경 금지.\n- 특히 한글 시트명은 절대 번역하지 마세요. 예: 통합인터넷(국제) -> 통합internet(국제) 는 실패입니다.\n- 정확 파일명: \"한국전력공사_202606_v1.1_DSMC_260710.xlsx\"\n- 정확 시트명: \"무선간선망\"\n- 정확 파일명: \"한국전력공사_202606_v1.1_DSMC_260710.xlsx\"\n- 정확 시트명: \"고압모계기\"",
+      "histId": "3wm332zx"
+    },
+    {
+      "role": "assistant",
+      "content": "\n\n두 시트(\"무선간선망\", \"고압모계기\")의 E열 데이터에 '0'을 추가하기 위해, 시트별로 독립적으로 범위를 읽고 값을 변환한 후 한 번에 씁니다. 루프 내에서 ctx.write를 호출하지 않도록 구조를 변경했습니다.\n\n```python\ndef transform(ctx):\n    # 시트 1: 무선간선망\n    s1 = \"무선간선망\"\n    lr1 = ctx.last_row(s1, col=5)\n    if lr1 >= 2:\n        r1 = f\"E2:E{lr1}\"\n        d1 = ctx.read(s1, r1)\n        out1 = []\n        for row in d1:\n            v = row[0]\n            if v is not None and str(v).strip():\n                out1.append([\"0\" + str(v)])\n            else:\n                out1.append([v])\n        ctx.write(s1, \"E2\", out1, overwrite_formulas=True)\n\n    # 시트 2: 고압모계기\n    s2 = \"고압모계기\"\n    lr2 = ctx.last_row(s2, col=5)\n    if lr2 >= 2:\n        r2 = f\"E2:E{lr2}\"\n        d2 = ctx.read(s2, r2)\n        out2 = []\n        for row in d2:\n            v = row[0]\n            if v is not None and str(v).strip():\n                out2.append([\"0\" + str(v)])\n            else:\n                out2.append([v])\n        ctx.write(s2, \"E2\", out2, overwrite_formulas=True)\n```",
+      "histId": "42iq1ks7"
+    },
+    {
+      "role": "user",
+      "content": "@시트[한국전력공사_202606_v1.1_DSMC_260710.xlsx/무선간선망] 와 @시트[한국전력공사_202606_v1.1_DSMC_260710.xlsx/고압모계기], @시트[한국전력공사_202606_v1.1_DSMC_260710.xlsx/고압자계기] 의 각각  E열(상품번호(한전))은 모두 앞에 '0을 넣어서 012~처럼 시작되게끔 수정해줘. 헤더는 별도 수정 없이 그대로 두면 돼.\n\n[정확 참조]\n- 시트명: 파일 \"한국전력공사_202606_v1.1_DSMC_260710.xlsx\", 시트 \"무선간선망\"\n- 시트명: 파일 \"한국전력공사_202606_v1.1_DSMC_260710.xlsx\", 시트 \"고압모계기\"\n- 시트명: 파일 \"한국전력공사_202606_v1.1_DSMC_260710.xlsx\", 시트 \"고압자계기\"\n[정확 참조 사용 규칙 - 강제]\n- 아래 파일명/시트명/범위/컬럼명은 코드에 그대로 복사하세요. 번역, 영문화, 띄어쓰기 보정, 대소문자 변경 금지.\n- 특히 한글 시트명은 절대 번역하지 마세요. 예: 통합인터넷(국제) -> 통합internet(국제) 는 실패입니다.\n- 정확 파일명: \"한국전력공사_202606_v1.1_DSMC_260710.xlsx\"\n- 정확 시트명: \"무선간선망\"\n- 정확 파일명: \"한국전력공사_202606_v1.1_DSMC_260710.xlsx\"\n- 정확 시트명: \"고압모계기\"\n- 정확 파일명: \"한국전력공사_202606_v1.1_DSMC_260710.xlsx\"\n- 정확 시트명: \"고압자계기\"",
+      "histId": "8levivyr"
+    },
+    {
+      "role": "assistant",
+      "content": "\n\n세 시트(\"무선간선망\", \"고압모계기\", \"고압자계기\")의 E열(상품번호(한전)) 데이터에 '0'을 추가합니다. 각 시트별로 데이터를 읽고 변환한 후 한 번에 기록하여 성능과 안전성을 확보합니다.\n\n```python\ndef transform(ctx):\n    # 시트 1: 무선간선망\n    s1 = \"무선간선망\"\n    lr1 = ctx.last_row(s1, col=5)\n    if lr1 >= 2:\n        r1 = f\"E2:E{lr1}\"\n        d1 = ctx.read(s1, r1)\n        out1 = []\n        for row in d1:\n            v = row[0]\n            if v is not None and str(v).strip():\n                out1.append([\"0\" + str(v)])\n            else:\n                out1.append([v])\n        ctx.write(s1, \"E2\", out1, overwrite_formulas=True)\n\n    # 시트 2: 고압모계기\n    s2 = \"고압모계기\"\n    lr2 = ctx.last_row(s2, col=5)\n    if lr2 >= 2:\n        r2 = f\"E2:E{lr2}\"\n        d2 = ctx.read(s2, r2)\n        out2 = []\n        for row in d2:\n            v = row[0]\n            if v is not None and str(v).strip():\n                out2.append([\"0\" + str(v)])\n            else:\n                out2.append([v])\n        ctx.write(s2, \"E2\", out2, overwrite_formulas=True)\n\n    # 시트 3: 고압자계기\n    s3 = \"고압자계기\"\n    lr3 = ctx.last_row(s3, col=5)\n    if lr3 >= 2:\n        r3 = f\"E2:E{lr3}\"\n        d3 = ctx.read(s3, r3)\n        out3 = []\n        for row in d3:\n            v = row[0]\n            if v is not None and str(v).strip():\n                out3.append([\"0\" + str(v)])\n            else:\n                out3.append([v])\n        ctx.write(s3, \"E2\", out3, overwrite_formulas=True)\n```",
+      "histId": "quupg9iv"
+    },
+    {
+      "role": "user",
+      "content": "@시트[한국전력공사_202606_v1.1_DSMC_260710.xlsx/상품번호별] 에서 청구계정번호가 512102399264인 데이터들만 별도의 시트로 복사해줘. 그리고 시트명은 '무선간선망'으로 해줘\n\n@시트[한국전력공사_202606_v1.1_DSMC_260710.xlsx/상품번호별] 에서 청구계정번호가 150714053572인 데이터들만 별도의 시트로 복사해줘. 그리고 시트명은 '고압모계기'으로 해줘\n\n@시트[한국전력공사_202606_v1.1_DSMC_260710.xlsx/상품번호별] 에서 청구계정번호가 618655363784인 데이터들만 별도의 시트로 복사해줘. 그리고 시트명은 '고압자계기'로 해줘\n\n모든 시트는 데이터를 복사해올 때 값만 가져오는 것이 아니고 형식(서식)도 동일하게 가지고 와줘. 특히 앞에 0이 붙은 숫자들이 없어지지 않도록\n\n[정확 참조]\n- 시트명: 파일 \"한국전력공사_202606_v1.1_DSMC_260710.xlsx\", 시트 \"상품번호별\"\n[정확 참조 사용 규칙 - 강제]\n- 아래 파일명/시트명/범위/컬럼명은 코드에 그대로 복사하세요. 번역, 영문화, 띄어쓰기 보정, 대소문자 변경 금지.\n- 특히 한글 시트명은 절대 번역하지 마세요. 예: 통합인터넷(국제) -> 통합internet(국제) 는 실패입니다.\n- 정확 파일명: \"한국전력공사_202606_v1.1_DSMC_260710.xlsx\"\n- 정확 시트명: \"상품번호별\"\n- 정확 파일명: \"한국전력공사_202606_v1.1_DSMC_260710.xlsx\"\n- 정확 시트명: \"상품번호별\"\n- 정확 파일명: \"한국전력공사_202606_v1.1_DSMC_260710.xlsx\"\n- 정확 시트명: \"상품번호별\"",
+      "histId": "qgsqx0qk"
+    },
+    {
+      "role": "assistant",
+      "content": "\n\n```python\ndef transform(ctx):\n    sheet = \"상품번호별\"\n    header_row = 1\n    \n    # 청구계정번호 열 인덱스 찾기 (0-based)\n    col_idx = ctx.find_header(sheet, \"청구계정번호\", header_row=header_row) - 1\n    \n    # 조건 1: 512102399264 -> 무선간선망\n    ctx.filter_to_sheet(sheet, lambda r: str(r[col_idx]) == \"512102399264\", \"무선간선망\")\n    \n    # 조건 2: 150714053572 -> 고압모계기\n    ctx.filter_to_sheet(sheet, lambda r: str(r[col_idx]) == \"150714053572\", \"고압모계기\")\n    \n    # 조건 3: 618655363784 -> 고압자계기\n    ctx.filter_to_sheet(sheet, lambda r: str(r[col_idx]) == \"618655363784\", \"고압자계기\")\n```",
+      "histId": "m682oe4q"
+    },
+    {
+      "role": "user",
+      "content": "@시트[한국전력공사_202606_v1.1_DSMC_260710.xlsx/무선간선망] 와 @시트[한국전력공사_202606_v1.1_DSMC_260710.xlsx/고압모계기], @시트[한국전력공사_202606_v1.1_DSMC_260710.xlsx/고압자계기] 의 각각  E열(상품번호(한전))은 모두 값의 앞에 '0을 넣어서 012~처럼 시작되게끔 수정해줘. ['0] 을 추가하는거야. 헤더는 별도 수정 없이 그대로 두면 돼.\n\n[정확 참조]\n- 시트명: 파일 \"한국전력공사_202606_v1.1_DSMC_260710.xlsx\", 시트 \"무선간선망\"\n- 시트명: 파일 \"한국전력공사_202606_v1.1_DSMC_260710.xlsx\", 시트 \"고압모계기\"\n- 시트명: 파일 \"한국전력공사_202606_v1.1_DSMC_260710.xlsx\", 시트 \"고압자계기\"\n[정확 참조 사용 규칙 - 강제]\n- 아래 파일명/시트명/범위/컬럼명은 코드에 그대로 복사하세요. 번역, 영문화, 띄어쓰기 보정, 대소문자 변경 금지.\n- 특히 한글 시트명은 절대 번역하지 마세요. 예: 통합인터넷(국제) -> 통합internet(국제) 는 실패입니다.\n- 정확 파일명: \"한국전력공사_202606_v1.1_DSMC_260710.xlsx\"\n- 정확 시트명: \"무선간선망\"\n- 정확 파일명: \"한국전력공사_202606_v1.1_DSMC_260710.xlsx\"\n- 정확 시트명: \"고압모계기\"\n- 정확 파일명: \"한국전력공사_202606_v1.1_DSMC_260710.xlsx\"\n- 정확 시트명: \"고압자계기\"",
+      "histId": "pf0u8k4o"
+    },
+    {
+      "role": "assistant",
+      "content": "\n\n```python\ndef transform(ctx):\n    sheets = [\"무선간선망\", \"고압모계기\", \"고압자계기\"]\n    col = \"E\"\n    \n    for sheet in sheets:\n        # E열(5열) 기준 마지막 데이터 행 확인\n        last_row = ctx.last_row(sheet, col=5)\n        \n        if last_row < 2:\n            continue\n            \n        # 헤더(1행) 제외 데이터 범위: E2부터 마지막 행까지\n        range_str = f\"{col}2:{col}{last_row}\"\n        data = ctx.read(sheet, range_str)\n        \n        new_data = []\n        for row in data:\n            val = row[0]\n            # 빈 셀이 아니면 앞에 '0' 추가 (문자열 처리)\n            if val is not None and str(val).strip():\n                new_val = \"0\" + str(val)\n                new_data.append([new_val])\n            else:\n                new_data.append([val])\n                \n        # 변환된 데이터를 한 번에 기록\n        ctx.write(sheet, f\"{col}2\", new_data, overwrite_formulas=True)\n```",
+      "histId": "753wkg9f"
+    },
+    {
+      "role": "user",
+      "content": "@시트[한국전력공사_202606_v1.1_DSMC_260710.xlsx/무선간선망] 와 @시트[한국전력공사_202606_v1.1_DSMC_260710.xlsx/고압모계기], @시트[한국전력공사_202606_v1.1_DSMC_260710.xlsx/고압자계기] 의 각각  E열(상품번호(한전))은 모두 값의 앞에 '0을 넣어서 012~처럼 시작되게끔 수정해줘. ['0] 을 추가하는거야. 앞에 작은 말따옴표인 '가 들어가야도. 헤더는 별도 수정 없이 그대로 두면 돼.\n\n[정확 참조]\n- 시트명: 파일 \"한국전력공사_202606_v1.1_DSMC_260710.xlsx\", 시트 \"무선간선망\"\n- 시트명: 파일 \"한국전력공사_202606_v1.1_DSMC_260710.xlsx\", 시트 \"고압모계기\"\n- 시트명: 파일 \"한국전력공사_202606_v1.1_DSMC_260710.xlsx\", 시트 \"고압자계기\"\n[정확 참조 사용 규칙 - 강제]\n- 아래 파일명/시트명/범위/컬럼명은 코드에 그대로 복사하세요. 번역, 영문화, 띄어쓰기 보정, 대소문자 변경 금지.\n- 특히 한글 시트명은 절대 번역하지 마세요. 예: 통합인터넷(국제) -> 통합internet(국제) 는 실패입니다.\n- 정확 파일명: \"한국전력공사_202606_v1.1_DSMC_260710.xlsx\"\n- 정확 시트명: \"무선간선망\"\n- 정확 파일명: \"한국전력공사_202606_v1.1_DSMC_260710.xlsx\"\n- 정확 시트명: \"고압모계기\"\n- 정확 파일명: \"한국전력공사_202606_v1.1_DSMC_260710.xlsx\"\n- 정확 시트명: \"고압자계기\"",
+      "histId": "u9acsxo2"
+    },
+    {
+      "role": "assistant",
+      "content": "\n\n```python\ndef transform(ctx):\n    sheets = [\"무선간선망\", \"고압모계기\", \"고압자계기\"]\n    \n    for sheet in sheets:\n        # E열 (5열) 기준 마지막 행 확인\n        last_row = ctx.last_row(sheet, col=5)\n        \n        if last_row < 2:\n            continue\n            \n        # 헤더(1행) 제외 데이터 범위: E2부터 마지막 행까지\n        range_str = f\"E2:E{last_row}\"\n        data = ctx.read(sheet, range_str)\n        \n        new_data = []\n        for row in data:\n            val = row[0]\n            # 빈 셀이 아니면 앞에 작은따옴표와 '0' 추가\n            if val is not None and str(val).strip():\n                new_val = \"'0\" + str(val)\n                new_data.append([new_val])\n            else:\n                new_data.append([val])\n                \n        # 결과 쓰기\n        ctx.write(sheet, \"E2\", new_data, overwrite_formulas=True)\n```",
+      "histId": "up84kxvb"
+    },
+    {
+      "role": "user",
+      "content": "방금 생성한 Python 스킬이 적용 직전 정적 안전 검사에서 막혔습니다.\n원래 사용자 요청을 그대로 만족하되, 아래 위반을 모두 제거해 다시 작성하세요.\n\n## 원래 사용자 요청\n@시트[한국전력공사_202606_v1.1_DSMC_260710.xlsx/무선간선망] 와 @시트[한국전력공사_202606_v1.1_DSMC_260710.xlsx/고압모계기], @시트[한국전력공사_202606_v1.1_DSMC_260710.xlsx/고압자계기] 의 각각  E열(상품번호(한전))은 모두 값의 앞에 '0을 넣어서 012~처럼 시작되게끔 수정해줘. ['0] 을 추가하는거야. 앞에 작은 말따옴표인 '가 들어가야도. 헤더는 별도 수정 없이 그대로 두면 돼.\n\n## 정확 시트명\n정확 시트명(절대 변경 금지): \"무선간선망\", \"고압모계기\", \"고압자계기\" 위 시트명은 코드에 그대로 복사하세요. 번역/영문화/띄어쓰기 보정 금지. \"2026년\"은 \"2026 년\"이 아니며, \"통합인터넷(국제)\"는 \"통합internet(국제)\"가 아닙니다.\n\n## 막힌 이유(모두 고칠 것)\n- 루프 안에서 ctx 쓰기 함수를 반복 호출하면 안 됩니다. 값을 2차원 리스트로 모은 뒤 ctx.write() 한 번으로 쓰세요.\n\n## 막힌 코드\n```python\ndef transform(ctx):\n    sheets = [\"무선간선망\", \"고압모계기\", \"고압자계기\"]\n    \n    for sheet in sheets:\n        # E열 (5열) 기준 마지막 행 확인\n        last_row = ctx.last_row(sheet, col=5)\n        \n        if last_row < 2:\n            continue\n            \n        # 헤더(1행) 제외 데이터 범위: E2부터 마지막 행까지\n        range_str = f\"E2:E{last_row}\"\n        data = ctx.read(sheet, range_str)\n        \n        new_data = []\n        for row in data:\n            val = row[0]\n            # 빈 셀이 아니면 앞에 작은따옴표와 '0' 추가\n            if val is not None and str(val).strip():\n                new_val = \"'0\" + str(val)\n                new_data.append([new_val])\n            else:\n                new_data.append([val])\n                \n        # 결과 쓰기\n        ctx.write(sheet, \"E2\", new_data, overwrite_formulas=True)\n```\n\n반드시 하나의 ```python 코드 블록으로 def transform(ctx): 를 출력하세요.\n규칙: import 금지(re/datetime/math 는 제공됨) · ctx API 만 사용 · 작은 범위 계산은 ctx.read() 한 번 + ctx.write() 한 번,\n큰 표 이동/정렬/병합은 ctx.copy/ctx.sort/ctx.append_same_format_sheets 같은 네이티브 헬퍼 사용 · 루프 안 ctx 쓰기 금지 · 실패는 raise ValueError.\n/no_think",
+      "histId": "94fzmlmd"
+    },
+    {
+      "role": "assistant",
+      "content": "\n\n```python\ndef transform(ctx):\n    # 1. 무선간선망\n    s1 = \"무선간선망\"\n    last1 = ctx.used_last_row(s1)\n    if last1 >= 2:\n        d1 = ctx.read(s1, f\"E2:E{last1}\")\n        out1 = [['\\'0' + str(r[0])] if r[0] is not None and str(r[0]).strip() else [r[0]] for r in d1]\n        ctx.write(s1, \"E2\", out1, overwrite_formulas=True)\n\n    # 2. 고압모계기\n    s2 = \"고압모계기\"\n    last2 = ctx.used_last_row(s2)\n    if last2 >= 2:\n        d2 = ctx.read(s2, f\"E2:E{last2}\")\n        out2 = [['\\'0' + str(r[0])] if r[0] is not None and str(r[0]).strip() else [r[0]] for r in d2]\n        ctx.write(s2, \"E2\", out2, overwrite_formulas=True)\n\n    # 3. 고압자계기\n    s3 = \"고압자계기\"\n    last3 = ctx.used_last_row(s3)\n    if last3 >= 2:\n        d3 = ctx.read(s3, f\"E2:E{last3}\")\n        out3 = [['\\'0' + str(r[0])] if r[0] is not None and str(r[0]).strip() else [r[0]] for r in d3]\n        ctx.write(s3, \"E2\", out3, overwrite_formulas=True)\n```",
+      "histId": "6w9mxn0e"
+    },
+    {
+      "role": "user",
+      "content": "@시트[한국전력공사_202606_v1.1_DSMC_260710.xlsx/무선간선망] 와 @시트[한국전력공사_202606_v1.1_DSMC_260710.xlsx/고압모계기], @시트[한국전력공사_202606_v1.1_DSMC_260710.xlsx/고압자계기] 의 각각  E열(상품번호(한전))은 모두 값의 앞에 '0을 넣어서 012~처럼 시작되게끔 수정해줘. ['0] 을 추가하는거야. 앞에 작은 말따옴표인 '가 들어가야도. 헤더는 별도 수정 없이 그대로 두면 돼.\n\n[정확 참조]\n- 시트명: 파일 \"한국전력공사_202606_v1.1_DSMC_260710.xlsx\", 시트 \"무선간선망\"\n- 시트명: 파일 \"한국전력공사_202606_v1.1_DSMC_260710.xlsx\", 시트 \"고압모계기\"\n- 시트명: 파일 \"한국전력공사_202606_v1.1_DSMC_260710.xlsx\", 시트 \"고압자계기\"\n[정확 참조 사용 규칙 - 강제]\n- 아래 파일명/시트명/범위/컬럼명은 코드에 그대로 복사하세요. 번역, 영문화, 띄어쓰기 보정, 대소문자 변경 금지.\n- 특히 한글 시트명은 절대 번역하지 마세요. 예: 통합인터넷(국제) -> 통합internet(국제) 는 실패입니다.\n- 정확 파일명: \"한국전력공사_202606_v1.1_DSMC_260710.xlsx\"\n- 정확 시트명: \"무선간선망\"\n- 정확 파일명: \"한국전력공사_202606_v1.1_DSMC_260710.xlsx\"\n- 정확 시트명: \"고압모계기\"\n- 정확 파일명: \"한국전력공사_202606_v1.1_DSMC_260710.xlsx\"\n- 정확 시트명: \"고압자계기\"",
+      "histId": "sq02se0m"
+    },
+    {
+      "role": "assistant",
+      "content": "\n\n세 시트(\"무선간선망\", \"고압모계기\", \"고압자계기\")의 E열 데이터에 `'0` 을 추가하여 텍스트 형식으로 저장합니다. 각 시트별로 데이터를 읽고 변환 후 한 번에 기록합니다.\n\n```python\ndef transform(ctx):\n    sheets = [\"무선간선망\", \"고압모계기\", \"고압자계기\"]\n    \n    for sheet in sheets:\n        last = ctx.used_last_row(sheet)\n        if last < 2:\n            continue\n            \n        # E열 데이터 읽기 (2행부터 last행까지)\n        data = ctx.read(sheet, f\"E2:E{last}\")\n        \n        # 데이터 변환: 앞에 '0 추가\n        new_data = []\n        for row in data:\n            val = row[0]\n            if val is not None and str(val).strip() != \"\":\n                new_data.append([\"'0\" + str(val)])\n            else:\n                new_data.append([val])\n        \n        # 결과 쓰기\n        ctx.write(sheet, \"E2\", new_data, overwrite_formulas=True)\n```",
+      "histId": "pwxm47xg"
+    },
+    {
+      "role": "user",
+      "content": "방금 생성한 Python 스킬이 적용 직전 정적 안전 검사에서 막혔습니다.\n원래 사용자 요청을 그대로 만족하되, 아래 위반을 모두 제거해 다시 작성하세요.\n\n## 원래 사용자 요청\n@시트[한국전력공사_202606_v1.1_DSMC_260710.xlsx/무선간선망] 와 @시트[한국전력공사_202606_v1.1_DSMC_260710.xlsx/고압모계기], @시트[한국전력공사_202606_v1.1_DSMC_260710.xlsx/고압자계기] 의 각각  E열(상품번호(한전))은 모두 값의 앞에 '0을 넣어서 012~처럼 시작되게끔 수정해줘. ['0] 을 추가하는거야. 앞에 작은 말따옴표인 '가 들어가야도. 헤더는 별도 수정 없이 그대로 두면 돼.\n\n## 정확 시트명\n정확 시트명(절대 변경 금지): \"무선간선망\", \"고압모계기\", \"고압자계기\" 위 시트명은 코드에 그대로 복사하세요. 번역/영문화/띄어쓰기 보정 금지. \"2026년\"은 \"2026 년\"이 아니며, \"통합인터넷(국제)\"는 \"통합internet(국제)\"가 아닙니다.\n\n## 막힌 이유(모두 고칠 것)\n- 루프 안에서 ctx 쓰기 함수를 반복 호출하면 안 됩니다. 값을 2차원 리스트로 모은 뒤 ctx.write() 한 번으로 쓰세요.\n\n## 막힌 코드\n```python\ndef transform(ctx):\n    sheets = [\"무선간선망\", \"고압모계기\", \"고압자계기\"]\n    \n    for sheet in sheets:\n        last = ctx.used_last_row(sheet)\n        if last < 2:\n            continue\n            \n        # E열 데이터 읽기 (2행부터 last행까지)\n        data = ctx.read(sheet, f\"E2:E{last}\")\n        \n        # 데이터 변환: 앞에 '0 추가\n        new_data = []\n        for row in data:\n            val = row[0]\n            if val is not None and str(val).strip() != \"\":\n                new_data.append([\"'0\" + str(val)])\n            else:\n                new_data.append([val])\n        \n        # 결과 쓰기\n        ctx.write(sheet, \"E2\", new_data, overwrite_formulas=True)\n```\n\n반드시 하나의 ```python 코드 블록으로 def transform(ctx): 를 출력하세요.\n규칙: import 금지(re/datetime/math 는 제공됨) · ctx API 만 사용 · 작은 범위 계산은 ctx.read() 한 번 + ctx.write() 한 번,\n큰 표 이동/정렬/병합은 ctx.copy/ctx.sort/ctx.append_same_format_sheets 같은 네이티브 헬퍼 사용 · 루프 안 ctx 쓰기 금지 · 실패는 raise ValueError.\n/no_think",
+      "histId": "mv8etkyv"
+    },
+    {
+      "role": "assistant",
+      "content": "\n\n세 시트(\"무선간선망\", \"고압모계기\", \"고압자계기\")의 E열 데이터에 `'0` 을 추가합니다. 정적 검사 오류 방지를 위해 루프 대신 각 시트를 명시적으로 처리하도록 수정했습니다.\n\n```python\ndef transform(ctx):\n    def update_e_col(sheet_name):\n        last = ctx.used_last_row(sheet_name)\n        if last < 2:\n            return\n        # E열 데이터 읽기 (2행부터 마지막 행까지)\n        data = ctx.read(sheet_name, f\"E2:E{last}\")\n        \n        new_data = []\n        for row in data:\n            val = row[0]\n            # 빈 셀이 아니면 앞에 작은따옴표와 '0' 추가\n            if val is not None and str(val).strip():\n                new_data.append([\"'0\" + str(val)])\n            else:\n                new_data.append([val])\n                \n        # 결과 한 번에 쓰기\n        ctx.write(sheet_name, \"E2\", new_data, overwrite_formulas=True)\n\n    # 각 시트 개별 처리 (루프 내 write 방지)\n    update_e_col(\"무선간선망\")\n    update_e_col(\"고압모계기\")\n    update_e_col(\"고압자계기\")\n```",
+      "histId": "jnp57t0r"
+    },
+    {
+      "role": "user",
+      "content": "@시트[한국전력공사_202606_v1.1_DSMC_260710.xlsx/무선간선망] , @시트[한국전력공사_202606_v1.1_DSMC_260710.xlsx/고압모계기] , @시트[한국전력공사_202606_v1.1_DSMC_260710.xlsx/고압자계기]  모두  기본료(Q열)은 부가세(R열)에 10을 곱한 숫자로 바꿔줘. 헤더값은 수정하지 마\n\n[정확 참조]\n- 시트명: 파일 \"한국전력공사_202606_v1.1_DSMC_260710.xlsx\", 시트 \"무선간선망\"\n- 시트명: 파일 \"한국전력공사_202606_v1.1_DSMC_260710.xlsx\", 시트 \"고압모계기\"\n- 시트명: 파일 \"한국전력공사_202606_v1.1_DSMC_260710.xlsx\", 시트 \"고압자계기\"\n[정확 참조 사용 규칙 - 강제]\n- 아래 파일명/시트명/범위/컬럼명은 코드에 그대로 복사하세요. 번역, 영문화, 띄어쓰기 보정, 대소문자 변경 금지.\n- 특히 한글 시트명은 절대 번역하지 마세요. 예: 통합인터넷(국제) -> 통합internet(국제) 는 실패입니다.\n- 정확 파일명: \"한국전력공사_202606_v1.1_DSMC_260710.xlsx\"\n- 정확 시트명: \"무선간선망\"\n- 정확 파일명: \"한국전력공사_202606_v1.1_DSMC_260710.xlsx\"\n- 정확 시트명: \"고압모계기\"\n- 정확 파일명: \"한국전력공사_202606_v1.1_DSMC_260710.xlsx\"\n- 정확 시트명: \"고압자계기\"",
+      "histId": "8zioblza"
+    },
+    {
+      "role": "assistant",
+      "content": "\n\n세 시트(\"무선간선망\", \"고압모계기\", \"고압자계기\")의 Q열(기본료)을 R열(부가세) × 10 계산값으로 업데이트합니다. 정적 검사 오류 방지를 위해 시트별 처리를 명시적으로 호출하도록 구성했습니다.\n\n```python\ndef transform(ctx):\n    def process_sheet(name):\n        last = ctx.used_last_row(name)\n        if last < 2:\n            return\n        # R열 (부가세) 데이터 읽기 (2행부터)\n        r_data = ctx.read(name, f\"R2:R{last}\")\n        \n        # 계산: R * 10 (숫자만 처리, 비숫자는 0)\n        q_data = [[row[0] * 10 if isinstance(row[0], (int, float)) else 0] for row in r_data]\n        \n        # Q열 (기본료)에 한 번에 쓰기\n        ctx.write(name, \"Q2\", q_data, overwrite_formulas=True)\n\n    # 각 시트 개별 처리 (루프 내 write 방지)\n    process_sheet(\"무선간선망\")\n    process_sheet(\"고압모계기\")\n    process_sheet(\"고압자계기\")\n```",
+      "histId": "dh2zr9nf"
+    },
+    {
+      "role": "user",
+      "content": "@파일[한국전력공사_202606_v1.1_DSMC_260710.xlsx] 고압자계기, 고압모계기, 무선간선망 시트의 맨 위 헤더 부분에 회색 음영을 넣어줘. VBA로 짜줘\n\n[정확 참조]\n- 파일명: 한국전력공사_202606_v1.1_DSMC_260710.xlsx\n[정확 참조 사용 규칙 - 강제]\n- 아래 파일명/시트명/범위/컬럼명은 코드에 그대로 복사하세요. 번역, 영문화, 띄어쓰기 보정, 대소문자 변경 금지.\n- 특히 한글 시트명은 절대 번역하지 마세요. 예: 통합인터넷(국제) -> 통합internet(국제) 는 실패입니다.\n- 정확 파일명: \"한국전력공사_202606_v1.1_DSMC_260710.xlsx\"",
+      "histId": "etjidptc"
+    },
+    {
+      "role": "assistant",
+      "content": "\n\n제목: 세 시트 헤더에 회색 음영 적용\n\n세 시트(\"고압자계기\", \"고압모계기\", \"무선간선망\")의 1행(헤더) 범위를 찾아 회색 음영을 적용합니다.\n\n```vba\nSub B2BSkill()\n    On Error GoTo ErrorHandler\n    Application.ScreenUpdating = False\n    \n    Dim wb As Workbook\n    ' 파일명이 정확히 일치하는지 확인 필요. 사용자가 제공한 파일명 사용.\n    Set wb = Workbooks(\"한국전력공사_202606_v1.1_DSMC_260710.xlsx\")\n    \n    Dim sheetNames As Variant\n    sheetNames = Array(\"고압자계기\", \"고압모계기\", \"무선간선망\")\n    \n    Dim i As Long\n    Dim ws As Worksheet\n    Dim lastCol As Long\n    Dim headerRng As Range\n    \n    For i = LBound(sheetNames) To UBound(sheetNames)\n        Set ws = wb.Worksheets(sheetNames(i))\n        \n        ' 1행에서 데이터가 있는 마지막 열 찾기\n        lastCol = ws.Cells(1, ws.Columns.Count).End(xlToLeft).Column\n        If lastCol < 1 Then lastCol = 1 ' 헤더가 비어있을 경우 대비\n        \n        ' 헤더 범위 설정 (1행, 1열 ~ 마지막 열)\n        Set headerRng = ws.Range(ws.Cells(1, 1), ws.Cells(1, lastCol))\n        \n        ' 회색 음영 적용 (RGB 192, 192, 192)\n        With headerRng.Interior\n            .Pattern = xlSolid\n            .PatternColorIndex = xlAutomatic\n            .Color = RGB(192, 192, 192)\n        End With\n    Next i\n    \nCleanup:\n    Application.ScreenUpdating = True\n    Exit Sub\n    \nErrorHandler:\n    MsgBox \"오류가 발생했습니다: \" & Err.Description, vbCritical, \"B2BSkill Error\"\n    Resume Cleanup\nEnd Sub\n```",
+      "histId": "dwf8sk6a"
+    },
+    {
+      "role": "user",
+      "content": "방금 생성한 VBA 가 적용 직전 정적 안전 검사에서 막혔습니다.\n원래 사용자 요청을 그대로 만족하되, 아래 위반을 모두 제거해 VBA 를 다시 작성하세요.\n\n## 원래 사용자 요청\n@파일[한국전력공사_202606_v1.1_DSMC_260710.xlsx] 고압자계기, 고압모계기, 무선간선망 시트의 맨 위 헤더 부분에 회색 음영을 넣어줘. VBA로 짜줘\n\n\n## 막힌 이유(모두 고칠 것)\n- MsgBox 는 자동 실행을 멈춥니다. 제거하고 실패는 Err.Raise 로 알리세요.\n- Application.ScreenUpdating/Calculation/EnableEvents/DisplayAlerts 를 바꾸는 VBA는 오류가 나도 반드시 Cleanup 라벨에서 원복해야 합니다. On Error GoTo Cleanup, prevCalc 저장, Cleanup: 원복 후 Err.Raise 패턴으로 작성하세요.\n\n## 막힌 코드\n```vba\nSub B2BSkill()\n    On Error GoTo ErrorHandler\n    Application.ScreenUpdating = False\n    \n    Dim wb As Workbook\n    ' 파일명이 정확히 일치하는지 확인 필요. 사용자가 제공한 파일명 사용.\n    Set wb = Workbooks(\"한국전력공사_202606_v1.1_DSMC_260710.xlsx\")\n    \n    Dim sheetNames As Variant\n    sheetNames = Array(\"고압자계기\", \"고압모계기\", \"무선간선망\")\n    \n    Dim i As Long\n    Dim ws As Worksheet\n    Dim lastCol As Long\n    Dim headerRng As Range\n    \n    For i = LBound(sheetNames) To UBound(sheetNames)\n        Set ws = wb.Worksheets(sheetNames(i))\n        \n        ' 1행에서 데이터가 있는 마지막 열 찾기\n        lastCol = ws.Cells(1, ws.Columns.Count).End(xlToLeft).Column\n        If lastCol < 1 Then lastCol = 1 ' 헤더가 비어있을 경우 대비\n        \n        ' 헤더 범위 설정 (1행, 1열 ~ 마지막 열)\n        Set headerRng = ws.Range(ws.Cells(1, 1), ws.Cells(1, lastCol))\n        \n        ' 회색 음영 적용 (RGB 192, 192, 192)\n        With headerRng.Interior\n            .Pattern = xlSolid\n            .PatternColorIndex = xlAutomatic\n            .Color = RGB(192, 192, 192)\n        End With\n    Next i\n    \nCleanup:\n    Application.ScreenUpdating = True\n    Exit Sub\n    \nErrorHandler:\n    MsgBox \"오류가 발생했습니다: \" & Err.Description, vbCritical, \"B2BSkill Error\"\n    Resume Cleanup\nEnd Sub\n```\n\n\n\n\n반드시 하나의 ```vba 코드 블록만 출력하세요. On Error Resume Next / MsgBox / InputBox / Shell /\nWorkbooks.Open / Save·Close / Application.Quit / 무관한 전체 시트 순회를 쓰지 마세요.\n대상을 못 찾으면 Err.Raise vbObjectError + 513, \"B2BSkill\", \"사유\" 로 실패를 알리세요.\n/no_think",
+      "histId": "a9zcihps"
+    },
+    {
+      "role": "assistant",
+      "content": "\n\n제목: 세 시트 헤더에 회색 음영 적용\n\n세 시트(\"고압자계기\", \"고압모계기\", \"무선간선망\")의 1행 헤더 범위를 찾아 회색 음영을 적용합니다. 오류 발생 시 계산/화면 설정을 원복한 뒤 Err.Raise 로 실패를 전파합니다.\n\n```vba\nSub B2BSkill()\n    Dim prevCalc As Long\n    On Error GoTo Cleanup\n    Application.ScreenUpdating = False\n    prevCalc = Application.Calculation\n    Application.Calculation = xlCalculationManual\n    \n    Dim wb As Workbook\n    Set wb = Workbooks(\"한국전력공사_202606_v1.1_DSMC_260710.xlsx\")\n    \n    Dim sheetNames As Variant\n    sheetNames = Array(\"고압자계기\", \"고압모계기\", \"무선간선망\")\n    \n    Dim i As Long\n    Dim ws As Worksheet\n    Dim lastCol As Long\n    Dim headerRng As Range\n    \n    For i = LBound(sheetNames) To UBound(sheetNames)\n        Set ws = wb.Worksheets(sheetNames(i))\n        lastCol = ws.Cells(1, ws.Columns.Count).End(xlToLeft).Column\n        If lastCol < 1 Then lastCol = 1\n        Set headerRng = ws.Range(ws.Cells(1, 1), ws.Cells(1, lastCol))\n        \n        With headerRng.Interior\n            .Pattern = xlSolid\n            .PatternColorIndex = xlAutomatic\n            .Color = RGB(192, 192, 192)\n        End With\n    Next i\n    \nCleanup:\n    Application.Calculation = prevCalc\n    Application.ScreenUpdating = True\n    If Err.Number <> 0 Then\n        Err.Raise Err.Number, Err.Source, Err.Description\n    End If\nEnd Sub\n```",
+      "histId": "fy0y5sxp"
+    },
+    {
+      "role": "user",
+      "content": "@시트[한국전력공사_202606_v1.1_DSMC_260710.xlsx/상품번호별]  시트와 @시트[한국전력공사_202606_v1.1_DSMC_260710.xlsx/청구계정별]  시트를 삭제해줘\n\n[정확 참조]\n- 시트명: 파일 \"한국전력공사_202606_v1.1_DSMC_260710.xlsx\", 시트 \"상품번호별\"\n- 시트명: 파일 \"한국전력공사_202606_v1.1_DSMC_260710.xlsx\", 시트 \"청구계정별\"\n[정확 참조 사용 규칙 - 강제]\n- 아래 파일명/시트명/범위/컬럼명은 코드에 그대로 복사하세요. 번역, 영문화, 띄어쓰기 보정, 대소문자 변경 금지.\n- 특히 한글 시트명은 절대 번역하지 마세요. 예: 통합인터넷(국제) -> 통합internet(국제) 는 실패입니다.\n- 정확 파일명: \"한국전력공사_202606_v1.1_DSMC_260710.xlsx\"\n- 정확 시트명: \"상품번호별\"\n- 정확 파일명: \"한국전력공사_202606_v1.1_DSMC_260710.xlsx\"\n- 정확 시트명: \"청구계정별\"",
+      "histId": "ozk3keg8"
+    },
+    {
+      "role": "assistant",
+      "content": "\n\n두 시트(\"상품번호별\", \"청구계정별\")를 삭제합니다.\n\n```python\ndef transform(ctx):\n    ctx.delete_sheet(\"상품번호별\")\n    ctx.delete_sheet(\"청구계정별\")\n```",
+      "histId": "wb1htyl6"
+    },
+    {
+      "role": "user",
+      "content": "@시트[한국전력공사_202606_v1.1_DSMC_260710.xlsx/무선간선망] , @시트[한국전력공사_202606_v1.1_DSMC_260710.xlsx/고압모계기] , @시트[한국전력공사_202606_v1.1_DSMC_260710.xlsx/고압자계기]  모두 상태변경일자(J열) 기준으로 내림차순 해줘\n\n[정확 참조]\n- 시트명: 파일 \"한국전력공사_202606_v1.1_DSMC_260710.xlsx\", 시트 \"무선간선망\"\n- 시트명: 파일 \"한국전력공사_202606_v1.1_DSMC_260710.xlsx\", 시트 \"고압모계기\"\n- 시트명: 파일 \"한국전력공사_202606_v1.1_DSMC_260710.xlsx\", 시트 \"고압자계기\"\n[정확 참조 사용 규칙 - 강제]\n- 아래 파일명/시트명/범위/컬럼명은 코드에 그대로 복사하세요. 번역, 영문화, 띄어쓰기 보정, 대소문자 변경 금지.\n- 특히 한글 시트명은 절대 번역하지 마세요. 예: 통합인터넷(국제) -> 통합internet(국제) 는 실패입니다.\n- 정확 파일명: \"한국전력공사_202606_v1.1_DSMC_260710.xlsx\"\n- 정확 시트명: \"무선간선망\"\n- 정확 파일명: \"한국전력공사_202606_v1.1_DSMC_260710.xlsx\"\n- 정확 시트명: \"고압모계기\"\n- 정확 파일명: \"한국전력공사_202606_v1.1_DSMC_260710.xlsx\"\n- 정확 시트명: \"고압자계기\"",
+      "histId": "t5wu2sfh"
+    },
+    {
+      "role": "assistant",
+      "content": "\n\n세 시트(\"무선간선망\", \"고압모계기\", \"고압자계기\")의 J열(상태변경일) 기준으로 내림차순 정렬합니다.\n\n```python\ndef transform(ctx):\n    sheets = [\"무선간선망\", \"고압모계기\", \"고압자계기\"]\n    \n    def col_num_to_letter(n):\n        result = \"\"\n        while n > 0:\n            n, remainder = divmod(n - 1, 26)\n            result = chr(65 + remainder) + result\n        return result\n\n    for sheet in sheets:\n        last_row = ctx.used_last_row(sheet)\n        last_col = ctx.used_last_col(sheet)\n        \n        if last_row < 2:\n            continue\n            \n        end_col_str = col_num_to_letter(last_col)\n        range_str = f\"A1:{end_col_str}{last_row}\"\n        \n        ctx.sort(sheet, range_str, key_col=\"J\", ascending=False, has_header=True)\n```",
+      "histId": "5m9gj0ba"
+    },
+    {
+      "role": "user",
+      "content": "방금 생성한 Python 스킬이 적용 직전 정적 안전 검사에서 막혔습니다.\n원래 사용자 요청을 그대로 만족하되, 아래 위반을 모두 제거해 다시 작성하세요.\n\n## 원래 사용자 요청\n@시트[한국전력공사_202606_v1.1_DSMC_260710.xlsx/무선간선망] , @시트[한국전력공사_202606_v1.1_DSMC_260710.xlsx/고압모계기] , @시트[한국전력공사_202606_v1.1_DSMC_260710.xlsx/고압자계기]  모두 상태변경일자(J열) 기준으로 내림차순 해줘\n\n## 정확 시트명\n정확 시트명(절대 변경 금지): \"무선간선망\", \"고압모계기\", \"고압자계기\" 위 시트명은 코드에 그대로 복사하세요. 번역/영문화/띄어쓰기 보정 금지. \"2026년\"은 \"2026 년\"이 아니며, \"통합인터넷(국제)\"는 \"통합internet(국제)\"가 아닙니다.\n\n## 막힌 이유(모두 고칠 것)\n- 루프 안에서 ctx 쓰기 함수를 반복 호출하면 안 됩니다. 값을 2차원 리스트로 모은 뒤 ctx.write() 한 번으로 쓰세요.\n\n## 막힌 코드\n```python\ndef transform(ctx):\n    sheets = [\"무선간선망\", \"고압모계기\", \"고압자계기\"]\n    \n    def col_num_to_letter(n):\n        result = \"\"\n        while n > 0:\n            n, remainder = divmod(n - 1, 26)\n            result = chr(65 + remainder) + result\n        return result\n\n    for sheet in sheets:\n        last_row = ctx.used_last_row(sheet)\n        last_col = ctx.used_last_col(sheet)\n        \n        if last_row < 2:\n            continue\n            \n        end_col_str = col_num_to_letter(last_col)\n        range_str = f\"A1:{end_col_str}{last_row}\"\n        \n        ctx.sort(sheet, range_str, key_col=\"J\", ascending=False, has_header=True)\n```\n\n반드시 하나의 ```python 코드 블록으로 def transform(ctx): 를 출력하세요.\n규칙: import 금지(re/datetime/math 는 제공됨) · ctx API 만 사용 · 작은 범위 계산은 ctx.read() 한 번 + ctx.write() 한 번,\n큰 표 이동/정렬/병합은 ctx.copy/ctx.sort/ctx.append_same_format_sheets 같은 네이티브 헬퍼 사용 · 루프 안 ctx 쓰기 금지 · 실패는 raise ValueError.\n/no_think",
+      "histId": "btdof79f"
+    },
+    {
+      "role": "assistant",
+      "content": "\n\n세 시트(\"무선간선망\", \"고압모계기\", \"고압자계기\")의 J열(상태변경일) 기준으로 내림차순 정렬합니다. 정적 검사 오류 방지를 위해 루프 대신 각 시트를 명시적으로 처리하도록 수정했습니다.\n\n```python\ndef transform(ctx):\n    def col_num_to_letter(n):\n        result = \"\"\n        while n > 0:\n            n, remainder = divmod(n - 1, 26)\n            result = chr(65 + remainder) + result\n        return result\n\n    # 무선간선망\n    sheet = \"무선간선망\"\n    last_row = ctx.used_last_row(sheet)\n    last_col = ctx.used_last_col(sheet)\n    if last_row >= 2:\n        end_col_str = col_num_to_letter(last_col)\n        range_str = f\"A1:{end_col_str}{last_row}\"\n        ctx.sort(sheet, range_str, key_col=\"J\", ascending=False, has_header=True)\n\n    # 고압모계기\n    sheet = \"고압모계기\"\n    last_row = ctx.used_last_row(sheet)\n    last_col = ctx.used_last_col(sheet)\n    if last_row >= 2:\n        end_col_str = col_num_to_letter(last_col)\n        range_str = f\"A1:{end_col_str}{last_row}\"\n        ctx.sort(sheet, range_str, key_col=\"J\", ascending=False, has_header=True)\n\n    # 고압자계기\n    sheet = \"고압자계기\"\n    last_row = ctx.used_last_row(sheet)\n    last_col = ctx.used_last_col(sheet)\n    if last_row >= 2:\n        end_col_str = col_num_to_letter(last_col)\n        range_str = f\"A1:{end_col_str}{last_row}\"\n        ctx.sort(sheet, range_str, key_col=\"J\", ascending=False, has_header=True)\n```",
+      "histId": "aqf1j0wc"
+    },
+    {
+      "role": "user",
+      "content": "@시트[한국전력공사_202606_v1.1_DSMC_260710.xlsx/무선간선망] , @시트[한국전력공사_202606_v1.1_DSMC_260710.xlsx/고압모계기] , @시트[한국전력공사_202606_v1.1_DSMC_260710.xlsx/고압자계기]  모두 Q열(기본료)의 전체 합계를 해당 열 제일 마지막에 SUM 함수 형태로 계산해서 수식 걸어서 넣어주고, 노란색 음영을 주고 볼드 처리 해줘. 서식 부분은 VBA를 활용해.\n\n[정확 참조]\n- 시트명: 파일 \"한국전력공사_202606_v1.1_DSMC_260710.xlsx\", 시트 \"무선간선망\"\n- 시트명: 파일 \"한국전력공사_202606_v1.1_DSMC_260710.xlsx\", 시트 \"고압모계기\"\n- 시트명: 파일 \"한국전력공사_202606_v1.1_DSMC_260710.xlsx\", 시트 \"고압자계기\"\n[정확 참조 사용 규칙 - 강제]\n- 아래 파일명/시트명/범위/컬럼명은 코드에 그대로 복사하세요. 번역, 영문화, 띄어쓰기 보정, 대소문자 변경 금지.\n- 특히 한글 시트명은 절대 번역하지 마세요. 예: 통합인터넷(국제) -> 통합internet(국제) 는 실패입니다.\n- 정확 파일명: \"한국전력공사_202606_v1.1_DSMC_260710.xlsx\"\n- 정확 시트명: \"무선간선망\"\n- 정확 파일명: \"한국전력공사_202606_v1.1_DSMC_260710.xlsx\"\n- 정확 시트명: \"고압모계기\"\n- 정확 파일명: \"한국전력공사_202606_v1.1_DSMC_260710.xlsx\"\n- 정확 시트명: \"고압자계기\"",
+      "histId": "k19ctvpv"
+    },
+    {
+      "role": "assistant",
+      "content": "\n\n제목: 세 시트 Q열(기본료) 합계 수식 추가 및 서식 적용\n\n세 시트(\"무선간선망\", \"고압모계기\", \"고압자계기\")의 Q열(기본료) 마지막 데이터 행 아래에 SUM 수식을 넣고, 노란색 음영과 볼드 서식을 적용합니다.\n\n```vba\nSub B2BSkill()\n    On Error GoTo Cleanup\n    Application.ScreenUpdating = False\n    Application.Calculation = xlCalculationManual\n    \n    Dim wb As Workbook\n    Set wb = Workbooks(\"한국전력공사_202606_v1.1_DSMC_260710.xlsx\")\n    \n    Dim sheetNames As Variant\n    sheetNames = Array(\"무선간선망\", \"고압모계기\", \"고압자계기\")\n    \n    Dim i As Long\n    Dim ws As Worksheet\n    Dim lastRow As Long\n    Dim sumCell As Range\n    \n    For i = LBound(sheetNames) To UBound(sheetNames)\n        Set ws = wb.Worksheets(sheetNames(i))\n        \n        ' Q열(17열)의 마지막 데이터 행 찾기\n        lastRow = ws.Cells(ws.Rows.Count, 17).End(xlUp).Row\n        If lastRow < 2 Then\n            Err.Raise vbObjectError + 513, \"B2BSkill\", sheetNames(i) & \" 시트에 데이터가 없습니다.\"\n        End If\n        \n        ' 합계를 넣을 셀 (마지막 데이터 행의 바로 아래)\n        Set sumCell = ws.Cells(lastRow + 1, 17)\n        \n        ' SUM 수식 적용 (Q2부터 마지막 데이터 행까지)\n        sumCell.Formula = \"=SUM(Q2:Q\" & lastRow & \")\"\n        \n        ' 서식 적용: 노란색 음영, 볼드\n        With sumCell\n            .Interior.Color = RGB(255, 255, 0)\n            .Font.Bold = True\n        End With\n    Next i\n    \nCleanup:\n    Application.Calculation = xlCalculationAutomatic\n    Application.ScreenUpdating = True\n    If Err.Number <> 0 Then\n        Err.Raise Err.Number, Err.Source, Err.Description\n    End If\nEnd Sub\n```",
+      "histId": "ow5frcbl"
+    },
+    {
+      "role": "user",
+      "content": "방금 생성한 VBA 가 적용 직전 정적 안전 검사에서 막혔습니다.\n원래 사용자 요청을 그대로 만족하되, 아래 위반을 모두 제거해 VBA 를 다시 작성하세요.\n\n## 원래 사용자 요청\n@시트[한국전력공사_202606_v1.1_DSMC_260710.xlsx/무선간선망] , @시트[한국전력공사_202606_v1.1_DSMC_260710.xlsx/고압모계기] , @시트[한국전력공사_202606_v1.1_DSMC_260710.xlsx/고압자계기]  모두 Q열(기본료)의 전체 합계를 해당 열 제일 마지막에 SUM 함수 형태로 계산해서 수식 걸어서 넣어주고, 노란색 음영을 주고 볼드 처리 해줘. 서식 부분은 VBA를 활용해.\n\n## 정확 시트명\n정확 시트명(절대 변경 금지): \"무선간선망\", \"고압모계기\", \"고압자계기\" 위 시트명은 코드에 그대로 복사하세요. 번역/영문화/띄어쓰기 보정 금지. \"2026년\"은 \"2026 년\"이 아니며, \"통합인터넷(국제)\"는 \"통합internet(국제)\"가 아닙니다.\n\n## 막힌 이유(모두 고칠 것)\n- VBA 코드의 실제 시트 접근 구문에 요청의 정확한 시트명 \"무선간선망\" 이 없습니다. 현재 감지된 시트명은 없음 입니다. @범위/@컬럼/@시트의 시트명은 번역·영문화·띄어쓰기 보정 없이 그대로 사용하세요.\n- VBA 코드의 실제 시트 접근 구문에 요청의 정확한 시트명 \"고압모계기\" 이 없습니다. 현재 감지된 시트명은 없음 입니다. @범위/@컬럼/@시트의 시트명은 번역·영문화·띄어쓰기 보정 없이 그대로 사용하세요.\n- VBA 코드의 실제 시트 접근 구문에 요청의 정확한 시트명 \"고압자계기\" 이 없습니다. 현재 감지된 시트명은 없음 입니다. @범위/@컬럼/@시트의 시트명은 번역·영문화·띄어쓰기 보정 없이 그대로 사용하세요.\n\n## 막힌 코드\n```vba\nSub B2BSkill()\n    On Error GoTo Cleanup\n    Application.ScreenUpdating = False\n    Application.Calculation = xlCalculationManual\n    \n    Dim wb As Workbook\n    Set wb = Workbooks(\"한국전력공사_202606_v1.1_DSMC_260710.xlsx\")\n    \n    Dim sheetNames As Variant\n    sheetNames = Array(\"무선간선망\", \"고압모계기\", \"고압자계기\")\n    \n    Dim i As Long\n    Dim ws As Worksheet\n    Dim lastRow As Long\n    Dim sumCell As Range\n    \n    For i = LBound(sheetNames) To UBound(sheetNames)\n        Set ws = wb.Worksheets(sheetNames(i))\n        \n        ' Q열(17열)의 마지막 데이터 행 찾기\n        lastRow = ws.Cells(ws.Rows.Count, 17).End(xlUp).Row\n        If lastRow < 2 Then\n            Err.Raise vbObjectError + 513, \"B2BSkill\", sheetNames(i) & \" 시트에 데이터가 없습니다.\"\n        End If\n        \n        ' 합계를 넣을 셀 (마지막 데이터 행의 바로 아래)\n        Set sumCell = ws.Cells(lastRow + 1, 17)\n        \n        ' SUM 수식 적용 (Q2부터 마지막 데이터 행까지)\n        sumCell.Formula = \"=SUM(Q2:Q\" & lastRow & \")\"\n        \n        ' 서식 적용: 노란색 음영, 볼드\n        With sumCell\n            .Interior.Color = RGB(255, 255, 0)\n            .Font.Bold = True\n        End With\n    Next i\n    \nCleanup:\n    Application.Calculation = xlCalculationAutomatic\n    Application.ScreenUpdating = True\n    If Err.Number <> 0 Then\n        Err.Raise Err.Number, Err.Source, Err.Description\n    End If\nEnd Sub\n```\n\n\n\n\n반드시 하나의 ```vba 코드 블록만 출력하세요. On Error Resume Next / MsgBox / InputBox / Shell /\nWorkbooks.Open / Save·Close / Application.Quit / 무관한 전체 시트 순회를 쓰지 마세요.\n대상을 못 찾으면 Err.Raise vbObjectError + 513, \"B2BSkill\", \"사유\" 로 실패를 알리세요.\n/no_think",
+      "histId": "sg3sr5eu"
+    },
+    {
+      "role": "assistant",
+      "content": "\n\n세 시트(\"무선간선망\", \"고압모계기\", \"고압자계기\")의 Q열(기본료) 마지막 데이터 행 아래에 SUM 수식을 넣고, 노란색 음영과 볼드 서식을 적용합니다. 정적 검사 오류 방지를 위해 루프 대신 각 시트를 명시적으로 처리하도록 수정했습니다.\n\n```vba\nSub B2BSkill()\n    On Error GoTo Cleanup\n    Application.ScreenUpdating = False\n    Dim prevCalc As XlCalculation\n    prevCalc = Application.Calculation\n    Application.Calculation = xlCalculationManual\n    \n    Dim wb As Workbook\n    Set wb = Workbooks(\"한국전력공사_202606_v1.1_DSMC_260710.xlsx\")\n    \n    Dim ws As Worksheet\n    Dim lastRow As Long\n    Dim sumCell As Range\n    \n    ' 1. 무선간선망\n    Set ws = wb.Worksheets(\"무선간선망\")\n    lastRow = ws.Cells(ws.Rows.Count, 17).End(xlUp).Row\n    If lastRow < 2 Then Err.Raise vbObjectError + 513, \"B2BSkill\", \"무선간선망 시트에 데이터가 없습니다.\"\n    Set sumCell = ws.Cells(lastRow + 1, 17)\n    sumCell.Formula = \"=SUM(Q2:Q\" & lastRow & \")\"\n    With sumCell\n        .Interior.Color = RGB(255, 255, 0)\n        .Font.Bold = True\n    End With\n    \n    ' 2. 고압모계기\n    Set ws = wb.Worksheets(\"고압모계기\")\n    lastRow = ws.Cells(ws.Rows.Count, 17).End(xlUp).Row\n    If lastRow < 2 Then Err.Raise vbObjectError + 513, \"B2BSkill\", \"고압모계기 시트에 데이터가 없습니다.\"\n    Set sumCell = ws.Cells(lastRow + 1, 17)\n    sumCell.Formula = \"=SUM(Q2:Q\" & lastRow & \")\"\n    With sumCell\n        .Interior.Color = RGB(255, 255, 0)\n        .Font.Bold = True\n    End With\n    \n    ' 3. 고압자계기\n    Set ws = wb.Worksheets(\"고압자계기\")\n    lastRow = ws.Cells(ws.Rows.Count, 17).End(xlUp).Row\n    If lastRow < 2 Then Err.Raise vbObjectError + 513, \"B2BSkill\", \"고압자계기 시트에 데이터가 없습니다.\"\n    Set sumCell = ws.Cells(lastRow + 1, 17)\n    sumCell.Formula = \"=SUM(Q2:Q\" & lastRow & \")\"\n    With sumCell\n        .Interior.Color = RGB(255, 255, 0)\n        .Font.Bold = True\n    End With\n    \nCleanup:\n    Application.Calculation = prevCalc\n    Application.ScreenUpdating = True\n    If Err.Number <> 0 Then Err.Raise Err.Number, Err.Source, Err.Description\nEnd Sub\n```",
+      "histId": "ya2piqu0"
+    },
+    {
+      "role": "user",
+      "content": "@파일[02. 한전_AMI_유선간선망_청구세부내역_2026-07-12 19_01_04.xlsx]의 Sheet1의 1~9행을 삭제해줘\n\n[정확 참조]\n- 파일명: 02. 한전_AMI_유선간선망_청구세부내역_2026-07-12 19_01_04.xlsx\n[정확 참조 사용 규칙 - 강제]\n- 아래 파일명/시트명/범위/컬럼명은 코드에 그대로 복사하세요. 번역, 영문화, 띄어쓰기 보정, 대소문자 변경 금지.\n- 특히 한글 시트명은 절대 번역하지 마세요. 예: 통합인터넷(국제) -> 통합internet(국제) 는 실패입니다.\n- 정확 파일명: \"02. 한전_AMI_유선간선망_청구세부내역_2026-07-12 19_01_04.xlsx\"",
+      "histId": "1541uxc8"
+    },
+    {
+      "role": "assistant",
+      "content": "\n\n지정된 파일의 Sheet1 시트에서 1~9행을 삭제합니다.\n\n```python\ndef transform(ctx):\n    target_book = ctx.book(\"02. 한전_AMI_유선간선망_청구세부내역_2026-07-12 19_01_04.xlsx\")\n    target_sheet = \"Sheet1\"\n    \n    # 1~9행 삭제\n    target_book.delete_rows(target_sheet, \"1:9\")\n```",
+      "histId": "ccvzhg8h"
+    },
+    {
+      "role": "user",
+      "content": "@파일[02. 한전_AMI_유선간선망_청구세부내역_2026-07-12 19_01_04.xlsx] 의 Sheet1의 이름을 유선간선망 으로 바꿔줘\n\n[정확 참조]\n- 파일명: 02. 한전_AMI_유선간선망_청구세부내역_2026-07-12 19_01_04.xlsx\n[정확 참조 사용 규칙 - 강제]\n- 아래 파일명/시트명/범위/컬럼명은 코드에 그대로 복사하세요. 번역, 영문화, 띄어쓰기 보정, 대소문자 변경 금지.\n- 특히 한글 시트명은 절대 번역하지 마세요. 예: 통합인터넷(국제) -> 통합internet(국제) 는 실패입니다.\n- 정확 파일명: \"02. 한전_AMI_유선간선망_청구세부내역_2026-07-12 19_01_04.xlsx\"",
+      "histId": "8c5dev55"
+    },
+    {
+      "role": "assistant",
+      "content": "\n\n지정된 파일의 Sheet1 시트 이름을 \"유선간선망\"으로 변경합니다.\n\n```python\ndef transform(ctx):\n    target_book = ctx.book(\"02. 한전_AMI_유선간선망_청구세부내역_2026-07-12 19_01_04.xlsx\")\n    target_book.rename_sheet(\"Sheet1\", \"유선간선망\")\n```",
+      "histId": "95ionol5"
+    },
+    {
+      "role": "user",
+      "content": "@시트[02. 한전_AMI_유선간선망_청구세부내역_2026-07-12 19_01_04.xlsx/유선간선망] 의 효력발생일자 기준으로 내림차순 해줘\n\n[정확 참조]\n- 시트명: 파일 \"02. 한전_AMI_유선간선망_청구세부내역_2026-07-12 19_01_04.xlsx\", 시트 \"유선간선망\"\n[정확 참조 사용 규칙 - 강제]\n- 아래 파일명/시트명/범위/컬럼명은 코드에 그대로 복사하세요. 번역, 영문화, 띄어쓰기 보정, 대소문자 변경 금지.\n- 특히 한글 시트명은 절대 번역하지 마세요. 예: 통합인터넷(국제) -> 통합internet(국제) 는 실패입니다.\n- 정확 파일명: \"02. 한전_AMI_유선간선망_청구세부내역_2026-07-12 19_01_04.xlsx\"\n- 정확 시트명: \"유선간선망\"",
+      "histId": "mmw5v31b"
+    },
+    {
+      "role": "assistant",
+      "content": "\n\n지정된 파일의 \"유선간선망\" 시트를 \"효력발생일자\" 기준으로 내림차순 정렬합니다.\n\n```python\ndef transform(ctx):\n    book = ctx.book(\"02. 한전_AMI_유선간선망_청구세부내역_2026-07-12 19_01_04.xlsx\")\n    sheet = \"유선간선망\"\n    \n    last_row = book.used_last_row(sheet)\n    last_col = book.used_last_col(sheet)\n    \n    if last_row < 2:\n        raise ValueError(\"정렬할 데이터가 없습니다.\")\n        \n    def col_to_letter(n):\n        s = \"\"\n        while n > 0:\n            n, r = divmod(n - 1, 26)\n            s = chr(65 + r) + s\n        return s\n        \n    end_col = col_to_letter(last_col)\n    range_str = f\"A1:{end_col}{last_row}\"\n    \n    book.sort(sheet, range_str, key_col=\"효력발생일자\", ascending=False, has_header=True)\n```",
+      "histId": "j7b61fgy"
+    },
+    {
+      "role": "user",
+      "content": "@시트[02. 한전_AMI_유선간선망_청구세부내역_2026-07-12 19_01_04.xlsx/유선간선망]의 T열(기본료)의 전체 합계를 해당 열 제일 마지막에 SUM 함수 형태로 계산해서 수식 걸어서 넣어주고, 노란색 음영을 주고 볼드 처리 해줘. 서식 부분은 VBA를 활용해.\n\n[정확 참조]\n- 시트명: 파일 \"02. 한전_AMI_유선간선망_청구세부내역_2026-07-12 19_01_04.xlsx\", 시트 \"유선간선망\"\n[정확 참조 사용 규칙 - 강제]\n- 아래 파일명/시트명/범위/컬럼명은 코드에 그대로 복사하세요. 번역, 영문화, 띄어쓰기 보정, 대소문자 변경 금지.\n- 특히 한글 시트명은 절대 번역하지 마세요. 예: 통합인터넷(국제) -> 통합internet(국제) 는 실패입니다.\n- 정확 파일명: \"02. 한전_AMI_유선간선망_청구세부내역_2026-07-12 19_01_04.xlsx\"\n- 정확 시트명: \"유선간선망\"",
+      "histId": "h432onos"
+    },
+    {
+      "role": "assistant",
+      "content": "\n\n제목: 유선간선망 시트 T열(기본료) 합계 수식 및 서식 적용\n\n```vba\nSub B2BSkill()\n    On Error GoTo Cleanup\n    Application.ScreenUpdating = False\n    Application.Calculation = xlCalculationManual\n    \n    Dim wb As Workbook\n    Dim ws As Worksheet\n    Dim lastRow As Long\n    Dim sumCell As Range\n    \n    ' 파일명 정확 참조\n    Set wb = Workbooks(\"02. 한전_AMI_유선간선망_청구세부내역_2026-07-12 19_01_04.xlsx\")\n    \n    ' 시트명 정확 참조\n    Set ws = wb.Worksheets(\"유선간선망\")\n    \n    ' T열(20열)의 마지막 데이터 행 찾기\n    lastRow = ws.Cells(ws.Rows.Count, 20).End(xlUp).Row\n    If lastRow < 2 Then\n        Err.Raise vbObjectError + 513, \"B2BSkill\", \"유선간선망 시트에 데이터가 없습니다.\"\n    End If\n    \n    ' 합계를 넣을 셀 (마지막 데이터 행의 바로 아래)\n    Set sumCell = ws.Cells(lastRow + 1, 20)\n    \n    ' SUM 수식 적용 (T2부터 마지막 데이터 행까지)\n    sumCell.Formula = \"=SUM(T2:T\" & lastRow & \")\"\n    \n    ' 서식 적용: 노란색 음영, 볼드\n    With sumCell\n        .Interior.Color = RGB(255, 255, 0)\n        .Font.Bold = True\n    End With\n    \nCleanup:\n    Application.Calculation = xlCalculationAutomatic\n    Application.ScreenUpdating = True\n    If Err.Number <> 0 Then\n        Err.Raise Err.Number, Err.Source, Err.Description\n    End If\nEnd Sub\n```",
+      "histId": "cd0xky8e"
+    },
+    {
+      "role": "user",
+      "content": "@시트[02. 한전_AMI_유선간선망_청구세부내역_2026-07-12 19_01_04.xlsx/유선간선망]를 @파일[한국전력공사_202606_v1.1_DSMC_260710.xlsx] 에 시트 자체를 복사해서 이동해줘\n\n[정확 참조]\n- 시트명: 파일 \"02. 한전_AMI_유선간선망_청구세부내역_2026-07-12 19_01_04.xlsx\", 시트 \"유선간선망\"\n- 파일명: 한국전력공사_202606_v1.1_DSMC_260710.xlsx\n[정확 참조 사용 규칙 - 강제]\n- 아래 파일명/시트명/범위/컬럼명은 코드에 그대로 복사하세요. 번역, 영문화, 띄어쓰기 보정, 대소문자 변경 금지.\n- 특히 한글 시트명은 절대 번역하지 마세요. 예: 통합인터넷(국제) -> 통합internet(국제) 는 실패입니다.\n- 정확 파일명: \"02. 한전_AMI_유선간선망_청구세부내역_2026-07-12 19_01_04.xlsx\"\n- 정확 시트명: \"유선간선망\"\n- 정확 파일명: \"한국전력공사_202606_v1.1_DSMC_260710.xlsx\"",
+      "histId": "s5z1cikr"
+    },
+    {
+      "role": "assistant",
+      "content": "\n\n\"유선간선망\" 시트를 대상 파일로 복사한 후 원본 시트를 삭제하여 이동 처리합니다.\n\n```python\ndef transform(ctx):\n    ctx.copy_sheet(\"유선간선망\", dst_book=\"한국전력공사_202606_v1.1_DSMC_260710.xlsx\")\n    ctx.delete_sheet(\"유선간선망\")\n```",
+      "histId": "bwlid8ud"
+    },
+    {
+      "role": "user",
+      "content": "@시트[02. 한전_AMI_유선간선망_청구세부내역_2026-07-12 19_01_04.xlsx/유선간선망]를 @파일[한국전력공사_202606_v1.1_DSMC_260710.xlsx] 에 시트 자체를 복사해줘\n\n[정확 참조]\n- 시트명: 파일 \"02. 한전_AMI_유선간선망_청구세부내역_2026-07-12 19_01_04.xlsx\", 시트 \"유선간선망\"\n- 파일명: 한국전력공사_202606_v1.1_DSMC_260710.xlsx\n[정확 참조 사용 규칙 - 강제]\n- 아래 파일명/시트명/범위/컬럼명은 코드에 그대로 복사하세요. 번역, 영문화, 띄어쓰기 보정, 대소문자 변경 금지.\n- 특히 한글 시트명은 절대 번역하지 마세요. 예: 통합인터넷(국제) -> 통합internet(국제) 는 실패입니다.\n- 정확 파일명: \"02. 한전_AMI_유선간선망_청구세부내역_2026-07-12 19_01_04.xlsx\"\n- 정확 시트명: \"유선간선망\"\n- 정확 파일명: \"한국전력공사_202606_v1.1_DSMC_260710.xlsx\"",
+      "histId": "gfrnldzd"
+    },
+    {
+      "role": "assistant",
+      "content": "\n\n\"유선간선망\" 시트를 대상 파일로 복사합니다.\n\n```python\ndef transform(ctx):\n    ctx.copy_sheet(\"유선간선망\", dst_book=\"한국전력공사_202606_v1.1_DSMC_260710.xlsx\")\n```",
+      "histId": "r2c1gto2"
+    },
+    {
+      "role": "user",
+      "content": "@시트[한국전력공사_202606_v1.1_DSMC_260710.xlsx/무선간선망] , @시트[한국전력공사_202606_v1.1_DSMC_260710.xlsx/고압모계기] , @시트[한국전력공사_202606_v1.1_DSMC_260710.xlsx/고압자계기] 의 각 Q열~S열(기본료, 부가세, 청구금액)을 숫자 쉼표 형식으로 바꿔줘\n\n[정확 참조]\n- 시트명: 파일 \"한국전력공사_202606_v1.1_DSMC_260710.xlsx\", 시트 \"무선간선망\"\n- 시트명: 파일 \"한국전력공사_202606_v1.1_DSMC_260710.xlsx\", 시트 \"고압모계기\"\n- 시트명: 파일 \"한국전력공사_202606_v1.1_DSMC_260710.xlsx\", 시트 \"고압자계기\"\n[정확 참조 사용 규칙 - 강제]\n- 아래 파일명/시트명/범위/컬럼명은 코드에 그대로 복사하세요. 번역, 영문화, 띄어쓰기 보정, 대소문자 변경 금지.\n- 특히 한글 시트명은 절대 번역하지 마세요. 예: 통합인터넷(국제) -> 통합internet(국제) 는 실패입니다.\n- 정확 파일명: \"한국전력공사_202606_v1.1_DSMC_260710.xlsx\"\n- 정확 시트명: \"무선간선망\"\n- 정확 파일명: \"한국전력공사_202606_v1.1_DSMC_260710.xlsx\"\n- 정확 시트명: \"고압모계기\"\n- 정확 파일명: \"한국전력공사_202606_v1.1_DSMC_260710.xlsx\"\n- 정확 시트명: \"고압자계기\"",
+      "histId": "mu0k3qu4"
+    },
+    {
+      "role": "assistant",
+      "content": "\n\n세 시트의 Q열~S열(기본료, 부가세, 청구금액) 데이터 영역에 숫자 쉼표 형식(`#,##0`)을 적용합니다.\n\n```python\ndef transform(ctx):\n    sheets = [\"무선간선망\", \"고압모계기\", \"고압자계기\"]\n    for sheet in sheets:\n        last = ctx.last_row(sheet, col=17)  # Q열(17) 기준 마지막 행\n        if last >= 2:\n            ctx.set_number_format(sheet, f\"Q2:S{last}\", \"#,##0\")\n```",
+      "histId": "k2r7qv59"
+    },
+    {
+      "role": "user",
+      "content": "@시트[한국전력공사_202606_v1.1_DSMC_260710.xlsx/상품번호별] 의 데이터에서, 서비스, 본부명, 청구계정번호, 상품번호, 상품번호(한전), 가입자번호, 요금제코드, 요금제명, 개통상태, 상태변경일, 최초개통일, 모델명, 단말일련번호, 사용량(Mbyte), 개통대리점코드, 개통대리점명, 기본료, 부가세, 청구금액, 비고 항목의 데이터가 아닌 다른 열의 데이터들은 모두 삭제해줘. 필요 없는 데이터야. 내가 말한 데이터만 딱 들어가게끔 해줘. 그리고 현재의 BA열인 상품번호(맨 마지막)은 삭제해줘.\n\n[정확 참조]\n- 시트명: 파일 \"한국전력공사_202606_v1.1_DSMC_260710.xlsx\", 시트 \"상품번호별\"\n[정확 참조 사용 규칙 - 강제]\n- 아래 파일명/시트명/범위/컬럼명은 코드에 그대로 복사하세요. 번역, 영문화, 띄어쓰기 보정, 대소문자 변경 금지.\n- 특히 한글 시트명은 절대 번역하지 마세요. 예: 통합인터넷(국제) -> 통합internet(국제) 는 실패입니다.\n- 정확 파일명: \"한국전력공사_202606_v1.1_DSMC_260710.xlsx\"\n- 정확 시트명: \"상품번호별\"",
+      "histId": "iyqy67qv"
+    },
+    {
+      "role": "assistant",
+      "content": "\n\n\"상품번호별\" 시트에서 지정한 열만 남기고 나머지를 삭제하며, BA열(상품번호)도 함께 삭제합니다.\n\n```python\ndef transform(ctx):\n    sheet = \"상품번호별\"\n    keep_headers = [\n        \"서비스\", \"본부명\", \"청구계정번호\", \"상품번호\", \"상품번호(한전)\", \n        \"가입자번호\", \"요금제코드\", \"요금제명\", \"개통상태\", \"상태변경일\", \n        \"최초개통일\", \"모델명\", \"단말일련번호\", \"사용량(Mbyte)\", \n        \"개통대리점코드\", \"개통대리점명\", \"기본료\", \"부가세\", \"청구금액\", \"비고\"\n    ]\n    \n    hdr_row = 1\n    last_col_idx = ctx.used_last_col(sheet)\n    \n    def idx_to_col(c):\n        s = \"\"\n        while c > 0:\n            c, r = divmod(c - 1, 26)\n            s = chr(65 + r) + s\n        return s\n        \n    keep_indices = set()\n    for h in keep_headers:\n        try:\n            col_idx = ctx.find_header(sheet, h, header_row=hdr_row)\n            keep_indices.add(col_idx)\n        except Exception:\n            raise ValueError(f\"헤더 '{h}'를 찾을 수 없습니다.\")\n            \n    # BA열(53열)은 명시적으로 삭제 대상이므로 유지 목록에서 제외\n    ba_col = 53\n    if ba_col in keep_indices:\n        keep_indices.remove(ba_col)\n        \n    all_indices = set(range(1, last_col_idx + 1))\n    delete_indices = sorted(list(all_indices - keep_indices), reverse=True)\n    \n    if not delete_indices:\n        raise ValueError(\"삭제할 열이 없습니다.\")\n        \n    for idx in delete_indices:\n        col_letter = idx_to_col(idx)\n        ctx.delete_cols(sheet, col_letter)\n```",
+      "histId": "u7vtwmnb"
+    },
+    {
+      "role": "user",
+      "content": "## ★ 사용자 추가 설명 — 최우선 반영\n아래는 사용자가 직접 적은 '하려던 작업 / 실제로 나온 결과 / 기대하는 결과'입니다. 다른 어떤 추론보다 이 설명을 가장 우선해서, 대화 히스토리·실패 코드·오류와 함께 반영해 코드를 고치세요.\n응 그 파일이 맞아\nStep 10 실행 중 오류가 발생했습니다.\n대화 히스토리의 사용자 의도, 현재 파일 스키마, 수정 대상 코드, 아래 오류를 함께 분석해서 이 Step을 교체할 수정 코드를 다시 작성하세요.\nReturn exactly one Python code block that defines def transform(ctx):. Do not return JavaScript.\n중요: 에러복구에서는 실패한 Step이 VBA였더라도 Python ctx 코드로 복구할 수 있습니다. 사용자가 복구창에서 명시적으로 VBA를 요구하지 않았으므로, ctx 헬퍼/ctx API로 해결 가능한 복구는 Python def transform(ctx): 로 작성하세요. 이후 적용 단계에서도 이 Python 복구 후보를 다시 VBA로 전환하지 않습니다.\n오류 복구는 실패 원인만 고치는 작업입니다. 사용자의 최신 요청에 없는 대상 파일/시트 변경이나 무관한 전체 범위 재작성은 새로 추가하지 마세요.\n사용자에게 보여줄 설명은 '간결하되 친절하게' 쓰세요: ① 무엇이 왜 안 됐는지 한 문장, ② (있으면) 사용자가 확인/입력할 것 한두 문장. 그게 전부입니다. 장황한 배경 서술·같은 말 반복·과한 공감/사과·이모지 남발은 빼고, 짧은 문장으로 핵심만 또렷하게. (코드블록은 설명과 별개로 그대로 출력)\n\"채워\", \"입력\", \"업데이트\", \"반영\"은 요청받은 대상 범위에 값을 쓰라는 뜻입니다. 그 대상 셀에 기존 수식이 있더라도 값으로 대체할 수 있습니다. 단, 표 끝의 합계/소계/부가세포함 같은 요약 행은 데이터 행이 아니므로 범위에서 제외하세요.\nReturn exactly one Python code block that defines def transform(ctx):. Do not return JavaScript.\n## 실패한 Step\n설명: 지정된 파일의 Sheet1 시트에서 1~9행을 삭제합니다.\n## 실패한 코드\n```python\n# 한전 AMI 무선인입 빼고_15단계_2026-07-12-19-43-52\n# Step 10: 지정된 파일의 Sheet1 시트에서 1~9행을 삭제합니다.\n# Created: 2026-07-12T10:43:52.702Z\ndef transform(ctx):\n    target_book = ctx.book(\"02. 한전_AMI_유선간선망_청구세부내역_2026-07-12 19_01_04.xlsx\")\n    target_sheet = \"Sheet1\"\n    \n    # 1~9행 삭제\n    target_book.delete_rows(target_sheet, \"1:9\")\n\n```\n## 상세 오류\n메시지: 작업 중 예기치 못한 오류가 났습니다.\n💡 이렇게 요청해 보세요: 요청을 더 구체적으로 적어주세요 — 대상 파일/시트/열/범위를 @파일·@시트·@컬럼·@범위로 지정하고, 한 번에 한 작업씩 나누면 정확도가 올라갑니다.\n(자세히: 워크북 '02. 한전_AMI_유선간선망_청구세부내역_2026-07-12 19_01_04.xlsx' 이 열려 있지 않습니다. 업로드된 파일명을 그대로 쓰세요.)\n\n스택:\nError: 작업 중 예기치 못한 오류가 났습니다.\n💡 이렇게 요청해 보세요: 요청을 더 구체적으로 적어주세요 — 대상 파일/시트/열/범위를 @파일·@시트·@컬럼·@범위로 지정하고, 한 번에 한 작업씩 나누면 정확도가 올라갑니다.\n(자세히: 워크북 '02. 한전_AMI_유선간선망_청구세부내역_2026-07-12 19_01_04.xlsx' 이 열려 있지 않습니다. 업로드된 파일명을 그대로 쓰세요.)\n    at postExcelMirror (http://127.0.0.1:18120/scripts/excel-mirror.js:1918:17)\n    at async runIsolatedLivePipelineSteps (http://127.0.0.1:18120/scripts/pipeline.js:1116:16)\n    at async reapplyVbaPipelineToLive (http://127.0.0.1:18120/scripts/pipeline.js:3227:14)",
+      "histId": "cmsca2yx"
+    },
+    {
+      "role": "assistant",
+      "content": "\n\n존재하지 않는 파일명으로 인해 실패했습니다. 현재 열려 있는 실제 파일명(`02. 한전_AMI_유선간선망_청구세부내역_2026-07-07 09_23_01_DSMC_260707.xlsx`)을 사용하여 Sheet1 시트의 1~9행을 삭제합니다.\n\n```python\ndef transform(ctx):\n    target_book = ctx.book(\"02. 한전_AMI_유선간선망_청구세부내역_2026-07-07 09_23_01_DSMC_260707.xlsx\")\n    target_sheet = \"Sheet1\"\n    \n    # 1~9행 삭제\n    target_book.delete_rows(target_sheet, \"1:9\")\n```",
+      "histId": "68nrq6na"
+    },
+    {
+      "role": "user",
+      "content": "## ★ 사용자 추가 설명 — 최우선 반영\n아래는 사용자가 직접 적은 '하려던 작업 / 실제로 나온 결과 / 기대하는 결과'입니다. 다른 어떤 추론보다 이 설명을 가장 우선해서, 대화 히스토리·실패 코드·오류와 함께 반영해 코드를 고치세요.\n응 그 파일이 맞아\nStep 10 실행 중 오류가 발생했습니다.\n대화 히스토리의 사용자 의도, 현재 파일 스키마, 수정 대상 코드, 아래 오류를 함께 분석해서 이 Step을 교체할 수정 코드를 다시 작성하세요.\nReturn exactly one Python code block that defines def transform(ctx):. Do not return JavaScript.\n중요: 에러복구에서는 실패한 Step이 VBA였더라도 Python ctx 코드로 복구할 수 있습니다. 사용자가 복구창에서 명시적으로 VBA를 요구하지 않았으므로, ctx 헬퍼/ctx API로 해결 가능한 복구는 Python def transform(ctx): 로 작성하세요. 이후 적용 단계에서도 이 Python 복구 후보를 다시 VBA로 전환하지 않습니다.\n오류 복구는 실패 원인만 고치는 작업입니다. 사용자의 최신 요청에 없는 대상 파일/시트 변경이나 무관한 전체 범위 재작성은 새로 추가하지 마세요.\n사용자에게 보여줄 설명은 '간결하되 친절하게' 쓰세요: ① 무엇이 왜 안 됐는지 한 문장, ② (있으면) 사용자가 확인/입력할 것 한두 문장. 그게 전부입니다. 장황한 배경 서술·같은 말 반복·과한 공감/사과·이모지 남발은 빼고, 짧은 문장으로 핵심만 또렷하게. (코드블록은 설명과 별개로 그대로 출력)\n\"채워\", \"입력\", \"업데이트\", \"반영\"은 요청받은 대상 범위에 값을 쓰라는 뜻입니다. 그 대상 셀에 기존 수식이 있더라도 값으로 대체할 수 있습니다. 단, 표 끝의 합계/소계/부가세포함 같은 요약 행은 데이터 행이 아니므로 범위에서 제외하세요.\nReturn exactly one Python code block that defines def transform(ctx):. Do not return JavaScript.\n## 실패한 Step\n설명: 지정된 파일의 Sheet1 시트에서 1~9행을 삭제합니다.\n## 실패한 코드\n```python\n# 한전 AMI 무선인입 빼고_15단계_2026-07-12-19-43-52\n# Step 10: 지정된 파일의 Sheet1 시트에서 1~9행을 삭제합니다.\n# Created: 2026-07-12T10:43:52.702Z\ndef transform(ctx):\n    target_book = ctx.book(\"02. 한전_AMI_유선간선망_청구세부내역_2026-07-12 19_01_04.xlsx\")\n    target_sheet = \"Sheet1\"\n    \n    # 1~9행 삭제\n    target_book.delete_rows(target_sheet, \"1:9\")\n\n```\n## 상세 오류\n메시지: 작업 중 예기치 못한 오류가 났습니다.\n💡 이렇게 요청해 보세요: 요청을 더 구체적으로 적어주세요 — 대상 파일/시트/열/범위를 @파일·@시트·@컬럼·@범위로 지정하고, 한 번에 한 작업씩 나누면 정확도가 올라갑니다.\n(자세히: 워크북 '02. 한전_AMI_유선간선망_청구세부내역_2026-07-12 19_01_04.xlsx' 이 열려 있지 않습니다. 업로드된 파일명을 그대로 쓰세요.)\n\n스택:\nError: 작업 중 예기치 못한 오류가 났습니다.\n💡 이렇게 요청해 보세요: 요청을 더 구체적으로 적어주세요 — 대상 파일/시트/열/범위를 @파일·@시트·@컬럼·@범위로 지정하고, 한 번에 한 작업씩 나누면 정확도가 올라갑니다.\n(자세히: 워크북 '02. 한전_AMI_유선간선망_청구세부내역_2026-07-12 19_01_04.xlsx' 이 열려 있지 않습니다. 업로드된 파일명을 그대로 쓰세요.)\n    at postExcelMirror (http://127.0.0.1:18120/scripts/excel-mirror.js:1918:17)\n    at async runIsolatedLivePipelineSteps (http://127.0.0.1:18120/scripts/pipeline.js:1116:16)\n    at async reapplyVbaPipelineToLive (http://127.0.0.1:18120/scripts/pipeline.js:3227:14)",
+      "histId": "c074o8g3"
+    },
+    {
+      "role": "assistant",
+      "content": "\n\n실제 시스템에 열려 있는 파일명으로 수정하여 `Sheet1` 시트의 1~9행을 삭제합니다.\n\n```python\ndef transform(ctx):\n    target_book = ctx.book(\"02. 한전_AMI_유선간선망_청구세부내역_2026-07-07 09_23_01_DSMC_260707.xlsx\")\n    target_sheet = \"Sheet1\"\n    target_book.delete_rows(target_sheet, \"1:9\")\n```",
+      "histId": "1sdhsg5z"
+    },
+    {
+      "role": "user",
+      "content": "## ★ 사용자 추가 설명 — 최우선 반영\n아래는 사용자가 직접 적은 '하려던 작업 / 실제로 나온 결과 / 기대하는 결과'입니다. 다른 어떤 추론보다 이 설명을 가장 우선해서, 대화 히스토리·실패 코드·오류와 함께 반영해 코드를 고치세요.\n다시 해줄래?\nStep 11 실행 중 오류가 발생했습니다.\n대화 히스토리의 사용자 의도, 현재 파일 스키마, 수정 대상 코드, 아래 오류를 함께 분석해서 이 Step을 교체할 수정 코드를 다시 작성하세요.\nReturn exactly one Python code block that defines def transform(ctx):. Do not return JavaScript.\n중요: 에러복구에서는 실패한 Step이 VBA였더라도 Python ctx 코드로 복구할 수 있습니다. 사용자가 복구창에서 명시적으로 VBA를 요구하지 않았으므로, ctx 헬퍼/ctx API로 해결 가능한 복구는 Python def transform(ctx): 로 작성하세요. 이후 적용 단계에서도 이 Python 복구 후보를 다시 VBA로 전환하지 않습니다.\n오류 복구는 실패 원인만 고치는 작업입니다. 사용자의 최신 요청에 없는 대상 파일/시트 변경이나 무관한 전체 범위 재작성은 새로 추가하지 마세요.\n사용자에게 보여줄 설명은 '간결하되 친절하게' 쓰세요: ① 무엇이 왜 안 됐는지 한 문장, ② (있으면) 사용자가 확인/입력할 것 한두 문장. 그게 전부입니다. 장황한 배경 서술·같은 말 반복·과한 공감/사과·이모지 남발은 빼고, 짧은 문장으로 핵심만 또렷하게. (코드블록은 설명과 별개로 그대로 출력)\n\"채워\", \"입력\", \"업데이트\", \"반영\"은 요청받은 대상 범위에 값을 쓰라는 뜻입니다. 그 대상 셀에 기존 수식이 있더라도 값으로 대체할 수 있습니다. 단, 표 끝의 합계/소계/부가세포함 같은 요약 행은 데이터 행이 아니므로 범위에서 제외하세요.\nReturn exactly one Python code block that defines def transform(ctx):. Do not return JavaScript.\n## 실패한 Step\n설명: 지정된 파일의 Sheet1 시트 이름을 \"유선간선망\"으로 변경합니다.\n## 실패한 코드\n```python\n# 한전 AMI 무선인입 빼고_15단계_2026-07-12-19-43-52\n# Step 11: 지정된 파일의 Sheet1 시트 이름을 \"유선간선망\"으로 변경합니다.\n# Created: 2026-07-12T10:43:52.702Z\ndef transform(ctx):\n    target_book = ctx.book(\"02. 한전_AMI_유선간선망_청구세부내역_2026-07-12 19_01_04.xlsx\")\n    target_book.rename_sheet(\"Sheet1\", \"유선간선망\")\n\n```\n## 상세 오류\n메시지: 작업 중 예기치 못한 오류가 났습니다.\n💡 이렇게 요청해 보세요: 요청을 더 구체적으로 적어주세요 — 대상 파일/시트/열/범위를 @파일·@시트·@컬럼·@범위로 지정하고, 한 번에 한 작업씩 나누면 정확도가 올라갑니다.\n(자세히: 워크북 '02. 한전_AMI_유선간선망_청구세부내역_2026-07-12 19_01_04.xlsx' 이 열려 있지 않습니다. 업로드된 파일명을 그대로 쓰세요.)\n\n스택:\nError: 작업 중 예기치 못한 오류가 났습니다.\n💡 이렇게 요청해 보세요: 요청을 더 구체적으로 적어주세요 — 대상 파일/시트/열/범위를 @파일·@시트·@컬럼·@범위로 지정하고, 한 번에 한 작업씩 나누면 정확도가 올라갑니다.\n(자세히: 워크북 '02. 한전_AMI_유선간선망_청구세부내역_2026-07-12 19_01_04.xlsx' 이 열려 있지 않습니다. 업로드된 파일명을 그대로 쓰세요.)\n    at postExcelMirror (http://127.0.0.1:18120/scripts/excel-mirror.js:1918:17)\n    at async runIsolatedLivePipelineSteps (http://127.0.0.1:18120/scripts/pipeline.js:1116:16)\n    at async runPipelineSuffixFromCheckpoint (http://127.0.0.1:18120/scripts/pipeline.js:3012:16)",
+      "histId": "4366pdwy"
+    },
+    {
+      "role": "assistant",
+      "content": "\n\n실제 열려 있는 파일명으로 수정하여 `Sheet1` 시트 이름을 변경합니다.\n\n```python\ndef transform(ctx):\n    target_book = ctx.book(\"02. 한전_AMI_유선간선망_청구세부내역_2026-07-07 09_23_01_DSMC_260707.xlsx\")\n    target_book.rename_sheet(\"Sheet1\", \"유선간선망\")\n```",
+      "histId": "l1unxyxo"
+    },
+    {
+      "role": "user",
+      "content": "## ★ 사용자 추가 설명 — 최우선 반영\n아래는 사용자가 직접 적은 '하려던 작업 / 실제로 나온 결과 / 기대하는 결과'입니다. 다른 어떤 추론보다 이 설명을 가장 우선해서, 대화 히스토리·실패 코드·오류와 함께 반영해 코드를 고치세요.\n다시 해줄래? 현재 열려있는 파일 기준으로 해주면 돼. 비슷한 파일을 찾으렴\nStep 10 실행 중 오류가 발생했습니다.\n대화 히스토리의 사용자 의도, 현재 파일 스키마, 수정 대상 코드, 아래 오류를 함께 분석해서 이 Step을 교체할 수정 코드를 다시 작성하세요.\nReturn exactly one Python code block that defines def transform(ctx):. Do not return JavaScript.\n중요: 에러복구에서는 실패한 Step이 VBA였더라도 Python ctx 코드로 복구할 수 있습니다. 사용자가 복구창에서 명시적으로 VBA를 요구하지 않았으므로, ctx 헬퍼/ctx API로 해결 가능한 복구는 Python def transform(ctx): 로 작성하세요. 이후 적용 단계에서도 이 Python 복구 후보를 다시 VBA로 전환하지 않습니다.\n오류 복구는 실패 원인만 고치는 작업입니다. 사용자의 최신 요청에 없는 대상 파일/시트 변경이나 무관한 전체 범위 재작성은 새로 추가하지 마세요.\n사용자에게 보여줄 설명은 '간결하되 친절하게' 쓰세요: ① 무엇이 왜 안 됐는지 한 문장, ② (있으면) 사용자가 확인/입력할 것 한두 문장. 그게 전부입니다. 장황한 배경 서술·같은 말 반복·과한 공감/사과·이모지 남발은 빼고, 짧은 문장으로 핵심만 또렷하게. (코드블록은 설명과 별개로 그대로 출력)\n\"채워\", \"입력\", \"업데이트\", \"반영\"은 요청받은 대상 범위에 값을 쓰라는 뜻입니다. 그 대상 셀에 기존 수식이 있더라도 값으로 대체할 수 있습니다. 단, 표 끝의 합계/소계/부가세포함 같은 요약 행은 데이터 행이 아니므로 범위에서 제외하세요.\nReturn exactly one Python code block that defines def transform(ctx):. Do not return JavaScript.\n## 실패한 Step\n설명: 지정된 파일의 Sheet1 시트에서 1~9행을 삭제합니다.\n## 실패한 코드\n```python\n# 한전 AMI 무선인입 빼고_15단계_2026-07-12-19-43-52\n# Step 10: 지정된 파일의 Sheet1 시트에서 1~9행을 삭제합니다.\n# Created: 2026-07-12T10:43:52.702Z\ndef transform(ctx):\n    target_book = ctx.book(\"02. 한전_AMI_유선간선망_청구세부내역_2026-07-12 19_01_04.xlsx\")\n    target_sheet = \"Sheet1\"\n    \n    # 1~9행 삭제\n    target_book.delete_rows(target_sheet, \"1:9\")\n\n```\n## 상세 오류\n메시지: 작업 중 예기치 못한 오류가 났습니다.\n💡 이렇게 요청해 보세요: 요청을 더 구체적으로 적어주세요 — 대상 파일/시트/열/범위를 @파일·@시트·@컬럼·@범위로 지정하고, 한 번에 한 작업씩 나누면 정확도가 올라갑니다.\n(자세히: 워크북 '02. 한전_AMI_유선간선망_청구세부내역_2026-07-12 19_01_04.xlsx' 이 열려 있지 않습니다. 업로드된 파일명을 그대로 쓰세요.)\n\n스택:\nError: 작업 중 예기치 못한 오류가 났습니다.\n💡 이렇게 요청해 보세요: 요청을 더 구체적으로 적어주세요 — 대상 파일/시트/열/범위를 @파일·@시트·@컬럼·@범위로 지정하고, 한 번에 한 작업씩 나누면 정확도가 올라갑니다.\n(자세히: 워크북 '02. 한전_AMI_유선간선망_청구세부내역_2026-07-12 19_01_04.xlsx' 이 열려 있지 않습니다. 업로드된 파일명을 그대로 쓰세요.)\n    at postExcelMirror (http://127.0.0.1:18120/scripts/excel-mirror.js:1918:17)\n    at async runIsolatedLivePipelineSteps (http://127.0.0.1:18120/scripts/pipeline.js:1116:16)\n    at async runPipelineSuffixFromCheckpoint (http://127.0.0.1:18120/scripts/pipeline.js:3012:16)",
+      "histId": "vcktb95v"
+    },
+    {
+      "role": "assistant",
+      "content": "\n\n실제 열려 있는 유사 파일명으로 수정하여 `Sheet1` 시트의 1~9행을 삭제합니다.\n\n```python\ndef transform(ctx):\n    target_book = ctx.book(\"02. 한전_AMI_유선간선망_청구세부내역_2026-07-07 09_23_01_DSMC_260707.xlsx\")\n    target_book.delete_rows(\"Sheet1\", \"1:9\")\n```",
+      "histId": "6vf3xqib"
+    },
+    {
+      "role": "user",
+      "content": "## ★ 사용자 추가 설명 — 최우선 반영\n아래는 사용자가 직접 적은 '하려던 작업 / 실제로 나온 결과 / 기대하는 결과'입니다. 다른 어떤 추론보다 이 설명을 가장 우선해서, 대화 히스토리·실패 코드·오류와 함께 반영해 코드를 고치세요.\n비슷한 파일명을 가진 열려있는 파일로 작업해줘\nStep 11 실행 중 오류가 발생했습니다.\n대화 히스토리의 사용자 의도, 현재 파일 스키마, 수정 대상 코드, 아래 오류를 함께 분석해서 이 Step을 교체할 수정 코드를 다시 작성하세요.\nReturn exactly one Python code block that defines def transform(ctx):. Do not return JavaScript.\n중요: 에러복구에서는 실패한 Step이 VBA였더라도 Python ctx 코드로 복구할 수 있습니다. 사용자가 복구창에서 명시적으로 VBA를 요구하지 않았으므로, ctx 헬퍼/ctx API로 해결 가능한 복구는 Python def transform(ctx): 로 작성하세요. 이후 적용 단계에서도 이 Python 복구 후보를 다시 VBA로 전환하지 않습니다.\n오류 복구는 실패 원인만 고치는 작업입니다. 사용자의 최신 요청에 없는 대상 파일/시트 변경이나 무관한 전체 범위 재작성은 새로 추가하지 마세요.\n사용자에게 보여줄 설명은 '간결하되 친절하게' 쓰세요: ① 무엇이 왜 안 됐는지 한 문장, ② (있으면) 사용자가 확인/입력할 것 한두 문장. 그게 전부입니다. 장황한 배경 서술·같은 말 반복·과한 공감/사과·이모지 남발은 빼고, 짧은 문장으로 핵심만 또렷하게. (코드블록은 설명과 별개로 그대로 출력)\n\"채워\", \"입력\", \"업데이트\", \"반영\"은 요청받은 대상 범위에 값을 쓰라는 뜻입니다. 그 대상 셀에 기존 수식이 있더라도 값으로 대체할 수 있습니다. 단, 표 끝의 합계/소계/부가세포함 같은 요약 행은 데이터 행이 아니므로 범위에서 제외하세요.\nReturn exactly one Python code block that defines def transform(ctx):. Do not return JavaScript.\n## 실패한 Step\n설명: 지정된 파일의 Sheet1 시트 이름을 \"유선간선망\"으로 변경합니다.\n## 실패한 코드\n```python\n# 한전 AMI 무선인입 빼고_15단계_2026-07-12-19-43-52\n# Step 11: 지정된 파일의 Sheet1 시트 이름을 \"유선간선망\"으로 변경합니다.\n# Created: 2026-07-12T10:43:52.702Z\ndef transform(ctx):\n    target_book = ctx.book(\"02. 한전_AMI_유선간선망_청구세부내역_2026-07-12 19_01_04.xlsx\")\n    target_book.rename_sheet(\"Sheet1\", \"유선간선망\")\n\n```\n## 상세 오류\n메시지: 작업 중 예기치 못한 오류가 났습니다.\n💡 이렇게 요청해 보세요: 요청을 더 구체적으로 적어주세요 — 대상 파일/시트/열/범위를 @파일·@시트·@컬럼·@범위로 지정하고, 한 번에 한 작업씩 나누면 정확도가 올라갑니다.\n(자세히: 워크북 '02. 한전_AMI_유선간선망_청구세부내역_2026-07-12 19_01_04.xlsx' 이 열려 있지 않습니다. 업로드된 파일명을 그대로 쓰세요.)\n\n스택:\nError: 작업 중 예기치 못한 오류가 났습니다.\n💡 이렇게 요청해 보세요: 요청을 더 구체적으로 적어주세요 — 대상 파일/시트/열/범위를 @파일·@시트·@컬럼·@범위로 지정하고, 한 번에 한 작업씩 나누면 정확도가 올라갑니다.\n(자세히: 워크북 '02. 한전_AMI_유선간선망_청구세부내역_2026-07-12 19_01_04.xlsx' 이 열려 있지 않습니다. 업로드된 파일명을 그대로 쓰세요.)\n    at postExcelMirror (http://127.0.0.1:18120/scripts/excel-mirror.js:1918:17)\n    at async runIsolatedLivePipelineSteps (http://127.0.0.1:18120/scripts/pipeline.js:1116:16)\n    at async runPipelineSuffixFromCheckpoint (http://127.0.0.1:18120/scripts/pipeline.js:3012:16)",
+      "histId": "0cjwukt2"
+    },
+    {
+      "role": "assistant",
+      "content": "\n\n실제 열려 있는 파일명으로 수정하여 Sheet1 시트 이름을 변경합니다.\n\n```python\ndef transform(ctx):\n    # 실제 열려 있는 파일명으로 수정\n    target_book = ctx.book(\"02. 한전_AMI_유선간선망_청구세부내역_2026-07-07 09_23_01_DSMC_260707.xlsx\")\n    target_book.rename_sheet(\"Sheet1\", \"유선간선망\")\n```",
+      "histId": "f8vwgbas"
+    },
+    {
+      "role": "user",
+      "content": "## ★ 사용자 추가 설명 — 최우선 반영\n아래는 사용자가 직접 적은 '하려던 작업 / 실제로 나온 결과 / 기대하는 결과'입니다. 다른 어떤 추론보다 이 설명을 가장 우선해서, 대화 히스토리·실패 코드·오류와 함께 반영해 코드를 고치세요.\n02. 한전_AMI_유선간선망_청구세부내역_2026-07-07 09_23_01_DSMC_260707 열려있는 이 파일 기준으로 작업해줘\nStep 10 실행 중 오류가 발생했습니다.\n대화 히스토리의 사용자 의도, 현재 파일 스키마, 수정 대상 코드, 아래 오류를 함께 분석해서 이 Step을 교체할 수정 코드를 다시 작성하세요.\nReturn exactly one Python code block that defines def transform(ctx):. Do not return JavaScript.\n중요: 에러복구에서는 실패한 Step이 VBA였더라도 Python ctx 코드로 복구할 수 있습니다. 사용자가 복구창에서 명시적으로 VBA를 요구하지 않았으므로, ctx 헬퍼/ctx API로 해결 가능한 복구는 Python def transform(ctx): 로 작성하세요. 이후 적용 단계에서도 이 Python 복구 후보를 다시 VBA로 전환하지 않습니다.\n오류 복구는 실패 원인만 고치는 작업입니다. 사용자의 최신 요청에 없는 대상 파일/시트 변경이나 무관한 전체 범위 재작성은 새로 추가하지 마세요.\n사용자에게 보여줄 설명은 '간결하되 친절하게' 쓰세요: ① 무엇이 왜 안 됐는지 한 문장, ② (있으면) 사용자가 확인/입력할 것 한두 문장. 그게 전부입니다. 장황한 배경 서술·같은 말 반복·과한 공감/사과·이모지 남발은 빼고, 짧은 문장으로 핵심만 또렷하게. (코드블록은 설명과 별개로 그대로 출력)\n\"채워\", \"입력\", \"업데이트\", \"반영\"은 요청받은 대상 범위에 값을 쓰라는 뜻입니다. 그 대상 셀에 기존 수식이 있더라도 값으로 대체할 수 있습니다. 단, 표 끝의 합계/소계/부가세포함 같은 요약 행은 데이터 행이 아니므로 범위에서 제외하세요.\nReturn exactly one Python code block that defines def transform(ctx):. Do not return JavaScript.\n## 실패한 Step\n설명: 지정된 파일의 Sheet1 시트에서 1~9행을 삭제합니다.\n## 실패한 코드\n```python\n# 한전 AMI 무선인입 빼고_15단계_2026-07-12-19-43-52\n# Step 10: 지정된 파일의 Sheet1 시트에서 1~9행을 삭제합니다.\n# Created: 2026-07-12T10:43:52.702Z\ndef transform(ctx):\n    target_book = ctx.book(\"02. 한전_AMI_유선간선망_청구세부내역_2026-07-12 19_01_04.xlsx\")\n    target_sheet = \"Sheet1\"\n    \n    # 1~9행 삭제\n    target_book.delete_rows(target_sheet, \"1:9\")\n\n```\n## 상세 오류\n메시지: 작업 중 예기치 못한 오류가 났습니다.\n💡 이렇게 요청해 보세요: 요청을 더 구체적으로 적어주세요 — 대상 파일/시트/열/범위를 @파일·@시트·@컬럼·@범위로 지정하고, 한 번에 한 작업씩 나누면 정확도가 올라갑니다.\n(자세히: 워크북 '02. 한전_AMI_유선간선망_청구세부내역_2026-07-12 19_01_04.xlsx' 이 열려 있지 않습니다. 업로드된 파일명을 그대로 쓰세요.)\n\n스택:\nError: 작업 중 예기치 못한 오류가 났습니다.\n💡 이렇게 요청해 보세요: 요청을 더 구체적으로 적어주세요 — 대상 파일/시트/열/범위를 @파일·@시트·@컬럼·@범위로 지정하고, 한 번에 한 작업씩 나누면 정확도가 올라갑니다.\n(자세히: 워크북 '02. 한전_AMI_유선간선망_청구세부내역_2026-07-12 19_01_04.xlsx' 이 열려 있지 않습니다. 업로드된 파일명을 그대로 쓰세요.)\n    at postExcelMirror (http://127.0.0.1:18120/scripts/excel-mirror.js:1918:17)\n    at async runIsolatedLivePipelineSteps (http://127.0.0.1:18120/scripts/pipeline.js:1116:16)\n    at async runPipelineSuffixFromCheckpoint (http://127.0.0.1:18120/scripts/pipeline.js:3012:16)",
+      "histId": "wzrfrzgt"
+    },
+    {
+      "role": "assistant",
+      "content": "\n\n실제 열려 있는 파일명으로 수정하여 Sheet1 시트의 1~9행을 삭제합니다.\n\n```python\ndef transform(ctx):\n    # 실제 열려 있는 파일명 사용\n    target_book = ctx.book(\"02. 한전_AMI_유선간선망_청구세부내역_2026-07-07 09_23_01_DSMC_260707.xlsx\")\n    target_sheet = \"Sheet1\"\n    \n    # 1~9행 삭제\n    target_book.delete_rows(target_sheet, \"1:9\")\n```",
+      "histId": "nktfy92t"
+    },
+    {
+      "role": "user",
+      "content": "@파일[02. 한전_AMI_유선간선망_청구세부내역_2026-07-07 09_23_01_DSMC_260707.xlsx] 의 Sheet1 시트에서 1~9행을 삭제해줘\n\n[정확 참조]\n- 파일명: 02. 한전_AMI_유선간선망_청구세부내역_2026-07-07 09_23_01_DSMC_260707.xlsx\n[정확 참조 사용 규칙 - 강제]\n- 아래 파일명/시트명/범위/컬럼명은 코드에 그대로 복사하세요. 번역, 영문화, 띄어쓰기 보정, 대소문자 변경 금지.\n- 특히 한글 시트명은 절대 번역하지 마세요. 예: 통합인터넷(국제) -> 통합internet(국제) 는 실패입니다.\n- 정확 파일명: \"02. 한전_AMI_유선간선망_청구세부내역_2026-07-07 09_23_01_DSMC_260707.xlsx\"",
+      "histId": "p3jak879"
+    },
+    {
+      "role": "assistant",
+      "content": "\n\n지정된 파일의 Sheet1 시트에서 1~9행을 삭제합니다.\n\n```python\ndef transform(ctx):\n    target_book = ctx.book(\"02. 한전_AMI_유선간선망_청구세부내역_2026-07-07 09_23_01_DSMC_260707.xlsx\")\n    target_sheet = \"Sheet1\"\n    \n    # 1~9행 삭제\n    target_book.delete_rows(target_sheet, \"1:9\")\n```",
+      "histId": "z7zymve8"
+    },
+    {
+      "role": "user",
+      "content": "@시트[02. 한전_AMI_유선간선망_청구세부내역_2026-07-07 09_23_01_DSMC_260707.xlsx/Sheet1]의  1~9행을 삭제해줘\n\n[정확 참조]\n- 시트명: 파일 \"02. 한전_AMI_유선간선망_청구세부내역_2026-07-07 09_23_01_DSMC_260707.xlsx\", 시트 \"Sheet1\"\n- 선택 범위: 02. 한전_AMI_유선간선망_청구세부내역_2026-07-07 09_23_01_DSMC_260707.xlsx/Sheet1!A1:M1\n[정확 참조 사용 규칙 - 강제]\n- 아래 파일명/시트명/범위/컬럼명은 코드에 그대로 복사하세요. 번역, 영문화, 띄어쓰기 보정, 대소문자 변경 금지.\n- 특히 한글 시트명은 절대 번역하지 마세요. 예: 통합인터넷(국제) -> 통합internet(국제) 는 실패입니다.\n- 정확 파일명: \"02. 한전_AMI_유선간선망_청구세부내역_2026-07-07 09_23_01_DSMC_260707.xlsx\"\n- 정확 시트명: \"Sheet1\"\n- 정확 파일명: \"02. 한전_AMI_유선간선망_청구세부내역_2026-07-07 09_23_01_DSMC_260707.xlsx\"\n- 정확 시트명: \"Sheet1\"\n- 정확 주소: \"A1:M1\"\n- 정확 파일명: \"02. 한전_AMI_유선간선망_청구세부내역_2026-07-07 09_23_01_DSMC_260707.xlsx\"\n- 정확 시트명: \"Sheet1\"\n- 정확 주소: \"A1:M1\"",
+      "histId": "f66pxqzf"
+    },
+    {
+      "role": "assistant",
+      "content": "\n\n```python\ndef transform(ctx):\n    target_book = ctx.book(\"02. 한전_AMI_유선간선망_청구세부내역_2026-07-07 09_23_01_DSMC_260707.xlsx\")\n    target_sheet = \"Sheet1\"\n    \n    # 1~9행 삭제\n    target_book.delete_rows(target_sheet, \"1:9\")\n```",
+      "histId": "hzvuxoqy"
+    },
+    {
+      "role": "user",
+      "content": "@시트[02. 한전_AMI_유선간선망_청구세부내역_2026-07-07 09_23_01_DSMC_260707.xlsx/Sheet1] 의 이름을 유선간선망 으로 바꿔줘\n\n[정확 참조]\n- 시트명: 파일 \"02. 한전_AMI_유선간선망_청구세부내역_2026-07-07 09_23_01_DSMC_260707.xlsx\", 시트 \"Sheet1\"\n[정확 참조 사용 규칙 - 강제]\n- 아래 파일명/시트명/범위/컬럼명은 코드에 그대로 복사하세요. 번역, 영문화, 띄어쓰기 보정, 대소문자 변경 금지.\n- 특히 한글 시트명은 절대 번역하지 마세요. 예: 통합인터넷(국제) -> 통합internet(국제) 는 실패입니다.\n- 정확 파일명: \"02. 한전_AMI_유선간선망_청구세부내역_2026-07-07 09_23_01_DSMC_260707.xlsx\"\n- 정확 시트명: \"Sheet1\"",
+      "histId": "akjta3s8"
+    },
+    {
+      "role": "assistant",
+      "content": "\n\n```python\ndef transform(ctx):\n    target_book = ctx.book(\"02. 한전_AMI_유선간선망_청구세부내역_2026-07-07 09_23_01_DSMC_260707.xlsx\")\n    target_book.rename_sheet(\"Sheet1\", \"유선간선망\")\n```",
+      "histId": "n6edau0h"
+    },
+    {
+      "role": "user",
+      "content": "@시트[02. 한전_AMI_유선간선망_청구세부내역_2026-07-07 09_23_01_DSMC_260707.xlsx/유선간선망] 의 효력발생일자 기준으로 내림차순해줘\n\n[정확 참조]\n- 시트명: 파일 \"02. 한전_AMI_유선간선망_청구세부내역_2026-07-07 09_23_01_DSMC_260707.xlsx\", 시트 \"유선간선망\"\n[정확 참조 사용 규칙 - 강제]\n- 아래 파일명/시트명/범위/컬럼명은 코드에 그대로 복사하세요. 번역, 영문화, 띄어쓰기 보정, 대소문자 변경 금지.\n- 특히 한글 시트명은 절대 번역하지 마세요. 예: 통합인터넷(국제) -> 통합internet(국제) 는 실패입니다.\n- 정확 파일명: \"02. 한전_AMI_유선간선망_청구세부내역_2026-07-07 09_23_01_DSMC_260707.xlsx\"\n- 정확 시트명: \"유선간선망\"",
+      "histId": "hdge6uk7"
+    },
+    {
+      "role": "assistant",
+      "content": "\n\n지정된 파일의 \"유선간선망\" 시트에서 \"효력발생일자\" 열을 기준으로 내림차순 정렬합니다.\n\n```python\ndef transform(ctx):\n    book = ctx.book(\"02. 한전_AMI_유선간선망_청구세부내역_2026-07-07 09_23_01_DSMC_260707.xlsx\")\n    sheet = \"유선간선망\"\n    \n    last_row = book.used_last_row(sheet)\n    last_col = book.used_last_col(sheet)\n    \n    def col_to_letter(n):\n        s = \"\"\n        while n > 0:\n            n, r = divmod(n - 1, 26)\n            s = chr(65 + r) + s\n        return s\n        \n    range_end = f\"{col_to_letter(last_col)}{last_row}\"\n    sort_range = f\"A1:{range_end}\"\n    \n    book.sort(sheet, sort_range, key_col=\"효력발생일자\", ascending=False, has_header=True)\n```",
+      "histId": "xa2q2q43"
+    },
+    {
+      "role": "user",
+      "content": "@시트[02. 한전_AMI_유선간선망_청구세부내역_2026-07-07 09_23_01_DSMC_260707.xlsx/유선간선망]의 T열(기본료)의 전체 합계를 해당 열 제일 마지막에 SUM 함수 형태로 계산해서 수식 걸어서 넣어주고, 노란색 음영을 주고 볼드 처리 해줘. 서식 부분은 VBA를 활용해.\n\n[정확 참조]\n- 시트명: 파일 \"02. 한전_AMI_유선간선망_청구세부내역_2026-07-07 09_23_01_DSMC_260707.xlsx\", 시트 \"유선간선망\"\n[정확 참조 사용 규칙 - 강제]\n- 아래 파일명/시트명/범위/컬럼명은 코드에 그대로 복사하세요. 번역, 영문화, 띄어쓰기 보정, 대소문자 변경 금지.\n- 특히 한글 시트명은 절대 번역하지 마세요. 예: 통합인터넷(국제) -> 통합internet(국제) 는 실패입니다.\n- 정확 파일명: \"02. 한전_AMI_유선간선망_청구세부내역_2026-07-07 09_23_01_DSMC_260707.xlsx\"\n- 정확 시트명: \"유선간선망\"",
+      "histId": "3a4bdjlg"
+    },
+    {
+      "role": "assistant",
+      "content": "\n\n제목: T열 합계 및 서식 적용\n\n지정된 파일의 \"유선간선망\" 시트에서 T열(기본료)의 합계를 SUM 함수로 계산하여 마지막 데이터 행 아래에 추가하고, 노란색 음영과 볼드 서식을 적용합니다.\n\n```vba\nSub B2BSkill()\n    Dim wb As Workbook\n    Dim ws As Worksheet\n    Dim lastRow As Long\n    Dim sumCell As Range\n    \n    ' 대상 워크북 설정\n    On Error Resume Next\n    Set wb = Workbooks(\"02. 한전_AMI_유선간선망_청구세부내역_2026-07-07 09_23_01_DSMC_260707.xlsx\")\n    If wb Is Nothing Then\n        MsgBox \"파일을 찾을 수 없습니다: 02. 한전_AMI_유선간선망_청구세부내역_2026-07-07 09_23_01_DSMC_260707.xlsx\", vbCritical\n        Exit Sub\n    End If\n    On Error GoTo 0\n    \n    ' 대상 시트 설정\n    On Error Resume Next\n    Set ws = wb.Worksheets(\"유선간선망\")\n    If ws Is Nothing Then\n        MsgBox \"시트를 찾을 수 없습니다: 유선간선망\", vbCritical\n        Exit Sub\n    End If\n    On Error GoTo 0\n    \n    Application.ScreenUpdating = False\n    \n    ' T열의 마지막 데이터 행 찾기\n    lastRow = ws.Cells(ws.Rows.Count, \"T\").End(xlUp).Row\n    \n    ' 데이터가 1행도 없거나 헤더만 있는 경우 처리\n    If lastRow < 2 Then\n        MsgBox \"T열에 데이터가 없습니다.\", vbExclamation\n        Application.ScreenUpdating = True\n        Exit Sub\n    End If\n    \n    ' 합계 셀 설정 (마지막 데이터 행의 바로 아래)\n    Set sumCell = ws.Cells(lastRow + 1, \"T\")\n    \n    ' SUM 수식 입력 (T2부터 마지막 행까지)\n    sumCell.Formula = \"=SUM(T2:T\" & lastRow & \")\"\n    \n    ' 서식 적용: 노란색 배경, 볼드\n    With sumCell\n        .Interior.Color = RGB(255, 255, 0) ' 노란색\n        .Font.Bold = True\n    End With\n    \n    Application.ScreenUpdating = True\n    MsgBox \"작업이 완료되었습니다.\", vbInformation\nEnd Sub\n```",
+      "histId": "zjm3vepn"
+    },
+    {
+      "role": "user",
+      "content": "방금 생성한 VBA 가 적용 직전 정적 안전 검사에서 막혔습니다.\n원래 사용자 요청을 그대로 만족하되, 아래 위반을 모두 제거해 VBA 를 다시 작성하세요.\n\n## 원래 사용자 요청\n@시트[02. 한전_AMI_유선간선망_청구세부내역_2026-07-07 09_23_01_DSMC_260707.xlsx/유선간선망]의 T열(기본료)의 전체 합계를 해당 열 제일 마지막에 SUM 함수 형태로 계산해서 수식 걸어서 넣어주고, 노란색 음영을 주고 볼드 처리 해줘. 서식 부분은 VBA를 활용해.\n\n## 정확 시트명\n정확 시트명(절대 변경 금지): \"유선간선망\" 위 시트명은 코드에 그대로 복사하세요. 번역/영문화/띄어쓰기 보정 금지. \"2026년\"은 \"2026 년\"이 아니며, \"통합인터넷(국제)\"는 \"통합internet(국제)\"가 아닙니다.\n\n## 막힌 이유(모두 고칠 것)\n- On Error Resume Next 로 오류를 삼키면 안 됩니다(실패가 '적용됨'으로 오보). 실패는 Err.Raise 로 전파하거나 On Error GoTo Cleanup 으로 상태 원복 후 재전파하세요.\n- MsgBox 는 자동 실행을 멈춥니다. 제거하고 실패는 Err.Raise 로 알리세요.\n- Application.ScreenUpdating/Calculation/EnableEvents/DisplayAlerts 를 바꾸는 VBA는 오류가 나도 반드시 Cleanup 라벨에서 원복해야 합니다. On Error GoTo Cleanup, prevCalc 저장, Cleanup: 원복 후 Err.Raise 패턴으로 작성하세요.\n\n## 막힌 코드\n```vba\nSub B2BSkill()\n    Dim wb As Workbook\n    Dim ws As Worksheet\n    Dim lastRow As Long\n    Dim sumCell As Range\n    \n    ' 대상 워크북 설정\n    On Error Resume Next\n    Set wb = Workbooks(\"02. 한전_AMI_유선간선망_청구세부내역_2026-07-07 09_23_01_DSMC_260707.xlsx\")\n    If wb Is Nothing Then\n        MsgBox \"파일을 찾을 수 없습니다: 02. 한전_AMI_유선간선망_청구세부내역_2026-07-07 09_23_01_DSMC_260707.xlsx\", vbCritical\n        Exit Sub\n    End If\n    On Error GoTo 0\n    \n    ' 대상 시트 설정\n    On Error Resume Next\n    Set ws = wb.Worksheets(\"유선간선망\")\n    If ws Is Nothing Then\n        MsgBox \"시트를 찾을 수 없습니다: 유선간선망\", vbCritical\n        Exit Sub\n    End If\n    On Error GoTo 0\n    \n    Application.ScreenUpdating = False\n    \n    ' T열의 마지막 데이터 행 찾기\n    lastRow = ws.Cells(ws.Rows.Count, \"T\").End(xlUp).Row\n    \n    ' 데이터가 1행도 없거나 헤더만 있는 경우 처리\n    If lastRow < 2 Then\n        MsgBox \"T열에 데이터가 없습니다.\", vbExclamation\n        Application.ScreenUpdating = True\n        Exit Sub\n    End If\n    \n    ' 합계 셀 설정 (마지막 데이터 행의 바로 아래)\n    Set sumCell = ws.Cells(lastRow + 1, \"T\")\n    \n    ' SUM 수식 입력 (T2부터 마지막 행까지)\n    sumCell.Formula = \"=SUM(T2:T\" & lastRow & \")\"\n    \n    ' 서식 적용: 노란색 배경, 볼드\n    With sumCell\n        .Interior.Color = RGB(255, 255, 0) ' 노란색\n        .Font.Bold = True\n    End With\n    \n    Application.ScreenUpdating = True\n    MsgBox \"작업이 완료되었습니다.\", vbInformation\nEnd Sub\n```\n\n\n\n\n반드시 하나의 ```vba 코드 블록만 출력하세요. On Error Resume Next / MsgBox / InputBox / Shell /\nWorkbooks.Open / Save·Close / Application.Quit / 무관한 전체 시트 순회를 쓰지 마세요.\n대상을 못 찾으면 Err.Raise vbObjectError + 513, \"B2BSkill\", \"사유\" 로 실패를 알리세요.\n/no_think",
+      "histId": "bqkboecd"
+    },
+    {
+      "role": "assistant",
+      "content": "\n\n제목: T열 합계 수식 및 서식 적용\n\n```vba\nSub B2BSkill()\n    Dim wb As Workbook\n    Dim ws As Worksheet\n    Dim lastRow As Long\n    Dim sumCell As Range\n    Dim prevScreenUpdating As Boolean\n    \n    On Error GoTo Cleanup\n    prevScreenUpdating = Application.ScreenUpdating\n    Application.ScreenUpdating = False\n    \n    ' 대상 워크북 설정\n    Set wb = Workbooks(\"02. 한전_AMI_유선간선망_청구세부내역_2026-07-07 09_23_01_DSMC_260707.xlsx\")\n    \n    ' 대상 시트 설정\n    Set ws = wb.Worksheets(\"유선간선망\")\n    \n    ' T열의 마지막 데이터 행 찾기\n    lastRow = ws.Cells(ws.Rows.Count, \"T\").End(xlUp).Row\n    \n    ' 데이터가 1행도 없거나 헤더만 있는 경우 처리\n    If lastRow < 2 Then\n        Err.Raise vbObjectError + 513, \"B2BSkill\", \"T열에 데이터가 없습니다.\"\n    End If\n    \n    ' 합계 셀 설정 (마지막 데이터 행의 바로 아래)\n    Set sumCell = ws.Cells(lastRow + 1, \"T\")\n    \n    ' SUM 수식 입력 (T2부터 마지막 행까지)\n    sumCell.Formula = \"=SUM(T2:T\" & lastRow & \")\"\n    \n    ' 서식 적용: 노란색 배경, 볼드\n    With sumCell\n        .Interior.Color = RGB(255, 255, 0) ' 노란색\n        .Font.Bold = True\n    End With\n    \nCleanup:\n    Application.ScreenUpdating = prevScreenUpdating\n    If Err.Number <> 0 Then\n        Err.Raise Err.Number, Err.Source, Err.Description\n    End If\nEnd Sub\n```",
+      "histId": "fpb1vtek"
+    },
+    {
+      "role": "user",
+      "content": "@시트[02. 한전_AMI_유선간선망_청구세부내역_2026-07-07 09_23_01_DSMC_260707.xlsx/유선간선망]을 @파일[한국전력공사_202606_v1.1_DSMC_260710.xlsx]로 시트를 복사해줘\n\n[정확 참조]\n- 시트명: 파일 \"02. 한전_AMI_유선간선망_청구세부내역_2026-07-07 09_23_01_DSMC_260707.xlsx\", 시트 \"유선간선망\"\n- 파일명: 한국전력공사_202606_v1.1_DSMC_260710.xlsx\n[정확 참조 사용 규칙 - 강제]\n- 아래 파일명/시트명/범위/컬럼명은 코드에 그대로 복사하세요. 번역, 영문화, 띄어쓰기 보정, 대소문자 변경 금지.\n- 특히 한글 시트명은 절대 번역하지 마세요. 예: 통합인터넷(국제) -> 통합internet(국제) 는 실패입니다.\n- 정확 파일명: \"02. 한전_AMI_유선간선망_청구세부내역_2026-07-07 09_23_01_DSMC_260707.xlsx\"\n- 정확 시트명: \"유선간선망\"\n- 정확 파일명: \"한국전력공사_202606_v1.1_DSMC_260710.xlsx\"",
+      "histId": "xewzsa7r"
+    },
+    {
+      "role": "assistant",
+      "content": "\n\n\"02. 한전_AMI_유선간선망_청구세부내역_2026-07-07 09_23_01_DSMC_260707.xlsx\" 파일의 \"유선간선망\" 시트를 \"한국전력공사_202606_v1.1_DSMC_260710.xlsx\" 파일로 복사합니다.\n\n```python\ndef transform(ctx):\n    ctx.copy_sheet(\"유선간선망\", dst_book=\"한국전력공사_202606_v1.1_DSMC_260710.xlsx\")\n```",
+      "histId": "8lcsp3yh"
+    },
+    {
+      "role": "user",
+      "content": "@시트[한국전력공사_202606_v1.1_DSMC_260710.xlsx/상품번호별] 에서 청구계정번호가 512102397744인 데이터들만 별도의 시트로 복사해줘. 그리고 시트명은 '무선간선망'으로 해줘\n\n@시트[한국전력공사_202606_v1.1_DSMC_260710.xlsx/상품번호별] 에서 청구계정번호가 611769344898인 데이터들만 별도의 시트로 복사해줘. 그리고 시트명은 '고압모계기'으로 해줘\n\n@시트[한국전력공사_202606_v1.1_DSMC_260710.xlsx/상품번호별] 에서 청구계정번호가 619299519426인 데이터들만 별도의 시트로 복사해줘. 그리고 시트명은 '고압자계기'로 해줘\n\n[정확 참조]\n- 시트명: 파일 \"한국전력공사_202606_v1.1_DSMC_260710.xlsx\", 시트 \"상품번호별\"\n[정확 참조 사용 규칙 - 강제]\n- 아래 파일명/시트명/범위/컬럼명은 코드에 그대로 복사하세요. 번역, 영문화, 띄어쓰기 보정, 대소문자 변경 금지.\n- 특히 한글 시트명은 절대 번역하지 마세요. 예: 통합인터넷(국제) -> 통합internet(국제) 는 실패입니다.\n- 정확 파일명: \"한국전력공사_202606_v1.1_DSMC_260710.xlsx\"\n- 정확 시트명: \"상품번호별\"\n- 정확 파일명: \"한국전력공사_202606_v1.1_DSMC_260710.xlsx\"\n- 정확 시트명: \"상품번호별\"\n- 정확 파일명: \"한국전력공사_202606_v1.1_DSMC_260710.xlsx\"\n- 정확 시트명: \"상품번호별\"",
+      "histId": "x4eq9zme"
+    },
+    {
+      "role": "assistant",
+      "content": "\n\n```python\ndef transform(ctx):\n    book = ctx.book(\"한국전력공사_202606_v1.1_DSMC_260710.xlsx\")\n    sheet = \"상품번호별\"\n    header_row = 1\n    \n    # 청구계정번호 열 인덱스 찾기 (0-based)\n    col_idx = book.find_header(sheet, \"청구계정번호\", header_row=header_row) - 1\n    \n    # 조건 1: 512102397744 -> 무선간선망\n    book.filter_to_sheet(sheet, lambda r: str(r[col_idx]) == \"512102397744\", \"무선간선망\")\n    \n    # 조건 2: 611769344898 -> 고압모계기\n    book.filter_to_sheet(sheet, lambda r: str(r[col_idx]) == \"611769344898\", \"고압모계기\")\n    \n    # 조건 3: 619299519426 -> 고압자계기\n    book.filter_to_sheet(sheet, lambda r: str(r[col_idx]) == \"619299519426\", \"고압자계기\")\n```",
+      "histId": "7wr4h2nt"
+    },
+    {
+      "role": "user",
+      "content": "@시트[한국전력공사_202606_v1.1_DSMC_260710.xlsx/상품번호별] 의 데이터에서, 서비스, 본부명, 청구계정번호, 상품번호, 상품번호(한전), 가입자번호, 요금제코드, 요금제명, 개통상태, 상태변경일, 최초개통일, 모델명, 단말일련번호, 사용량(Mbyte), 개통대리점코드, 개통대리점명, 기본료, 부가세, 청구금액, 비고 항목의 데이터가 아닌 다른 열의 데이터들은 모두 삭제해줘. 필요 없는 데이터야. 내가 말한 데이터만 딱 들어가게끔 해줘. 그리고 현재의 BA열인 상품번호는 삭제해줘.\n\n[정확 참조]\n- 시트명: 파일 \"한국전력공사_202606_v1.1_DSMC_260710.xlsx\", 시트 \"상품번호별\"\n[정확 참조 사용 규칙 - 강제]\n- 아래 파일명/시트명/범위/컬럼명은 코드에 그대로 복사하세요. 번역, 영문화, 띄어쓰기 보정, 대소문자 변경 금지.\n- 특히 한글 시트명은 절대 번역하지 마세요. 예: 통합인터넷(국제) -> 통합internet(국제) 는 실패입니다.\n- 정확 파일명: \"한국전력공사_202606_v1.1_DSMC_260710.xlsx\"\n- 정확 시트명: \"상품번호별\"",
+      "histId": "sxx11kko"
+    },
+    {
+      "role": "assistant",
+      "content": "\n\n```python\ndef transform(ctx):\n    book = ctx.book(\"한국전력공사_202606_v1.1_DSMC_260710.xlsx\")\n    sheet = \"상품번호별\"\n    keep_headers = [\n        \"서비스\", \"본부명\", \"청구계정번호\", \"상품번호\", \"상품번호(한전)\", \n        \"가입자번호\", \"요금제코드\", \"요금제명\", \"개통상태\", \"상태변경일\", \n        \"최초개통일\", \"모델명\", \"단말일련번호\", \"사용량(Mbyte)\", \n        \"개통대리점코드\", \"개통대리점명\", \"기본료\", \"부가세\", \"청구금액\", \"비고\"\n    ]\n    \n    # BA열 (53열) 은 명시적으로 삭제 대상\n    ba_col_idx = 53 \n    \n    def idx_to_col(c):\n        s = \"\"\n        while c > 0:\n            c, r = divmod(c - 1, 26)\n            s = chr(65 + r) + s\n        return s\n        \n    keep_indices = set()\n    for h in keep_headers:\n        try:\n            col_idx = book.find_header(sheet, h, header_row=1)\n            if col_idx != ba_col_idx: # BA열은 유지 목록에서 제외\n                keep_indices.add(col_idx)\n        except Exception:\n            raise ValueError(f\"헤더 '{h}'를 찾을 수 없습니다.\")\n            \n    last_col_idx = book.used_last_col(sheet)\n    all_indices = set(range(1, last_col_idx + 1))\n    delete_indices = sorted(list(all_indices - keep_indices), reverse=True)\n    \n    if not delete_indices:\n        raise ValueError(\"삭제할 열이 없습니다.\")\n        \n    for idx in delete_indices:\n        col_letter = idx_to_col(idx)\n        book.delete_cols(sheet, col_letter)\n```",
+      "histId": "uwbbsxr9"
+    },
+    {
+      "role": "user",
+      "content": "@시트[01. 한전_DAS_배전자동화_청구세부내역_2026-07-12 19_00_54_DSMC_260712.xlsx/Sheet1] 의 1~9행을 삭제해줘\n\n[정확 참조]\n- 시트명: 파일 \"01. 한전_DAS_배전자동화_청구세부내역_2026-07-12 19_00_54_DSMC_260712.xlsx\", 시트 \"Sheet1\"\n[정확 참조 사용 규칙 - 강제]\n- 아래 파일명/시트명/범위/컬럼명은 코드에 그대로 복사하세요. 번역, 영문화, 띄어쓰기 보정, 대소문자 변경 금지.\n- 특히 한글 시트명은 절대 번역하지 마세요. 예: 통합인터넷(국제) -> 통합internet(국제) 는 실패입니다.\n- 정확 파일명: \"01. 한전_DAS_배전자동화_청구세부내역_2026-07-12 19_00_54_DSMC_260712.xlsx\"\n- 정확 시트명: \"Sheet1\"",
+      "histId": "lcazhkt9"
+    },
+    {
+      "role": "assistant",
+      "content": "\n\n```python\ndef transform(ctx):\n    book = ctx.book(\"01. 한전_DAS_배전자동화_청구세부내역_2026-07-12 19_00_54_DSMC_260712.xlsx\")\n    book.delete_rows(\"Sheet1\", \"1:9\")\n```",
+      "histId": "q9ioeuv5"
+    },
+    {
+      "role": "user",
+      "content": "@시트[01. 한전_DAS_배전자동화_청구세부내역_2026-07-12 19_00_54_DSMC_260712.xlsx/Sheet1] 의 이름을 배전자동화 로 바꿔줘\n\n[정확 참조]\n- 시트명: 파일 \"01. 한전_DAS_배전자동화_청구세부내역_2026-07-12 19_00_54_DSMC_260712.xlsx\", 시트 \"Sheet1\"\n[정확 참조 사용 규칙 - 강제]\n- 아래 파일명/시트명/범위/컬럼명은 코드에 그대로 복사하세요. 번역, 영문화, 띄어쓰기 보정, 대소문자 변경 금지.\n- 특히 한글 시트명은 절대 번역하지 마세요. 예: 통합인터넷(국제) -> 통합internet(국제) 는 실패입니다.\n- 정확 파일명: \"01. 한전_DAS_배전자동화_청구세부내역_2026-07-12 19_00_54_DSMC_260712.xlsx\"\n- 정확 시트명: \"Sheet1\"",
+      "histId": "z5dexhiy"
+    },
+    {
+      "role": "assistant",
+      "content": "\n\n```python\ndef transform(ctx):\n    book = ctx.book(\"01. 한전_DAS_배전자동화_청구세부내역_2026-07-12 19_00_54_DSMC_260712.xlsx\")\n    book.rename_sheet(\"Sheet1\", \"배전자동화\")\n```",
+      "histId": "qzfdjl27"
+    },
+    {
+      "role": "user",
+      "content": "@시트[01. 한전_DAS_배전자동화_청구세부내역_2026-07-12 19_00_54_DSMC_260712.xlsx/배전자동화] 의 효력발생일자 기준으로 내림차순해줘\n\n[정확 참조]\n- 시트명: 파일 \"01. 한전_DAS_배전자동화_청구세부내역_2026-07-12 19_00_54_DSMC_260712.xlsx\", 시트 \"배전자동화\"\n[정확 참조 사용 규칙 - 강제]\n- 아래 파일명/시트명/범위/컬럼명은 코드에 그대로 복사하세요. 번역, 영문화, 띄어쓰기 보정, 대소문자 변경 금지.\n- 특히 한글 시트명은 절대 번역하지 마세요. 예: 통합인터넷(국제) -> 통합internet(국제) 는 실패입니다.\n- 정확 파일명: \"01. 한전_DAS_배전자동화_청구세부내역_2026-07-12 19_00_54_DSMC_260712.xlsx\"\n- 정확 시트명: \"배전자동화\"",
+      "histId": "jzeozhva"
+    },
+    {
+      "role": "assistant",
+      "content": "\n\n```python\ndef transform(ctx):\n    book = ctx.book(\"01. 한전_DAS_배전자동화_청구세부내역_2026-07-12 19_00_54_DSMC_260712.xlsx\")\n    sheet = \"배전자동화\"\n    last_row = book.used_last_row(sheet)\n    last_col = book.used_last_col(sheet)\n    \n    def col_letter(n):\n        s = \"\"\n        while n:\n            n, r = divmod(n - 1, 26)\n            s = chr(65 + r) + s\n        return s\n    \n    range_str = f\"A1:{col_letter(last_col)}{last_row}\"\n    book.sort(sheet, range_str, key_col=\"효력발생일자\", ascending=False, has_header=True)\n```",
+      "histId": "u274edv6"
+    },
+    {
+      "role": "user",
+      "content": "@시트[01. 한전_DAS_배전자동화_청구세부내역_2026-07-12 19_00_54_DSMC_260712.xlsx/배전자동화] 의 R열 의 전체 합계를 해당 열 제일 마지막에 SUM 함수 형태로 계산해서 수식 걸어서 넣어주고, 노란색 음영을 주고 볼드 처리 해줘. 서식 부분은 VBA를 활용해.\n\n[정확 참조]\n- 시트명: 파일 \"01. 한전_DAS_배전자동화_청구세부내역_2026-07-12 19_00_54_DSMC_260712.xlsx\", 시트 \"배전자동화\"\n[정확 참조 사용 규칙 - 강제]\n- 아래 파일명/시트명/범위/컬럼명은 코드에 그대로 복사하세요. 번역, 영문화, 띄어쓰기 보정, 대소문자 변경 금지.\n- 특히 한글 시트명은 절대 번역하지 마세요. 예: 통합인터넷(국제) -> 통합internet(국제) 는 실패입니다.\n- 정확 파일명: \"01. 한전_DAS_배전자동화_청구세부내역_2026-07-12 19_00_54_DSMC_260712.xlsx\"\n- 정확 시트명: \"배전자동화\"",
+      "histId": "8c6tc8jq"
+    },
+    {
+      "role": "assistant",
+      "content": "\n\n제목: 배전자동화 시트 R열 합계 수식 및 서식 적용\n\n```vba\nSub B2BSkill()\n    Dim wb As Workbook\n    Dim ws As Worksheet\n    Dim lastRow As Long\n    Dim sumRow As Long\n    \n    ' 파일 참조\n    On Error Resume Next\n    Set wb = Workbooks(\"01. 한전_DAS_배전자동화_청구세부내역_2026-07-12 19_00_54_DSMC_260712.xlsx\")\n    If wb Is Nothing Then\n        MsgBox \"지정된 파일을 찾을 수 없습니다.\"\n        Exit Sub\n    End If\n    On Error GoTo 0\n    \n    ' 시트 참조\n    On Error Resume Next\n    Set ws = wb.Worksheets(\"배전자동화\")\n    If ws Is Nothing Then\n        MsgBox \"지정된 시트를 찾을 수 없습니다.\"\n        Exit Sub\n    End If\n    On Error GoTo 0\n    \n    ' R열(기본요금)의 마지막 데이터 행 찾기\n    lastRow = ws.Cells(ws.Rows.Count, \"R\").End(xlUp).Row\n    \n    ' 데이터가 없는 경우 확인 (헤더 행 1 제외)\n    If lastRow < 2 Then\n        MsgBox \"R열에 합계할 데이터가 없습니다.\"\n        Exit Sub\n    End If\n    \n    ' 합계 행 설정 (데이터 마지막 행의 다음 행)\n    sumRow = lastRow + 1\n    \n    ' SUM 수식 입력 및 서식 적용\n    With ws.Cells(sumRow, \"R\")\n        .Formula = \"=SUM(R2:R\" & lastRow & \")\"\n        .Interior.Color = vbYellow\n        .Font.Bold = True\n    End With\n    \n    MsgBox \"R열 합계 수식 및 서식이 적용되었습니다.\"\nEnd Sub\n```",
+      "histId": "daixne7d"
+    },
+    {
+      "role": "user",
+      "content": "방금 생성한 VBA 가 적용 직전 정적 안전 검사에서 막혔습니다.\n원래 사용자 요청을 그대로 만족하되, 아래 위반을 모두 제거해 VBA 를 다시 작성하세요.\n\n## 원래 사용자 요청\n@시트[01. 한전_DAS_배전자동화_청구세부내역_2026-07-12 19_00_54_DSMC_260712.xlsx/배전자동화] 의 R열 의 전체 합계를 해당 열 제일 마지막에 SUM 함수 형태로 계산해서 수식 걸어서 넣어주고, 노란색 음영을 주고 볼드 처리 해줘. 서식 부분은 VBA를 활용해.\n\n## 정확 시트명\n정확 시트명(절대 변경 금지): \"배전자동화\" 위 시트명은 코드에 그대로 복사하세요. 번역/영문화/띄어쓰기 보정 금지. \"2026년\"은 \"2026 년\"이 아니며, \"통합인터넷(국제)\"는 \"통합internet(국제)\"가 아닙니다.\n\n## 막힌 이유(모두 고칠 것)\n- On Error Resume Next 로 오류를 삼키면 안 됩니다(실패가 '적용됨'으로 오보). 실패는 Err.Raise 로 전파하거나 On Error GoTo Cleanup 으로 상태 원복 후 재전파하세요.\n- MsgBox 는 자동 실행을 멈춥니다. 제거하고 실패는 Err.Raise 로 알리세요.\n\n## 막힌 코드\n```vba\nSub B2BSkill()\n    Dim wb As Workbook\n    Dim ws As Worksheet\n    Dim lastRow As Long\n    Dim sumRow As Long\n    \n    ' 파일 참조\n    On Error Resume Next\n    Set wb = Workbooks(\"01. 한전_DAS_배전자동화_청구세부내역_2026-07-12 19_00_54_DSMC_260712.xlsx\")\n    If wb Is Nothing Then\n        MsgBox \"지정된 파일을 찾을 수 없습니다.\"\n        Exit Sub\n    End If\n    On Error GoTo 0\n    \n    ' 시트 참조\n    On Error Resume Next\n    Set ws = wb.Worksheets(\"배전자동화\")\n    If ws Is Nothing Then\n        MsgBox \"지정된 시트를 찾을 수 없습니다.\"\n        Exit Sub\n    End If\n    On Error GoTo 0\n    \n    ' R열(기본요금)의 마지막 데이터 행 찾기\n    lastRow = ws.Cells(ws.Rows.Count, \"R\").End(xlUp).Row\n    \n    ' 데이터가 없는 경우 확인 (헤더 행 1 제외)\n    If lastRow < 2 Then\n        MsgBox \"R열에 합계할 데이터가 없습니다.\"\n        Exit Sub\n    End If\n    \n    ' 합계 행 설정 (데이터 마지막 행의 다음 행)\n    sumRow = lastRow + 1\n    \n    ' SUM 수식 입력 및 서식 적용\n    With ws.Cells(sumRow, \"R\")\n        .Formula = \"=SUM(R2:R\" & lastRow & \")\"\n        .Interior.Color = vbYellow\n        .Font.Bold = True\n    End With\n    \n    MsgBox \"R열 합계 수식 및 서식이 적용되었습니다.\"\nEnd Sub\n```\n\n\n\n\n반드시 하나의 ```vba 코드 블록만 출력하세요. On Error Resume Next / MsgBox / InputBox / Shell /\nWorkbooks.Open / Save·Close / Application.Quit / 무관한 전체 시트 순회를 쓰지 마세요.\n대상을 못 찾으면 Err.Raise vbObjectError + 513, \"B2BSkill\", \"사유\" 로 실패를 알리세요.\n/no_think",
+      "histId": "w72km78j"
+    },
+    {
+      "role": "assistant",
+      "content": "\n\n```vba\nSub B2BSkill()\n    Dim wb As Workbook\n    Dim ws As Worksheet\n    Dim lastRow As Long\n    Dim sumRow As Long\n    Dim prevCalc As XlCalculation\n    \n    On Error GoTo Cleanup\n    prevCalc = Application.Calculation\n    Application.ScreenUpdating = False\n    Application.Calculation = xlCalculationManual\n    \n    ' 워크북 참조\n    Set wb = Workbooks(\"01. 한전_DAS_배전자동화_청구세부내역_2026-07-12 19_00_54_DSMC_260712.xlsx\")\n    \n    ' 시트 참조\n    Set ws = wb.Worksheets(\"배전자동화\")\n    \n    ' R열 마지막 데이터 행 찾기\n    lastRow = ws.Cells(ws.Rows.Count, \"R\").End(xlUp).Row\n    \n    ' 데이터가 헤더만 있는 경우 확인\n    If lastRow < 2 Then\n        Err.Raise vbObjectError + 513, \"B2BSkill\", \"R열에 합계할 데이터가 없습니다.\"\n    End If\n    \n    ' 합계 행 설정\n    sumRow = lastRow + 1\n    \n    ' SUM 수식 및 서식 적용\n    With ws.Cells(sumRow, \"R\")\n        .Formula = \"=SUM(R2:R\" & lastRow & \")\"\n        .Interior.Color = vbYellow\n        .Font.Bold = True\n    End With\n    \nCleanup:\n    Application.Calculation = prevCalc\n    Application.ScreenUpdating = True\n    If Err.Number <> 0 Then\n        Err.Raise Err.Number, Err.Source, Err.Description\n    End If\nEnd Sub\n```",
+      "histId": "eg5rlaef"
+    },
+    {
+      "role": "user",
+      "content": "@시트[03. 한전_AMI_무선인입망합산_청구세부내역_2026-07-12 19_01_11_DSMC_260712.xlsx/Sheet1] 시트의 1~9행을 삭제합니다.\n\n[정확 참조]\n- 시트명: 파일 \"03. 한전_AMI_무선인입망합산_청구세부내역_2026-07-12 19_01_11_DSMC_260712.xlsx\", 시트 \"Sheet1\"\n[정확 참조 사용 규칙 - 강제]\n- 아래 파일명/시트명/범위/컬럼명은 코드에 그대로 복사하세요. 번역, 영문화, 띄어쓰기 보정, 대소문자 변경 금지.\n- 특히 한글 시트명은 절대 번역하지 마세요. 예: 통합인터넷(국제) -> 통합internet(국제) 는 실패입니다.\n- 정확 파일명: \"03. 한전_AMI_무선인입망합산_청구세부내역_2026-07-12 19_01_11_DSMC_260712.xlsx\"\n- 정확 시트명: \"Sheet1\"",
+      "histId": "tx0vkm3q"
+    },
+    {
+      "role": "assistant",
+      "content": "\n\n```python\ndef transform(ctx):\n    b = ctx.book(\"03. 한전_AMI_무선인입망합산_청구세부내역_2026-07-12 19_01_11_DSMC_260712.xlsx\")\n    b.delete_rows(\"Sheet1\", \"1:9\")\n```",
+      "histId": "surjwf9j"
+    },
+    {
+      "role": "user",
+      "content": "선택 범위: @범위[03. 한전_AMI_무선인입망합산_청구세부내역_2026-07-12 19_01_11_DSMC_260712.xlsx/Sheet1!B:B] 의  12번째부터 시작하는 글자가 all 이라면 해당 데이터를 'SMGW-C'로, all이 아니라면 '저압인입망'으로 바꿔줘.\nall이 들어간게 SMGW-C형이고, 아닌 거가 저압인입망이야\n\n[정확 참조]\n- 선택 범위: 03. 한전_AMI_무선인입망합산_청구세부내역_2026-07-12 19_01_11_DSMC_260712.xlsx/Sheet1!B:B\n[정확 참조 사용 규칙 - 강제]\n- 아래 파일명/시트명/범위/컬럼명은 코드에 그대로 복사하세요. 번역, 영문화, 띄어쓰기 보정, 대소문자 변경 금지.\n- 특히 한글 시트명은 절대 번역하지 마세요. 예: 통합인터넷(국제) -> 통합internet(국제) 는 실패입니다.\n- 정확 파일명: \"03. 한전_AMI_무선인입망합산_청구세부내역_2026-07-12 19_01_11_DSMC_260712.xlsx\"\n- 정확 시트명: \"Sheet1\"\n- 정확 주소: \"B:B\"",
+      "histId": "3mmdgki0"
+    },
+    {
+      "role": "assistant",
+      "content": "\n\n지정된 파일의 `Sheet1` 시트 B열(2행~최종행)을 한 번에 읽어, 12번째 문자부터 `all` 이 들어간 셀은 `SMGW-C`, 나머지는 `저압인입망`으로 변환한 뒤 일괄 기록합니다.\n\n```python\ndef transform(ctx):\n    b = ctx.book(\"03. 한전_AMI_무선인입망합산_청구세부내역_2026-07-12 19_01_11_DSMC_260712.xlsx\")\n    sheet = \"Sheet1\"\n    last = b.used_last_row(sheet)\n    if last < 2:\n        raise ValueError(\"처리할 데이터 행이 없습니다.\")\n        \n    vals = b.read(sheet, f\"B2:B{last}\")\n    out = []\n    for v in vals:\n        s = str(v[0] or \"\")\n        # 12번째 문자(index 11)부터 \"all\" 로 시작하는지 확인(대소문자 무관)\n        if len(s) > 11 and s[11:14].lower() == \"all\":\n            out.append([\"SMGW-C\"])\n        else:\n            out.append([\"저압인입망\"])\n            \n    b.write(sheet, \"B2\", out)\n```",
+      "histId": "i0smorh4"
+    },
+    {
+      "role": "user",
+      "content": "선택 범위: @범위[03. 한전_AMI_무선인입망합산_청구세부내역_2026-07-07 09_59_07_DSMC_260707.xlsx/Sheet1!B1] 헤더값은 '구분'으로 바꿔줘\n\n[정확 참조]\n- 선택 범위: 03. 한전_AMI_무선인입망합산_청구세부내역_2026-07-07 09_59_07_DSMC_260707.xlsx/Sheet1!B1\n[정확 참조 사용 규칙 - 강제]\n- 아래 파일명/시트명/범위/컬럼명은 코드에 그대로 복사하세요. 번역, 영문화, 띄어쓰기 보정, 대소문자 변경 금지.\n- 특히 한글 시트명은 절대 번역하지 마세요. 예: 통합인터넷(국제) -> 통합internet(국제) 는 실패입니다.\n- 정확 파일명: \"03. 한전_AMI_무선인입망합산_청구세부내역_2026-07-07 09_59_07_DSMC_260707.xlsx\"\n- 정확 시트명: \"Sheet1\"\n- 정확 주소: \"B1\"",
+      "histId": "worv93m9"
+    },
+    {
+      "role": "user",
+      "content": "선택 범위: @범위[03. 한전_AMI_무선인입망합산_청구세부내역_2026-07-12 19_01_11_DSMC_260712.xlsx/Sheet1!B1] 헤더값은 '구분'으로 바꿔줘\n\n[정확 참조]\n- 선택 범위: 03. 한전_AMI_무선인입망합산_청구세부내역_2026-07-12 19_01_11_DSMC_260712.xlsx/Sheet1!B1\n[정확 참조 사용 규칙 - 강제]\n- 아래 파일명/시트명/범위/컬럼명은 코드에 그대로 복사하세요. 번역, 영문화, 띄어쓰기 보정, 대소문자 변경 금지.\n- 특히 한글 시트명은 절대 번역하지 마세요. 예: 통합인터넷(국제) -> 통합internet(국제) 는 실패입니다.\n- 정확 파일명: \"03. 한전_AMI_무선인입망합산_청구세부내역_2026-07-12 19_01_11_DSMC_260712.xlsx\"\n- 정확 시트명: \"Sheet1\"\n- 정확 주소: \"B1\"",
+      "histId": "n5vppop3"
+    },
+    {
+      "role": "assistant",
+      "content": "\n\n```python\ndef transform(ctx):\n    ctx.write_cell(\"Sheet1\", \"B1\", \"구분\")\n```",
+      "histId": "bdv97cob"
+    },
+    {
+      "role": "user",
+      "content": "@시트[03. 한전_AMI_무선인입망합산_청구세부내역_2026-07-12 19_01_11_DSMC_260712.xlsx/Sheet1]  의 시트 이름을 '무선간선망'으로 바꿔줘\n\n[정확 참조]\n- 시트명: 파일 \"03. 한전_AMI_무선인입망합산_청구세부내역_2026-07-12 19_01_11_DSMC_260712.xlsx\", 시트 \"Sheet1\"\n[정확 참조 사용 규칙 - 강제]\n- 아래 파일명/시트명/범위/컬럼명은 코드에 그대로 복사하세요. 번역, 영문화, 띄어쓰기 보정, 대소문자 변경 금지.\n- 특히 한글 시트명은 절대 번역하지 마세요. 예: 통합인터넷(국제) -> 통합internet(국제) 는 실패입니다.\n- 정확 파일명: \"03. 한전_AMI_무선인입망합산_청구세부내역_2026-07-12 19_01_11_DSMC_260712.xlsx\"\n- 정확 시트명: \"Sheet1\"",
+      "histId": "ryyf0xxe"
+    },
+    {
+      "role": "assistant",
+      "content": "\n\n```python\ndef transform(ctx):\n    target_file = \"03. 한전_AMI_무선인입망합산_청구세부내역_2026-07-12 19_01_11_DSMC_260712.xlsx\"\n    ctx.book(target_file).rename_sheet(\"Sheet1\", \"무선간선망\")\n```",
+      "histId": "h9bvlkhq"
+    },
+    {
+      "role": "user",
+      "content": "@시트[03. 한전_AMI_무선인입망합산_청구세부내역_2026-07-12 19_01_11_DSMC_260712.xlsx/Sheet1]  의 시트 이름을 '무선인입망'으로 바꿔줘\n\n[정확 참조]\n- 시트명: 파일 \"03. 한전_AMI_무선인입망합산_청구세부내역_2026-07-12 19_01_11_DSMC_260712.xlsx\", 시트 \"Sheet1\"\n[정확 참조 사용 규칙 - 강제]\n- 아래 파일명/시트명/범위/컬럼명은 코드에 그대로 복사하세요. 번역, 영문화, 띄어쓰기 보정, 대소문자 변경 금지.\n- 특히 한글 시트명은 절대 번역하지 마세요. 예: 통합인터넷(국제) -> 통합internet(국제) 는 실패입니다.\n- 정확 파일명: \"03. 한전_AMI_무선인입망합산_청구세부내역_2026-07-12 19_01_11_DSMC_260712.xlsx\"\n- 정확 시트명: \"Sheet1\"",
+      "histId": "hfftih0x"
+    },
+    {
+      "role": "assistant",
+      "content": "\n\n```python\ndef transform(ctx):\n    target_file = \"03. 한전_AMI_무선인입망합산_청구세부내역_2026-07-12 19_01_11_DSMC_260712.xlsx\"\n    ctx.book(target_file).rename_sheet(\"Sheet1\", \"무선인입망\")\n```",
+      "histId": "umkw0moq"
+    },
+    {
+      "role": "user",
+      "content": "@시트[03. 한전_AMI_무선인입망합산_청구세부내역_2026-07-12 19_01_11_DSMC_260712.xlsx/무선인입망] 개통일자 기준으로 내림차순 해줘\n\n[정확 참조]\n- 시트명: 파일 \"03. 한전_AMI_무선인입망합산_청구세부내역_2026-07-12 19_01_11_DSMC_260712.xlsx\", 시트 \"무선인입망\"\n[정확 참조 사용 규칙 - 강제]\n- 아래 파일명/시트명/범위/컬럼명은 코드에 그대로 복사하세요. 번역, 영문화, 띄어쓰기 보정, 대소문자 변경 금지.\n- 특히 한글 시트명은 절대 번역하지 마세요. 예: 통합인터넷(국제) -> 통합internet(국제) 는 실패입니다.\n- 정확 파일명: \"03. 한전_AMI_무선인입망합산_청구세부내역_2026-07-12 19_01_11_DSMC_260712.xlsx\"\n- 정확 시트명: \"무선인입망\"",
+      "histId": "gb8sbnh1"
+    },
+    {
+      "role": "assistant",
+      "content": "\n\n지정된 파일의 \"무선인입망\" 시트에서 \"개통일자(V3)\" 열(G열)을 기준으로 데이터를 내림차순으로 정렬합니다.\n\n```python\ndef transform(ctx):\n    sheet = \"무선인입망\"\n    last_row = ctx.used_last_row(sheet)\n    last_col = ctx.used_last_col(sheet)\n    \n    if last_row < 1:\n        raise ValueError(\"데이터가 없습니다.\")\n\n    def col_letter(n):\n        s = \"\"\n        while n:\n            n, r = divmod(n - 1, 26)\n            s = chr(65 + r) + s\n        return s\n    \n    range_str = f\"A1:{col_letter(last_col)}{last_row}\"\n    \n    # G열이 개통일자(V3) 열입니다. 내림차순 정렬.\n    ctx.sort(sheet, range_str, key_col=\"G\", ascending=False, has_header=True)\n```",
+      "histId": "ciwj8un1"
+    },
+    {
+      "role": "user",
+      "content": "@시트[03. 한전_AMI_무선인입망합산_청구세부내역_2026-07-12 19_01_11_DSMC_260712.xlsx/무선인입망] 상태변경일자 기준으로 내림차순으로 정렬해줘\n\n[정확 참조]\n- 시트명: 파일 \"03. 한전_AMI_무선인입망합산_청구세부내역_2026-07-12 19_01_11_DSMC_260712.xlsx\", 시트 \"무선인입망\"\n[정확 참조 사용 규칙 - 강제]\n- 아래 파일명/시트명/범위/컬럼명은 코드에 그대로 복사하세요. 번역, 영문화, 띄어쓰기 보정, 대소문자 변경 금지.\n- 특히 한글 시트명은 절대 번역하지 마세요. 예: 통합인터넷(국제) -> 통합internet(국제) 는 실패입니다.\n- 정확 파일명: \"03. 한전_AMI_무선인입망합산_청구세부내역_2026-07-12 19_01_11_DSMC_260712.xlsx\"\n- 정확 시트명: \"무선인입망\"",
+      "histId": "52qpnzdh"
+    },
+    {
+      "role": "assistant",
+      "content": "\n\n지정된 파일의 \"무선인입망\" 시트에서 \"가입상태변경일자(V3)\" 열(F열)을 기준으로 데이터를 내림차순으로 정렬합니다.\n\n```python\ndef transform(ctx):\n    sheet = \"무선인입망\"\n    last_row = ctx.used_last_row(sheet)\n    last_col = ctx.used_last_col(sheet)\n    \n    if last_row < 1:\n        raise ValueError(\"데이터가 없습니다.\")\n\n    def col_letter(n):\n        s = \"\"\n        while n:\n            n, r = divmod(n - 1, 26)\n            s = chr(65 + r) + s\n        return s\n    \n    range_str = f\"A1:{col_letter(last_col)}{last_row}\"\n    \n    # F열이 가입상태변경일자(V3) 열입니다. 내림차순 정렬.\n    ctx.sort(sheet, range_str, key_col=\"F\", ascending=False, has_header=True)\n```",
+      "histId": "j6ip4x47"
+    },
+    {
+      "role": "user",
+      "content": "상태변경일자(F열) 내림차순 정렬",
+      "histId": "y4alvqps"
+    },
+    {
+      "role": "assistant",
+      "content": "\n\n현재 활성 파일(\"03. 한전_AMI_무선인입망합산_청구세부내역_2026-07-12 19_01_11_DSMC_260712.xlsx\") 의 \"무선인입망\" 시트에서 F열(가입상태변경일자(V3)) 을 기준으로 내림차순 정렬합니다.\n\n```python\ndef transform(ctx):\n    sheet = \"무선인입망\"\n    last_row = ctx.used_last_row(sheet)\n    last_col = ctx.used_last_col(sheet)\n    \n    if last_row < 1:\n        raise ValueError(\"데이터가 없습니다.\")\n\n    def col_letter(n):\n        s = \"\"\n        while n:\n            n, r = divmod(n - 1, 26)\n            s = chr(65 + r) + s\n        return s\n    \n    range_str = f\"A1:{col_letter(last_col)}{last_row}\"\n    \n    # F열이 상태변경일자 열입니다. 내림차순 정렬.\n    ctx.sort(sheet, range_str, key_col=\"F\", ascending=False, has_header=True)\n```",
+      "histId": "d072d0ln"
+    },
+    {
+      "role": "user",
+      "content": "선택 범위: @범위[03. 한전_AMI_무선인입망합산_청구세부내역_2026-07-12 19_01_11_DSMC_260712.xlsx/무선인입망!J:J]의 전체 SUM 값을 맨 J열의 마지막 행에 붙여주고(엑셀 함수 SUM 형태로), 볼드 처리해주고 노란색 음영 표기해줘. VBA로 짜\n\n[정확 참조]\n- 선택 범위: 03. 한전_AMI_무선인입망합산_청구세부내역_2026-07-12 19_01_11_DSMC_260712.xlsx/무선인입망!J:J\n[정확 참조 사용 규칙 - 강제]\n- 아래 파일명/시트명/범위/컬럼명은 코드에 그대로 복사하세요. 번역, 영문화, 띄어쓰기 보정, 대소문자 변경 금지.\n- 특히 한글 시트명은 절대 번역하지 마세요. 예: 통합인터넷(국제) -> 통합internet(국제) 는 실패입니다.\n- 정확 파일명: \"03. 한전_AMI_무선인입망합산_청구세부내역_2026-07-12 19_01_11_DSMC_260712.xlsx\"\n- 정확 시트명: \"무선인입망\"\n- 정확 주소: \"J:J\"",
+      "histId": "94snshq1"
+    },
+    {
+      "role": "assistant",
+      "content": "\n\n제목: J열(기본요금) 합계 수식 및 서식 적용\n\n```vba\nSub B2BSkill()\n    On Error GoTo Cleanup\n    Application.ScreenUpdating = False\n    Application.Calculation = xlCalculationManual\n\n    Dim wb As Workbook\n    Set wb = Workbooks(\"03. 한전_AMI_무선인입망합산_청구세부내역_2026-07-12 19_01_11_DSMC_260712.xlsx\")\n\n    Dim ws As Worksheet\n    Set ws = wb.Worksheets(\"무선인입망\")\n\n    Dim lastRow As Long\n    lastRow = ws.Cells(ws.Rows.Count, \"J\").End(xlUp).Row\n\n    If lastRow < 2 Then\n        Err.Raise vbObjectError + 513, \"B2BSkill\", \"J열에 합산할 데이터가 부족합니다.\"\n    End If\n\n    Dim sumCell As Range\n    Set sumCell = ws.Cells(lastRow + 1, \"J\")\n\n    sumCell.Formula = \"=SUM(J2:J\" & lastRow & \")\"\n    sumCell.Font.Bold = True\n    sumCell.Interior.Color = vbYellow\n\nCleanup:\n    Application.Calculation = xlCalculationAutomatic\n    Application.ScreenUpdating = True\n    If Err.Number <> 0 Then\n        Err.Raise Err.Number, Err.Source, Err.Description\n    End If\nEnd Sub\n```\n\n지정된 파일의 \"무선인입망\" 시트 J열 데이터 끝 다음 행에 SUM 수식을 입력하고, 볼드와 노란색 음영을 적용했습니다.\n\nJ열의 마지막 데이터 행을 찾고, 그 다음 행에 SUM 수식을 배치했습니다. 헤더(1행)를 제외하고 데이터 범위(2행~마지막행)를 합산하도록 수식을 구성했으며, 요청대로 셀 서식(볼드, 노란색)을 적용했습니다. 오류 처리와 화면 업데이트 제어는 표준 패턴을 따랐습니다.",
+      "histId": "logs5bbq"
+    },
+    {
+      "role": "user",
+      "content": "@시트[한국전력공사_202606_v1.1_DSMC_260710.xlsx/상품번호별] 에서 청구계정번호가 512102405339인 데이터들만 별도의 시트로 복사해줘. 그리고 시트명은 '무선간선망'으로 해줘\n\n@시트[한국전력공사_202606_v1.1_DSMC_260710.xlsx/상품번호별] 에서 청구계정번호가 612192188403인 데이터들만 별도의 시트로 복사해줘. 그리고 시트명은 '고압모계기'으로 해줘\n\n@시트[한국전력공사_202606_v1.1_DSMC_260710.xlsx/상품번호별] 에서 청구계정번호가 614691497553인 데이터들만 별도의 시트로 복사해줘. 그리고 시트명은 '고압자계기'로 해줘\n\n[정확 참조]\n- 시트명: 파일 \"한국전력공사_202606_v1.1_DSMC_260710.xlsx\", 시트 \"상품번호별\"\n[정확 참조 사용 규칙 - 강제]\n- 아래 파일명/시트명/범위/컬럼명은 코드에 그대로 복사하세요. 번역, 영문화, 띄어쓰기 보정, 대소문자 변경 금지.\n- 특히 한글 시트명은 절대 번역하지 마세요. 예: 통합인터넷(국제) -> 통합internet(국제) 는 실패입니다.\n- 정확 파일명: \"한국전력공사_202606_v1.1_DSMC_260710.xlsx\"\n- 정확 시트명: \"상품번호별\"\n- 정확 파일명: \"한국전력공사_202606_v1.1_DSMC_260710.xlsx\"\n- 정확 시트명: \"상품번호별\"\n- 정확 파일명: \"한국전력공사_202606_v1.1_DSMC_260710.xlsx\"\n- 정확 시트명: \"상품번호별\"",
+      "histId": "8monkd3h"
+    },
+    {
+      "role": "assistant",
+      "content": "\"상품번호별\" 시트에서 청구계정번호가 각각 512102405339, 612192188403, 614691497553인 데이터를 세 개의 새 시트(\"무선간선망\", \"고압모계기\", \"고압자계기\")로 필터 추출합니다.\n\n```python\ndef transform(ctx):\n    book = ctx.book(\"한국전력공사_202606_v1.1_DSMC_260710.xlsx\")\n    sheet = \"상품번호별\"\n    header_row = 1\n\n    col_idx = book.find_header(sheet, \"청구계정번호\", header_row=header_row) - 1\n\n    book.filter_to_sheet(sheet, lambda r: str(r[col_idx]) == \"512102405339\", \"무선간선망\")\n    book.filter_to_sheet(sheet, lambda r: str(r[col_idx]) == \"612192188403\", \"고압모계기\")\n    book.filter_to_sheet(sheet, lambda r: str(r[col_idx]) == \"614691497553\", \"고압자계기\")\n```",
+      "histId": "a1am5of5"
+    }
+  ]
+}
