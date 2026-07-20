@@ -925,6 +925,57 @@ function loadLogic(data, filename, meta) {
       });
     }
   }
+  // [v4 표 기준 재바인딩] 결과 편집 후 재저장된 v4 스킬은 표(requiredFiles)가 '재저장 시점 업로드
+  // 이름'으로 갱신되는 반면, 코드 리터럴/targetFileId 는 스킬 원작 시점의 옛 달 이름으로 남을 수 있다
+  // (내부 불일치 zip). 구방식 추론은 '코드 속 옛 이름'을 요구행으로 내놓아 퍼지 매칭→치환됐지만,
+  // v4 표는 이미 새 이름이라 치환 대상이 사라져 옛 이름이 실행까지 살아남았다(한전 Step11
+  // "워크북 '02...260707' 이 열려 있지 않습니다" 실측). 로드 시점에 옛 이름을 표 이름으로 정규화한다
+  // — 월·날짜·버전 무시 안정키(pipelineStableWorkbookKey), 단일 명확 매칭만(모호하면 그대로 둔다).
+  try {
+    const v4rfs = (state.loadedSkillRequirements && state.loadedSkillRequirements.requiredFiles) || [];
+    const tableNames = v4rfs.map(rf => rf && rf.name).filter(Boolean);
+    if (tableNames.length && typeof pipelineStableWorkbookKey === "function"
+        && typeof runnerReplaceLiteral === "function") {
+      const norm = v => (typeof normalizeText === "function"
+        ? normalizeText(v) : String(v || "").trim().toLowerCase());
+      const tset = new Set(tableNames.map(norm));
+      const codeNames = new Set();
+      state.pipeline.forEach(step => {
+        if (!step) return;
+        const t = String(step.targetFileId || "");
+        if (t.startsWith("input:")) codeNames.add(t.slice(6));
+        try {
+          if (step.code && typeof pipelineCollectWorkbookNames === "function") {
+            pipelineCollectWorkbookNames(step.code).forEach(n => { if (n) codeNames.add(n); });
+          }
+        } catch (_) {}
+      });
+      const renames = [];
+      codeNames.forEach(oldName => {
+        if (tset.has(norm(oldName))) return;                       // 이미 표 이름과 동일
+        const key = pipelineStableWorkbookKey(oldName);
+        if (!key || key.length < 4) return;
+        const hits = tableNames.filter(tn => pipelineStableWorkbookKey(tn) === key);
+        if (hits.length === 1 && norm(hits[0]) !== norm(oldName)) renames.push([oldName, hits[0]]);
+      });
+      if (renames.length) {
+        state.pipeline.forEach(step => {
+          if (!step) return;
+          if (step.code) {
+            let c = String(step.code);
+            renames.forEach(([a, b]) => { c = runnerReplaceLiteral(c, a, b); });
+            step.code = c;
+          }
+          const t = String(step.targetFileId || "");
+          if (t.startsWith("input:")) {
+            const hit = renames.find(([a]) => a === t.slice(6));
+            if (hit) step.targetFileId = "input:" + hit[1];
+          }
+        });
+        try { console.log("[load] v4 표 기준 파일명 재바인딩:", renames.map(p => p.join(" → ")).join(" | ")); } catch (_) {}
+      }
+    }
+  } catch (_) {}
   state.loadedSkillReqPipelineSig = state.loadedSkillRequirements
     ? (typeof loadedSkillReqSignature === "function" ? loadedSkillReqSignature(state.pipeline) : null)
     : null;

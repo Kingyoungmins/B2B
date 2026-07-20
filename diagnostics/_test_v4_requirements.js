@@ -113,6 +113,15 @@ ck("(A6) 출력 템플릿 요구(취합)",
   ck("(C1) v4 표 우선 사용(source=v4)", v4rows.length && v4rows.every(r => r[2] === "v4"), v4rows);
   ck("(C2) v4 경로에 생성 시트 요구 없음", !v4rows.some(r => r[1] === "무선간선망"), v4rows);
   ck("(C3) v4 경로에 유령 요구 없음", !v4rows.some(r => /excel_open_/i.test(r[0])), v4rows);
+  // (C6) 미해결 '실참조'(내부 임시명이 아닌 워크북 이름)는 v4 경로에서도 파일 행으로 노출돼야 한다
+  // — 숨기면 사용자가 매핑할 기회 없이 해당 스텝이 "워크북이 열려 있지 않습니다"로 죽는다(한전 01 실측).
+  sb.state.loadedSkillRequirements.unresolvedRefs =
+    [...req.unresolvedRefs, "옛달_세부내역_2026-05-12 10_00_00.xlsx"];
+  const v4rows2 = vm.runInContext("runnerExtractMappingRequirements()", sb).map(r => [r.book, r.sheet, r.source]);
+  ck("(C6) 미해결 실참조는 v4 행으로 노출(내부 임시명은 계속 제외)",
+     v4rows2.some(r => r[0] === "옛달_세부내역_2026-05-12 10_00_00.xlsx" && r[2] === "v4")
+     && !v4rows2.some(r => /excel_open_/i.test(r[0])), v4rows2);
+  sb.state.loadedSkillRequirements.unresolvedRefs = req.unresolvedRefs;
   // 편집(서명 불일치) → 추론 폴백 + 유령 제거
   sb.state.pipeline[0].code += "\n# edited";
   const fbRows = vm.runInContext("runnerExtractMappingRequirements()", sb).map(r => [r.book, r.sheet, r.source]);

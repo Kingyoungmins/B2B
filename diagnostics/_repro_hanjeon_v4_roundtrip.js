@@ -38,7 +38,10 @@ function extract(src, name) {
     if (alt < 0) throw new Error("not found: " + name);
     st = alt;
   }
-  let i = src.indexOf("{", st), d = 0, e = -1;
+  // 파라미터 괄호를 먼저 균형 매칭 — `options = {}` 같은 기본값 중괄호에서 본문 탐색이 시작되면 추출이 깨진다.
+  let p = src.indexOf("(", st), pd = 0;
+  for (; p < src.length; p++) { if (src[p] === "(") pd++; else if (src[p] === ")") { pd--; if (pd === 0) break; } }
+  let i = src.indexOf("{", p), d = 0, e = -1;
   for (; i < src.length; i++) { if (src[i] === "{") d++; else if (src[i] === "}") { d--; if (d === 0) { e = i + 1; break; } } }
   let out = src.slice(st, e);
   if (out.startsWith("window.")) out = out.replace(/^window\.(\w+) = function/, "var $1 = function");
@@ -75,10 +78,15 @@ const runnerFnNames = [...new Set([...dropSrc.matchAll(/^(?:window\.)?(?:async )
 });
 try {
   const pipeSrc = fs.readFileSync(path.join(ROOT, "scripts", "pipeline.js"), "utf8");
-  ["pipelineCollectWorkbookNames", "pipelineFileIdByWorkbookName", "pipelineKnownFiles",
-   "pipelineDecodeWorkbookName", "pipelineEncodeWorkbookName", "pipelineWorkbookNameKey"].forEach(f => {
-    try { vm.runInContext(extract(pipeSrc, f), sb); } catch (_) {}
-  });
+  // 안정키/이름 정규화 계열은 loadLogic 의 v4 재바인딩과 러너 자동 매칭(rebound 티어)이 쓴다.
+  const pipeFns = [...new Set([...pipeSrc.matchAll(/^function (pipelineLooksLike\w+)\(/gm)].map(m => m[1]))]
+    .concat(["pipelineCollectWorkbookNames", "pipelineFileIdByWorkbookName", "pipelineKnownFiles",
+             "pipelineDecodeWorkbookName", "pipelineEncodeWorkbookName", "pipelineWorkbookNameKey",
+             "pipelineStableWorkbookKey"]);
+  pipeFns.forEach(f => { try { vm.runInContext(extract(pipeSrc, f), sb); } catch (_) {} });
+  for (const m of pipeSrc.matchAll(/^const (PIPELINE_VOLATILE_\w+)\s*=\s*\[/gm)) {
+    try { vm.runInContext(pipeSrc.slice(m.index, pipeSrc.indexOf("\n];", m.index) + 3), sb); } catch (_) {}
+  }
 } catch (_) {}
 for (const m of dropSrc.matchAll(/^const (RUNNER_\w+) = ("[^"\n]*"|\d+|\[[^\]]*\]);/gm)) {
   try { vm.runInContext(m[0], sb); } catch (_) {}
@@ -124,6 +132,9 @@ const handleScan = steps => {
 console.log("\n=== (A) loadLogic 직후 ===");
 const loadLeak = handleScan(vm.runInContext("state.pipeline", sb));
 console.log(" 코드 내 자리표 잔존:", loadLeak.join(" ") || "없음");
+// v4 지원 버전인지(= 자리표 복원/표 재바인딩이 있어야 하는 버전인지)
+const v4Capable = vm.runInContext("typeof loadedSkillReqSignature === 'function' && !!state.loadedSkillRequirements", sb);
+console.log(" v4 지원 버전:", v4Capable);
 
 // ── 3) 러너 요구행(파일확인 목록) ──
 let reqRows = [];
@@ -134,20 +145,49 @@ reqRows.forEach(r => console.log(`  [${r.source || "infer"}] book=${r.book} | sh
 const PHANTOMS = ["무선간선망", "고압모계기", "고압자계기"];
 const phantomRows = reqRows.filter(r => PHANTOMS.includes(String(r.sheet || "")));
 console.log(" 유령 시트 요구:", phantomRows.length ? phantomRows.map(r => r.sheet).join(",") : "없음");
+// [한전 Step15 계열] v4 표에 없는 '미해결 실참조'(01 파일)도 매핑 행으로 노출돼야 한다 — 숨기면
+// 사용자가 매핑할 기회 없이 해당 스텝이 실행에서 죽는다.
+let missingUnresolvedRows = [];
+if (v4Capable) {
+  const unresolvedReal = (vm.runInContext("state.loadedSkillRequirements.unresolvedRefs || []", sb) || [])
+    .filter(n => /\.(xls[xmb]?|csv)$/i.test(String(n || "")) && !/^(?:excel_open_|live_reset_)?[0-9a-f]{12,}/i.test(String(n || "")));
+  const rowBooks = reqRows.map(r => String(r.book || ""));
+  missingUnresolvedRows = unresolvedReal.filter(n => !rowBooks.includes(String(n)));
+  console.log(" 미해결 실참조 행 노출:", unresolvedReal.length
+    ? unresolvedReal.map(n => `${n}${missingUnresolvedRows.includes(n) ? "(누락!)" : "(OK)"}`).join(" | ")
+    : "해당 없음");
+}
 
-// ── 4) 매핑 rows(자동 매칭) → 유령 행이 있으면 사용자처럼 '스킬 기본값' 선택 ──
+// ── 4) 매핑 rows(자동 매칭) → 사용자 행동 재현: 유령 행 '스킬 기본값' + 미매칭 파일 행 수동 매핑 ──
+// 실제 사용자는 01 요구를 업로드된 '01 도서' 파일에 매핑한다(모호해서 자동 매칭 안 됨 → 수동).
+const MANUAL_FILE_MAP = {
+  "01. 한전_DAS_배전자동화_청구세부내역_2026-07-12 19_00_54_DSMC_260712.xlsx":
+    "01. 한전_DAS_배전자동화_청구세부내역_도서_2026-07-14 13_25_33_DSMC_260714 - 복사본 (2).xlsx",
+};
 let mapped = null;
 try {
+  sb.__manualMap = MANUAL_FILE_MAP;
   vm.runInContext(`
     (runnerBuildMappingRows() || []).forEach(row => {
-      if (${JSON.stringify(PHANTOMS)}.includes(String(row.req && row.req.sheet || ""))) {
-        const key = runnerMappingKey(row.req);
+      const key = row.req && row.req.key;
+      if (!key) return;
+      if (${JSON.stringify(PHANTOMS)}.includes(String(row.req.sheet || ""))) {
         state.runnerMappings[key] = Object.assign({}, state.runnerMappings[key] || {},
           { sheet: (typeof RUNNER_SHEET_SKILL_DEFAULT !== "undefined" && RUNNER_SHEET_SKILL_DEFAULT) || "__b2b_skill_default__" });
+      }
+      const wantName = __manualMap[String(row.req.book || "")];
+      if (wantName && !row.fileItem) {
+        const files = runnerMappingKnownFiles();
+        const hit = files.find(f => f.name === wantName);
+        if (hit) state.runnerMappings[key] = Object.assign({}, state.runnerMappings[key] || {},
+          { fileId: hit.id, userSet: true });
       }
     });
     state.runnerMappingChecked = true;
   `, sb);
+  const rows2 = vm.runInContext("runnerBuildMappingRows()", sb) || [];
+  console.log("\n=== (C) 매핑 상태 ===");
+  rows2.forEach(r => console.log(`  book=${r.req && r.req.book || "-"} sheet=${r.req && r.req.sheet || "-"} -> ${r.fileItem ? r.fileItem.name : "(미매칭)"} [${r.statusText}]`));
   mapped = vm.runInContext("buildRunnerMappedPipeline(state.pipeline)", sb);
 } catch (e) {
   console.log("\n(매핑 단계 미지원/예외 — loadLogic 결과로 판정)", e.message.split("\n")[0]);
@@ -158,9 +198,20 @@ const finalSteps = mapped || vm.runInContext("state.pipeline", sb);
 const leak = handleScan(finalSteps);
 console.log("\n=== (D) 실행 코드 판정 ===");
 console.log(" 실행 코드 자리표 잔존:", leak.join(" ") || "없음");
+// [한전 Step11 계열] v4 지원 버전이라면 옛 달 파일명이 실행 코드에 남으면 안 된다
+// (표 재바인딩 or 매핑 치환으로 현재 업로드 이름이어야 함). 업로드는 전부 07-14/260710 계열.
+const OLD_TOKENS = ["2026-07-07", "260707", "2026-07-12 19_00_54", "2026-07-12 19_01_11", "260712"];
+let oldHits = [];
+if (v4Capable && mapped) {
+  finalSteps.forEach((s, i) => {
+    const c = String((s && s.code) || "") + " " + String((s && s.targetFileId) || "");
+    OLD_TOKENS.forEach(tok => { if (c.includes(tok)) oldHits.push(`step${i + 1}:${tok}`); });
+  });
+  console.log(" 실행 코드 내 옛 달 파일명:", oldHits.join(" ") || "없음");
+}
 
-const bad = leak.length > 0 || phantomRows.length > 0;
+const bad = leak.length > 0 || phantomRows.length > 0 || missingUnresolvedRows.length > 0 || oldHits.length > 0;
 console.log("\n결론:", bad
-  ? "재현됨 — 자리표/유령 요구가 살아남음(이 버전은 v4 스킬 하위호환 깨짐)"
-  : "정상 — 자리표 복원·요구행 모두 문제 없음");
+  ? "재현됨 — 자리표/유령/옛이름/미해결누락이 살아남음(하위호환 또는 v4 매핑 결함)"
+  : "정상 — 자리표·요구행·옛 이름 재바인딩 모두 문제 없음");
 process.exit(bad ? 1 : 0);

@@ -1061,6 +1061,18 @@ function runnerExtractMappingRequirements() {
         runnerAddRequirement(map, book, "", "v4"); // 파일만 필요(시트 미검증)
       }
     }
+    // [미해결 실참조 노출] 저장 시점에 pristine 업로드와 매칭하지 못한 '진짜 워크북 이름'(예: 같은
+    // 계열 파일이 두 개 올라와 모호했던 01 파일)은 표(requiredFiles)에 없다. 그대로 숨기면 사용자가
+    // 매핑할 기회도 없이 해당 스텝이 "워크북이 열려 있지 않습니다"로 죽는다(한전 Step15 계열).
+    // 내부 임시명(excel_open_* 등)이 아닌 워크북 파일명 형태만 파일 행으로 노출해 수동 매핑을 받는다.
+    const unresolved = Array.isArray(v4t.unresolvedRefs) ? v4t.unresolvedRefs : [];
+    for (const u of unresolved) {
+      const nm = String(u || "").trim();
+      if (!nm || !/\.(xls[xmb]?|csv)$/i.test(nm)) continue;
+      if (/^(?:excel_open_|live_reset_)?[0-9a-f]{12,}/i.test(nm)) continue;
+      if (typeof isInternalTempWorkbookName === "function" && isInternalTempWorkbookName(nm)) continue;
+      runnerAddRequirement(map, nm, "", "v4");
+    }
     return Array.from(map.values()).slice(0, 40);
   }
   const steps = state.pipeline || [];
