@@ -172,7 +172,7 @@ def import_jira_csv(text):
 
 def cross_check_csv_text(text, issues):
     """지라 내보내기 CSV 텍스트와 레지스트리 대조 → dict 보고."""
-    covered = {i["id"].upper() for i in issues}
+    covered = {i["id"].upper() for i in issues} | {str(i.get("jira") or "").upper() for i in issues if i.get("jira")}
     reader = csv.reader(io.StringIO(text.lstrip("﻿")))
     header = next(reader, [])
 

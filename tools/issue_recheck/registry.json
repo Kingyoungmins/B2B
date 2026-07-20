@@ -9,109 +9,235 @@
     {
       "id": "SBAGENT-138",
       "title": "VBA 변수 사슬로 만든 생성 시트가 '필수 업로드'로 요구됨",
-      "checks": [["node", "diagnostics/_test_generated_sheet_var.js"]]
+      "checks": [
+        [
+          "node",
+          "diagnostics/_test_generated_sheet_var.js"
+        ]
+      ]
     },
     {
       "id": "SBAGENT-171",
       "title": "소스+타겟 두 파일 스킬에서 시트 요구 오귀속 / ctx.book(변수) 미해석",
-      "checks": [["node", "diagnostics/_test_creator_sheets.js"],
-                 ["node", "diagnostics/_test_paste_requirements.js"]]
+      "checks": [
+        [
+          "node",
+          "diagnostics/_test_creator_sheets.js"
+        ],
+        [
+          "node",
+          "diagnostics/_test_paste_requirements.js"
+        ]
+      ]
     },
     {
       "id": "SBAGENT-198",
       "title": "한전 스킬 수정 후 재실행 오류(다른 달 리바인딩·시트명 31자·복구 인덱스)",
-      "checks": [["node", "diagnostics/_test_edit_month_rebind.js"],
-                 ["node", "diagnostics/_test_error_recovery_index.js"],
-                 ["com", "test_runs/_test_rename_31_com.py"]]
+      "checks": [
+        [
+          "node",
+          "diagnostics/_test_edit_month_rebind.js"
+        ],
+        [
+          "node",
+          "diagnostics/_test_error_recovery_index.js"
+        ],
+        [
+          "com",
+          "test_runs/_test_rename_31_com.py"
+        ]
+      ]
     },
     {
       "id": "SBAGENT-209",
       "title": "복붙 캡처가 내부 작업본명(excel_open_...)을 저장 → 실행기 유령 파일요구 + 조건부 스킬 무변경 오탐",
-      "checks": [["node", "diagnostics/_test_paste_internal_repair.js"],
-                 ["python", "test_runs/_test_capture_display_name.py"],
-                 ["com", "test_runs/_test_no_change_gate_com.py"]]
+      "checks": [
+        [
+          "node",
+          "diagnostics/_test_paste_internal_repair.js"
+        ],
+        [
+          "python",
+          "test_runs/_test_capture_display_name.py"
+        ],
+        [
+          "com",
+          "test_runs/_test_no_change_gate_com.py"
+        ]
+      ]
     },
     {
       "id": "hanwha-save-name",
       "title": "저장 기본 이름이 옛 스킬명에 고착(한화테크윈)",
-      "checks": [["node", "diagnostics/_test_save_name_follows_input.js"]]
+      "checks": [
+        [
+          "node",
+          "diagnostics/_test_save_name_follows_input.js"
+        ]
+      ],
+      "jira": "SBAGENT-219"
     },
     {
       "id": "hanjeon-mapping-save-leak",
       "title": "매핑 치환본이 저장 스킬에 유출돼 재사용 불가(한전) + 확정 매핑 기록 유실",
-      "checks": [["node", "diagnostics/_test_save_no_mapped_leak.js"],
-                 ["node", "diagnostics/_test_mapping_persistence.js"]]
+      "checks": [
+        [
+          "node",
+          "diagnostics/_test_save_no_mapped_leak.js"
+        ],
+        [
+          "node",
+          "diagnostics/_test_mapping_persistence.js"
+        ]
+      ]
     },
     {
       "id": "applied-label-truth",
       "title": "전체실행 중간 실패 시 '적용됨' 표시가 실제와 불일치",
-      "checks": [["node", "diagnostics/_test_applied_label_truth.js"]]
+      "checks": [
+        [
+          "node",
+          "diagnostics/_test_applied_label_truth.js"
+        ]
+      ]
     },
     {
       "id": "ucap-insert-dup",
       "title": "중간 삽입 후 전체실행 시 시트 중복(LGCNS UCAP — 괄호/공백 파일명 교차 쓰기 인식)",
-      "checks": [["node", "diagnostics/_test_cross_reset.js"]]
+      "checks": [
+        [
+          "node",
+          "diagnostics/_test_cross_reset.js"
+        ]
+      ],
+      "jira": "SBAGENT-214"
     },
     {
       "id": "ucap-name-truncate",
       "title": "파일확인 요구 파일명 앞부분 잘림(input)/output) 시작 + 공백 파일명)",
-      "checks": [["node", "diagnostics/_test_requirement_name_clean.js"]]
+      "checks": [
+        [
+          "node",
+          "diagnostics/_test_requirement_name_clean.js"
+        ]
+      ]
     },
     {
       "id": "pangyo-edit-rerun",
       "title": "완료 스킬 수정 재실행이 산출물에 미반영(조용한 무실행, 판교테크윈)",
-      "checks": [["node", "diagnostics/_test_edit_checkpoint_guard.js"]]
+      "checks": [
+        [
+          "node",
+          "diagnostics/_test_edit_checkpoint_guard.js"
+        ]
+      ]
     },
     {
       "id": "hanjeon-incheon-ghost-req",
       "title": "생성 시트/오귀속 시트가 필수 업로드로 요구(람다 filter_to_sheet·시트 변수·괄호 파일명)",
-      "checks": [["node", "diagnostics/_test_lambda_dest_owner_var.js"],
-                 ["node", "diagnostics/_test_sheet_default_fallback.js"]]
+      "checks": [
+        [
+          "node",
+          "diagnostics/_test_lambda_dest_owner_var.js"
+        ],
+        [
+          "node",
+          "diagnostics/_test_sheet_default_fallback.js"
+        ]
+      ]
     },
     {
       "id": "idle-24h-slowdown",
       "title": "24시간 구동 시 점점 버벅임(채팅 타자기 RAF 루프 누적)",
-      "checks": [["node", "diagnostics/_test_smooth_renderer_raf.js"]]
+      "checks": [
+        [
+          "node",
+          "diagnostics/_test_smooth_renderer_raf.js"
+        ]
+      ],
+      "jira": "SBAGENT-40"
     },
     {
       "id": "minimize-gray-excel",
       "title": "최소화 시 Excel 창 잔존/회색 빈 창(세션 외 소유 창 미은닉)",
-      "checks": [["com", "test_runs/_test_minimize_hide_orphan_com.py"]]
+      "checks": [
+        [
+          "com",
+          "test_runs/_test_minimize_hide_orphan_com.py"
+        ]
+      ]
     },
     {
       "id": "runner-skill-reupload-view",
       "title": "실행기 스킬 삭제→재업로드 시 편집기 목록 미갱신(표시 버그)",
-      "checks": [["node", "diagnostics/_test_runner_logic_modal_refresh.js"]]
+      "checks": [
+        [
+          "node",
+          "diagnostics/_test_runner_logic_modal_refresh.js"
+        ]
+      ]
     },
     {
       "id": "hanjeon-redownload-suffix",
       "title": "재다운로드 '(2)'/'- 복사본' 접미사로 스킬 재실행 실패(워크북 안정키)",
-      "checks": [["python", "test_runs/_test_stable_key_dup_suffix.py"]]
+      "checks": [
+        [
+          "python",
+          "test_runs/_test_stable_key_dup_suffix.py"
+        ]
+      ],
+      "jira": "SBAGENT-191"
     },
     {
       "id": "stop-escalation",
       "title": "'작업 중단'이 정상 복원을 성급히 강제 종료(시간→진행 기반)",
-      "checks": [["node", "diagnostics/_test_stop_escalation.js"]]
+      "checks": [
+        [
+          "node",
+          "diagnostics/_test_stop_escalation.js"
+        ]
+      ],
+      "jira": "SBAGENT-202"
     },
     {
       "id": "click-double-fire",
       "title": "클릭 이중 실행·Ctrl+클릭 다중선택 불가(VDI 마우스 이벤트 유실 보상)",
-      "checks": [["node", "diagnostics/_test_click_recovery.js"]]
+      "checks": [
+        [
+          "node",
+          "diagnostics/_test_click_recovery.js"
+        ]
+      ]
     },
     {
       "id": "skill-default-sheet",
       "title": "시트 치환 끄기('스킬 기본값') 옵션 동작",
-      "checks": [["node", "diagnostics/_test_skill_default_sheet.js"]]
+      "checks": [
+        [
+          "node",
+          "diagnostics/_test_skill_default_sheet.js"
+        ]
+      ]
     },
     {
       "id": "runner-automap",
       "title": "실행기 자동 매칭(다른 달 파일 조용한 오선택 방지·유일 일치 규칙)",
-      "checks": [["node", "diagnostics/_test_runner_automap.js"]]
+      "checks": [
+        [
+          "node",
+          "diagnostics/_test_runner_automap.js"
+        ]
+      ]
     },
     {
       "id": "pivot-always-native",
       "title": "같은 피벗 명령이 값-표로 강등되던 문제(항상 진짜 피벗테이블)",
-      "checks": [["com", "test_runs/_test_native_pivot_com.py"]]
+      "checks": [
+        [
+          "com",
+          "test_runs/_test_native_pivot_com.py"
+        ]
+      ]
     }
   ]
 }
