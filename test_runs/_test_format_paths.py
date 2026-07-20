@@ -1,7 +1,7 @@
 # [포맷별 오픈/저장] .xlsx/.xlsm/.xls/.xlsb/.csv/.tsv 경로 회귀 검증 (Excel COM 불필요).
 # python test_runs/_test_format_paths.py
 import sys
-sys.path.insert(0, r"C:\Users\Admin\Desktop\KGM_git\B2B_ver0.6.1")
+sys.path.insert(0, r"C:\Users\Admin\Desktop\KGM_git\B2B_ver0.6.2")
 import serve_b2b as s
 
 fails = 0

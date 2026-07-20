@@ -1,7 +1,7 @@
 # [실측] 한전 Step11 오류 재현: 백엔드 ctx.book 이 스킬의 옛 파일명으로 업로드된 새 파일을 찾는가?
 # 클라(대상 해석)는 통과해도, 백엔드가 못 찾으면 "워크북이 열려 있지 않습니다"가 그대로 난다.
 import sys
-sys.path.insert(0, r"C:\Users\Admin\Desktop\KGM_git\B2B_ver0.6.1")
+sys.path.insert(0, r"C:\Users\Admin\Desktop\KGM_git\B2B_ver0.6.2")
 import serve_b2b as S
 
 WANT = "02. 한전_AMI_유선간선망_청구세부내역_2026-07-07 09_23_01_DSMC_260707.xlsx"   # 스킬 코드의 리터럴

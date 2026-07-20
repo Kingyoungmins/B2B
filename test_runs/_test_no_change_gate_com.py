@@ -2,7 +2,7 @@
 # 배경: CNS메시징 스킬 Step8('소계' 행 삭제)이 새 달 파일(소계 없음)에서 조건 미해당으로 아무것도
 #       안 바꾸자, 게이트가 "아무 변경도 없습니다"로 실패 처리해 전체실행이 죽었다.
 import sys
-sys.path.insert(0, r"C:\Users\Admin\Desktop\KGM_git\B2B_ver0.6.1")
+sys.path.insert(0, r"C:\Users\Admin\Desktop\KGM_git\B2B_ver0.6.2")
 import win32com.client as w
 import serve_b2b as S
 

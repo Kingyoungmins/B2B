@@ -1,7 +1,7 @@
 # [실측][진단] native_pivot 이 '어떤 데이터 모양'에서 실패해 값-표로 조용히 폴백하는지 재현.
 # 같은 ctx.pivot 명령인데 어떨 땐 진짜 피벗, 어떨 땐 값-표가 나오는 원인 규명용.
 import sys
-sys.path.insert(0, r"C:\Users\Admin\Desktop\KGM_git\B2B_ver0.6.1")
+sys.path.insert(0, r"C:\Users\Admin\Desktop\KGM_git\B2B_ver0.6.2")
 import win32com.client as w
 import serve_b2b as S
 

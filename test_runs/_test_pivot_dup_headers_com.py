@@ -1,7 +1,7 @@
 # [실측] 중복 헤더 다중키 피벗 — '상품명'이 두 열(B,C)일 때 엑셀처럼 2번째를 '상품명2'로 보고 다중 피벗.
 # ctx.pivot(native) + _pivot_value_table(값-표 폴백) 둘 다, '상품명2'/열문자 지목 모두 검증.
 import sys
-sys.path.insert(0, r"C:\Users\Admin\Desktop\KGM_git\B2B_ver0.6.1")
+sys.path.insert(0, r"C:\Users\Admin\Desktop\KGM_git\B2B_ver0.6.2")
 import win32com.client as w
 import serve_b2b as S
 

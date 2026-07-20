@@ -224,6 +224,19 @@ function computeSkillRequirements() {
       const cf = canonFileId(fid);
       if (cf && pristine.has(cf)) { usedFileIds.add(cf); addSheet(cf, m[2].trim()); }
     }
+    // [보완] 코드 리터럴 (파일, 시트) 쌍도 귀속 — targetSheetName/@멘션만 보면
+    // book.read("시트", …)류 코드 참조 시트가 표에서 빠져, v4 경로에서 시트 칩이 파일
+    // 단위로만 뜨고 시트 치환 기회를 잃는다. 실행기와 동일한 소유자 판정을 재사용한다.
+    if (step.code && typeof runnerSheetOwnersFromCode === "function") {
+      try {
+        runnerSheetOwnersFromCode(step.code).forEach(pair => {
+          const fid = (typeof pipelineFileIdByWorkbookName === "function")
+            ? pipelineFileIdByWorkbookName(pair.book) : null;
+          const cf2 = canonFileId(fid);
+          if (cf2 && pristine.has(cf2)) { usedFileIds.add(cf2); addSheet(cf2, pair.sheet); }
+        });
+      } catch (_) {}
+    }
   });
   // 시트가 귀속됐지만 파일이 used 로 안 잡힌 경우도 used 로 포함
   attributedSheets.forEach((_s, fid) => { if (pristine.has(fid)) usedFileIds.add(fid); });

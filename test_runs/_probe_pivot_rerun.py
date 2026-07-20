@@ -2,7 +2,7 @@
 # 가설: dest 시트가 이미 있으면 native_pivot 이 "이미 있습니다"로 raise → pivot() 이 그 시트를 지우고
 #       _pivot_value_table 로 폴백 → 두 번째부터는 조용히 값-표.
 import sys
-sys.path.insert(0, r"C:\Users\Admin\Desktop\KGM_git\B2B_ver0.6.1")
+sys.path.insert(0, r"C:\Users\Admin\Desktop\KGM_git\B2B_ver0.6.2")
 import win32com.client as w
 import serve_b2b as S
 

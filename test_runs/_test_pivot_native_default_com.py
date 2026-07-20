@@ -2,7 +2,7 @@
 # 배경: 예전엔 native 실패 시 값-표로 폴백해, 같은 명령인데 1회차는 진짜 피벗·2회차부터 값-표가
 #       나왔다(dest 시트 잔존 → native 가 "이미 있습니다"로 실패 → 폴백). 사용자 제보로 폴백 제거.
 import sys
-sys.path.insert(0, r"C:\Users\Admin\Desktop\KGM_git\B2B_ver0.6.1")
+sys.path.insert(0, r"C:\Users\Admin\Desktop\KGM_git\B2B_ver0.6.2")
 import win32com.client as w
 import serve_b2b as S
 

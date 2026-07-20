@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>이슈 재점검 대시보드</title>
+<style>
+  :root { --ok:#16a34a; --fail:#dc2626; --skip:#9ca3af; --line:#e5e7eb; --ink:#111827; --sub:#6b7280; }
+  * { box-sizing: border-box; }
+  body { font-family: 'Segoe UI', 'Malgun Gothic', sans-serif; margin: 0; background:#f8fafc; color:var(--ink); }
+  header { background:#fff; border-bottom:1px solid var(--line); padding:14px 22px; display:flex; align-items:center; gap:14px; position:sticky; top:0; z-index:5; }
+  h1 { font-size:17px; margin:0; }
+  .sub { color:var(--sub); font-size:12px; }
+  main { max-width:1100px; margin:0 auto; padding:18px 22px 60px; }
+  section { background:#fff; border:1px solid var(--line); border-radius:10px; padding:16px 18px; margin-bottom:16px; }
+  h2 { font-size:14px; margin:0 0 10px; }
+  button { border:1px solid var(--line); background:#fff; border-radius:8px; padding:7px 14px; cursor:pointer; font-size:13px; }
+  button.primary { background:#111827; color:#fff; border-color:#111827; }
+  button:disabled { opacity:.45; cursor:default; }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  th, td { text-align:left; padding:7px 8px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { color:var(--sub); font-weight:600; font-size:12px; }
+  .badge { display:inline-block; padding:2px 9px; border-radius:99px; font-size:11.5px; font-weight:700; color:#fff; }
+  .b-PASS { background:var(--ok); } .b-FAIL { background:var(--fail); } .b-SKIP { background:var(--skip); } .b-none { background:#cbd5e1; }
+  .chk { color:var(--sub); font-size:12px; margin:2px 0 0 2px; }
+  .chk b.PASS { color:var(--ok); } .chk b.FAIL { color:var(--fail); } .chk b.SKIP { color:var(--skip); }
+  .tail { background:#fef2f2; border:1px solid #fecaca; border-radius:6px; padding:6px 8px; margin-top:4px; font-family:Consolas,monospace; font-size:11px; white-space:pre-wrap; }
+  .row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+  input[type=text], textarea { border:1px solid var(--line); border-radius:8px; padding:7px 10px; font-size:13px; font-family:inherit; }
+  textarea { width:100%; font-family:Consolas,monospace; font-size:12px; }
+  .spin { display:inline-block; width:14px; height:14px; border:2px solid #cbd5e1; border-top-color:#111827; border-radius:50%; animation:sp 0.8s linear infinite; vertical-align:-2px; }
+  @keyframes sp { to { transform:rotate(360deg); } }
+  .muted { color:var(--sub); }
+  .hist { font-size:12.5px; }
+  .hist td { padding:5px 8px; }
+  details summary { cursor:pointer; font-size:13px; color:var(--sub); }
+  .del { color:var(--fail); border-color:#fecaca; }
+</style>
+</head>
+<body>
+<header>
+  <h1>완료 이슈 재점검</h1>
+  <span class="sub">패치 누적 사이드이펙트 일괄 검사 — tools/issue_recheck</span>
+  <span id="run-ind" style="margin-left:auto"></span>
+</header>
+<main>
+
+<section>
+  <div class="row">
+    <button class="primary" id="btn-run">▶ 전체 재점검</button>
+    <label><input type="checkbox" id="opt-com"> COM 실측 포함(실제 Excel 기동, 수 분)</label>
+    <input type="text" id="opt-only" placeholder="필터: id/제목 부분일치 (비우면 전체)" style="width:260px">
+    <span class="muted" id="run-summary"></span>
+  </div>
+</section>
+
+<section>
+  <h2>이슈 목록 <span class="muted" id="cnt"></span></h2>
+  <table id="tbl">
+    <thead><tr><th style="width:90px">결과</th><th style="width:210px">이슈</th><th>제목 / 체크</th><th style="width:70px"></th></tr></thead>
+    <tbody></tbody>
+  </table>
+</section>
+
+<section>
+  <h2>실행 이력</h2>
+  <table class="hist" id="hist"><tbody></tbody></table>
+</section>
+
+<section>
+  <h2>지라 완료 이슈 전수 관리 <span class="muted" id="jira-progress"></span></h2>
+  <div id="jira-bar" style="height:8px; background:#e5e7eb; border-radius:99px; overflow:hidden; margin:6px 0 10px">
+    <div id="jira-bar-fill" style="height:100%; width:0%; background:var(--ok); transition:width .3s"></div>
+  </div>
+  <details>
+    <summary>목록 가져오기/갱신 (지라 CSV 붙여넣기)</summary>
+    <p class="muted" style="font-size:12px; margin:6px 0">
+      지라 목록 → 내보내기 → CSV(현재 필드) → 내용 붙여넣기. 재가져오기해도 기존 점검 상태는 보존됩니다.
+      (사내망 로그인이 막히면 F12 → Network conditions → UA를 Chrome—iPhone 으로 바꿔 로그인)
+    </p>
+    <textarea id="csv" rows="4" placeholder="CSV 내용 붙여넣기…"></textarea>
+    <div class="row" style="margin-top:8px"><button id="btn-import">가져오기(병합)</button><span id="csv-sum" class="muted"></span></div>
+  </details>
+  <div class="row" style="margin:10px 0 8px">
+    <select id="jira-filter">
+      <option value="">전체(완료만)</option>
+      <option value="unchecked" selected>미점검</option>
+      <option value="auto">자동화 있음</option>
+      <option value="manual">자동화 없음(수동 대상)</option>
+      <option value="재발">재발</option>
+      <option value="보류">보류</option>
+      <option value="정상">정상 확인됨</option>
+    </select>
+    <input type="text" id="jira-search" placeholder="키/요약 검색" style="width:220px">
+    <span class="muted" id="jira-count"></span>
+  </div>
+  <table id="jira-tbl">
+    <thead><tr><th style="width:110px">키</th><th>요약</th><th style="width:80px">자동화</th><th style="width:250px">수동 점검</th></tr></thead>
+    <tbody></tbody>
+  </table>
+</section>
+
+<section>
+  <details id="edit-box">
+    <summary>레지스트리 편집 (이슈 추가/삭제/체크 수정)</summary>
+    <p class="muted" style="font-size:12px">체크는 한 줄에 하나, <code>타입 경로</code> 형식 (타입: node / python / com). 저장 시 registry.json.bak 백업이 남습니다.</p>
+    <div id="editor"></div>
+    <div class="row" style="margin-top:10px">
+      <button id="btn-add">+ 이슈 추가</button>
+      <button class="primary" id="btn-save">레지스트리 저장</button>
+      <span id="save-msg" class="muted"></span>
+    </div>
+  </details>
+</section>
+
+</main>
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+let REG = [];                 // 레지스트리(편집 반영본)
+let LAST = {};                // id -> 마지막 실행 결과
+let polling = null;
+
+async function api(path, body) {
+  const r = await fetch(path, body ? { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify(body) } : undefined);
+  return r.json();
+}
+
+function badge(s) { return `<span class="badge b-${s || "none"}">${s || "미실행"}</span>`; }
+
+function renderTable() {
+  const tb = $("tbl").querySelector("tbody");
+  tb.innerHTML = "";
+  REG.forEach(issue => {
+    const r = LAST[issue.id];
+    const tr = document.createElement("tr");
+    const checksHtml = (r ? r.checks : issue.checks.map(c => ({kind:c[0], path:c[1], status:""})))
+      .map(c => `<div class="chk"><b class="${c.status||""}">${c.status||"—"}</b> [${c.kind}] ${c.path}${c.secs?` (${c.secs}s)`:""}${c.tail?`<div class="tail">${c.tail.replace(/</g,"&lt;")}</div>`:""}</div>`).join("");
+    const fixHtml = issue.fix ? `<div class="chk" style="color:#7c3aed">🔧 해결: ${String(issue.fix).replace(/</g,"&lt;")}</div>` : "";
+    tr.innerHTML = `<td>${badge(r && r.status)}</td><td><b>${issue.id}</b></td>
+      <td>${issue.title}${fixHtml}${checksHtml}</td>
+      <td><button data-one="${issue.id}">실행</button></td>`;
+    tb.appendChild(tr);
+  });
+  $("cnt").textContent = `(${REG.length}건)`;
+  tb.querySelectorAll("[data-one]").forEach(b => b.onclick = () => startRun({ only: b.dataset.one, com: $("opt-com").checked }));
+}
+
+function renderHistory(runs) {
+  const tb = $("hist").querySelector("tbody");
+  tb.innerHTML = runs.length ? "" : `<tr><td class="muted">아직 실행 이력이 없습니다.</td></tr>`;
+  runs.forEach(r => {
+    const pass = r.issues.filter(i => i.status === "PASS").length;
+    const fail = r.issues.filter(i => i.status === "FAIL").length;
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<td>${r.ts}</td><td>${r.com ? "COM 포함" : "빠른 검사"}${r.only ? ` · 필터 "${r.only}"` : ""}</td>
+      <td>${fail ? `<b style="color:var(--fail)">체크 실패 ${r.fail}</b>` : `<b style="color:var(--ok)">전체 통과</b>`} (이슈 ${pass}✅${fail ? " " + fail + "❌" : ""})</td>`;
+    tb.appendChild(tr);
+  });
+}
+
+function showRunning() {
+  $("btn-run").disabled = true;
+  $("run-ind").innerHTML = `<span class="spin"></span> 실행 중…
+    <button id="btn-stop" class="del" style="margin-left:8px" title="현재 검사를 중단합니다 (COM 검사 중지 시 Excel 프로세스가 남을 수 있음)">■ 중지</button>`;
+  $("btn-stop").onclick = async () => {
+    $("btn-stop").disabled = true; $("btn-stop").textContent = "중지 중…";
+    await api("/api/run-stop", {});
+  };
+}
+
+async function startRun(opts) {
+  const res = await api("/api/run", { com: !!opts.com, only: opts.only || "" });
+  if (res.error) { alert(res.error); return; }
+  showRunning();
+  polling = setInterval(poll, 1000);
+}
+
+async function poll() {
+  const st = await api("/api/status");
+  (st.results || []).forEach(r => { LAST[r.id] = r; });
+  renderTable();
+  $("run-summary").textContent = st.total ? `${(st.results||[]).length}/${st.total} 이슈 완료` : "";
+  if (st.done && !st.running) {
+    clearInterval(polling); polling = null;
+    $("btn-run").disabled = false;
+    const fails = (st.results||[]).filter(r => r.status === "FAIL").length;
+    $("run-ind").innerHTML = st.cancelled
+      ? `<span class="badge b-SKIP">중지됨 (${(st.results||[]).length}/${st.total})</span>`
+      : (fails ? `<span class="badge b-FAIL">실패 ${fails}건</span>` : `<span class="badge b-PASS">전체 통과</span>`);
+    api("/api/history").then(h => renderHistory(h.runs || []));
+  }
+}
+
+// ── 레지스트리 편집 ──
+function renderEditor() {
+  const box = $("editor");
+  box.innerHTML = "";
+  REG.forEach((issue, idx) => {
+    const div = document.createElement("div");
+    div.style.cssText = "border:1px solid var(--line); border-radius:8px; padding:10px; margin:8px 0;";
+    div.innerHTML = `
+      <div class="row">
+        <input type="text" value="${issue.id}" data-f="id" data-i="${idx}" style="width:220px" placeholder="SBAGENT-000 또는 슬러그">
+        <input type="text" value="${issue.title.replace(/"/g,"&quot;")}" data-f="title" data-i="${idx}" style="flex:1" placeholder="증상 한 줄">
+        <button class="del" data-del="${idx}">삭제</button>
+      </div>
+      <textarea rows="${Math.max(2, issue.checks.length)}" data-f="checks" data-i="${idx}">${issue.checks.map(c => c[0] + " " + c[1]).join("\n")}</textarea>`;
+    box.appendChild(div);
+  });
+  box.querySelectorAll("[data-del]").forEach(b => b.onclick = () => { REG.splice(Number(b.dataset.del), 1); renderEditor(); renderTable(); });
+  box.querySelectorAll("[data-f]").forEach(el => el.onchange = () => {
+    const i = Number(el.dataset.i), f = el.dataset.f;
+    if (f === "checks") {
+      REG[i].checks = el.value.split("\n").map(l => l.trim()).filter(Boolean).map(l => {
+        const sp = l.indexOf(" ");
+        return [l.slice(0, sp), l.slice(sp + 1).trim()];
+      });
+    } else REG[i][f] = el.value.trim();
+    renderTable();
+  });
+}
+
+$("btn-add").onclick = () => { REG.push({ id: "새이슈", title: "", checks: [] }); renderEditor(); };
+$("btn-save").onclick = async () => {
+  const bad = REG.find(i => !i.id || !i.title || i.checks.some(c => !["node","python","com"].includes(c[0])));
+  if (bad) { $("save-msg").textContent = `저장 불가: "${bad.id}" — id/제목 필수, 체크 타입은 node|python|com`; return; }
+  const res = await api("/api/registry", { issues: REG });
+  $("save-msg").textContent = res.ok ? "저장됨 (registry.json.bak 백업)" : ("실패: " + res.error);
+  renderTable();
+};
+
+// ── 지라 완료 이슈 전수 관리 ──
+let JIRA = [];   // [{key, summary, status, done, verdict, note, lastChecked}]
+
+function autoCoveredKeys() {
+  const set = new Set();
+  REG.forEach(i => { set.add(i.id.toUpperCase()); if (i.jira) set.add(String(i.jira).toUpperCase()); });
+  return set;
+}
+
+function regEntryForKey(key) {
+  const K = String(key).toUpperCase();
+  return REG.find(i => i.id.toUpperCase() === K || String(i.jira || "").toUpperCase() === K) || null;
+}
+
+function renderJira() {
+  const covered = autoCoveredKeys();
+  const doneIssues = JIRA.filter(r => r.done);
+  const checked = doneIssues.filter(r => r.verdict === "정상" || covered.has(r.key));
+  $("jira-progress").textContent = doneIssues.length
+    ? `— 완료 ${doneIssues.length}건 중 점검됨 ${checked.length}건 (자동화 ${doneIssues.filter(r => covered.has(r.key)).length} + 수동 정상 ${doneIssues.filter(r => r.verdict === "정상" && !covered.has(r.key)).length})`
+    : "— 아직 목록이 없습니다. 아래에서 CSV 를 가져오세요.";
+  $("jira-bar-fill").style.width = doneIssues.length ? (100 * checked.length / doneIssues.length).toFixed(1) + "%" : "0%";
+
+  const f = $("jira-filter").value;
+  const q = $("jira-search").value.trim().toLowerCase();
+  let rows = doneIssues.filter(r => {
+    if (q && !(r.key.toLowerCase().includes(q) || r.summary.toLowerCase().includes(q))) return false;
+    const isAuto = covered.has(r.key);
+    if (f === "unchecked") return !isAuto && !r.verdict;
+    if (f === "auto") return isAuto;
+    if (f === "manual") return !isAuto;
+    if (f === "재발" || f === "보류" || f === "정상") return r.verdict === f;
+    return true;
+  });
+  $("jira-count").textContent = `${rows.length}건 표시`;
+  const tb = $("jira-tbl").querySelector("tbody");
+  tb.innerHTML = "";
+  rows.forEach(r => {
+    const isAuto = covered.has(r.key);
+    const autoRes = LAST[r.key] || LAST[Object.keys(LAST).find(k => k.toUpperCase() === r.key) || ""];
+    const vColor = { "정상": "var(--ok)", "재발": "var(--fail)", "보류": "#d97706" }[r.verdict] || "var(--sub)";
+    const reg = regEntryForKey(r.key);
+    const fixHtml = reg && reg.fix ? `<div class="chk" style="color:#7c3aed">🔧 해결: ${String(reg.fix).replace(/</g,"&lt;")}</div>` : "";
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td><b>${r.key}</b></td>
+      <td>${r.summary.replace(/</g,"&lt;")}${fixHtml}${r.note ? `<div class="chk">메모: ${r.note.replace(/</g,"&lt;")}</div>` : ""}</td>
+      <td>${isAuto ? (autoRes ? badge(autoRes.status) : `<span class="badge b-none">등록됨</span>`) : `<span class="muted">없음</span>`}</td>
+      <td>
+        <span style="color:${vColor}; font-weight:700">${r.verdict || "미점검"}</span>
+        <span class="muted" style="font-size:11px">${r.lastChecked ? " · " + r.lastChecked.slice(0, 10) : ""}</span><br>
+        <button data-v="정상" data-k="${r.key}">정상</button>
+        <button data-v="재발" data-k="${r.key}" class="del">재발</button>
+        <button data-v="보류" data-k="${r.key}">보류</button>
+        <button data-v="" data-k="${r.key}">지움</button>
+      </td>`;
+    tb.appendChild(tr);
+  });
+  tb.querySelectorAll("[data-k]").forEach(b => b.onclick = async () => {
+    const cur = JIRA.find(x => x.key === b.dataset.k);
+    let note = cur ? cur.note : "";
+    if (b.dataset.v === "재발" || b.dataset.v === "보류") {
+      note = prompt("메모(재현 상황/보류 사유):", note || "") ?? note;
+    }
+    const res = await api("/api/jira-verdict", { key: b.dataset.k, verdict: b.dataset.v, note });
+    if (res.ok && cur) Object.assign(cur, res.issue);
+    renderJira();
+  });
+}
+
+$("btn-import").onclick = async () => {
+  const res = await api("/api/jira-import", { content: $("csv").value });
+  if (res.error) { $("csv-sum").textContent = res.error; return; }
+  $("csv-sum").textContent = `가져옴: 총 ${res.total}건(완료 ${res.done}건) — 기존 점검 상태 보존`;
+  JIRA = (await api("/api/jira")).issues || [];
+  renderJira();
+};
+$("jira-filter").onchange = renderJira;
+$("jira-search").oninput = renderJira;
+
+$("btn-run").onclick = () => startRun({ com: $("opt-com").checked, only: $("opt-only").value.trim() });
+
+(async function init() {
+  REG = (await api("/api/registry")).issues || [];
+  renderTable();
+  renderEditor();
+  renderHistory((await api("/api/history")).runs || []);
+  JIRA = (await api("/api/jira")).issues || [];
+  renderJira();
+  const st = await api("/api/status");
+  if (st.running) { showRunning(); polling = setInterval(poll, 1000); }
+})();
+</script>
+</body>
+</html>

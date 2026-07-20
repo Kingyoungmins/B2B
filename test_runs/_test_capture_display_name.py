@@ -3,7 +3,7 @@
 # 배경: 위장 파일(.xls=OLE/HTML)은 라이브 wb.Name 이 excel_open_<hash> 라서 캡처가 그대로 저장하면
 #       실행기 파일확인에 영원히 못 채우는 '파일 선택 필요' 행이 뜨고 재생도 깨졌다.
 import sys
-sys.path.insert(0, r"C:\Users\Admin\Desktop\KGM_git\B2B_ver0.6.1")
+sys.path.insert(0, r"C:\Users\Admin\Desktop\KGM_git\B2B_ver0.6.2")
 import serve_b2b as S
 
 fails = 0

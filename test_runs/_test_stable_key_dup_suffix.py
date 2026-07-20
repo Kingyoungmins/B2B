@@ -2,7 +2,7 @@
 # 배경: 파일명에 다운로드 타임스탬프가 박힌 청구세부내역을 재다운로드하면 " (2)" 가 붙어
 #       stable key 에 숫자 2 가 남아 ctx.book 폴백 매칭이 깨졌다(스킬 수정 후 재실행 실패).
 import sys
-sys.path.insert(0, r"C:\Users\Admin\Desktop\KGM_git\B2B_ver0.6.1")
+sys.path.insert(0, r"C:\Users\Admin\Desktop\KGM_git\B2B_ver0.6.2")
 import serve_b2b as S
 
 fails = 0

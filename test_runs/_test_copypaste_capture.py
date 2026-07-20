@@ -5,7 +5,7 @@
 2) 생성된 ctx.paste_copied 스텝을 _exec_python_com_skill 로 실행 → 수식 보존 재생 확인"""
 import os, sys, shutil, tempfile, traceback
 from pathlib import Path
-ROOT = Path(r"C:/Users/Admin/Desktop/KGM_git/B2B_ver0.6.1"); sys.path.insert(0, str(ROOT))
+ROOT = Path(r"C:/Users/Admin/Desktop/KGM_git/B2B_ver0.6.2"); sys.path.insert(0, str(ROOT))
 
 
 def main():

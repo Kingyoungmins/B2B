@@ -5,7 +5,7 @@
 #  C) 둘 다 열림 → ctx.book(2605명, 미존재) : 안정키 2건 → 모호성으로 매칭 포기 → 예외 문구
 #  D) A 의 ctx 재사용(공유 books 캐시) 상태에서 2606 이 '진짜로' 열린 뒤 같은 호출 → 캐시가 2607 을 계속 주는지
 import sys, os, tempfile, traceback
-sys.path.insert(0, r"C:\Users\Admin\Desktop\KGM_git\B2B_ver0.6.1")
+sys.path.insert(0, r"C:\Users\Admin\Desktop\KGM_git\B2B_ver0.6.2")
 import win32com.client as w
 import serve_b2b as S
 

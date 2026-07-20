@@ -2,7 +2,7 @@
 # (격리 워커/작업사본/Quit 잔존)도 함께 숨겨지는지 — 결과 편집 후 최소화 때 워크북 0개짜리
 # 회색 'Excel' 창이 화면에 남던 증상의 회귀 테스트.
 import sys, time
-sys.path.insert(0, r"C:\Users\Admin\Desktop\KGM_git\B2B_ver0.6.1")
+sys.path.insert(0, r"C:\Users\Admin\Desktop\KGM_git\B2B_ver0.6.2")
 import win32com.client as w
 import win32gui, win32process
 import serve_b2b as S

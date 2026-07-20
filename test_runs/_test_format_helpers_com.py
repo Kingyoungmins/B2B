@@ -1,7 +1,7 @@
 # [실측] ctx 서식 헬퍼(set_fill/set_font/set_border)를 진짜 Excel COM 에 걸어 결과를 되읽어 검증.
 # 추측금지 — 실제 Excel 이 Interior.Color/Font/Borders 를 우리가 의도한 값으로 바꿨는지 확인.
 import sys, os
-sys.path.insert(0, r"C:\Users\Admin\Desktop\KGM_git\B2B_ver0.6.1")
+sys.path.insert(0, r"C:\Users\Admin\Desktop\KGM_git\B2B_ver0.6.2")
 import win32com.client as w
 import serve_b2b as S
 
