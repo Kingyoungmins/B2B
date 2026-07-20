@@ -135,8 +135,9 @@ function renderTable() {
     const tr = document.createElement("tr");
     const checksHtml = (r ? r.checks : issue.checks.map(c => ({kind:c[0], path:c[1], status:""})))
       .map(c => `<div class="chk"><b class="${c.status||""}">${c.status||"—"}</b> [${c.kind}] ${c.path}${c.secs?` (${c.secs}s)`:""}${c.tail?`<div class="tail">${c.tail.replace(/</g,"&lt;")}</div>`:""}</div>`).join("");
+    const fixHtml = issue.fix ? `<div class="chk" style="color:#7c3aed">🔧 해결: ${String(issue.fix).replace(/</g,"&lt;")}</div>` : "";
     tr.innerHTML = `<td>${badge(r && r.status)}</td><td><b>${issue.id}</b></td>
-      <td>${issue.title}${checksHtml}</td>
+      <td>${issue.title}${fixHtml}${checksHtml}</td>
       <td><button data-one="${issue.id}">실행</button></td>`;
     tb.appendChild(tr);
   });
@@ -226,6 +227,11 @@ function autoCoveredKeys() {
   return set;
 }
 
+function regEntryForKey(key) {
+  const K = String(key).toUpperCase();
+  return REG.find(i => i.id.toUpperCase() === K || String(i.jira || "").toUpperCase() === K) || null;
+}
+
 function renderJira() {
   const covered = autoCoveredKeys();
   const doneIssues = JIRA.filter(r => r.done);
@@ -253,10 +259,12 @@ function renderJira() {
     const isAuto = covered.has(r.key);
     const autoRes = LAST[r.key] || LAST[Object.keys(LAST).find(k => k.toUpperCase() === r.key) || ""];
     const vColor = { "정상": "var(--ok)", "재발": "var(--fail)", "보류": "#d97706" }[r.verdict] || "var(--sub)";
+    const reg = regEntryForKey(r.key);
+    const fixHtml = reg && reg.fix ? `<div class="chk" style="color:#7c3aed">🔧 해결: ${String(reg.fix).replace(/</g,"&lt;")}</div>` : "";
     const tr = document.createElement("tr");
     tr.innerHTML = `
       <td><b>${r.key}</b></td>
-      <td>${r.summary.replace(/</g,"&lt;")}${r.note ? `<div class="chk">메모: ${r.note.replace(/</g,"&lt;")}</div>` : ""}</td>
+      <td>${r.summary.replace(/</g,"&lt;")}${fixHtml}${r.note ? `<div class="chk">메모: ${r.note.replace(/</g,"&lt;")}</div>` : ""}</td>
       <td>${isAuto ? (autoRes ? badge(autoRes.status) : `<span class="badge b-none">등록됨</span>`) : `<span class="muted">없음</span>`}</td>
       <td>
         <span style="color:${vColor}; font-weight:700">${r.verdict || "미점검"}</span>

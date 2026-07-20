@@ -18,7 +18,8 @@
      "com",
      "test_runs/_test_pivot_dup_headers_com.py"
     ]
-   ]
+   ],
+   "fix": "피벗을 LLM 손코딩 대신 ctx.pivot 네이티브 헬퍼로 강제(라우팅 힌트) + 항상 진짜 피벗테이블 생성(0.6.1)"
   },
   {
    "id": "SBAGENT-18",
@@ -28,7 +29,8 @@
      "marker",
      "scripts/excel-mirror.js::restoreActiveExcelMirrorWindow"
     ]
-   ]
+   ],
+   "fix": "라이브 Excel 오버레이 구조 전환(0.4.4~) — 시트 이동 등은 실제 Excel 네이티브가 직접 처리"
   },
   {
    "id": "SBAGENT-19",
@@ -42,7 +44,8 @@
      "marker",
      "serve_b2b.py::def sum_where"
     ]
-   ]
+   ],
+   "fix": "조건 집계용 sum_where/sum_lookup 결정적 헬퍼 도입(0.5.x 평가지 대응)"
   },
   {
    "id": "SBAGENT-20",
@@ -52,7 +55,8 @@
      "node",
      "diagnostics/_test_cross_reset.js"
     ]
-   ]
+   ],
+   "fix": "단계 삭제 시 직전 스냅샷 복원 + 교차 목적지 리셋 집합 정비(0.5.14~0.6.1)"
   },
   {
    "id": "SBAGENT-22",
@@ -66,7 +70,8 @@
      "marker",
      "scripts/file-schema.js::피벗"
     ]
-   ]
+   ],
+   "fix": "피벗 항상-네이티브 강제 + 서식 보존 경로 정비(0.6.1)"
   },
   {
    "id": "SBAGENT-26",
@@ -81,7 +86,8 @@
      "diagnostics/_test_issue_real_artifacts.js"
     ]
    ],
-   "repro": "C:\\Users\\Admin\\Downloads\\엎어씌우기 문제.zip"
+   "repro": "C:\\Users\\Admin\\Downloads\\엎어씌우기 문제.zip",
+   "fix": "전체 열/행 배열 일괄 엔진 + dict 매칭 덮어쓰기 VBA 라우팅(0.5.x)"
   },
   {
    "id": "SBAGENT-28",
@@ -95,7 +101,8 @@
      "marker",
      "scripts/chat-ui.js::forceEngine"
     ]
-   ]
+   ],
+   "fix": "엔진 전환 시 원본 코드 보존 + 게이트 우회 표지(단방향 전환 정책)"
   },
   {
    "id": "SBAGENT-29",
@@ -105,7 +112,8 @@
      "com",
      "test_runs/_test_fullcolrow_engine.py"
     ]
-   ]
+   ],
+   "fix": "전체 행 값 대체를 배열 일괄 쓰기로(전체 열/행 엔진)"
   },
   {
    "id": "SBAGENT-30",
@@ -124,7 +132,8 @@
      "test_runs/_test_vba_env_access.py"
     ]
    ],
-   "repro": "C:\\Users\\Admin\\Downloads\\보안해제.zip"
+   "repro": "C:\\Users\\Admin\\Downloads\\보안해제.zip",
+   "fix": "열 때부터 AutomationSecurity=Low + AccessVBOM/VBAWarnings=1 + 러너 신뢰 위치 등록(0.6.0 A안)"
   },
   {
    "id": "SBAGENT-31",
@@ -134,7 +143,8 @@
      "marker",
      "scripts/excel-mirror.js::recoverExcelMirrorWindow"
     ]
-   ]
+   ],
+   "fix": "미러 복구(recover) — 빈 화면 시 창 재배치·재표시"
   },
   {
    "id": "SBAGENT-32",
@@ -144,7 +154,8 @@
      "marker",
      "scripts/llm-api.js::extractDescription"
     ]
-   ]
+   ],
+   "fix": "응답 제목 추출(extractDescription)로 단계 요약 자동화"
   },
   {
    "id": "SBAGENT-33",
@@ -154,7 +165,8 @@
      "marker",
      "serve_b2b.py::def hide_rows"
     ]
-   ]
+   ],
+   "fix": "hide_rows/hide_cols 헬퍼 도입(행숨기기취소 오류 메시지 제거)"
   },
   {
    "id": "SBAGENT-35",
@@ -165,7 +177,8 @@
      "test_runs/_test_eval_fixes_com.py"
     ]
    ],
-   "repro": "C:\\Users\\Admin\\Downloads\\난이도up.zip"
+   "repro": "C:\\Users\\Admin\\Downloads\\난이도up.zip",
+   "fix": "평가지 함정 대응 헬퍼(sum_where/sum_lookup/find_header 인접행) + 명시열 규칙(0.5.x)"
   },
   {
    "id": "SBAGENT-38",
@@ -179,7 +192,8 @@
      "marker",
      "serve_b2b.py::_resolve_ephemeral_excel_open_sheet_alias"
     ]
-   ]
+   ],
+   "fix": "_ws 7단 폴백(정확→별칭→교차유일→정규화→안정키→31자절단→단일시트, 유일 매칭 시에만 완화)"
   },
   {
    "id": "SBAGENT-39",
@@ -189,7 +203,8 @@
      "com",
      "test_runs/_test_crossfile_autoopen.py"
     ]
-   ]
+   ],
+   "fix": "교차파일 소스 자동 오픈(_registered_path_for_name) + 동반본 개방"
   },
   {
    "id": "SBAGENT-40",
@@ -199,7 +214,8 @@
      "node",
      "diagnostics/_test_smooth_renderer_raf.js"
     ]
-   ]
+   ],
+   "fix": "채팅 타자기 RAF 영구 루프 수정 — 완료 시 정지 + 오류 경로 flush(0.6.1)"
   },
   {
    "id": "SBAGENT-42",
@@ -209,7 +225,8 @@
      "com",
      "test_runs/_test_ws_truncated_sheet_com.py"
     ]
-   ]
+   ],
+   "fix": "_ws 폴백 사다리로 시트명 오인식 방지(유일 매칭 한정 완화)"
   },
   {
    "id": "SBAGENT-43",
@@ -219,7 +236,8 @@
      "com",
      "test_runs/_test_fullcolrow_engine.py"
     ]
-   ]
+   ],
+   "fix": "전체 열/행 범위 산정 정비(1행 포함)"
   },
   {
    "id": "SBAGENT-44",
@@ -229,7 +247,8 @@
      "com",
      "test_runs/_test_copypaste_capture.py"
     ]
-   ]
+   ],
+   "fix": "복붙 캡처 기능 신설(0.5.9) — 클립보드 Link 역추적 + RangeSelection"
   },
   {
    "id": "SBAGENT-48",
@@ -239,7 +258,8 @@
      "com",
      "test_runs/_test_format_helpers_com.py"
     ]
-   ]
+   ],
+   "fix": "위임형 오픈(실제 Excel COM)으로 함수/서식 보존"
   },
   {
    "id": "SBAGENT-49",
@@ -249,7 +269,8 @@
      "com",
      "test_runs/_test_copypaste_capture.py"
     ]
-   ]
+   ],
+   "fix": "복붙 캡처가 네이티브 Range.Copy 로 수식·서식 보존"
   },
   {
    "id": "SBAGENT-50",
@@ -259,7 +280,8 @@
      "marker",
      "scripts/save-load.js::scheduleLogicAutoBackup"
     ]
-   ]
+   ],
+   "fix": "스킬 자동백업(scheduleLogicAutoBackup) 도입"
   },
   {
    "id": "SBAGENT-51",
@@ -269,7 +291,8 @@
      "marker",
      "scripts/excel-mirror.js::scheduleExcelMirrorPosition"
     ]
-   ]
+   ],
+   "fix": "미러 위치 스케줄러 정비(스크롤/전환 시 재배치)"
   },
   {
    "id": "SBAGENT-52",
@@ -279,7 +302,8 @@
      "marker",
      "native_host/NativeHost.cs::Download deferral"
     ]
-   ]
+   ],
+   "fix": "다운로드 저장 대화상자 deferral + 강제 포그라운드(0.6.1)"
   },
   {
    "id": "SBAGENT-53",
@@ -289,7 +313,8 @@
      "marker",
      "scripts/llm-api.js::retryWithoutThink"
     ]
-   ]
+   ],
+   "fix": "think 반복 감지 → no-think 자동 재시도(retryWithoutThink)"
   },
   {
    "id": "SBAGENT-54",
@@ -299,7 +324,8 @@
      "com",
      "test_runs/_test_no_change_gate_com.py"
     ]
-   ]
+   ],
+   "fix": "무변경 실행 검증 게이트(거짓 '적용됨' 차단) + read-evidence 정밀화(0.6.1)"
   },
   {
    "id": "SBAGENT-55",
@@ -309,7 +335,8 @@
      "com",
      "test_runs/_test_excel_compatible_open_path_formats.py"
     ]
-   ]
+   ],
+   "fix": "위임형 오픈으로 병합 셀 데이터 보존(자체 파서 미사용)"
   },
   {
    "id": "SBAGENT-56",
@@ -323,7 +350,8 @@
      "marker",
      "serve_b2b.py::def merge"
     ]
-   ]
+   ],
+   "fix": "위임형 오픈으로 병합 유지 + merge/unmerge 헬퍼"
   },
   {
    "id": "SBAGENT-57",
@@ -333,7 +361,8 @@
      "com",
      "test_runs/_test_format_helpers_com.py"
     ]
-   ]
+   ],
+   "fix": "위임형 구조로 숫자 서식(천단위 쉼표) 보존"
   },
   {
    "id": "SBAGENT-58",
@@ -343,7 +372,8 @@
      "marker",
      "serve_b2b.py::_present_live_session_frame"
     ]
-   ]
+   ],
+   "fix": "라이브 Excel 프레임 직접 노출 — 네이티브 탐색 그대로 사용"
   },
   {
    "id": "SBAGENT-59",
@@ -353,7 +383,8 @@
      "com",
      "test_runs/_test_clear_filter_com.py"
     ]
-   ]
+   ],
+   "fix": "filter_to_sheet(원본 보존, 새 시트 추출) 헬퍼로 대체"
   },
   {
    "id": "SBAGENT-61",
@@ -363,7 +394,8 @@
      "marker",
      "scripts/pipeline.js::pushHistory"
     ]
-   ]
+   ],
+   "fix": "Undo/Redo(pushHistory) 도입"
   },
   {
    "id": "SBAGENT-62",
@@ -373,7 +405,8 @@
      "marker",
      "scripts/pipeline.js::isStepEnabled"
     ]
-   ]
+   ],
+   "fix": "단계 On/Off(isStepEnabled) + 토글 시 체크포인트 복원"
   },
   {
    "id": "SBAGENT-63",
@@ -383,7 +416,8 @@
      "com",
      "test_runs/_test_excel_compatible_open_path_formats.py"
     ]
-   ]
+   ],
+   "fix": "위임형 오픈으로 빈 컬럼 구조 유지"
   },
   {
    "id": "SBAGENT-64",
@@ -393,7 +427,8 @@
      "marker",
      "serve_b2b.py::def copy_values"
     ]
-   ]
+   ],
+   "fix": "copy_values(계산값 고정, 참조 시프트 없음) 헬퍼"
   },
   {
    "id": "SBAGENT-65",
@@ -403,7 +438,8 @@
      "com",
      "test_runs/_test_format_helpers_com.py"
     ]
-   ]
+   ],
+   "fix": "위임형 구조로 수식 포함 파일 그대로 적용"
   },
   {
    "id": "SBAGENT-66",
@@ -413,7 +449,8 @@
      "node",
      "diagnostics/_test_stop_escalation.js"
     ]
-   ]
+   ],
+   "fix": "작업 중단을 '진행 여부' 기반 승격으로 재설계(0.6.1)"
   },
   {
    "id": "SBAGENT-67",
@@ -423,7 +460,8 @@
      "marker",
      "scripts/drop-handling.js::beginUpload"
     ]
-   ]
+   ],
+   "fix": "업로드 진행 표시(beginUpload) + 중단 버튼"
   },
   {
    "id": "SBAGENT-68",
@@ -433,7 +471,8 @@
      "marker",
      "scripts/pipeline.js::outputTemplates"
     ]
-   ]
+   ],
+   "fix": "출력 템플릿 N개(outputTemplates) 지원"
   },
   {
    "id": "SBAGENT-69",
@@ -443,7 +482,8 @@
      "marker",
      "scripts/drop-handling.js::@(?:범위|시트|컬럼)"
     ]
-   ]
+   ],
+   "fix": "@파일/@시트/@범위/@컬럼 멘션 도입"
   },
   {
    "id": "SBAGENT-70",
@@ -453,7 +493,8 @@
      "com",
      "test_runs/_test_pivot_dup_headers_com.py"
     ]
-   ]
+   ],
+   "fix": "피벗 중복 헤더 구분 처리"
   },
   {
    "id": "SBAGENT-72",
@@ -463,7 +504,8 @@
      "com",
      "test_runs/_test_csv_multisheet_com.py"
     ]
-   ]
+   ],
+   "fix": "다중 시트 인식 + CSV 다중시트→xlsx 자동 승격"
   },
   {
    "id": "SBAGENT-73",
@@ -473,7 +515,8 @@
      "marker",
      "scripts/chat-ui.js::buildSheetStructureDigest"
     ]
-   ]
+   ],
+   "fix": "시트 구조 다이제스트(buildSheetStructureDigest)로 다중 표 파악"
   },
   {
    "id": "SBAGENT-74",
@@ -483,7 +526,8 @@
      "marker",
      "serve_b2b.py::_present_live_session_frame"
     ]
-   ]
+   ],
+   "fix": "라이브 Excel 위임 — Ctrl+F 등 네이티브 기능 그대로"
   },
   {
    "id": "SBAGENT-75",
@@ -493,7 +537,8 @@
      "marker",
      "scripts/chat-ui.js::editTargetId"
     ]
-   ]
+   ],
+   "fix": "수정 모드(editTargetId) — 대화로 특정 단계 in-place 수정"
   },
   {
    "id": "SBAGENT-76",
@@ -503,7 +548,8 @@
      "node",
      "diagnostics/_test_error_recovery_index.js"
     ]
-   ]
+   ],
+   "fix": "오류 단계/사유 표시 + 복구 인덱스 폴백(항상 복구 가능)"
   },
   {
    "id": "SBAGENT-77",
@@ -513,7 +559,8 @@
      "marker",
      "serve_b2b.py::ensure_result_file"
     ]
-   ]
+   ],
+   "fix": "결과 파일 보존소(ensure_result_file)"
   },
   {
    "id": "SBAGENT-78",
@@ -523,7 +570,8 @@
      "node",
      "diagnostics/_test_cross_reset.js"
     ]
-   ]
+   ],
+   "fix": "편집 경로에도 교차 목적지 리셋 가드(0.6.1)"
   },
   {
    "id": "SBAGENT-79",
@@ -533,7 +581,8 @@
      "com",
      "test_runs/_test_excel_compatible_open_path_formats.py"
     ]
-   ]
+   ],
+   "fix": "위임형 오픈으로 숨김열 보존"
   },
   {
    "id": "SBAGENT-80",
@@ -543,7 +592,8 @@
      "node",
      "diagnostics/_test_edit_checkpoint_guard.js"
     ]
-   ]
+   ],
+   "fix": "스텝별 사전 스냅샷 복원(미리보기 복원)"
   },
   {
    "id": "SBAGENT-81",
@@ -553,7 +603,8 @@
      "marker",
      "scripts/chat-ui.js::chat-expanded"
     ]
-   ]
+   ],
+   "fix": "설계창 세로 확대(chat-expanded)"
   },
   {
    "id": "SBAGENT-82",
@@ -563,7 +614,8 @@
      "marker",
      "scripts/excel-mirror.js::busy-stop"
     ]
-   ]
+   ],
+   "fix": "busy 오버레이 고정 중단 버튼(스크롤 무관)"
   },
   {
    "id": "SBAGENT-83",
@@ -573,7 +625,8 @@
      "marker",
      "scripts/chat-ui.js::chat-clear-history"
     ]
-   ]
+   ],
+   "fix": "대화 기억 비우기 기능"
   },
   {
    "id": "SBAGENT-84",
@@ -587,7 +640,8 @@
      "marker",
      "scripts/file-schema.js::글자 그대로"
     ]
-   ]
+   ],
+   "fix": "명시열 문자 그대로/열 암산 금지 프롬프트 규칙"
   },
   {
    "id": "SBAGENT-85",
@@ -601,7 +655,8 @@
      "com",
      "test_runs/_test_copy_snapshot_fallback.py"
     ]
-   ]
+   ],
+   "fix": "copy_values + 복사 스냅샷 폴백(수식 값복사 실패 방지)"
   },
   {
    "id": "SBAGENT-86",
@@ -611,7 +666,8 @@
      "marker",
      "serve_b2b.py::def _ws"
     ]
-   ]
+   ],
+   "fix": "세션 고정 ctx(_ws) — 대상 시트 한정 작업"
   },
   {
    "id": "SBAGENT-87",
@@ -621,7 +677,8 @@
      "com",
      "test_runs/_test_filemode_csv_output_com.py"
     ]
-   ]
+   ],
+   "fix": "파일 출력 모드 수식 유지 저장"
   },
   {
    "id": "SBAGENT-88",
@@ -635,7 +692,8 @@
      "marker",
      "serve_b2b.py::def clear_filter"
     ]
-   ]
+   ],
+   "fix": "clear_filter 헬퍼 도입"
   },
   {
    "id": "SBAGENT-89",
@@ -645,7 +703,8 @@
      "com",
      "test_runs/_test_vba_newsheet_liveschema.py"
     ]
-   ]
+   ],
+   "fix": "시트 추가 후 라이브 스키마 갱신(vba_newsheet_liveschema)"
   },
   {
    "id": "SBAGENT-90",
@@ -655,7 +714,8 @@
      "com",
      "test_runs/_test_copy_snapshot_fallback.py"
     ]
-   ]
+   ],
+   "fix": "복사 스냅샷 폴백으로 수식 null 방지"
   },
   {
    "id": "SBAGENT-91",
@@ -665,7 +725,8 @@
      "node",
      "diagnostics/_test_cross_reset.js"
     ]
-   ]
+   ],
+   "fix": "삭제/토글 시 직전 스냅샷 복원(0.5.14 재설계)"
   },
   {
    "id": "SBAGENT-92",
@@ -675,7 +736,8 @@
      "node",
      "diagnostics/_test_applied_label_truth.js"
     ]
-   ]
+   ],
+   "fix": "실패 시점 전-파일 스냅샷 + 복원 커버리지 검증(0.6.1) — '적용됨' 정합"
   },
   {
    "id": "SBAGENT-93",
@@ -685,7 +747,8 @@
      "com",
      "test_runs/_test_eval_fixes_com.py"
     ]
-   ]
+   ],
+   "fix": "@범위 리터럴 정확 복사 규칙(지정 범위 준수)"
   },
   {
    "id": "SBAGENT-94",
@@ -695,7 +758,8 @@
      "marker",
      "scripts/llm-api.js::_looksLikeCorrection"
     ]
-   ]
+   ],
+   "fix": "정정 우선 지시(_looksLikeCorrection) — 직전 해석 반복 금지"
   },
   {
    "id": "SBAGENT-95",
@@ -705,7 +769,8 @@
      "marker",
      "serve_b2b.py::def move_col_clear"
     ]
-   ]
+   ],
+   "fix": "move_col_clear(열 구조 유지 이동·비우기) 헬퍼"
   },
   {
    "id": "SBAGENT-96",
@@ -715,7 +780,8 @@
      "marker",
      "scripts/llm-api.js::_looksLikeCorrection"
     ]
-   ]
+   ],
+   "fix": "정정 우선 지시로 자동 반복 억제"
   },
   {
    "id": "SBAGENT-97",
@@ -725,7 +791,8 @@
      "node",
      "diagnostics/_test_stop_escalation.js"
     ]
-   ]
+   ],
+   "fix": "중단 승격 재설계(진행 기반) + busy 중단 버튼"
   },
   {
    "id": "SBAGENT-98",
@@ -735,7 +802,8 @@
      "marker",
      "serve_b2b.py::def insert_cols"
     ]
-   ]
+   ],
+   "fix": "네이티브 insert_cols(참조 자동 보정)"
   },
   {
    "id": "SBAGENT-99",
@@ -745,7 +813,8 @@
      "marker",
      "serve_b2b.py::SaveChanges"
     ]
-   ]
+   ],
+   "fix": "SaveChanges:=False 원본 불변 + 세션 작업사본"
   },
   {
    "id": "SBAGENT-100",
@@ -755,7 +824,8 @@
      "com",
      "test_runs/_test_excel_compatible_open_path_formats.py"
     ]
-   ]
+   ],
+   "fix": "위임형 오픈으로 숨김열 출력 보존"
   },
   {
    "id": "SBAGENT-101",
@@ -765,7 +835,8 @@
      "com",
      "test_runs/_test_fullrun_single_instance_live.py"
     ]
-   ]
+   ],
+   "fix": "격리 인스턴스 pristine 재계산 배치(0.5.14) — 실행 결정성"
   },
   {
    "id": "SBAGENT-102",
@@ -775,7 +846,8 @@
      "com",
      "test_runs/_test_format_helpers_com.py"
     ]
-   ]
+   ],
+   "fix": "위임형 구조로 날짜/시간 서식 보존"
   },
   {
    "id": "SBAGENT-103",
@@ -785,7 +857,8 @@
      "com",
      "test_runs/_test_fullrun_single_instance_live.py"
     ]
-   ]
+   ],
+   "fix": "격리 배치 1콜 재설계(0.5.14)"
   },
   {
    "id": "SBAGENT-104",
@@ -799,7 +872,8 @@
      "node",
      "diagnostics/_test_applied_label_truth.js"
     ]
-   ]
+   ],
+   "fix": "무변경 게이트 + 적용 표시 정합(0.6.1)"
   },
   {
    "id": "SBAGENT-105",
@@ -813,7 +887,8 @@
      "node",
      "diagnostics/_test_cross_reset.js"
     ]
-   ]
+   ],
+   "fix": "실패 시점 전-파일 스냅샷 + 교차 목적지 리셋(0.6.1)"
   },
   {
    "id": "SBAGENT-106",
@@ -823,7 +898,8 @@
      "com",
      "test_runs/_test_fullcolrow_engine.py"
     ]
-   ]
+   ],
+   "fix": "전체 행 삽입 엔진 정비"
   },
   {
    "id": "SBAGENT-107",
@@ -833,7 +909,8 @@
      "com",
      "test_runs/_test_no_change_gate_com.py"
     ]
-   ]
+   ],
+   "fix": "무변경 실행 검증 게이트(미반영을 실패로 노출)"
   },
   {
    "id": "SBAGENT-108",
@@ -847,7 +924,8 @@
      "com",
      "test_runs/_test_excel_compatible_open_path_formats.py"
     ]
-   ]
+   ],
+   "fix": "확장자 위장 시그니처 판별 + 해시 고정 임시명 변환 오픈"
   },
   {
    "id": "SBAGENT-109",
@@ -857,7 +935,8 @@
      "node",
      "diagnostics/_test_error_recovery_index.js"
     ]
-   ]
+   ],
+   "fix": "복구 인덱스 폴백 — 오류에도 파이프라인 생성/복구 가능"
   },
   {
    "id": "SBAGENT-110",
@@ -867,7 +946,8 @@
      "marker",
      "serve_b2b.py::def insert_cols"
     ]
-   ]
+   ],
+   "fix": "네이티브 insert_cols 로 잔존 수식 정리"
   },
   {
    "id": "SBAGENT-111",
@@ -877,7 +957,8 @@
      "marker",
      "scripts/chat-ui.js::clarifyVerifierAskIfNeeded"
     ]
-   ]
+   ],
+   "fix": "명확화 verifier(구조 다이제스트+LLM, 키워드 금지)"
   },
   {
    "id": "SBAGENT-113",
@@ -887,7 +968,8 @@
      "node",
      "diagnostics/_test_click_recovery.js"
     ]
-   ]
+   ],
+   "fix": "클릭 복구기 — 눌림 즉시 합성 + 진짜 이벤트 삼킴(VDI)"
   },
   {
    "id": "SBAGENT-114",
@@ -901,7 +983,8 @@
      "com",
      "test_runs/_test_copypaste_capture.py"
     ]
-   ]
+   ],
+   "fix": "복붙 캡처 '값만' 옵션(values_only) 추가"
   },
   {
    "id": "SBAGENT-115",
@@ -915,7 +998,8 @@
      "marker",
      "serve_b2b.py::cleanup_stale_temp_artifacts"
     ]
-   ]
+   ],
+   "fix": "시작 시 임시 산출물 정리 + 스냅샷 상한 하우스키핑"
   },
   {
    "id": "SBAGENT-116",
@@ -930,7 +1014,8 @@
      "diagnostics/_test_save_no_mapped_leak.js"
     ]
    ],
-   "repro": "C:\\Users\\Admin\\Downloads\\불러오기실패_전체_파일_20260626_1332_가입자별청구내역_작업.zip"
+   "repro": "C:\\Users\\Admin\\Downloads\\불러오기실패_전체_파일_20260626_1332_가입자별청구내역_작업.zip",
+   "fix": "불러오기 정규화 + 내부 작업본명 수리(0.6.1)"
   },
   {
    "id": "SBAGENT-117",
@@ -940,7 +1025,8 @@
      "node",
      "diagnostics/_test_error_recovery_index.js"
     ]
-   ]
+   ],
+   "fix": "복구 인덱스 정렬 — 성공 단계 오류 오표시 제거"
   },
   {
    "id": "SBAGENT-119",
@@ -950,7 +1036,8 @@
      "com",
      "test_runs/_test_format_helpers_com.py"
     ]
-   ]
+   ],
+   "fix": "위임형 구조로 수식 표시 보존"
   },
   {
    "id": "SBAGENT-120",
@@ -964,7 +1051,8 @@
      "node",
      "diagnostics/_test_save_name_follows_input.js"
     ]
-   ]
+   ],
+   "fix": "저장 대화상자 deferral(0.6.1) + 저장명 시그니처"
   },
   {
    "id": "SBAGENT-121",
@@ -974,7 +1062,8 @@
      "com",
      "test_runs/_test_month_shift.py"
     ]
-   ]
+   ],
+   "fix": "shift_months(연도 넘김·말일 보정) 헬퍼"
   },
   {
    "id": "SBAGENT-122",
@@ -984,7 +1073,8 @@
      "node",
      "diagnostics/_test_cross_reset.js"
     ]
-   ]
+   ],
+   "fix": "삭제 시 스냅샷 복원 — 뷰/스킬 상태 일치(0.5.14)"
   },
   {
    "id": "SBAGENT-123",
@@ -994,7 +1084,8 @@
      "node",
      "diagnostics/_test_paste_internal_repair.js"
     ]
-   ]
+   ],
+   "fix": "로드 시 스킬 수리(내부명/스텝 매칭)(0.6.1)"
   },
   {
    "id": "SBAGENT-124",
@@ -1004,7 +1095,8 @@
      "marker",
      "serve_b2b.py::def copy_sheet"
     ]
-   ]
+   ],
+   "fix": "copy_sheet 헬퍼(교차파일 포함)"
   },
   {
    "id": "SBAGENT-126",
@@ -1014,7 +1106,8 @@
      "node",
      "diagnostics/_test_edit_checkpoint_guard.js"
     ]
-   ]
+   ],
+   "fix": "삭제 재실행을 체크포인트 이어실행으로(0.5.15)"
   },
   {
    "id": "SBAGENT-129",
@@ -1024,7 +1117,8 @@
      "node",
      "diagnostics/_test_applied_label_truth.js"
     ]
-   ]
+   ],
+   "fix": "적용 추적 시그니처 무효화 — 불러온 스킬 첫 실행 보장"
   },
   {
    "id": "SBAGENT-130",
@@ -1038,7 +1132,8 @@
      "node",
      "diagnostics/_test_cross_reset.js"
     ]
-   ]
+   ],
+   "fix": "rename 31자 절단 대칭 + 변경 후 재조회"
   },
   {
    "id": "SBAGENT-131",
@@ -1048,7 +1143,8 @@
      "node",
      "diagnostics/_test_cross_reset.js"
     ]
-   ]
+   ],
+   "fix": "직전 삭제 시 체크포인트 복원(값 유실 방지)"
   },
   {
    "id": "SBAGENT-132",
@@ -1058,7 +1154,8 @@
      "com",
      "test_runs/_test_no_change_gate_com.py"
     ]
-   ]
+   ],
+   "fix": "무변경 게이트 — 정렬 실패를 실패로 노출"
   },
   {
    "id": "SBAGENT-133",
@@ -1068,7 +1165,8 @@
      "com",
      "test_runs/_test_crossfile_capture_e2e.py"
     ]
-   ]
+   ],
+   "fix": "캡처 재생 네이티브 Copy + 캡처 스텝 재생성 금지 분류"
   },
   {
    "id": "SBAGENT-134",
@@ -1078,7 +1176,8 @@
      "marker",
      "index.html::runner-download-btn"
     ]
-   ]
+   ],
+   "fix": "전체 파일 zip 다운로드 + 파일별 보기/다운"
   },
   {
    "id": "SBAGENT-138",
@@ -1089,7 +1188,8 @@
      "diagnostics/_test_generated_sheet_var.js"
     ]
    ],
-   "repro": "C:\\Users\\Admin\\Downloads\\0.한전 전력통신 빌링_표준양식_서울기준_25단계_2026-07-14-13-03-32.zip"
+   "repro": "C:\\Users\\Admin\\Downloads\\0.한전 전력통신 빌링_표준양식_서울기준_25단계_2026-07-14-13-03-32.zip",
+   "fix": "VBA 변수 사슬 해소 — 생성 시트 오요구 제거(SBAGENT-138)"
   },
   {
    "id": "SBAGENT-139",
@@ -1099,7 +1199,8 @@
      "com",
      "test_runs/_test_filter_to_sheet_column_offset.py"
     ]
-   ]
+   ],
+   "fix": "filter_to_sheet 열 오프셋 수정(I→J 어긋남)"
   },
   {
    "id": "SBAGENT-140",
@@ -1109,7 +1210,8 @@
      "marker",
      "scripts/save-load.js::rememberLogicSaveBaseName"
     ]
-   ]
+   ],
+   "fix": "저장명 기억 + 입력 시그니처 게이트(0.6.1)"
   },
   {
    "id": "SBAGENT-141",
@@ -1119,7 +1221,8 @@
      "marker",
      "serve_b2b.py::PY_COM_BUDGET"
     ]
-   ]
+   ],
+   "fix": "COM 호출 예산(PY_COM_BUDGET) + 대량 작업 VBA 라우팅"
   },
   {
    "id": "SBAGENT-142",
@@ -1129,7 +1232,8 @@
      "com",
      "test_runs/_test_ws_truncated_sheet_com.py"
     ]
-   ]
+   ],
+   "fix": "_ws 폴백 + 오류 후 시트 재해석"
   },
   {
    "id": "SBAGENT-144",
@@ -1139,7 +1243,8 @@
      "node",
      "diagnostics/_test_runner_automap.js"
     ]
-   ]
+   ],
+   "fix": "실행기 자동 매칭(5단 점수 사다리, 유일 일치)"
   },
   {
    "id": "SBAGENT-146",
@@ -1149,7 +1254,8 @@
      "com",
      "test_runs/_test_ws_truncated_sheet_com.py"
     ]
-   ]
+   ],
+   "fix": "_ws 7단 폴백으로 시트 이름 해석"
   },
   {
    "id": "SBAGENT-148",
@@ -1159,7 +1265,8 @@
      "com",
      "test_runs/_test_format_helpers_com.py"
     ]
-   ]
+   ],
+   "fix": "서식 보존 경로 정비(KGM 텍스트 압축)"
   },
   {
    "id": "SBAGENT-149",
@@ -1169,7 +1276,8 @@
      "marker",
      "scripts/save-load.js::scheduleLogicAutoBackup"
     ]
-   ]
+   ],
+   "fix": "스킬 자동백업 도입"
   },
   {
    "id": "SBAGENT-150",
@@ -1184,7 +1292,8 @@
      "serve_b2b.py::def append_same_format_sheets"
     ]
    ],
-   "repro": "C:\\Users\\Admin\\Downloads\\5개합치기"
+   "repro": "C:\\Users\\Admin\\Downloads\\5개합치기",
+   "fix": "append_same_format_sheets(헤더 1회+네이티브 Copy)(SBAGENT-150)"
   },
   {
    "id": "SBAGENT-151",
@@ -1199,7 +1308,8 @@
      "test_runs/_test_infinite_loop_guard.py"
     ]
    ],
-   "repro": "C:\\Users\\Admin\\Downloads\\무한 루프.zip"
+   "repro": "C:\\Users\\Admin\\Downloads\\무한 루프.zip",
+   "fix": "정적 while True 금지 + 런타임 트레이서 데드라인(2겹 방어)"
   },
   {
    "id": "SBAGENT-152",
@@ -1210,7 +1320,8 @@
      "test_runs/_test_fullrun_single_instance_live.py"
     ]
    ],
-   "repro": "C:\\Users\\Admin\\Downloads\\프로그램 다운.zip"
+   "repro": "C:\\Users\\Admin\\Downloads\\프로그램 다운.zip",
+   "fix": "격리 배치 1콜 + 무락 진행률(저사양 멈춤 구조 제거, 0.5.14)"
   },
   {
    "id": "SBAGENT-155",
@@ -1224,7 +1335,8 @@
      "marker",
      "scripts/chat-ui.js::clarifyVerifierAskIfNeeded"
     ]
-   ]
+   ],
+   "fix": "질의 verifier 도입(생성 전 모호성 확인)"
   },
   {
    "id": "SBAGENT-156",
@@ -1234,7 +1346,8 @@
      "com",
      "test_runs/_test_clear_filter_com.py"
     ]
-   ]
+   ],
+   "fix": "필터 후 행삭제를 AutoFilter+SpecialCells 일괄 삭제로"
   },
   {
    "id": "SBAGENT-157",
@@ -1244,7 +1357,8 @@
      "node",
      "diagnostics/_test_edit_checkpoint_guard.js"
     ]
-   ]
+   ],
+   "fix": "수정/오류 재실행을 실패 지점부터 이어실행으로(0.5.15)"
   },
   {
    "id": "SBAGENT-158",
@@ -1254,7 +1368,8 @@
      "com",
      "test_runs/_test_clear_filter_com.py"
     ]
-   ]
+   ],
+   "fix": "filter_to_sheet 원본 보존 설계"
   },
   {
    "id": "SBAGENT-159",
@@ -1264,7 +1379,8 @@
      "marker",
      "scripts/pipeline.js::explainPipelineErrorForUser"
     ]
-   ]
+   ],
+   "fix": "오류 사용자 눈높이 해설(explainPipelineErrorForUser)"
   },
   {
    "id": "SBAGENT-160",
@@ -1283,7 +1399,8 @@
      "diagnostics/_test_issue_real_artifacts.js"
     ]
    ],
-   "repro": "C:\\Users\\Admin\\Downloads\\네이버클라우드_5월 트래픽_2단계_2026-06-26-16-28-22.zip"
+   "repro": "C:\\Users\\Admin\\Downloads\\네이버클라우드_5월 트래픽_2단계_2026-06-26-16-28-22.zip",
+   "fix": "ctx.lookup 헬퍼 + For Each 관용구 대상 인식"
   },
   {
    "id": "SBAGENT-161",
@@ -1293,7 +1410,8 @@
      "node",
      "diagnostics/_test_paste_internal_repair.js"
     ]
-   ]
+   ],
+   "fix": "로드 정규화 + 스텝 파일 유사도 매칭"
   },
   {
    "id": "SBAGENT-162",
@@ -1303,7 +1421,8 @@
      "marker",
      "scripts/pipeline.js::runPipelineSuffixFromCheckpoint"
     ]
-   ]
+   ],
+   "fix": "숨김 워커 재사용 + 라이브 추가 + 이어실행(적용 속도 최적화)"
   },
   {
    "id": "SBAGENT-163",
@@ -1313,7 +1432,8 @@
      "marker",
      "scripts/server-monitor.js::autoReconnectLoop"
     ]
-   ]
+   ],
+   "fix": "서버 크래시 자동 재시작 + 재연결 배너"
   },
   {
    "id": "SBAGENT-164",
@@ -1323,7 +1443,8 @@
      "com",
      "test_runs/_test_format_helpers_com.py"
     ]
-   ]
+   ],
+   "fix": "서식 헬퍼(회계 등) 정비"
   },
   {
    "id": "SBAGENT-166",
@@ -1333,7 +1454,8 @@
      "node",
      "diagnostics/_test_edit_checkpoint_guard.js"
     ]
-   ]
+   ],
+   "fix": "수정 반영을 체크포인트 이어실행으로(0.5.15 Bug2)"
   },
   {
    "id": "SBAGENT-167",
@@ -1343,7 +1465,8 @@
      "marker",
      "native_host/NativeHost.cs::PublishNativeBounds"
     ]
-   ]
+   ],
+   "fix": "좌표 발행(PublishNativeBounds) 동기화"
   },
   {
    "id": "SBAGENT-168",
@@ -1353,7 +1476,8 @@
      "com",
      "test_runs/_test_format_helpers_com.py"
     ]
-   ]
+   ],
+   "fix": "서식 보존 경로 정비(KGM 패치 확인)"
   },
   {
    "id": "SBAGENT-169",
@@ -1367,7 +1491,8 @@
      "marker",
      "native_host/NativeHost.cs::AttachThreadInput"
     ]
-   ]
+   ],
+   "fix": "포커스 이식(AttachThreadInput) + 선클릭 보정"
   },
   {
    "id": "SBAGENT-170",
@@ -1376,9 +1501,14 @@
     [
      "com",
      "test_runs/_test_fullrun_single_instance_live.py"
+    ],
+    [
+     "node",
+     "diagnostics/_test_issue_real_artifacts.js"
     ]
    ],
-   "repro": "C:\\Users\\Admin\\Downloads\\창범KGMSBAGENT-170_attachments.zip"
+   "repro": "C:\\Users\\Admin\\Downloads\\창범KGMSBAGENT-170_attachments.zip",
+   "fix": "격리 pristine 재계산으로 완성 스킬 실행 안정화"
   },
   {
    "id": "SBAGENT-171",
@@ -1397,7 +1527,8 @@
      "diagnostics/_test_issue_real_artifacts.js"
     ]
    ],
-   "repro": "C:\\Users\\Admin\\Downloads\\예원SBAGENT-171_attachments.zip"
+   "repro": "C:\\Users\\Admin\\Downloads\\예원SBAGENT-171_attachments.zip",
+   "fix": "시트 소유자 검증(오귀속 방지) + 쌍 요구 추출(SBAGENT-171)"
   },
   {
    "id": "SBAGENT-172",
@@ -1407,7 +1538,8 @@
      "node",
      "diagnostics/_test_applied_label_truth.js"
     ]
-   ]
+   ],
+   "fix": "적용 표시 정합 + 진행률 무락 채널(거짓 지연/실패 제거)"
   },
   {
    "id": "SBAGENT-174",
@@ -1417,7 +1549,8 @@
      "marker",
      "scripts/chat-ui.js::editTargetId"
     ]
-   ]
+   ],
+   "fix": "수정 모드 in-place 교체(새 스텝 추가로 새는 문제 수정, 0.6.1)"
   },
   {
    "id": "SBAGENT-175",
@@ -1431,7 +1564,8 @@
      "marker",
      "serve_b2b.py::cleanup_stale_temp_artifacts"
     ]
-   ]
+   ],
+   "fix": "임시 산출물 정리 + 스냅샷 상한(디스크 누적 방지)"
   },
   {
    "id": "SBAGENT-177",
@@ -1441,7 +1575,8 @@
      "marker",
      "scripts/pipeline.js::renamingStepId"
     ]
-   ]
+   ],
+   "fix": "단계 이름 상태 기반 편집 + '스킬명' 버튼(0.6.1)"
   },
   {
    "id": "SBAGENT-180",
@@ -1451,7 +1586,8 @@
      "marker",
      "scripts/drop-handling.js::chip-view"
     ]
-   ]
+   ],
+   "fix": "파일별 보기/다운 UI"
   },
   {
    "id": "SBAGENT-181",
@@ -1461,7 +1597,8 @@
      "com",
      "test_runs/_test_format_helpers_com.py"
     ]
-   ]
+   ],
+   "fix": "서식 변경 헬퍼 정비"
   },
   {
    "id": "SBAGENT-183",
@@ -1475,7 +1612,8 @@
      "node",
      "diagnostics/_test_mapping_persistence.js"
     ]
-   ]
+   ],
+   "fix": "파일확인 매핑 UI + 매핑 기록 유지·재실행 적용(0.6.1)"
   },
   {
    "id": "SBAGENT-184",
@@ -1485,7 +1623,8 @@
      "marker",
      "scripts/save-load.js::pipelineForSave"
     ]
-   ]
+   ],
+   "fix": "저장은 원본(범용) 기준(pipelineForSave) — 1회성 치환본 미저장(0.6.1)"
   },
   {
    "id": "SBAGENT-185",
@@ -1495,7 +1634,8 @@
      "marker",
      "scripts/pipeline.js::insertLogic"
     ]
-   ]
+   ],
+   "fix": "단계 삽입(insertLogic) + 삽입 전 상태 복원"
   },
   {
    "id": "SBAGENT-187",
@@ -1505,7 +1645,8 @@
      "marker",
      "scripts/save-load.js::loadLogicFiles"
     ]
-   ]
+   ],
+   "fix": "스킬 zip 다중 로드 병합"
   },
   {
    "id": "SBAGENT-188",
@@ -1519,7 +1660,8 @@
      "marker",
      "serve_b2b.py::def clear_filter"
     ]
-   ]
+   ],
+   "fix": "clear_filter 헬퍼(필터 해제)"
   },
   {
    "id": "SBAGENT-189",
@@ -1529,7 +1671,8 @@
      "marker",
      "native_host/NativeHost.cs::PublishNativeBounds"
     ]
-   ]
+   ],
+   "fix": "스크린 좌표 발행 기반 오버레이(모니터 배치 무관)"
   },
   {
    "id": "SBAGENT-191",
@@ -1539,7 +1682,8 @@
      "python",
      "test_runs/_test_stable_key_dup_suffix.py"
     ]
-   ]
+   ],
+   "fix": "워크북 안정키(월/날짜/접미사 무시, 유일 일치)(0.6.0~0.6.1)"
   },
   {
    "id": "SBAGENT-192",
@@ -1553,7 +1697,8 @@
      "node",
      "diagnostics/_test_edit_month_rebind.js"
     ]
-   ]
+   ],
+   "fix": "안정키 재바인딩 + 다른 달 확인 표시"
   },
   {
    "id": "SBAGENT-193",
@@ -1563,7 +1708,8 @@
      "marker",
      "serve_b2b.py::Unprotect"
     ]
-   ]
+   ],
+   "fix": "시트 보호 해제 경로(Unprotect)"
   },
   {
    "id": "SBAGENT-194",
@@ -1577,7 +1723,8 @@
      "marker",
      "serve_b2b.py::SPAWNED_EXCEL_PIDS"
     ]
-   ]
+   ],
+   "fix": "종료 시 정리 완료 대기 + 창 즉시 숨김(0.6.1)"
   },
   {
    "id": "SBAGENT-195",
@@ -1587,7 +1734,8 @@
      "node",
      "diagnostics/_test_click_recovery.js"
     ]
-   ]
+   ],
+   "fix": "클릭 복구기(VDI 이벤트 유실 보상)"
   },
   {
    "id": "SBAGENT-196",
@@ -1597,7 +1745,8 @@
      "node",
      "diagnostics/_test_cross_reset.js"
     ]
-   ]
+   ],
+   "fix": "삭제/토글 시 교차 목적지 리셋 — 복사된 시트 제거(0.6.1)"
   },
   {
    "id": "SBAGENT-197",
@@ -1607,7 +1756,8 @@
      "com",
      "test_runs/_test_copypaste_capture.py"
     ]
-   ]
+   ],
+   "fix": "캡처 소스 소실 폴백(복사 중 주기 스냅샷)"
   },
   {
    "id": "SBAGENT-198",
@@ -1624,9 +1774,14 @@
     [
      "com",
      "test_runs/_test_rename_31_com.py"
+    ],
+    [
+     "node",
+     "diagnostics/_test_issue_real_artifacts.js"
     ]
    ],
-   "repro": "C:\\Users\\Admin\\Downloads\\SBAGENT-198_attachments.zip"
+   "repro": "C:\\Users\\Admin\\Downloads\\SBAGENT-198_attachments.zip",
+   "fix": "리바인딩+31자 절단+복구 인덱스 묶음(SBAGENT-198 대응)"
   },
   {
    "id": "SBAGENT-199",
@@ -1636,7 +1791,8 @@
      "node",
      "diagnostics/_test_edit_checkpoint_guard.js"
     ]
-   ]
+   ],
+   "fix": "수정 재실행 체크포인트 + 복원 실패 시 전체 재적용 폴백(0.6.1)"
   },
   {
    "id": "SBAGENT-200",
@@ -1646,7 +1802,8 @@
      "node",
      "diagnostics/_test_edit_checkpoint_guard.js"
     ]
-   ]
+   ],
+   "fix": "수정 재실행 절차 정립(체크포인트 이어실행)"
   },
   {
    "id": "SBAGENT-201",
@@ -1660,7 +1817,8 @@
      "python",
      "test_runs/_test_stable_key_dup_suffix.py"
     ]
-   ]
+   ],
+   "fix": "안정키 재바인딩 — 생성 시 파일과 달라도 유일 일치 시 실행"
   },
   {
    "id": "SBAGENT-202",
@@ -1670,7 +1828,8 @@
      "node",
      "diagnostics/_test_stop_escalation.js"
     ]
-   ]
+   ],
+   "fix": "중단 승격을 시간→진행 기반으로(0.6.1)"
   },
   {
    "id": "SBAGENT-204",
@@ -1680,7 +1839,8 @@
      "node",
      "diagnostics/_test_applied_label_truth.js"
     ]
-   ]
+   ],
+   "fix": "실패 시점 전-파일 스냅샷 + 복원 커버리지 검증(0.6.1) — 바로 이 건"
   },
   {
    "id": "SBAGENT-205",
@@ -1694,7 +1854,8 @@
      "node",
      "diagnostics/_test_error_recovery_index.js"
     ]
-   ]
+   ],
+   "fix": "적용 표시 정합 + 복구 인덱스(선행 단계 상태 정확화)"
   },
   {
    "id": "SBAGENT-207",
@@ -1703,9 +1864,14 @@
     [
      "node",
      "diagnostics/_test_lambda_dest_owner_var.js"
+    ],
+    [
+     "node",
+     "diagnostics/_test_issue_real_artifacts.js"
     ]
    ],
-   "repro": "C:\\Users\\Admin\\Downloads\\한전 오류신고 스킬과 인풋파일_2026-07-15.zip"
+   "repro": "C:\\Users\\Admin\\Downloads\\한전 오류신고 스킬과 인풋파일_2026-07-15.zip",
+   "fix": "한전 계열 매핑·생성시트 가드 강화(0.6.1)"
   },
   {
    "id": "SBAGENT-208",
@@ -1714,8 +1880,13 @@
     [
      "node",
      "diagnostics/_test_requirement_name_clean.js"
+    ],
+    [
+     "node",
+     "diagnostics/_test_issue_real_artifacts.js"
     ]
-   ]
+   ],
+   "fix": "요구 파일명 산문 접두사 오발동 수정(0.6.1)"
   },
   {
    "id": "SBAGENT-209",
@@ -1732,9 +1903,14 @@
     [
      "com",
      "test_runs/_test_no_change_gate_com.py"
+    ],
+    [
+     "node",
+     "diagnostics/_test_issue_real_artifacts.js"
     ]
    ],
-   "repro": "C:\\Users\\Admin\\Downloads\\SBAGENT-209_attachments.zip"
+   "repro": "C:\\Users\\Admin\\Downloads\\SBAGENT-209_attachments.zip",
+   "fix": "캡처 원본명 역별칭 + 로드 수리 + read-evidence(0.6.1)"
   },
   {
    "id": "SBAGENT-210",
@@ -1744,7 +1920,8 @@
      "com",
      "test_runs/_test_native_pivot_com.py"
     ]
-   ]
+   ],
+   "fix": "항상 진짜 피벗테이블(재생성 시 갱신)(0.6.1)"
   },
   {
    "id": "SBAGENT-212",
@@ -1754,7 +1931,8 @@
      "marker",
      "scripts/chat-ui.js::chat-clear-history"
     ]
-   ]
+   ],
+   "fix": "대화 기억 비우기"
   },
   {
    "id": "SBAGENT-213",
@@ -1768,7 +1946,8 @@
      "marker",
      "serve_b2b.py::HOST_MINIMIZED"
     ]
-   ]
+   ],
+   "fix": "HOST_MINIMIZED 표시 게이트 + 소유 창 스윕(0.6.1)"
   },
   {
    "id": "SBAGENT-214",
@@ -1779,7 +1958,8 @@
      "diagnostics/_test_cross_reset.js"
     ]
    ],
-   "repro": "C:\\Users\\Admin\\Downloads\\LGCNS_UCAP_03.2.zip"
+   "repro": "C:\\Users\\Admin\\Downloads\\LGCNS_UCAP_03.2.zip",
+   "fix": "괄호/공백 파일명 교차 쓰기 인식 — 삽입 중복 수정(0.6.1)"
   },
   {
    "id": "SBAGENT-215",
@@ -1789,7 +1969,8 @@
      "marker",
      "native_host/NativeHost.cs::Download deferral"
     ]
-   ]
+   ],
+   "fix": "다운로드 대화상자 deferral + 강제 포그라운드(0.6.1)"
   },
   {
    "id": "SBAGENT-216",
@@ -1799,7 +1980,8 @@
      "com",
      "test_runs/_test_ctx_col_row_range_and_readcell.py"
     ]
-   ]
+   ],
+   "fix": "ctx 열 읽기 헬퍼 정비(col/row/range/read_cell)"
   },
   {
    "id": "SBAGENT-217",
@@ -1810,7 +1992,8 @@
      "diagnostics/_test_edit_checkpoint_guard.js"
     ]
    ],
-   "repro": "C:\\Users\\Admin\\Downloads\\571601213953_판교테크윈_DSMC_260713_21단계_2026-07-15-21-35-52.zip"
+   "repro": "C:\\Users\\Admin\\Downloads\\571601213953_판교테크윈_DSMC_260713_21단계_2026-07-15-21-35-52.zip",
+   "fix": "수정 재실행 조용한 무실행 수정 — 복원 실패 시 전체 재적용 폴백 + 체크포인트 가드(0.6.1, 판교테크윈)"
   },
   {
    "id": "SBAGENT-218",
@@ -1820,7 +2003,8 @@
      "marker",
      "scripts/file-schema.js::글자 그대로"
     ]
-   ]
+   ],
+   "fix": "따옴표 값 '글자 그대로' 규칙 — 슬래시 후보 분해 금지(0.6.1)"
   },
   {
    "id": "SBAGENT-219",
@@ -1830,7 +2014,8 @@
      "node",
      "diagnostics/_test_save_name_follows_input.js"
     ]
-   ]
+   ],
+   "fix": "저장 기본 이름 입력 시그니처 게이트(0.6.1 A안)"
   },
   {
    "id": "SBAGENT-220",
@@ -1840,7 +2025,8 @@
      "node",
      "diagnostics/_test_edit_month_rebind.js"
     ]
-   ]
+   ],
+   "fix": "안정키/월 리바인딩으로 생성 파일 비의존 실행"
   },
   {
    "id": "SBAGENT-221",
@@ -1853,9 +2039,14 @@
     [
      "node",
      "diagnostics/_test_runner_automap.js"
+    ],
+    [
+     "node",
+     "diagnostics/_test_issue_real_artifacts.js"
     ]
    ],
-   "repro": "C:\\Users\\Admin\\Downloads\\SBAGENT-221_attachments.zip"
+   "repro": "C:\\Users\\Admin\\Downloads\\SBAGENT-221_attachments.zip",
+   "fix": "매핑 기록 유지 + 생성기 재실행 매핑 적용(0.6.1)"
   },
   {
    "id": "SBAGENT-222",
@@ -1865,7 +2056,8 @@
      "marker",
      "scripts/chat-ui.js::routingHint"
     ]
-   ]
+   ],
+   "fix": "명시 VBA 지시 존중 라우팅 힌트"
   },
   {
    "id": "SBAGENT-223",
@@ -1875,7 +2067,8 @@
      "marker",
      "scripts/pipeline.js::renamingStepId"
     ]
-   ]
+   ],
+   "fix": "이름 편집 상태 기반 + '스킬명' 버튼(더블클릭 불요)(0.6.1)"
   },
   {
    "id": "hanjeon-mapping-save-leak",
@@ -1889,7 +2082,8 @@
      "node",
      "diagnostics/_test_mapping_persistence.js"
     ]
-   ]
+   ],
+   "fix": "저장은 원본 기준 + 매핑 기록 유지(0.6.1)"
   },
   {
    "id": "hanjeon-incheon-ghost-req",
@@ -1904,7 +2098,8 @@
      "diagnostics/_test_sheet_default_fallback.js"
     ]
    ],
-   "repro": "C:\\Users\\Admin\\Downloads\\0720_완성스킬"
+   "repro": "C:\\Users\\Admin\\Downloads\\0720_완성스킬",
+   "fix": "람다 목적지 균형 파싱 + 시트 변수 소유자 + 괄호 파일명(0.6.1)"
   },
   {
    "id": "skill-default-sheet",
@@ -1914,7 +2109,8 @@
      "node",
      "diagnostics/_test_skill_default_sheet.js"
     ]
-   ]
+   ],
+   "fix": "'스킬 기본값(그대로 실행)' 옵션 + 미매칭 기본 선택(0.6.1)"
   },
   {
    "id": "runner-skill-reupload-view",
@@ -1924,7 +2120,8 @@
      "node",
      "diagnostics/_test_runner_logic_modal_refresh.js"
     ]
-   ]
+   ],
+   "fix": "업로드 완료 시 편집기 모달 재렌더(0.6.1)"
   }
  ]
 }

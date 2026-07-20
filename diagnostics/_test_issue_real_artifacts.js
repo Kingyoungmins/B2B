@@ -85,5 +85,64 @@ function vbaTargets(code) {
   ck("(160-3) For Each 관용구에서 파일형 대상 추론 = 청구내역서 유일(소스 아님)", t.length === 1 && t[0] === DST, t);
 }
 
+// ── SBAGENT-207: 한전 서울 25단계 — 생성시트/오귀속 유령 요구 없음(인천본부 수정 수혜) ──
+{
+  const j = loadRepro("sbagent207_hanjeon_seoul.logic.json");
+  const reqs = reqsOf(j.pipeline);
+  const HJ = "한국전력공사_202606_v1.1_DSMC_260710.xlsx";
+  ck("(207-1) 한국전력공사 요구 = 상품번호별+청구계정별만",
+     reqs.filter(r => r[0] === HJ).map(r => r[1]).sort().join(",") === "상품번호별,청구계정별",
+     reqs.filter(r => r[0] === HJ));
+  ck("(207-2) 생성 시트(무선간선망/고압모계기/고압자계기) 유령 요구 없음",
+     !reqs.some(r => ["무선간선망", "고압모계기", "고압자계기"].includes(r[1])), reqs);
+  ck("(207-3) 세부내역 3파일 Sheet1 요구", reqs.filter(r => r[1] === "Sheet1").length === 3, reqs);
+}
+
+// ── SBAGENT-198: KB국민카드 14단계 — 캡처 요구가 사용자 원본명·실시트로 ──
+{
+  const j = loadRepro("sbagent198_kb.logic.json");
+  const reqs = reqsOf(j.pipeline);
+  ck("(198-1) 캡처 소스 시트((2) LGU+) 요구", reqs.some(r => r[0].includes("KB국민카드") && r[1] === "(2) LGU+"), reqs);
+  ck("(198-2) 캡처 대상 시트(2026년) 요구", reqs.some(r => r[0].includes("KB카드_메시지_요금정산") && r[1] === "2026년"), reqs);
+  ck("(198-3) 위장 .xls 파일 2건 파일 요구", reqs.filter(r => /\.xls$/i.test(r[0])).length === 2, reqs);
+  ck("(198-4) 내부 임시명 없음", reqs.every(r => !/excel_open_/i.test(r[0])), reqs);
+}
+
+// ── SBAGENT-221/208: UCAP 03.3 — 괄호+공백 파일명 요구가 '전체 이름'으로(잘림 수정 실증) ──
+{
+  const j = loadRepro("sbagent221_ucap33.logic.json");
+  const reqs = reqsOf(j.pipeline);
+  ck("(221-1) input) 전체 이름 요구(산문 접두사 잘림 없음)",
+     reqs.some(r => r[0] === "input)_기업DW추출_131 통화상세내역(마스킹)_2026-03-13 10_02_56_DSMC_260713.xlsx" && r[1] === "VIEW"), reqs);
+  ck("(221-2) output) 요구(할인후합계)", reqs.some(r => r[0].startsWith("output)_LG_CNS") && r[1] === "할인후합계"), reqs);
+  ck("(221-3) 꼬리만 남은 잘린 이름 없음", reqs.every(r => !/^10_02_56/.test(r[0])), reqs);
+}
+
+// ── SBAGENT-170: KGM 제경비 33단계 — 다중 교차파일 요구 정확 ──
+{
+  const j = loadRepro("sbagent170_kgm.logic.json");
+  const reqs = reqsOf(j.pipeline);
+  ck("(170-1) 5개 파일 요구", new Set(reqs.map(r => r[0])).size === 5, reqs);
+  ck("(170-2) CCU 목록 시트 소유 정확", reqs.some(r => r[0].startsWith("교체된 CCU 목록") && r[1] === "교체된 CCU 목록"), reqs);
+  ck("(170-3) 원본_DSMC 시트 요구", reqs.some(r => r[0] === "원본_DSMC_260624.xlsx" && r[1].startsWith("202605")), reqs);
+}
+
+// ── SBAGENT-186(=209 원본 스킬): 수리 전 내부명 존재 → 로드 수리 후 소멸(전체 체인) ──
+{
+  const saveSrc = fs.readFileSync(path.join(ROOT, "scripts", "save-load.js"), "utf8");
+  ["isInternalTempWorkbookName", "repairPasteCopiedInternalBookNames"].forEach(f =>
+    vm.runInContext(extract(saveSrc, f), sb));
+  const j = loadRepro("sbagent186_cns23.logic.json");
+  const before = reqsOf(j.pipeline);
+  ck("(186-1) 수리 전: 내부 임시명 요구 존재(원시 상태 확인)", before.some(r => /excel_open_/i.test(r[0])), before.length);
+  sb.__steps = j.pipeline;
+  const repaired = vm.runInContext("repairPasteCopiedInternalBookNames(__steps)", sb);
+  const after = reqsOf(j.pipeline);
+  ck("(186-2) 로드 수리 1단계 수행", repaired === 1, repaired);
+  ck("(186-3) 수리 후: 내부 임시명 요구 소멸", after.every(r => !/excel_open_/i.test(r[0])), after);
+  ck("(186-4) 가입자별 5파일 요구 유지", new Set(after.filter(r => r[0].startsWith("가입자별")).map(r => r[0])).size === 5, after);
+  ck("(186-5) output) 취합 시트 요구 유지", after.some(r => r[0].startsWith("output)") && r[1].includes("유플러스")), after);
+}
+
 console.log("\n=== RESULT: " + (fails === 0 ? "ALL PASS" : fails + " FAIL") + " ===");
 process.exit(fails ? 1 : 0);
