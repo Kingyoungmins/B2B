@@ -651,7 +651,10 @@ function runnerPyBookVarMap(src) {
     return /^[A-Za-z_]\w*$/.test(s) ? (literals.get(s) || "") : "";
   };
   const books = new Map();
-  const re = /\b([A-Za-z_]\w*)\s*=\s*ctx\.book\(\s*([^()\r\n]+?)\s*\)/g;
+  // [괄호 파일명] 따옴표 문자열을 '우선' 통째로 매칭 — bare 패턴([^()\r\n])만 쓰면
+  // "…복사본 (2).xlsx" 처럼 파일명에 괄호가 있을 때 매칭 자체가 실패해 수신자 변수 해석이
+  // 통째로 죽었다(UCAP dst_book 과 동일 계열, 한전 인천본부 실측).
+  const re = /\b([A-Za-z_]\w*)\s*=\s*ctx\.book\(\s*((?:"[^"\r\n]*"|'[^'\r\n]*')|[^()\r\n]+?)\s*\)/g;
   let m;
   while ((m = re.exec(text))) {
     const name = resolve(m[2]);
@@ -663,6 +666,29 @@ function runnerPyBookVarMap(src) {
 // 여는 괄호 위치(openIdx)에서 짝이 맞는 닫는 괄호까지 = '그 호출의 인자 목록'만 반환.
 // 고정 길이(400자) 창은 호출 경계를 안 지켜 인접 호출의 dest_name/new_name 을 훔친다.
 // 문자열 리터럴 안의 괄호는 세지 않는다(조건 람다에 괄호·콤마가 흔하다).
+// 호출 인자 텍스트("(a, lambda r: f(r, \"x\"), \"y\")")를 '최상위 콤마' 기준으로 분해한다.
+// 람다/중첩 호출/리스트의 내부 콤마·괄호에 속지 않기 위한 균형 스캐너(문자열 인지).
+function runnerSplitTopLevelArgs(callText) {
+  const text = String(callText || "");
+  if (text[0] !== "(") return [];
+  const args = [];
+  let depth = 0, quote = "", cur = "";
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (quote) { cur += c; if (c === quote && text[i - 1] !== "\\") quote = ""; continue; }
+    if (c === '"' || c === "'") { quote = c; cur += c; continue; }
+    if (c === "(" || c === "[" || c === "{") { depth++; if (depth === 1 && i === 0) continue; cur += c; continue; }
+    if (c === ")" || c === "]" || c === "}") {
+      depth--;
+      if (depth === 0 && c === ")") { if (cur.trim()) args.push(cur.trim()); return args; }
+      cur += c; continue;
+    }
+    if (c === "," && depth === 1) { args.push(cur.trim()); cur = ""; continue; }
+    cur += c;
+  }
+  return args;
+}
+
 function runnerSliceCallArgs(src, openIdx) {
   const text = String(src || "");
   if (text[openIdx] !== "(") return "";
@@ -797,20 +823,18 @@ function runnerExtractGeneratedSheetsFromCode(code) {
       continue;
     }
     if (fn === "filter_to_sheet") {
-      // 3번째 위치 인자 — 조건 람다에 괄호/콤마가 섞이므로 '닫는 괄호 바로 앞의 문자열 리터럴'
-      // (콤마 뒤 리터럴 + `)` 또는 `, header_rows=` 꼬리)로 판정. LLM 생성 조건은 대부분
-      // == "값" / in ["a","b"] 형태라 리터럴+`)` 오탐 위험은 낮다.
-      const direct = /,\s*(["'])([^"']+)\1\s*(?:\)|,\s*(?:header_rows|after)\s*=)/.exec(win);
-      if (direct) {
-        runnerAddGeneratedSheet(generated, bookName, direct[2]);
-      } else {
-        // 3번째 위치 인자가 '변수'인 경우(filter_to_sheet(src, cond, dest)) — kwarg 변수만 보던
-        // 탓에 모든 수신자에서 미탐이었다. 창이 이 호출 인자로 한정돼 있어 안전하게 볼 수 있다.
-        const directVar = /,\s*([A-Za-z_][A-Za-z0-9_]*)\s*(?:\)|,\s*(?:header_rows|after)\s*=)/.exec(win);
-        if (directVar) {
-          const name = resolvePyName(directVar[1]);
-          if (name) runnerAddGeneratedSheet(generated, bookName, name);
-        }
+      // [한전 인천본부 실측] 3번째 위치 인자를 정규식이 아니라 '최상위 인자 분해'로 뽑는다.
+      // 예전 '닫는 괄호 앞 리터럴' 휴리스틱은 조건이 람다면 — filter_to_sheet(sheet,
+      // lambda r: f(r, "512102405339"), "무선간선망") — 람다 내부 리터럴("512...")을 산출물로
+      // 오등록하고 실제 목적지("무선간선망")를 놓쳐, 생성 시트 3개가 전부 '필수 업로드'로 떴다.
+      const args = runnerSplitTopLevelArgs(win);
+      const dest = args.length >= 3 ? args[2] : "";
+      const lit = /^(["'])([^"']*)\1$/.exec(dest);
+      if (lit && lit[2]) {
+        runnerAddGeneratedSheet(generated, bookName, lit[2]);
+      } else if (/^[A-Za-z_][A-Za-z0-9_]*$/.test(dest)) {
+        const name = resolvePyName(dest);
+        if (name) runnerAddGeneratedSheet(generated, bookName, name);
       }
     } else {
       // pivot/native_pivot 에 dest_name 이 없으면 기본 산출 시트 "피벗요약"
@@ -975,15 +999,42 @@ function runnerSheetOwnersFromCode(code) {
     let mm;
     while ((mm = re.exec(src))) add(book, mm[1]);
   });
-  const pyDirect = /ctx\.book\(\s*["']([^"']+)["']\s*\)\s*\.\s*(?:read|write|write_cell|copy|sort|clear|find_header|last_row|last_col)\(\s*["']([^"']+)["']/gi;
+  const PY_OWNER_VERBS = "read|write|write_cell|copy|sort|clear|find_header|last_row|last_col|delete_rows|delete_cols|used_last_row|used_last_col|rename_sheet";
+  const pyDirect = new RegExp(`ctx\\.book\\(\\s*["']([^"']+)["']\\s*\\)\\s*\\.\\s*(?:${PY_OWNER_VERBS})\\(\\s*["']([^"']+)["']`, "gi");
   while ((m = pyDirect.exec(src))) add(m[1], m[2]);
   // 파일명 변수(ctx.book(tgt_file))도 푼다 — 세 추출기가 같은 규칙을 쓰게 통일.
   const pyVars = runnerPyBookVarMap(src);
   pyVars.forEach((book, varName) => {
     const esc = varName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const re = new RegExp(`\\b${esc}\\s*\\.\\s*(?:read|write|write_cell|copy|sort|clear|find_header|last_row|last_col)\\(\\s*["']([^"']+)["']`, "g");
+    const re = new RegExp(`\\b${esc}\\s*\\.\\s*(?:${PY_OWNER_VERBS})\\(\\s*["']([^"']+)["']`, "g");
     let mm;
     while ((mm = re.exec(src))) add(book, mm[1]);
+  });
+  // [한전 인천본부 실측] 시트 인자가 '변수'인 경우 — sheet = "Sheet1"; book.delete_rows(sheet, ...) —
+  // 리터럴만 보던 탓에 소유자 판정이 빠져, 다른 파일을 다루는 스텝의 잘못 저장된 targetFileId 에
+  // 남의 시트(Sheet1)가 '필수 업로드'로 붙었다. 단독 리터럴 대입이 '유일'할 때만 해석(모호하면 안 씀).
+  const litVars = new Map();
+  {
+    const lvRe = /^[ \t]*([A-Za-z_]\w*)\s*=\s*(["'])([^"'\r\n]+)\2\s*(?:#.*)?$/gm;
+    let lv;
+    while ((lv = lvRe.exec(src))) {
+      if (!litVars.has(lv[1])) litVars.set(lv[1], lv[3]);
+      else if (litVars.get(lv[1]) !== lv[3]) litVars.set(lv[1], null); // 재대입 상이 → 모호
+    }
+  }
+  const pyDirectVar = new RegExp(`ctx\\.book\\(\\s*["']([^"']+)["']\\s*\\)\\s*\\.\\s*(?:${PY_OWNER_VERBS})\\(\\s*([A-Za-z_]\\w*)\\s*[,)]`, "g");
+  while ((m = pyDirectVar.exec(src))) {
+    const v = litVars.get(m[2]);
+    if (v) add(m[1], v);
+  }
+  pyVars.forEach((book, varName) => {
+    const esc = varName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const re = new RegExp(`\\b${esc}\\s*\\.\\s*(?:${PY_OWNER_VERBS})\\(\\s*([A-Za-z_]\\w*)\\s*[,)]`, "g");
+    let mm;
+    while ((mm = re.exec(src))) {
+      const v = litVars.get(mm[1]);
+      if (v) add(book, v);
+    }
   });
   return pairs;
 }
