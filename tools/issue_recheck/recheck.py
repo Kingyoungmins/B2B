@@ -36,6 +36,9 @@ except Exception:
 
 TIMEOUT = {"node": 120, "python": 180, "com": 420}
 
+# 같은 실행 안에서 동일 체크(여러 이슈가 같은 테스트를 공유)는 1회만 돌리고 결과를 재사용.
+_CHECK_CACHE = {}
+
 
 def load_registry():
     data = json.loads((HERE / "registry.json").read_text(encoding="utf-8"))
@@ -52,7 +55,25 @@ def save_registry(issues):
 
 
 def run_check(kind, rel_path):
-    """단일 체크 실행. 반환: (ok, 초, 실패시 출력 꼬리)."""
+    """단일 체크 실행. 반환: (ok, 초, 실패시 출력 꼬리).
+
+    kind=marker: rel_path 가 "파일경로::문자열" — 해당 소스에 수정 코드 마커가 존재하는지 검사.
+    행위 테스트가 어려운 항목(기능요청·프롬프트 규칙·환경성)의 최소 자동화로, 수정이 실수로
+    되돌려지면(revert) 즉시 잡는다."""
+    if kind == "marker":
+        try:
+            rel, needle = rel_path.split("::", 1)
+        except ValueError:
+            return False, 0.0, "marker 형식 오류(파일::문자열): " + rel_path
+        p = ROOT / rel
+        if not p.exists():
+            return False, 0.0, f"파일 없음: {rel}"
+        try:
+            text = p.read_text(encoding="utf-8", errors="replace")
+        except Exception as err:
+            return False, 0.0, str(err)
+        ok = needle in text
+        return ok, 0.0, "" if ok else f"마커 없음: {needle!r} in {rel}"
     path = ROOT / rel_path
     if not path.exists():
         return False, 0.0, f"파일 없음: {rel_path}"
@@ -75,7 +96,12 @@ def run_issue(issue, include_com):
         if kind == "com" and not include_com:
             checks.append({"kind": kind, "path": rel, "status": "SKIP", "secs": 0.0, "tail": ""})
             continue
-        ok, secs, tail = run_check(kind, rel)
+        ck = (kind, rel)
+        if ck in _CHECK_CACHE:
+            ok, secs, tail = _CHECK_CACHE[ck]
+        else:
+            ok, secs, tail = run_check(kind, rel)
+            _CHECK_CACHE[ck] = (ok, secs, tail)
         checks.append({"kind": kind, "path": rel, "status": "PASS" if ok else "FAIL",
                        "secs": round(secs, 1), "tail": "" if ok else tail})
     if any(c["status"] == "FAIL" for c in checks):
@@ -212,6 +238,7 @@ def cli_run(args):
             print(f"{i['id']:<28} [{kinds}] {i['title']}")
         return 0
 
+    _CHECK_CACHE.clear()
     total_fail = 0
     skipped = 0
     results = []
@@ -257,6 +284,7 @@ RUN_LOCK = threading.Lock()
 
 
 def _run_all_bg(include_com, only):
+    _CHECK_CACHE.clear()
     issues = filter_issues(load_registry(), only)
     with RUN_LOCK:
         RUN_STATE.update({"running": True, "com": include_com, "results": [],
