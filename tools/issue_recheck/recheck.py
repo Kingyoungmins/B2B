@@ -38,6 +38,8 @@ TIMEOUT = {"node": 120, "python": 180, "com": 420}
 
 # 같은 실행 안에서 동일 체크(여러 이슈가 같은 테스트를 공유)는 1회만 돌리고 결과를 재사용.
 _CHECK_CACHE = {}
+# 대시보드 '중지' — 실행 중 세트되면 현재 체크 프로세스를 죽이고 나머지를 건너뛴다.
+RUN_CANCEL = threading.Event()
 
 
 def load_registry():
@@ -79,14 +81,26 @@ def run_check(kind, rel_path):
         return False, 0.0, f"파일 없음: {rel_path}"
     cmd = ["node", str(path)] if kind == "node" else [sys.executable, str(path)]
     t0 = time.monotonic()
-    try:
-        p = subprocess.run(cmd, cwd=str(ROOT), capture_output=True, text=True,
-                           encoding="utf-8", errors="replace",
-                           timeout=TIMEOUT.get(kind, 180))
-    except subprocess.TimeoutExpired:
-        return False, time.monotonic() - t0, f"타임아웃({TIMEOUT.get(kind)}초)"
-    tail = "\n".join(((p.stdout or "") + "\n" + (p.stderr or "")).strip().splitlines()[-6:])
-    return p.returncode == 0, time.monotonic() - t0, tail
+    limit = TIMEOUT.get(kind, 180)
+    # Popen + 0.5초 폴링 — 대시보드 '중지'(RUN_CANCEL)가 진행 중인 체크도 즉시 끊을 수 있게.
+    proc = subprocess.Popen(cmd, cwd=str(ROOT), stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                            text=True, encoding="utf-8", errors="replace")
+    out = err = ""
+    while True:
+        try:
+            out, err = proc.communicate(timeout=0.5)
+            break
+        except subprocess.TimeoutExpired:
+            if RUN_CANCEL.is_set() or (time.monotonic() - t0) > limit:
+                proc.kill()
+                try:
+                    proc.communicate(timeout=5)
+                except Exception:
+                    pass
+                reason = "중지됨" if RUN_CANCEL.is_set() else f"타임아웃({limit}초)"
+                return False, time.monotonic() - t0, reason
+    tail = "\n".join(((out or "") + "\n" + (err or "")).strip().splitlines()[-6:])
+    return proc.returncode == 0, time.monotonic() - t0, tail
 
 
 def run_issue(issue, include_com):
@@ -96,12 +110,16 @@ def run_issue(issue, include_com):
         if kind == "com" and not include_com:
             checks.append({"kind": kind, "path": rel, "status": "SKIP", "secs": 0.0, "tail": ""})
             continue
+        if RUN_CANCEL.is_set():
+            checks.append({"kind": kind, "path": rel, "status": "SKIP", "secs": 0.0, "tail": "중지됨"})
+            continue
         ck = (kind, rel)
         if ck in _CHECK_CACHE:
             ok, secs, tail = _CHECK_CACHE[ck]
         else:
             ok, secs, tail = run_check(kind, rel)
-            _CHECK_CACHE[ck] = (ok, secs, tail)
+            if tail != "중지됨":
+                _CHECK_CACHE[ck] = (ok, secs, tail)
         checks.append({"kind": kind, "path": rel, "status": "PASS" if ok else "FAIL",
                        "secs": round(secs, 1), "tail": "" if ok else tail})
     if any(c["status"] == "FAIL" for c in checks):
@@ -279,25 +297,28 @@ def cli_run(args):
 
 # ── 대시보드 서버 (--serve) ──────────────────────────────────────────────────
 
-RUN_STATE = {"running": False, "com": False, "startedAt": "", "results": [], "total": 0, "done": False}
+RUN_STATE = {"running": False, "com": False, "startedAt": "", "results": [], "total": 0, "done": False, "cancelled": False}
 RUN_LOCK = threading.Lock()
 
 
 def _run_all_bg(include_com, only):
     _CHECK_CACHE.clear()
+    RUN_CANCEL.clear()
     issues = filter_issues(load_registry(), only)
     with RUN_LOCK:
         RUN_STATE.update({"running": True, "com": include_com, "results": [],
                           "startedAt": datetime.now().isoformat(timespec="seconds"),
-                          "total": len(issues), "done": False})
+                          "total": len(issues), "done": False, "cancelled": False})
     fail = 0
     for issue in issues:
+        if RUN_CANCEL.is_set():
+            break
         r = run_issue(issue, include_com)
         fail += sum(1 for c in r["checks"] if c["status"] == "FAIL")
         with RUN_LOCK:
             RUN_STATE["results"].append(r)
     with RUN_LOCK:
-        RUN_STATE.update({"running": False, "done": True})
+        RUN_STATE.update({"running": False, "done": True, "cancelled": RUN_CANCEL.is_set()})
     append_history({"ts": datetime.now().isoformat(timespec="seconds"), "com": include_com,
                     "only": only, "fail": fail,
                     "issues": [{"id": r["id"], "status": r["status"]}
@@ -354,6 +375,12 @@ def serve(port):
                     threading.Thread(target=_run_all_bg,
                                      args=(bool(p.get("com")), str(p.get("only") or "")),
                                      daemon=True).start()
+                    return self._json({"ok": True})
+                if self.path == "/api/run-stop":
+                    with RUN_LOCK:
+                        if not RUN_STATE["running"]:
+                            return self._json({"ok": True, "idle": True})
+                    RUN_CANCEL.set()
                     return self._json({"ok": True})
                 if self.path == "/api/registry":
                     p = self._body()

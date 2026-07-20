@@ -158,11 +158,20 @@ function renderHistory(runs) {
   });
 }
 
+function showRunning() {
+  $("btn-run").disabled = true;
+  $("run-ind").innerHTML = `<span class="spin"></span> 실행 중…
+    <button id="btn-stop" class="del" style="margin-left:8px" title="현재 검사를 중단합니다 (COM 검사 중지 시 Excel 프로세스가 남을 수 있음)">■ 중지</button>`;
+  $("btn-stop").onclick = async () => {
+    $("btn-stop").disabled = true; $("btn-stop").textContent = "중지 중…";
+    await api("/api/run-stop", {});
+  };
+}
+
 async function startRun(opts) {
   const res = await api("/api/run", { com: !!opts.com, only: opts.only || "" });
   if (res.error) { alert(res.error); return; }
-  $("btn-run").disabled = true;
-  $("run-ind").innerHTML = `<span class="spin"></span> 실행 중…`;
+  showRunning();
   polling = setInterval(poll, 1000);
 }
 
@@ -175,7 +184,9 @@ async function poll() {
     clearInterval(polling); polling = null;
     $("btn-run").disabled = false;
     const fails = (st.results||[]).filter(r => r.status === "FAIL").length;
-    $("run-ind").innerHTML = fails ? `<span class="badge b-FAIL">실패 ${fails}건</span>` : `<span class="badge b-PASS">전체 통과</span>`;
+    $("run-ind").innerHTML = st.cancelled
+      ? `<span class="badge b-SKIP">중지됨 (${(st.results||[]).length}/${st.total})</span>`
+      : (fails ? `<span class="badge b-FAIL">실패 ${fails}건</span>` : `<span class="badge b-PASS">전체 통과</span>`);
     api("/api/history").then(h => renderHistory(h.runs || []));
   }
 }
@@ -308,7 +319,7 @@ $("btn-run").onclick = () => startRun({ com: $("opt-com").checked, only: $("opt-
   JIRA = (await api("/api/jira")).issues || [];
   renderJira();
   const st = await api("/api/status");
-  if (st.running) { $("btn-run").disabled = true; $("run-ind").innerHTML = `<span class="spin"></span> 실행 중…`; polling = setInterval(poll, 1000); }
+  if (st.running) { showRunning(); polling = setInterval(poll, 1000); }
 })();
 </script>
 </body>
