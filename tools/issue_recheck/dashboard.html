@@ -67,14 +67,36 @@
 </section>
 
 <section>
-  <h2>지라 완료 이슈 대조</h2>
-  <p class="muted" style="font-size:12px; margin:4px 0 8px">
-    지라 목록 → 내보내기 → CSV(현재 필드) 저장 후 내용을 붙여넣기.
-    (사내망 로그인이 막히면 F12 → Network conditions → UA를 Chrome—iPhone 으로 바꿔 로그인)
-  </p>
-  <textarea id="csv" rows="4" placeholder="CSV 내용 붙여넣기…"></textarea>
-  <div class="row" style="margin-top:8px"><button id="btn-csv">대조 실행</button><span id="csv-sum" class="muted"></span></div>
-  <div id="csv-out"></div>
+  <h2>지라 완료 이슈 전수 관리 <span class="muted" id="jira-progress"></span></h2>
+  <div id="jira-bar" style="height:8px; background:#e5e7eb; border-radius:99px; overflow:hidden; margin:6px 0 10px">
+    <div id="jira-bar-fill" style="height:100%; width:0%; background:var(--ok); transition:width .3s"></div>
+  </div>
+  <details>
+    <summary>목록 가져오기/갱신 (지라 CSV 붙여넣기)</summary>
+    <p class="muted" style="font-size:12px; margin:6px 0">
+      지라 목록 → 내보내기 → CSV(현재 필드) → 내용 붙여넣기. 재가져오기해도 기존 점검 상태는 보존됩니다.
+      (사내망 로그인이 막히면 F12 → Network conditions → UA를 Chrome—iPhone 으로 바꿔 로그인)
+    </p>
+    <textarea id="csv" rows="4" placeholder="CSV 내용 붙여넣기…"></textarea>
+    <div class="row" style="margin-top:8px"><button id="btn-import">가져오기(병합)</button><span id="csv-sum" class="muted"></span></div>
+  </details>
+  <div class="row" style="margin:10px 0 8px">
+    <select id="jira-filter">
+      <option value="">전체(완료만)</option>
+      <option value="unchecked" selected>미점검</option>
+      <option value="auto">자동화 있음</option>
+      <option value="manual">자동화 없음(수동 대상)</option>
+      <option value="재발">재발</option>
+      <option value="보류">보류</option>
+      <option value="정상">정상 확인됨</option>
+    </select>
+    <input type="text" id="jira-search" placeholder="키/요약 검색" style="width:220px">
+    <span class="muted" id="jira-count"></span>
+  </div>
+  <table id="jira-tbl">
+    <thead><tr><th style="width:110px">키</th><th>요약</th><th style="width:80px">자동화</th><th style="width:250px">수동 점검</th></tr></thead>
+    <tbody></tbody>
+  </table>
 </section>
 
 <section>
@@ -195,16 +217,78 @@ $("btn-save").onclick = async () => {
   renderTable();
 };
 
-// ── 지라 CSV 대조 ──
-$("btn-csv").onclick = async () => {
-  const res = await api("/api/csv", { content: $("csv").value });
-  if (res.error) { $("csv-sum").textContent = res.error; $("csv-out").innerHTML = ""; return; }
-  $("csv-sum").textContent = `총 ${res.total}건 · 완료 ${res.done}건 · 자동화 커버 ${res.coveredDone}건`;
-  $("csv-out").innerHTML = res.uncovered.length
-    ? `<p style="font-size:13px"><b>완료됐지만 회귀 자동화가 없는 이슈</b> (수동 재점검 또는 테스트 추가):</p>` +
-      res.uncovered.map(r => `<div class="chk">• <b>${r.key}</b> ${r.summary}</div>`).join("")
-    : `<p style="font-size:13px; color:var(--ok)">완료 이슈 전부 자동화 커버 ✅</p>`;
+// ── 지라 완료 이슈 전수 관리 ──
+let JIRA = [];   // [{key, summary, status, done, verdict, note, lastChecked}]
+
+function autoCoveredKeys() {
+  const set = new Set();
+  REG.forEach(i => { set.add(i.id.toUpperCase()); if (i.jira) set.add(String(i.jira).toUpperCase()); });
+  return set;
+}
+
+function renderJira() {
+  const covered = autoCoveredKeys();
+  const doneIssues = JIRA.filter(r => r.done);
+  const checked = doneIssues.filter(r => r.verdict === "정상" || covered.has(r.key));
+  $("jira-progress").textContent = doneIssues.length
+    ? `— 완료 ${doneIssues.length}건 중 점검됨 ${checked.length}건 (자동화 ${doneIssues.filter(r => covered.has(r.key)).length} + 수동 정상 ${doneIssues.filter(r => r.verdict === "정상" && !covered.has(r.key)).length})`
+    : "— 아직 목록이 없습니다. 아래에서 CSV 를 가져오세요.";
+  $("jira-bar-fill").style.width = doneIssues.length ? (100 * checked.length / doneIssues.length).toFixed(1) + "%" : "0%";
+
+  const f = $("jira-filter").value;
+  const q = $("jira-search").value.trim().toLowerCase();
+  let rows = doneIssues.filter(r => {
+    if (q && !(r.key.toLowerCase().includes(q) || r.summary.toLowerCase().includes(q))) return false;
+    const isAuto = covered.has(r.key);
+    if (f === "unchecked") return !isAuto && !r.verdict;
+    if (f === "auto") return isAuto;
+    if (f === "manual") return !isAuto;
+    if (f === "재발" || f === "보류" || f === "정상") return r.verdict === f;
+    return true;
+  });
+  $("jira-count").textContent = `${rows.length}건 표시`;
+  const tb = $("jira-tbl").querySelector("tbody");
+  tb.innerHTML = "";
+  rows.forEach(r => {
+    const isAuto = covered.has(r.key);
+    const autoRes = LAST[r.key] || LAST[Object.keys(LAST).find(k => k.toUpperCase() === r.key) || ""];
+    const vColor = { "정상": "var(--ok)", "재발": "var(--fail)", "보류": "#d97706" }[r.verdict] || "var(--sub)";
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td><b>${r.key}</b></td>
+      <td>${r.summary.replace(/</g,"&lt;")}${r.note ? `<div class="chk">메모: ${r.note.replace(/</g,"&lt;")}</div>` : ""}</td>
+      <td>${isAuto ? (autoRes ? badge(autoRes.status) : `<span class="badge b-none">등록됨</span>`) : `<span class="muted">없음</span>`}</td>
+      <td>
+        <span style="color:${vColor}; font-weight:700">${r.verdict || "미점검"}</span>
+        <span class="muted" style="font-size:11px">${r.lastChecked ? " · " + r.lastChecked.slice(0, 10) : ""}</span><br>
+        <button data-v="정상" data-k="${r.key}">정상</button>
+        <button data-v="재발" data-k="${r.key}" class="del">재발</button>
+        <button data-v="보류" data-k="${r.key}">보류</button>
+        <button data-v="" data-k="${r.key}">지움</button>
+      </td>`;
+    tb.appendChild(tr);
+  });
+  tb.querySelectorAll("[data-k]").forEach(b => b.onclick = async () => {
+    const cur = JIRA.find(x => x.key === b.dataset.k);
+    let note = cur ? cur.note : "";
+    if (b.dataset.v === "재발" || b.dataset.v === "보류") {
+      note = prompt("메모(재현 상황/보류 사유):", note || "") ?? note;
+    }
+    const res = await api("/api/jira-verdict", { key: b.dataset.k, verdict: b.dataset.v, note });
+    if (res.ok && cur) Object.assign(cur, res.issue);
+    renderJira();
+  });
+}
+
+$("btn-import").onclick = async () => {
+  const res = await api("/api/jira-import", { content: $("csv").value });
+  if (res.error) { $("csv-sum").textContent = res.error; return; }
+  $("csv-sum").textContent = `가져옴: 총 ${res.total}건(완료 ${res.done}건) — 기존 점검 상태 보존`;
+  JIRA = (await api("/api/jira")).issues || [];
+  renderJira();
 };
+$("jira-filter").onchange = renderJira;
+$("jira-search").oninput = renderJira;
 
 $("btn-run").onclick = () => startRun({ com: $("opt-com").checked, only: $("opt-only").value.trim() });
 
@@ -213,6 +297,8 @@ $("btn-run").onclick = () => startRun({ com: $("opt-com").checked, only: $("opt-
   renderTable();
   renderEditor();
   renderHistory((await api("/api/history")).runs || []);
+  JIRA = (await api("/api/jira")).issues || [];
+  renderJira();
   const st = await api("/api/status");
   if (st.running) { $("btn-run").disabled = true; $("run-ind").innerHTML = `<span class="spin"></span> 실행 중…`; polling = setInterval(poll, 1000); }
 })();

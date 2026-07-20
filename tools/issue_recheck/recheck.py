@@ -27,6 +27,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent.parent          # tools/issue_recheck/ → 레포 루트
 HISTORY = HERE / "results_history.jsonl"
+JIRA_FILE = HERE / "jira_issues.json"   # 지라 완료 이슈 전수 목록 + 수동 점검 상태(git 추적)
 
 try:
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -107,6 +108,66 @@ def filter_issues(issues, only):
         return issues
     needle = only.lower()
     return [i for i in issues if needle in i["id"].lower() or needle in i["title"].lower()]
+
+
+def load_jira():
+    try:
+        return json.loads(JIRA_FILE.read_text(encoding="utf-8"))
+    except Exception:
+        return {"importedAt": "", "issues": []}
+
+
+def save_jira(data):
+    JIRA_FILE.write_text(json.dumps(data, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
+
+
+def parse_jira_csv(text):
+    """지라 내보내기 CSV → [{key, summary, status, done}]. 열 이름은 한/영 유연 매칭."""
+    reader = csv.reader(io.StringIO(text.lstrip("﻿")))
+    header = next(reader, [])
+
+    def col(names):
+        for n in names:
+            for idx, h in enumerate(header):
+                if n.lower() in str(h).lower():
+                    return idx
+        return -1
+
+    k = col(["issue key", "이슈 키", "키"])
+    s = col(["summary", "요약"])
+    st = col(["status", "상태"])
+    if k < 0:
+        return None
+    out = []
+    for row in reader:
+        if len(row) <= k or not row[k].strip():
+            continue
+        key = row[k].strip().upper()
+        status = row[st].strip() if 0 <= st < len(row) else ""
+        summary = row[s].strip() if 0 <= s < len(row) else ""
+        done = any(w in status for w in ("완료", "Done", "닫힘", "Closed", "Resolved"))
+        out.append({"key": key, "summary": summary, "status": status, "done": done})
+    return out
+
+
+def import_jira_csv(text):
+    """CSV 를 지라 전수 목록에 병합 — 기존 수동 점검 상태(verdict/note/lastChecked)는 보존."""
+    parsed = parse_jira_csv(text)
+    if parsed is None:
+        return {"error": "'이슈 키' 열을 찾지 못했습니다 — 지라에서 CSV(현재 필드) 내보내기를 사용하세요."}
+    data = load_jira()
+    old = {i["key"]: i for i in data.get("issues", [])}
+    merged = []
+    for row in parsed:
+        prev = old.get(row["key"], {})
+        merged.append({**row,
+                       "verdict": prev.get("verdict", ""),
+                       "note": prev.get("note", ""),
+                       "lastChecked": prev.get("lastChecked", "")})
+    merged.sort(key=lambda r: (not r["done"], r["key"]))
+    data = {"importedAt": datetime.now().isoformat(timespec="seconds"), "issues": merged}
+    save_jira(data)
+    return {"ok": True, "total": len(merged), "done": sum(1 for r in merged if r["done"])}
 
 
 def cross_check_csv_text(text, issues):
@@ -250,6 +311,8 @@ def serve(port):
                     return self._json(dict(RUN_STATE))
             if self.path == "/api/history":
                 return self._json({"runs": read_history()})
+            if self.path == "/api/jira":
+                return self._json(load_jira())
             self.send_response(404)
             self.end_headers()
 
@@ -276,6 +339,21 @@ def serve(port):
                 if self.path == "/api/csv":
                     p = self._body()
                     return self._json(cross_check_csv_text(str(p.get("content") or ""), load_registry()))
+                if self.path == "/api/jira-import":
+                    p = self._body()
+                    return self._json(import_jira_csv(str(p.get("content") or "")))
+                if self.path == "/api/jira-verdict":
+                    p = self._body()
+                    key = str(p.get("key") or "").upper()
+                    data = load_jira()
+                    for it in data.get("issues", []):
+                        if it["key"] == key:
+                            it["verdict"] = str(p.get("verdict") or "")
+                            it["note"] = str(p.get("note") or "")
+                            it["lastChecked"] = datetime.now().isoformat(timespec="seconds") if it["verdict"] else ""
+                            save_jira(data)
+                            return self._json({"ok": True, "issue": it})
+                    return self._json({"error": "이슈 키를 찾지 못했습니다: " + key}, 404)
             except Exception as err:
                 return self._json({"error": str(err)}, 500)
             self.send_response(404)
