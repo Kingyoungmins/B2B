@@ -1,0 +1,61 @@
+---
+type: endpoint
+title: ApplyUiBusyLock
+module: NativeHost.cs
+lang: csharp
+extraction: regex   # 정규식 근사
+signature: "()"
+role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
+role_source: none
+version: "0.5.19"
+loc: "NativeHost.cs:570-570"
+
+# ── 입출력 ──
+inputs: []
+returns: "(추정)"
+
+# ── 사이드이펙트 (정적 추정) ──
+side_effects:
+  - "프로세스 실행/종료"
+raises: []
+
+# ── 유기적 관계 ──
+calls:
+  - "ReleaseUiBusyLock"
+calls_external:
+  - "Add"
+  - "EnableWindow"
+  - "EnumWindows"
+  - "FromLTRB"
+  - "GetClassName"
+  - "GetWindowRect"
+  - "IndexOf"
+  - "IntersectsWith"
+  - "IsWindowVisible"
+  - "RectangleToScreen"
+  - "Start"
+  - "Stop"
+  - "StringBuilder"
+  - "Timer"
+  - "ToString"
+  - "delegate"
+called_by:
+  - "UpdateUiBusyLock"
+reads: []
+writes: []
+affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
+timestamp: "0.5.19-gen"
+---
+
+## 역할
+(추정) 역할 주석 없음 — 담당자 1줄 보완 필요  _(자동 추정 — 확인 필요)_
+
+## 사이드이펙트 & 주의
+- 프로세스 실행/종료
+
+## 관계
+- 호출: `ReleaseUiBusyLock`
+- 피호출(영향 전파 경로): `UpdateUiBusyLock`
+
+## 실패/예외
+- `(명시적 raise 없음/미탐지)`

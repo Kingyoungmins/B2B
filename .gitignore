@@ -1,0 +1,61 @@
+﻿# PyInstaller build artifacts
+build/
+dist/
+*.spec.bak
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.venv/
+venv/
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/
+
+# Zone.Identifier (Windows download metadata)
+*Zone.Identifier
+
+# Local automatic skill backups
+auto_backups/
+auto_backup/
+
+# Runner file-output results
+output/
+
+# Local runtime/debug logs
+vba_pipeline_trace.jsonl
+runtime_load_trace.jsonl
+vba_runner_fail.log
+*_log.txt
+
+# Regression test generated reports
+tests/vba_regression/reports/**
+!tests/vba_regression/reports/.gitkeep
+tests/vba_regression/cases/_orig_backup/
+
+# Local transfer packages
+dist_transfer/
+
+# Native host generated files
+native_host/bin/
+native_host/packages/
+
+# Embed prototype build output
+embed_proto/bin/
+_tmp_*
+
+# [0.5.13 신규 repo] 루트 스킬-export zip(테스트 산출물), 단일 exe 산출물
+/*.zip
+
+# [0.5.18] 로컬 eval 게이트 스크래치 — Qwen 엔드포인트/API키 포함, 절대 커밋 금지
+test_runs/_qwen_client.py
+test_runs/_prompt_*.txt
+test_runs/_batch_*.txt
+test_runs/_batch_*.log
+test_runs/_flagged_dump.txt
