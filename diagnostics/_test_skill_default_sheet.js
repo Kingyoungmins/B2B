@@ -56,7 +56,10 @@ ck("(6) 선택 상태(m.skillDefault)로 selected 표시", /m\.skillDefault \? "
      src.includes("if (row.req.sheet && row.sheet) code = runnerReplaceLiteral"));
 }
 // (9) 파일명 치환은 스킬 기본값에서도 유지돼야 한다 — 안 하면 옛 파일명이 남아 워크북을 못 찾는다.
-ck("(9) 파일명 치환은 조건 없이 유지", src.includes("if (row.req.book && actualName) code = runnerReplaceLiteral"));
+// (v4 부터 핸들 치환이 추가되며 한 줄→블록 형태가 됐다 — 두 형태 모두 인정)
+ck("(9) 파일명 치환은 조건 없이 유지",
+   src.includes("if (row.req.book && actualName) code = runnerReplaceLiteral")
+   || /if \(row\.req\.book && actualName\) \{[\s\S]{0,200}?runnerReplaceLiteral\(code, row\.req\.book, actualName\)/.test(src));
 // (10) 실행 차단(status 'bad')에 걸리지 않아야 한다 — 막히면 탈출구 의미가 없다.
 ck("(10) 스킬 기본값은 상태 ok(실행 차단 안 됨)", /skillDefault\)\s*\{\s*status = "ok"/.test(src.replace(/\s+/g, " ").replace(/ \{/g, "{")) || src.includes('statusText = "스킬 기본값"'));
 
