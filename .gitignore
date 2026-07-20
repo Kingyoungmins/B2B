@@ -59,3 +59,5 @@ test_runs/_prompt_*.txt
 test_runs/_batch_*.txt
 test_runs/_batch_*.log
 test_runs/_flagged_dump.txt
+tools/issue_recheck/results_history.jsonl
+tools/issue_recheck/registry.json.bak
