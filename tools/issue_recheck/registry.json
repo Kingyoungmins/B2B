@@ -2144,6 +2144,17 @@
         ]
       ],
       "fix": "loadLogic에 v4 자리표(@@FILE_n@@)->원본 파일명 복원 백포트(0.6.1) / 0.6.2는 네이티브 v4 왕복. 실물 한전 오류신고(2026-07-20) zip 회귀"
+    },
+    {
+      "id": "OUTPUT-LANG-KO",
+      "title": "응답에 중국어 혼입(Qwen 계열) — 시스템 프롬프트 출력 언어 고정",
+      "checks": [
+        [
+          "node",
+          "diagnostics/_test_output_language_rule.js"
+        ]
+      ],
+      "fix": "OUTPUT_LANGUAGE_RULE 신설 후 시스템 프롬프트 4개 맨 앞 + 인라인 2개(검증자·오류설명)에 삽입. 생각(reasoning)까지 한국어 고정, 시트명·파일명 원문 보존은 예외로 명시(번역 회귀 방지)"
     }
   ]
 }
