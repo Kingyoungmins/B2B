@@ -75,6 +75,10 @@
     [
      "com",
      "test_runs/_test_fullcolrow_engine.py"
+    ],
+    [
+     "node",
+     "diagnostics/_test_issue_real_artifacts.js"
     ]
    ],
    "repro": "C:\\Users\\Admin\\Downloads\\엎어씌우기 문제.zip"
@@ -114,6 +118,10 @@
     [
      "marker",
      "serve_b2b.py::_ensure_vbom_access"
+    ],
+    [
+     "python",
+     "test_runs/_test_vba_env_access.py"
     ]
    ],
    "repro": "C:\\Users\\Admin\\Downloads\\보안해제.zip"
@@ -1185,6 +1193,10 @@
     [
      "marker",
      "serve_b2b.py::무한 루프"
+    ],
+    [
+     "python",
+     "test_runs/_test_infinite_loop_guard.py"
     ]
    ],
    "repro": "C:\\Users\\Admin\\Downloads\\무한 루프.zip"
@@ -1265,6 +1277,10 @@
     [
      "marker",
      "serve_b2b.py::def lookup"
+    ],
+    [
+     "node",
+     "diagnostics/_test_issue_real_artifacts.js"
     ]
    ],
    "repro": "C:\\Users\\Admin\\Downloads\\네이버클라우드_5월 트래픽_2단계_2026-06-26-16-28-22.zip"
@@ -1375,6 +1391,10 @@
     [
      "node",
      "diagnostics/_test_paste_requirements.js"
+    ],
+    [
+     "node",
+     "diagnostics/_test_issue_real_artifacts.js"
     ]
    ],
    "repro": "C:\\Users\\Admin\\Downloads\\예원SBAGENT-171_attachments.zip"
