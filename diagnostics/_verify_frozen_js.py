@@ -19,6 +19,12 @@ CHECKS = {
     # WaitForSingleObject = 259 좀비 오판 수정본, waitRestoreOrStall = 중단 진행률 기반 승격.
     "serve_b2b.py": ["STARTF_FORCEOFFFEEDBACK", "_is_pid_alive", "WaitForSingleObject"],
     "scripts\\pipeline.js": ["waitRestoreOrStall", "PIPELINE_VOLATILE_SUFFIX_TOKENS"],
+    # [0.6.2 v4] 요구 선언표 + 자리표(@@FILE_n@@) 복원 + 재저장 스킬의 옛 달 파일명 재바인딩(한전 실측).
+    "scripts\\save-load.js": ["computeSkillRequirements", "loadedSkillReqSignature",
+                              "v4 표 기준 파일명 재바인딩", "pipelineStableWorkbookKey"],
+    "scripts\\drop-handling.js": ["runnerHandleForName", "미해결 실참조 노출", "runnerSheetOwnersFromCode"],
+    # 빌드 스탬프가 0.6.2 여야 한다(0.6.1 복제 폴더라 버전 표기가 안 올라간 이력 있음).
+    "scripts\\config.js": ["b2b-0.6.2-"],
 }
 
 fails = 0
