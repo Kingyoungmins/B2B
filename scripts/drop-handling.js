@@ -1258,13 +1258,21 @@ function runnerBuildMappingRows() {
     // [스킬 기본값] 사용자가 '치환하지 말라'고 명시한 시트 — sheet 를 비워 두면
     // buildRunnerMappedPipeline 의 `if (row.req.sheet && row.sheet)` 가 걸러 치환이 일어나지 않는다.
     // 다만 '선택 필요'(bad)로 떨어져 실행이 막히면 안 되므로 상태는 정상으로 둔다.
-    const skillDefault = !!(stored && runnerIsSkillDefaultSheet(stored.sheet));
+    let skillDefault = !!(stored && runnerIsSkillDefaultSheet(stored.sheet));
     const sheet = (fileItem && !skillDefault) ? runnerFindSheet(req, fileItem.file, stored && stored.sheet) : "";
+    // [안전판] 파일은 정해졌는데 요구 시트가 자동 매칭되지 않고 사용자가 고르지도 않았으면
+    // '시트 선택'(선택 강요) 대신 '스킬 기본값(그대로 실행)'을 기본 선택으로 둔다 — 요구 추출이
+    // 놓친 케이스(생성 시트 감지 누락 등)가 실행을 막거나 사용자를 헤매게 하지 않게(치환만 생략).
+    let autoSkillDefault = false;
+    if (fileItem && req.sheet && !sheet && !(stored && stored.sheet)) {
+      skillDefault = true;
+      autoSkillDefault = true;
+    }
     let status = "bad";
     let statusText = "선택 필요";
     if (fileItem && skillDefault) {
       status = "ok";
-      statusText = "스킬 기본값";
+      statusText = autoSkillDefault ? "스킬 기본값(자동)" : "스킬 기본값";
     } else if (fileItem && (!req.sheet || sheet)) {
       const sheetExact = !req.sheet || sheet === req.sheet || runnerMappingNorm(sheet) === runnerMappingNorm(req.sheet);
       if ((score >= 95 || !req.book) && sheetExact) {
@@ -1276,7 +1284,7 @@ function runnerBuildMappingRows() {
         statusText = rebound ? "확인 필요(다른 달 추정)" : "확인 필요";
       }
     }
-    return { req, files, fileItem, sheet, score, status, statusText, rebound, skillDefault, userSet: !!(stored && stored.userSet) };
+    return { req, files, fileItem, sheet, score, status, statusText, rebound, skillDefault, autoSkillDefault, userSet: !!(stored && stored.userSet) };
   });
 }
 
@@ -1301,10 +1309,12 @@ function runnerGroupMappingRowsByFile(rows) {
     g.userSet = g.members.some(m => m.userSet);   // 사람이 직접 파일/시트를 고른 그룹
     const sheetMembers = g.members.filter(m => m.req.sheet);
     if (!g.fileItem) { g.status = "bad"; g.statusText = "파일 선택 필요"; return; }
-    const unresolved = sheetMembers.filter(m => !m.sheet);
+    // 스킬 기본값(사용자 명시/자동 안전판)은 '치환 없이 그대로 실행'이 확정된 상태 — 미해결이 아니다.
+    const unresolved = sheetMembers.filter(m => !m.sheet && !m.skillDefault);
     if (unresolved.length) { g.status = "warn"; g.statusText = "시트 확인"; return; }
     // 파일+시트 모두 해결됨 → 초록(ok). 어떻게 해결됐는지에 따라 라벨만 구분.
     if (g.userSet) { g.status = "ok"; g.statusText = "사용자 확인 완료"; }                      // 사람이 직접 지정
+    else if (g.members.some(m => m.autoSkillDefault)) { g.status = "ok"; g.statusText = "스킬 기본값 포함"; }  // 자동 안전판 — 정확 매칭으로 과장하지 않음
     else if (g.members.every(m => m.status === "ok")) { g.status = "ok"; g.statusText = "정확 매칭"; }  // 정확 자동
     else { g.status = "ok"; g.statusText = "AI 자동매칭"; }                                     // 유사도 자동(예전 '확인 필요')
   });
