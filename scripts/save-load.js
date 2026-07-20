@@ -748,6 +748,24 @@ function loadLogic(data, filename, meta) {
   if (typeof ensurePipelineStepIds === "function") ensurePipelineStepIds();
   // 채팅 히스토리도 함께 복원 (있으면)
   state.chatHistory = Array.isArray(data.chatHistory) ? deepClone(data.chatHistory) : [];
+  // [v4 하위호환] 0.6.2+ 가 저장한 스킬(zip)은 코드의 파일명 리터럴이 자리표(@@FILE_n@@)로 저장되고,
+  // 원본 이름은 requiredFiles[].{handle,name} 에 있다. 이 버전은 v4 요구 표를 쓰지 않지만 자리표만은
+  // 반드시 원본 이름으로 되돌려야 한다 — 안 하면 실행 코드에 자리표가 남아 "워크북 '@@FILE_1@@' 이
+  // 열려 있지 않습니다"로 죽고, 생성시트 판정의 book 키도 어긋나 스킬이 만드는 중간 시트(무선간선망 등)를
+  // 업로드하라는 유령 요구가 생긴다(한전 오류신고 2026-07-20 실측). 표 자체는 계속 무시(기존 추론 유지).
+  try {
+    const rfs = Array.isArray(data && data.requiredFiles)
+      ? data.requiredFiles.filter(rf => rf && rf.handle && rf.name)
+      : [];
+    if (rfs.length && typeof runnerReplaceLiteral === "function") {
+      state.pipeline.forEach(step => {
+        if (!step || !step.code) return;
+        let c = String(step.code);
+        rfs.forEach(rf => { c = runnerReplaceLiteral(c, rf.handle, rf.name); });
+        step.code = c;
+      });
+    }
+  } catch (_) {}
   state.editingStepId = null;
   // 불러온 파이프라인은 라이브에 아직 적용 안 됨 → 적용추적 시그니처 무효화. 안 하면 첫 '전체 실행'이
   // no-op 으로 거부되거나 옛 서명과 충돌해 "스킬을 적용하지 못했습니다" 가 뜬다. [#18]

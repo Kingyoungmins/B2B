@@ -1,2127 +1,2138 @@
 {
- "_설명": "완료된 이슈 ↔ 회귀 테스트 매핑. 이슈를 고칠 때마다 회귀 테스트를 만들고 여기 등록한다.",
- "_체크타입": {
-  "node": "diagnostics/*.js — 실제 소스에서 함수 추출해 구동(Excel 불필요, 수 초)",
-  "python": "test_runs/*.py 중 순수 로직(Excel 불필요)",
-  "com": "test_runs/*_com.py 등 실제 Excel 을 띄우는 실측(--com 지정 시에만 실행)"
- },
- "issues": [
-  {
-   "id": "SBAGENT-17",
-   "title": "피벗_ LLM으로 요청시 화면 다운되는 현상",
-   "checks": [
-    [
-     "com",
-     "test_runs/_test_native_pivot_com.py"
-    ],
-    [
-     "com",
-     "test_runs/_test_pivot_dup_headers_com.py"
-    ]
-   ],
-   "fix": "피벗을 LLM 손코딩 대신 ctx.pivot 네이티브 헬퍼로 강제(라우팅 힌트) + 항상 진짜 피벗테이블 생성(0.6.1)"
-  },
-  {
-   "id": "SBAGENT-18",
-   "title": "출력파일에서 시트 이동이 안됨",
-   "checks": [
-    [
-     "marker",
-     "scripts/excel-mirror.js::restoreActiveExcelMirrorWindow"
-    ]
-   ],
-   "fix": "라이브 Excel 오버레이 구조 전환(0.4.4~) — 시트 이동 등은 실제 Excel 네이티브가 직접 처리"
-  },
-  {
-   "id": "SBAGENT-19",
-   "title": "조건을 2개 이상 넣어 계산 요청",
-   "checks": [
-    [
-     "com",
-     "test_runs/_test_eval_fixes_com.py"
-    ],
-    [
-     "marker",
-     "serve_b2b.py::def sum_where"
-    ]
-   ],
-   "fix": "조건 집계용 sum_where/sum_lookup 결정적 헬퍼 도입(0.5.x 평가지 대응)"
-  },
-  {
-   "id": "SBAGENT-20",
-   "title": "스킬 삭제시 오류",
-   "checks": [
-    [
-     "node",
-     "diagnostics/_test_cross_reset.js"
-    ]
-   ],
-   "fix": "단계 삭제 시 직전 스냅샷 복원 + 교차 목적지 리셋 집합 정비(0.5.14~0.6.1)"
-  },
-  {
-   "id": "SBAGENT-22",
-   "title": "[CNS]피벗_llm으로 요청시 화면다운>VBA(F7)로 처리되었으나 서식변경됨",
-   "checks": [
-    [
-     "com",
-     "test_runs/_test_native_pivot_com.py"
-    ],
-    [
-     "marker",
-     "scripts/file-schema.js::피벗"
-    ]
-   ],
-   "fix": "피벗 항상-네이티브 강제 + 서식 보존 경로 정비(0.6.1)"
-  },
-  {
-   "id": "SBAGENT-26",
-   "title": "행 추가 시 덮어씌우기 불가 / 값 오류",
-   "checks": [
-    [
-     "com",
-     "test_runs/_test_fullcolrow_engine.py"
-    ],
-    [
-     "node",
-     "diagnostics/_test_issue_real_artifacts.js"
-    ]
-   ],
-   "repro": "C:\\Users\\Admin\\Downloads\\엎어씌우기 문제.zip",
-   "fix": "전체 열/행 배열 일괄 엔진 + dict 매칭 덮어쓰기 VBA 라우팅(0.5.x)"
-  },
-  {
-   "id": "SBAGENT-28",
-   "title": "VBA모드로 전환 사용 스킬 저장 후 스킬 불러오기 적용 오류",
-   "checks": [
-    [
-     "node",
-     "diagnostics/_test_save_no_mapped_leak.js"
-    ],
-    [
-     "marker",
-     "scripts/chat-ui.js::forceEngine"
-    ]
-   ],
-   "fix": "엔진 전환 시 원본 코드 보존 + 게이트 우회 표지(단방향 전환 정책)"
-  },
-  {
-   "id": "SBAGENT-29",
-   "title": "전체 행 값 대체 시 에러 발생",
-   "checks": [
-    [
-     "com",
-     "test_runs/_test_fullcolrow_engine.py"
-    ]
-   ],
-   "fix": "전체 행 값 대체를 배열 일괄 쓰기로(전체 열/행 엔진)"
-  },
-  {
-   "id": "SBAGENT-30",
-   "title": "[KT HCN]스킬 적용 시 엑셀 보안설정 문제로 스킬오류가 해결되지 않는 현상",
-   "checks": [
-    [
-     "marker",
-     "serve_b2b.py::AutomationSecurity"
-    ],
-    [
-     "marker",
-     "serve_b2b.py::_ensure_vbom_access"
-    ],
-    [
-     "python",
-     "test_runs/_test_vba_env_access.py"
-    ]
-   ],
-   "repro": "C:\\Users\\Admin\\Downloads\\보안해제.zip",
-   "fix": "열 때부터 AutomationSecurity=Low + AccessVBOM/VBAWarnings=1 + 러너 신뢰 위치 등록(0.6.0 A안)"
-  },
-  {
-   "id": "SBAGENT-31",
-   "title": "스킬 적용 후 추가 작업 진행시 엑셀 빈 화면 뜸",
-   "checks": [
-    [
-     "marker",
-     "scripts/excel-mirror.js::recoverExcelMirrorWindow"
-    ]
-   ],
-   "fix": "미러 복구(recover) — 빈 화면 시 창 재배치·재표시"
-  },
-  {
-   "id": "SBAGENT-32",
-   "title": "스킬파이프라인에 스킬 내용 요약",
-   "checks": [
-    [
-     "marker",
-     "scripts/llm-api.js::extractDescription"
-    ]
-   ],
-   "fix": "응답 제목 추출(extractDescription)로 단계 요약 자동화"
-  },
-  {
-   "id": "SBAGENT-33",
-   "title": "[CNS] 행숨기기취소 적용은 되었으나 오류메시지출력되어 스킬생성불가",
-   "checks": [
-    [
-     "marker",
-     "serve_b2b.py::def hide_rows"
-    ]
-   ],
-   "fix": "hide_rows/hide_cols 헬퍼 도입(행숨기기취소 오류 메시지 제거)"
-  },
-  {
-   "id": "SBAGENT-35",
-   "title": "KT HCN_난이도있는 스킬 못하는 현상(and값 2개 이상, 셀병합 등)",
-   "checks": [
-    [
-     "com",
-     "test_runs/_test_eval_fixes_com.py"
-    ]
-   ],
-   "repro": "C:\\Users\\Admin\\Downloads\\난이도up.zip",
-   "fix": "평가지 함정 대응 헬퍼(sum_where/sum_lookup/find_header 인접행) + 명시열 규칙(0.5.x)"
-  },
-  {
-   "id": "SBAGENT-38",
-   "title": "시트내 셀범위 직접 선택 후 데이터 삭제를 요청하였으나 시트명 못찾",
-   "checks": [
-    [
-     "com",
-     "test_runs/_test_ws_truncated_sheet_com.py"
-    ],
-    [
-     "marker",
-     "serve_b2b.py::_resolve_ephemeral_excel_open_sheet_alias"
-    ]
-   ],
-   "fix": "_ws 7단 폴백(정확→별칭→교차유일→정규화→안정키→31자절단→단일시트, 유일 매칭 시에만 완화)"
-  },
-  {
-   "id": "SBAGENT-39",
-   "title": "NH투자증권_태블릿_인풋-아웃풋 파일간 수식복사 오류(참고:파일명 아웃풋 파일이 인풋파일임)",
-   "checks": [
-    [
-     "com",
-     "test_runs/_test_crossfile_autoopen.py"
-    ]
-   ],
-   "fix": "교차파일 소스 자동 오픈(_registered_path_for_name) + 동반본 개방"
-  },
-  {
-   "id": "SBAGENT-40",
-   "title": "1시간 이상 프로그램 켜둘시 컴퓨터 버벅이는 현상",
-   "checks": [
-    [
-     "node",
-     "diagnostics/_test_smooth_renderer_raf.js"
-    ]
-   ],
-   "fix": "채팅 타자기 RAF 영구 루프 수정 — 완료 시 정지 + 오류 경로 flush(0.6.1)"
-  },
-  {
-   "id": "SBAGENT-42",
-   "title": "시트내 셀범위 직접 선택 후 데이터 삭제를 요청하였으나 시트명을 오인식하는 현상",
-   "checks": [
-    [
-     "com",
-     "test_runs/_test_ws_truncated_sheet_com.py"
-    ]
-   ],
-   "fix": "_ws 폴백 사다리로 시트명 오인식 방지(유일 매칭 한정 완화)"
-  },
-  {
-   "id": "SBAGENT-43",
-   "title": "1행 못채움 현상",
-   "checks": [
-    [
-     "com",
-     "test_runs/_test_fullcolrow_engine.py"
-    ]
-   ],
-   "fix": "전체 열/행 범위 산정 정비(1행 포함)"
-  },
-  {
-   "id": "SBAGENT-44",
-   "title": "복붙 로직 추가 고려",
-   "checks": [
-    [
-     "com",
-     "test_runs/_test_copypaste_capture.py"
-    ]
-   ],
-   "fix": "복붙 캡처 기능 신설(0.5.9) — 클립보드 Link 역추적 + RangeSelection"
-  },
-  {
-   "id": "SBAGENT-48",
-   "title": "1. input파일 함수서식 깨짐현상",
-   "checks": [
-    [
-     "com",
-     "test_runs/_test_format_helpers_com.py"
-    ]
-   ],
-   "fix": "위임형 오픈(실제 Excel COM)으로 함수/서식 보존"
-  },
-  {
-   "id": "SBAGENT-49",
-   "title": "2. 복붙시 수식 복사 안됨",
-   "checks": [
-    [
-     "com",
-     "test_runs/_test_copypaste_capture.py"
-    ]
-   ],
-   "fix": "복붙 캡처가 네이티브 Range.Copy 로 수식·서식 보존"
-  },
-  {
-   "id": "SBAGENT-50",
-   "title": "3. 스킬 자동저장 기능",
-   "checks": [
-    [
-     "marker",
-     "scripts/save-load.js::scheduleLogicAutoBackup"
-    ]
-   ],
-   "fix": "스킬 자동백업(scheduleLogicAutoBackup) 도입"
-  },
-  {
-   "id": "SBAGENT-51",
-   "title": "4. 엑셀뷰 스크롤시 미리보기 오류",
-   "checks": [
-    [
-     "marker",
-     "scripts/excel-mirror.js::scheduleExcelMirrorPosition"
-    ]
-   ],
-   "fix": "미러 위치 스케줄러 정비(스크롤/전환 시 재배치)"
-  },
-  {
-   "id": "SBAGENT-52",
-   "title": "5. 파일 다운로드 기능 오류",
-   "checks": [
-    [
-     "marker",
-     "native_host/NativeHost.cs::Download deferral"
-    ]
-   ],
-   "fix": "다운로드 저장 대화상자 deferral + 강제 포그라운드(0.6.1)"
-  },
-  {
-   "id": "SBAGENT-53",
-   "title": "6. THINK 자동중단 현상",
-   "checks": [
-    [
-     "marker",
-     "scripts/llm-api.js::retryWithoutThink"
-    ]
-   ],
-   "fix": "think 반복 감지 → no-think 자동 재시도(retryWithoutThink)"
-  },
-  {
-   "id": "SBAGENT-54",
-   "title": "7. '적용' 미실행 현상",
-   "checks": [
-    [
-     "com",
-     "test_runs/_test_no_change_gate_com.py"
-    ]
-   ],
-   "fix": "무변경 실행 검증 게이트(거짓 '적용됨' 차단) + read-evidence 정밀화(0.6.1)"
-  },
-  {
-   "id": "SBAGENT-55",
-   "title": "8. 셀병합 파일 업로드시 데이터 누락",
-   "checks": [
-    [
-     "com",
-     "test_runs/_test_excel_compatible_open_path_formats.py"
-    ]
-   ],
-   "fix": "위임형 오픈으로 병합 셀 데이터 보존(자체 파서 미사용)"
-  },
-  {
-   "id": "SBAGENT-56",
-   "title": "9. 셀병합 파일 업로드시 병합 해제됨",
-   "checks": [
-    [
-     "com",
-     "test_runs/_test_excel_compatible_open_path_formats.py"
-    ],
-    [
-     "marker",
-     "serve_b2b.py::def merge"
-    ]
-   ],
-   "fix": "위임형 오픈으로 병합 유지 + merge/unmerge 헬퍼"
-  },
-  {
-   "id": "SBAGENT-57",
-   "title": "10. 숫자 서식 변경됨 (천단위 쉼표)",
-   "checks": [
-    [
-     "com",
-     "test_runs/_test_format_helpers_com.py"
-    ]
-   ],
-   "fix": "위임형 구조로 숫자 서식(천단위 쉼표) 보존"
-  },
-  {
-   "id": "SBAGENT-58",
-   "title": "11. 엑셀뷰 데이터 끝까지 이동 기능",
-   "checks": [
-    [
-     "marker",
-     "serve_b2b.py::_present_live_session_frame"
-    ]
-   ],
-   "fix": "라이브 Excel 프레임 직접 노출 — 네이티브 탐색 그대로 사용"
-  },
-  {
-   "id": "SBAGENT-59",
-   "title": "12. 필터링시 원본 데이터 삭제 문제",
-   "checks": [
-    [
-     "com",
-     "test_runs/_test_clear_filter_com.py"
-    ]
-   ],
-   "fix": "filter_to_sheet(원본 보존, 새 시트 추출) 헬퍼로 대체"
-  },
-  {
-   "id": "SBAGENT-61",
-   "title": "14. Undo/Redo 기능",
-   "checks": [
-    [
-     "marker",
-     "scripts/pipeline.js::pushHistory"
-    ]
-   ],
-   "fix": "Undo/Redo(pushHistory) 도입"
-  },
-  {
-   "id": "SBAGENT-62",
-   "title": "15. 파이프라인 단계별 On/Off 제어",
-   "checks": [
-    [
-     "marker",
-     "scripts/pipeline.js::isStepEnabled"
-    ]
-   ],
-   "fix": "단계 On/Off(isStepEnabled) + 토글 시 체크포인트 복원"
-  },
-  {
-   "id": "SBAGENT-63",
-   "title": "16. 업로드시 빈 컬럼 구조 유지",
-   "checks": [
-    [
-     "com",
-     "test_runs/_test_excel_compatible_open_path_formats.py"
-    ]
-   ],
-   "fix": "위임형 오픈으로 빈 컬럼 구조 유지"
-  },
-  {
-   "id": "SBAGENT-64",
-   "title": "17. 수식 계산결과 값으로 반영",
-   "checks": [
-    [
-     "marker",
-     "serve_b2b.py::def copy_values"
-    ]
-   ],
-   "fix": "copy_values(계산값 고정, 참조 시프트 없음) 헬퍼"
-  },
-  {
-   "id": "SBAGENT-65",
-   "title": "18. 수식 포함 파일 그대로 적용",
-   "checks": [
-    [
-     "com",
-     "test_runs/_test_format_helpers_com.py"
-    ]
-   ],
-   "fix": "위임형 구조로 수식 포함 파일 그대로 적용"
-  },
-  {
-   "id": "SBAGENT-66",
-   "title": "19. 작업 중단(Cancel) 기능",
-   "checks": [
-    [
-     "node",
-     "diagnostics/_test_stop_escalation.js"
-    ]
-   ],
-   "fix": "작업 중단을 '진행 여부' 기반 승격으로 재설계(0.6.1)"
-  },
-  {
-   "id": "SBAGENT-67",
-   "title": "20. 파일 업로드 로딩 표시",
-   "checks": [
-    [
-     "marker",
-     "scripts/drop-handling.js::beginUpload"
-    ]
-   ],
-   "fix": "업로드 진행 표시(beginUpload) + 중단 버튼"
-  },
-  {
-   "id": "SBAGENT-68",
-   "title": "21. 출력템플릿 N개 지원",
-   "checks": [
-    [
-     "marker",
-     "scripts/pipeline.js::outputTemplates"
-    ]
-   ],
-   "fix": "출력 템플릿 N개(outputTemplates) 지원"
-  },
-  {
-   "id": "SBAGENT-69",
-   "title": "22. @멘션으로 파일/컬럼 선택",
-   "checks": [
-    [
-     "marker",
-     "scripts/drop-handling.js::@(?:범위|시트|컬럼)"
-    ]
-   ],
-   "fix": "@파일/@시트/@범위/@컬럼 멘션 도입"
-  },
-  {
-   "id": "SBAGENT-70",
-   "title": "23. 동일 컬럼명 구분 선택 기능",
-   "checks": [
-    [
-     "com",
-     "test_runs/_test_pivot_dup_headers_com.py"
-    ]
-   ],
-   "fix": "피벗 중복 헤더 구분 처리"
-  },
-  {
-   "id": "SBAGENT-72",
-   "title": "25. 다중 시트 인식 기능",
-   "checks": [
-    [
-     "com",
-     "test_runs/_test_csv_multisheet_com.py"
-    ]
-   ],
-   "fix": "다중 시트 인식 + CSV 다중시트→xlsx 자동 승격"
-  },
-  {
-   "id": "SBAGENT-73",
-   "title": "26. 시트 내 다중 표 인식 기능",
-   "checks": [
-    [
-     "marker",
-     "scripts/chat-ui.js::buildSheetStructureDigest"
-    ]
-   ],
-   "fix": "시트 구조 다이제스트(buildSheetStructureDigest)로 다중 표 파악"
-  },
-  {
-   "id": "SBAGENT-74",
-   "title": "27. 엑셀뷰 검색(Ctrl+F) 기능",
-   "checks": [
-    [
-     "marker",
-     "serve_b2b.py::_present_live_session_frame"
-    ]
-   ],
-   "fix": "라이브 Excel 위임 — Ctrl+F 등 네이티브 기능 그대로"
-  },
-  {
-   "id": "SBAGENT-75",
-   "title": "28. 대화창 통한 파이프라인 수정",
-   "checks": [
-    [
-     "marker",
-     "scripts/chat-ui.js::editTargetId"
-    ]
-   ],
-   "fix": "수정 모드(editTargetId) — 대화로 특정 단계 in-place 수정"
-  },
-  {
-   "id": "SBAGENT-76",
-   "title": "29. 오류 발생 단계/사유 명확히 표시",
-   "checks": [
-    [
-     "node",
-     "diagnostics/_test_error_recovery_index.js"
-    ]
-   ],
-   "fix": "오류 단계/사유 표시 + 복구 인덱스 폴백(항상 복구 가능)"
-  },
-  {
-   "id": "SBAGENT-77",
-   "title": "30. 고객별 결과파일 누적 저장",
-   "checks": [
-    [
-     "marker",
-     "serve_b2b.py::ensure_result_file"
-    ]
-   ],
-   "fix": "결과 파일 보존소(ensure_result_file)"
-  },
-  {
-   "id": "SBAGENT-78",
-   "title": "31. 스킬 편집시 삭제 로직 잔존",
-   "checks": [
-    [
-     "node",
-     "diagnostics/_test_cross_reset.js"
-    ]
-   ],
-   "fix": "편집 경로에도 교차 목적지 리셋 가드(0.6.1)"
-  },
-  {
-   "id": "SBAGENT-79",
-   "title": "32. 숨김열 파일 업로드 오류",
-   "checks": [
-    [
-     "com",
-     "test_runs/_test_excel_compatible_open_path_formats.py"
-    ]
-   ],
-   "fix": "위임형 오픈으로 숨김열 보존"
-  },
-  {
-   "id": "SBAGENT-80",
-   "title": "33. 미리보기 삭제값 복원 기능",
-   "checks": [
-    [
-     "node",
-     "diagnostics/_test_edit_checkpoint_guard.js"
-    ]
-   ],
-   "fix": "스텝별 사전 스냅샷 복원(미리보기 복원)"
-  },
-  {
-   "id": "SBAGENT-81",
-   "title": "34. 스킬 설계창 세로 확대",
-   "checks": [
-    [
-     "marker",
-     "scripts/chat-ui.js::chat-expanded"
-    ]
-   ],
-   "fix": "설계창 세로 확대(chat-expanded)"
-  },
-  {
-   "id": "SBAGENT-82",
-   "title": "35. 처리중 스크롤 불가로 중단버튼 클릭 불가",
-   "checks": [
-    [
-     "marker",
-     "scripts/excel-mirror.js::busy-stop"
-    ]
-   ],
-   "fix": "busy 오버레이 고정 중단 버튼(스크롤 무관)"
-  },
-  {
-   "id": "SBAGENT-83",
-   "title": "36. LLM 이력 삭제 기능",
-   "checks": [
-    [
-     "marker",
-     "scripts/chat-ui.js::chat-clear-history"
-    ]
-   ],
-   "fix": "대화 기억 비우기 기능"
-  },
-  {
-   "id": "SBAGENT-84",
-   "title": "37. 출력 셀 위치 오인식",
-   "checks": [
-    [
-     "com",
-     "test_runs/_test_eval_fixes_com.py"
-    ],
-    [
-     "marker",
-     "scripts/file-schema.js::글자 그대로"
-    ]
-   ],
-   "fix": "명시열 문자 그대로/열 암산 금지 프롬프트 규칙"
-  },
-  {
-   "id": "SBAGENT-85",
-   "title": "38. 수식 셀 값복사시 실패",
-   "checks": [
-    [
-     "marker",
-     "serve_b2b.py::def copy_values"
-    ],
-    [
-     "com",
-     "test_runs/_test_copy_snapshot_fallback.py"
-    ]
-   ],
-   "fix": "copy_values + 복사 스냅샷 폴백(수식 값복사 실패 방지)"
-  },
-  {
-   "id": "SBAGENT-86",
-   "title": "39. 다중 시트 파일 특정시트 작업시 전체 적용됨",
-   "checks": [
-    [
-     "marker",
-     "serve_b2b.py::def _ws"
-    ]
-   ],
-   "fix": "세션 고정 ctx(_ws) — 대상 시트 한정 작업"
-  },
-  {
-   "id": "SBAGENT-87",
-   "title": "40. 다운로드시 수식 유지",
-   "checks": [
-    [
-     "com",
-     "test_runs/_test_filemode_csv_output_com.py"
-    ]
-   ],
-   "fix": "파일 출력 모드 수식 유지 저장"
-  },
-  {
-   "id": "SBAGENT-88",
-   "title": "필터기능",
-   "checks": [
-    [
-     "com",
-     "test_runs/_test_clear_filter_com.py"
-    ],
-    [
-     "marker",
-     "serve_b2b.py::def clear_filter"
-    ]
-   ],
-   "fix": "clear_filter 헬퍼 도입"
-  },
-  {
-   "id": "SBAGENT-89",
-   "title": "41. 시트 추가시 에러 발생",
-   "checks": [
-    [
-     "com",
-     "test_runs/_test_vba_newsheet_liveschema.py"
-    ]
-   ],
-   "fix": "시트 추가 후 라이브 스키마 갱신(vba_newsheet_liveschema)"
-  },
-  {
-   "id": "SBAGENT-90",
-   "title": "42. 수식 셀 복사시 null 출력",
-   "checks": [
-    [
-     "com",
-     "test_runs/_test_copy_snapshot_fallback.py"
-    ]
-   ],
-   "fix": "복사 스냅샷 폴백으로 수식 null 방지"
-  },
-  {
-   "id": "SBAGENT-91",
-   "title": "43. 스킬 적용 후 이전 단계 원복됨",
-   "checks": [
-    [
-     "node",
-     "diagnostics/_test_cross_reset.js"
-    ]
-   ],
-   "fix": "삭제/토글 시 직전 스냅샷 복원(0.5.14 재설계)"
-  },
-  {
-   "id": "SBAGENT-92",
-   "title": "44. 미적용건 '적용됨' 표시",
-   "checks": [
-    [
-     "node",
-     "diagnostics/_test_applied_label_truth.js"
-    ]
-   ],
-   "fix": "실패 시점 전-파일 스냅샷 + 복원 커버리지 검증(0.6.1) — '적용됨' 정합"
-  },
-  {
-   "id": "SBAGENT-93",
-   "title": "45. 지정 범위와 다른 범위 작업",
-   "checks": [
-    [
-     "com",
-     "test_runs/_test_eval_fixes_com.py"
-    ]
-   ],
-   "fix": "@범위 리터럴 정확 복사 규칙(지정 범위 준수)"
-  },
-  {
-   "id": "SBAGENT-94",
-   "title": "46. 오작업 지적시 반복 수행",
-   "checks": [
-    [
-     "marker",
-     "scripts/llm-api.js::_looksLikeCorrection"
-    ]
-   ],
-   "fix": "정정 우선 지시(_looksLikeCorrection) — 직전 해석 반복 금지"
-  },
-  {
-   "id": "SBAGENT-95",
-   "title": "47. 열 이동시 값 null 처리",
-   "checks": [
-    [
-     "marker",
-     "serve_b2b.py::def move_col_clear"
-    ]
-   ],
-   "fix": "move_col_clear(열 구조 유지 이동·비우기) 헬퍼"
-  },
-  {
-   "id": "SBAGENT-96",
-   "title": "48. 프롬프트 자동 반복 수행",
-   "checks": [
-    [
-     "marker",
-     "scripts/llm-api.js::_looksLikeCorrection"
-    ]
-   ],
-   "fix": "정정 우선 지시로 자동 반복 억제"
-  },
-  {
-   "id": "SBAGENT-97",
-   "title": "49. 중단 버튼 작동 안됨",
-   "checks": [
-    [
-     "node",
-     "diagnostics/_test_stop_escalation.js"
-    ]
-   ],
-   "fix": "중단 승격 재설계(진행 기반) + busy 중단 버튼"
-  },
-  {
-   "id": "SBAGENT-98",
-   "title": "50. 열 삽입 스킬 미적용",
-   "checks": [
-    [
-     "marker",
-     "serve_b2b.py::def insert_cols"
-    ]
-   ],
-   "fix": "네이티브 insert_cols(참조 자동 보정)"
-  },
-  {
-   "id": "SBAGENT-99",
-   "title": "51. 전체보기시 데이터 삭제됨",
-   "checks": [
-    [
-     "marker",
-     "serve_b2b.py::SaveChanges"
-    ]
-   ],
-   "fix": "SaveChanges:=False 원본 불변 + 세션 작업사본"
-  },
-  {
-   "id": "SBAGENT-100",
-   "title": "52. 숨김열 파일 업로드시 출력 누락",
-   "checks": [
-    [
-     "com",
-     "test_runs/_test_excel_compatible_open_path_formats.py"
-    ]
-   ],
-   "fix": "위임형 오픈으로 숨김열 출력 보존"
-  },
-  {
-   "id": "SBAGENT-101",
-   "title": "53. 동일 스킬 다른 결과 출력",
-   "checks": [
-    [
-     "com",
-     "test_runs/_test_fullrun_single_instance_live.py"
-    ]
-   ],
-   "fix": "격리 인스턴스 pristine 재계산 배치(0.5.14) — 실행 결정성"
-  },
-  {
-   "id": "SBAGENT-102",
-   "title": "54. 날짜/시간 서식 false 출력",
-   "checks": [
-    [
-     "com",
-     "test_runs/_test_format_helpers_com.py"
-    ]
-   ],
-   "fix": "위임형 구조로 날짜/시간 서식 보존"
-  },
-  {
-   "id": "SBAGENT-103",
-   "title": "55. 스킬 파이프라인 실행 오류",
-   "checks": [
-    [
-     "com",
-     "test_runs/_test_fullrun_single_instance_live.py"
-    ]
-   ],
-   "fix": "격리 배치 1콜 재설계(0.5.14)"
-  },
-  {
-   "id": "SBAGENT-104",
-   "title": "56. 스킬 적용 표시되나 내림차순 미반영",
-   "checks": [
-    [
-     "com",
-     "test_runs/_test_no_change_gate_com.py"
-    ],
-    [
-     "node",
-     "diagnostics/_test_applied_label_truth.js"
-    ]
-   ],
-   "fix": "무변경 게이트 + 적용 표시 정합(0.6.1)"
-  },
-  {
-   "id": "SBAGENT-105",
-   "title": "57. 스킬 적용 표시되나 시트삭제 미반영",
-   "checks": [
-    [
-     "node",
-     "diagnostics/_test_applied_label_truth.js"
-    ],
-    [
-     "node",
-     "diagnostics/_test_cross_reset.js"
-    ]
-   ],
-   "fix": "실패 시점 전-파일 스냅샷 + 교차 목적지 리셋(0.6.1)"
-  },
-  {
-   "id": "SBAGENT-106",
-   "title": "58. 행 추가시 셀 1개만 추가됨",
-   "checks": [
-    [
-     "com",
-     "test_runs/_test_fullcolrow_engine.py"
-    ]
-   ],
-   "fix": "전체 행 삽입 엔진 정비"
-  },
-  {
-   "id": "SBAGENT-107",
-   "title": "59. 데이터지우기 스킬 미반영",
-   "checks": [
-    [
-     "com",
-     "test_runs/_test_no_change_gate_com.py"
-    ]
-   ],
-   "fix": "무변경 실행 검증 게이트(미반영을 실패로 노출)"
-  },
-  {
-   "id": "SBAGENT-108",
-   "title": "60. .xls 파일 업로드시 깨짐",
-   "checks": [
-    [
-     "com",
-     "test_runs/_test_html_xls_stable_sheetname.py"
-    ],
-    [
-     "com",
-     "test_runs/_test_excel_compatible_open_path_formats.py"
-    ]
-   ],
-   "fix": "확장자 위장 시그니처 판별 + 해시 고정 임시명 변환 오픈"
-  },
-  {
-   "id": "SBAGENT-109",
-   "title": "61. 스킬 미적용으로 파이프라인 생성 불가",
-   "checks": [
-    [
-     "node",
-     "diagnostics/_test_error_recovery_index.js"
-    ]
-   ],
-   "fix": "복구 인덱스 폴백 — 오류에도 파이프라인 생성/복구 가능"
-  },
-  {
-   "id": "SBAGENT-110",
-   "title": "62. 열 삽입시 밀린 셀 수식 잔존",
-   "checks": [
-    [
-     "marker",
-     "serve_b2b.py::def insert_cols"
-    ]
-   ],
-   "fix": "네이티브 insert_cols 로 잔존 수식 정리"
-  },
-  {
-   "id": "SBAGENT-111",
-   "title": "63. 자연어 표현별 해석 편차",
-   "checks": [
-    [
-     "marker",
-     "scripts/chat-ui.js::clarifyVerifierAskIfNeeded"
-    ]
-   ],
-   "fix": "명확화 verifier(구조 다이제스트+LLM, 키워드 금지)"
-  },
-  {
-   "id": "SBAGENT-113",
-   "title": "전송, 적용 버튼이 잘 안 눌리는 현상",
-   "checks": [
-    [
-     "node",
-     "diagnostics/_test_click_recovery.js"
-    ]
-   ],
-   "fix": "클릭 복구기 — 눌림 즉시 합성 + 진짜 이벤트 삼킴(VDI)"
-  },
-  {
-   "id": "SBAGENT-114",
-   "title": "\"복붙캡쳐\" 실행 시 값으로만 불러올 수 있는 기능 선택 요청",
-   "checks": [
-    [
-     "marker",
-     "serve_b2b.py::values_only"
-    ],
-    [
-     "com",
-     "test_runs/_test_copypaste_capture.py"
-    ]
-   ],
-   "fix": "복붙 캡처 '값만' 옵션(values_only) 추가"
-  },
-  {
-   "id": "SBAGENT-115",
-   "title": "공통_실행파일 디스크부족으로 실행 안되는 현상",
-   "checks": [
-    [
-     "python",
-     "test_runs/_test_temp_cleanup.py"
-    ],
-    [
-     "marker",
-     "serve_b2b.py::cleanup_stale_temp_artifacts"
-    ]
-   ],
-   "fix": "시작 시 임시 산출물 정리 + 스냅샷 상한 하우스키핑"
-  },
-  {
-   "id": "SBAGENT-116",
-   "title": "저장된 스킬불러오기 시 오류(시트삭제 실행오류)",
-   "checks": [
-    [
-     "node",
-     "diagnostics/_test_paste_internal_repair.js"
-    ],
-    [
-     "node",
-     "diagnostics/_test_save_no_mapped_leak.js"
-    ]
-   ],
-   "repro": "C:\\Users\\Admin\\Downloads\\불러오기실패_전체_파일_20260626_1332_가입자별청구내역_작업.zip",
-   "fix": "불러오기 정규화 + 내부 작업본명 수리(0.6.1)"
-  },
-  {
-   "id": "SBAGENT-117",
-   "title": "저장된 스킬불러오기 시 오류(작업성공한 부분도 오류로 표현)",
-   "checks": [
-    [
-     "node",
-     "diagnostics/_test_error_recovery_index.js"
-    ]
-   ],
-   "fix": "복구 인덱스 정렬 — 성공 단계 오류 오표시 제거"
-  },
-  {
-   "id": "SBAGENT-119",
-   "title": "엑셀에 함수가 안 보이는 현상",
-   "checks": [
-    [
-     "com",
-     "test_runs/_test_format_helpers_com.py"
-    ]
-   ],
-   "fix": "위임형 구조로 수식 표시 보존"
-  },
-  {
-   "id": "SBAGENT-120",
-   "title": "공통_스킬 저장 못하는 현상",
-   "checks": [
-    [
-     "marker",
-     "native_host/NativeHost.cs::Download deferral"
-    ],
-    [
-     "node",
-     "diagnostics/_test_save_name_follows_input.js"
-    ]
-   ],
-   "fix": "저장 대화상자 deferral(0.6.1) + 저장명 시그니처"
-  },
-  {
-   "id": "SBAGENT-121",
-   "title": "날짜 변경 오류",
-   "checks": [
-    [
-     "com",
-     "test_runs/_test_month_shift.py"
-    ]
-   ],
-   "fix": "shift_months(연도 넘김·말일 보정) 헬퍼"
-  },
-  {
-   "id": "SBAGENT-122",
-   "title": "6단계스킬 삭제(값복붙) 시 엑셀뷰는 반영됨. 스킬은유지됨",
-   "checks": [
-    [
-     "node",
-     "diagnostics/_test_cross_reset.js"
-    ]
-   ],
-   "fix": "삭제 시 스냅샷 복원 — 뷰/스킬 상태 일치(0.5.14)"
-  },
-  {
-   "id": "SBAGENT-123",
-   "title": "[스킬설계추가]스킬 불러오기 실행 오류",
-   "checks": [
-    [
-     "node",
-     "diagnostics/_test_paste_internal_repair.js"
-    ]
-   ],
-   "fix": "로드 시 스킬 수리(내부명/스텝 매칭)(0.6.1)"
-  },
-  {
-   "id": "SBAGENT-124",
-   "title": "엑셀 시트를 복사해서 추가 시트 만들기가 불가한 현상",
-   "checks": [
-    [
-     "marker",
-     "serve_b2b.py::def copy_sheet"
-    ]
-   ],
-   "fix": "copy_sheet 헬퍼(교차파일 포함)"
-  },
-  {
-   "id": "SBAGENT-126",
-   "title": "4단계 스킬 삭제시 1~3단계 스킬 재처리됨",
-   "checks": [
-    [
-     "node",
-     "diagnostics/_test_edit_checkpoint_guard.js"
-    ]
-   ],
-   "fix": "삭제 재실행을 체크포인트 이어실행으로(0.5.15)"
-  },
-  {
-   "id": "SBAGENT-129",
-   "title": "저장된 스킬불러오기 시 오류(적용됨으로 나왔으나 실행x)",
-   "checks": [
-    [
-     "node",
-     "diagnostics/_test_applied_label_truth.js"
-    ]
-   ],
-   "fix": "적용 추적 시그니처 무효화 — 불러온 스킬 첫 실행 보장"
-  },
-  {
-   "id": "SBAGENT-130",
-   "title": "엑셀 시트명 변경 시 데이터 변경 작업이 부분적으로 롤백되는 오류 발생",
-   "checks": [
-    [
-     "com",
-     "test_runs/_test_rename_31_com.py"
-    ],
-    [
-     "node",
-     "diagnostics/_test_cross_reset.js"
-    ]
-   ],
-   "fix": "rename 31자 절단 대칭 + 변경 후 재조회"
-  },
-  {
-   "id": "SBAGENT-131",
-   "title": "직전 생성 스킬 삭제시 앞단계 스킬 재작동(정상)건 결과값 일부 지워짐",
-   "checks": [
-    [
-     "node",
-     "diagnostics/_test_cross_reset.js"
-    ]
-   ],
-   "fix": "직전 삭제 시 체크포인트 복원(값 유실 방지)"
-  },
-  {
-   "id": "SBAGENT-132",
-   "title": "범위 선택 후 내림차순 정렬 요청하여 적용됨으로 보이나 정렬실패",
-   "checks": [
-    [
-     "com",
-     "test_runs/_test_no_change_gate_com.py"
-    ]
-   ],
-   "fix": "무변경 게이트 — 정렬 실패를 실패로 노출"
-  },
-  {
-   "id": "SBAGENT-133",
-   "title": "복붙 캡쳐 기능으로 수식을 붙여 넣어도 오류 발생",
-   "checks": [
-    [
-     "com",
-     "test_runs/_test_crossfile_capture_e2e.py"
-    ]
-   ],
-   "fix": "캡처 재생 네이티브 Copy + 캡처 스텝 재생성 금지 분류"
-  },
-  {
-   "id": "SBAGENT-134",
-   "title": "[기능개선] 작업완료파일 부분다운로드 기능개선요청",
-   "checks": [
-    [
-     "marker",
-     "index.html::runner-download-btn"
-    ]
-   ],
-   "fix": "전체 파일 zip 다운로드 + 파일별 보기/다운"
-  },
-  {
-   "id": "SBAGENT-138",
-   "title": "한전_스킬 실행 시 순서대로 작업 안해서 작업중단되는 현상",
-   "checks": [
-    [
-     "node",
-     "diagnostics/_test_generated_sheet_var.js"
-    ]
-   ],
-   "repro": "C:\\Users\\Admin\\Downloads\\0.한전 전력통신 빌링_표준양식_서울기준_25단계_2026-07-14-13-03-32.zip",
-   "fix": "VBA 변수 사슬 해소 — 생성 시트 오요구 제거(SBAGENT-138)"
-  },
-  {
-   "id": "SBAGENT-139",
-   "title": "I열 필터링 요청, J열에 필터링이 적용됨",
-   "checks": [
-    [
-     "com",
-     "test_runs/_test_filter_to_sheet_column_offset.py"
-    ]
-   ],
-   "fix": "filter_to_sheet 열 오프셋 수정(I→J 어긋남)"
-  },
-  {
-   "id": "SBAGENT-140",
-   "title": "[기능개선]스킬 저장 색상 구분",
-   "checks": [
-    [
-     "marker",
-     "scripts/save-load.js::rememberLogicSaveBaseName"
-    ]
-   ],
-   "fix": "저장명 기억 + 입력 시그니처 게이트(0.6.1)"
-  },
-  {
-   "id": "SBAGENT-141",
-   "title": "python ctx 다운현상",
-   "checks": [
-    [
-     "marker",
-     "serve_b2b.py::PY_COM_BUDGET"
-    ]
-   ],
-   "fix": "COM 호출 예산(PY_COM_BUDGET) + 대량 작업 VBA 라우팅"
-  },
-  {
-   "id": "SBAGENT-142",
-   "title": "오류발생 후 시트를 못찾음",
-   "checks": [
-    [
-     "com",
-     "test_runs/_test_ws_truncated_sheet_com.py"
-    ]
-   ],
-   "fix": "_ws 폴백 + 오류 후 시트 재해석"
-  },
-  {
-   "id": "SBAGENT-144",
-   "title": "파일을 인식하지 못함",
-   "checks": [
-    [
-     "node",
-     "diagnostics/_test_runner_automap.js"
-    ]
-   ],
-   "fix": "실행기 자동 매칭(5단 점수 사다리, 유일 일치)"
-  },
-  {
-   "id": "SBAGENT-146",
-   "title": "시트 이름 찾기 불가 에러",
-   "checks": [
-    [
-     "com",
-     "test_runs/_test_ws_truncated_sheet_com.py"
-    ]
-   ],
-   "fix": "_ws 7단 폴백으로 시트 이름 해석"
-  },
-  {
-   "id": "SBAGENT-148",
-   "title": "KGM_스킬 실행 이후 텍스트 압축되는 현상(스킬 추가)",
-   "checks": [
-    [
-     "com",
-     "test_runs/_test_format_helpers_com.py"
-    ]
-   ],
-   "fix": "서식 보존 경로 정비(KGM 텍스트 압축)"
-  },
-  {
-   "id": "SBAGENT-149",
-   "title": "자동저장안됨 이슈",
-   "checks": [
-    [
-     "marker",
-     "scripts/save-load.js::scheduleLogicAutoBackup"
-    ]
-   ],
-   "fix": "스킬 자동백업 도입"
-  },
-  {
-   "id": "SBAGENT-150",
-   "title": "[CNS] 5개파일 동일표 행합치기 오류",
-   "checks": [
-    [
-     "com",
-     "test_runs/_test_actual_sbagent150_append_files.py"
-    ],
-    [
-     "marker",
-     "serve_b2b.py::def append_same_format_sheets"
-    ]
-   ],
-   "repro": "C:\\Users\\Admin\\Downloads\\5개합치기",
-   "fix": "append_same_format_sheets(헤더 1회+네이티브 Copy)(SBAGENT-150)"
-  },
-  {
-   "id": "SBAGENT-151",
-   "title": "무한루프",
-   "checks": [
-    [
-     "marker",
-     "serve_b2b.py::무한 루프"
-    ],
-    [
-     "python",
-     "test_runs/_test_infinite_loop_guard.py"
-    ]
-   ],
-   "repro": "C:\\Users\\Admin\\Downloads\\무한 루프.zip",
-   "fix": "정적 while True 금지 + 런타임 트레이서 데드라인(2겹 방어)"
-  },
-  {
-   "id": "SBAGENT-152",
-   "title": "스킬셋을 돌렸을 경우 다운되는 현상",
-   "checks": [
-    [
-     "com",
-     "test_runs/_test_fullrun_single_instance_live.py"
-    ]
-   ],
-   "repro": "C:\\Users\\Admin\\Downloads\\프로그램 다운.zip",
-   "fix": "격리 배치 1콜 + 무락 진행률(저사양 멈춤 구조 제거, 0.5.14)"
-  },
-  {
-   "id": "SBAGENT-155",
-   "title": "질의 verifier",
-   "checks": [
-    [
-     "marker",
-     "scripts/chat-ui.js::buildSheetStructureDigest"
-    ],
-    [
-     "marker",
-     "scripts/chat-ui.js::clarifyVerifierAskIfNeeded"
-    ]
-   ],
-   "fix": "질의 verifier 도입(생성 전 모호성 확인)"
-  },
-  {
-   "id": "SBAGENT-156",
-   "title": "필터 후 행삭제 스킬적용 오류",
-   "checks": [
-    [
-     "com",
-     "test_runs/_test_clear_filter_com.py"
-    ]
-   ],
-   "fix": "필터 후 행삭제를 AutoFilter+SpecialCells 일괄 삭제로"
-  },
-  {
-   "id": "SBAGENT-157",
-   "title": "6단계 스킬 실행 요청 중  1단계부터 재작업 진행되는 오류",
-   "checks": [
-    [
-     "node",
-     "diagnostics/_test_edit_checkpoint_guard.js"
-    ]
-   ],
-   "fix": "수정/오류 재실행을 실패 지점부터 이어실행으로(0.5.15)"
-  },
-  {
-   "id": "SBAGENT-158",
-   "title": "필터링 적용시 원본 삭제됨 오루",
-   "checks": [
-    [
-     "com",
-     "test_runs/_test_clear_filter_com.py"
-    ]
-   ],
-   "fix": "filter_to_sheet 원본 보존 설계"
-  },
-  {
-   "id": "SBAGENT-159",
-   "title": "오류시 대화상자 가독성 up, 간결하게",
-   "checks": [
-    [
-     "marker",
-     "scripts/pipeline.js::explainPipelineErrorForUser"
-    ]
-   ],
-   "fix": "오류 사용자 눈높이 해설(explainPipelineErrorForUser)"
-  },
-  {
-   "id": "SBAGENT-160",
-   "title": "네이버_시트명 기준으로 데이터를 매칭하여 값 불러오기 실행 안됨",
-   "checks": [
-    [
-     "com",
-     "test_runs/_test_eval_fixes_com.py"
-    ],
-    [
-     "marker",
-     "serve_b2b.py::def lookup"
-    ],
-    [
-     "node",
-     "diagnostics/_test_issue_real_artifacts.js"
-    ]
-   ],
-   "repro": "C:\\Users\\Admin\\Downloads\\네이버클라우드_5월 트래픽_2단계_2026-06-26-16-28-22.zip",
-   "fix": "ctx.lookup 헬퍼 + For Each 관용구 대상 인식"
-  },
-  {
-   "id": "SBAGENT-161",
-   "title": "스킬불러오기 오류",
-   "checks": [
-    [
-     "node",
-     "diagnostics/_test_paste_internal_repair.js"
-    ]
-   ],
-   "fix": "로드 정규화 + 스텝 파일 유사도 매칭"
-  },
-  {
-   "id": "SBAGENT-162",
-   "title": "적용 속도 개선 요청",
-   "checks": [
-    [
-     "marker",
-     "scripts/pipeline.js::runPipelineSuffixFromCheckpoint"
-    ]
-   ],
-   "fix": "숨김 워커 재사용 + 라이브 추가 + 이어실행(적용 속도 최적화)"
-  },
-  {
-   "id": "SBAGENT-163",
-   "title": "\"적용\" 클릭 시 에이전트가 꺼졌다가 켜짐",
-   "checks": [
-    [
-     "marker",
-     "scripts/server-monitor.js::autoReconnectLoop"
-    ]
-   ],
-   "fix": "서버 크래시 자동 재시작 + 재연결 배너"
-  },
-  {
-   "id": "SBAGENT-164",
-   "title": "셀서식 변경 오류",
-   "checks": [
-    [
-     "com",
-     "test_runs/_test_format_helpers_com.py"
-    ]
-   ],
-   "fix": "서식 헬퍼(회계 등) 정비"
-  },
-  {
-   "id": "SBAGENT-166",
-   "title": "직전에 만든 스킬을 수정을 반영 버튼을 누르면 처음부터 시작",
-   "checks": [
-    [
-     "node",
-     "diagnostics/_test_edit_checkpoint_guard.js"
-    ]
-   ],
-   "fix": "수정 반영을 체크포인트 이어실행으로(0.5.15 Bug2)"
-  },
-  {
-   "id": "SBAGENT-167",
-   "title": "엑셀 하단의 화면 크기 +- 하는 기능 장애",
-   "checks": [
-    [
-     "marker",
-     "native_host/NativeHost.cs::PublishNativeBounds"
-    ]
-   ],
-   "fix": "좌표 발행(PublishNativeBounds) 동기화"
-  },
-  {
-   "id": "SBAGENT-168",
-   "title": "KGM_스킬 실행 이후 텍스트 압축되는 현상(스킬 패치 확인요청)",
-   "checks": [
-    [
-     "com",
-     "test_runs/_test_format_helpers_com.py"
-    ]
-   ],
-   "fix": "서식 보존 경로 정비(KGM 패치 확인)"
-  },
-  {
-   "id": "SBAGENT-169",
-   "title": "엑셀 창 선택이 안됨",
-   "checks": [
-    [
-     "node",
-     "diagnostics/_test_click_recovery.js"
-    ],
-    [
-     "marker",
-     "native_host/NativeHost.cs::AttachThreadInput"
-    ]
-   ],
-   "fix": "포커스 이식(AttachThreadInput) + 선클릭 보정"
-  },
-  {
-   "id": "SBAGENT-170",
-   "title": "KGM_완성 스킬 실행 시 오류 건",
-   "checks": [
-    [
-     "com",
-     "test_runs/_test_fullrun_single_instance_live.py"
-    ],
-    [
-     "node",
-     "diagnostics/_test_issue_real_artifacts.js"
-    ]
-   ],
-   "repro": "C:\\Users\\Admin\\Downloads\\창범KGMSBAGENT-170_attachments.zip",
-   "fix": "격리 pristine 재계산으로 완성 스킬 실행 안정화"
-  },
-  {
-   "id": "SBAGENT-171",
-   "title": "행 덮어씌우기 불가 및 적용 완료 알람 오류",
-   "checks": [
-    [
-     "node",
-     "diagnostics/_test_creator_sheets.js"
-    ],
-    [
-     "node",
-     "diagnostics/_test_paste_requirements.js"
-    ],
-    [
-     "node",
-     "diagnostics/_test_issue_real_artifacts.js"
-    ]
-   ],
-   "repro": "C:\\Users\\Admin\\Downloads\\예원SBAGENT-171_attachments.zip",
-   "fix": "시트 소유자 검증(오귀속 방지) + 쌍 요구 추출(SBAGENT-171)"
-  },
-  {
-   "id": "SBAGENT-172",
-   "title": "에러발생 , 적용 지연",
-   "checks": [
-    [
-     "node",
-     "diagnostics/_test_applied_label_truth.js"
-    ]
-   ],
-   "fix": "적용 표시 정합 + 진행률 무락 채널(거짓 지연/실패 제거)"
-  },
-  {
-   "id": "SBAGENT-174",
-   "title": "스킬편집시 프롬프트 수정 불가",
-   "checks": [
-    [
-     "marker",
-     "scripts/chat-ui.js::editTargetId"
-    ]
-   ],
-   "fix": "수정 모드 in-place 교체(새 스텝 추가로 새는 문제 수정, 0.6.1)"
-  },
-  {
-   "id": "SBAGENT-175",
-   "title": "C 드라이브 용량이 차는 현상, PC가 느려지는 현상 발생",
-   "checks": [
-    [
-     "python",
-     "test_runs/_test_temp_cleanup.py"
-    ],
-    [
-     "marker",
-     "serve_b2b.py::cleanup_stale_temp_artifacts"
-    ]
-   ],
-   "fix": "임시 산출물 정리 + 스냅샷 상한(디스크 누적 방지)"
-  },
-  {
-   "id": "SBAGENT-177",
-   "title": "각 스킬의 명칭을 이 에이전트가 요약하지 못한다면 제가 수정할 수 있게 해주세요",
-   "checks": [
-    [
-     "marker",
-     "scripts/pipeline.js::renamingStepId"
-    ]
-   ],
-   "fix": "단계 이름 상태 기반 편집 + '스킬명' 버튼(0.6.1)"
-  },
-  {
-   "id": "SBAGENT-180",
-   "title": "스킬 실행 단계에서 파일들 전체 다운로드 말고 하나만 다운로드 받을 수 있게도 해주세요",
-   "checks": [
-    [
-     "marker",
-     "scripts/drop-handling.js::chip-view"
-    ]
-   ],
-   "fix": "파일별 보기/다운 UI"
-  },
-  {
-   "id": "SBAGENT-181",
-   "title": "색상변경이 안됨(서식변경이 되지않음)",
-   "checks": [
-    [
-     "com",
-     "test_runs/_test_format_helpers_com.py"
-    ]
-   ],
-   "fix": "서식 변경 헬퍼 정비"
-  },
-  {
-   "id": "SBAGENT-183",
-   "title": "실행기에서 파일 매핑",
-   "checks": [
-    [
-     "node",
-     "diagnostics/_test_runner_automap.js"
-    ],
-    [
-     "node",
-     "diagnostics/_test_mapping_persistence.js"
-    ]
-   ],
-   "fix": "파일확인 매핑 UI + 매핑 기록 유지·재실행 적용(0.6.1)"
-  },
-  {
-   "id": "SBAGENT-184",
-   "title": "생성된 스킬중 1회성인것은 제외하고 스킬 저장하는 기능필요",
-   "checks": [
-    [
-     "marker",
-     "scripts/save-load.js::pipelineForSave"
-    ]
-   ],
-   "fix": "저장은 원본(범용) 기준(pipelineForSave) — 1회성 치환본 미저장(0.6.1)"
-  },
-  {
-   "id": "SBAGENT-185",
-   "title": "스킬 중간추가 기능요청",
-   "checks": [
-    [
-     "marker",
-     "scripts/pipeline.js::insertLogic"
-    ]
-   ],
-   "fix": "단계 삽입(insertLogic) + 삽입 전 상태 복원"
-  },
-  {
-   "id": "SBAGENT-187",
-   "title": "스킬들을 병렬 실행하거나 두개를 이어서 합칠 수 있는 기능 개발 요청",
-   "checks": [
-    [
-     "marker",
-     "scripts/save-load.js::loadLogicFiles"
-    ]
-   ],
-   "fix": "스킬 zip 다중 로드 병합"
-  },
-  {
-   "id": "SBAGENT-188",
-   "title": "필터 푸는 것이 안된다고 함",
-   "checks": [
-    [
-     "com",
-     "test_runs/_test_clear_filter_com.py"
-    ],
-    [
-     "marker",
-     "serve_b2b.py::def clear_filter"
-    ]
-   ],
-   "fix": "clear_filter 헬퍼(필터 해제)"
-  },
-  {
-   "id": "SBAGENT-189",
-   "title": "더블모니터 이용 시 창 위치 오류",
-   "checks": [
-    [
-     "marker",
-     "native_host/NativeHost.cs::PublishNativeBounds"
-    ]
-   ],
-   "fix": "스크린 좌표 발행 기반 오버레이(모니터 배치 무관)"
-  },
-  {
-   "id": "SBAGENT-191",
-   "title": "파일 이름이 조금만 바뀌어도 스킬 실행이 되지 않습니다",
-   "checks": [
-    [
-     "python",
-     "test_runs/_test_stable_key_dup_suffix.py"
-    ]
-   ],
-   "fix": "워크북 안정키(월/날짜/접미사 무시, 유일 일치)(0.6.0~0.6.1)"
-  },
-  {
-   "id": "SBAGENT-192",
-   "title": "방금 작성한 파일명이 바뀌면 작동하지 않는 문제 상세 오류보기 내용 공유드립니다.",
-   "checks": [
-    [
-     "python",
-     "test_runs/_test_stable_key_dup_suffix.py"
-    ],
-    [
-     "node",
-     "diagnostics/_test_edit_month_rebind.js"
-    ]
-   ],
-   "fix": "안정키 재바인딩 + 다른 달 확인 표시"
-  },
-  {
-   "id": "SBAGENT-193",
-   "title": "시트보호 파일 작업 불가",
-   "checks": [
-    [
-     "marker",
-     "serve_b2b.py::Unprotect"
-    ]
-   ],
-   "fix": "시트 보호 해제 경로(Unprotect)"
-  },
-  {
-   "id": "SBAGENT-194",
-   "title": "시스템 종료 시 화면이 바로 닫히지 않고 멈추는 현상",
-   "checks": [
-    [
-     "marker",
-     "scripts/lifecycle.js::hide-all"
-    ],
-    [
-     "marker",
-     "serve_b2b.py::SPAWNED_EXCEL_PIDS"
-    ]
-   ],
-   "fix": "종료 시 정리 완료 대기 + 창 즉시 숨김(0.6.1)"
-  },
-  {
-   "id": "SBAGENT-195",
-   "title": "파일 내용 및 시트 클릭 불가",
-   "checks": [
-    [
-     "node",
-     "diagnostics/_test_click_recovery.js"
-    ]
-   ],
-   "fix": "클릭 복구기(VDI 이벤트 유실 보상)"
-  },
-  {
-   "id": "SBAGENT-196",
-   "title": "스킬삭제해도 이동복사된 시트 결과값 미삭제",
-   "checks": [
-    [
-     "node",
-     "diagnostics/_test_cross_reset.js"
-    ]
-   ],
-   "fix": "삭제/토글 시 교차 목적지 리셋 — 복사된 시트 제거(0.6.1)"
-  },
-  {
-   "id": "SBAGENT-197",
-   "title": "복붙이 안 되요",
-   "checks": [
-    [
-     "com",
-     "test_runs/_test_copypaste_capture.py"
-    ]
-   ],
-   "fix": "캡처 소스 소실 폴백(복사 중 주기 스냅샷)"
-  },
-  {
-   "id": "SBAGENT-198",
-   "title": "5.19버젼으로 완성된 스킬셋을 돌렸을 때 멈추는 현상 발생",
-   "checks": [
-    [
-     "node",
-     "diagnostics/_test_edit_month_rebind.js"
-    ],
-    [
-     "node",
-     "diagnostics/_test_error_recovery_index.js"
-    ],
-    [
-     "com",
-     "test_runs/_test_rename_31_com.py"
-    ],
-    [
-     "node",
-     "diagnostics/_test_issue_real_artifacts.js"
-    ]
-   ],
-   "repro": "C:\\Users\\Admin\\Downloads\\SBAGENT-198_attachments.zip",
-   "fix": "리바인딩+31자 절단+복구 인덱스 묶음(SBAGENT-198 대응)"
-  },
-  {
-   "id": "SBAGENT-199",
-   "title": "스킬 수정 시 동일한 액션에 key값만 변경하였는데 되던 것이 적용되지 않음",
-   "checks": [
-    [
-     "node",
-     "diagnostics/_test_edit_checkpoint_guard.js"
-    ]
-   ],
-   "fix": "수정 재실행 체크포인트 + 복원 실패 시 전체 재적용 폴백(0.6.1)"
-  },
-  {
-   "id": "SBAGENT-200",
-   "title": "중간 단계 수정사항 발생 시 어떤 환경에서 해야하나요?",
-   "checks": [
-    [
-     "node",
-     "diagnostics/_test_edit_checkpoint_guard.js"
-    ]
-   ],
-   "fix": "수정 재실행 절차 정립(체크포인트 이어실행)"
-  },
-  {
-   "id": "SBAGENT-201",
-   "title": "스킬 수정 시 최초 스킬생성 시 활용했던 파일과 파일명이 다르면 진행이 되지 않는 것 같습니다",
-   "checks": [
-    [
-     "node",
-     "diagnostics/_test_edit_month_rebind.js"
-    ],
-    [
-     "python",
-     "test_runs/_test_stable_key_dup_suffix.py"
-    ]
-   ],
-   "fix": "안정키 재바인딩 — 생성 시 파일과 달라도 유일 일치 시 실행"
-  },
-  {
-   "id": "SBAGENT-202",
-   "title": "작업 중단 멈춤",
-   "checks": [
-    [
-     "node",
-     "diagnostics/_test_stop_escalation.js"
-    ]
-   ],
-   "fix": "중단 승격을 시간→진행 기반으로(0.6.1)"
-  },
-  {
-   "id": "SBAGENT-204",
-   "title": "스킬 6단계셋으로 불러와서 실행한경우, 5단계에서 오류가 있으면 4단계 까지는 생성기에서 적용됨으로 보이는데 실제로 적용이 안되어있음",
-   "checks": [
-    [
-     "node",
-     "diagnostics/_test_applied_label_truth.js"
-    ]
-   ],
-   "fix": "실패 시점 전-파일 스냅샷 + 복원 커버리지 검증(0.6.1) — 바로 이 건"
-  },
-  {
-   "id": "SBAGENT-205",
-   "title": "LGCNS_스킬1.2단계 미적용인데 3단계에서 오류발생",
-   "checks": [
-    [
-     "node",
-     "diagnostics/_test_applied_label_truth.js"
-    ],
-    [
-     "node",
-     "diagnostics/_test_error_recovery_index.js"
-    ]
-   ],
-   "fix": "적용 표시 정합 + 복구 인덱스(선행 단계 상태 정확화)"
-  },
-  {
-   "id": "SBAGENT-207",
-   "title": "한전 오류 신고 인풋 및 스킬파일(7/14)",
-   "checks": [
-    [
-     "node",
-     "diagnostics/_test_lambda_dest_owner_var.js"
-    ],
-    [
-     "node",
-     "diagnostics/_test_issue_real_artifacts.js"
-    ]
-   ],
-   "repro": "C:\\Users\\Admin\\Downloads\\한전 오류신고 스킬과 인풋파일_2026-07-15.zip",
-   "fix": "한전 계열 매핑·생성시트 가드 강화(0.6.1)"
-  },
-  {
-   "id": "SBAGENT-208",
-   "title": "디폴트 제공 파일명 오류",
-   "checks": [
-    [
-     "node",
-     "diagnostics/_test_requirement_name_clean.js"
-    ],
-    [
-     "node",
-     "diagnostics/_test_issue_real_artifacts.js"
-    ]
-   ],
-   "fix": "요구 파일명 산문 접두사 오발동 수정(0.6.1)"
-  },
-  {
-   "id": "SBAGENT-209",
-   "title": "확인필요한 알수없는 디폴트파일",
-   "checks": [
-    [
-     "node",
-     "diagnostics/_test_paste_internal_repair.js"
-    ],
-    [
-     "python",
-     "test_runs/_test_capture_display_name.py"
-    ],
-    [
-     "com",
-     "test_runs/_test_no_change_gate_com.py"
-    ],
-    [
-     "node",
-     "diagnostics/_test_issue_real_artifacts.js"
-    ]
-   ],
-   "repro": "C:\\Users\\Admin\\Downloads\\SBAGENT-209_attachments.zip",
-   "fix": "캡처 원본명 역별칭 + 로드 수리 + read-evidence(0.6.1)"
-  },
-  {
-   "id": "SBAGENT-210",
-   "title": "피벗 테이블 형식으로 보이지 않음.",
-   "checks": [
-    [
-     "com",
-     "test_runs/_test_native_pivot_com.py"
-    ]
-   ],
-   "fix": "항상 진짜 피벗테이블(재생성 시 갱신)(0.6.1)"
-  },
-  {
-   "id": "SBAGENT-212",
-   "title": "대화내용을 비우기",
-   "checks": [
-    [
-     "marker",
-     "scripts/chat-ui.js::chat-clear-history"
-    ]
-   ],
-   "fix": "대화 기억 비우기"
-  },
-  {
-   "id": "SBAGENT-213",
-   "title": "스킬 실행 후 결과 편집 시 옆에 엑셀 화면 따로 뜸",
-   "checks": [
-    [
-     "com",
-     "test_runs/_test_minimize_hide_orphan_com.py"
-    ],
-    [
-     "marker",
-     "serve_b2b.py::HOST_MINIMIZED"
-    ]
-   ],
-   "fix": "HOST_MINIMIZED 표시 게이트 + 소유 창 스윕(0.6.1)"
-  },
-  {
-   "id": "SBAGENT-214",
-   "title": "스킬 중간단계 삽입. 전체스킬 재작동 결과 동일시트 중복생성됨.",
-   "checks": [
-    [
-     "node",
-     "diagnostics/_test_cross_reset.js"
-    ]
-   ],
-   "repro": "C:\\Users\\Admin\\Downloads\\LGCNS_UCAP_03.2.zip",
-   "fix": "괄호/공백 파일명 교차 쓰기 인식 — 삽입 중복 수정(0.6.1)"
-  },
-  {
-   "id": "SBAGENT-215",
-   "title": "스킬 저장이 안됨",
-   "checks": [
-    [
-     "marker",
-     "native_host/NativeHost.cs::Download deferral"
-    ]
-   ],
-   "fix": "다운로드 대화상자 deferral + 강제 포그라운드(0.6.1)"
-  },
-  {
-   "id": "SBAGENT-216",
-   "title": "해당 열 값 읽어오지 못함.",
-   "checks": [
-    [
-     "com",
-     "test_runs/_test_ctx_col_row_range_and_readcell.py"
-    ]
-   ],
-   "fix": "ctx 열 읽기 헬퍼 정비(col/row/range/read_cell)"
-  },
-  {
-   "id": "SBAGENT-217",
-   "title": "스킬 수정에 대한 반영이 안됨",
-   "checks": [
-    [
-     "node",
-     "diagnostics/_test_edit_checkpoint_guard.js"
-    ]
-   ],
-   "repro": "C:\\Users\\Admin\\Downloads\\571601213953_판교테크윈_DSMC_260713_21단계_2026-07-15-21-35-52.zip",
-   "fix": "수정 재실행 조용한 무실행 수정 — 복원 실패 시 전체 재적용 폴백 + 체크포인트 가드(0.6.1, 판교테크윈)"
-  },
-  {
-   "id": "SBAGENT-218",
-   "title": "두개의 단어를 한번에 적어야 하는데 혹은 으로 이해함.",
-   "checks": [
-    [
-     "marker",
-     "scripts/file-schema.js::글자 그대로"
-    ]
-   ],
-   "fix": "따옴표 값 '글자 그대로' 규칙 — 슬래시 후보 분해 금지(0.6.1)"
-  },
-  {
-   "id": "SBAGENT-219",
-   "title": "스킬 파일 저장명",
-   "checks": [
-    [
-     "node",
-     "diagnostics/_test_save_name_follows_input.js"
-    ]
-   ],
-   "fix": "저장 기본 이름 입력 시그니처 게이트(0.6.1 A안)"
-  },
-  {
-   "id": "SBAGENT-220",
-   "title": "스킬 수정 시 생성시 만든 파일 사용이 아니면 오류가 뜨는 것 관련하여",
-   "checks": [
-    [
-     "node",
-     "diagnostics/_test_edit_month_rebind.js"
-    ]
-   ],
-   "fix": "안정키/월 리바인딩으로 생성 파일 비의존 실행"
-  },
-  {
-   "id": "SBAGENT-221",
-   "title": "실행기 오류발생건. 생성기에서는 정상처리됨",
-   "checks": [
-    [
-     "node",
-     "diagnostics/_test_mapping_persistence.js"
-    ],
-    [
-     "node",
-     "diagnostics/_test_runner_automap.js"
-    ],
-    [
-     "node",
-     "diagnostics/_test_issue_real_artifacts.js"
-    ]
-   ],
-   "repro": "C:\\Users\\Admin\\Downloads\\SBAGENT-221_attachments.zip",
-   "fix": "매핑 기록 유지 + 생성기 재실행 매핑 적용(0.6.1)"
-  },
-  {
-   "id": "SBAGENT-222",
-   "title": "vba로짜라고 지시했던(최초 생성 시) 코드 단계들이 실행 시 vba로 하라고해서 실패했다고 오류메시지가 뜸",
-   "checks": [
-    [
-     "marker",
-     "scripts/chat-ui.js::routingHint"
-    ]
-   ],
-   "fix": "명시 VBA 지시 존중 라우팅 힌트"
-  },
-  {
-   "id": "SBAGENT-223",
-   "title": "스킬셋 이름 변경을 위해 이름 더블클릭 시 오류",
-   "checks": [
-    [
-     "marker",
-     "scripts/pipeline.js::renamingStepId"
-    ]
-   ],
-   "fix": "이름 편집 상태 기반 + '스킬명' 버튼(더블클릭 불요)(0.6.1)"
-  },
-  {
-   "id": "hanjeon-mapping-save-leak",
-   "title": "매핑 치환본이 저장 스킬에 유출돼 재사용 불가(한전) + 확정 매핑 기록 유실",
-   "checks": [
-    [
-     "node",
-     "diagnostics/_test_save_no_mapped_leak.js"
-    ],
-    [
-     "node",
-     "diagnostics/_test_mapping_persistence.js"
-    ]
-   ],
-   "fix": "저장은 원본 기준 + 매핑 기록 유지(0.6.1)"
-  },
-  {
-   "id": "hanjeon-incheon-ghost-req",
-   "title": "생성 시트/오귀속 시트가 필수 업로드로 요구(람다 filter_to_sheet·시트 변수·괄호 파일명)",
-   "checks": [
-    [
-     "node",
-     "diagnostics/_test_lambda_dest_owner_var.js"
-    ],
-    [
-     "node",
-     "diagnostics/_test_sheet_default_fallback.js"
-    ]
-   ],
-   "repro": "C:\\Users\\Admin\\Downloads\\0720_완성스킬",
-   "fix": "람다 목적지 균형 파싱 + 시트 변수 소유자 + 괄호 파일명(0.6.1)"
-  },
-  {
-   "id": "skill-default-sheet",
-   "title": "시트 치환 끄기('스킬 기본값') 옵션 동작",
-   "checks": [
-    [
-     "node",
-     "diagnostics/_test_skill_default_sheet.js"
-    ]
-   ],
-   "fix": "'스킬 기본값(그대로 실행)' 옵션 + 미매칭 기본 선택(0.6.1)"
-  },
-  {
-   "id": "runner-skill-reupload-view",
-   "title": "실행기 스킬 삭제→재업로드 시 편집기 목록 미갱신(표시 버그)",
-   "checks": [
-    [
-     "node",
-     "diagnostics/_test_runner_logic_modal_refresh.js"
-    ]
-   ],
-   "fix": "업로드 완료 시 편집기 모달 재렌더(0.6.1)"
-  }
- ]
+  "_설명": "완료된 이슈 ↔ 회귀 테스트 매핑. 이슈를 고칠 때마다 회귀 테스트를 만들고 여기 등록한다.",
+  "_체크타입": {
+    "node": "diagnostics/*.js — 실제 소스에서 함수 추출해 구동(Excel 불필요, 수 초)",
+    "python": "test_runs/*.py 중 순수 로직(Excel 불필요)",
+    "com": "test_runs/*_com.py 등 실제 Excel 을 띄우는 실측(--com 지정 시에만 실행)"
+  },
+  "issues": [
+    {
+      "id": "SBAGENT-17",
+      "title": "피벗_ LLM으로 요청시 화면 다운되는 현상",
+      "checks": [
+        [
+          "com",
+          "test_runs/_test_native_pivot_com.py"
+        ],
+        [
+          "com",
+          "test_runs/_test_pivot_dup_headers_com.py"
+        ]
+      ],
+      "fix": "피벗을 LLM 손코딩 대신 ctx.pivot 네이티브 헬퍼로 강제(라우팅 힌트) + 항상 진짜 피벗테이블 생성(0.6.1)"
+    },
+    {
+      "id": "SBAGENT-18",
+      "title": "출력파일에서 시트 이동이 안됨",
+      "checks": [
+        [
+          "marker",
+          "scripts/excel-mirror.js::restoreActiveExcelMirrorWindow"
+        ]
+      ],
+      "fix": "라이브 Excel 오버레이 구조 전환(0.4.4~) — 시트 이동 등은 실제 Excel 네이티브가 직접 처리"
+    },
+    {
+      "id": "SBAGENT-19",
+      "title": "조건을 2개 이상 넣어 계산 요청",
+      "checks": [
+        [
+          "com",
+          "test_runs/_test_eval_fixes_com.py"
+        ],
+        [
+          "marker",
+          "serve_b2b.py::def sum_where"
+        ]
+      ],
+      "fix": "조건 집계용 sum_where/sum_lookup 결정적 헬퍼 도입(0.5.x 평가지 대응)"
+    },
+    {
+      "id": "SBAGENT-20",
+      "title": "스킬 삭제시 오류",
+      "checks": [
+        [
+          "node",
+          "diagnostics/_test_cross_reset.js"
+        ]
+      ],
+      "fix": "단계 삭제 시 직전 스냅샷 복원 + 교차 목적지 리셋 집합 정비(0.5.14~0.6.1)"
+    },
+    {
+      "id": "SBAGENT-22",
+      "title": "[CNS]피벗_llm으로 요청시 화면다운>VBA(F7)로 처리되었으나 서식변경됨",
+      "checks": [
+        [
+          "com",
+          "test_runs/_test_native_pivot_com.py"
+        ],
+        [
+          "marker",
+          "scripts/file-schema.js::피벗"
+        ]
+      ],
+      "fix": "피벗 항상-네이티브 강제 + 서식 보존 경로 정비(0.6.1)"
+    },
+    {
+      "id": "SBAGENT-26",
+      "title": "행 추가 시 덮어씌우기 불가 / 값 오류",
+      "checks": [
+        [
+          "com",
+          "test_runs/_test_fullcolrow_engine.py"
+        ],
+        [
+          "node",
+          "diagnostics/_test_issue_real_artifacts.js"
+        ]
+      ],
+      "repro": "C:\\Users\\Admin\\Downloads\\엎어씌우기 문제.zip",
+      "fix": "전체 열/행 배열 일괄 엔진 + dict 매칭 덮어쓰기 VBA 라우팅(0.5.x)"
+    },
+    {
+      "id": "SBAGENT-28",
+      "title": "VBA모드로 전환 사용 스킬 저장 후 스킬 불러오기 적용 오류",
+      "checks": [
+        [
+          "node",
+          "diagnostics/_test_save_no_mapped_leak.js"
+        ],
+        [
+          "marker",
+          "scripts/chat-ui.js::forceEngine"
+        ]
+      ],
+      "fix": "엔진 전환 시 원본 코드 보존 + 게이트 우회 표지(단방향 전환 정책)"
+    },
+    {
+      "id": "SBAGENT-29",
+      "title": "전체 행 값 대체 시 에러 발생",
+      "checks": [
+        [
+          "com",
+          "test_runs/_test_fullcolrow_engine.py"
+        ]
+      ],
+      "fix": "전체 행 값 대체를 배열 일괄 쓰기로(전체 열/행 엔진)"
+    },
+    {
+      "id": "SBAGENT-30",
+      "title": "[KT HCN]스킬 적용 시 엑셀 보안설정 문제로 스킬오류가 해결되지 않는 현상",
+      "checks": [
+        [
+          "marker",
+          "serve_b2b.py::AutomationSecurity"
+        ],
+        [
+          "marker",
+          "serve_b2b.py::_ensure_vbom_access"
+        ],
+        [
+          "python",
+          "test_runs/_test_vba_env_access.py"
+        ]
+      ],
+      "repro": "C:\\Users\\Admin\\Downloads\\보안해제.zip",
+      "fix": "열 때부터 AutomationSecurity=Low + AccessVBOM/VBAWarnings=1 + 러너 신뢰 위치 등록(0.6.0 A안)"
+    },
+    {
+      "id": "SBAGENT-31",
+      "title": "스킬 적용 후 추가 작업 진행시 엑셀 빈 화면 뜸",
+      "checks": [
+        [
+          "marker",
+          "scripts/excel-mirror.js::recoverExcelMirrorWindow"
+        ]
+      ],
+      "fix": "미러 복구(recover) — 빈 화면 시 창 재배치·재표시"
+    },
+    {
+      "id": "SBAGENT-32",
+      "title": "스킬파이프라인에 스킬 내용 요약",
+      "checks": [
+        [
+          "marker",
+          "scripts/llm-api.js::extractDescription"
+        ]
+      ],
+      "fix": "응답 제목 추출(extractDescription)로 단계 요약 자동화"
+    },
+    {
+      "id": "SBAGENT-33",
+      "title": "[CNS] 행숨기기취소 적용은 되었으나 오류메시지출력되어 스킬생성불가",
+      "checks": [
+        [
+          "marker",
+          "serve_b2b.py::def hide_rows"
+        ]
+      ],
+      "fix": "hide_rows/hide_cols 헬퍼 도입(행숨기기취소 오류 메시지 제거)"
+    },
+    {
+      "id": "SBAGENT-35",
+      "title": "KT HCN_난이도있는 스킬 못하는 현상(and값 2개 이상, 셀병합 등)",
+      "checks": [
+        [
+          "com",
+          "test_runs/_test_eval_fixes_com.py"
+        ]
+      ],
+      "repro": "C:\\Users\\Admin\\Downloads\\난이도up.zip",
+      "fix": "평가지 함정 대응 헬퍼(sum_where/sum_lookup/find_header 인접행) + 명시열 규칙(0.5.x)"
+    },
+    {
+      "id": "SBAGENT-38",
+      "title": "시트내 셀범위 직접 선택 후 데이터 삭제를 요청하였으나 시트명 못찾",
+      "checks": [
+        [
+          "com",
+          "test_runs/_test_ws_truncated_sheet_com.py"
+        ],
+        [
+          "marker",
+          "serve_b2b.py::_resolve_ephemeral_excel_open_sheet_alias"
+        ]
+      ],
+      "fix": "_ws 7단 폴백(정확→별칭→교차유일→정규화→안정키→31자절단→단일시트, 유일 매칭 시에만 완화)"
+    },
+    {
+      "id": "SBAGENT-39",
+      "title": "NH투자증권_태블릿_인풋-아웃풋 파일간 수식복사 오류(참고:파일명 아웃풋 파일이 인풋파일임)",
+      "checks": [
+        [
+          "com",
+          "test_runs/_test_crossfile_autoopen.py"
+        ]
+      ],
+      "fix": "교차파일 소스 자동 오픈(_registered_path_for_name) + 동반본 개방"
+    },
+    {
+      "id": "SBAGENT-40",
+      "title": "1시간 이상 프로그램 켜둘시 컴퓨터 버벅이는 현상",
+      "checks": [
+        [
+          "node",
+          "diagnostics/_test_smooth_renderer_raf.js"
+        ]
+      ],
+      "fix": "채팅 타자기 RAF 영구 루프 수정 — 완료 시 정지 + 오류 경로 flush(0.6.1)"
+    },
+    {
+      "id": "SBAGENT-42",
+      "title": "시트내 셀범위 직접 선택 후 데이터 삭제를 요청하였으나 시트명을 오인식하는 현상",
+      "checks": [
+        [
+          "com",
+          "test_runs/_test_ws_truncated_sheet_com.py"
+        ]
+      ],
+      "fix": "_ws 폴백 사다리로 시트명 오인식 방지(유일 매칭 한정 완화)"
+    },
+    {
+      "id": "SBAGENT-43",
+      "title": "1행 못채움 현상",
+      "checks": [
+        [
+          "com",
+          "test_runs/_test_fullcolrow_engine.py"
+        ]
+      ],
+      "fix": "전체 열/행 범위 산정 정비(1행 포함)"
+    },
+    {
+      "id": "SBAGENT-44",
+      "title": "복붙 로직 추가 고려",
+      "checks": [
+        [
+          "com",
+          "test_runs/_test_copypaste_capture.py"
+        ]
+      ],
+      "fix": "복붙 캡처 기능 신설(0.5.9) — 클립보드 Link 역추적 + RangeSelection"
+    },
+    {
+      "id": "SBAGENT-48",
+      "title": "1. input파일 함수서식 깨짐현상",
+      "checks": [
+        [
+          "com",
+          "test_runs/_test_format_helpers_com.py"
+        ]
+      ],
+      "fix": "위임형 오픈(실제 Excel COM)으로 함수/서식 보존"
+    },
+    {
+      "id": "SBAGENT-49",
+      "title": "2. 복붙시 수식 복사 안됨",
+      "checks": [
+        [
+          "com",
+          "test_runs/_test_copypaste_capture.py"
+        ]
+      ],
+      "fix": "복붙 캡처가 네이티브 Range.Copy 로 수식·서식 보존"
+    },
+    {
+      "id": "SBAGENT-50",
+      "title": "3. 스킬 자동저장 기능",
+      "checks": [
+        [
+          "marker",
+          "scripts/save-load.js::scheduleLogicAutoBackup"
+        ]
+      ],
+      "fix": "스킬 자동백업(scheduleLogicAutoBackup) 도입"
+    },
+    {
+      "id": "SBAGENT-51",
+      "title": "4. 엑셀뷰 스크롤시 미리보기 오류",
+      "checks": [
+        [
+          "marker",
+          "scripts/excel-mirror.js::scheduleExcelMirrorPosition"
+        ]
+      ],
+      "fix": "미러 위치 스케줄러 정비(스크롤/전환 시 재배치)"
+    },
+    {
+      "id": "SBAGENT-52",
+      "title": "5. 파일 다운로드 기능 오류",
+      "checks": [
+        [
+          "marker",
+          "native_host/NativeHost.cs::Download deferral"
+        ]
+      ],
+      "fix": "다운로드 저장 대화상자 deferral + 강제 포그라운드(0.6.1)"
+    },
+    {
+      "id": "SBAGENT-53",
+      "title": "6. THINK 자동중단 현상",
+      "checks": [
+        [
+          "marker",
+          "scripts/llm-api.js::retryWithoutThink"
+        ]
+      ],
+      "fix": "think 반복 감지 → no-think 자동 재시도(retryWithoutThink)"
+    },
+    {
+      "id": "SBAGENT-54",
+      "title": "7. '적용' 미실행 현상",
+      "checks": [
+        [
+          "com",
+          "test_runs/_test_no_change_gate_com.py"
+        ]
+      ],
+      "fix": "무변경 실행 검증 게이트(거짓 '적용됨' 차단) + read-evidence 정밀화(0.6.1)"
+    },
+    {
+      "id": "SBAGENT-55",
+      "title": "8. 셀병합 파일 업로드시 데이터 누락",
+      "checks": [
+        [
+          "com",
+          "test_runs/_test_excel_compatible_open_path_formats.py"
+        ]
+      ],
+      "fix": "위임형 오픈으로 병합 셀 데이터 보존(자체 파서 미사용)"
+    },
+    {
+      "id": "SBAGENT-56",
+      "title": "9. 셀병합 파일 업로드시 병합 해제됨",
+      "checks": [
+        [
+          "com",
+          "test_runs/_test_excel_compatible_open_path_formats.py"
+        ],
+        [
+          "marker",
+          "serve_b2b.py::def merge"
+        ]
+      ],
+      "fix": "위임형 오픈으로 병합 유지 + merge/unmerge 헬퍼"
+    },
+    {
+      "id": "SBAGENT-57",
+      "title": "10. 숫자 서식 변경됨 (천단위 쉼표)",
+      "checks": [
+        [
+          "com",
+          "test_runs/_test_format_helpers_com.py"
+        ]
+      ],
+      "fix": "위임형 구조로 숫자 서식(천단위 쉼표) 보존"
+    },
+    {
+      "id": "SBAGENT-58",
+      "title": "11. 엑셀뷰 데이터 끝까지 이동 기능",
+      "checks": [
+        [
+          "marker",
+          "serve_b2b.py::_present_live_session_frame"
+        ]
+      ],
+      "fix": "라이브 Excel 프레임 직접 노출 — 네이티브 탐색 그대로 사용"
+    },
+    {
+      "id": "SBAGENT-59",
+      "title": "12. 필터링시 원본 데이터 삭제 문제",
+      "checks": [
+        [
+          "com",
+          "test_runs/_test_clear_filter_com.py"
+        ]
+      ],
+      "fix": "filter_to_sheet(원본 보존, 새 시트 추출) 헬퍼로 대체"
+    },
+    {
+      "id": "SBAGENT-61",
+      "title": "14. Undo/Redo 기능",
+      "checks": [
+        [
+          "marker",
+          "scripts/pipeline.js::pushHistory"
+        ]
+      ],
+      "fix": "Undo/Redo(pushHistory) 도입"
+    },
+    {
+      "id": "SBAGENT-62",
+      "title": "15. 파이프라인 단계별 On/Off 제어",
+      "checks": [
+        [
+          "marker",
+          "scripts/pipeline.js::isStepEnabled"
+        ]
+      ],
+      "fix": "단계 On/Off(isStepEnabled) + 토글 시 체크포인트 복원"
+    },
+    {
+      "id": "SBAGENT-63",
+      "title": "16. 업로드시 빈 컬럼 구조 유지",
+      "checks": [
+        [
+          "com",
+          "test_runs/_test_excel_compatible_open_path_formats.py"
+        ]
+      ],
+      "fix": "위임형 오픈으로 빈 컬럼 구조 유지"
+    },
+    {
+      "id": "SBAGENT-64",
+      "title": "17. 수식 계산결과 값으로 반영",
+      "checks": [
+        [
+          "marker",
+          "serve_b2b.py::def copy_values"
+        ]
+      ],
+      "fix": "copy_values(계산값 고정, 참조 시프트 없음) 헬퍼"
+    },
+    {
+      "id": "SBAGENT-65",
+      "title": "18. 수식 포함 파일 그대로 적용",
+      "checks": [
+        [
+          "com",
+          "test_runs/_test_format_helpers_com.py"
+        ]
+      ],
+      "fix": "위임형 구조로 수식 포함 파일 그대로 적용"
+    },
+    {
+      "id": "SBAGENT-66",
+      "title": "19. 작업 중단(Cancel) 기능",
+      "checks": [
+        [
+          "node",
+          "diagnostics/_test_stop_escalation.js"
+        ]
+      ],
+      "fix": "작업 중단을 '진행 여부' 기반 승격으로 재설계(0.6.1)"
+    },
+    {
+      "id": "SBAGENT-67",
+      "title": "20. 파일 업로드 로딩 표시",
+      "checks": [
+        [
+          "marker",
+          "scripts/drop-handling.js::beginUpload"
+        ]
+      ],
+      "fix": "업로드 진행 표시(beginUpload) + 중단 버튼"
+    },
+    {
+      "id": "SBAGENT-68",
+      "title": "21. 출력템플릿 N개 지원",
+      "checks": [
+        [
+          "marker",
+          "scripts/pipeline.js::outputTemplates"
+        ]
+      ],
+      "fix": "출력 템플릿 N개(outputTemplates) 지원"
+    },
+    {
+      "id": "SBAGENT-69",
+      "title": "22. @멘션으로 파일/컬럼 선택",
+      "checks": [
+        [
+          "marker",
+          "scripts/drop-handling.js::@(?:범위|시트|컬럼)"
+        ]
+      ],
+      "fix": "@파일/@시트/@범위/@컬럼 멘션 도입"
+    },
+    {
+      "id": "SBAGENT-70",
+      "title": "23. 동일 컬럼명 구분 선택 기능",
+      "checks": [
+        [
+          "com",
+          "test_runs/_test_pivot_dup_headers_com.py"
+        ]
+      ],
+      "fix": "피벗 중복 헤더 구분 처리"
+    },
+    {
+      "id": "SBAGENT-72",
+      "title": "25. 다중 시트 인식 기능",
+      "checks": [
+        [
+          "com",
+          "test_runs/_test_csv_multisheet_com.py"
+        ]
+      ],
+      "fix": "다중 시트 인식 + CSV 다중시트→xlsx 자동 승격"
+    },
+    {
+      "id": "SBAGENT-73",
+      "title": "26. 시트 내 다중 표 인식 기능",
+      "checks": [
+        [
+          "marker",
+          "scripts/chat-ui.js::buildSheetStructureDigest"
+        ]
+      ],
+      "fix": "시트 구조 다이제스트(buildSheetStructureDigest)로 다중 표 파악"
+    },
+    {
+      "id": "SBAGENT-74",
+      "title": "27. 엑셀뷰 검색(Ctrl+F) 기능",
+      "checks": [
+        [
+          "marker",
+          "serve_b2b.py::_present_live_session_frame"
+        ]
+      ],
+      "fix": "라이브 Excel 위임 — Ctrl+F 등 네이티브 기능 그대로"
+    },
+    {
+      "id": "SBAGENT-75",
+      "title": "28. 대화창 통한 파이프라인 수정",
+      "checks": [
+        [
+          "marker",
+          "scripts/chat-ui.js::editTargetId"
+        ]
+      ],
+      "fix": "수정 모드(editTargetId) — 대화로 특정 단계 in-place 수정"
+    },
+    {
+      "id": "SBAGENT-76",
+      "title": "29. 오류 발생 단계/사유 명확히 표시",
+      "checks": [
+        [
+          "node",
+          "diagnostics/_test_error_recovery_index.js"
+        ]
+      ],
+      "fix": "오류 단계/사유 표시 + 복구 인덱스 폴백(항상 복구 가능)"
+    },
+    {
+      "id": "SBAGENT-77",
+      "title": "30. 고객별 결과파일 누적 저장",
+      "checks": [
+        [
+          "marker",
+          "serve_b2b.py::ensure_result_file"
+        ]
+      ],
+      "fix": "결과 파일 보존소(ensure_result_file)"
+    },
+    {
+      "id": "SBAGENT-78",
+      "title": "31. 스킬 편집시 삭제 로직 잔존",
+      "checks": [
+        [
+          "node",
+          "diagnostics/_test_cross_reset.js"
+        ]
+      ],
+      "fix": "편집 경로에도 교차 목적지 리셋 가드(0.6.1)"
+    },
+    {
+      "id": "SBAGENT-79",
+      "title": "32. 숨김열 파일 업로드 오류",
+      "checks": [
+        [
+          "com",
+          "test_runs/_test_excel_compatible_open_path_formats.py"
+        ]
+      ],
+      "fix": "위임형 오픈으로 숨김열 보존"
+    },
+    {
+      "id": "SBAGENT-80",
+      "title": "33. 미리보기 삭제값 복원 기능",
+      "checks": [
+        [
+          "node",
+          "diagnostics/_test_edit_checkpoint_guard.js"
+        ]
+      ],
+      "fix": "스텝별 사전 스냅샷 복원(미리보기 복원)"
+    },
+    {
+      "id": "SBAGENT-81",
+      "title": "34. 스킬 설계창 세로 확대",
+      "checks": [
+        [
+          "marker",
+          "scripts/chat-ui.js::chat-expanded"
+        ]
+      ],
+      "fix": "설계창 세로 확대(chat-expanded)"
+    },
+    {
+      "id": "SBAGENT-82",
+      "title": "35. 처리중 스크롤 불가로 중단버튼 클릭 불가",
+      "checks": [
+        [
+          "marker",
+          "scripts/excel-mirror.js::busy-stop"
+        ]
+      ],
+      "fix": "busy 오버레이 고정 중단 버튼(스크롤 무관)"
+    },
+    {
+      "id": "SBAGENT-83",
+      "title": "36. LLM 이력 삭제 기능",
+      "checks": [
+        [
+          "marker",
+          "scripts/chat-ui.js::chat-clear-history"
+        ]
+      ],
+      "fix": "대화 기억 비우기 기능"
+    },
+    {
+      "id": "SBAGENT-84",
+      "title": "37. 출력 셀 위치 오인식",
+      "checks": [
+        [
+          "com",
+          "test_runs/_test_eval_fixes_com.py"
+        ],
+        [
+          "marker",
+          "scripts/file-schema.js::글자 그대로"
+        ]
+      ],
+      "fix": "명시열 문자 그대로/열 암산 금지 프롬프트 규칙"
+    },
+    {
+      "id": "SBAGENT-85",
+      "title": "38. 수식 셀 값복사시 실패",
+      "checks": [
+        [
+          "marker",
+          "serve_b2b.py::def copy_values"
+        ],
+        [
+          "com",
+          "test_runs/_test_copy_snapshot_fallback.py"
+        ]
+      ],
+      "fix": "copy_values + 복사 스냅샷 폴백(수식 값복사 실패 방지)"
+    },
+    {
+      "id": "SBAGENT-86",
+      "title": "39. 다중 시트 파일 특정시트 작업시 전체 적용됨",
+      "checks": [
+        [
+          "marker",
+          "serve_b2b.py::def _ws"
+        ]
+      ],
+      "fix": "세션 고정 ctx(_ws) — 대상 시트 한정 작업"
+    },
+    {
+      "id": "SBAGENT-87",
+      "title": "40. 다운로드시 수식 유지",
+      "checks": [
+        [
+          "com",
+          "test_runs/_test_filemode_csv_output_com.py"
+        ]
+      ],
+      "fix": "파일 출력 모드 수식 유지 저장"
+    },
+    {
+      "id": "SBAGENT-88",
+      "title": "필터기능",
+      "checks": [
+        [
+          "com",
+          "test_runs/_test_clear_filter_com.py"
+        ],
+        [
+          "marker",
+          "serve_b2b.py::def clear_filter"
+        ]
+      ],
+      "fix": "clear_filter 헬퍼 도입"
+    },
+    {
+      "id": "SBAGENT-89",
+      "title": "41. 시트 추가시 에러 발생",
+      "checks": [
+        [
+          "com",
+          "test_runs/_test_vba_newsheet_liveschema.py"
+        ]
+      ],
+      "fix": "시트 추가 후 라이브 스키마 갱신(vba_newsheet_liveschema)"
+    },
+    {
+      "id": "SBAGENT-90",
+      "title": "42. 수식 셀 복사시 null 출력",
+      "checks": [
+        [
+          "com",
+          "test_runs/_test_copy_snapshot_fallback.py"
+        ]
+      ],
+      "fix": "복사 스냅샷 폴백으로 수식 null 방지"
+    },
+    {
+      "id": "SBAGENT-91",
+      "title": "43. 스킬 적용 후 이전 단계 원복됨",
+      "checks": [
+        [
+          "node",
+          "diagnostics/_test_cross_reset.js"
+        ]
+      ],
+      "fix": "삭제/토글 시 직전 스냅샷 복원(0.5.14 재설계)"
+    },
+    {
+      "id": "SBAGENT-92",
+      "title": "44. 미적용건 '적용됨' 표시",
+      "checks": [
+        [
+          "node",
+          "diagnostics/_test_applied_label_truth.js"
+        ]
+      ],
+      "fix": "실패 시점 전-파일 스냅샷 + 복원 커버리지 검증(0.6.1) — '적용됨' 정합"
+    },
+    {
+      "id": "SBAGENT-93",
+      "title": "45. 지정 범위와 다른 범위 작업",
+      "checks": [
+        [
+          "com",
+          "test_runs/_test_eval_fixes_com.py"
+        ]
+      ],
+      "fix": "@범위 리터럴 정확 복사 규칙(지정 범위 준수)"
+    },
+    {
+      "id": "SBAGENT-94",
+      "title": "46. 오작업 지적시 반복 수행",
+      "checks": [
+        [
+          "marker",
+          "scripts/llm-api.js::_looksLikeCorrection"
+        ]
+      ],
+      "fix": "정정 우선 지시(_looksLikeCorrection) — 직전 해석 반복 금지"
+    },
+    {
+      "id": "SBAGENT-95",
+      "title": "47. 열 이동시 값 null 처리",
+      "checks": [
+        [
+          "marker",
+          "serve_b2b.py::def move_col_clear"
+        ]
+      ],
+      "fix": "move_col_clear(열 구조 유지 이동·비우기) 헬퍼"
+    },
+    {
+      "id": "SBAGENT-96",
+      "title": "48. 프롬프트 자동 반복 수행",
+      "checks": [
+        [
+          "marker",
+          "scripts/llm-api.js::_looksLikeCorrection"
+        ]
+      ],
+      "fix": "정정 우선 지시로 자동 반복 억제"
+    },
+    {
+      "id": "SBAGENT-97",
+      "title": "49. 중단 버튼 작동 안됨",
+      "checks": [
+        [
+          "node",
+          "diagnostics/_test_stop_escalation.js"
+        ]
+      ],
+      "fix": "중단 승격 재설계(진행 기반) + busy 중단 버튼"
+    },
+    {
+      "id": "SBAGENT-98",
+      "title": "50. 열 삽입 스킬 미적용",
+      "checks": [
+        [
+          "marker",
+          "serve_b2b.py::def insert_cols"
+        ]
+      ],
+      "fix": "네이티브 insert_cols(참조 자동 보정)"
+    },
+    {
+      "id": "SBAGENT-99",
+      "title": "51. 전체보기시 데이터 삭제됨",
+      "checks": [
+        [
+          "marker",
+          "serve_b2b.py::SaveChanges"
+        ]
+      ],
+      "fix": "SaveChanges:=False 원본 불변 + 세션 작업사본"
+    },
+    {
+      "id": "SBAGENT-100",
+      "title": "52. 숨김열 파일 업로드시 출력 누락",
+      "checks": [
+        [
+          "com",
+          "test_runs/_test_excel_compatible_open_path_formats.py"
+        ]
+      ],
+      "fix": "위임형 오픈으로 숨김열 출력 보존"
+    },
+    {
+      "id": "SBAGENT-101",
+      "title": "53. 동일 스킬 다른 결과 출력",
+      "checks": [
+        [
+          "com",
+          "test_runs/_test_fullrun_single_instance_live.py"
+        ]
+      ],
+      "fix": "격리 인스턴스 pristine 재계산 배치(0.5.14) — 실행 결정성"
+    },
+    {
+      "id": "SBAGENT-102",
+      "title": "54. 날짜/시간 서식 false 출력",
+      "checks": [
+        [
+          "com",
+          "test_runs/_test_format_helpers_com.py"
+        ]
+      ],
+      "fix": "위임형 구조로 날짜/시간 서식 보존"
+    },
+    {
+      "id": "SBAGENT-103",
+      "title": "55. 스킬 파이프라인 실행 오류",
+      "checks": [
+        [
+          "com",
+          "test_runs/_test_fullrun_single_instance_live.py"
+        ]
+      ],
+      "fix": "격리 배치 1콜 재설계(0.5.14)"
+    },
+    {
+      "id": "SBAGENT-104",
+      "title": "56. 스킬 적용 표시되나 내림차순 미반영",
+      "checks": [
+        [
+          "com",
+          "test_runs/_test_no_change_gate_com.py"
+        ],
+        [
+          "node",
+          "diagnostics/_test_applied_label_truth.js"
+        ]
+      ],
+      "fix": "무변경 게이트 + 적용 표시 정합(0.6.1)"
+    },
+    {
+      "id": "SBAGENT-105",
+      "title": "57. 스킬 적용 표시되나 시트삭제 미반영",
+      "checks": [
+        [
+          "node",
+          "diagnostics/_test_applied_label_truth.js"
+        ],
+        [
+          "node",
+          "diagnostics/_test_cross_reset.js"
+        ]
+      ],
+      "fix": "실패 시점 전-파일 스냅샷 + 교차 목적지 리셋(0.6.1)"
+    },
+    {
+      "id": "SBAGENT-106",
+      "title": "58. 행 추가시 셀 1개만 추가됨",
+      "checks": [
+        [
+          "com",
+          "test_runs/_test_fullcolrow_engine.py"
+        ]
+      ],
+      "fix": "전체 행 삽입 엔진 정비"
+    },
+    {
+      "id": "SBAGENT-107",
+      "title": "59. 데이터지우기 스킬 미반영",
+      "checks": [
+        [
+          "com",
+          "test_runs/_test_no_change_gate_com.py"
+        ]
+      ],
+      "fix": "무변경 실행 검증 게이트(미반영을 실패로 노출)"
+    },
+    {
+      "id": "SBAGENT-108",
+      "title": "60. .xls 파일 업로드시 깨짐",
+      "checks": [
+        [
+          "com",
+          "test_runs/_test_html_xls_stable_sheetname.py"
+        ],
+        [
+          "com",
+          "test_runs/_test_excel_compatible_open_path_formats.py"
+        ]
+      ],
+      "fix": "확장자 위장 시그니처 판별 + 해시 고정 임시명 변환 오픈"
+    },
+    {
+      "id": "SBAGENT-109",
+      "title": "61. 스킬 미적용으로 파이프라인 생성 불가",
+      "checks": [
+        [
+          "node",
+          "diagnostics/_test_error_recovery_index.js"
+        ]
+      ],
+      "fix": "복구 인덱스 폴백 — 오류에도 파이프라인 생성/복구 가능"
+    },
+    {
+      "id": "SBAGENT-110",
+      "title": "62. 열 삽입시 밀린 셀 수식 잔존",
+      "checks": [
+        [
+          "marker",
+          "serve_b2b.py::def insert_cols"
+        ]
+      ],
+      "fix": "네이티브 insert_cols 로 잔존 수식 정리"
+    },
+    {
+      "id": "SBAGENT-111",
+      "title": "63. 자연어 표현별 해석 편차",
+      "checks": [
+        [
+          "marker",
+          "scripts/chat-ui.js::clarifyVerifierAskIfNeeded"
+        ]
+      ],
+      "fix": "명확화 verifier(구조 다이제스트+LLM, 키워드 금지)"
+    },
+    {
+      "id": "SBAGENT-113",
+      "title": "전송, 적용 버튼이 잘 안 눌리는 현상",
+      "checks": [
+        [
+          "node",
+          "diagnostics/_test_click_recovery.js"
+        ]
+      ],
+      "fix": "클릭 복구기 — 눌림 즉시 합성 + 진짜 이벤트 삼킴(VDI)"
+    },
+    {
+      "id": "SBAGENT-114",
+      "title": "\"복붙캡쳐\" 실행 시 값으로만 불러올 수 있는 기능 선택 요청",
+      "checks": [
+        [
+          "marker",
+          "serve_b2b.py::values_only"
+        ],
+        [
+          "com",
+          "test_runs/_test_copypaste_capture.py"
+        ]
+      ],
+      "fix": "복붙 캡처 '값만' 옵션(values_only) 추가"
+    },
+    {
+      "id": "SBAGENT-115",
+      "title": "공통_실행파일 디스크부족으로 실행 안되는 현상",
+      "checks": [
+        [
+          "python",
+          "test_runs/_test_temp_cleanup.py"
+        ],
+        [
+          "marker",
+          "serve_b2b.py::cleanup_stale_temp_artifacts"
+        ]
+      ],
+      "fix": "시작 시 임시 산출물 정리 + 스냅샷 상한 하우스키핑"
+    },
+    {
+      "id": "SBAGENT-116",
+      "title": "저장된 스킬불러오기 시 오류(시트삭제 실행오류)",
+      "checks": [
+        [
+          "node",
+          "diagnostics/_test_paste_internal_repair.js"
+        ],
+        [
+          "node",
+          "diagnostics/_test_save_no_mapped_leak.js"
+        ]
+      ],
+      "repro": "C:\\Users\\Admin\\Downloads\\불러오기실패_전체_파일_20260626_1332_가입자별청구내역_작업.zip",
+      "fix": "불러오기 정규화 + 내부 작업본명 수리(0.6.1)"
+    },
+    {
+      "id": "SBAGENT-117",
+      "title": "저장된 스킬불러오기 시 오류(작업성공한 부분도 오류로 표현)",
+      "checks": [
+        [
+          "node",
+          "diagnostics/_test_error_recovery_index.js"
+        ]
+      ],
+      "fix": "복구 인덱스 정렬 — 성공 단계 오류 오표시 제거"
+    },
+    {
+      "id": "SBAGENT-119",
+      "title": "엑셀에 함수가 안 보이는 현상",
+      "checks": [
+        [
+          "com",
+          "test_runs/_test_format_helpers_com.py"
+        ]
+      ],
+      "fix": "위임형 구조로 수식 표시 보존"
+    },
+    {
+      "id": "SBAGENT-120",
+      "title": "공통_스킬 저장 못하는 현상",
+      "checks": [
+        [
+          "marker",
+          "native_host/NativeHost.cs::Download deferral"
+        ],
+        [
+          "node",
+          "diagnostics/_test_save_name_follows_input.js"
+        ]
+      ],
+      "fix": "저장 대화상자 deferral(0.6.1) + 저장명 시그니처"
+    },
+    {
+      "id": "SBAGENT-121",
+      "title": "날짜 변경 오류",
+      "checks": [
+        [
+          "com",
+          "test_runs/_test_month_shift.py"
+        ]
+      ],
+      "fix": "shift_months(연도 넘김·말일 보정) 헬퍼"
+    },
+    {
+      "id": "SBAGENT-122",
+      "title": "6단계스킬 삭제(값복붙) 시 엑셀뷰는 반영됨. 스킬은유지됨",
+      "checks": [
+        [
+          "node",
+          "diagnostics/_test_cross_reset.js"
+        ]
+      ],
+      "fix": "삭제 시 스냅샷 복원 — 뷰/스킬 상태 일치(0.5.14)"
+    },
+    {
+      "id": "SBAGENT-123",
+      "title": "[스킬설계추가]스킬 불러오기 실행 오류",
+      "checks": [
+        [
+          "node",
+          "diagnostics/_test_paste_internal_repair.js"
+        ]
+      ],
+      "fix": "로드 시 스킬 수리(내부명/스텝 매칭)(0.6.1)"
+    },
+    {
+      "id": "SBAGENT-124",
+      "title": "엑셀 시트를 복사해서 추가 시트 만들기가 불가한 현상",
+      "checks": [
+        [
+          "marker",
+          "serve_b2b.py::def copy_sheet"
+        ]
+      ],
+      "fix": "copy_sheet 헬퍼(교차파일 포함)"
+    },
+    {
+      "id": "SBAGENT-126",
+      "title": "4단계 스킬 삭제시 1~3단계 스킬 재처리됨",
+      "checks": [
+        [
+          "node",
+          "diagnostics/_test_edit_checkpoint_guard.js"
+        ]
+      ],
+      "fix": "삭제 재실행을 체크포인트 이어실행으로(0.5.15)"
+    },
+    {
+      "id": "SBAGENT-129",
+      "title": "저장된 스킬불러오기 시 오류(적용됨으로 나왔으나 실행x)",
+      "checks": [
+        [
+          "node",
+          "diagnostics/_test_applied_label_truth.js"
+        ]
+      ],
+      "fix": "적용 추적 시그니처 무효화 — 불러온 스킬 첫 실행 보장"
+    },
+    {
+      "id": "SBAGENT-130",
+      "title": "엑셀 시트명 변경 시 데이터 변경 작업이 부분적으로 롤백되는 오류 발생",
+      "checks": [
+        [
+          "com",
+          "test_runs/_test_rename_31_com.py"
+        ],
+        [
+          "node",
+          "diagnostics/_test_cross_reset.js"
+        ]
+      ],
+      "fix": "rename 31자 절단 대칭 + 변경 후 재조회"
+    },
+    {
+      "id": "SBAGENT-131",
+      "title": "직전 생성 스킬 삭제시 앞단계 스킬 재작동(정상)건 결과값 일부 지워짐",
+      "checks": [
+        [
+          "node",
+          "diagnostics/_test_cross_reset.js"
+        ]
+      ],
+      "fix": "직전 삭제 시 체크포인트 복원(값 유실 방지)"
+    },
+    {
+      "id": "SBAGENT-132",
+      "title": "범위 선택 후 내림차순 정렬 요청하여 적용됨으로 보이나 정렬실패",
+      "checks": [
+        [
+          "com",
+          "test_runs/_test_no_change_gate_com.py"
+        ]
+      ],
+      "fix": "무변경 게이트 — 정렬 실패를 실패로 노출"
+    },
+    {
+      "id": "SBAGENT-133",
+      "title": "복붙 캡쳐 기능으로 수식을 붙여 넣어도 오류 발생",
+      "checks": [
+        [
+          "com",
+          "test_runs/_test_crossfile_capture_e2e.py"
+        ]
+      ],
+      "fix": "캡처 재생 네이티브 Copy + 캡처 스텝 재생성 금지 분류"
+    },
+    {
+      "id": "SBAGENT-134",
+      "title": "[기능개선] 작업완료파일 부분다운로드 기능개선요청",
+      "checks": [
+        [
+          "marker",
+          "index.html::runner-download-btn"
+        ]
+      ],
+      "fix": "전체 파일 zip 다운로드 + 파일별 보기/다운"
+    },
+    {
+      "id": "SBAGENT-138",
+      "title": "한전_스킬 실행 시 순서대로 작업 안해서 작업중단되는 현상",
+      "checks": [
+        [
+          "node",
+          "diagnostics/_test_generated_sheet_var.js"
+        ]
+      ],
+      "repro": "C:\\Users\\Admin\\Downloads\\0.한전 전력통신 빌링_표준양식_서울기준_25단계_2026-07-14-13-03-32.zip",
+      "fix": "VBA 변수 사슬 해소 — 생성 시트 오요구 제거(SBAGENT-138)"
+    },
+    {
+      "id": "SBAGENT-139",
+      "title": "I열 필터링 요청, J열에 필터링이 적용됨",
+      "checks": [
+        [
+          "com",
+          "test_runs/_test_filter_to_sheet_column_offset.py"
+        ]
+      ],
+      "fix": "filter_to_sheet 열 오프셋 수정(I→J 어긋남)"
+    },
+    {
+      "id": "SBAGENT-140",
+      "title": "[기능개선]스킬 저장 색상 구분",
+      "checks": [
+        [
+          "marker",
+          "scripts/save-load.js::rememberLogicSaveBaseName"
+        ]
+      ],
+      "fix": "저장명 기억 + 입력 시그니처 게이트(0.6.1)"
+    },
+    {
+      "id": "SBAGENT-141",
+      "title": "python ctx 다운현상",
+      "checks": [
+        [
+          "marker",
+          "serve_b2b.py::PY_COM_BUDGET"
+        ]
+      ],
+      "fix": "COM 호출 예산(PY_COM_BUDGET) + 대량 작업 VBA 라우팅"
+    },
+    {
+      "id": "SBAGENT-142",
+      "title": "오류발생 후 시트를 못찾음",
+      "checks": [
+        [
+          "com",
+          "test_runs/_test_ws_truncated_sheet_com.py"
+        ]
+      ],
+      "fix": "_ws 폴백 + 오류 후 시트 재해석"
+    },
+    {
+      "id": "SBAGENT-144",
+      "title": "파일을 인식하지 못함",
+      "checks": [
+        [
+          "node",
+          "diagnostics/_test_runner_automap.js"
+        ]
+      ],
+      "fix": "실행기 자동 매칭(5단 점수 사다리, 유일 일치)"
+    },
+    {
+      "id": "SBAGENT-146",
+      "title": "시트 이름 찾기 불가 에러",
+      "checks": [
+        [
+          "com",
+          "test_runs/_test_ws_truncated_sheet_com.py"
+        ]
+      ],
+      "fix": "_ws 7단 폴백으로 시트 이름 해석"
+    },
+    {
+      "id": "SBAGENT-148",
+      "title": "KGM_스킬 실행 이후 텍스트 압축되는 현상(스킬 추가)",
+      "checks": [
+        [
+          "com",
+          "test_runs/_test_format_helpers_com.py"
+        ]
+      ],
+      "fix": "서식 보존 경로 정비(KGM 텍스트 압축)"
+    },
+    {
+      "id": "SBAGENT-149",
+      "title": "자동저장안됨 이슈",
+      "checks": [
+        [
+          "marker",
+          "scripts/save-load.js::scheduleLogicAutoBackup"
+        ]
+      ],
+      "fix": "스킬 자동백업 도입"
+    },
+    {
+      "id": "SBAGENT-150",
+      "title": "[CNS] 5개파일 동일표 행합치기 오류",
+      "checks": [
+        [
+          "com",
+          "test_runs/_test_actual_sbagent150_append_files.py"
+        ],
+        [
+          "marker",
+          "serve_b2b.py::def append_same_format_sheets"
+        ]
+      ],
+      "repro": "C:\\Users\\Admin\\Downloads\\5개합치기",
+      "fix": "append_same_format_sheets(헤더 1회+네이티브 Copy)(SBAGENT-150)"
+    },
+    {
+      "id": "SBAGENT-151",
+      "title": "무한루프",
+      "checks": [
+        [
+          "marker",
+          "serve_b2b.py::무한 루프"
+        ],
+        [
+          "python",
+          "test_runs/_test_infinite_loop_guard.py"
+        ]
+      ],
+      "repro": "C:\\Users\\Admin\\Downloads\\무한 루프.zip",
+      "fix": "정적 while True 금지 + 런타임 트레이서 데드라인(2겹 방어)"
+    },
+    {
+      "id": "SBAGENT-152",
+      "title": "스킬셋을 돌렸을 경우 다운되는 현상",
+      "checks": [
+        [
+          "com",
+          "test_runs/_test_fullrun_single_instance_live.py"
+        ]
+      ],
+      "repro": "C:\\Users\\Admin\\Downloads\\프로그램 다운.zip",
+      "fix": "격리 배치 1콜 + 무락 진행률(저사양 멈춤 구조 제거, 0.5.14)"
+    },
+    {
+      "id": "SBAGENT-155",
+      "title": "질의 verifier",
+      "checks": [
+        [
+          "marker",
+          "scripts/chat-ui.js::buildSheetStructureDigest"
+        ],
+        [
+          "marker",
+          "scripts/chat-ui.js::clarifyVerifierAskIfNeeded"
+        ]
+      ],
+      "fix": "질의 verifier 도입(생성 전 모호성 확인)"
+    },
+    {
+      "id": "SBAGENT-156",
+      "title": "필터 후 행삭제 스킬적용 오류",
+      "checks": [
+        [
+          "com",
+          "test_runs/_test_clear_filter_com.py"
+        ]
+      ],
+      "fix": "필터 후 행삭제를 AutoFilter+SpecialCells 일괄 삭제로"
+    },
+    {
+      "id": "SBAGENT-157",
+      "title": "6단계 스킬 실행 요청 중  1단계부터 재작업 진행되는 오류",
+      "checks": [
+        [
+          "node",
+          "diagnostics/_test_edit_checkpoint_guard.js"
+        ]
+      ],
+      "fix": "수정/오류 재실행을 실패 지점부터 이어실행으로(0.5.15)"
+    },
+    {
+      "id": "SBAGENT-158",
+      "title": "필터링 적용시 원본 삭제됨 오루",
+      "checks": [
+        [
+          "com",
+          "test_runs/_test_clear_filter_com.py"
+        ]
+      ],
+      "fix": "filter_to_sheet 원본 보존 설계"
+    },
+    {
+      "id": "SBAGENT-159",
+      "title": "오류시 대화상자 가독성 up, 간결하게",
+      "checks": [
+        [
+          "marker",
+          "scripts/pipeline.js::explainPipelineErrorForUser"
+        ]
+      ],
+      "fix": "오류 사용자 눈높이 해설(explainPipelineErrorForUser)"
+    },
+    {
+      "id": "SBAGENT-160",
+      "title": "네이버_시트명 기준으로 데이터를 매칭하여 값 불러오기 실행 안됨",
+      "checks": [
+        [
+          "com",
+          "test_runs/_test_eval_fixes_com.py"
+        ],
+        [
+          "marker",
+          "serve_b2b.py::def lookup"
+        ],
+        [
+          "node",
+          "diagnostics/_test_issue_real_artifacts.js"
+        ]
+      ],
+      "repro": "C:\\Users\\Admin\\Downloads\\네이버클라우드_5월 트래픽_2단계_2026-06-26-16-28-22.zip",
+      "fix": "ctx.lookup 헬퍼 + For Each 관용구 대상 인식"
+    },
+    {
+      "id": "SBAGENT-161",
+      "title": "스킬불러오기 오류",
+      "checks": [
+        [
+          "node",
+          "diagnostics/_test_paste_internal_repair.js"
+        ]
+      ],
+      "fix": "로드 정규화 + 스텝 파일 유사도 매칭"
+    },
+    {
+      "id": "SBAGENT-162",
+      "title": "적용 속도 개선 요청",
+      "checks": [
+        [
+          "marker",
+          "scripts/pipeline.js::runPipelineSuffixFromCheckpoint"
+        ]
+      ],
+      "fix": "숨김 워커 재사용 + 라이브 추가 + 이어실행(적용 속도 최적화)"
+    },
+    {
+      "id": "SBAGENT-163",
+      "title": "\"적용\" 클릭 시 에이전트가 꺼졌다가 켜짐",
+      "checks": [
+        [
+          "marker",
+          "scripts/server-monitor.js::autoReconnectLoop"
+        ]
+      ],
+      "fix": "서버 크래시 자동 재시작 + 재연결 배너"
+    },
+    {
+      "id": "SBAGENT-164",
+      "title": "셀서식 변경 오류",
+      "checks": [
+        [
+          "com",
+          "test_runs/_test_format_helpers_com.py"
+        ]
+      ],
+      "fix": "서식 헬퍼(회계 등) 정비"
+    },
+    {
+      "id": "SBAGENT-166",
+      "title": "직전에 만든 스킬을 수정을 반영 버튼을 누르면 처음부터 시작",
+      "checks": [
+        [
+          "node",
+          "diagnostics/_test_edit_checkpoint_guard.js"
+        ]
+      ],
+      "fix": "수정 반영을 체크포인트 이어실행으로(0.5.15 Bug2)"
+    },
+    {
+      "id": "SBAGENT-167",
+      "title": "엑셀 하단의 화면 크기 +- 하는 기능 장애",
+      "checks": [
+        [
+          "marker",
+          "native_host/NativeHost.cs::PublishNativeBounds"
+        ]
+      ],
+      "fix": "좌표 발행(PublishNativeBounds) 동기화"
+    },
+    {
+      "id": "SBAGENT-168",
+      "title": "KGM_스킬 실행 이후 텍스트 압축되는 현상(스킬 패치 확인요청)",
+      "checks": [
+        [
+          "com",
+          "test_runs/_test_format_helpers_com.py"
+        ]
+      ],
+      "fix": "서식 보존 경로 정비(KGM 패치 확인)"
+    },
+    {
+      "id": "SBAGENT-169",
+      "title": "엑셀 창 선택이 안됨",
+      "checks": [
+        [
+          "node",
+          "diagnostics/_test_click_recovery.js"
+        ],
+        [
+          "marker",
+          "native_host/NativeHost.cs::AttachThreadInput"
+        ]
+      ],
+      "fix": "포커스 이식(AttachThreadInput) + 선클릭 보정"
+    },
+    {
+      "id": "SBAGENT-170",
+      "title": "KGM_완성 스킬 실행 시 오류 건",
+      "checks": [
+        [
+          "com",
+          "test_runs/_test_fullrun_single_instance_live.py"
+        ],
+        [
+          "node",
+          "diagnostics/_test_issue_real_artifacts.js"
+        ]
+      ],
+      "repro": "C:\\Users\\Admin\\Downloads\\창범KGMSBAGENT-170_attachments.zip",
+      "fix": "격리 pristine 재계산으로 완성 스킬 실행 안정화"
+    },
+    {
+      "id": "SBAGENT-171",
+      "title": "행 덮어씌우기 불가 및 적용 완료 알람 오류",
+      "checks": [
+        [
+          "node",
+          "diagnostics/_test_creator_sheets.js"
+        ],
+        [
+          "node",
+          "diagnostics/_test_paste_requirements.js"
+        ],
+        [
+          "node",
+          "diagnostics/_test_issue_real_artifacts.js"
+        ]
+      ],
+      "repro": "C:\\Users\\Admin\\Downloads\\예원SBAGENT-171_attachments.zip",
+      "fix": "시트 소유자 검증(오귀속 방지) + 쌍 요구 추출(SBAGENT-171)"
+    },
+    {
+      "id": "SBAGENT-172",
+      "title": "에러발생 , 적용 지연",
+      "checks": [
+        [
+          "node",
+          "diagnostics/_test_applied_label_truth.js"
+        ]
+      ],
+      "fix": "적용 표시 정합 + 진행률 무락 채널(거짓 지연/실패 제거)"
+    },
+    {
+      "id": "SBAGENT-174",
+      "title": "스킬편집시 프롬프트 수정 불가",
+      "checks": [
+        [
+          "marker",
+          "scripts/chat-ui.js::editTargetId"
+        ]
+      ],
+      "fix": "수정 모드 in-place 교체(새 스텝 추가로 새는 문제 수정, 0.6.1)"
+    },
+    {
+      "id": "SBAGENT-175",
+      "title": "C 드라이브 용량이 차는 현상, PC가 느려지는 현상 발생",
+      "checks": [
+        [
+          "python",
+          "test_runs/_test_temp_cleanup.py"
+        ],
+        [
+          "marker",
+          "serve_b2b.py::cleanup_stale_temp_artifacts"
+        ]
+      ],
+      "fix": "임시 산출물 정리 + 스냅샷 상한(디스크 누적 방지)"
+    },
+    {
+      "id": "SBAGENT-177",
+      "title": "각 스킬의 명칭을 이 에이전트가 요약하지 못한다면 제가 수정할 수 있게 해주세요",
+      "checks": [
+        [
+          "marker",
+          "scripts/pipeline.js::renamingStepId"
+        ]
+      ],
+      "fix": "단계 이름 상태 기반 편집 + '스킬명' 버튼(0.6.1)"
+    },
+    {
+      "id": "SBAGENT-180",
+      "title": "스킬 실행 단계에서 파일들 전체 다운로드 말고 하나만 다운로드 받을 수 있게도 해주세요",
+      "checks": [
+        [
+          "marker",
+          "scripts/drop-handling.js::chip-view"
+        ]
+      ],
+      "fix": "파일별 보기/다운 UI"
+    },
+    {
+      "id": "SBAGENT-181",
+      "title": "색상변경이 안됨(서식변경이 되지않음)",
+      "checks": [
+        [
+          "com",
+          "test_runs/_test_format_helpers_com.py"
+        ]
+      ],
+      "fix": "서식 변경 헬퍼 정비"
+    },
+    {
+      "id": "SBAGENT-183",
+      "title": "실행기에서 파일 매핑",
+      "checks": [
+        [
+          "node",
+          "diagnostics/_test_runner_automap.js"
+        ],
+        [
+          "node",
+          "diagnostics/_test_mapping_persistence.js"
+        ]
+      ],
+      "fix": "파일확인 매핑 UI + 매핑 기록 유지·재실행 적용(0.6.1)"
+    },
+    {
+      "id": "SBAGENT-184",
+      "title": "생성된 스킬중 1회성인것은 제외하고 스킬 저장하는 기능필요",
+      "checks": [
+        [
+          "marker",
+          "scripts/save-load.js::pipelineForSave"
+        ]
+      ],
+      "fix": "저장은 원본(범용) 기준(pipelineForSave) — 1회성 치환본 미저장(0.6.1)"
+    },
+    {
+      "id": "SBAGENT-185",
+      "title": "스킬 중간추가 기능요청",
+      "checks": [
+        [
+          "marker",
+          "scripts/pipeline.js::insertLogic"
+        ]
+      ],
+      "fix": "단계 삽입(insertLogic) + 삽입 전 상태 복원"
+    },
+    {
+      "id": "SBAGENT-187",
+      "title": "스킬들을 병렬 실행하거나 두개를 이어서 합칠 수 있는 기능 개발 요청",
+      "checks": [
+        [
+          "marker",
+          "scripts/save-load.js::loadLogicFiles"
+        ]
+      ],
+      "fix": "스킬 zip 다중 로드 병합"
+    },
+    {
+      "id": "SBAGENT-188",
+      "title": "필터 푸는 것이 안된다고 함",
+      "checks": [
+        [
+          "com",
+          "test_runs/_test_clear_filter_com.py"
+        ],
+        [
+          "marker",
+          "serve_b2b.py::def clear_filter"
+        ]
+      ],
+      "fix": "clear_filter 헬퍼(필터 해제)"
+    },
+    {
+      "id": "SBAGENT-189",
+      "title": "더블모니터 이용 시 창 위치 오류",
+      "checks": [
+        [
+          "marker",
+          "native_host/NativeHost.cs::PublishNativeBounds"
+        ]
+      ],
+      "fix": "스크린 좌표 발행 기반 오버레이(모니터 배치 무관)"
+    },
+    {
+      "id": "SBAGENT-191",
+      "title": "파일 이름이 조금만 바뀌어도 스킬 실행이 되지 않습니다",
+      "checks": [
+        [
+          "python",
+          "test_runs/_test_stable_key_dup_suffix.py"
+        ]
+      ],
+      "fix": "워크북 안정키(월/날짜/접미사 무시, 유일 일치)(0.6.0~0.6.1)"
+    },
+    {
+      "id": "SBAGENT-192",
+      "title": "방금 작성한 파일명이 바뀌면 작동하지 않는 문제 상세 오류보기 내용 공유드립니다.",
+      "checks": [
+        [
+          "python",
+          "test_runs/_test_stable_key_dup_suffix.py"
+        ],
+        [
+          "node",
+          "diagnostics/_test_edit_month_rebind.js"
+        ]
+      ],
+      "fix": "안정키 재바인딩 + 다른 달 확인 표시"
+    },
+    {
+      "id": "SBAGENT-193",
+      "title": "시트보호 파일 작업 불가",
+      "checks": [
+        [
+          "marker",
+          "serve_b2b.py::Unprotect"
+        ]
+      ],
+      "fix": "시트 보호 해제 경로(Unprotect)"
+    },
+    {
+      "id": "SBAGENT-194",
+      "title": "시스템 종료 시 화면이 바로 닫히지 않고 멈추는 현상",
+      "checks": [
+        [
+          "marker",
+          "scripts/lifecycle.js::hide-all"
+        ],
+        [
+          "marker",
+          "serve_b2b.py::SPAWNED_EXCEL_PIDS"
+        ]
+      ],
+      "fix": "종료 시 정리 완료 대기 + 창 즉시 숨김(0.6.1)"
+    },
+    {
+      "id": "SBAGENT-195",
+      "title": "파일 내용 및 시트 클릭 불가",
+      "checks": [
+        [
+          "node",
+          "diagnostics/_test_click_recovery.js"
+        ]
+      ],
+      "fix": "클릭 복구기(VDI 이벤트 유실 보상)"
+    },
+    {
+      "id": "SBAGENT-196",
+      "title": "스킬삭제해도 이동복사된 시트 결과값 미삭제",
+      "checks": [
+        [
+          "node",
+          "diagnostics/_test_cross_reset.js"
+        ]
+      ],
+      "fix": "삭제/토글 시 교차 목적지 리셋 — 복사된 시트 제거(0.6.1)"
+    },
+    {
+      "id": "SBAGENT-197",
+      "title": "복붙이 안 되요",
+      "checks": [
+        [
+          "com",
+          "test_runs/_test_copypaste_capture.py"
+        ]
+      ],
+      "fix": "캡처 소스 소실 폴백(복사 중 주기 스냅샷)"
+    },
+    {
+      "id": "SBAGENT-198",
+      "title": "5.19버젼으로 완성된 스킬셋을 돌렸을 때 멈추는 현상 발생",
+      "checks": [
+        [
+          "node",
+          "diagnostics/_test_edit_month_rebind.js"
+        ],
+        [
+          "node",
+          "diagnostics/_test_error_recovery_index.js"
+        ],
+        [
+          "com",
+          "test_runs/_test_rename_31_com.py"
+        ],
+        [
+          "node",
+          "diagnostics/_test_issue_real_artifacts.js"
+        ]
+      ],
+      "repro": "C:\\Users\\Admin\\Downloads\\SBAGENT-198_attachments.zip",
+      "fix": "리바인딩+31자 절단+복구 인덱스 묶음(SBAGENT-198 대응)"
+    },
+    {
+      "id": "SBAGENT-199",
+      "title": "스킬 수정 시 동일한 액션에 key값만 변경하였는데 되던 것이 적용되지 않음",
+      "checks": [
+        [
+          "node",
+          "diagnostics/_test_edit_checkpoint_guard.js"
+        ]
+      ],
+      "fix": "수정 재실행 체크포인트 + 복원 실패 시 전체 재적용 폴백(0.6.1)"
+    },
+    {
+      "id": "SBAGENT-200",
+      "title": "중간 단계 수정사항 발생 시 어떤 환경에서 해야하나요?",
+      "checks": [
+        [
+          "node",
+          "diagnostics/_test_edit_checkpoint_guard.js"
+        ]
+      ],
+      "fix": "수정 재실행 절차 정립(체크포인트 이어실행)"
+    },
+    {
+      "id": "SBAGENT-201",
+      "title": "스킬 수정 시 최초 스킬생성 시 활용했던 파일과 파일명이 다르면 진행이 되지 않는 것 같습니다",
+      "checks": [
+        [
+          "node",
+          "diagnostics/_test_edit_month_rebind.js"
+        ],
+        [
+          "python",
+          "test_runs/_test_stable_key_dup_suffix.py"
+        ]
+      ],
+      "fix": "안정키 재바인딩 — 생성 시 파일과 달라도 유일 일치 시 실행"
+    },
+    {
+      "id": "SBAGENT-202",
+      "title": "작업 중단 멈춤",
+      "checks": [
+        [
+          "node",
+          "diagnostics/_test_stop_escalation.js"
+        ]
+      ],
+      "fix": "중단 승격을 시간→진행 기반으로(0.6.1)"
+    },
+    {
+      "id": "SBAGENT-204",
+      "title": "스킬 6단계셋으로 불러와서 실행한경우, 5단계에서 오류가 있으면 4단계 까지는 생성기에서 적용됨으로 보이는데 실제로 적용이 안되어있음",
+      "checks": [
+        [
+          "node",
+          "diagnostics/_test_applied_label_truth.js"
+        ]
+      ],
+      "fix": "실패 시점 전-파일 스냅샷 + 복원 커버리지 검증(0.6.1) — 바로 이 건"
+    },
+    {
+      "id": "SBAGENT-205",
+      "title": "LGCNS_스킬1.2단계 미적용인데 3단계에서 오류발생",
+      "checks": [
+        [
+          "node",
+          "diagnostics/_test_applied_label_truth.js"
+        ],
+        [
+          "node",
+          "diagnostics/_test_error_recovery_index.js"
+        ]
+      ],
+      "fix": "적용 표시 정합 + 복구 인덱스(선행 단계 상태 정확화)"
+    },
+    {
+      "id": "SBAGENT-207",
+      "title": "한전 오류 신고 인풋 및 스킬파일(7/14)",
+      "checks": [
+        [
+          "node",
+          "diagnostics/_test_lambda_dest_owner_var.js"
+        ],
+        [
+          "node",
+          "diagnostics/_test_issue_real_artifacts.js"
+        ]
+      ],
+      "repro": "C:\\Users\\Admin\\Downloads\\한전 오류신고 스킬과 인풋파일_2026-07-15.zip",
+      "fix": "한전 계열 매핑·생성시트 가드 강화(0.6.1)"
+    },
+    {
+      "id": "SBAGENT-208",
+      "title": "디폴트 제공 파일명 오류",
+      "checks": [
+        [
+          "node",
+          "diagnostics/_test_requirement_name_clean.js"
+        ],
+        [
+          "node",
+          "diagnostics/_test_issue_real_artifacts.js"
+        ]
+      ],
+      "fix": "요구 파일명 산문 접두사 오발동 수정(0.6.1)"
+    },
+    {
+      "id": "SBAGENT-209",
+      "title": "확인필요한 알수없는 디폴트파일",
+      "checks": [
+        [
+          "node",
+          "diagnostics/_test_paste_internal_repair.js"
+        ],
+        [
+          "python",
+          "test_runs/_test_capture_display_name.py"
+        ],
+        [
+          "com",
+          "test_runs/_test_no_change_gate_com.py"
+        ],
+        [
+          "node",
+          "diagnostics/_test_issue_real_artifacts.js"
+        ]
+      ],
+      "repro": "C:\\Users\\Admin\\Downloads\\SBAGENT-209_attachments.zip",
+      "fix": "캡처 원본명 역별칭 + 로드 수리 + read-evidence(0.6.1)"
+    },
+    {
+      "id": "SBAGENT-210",
+      "title": "피벗 테이블 형식으로 보이지 않음.",
+      "checks": [
+        [
+          "com",
+          "test_runs/_test_native_pivot_com.py"
+        ]
+      ],
+      "fix": "항상 진짜 피벗테이블(재생성 시 갱신)(0.6.1)"
+    },
+    {
+      "id": "SBAGENT-212",
+      "title": "대화내용을 비우기",
+      "checks": [
+        [
+          "marker",
+          "scripts/chat-ui.js::chat-clear-history"
+        ]
+      ],
+      "fix": "대화 기억 비우기"
+    },
+    {
+      "id": "SBAGENT-213",
+      "title": "스킬 실행 후 결과 편집 시 옆에 엑셀 화면 따로 뜸",
+      "checks": [
+        [
+          "com",
+          "test_runs/_test_minimize_hide_orphan_com.py"
+        ],
+        [
+          "marker",
+          "serve_b2b.py::HOST_MINIMIZED"
+        ]
+      ],
+      "fix": "HOST_MINIMIZED 표시 게이트 + 소유 창 스윕(0.6.1)"
+    },
+    {
+      "id": "SBAGENT-214",
+      "title": "스킬 중간단계 삽입. 전체스킬 재작동 결과 동일시트 중복생성됨.",
+      "checks": [
+        [
+          "node",
+          "diagnostics/_test_cross_reset.js"
+        ]
+      ],
+      "repro": "C:\\Users\\Admin\\Downloads\\LGCNS_UCAP_03.2.zip",
+      "fix": "괄호/공백 파일명 교차 쓰기 인식 — 삽입 중복 수정(0.6.1)"
+    },
+    {
+      "id": "SBAGENT-215",
+      "title": "스킬 저장이 안됨",
+      "checks": [
+        [
+          "marker",
+          "native_host/NativeHost.cs::Download deferral"
+        ]
+      ],
+      "fix": "다운로드 대화상자 deferral + 강제 포그라운드(0.6.1)"
+    },
+    {
+      "id": "SBAGENT-216",
+      "title": "해당 열 값 읽어오지 못함.",
+      "checks": [
+        [
+          "com",
+          "test_runs/_test_ctx_col_row_range_and_readcell.py"
+        ]
+      ],
+      "fix": "ctx 열 읽기 헬퍼 정비(col/row/range/read_cell)"
+    },
+    {
+      "id": "SBAGENT-217",
+      "title": "스킬 수정에 대한 반영이 안됨",
+      "checks": [
+        [
+          "node",
+          "diagnostics/_test_edit_checkpoint_guard.js"
+        ]
+      ],
+      "repro": "C:\\Users\\Admin\\Downloads\\571601213953_판교테크윈_DSMC_260713_21단계_2026-07-15-21-35-52.zip",
+      "fix": "수정 재실행 조용한 무실행 수정 — 복원 실패 시 전체 재적용 폴백 + 체크포인트 가드(0.6.1, 판교테크윈)"
+    },
+    {
+      "id": "SBAGENT-218",
+      "title": "두개의 단어를 한번에 적어야 하는데 혹은 으로 이해함.",
+      "checks": [
+        [
+          "marker",
+          "scripts/file-schema.js::글자 그대로"
+        ]
+      ],
+      "fix": "따옴표 값 '글자 그대로' 규칙 — 슬래시 후보 분해 금지(0.6.1)"
+    },
+    {
+      "id": "SBAGENT-219",
+      "title": "스킬 파일 저장명",
+      "checks": [
+        [
+          "node",
+          "diagnostics/_test_save_name_follows_input.js"
+        ]
+      ],
+      "fix": "저장 기본 이름 입력 시그니처 게이트(0.6.1 A안)"
+    },
+    {
+      "id": "SBAGENT-220",
+      "title": "스킬 수정 시 생성시 만든 파일 사용이 아니면 오류가 뜨는 것 관련하여",
+      "checks": [
+        [
+          "node",
+          "diagnostics/_test_edit_month_rebind.js"
+        ]
+      ],
+      "fix": "안정키/월 리바인딩으로 생성 파일 비의존 실행"
+    },
+    {
+      "id": "SBAGENT-221",
+      "title": "실행기 오류발생건. 생성기에서는 정상처리됨",
+      "checks": [
+        [
+          "node",
+          "diagnostics/_test_mapping_persistence.js"
+        ],
+        [
+          "node",
+          "diagnostics/_test_runner_automap.js"
+        ],
+        [
+          "node",
+          "diagnostics/_test_issue_real_artifacts.js"
+        ]
+      ],
+      "repro": "C:\\Users\\Admin\\Downloads\\SBAGENT-221_attachments.zip",
+      "fix": "매핑 기록 유지 + 생성기 재실행 매핑 적용(0.6.1)"
+    },
+    {
+      "id": "SBAGENT-222",
+      "title": "vba로짜라고 지시했던(최초 생성 시) 코드 단계들이 실행 시 vba로 하라고해서 실패했다고 오류메시지가 뜸",
+      "checks": [
+        [
+          "marker",
+          "scripts/chat-ui.js::routingHint"
+        ]
+      ],
+      "fix": "명시 VBA 지시 존중 라우팅 힌트"
+    },
+    {
+      "id": "SBAGENT-223",
+      "title": "스킬셋 이름 변경을 위해 이름 더블클릭 시 오류",
+      "checks": [
+        [
+          "marker",
+          "scripts/pipeline.js::renamingStepId"
+        ]
+      ],
+      "fix": "이름 편집 상태 기반 + '스킬명' 버튼(더블클릭 불요)(0.6.1)"
+    },
+    {
+      "id": "hanjeon-mapping-save-leak",
+      "title": "매핑 치환본이 저장 스킬에 유출돼 재사용 불가(한전) + 확정 매핑 기록 유실",
+      "checks": [
+        [
+          "node",
+          "diagnostics/_test_save_no_mapped_leak.js"
+        ],
+        [
+          "node",
+          "diagnostics/_test_mapping_persistence.js"
+        ]
+      ],
+      "fix": "저장은 원본 기준 + 매핑 기록 유지(0.6.1)"
+    },
+    {
+      "id": "hanjeon-incheon-ghost-req",
+      "title": "생성 시트/오귀속 시트가 필수 업로드로 요구(람다 filter_to_sheet·시트 변수·괄호 파일명)",
+      "checks": [
+        [
+          "node",
+          "diagnostics/_test_lambda_dest_owner_var.js"
+        ],
+        [
+          "node",
+          "diagnostics/_test_sheet_default_fallback.js"
+        ]
+      ],
+      "repro": "C:\\Users\\Admin\\Downloads\\0720_완성스킬",
+      "fix": "람다 목적지 균형 파싱 + 시트 변수 소유자 + 괄호 파일명(0.6.1)"
+    },
+    {
+      "id": "skill-default-sheet",
+      "title": "시트 치환 끄기('스킬 기본값') 옵션 동작",
+      "checks": [
+        [
+          "node",
+          "diagnostics/_test_skill_default_sheet.js"
+        ]
+      ],
+      "fix": "'스킬 기본값(그대로 실행)' 옵션 + 미매칭 기본 선택(0.6.1)"
+    },
+    {
+      "id": "runner-skill-reupload-view",
+      "title": "실행기 스킬 삭제→재업로드 시 편집기 목록 미갱신(표시 버그)",
+      "checks": [
+        [
+          "node",
+          "diagnostics/_test_runner_logic_modal_refresh.js"
+        ]
+      ],
+      "fix": "업로드 완료 시 편집기 모달 재렌더(0.6.1)"
+    },
+    {
+      "id": "HANJEON-0720-V4COMPAT",
+      "title": "v4 스킬(자리표) 구버전 로드 시 @@FILE_n@@ 잔존 + 유령 시트 요구",
+      "checks": [
+        [
+          "node",
+          "diagnostics/_repro_hanjeon_v4_roundtrip.js"
+        ]
+      ],
+      "fix": "loadLogic에 v4 자리표(@@FILE_n@@)->원본 파일명 복원 백포트(0.6.1) / 0.6.2는 네이티브 v4 왕복. 실물 한전 오류신고(2026-07-20) zip 회귀"
+    }
+  ]
 }
