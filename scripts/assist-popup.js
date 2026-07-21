@@ -129,6 +129,46 @@
     post({ t: "user", text: t });
   }
 
+  let _reportCard = null;
+  function renderReport(meta) {
+    meta = meta || {};
+    const html = `
+      <div class="assist-card assist-report">
+        <div class="assist-card-head">🧾 이슈 제보 준비</div>
+        <div class="assist-card-reason">${esc(meta.reason || "AI 도움 범위를 벗어나는 문제로 보입니다.")}</div>
+        <div class="assist-card-note">
+          입력 파일 + 스킬 + 진단 기록을 zip 하나로 묶어 드립니다.<br>
+          받은 zip 은 <b>사내 지라(SBAGENT 프로젝트)</b>에 새 이슈(버그)로 올리고 통째로 첨부하세요 —
+          자세한 절차와 붙여넣을 양식은 zip 안의 <b>제보양식.txt</b> 에 있습니다.
+        </div>
+        <div class="assist-card-actions">
+          <button type="button" class="assist-ok assist-report-build">📦 제보 파일 묶음 만들기</button>
+        </div>
+      </div>`;
+    const el = addMsg("assistant", html, { html: true });
+    if (!el) return;
+    _reportCard = el;
+    el.querySelector(".assist-report-build").onclick = () => {
+      el.querySelector(".assist-card-actions").innerHTML = '<span class="assist-done">묶는 중... (저장 대화상자는 메인 창에 뜹니다)</span>';
+      post({ t: "report-build", meta });
+    };
+  }
+  function onReportResult(m) {
+    const el = _reportCard;
+    _reportCard = null;
+    if (!el) return;
+    const box = el.querySelector(".assist-card-actions");
+    if (!box) return;
+    if (!m.ok) {
+      box.innerHTML = '<span class="assist-fail">✕ ' + esc(m.error || "묶음 생성 실패") + "</span>";
+      return;
+    }
+    const parts = ['<span class="assist-done">✓ ' + esc(m.fileName || "") + ' 저장 대화상자가 메인 창에 열렸습니다.</span>'];
+    if (m.included && m.included.length) parts.push('<div class="assist-card-note">포함: ' + esc(m.included.join(", ")) + "</div>");
+    if (m.missing && m.missing.length) parts.push('<div class="assist-warn">⚠ 자동으로 못 담은 것(직접 첨부 필요): ' + esc(m.missing.join(", ")) + "</div>");
+    box.innerHTML = parts.join("");
+  }
+
   function onBridge(m) {
     switch (m.t) {
       case "history": {
@@ -147,6 +187,8 @@
       case "trace": addMsg("trace", (m.ok === false ? "✕ " : "· ") + m.name); break;
       case "proposal": renderProposal(m.proposal || {}); break;
       case "commit-result": onCommitResult(m); break;
+      case "report": renderReport(m.meta || {}); break;
+      case "report-result": onReportResult(m); break;
       case "cleared": {
         const box = $id("assist-messages");
         if (box) box.innerHTML = "";

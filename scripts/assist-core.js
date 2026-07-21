@@ -41,6 +41,12 @@ function assistSystemPrompt() {
   전체실행 버튼으로 해야 한다"고 안내하라.
 - 단계를 새로 만들거나 삭제할 수 없다. 그건 ③ 스킬 설계 채팅의 일이다.
 
+## 해결할 수 없을 때 — 이슈 제보로 넘긴다
+도구로 확인해도 원인을 못 찾거나, 프로그램 자체의 오류로 보이거나, 당신 권한 밖의 수정이
+필요하면 억지로 추측하지 말고 action="report" 를 내라. 그러면 프로그램이 입력 파일·스킬·진단
+기록을 zip 하나로 묶어 주고 지라 제보 방법을 안내한다.
+args: {"summary":"증상 한 줄","reason":"해결 불가 판단 근거","tried":"확인해 본 것들"}
+
 ## 응답 규약
 매 응답은 아래 셋 중 **하나**의 액션 블록으로 끝난다. 블록은 정확히 이 형식이어야 한다:
 
@@ -52,6 +58,7 @@ function assistSystemPrompt() {
 - 코드 수정을 제안하려면 action="propose", args={"kind":"replaceStepCode","stepId":"...","newCode":"전체 코드","reason":"왜"}
   또는 args={"kind":"replaceLiteral","stepId":"...","from":"바꿀 문자열","to":"새 문자열","reason":"왜"}
 - 더 알아볼 게 없으면 action="final" 로 끝내고, 블록 위에 사용자에게 할 답변을 쓴다.
+- 해결 불가/프로그램 오류로 판단되면 action="report" (위 '이슈 제보' 참조).
 
 ### 값 하나만 바꿀 때는 반드시 replaceLiteral 을 쓸 것
 숫자·문자 하나를 바꾸는 요청(예: "100을 1000으로")에 replaceStepCode 로 코드 전체를 다시 쓰면
@@ -160,6 +167,19 @@ async function assistHandleUserMessage(userText, ui) {
         tail.push({ role: "assistant", content: reply.slice(0, 1500) });
         tail.push({ role: "user", content: `[도구 결과 ${toolName}]\n${JSON.stringify(result).slice(0, 6000)}` });
         continue;
+      }
+
+      if (parsed.action === "report" || parsed.action === "escalate") {
+        // 해결 불가 → 제보 카드. 다운로드는 카드 버튼(사용자 클릭)에서만 일어난다.
+        if (visible) assistPushAssistant(visible, ui);
+        try {
+          ui.onReport && ui.onReport({
+            summary: String(parsed.args.summary || "").slice(0, 200),
+            reason: String(parsed.args.reason || "").slice(0, 400),
+            tried: String(parsed.args.tried || "").slice(0, 400),
+          });
+        } catch (_) {}
+        return;
       }
 
       if (parsed.action === "propose") {

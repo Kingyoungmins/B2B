@@ -143,7 +143,51 @@ function assistSubmit(text) {
       assistAddMsg("trace", `${okMark} ${name}`);
     },
     onProposal: assistRenderProposalCard,
+    onReport: assistRenderReportCard,
   });
+}
+
+// 해결 불가 → 제보 카드. [묶음 만들기]를 눌러야만 파일이 만들어진다.
+function assistRenderReportCard(meta) {
+  const html = `
+    <div class="assist-card assist-report">
+      <div class="assist-card-head">🧾 이슈 제보 준비</div>
+      <div class="assist-card-reason">${escapeHtml(meta.reason || "AI 도움 범위를 벗어나는 문제로 보입니다.")}</div>
+      <div class="assist-card-note">
+        입력 파일 + 스킬 + 진단 기록을 zip 하나로 묶어 드립니다.<br>
+        받은 zip 은 <b>사내 지라(SBAGENT 프로젝트)</b>에 새 이슈(버그)로 올리고 통째로 첨부하세요 —
+        자세한 절차와 붙여넣을 양식은 zip 안의 <b>제보양식.txt</b> 에 있습니다.
+      </div>
+      <div class="assist-card-actions">
+        <button type="button" class="assist-ok assist-report-build">📦 제보 파일 묶음 만들기</button>
+      </div>
+    </div>`;
+  const el = assistAddMsg("assistant", html, { html: true });
+  if (!el) return;
+  el.querySelector(".assist-report-build").onclick = async () => {
+    const box = el.querySelector(".assist-card-actions");
+    box.innerHTML = `<span class="assist-done">묶는 중...</span>`;
+    try {
+      const r = await assistPrepareReportBundle(meta);
+      box.innerHTML = assistReportResultHtml(r);
+    } catch (err) {
+      box.innerHTML = `<span class="assist-fail">✕ ${escapeHtml(String(err && err.message).slice(0, 120))}</span>`;
+    }
+  };
+}
+
+function assistReportResultHtml(r) {
+  if (!r || !r.ok) {
+    return `<span class="assist-fail">✕ ${escapeHtml((r && r.error) || "묶음 생성 실패")}</span>`;
+  }
+  const parts = [`<span class="assist-done">✓ ${escapeHtml(r.fileName)} 저장 대화상자가 열렸습니다.</span>`];
+  if (r.included && r.included.length) {
+    parts.push(`<div class="assist-card-note">포함: ${escapeHtml(r.included.join(", "))}</div>`);
+  }
+  if (r.missing && r.missing.length) {
+    parts.push(`<div class="assist-warn">⚠ 자동으로 못 담은 것(직접 첨부 필요): ${escapeHtml(r.missing.join(", "))}</div>`);
+  }
+  return parts.join("");
 }
 
 // 승인 카드 — 여기 버튼을 눌러야만 스킬이 바뀐다.
@@ -342,6 +386,7 @@ function assistHandleBridgeMessage(m) {
         onAssistantText: (t) => assistSendToPopup({ t: "assistant", text: t }),
         onToolTrace: (name, result) => assistSendToPopup({ t: "trace", name, ok: !(result && result.ok === false) }),
         onProposal: (p) => assistSendToPopup({ t: "proposal", proposal: p }),
+        onReport: (meta) => assistSendToPopup({ t: "report", meta }),
       });
       break;
     case "commit": {
@@ -356,6 +401,15 @@ function assistHandleBridgeMessage(m) {
     case "clear":
       state.assist = { history: [] };
       assistSendToPopup({ t: "cleared" });
+      break;
+    case "report-build":
+      // 다운로드(저장 대화상자)는 메인 WebView 에서 떠야 NativeHost 의 DownloadStarting 이 받는다.
+      assistPrepareReportBundle(m.meta || {}).then(r => {
+        assistSendToPopup({ t: "report-result", ok: !!r.ok, fileName: r.fileName || "",
+                            included: r.included || [], missing: r.missing || [], error: r.error || "" });
+      }).catch(err => {
+        assistSendToPopup({ t: "report-result", ok: false, error: String(err && err.message).slice(0, 120) });
+      });
       break;
   }
 }

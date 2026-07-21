@@ -256,5 +256,47 @@ ck("(35) assist 스크립트가 pipeline/chat-ui 뒤에 로드",
      /assistNativeShellAvailable\(\)/.test(uiSrc) && /nativeShell=1/.test(uiSrc));
 }
 
+// ── 12. 이슈 제보 패키지: 해결 불가 시 zip 묶음 + 지라 안내 ────────────────
+{
+  const reportSrc = rd("scripts/assist-report.js");
+  const popupJs2 = rd("scripts/assist-popup.js");
+  const htmlIdx = rd("index.html");
+
+  ck("(60) report 액션이 프롬프트·루프에 존재",
+     /action="report"/.test(coreSrc) && /parsed\.action === "report"/.test(coreSrc));
+  ck("(61) 다운로드는 카드 버튼(사용자 클릭)에서만 — 루프에서 번들 생성 금지",
+     !/assistPrepareReportBundle/.test(coreSrc));
+  ck("(62) 묶음에 스킬 zip(중첩)·원본 파일·양식·진단·대화록 포함",
+     /스킬\//.test(reportSrc) && /파일\//.test(reportSrc)
+     && /제보양식\.txt/.test(reportSrc) && /진단\.txt/.test(reportSrc) && /대화록\.txt/.test(reportSrc));
+  ck("(63) 지라 안내(주소·프로젝트·절차·보안 주의) 포함",
+     /lgucorp\.atlassian\.net/.test(reportSrc) && /SBAGENT/.test(reportSrc)
+     && /보안 주의/.test(reportSrc));
+  ck("(64) 원본은 백엔드 보관본에서 회수 + 실패는 missing 으로 정직하게",
+     /backendDownloadUrl/.test(reportSrc) && /missing\.push/.test(reportSrc));
+  ck("(65) 양쪽 UI 에 제보 카드 + 브리지(report/report-build/report-result)",
+     /assistRenderReportCard/.test(uiSrc) && /case "report-build":/.test(uiSrc)
+     && /case "report":/.test(popupJs2) && /case "report-result":/.test(popupJs2));
+  ck("(66) assist-report.js 로드 등록", /scripts\/assist-report\.js/.test(htmlIdx));
+
+  // 양식 내용 실검증: 실제 상태로 생성해 필수 항목이 들어가는지
+  const rb = { console, JSON, Date, Math, String, Number, Array, Set, Map, RegExp,
+    B2B_BUILD_STAMP: "b2b-test",
+    state: { pipeline: [{ id: "s1", code: "x" }], logicSaveBaseName: "한전스킬",
+             inputsOriginal: [{ name: "정산_2026-04.xlsx" }], assist: { history: [
+               { role: "user", content: "안 돼요" }, { role: "assistant", content: "확인했습니다" }] } },
+    ASSIST_TOOLS: { "pipeline.list": { fn: () => ({ ok: true }) }, "diag.stepStatus": { fn: () => ({ ok: true }) },
+                    "preflight.check": { fn: () => ({ ok: true }) }, "literals.scan": { fn: () => ({ ok: true }) } },
+  };
+  vm.createContext(rb);
+  vm.runInContext(reportSrc, rb);
+  const guide = vm.runInContext('assistBuildJiraGuideText({summary:"3단계 멈춤", reason:"원인 미상"}, {})', rb);
+  ck("(67) 양식에 증상·스킬명·파일명·버전이 실제로 들어감",
+     guide.includes("3단계 멈춤") && guide.includes("한전스킬")
+     && guide.includes("정산_2026-04.xlsx") && guide.includes("b2b-test"), guide.slice(0, 120));
+  const conv = vm.runInContext("assistBuildConversationText()", rb);
+  ck("(68) 대화록에 사용자/AI 발화 포함", conv.includes("안 돼요") && conv.includes("확인했습니다"));
+}
+
 console.log("\n=== RESULT: " + (fails === 0 ? "ALL PASS" : fails + " FAIL") + " ===");
 process.exit(fails ? 1 : 0);
