@@ -100,5 +100,23 @@ ck("(23) 캡처 스텝 수정 시 '코드가 곧 명세' 문맥 주입",
 ck("(24) 매칭 코어(_matchStepToChatIndex)는 변경 없음(기존 테스트 보호)",
    /function _matchStepToChatIndex\(step, entries, stepIdx\) \{/.test(chatSrc));
 
+// ── 5. [수정 모드 캡처 = 대체] 수정 버튼이 켜진 채 캡처하면 새 단계 추가가 아니라 대체 ──
+// 실측: 1단계 수정 중 복붙 캡처 → 3단계로 새로 붙었음. 수정이면 그 단계가 바뀌어야 한다.
+{
+  const pipeSrc = rd("scripts/pipeline.js");
+  const seg = pipeSrc.slice(pipeSrc.indexOf("btn-capture-copypaste"));
+  ck("(25) 캡처 핸들러가 수정 모드를 분기(editingStepId → replaceLogicAt)",
+     /state\.editingStepId && typeof replaceLogicAt === "function"/.test(seg)
+     && /replaceLogicAt\(editId, data\.code/.test(seg));
+  ck("(26) 대체 후 정체성 갱신: 캡처 prompt + 번호표 해제 + 대상 파일",
+     /st\.prompt = "복붙 캡처: "/.test(seg) && /delete st\.originHistId/.test(seg)
+     && /st\.targetFileId = step\.targetFileId/.test(seg));
+  ck("(27) 대체 후 수정 모드 해제 + 실패 시 추가로도 안 붙임(return)",
+     /state\.editingStepId = null/.test(seg)
+     && /추가로도 붙이지 않는다/.test(seg));
+  ck("(28) 수정 모드가 아니면 기존 동작(applyLogic 추가) 유지",
+     /applyLogic\(step\);/.test(seg));
+}
+
 console.log("\n=== RESULT: " + (fails === 0 ? "ALL PASS" : fails + " FAIL") + " ===");
 process.exit(fails ? 1 : 0);

@@ -5251,6 +5251,32 @@ $("btn-run").onclick = async () => {
         targetFileId: (typeof fileIdForExcelMirrorId === "function" ? fileIdForExcelMirrorId(excelId) : null)
           || state.currentFileId || null,
       };
+      // [수정 모드 대체] 수정 버튼이 켜진 채 캡처하면 '새 단계 추가'가 아니라 그 단계를 캡처로
+      // 대체한다(실측 기대: 1단계 수정 중 캡처했는데 3단계로 새로 붙었음). 채팅 수정과 같은
+      // 적용 경로(replaceLogicAt)를 타므로 스냅샷 복원 → 그 단계부터 재실행으로 라이브도 정합해진다
+      // — 방금 손으로 한 붙여넣기는 복원 시 지워지고 새 코드로 다시 실행되니 이중 반영이 없다.
+      if (state.editingStepId && typeof replaceLogicAt === "function") {
+        const editId = state.editingStepId;
+        const editIdx = (state.pipeline || []).findIndex(s => s && s.id === editId);
+        const r = replaceLogicAt(editId, data.code, data.description, "python", {});
+        if (r !== false) {
+          // 대체된 단계의 정체성도 캡처로 갱신 — 옛 채팅 요청문/번호표를 남기면 수정 버튼이
+          // 이제는 무관한 말풍선으로 스크롤한다(번호표 수명주기: 캡처로 대체 = 대화 없음).
+          try {
+            const st = (state.pipeline || []).find(s => s && s.id === editId);
+            if (st) {
+              st.prompt = "복붙 캡처: " + data.description;
+              delete st.originHistId;
+              if (step.targetFileId) st.targetFileId = step.targetFileId;   // 대상 = 붙여넣은 파일
+            }
+          } catch (_) {}
+          state.editingStepId = null;
+          if (typeof renderEditingBanner === "function") renderEditingBanner();
+          renderPipeline();
+          toast(`Step ${editIdx + 1} 을 방금 캡처로 대체했습니다 — ` + data.description, "success");
+        }
+        return;   // 대체 실패(실행 중 등)면 replaceLogicAt 이 사유를 토스트했다 — 추가로도 붙이지 않는다
+      }
       applyLogic(step);
       toast("복붙을 스킬 단계로 저장했습니다 — " + data.description, "success");
     } catch (err) {
