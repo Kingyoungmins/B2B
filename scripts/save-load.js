@@ -199,8 +199,13 @@ function _buildLogicZipEntriesImpl(safeBase, name) {
       targetSheetName: s.targetSheetName || null,
       // 저장된 스킬은 사용자가 적용/확인한 실행 단위다. 이후 전체실행에서 정적검사/재생성으로
       // 원본 코드를 다시 흔들지 않도록 신뢰 플래그를 함께 보존한다.
-      trustedStatic: s.trustedStatic === true ||
-        (typeof getPipelineRuntimeStatus === "function" && ((getPipelineRuntimeStatus(s.id) || {}).status === "applied")),
+      // [미적용 편집 방어] '적용됨' 상태면 작성자 확인본으로 보고 trustedStatic 을 박아 왔는데,
+      // AI 도움이 '적용 없이' 고친 스텝은 한 번도 실행된 적이 없다. 그대로 승격되면 미검증 코드가
+      // 정적검사를 우회하는 저장본이 돼 다음 전체실행에서 터진다 → _unappliedEdit 이면 승격 금지.
+      trustedStatic: s._unappliedEdit === true
+        ? false
+        : (s.trustedStatic === true ||
+           (typeof getPipelineRuntimeStatus === "function" && ((getPipelineRuntimeStatus(s.id) || {}).status === "applied"))),
     })),
     chatHistory: state.chatHistory,
   };

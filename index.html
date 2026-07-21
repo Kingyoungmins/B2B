@@ -56,6 +56,11 @@
         <h1 id="page-title">B2B 빌링 Agent</h1>
         <div class="sub" id="model-label">AI: ixi 모델</div>
       </div>
+      <button class="ai-help-btn" id="btn-ai-help" type="button" aria-pressed="false"
+              title="AI 도움 — 스킬 진단·수정·데이터 질의 (프로그램 안의 도우미)">
+        <span class="ai-help-spark">✦</span>
+        <span class="ai-help-text">AI 도움</span>
+      </button>
       <button class="think-toggle" id="btn-think-toggle" type="button" aria-pressed="false" title="Think 모드 켜기">
         <span class="think-toggle-knob"></span>
         <span class="think-toggle-text">Think</span>
@@ -363,6 +368,12 @@
   <script src="scripts/menu.js"></script>
   <script src="scripts/resizer.js"></script>
   <script src="scripts/model-modal.js"></script>
+  <!-- AI 도움(독립 챗봇) — 기존 채팅/파이프라인 함수를 참조하므로 뒤에 둔다 -->
+  <script src="scripts/assist-llm.js"></script>
+  <script src="scripts/assist-tools.js"></script>
+  <script src="scripts/assist-guard.js"></script>
+  <script src="scripts/assist-core.js"></script>
+  <script src="scripts/assist-ui.js"></script>
   <script src="scripts/main.js"></script>
 </body>
 </html>

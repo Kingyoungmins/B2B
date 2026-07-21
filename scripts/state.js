@@ -27,6 +27,9 @@ const state = {
   logicSaveInputSig: "",  // [A안] 위 이름이 나온 '입력 파일 세트' 서명 — 지금 입력이 다르면 그 이름을 기본값으로 안 씀
   history: { undo: [], redo: [], limit: 80 },
   chatHistory: [],
+  // [AI 도움] 독립 챗봇의 대화. 생성기 chatHistory 와 절대 섞지 않는다 —
+  // 섞이면 도움 대화가 다음 스킬 생성 프롬프트에 들어가 엉뚱한 코드를 만든다.
+  assist: { history: [] },
   currentPage: "generator",
   editingStepId: null,
   uploadJob: null,

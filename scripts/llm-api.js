@@ -214,10 +214,11 @@ async function callOpenAICompatOnce(system, options) {
   options = options || {};
   const base = effectiveOpenAICompatBaseUrl();
   const networkDefaults = settings.network === "dev-vllm" ? DEFAULTS.devVllm : DEFAULTS["openai-compat"];
-  const messages = [
-    { role: "system", content: system },
-    ...getLLMChatHistory(),
-  ];
+  // [AI 도움 격리] 기본은 생성기 대화기억(state.chatHistory)을 붙이지만, 독립 챗봇은 자기 대화만
+  // 써야 한다(생성기 맥락이 섞이면 엉뚱한 스텝을 만들려 든다). messagesOverride 가 오면 그것만 쓴다.
+  const messages = Array.isArray(options.messagesOverride)
+    ? [{ role: "system", content: system }, ...options.messagesOverride]
+    : [{ role: "system", content: system }, ...getLLMChatHistory()];
   const model = settings.model || networkDefaults.model || DEFAULTS["openai-compat"].model;
   const isQwen = /qwen/i.test(String(model || ""));
   const thinkOn = options.thinkMode === true;
@@ -264,17 +265,21 @@ async function callOpenAICompatOnce(system, options) {
     }
     throw new Error(`LLM API 오류 ${resp.status}: ${text.slice(0, 300)}\n(URL: ${url})`);
   }
-  const contentType = resp.headers.get("content-type") || "";
-  if (resp.body && contentType.includes("text/event-stream")) {
-    const content = await readOpenAICompatStream(resp, options);
+  // [AI 도움 격리] messagesOverride 로 온 호출(독립 챗봇)은 생성기 대화기억에 절대 남기지 않는다.
+  // 남기면 도움 챗봇의 잡담·도구 JSON 이 다음 스킬 생성 프롬프트에 섞여 엉뚱한 코드를 만든다.
+  const _keepHistory = !Array.isArray(options.messagesOverride);
+  const _pushAssistant = (content) => {
+    if (!_keepHistory) return content;
     state.chatHistory.push({ role: "assistant", content, histId: (typeof uid === "function" ? uid() : String(Date.now() + Math.random())) });
     return content;
+  };
+  const contentType = resp.headers.get("content-type") || "";
+  if (resp.body && contentType.includes("text/event-stream")) {
+    return _pushAssistant(await readOpenAICompatStream(resp, options));
   }
 
   const data = await resp.json();
-  const content = data.choices?.[0]?.message?.content || "";
-  state.chatHistory.push({ role: "assistant", content, histId: (typeof uid === "function" ? uid() : String(Date.now() + Math.random())) });
-  return content;
+  return _pushAssistant(data.choices?.[0]?.message?.content || "");
 }
 
 function effectiveOpenAICompatBaseUrl() {

@@ -2173,6 +2173,56 @@ function replaceLogicAt(stepId, newCode, newDescription, language, opts) {
       if (rebound && rebound !== tid) next[idx].targetFileId = rebound;
     }
   } catch (_) {}
+  // ── [AI 도움 · 적용 없이 코드만 교체] ────────────────────────────────────────────
+  // opts.applyMode === "none" 이면 라이브 Excel 을 건드리지 않고 state.pipeline 만 갱신한다.
+  // (사용자 요구: "적용 버튼은 항상 적용하는데, 변수/key 만 고쳐 저장하고 싶은 경우가 있다")
+  // 반드시 재바인딩·normalizeStep 이 끝난 '이 위치'에서 갈라진다 — 앞으로 빼면 그 보정이 유실된다.
+  //
+  // 조용한 오답을 막는 가드(이 프로젝트 실측 이력 기반):
+  //  · 하류 스냅샷 폐기 — 안 지우면 뒤 단계를 수정할 때 빠른경로가 '옛 코드로 만든 상태'를 복원해
+  //    수정분을 영원히 건너뛴다(오류도 없음). 교차파일 쓰기면 자기 자신 것도 못 믿으니 함께 폐기.
+  //  · resume 포인터는 '앞당기기만' — 뒤로 밀면 앞 단계 수정분이 실행에서 빠진다.
+  //  · noteLivePipelineApplied 는 prefix 만 — 전체로 부르면 라이브에 없는 코드가 '적용됨'으로 고착돼
+  //    이후 reconcile 이 no-op 으로 건너뛰며 진짜 적용을 영구히 삼킨다(최악의 실패 모드).
+  //  · trustedStatic/extendedTimeout 해제 — 미검증 코드가 '작성자 확인본'으로 zip 에 굳으면 안 된다.
+  if (opts && opts.applyMode === "none") {
+    const busy = (typeof pipelineEditBusyReason === "function") ? pipelineEditBusyReason() : "";
+    if (busy) { toast(busy, "error"); return false; }
+    if (state.runnerMappingRunActive) { toast("실행 중에는 스킬을 수정할 수 없습니다.", "error"); return false; }
+    if (typeof pipelineHasBackendOnlyStep === "function" && pipelineHasBackendOnlyStep(next)) {
+      toast("구버전 백엔드 전용 스텝이 있어 '적용 없이 수정'을 지원하지 않습니다.", "error");
+      return false;
+    }
+    next[idx].trustedStatic = false;
+    next[idx].extendedTimeout = false;
+    next[idx]._unappliedEdit = true;      // 저장 시 trustedStatic 승격 차단용 표식
+    // 스냅샷 폐기 범위: 기본 idx+1.., 교차파일 쓰기면 idx 자신부터(교차 목적지는 어떤 스냅샷에도 없다)
+    let dropFrom = idx + 1;
+    try {
+      const writesCross = (typeof pipelineStepWritesCrossFile === "function" && pipelineStepWritesCrossFile(next[idx]))
+        || (typeof pipelineSuffixWritesCrossFile === "function" && pipelineSuffixWritesCrossFile(next, idx));
+      if (writesCross) dropFrom = idx;
+    } catch (_) {}
+    for (let i = dropFrom; i < next.length; i += 1) {
+      if (next[i] && next[i]._preApplySnapshot) delete next[i]._preApplySnapshot;
+    }
+    if (typeof pushHistory === "function") pushHistory("단계 수정(미적용)");
+    state.pipeline = next;
+    const existingResume = (typeof getPipelineResumeFromIndex === "function") ? getPipelineResumeFromIndex() : null;
+    const start = Number.isInteger(existingResume) ? Math.min(existingResume, dropFrom) : dropFrom;
+    if (typeof markPipelinePendingFromIndex === "function") {
+      markPipelinePendingFromIndex(start, { label: "수정됨 · 미적용" });
+    }
+    // 라이브는 start 직전까지만 반영돼 있다 — prefix 로만 적용 표시를 갱신한다.
+    if (typeof noteLivePipelineApplied === "function") {
+      noteLivePipelineApplied((state.pipeline || []).slice(0, start));
+    }
+    renderPipeline();
+    refreshRunButton();
+    if (typeof scheduleLogicAutoBackup === "function") scheduleLogicAutoBackup("step-updated-unapplied");
+    toast(`Step ${idx + 1} 코드를 수정했습니다(라이브 미적용). 저장하거나 전체실행하면 반영됩니다.`, "success");
+    return { applied: false, unapplied: true, startIndex: start };
+  }
   // [0.5.15 Bug2 본수정] 마지막 스텝을 수정/에러복구해도 '그 스텝 직전 스냅샷'에서 이어실행한다(전체 재실행 금지).
   // 예전엔 idx<lastBeforeIdx(=마지막이 아님)이거나 resume 보류 중일 때만 이어실행 → 마지막 스텝(예: 6단계)
   // 수정/에러복구가 1단계부터 전체 재실행으로 떨어져 느리고 '멈춤'처럼 보였다. 이어실행 가능(=그 스텝 직전

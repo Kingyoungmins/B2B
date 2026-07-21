@@ -2155,6 +2155,17 @@
         ]
       ],
       "fix": "OUTPUT_LANGUAGE_RULE 신설 후 시스템 프롬프트 4개 맨 앞 + 인라인 2개(검증자·오류설명)에 삽입. 생각(reasoning)까지 한국어 고정, 시트명·파일명 원문 보존은 예외로 명시(번역 회귀 방지)"
+    },
+    {
+      "id": "ASSIST-CHATBOT",
+      "title": "AI 도움 독립 챗봇 — 격리·능력부재 가드·미적용 수정",
+      "checks": [
+        [
+          "node",
+          "diagnostics/_test_assist_chatbot.js"
+        ]
+      ],
+      "fix": "hybrid 아키텍처: 읽기 도구는 자율 루프, 상태 변경은 승인 카드 1경로(applyMode:'none'). LLM 은 apply/run 도구 자체가 없어 '지시 준수'가 아니라 '능력 부재'로 막힌다. 생성기 chatHistory 오염 방지(messagesOverride), 파서 무-throw, 제안 신선도 검사, 하류 스냅샷 폐기+resume 앞당기기+prefix 적용표시"
     }
   ]
 }
