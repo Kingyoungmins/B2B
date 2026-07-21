@@ -568,6 +568,18 @@ function wholeColumnCountRowTwoFailures(code, sourceUserMessage) {
   return ["전체 열 범위에서 동일값 개수/중복 개수를 채우는 요청인데 코드가 2행을 헤더로 가정하고 3행부터 처리합니다. 요청에 '2행이 헤더'라고 명시되지 않았으면 1행을 헤더로 보고 2행부터 포함하거나, 실제 2행이 헤더인지 검사한 뒤 시작 행을 정하세요."];
 }
 
+// [소수점 쪼개기 차단] re.findall(r'\d+') 류 '연속 숫자만' 패턴 + 콤마 join 조합은 '20.0' 을
+// '20','0' 으로 쪼개 "20, 0" 오답을 만든다(실측: 한화테크윈 DSMC ':' 뒤 숫자 추출 — 프롬프트
+// 규칙만으로는 모델이 반복 위반해 정적 게이트로 승격). ''.join(전화번호 숫자 이어붙이기) 같은
+// 정상 패턴은 콤마 join 이 아니므로 걸리지 않는다. 서버 AST 게이트에도 동일 검사가 있다(최종 방어).
+function decimalSplitNumberExtractFailures(code) {
+  const text = String(code || "");
+  const digitOnlyFindall = /\bfind(?:all|iter)\s*\(\s*r?['"](?:\\d\+|\[0-9\]\+)['"]/.test(text);
+  const commaJoin = /['"],\s?['"]\s*\.\s*join\s*\(/.test(text);
+  if (!digitOnlyFindall || !commaJoin) return [];
+  return ["re.findall 의 숫자 패턴이 '연속 숫자만'(\\d+)이라 '20.0' 같은 소수점 값을 '20'과 '0'으로 쪼개 콤마 나열합니다. 소수점 포함 r'\\d+(?:\\.\\d+)?' 패턴을 쓰거나 구분자로 자른 조각을 통째로 기입하고, 매칭이 1개면 join 나열 대신 그 값 하나만 쓰세요."];
+}
+
 function userRequestsSort(text) {
   return /(정렬|내림\s*차순|오름\s*차순|소트|sort|order\s*by)/i.test(String(text || ""));
 }
@@ -2025,6 +2037,7 @@ function validateAssistantCodeBeforeApply(code, context) {
   const commonFailures = [
     ...traceValidationStage("exactReferenceFailures", () => exactReferenceFailures(code, sourceUserMessage)),
     ...traceValidationStage("wholeColumnCountRowTwoFailures", () => wholeColumnCountRowTwoFailures(code, sourceUserMessage)),
+    ...traceValidationStage("decimalSplitNumberExtractFailures", () => decimalSplitNumberExtractFailures(code)),
   ];
   if (commonFailures.length) {
     const attemptsSoFar = Number(context.staticRegenAttempt || 0);
@@ -3257,6 +3270,44 @@ function buildSheetStructureDigest(aoa, sheetName) {
   res.text = lines.join("\n");
   return res;
 }
+// [따옴표 구분자 공백 불일치 → 되묻기] 사용자가 "' : ' 뒤 숫자"처럼 공백 포함 구분자를 따옴표로 지정했는데
+// 실제 셀 값은 '03:20.0'처럼 공백 없이 붙어 있으면, "따옴표는 리터럴" 규칙대로면 전 행 0건이고
+// 공백을 무시하면 의도 확대해석이라 의도가 갈린다 — 한 번 되묻는 게 정답(현장 실측: 한화테크윈 DSMC U열).
+// 요청 '단어' 추측이 아니라 (요청의 명시적 따옴표 토큰) × (실제 셀 값) 대조라는 데이터 근거로만 판단한다.
+function _clarifySeparatorWhitespaceQuestion(text, aoa) {
+  const s = String(text || "");
+  if (!aoa || !aoa.length) return null;
+  const tokens = [];
+  const re = /['"‘’“”]([^'"‘’“”]{2,8})['"‘’“”]/g;
+  let m;
+  while ((m = re.exec(s)) && tokens.length < 4) {
+    const tok = m[1];
+    const core = tok.trim();
+    // 공백이 붙어 있고 알맹이가 짧은 '기호' 구분자(: - / 등)일 때만 대상 — '시내호' 같은 값 리터럴은 제외.
+    if (tok !== core && core && core.length <= 3 && !/[\w가-힣]/.test(core)) tokens.push({ tok, core });
+  }
+  if (!tokens.length) return null;
+  const maxRows = Math.min(aoa.length, 5000);
+  for (const { tok, core } of tokens) {
+    let spacedFound = false;
+    let coreExample = null;
+    for (let r = 0; r < maxRows && !spacedFound; r++) {
+      const row = aoa[r] || [];
+      for (let c = 0; c < row.length; c++) {
+        const v = row[c];
+        if (typeof v !== "string") continue;
+        if (v.indexOf(tok) >= 0) { spacedFound = true; break; }
+        if (coreExample === null && v.indexOf(core) >= 0) coreExample = v;
+      }
+    }
+    if (!spacedFound && coreExample !== null) {
+      const shown = String(coreExample).trim().slice(0, 20);
+      return `실제 데이터에는 '${shown}'처럼 '${core}' 양옆에 공백이 없는 값만 보이고, 요청하신 '${tok}'(공백 포함) 형태는 없습니다. 공백을 무시하고 '${core}' 기준으로 처리할까요, 아니면 공백이 포함된 값만 매칭할까요?`;
+    }
+  }
+  return null;
+}
+
 // 되물음 대상 시트 추정: @범위[파일/시트!범위] / @시트[..] / "○○ 시트" / 현재 활성 시트.
 function _clarifyResolveSheet(text) {
   const s = String(text || "");
@@ -3287,11 +3338,20 @@ async function clarifyVerifierAskIfNeeded(userMessage, options) {
   const resolveSheet = options.resolveSheet || _clarifyResolveSheet;
   const getAoa = options.getAoa || _clarifyGetAoa;
   let digest = { text: "", hasLandmarks: false, totalRows: [] };
+  let aoaForChecks = null;
   try {
     const sheet = resolveSheet(String(userMessage || ""));
     const aoa = options.aoa || (typeof getAoa === "function" ? getAoa(sheet) : null);
+    aoaForChecks = aoa;
     digest = buildSheetStructureDigest(aoa, sheet);
   } catch (_) { /* 데이터 못 보면 다이제스트 없이 진행 */ }
+
+  // [데이터 근거 결정형] 따옴표 구분자의 공백이 실제 셀 값과 안 맞으면 LLM 게이트와 무관하게 되묻는다
+  // (@범위 멘션이 있으면 아래 vague 게이트가 항상 통과라 이 경로가 유일한 검출 지점).
+  try {
+    const sepQ = _clarifySeparatorWhitespaceQuestion(userMessage, aoaForChecks);
+    if (sepQ) return sepQ;
+  } catch (_) {}
 
   // 게이트: '데이터에 지뢰가 있음'(구조) 또는 '요청이 막연함'(휴리스틱)일 때만 LLM 검증.
   // → 평범한 표 + 구체 요청이면 LLM 호출 없이 통과(지연 0). 단어에 의존하지 않는다.
