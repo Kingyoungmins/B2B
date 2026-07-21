@@ -25,6 +25,9 @@ CHECKS = {
     "scripts\\drop-handling.js": ["runnerHandleForName", "미해결 실참조 노출", "runnerSheetOwnersFromCode"],
     # 빌드 스탬프가 0.6.2 여야 한다(0.6.1 복제 폴더라 버전 표기가 안 올라간 이력 있음).
     "scripts\\config.js": ["b2b-0.6.2-"],
+    # [구분자 공백/소수점] 0건 매칭 · '20, 0' 오답 방어가 번들됐는지(프롬프트 + 클라 게이트).
+    "scripts\\file-schema.js": ["구분자", "소수점"],
+    "scripts\\chat-ui.js": ["decimalSplitNumberExtractFailures", "_clarifySeparatorWhitespaceQuestion"],
 }
 
 fails = 0
