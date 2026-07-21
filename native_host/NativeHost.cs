@@ -110,6 +110,11 @@ namespace B2BNativeHost
         private readonly TableLayoutPanel rightLayout;
         private readonly FlowLayoutPanel nativeFileTabs;
         private readonly Panel excelPanel;
+        // [AI 도움 팝업] WebView 는 SplitContainer 왼쪽에만 있어 HTML 팝업이 우측(네이티브 Excel 영역)
+        // 위로 못 올라간다 — 진짜 OS 창(별도 Form + WebView2)으로 띄우고 메인 페이지와 메시지를 중계한다.
+        private CoreWebView2Environment sharedWebEnv;
+        private Form assistForm;
+        private WebView2 assistWeb;
         private readonly Label excelLoadingLabel;
         private readonly Label startupSplash;
         private Process serverProcess;
@@ -473,6 +478,7 @@ namespace B2BNativeHost
 
                 Program.Log("Initializing WebView2");
                 CoreWebView2Environment env = await CreateWebViewEnvironmentAsync();
+                sharedWebEnv = env;   // [AI 도움 팝업] 같은 프로세스의 두 번째 WebView2 는 같은 환경을 써야 한다
                 await webView.EnsureCoreWebView2Async(env);
                 webView.CoreWebView2.Settings.AreDefaultContextMenusEnabled = false;
                 webView.CoreWebView2.Settings.AreDevToolsEnabled =
@@ -670,6 +676,129 @@ namespace B2BNativeHost
                 Task ignore = RestartPythonServerAsync(false);
                 return;
             }
+            if (message.StartsWith("B2B_ASSIST_POPUP	", StringComparison.Ordinal))
+            {
+                HandleAssistPopupCommand(message.Substring("B2B_ASSIST_POPUP	".Length));
+                return;
+            }
+            if (message.StartsWith("B2B_ASSIST_TO_POPUP	", StringComparison.Ordinal))
+            {
+                RelayToAssistPopup(message.Substring("B2B_ASSIST_TO_POPUP	".Length));
+                return;
+            }
+        }
+
+        // ── [AI 도움 팝업] ─────────────────────────────────────────────────────────
+        // TopMost 를 쓰지 않는다 — 항상 위 창은 다른 앱 사용까지 방해한다. Owner 관계면 호스트/Excel
+        // 오버레이와 자연스러운 z-순서로 겹치고(클릭한 쪽이 위), 호스트 최소화 때 같이 숨는다.
+        private void HandleAssistPopupCommand(string action)
+        {
+            bool visible = assistForm != null && !assistForm.IsDisposed && assistForm.Visible;
+            if (action == "close" || (action == "toggle" && visible))
+            {
+                if (visible) assistForm.Hide();
+                NotifyMainAssist("{\"t\":\"popup-closed\"}");
+                return;
+            }
+            Task ignore = EnsureAssistPopupAsync();
+        }
+
+        private async Task EnsureAssistPopupAsync()
+        {
+            try
+            {
+                if (assistForm == null || assistForm.IsDisposed)
+                {
+                    assistForm = new Form();
+                    assistForm.Text = "AI 도움";
+                    assistForm.StartPosition = FormStartPosition.Manual;
+                    assistForm.Size = new Size(470, 640);
+                    assistForm.MinimumSize = new Size(330, 320);
+                    assistForm.ShowInTaskbar = false;
+                    assistForm.Owner = this;
+                    try
+                    {
+                        assistForm.Location = new Point(
+                            Math.Max(0, this.Location.X + this.Width - 500),
+                            Math.Max(0, this.Location.Y + 90));
+                    }
+                    catch { }
+                    assistForm.FormClosing += delegate(object s2, FormClosingEventArgs e2)
+                    {
+                        // X 를 눌러도 파괴하지 않고 숨긴다 — WebView 상태(스크롤/입력 중 텍스트)가 유지되고
+                        // 다시 열 때 즉시 뜬다. 앱 종료(owner 종료) 때는 CloseReason 이 달라 그대로 닫힌다.
+                        if (e2.CloseReason == CloseReason.UserClosing)
+                        {
+                            e2.Cancel = true;
+                            assistForm.Hide();
+                            NotifyMainAssist("{\"t\":\"popup-closed\"}");
+                        }
+                    };
+                    assistWeb = new WebView2();
+                    assistWeb.Dock = DockStyle.Fill;
+                    assistForm.Controls.Add(assistWeb);
+                    CoreWebView2Environment env = sharedWebEnv;
+                    if (env == null) env = await CreateWebViewEnvironmentAsync();
+                    await assistWeb.EnsureCoreWebView2Async(env);
+                    assistWeb.CoreWebView2.Settings.AreDefaultContextMenusEnabled = false;
+                    assistWeb.CoreWebView2.WebMessageReceived += delegate(object s3, CoreWebView2WebMessageReceivedEventArgs e3)
+                    {
+                        try { HandleAssistWebMessage(e3.TryGetWebMessageAsString()); }
+                        catch (Exception ex3) { Program.Log("Assist web message failed: " + ex3.Message); }
+                    };
+                    assistWeb.CoreWebView2.Navigate("http://127.0.0.1:" + port + "/assist.html?nativeShell=1");
+                    Program.Log("Assist popup created");
+                }
+                assistForm.Show();
+                assistForm.Activate();
+                NotifyMainAssist("{\"t\":\"popup-opened\"}");
+            }
+            catch (Exception ex)
+            {
+                Program.Log("Assist popup failed: " + ex);
+                NotifyMainAssist("{\"t\":\"popup-failed\"}");
+            }
+        }
+
+        private void HandleAssistWebMessage(string message)
+        {
+            if (String.IsNullOrEmpty(message)) return;
+            if (InvokeRequired)
+            {
+                BeginInvoke(new Action<string>(HandleAssistWebMessage), message);
+                return;
+            }
+            if (message.StartsWith("B2B_ASSIST_TO_MAIN	", StringComparison.Ordinal))
+            {
+                NotifyMainAssist(message.Substring("B2B_ASSIST_TO_MAIN	".Length));
+                return;
+            }
+            if (message.StartsWith("B2B_ASSIST_POPUP	", StringComparison.Ordinal))
+            {
+                HandleAssistPopupCommand(message.Substring("B2B_ASSIST_POPUP	".Length));
+                return;
+            }
+        }
+
+        // 메인/팝업 페이지는 {"__b2bAssist": ...} 봉투로 받는다(다른 message 리스너와 충돌 방지).
+        private void NotifyMainAssist(string json)
+        {
+            try
+            {
+                if (webView != null && webView.CoreWebView2 != null)
+                    webView.CoreWebView2.PostWebMessageAsString("{\"__b2bAssist\":" + json + "}");
+            }
+            catch (Exception ex) { Program.Log("NotifyMainAssist failed: " + ex.Message); }
+        }
+
+        private void RelayToAssistPopup(string json)
+        {
+            try
+            {
+                if (assistWeb != null && assistWeb.CoreWebView2 != null)
+                    assistWeb.CoreWebView2.PostWebMessageAsString("{\"__b2bAssist\":" + json + "}");
+            }
+            catch (Exception ex) { Program.Log("RelayToAssistPopup failed: " + ex.Message); }
         }
 
         // [0.5.16 #1] 실행기(runner)는 헤드리스 — 우측 패널(파일탭+Excel 영역)을 접어 WebView 가 창을 꽉 채운다.

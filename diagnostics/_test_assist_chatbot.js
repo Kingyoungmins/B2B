@@ -220,5 +220,41 @@ ck("(35) assist 스크립트가 pipeline/chat-ui 뒤에 로드",
      /\.assist-popup \{[\s\S]{0,400}position: fixed/.test(cssSrc) && !/\.assist-drawer \{/.test(cssSrc));
 }
 
+// ── 11. 네이티브 팝업(진짜 OS 창) 브리지 ──────────────────────────────────
+// WebView 는 SplitContainer 왼쪽에만 있어 DOM 팝업이 우측(네이티브 Excel 영역) 위로 못 올라간다
+// (사용자 실측). C# 이 별도 창을 띄우고 메인 페이지와 메시지를 중계해야 한다.
+{
+  const csSrc = rd("native_host/NativeHost.cs");
+  const popupHtml = rd("assist.html");
+  const popupJs = rd("scripts/assist-popup.js");
+
+  ck("(50) C# 이 팝업 명령·양방향 중계를 처리",
+     /B2B_ASSIST_POPUP/.test(csSrc) && /B2B_ASSIST_TO_POPUP/.test(csSrc)
+     && /B2B_ASSIST_TO_MAIN/.test(csSrc) && /EnsureAssistPopupAsync/.test(csSrc));
+  ck("(51) 팝업 창은 TopMost 가 아니라 Owner 관계(다른 앱 방해 금지)",
+     /assistForm\.Owner = this/.test(csSrc)
+     && !/assistForm\.TopMost\s*=\s*true/.test(csSrc));
+  ck("(52) 팝업 X = 숨김(상태 유지) + 메인에 닫힘 통지",
+     /e2\.Cancel = true;\s*\n\s*assistForm\.Hide\(\)/.test(csSrc)
+     && /popup-closed/.test(csSrc));
+  ck("(53) 두 번째 WebView2 는 같은 환경 공유(같은 프로세스 필수 조건)",
+     /sharedWebEnv = env/.test(csSrc) && /CoreWebView2Environment env = sharedWebEnv/.test(csSrc));
+
+  ck("(54) assist.html 존재 + 팝업 뷰 로드 + 미연결 안내",
+     /assist-popup\.js/.test(popupHtml) && /assist-offline/.test(popupHtml));
+  ck("(55) 팝업 뷰는 상태를 직접 만지지 않음(순수 화면)",
+     !/state\.pipeline|replaceLogicAt|assistCommitProposal|callAssistLLM/.test(popupJs));
+  ck("(56) 팝업 뷰: ready 핸드셰이크 + 커밋은 메시지로 위임",
+     /post\(\{ t: "ready" \}\)/.test(popupJs) && /t: "commit", pid/.test(popupJs));
+
+  ck("(57) 메인 브리지: 이력 재생·user·commit·clear 처리",
+     /case "ready":/.test(uiSrc) && /case "user":/.test(uiSrc)
+     && /case "commit":/.test(uiSrc) && /case "clear":/.test(uiSrc));
+  ck("(58) 구버전 exe 폴백(무응답 시 DOM 팝업)",
+     /_assistNativeAckTimer = setTimeout/.test(uiSrc) && /assistToggleDrawer\(\)/.test(uiSrc));
+  ck("(59) 브라우저 모드는 기존 DOM 팝업 유지",
+     /assistNativeShellAvailable\(\)/.test(uiSrc) && /nativeShell=1/.test(uiSrc));
+}
+
 console.log("\n=== RESULT: " + (fails === 0 ? "ALL PASS" : fails + " FAIL") + " ===");
 process.exit(fails ? 1 : 0);

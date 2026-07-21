@@ -278,12 +278,108 @@ function assistToggleDrawer(force) {
   }
 }
 
+/* ── 네이티브 팝업(별도 OS 창) 브리지 ───────────────────────────────────────
+   WebView 는 SplitContainer 왼쪽에만 있어 DOM 팝업이 우측(네이티브 Excel 영역) 위로 못 올라간다
+   (사용자 실측). 네이티브 셸에서는 C# 이 진짜 창(assist.html + WebView2)을 띄우고, 이 페이지의
+   엔진(assistHandleUserMessage/assistCommitProposal)과 창 사이를 메시지로 중계한다.
+   구버전 exe(중계 미지원)면 열기 요청에 응답이 없다 → 1.2초 내 무응답 시 DOM 팝업으로 폴백. */
+let _assistNativeMode = false;      // 네이티브 창이 떠 있는가(버튼 표시용)
+let _assistNativeAckTimer = null;
+
+function assistNativeShellAvailable() {
+  return !!(window.chrome && window.chrome.webview && /[?&]nativeShell=1/.test(location.search));
+}
+function assistPostToHost(text) {
+  try { window.chrome.webview.postMessage(text); } catch (_) {}
+}
+function assistSendToPopup(obj) {
+  assistPostToHost("B2B_ASSIST_TO_POPUP	" + JSON.stringify(obj));
+}
+
+function assistSetButtonOn(on) {
+  const btn = document.getElementById("btn-ai-help");
+  if (btn) { btn.classList.toggle("on", !!on); btn.setAttribute("aria-pressed", String(!!on)); }
+}
+
+function assistEnsureNativeBridge() {
+  if (window.__b2bAssistBridgeBound || !assistNativeShellAvailable()) return;
+  window.__b2bAssistBridgeBound = true;
+  window.chrome.webview.addEventListener("message", (ev) => {
+    let data = ev && ev.data;
+    if (typeof data === "string") { try { data = JSON.parse(data); } catch (_) { return; } }
+    const m = data && data.__b2bAssist;
+    if (!m || typeof m.t !== "string") return;
+    try { assistHandleBridgeMessage(m); } catch (err) { console.warn("[assist] bridge", err); }
+  });
+}
+
+function assistHandleBridgeMessage(m) {
+  switch (m.t) {
+    case "popup-opened":
+      _assistNativeMode = true;
+      clearTimeout(_assistNativeAckTimer);
+      assistSetButtonOn(true);
+      break;
+    case "popup-closed":
+      _assistNativeMode = false;
+      assistSetButtonOn(false);
+      break;
+    case "popup-failed":
+      _assistNativeMode = false;
+      clearTimeout(_assistNativeAckTimer);
+      assistToggleDrawer(true);            // 네이티브 실패 → DOM 팝업으로라도 연다
+      break;
+    case "ready":                          // 팝업 페이지 로드 완료 → 대화 이력 재생
+      assistSendToPopup({
+        t: "history",
+        items: ((state.assist && state.assist.history) || []).slice(-40)
+          .map(x => ({ role: x.role, content: String(x.content || "").slice(0, 4000) })),
+      });
+      break;
+    case "user":
+      assistHandleUserMessage(String(m.text || ""), {
+        onStatus: (s) => assistSendToPopup({ t: "status", s }),
+        onAssistantText: (t) => assistSendToPopup({ t: "assistant", text: t }),
+        onToolTrace: (name, result) => assistSendToPopup({ t: "trace", name, ok: !(result && result.ok === false) }),
+        onProposal: (p) => assistSendToPopup({ t: "proposal", proposal: p }),
+      });
+      break;
+    case "commit": {
+      const r = assistCommitProposal(m.pid, Array.isArray(m.picked) ? m.picked : []);
+      assistSendToPopup({
+        t: "commit-result", pid: m.pid,
+        ok: !!(r && r.ok), error: (r && r.error) || "",
+        companions: (r && r.companions) || null,
+      });
+      break;
+    }
+    case "clear":
+      state.assist = { history: [] };
+      assistSendToPopup({ t: "cleared" });
+      break;
+  }
+}
+
 (function assistBindButton() {
   const bind = () => {
     const btn = document.getElementById("btn-ai-help");
     if (!btn || btn._assistBound) return;
     btn._assistBound = true;
-    btn.onclick = () => assistToggleDrawer();
+    btn.onclick = () => {
+      if (assistNativeShellAvailable()) {
+        assistEnsureNativeBridge();
+        const opening = !_assistNativeMode;
+        assistPostToHost("B2B_ASSIST_POPUP	toggle");
+        if (opening) {
+          clearTimeout(_assistNativeAckTimer);
+          _assistNativeAckTimer = setTimeout(() => {
+            if (!_assistNativeMode) assistToggleDrawer();   // 구버전 exe 폴백
+          }, 1200);
+        }
+        return;
+      }
+      assistToggleDrawer();                                  // 브라우저 모드: DOM 팝업
+    };
   };
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", bind);
   else bind();
