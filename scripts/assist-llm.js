@@ -45,6 +45,13 @@ function assistHistoryMessages(extraTail) {
  * @param {object} options {signal, onDelta, temperature}
  * @returns {Promise<string>} 어시스턴트 응답 전문
  */
+// [검토 #3] think 태그 방어 — thinkMode:false 를 보내도 Qwen 이 규약을 어기고 <think> 를 뱉는
+// 실측이 있다. 생성기 경로의 stripThink 는 callLLMOneShot 내부 로컬이라 여기서 자체 제거한다.
+// 안 지우면 추론 본문이 사용자에게 노출되고, 폐기됐어야 할 추론 속 액션 블록을 파서가 주워 실행한다.
+function assistStripThink(s) {
+  return String(s || "").replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
+}
+
 async function callAssistLLM(systemPrompt, tailMessages, options) {
   options = options || {};
   const messages = assistHistoryMessages(tailMessages);
@@ -52,13 +59,17 @@ async function callAssistLLM(systemPrompt, tailMessages, options) {
     // Anthropic 경로는 히스토리를 인자로 받는 형태가 아니라, 여기선 단발 호출로 충분하다
     // (도구 루프의 문맥은 tailMessages 로 매 라운드 재주입되므로 손실 없음).
     const merged = messages.map(m => `[${m.role}] ${m.content}`).join("\n\n");
-    return await callLLMOneShot(systemPrompt, merged, { signal: options.signal, maxTokens: 4096 });
+    return assistStripThink(await callLLMOneShot(systemPrompt, merged, { signal: options.signal, maxTokens: 4096 }));
   }
-  return await callOpenAICompatOnce(systemPrompt, {
+  // [검토 #3] callOpenAICompatOnce 직접 호출은 생성기 경로의 3회 재시도·지수 대기·think 폴백을 전부
+  // 잃어 일시 오류 1번에 라운드가 통째로 실패했다. 재시도 래퍼(callOpenAICompat)를 경유한다 —
+  // messagesOverride/signal/onDelta 는 옵션 스프레드로 그대로 전달된다(중단 시에는 재시도 안 함).
+  const reply = await callOpenAICompat(systemPrompt, {
     messagesOverride: messages,
     thinkMode: false,                 // 항상 OFF (위 주석 참조)
     signal: options.signal,
     onDelta: options.onDelta,
     temperature: options.temperature,
   });
+  return assistStripThink(reply);
 }

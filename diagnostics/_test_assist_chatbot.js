@@ -27,8 +27,10 @@ ck("(1) 격리 호출은 chatHistory 에 push 하지 않음",
    && /if \(!_keepHistory\) return content;/.test(llmSrc));
 ck("(2) messagesOverride 로 자체 메시지만 사용",
    /Array\.isArray\(options\.messagesOverride\)\s*\?\s*\[\{ role: "system"/.test(llmSrc));
-ck("(3) assist 는 callLLM\\/callLLMOneShot 을 직접 쓰지 않음(Anthropic 폴백 제외)",
-   !/\bcallLLM\s*\(/.test(coreSrc), "core 에서 callLLM 직접 호출 발견");
+// (3) core 의 로컬 `const callLLM` 워치독 래퍼는 callAssistLLM 을 경유한다 — 금지 대상은
+//     생성기 전역 callLLMOneShot 직접 호출(히스토리 오염 경로)뿐이다.
+ck("(3) assist 는 생성기 LLM 경로를 직접 쓰지 않음(callAssistLLM 경유)",
+   !/\bcallLLMOneShot\s*\(/.test(coreSrc) && /callAssistLLM\(/.test(coreSrc));
 ck("(4) state.assist 슬롯 분리", /assist: \{ history: \[\] \}/.test(rd("scripts/state.js")));
 
 // ── 2. 능력 부재: LLM 이 부를 수 있는 쓰기 경로가 없어야 한다 ───────────────
@@ -109,7 +111,11 @@ ck("(19) 중국어 혼입 감지", vm.runInContext("assistHasChineseLeak(__cn)",
 ck("(24) applyMode:\"none\" 분기 존재", /opts && opts\.applyMode === "none"/.test(pipeSrc));
 ck("(25) 하류 스냅샷 폐기", /delete next\[i\]\._preApplySnapshot/.test(pipeSrc));
 ck("(26) 교차파일이면 자기 자신부터 폐기", /if \(writesCross\) dropFrom = idx;/.test(pipeSrc));
-ck("(27) resume 는 앞당기기만(Math.min)", /Math\.min\(existingResume, dropFrom\)/.test(pipeSrc));
+// (27) [off-by-one 본수정 반영] 상태 경계(start)는 '수정된 스텝 자신(idx)'부터 — dropFrom(idx+1)을
+//      쓰면 수정 스텝이 적용됨으로 찍히고 새 코드가 실행에서 빠진다. dropFrom 은 스냅샷 폐기 전용.
+ck("(27) resume/보류 경계는 수정 스텝 자신(idx)부터 + 앞당기기만",
+   /Math\.min\(existingResume, idx\)/.test(pipeSrc)
+   && !/Math\.min\(existingResume, dropFrom\)/.test(pipeSrc));
 ck("(28) noteLivePipelineApplied 는 prefix 만",
    /noteLivePipelineApplied\(\(state\.pipeline \|\| \[\]\)\.slice\(0, start\)\)/.test(pipeSrc));
 ck("(29) trustedStatic/extendedTimeout 해제",

@@ -717,6 +717,7 @@
 .assist-diff .d-del { color: #b91c1c; }
 .assist-diff .d-add { color: #15803d; }
 .assist-diff .d-none { color: var(--ink-300); }
+.assist-diff .d-ctx { color: var(--ink-400); font-style: italic; }
 .assist-card-note { padding: 0 10px; font-size: 11px; color: var(--ink-500); }
 .assist-card-actions { display: flex; gap: 6px; padding: 9px 10px; }
 .assist-ok {

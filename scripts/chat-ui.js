@@ -150,6 +150,28 @@ function _isSyntheticRequest(text) {
   const s = String(text || "");
   return /정적\s*안전\s*검사|안전\s*검사에서\s*막|방금\s*생성한|##\s*실패한\s*코드|##\s*상세\s*오류|##\s*막힌\s*코드|원래\s*사용자\s*요청|Python\s*스킬이\s*정적|VBA\s*로\s*전환|안전\s*재생성|실행\s*중\s*오류가\s*발생|Python\s*(?:→|->)\s*VBA/i.test(s);
 }
+// [번호표 연결] 스텝 생성 시점에 '그 요청 말풍선'의 histId 를 찾아 스텝에 박는다.
+// 생성 직후엔 방금 push 된 내용과 정확히 일치하므로 뒤에서부터 exact 매칭이 결정적이다.
+function originHistIdForPrompt(promptText) {
+  const want = String(promptText || "");
+  if (!want.trim()) return null;
+  const hist = state.chatHistory || [];
+  for (let i = hist.length - 1; i >= 0; i--) {
+    const e = hist[i];
+    if (e && e.role === "user" && e.histId && String(e.content) === want) return e.histId;
+  }
+  return null;
+}
+
+// 대화 없이 태어난 스텝(복붙 캡처·수동 셀편집)인가 — 이런 스텝은 텍스트 매칭을 시도하는 것
+// 자체가 오매핑의 원인이다(빈 prompt 가 순서 폴백까지 흘러 남의 말풍선을 잡았다 — 실측).
+function stepChatOriginless(step) {
+  const pr = String((step && step.prompt) || "").trim();
+  if (!pr || pr === "manual cell edit") return true;
+  if (/\[복붙 캡처\]/.test(String((step && step.code) || ""))) return true;
+  return false;
+}
+
 function _matchStepToChatIndex(step, entries, stepIdx) {
   if (!step || !Array.isArray(entries) || !entries.length) return -1;
   // 코드 말풍선 앞의 '진짜' 사용자 요청을 찾는다. 자동 재생성/복구 프롬프트는 건너뛰고 더 앞으로.
@@ -222,6 +244,20 @@ function scrollChatToStepRequest(step) {
     const container = $("chat-messages");
     if (!container || !step) return false;
     const msgs = Array.from(container.querySelectorAll(".msg"));
+    // 0단: 번호표(originHistId) — 텍스트를 보지 않고 정확히 그 말풍선으로.
+    if (step.originHistId) {
+      const hit = msgs.find(d => d.dataset && d.dataset.histId === String(step.originHistId));
+      if (hit) { _flashChatMessage(hit); return true; }
+      // 번호표는 있는데 말풍선이 없다(삭제/비우기) — 텍스트 폴백으로 '다른' 말풍선을 잡으면
+      // 그게 바로 오매핑이다. 여기서 정직하게 멈춘다.
+      if (typeof toast === "function") toast("이 단계를 만든 대화가 삭제되었거나 비워져 찾을 수 없습니다.", "info");
+      return false;
+    }
+    // 출처 없는 스텝(복붙 캡처·수동 편집): 매칭 시도 자체가 오매핑의 원인 — 안내만 하고 끝.
+    if (stepChatOriginless(step)) {
+      if (typeof toast === "function") toast("이 단계는 복붙 캡처 등으로 만들어져 연결된 대화가 없습니다. 수정 내용을 채팅에 입력하세요.", "info");
+      return false;
+    }
     const entries = msgs.map(div => {
       const role = div.classList.contains("user") ? "user"
         : div.classList.contains("assistant") ? "assistant" : "system";
@@ -249,6 +285,7 @@ function bindChatHistoryEntryToMessage(div, role, content) {
       if (entry && entry.role === role && entry.content === content &&
           entry.histId && !_boundChatHistIds.has(entry.histId)) {
         _boundChatHistIds.add(entry.histId);
+        div.dataset.histId = entry.histId;   // [번호표 연결] 수정 버튼 → 원 요청 스크롤이 ID 로 찾는다
         attachChatMessageDeleteButton(div, entry.histId);
         return;
       }
@@ -1849,6 +1886,7 @@ function applyForcedPythonFallback(pythonCode, context) {
   const result = applyLogic({
     id: uid(),
     prompt,
+    originHistId: originHistIdForPrompt(prompt),   // [번호표 연결]
     code: String(pythonCode || ""),
     description: context.originalPythonDesc || "원본 Python 스킬(강제 적용)",
     language: "python",
@@ -2321,6 +2359,16 @@ function addAssistantReply(fullText, replyContext) {
         const result = replaceLogicAt(editTargetId, code, desc, language,
           // 기존 스텝의 VBA 실패→Python 에러복구도 대용량 완주(정적검사 우회+데드라인 확장)를 허용한다.
           { recoveredFromVba: !!(replyContext && replyContext.recoveredFromVba && String(language).toLowerCase() === "python") });
+        if (result !== false) {
+          // [번호표 연결] 채팅으로 내용을 바꿨으면 출처도 이 수정 요청으로 갱신한다 — 캡처로 태어난
+          // 스텝도 이 순간부터 연결된 대화가 생긴다. prompt 는 건드리지 않는다(시트/대상 추론이
+          // step.prompt 를 읽으므로 바꾸면 실행 대상이 흔들린다 — 연결은 번호표만 담당).
+          try {
+            const oh = originHistIdForPrompt((replyContext && replyContext.sourceUserMessage) || "");
+            const st = (state.pipeline || []).find(x => x && x.id === editTargetId);
+            if (oh && st) st.originHistId = oh;
+          } catch (_) {}
+        }
         if (result && !result.error) {
           editApplyBtn.disabled = true;
           rejectBtn.disabled = true;
@@ -2371,7 +2419,9 @@ function addAssistantReply(fullText, replyContext) {
       div.appendChild(actions);
 
       const runApply = () => {
-        const result = applyLogic({ id: uid(), prompt: replyStepPrompt(replyContext), code, description: desc, language,
+        const result = applyLogic({ id: uid(), prompt: replyStepPrompt(replyContext),
+          originHistId: originHistIdForPrompt(replyStepPrompt(replyContext)),   // [번호표 연결]
+          code, description: desc, language,
           // VBA 실패→에러복구가 Python 으로 다시 짠 코드(recoveredFromVba)는 대용량이라 다시 VBA 로 튕기면
           // 안 되고 75초에 잘려도 안 된다 → 백엔드 정적검사 우회 + 데드라인 확장으로 완주.
           extendedTimeout: !!(replyContext && replyContext.recoveredFromVba && language === "python") });
@@ -2389,7 +2439,9 @@ function addAssistantReply(fullText, replyContext) {
       const runInsert = () => {
         const preferredPosition = replyContext && Number(replyContext.suggestInsertPosition);
         openInsertPositionDialog(state.pipeline.length, (position) => {
-          const result = insertLogic({ id: uid(), prompt: replyStepPrompt(replyContext), code, description: desc, language }, position);
+          const result = insertLogic({ id: uid(), prompt: replyStepPrompt(replyContext),
+          originHistId: originHistIdForPrompt(replyStepPrompt(replyContext)),   // [번호표 연결]
+          code, description: desc, language }, position);
           applyBtn.disabled = true;
           insertBtn.disabled = true;
           rejectBtn.disabled = true;
@@ -3391,6 +3443,12 @@ async function sendChat() {
   // [#5] 인플라이트 락: 처리 중에는 버튼 클릭/Enter 재입력을 막아 같은 요청 중복 전송을 방지.
   // (락 설정 이후의 await 는 락이 잡힌 상태라 재진입이 끼어들 수 없음. 해제는 finally/조기반환 지점.)
   if (window.__b2bChatInFlight) { toast("이전 요청을 처리 중입니다. 잠시 후 다시 시도하세요.", "error"); return; }
+  // [검토 #18] 역방향 상호배제 — AI 도움이 도구 루프를 도는 중에 생성기 채팅이 시작되면 두 대화가
+  // 같은 Excel/파이프라인 상태를 두고 겹친다(assist 쪽은 시작 시 이쪽을 확인하는데 반대는 없었다).
+  if (typeof assistIsBusy === "function" && assistIsBusy()) {
+    toast("AI 도움 창이 응답 중입니다. 끝나거나 중단한 뒤 다시 시도하세요.", "error");
+    return;
+  }
   window.__b2bChatInFlight = true;
   // 전송 시점의 수정 대상 step을 캡처해두면, 이후 사용자가 수정 모드를 토글해도 응답 버튼은 올바른 step을 가리킨다.
   const editTargetId = state.editingStepId || null;

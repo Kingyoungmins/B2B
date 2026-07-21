@@ -9,6 +9,10 @@
    =================================================================== */
 
 const ASSIST_FENCE = "b2b-action";
+// 액션 블록 스캔 상한. replaceStepCode 의 newCode 는 pipeline.step 이 주는 코드(최대 12000자)에
+// JSON 이스케이프(줄바꿈/따옴표)가 붙어 1.5~2배로 불어난다 — 8000이면 통짜 제안이 파싱 실패로
+// 유실되고 원문 JSON 이 노출됐다(검토 #12). 32000 이면 12000자 코드도 여유 있게 담긴다.
+const ASSIST_ACTION_SCAN_MAX = 32000;
 
 // 응답에서 액션 JSON 을 뽑는다. 3단 폴백(펜스 → 느슨한 펜스 → 중괄호 균형 스캔).
 function assistParseAction(reply) {
@@ -24,41 +28,53 @@ function assistParseAction(reply) {
   };
 
   let obj = null;
-  const fenced = new RegExp("```\\s*" + ASSIST_FENCE + "\\s*\\n([\\s\\S]{0,8000}?)```", "i").exec(text);
-  if (fenced) obj = tryJson(fenced[1].trim());
+  // block = 응답에서 액션으로 채택한 원문 조각. 오케스트레이터가 '사람이 읽을 부분'을 만들 때
+  // 이 조각을 정확히 걷어낸다(펜스 없는 bare JSON 은 정규식 스트립으로는 못 걷어내 노출됐다 — 검토 #6).
+  let block = null;
+  const fenced = new RegExp("```\\s*" + ASSIST_FENCE + "\\s*\\n([\\s\\S]{0," + ASSIST_ACTION_SCAN_MAX + "}?)```", "i").exec(text);
+  if (fenced) { obj = tryJson(fenced[1].trim()); if (obj) block = fenced[0]; }
   if (!obj) {
-    const anyFence = /```[a-z-]{0,16}\s*\n(\{[\s\S]{0,8000}?\})\s*```/i.exec(text);
-    if (anyFence) obj = tryJson(anyFence[1].trim());
+    const anyFence = new RegExp("```[a-z-]{0,16}\\s*\\n(\\{[\\s\\S]{0," + ASSIST_ACTION_SCAN_MAX + "}?\\})\\s*```", "i").exec(text);
+    if (anyFence) { obj = tryJson(anyFence[1].trim()); if (obj) block = anyFence[0]; }
   }
   if (!obj) {
     // 펜스 없이 뱉은 경우: 첫 '{' 부터 균형 잡힌 곳까지
     const st = text.indexOf("{");
     if (st >= 0) {
       let depth = 0, inStr = false, esc = false;
-      for (let i = st; i < text.length && i < st + 8000; i++) {
+      for (let i = st; i < text.length && i < st + ASSIST_ACTION_SCAN_MAX; i++) {
         const ch = text[i];
         if (esc) { esc = false; continue; }
         if (ch === "\\") { esc = true; continue; }
         if (ch === '"') { inStr = !inStr; continue; }
         if (inStr) continue;
         if (ch === "{") depth++;
-        else if (ch === "}") { depth--; if (depth === 0) { obj = tryJson(text.slice(st, i + 1)); break; } }
+        else if (ch === "}") { depth--; if (depth === 0) { obj = tryJson(text.slice(st, i + 1)); if (obj) block = text.slice(st, i + 1); break; } }
       }
     }
   }
-  if (!obj || typeof obj !== "object") return { action: "final", args: {}, raw: text, parsed: false };
+  if (!obj || typeof obj !== "object") return { action: "final", args: {}, raw: text, parsed: false, block: null };
 
   // 별칭 정규화
-  const action = String(obj.action || obj.tool || obj.name || obj.function || "final").trim();
-  const args = obj.args || obj.arguments || obj.parameters || obj.input || {};
-  return { action, args: (args && typeof args === "object") ? args : {}, raw: text, parsed: true };
+  let action = String(obj.action || obj.tool || obj.name || obj.function || "final").trim();
+  let args = obj.args || obj.arguments || obj.parameters || obj.input || {};
+  args = (args && typeof args === "object") ? args : {};
+  // [검토 #6] 모델이 {"action":"pipeline.list"} / {"tool":"diag.stepStatus"} 처럼 도구명을 action 에
+  // 직접 쓰는 위반이 흔한데, 오케스트레이터는 action==="tool" 만 디스패치한다 — 여기서 등록된
+  // 도구명이면 정식 형태로 재작성해 별칭 수용 의도를 실제로 완성한다.
+  if (action !== "tool" && action !== "propose" && action !== "final"
+      && typeof ASSIST_TOOLS === "object" && ASSIST_TOOLS && ASSIST_TOOLS[action]) {
+    args = { tool: action, ...args };
+    action = "tool";
+  }
+  return { action, args, raw: text, parsed: true, block };
 }
 
 // 응답 본문에서 액션 블록을 걷어낸 '사람이 읽을 부분'
 function assistStripActionBlock(reply) {
   return String(reply || "")
-    .replace(new RegExp("```\\s*" + ASSIST_FENCE + "[\\s\\S]{0,8000}?```", "gi"), "")
-    .replace(/```[a-z-]{0,16}\s*\n\{[\s\S]{0,8000}?\}\s*```/gi, "")
+    .replace(new RegExp("```\\s*" + ASSIST_FENCE + "[\\s\\S]{0," + ASSIST_ACTION_SCAN_MAX + "}?```", "gi"), "")
+    .replace(new RegExp("```[a-z-]{0,16}\\s*\\n\\{[\\s\\S]{0," + ASSIST_ACTION_SCAN_MAX + "}?\\}\\s*```", "gi"), "")
     .trim();
 }
 
@@ -101,7 +117,7 @@ function assistStoreProposal(p) {
 
 function assistTakeProposal(id) {
   const p = _assistProposals.get(id);
-  if (!p) return { ok: false, error: "제안을 찾을 수 없습니다(시간이 지나 만료됐을 수 있습니다)." };
+  if (!p) return { ok: false, error: "제안을 찾을 수 없습니다(시간이 지나 만료됐거나 이미 반영됐습니다)." };
   if (Date.now() - p.createdAt > ASSIST_PROPOSAL_TTL_MS) {
     _assistProposals.delete(id);
     return { ok: false, error: "제안이 만료됐습니다. 다시 요청해 주세요." };
@@ -116,6 +132,11 @@ function assistTakeProposal(id) {
   if (assistHashCode(cur.code) !== p.baseHash) {
     return { ok: false, error: "제안을 만든 뒤 이 단계의 코드가 바뀌었습니다. 다시 확인해 주세요." };
   }
-  _assistProposals.delete(id);
+  // [검토 #8] 여기서 지우지 않는다 — 커밋이 일시 사유(Excel 적용 중 등)로 실패하면 카드 버튼으로
+  // 재시도할 수 있어야 한다. 소거는 커밋 '성공' 후 assistConsumeProposal 로 한다(이중 커밋 방지).
   return { ok: true, proposal: p, step: cur };
+}
+
+function assistConsumeProposal(id) {
+  _assistProposals.delete(id);
 }

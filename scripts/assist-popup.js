@@ -48,19 +48,26 @@
     if (el) el.textContent = s || "";
   }
 
+  // [검토 #10] 같은 줄번호끼리 비교하면 줄 하나 삽입에도 이후 전체가 어긋난 diff 로 보였다(승인 근거
+  // 왜곡). 공통 앞/뒤를 걷어낸 '실제 변경 블록'만 보여주고, 잘리면 반드시 표시한다(assist-ui 와 동일).
   function buildDiffHtml(oldCode, newCode) {
     const a = String(oldCode || "").split("\n");
     const b = String(newCode || "").split("\n");
+    let pre = 0;
+    while (pre < a.length && pre < b.length && a[pre] === b[pre]) pre++;
+    let endA = a.length, endB = b.length;
+    while (endA > pre && endB > pre && a[endA - 1] === b[endB - 1]) { endA--; endB--; }
+    const dels = a.slice(pre, endA);
+    const adds = b.slice(pre, endB);
+    if (!dels.length && !adds.length) return '<div class="d-none">(줄 단위 차이 없음)</div>';
+    const CAP = 25;
     const rows = [];
-    const max = Math.max(a.length, b.length);
-    let shown = 0;
-    for (let i = 0; i < max && shown < 40; i++) {
-      const x = a[i], y = b[i];
-      if (x === y) continue;
-      if (x != null) { rows.push('<div class="d-del">- ' + esc(x.slice(0, 200)) + "</div>"); shown++; }
-      if (y != null) { rows.push('<div class="d-add">+ ' + esc(y.slice(0, 200)) + "</div>"); shown++; }
-    }
-    return rows.length ? rows.join("") : '<div class="d-none">(줄 단위 차이 없음)</div>';
+    if (pre > 0) rows.push('<div class="d-ctx">… ' + (pre + 1) + '번째 줄부터 변경 …</div>');
+    dels.slice(0, CAP).forEach(x => rows.push('<div class="d-del">- ' + esc(x.slice(0, 200)) + "</div>"));
+    if (dels.length > CAP) rows.push('<div class="d-ctx">… 삭제 ' + (dels.length - CAP) + '줄 더 있음(반영은 코드 전체 기준) …</div>');
+    adds.slice(0, CAP).forEach(y => rows.push('<div class="d-add">+ ' + esc(y.slice(0, 200)) + "</div>"));
+    if (adds.length > CAP) rows.push('<div class="d-ctx">… 추가 ' + (adds.length - CAP) + '줄 더 있음(반영은 코드 전체 기준) …</div>');
+    return rows.join("");
   }
 
   function renderProposal(p) {
@@ -75,9 +82,12 @@
             <span class="assist-comp-text"><s>${esc(String(c.before).slice(0, 70))}</s> → ${esc(String(c.after).slice(0, 70))}</span>
           </label>`).join("")}
       </div>` : "";
-    const warn = p.touchesNames
+    const warn = (p.touchesNames
       ? '<div class="assist-warn">⚠ 파일명/시트명으로 보이는 문자열을 바꿉니다. 이름이 틀리면 실행이 실패합니다.</div>'
-      : "";
+      : "")
+      + (p.kind === "replaceLiteral" && Number(p.occurrences) > 1
+        ? '<div class="assist-warn">⚠ 같은 문자열이 코드에 ' + Number(p.occurrences) + '곳 있어 전부 바뀝니다. 아래 diff 로 확인하세요.</div>'
+        : "");
     const html = `
       <div class="assist-card">
         <div class="assist-card-head">Step ${Number(p.stepNo) || "?"} 코드 수정 제안
@@ -122,10 +132,20 @@
     }
   }
 
+  // [검토 #1] 응답 진행 상태 추적 — 진행 중엔 전송 버튼이 '중지'가 된다. 완료 신호는 메인이 보내는
+  // status:""(루프 finally 의 say(""))와 assistant/proposal/report 수신이다.
+  let busy = false;
+  function setBusy(on) {
+    busy = !!on;
+    const btn = $id("assist-send");
+    if (btn) btn.textContent = busy ? "중지" : "전송";
+  }
+
   function submit(text) {
     const t = String(text || "").trim();
     if (!t) return;
     addMsg("user", t);
+    setBusy(true);
     post({ t: "user", text: t });
   }
 
@@ -182,12 +202,16 @@
         }
         break;
       }
-      case "status": setStatus(m.s); break;
-      case "assistant": addMsg("assistant", m.text); break;
+      case "status":
+        setStatus(m.s);
+        if (!String(m.s || "").trim()) setBusy(false);   // say("") = 라운드 루프 종료 신호
+        break;
+      case "done": setBusy(false); break;                // 조기 거절 포함 모든 종료를 덮는 확정 신호
+      case "assistant": addMsg("assistant", m.text); setBusy(false); break;
       case "trace": addMsg("trace", (m.ok === false ? "✕ " : "· ") + m.name); break;
-      case "proposal": renderProposal(m.proposal || {}); break;
+      case "proposal": renderProposal(m.proposal || {}); setBusy(false); break;
       case "commit-result": onCommitResult(m); break;
-      case "report": renderReport(m.meta || {}); break;
+      case "report": renderReport(m.meta || {}); setBusy(false); break;
       case "report-result": onReportResult(m); break;
       case "cleared": {
         const box = $id("assist-messages");
@@ -205,7 +229,10 @@
   chipsBox.querySelectorAll(".assist-chip").forEach(b => {
     b.onclick = () => submit(CHIPS[Number(b.dataset.i)][1]);
   });
-  const send = () => { const ta = $id("assist-text"); submit(ta.value); ta.value = ""; };
+  const send = () => {
+    if (busy) { post({ t: "stop" }); setStatus("중단 중..."); return; }   // [검토 #1] 진행 중 = 중지 버튼
+    const ta = $id("assist-text"); submit(ta.value); ta.value = "";
+  };
   $id("assist-send").onclick = send;
   $id("assist-text").addEventListener("keydown", (e) => {
     if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); send(); }

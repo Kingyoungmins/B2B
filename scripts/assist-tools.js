@@ -108,7 +108,8 @@ assistDefineTool("diag.stepStatus", { desc: "각 단계가 라이브에 실제�
       return {
         no: i + 1, id: s.id,
         statusChip: st.status || "(없음)",
-        statusText: st.text || "",
+        // [검토 #21] 상태 저장 형태는 {status, label} — st.text 는 존재하지 않는 필드라 항상 "" 였다.
+        statusText: st.label || "",
         unappliedEdit: s._unappliedEdit === true,
         hasSnapshot: !!(snap && snap.resultId),
         snapshotAgeSec: (snap && snap.capturedAt) ? Math.round((Date.now() - snap.capturedAt) / 1000) : null,

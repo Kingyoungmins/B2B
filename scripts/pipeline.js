@@ -2209,7 +2209,12 @@ function replaceLogicAt(stepId, newCode, newDescription, language, opts) {
     if (typeof pushHistory === "function") pushHistory("단계 수정(미적용)");
     state.pipeline = next;
     const existingResume = (typeof getPipelineResumeFromIndex === "function") ? getPipelineResumeFromIndex() : null;
-    const start = Number.isInteger(existingResume) ? Math.min(existingResume, dropFrom) : dropFrom;
+    // [검토 #2·off-by-one 본수정] 상태 경계(start)는 '수정된 스텝 자신(idx)'부터다. dropFrom(기본
+    // idx+1)을 그대로 쓰면 수정 스텝이 '적용됨'으로 찍히고 resume 이 다음 스텝으로 잡혀 새 코드가
+    // 실행에서 빠졌다 — 특히 마지막 스텝 수정은 prefix 시그니처가 전체와 같아져 reconcile no-op
+    // 게이트("적용 상태 변화 없음")까지 통과, 새 코드가 영영 실행되지 않았다. dropFrom 은 '스냅샷
+    // 폐기 범위'(idx 자신의 직전 스냅샷은 이어실행 복원점으로 보존)라는 다른 개념이다.
+    const start = Number.isInteger(existingResume) ? Math.min(existingResume, idx) : idx;
     if (typeof markPipelinePendingFromIndex === "function") {
       markPipelinePendingFromIndex(start, { label: "수정됨 · 미적용" });
     }
@@ -3343,6 +3348,9 @@ function liveEnabledStepsSignature(steps = state.pipeline) {
 
 function noteLivePipelineApplied(steps = state.pipeline) {
   _lastLiveAppliedSignature = liveEnabledStepsSignature(steps);
+  // [검토 #9] 여기 오는 스텝들은 방금 라이브에 실제 반영된 것들이다 — 'AI 도움 미검증 수정' 낙인을
+  // 해제해 저장 시 trustedStatic 승격이 다시 가능해지게 한다(해제 지점이 없어 영구 낙인이었다).
+  try { (steps || []).forEach(s => { if (s && s._unappliedEdit) delete s._unappliedEdit; }); } catch (_) {}
 }
 
 // 라이브 상태를 더 이상 신뢰할 수 없을 때(세션 전부 닫힘/초기화/적용 실패) 호출 —

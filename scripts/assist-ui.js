@@ -8,6 +8,7 @@
    =================================================================== */
 
 let _assistOpen = false;
+let _assistMirrorHidden = false;   // [검토 #20] 👁 미러 버튼의 실제 토글 상태
 
 // 창 위치/크기는 세션 간 유지한다(매번 가운데로 튀면 거슬린다).
 const ASSIST_POS_KEY = "b2b_assist_popup_rect";
@@ -70,18 +71,34 @@ function assistEnsureDom() {
 
   document.getElementById("assist-close").onclick = () => assistToggleDrawer(false);
   document.getElementById("assist-clear").onclick = () => {
+    // [검토 #17] 응답 진행 중 비우면 늦게 도착한 assistant 가 빈 대화 앞에 고아로 붙는다 — 먼저 중단.
+    if (typeof assistIsBusy === "function" && assistIsBusy() && typeof assistAbortCurrent === "function") {
+      assistAbortCurrent();
+    }
     state.assist = { history: [] };
     document.getElementById("assist-messages").innerHTML = "";
     assistRenderChips();
     assistAddMsg("system", "대화를 비웠습니다. 스킬과 파일은 그대로입니다.");
   };
   document.getElementById("assist-mirror-toggle").onclick = () => {
+    // [검토 #20] 기존엔 hide + 120ms 뒤 restore 예약을 '동시에' 걸어 깜빡이기만 했다 — 진짜 토글로.
     try {
-      if (typeof hideAllExcelMirrorWindows === "function") hideAllExcelMirrorWindows();
-      if (typeof scheduleRestoreActiveExcelMirror === "function") scheduleRestoreActiveExcelMirror(120);
+      if (_assistMirrorHidden) {
+        if (typeof scheduleRestoreActiveExcelMirror === "function") scheduleRestoreActiveExcelMirror(0);
+        _assistMirrorHidden = false;
+      } else {
+        if (typeof hideAllExcelMirrorWindows === "function") hideAllExcelMirrorWindows();
+        _assistMirrorHidden = true;
+      }
     } catch (_) {}
   };
   const send = () => {
+    // [검토 #1] 응답 중엔 같은 버튼이 '중지'로 동작한다.
+    if (typeof assistIsBusy === "function" && assistIsBusy()) {
+      if (typeof assistAbortCurrent === "function") assistAbortCurrent();
+      assistSetStatus("중단 중...");
+      return;
+    }
     const ta = document.getElementById("assist-text");
     const text = String(ta.value || "").trim();
     if (!text) return;
@@ -131,11 +148,21 @@ function assistSetStatus(s) {
 
 function assistSubmit(text) {
   if (typeof assistIsBusy === "function" && assistIsBusy()) {
-    assistSetStatus("처리 중입니다...");
+    assistSetStatus("처리 중입니다... (전송 버튼으로 중단할 수 있습니다)");
+    return;
+  }
+  // [검토 #16] 생성기 채팅 중이면 말풍선을 만들기 전에 막는다 — 기존엔 화면에만 남고 히스토리에는
+  // 없는 유령 메시지가 됐고, 상태 문구도 초기화되지 않아 고착됐다.
+  if (typeof window !== "undefined" && window.__b2bChatInFlight) {
+    assistSetStatus("스킬 설계 채팅이 응답 중입니다. 끝난 뒤 다시 시도해 주세요.");
+    setTimeout(() => { if (!(typeof assistIsBusy === "function" && assistIsBusy())) assistSetStatus(""); }, 4000);
     return;
   }
   assistAddMsg("user", text);
-  assistHandleUserMessage(text, {
+  const sendBtn = document.getElementById("assist-send");
+  if (sendBtn) sendBtn.textContent = "중지";
+  const restore = () => { if (sendBtn) sendBtn.textContent = "전송"; };
+  Promise.resolve(assistHandleUserMessage(text, {
     onStatus: assistSetStatus,
     onAssistantText: (t) => assistAddMsg("assistant", t),
     onToolTrace: (name, result) => {
@@ -144,7 +171,7 @@ function assistSubmit(text) {
     },
     onProposal: assistRenderProposalCard,
     onReport: assistRenderReportCard,
-  });
+  })).catch(() => {}).finally(restore);
 }
 
 // 해결 불가 → 제보 카드. [묶음 만들기]를 눌러야만 파일이 만들어진다.
@@ -193,9 +220,13 @@ function assistReportResultHtml(r) {
 // 승인 카드 — 여기 버튼을 눌러야만 스킬이 바뀐다.
 function assistRenderProposalCard(p) {
   const diffHtml = assistBuildDiffHtml(p.oldCode, p.newCode);
-  const warn = p.touchesNames
+  const warn = (p.touchesNames
     ? `<div class="assist-warn">⚠ 파일명/시트명으로 보이는 문자열을 바꿉니다. 이름이 틀리면 실행이 실패합니다.</div>`
-    : "";
+    : "")
+    // [검토 #19] 전역 치환의 부수 변경을 승인 전에 알린다(짧은 from 이 무관한 곳까지 바꾸는 사고 방지).
+    + (p.kind === "replaceLiteral" && Number(p.occurrences) > 1
+      ? `<div class="assist-warn">⚠ 같은 문자열이 코드에 ${Number(p.occurrences)}곳 있어 전부 바뀝니다. 아래 diff 로 확인하세요.</div>`
+      : "");
   // [동반 수정] 코드만 고치면 단계 이름·설명·대화기록에 옛 값이 남아 헷갈리고, 그 기록이 다음
   // 스킬 생성 문맥으로 들어가 옛 값으로 되돌리는 원인이 된다. 기본 체크 상태로 함께 제안한다.
   const comps = Array.isArray(p.companions) ? p.companions : [];
@@ -244,20 +275,25 @@ function assistRenderProposalCard(p) {
   };
 }
 
-// 줄 단위 diff(간단). 큰 코드는 변경 지점 주변만 보여준다.
+// 줄 단위 diff. [검토 #10] 같은 줄번호끼리 비교하면 줄 하나만 삽입돼도 이후 전체가 어긋난 diff 로
+// 보였다(승인 근거 왜곡). 공통 앞/뒤를 걷어낸 '실제 변경 블록'만 보여주고, 잘리면 반드시 표시한다.
 function assistBuildDiffHtml(oldCode, newCode) {
   const a = String(oldCode || "").split("\n");
   const b = String(newCode || "").split("\n");
+  let pre = 0;
+  while (pre < a.length && pre < b.length && a[pre] === b[pre]) pre++;
+  let endA = a.length, endB = b.length;
+  while (endA > pre && endB > pre && a[endA - 1] === b[endB - 1]) { endA--; endB--; }
+  const dels = a.slice(pre, endA);
+  const adds = b.slice(pre, endB);
+  if (!dels.length && !adds.length) return `<div class="d-none">(줄 단위 차이 없음)</div>`;
+  const CAP = 25;
   const rows = [];
-  const max = Math.max(a.length, b.length);
-  let shown = 0;
-  for (let i = 0; i < max && shown < 40; i++) {
-    const x = a[i], y = b[i];
-    if (x === y) continue;
-    if (x != null) { rows.push(`<div class="d-del">- ${escapeHtml(x.slice(0, 200))}</div>`); shown++; }
-    if (y != null) { rows.push(`<div class="d-add">+ ${escapeHtml(y.slice(0, 200))}</div>`); shown++; }
-  }
-  if (!rows.length) return `<div class="d-none">(줄 단위 차이 없음)</div>`;
+  if (pre > 0) rows.push(`<div class="d-ctx">… ${pre + 1}번째 줄부터 변경 …</div>`);
+  dels.slice(0, CAP).forEach(x => rows.push(`<div class="d-del">- ${escapeHtml(x.slice(0, 200))}</div>`));
+  if (dels.length > CAP) rows.push(`<div class="d-ctx">… 삭제 ${dels.length - CAP}줄 더 있음(반영은 코드 전체 기준) …</div>`);
+  adds.slice(0, CAP).forEach(y => rows.push(`<div class="d-add">+ ${escapeHtml(y.slice(0, 200))}</div>`));
+  if (adds.length > CAP) rows.push(`<div class="d-ctx">… 추가 ${adds.length - CAP}줄 더 있음(반영은 코드 전체 기준) …</div>`);
   return rows.join("");
 }
 
@@ -312,6 +348,7 @@ function assistToggleDrawer(force) {
   if (_assistOpen) {
     // 네이티브 미러가 드로어를 덮으므로 잠시 숨긴다(사용자가 [👁 미러] 로 되돌릴 수 있다).
     try { if (typeof hideAllExcelMirrorWindows === "function") hideAllExcelMirrorWindows(); } catch (_) {}
+    _assistMirrorHidden = true;
     const box = document.getElementById("assist-messages");
     if (box && !box.children.length) {
       assistAddMsg("system", "스킬이 뜻대로 안 되거나 무엇을 고쳐야 할지 모를 때 물어보세요. 아래 버튼으로 시작해도 됩니다.");
@@ -319,6 +356,7 @@ function assistToggleDrawer(force) {
     setTimeout(() => { const t = document.getElementById("assist-text"); if (t) t.focus(); }, 60);
   } else {
     try { if (typeof scheduleRestoreActiveExcelMirror === "function") scheduleRestoreActiveExcelMirror(120); } catch (_) {}
+    _assistMirrorHidden = false;
   }
 }
 
@@ -381,13 +419,15 @@ function assistHandleBridgeMessage(m) {
       });
       break;
     case "user":
-      assistHandleUserMessage(String(m.text || ""), {
+      // done 신호는 조기 거절(생성기 채팅 중/이미 처리 중 — finally 를 안 타는 경로)까지 포함해
+      // 모든 종료에서 팝업의 busy(중지 버튼) 상태를 원복한다.
+      Promise.resolve(assistHandleUserMessage(String(m.text || ""), {
         onStatus: (s) => assistSendToPopup({ t: "status", s }),
         onAssistantText: (t) => assistSendToPopup({ t: "assistant", text: t }),
         onToolTrace: (name, result) => assistSendToPopup({ t: "trace", name, ok: !(result && result.ok === false) }),
         onProposal: (p) => assistSendToPopup({ t: "proposal", proposal: p }),
         onReport: (meta) => assistSendToPopup({ t: "report", meta }),
-      });
+      })).catch(() => {}).finally(() => assistSendToPopup({ t: "done" }));
       break;
     case "commit": {
       const r = assistCommitProposal(m.pid, Array.isArray(m.picked) ? m.picked : []);
@@ -398,7 +438,15 @@ function assistHandleBridgeMessage(m) {
       });
       break;
     }
+    case "stop":
+      // [검토 #1] 팝업의 중지 버튼 — 진행 중인 라운드 루프를 abort 한다.
+      if (typeof assistAbortCurrent === "function") assistAbortCurrent();
+      break;
     case "clear":
+      // [검토 #17] 진행 중 비우면 늦게 온 assistant 가 빈 대화 앞에 고아로 붙는다 — 먼저 중단.
+      if (typeof assistIsBusy === "function" && assistIsBusy() && typeof assistAbortCurrent === "function") {
+        assistAbortCurrent();
+      }
       state.assist = { history: [] };
       assistSendToPopup({ t: "cleared" });
       break;

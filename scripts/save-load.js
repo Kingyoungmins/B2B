@@ -190,6 +190,7 @@ function _buildLogicZipEntriesImpl(safeBase, name) {
       // [설명 유실 수정] 카드 라벨은 description 이 제네릭("스킬 생성")이면 prompt(사용자 요청)로
       // 폴백한다. prompt 를 저장하지 않아 불러오면 라벨이 "스킬 생성"으로 남던 문제 → prompt 를 함께 보존.
       prompt: s.prompt || null,
+      originHistId: s.originHistId || null,   // [번호표 연결] chatHistory 의 histId 와 짝 — 함께 저장돼야 왕복된다
       title: s.title || null,   // [사용자 편집 이름] 카드 라벨을 직접 편집한 이름 → zip 에 보존, 불러오면 그 이름으로 표시
       enabled: isStepEnabled(s),
       language: s.language || "javascript",
@@ -705,6 +706,7 @@ async function loadLogicFiles(files) {
       id: s.id || uid(),
       description: s.description || `Step ${idx + 1}`,
       prompt: s.prompt || null,   // [설명 유실 수정] 저장된 사용자 요청을 복원 → 카드 라벨 폴백/에러복구가 live 와 동일하게 동작
+      originHistId: s.originHistId || null,   // [번호표 연결] 수정 버튼 → 원 요청 말풍선 정확 연결(텍스트 매칭 아님)
       title: s.title || null,     // [사용자 편집 이름] 저장된 편집 이름 복원 → 불러오면 편집한 이름으로 표시
       enabled: s.enabled !== false,
       language,
@@ -746,6 +748,30 @@ function openLoadDialog() {
   input.click();
 }
 
+// [구버전 승격] originHistId 없는 스텝(옛 zip): prompt 가 복원된 대화의 user 말풍선과 '정확히 1개'
+// 일치할 때만 번호표를 달아준다(재저장하면 신형이 된다). 0개(대화 비움)·2개 이상(같은 문장 중복)은
+// 모호하므로 승격하지 않는다 — 월 재바인딩과 같은 '단일 명확 매칭만' 원칙. 캡처/수동 스텝은 대상 아님.
+function promoteStepChatOrigins() {
+  try {
+    const users = (state.chatHistory || []).filter(e => e && e.role === "user" && e.histId);
+    if (!users.length) return 0;
+    const norm = (typeof _chatNormForMatch === "function")
+      ? _chatNormForMatch
+      : (t) => String(t || "").replace(/\s+/g, " ").trim().slice(0, 400);
+    let promoted = 0;
+    (state.pipeline || []).forEach(step => {
+      if (!step || step.originHistId) return;
+      const pr = String(step.prompt || "").trim();
+      if (!pr || pr === "manual cell edit") return;
+      const want = norm(pr);
+      if (!want) return;
+      const hits = users.filter(e => norm(e.content) === want);
+      if (hits.length === 1) { step.originHistId = hits[0].histId; promoted += 1; }
+    });
+    return promoted;
+  } catch (_) { return 0; }
+}
+
 function loadLogic(data, filename, meta) {
   // 파이프라인 복원. 자동 실행 X (사용자가 "전체 실행"을 눌러야 적용됨).
   state.pipeline = deepClone(data.pipeline || []);
@@ -771,6 +797,9 @@ function loadLogic(data, filename, meta) {
       });
     }
   } catch (_) {}
+  // [구버전 승격] 대화·파이프라인이 모두 복원된 이 시점에 1회. typeof 가드: 진단 하네스가
+  // loadLogic 만 추출해 실행하는 관행이 있어(실물 재현 테스트들), 미로드 시 조용히 건너뛴다.
+  if (typeof promoteStepChatOrigins === "function") promoteStepChatOrigins();
   state.editingStepId = null;
   // 불러온 파이프라인은 라이브에 아직 적용 안 됨 → 적용추적 시그니처 무효화. 안 하면 첫 '전체 실행'이
   // no-op 으로 거부되거나 옛 서명과 충돌해 "스킬을 적용하지 못했습니다" 가 뜬다. [#18]
@@ -817,7 +846,12 @@ function renderChatFromHistory() {
     if (msg.role === "user") {
       // 내부 프롬프트 스캐폴딩([정확 참조]·에러복구·재생성 등)은 감추고 사용자가 친 부분만 표시.
       const shown = (typeof cleanChatDisplayText === "function") ? cleanChatDisplayText(msg.content) : msg.content;
-      if (shown && shown.trim()) addMessage("user", shown);
+      if (shown && shown.trim()) {
+        const div = addMessage("user", shown);
+        // [번호표 연결] 재렌더 말풍선은 표시용으로 '정리된' 텍스트라 원문 매칭이 안 된다 —
+        // histId 를 DOM 에 실어 스텝의 originHistId 조회가 리로드 후에도 동작하게 한다.
+        if (div && msg.histId) div.dataset.histId = msg.histId;
+      }
     } else if (msg.role === "assistant") {
       addHistoricAssistant(msg.content);
     }

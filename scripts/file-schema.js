@@ -1178,6 +1178,12 @@ function buildEditingContext(editIdx) {
   lines.push("## 수정 대상 단계");
   lines.push(`전체 ${state.pipeline.length}단계 중 Step ${editIdx + 1}을 수정합니다.`);
   lines.push(`기존 설명: "${step.description}"`);
+  // [캡처 스텝 수정 품질] 대화 없이 태어난 스텝은 자연어 의도가 없다 — 코드가 곧 명세임을 명시해
+  // 모델이 '원래 요청'을 지어내 엉뚱하게 다시 쓰는 것을 막는다.
+  if (!String(step.prompt || "").trim() || step.prompt === "manual cell edit"
+      || /\[복붙 캡처\]/.test(String(step.code || ""))) {
+    lines.push("주의: 이 단계는 대화 없이 만들어졌습니다(복붙 캡처/수동 편집). 원래 요청문이 없으므로 아래 코드가 곧 명세입니다 — 코드의 파일·시트·좌표를 근거로만 수정하세요.");
+  }
 
   lines.push("\n## 이 단계의 현재 코드 (수정 대상)");
   // 0.4.11 라이브 엔진은 VBA 다. 수정 대상 코드의 실제 언어로 펜스를 표기해야

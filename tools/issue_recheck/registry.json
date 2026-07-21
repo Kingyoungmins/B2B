@@ -2166,6 +2166,21 @@
         ]
       ],
       "fix": "hybrid 아키텍처: 읽기 도구는 자율 루프, 상태 변경은 승인 카드 1경로(applyMode:'none'). LLM 은 apply/run 도구 자체가 없어 '지시 준수'가 아니라 '능력 부재'로 막힌다. 생성기 chatHistory 오염 방지(messagesOverride), 파서 무-throw, 제안 신선도 검사, 하류 스냅샷 폐기+resume 앞당기기+prefix 적용표시"
+    },
+    {
+      "id": "CAPTURE-CHAT-MISMAP",
+      "title": "복붙 캡처 스텝 수정 시 남의 채팅에 매핑되는 현상 — 번호표(originHistId) 연결",
+      "checks": [
+        [
+          "node",
+          "diagnostics/_test_step_chat_origin.js"
+        ],
+        [
+          "node",
+          "test_runs/_test_step_to_chat_match.js"
+        ]
+      ],
+      "fix": "스텝↔말풍선을 텍스트 매칭 대신 histId 로 연결. 생성 3경로 부여 + 채팅수정 시 갱신(prompt 불변) + zip 왕복 + 구버전은 로드 시 '유일 일치만' 승격. 캡처/수동 스텝은 매칭 자체를 안 하고 '연결된 대화 없음' 안내(순서 폴백이 남의 말풍선 잡던 원인 차단)"
     }
   ]
 }
