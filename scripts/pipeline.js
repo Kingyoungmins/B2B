@@ -2218,7 +2218,9 @@ function replaceLogicAt(stepId, newCode, newDescription, language, opts) {
     if (typeof markPipelinePendingFromIndex === "function") {
       markPipelinePendingFromIndex(start, { label: "수정됨 · 미적용" });
     }
-    // 라이브는 start 직전까지만 반영돼 있다 — prefix 로만 적용 표시를 갱신한다.
+    // 라이브에서 '신뢰할 수 있는' 구간은 start 직전까지다 — start 이후는 옛 코드의 효과가 남아
+    // 있을 수 있으므로(이 경로는 라이브를 되돌리지 않는다) 이어실행 시 반드시 복원을 거쳐야 한다
+    // (_runPipelineSuffixFromCheckpointImpl 의 미적용 수정 복원 가드). prefix 로만 적용 표시를 갱신한다.
     if (typeof noteLivePipelineApplied === "function") {
       noteLivePipelineApplied((state.pipeline || []).slice(0, start));
     }
@@ -3348,9 +3350,18 @@ function liveEnabledStepsSignature(steps = state.pipeline) {
 
 function noteLivePipelineApplied(steps = state.pipeline) {
   _lastLiveAppliedSignature = liveEnabledStepsSignature(steps);
-  // [검토 #9] 여기 오는 스텝들은 방금 라이브에 실제 반영된 것들이다 — 'AI 도움 미검증 수정' 낙인을
-  // 해제해 저장 시 trustedStatic 승격이 다시 가능해지게 한다(해제 지점이 없어 영구 낙인이었다).
-  try { (steps || []).forEach(s => { if (s && s._unappliedEdit) delete s._unappliedEdit; }); } catch (_) {}
+  // [검토 #9 + 검증 R3] 'AI 도움 미검증 수정' 낙인 해제 — 단, 호출부들이 전체 배열을 넘기는 경우가
+  // 많아(단일 스텝 적용·결과 편집하기 등) 일괄 삭제하면 '실행 안 된 수정'의 낙인까지 지워진다.
+  // 활성 상태이고 런타임 상태칩이 '적용됨'인 스텝만 해제한다(수정 스텝은 '수정됨 · 미적용'(review)
+  // 라 보존됨). 실행 없이 낙인만 풀리는 조합을 status 게이트가 막는다.
+  try {
+    (steps || []).forEach(s => {
+      if (!s || !s._unappliedEdit) return;
+      const enabled = (typeof isStepEnabled === "function") ? isStepEnabled(s) : s.enabled !== false;
+      const st = (typeof getPipelineRuntimeStatus === "function") ? getPipelineRuntimeStatus(s.id) : null;
+      if (enabled && st && st.status === "applied") delete s._unappliedEdit;
+    });
+  } catch (_) {}
 }
 
 // 라이브 상태를 더 이상 신뢰할 수 없을 때(세션 전부 닫힘/초기화/적용 실패) 호출 —
@@ -3596,6 +3607,26 @@ async function _runPipelineSuffixFromCheckpointImpl(startIdx, options = {}) {
   if (pipelineHasBackendOnlyStep(suffix)) {
     throw new Error("보류 구간에 구버전 백엔드 전용 스킬이 있어 부분 실행할 수 없습니다. 전체 실행으로 다시 동기화해 주세요.");
   }
+  // [검증 R2·이중 반영 차단] AI 도움 '적용 없이 수정'(applyMode:"none")은 resume 만 심고 라이브를
+  // 되돌리지 않는다 — 라이브에는 그 스텝의 '옛 코드 효과'가 남아 있다. 그 위에 suffix 를 그대로
+  // 돌리면 행 삽입/누적형 스텝이 이중 반영된다. 미적용 수정 스텝이 구간에 있으면 시작 직전
+  // 스냅샷으로 먼저 복원하고, 복원 불가면 pristine 전체 재적용으로 폴백한다(느리지만 항상 옳다).
+  // skipUnappliedRestore 는 호출자(runFromCheckpointAfterEdit)가 이미 복원한 경우의 중복 방지.
+  if (!options.skipUnappliedRestore && suffix.some(s => s && s._unappliedEdit)) {
+    const restored = await restorePipelineCheckpointForSuffix(start, steps, {
+      message: "미적용 수정 직전 상태로 되돌리는 중...",
+    });
+    if (!restored) {
+      const fallbackExcelId = (typeof vbaTargetExcelId === "function" && vbaTargetExcelId())
+        || (typeof currentExcelId === "function" && currentExcelId());
+      if (fallbackExcelId && typeof reapplyVbaPipelineToLive === "function") {
+        if (typeof toast === "function") toast("수정 전 상태 복원이 불가해 스킬 전체를 처음부터 다시 적용합니다...", "info");
+        await reapplyVbaPipelineToLive(fallbackExcelId);
+        return { ok: true, applied: activeSuffix.length };
+      }
+      throw new Error("미적용 수정 직전 상태로 복원하지 못했습니다. '전체 실행'으로 다시 적용해 주세요.");
+    }
+  }
   const ids = activeSuffix.map(s => s && s.id).filter(Boolean);
   setPipelineRuntimeStatus(ids, "running", "실행 중");
   let excelId = vbaTargetExcelId() || (typeof currentExcelId === "function" ? currentExcelId() : null);
@@ -3646,7 +3677,8 @@ async function runFromCheckpointAfterEdit(startIdx, beforeSteps, options = {}) {
     }
   }
   markPipelinePendingFromIndex(start, { label: "보류" });
-  return runPipelineSuffixFromCheckpoint(start, options);
+  // mustRestore 로 이미 복원했으면 임플 내부의 '미적용 수정 복원'을 건너뛴다(이중 복원 방지).
+  return runPipelineSuffixFromCheckpoint(start, { ...options, skipUnappliedRestore: mustRestore });
 }
 
 function canUsePipelineCheckpointFromIndex(startIdx, beforeSteps, nextSteps) {
@@ -3657,8 +3689,11 @@ function canUsePipelineCheckpointFromIndex(startIdx, beforeSteps, nextSteps) {
   // 남는다. 토글/삭제엔 가드가 있었지만 스킬 '수정'·'삽입' 경로는 여기로 선점돼 가드가 없었다.
   // '수정 전' 코드(beforeSteps)와 '수정 후' 코드(steps) 양쪽을 봐야 한다 — 수정으로 dst_book 호출
   // 자체가 사라지면 옛 목적지는 next 어디에도 안 남아 영영 리셋되지 않는다(삭제 버그의 재현).
-  if (pipelineSuffixWritesCrossFile(beforeSteps, start) || pipelineSuffixWritesCrossFile(steps, start)) return false;
+  // [검증 R2 변형] resume 이 start 보다 앞이면 실제 실행은 min(resume, start)부터 시작한다 —
+  // 교차파일 검사도 그 지점부터 해야 AI 수정으로 당겨진 resume 구간의 교차 스텝을 놓치지 않는다.
   const existingResume = getPipelineResumeFromIndex();
+  const effStart = Number.isInteger(existingResume) ? Math.min(existingResume, start) : start;
+  if (pipelineSuffixWritesCrossFile(beforeSteps, effStart) || pipelineSuffixWritesCrossFile(steps, effStart)) return false;
   if (Number.isInteger(existingResume) && existingResume <= start) return true;
   // [수정 미반영 수정] 예전 .some(뒤쪽 '아무' 스텝이나 스냅샷 보유)의 결함: 시작 스텝 스냅샷이
   // 없고 뒤 스텝 것만 있으면, 복원이 '뒤 스텝 직전'(=시작 스텝이 이미 반영된 상태)으로 되돌아가

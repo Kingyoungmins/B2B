@@ -16,6 +16,7 @@ const guardSrc = rd("scripts/assist-guard.js");
 const toolsSrc = rd("scripts/assist-tools.js");
 const coreSrc = rd("scripts/assist-core.js");
 const llmSrc = rd("scripts/llm-api.js");
+const llmAssistSrc = rd("scripts/assist-llm.js");
 const pipeSrc = rd("scripts/pipeline.js");
 const saveSrc = rd("scripts/save-load.js");
 const uiSrc = rd("scripts/assist-ui.js");
@@ -303,6 +304,62 @@ ck("(35) assist 스크립트가 pipeline/chat-ui 뒤에 로드",
   const conv = vm.runInContext("assistBuildConversationText()", rb);
   ck("(68) 대화록에 사용자/AI 발화 포함", conv.includes("안 돼요") && conv.includes("확인했습니다"));
 }
+
+// ── 8. 2차 수정 회귀 잠금(검증 대응) ────────────────────────────────────────
+{
+  const gb = { console, JSON, Date, Math, String, Number, Array, Set, Map, RegExp,
+    Object, state: { pipeline: [] },
+    ASSIST_TOOLS: { "pipeline.list": { fn: () => ({}) }, "diag.stepStatus": { fn: () => ({}) } } };
+  vm.createContext(gb);
+  vm.runInContext(guardSrc, gb);
+  const parse = (s) => { gb.__in = s; return vm.runInContext("assistParseAction(__in)", gb); };
+
+  // (69) [R8] 액션 키 없는 bare JSON(데이터 예시)은 액션으로 채택하지 않는다 → 본문에서 안 지워짐
+  const r69 = parse('이 단계 매핑은 {"단가": 1000} 형태입니다.');
+  ck("(69) bare 데이터 JSON 은 액션 아님(block=null)", r69.parsed === false && r69.block === null, JSON.stringify(r69).slice(0, 100));
+
+  // (70) [#6] 도구명이 action 에 직접 온 흔한 위반 → tool 디스패치로 재작성
+  const r70 = parse('```b2b-action\n{"action":"pipeline.list"}\n```');
+  ck("(70) {action:도구명} → tool 재작성", r70.action === "tool" && r70.args.tool === "pipeline.list", JSON.stringify(r70).slice(0, 100));
+
+  // (71) [R8 후속] 상속 키(constructor)를 도구로 오인하지 않음(hasOwnProperty)
+  const r71 = parse('```b2b-action\n{"action":"constructor"}\n```');
+  ck("(71) constructor 는 도구 아님", r71.action !== "tool", JSON.stringify(r71).slice(0, 100));
+
+  // (72) 도구명 대소문자 변형도 흡수
+  const r72 = parse('```b2b-action\n{"tool":"Pipeline.List"}\n```');
+  ck("(72) 대소문자 변형 도구명 흡수", r72.action === "tool" && r72.args.tool === "pipeline.list", JSON.stringify(r72).slice(0, 100));
+
+  // (73) b2b-action 펜스면 액션 키 없이도 채택(사용자가 명시)
+  const r73 = parse('```b2b-action\n{"args":{"tool":"pipeline.list"}}\n```');
+  ck("(73) b2b-action 펜스는 액션키 없어도 block 채택", r73.block !== null, JSON.stringify(r73).slice(0, 100));
+}
+
+// (74) [#7] replaceLiteral to:0 은 "0" 으로 보존(값 삭제 아님) — 문자열화 로직만 국소 검증
+ck("(74) to:0 falsy 코어션 제거", /args\.to != null \? String\(args\.to\) : ""/.test(coreSrc));
+// (75) [R1] replaceLiteral 은 prompt 기준 게이트를 건너뛴다(다음 달 시트명 치환 허용):
+// exactReferenceFailures 호출은 gate 블록의 replaceStepCode 분기 '안'에만 있어야 한다.
+{
+  const gateAt = coreSrc.indexOf("교체 코드도 생성기와 같은 결정적 정적 검사");
+  const branchAt = coreSrc.indexOf('if (kind === "replaceStepCode") {', gateAt);
+  const exactAt = coreSrc.indexOf("run(exactReferenceFailures", gateAt);
+  ck("(75) prompt 기준 검사는 replaceStepCode 분기에만",
+     gateAt > 0 && branchAt > gateAt && exactAt > branchAt);
+}
+// (76) [R2] 미적용 수정이 suffix 에 있으면 복원(이중 반영 차단)
+ck("(76) 미적용 수정 이중반영 복원 가드",
+   /suffix\.some\(s => s && s\._unappliedEdit\)/.test(pipeSrc) && /restorePipelineCheckpointForSuffix/.test(pipeSrc));
+// (77) [R3] _unappliedEdit 해제는 status='applied'+활성일 때만(실행 안 된 스텝 낙인 보존)
+ck("(77) 낙인 해제는 status=applied 게이트",
+   /st\.status === "applied"[\s\S]{0,40}delete s\._unappliedEdit/.test(pipeSrc));
+// (78) [off-by-one] applyMode:"none" 의 상태 경계는 idx(수정 스텝 자신)부터
+ck("(78) applyMode none 경계 start=idx",
+   /Math\.min\(existingResume, idx\) : idx/.test(pipeSrc));
+// (79) [#1] 유휴(stall) 워치독 — 델타 수신마다 재장전(정상 긴 응답 오중단 방지)
+ck("(79) stall 워치독 재장전", /armStall\(\)/.test(coreSrc) && /ASSIST_STALL_TIMEOUT_MS/.test(coreSrc));
+// (80) [#3] assist 는 재시도 래퍼(callOpenAICompat) 경유 + think 방어
+ck("(80) 재시도 래퍼 경유 + stripThink",
+   /callOpenAICompat\(systemPrompt/.test(llmAssistSrc) && /assistStripThink/.test(llmAssistSrc));
 
 console.log("\n=== RESULT: " + (fails === 0 ? "ALL PASS" : fails + " FAIL") + " ===");
 process.exit(fails ? 1 : 0);

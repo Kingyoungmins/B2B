@@ -27,7 +27,9 @@ function assistHistoryMessages(extraTail) {
   for (let i = src.length - 1; i >= 0 && picked.length < ASSIST_MAX_HISTORY_MESSAGES; i--) {
     const m = src[i];
     if (!m || (m.role !== "user" && m.role !== "assistant")) continue;
-    const content = String(m.content || "").slice(0, 4000);
+    // [검증 항목5] 최신(방금 보낸) 메시지는 넉넉히 — 사용자 발화가 tail 중복 제거 후 history 경유가
+    // 유일한 사본이 되면서, 긴 오류로그/코드 붙여넣기가 4000자에서 무표시 절단되던 회귀 방지.
+    const content = String(m.content || "").slice(0, i === src.length - 1 ? 12000 : 4000);
     if (!content.trim()) continue;
     chars += content.length;
     if (chars > ASSIST_MAX_HISTORY_CHARS) break;
@@ -49,7 +51,11 @@ function assistHistoryMessages(extraTail) {
 // 실측이 있다. 생성기 경로의 stripThink 는 callLLMOneShot 내부 로컬이라 여기서 자체 제거한다.
 // 안 지우면 추론 본문이 사용자에게 노출되고, 폐기됐어야 할 추론 속 액션 블록을 파서가 주워 실행한다.
 function assistStripThink(s) {
-  return String(s || "").replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
+  let t = String(s || "").replace(/<think>[\s\S]*?<\/think>/gi, "");
+  // [검증 항목3] max_tokens 절단 등으로 </think> 없이 끝난 응답 — 추론 본문이 통째로 남아 노출되고
+  // 그 속 액션을 파서가 주울 수 있다. 미폐 <think> 는 거기부터 끝까지 버린다.
+  t = t.replace(/<think>[\s\S]*$/i, "");
+  return t.trim();
 }
 
 async function callAssistLLM(systemPrompt, tailMessages, options) {

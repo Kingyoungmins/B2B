@@ -104,31 +104,40 @@
       </div>`;
     const el = addMsg("assistant", html, { html: true });
     if (!el) return;
-    cards.set(String(p.id), el);
-    el.querySelector(".assist-no").onclick = () => {
-      el.querySelector(".assist-card-actions").innerHTML = '<span class="assist-done">취소했습니다.</span>';
-      cards.delete(String(p.id));
+    // [검증 항목8] 실패 시 [다시 시도] 버튼을 복원할 수 있게 액션 영역을 재바인딩 함수로 만든다.
+    const bindActions = (prefixHtml) => {
+      const box = el.querySelector(".assist-card-actions");
+      if (!box) return;
+      box.innerHTML = (prefixHtml || "")
+        + '<button type="button" class="assist-ok">' + (prefixHtml ? "다시 시도" : "이대로 수정") + '</button>'
+        + '<button type="button" class="assist-no">취소</button>';
+      el.querySelector(".assist-no").onclick = () => {
+        box.innerHTML = '<span class="assist-done">취소했습니다.</span>';
+        cards.delete(String(p.id));
+      };
+      el.querySelector(".assist-ok").onclick = () => {
+        const picked = [...el.querySelectorAll(".assist-comp-cb")]
+          .filter(cb => cb.checked).map(cb => Number(cb.dataset.i));
+        box.innerHTML = '<span class="assist-done">반영 중...</span>';
+        post({ t: "commit", pid: p.id, picked });
+      };
     };
-    el.querySelector(".assist-ok").onclick = () => {
-      const picked = [...el.querySelectorAll(".assist-comp-cb")]
-        .filter(cb => cb.checked).map(cb => Number(cb.dataset.i));
-      el.querySelector(".assist-card-actions").innerHTML = '<span class="assist-done">반영 중...</span>';
-      post({ t: "commit", pid: p.id, picked });
-    };
+    cards.set(String(p.id), { el, bindActions });
+    bindActions("");
   }
 
   function onCommitResult(m) {
-    const el = cards.get(String(m.pid));
-    if (!el) return;
-    cards.delete(String(m.pid));
-    const box = el.querySelector(".assist-card-actions");
+    const entry = cards.get(String(m.pid));
+    if (!entry) return;
+    const box = entry.el.querySelector(".assist-card-actions");
     if (!box) return;
     if (m.ok) {
+      cards.delete(String(m.pid));   // 성공했을 때만 소거 — 실패는 재시도 가능해야 한다
       const c = m.companions || { step: 0, chat: 0 };
       const extra = (c.step || c.chat) ? ` · 이름/설명 ${c.step}곳, 대화 ${c.chat}곳 함께 수정` : "";
       box.innerHTML = '<span class="assist-done">✓ 수정했습니다 (라이브 미적용)' + esc(extra) + "</span>";
     } else {
-      box.innerHTML = '<span class="assist-fail">✕ ' + esc(m.error || "실패") + "</span>";
+      entry.bindActions('<span class="assist-fail">✕ ' + esc(m.error || "실패") + "</span> ");
     }
   }
 
@@ -142,6 +151,9 @@
   }
 
   function submit(text) {
+    // [검증 R6] 진행 중 재전송(칩 클릭 포함)은 막는다 — 유령 말풍선 + 조기 done 으로 '중지' 버튼이
+    // 풀리는 원인이었다. 칩도 이 함수를 거치므로 여기 한 곳의 가드로 충분하다.
+    if (busy) { setStatus("처리 중입니다... (전송 버튼으로 중단할 수 있습니다)"); return; }
     const t = String(text || "").trim();
     if (!t) return;
     addMsg("user", t);

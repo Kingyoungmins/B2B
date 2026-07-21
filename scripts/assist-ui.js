@@ -255,24 +255,33 @@ function assistRenderProposalCard(p) {
     </div>`;
   const el = assistAddMsg("assistant", html, { html: true });
   if (!el) return;
-  el.querySelector(".assist-no").onclick = () => {
-    el.querySelector(".assist-card-actions").innerHTML = `<span class="assist-done">취소했습니다.</span>`;
-  };
-  el.querySelector(".assist-ok").onclick = () => {
-    const picked = [...el.querySelectorAll(".assist-comp-cb")]
-      .filter(cb => cb.checked).map(cb => Number(cb.dataset.i));
-    const r = assistCommitProposal(p.id, picked);
+  // [검증 항목8] 실패 시 버튼을 없애면 '카드에서 다시 시도' 안내가 거짓이 된다 — 액션 영역을
+  // 재바인딩 가능한 함수로 만들어, 일시 실패 후 [다시 시도] 버튼을 복원한다(제안은 성공 시에만 소거됨).
+  const bindActions = (prefixHtml) => {
     const box = el.querySelector(".assist-card-actions");
-    if (r && r.ok) {
-      const c = r.companions || { step: 0, chat: 0 };
-      const extra = (c.step || c.chat)
-        ? ` · 이름/설명 ${c.step}곳, 대화 ${c.chat}곳 함께 수정`
-        : "";
-      box.innerHTML = `<span class="assist-done">✓ 수정했습니다 (라이브 미적용)${escapeHtml(extra)}</span>`;
-    } else {
-      box.innerHTML = `<span class="assist-fail">✕ ${escapeHtml((r && r.error) || "실패")}</span>`;
-    }
+    if (!box) return;
+    box.innerHTML = `${prefixHtml || ""}
+      <button type="button" class="assist-ok">${prefixHtml ? "다시 시도" : "이대로 수정"}</button>
+      <button type="button" class="assist-no">취소</button>`;
+    el.querySelector(".assist-no").onclick = () => {
+      box.innerHTML = `<span class="assist-done">취소했습니다.</span>`;
+    };
+    el.querySelector(".assist-ok").onclick = () => {
+      const picked = [...el.querySelectorAll(".assist-comp-cb")]
+        .filter(cb => cb.checked).map(cb => Number(cb.dataset.i));
+      const r = assistCommitProposal(p.id, picked);
+      if (r && r.ok) {
+        const c = r.companions || { step: 0, chat: 0 };
+        const extra = (c.step || c.chat)
+          ? ` · 이름/설명 ${c.step}곳, 대화 ${c.chat}곳 함께 수정`
+          : "";
+        box.innerHTML = `<span class="assist-done">✓ 수정했습니다 (라이브 미적용)${escapeHtml(extra)}</span>`;
+      } else {
+        bindActions(`<span class="assist-fail">✕ ${escapeHtml((r && r.error) || "실패")}</span>`);
+      }
+    };
   };
+  bindActions("");
 }
 
 // 줄 단위 diff. [검토 #10] 같은 줄번호끼리 비교하면 줄 하나만 삽입돼도 이후 전체가 어긋난 diff 로
@@ -357,6 +366,10 @@ function assistToggleDrawer(force) {
   } else {
     try { if (typeof scheduleRestoreActiveExcelMirror === "function") scheduleRestoreActiveExcelMirror(120); } catch (_) {}
     _assistMirrorHidden = false;
+    // [검증 R4 대칭] 창을 닫는 것은 곧 중단 — 보이지 않는 인플라이트가 생성기 채팅을 막지 않게.
+    if (typeof assistIsBusy === "function" && assistIsBusy() && typeof assistAbortCurrent === "function") {
+      assistAbortCurrent();
+    }
   }
 }
 
@@ -405,6 +418,11 @@ function assistHandleBridgeMessage(m) {
     case "popup-closed":
       _assistNativeMode = false;
       assistSetButtonOn(false);
+      // [검증 R4] 응답 진행 중 팝업을 닫으면 보이지 않는 인플라이트가 남아 생성기 채팅이 이유도
+      // 안 보인 채 수 분간 차단됐다 — 창을 닫는 것은 곧 중단이다.
+      if (typeof assistIsBusy === "function" && assistIsBusy() && typeof assistAbortCurrent === "function") {
+        assistAbortCurrent();
+      }
       break;
     case "popup-failed":
       _assistNativeMode = false;
@@ -419,18 +437,29 @@ function assistHandleBridgeMessage(m) {
       });
       break;
     case "user":
-      // done 신호는 조기 거절(생성기 채팅 중/이미 처리 중 — finally 를 안 타는 경로)까지 포함해
-      // 모든 종료에서 팝업의 busy(중지 버튼) 상태를 원복한다.
+      // done 신호는 '인플라이트 슬롯을 잡은 호출'의 모든 종료에서 팝업 busy(중지 버튼)를 원복한다.
+      // [검증 R6] 조기 거절(반환값 false — 이미 처리 중일 때의 중복 전송 등)에는 done 을 보내지
+      // 않는다: 보내면 '먼저 돌던' 요청의 중지 버튼이 진행 중에 풀려 버린다.
       Promise.resolve(assistHandleUserMessage(String(m.text || ""), {
         onStatus: (s) => assistSendToPopup({ t: "status", s }),
         onAssistantText: (t) => assistSendToPopup({ t: "assistant", text: t }),
         onToolTrace: (name, result) => assistSendToPopup({ t: "trace", name, ok: !(result && result.ok === false) }),
         onProposal: (p) => assistSendToPopup({ t: "proposal", proposal: p }),
         onReport: (meta) => assistSendToPopup({ t: "report", meta }),
-      })).catch(() => {}).finally(() => assistSendToPopup({ t: "done" }));
+      })).then(
+        (res) => { if (res !== false) assistSendToPopup({ t: "done" }); },
+        () => assistSendToPopup({ t: "done" })
+      );
       break;
     case "commit": {
-      const r = assistCommitProposal(m.pid, Array.isArray(m.picked) ? m.picked : []);
+      // [검증 항목8] 커밋 도중 예외가 나도 commit-result 는 반드시 보낸다 — 안 보내면 팝업 카드가
+      // '반영 중...' 으로 영구 고착된다(브리지 바깥 catch 가 예외를 삼킴).
+      let r = null;
+      try {
+        r = assistCommitProposal(m.pid, Array.isArray(m.picked) ? m.picked : []);
+      } catch (err) {
+        r = { ok: false, error: String((err && err.message) || err).slice(0, 200) };
+      }
       assistSendToPopup({
         t: "commit-result", pid: m.pid,
         ok: !!(r && r.ok), error: (r && r.error) || "",

@@ -55,17 +55,34 @@ function assistParseAction(reply) {
   }
   if (!obj || typeof obj !== "object") return { action: "final", args: {}, raw: text, parsed: false, block: null };
 
+  // [검증 R8] 액션 키(action/tool/name/function)가 하나도 없는 객체는 답변 속 '데이터 예시'일 수
+  // 있다({"단가":1000} 등). b2b-action 펜스로 명시한 경우가 아니면 액션으로 채택하지 않는다 —
+  // 채택하면 오케스트레이터가 block 을 본문에서 걷어내 정상 답변에 구멍이 난다.
+  const hasActionKey = !!(obj.action || obj.tool || obj.name || obj.function);
+  const fromActionFence = !!(fenced && block === fenced[0]);
+  if (!hasActionKey && !fromActionFence) {
+    return { action: "final", args: {}, raw: text, parsed: false, block: null };
+  }
+
   // 별칭 정규화
   let action = String(obj.action || obj.tool || obj.name || obj.function || "final").trim();
   let args = obj.args || obj.arguments || obj.parameters || obj.input || {};
   args = (args && typeof args === "object") ? args : {};
   // [검토 #6] 모델이 {"action":"pipeline.list"} / {"tool":"diag.stepStatus"} 처럼 도구명을 action 에
-  // 직접 쓰는 위반이 흔한데, 오케스트레이터는 action==="tool" 만 디스패치한다 — 여기서 등록된
-  // 도구명이면 정식 형태로 재작성해 별칭 수용 의도를 실제로 완성한다.
+  // 직접 쓰는 위반이 흔한데, 오케스트레이터는 action==="tool" 만 디스패치한다 — 등록된 도구명이면
+  // 정식 형태로 재작성한다. hasOwnProperty 로 상속 키(constructor 등) 오인을 막고, 대소문자 변형
+  // (Pipeline.List)도 소문자 대조로 흡수한다.
   if (action !== "tool" && action !== "propose" && action !== "final"
-      && typeof ASSIST_TOOLS === "object" && ASSIST_TOOLS && ASSIST_TOOLS[action]) {
-    args = { tool: action, ...args };
-    action = "tool";
+      && typeof ASSIST_TOOLS === "object" && ASSIST_TOOLS) {
+    let toolKey = Object.prototype.hasOwnProperty.call(ASSIST_TOOLS, action) ? action : null;
+    if (!toolKey) {
+      const lower = action.toLowerCase();
+      toolKey = Object.keys(ASSIST_TOOLS).find(k => k.toLowerCase() === lower) || null;
+    }
+    if (toolKey) {
+      args = { tool: toolKey, ...args };
+      action = "tool";
+    }
   }
   return { action, args, raw: text, parsed: true, block };
 }
