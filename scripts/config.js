@@ -38,14 +38,23 @@ const DEFAULTS = {
     network: "ixi",
   },
   devVllm: {
-    apiKey: "7365676d",
-    model: "Qwen3.5-27B-FP8",
-    baseUrl: "http://localhost:8016/v1",
-    // WSL의 vLLM은 NAT + localhostForwarding 으로 localhost 로 접근(권장). 죽은 LAN IP fallback 제거.
-    fallbackBaseUrls: ["http://127.0.0.1:8016/v1"],
+    apiKey: "khkim",
+    model: "Qwen/Qwen3.6-27B-FP8",
+    // 개발망 vLLM — 별도 PC(LAN)의 vLLM 서버. --api-key 를 켜고 떠 있어 Authorization: Bearer 필수.
+    baseUrl: "http://192.168.219.111:8000/v1",
+    fallbackBaseUrls: [],
     thinkControlMode: "chat_template_kwargs",
   },
 };
+
+// openai-compat 호출 인증 헤더. ixi 게이트웨이는 Api-Key 헤더를 보고, dev-vllm(vLLM --api-key)은
+// Authorization: Bearer 만 인식한다(Api-Key 는 무시 → 401). 네트워크에 맞춰 함께 구성한다.
+function openAICompatAuthHeaders(apiKey, network) {
+  const key = String(apiKey || "").trim();
+  const headers = { "Api-Key": key };
+  if (network === "dev-vllm" && key) headers["Authorization"] = "Bearer " + key;
+  return headers;
+}
 
 const OPENAI_COMPAT_FALLBACK_BASE_URLS = [
   DEFAULTS["openai-compat"].baseUrl,
@@ -122,7 +131,7 @@ function normalizeSettings(parsed) {
       provider: "openai-compat",
       model: normalizeIxiModel(network, parsed.model, parsed) || networkDefaults.model || DEFAULTS["openai-compat"].model,
       baseUrl: network === "dev-vllm"
-        ? (parsed.baseUrl || networkDefaults.baseUrl || DEFAULTS.devVllm.baseUrl)
+        ? normalizeDevVllmBaseUrl(parsed.baseUrl || networkDefaults.baseUrl || DEFAULTS.devVllm.baseUrl)
         : normalizeIxiBaseUrl(parsed.baseUrl || networkDefaults.baseUrl || DEFAULTS["openai-compat"].baseUrl, parsed),
       proxyUpstream: network === "dev-vllm" ? "" : normalizeIxiProxyUpstream(parsed.proxyUpstream, parsed),
       apiKey: normalizeIxiApiKey(network, parsed.apiKey, networkDefaults, parsed),
@@ -159,11 +168,28 @@ function normalizeStoredSkillEngine(parsed) {
   return DEFAULT_SKILL_ENGINE;
 }
 
+// 옛 개발망 vLLM(WSL 8016 계열) 잔재 — 서버가 192.168.219.111:8000(다른 PC)으로 이전됐다.
+// 저장 설정이 죽은 주소·키·모델을 물고 있으면 devModeSet 여부와 무관하게 새 값으로 승격한다.
+const DEV_VLLM_LEGACY_BASE_URLS = [
+  "http://localhost:8016/v1",
+  "http://127.0.0.1:8016/v1",
+  "http://192.168.219.105:8016/v1",
+];
+function normalizeDevVllmBaseUrl(value) {
+  const raw = String(value || "").trim().replace(/\/$/, "");
+  if (!raw || DEV_VLLM_LEGACY_BASE_URLS.includes(raw)) return DEFAULTS.devVllm.baseUrl;
+  return raw;
+}
+
 function normalizeIxiModel(network, value, parsed) {
   // 저장 설정에 남은 옛 ixi 기본 모델(Qwen3.5)은 새 기본(Qwen3.6)으로 승격한다.
-  // DEV 모달에서 명시 저장한 설정(devModeSet)만 그대로 유지. dev-vllm 네트워크는 건드리지 않는다.
+  // DEV 모달에서 명시 저장한 설정(devModeSet)만 그대로 유지.
   if (network === "ixi" && String(value || "") === "Qwen3.5-27B-FP8" && !(parsed && parsed.devModeSet === true)) {
     return DEFAULTS["openai-compat"].model;
+  }
+  // dev-vllm: 옛 서버 모델명은 새 서버에 없어 호출이 전부 실패하므로 무조건 승격.
+  if (network === "dev-vllm" && (!value || String(value) === "Qwen3.5-27B-FP8")) {
+    return DEFAULTS.devVllm.model;
   }
   return value;
 }
@@ -193,12 +219,16 @@ function getIxiServerLabel(upstream) {
 }
 
 function normalizeIxiApiKey(network, value, networkDefaults, parsed) {
-  // 옛 ixi API 키는 새 키로 승격(DEV 명시 저장 제외). dev-vllm 네트워크 키는 그대로 둔다.
+  // 옛 ixi API 키는 새 키로 승격(DEV 명시 저장 제외).
   const raw = String(value || "").trim();
   const fallback = (networkDefaults && networkDefaults.apiKey) || DEFAULTS["openai-compat"].apiKey;
   if (!raw) return fallback;
   if (network === "ixi" && IXI_LEGACY_API_KEYS.includes(raw) && !(parsed && parsed.devModeSet === true)) {
     return DEFAULTS["openai-compat"].apiKey;
+  }
+  // dev-vllm: 옛 서버 키(7365676d)는 새 서버가 거부하므로 무조건 새 키로 승격.
+  if (network === "dev-vllm" && raw === "7365676d") {
+    return DEFAULTS.devVllm.apiKey;
   }
   return raw;
 }

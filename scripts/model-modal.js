@@ -179,7 +179,7 @@ function openSettingsModal(devMode) {
       <label style="font-size:11.5px; color:#666">Base URL (로컬 /v1 프록시 → Violet 전달)</label>
       <input type="text" id="set-o-url" value="${escapeHtml(ixiUrl)}" />
       ${devMode ? `<div style="font-size:11px; color:#777; margin:-6px 0 8px">
-        개발망 vLLM은 Windows에서 <code>http://localhost:8016/v1</code>을 먼저 사용하고, 실패하면 <code>http://192.168.219.105:8016/v1</code>을 자동 시도합니다.
+        개발망 vLLM은 별도 PC의 <code>http://192.168.219.111:8000/v1</code>(Qwen3.6-27B-FP8)로 직접 연결합니다.
       </div>` : ""}
       ${devMode ? `
       <label style="font-size:11.5px; color:#666">Violet/vLLM 실제 주소 (ixi 프록시 전달 대상)</label>
@@ -297,7 +297,7 @@ function openSettingsModal(devMode) {
 
       const { resp: r, url } = await fetchOpenAICompat("/models", form.baseUrl.replace(/\/$/, ""), {
         method: "GET",
-        headers: { "Api-Key": form.apiKey },
+        headers: openAICompatAuthHeaders(form.apiKey, form.network),
       });
       if (!r.ok) throw new Error("HTTP " + r.status + " " + (await r.text()).slice(0, 200));
       const data = await r.json();

@@ -160,7 +160,7 @@ async function callLLMOneShot(systemPrompt, userPrompt, options) {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "Api-Key": settings.apiKey || networkDefaults.apiKey || DEFAULTS["openai-compat"].apiKey,
+      ...openAICompatAuthHeaders(settings.apiKey || networkDefaults.apiKey || DEFAULTS["openai-compat"].apiKey, settings.network),
     },
     signal: options.signal,
     body: JSON.stringify(payload),
@@ -249,7 +249,7 @@ async function callOpenAICompatOnce(system, options) {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "Api-Key": settings.apiKey || networkDefaults.apiKey || DEFAULTS["openai-compat"].apiKey,
+      ...openAICompatAuthHeaders(settings.apiKey || networkDefaults.apiKey || DEFAULTS["openai-compat"].apiKey, settings.network),
     },
     signal: options.signal,
     body: JSON.stringify(payload),
