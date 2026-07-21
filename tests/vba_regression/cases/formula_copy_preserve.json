@@ -1,0 +1,61 @@
+{
+  "id": "formula_copy_preserve",
+  "title": "셀에 수식이 있는 값복사 오류: 수식/서식/병합 보존 복사",
+  "checks_by_mode": {
+    "vba": {
+      "risk_rules": [
+        "copy_preserve_formula_format",
+        "formula_cells_not_overwritten",
+        "single_sheet_scope"
+      ],
+      "must_match_any": [
+        {
+          "label": "수식/서식 보존 Excel 복사",
+          "patterns": [
+            "\\.Copy\\b[\\s\\S]{0,160}(Destination\\s*:=|\\.\\s*PasteSpecial\\s+xlPasteAll|After\\s*:=|Before\\s*:=)"
+          ]
+        }
+      ],
+      "must_not_match": [
+        "\\.Value\\s*=\\s*[^\\n]*\\.Value",
+        "For\\s+Each\\s+\\w+\\s+In\\s+Worksheets"
+      ],
+      "windows_only": [
+        "복사 대상이 마진/마진율 수식과 테두리/숫자서식을 모두 유지하는지 Excel 확인."
+      ]
+    },
+    "python": {
+      "risk_rules": [
+        "copy_preserve_formula_format",
+        "formula_cells_not_overwritten",
+        "single_sheet_scope"
+      ],
+      "must_not_match": [
+        "\\.Value2?\\s*=\\s*\\w[\\w.()\\[\\] ]*\\.Value2?",
+        "for\\s+\\w+\\s+in\\s+[\\w.]+\\.(?:worksheets|sheetnames)\\b",
+        "\\.Copy\\s*\\(",
+        "\\.PasteSpecial\\b"
+      ],
+      "windows_only": [
+        "복사 대상이 마진/마진율 수식과 테두리/숫자서식을 모두 유지하는지 Excel 확인."
+      ]
+    }
+  },
+  "variants": [
+    {
+      "id": "copy_formula_block_same_sheet",
+      "prompt": "회사별요약에서 수식과 서식이 있는 A3:E23 범위를 같은 시트 H3:L23에 그대로 복사해줘. 값만 복사하지 말고 마진/마진율 수식과 서식도 유지해.",
+      "expected": "H3:L23 가 Range.Copy Destination(또는 PasteSpecial xlPasteAll)로 복제되어 마진(=B-C)/마진율 수식과 테두리·숫자서식이 보존된다."
+    },
+    {
+      "id": "duplicate_template_block",
+      "prompt": "회사별요약의 A:E 양식을 오른쪽으로 한 번 더 복제해줘. 마진/마진율 수식, 테두리, 숫자서식이 유지되어야 해.",
+      "expected": "A:E 블록이 우측으로 Copy 로 복제되어 수식/서식이 유지된다. 값-투-값 복사 아님."
+    },
+    {
+      "id": "new_sheet_preserve_formulas",
+      "prompt": "회사별요약과 동일한 새 시트를 하나 만들고, 원본 시트의 마진/마진율 수식 셀도 null이 아니라 수식 그대로 복사되게 해줘.",
+      "expected": "새 시트가 생성되고 회사별요약 내용이 Copy 로 복제되어 D/E 수식이 그대로 살아있다(값/빈칸 아님)."
+    }
+  ]
+}

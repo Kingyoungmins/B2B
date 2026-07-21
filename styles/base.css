@@ -1,0 +1,122 @@
+﻿  /* ============================================================
+     B2B Magenta — redesigned visual system
+     Main gradient: #FF0080 → #7928CA
+     ============================================================ */
+  /*
+Copyright (c) 2021 Kil Hyung-jin, with Reserved Font Name Pretendard.
+https://github.com/orioncactus/pretendard
+
+This Font Software is licensed under the SIL Open Font License, Version 1.1.
+This license is copied below, and is also available with a FAQ at:
+http://scripts.sil.org/OFL
+*/
+
+@font-face {
+	font-family: 'Pretendard Variable';
+	font-weight: 45 920;
+	font-style: normal;
+	font-display: swap;
+	src: url("../vendor/pretendard-variable.woff2") format('woff2-variations');
+}
+
+
+  :root {
+    --m-50:  #FFF0F9;
+    --m-100: #FFE0F2;
+    --m-200: #FFB8DF;
+    --m-300: #FF80C2;
+    --m-400: #FF3DA1;
+    --m-500: #FF0080;   /* primary magenta */
+    --m-600: #E00072;
+    --m-700: #B8005E;
+
+    --p-500: #7928CA;   /* purple end of gradient */
+    --p-600: #5B1F99;
+
+    --grad: linear-gradient(135deg, #FF0080 0%, #7928CA 100%);
+    --grad-soft: linear-gradient(135deg, #FFE0F2 0%, #EADCFF 100%);
+    --grad-text: linear-gradient(135deg, #FF0080 0%, #7928CA 100%);
+
+    --ink-900: #0F0A1E;
+    --ink-700: #2C2440;
+    --ink-500: #5B5270;
+    --ink-400: #7E7792;
+    --ink-300: #A8A2B8;
+    --ink-200: #D5D1DF;
+    --ink-100: #EBE9F1;
+    --ink-50:  #F7F6FB;
+
+    --bg: #FAFAFD;
+    --card: #FFFFFF;
+    --border: #EBE9F1;
+    --border-strong: #D5D1DF;
+
+    --shadow-sm: 0 1px 2px rgba(15,10,30,0.04), 0 1px 3px rgba(15,10,30,0.05);
+    --shadow-md: 0 4px 12px rgba(15,10,30,0.05), 0 2px 4px rgba(15,10,30,0.04);
+    --shadow-lg: 0 12px 32px rgba(121,40,202,0.10), 0 4px 12px rgba(15,10,30,0.06);
+    --shadow-mag: 0 8px 24px rgba(255,0,128,0.22);
+
+    --r-sm: 8px;
+    --r-md: 12px;
+    --r-lg: 16px;
+    --r-xl: 20px;
+    --r-full: 999px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    font-family: 'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont,
+                 'Malgun Gothic', 'Noto Sans KR', sans-serif;
+    background:
+      radial-gradient(1200px 600px at 85% -10%, rgba(255,0,128,0.08), transparent 60%),
+      radial-gradient(900px 500px at -10% 110%, rgba(121,40,202,0.08), transparent 60%),
+      var(--bg);
+    color: var(--ink-900);
+    font-size: 13px;
+    line-height: 1.5;
+    letter-spacing: -0.01em;
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  ::selection { background: var(--m-200); color: var(--ink-900); }
+
+  /* Scrollbars */
+  *::-webkit-scrollbar { width: 10px; height: 10px; }
+  *::-webkit-scrollbar-track { background: transparent; }
+  *::-webkit-scrollbar-thumb { background: var(--ink-200); border-radius: 999px; border: 2px solid transparent; background-clip: padding-box; }
+  *::-webkit-scrollbar-thumb:hover { background: var(--ink-300); background-clip: padding-box; border: 2px solid transparent; }
+
+  .app { display: flex; height: 100vh; gap: 12px; padding: 12px; }
+
+  html.native-shell body {
+    background: var(--card);
+  }
+  html.native-shell .app {
+    padding: 0;
+    gap: 0;
+  }
+  html.native-shell .left {
+    width: 100%;
+    min-width: 0;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+  html.native-shell .right,
+  html.native-shell .resizer {
+    display: none !important;
+  }
+
+  /* [0.5.16 #1] 실행기(runner)는 헤드리스 — 브라우저 모드에서 우측 Excel 뷰를 숨기고 좌측을 풀폭으로.
+     (네이티브 셸은 호스트가 B2B_RUNNER_MODE 로 우측 패널을 접어 처리하고, .right 는 위에서 이미 숨김) */
+  body.page-runner-active .right,
+  body.page-runner-active .resizer {
+    display: none !important;
+  }
+  body.page-runner-active .left {
+    flex: 1 1 100% !important;
+    width: 100% !important;
+    min-width: 0;
+  }

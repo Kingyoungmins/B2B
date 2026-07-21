@@ -1,0 +1,55 @@
+{
+  "id": "single_sheet_scope",
+  "title": "파일 하나 N개 시트인 경우 특정 시트 작업이 전체 시트로 확장되는 문제 방지",
+  "checks_by_mode": {
+    "vba": {
+      "risk_rules": [
+        "single_sheet_scope",
+        "no_activecell_offset"
+      ],
+      "must_not_match": [
+        "For\\s+Each\\s+\\w+\\s+In\\s+(?:ActiveWorkbook\\s*\\.\\s*)?Worksheets",
+        "Worksheets\\.Count",
+        "\\.Cells\\s*\\.\\s*Clear",
+        "\\.UsedRange\\s*\\.\\s*Clear"
+      ],
+      "windows_only": [
+        "매출 시트만 바뀌고 고객정보/월별집계 시트는 불변인지 확인."
+      ]
+    },
+    "python": {
+      "risk_rules": [
+        "single_sheet_scope",
+        "no_activecell_offset"
+      ],
+      "must_not_match": [
+        "for\\s+\\w+\\s+in\\s+[\\w.]+\\.(?:worksheets|sheetnames)\\b",
+        "\\.delete_rows\\s*\\(",
+        "\\.delete_cols\\s*\\("
+      ],
+      "windows_only": [
+        "매출 시트만 바뀌고 고객정보/월별집계 시트는 불변인지 확인."
+      ]
+    }
+  },
+  "variants": [
+    {
+      "id": "clear_sales_d_column_only",
+      "prompt": "input_매출_2026_4월.xlsx 에 매출·고객정보·월별집계 시트가 있어. 매출 시트의 금액(D열) 값만 지워줘. 고객정보와 월별집계 시트는 절대 건드리지 마.",
+      "expected": "매출 시트 D열(금액) 데이터만 지워진다. 고객정보/월별집계 시트는 전혀 바뀌지 않는다. 전체 시트 순회 없음."
+    },
+    {
+      "id": "clear_specific_sheet_column",
+      "prompt": "@시트[input_매출_2026_4월.xlsx/매출] 여기에서 금액(D) 컬럼 내용만 비워줘. 다른 시트의 같은 열은 유지해야 해.",
+      "exact_refs": [
+        "- 대상: 파일 \"input_매출_2026_4월.xlsx\", 시트 \"매출\", 열 \"D\""
+      ],
+      "expected": "지정된 매출 시트의 D열만 비워진다. 다른 시트는 불변."
+    },
+    {
+      "id": "current_sheet_only",
+      "prompt": "현재 활성 시트(매출)에서만 금액(D열) 데이터를 삭제해줘. 전체 시트 반복은 하지 마.",
+      "expected": "활성 시트(매출)의 D열만 삭제. For Each Worksheets 같은 전체 순회 없음."
+    }
+  ]
+}

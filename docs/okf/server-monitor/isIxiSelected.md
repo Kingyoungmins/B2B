@@ -1,0 +1,46 @@
+---
+type: endpoint
+title: isIxiSelected
+module: server-monitor.js
+lang: js
+extraction: regex   # 정규식 근사
+signature: "()"
+role: "재연결/배너는 ixi 모델이 선택됐을 때만 동작. (Claude·개발망 vLLM 선택 시엔 알림 안 띄움)"
+role_source: banner
+version: "0.5.19"
+loc: "server-monitor.js:30-30"
+
+# ── 입출력 ──
+inputs: []
+returns: "(추정)"
+
+# ── 사이드이펙트 (정적 추정) ──
+side_effects:
+  - "없음(정적 분석 기준)"
+raises: []
+
+# ── 유기적 관계 ──
+calls: []
+calls_external: []
+called_by:
+  - "autoReconnectLoop"
+  - "poll"
+  - "reconnectNow"
+reads: []
+writes: []
+affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
+timestamp: "0.5.19-gen"
+---
+
+## 역할
+재연결/배너는 ixi 모델이 선택됐을 때만 동작. (Claude·개발망 vLLM 선택 시엔 알림 안 띄움)
+
+## 사이드이펙트 & 주의
+- 없음(정적 분석 기준)
+
+## 관계
+- 호출: 없음
+- 피호출(영향 전파 경로): `autoReconnectLoop`, `poll`, `reconnectNow`
+
+## 실패/예외
+- `(명시적 raise 없음/미탐지)`
