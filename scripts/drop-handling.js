@@ -1248,7 +1248,27 @@ function runnerFindAutoFile(req, files) {
   return scored[0];
 }
 
-function runnerFindSheet(req, file, preferredSheet) {
+// [생성시트 오매칭 방어] 이 스킬이 실행 중 만드는 시트 이름 전부(책 구분 없이 이름만).
+// runnerIsGeneratedSheet 는 (책, 시트) 쌍이 모두 맞아야 '생성시트'로 보는데, 교차파일 스킬은
+// 만든 책과 참조하는 책의 이름 해석이 갈려 생성시트가 요구 목록으로 새어 나온다(실물 확인:
+// KGM 202605_SS001643_ENTR_BY_STACC_P, UCAP VIEW). 그 요구는 업로드 원본에 있을 리가 없으니
+// '시트가 하나뿐이니 그거겠지' 추측이 엉뚱한 원본 시트를 물어와 치환해 버린다.
+// 이 집합은 그 '추측'만 끄는 데 쓴다 — 이름이 실제로 일치하면 아래 정확매칭이 그대로 이긴다.
+function runnerGeneratedSheetNameSet(steps) {
+  const out = new Set();
+  (steps || state.pipeline || []).forEach(step => {
+    if (!step || !step.code) return;
+    try {
+      (runnerExtractGeneratedSheetsFromCode(step.code) || []).forEach(g => {
+        const nm = runnerMappingNorm(g && g.sheet);
+        if (nm) out.add(nm);
+      });
+    } catch (_) {}
+  });
+  return out;
+}
+
+function runnerFindSheet(req, file, preferredSheet, generatedNames) {
   const sheets = runnerMappingSheetNames(file);
   if (!sheets.length) return "";
   if (preferredSheet && sheets.includes(preferredSheet)) return preferredSheet;
@@ -1265,6 +1285,10 @@ function runnerFindSheet(req, file, preferredSheet) {
   // step1 부터 "시트를 찾을 수 없음"이 난다(실측). 신뢰불가 목록에서는 자동 채택하지 않는다 —
   // 빈 값으로 두면 runnerBuildMappingRows 가 '스킬 기본값(자동)'으로 잡아 치환 없이 원본대로 실행한다.
   if (file && file.sheetNamesUnreliable) return "";
+  // 요구 시트가 '스킬이 만드는 시트'면 업로드 원본에 없는 게 정상이다. 여기서 단일시트를 추측으로
+  // 채택하면 새 시트 참조가 엉뚱한 원본 시트로 치환돼, 만들어 둔 시트 대신 원본을 덮어쓴다.
+  // 추측을 포기하면 runnerBuildMappingRows 가 '스킬 기본값(자동)'으로 잡아 원래 이름 그대로 실행한다.
+  if (req && req.sheet && generatedNames && generatedNames.has(runnerMappingNorm(req.sheet))) return "";
   return sheets.length === 1 ? sheets[0] : "";
 }
 
@@ -1297,6 +1321,7 @@ function runnerResetMappingIfSourceChanged() {
 function runnerBuildMappingRows() {
   const reqs = runnerExtractMappingRequirements();
   const files = runnerMappingKnownFiles();
+  const generatedNames = runnerGeneratedSheetNameSet();   // 행마다 재계산하지 않도록 1회
   return reqs.map(req => {
     const stored = state.runnerMappings && state.runnerMappings[req.key];
     let fileItem = stored && files.find(item => item.id === stored.fileId);
@@ -1312,7 +1337,7 @@ function runnerBuildMappingRows() {
     // buildRunnerMappedPipeline 의 `if (row.req.sheet && row.sheet)` 가 걸러 치환이 일어나지 않는다.
     // 다만 '선택 필요'(bad)로 떨어져 실행이 막히면 안 되므로 상태는 정상으로 둔다.
     let skillDefault = !!(stored && runnerIsSkillDefaultSheet(stored.sheet));
-    const sheet = (fileItem && !skillDefault) ? runnerFindSheet(req, fileItem.file, stored && stored.sheet) : "";
+    const sheet = (fileItem && !skillDefault) ? runnerFindSheet(req, fileItem.file, stored && stored.sheet, generatedNames) : "";
     // [안전판] 파일은 정해졌는데 요구 시트가 자동 매칭되지 않고 사용자가 고르지도 않았으면
     // '시트 선택'(선택 강요) 대신 '스킬 기본값(그대로 실행)'을 기본 선택으로 둔다 — 요구 추출이
     // 놓친 케이스(생성 시트 감지 누락 등)가 실행을 막거나 사용자를 헤매게 하지 않게(치환만 생략).
@@ -1494,7 +1519,7 @@ function runnerRenderMappingPanel() {
       if (!g) return;
       const fileItem = g.files.find(item => item.id === sel.value);
       g.members.forEach(m => {
-        const sheet = fileItem ? runnerFindSheet(m.req, fileItem.file, "") : "";
+        const sheet = fileItem ? runnerFindSheet(m.req, fileItem.file, "", runnerGeneratedSheetNameSet()) : "";
         state.runnerMappings[m.req.key] = { fileId: sel.value || "", sheet, userSet: !!sel.value };  // 사람이 직접 파일 지정 → '사용자 확인'
       });
       runnerRenderMappingPanel();
