@@ -25,7 +25,9 @@ const sandbox = { console, Map, Set, RegExp, state: { runnerMappings: {}, runner
 vm.createContext(sandbox);
 vm.runInContext('const RUNNER_SHEET_SKILL_DEFAULT = "__b2b_skill_default__";', sandbox);
 ["runnerIsSkillDefaultSheet", "runnerMappingNorm", "runnerMappingStem", "runnerMappingKey",
- "runnerMappingSheetNames", "runnerFindSheet", "runnerBuildMappingRows", "runnerGroupMappingRowsByFile",
+ "runnerMappingSheetNames", "runnerFindSheet", "runnerGeneratedSheetNameSet",
+ "runnerExtractGeneratedSheetsFromCode", "runnerAddGeneratedSheet", "runnerLooksLikeA1Address",
+ "runnerBuildMappingRows", "runnerGroupMappingRowsByFile",
  "runnerMappingHasBlockingMissing"].forEach(fn => vm.runInContext(extract(fn), sandbox));
 
 // 요구/파일/자동매칭은 스텁 — 이 테스트의 관심사는 '미매칭 시트의 기본 선택'뿐이다.
