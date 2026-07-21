@@ -3671,6 +3671,21 @@ function applyLiveSchemaToFileCache(excelId, schema) {
     f.backendPreviewDimensions = f.backendPreviewDimensions || {};
     names.forEach(nm => { if (schema.dims[nm]) f.backendPreviewDimensions[nm] = schema.dims[nm]; });
   }
+  // [자리표 해제] 이 스키마는 라이브 Excel 이 실제로 연 워크북에서 읽은 '진짜' 시트 목록이다.
+  // 업로드 때 검사에 실패해 파일명을 시트명으로 지어냈던(sheetNamesUnreliable) 파일도, 여기까지 왔으면
+  // 실제 이름을 확보한 것이므로 신뢰불가 표시를 푼다 — 안 풀면 스킬이 중간에 만든 새 시트까지 목록에
+  // 들어온 뒤에도 계속 '스킬 기본값'에 묶여, 사용자가 그 시트를 고를 수 없다.
+  if (f.sheetNamesUnreliable) {
+    f.sheetNamesUnreliable = false;
+    f.inspectError = "";
+    try {
+      (state.inputsOriginal || []).forEach(orig => {
+        if (orig && orig.backendWorkbookId && orig.backendWorkbookId === f.backendWorkbookId) {
+          orig.sheetNamesUnreliable = false;
+        }
+      });
+    } catch (_) {}
+  }
   if (typeof syncFileMetadata === "function") { try { syncFileMetadata(f); } catch (_) {} }
 }
 

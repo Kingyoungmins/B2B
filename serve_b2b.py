@@ -1065,6 +1065,9 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
         if self.path == "/api/workbooks/archive":
             self.handle_workbook_archive()
             return
+        if self.path == "/api/workbooks/reinspect":
+            self.handle_workbook_reinspect()
+            return
         if self.path == "/api/logic/backup":
             self.handle_logic_backup()
             return
@@ -1361,6 +1364,32 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
             "aoa_cache_hits": 0,
         }
         self.send_json({"ok": True, "workbookId": workbook_id, "name": name, "meta": meta})
+
+    def handle_workbook_reinspect(self):
+        """업로드 때 시트명을 못 읽은 워크북(meta.requiresExcel)을 다시 검사한다.
+
+        업로드 순간 Excel 이 바쁘거나 spawn 이 실패하면 inspect_workbook 의 COM 재시도(2회)가
+        모두 실패해 폴백이 '파일명'을 시트명으로 지어낸다. 그 가짜 목록으로 매핑하면 스킬의
+        올바른 시트명이 파일명으로 치환돼 step1 부터 '시트를 찾을 수 없음'이 난다(보안문서 실측).
+        실행기 매핑 화면을 열 때 한 번 더 시도하면 Excel 이 한가해져 진짜 이름을 얻는 경우가 많다.
+        (DRM/AIP 처럼 끝내 못 여는 파일은 여전히 실패 → 클라가 '스킬 기본값'으로 안전 폴백한다.)
+        """
+        payload = self.read_json_body() or {}
+        workbook_id = str(payload.get("workbookId") or "").strip()
+        rec = WORKBOOKS.get(workbook_id)
+        if not rec:
+            self.send_json({"ok": False, "error": "unknown workbookId"}, status=404)
+            return
+        path = Path(rec.get("path") or "")
+        if not path.exists():
+            self.send_json({"ok": False, "error": "workbook file is missing"}, status=404)
+            return
+        try:
+            meta = inspect_workbook(path)
+        except Exception as err:
+            self.send_json({"ok": False, "error": str(err)}, status=500)
+            return
+        self.send_json({"ok": True, "workbookId": workbook_id, "name": rec.get("name"), "meta": meta})
 
     def handle_backend_pipeline_run(self):
         if openpyxl is None:
@@ -16436,10 +16465,24 @@ def inspect_workbook(path):
             # COM 검사가 일시 실패(업로드 순간 Excel 바쁨/spawn 실패)하면 폴백이 시트명을 지어내
             # '<32hex>_파일명' 이 매핑 UI 에 그대로 떴다(고객 화면 실측 — 실제 시트명은 'Sheet1').
             # 일시 실패가 대부분이므로 짧게 1회 재시도해 진짜 시트명을 최대한 확보한다.
+            #
+            # [CoInitialize 누락 수정] 업로드/재검사는 HTTP 워커 스레드에서 실행되는데 그 스레드는
+            # CoInitialize 를 부른 적이 없다 → DispatchEx 가 항상 "CoInitialize가 호출되지 않았습니다"
+            # (-2147221008)로 죽어, '일시 실패'가 아니라 위장 파일이면 100% 폴백으로 떨어졌다.
+            # 그래서 매핑 UI 에 실제 시트명 대신 파일명이 뜨고, 그걸 채택한 스킬이 step1 부터
+            # "시트를 찾을 수 없음"으로 실패했다(한전 위장 xlsx 실측). COM 은 CoInitialize 를 보유한
+            # 전용 워커(b2b-excel-com)에서만 돌려야 한다 → excel_call 로 마샬링한다.
+            # (워커 스레드 자신이 호출한 경우엔 큐에 넣으면 자기 자신을 기다려 데드락 → 직접 실행.)
+            def _inspect_via_com():
+                in_worker = EXCEL_THREAD is not None and threading.current_thread() is EXCEL_THREAD
+                if in_worker:
+                    return inspect_workbook_with_excel(path, source_error=err)
+                return excel_call(inspect_workbook_with_excel, path, source_error=err, timeout=180)
+
             last_excel_err = None
             for _attempt in range(2):
                 try:
-                    return inspect_workbook_with_excel(path, source_error=err)
+                    return _inspect_via_com()
                 except Exception as excel_err:
                     last_excel_err = excel_err
                     time.sleep(1.2)
