@@ -161,5 +161,64 @@ ck("(35) assist 스크립트가 pipeline/chat-ui 뒤에 로드",
      /error: "unknown_tool"[\s\S]{0,80}available/.test(toolsSrc));
 }
 
+// ── 9. 동반 수정: 코드만 바뀌고 이름/설명/대화가 옛 값으로 남지 않아야 한다 ──────
+// 사용자 실측: 4단계 100→1000 을 고쳤는데 카드 이름·설명·대화기록은 100으로 남아 헷갈렸다.
+// 그 기록은 다음 스킬 생성의 LLM 문맥으로도 들어가 옛 값으로 되돌리는 원인이 된다.
+{
+  const cb = { console, JSON, Date, Math, String, Number, Array, Set, Map, RegExp, parseFloat, isFinite };
+  cb.state = {
+    pipeline: [{ id: "s4", code: 'ws.Range("I16").Value = 100', language: "vba",
+                 title: "I16에 숫자 100 입력", description: "Step 4: I16에 숫자 100 입력",
+                 prompt: "I16에 100 입력해줘" }],
+    chatHistory: [
+      { role: "user", content: "I16에 100 입력해줘" },
+      { role: "assistant", content: "I16 셀에 100을 입력하는 코드를 만들었습니다." },
+      { role: "user", content: "다른 작업 100건 처리" },      // 무관한 100 — 건드리면 안 됨
+    ],
+  };
+  cb.replaceLogicAt = () => ({ applied: false, unapplied: true, startIndex: 4 });
+  vm.createContext(cb);
+  vm.runInContext(guardSrc, cb);
+  vm.runInContext(toolsSrc, cb);
+  vm.runInContext(coreSrc, cb);
+
+  cb.__args = { kind: "replaceLiteral", stepId: "s4", from: "100", to: "1000", reason: "요청" };
+  const built = vm.runInContext("assistBuildProposal(__args)", cb);
+  ck("(39) 값 치환 제안 생성", !!(built && built.ok), built && built.error);
+  const comps = (built.proposal && built.proposal.companions) || [];
+  const labels = comps.map(c => c.label);
+  ck("(40) 단계 이름·설명·요청문이 동반 후보에 포함",
+     labels.includes("단계 이름") && labels.includes("단계 설명") && labels.includes("원래 요청문"), labels);
+  const chatComps = comps.filter(c => c.target === "chat");
+  ck("(41) 이 단계를 만든 대화만 후보(무관한 100은 제외)",
+     chatComps.length === 2 && !chatComps.some(c => String(c.before).includes("다른 작업")),
+     chatComps.map(c => c.before));
+
+  cb.__pid = built.proposal.id;
+  const res = vm.runInContext("assistCommitProposal(__pid, [0,1,2,3,4])", cb);
+  ck("(42) 커밋 성공", !!(res && res.ok), res && res.error);
+  const st = cb.state.pipeline[0];
+  ck("(43) 단계 이름/설명/요청문이 1000으로 갱신",
+     st.title.includes("1000") && st.description.includes("1000") && st.prompt.includes("1000"),
+     [st.title, st.description, st.prompt]);
+  ck("(44) 이 단계 대화만 1000으로, 무관한 대화는 그대로",
+     cb.state.chatHistory[0].content.includes("1000")
+     && cb.state.chatHistory[1].content.includes("1000")
+     && cb.state.chatHistory[2].content === "다른 작업 100건 처리",
+     cb.state.chatHistory.map(m => m.content));
+}
+
+// ── 10. 팝업 창(앱 레이아웃에 붙지 않음) ──────────────────────────────────
+{
+  const cssSrc = rd("styles/panels.css");
+  ck("(45) 드로어가 아닌 떠 있는 팝업", /className = "assist-popup"/.test(uiSrc));
+  ck("(46) 제목줄 드래그 이동 + 크기 조절 손잡이",
+     /function assistBindDrag/.test(uiSrc) && /assist-resize/.test(uiSrc));
+  ck("(47) 위치·크기 기억", /localStorage\.setItem\(ASSIST_POS_KEY/.test(uiSrc));
+  ck("(48) 화면 밖으로 나가면 되돌림", /function assistClampIntoView/.test(uiSrc));
+  ck("(49) CSS 가 fixed 팝업(우측 도킹 아님)",
+     /\.assist-popup \{[\s\S]{0,400}position: fixed/.test(cssSrc) && !/\.assist-drawer \{/.test(cssSrc));
+}
+
 console.log("\n=== RESULT: " + (fails === 0 ? "ALL PASS" : fails + " FAIL") + " ===");
 process.exit(fails ? 1 : 0);

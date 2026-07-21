@@ -53,6 +53,14 @@ function assistSystemPrompt() {
   또는 args={"kind":"replaceLiteral","stepId":"...","from":"바꿀 문자열","to":"새 문자열","reason":"왜"}
 - 더 알아볼 게 없으면 action="final" 로 끝내고, 블록 위에 사용자에게 할 답변을 쓴다.
 
+### 값 하나만 바꿀 때는 반드시 replaceLiteral 을 쓸 것
+숫자·문자 하나를 바꾸는 요청(예: "100을 1000으로")에 replaceStepCode 로 코드 전체를 다시 쓰면
+엉뚱한 곳까지 바뀔 위험이 있다. from/to 만 정확히 지정하라.
+단계 이름·설명·과거 대화에 남은 같은 값은 **프로그램이 자동으로 함께 고쳐 준다** — 그것까지
+제안에 넣지 말고, 답변에서 "이름과 설명도 같이 정리했다"고만 알려 주면 된다.
+코드 전체를 바꿔야 하는 경우(replaceStepCode)에는 바뀐 내용에 맞는 새 설명을
+args.newDescription 으로 함께 주면 카드에서 같이 반영된다.
+
 ## 사용 가능한 도구
 ${typeof assistToolCatalog === "function" ? assistToolCatalog() : ""}
 
@@ -216,6 +224,58 @@ function assistBuildProposal(args) {
 
   if (newCode === oldCode) return { ok: false, error: "바뀌는 내용이 없습니다." };
 
+  // ── [동반 수정] 코드만 고치면 단계 이름·설명·대화기록에 옛 값이 남아 사용자가 헷갈린다.
+  // 게다가 그 기록은 다음 스킬 생성의 LLM 문맥으로 들어가 옛 값으로 되돌리는 원인이 된다
+  // (사용자 실측: 코드는 1000인데 설명/대화는 100으로 남음).
+  // 값 치환(from→to)일 때만 '같은 리터럴'을 결정적으로 찾아 후보를 만든다 — LLM 이 자유롭게
+  // 다시 쓰게 두지 않는다(요약이 사실을 왜곡하는 것보다 기계적 치환이 안전하다).
+  const companions = [];
+  if (kind === "replaceLiteral" && args.from) {
+    const from = String(args.from), to = String(args.to != null ? args.to : "");
+    const addField = (field, label) => {
+      const cur = String(step[field] || "");
+      if (cur && cur.includes(from)) {
+        companions.push({ target: "step", field, label, before: cur, after: cur.split(from).join(to) });
+      }
+    };
+    addField("title", "단계 이름");
+    addField("description", "단계 설명");
+    addField("prompt", "원래 요청문");
+
+    // 이 단계를 만든 대화(사용자 요청 말풍선 + 바로 뒤 어시스턴트 응답)만 대상으로 한다.
+    // 대화 전체를 훑어 '100'을 모두 바꾸면 무관한 숫자까지 건드린다.
+    try {
+      const hist = Array.isArray(state.chatHistory) ? state.chatHistory : [];
+      const norm = t => String(t || "").replace(/\s+/g, " ").trim().slice(0, 200);
+      const want = norm(step.prompt);
+      if (want) {
+        for (let i = 0; i < hist.length; i++) {
+          const m = hist[i];
+          if (!m || m.role !== "user" || norm(m.content) !== want) continue;
+          [i, i + 1].forEach(j => {
+            const t = hist[j];
+            if (!t || !t.content || !String(t.content).includes(from)) return;
+            companions.push({
+              target: "chat", index: j, label: t.role === "user" ? "대화(내 요청)" : "대화(AI 답변)",
+              before: String(t.content), after: String(t.content).split(from).join(to),
+            });
+          });
+          break;
+        }
+      }
+    } catch (_) {}
+  } else if (kind === "replaceStepCode") {
+    // 코드 전체 교체는 기계적 치환이 불가하므로, 모델이 새 설명을 준 경우에만 반영한다.
+    const nt = String(args.newTitle || "").trim();
+    const nd = String(args.newDescription || "").trim();
+    if (nt && nt !== String(step.title || "")) {
+      companions.push({ target: "step", field: "title", label: "단계 이름", before: String(step.title || ""), after: nt });
+    }
+    if (nd && nd !== String(step.description || "")) {
+      companions.push({ target: "step", field: "description", label: "단계 설명", before: String(step.description || ""), after: nd });
+    }
+  }
+
   // 파일명/시트명 변경은 사고 위험이 크므로 카드에 경고를 띄우도록 표시만 해 둔다.
   const touchesNames = /\.(xls[xmb]?|csv)["']/i.test(String(args.from || "")) ||
     (kind === "replaceLiteral" && /^[^\r\n]{1,60}$/.test(String(args.from || "")) &&
@@ -229,6 +289,7 @@ function assistBuildProposal(args) {
     baseHash: assistHashCode(oldCode),
     pipelineLen: steps.length,
     touchesNames,
+    companions,
   });
   return { ok: true, proposal: { ..._assistProposalPeek(id), id } };
 }
@@ -241,14 +302,41 @@ function _assistProposalPeek(id) {
 }
 
 /** 사용자가 승인 버튼을 눌렀을 때만 호출된다. 여기가 유일한 상태 변경 지점. */
-function assistCommitProposal(proposalId) {
+function assistApplyCompanions(p, pickedIdx) {
+  const out = { step: 0, chat: 0 };
+  const steps = Array.isArray(state.pipeline) ? state.pipeline : [];
+  const target = steps.find(s => s && String(s.id) === String(p.stepId));
+  (p.companions || []).forEach((c, i) => {
+    if (!pickedIdx.includes(i)) return;
+    try {
+      if (c.target === "step" && target) {
+        // 현재 값이 제안 시점과 같을 때만(그 사이 사용자가 이름을 직접 고쳤으면 건드리지 않는다)
+        if (String(target[c.field] || "") === c.before) { target[c.field] = c.after; out.step += 1; }
+      } else if (c.target === "chat") {
+        const h = state.chatHistory || [];
+        const m = h[c.index];
+        if (m && String(m.content || "") === c.before) { m.content = c.after; out.chat += 1; }
+      }
+    } catch (_) {}
+  });
+  return out;
+}
+
+function assistCommitProposal(proposalId, accepted) {
   const taken = assistTakeProposal(proposalId);
   if (!taken.ok) return { ok: false, error: taken.error };
   const p = taken.proposal;
   if (typeof replaceLogicAt !== "function") return { ok: false, error: "수정 함수를 찾을 수 없습니다." };
   // applyMode:"none" — 라이브에 적용하지 않고 스킬만 갱신(가드는 replaceLogicAt 안에 있다).
   const r = replaceLogicAt(p.stepId, p.newCode, null, taken.step.language || "python", { applyMode: "none" });
-  if (r && r.unapplied) return { ok: true, startIndex: r.startIndex };
+  if (r && r.unapplied) {
+    // 동반 수정은 코드 교체가 성공한 뒤에만 반영한다(코드가 안 바뀌었는데 라벨만 바뀌면 더 헷갈린다).
+    const picked = Array.isArray(accepted) ? accepted : (p.companions || []).map((_, i) => i);
+    const applied = assistApplyCompanions(p, picked);
+    try { if (typeof renderPipeline === "function") renderPipeline(); } catch (_) {}
+    try { if (typeof renderChatFromHistory === "function" && applied.chat > 0) renderChatFromHistory(); } catch (_) {}
+    return { ok: true, startIndex: r.startIndex, companions: applied };
+  }
   if (r === false) return { ok: false, error: "수정을 적용하지 못했습니다(위 안내 참조)." };
   return { ok: true };
 }
