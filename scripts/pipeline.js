@@ -5218,6 +5218,7 @@ async function explainPipelineErrorForUser(info) {
   if (typeof callLLMOneShot !== "function") return null;
   const req = (typeof latestUserRequestForSafety === "function") ? latestUserRequestForSafety() : "";
   const system = [
+    typeof OUTPUT_LANGUAGE_RULE === "string" ? OUTPUT_LANGUAGE_RULE : "",
     "당신은 한국어 엑셀 자동화 도우미입니다. 방금 사용자가 시킨 작업이 오류로 실패했습니다.",
     "엑셀/코드 지식이 전혀 없는 사용자에게 친절하고 평이하게 설명하세요. 반드시 이 흐름을 지키세요:",
     "(1) 사용자가 무엇을 하려 했는지 한 문장으로 되짚기",

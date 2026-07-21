@@ -1,6 +1,17 @@
 ﻿/* ===================================================================
    FILE SCHEMA FOR CLAUDE
    =================================================================== */
+// [출력 언어 고정] 기본 모델(Qwen 계열)은 중국어 학습 비중이 높아, 확신이 낮은 구간(드문 용어·긴 생성·
+// 생각 트레이스)에서 한국어 관성이 풀리면 중국어로 미끄러진다. 프롬프트가 한국어로 '쓰여' 있을 뿐
+// 출력 언어를 못박은 문장이 없어 제약이 아예 없었다(실사용 중 중국어 혼입 보고). 생각 과정도 화면에
+// '생각 펼치기'로 노출되므로 함께 고정한다. 시트명·파일명 원문 보존 규칙과 충돌하지 않도록 예외를 명시.
+const OUTPUT_LANGUAGE_RULE = `## 출력 언어 (최우선)
+- 사람이 읽는 모든 문장(설명·제목·요약·질문·코드 주석)은 한국어로 씁니다.
+- 생각(reasoning) 과정도 한국어로 씁니다.
+- 중국어·일본어 등 다른 언어의 낱말이나 문장을 섞지 마세요. 한자(汉字) 표기도 쓰지 마세요.
+- 단, 코드 문법과 식별자, 그리고 파일명·시트명·열 머리글 같은 데이터의 이름은 원문 그대로 둡니다
+  (번역·표기 변경 금지 — 이 규칙이 위 언어 규칙보다 우선합니다).`;
+
 const FORMULA_OVERWRITE_RULE = `
 Formula overwrite and displayed-text edit rule:
 - Generate Python Excel automation, not JavaScript array edits.
@@ -86,7 +97,9 @@ COPY / PASTE — preserve formatting (IMPORTANT):
 `;
 
 // 0.4.9 리모콘 모델: 라이브 워크북에 즉시 주입 실행되는 VBA 매크로 생성용 시스템 프롬프트.
-const VBA_SYSTEM_PROMPT = `당신은 우측에 실제로 떠 있는 Microsoft Excel 워크북을 VBA 매크로로 조작하는 코드 작성 도우미입니다.
+const VBA_SYSTEM_PROMPT = `${OUTPUT_LANGUAGE_RULE}
+
+당신은 우측에 실제로 떠 있는 Microsoft Excel 워크북을 VBA 매크로로 조작하는 코드 작성 도우미입니다.
 지금 작성하는 VBA는 사용자가 보고 있는 라이브 워크북(ActiveWorkbook)에 즉시 주입되어 실행됩니다.
 
 ## 출력 형식 (엄격)
@@ -755,7 +768,9 @@ function _buildDefaultTargetHint() {
 }
 
 
-const PYTHON_COM_SYSTEM_PROMPT = `당신은 우측에 실제로 떠 있는 Microsoft Excel 워크북을 Python 으로 조작하는 코드 작성 도우미입니다.
+const PYTHON_COM_SYSTEM_PROMPT = `${OUTPUT_LANGUAGE_RULE}
+
+당신은 우측에 실제로 떠 있는 Microsoft Excel 워크북을 Python 으로 조작하는 코드 작성 도우미입니다.
 작성한 코드는 즉시 라이브 Excel 에 실행되어 결과가 바로 화면에 보입니다. 파일을 열고 닫는 코드가 아닙니다.
 
 ## 실행 모델 — 매우 중요
@@ -1038,7 +1053,8 @@ def transform(ctx):
 // 라우팅 규칙: 스텝 코드 첫 줄 부근의 `# B2B_ENGINE: openpyxl` 마커가 있으면 라이브 COM 대신
 // 백엔드 openpyxl 파이프라인으로 보낸다(pipelineStepLiveLanguage). 생성은 항상 COM 규약.
 
-const SYSTEM_PROMPT = `${PYTHON_EXCEL_SKILL_RULE}
+const SYSTEM_PROMPT = `${OUTPUT_LANGUAGE_RULE}
+${PYTHON_EXCEL_SKILL_RULE}
 ${FORMULA_OVERWRITE_RULE}
 
 당신은 업로드된 Excel 파일을 실제 Microsoft Excel COM으로 자동화하는 코드 작성 도우미입니다.
@@ -1107,7 +1123,8 @@ def transform(ctx):
 4. 외부 라이브러리는 사용하지 마세요. Python 표준 라이브러리와 제공된 ctx/workbook 객체만 사용하세요.
 `;
 
-const EDIT_SYSTEM_PROMPT = `${PYTHON_EXCEL_SKILL_RULE}
+const EDIT_SYSTEM_PROMPT = `${OUTPUT_LANGUAGE_RULE}
+${PYTHON_EXCEL_SKILL_RULE}
 ${FORMULA_OVERWRITE_RULE}
 
 당신은 이미 만들어진 Excel 자동화 파이프라인의 특정 단계(step)를 수정하는 도우미입니다.

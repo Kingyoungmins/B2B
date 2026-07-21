@@ -3360,6 +3360,7 @@ async function clarifyVerifierAskIfNeeded(userMessage, options) {
 
   const schema = options.schema || (typeof buildSchemaSummary === "function" ? buildSchemaSummary() : "");
   const sys = [
+    typeof OUTPUT_LANGUAGE_RULE === "string" ? OUTPUT_LANGUAGE_RULE : "",
     "당신은 Excel 자동화 스킬을 '만들기 전에' 요청이 정확한 스킬을 짜기에 충분한지 점검하는 검증자입니다.",
     "코드는 절대 작성하지 말고, 아래 둘 중 하나만 출력하세요:",
     "- 지금 그대로 정확한 스킬을 짤 수 있으면 정확히 'OK' 한 단어만.",
