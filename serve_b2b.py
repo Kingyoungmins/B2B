@@ -9173,6 +9173,10 @@ class PythonComSkillContext:
                 # 조건부 스킬(예: '소계 행이 있으면 삭제')이 이번 파일엔 해당 없어 아무것도 안 바꾼
                 # '정상 무변경'과, 엉뚱한 시트를 읽어 아무것도 못 한 '오타겟 무변경'을 구분하는 증거.
                 "read_nonempty": False,
+                # [0건 매칭 노출] ctx.write 가 기록한 총 셀 수/비어있지 않은 값 수. 전량 빈값이면
+                # '조건에 맞는 데이터 0건' 신호 — 실행은 성공이라도 응답에 경고를 실어 조용한 실패를 드러낸다.
+                "write_cells_total": 0,
+                "write_cells_nonempty": 0,
             }
         self._shared = _shared
 
@@ -9615,6 +9619,13 @@ class PythonComSkillContext:
         t0 = time.perf_counter()
         ws = self._ws(sheet)
         data, rows, cols = self._as_2d(values)
+        try:
+            self._shared["write_cells_total"] += int(rows) * int(cols)
+            self._shared["write_cells_nonempty"] += sum(
+                1 for _row in data for _v in _row if _v is not None and str(_v).strip() != ""
+            )
+        except Exception:
+            pass
         anchor = self._rng(ws, a1_start)
         rng = self._resize_rng(ws, anchor, rows, cols)
         self._tick(3)
@@ -11688,6 +11699,16 @@ def _python_com_static_check(code):
             "정렬을 ctx.read → Python sorted/list.sort → ctx.write 로 구현하면 헤더/행 관계가 깨지고 "
             "긴 숫자 식별자가 8.90E+31 형태로 손실될 수 있습니다. ctx.sort(...)를 사용하세요."
         )
+    # [소수점 쪼개기 차단] '연속 숫자만' findall + 콤마 join 은 '20.0' → '20','0' → "20, 0" 오답
+    # (실측: 한화테크윈 DSMC ':' 뒤 숫자 — 프롬프트 규칙을 모델이 반복 위반해 게이트로 승격).
+    # ''.join(숫자 이어붙이기) 같은 정상 패턴은 콤마 join 이 아니라서 통과한다.
+    if (re.search(r"\bfind(?:all|iter)\s*\(\s*r?['\"](?:\\d\+|\[0-9\]\+)['\"]", code_text)
+            and re.search(r"['\"],\s?['\"]\s*\.\s*join\s*\(", code_text)):
+        failures.append(
+            "re.findall 의 숫자 패턴이 '연속 숫자만'(\\d+)이라 '20.0' 같은 소수점 값을 '20'과 '0'으로 "
+            "쪼개 콤마 나열합니다. 소수점 포함 r'\\d+(?:\\.\\d+)?' 패턴을 쓰거나 구분자로 자른 조각을 "
+            "통째로 기입하고, 매칭이 1개면 join 나열 대신 그 값 하나만 쓰세요."
+        )
 
     def _col_to_index(col):
         n = 0
@@ -11947,7 +11968,23 @@ def _exec_python_com_skill(app, wb, session, code, skip_static=False, timeout_s=
             "스킬이 실행됐지만 워크북에 아무 변경도 없습니다(대상 시트/범위/조건을 확인하세요). "
             "'적용됨'으로 잘못 보고되지 않도록 실패로 처리했습니다."
         )
-    return ctx.summary()
+    summary = ctx.summary()
+    try:
+        _w_total = int(ctx._shared.get("write_cells_total") or 0)
+        _w_filled = int(ctx._shared.get("write_cells_nonempty") or 0)
+        if _w_total > 0 and _w_filled == 0:
+            # [조용한 0건 매칭] 실행은 성공했지만 기록한 값이 전부 빈값 — 대개 구분자/조건 표기가
+            # 실제 데이터와 달라 매칭 0건인 경우(예: ' : ' 리터럴 매칭 vs 실제 셀 '03:20.0').
+            # 의도적 비우기일 수도 있으니 실패로 만들지 않고 성공 응답에 경고만 실어 드러낸다.
+            summary["emptyWrites"] = True
+            summary["warning"] = (
+                f"적용은 됐지만 기록된 {_w_total:,}칸이 전부 빈값입니다. 조건에 맞는 데이터가 "
+                "0건일 수 있습니다 — 구분자·조건 표기(공백 등)가 실제 셀 값과 일치하는지 확인하세요."
+            )
+            _vba_trace("python_com.all_empty_writes", cells=_w_total)
+    except Exception:
+        pass
+    return summary
 
 
 def _run_python_on_session_impl(excel_id, code, skip_static=False, timeout_s=None):

@@ -1844,7 +1844,9 @@ function applyVbaStepToLiveExcel(step, excelId, options = {}) {
       if (data && data.liveSchema) {
         try { applyLiveSchemaToFileCache(excelId, data.liveSchema); } catch (_) {}
       }
-      setPipelineRuntimeStatus([step.id], "applied", "적용됨");
+      // [0건 매칭 노출] 백엔드가 '기록값 전부 빈값' 경고를 실어주면 상태·토스트로 드러낸다(조용한 실패 방지).
+      const allEmptyWrites = !!(data && data.emptyWrites);
+      setPipelineRuntimeStatus([step.id], "applied", allEmptyWrites ? "적용됨(값 0건)" : "적용됨");
       noteLivePipelineApplied(state.pipeline); // [0.5.2.2] 추가 적용 완료 상태 기억(no-op 편집 생략용)
       if (typeof endExcelMirrorApplyLoading === "function") endExcelMirrorApplyLoading();
       if (typeof releaseExcelMirrorPipelineMute === "function") releaseExcelMirrorPipelineMute(excelId);
@@ -1862,7 +1864,10 @@ function applyVbaStepToLiveExcel(step, excelId, options = {}) {
         totalClientMs: performance.now() - perfStartedAt,
         server: (data && data.debugTimings) || {},
       });
-      if (showToasts) toast(`"${step.description}" 적용됨`, "success");
+      if (showToasts) {
+        if (allEmptyWrites) toast(`"${step.description}" — ${(data && data.warning) || "기록된 값이 전부 빈값입니다(조건 매칭 0건 의심)."}`, "warning");
+        else toast(`"${step.description}" 적용됨`, "success");
+      }
       try { if (typeof traceClientUiEvent === "function") traceClientUiEvent("pipeline.apply_live.done", { stepId: step.id || "", totalClientMs: Math.round(performance.now() - perfStartedAt) }); } catch (_) {}
       return true;
     })
