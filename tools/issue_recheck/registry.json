@@ -2133,6 +2133,17 @@
         ]
       ],
       "fix": "loadLogic에 v4 자리표(@@FILE_n@@)->원본 파일명 복원 백포트(0.6.1) / 0.6.2는 네이티브 v4 왕복. 실물 한전 오류신고(2026-07-20) zip 회귀"
+    },
+    {
+      "id": "SHEETNAME-PLACEHOLDER-DRM",
+      "title": "보안/위장 파일 시트명이 '파일명'으로 들어와 실행기 매핑이 스킬 시트를 덮어씀",
+      "checks": [
+        [
+          "node",
+          "diagnostics/_test_unreliable_sheet_names.js"
+        ]
+      ],
+      "fix": "① inspect_workbook 의 Excel 폴백을 excel_call(COM 워커)로 마샬링 — HTTP 스레드엔 CoInitialize 가 없어 위장 파일이면 100% 실패하고 파일명을 시트명으로 지어냈다(실측 -2147221008). ② 그래도 못 읽으면 requiresExcel→sheetNamesUnreliable 로 표시해 러너가 단일시트 자동채택 대신 '스킬 기본값(그대로 실행)'으로 폴백. ③ /api/workbooks/reinspect 로 매핑 진입 시 재시도, ④ 라이브 스키마 도착 시 자리표 해제"
     }
   ]
 }

@@ -1212,6 +1212,12 @@ function runnerFindSheet(req, file, preferredSheet) {
     const normalized = sheets.find(s => runnerMappingNorm(s) === norm);
     if (normalized) return normalized;
   }
+  // [가짜 시트명 방어] 시트가 하나뿐이면 '당연히 그것'이라 자동 채택해 왔는데, 보안문서(DRM/AIP)처럼
+  // 백엔드가 못 읽은 파일은 그 하나가 실제 시트가 아니라 '파일명'으로 지어낸 자리표다
+  // (inspect_workbook_fallback). 그걸 채택하면 스킬의 올바른 시트명이 파일명으로 치환돼
+  // step1 부터 "시트를 찾을 수 없음"이 난다(실측). 신뢰불가 목록에서는 자동 채택하지 않는다 —
+  // 빈 값으로 두면 runnerBuildMappingRows 가 '스킬 기본값(자동)'으로 잡아 치환 없이 원본대로 실행한다.
+  if (file && file.sheetNamesUnreliable) return "";
   return sheets.length === 1 ? sheets[0] : "";
 }
 
@@ -1463,11 +1469,59 @@ function runnerRenderMappingPanel() {
   });
 }
 
+// [진짜 시트명 재확보] 업로드 순간 Excel 이 바빠서 검사에 실패한 워크북은 시트 목록이 '파일명'
+// 자리표다(requiresExcel). 매핑 화면을 여는 시점엔 Excel 이 한가한 경우가 많아 한 번 더 시도하면
+// 진짜 시트명을 얻는다. 끝내 실패하는 파일(DRM/AIP)은 신뢰불가로 남아 '스킬 기본값'으로 폴백된다.
+async function runnerRefreshUnreliableSheetNames() {
+  if (!window.fetch || location.protocol === "file:") return 0;
+  const targets = (state.inputs || [])
+    .concat((state.outputTemplates || []).map(t => t && t.file).filter(Boolean))
+    .filter(f => f && f.sheetNamesUnreliable && f.backendWorkbookId);
+  if (!targets.length) return 0;
+  let fixed = 0;
+  for (const file of targets) {
+    try {
+      const resp = await fetch("/api/workbooks/reinspect", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ workbookId: file.backendWorkbookId }),
+      });
+      const data = await resp.json();
+      if (!resp.ok || !data || !data.ok || !data.meta) continue;
+      const meta = data.meta;
+      if (meta.requiresExcel === true) continue;          // 여전히 못 읽음 → 자리표 유지
+      const names = Array.isArray(meta.sheetNames) ? meta.sheetNames.filter(Boolean) : [];
+      if (!names.length) continue;
+      file.sheetNames = names.slice();
+      file.sheetNamesUnreliable = false;
+      file.inspectError = "";
+      // pristine 스냅샷도 같은 파일이면 함께 갱신(요구 계산이 원본 기준이라 어긋나면 안 된다).
+      (state.inputsOriginal || []).forEach(orig => {
+        if (orig && orig.backendWorkbookId === file.backendWorkbookId) {
+          orig.sheetNames = names.slice();
+          orig.sheetNamesUnreliable = false;
+        }
+      });
+      fixed += 1;
+    } catch (_) { /* 네트워크 실패는 무시 — 자리표 유지 후 스킬 기본값 폴백 */ }
+  }
+  return fixed;
+}
+
 window.runnerShowMappingPanel = function() {
   runnerResetMappingIfSourceChanged();
   state.runnerMappingChecked = true;
   runnerRenderMappingPanel();
   renderRunnerWorkflow();
+  // 재검사는 비동기 — 먼저 화면을 그리고, 진짜 이름을 얻으면 그 자리에서 다시 그린다.
+  runnerRefreshUnreliableSheetNames().then(fixed => {
+    if (!fixed) return;
+    try {
+      runnerRenderMappingPanel();
+      renderRunnerWorkflow();
+      if (typeof toast === "function") toast(`실제 시트 이름을 확인했습니다(파일 ${fixed}개).`, "success");
+    } catch (_) {}
+  }).catch(() => {});
 };
 
 function runnerReplaceLiteral(text, from, to) {

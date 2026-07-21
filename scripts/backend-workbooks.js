@@ -76,6 +76,12 @@ function createBackendPreviewRecord(file, backendInfo) {
     originalFormulaValues,
     tables: {},
     lightweightPreview: true,
+    // [가짜 시트명 방어] 백엔드가 워크북을 끝내 못 읽으면(보안문서/DRM, 업로드 순간 Excel 바쁨)
+    // inspect_workbook_fallback 이 '파일명'을 시트명으로 지어낸다(requiresExcel=true).
+    // 이 목록으로 매핑하면 스킬의 올바른 시트명이 파일명으로 치환돼 step1 부터 죽는다 →
+    // 신뢰불가로 표시해 두고, 러너는 치환 대신 '스킬 기본값(그대로 실행)'으로 폴백한다.
+    sheetNamesUnreliable: meta.requiresExcel === true,
+    inspectError: meta.inspectError || "",
     backendOnly: true,
     backendWorkbookId: backendInfo.workbookId,
     backendWorkbookMeta: meta,
