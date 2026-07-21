@@ -19,6 +19,9 @@ CHECKS = {
     # WaitForSingleObject = 259 좀비 오판 수정본, waitRestoreOrStall = 중단 진행률 기반 승격.
     "serve_b2b.py": ["STARTF_FORCEOFFFEEDBACK", "_is_pid_alive", "WaitForSingleObject"],
     "scripts\\pipeline.js": ["waitRestoreOrStall", "PIPELINE_VOLATILE_SUFFIX_TOKENS"],
+    # [구분자 공백/소수점] 0건 매칭 · '20, 0' 오답 방어가 번들됐는지(프롬프트 + 클라 게이트).
+    "scripts\\file-schema.js": ["구분자", "소수점"],
+    "scripts\\chat-ui.js": ["decimalSplitNumberExtractFailures", "_clarifySeparatorWhitespaceQuestion"],
 }
 
 fails = 0
