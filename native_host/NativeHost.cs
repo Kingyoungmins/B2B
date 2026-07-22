@@ -212,9 +212,11 @@ namespace B2BNativeHost
             KeyPreview = true;
             // 최대화 시 작업영역(작업표시줄 제외)으로 제한 → 작업표시줄을 덮지 않음.
             MaximizedBounds = Screen.PrimaryScreen.WorkingArea;
-            WindowState = FormWindowState.Maximized;
-            // 창 크기 조절 부담을 없앤다: 최대화로 고정하고 최소화만 허용(복원/리사이즈는 HandleHostResize 에서 되돌림).
-            MaximizeBox = false;
+            WindowState = FormWindowState.Maximized;   // 기본은 최대화로 시작(사용자가 복원/최대화 자유)
+            // [사용성] 일반 Windows 창처럼 최대화/복원/최소화를 모두 허용한다. Excel 오버레이는
+            // PublishNativeBounds 가 Resize/Move/SplitterMoved 마다 excelPanel 좌표로 재배치하므로
+            // 복원/리사이즈에도 따라온다(강제 최대화 고정은 HandleHostResize 에서 제거).
+            MaximizeBox = true;
             MinimizeBox = true;
             MinimumSize = new Size(1280, 760);
 
@@ -1322,12 +1324,9 @@ namespace B2BNativeHost
                 lastWindowState = WindowState;
                 return;
             }
-            // 최대화 고정: 복원/리사이즈로 Normal 이 되면 즉시 다시 최대화한다(최소화만 허용).
-            if (WindowState == FormWindowState.Normal)
-            {
-                WindowState = FormWindowState.Maximized;  // 다시 Resize 발생 → Maximized 분기로 진행
-                return;
-            }
+            // [사용성] 예전엔 Normal 이 되면 즉시 Maximized 로 되돌려 사실상 최대화 고정이었다.
+            // 이제 최대화/복원/리사이즈를 자유롭게 허용한다 — 아래 PublishNativeBounds 가 새 창 크기에
+            // 맞춰 Excel 오버레이를 재배치하므로 복원/리사이즈 상태에서도 미러가 따라온다.
             bool restoredFromMinimized = lastWindowState == FormWindowState.Minimized;
             lastWindowState = WindowState;
             PublishNativeBounds();
