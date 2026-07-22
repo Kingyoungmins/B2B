@@ -215,8 +215,10 @@ namespace B2BNativeHost
             Text = "B2B 빌링 Agent";
             StartPosition = FormStartPosition.CenterScreen;
             KeyPreview = true;
-            // 최대화 시 작업영역(작업표시줄 제외)으로 제한 → 작업표시줄을 덮지 않음.
-            MaximizedBounds = Screen.PrimaryScreen.WorkingArea;
+            // [듀얼모니터] 최대화 범위를 '지금 창이 있는 모니터'의 작업영역으로 잡는다. 예전엔 주 모니터로
+            // 고정해서, 왼쪽/보조 모니터에서 최대화하면 주 모니터로 튀었다. UpdateMaximizedBoundsForScreen 이
+            // Move 마다 현재 모니터로 갱신한다(작업표시줄 제외는 WorkingArea 가 유지). 초기값은 시작 모니터.
+            MaximizedBounds = Screen.FromPoint(Cursor.Position).WorkingArea;
             WindowState = FormWindowState.Maximized;   // 기본은 최대화로 시작(사용자가 복원/최대화 자유)
             // [사용성] 일반 Windows 창처럼 최대화/복원/최소화를 모두 허용한다. Excel 오버레이는
             // PublishNativeBounds 가 Resize/Move/SplitterMoved 마다 excelPanel 좌표로 재배치하므로
@@ -290,7 +292,7 @@ namespace B2BNativeHost
             Shown += (s, e) => ApplyInitialSplitterLayout();
             FormClosing += (s, e) => Cleanup();
             Resize += (s, e) => HandleHostResize();
-            Move += (s, e) => PublishNativeBounds();
+            Move += (s, e) => { UpdateMaximizedBoundsForScreen(); PublishNativeBounds(); };
             Activated += (s, e) =>
             {
                 PublishNativeBounds();
@@ -1364,8 +1366,11 @@ namespace B2BNativeHost
                 "window.__B2B_NATIVE_SHELL={{enabled:true,excelOverlay:true,excelParentHwnd:'{0}',nativeHostHwnd:'{1}',excelLeft:{2},excelTop:{3},excelWidth:{4},excelHeight:{5}}};window.dispatchEvent(new Event('b2bNativeResize'));",
                 excelPanel.Handle.ToInt64(),
                 Handle.ToInt64(),
-                Math.Max(0, screen.X),
-                Math.Max(0, screen.Y),
+                // [듀얼모니터] 좌표를 Math.Max(0,...) 로 막으면 왼쪽/위쪽 모니터(음수 좌표)로 창을 옮겨도
+                // Excel 오버레이가 x/y>=0(주 모니터)에 박혀 따라오지 못했다. 음수 좌표를 그대로 넘긴다
+                // (JS·백엔드는 이미 음수 지원 — 백엔드는 창 숨김에 -32000 좌표까지 쓴다). 크기는 양수 유지.
+                screen.X,
+                screen.Y,
                 Math.Max(320, rect.Width),
                 Math.Max(240, rect.Height)
             );
@@ -1425,6 +1430,20 @@ namespace B2BNativeHost
             {
                 return "(error)";
             }
+        }
+
+        // [듀얼모니터] 최대화 범위를 '현재 창이 걸쳐 있는 모니터'로 갱신한다. 복원(Normal) 상태에서만
+        // 바꾼다 — 최대화 중에 MaximizedBounds 를 건드리면 재배치 피드백이 생긴다. 다음에 최대화를
+        // 누르면 이 모니터를 꽉 채운다(작업표시줄 제외).
+        private void UpdateMaximizedBoundsForScreen()
+        {
+            try
+            {
+                if (WindowState == FormWindowState.Maximized) return;
+                Rectangle wa = Screen.FromControl(this).WorkingArea;
+                if (MaximizedBounds != wa) MaximizedBounds = wa;
+            }
+            catch { }
         }
 
         private void HandleHostResize()
