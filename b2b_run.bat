@@ -20,10 +20,12 @@
 #    --timeout S    실행 대기 초(기본 1800)
 #    --keep-open    실행 후 내가 연 Excel 세션을 닫지 않음(디버그)
 #    --dry-run      업로드/열기까지만 하고 실제 실행은 안 함(전송할 payload 를 출력)
+#    --progress-json 진행률을 stderr 에 JSON 라인(PROGRESS {...})으로도 출력
+#  진행률: 실행 중 stderr 에 '진행 3/5 단계 (60%)' 를 실시간으로 찍는다(stdout 은 최종 JSON 만).
 #  결과: stdout 마지막 줄에 JSON 한 줄 {ok, outZip, files, port, ...}. OpenClaw 는 이걸 파싱.
 #  주의: 결과 zip 에는 '전체실행으로 값이 바뀐 파일'만 담긴다(읽기만 한 입력은 원본과 동일 → 미포함).
 # ==========================================================================
-import sys, os, json, argparse, zipfile, io, time, re, urllib.request, urllib.error
+import sys, os, json, argparse, zipfile, io, time, re, threading, urllib.request, urllib.error
 
 # OpenClaw 가 stdout 의 결과 JSON(한글 파일명 포함)을 콘솔 코드페이지와 무관하게 항상 UTF-8 로
 # 받도록 고정한다. 안 하면 cp949 콘솔에서 한글이 깨지거나 UnicodeEncodeError 로 죽을 수 있다.
@@ -229,6 +231,8 @@ def main():
     ap.add_argument("--timeout", type=int, default=1800)
     ap.add_argument("--keep-open", action="store_true")
     ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--progress-json", dest="progress_json", action="store_true",
+                    help="진행률을 stderr 에 기계가 읽기 쉬운 JSON 라인(PROGRESS {...})으로도 출력")
     args = ap.parse_args()
 
     port = discover_port(args.port)
@@ -294,11 +298,54 @@ def main():
             return
 
         # 4) 전체실행(파일 출력 모드) — 라이브 미반영, 결과 파일만 생성
-        _log("전체실행 중... (단계 %d)" % len(skill["steps"]))
-        res = c.post_json("/api/excel/run-full-pipeline",
-                          {"groups": groups, "resetExcelIds": reset_ids,
-                           "viewSheet": None, "outputMode": "file"},
-                          timeout=args.timeout)
+        total_steps = sum(len(g["steps"]) for g in groups)
+        anchor = groups[0]["excelId"]
+        _log("전체실행 중... (단계 %d)" % total_steps)
+
+        # 진행률 폴링: run-full-pipeline 은 '1콜'로 블록되므로, 그 동안 별도 스레드가
+        # /api/excel/pipeline-progress?excelId=<anchor> 를 폴링해 stderr 에 진행률을 찍는다.
+        # stdout 은 마지막 결과 JSON 한 줄만 유지(OpenClaw 파싱용). --progress-json 이면
+        # stderr 에 기계가 읽기 쉬운 JSON 라인({"progress":..})도 함께 낸다.
+        _stop = threading.Event()
+
+        def _poll():
+            pc = Client(port, timeout=5)
+            last = None
+            while not _stop.is_set():
+                try:
+                    p = pc._req("/api/excel/pipeline-progress?excelId=" + anchor, timeout=5)
+                    cur, tot = int(p.get("current") or 0), int(p.get("total") or 0)
+                    phase = p.get("phase") or "running"
+                    if phase == "syncing":
+                        sc, st = int(p.get("syncCurrent") or 0), int(p.get("syncTotal") or 0)
+                        key = ("sync", sc, st)
+                        if key != last:
+                            last = key
+                            _log("결과 반영 중... (%d/%d)" % (sc, st) if st else "결과 반영 중...")
+                            if args.progress_json:
+                                _log("PROGRESS " + json.dumps({"phase": "syncing", "current": sc, "total": st}))
+                    elif tot:
+                        key = ("run", cur, tot)
+                        if key != last:
+                            last = key
+                            pct = int(cur * 100 / tot) if tot else 0
+                            _log("진행 %d/%d 단계 (%d%%)" % (cur, tot, pct))
+                            if args.progress_json:
+                                _log("PROGRESS " + json.dumps({"phase": "running", "current": cur, "total": tot, "percent": pct}))
+                except Exception:
+                    pass
+                _stop.wait(0.8)
+
+        poller = threading.Thread(target=_poll, daemon=True)
+        poller.start()
+        try:
+            res = c.post_json("/api/excel/run-full-pipeline",
+                              {"groups": groups, "resetExcelIds": reset_ids,
+                               "viewSheet": None, "outputMode": "file"},
+                              timeout=args.timeout)
+        finally:
+            _stop.set()
+            poller.join(timeout=1)
         if not res.get("ok"):
             _fail("전체실행 실패: " + str(res.get("error")), errorInfo=res.get("errorInfo"))
 
