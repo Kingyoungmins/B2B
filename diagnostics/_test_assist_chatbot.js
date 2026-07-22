@@ -433,5 +433,51 @@ ck("(80) 재시도 래퍼 경유 + stripThink",
   ck("(92) 새 도구가 카탈로그에 자동 노출", cat.includes("result.summary") && cat.includes("sheet.headers") && cat.includes("step.error"), cat.slice(0, 80));
 }
 
+// ── 10. [Tier2] 격리 검증(auto-verify, option A) ────────────────────────────
+{
+  // 소스 레벨: 백엔드 페일세이프(엔드포인트 예외도 200+데이터로), 삼중 정리, 라이브 무접촉
+  const srv = rd("serve_b2b.py");
+  ck("(93) verify-step 라우트 등록", /\/api\/excel\/verify-step/.test(srv) && /def handle_excel_verify_step/.test(srv));
+  ck("(94) 실패를 예외 아닌 데이터로(페일세이프)", /def verify_step_isolated\b/.test(srv) && /"verifiable": True/.test(srv));
+  ck("(95) 삼중 정리(고아 EXCEL 방지: Close→Quit→kill)",
+     /_track_spawned_excel_app\(app\)/.test(srv) && /app\.Quit\(\)/.test(srv) && /_kill_pid_quiet\(pid\)/.test(srv));
+  ck("(96) 교차파일·스냅샷없음은 검증 불가로 정직 반환",
+     /ctx\s*\.\s*book/.test(srv) && /"verifiable": False/.test(srv));
+
+  // 클라 레벨: 검증 가능성 게이트를 실제 실행
+  const vctx = { console, JSON, Date, Math, String, Number, Array, Set, Map, RegExp, Object,
+    window: {}, postExcelMirror: () => {}, isStepEnabled: (s) => !s || s.enabled !== false,
+    state: { pipeline: [
+      { id: "py1", language: "python", targetSheetName: "VIEW", code: "def transform(ctx): pass", _preApplySnapshot: { resultId: "r1" } },
+      { id: "py2", language: "python", code: "def transform(ctx): pass" },   // 스냅샷 없음
+      { id: "vba1", language: "vba", code: "Sub X()\nEnd Sub", _preApplySnapshot: { resultId: "r2" } },
+      { id: "cross", language: "python", code: "def transform(ctx):\n  ctx.book('a.xlsx')", _preApplySnapshot: { resultId: "r3" } },
+    ], inputs: [] } };
+  vm.createContext(vctx);
+  vm.runInContext(guardSrc, vctx);
+  vm.runInContext(coreSrc, vctx);
+  const isV = (p) => vm.runInContext("assistProposalIsVerifiable(" + JSON.stringify(p) + ")", vctx);
+
+  ck("(97) Python+스냅샷+단일수정 → 검증 가능",
+     isV({ kind: "replaceLiteral", stepId: "py1", newCode: "def transform(ctx): ctx.write('VIEW','A1',1)" }) === true);
+  ck("(98) 스냅샷 없으면 검증 불가", isV({ kind: "replaceStepCode", stepId: "py2", newCode: "x" }) === false);
+  ck("(99) VBA 는 검증 불가(격리는 python COM)", isV({ kind: "replaceStepCode", stepId: "vba1", newCode: "Sub X()" }) === false);
+  ck("(100) 교차파일(ctx.book)은 검증 불가", isV({ kind: "replaceStepCode", stepId: "cross", newCode: "def transform(ctx):\n  ctx.book('a.xlsx')" }) === false);
+  ck("(101) 토글/일괄치환/핸드오프는 검증 대상 아님",
+     isV({ kind: "setStepEnabled", stepId: "py1" }) === false && isV({ kind: "replaceLiteralAll", from: "6", to: "7" }) === false);
+
+  // 배지 렌더(assist-ui): 검증됨/0건/실패/불가 4상태
+  const uiSrc2 = rd("scripts/assist-ui.js");
+  const uctx = { console, JSON, String, Number, Array, escapeHtml: (s) => String(s) };
+  vm.createContext(uctx);
+  const badgeFn = uiSrc2.match(/function assistVerifyBadgeHtml[\s\S]*?\n}/)[0];
+  vm.runInContext(badgeFn, uctx);
+  const badge = (v) => { uctx.__v = v; return vm.runInContext("assistVerifyBadgeHtml(__v)", uctx); };
+  ck("(102) 검증됨 배지(변경 N칸)", /검증됨/.test(badge({ ok: true, verifiable: true, changedCount: 2494, sample: [{ value: "20.0" }] })));
+  ck("(103) 0건이면 경고", /0건/.test(badge({ ok: true, verifiable: true, changedCount: 0 })));
+  ck("(104) 검증 실패는 경고+적용 허용", /검증 실패/.test(badge({ ok: false, verifiable: true, error: "boom" })));
+  ck("(105) 검증 불가는 무배지(오늘 동작)", badge({ verifiable: false }) === "" && badge(null) === "");
+}
+
 console.log("\n=== RESULT: " + (fails === 0 ? "ALL PASS" : fails + " FAIL") + " ===");
 process.exit(fails ? 1 : 0);

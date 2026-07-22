@@ -1156,6 +1156,9 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
         if self.path == "/api/excel/run-python":
             self.handle_excel_run_python()
             return
+        if self.path == "/api/excel/verify-step":
+            self.handle_excel_verify_step()
+            return
         if self.path == "/api/excel/run-vba-pipeline":
             self.handle_excel_run_vba_pipeline()
             return
@@ -1916,6 +1919,19 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
             self.send_json(hide_excel_session(payload.get("excelId"), light=bool(payload.get("light"))))
         except Exception as err:
             self.send_json({"ok": False, "error": str(err)}, status=400)
+
+    def handle_excel_verify_step(self):
+        # [AI 도움 Tier2] 후보 스텝 코드를 '격리 인스턴스'에서 스냅샷 위에 실행하고 diff 만 돌려준다.
+        # 라이브는 절대 건드리지 않는다(불변식). 실패는 데이터로 반환 — 클라가 '미검증 카드'로 폴백한다.
+        payload = self.read_json_body()
+        try:
+            self.send_json(verify_step_isolated(
+                payload.get("resultId"),
+                payload.get("code") or "",
+                sheet=payload.get("sheet"),
+            ))
+        except Exception as err:
+            self.send_json({"ok": False, "error": str(err)}, status=200)
 
     def handle_excel_save(self):
         payload = self.read_json_body()
@@ -12043,6 +12059,131 @@ def _run_python_on_session_impl(excel_id, code, skip_static=False, timeout_s=Non
             structural=summary.get("structural"),
         )
         return result
+
+
+# [AI 도움 Tier2] 격리 검증 — 스냅샷(스텝 직전 상태) 위에 후보 코드를 '보이지 않는 별도 인스턴스'에서
+# 실행하고 대상 시트의 before/after diff 만 돌려준다. 라이브 세션은 절대 건드리지 않는다.
+VERIFY_TIMEOUT_S = float(os.environ.get("B2B_VERIFY_TIMEOUT", "60"))
+VERIFY_DIFF_CELL_CAP = 200
+
+
+def _verify_capture_sheet_aoa(wb, sheet_name):
+    """대상 시트(없으면 전 시트)의 UsedRange 값을 {시트명: 2차원리스트} 로 캡처(diff 입력용)."""
+    out = {}
+    try:
+        targets = []
+        if sheet_name:
+            try:
+                targets = [wb.Worksheets(sheet_name)]
+            except Exception:
+                targets = []
+        if not targets:
+            targets = [wb.Worksheets(i + 1) for i in range(int(wb.Worksheets.Count))]
+        for ws in targets:
+            try:
+                nm = str(ws.Name)
+                used = ws.UsedRange
+                mat = _range_matrix(used.Value) if used is not None else []
+                # 스칼라 정규화(날짜/COM 객체 → 문자열)
+                out[nm] = [[_com_scalar(c) for c in row] for row in mat]
+            except Exception:
+                continue
+    except Exception:
+        pass
+    return out
+
+
+def _verify_step_isolated_impl(result_id, code, sheet_name=None):
+    if not (code or "").strip():
+        return {"ok": False, "error": "코드가 비어 있습니다.", "verifiable": False}
+    # 교차파일(ctx.book) 후보는 동반 워크북이 없어 격리 검증이 무의미 → 검증 불가로 정직히 반환.
+    if re.search(r"\bctx\s*\.\s*book\s*\(", str(code)):
+        return {"ok": False, "error": "교차파일 참조 스텝은 격리 검증을 지원하지 않습니다.", "verifiable": False}
+    path = ensure_result_file(result_id)
+    if not path:
+        return {"ok": False, "error": "검증용 스냅샷을 찾을 수 없습니다(스텝을 한 번도 적용하지 않았을 수 있습니다).", "verifiable": False}
+    app = None
+    wb = None
+    pid = None
+    t0 = time.perf_counter()
+    with EXCEL_LOCK:
+        try:
+            app = win32com.client.DispatchEx("Excel.Application")
+            _track_spawned_excel_app(app)   # 고아 방지: 앱 reaper 가 pid 로 잡게 즉시 등록
+            try:
+                pid = _excel_process_id(app)
+            except Exception:
+                pid = None
+            try:
+                app.Visible = False
+                app.DisplayAlerts = False
+                app.ScreenUpdating = False
+                app.EnableEvents = False
+            except Exception:
+                pass
+            wb = app.Workbooks.Open(str(path), ReadOnly=False)
+            before = _verify_capture_sheet_aoa(wb, sheet_name)
+            # 격리 인스턴스라 정적검사는 클라가 이미 통과시킨 코드 — skip_static 로 중복 우회.
+            session = {"rev": 0, "excelId": "verify", "companionNames": [], "companionTemps": []}
+            _exec_python_com_skill(app, wb, session, code, skip_static=True, timeout_s=VERIFY_TIMEOUT_S)
+            after = _verify_capture_sheet_aoa(wb, sheet_name)
+            diff = compute_workbook_diff(before, after)
+            # 카드 표시용 '쓰이는 값' 샘플. compute_sheet_diff 의 cell 은 {r,c,value}(after 값)이고
+            # r/c 는 UsedRange 기준 상대좌표라 절대주소를 단정하지 않는다 — 값 예시만 보여준다.
+            sample = []
+            try:
+                for snm, sd in (diff.get("sheets") or {}).items():
+                    for cell in (sd.get("cells") or []):
+                        v = cell.get("value")
+                        if v is None or str(v).strip() == "":
+                            continue
+                        sample.append({"sheet": snm, "value": str(v)[:60]})
+                        if len(sample) >= 12:
+                            break
+                    if len(sample) >= 12:
+                        break
+            except Exception:
+                pass
+            _vba_trace("assist.verify.ok", changed=diff.get("changedCount"),
+                       ms=round((time.perf_counter() - t0) * 1000, 1))
+            return {"ok": True, "verifiable": True,
+                    "changedCount": diff.get("changedCount", 0),
+                    "truncated": bool(diff.get("truncated")),
+                    "sample": sample[:VERIFY_DIFF_CELL_CAP]}
+        except PythonComSkillError as err:
+            return {"ok": False, "verifiable": True, "error": str(err)[:600]}
+        except Exception as err:
+            _vba_trace("assist.verify.fail", error=str(err)[:600])
+            return {"ok": False, "verifiable": True, "error": str(err)[:600]}
+        finally:
+            # 삼중 정리(고아 EXCEL.EXE 방지): wb.Close → app.Quit → pid taskkill.
+            try:
+                if wb is not None:
+                    wb.Close(SaveChanges=False)
+            except Exception:
+                pass
+            try:
+                if app is not None:
+                    app.Quit()
+            except Exception:
+                pass
+            try:
+                if pid:
+                    _kill_pid_quiet(pid)
+                    SPAWNED_EXCEL_PIDS.discard(int(pid))
+            except Exception:
+                pass
+
+
+def verify_step_isolated(result_id, code, sheet=None):
+    # 외부 큐 타임아웃은 내부 데드라인보다 넉넉히(+30s). 실패는 예외가 아니라 데이터로 반환한다.
+    try:
+        return excel_call(_verify_step_isolated_impl, result_id, code, sheet_name=sheet,
+                          timeout=max(45, int(VERIFY_TIMEOUT_S) + 30))
+    except TimeoutError:
+        return {"ok": False, "verifiable": True, "error": "검증 시간이 초과됐습니다."}
+    except Exception as err:
+        return {"ok": False, "verifiable": True, "error": str(err)[:400]}
 
 
 def run_python_on_session(excel_id, code, extended=False):

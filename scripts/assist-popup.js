@@ -99,6 +99,20 @@
         + '<div class="assist-card-note">적용하지 않고 스킬만 바꿉니다. 라이브 Excel 은 그대로이며, 반영하려면 나중에 전체실행하세요.</div>' };
   }
 
+  // [Tier2] 격리 검증 배지(assist-ui.js 와 동형).
+  function verifyBadge(v) {
+    if (!v || v.verifiable === false) return "";
+    if (v.ok) {
+      const n = Number(v.changedCount) || 0;
+      const ex = (v.sample || []).map(s => String(s.value)).filter(Boolean).slice(0, 6);
+      const exHtml = ex.length ? ' 예: ' + ex.map(x => esc(x)).join(", ") : "";
+      return n > 0
+        ? '<div class="assist-verified">✓ 격리에서 검증됨 — ' + n + '칸이 바뀝니다.' + exHtml + '</div>'
+        : '<div class="assist-warn">⚠ 격리에서 돌려보니 바뀌는 셀이 0건입니다(조건이 안 맞을 수 있음). 그래도 적용할지 확인하세요.</div>';
+    }
+    return '<div class="assist-warn">⚠ 격리 검증 실패: ' + esc(String(v.error || "").slice(0, 120)) + ' — 검증 없이 적용됩니다.</div>';
+  }
+
   function renderProposal(p) {
     const b = proposalBody(p);
     const html = `
@@ -106,6 +120,7 @@
         <div class="assist-card-head">${esc(b.headScope)} 제안
           <span class="assist-card-kind">${esc(b.headLabel)}</span></div>
         ${p.reason ? '<div class="assist-card-reason">' + esc(p.reason) + "</div>" : ""}
+        ${verifyBadge(p.verify)}
         ${b.body}
         <div class="assist-card-actions">
           <button type="button" class="assist-ok">이대로 수정</button>

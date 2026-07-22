@@ -289,6 +289,20 @@ function _assistProposalCardBody(p) {
       <div class="assist-card-note">적용하지 않고 스킬만 바꿉니다. 라이브 Excel 은 그대로이며, 반영하려면 나중에 전체실행하세요.</div>` };
 }
 
+// [Tier2] 격리 검증 배지 — 실측 결과를 카드 상단에 붙인다(추측 카드와 구분).
+function assistVerifyBadgeHtml(v) {
+  if (!v || v.verifiable === false) return "";               // 검증 불가(교차파일·스냅샷 없음 등)는 무배지
+  if (v.ok) {
+    const n = Number(v.changedCount) || 0;
+    const ex = (v.sample || []).map(s => String(s.value)).filter(Boolean).slice(0, 6);
+    const exHtml = ex.length ? ` 예: ${ex.map(x => escapeHtml(x)).join(", ")}` : "";
+    return n > 0
+      ? `<div class="assist-verified">✓ 격리에서 검증됨 — ${n.toLocaleString()}칸이 바뀝니다.${escapeHtml(exHtml)}</div>`
+      : `<div class="assist-warn">⚠ 격리에서 돌려보니 바뀌는 셀이 0건입니다(조건이 안 맞을 수 있음). 그래도 적용할지 확인하세요.</div>`;
+  }
+  return `<div class="assist-warn">⚠ 격리 검증 실패: ${escapeHtml(String(v.error || "").slice(0, 120))} — 검증 없이 적용됩니다.</div>`;
+}
+
 // 승인 카드 — 여기 버튼을 눌러야만 스킬이 바뀐다.
 function assistRenderProposalCard(p) {
   const b = _assistProposalCardBody(p);
@@ -297,6 +311,7 @@ function assistRenderProposalCard(p) {
     <div class="assist-card" data-pid="${escapeHtml(p.id)}">
       <div class="assist-card-head">${escapeHtml(headScope)} 제안 <span class="assist-card-kind">${escapeHtml(b.headLabel)}</span></div>
       ${p.reason ? `<div class="assist-card-reason">${escapeHtml(p.reason)}</div>` : ""}
+      ${assistVerifyBadgeHtml(p.verify)}
       ${b.body}
       <div class="assist-card-actions">
         <button type="button" class="assist-ok">이대로 수정</button>

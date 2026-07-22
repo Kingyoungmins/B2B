@@ -268,6 +268,15 @@ async function assistHandleUserMessage(userText, ui) {
           continue;
         }
         if (visible) assistPushAssistant(visible, ui);
+        // [Tier2 · option A] 코드 수정 제안은 카드를 띄우기 전에 '격리 인스턴스'에서 조용히 돌려본다.
+        // 성공하면 카드에 '검증됨(실측)' 배지가, 실패/불가면 '미검증'으로 폴백(오늘 동작 그대로).
+        // 라이브는 절대 안 건드린다. 여기서 예외가 나도 카드는 반드시 뜬다(폴백 보장).
+        try {
+          if (assistProposalIsVerifiable(p.proposal)) {
+            say("격리에서 검증 중...");
+            p.proposal.verify = await assistVerifyProposal(p.proposal, signal);
+          }
+        } catch (_) { p.proposal.verify = null; }
         try { ui.onProposal && ui.onProposal(p.proposal); } catch (_) {}
         return;
       }
@@ -520,6 +529,42 @@ function _assistProposalPeek(id) {
   const steps = Array.isArray(state.pipeline) ? state.pipeline : [];
   for (const [k, v] of _assistProposals) if (k === id) return { ...v, stepCount: steps.length };
   return {};
+}
+
+// [Tier2] 격리 검증이 가능한 제안인가 — 단일 코드 수정(replaceLiteral/replaceStepCode)이고, 대상 스텝이
+// Python 이며(격리 실행 = python COM), 스텝 직전 스냅샷(resultId)이 있고, 교차파일(ctx.book)이 아님.
+function assistProposalIsVerifiable(p) {
+  try {
+    if (!p || (p.kind !== "replaceLiteral" && p.kind !== "replaceStepCode")) return false;
+    const steps = Array.isArray(state.pipeline) ? state.pipeline : [];
+    const step = steps.find(s => s && String(s.id) === String(p.stepId));
+    if (!step) return false;
+    const lang = String(step.language || "python").toLowerCase();
+    if (lang !== "python") return false;                       // VBA 는 격리 검증 미지원(정직히 미검증)
+    if (/\bctx\s*\.\s*book\s*\(/.test(String(p.newCode || ""))) return false;   // 교차파일 제외
+    const snap = step._preApplySnapshot;
+    if (!snap || !snap.resultId) return false;                 // 스냅샷 없으면 검증 불가
+    if (typeof postExcelMirror !== "function") return false;   // HTTP 배관 없으면 폴백
+    return true;
+  } catch (_) { return false; }
+}
+
+// [Tier2] 후보 코드를 격리 인스턴스에서 실행해 diff 를 받는다. 실패/불가는 예외가 아니라 결과로.
+async function assistVerifyProposal(p, signal) {
+  const steps = Array.isArray(state.pipeline) ? state.pipeline : [];
+  const step = steps.find(s => s && String(s.id) === String(p.stepId));
+  if (!step) return { ok: false, verifiable: false };
+  const snap = step._preApplySnapshot;
+  const sheet = step.targetSheetName || "";
+  try {
+    const data = await postExcelMirror("/api/excel/verify-step", {
+      resultId: snap.resultId, code: p.newCode, sheet,
+    }, 0, { timeoutMs: 120000, signal });
+    return data || { ok: false, verifiable: true, error: "빈 응답" };
+  } catch (err) {
+    // 구버전 백엔드(엔드포인트 없음)·네트워크 오류 → 미검증 폴백.
+    return { ok: false, verifiable: true, error: String((err && err.message) || err).slice(0, 200) };
+  }
 }
 
 /** 사용자가 승인 버튼을 눌렀을 때만 호출된다. 여기가 유일한 상태 변경 지점. */
