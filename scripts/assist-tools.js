@@ -364,3 +364,34 @@ assistDefineTool("sheet.headers", { desc: "특정 파일/시트의 헤더(열 �
              headers: header.slice(0, 60),
              note: "col 은 엑셀 열문자(A,B,…), name 은 헤더 텍스트다. data.query 의 column 에는 둘 중 아무거나 넣어도 된다." };
   });
+
+// ── 12. [Tier0] 스킬 설계 채팅(③) 대화 읽기 ─────────────────────────────────
+// "내가 설계 채팅에서 말한 것만 뽑아줘", "지금까지 뭐라고 시켰지?", "이 스킬 어떻게 만들었더라"
+// 같은 요청을 위해 ③ 스킬 설계 채팅의 대화를 노출한다. role=user 는 사용자 발화, assistant 는 AI 응답.
+// (이건 ③ 설계 채팅 기록이고, AI 도움 창 자기 대화(state.assist)와는 다르다.)
+assistDefineTool("chat.history", {
+  desc: "스킬 설계 채팅(③)의 대화 기록. role=user|assistant|all(기본 all), limit(기본 40, 최근 것부터).",
+  args: "role?, limit?",
+}, (a) => {
+  const hist = (typeof state !== "undefined" && state && Array.isArray(state.chatHistory)) ? state.chatHistory : [];
+  const roleWant = String(a.role || "all").toLowerCase();
+  const limit = Math.max(1, Math.min(200, Number(a.limit) || 40));
+  const picked = [];
+  for (let i = hist.length - 1; i >= 0 && picked.length < limit; i--) {
+    const m = hist[i];
+    if (!m || (m.role !== "user" && m.role !== "assistant")) continue;
+    if (roleWant !== "all" && m.role !== roleWant) continue;
+    const content = String(m.content || m.text || m.message || "").trim();
+    if (!content) continue;
+    picked.push({ index: i, role: m.role, content: content.slice(0, 1200) });
+  }
+  picked.reverse();
+  return {
+    ok: true, totalMessages: hist.length, returned: picked.length,
+    role: roleWant, truncatedEach: 1200,
+    messages: picked,
+    note: hist.length === 0
+      ? "설계 채팅에 대화가 없습니다(아직 대화하지 않았거나 새 세션입니다)."
+      : "이건 ③ 스킬 설계 채팅의 대화다. 'user'가 사용자가 말한 것, 'assistant'가 AI 응답. 최근 것부터 최대 limit 개.",
+  };
+});

@@ -431,6 +431,23 @@ ck("(80) 재시도 래퍼 경유 + stripThink",
   // (92) 도구 카탈로그에 새 도구가 자동 노출(프롬프트로 감)
   const cat = vm.runInContext("assistToolCatalog()", ctx);
   ck("(92) 새 도구가 카탈로그에 자동 노출", cat.includes("result.summary") && cat.includes("sheet.headers") && cat.includes("step.error"), cat.slice(0, 80));
+
+  // (93b) chat.history — 설계 채팅에서 '내가 말한 것만'(role=user) 추출
+  ctx.state.chatHistory = [
+    { role: "user", content: "E1에 마진 쓰고 E2부터 수식 넣어줘" },
+    { role: "assistant", content: "네, 코드를 만들었습니다..." },
+    { role: "user", content: "5월 파일로 바꿔줘" },
+  ];
+  ctx.__c1 = { role: "user" };
+  const rc1 = vm.runInContext('ASSIST_TOOLS["chat.history"].fn(__c1)', ctx);
+  ck("(93b) chat.history role=user 추출",
+     rc1 && rc1.ok === true && rc1.messages.length === 2 && rc1.messages.every(m => m.role === "user")
+     && rc1.messages[0].content.includes("마진"), JSON.stringify(rc1).slice(0, 160));
+  ctx.__c2 = { role: "all" };
+  const rc2 = vm.runInContext('ASSIST_TOOLS["chat.history"].fn(__c2)', ctx);
+  ck("(93c) chat.history all 은 user+assistant", rc2 && rc2.messages.length === 3);
+  ck("(93d) 프롬프트에 의도우선·한계정직 태도 명시",
+     /엉뚱한 답으로 넘어가지 마라/.test(coreSrc) && /chat\.history/.test(coreSrc));
 }
 
 // ── 10. [Tier2] 격리 검증(auto-verify, option A) ────────────────────────────
