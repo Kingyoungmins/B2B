@@ -19,7 +19,7 @@ exit /b %B2BRC%
 #
 #  사용:
 #    b2b_run_ps.bat -Skill 스킬.zip -Inputs 입력.xlsx [-Output 템플릿.xlsx] -OutZip 결과.zip
-#    b2b_run_ps.bat -Skill s.zip -Inputs a.xlsx,b.xlsx -OutZip out.zip   (다입력: 스킬 입력 순서대로)
+#    b2b_run_ps.bat -Skill s.zip -Inputs "[a.xlsx, b.xlsx, c.xlsx]" -OutZip out.zip  (다입력: 대괄호 리스트, 스킬 입력 순서대로)
 #    b2b_run_ps.bat -Skill s.zip -Inputs "청구내역.xlsx=C:\경로.xlsx" -OutZip out.zip  (명시 매핑)
 #  옵션: -Port N / -Timeout S(기본1800) / -KeepOpen / -DryRun / -ProgressJson
 #  진행률: 실행 중 stderr 에 '진행 3/5 단계 (60%)' 를 실시간 출력(stdout 은 최종 JSON 만).
@@ -42,6 +42,18 @@ param(
 $ErrorActionPreference = "Stop"
 try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch {}
 Add-Type -AssemblyName System.IO.Compression.FileSystem | Out-Null
+
+# [다입력 파싱] powershell -File 은 cmd 로부터 '공백으로 띄운 여러 값'을 못 받는다(첫 값만 바인딩).
+# 그래서 여러 파일은 '따옴표로 묶은 한 덩어리'로 받고 여기서 직접 쪼갠다. 지원 표기(모두 동일):
+#   -Inputs "[a.xlsx, b.xlsx, c.xlsx]"     (대괄호 리스트 — 공백 있어도 됨)
+#   -Inputs "a.xlsx;b.xlsx;c.xlsx"         (세미콜론)
+#   -Inputs "a.xlsx,b.xlsx,c.xlsx"         (콤마)
+# 파일 하나면 그냥 -Inputs a.xlsx. 각 원소의 앞뒤 대괄호를 벗기고 , 또는 ; 로 쪼갠 뒤 공백 제거.
+$Inputs = @($Inputs |
+  ForEach-Object { $_ -replace '^\s*\[', '' -replace '\]\s*$', '' } |
+  ForEach-Object { $_ -split '[;,]' } |
+  ForEach-Object { $_.Trim() } |
+  Where-Object { $_ })
 
 # 서버가 뜰 수 있는 포트 후보(네이티브 셸 18120~, 단독 launcher 8090/18090~).
 $PORT_CANDIDATES = @(18120,18121,18122,18123,18124,18125,18126,18127,8090,18090,18091,18092,18093,18094,18095)
