@@ -448,6 +448,29 @@ ck("(80) 재시도 래퍼 경유 + stripThink",
   ck("(93c) chat.history all 은 user+assistant", rc2 && rc2.messages.length === 3);
   ck("(93d) 프롬프트에 의도우선·한계정직 태도 명시",
      /엉뚱한 답으로 넘어가지 마라/.test(coreSrc) && /chat\.history/.test(coreSrc));
+
+  // [범용 읽기] data.read — 원시 범위 읽기
+  ctx.__r1 = { file: "정산.xlsx", sheet: "VIEW", range: "A1:B2" };
+  const rr1 = vm.runInContext('ASSIST_TOOLS["data.read"].fn(__r1)', ctx);
+  ck("(93e) data.read A1:B2 원시값",
+     rr1 && rr1.ok === true && rr1.rows.length === 2 && rr1.rows[0][0] === "거래처" && rr1.rows[1][0] === "A사", JSON.stringify(rr1).slice(0, 160));
+  ctx.__r2 = { file: "정산.xlsx", sheet: "VIEW", range: "A:A" };
+  const rr2 = vm.runInContext('ASSIST_TOOLS["data.read"].fn(__r2)', ctx);
+  ck("(93f) data.read 열전체(A:A)", rr2 && rr2.ok === true && rr2.colCount === 1 && rr2.rows.length === 4);
+  ctx.__r3 = { file: "정산.xlsx", sheet: "VIEW", range: "ZZ99" };
+  const rr3 = vm.runInContext('ASSIST_TOOLS["data.read"].fn(__r3)', ctx);
+  ck("(93g) data.read 범위 밖은 빈결과지 크래시 아님", rr3 && rr3.ok === true);
+
+  // [범용 읽기] app.state — 비밀값 마스킹 필수
+  ctx.settings = { provider: "openai-compat", network: "dev-vllm", model: "Qwen/Qwen3.6-27B-FP8", apiKey: "khkim-SECRET", thinkMode: true, skillEngine: "python" };
+  ctx.state.currentFileId = "input:정산.xlsx";
+  ctx.state.currentSheet = "VIEW";
+  const as = vm.runInContext('ASSIST_TOOLS["app.state"].fn({})', ctx);
+  ck("(93h) app.state 현재 파일/시트", as && as.ok === true && as.currentFile === "정산.xlsx" && as.currentSheet === "VIEW", JSON.stringify(as).slice(0, 140));
+  ck("(93i) ★ API 키 절대 노출 안 함(마스킹)",
+     as && as.ai && as.ai.apiKey && !String(JSON.stringify(as)).includes("khkim-SECRET"), JSON.stringify(as.ai));
+  ck("(93j) 새 범용 도구가 카탈로그에 노출",
+     vm.runInContext("assistToolCatalog()", ctx).includes("data.read") && vm.runInContext("assistToolCatalog()", ctx).includes("app.state"));
 }
 
 // ── 10. [Tier2] 격리 검증(auto-verify, option A) ────────────────────────────

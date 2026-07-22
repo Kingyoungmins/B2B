@@ -395,3 +395,81 @@ assistDefineTool("chat.history", {
       : "이건 ③ 스킬 설계 채팅의 대화다. 'user'가 사용자가 말한 것, 'assistant'가 AI 응답. 최근 것부터 최대 limit 개.",
   };
 });
+
+// ── 13. [범용 읽기] 아무 파일/시트의 원시 범위 읽기 ──────────────────────────
+// data.query 가 집계라면, 이건 '있는 그대로'의 셀 값을 A1 범위로 읽는다("A2:C20", "F:F", "B5").
+// 안전: 클라 미리보기 데이터(state.inputs[].sheets)만 읽는다 — COM 미사용(엑셀 멈춤 없음). 셀 수 상한.
+function _assistColToIdx(col) {
+  let n = 0; for (const ch of String(col || "").toUpperCase()) { if (ch < "A" || ch > "Z") break; n = n * 26 + (ch.charCodeAt(0) - 64); }
+  return n - 1;   // 0-based, 없으면 -1
+}
+assistDefineTool("data.read", {
+  desc: "파일/시트의 셀 값을 A1 범위로 '있는 그대로' 읽는다. range 예: 'A2:C20', 'F:F'(열 전체), 'B5'(한 셀). 최대 3000셀(미리보기 기준).",
+  args: "file, sheet, range",
+}, (a) => {
+  const fname = String(a.file || "").trim();
+  const f = (state.inputs || []).find(x => x && x.name === fname)
+    || ((state.outputTemplates || []).map(t => t && (t.file || t.original)).find(x => x && x.name === fname));
+  if (!f) return { ok: false, error: "unknown_file", given: fname, available: _assistFileList().map(x => x.name) };
+  const sheets = f.sheets || {};
+  const sname = String(a.sheet || "").trim();
+  const rows = Array.isArray(sheets[sname]) ? sheets[sname] : null;
+  if (!rows) return { ok: false, error: "unknown_sheet", given: sname, available: f.sheetNames || Object.keys(sheets) };
+  const nRows = rows.length, nCols = rows.reduce((m, r) => Math.max(m, (r || []).length), 0);
+  // A1 파싱: "A2:C20" | "F:F" | "B5"
+  const m = /^\s*([A-Za-z]{1,3})?(\d+)?(?::([A-Za-z]{1,3})?(\d+)?)?\s*$/.exec(String(a.range || ""));
+  if (!m) return { ok: false, error: "bad_range", given: a.range, hint: "예: A2:C20, F:F, B5" };
+  let c1 = m[1] ? _assistColToIdx(m[1]) : 0;
+  let r1 = m[2] ? Number(m[2]) - 1 : 0;
+  let c2 = m[3] ? _assistColToIdx(m[3]) : (m[1] && !m[3] && !m[4] ? c1 : nCols - 1);
+  let r2 = m[4] ? Number(m[4]) - 1 : (m[2] && !m[4] && !m[3] ? r1 : nRows - 1);
+  if (m[1] && !m[2] && !m[4]) { r1 = 0; r2 = nRows - 1; }         // "F:F" = 열 전체
+  c1 = Math.max(0, c1); r1 = Math.max(0, r1);
+  c2 = Math.min(nCols - 1, Math.max(c1, c2)); r2 = Math.min(nRows - 1, Math.max(r1, r2));
+  let truncated = false;
+  const CAP = 3000;
+  if ((r2 - r1 + 1) * (c2 - c1 + 1) > CAP) { r2 = r1 + Math.max(0, Math.floor(CAP / (c2 - c1 + 1)) - 1); truncated = true; }
+  const out = [];
+  for (let r = r1; r <= r2 && r < nRows; r++) {
+    const row = rows[r] || [];
+    out.push(row.slice(c1, c2 + 1).map(v => (v == null ? "" : v)));
+  }
+  return { ok: true, file: fname, sheet: sname,
+           range: `${_assistColLetter(c1)}${r1 + 1}:${_assistColLetter(c2)}${r2 + 1}`,
+           rows: out, rowCount: out.length, colCount: c2 - c1 + 1, truncated,
+           note: "미리보기 데이터 기준(파일 전체가 아닐 수 있음). 값은 있는 그대로다." };
+});
+
+// ── 14. [범용 읽기] 현재 앱 상태 스냅샷 ──────────────────────────────────────
+// "지금 어떤 파일/시트 보고 있어?", "내가 뭘 선택했지?", "엔진/모델 뭐로 돼 있어?" 등에 답한다.
+// 안전: API 키 등 비밀값은 노출하지 않는다(마스킹). 상태 '읽기'만, 변경 없음.
+assistDefineTool("app.state", { desc: "현재 앱 상태 스냅샷 — 보고 있는 파일/시트, 선택 범위, 페이지, 스킬 엔진, AI 모델/네트워크(키 제외), 업로드 파일 목록. '지금 뭐 선택했지/어떤 설정이지'에 답." },
+  () => {
+    const s = (typeof settings !== "undefined" && settings) ? settings : {};
+    const sel = state.selectedRange || state.selectedCell || null;
+    const selText = (() => {
+      try {
+        if (state.selectedRange) { const g = state.selectedRange; return `${_assistColLetter(g.c1)}${g.r1 + 1}:${_assistColLetter(g.c2)}${g.r2 + 1}`; }
+        if (state.selectedCell) { const c = state.selectedCell; return `${_assistColLetter(c.c)}${c.r + 1}`; }
+      } catch (_) {}
+      return null;
+    })();
+    return {
+      ok: true,
+      currentFile: String(state.currentFileId || "").replace(/^input:/, "") || null,
+      currentSheet: state.currentSheet || null,
+      selection: selText ? { sheet: (sel && sel.sheet) || state.currentSheet || null, range: selText,
+                             fileId: String((sel && sel.fileId) || "").replace(/^input:/, "") || null } : null,
+      multiSelectionCount: Array.isArray(state.selectedRanges) ? state.selectedRanges.length : 0,
+      page: state.currentPage || null,
+      skillEngine: (typeof getSkillEngine === "function" ? getSkillEngine() : s.skillEngine) || null,
+      ai: {
+        provider: s.provider || null, network: s.network || null, model: s.model || null,
+        thinkMode: s.thinkMode === true,
+        apiKey: s.apiKey ? "***(마스킹)" : "(없음)",   // 비밀값은 절대 노출 안 함
+      },
+      files: _assistFileList(),
+      stepCount: _assistSteps().length,
+      note: "상태 '읽기'만 한 결과다(아무것도 바꾸지 않음). API 키 등 비밀값은 마스킹돼 있다.",
+    };
+  });
