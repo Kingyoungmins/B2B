@@ -175,17 +175,35 @@ function Parse-Inputs([string[]]$inputArgs, [string[]]$skillInputs) {
   }
   $mapping = [ordered]@{}
   foreach ($k in $explicit.Keys) { $mapping[$k] = $explicit[$k] }
+  # 파일명 정규화(공백/대소문자 무시) — 이름 매칭용
+  $norm = { param($s) ([System.IO.Path]::GetFileName([string]$s)).Trim().ToLower() -replace '\s+', '' }
+  $pool = New-Object System.Collections.ArrayList
+  foreach ($v in $positional) { [void]$pool.Add($v) }
+  # 스킬이 요구하는 슬롯을 채운다: (1) 이름 정확 일치 → (2) 남은 파일을 순서대로.
+  # [넉넉히 줘도 됨] 스킬이 안 쓰는 여분 파일은 그냥 무시한다(웹 실행기와 동일 — 이름으로 골라 씀).
   $remaining = @($skillInputs | Where-Object { -not $mapping.Contains($_) })
-  if ($positional.Count -gt 0) {
-    if ($remaining.Count -eq 0) {
-      foreach ($v in $positional) { $mapping[[System.IO.Path]::GetFileName($v)] = $v }
-    } else {
-      if ($positional.Count -gt $remaining.Count) {
-        Fail ("입력 파일이 스킬이 요구하는 개수({0})보다 많습니다. '기대이름=파일' 형식으로 매핑하세요." -f $remaining.Count) `
-             @{ skillInputs = $skillInputs }
-      }
-      for ($i = 0; $i -lt $positional.Count; $i++) { $mapping[$remaining[$i]] = $positional[$i] }
-    }
+  # (1) 이름 정확 일치
+  foreach ($slot in $remaining) {
+    if ($mapping.Contains($slot)) { continue }
+    $want = & $norm $slot
+    $hit = $null
+    foreach ($f in $pool) { if ((& $norm $f) -eq $want) { $hit = $f; break } }
+    if ($hit) { $mapping[$slot] = $hit; [void]$pool.Remove($hit) }
+  }
+  # (2) 아직 못 채운 슬롯 ← 남은 파일 순서대로
+  foreach ($slot in $remaining) {
+    if ($mapping.Contains($slot)) { continue }
+    if ($pool.Count -gt 0) { $mapping[$slot] = $pool[0]; [void]$pool.RemoveAt(0) }
+  }
+  # (3) 슬롯이 없는 스킬(input:… 미선언)인데 파일이 있으면 파일명 그대로 매핑
+  if ($remaining.Count -eq 0 -and $pool.Count -gt 0 -and $explicit.Count -eq 0) {
+    foreach ($v in $pool) { $mapping[[System.IO.Path]::GetFileName($v)] = $v }
+    $pool.Clear()
+  }
+  # (4) 남은 여분 파일 = 스킬이 안 씀 → 무시(안내만)
+  if ($pool.Count -gt 0) {
+    Log ("참고: 파일 {0}개는 이 스킬이 쓰지 않아 무시합니다 — {1}" -f $pool.Count,
+         (($pool | ForEach-Object { [System.IO.Path]::GetFileName($_) }) -join ", "))
   }
   if ($mapping.Count -eq 0) { Fail "입력 파일이 없습니다(-Inputs)." }
   foreach ($k in $mapping.Keys) {

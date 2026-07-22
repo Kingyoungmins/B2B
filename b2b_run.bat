@@ -168,23 +168,36 @@ def parse_input_args(input_args, skill_inputs):
         else:
             positional.append(a)
     mapping = {}
-    # 명시 매핑 먼저
     for k, v in explicit.items():
-        # 스킬 기대이름과 정확 일치 우선, 없으면 그 이름 그대로 사용(스킬이 그 이름을 쓸 수도)
         mapping[k] = v
-    # 위치 매핑: 남은 스킬 입력 슬롯에 순서대로
+    # [넉넉히 줘도 됨] 스킬 슬롯을 (1)파일명 정확 일치 → (2)남은 파일 순서로 채우고,
+    # 스킬이 안 쓰는 여분 파일은 무시한다(웹 실행기와 동일 — 이름으로 골라 씀).
+    norm = lambda s: os.path.basename(str(s)).strip().lower().replace(" ", "")
+    pool = list(positional)
     remaining_slots = [n for n in skill_inputs if n not in mapping]
-    if positional:
-        if not remaining_slots:
-            # 스킬이 input:… 을 안 남긴 경우(파일명 리터럴만): 파일명 그대로 기대이름으로 씀
-            for v in positional:
-                mapping[os.path.basename(v)] = v
-        else:
-            if len(positional) > len(remaining_slots):
-                _fail("입력 파일이 스킬이 요구하는 개수(%d)보다 많습니다. name=파일 형식으로 매핑하세요."
-                      % len(remaining_slots), skillInputs=skill_inputs)
-            for slot, v in zip(remaining_slots, positional):
-                mapping[slot] = v
+    # (1) 이름 정확 일치
+    for slot in remaining_slots:
+        if slot in mapping:
+            continue
+        hit = next((f for f in pool if norm(f) == norm(slot)), None)
+        if hit is not None:
+            mapping[slot] = hit
+            pool.remove(hit)
+    # (2) 아직 못 채운 슬롯 ← 남은 파일 순서대로
+    for slot in remaining_slots:
+        if slot in mapping:
+            continue
+        if pool:
+            mapping[slot] = pool.pop(0)
+    # (3) 슬롯이 없는 스킬(input:… 미선언)인데 파일이 있으면 파일명 그대로
+    if not remaining_slots and pool and not explicit:
+        for v in pool:
+            mapping[os.path.basename(v)] = v
+        pool = []
+    # (4) 남은 여분 파일 = 스킬이 안 씀 → 무시(안내만)
+    if pool:
+        _log("참고: 파일 %d개는 이 스킬이 쓰지 않아 무시 — %s"
+             % (len(pool), ", ".join(os.path.basename(f) for f in pool)))
     if not mapping:
         _fail("입력 파일이 없습니다(--input).")
     for k, v in mapping.items():
