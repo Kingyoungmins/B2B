@@ -51,6 +51,11 @@ function _assistStepIndexById(stepId) {
 function _assistStepLabel(step, idx) {
   return `Step ${idx + 1}` + (step && (step.title || step.description) ? ` (${String(step.title || step.description).slice(0, 40)})` : "");
 }
+function _assistColLetter(idx) {   // 0→A, 25→Z, 26→AA
+  let n = Number(idx) + 1, s = "";
+  while (n > 0) { const r = (n - 1) % 26; s = String.fromCharCode(65 + r) + s; n = Math.floor((n - 1) / 26); }
+  return s || "A";
+}
 function _assistFileList() {
   const out = [];
   (state.inputs || []).forEach(f => { if (f && f.name) out.push({ role: "input", name: f.name, sheets: f.sheetNames || [] }); });
@@ -180,8 +185,8 @@ assistDefineTool("literals.scan", { desc: "코드에 박힌 월·날짜·파일�
 
 // ── 7. 데이터 질의 (클라이언트 미리보기 한정, 백엔드 호출 없음) ──────────────
 assistDefineTool("data.query", {
-  desc: "업로드 미리보기 데이터에서 개수/합계/고유값/표본 조회. op=count|sum|distinct|sample, where=[{col,op,value}]",
-  args: "file, sheet, op, column, where?",
+  desc: "업로드 미리보기 데이터 조회. op=count|sum|distinct|sample|groupSum|groupCount. groupSum/groupCount 는 groupBy 열로 묶어 상위 topN(기본20). where=[{col,op,value}] 로 조건.",
+  args: "file, sheet, op, column, groupBy?, topN?, where?",
 }, (a) => {
     const files = _assistFileList();
     const fname = String(a.file || "").trim();
@@ -255,7 +260,25 @@ assistDefineTool("data.query", {
     if (op === "sample") {
       return { ok: true, op, header, rows: hit.slice(0, 8).map(r => r.slice(0, 12)), matchedRows: hit.length, note: previewNote };
     }
-    return { ok: false, error: "unknown_op", given: a.op, available: ["count", "sum", "distinct", "sample"] };
+    // [Tier0] 그룹별 집계 — 정산 실무의 기본 질의("거래처별 합계", "요금제별 건수 상위 N").
+    // groupBy 열로 묶어 대상 열을 합산(groupSum)하거나 건수를 센다(groupCount). 상위 topN 만 반환.
+    if (op === "groupsum" || op === "groupcount") {
+      const gi = colIdx(a.groupBy);
+      if (gi < 0) return { ok: false, error: "unknown_groupBy", given: a.groupBy, available: header.slice(0, 40) };
+      const topN = Math.max(1, Math.min(50, Number(a.topN) || 20));
+      const agg = new Map();
+      hit.forEach(r => {
+        const key = norm(r[gi]); if (!key) return;
+        if (op === "groupcount") { agg.set(key, (agg.get(key) || 0) + 1); return; }
+        const x = parseFloat(norm(r[ci]).replace(/[,\s₩]/g, ""));
+        if (isFinite(x)) agg.set(key, (agg.get(key) || 0) + x);
+      });
+      const groups = [...agg.entries()].sort((x, y) => y[1] - x[1]).slice(0, topN)
+        .map(([k, v]) => ({ key: k, value: op === "groupsum" ? Math.round(v * 100) / 100 : v }));
+      return { ok: true, op, groupBy: a.groupBy, valueColumn: op === "groupsum" ? a.column : null,
+               groupCount: agg.size, top: groups, scannedRows: body.length, note: previewNote };
+    }
+    return { ok: false, error: "unknown_op", given: a.op, available: ["count", "sum", "distinct", "sample", "groupSum", "groupCount"] };
   });
 
 // ── 8. 되돌리기 가능성 안내 ──────────────────────────────────────────────────
@@ -272,4 +295,72 @@ assistDefineTool("undo.advice", { desc: "지금 상태에서 무엇을 되돌릴
         ? "교차파일에 쓰는 스킬이라 부분 되돌리기가 구조적으로 불가하다(목적지 파일은 스냅샷에 없음). 되돌리려면 원본을 다시 올려 전체실행해야 한다."
         : "스냅샷이 있는 단계는 그 직전 상태로 되돌릴 수 있다. 앱 재시작·세션 종료 시 스냅샷은 사라진다.",
     };
+  });
+
+// ── 9. [Tier0] 방금 전체실행 결과 요약 ───────────────────────────────────────
+// (이름은 result.summary — 도구는 전부 읽기 전용이라 'run/apply/save' 동사를 이름에 쓰지 않는다.)
+assistDefineTool("result.summary", { desc: "직전 전체실행 결과 요약(만들어진 출력 파일 수·이름, 스텝별 스냅샷 보유). '방금 실행 뭐 나왔어?'에 답할 근거." },
+  () => {
+    const outs = (typeof window !== "undefined" && Array.isArray(window.lastRunnerOutputs)) ? window.lastRunnerOutputs : [];
+    const snaps = (typeof window !== "undefined" && Array.isArray(window.lastRunnerStepSnapshots)) ? window.lastRunnerStepSnapshots : [];
+    if (!outs.length && !snaps.length) {
+      return { ok: true, hasRun: false, note: "이번 세션에 기록된 전체실행 결과가 없습니다(아직 실행하지 않았거나 라이브 동기화 모드였을 수 있습니다)." };
+    }
+    return {
+      ok: true, hasRun: true,
+      outputFileCount: outs.length,
+      outputFiles: outs.slice(0, 20).map(o => ({ name: (o && o.name) || "", hasDownload: !!(o && o.downloadId) })),
+      stepSnapshotCount: snaps.length,
+      note: "출력 파일은 '결과 편집하기'로 라이브에 불러오거나 다운로드할 수 있습니다(다운로드는 사용자 클릭).",
+    };
+  });
+
+// ── 10. [Tier0] 방금 실패한 스텝의 실제 오류 ─────────────────────────────────
+assistDefineTool("step.error", { desc: "직전 실행에서 실패한 스텝의 실제 오류(메시지·원인·기술 세부). '방금 왜 실패했어?'에 추측 말고 근거로 답할 때 쓴다." },
+  () => {
+    const e = (typeof window !== "undefined" && window.__lastPipelineErrorInfo) || null;
+    if (!e) return { ok: true, hasError: false, note: "이번 세션에 기록된 실패가 없습니다(성공했거나 아직 실행하지 않음)." };
+    const ageMin = Math.round((Date.now() - (e.at || 0)) / 60000);
+    return {
+      ok: true, hasError: true,
+      step: Number(e.stepIdx) >= 0 ? Number(e.stepIdx) + 1 : null,
+      stepId: e.stepId || null, description: e.description || "", language: e.language || "",
+      message: String(e.message || "").slice(0, 600),
+      cause: String(e.cause || "").slice(0, 600),
+      rawError: String(e.rawError || "").slice(0, 800),
+      ageMinutes: ageMin,
+      note: "이 오류는 마지막 실패 시점의 기록이다. 지금 스킬이 그 사이 수정됐으면 최신 상태와 다를 수 있다.",
+    };
+  });
+
+// ── 11. [Tier0] 대상 시트 헤더(열 이름) 다이제스트 ──────────────────────────
+assistDefineTool("sheet.headers", { desc: "특정 파일/시트의 헤더(열 이름) 목록. data.query 전에 열 이름을 미리 알아 unknown_column 재시도를 없앤다.", args: "file, sheet, headerRow?" },
+  (a) => {
+    const fname = String(a.file || "").trim();
+    const f = (state.inputs || []).find(x => x && x.name === fname)
+      || ((state.outputTemplates || []).map(t => t && (t.file || t.original)).find(x => x && x.name === fname));
+    if (!f) return { ok: false, error: "unknown_file", given: fname, available: _assistFileList().map(x => x.name) };
+    const sheets = f.sheets || {};
+    const sname = String(a.sheet || "").trim();
+    const rows = Array.isArray(sheets[sname]) ? sheets[sname] : null;
+    if (!rows) return { ok: false, error: "unknown_sheet", given: sname, available: f.sheetNames || Object.keys(sheets) };
+    if (!rows.length) return { ok: false, error: "empty_preview", note: "이 시트는 미리보기 데이터가 비어 있습니다." };
+    // 헤더 행 자동 추정: 지정 없으면 '가장 많이 채워진' 상위 5행 중 텍스트 비율 높은 행.
+    let hr = Number.isInteger(Number(a.headerRow)) && Number(a.headerRow) >= 1 ? Number(a.headerRow) - 1 : 0;
+    if (!(a.headerRow >= 1)) {
+      let best = 0, bestScore = -1;
+      for (let r = 0; r < Math.min(rows.length, 5); r++) {
+        const row = rows[r] || [];
+        const filled = row.filter(v => String(v == null ? "" : v).trim()).length;
+        const texty = row.filter(v => typeof v === "string" && v.trim() && isNaN(Number(v))).length;
+        const score = filled + texty;
+        if (score > bestScore) { bestScore = score; best = r; }
+      }
+      hr = best;
+    }
+    const header = (rows[hr] || []).map((v, i) => ({ col: _assistColLetter(i), name: String(v == null ? "" : v).trim() }))
+      .filter(h => h.name);
+    return { ok: true, file: fname, sheet: sname, headerRow: hr + 1, columnCount: header.length,
+             headers: header.slice(0, 60),
+             note: "col 은 엑셀 열문자(A,B,…), name 은 헤더 텍스트다. data.query 의 column 에는 둘 중 아무거나 넣어도 된다." };
   });

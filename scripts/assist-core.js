@@ -61,8 +61,12 @@ args: {"summary":"증상 한 줄","reason":"해결 불가 판단 근거","tried"
 \`\`\`
 
 - 사실을 더 알아야 하면 action="tool" (한 응답에 도구 하나만).
-- 코드 수정을 제안하려면 action="propose", args={"kind":"replaceStepCode","stepId":"...","newCode":"전체 코드","reason":"왜"}
-  또는 args={"kind":"replaceLiteral","stepId":"...","from":"바꿀 문자열","to":"새 문자열","reason":"왜"}
+- 코드 수정을 제안하려면 action="propose". kind 는 아래 중 하나:
+  · replaceLiteral — 값 하나 치환. args={"kind":"replaceLiteral","stepId":"...","from":"바꿀 문자열","to":"새 문자열","reason":"왜"}
+  · replaceStepCode — 코드 전체 교체. args={"kind":"replaceStepCode","stepId":"...","newCode":"전체 코드","reason":"왜"}
+  · replaceLiteralAll — **여러 단계에 걸친 같은 값 일괄 치환**(다음 달 준비: "6월→7월 다 바꿔줘"). args={"kind":"replaceLiteralAll","from":"6월","to":"7월","reason":"왜"} — stepId 없이 스킬 전체에서 from 을 찾아 바꾼다. 먼저 literals.scan 으로 어디 있는지 확인하고 제안하라.
+  · setStepEnabled — 코드는 그대로 두고 단계를 켜거나 끈다("이번 달은 3단계 빼고"). args={"kind":"setStepEnabled","stepId":"...","enabled":false,"reason":"왜"}
+- 새 단계를 **만들거나** 지워야 하는 요청(현재 스킬로 안 되는 새 작업)은 action="handoff" 로 ③ 스킬 설계 채팅에 넘긴다. args={"request":"설계 채팅에 넣을, 파일·시트·열까지 특정한 정리된 요청문","reason":"왜 넘기는지"} — 넘기면 사용자가 설계 채팅에서 확인 후 실행한다.
 - 더 알아볼 게 없으면 action="final" 로 끝내고, 블록 위에 사용자에게 할 답변을 쓴다.
 - 해결 불가/프로그램 오류로 판단되면 action="report" (위 '이슈 제보' 참조).
 
@@ -243,6 +247,19 @@ async function assistHandleUserMessage(userText, ui) {
         return;
       }
 
+      if (parsed.action === "handoff") {
+        // [Tier1] 새 단계 생성은 ③ 설계 채팅의 일 — 정리된 요청문을 카드로 넘긴다(사용자 클릭으로 이관).
+        const request = String(parsed.args.request || "").trim().slice(0, 1200);
+        if (!request) {
+          tail.push({ role: "assistant", content: reply.slice(0, 1500) });
+          tail.push({ role: "user", content: `[핸드오프 거부] request 가 비어 있습니다. 파일·시트·열을 특정한 요청문을 넣으세요.` });
+          continue;
+        }
+        if (visible) assistPushAssistant(visible, ui);
+        try { ui.onHandoff && ui.onHandoff({ request, reason: String(parsed.args.reason || "").slice(0, 300) }); } catch (_) {}
+        return;
+      }
+
       if (parsed.action === "propose") {
         const p = assistBuildProposal(parsed.args);
         if (!p.ok) {
@@ -296,10 +313,73 @@ function assistPushAssistant(text, ui) {
   try { ui && ui.onAssistantText && ui.onAssistantText(String(text || "")); } catch (_) {}
 }
 
+// [Tier1] 교체 코드 정적 게이트 — 여러 곳에서 재사용(단일/일괄 치환). 통과 실패 사유 배열 반환.
+function _assistGateReplacementCode(newCode, step, kind) {
+  const gateFails = [];
+  const src = String((step && step.prompt) || "");
+  const isVbaCode = /\bSub\s+\w+\s*\(/i.test(newCode) && !/def\s+transform\s*\(/.test(newCode);
+  const run = (fn, ...a) => { try { gateFails.push(...(fn(...a) || [])); } catch (_) {} };
+  if (kind === "replaceStepCode") {
+    if (typeof exactReferenceFailures === "function") run(exactReferenceFailures, newCode, src);
+    if (typeof wholeColumnCountRowTwoFailures === "function") run(wholeColumnCountRowTwoFailures, newCode, src);
+    if (isVbaCode && typeof vbaExactSheetReferenceFailures === "function") run(vbaExactSheetReferenceFailures, newCode, src);
+  }
+  if (typeof decimalSplitNumberExtractFailures === "function") run(decimalSplitNumberExtractFailures, newCode);
+  if (isVbaCode && typeof vbaStaticSafetyFailures === "function") run(vbaStaticSafetyFailures, newCode, src);
+  return gateFails;
+}
+
 // LLM 이 낸 제안을 검증해 보관한다. 여기서 통과한 것만 카드로 뜬다.
 function assistBuildProposal(args) {
   const steps = Array.isArray(state.pipeline) ? state.pipeline : [];
   const kind = String(args.kind || "").trim();
+
+  // [Tier1] 단계 켜기/끄기 — 코드는 안 건드리고 enabled 만. stepId 필요.
+  if (kind === "setStepEnabled") {
+    const i = (typeof _assistStepIndexById === "function") ? _assistStepIndexById(args.stepId) : -1;
+    if (i < 0) return { ok: false, error: `stepId '${args.stepId}' 를 찾을 수 없습니다. 사용 가능: ${steps.map((s, k) => `${k + 1}:${s.id}`).join(", ")}` };
+    const s = steps[i];
+    const want = args.enabled !== false && String(args.enabled) !== "false";
+    const cur = (typeof isStepEnabled === "function") ? isStepEnabled(s) : s.enabled !== false;
+    if (want === cur) return { ok: false, error: `Step ${i + 1} 은 이미 ${want ? "켜짐" : "꺼짐"} 상태입니다.` };
+    const id = assistStoreProposal({
+      kind, stepId: s.id, stepNo: i + 1, enabled: want, before: cur,
+      reason: String(args.reason || "").slice(0, 400),
+      baseHash: assistHashCode(String(s.code || "")), pipelineLen: steps.length, companions: [],
+    });
+    return { ok: true, proposal: { ..._assistProposalPeek(id), id } };
+  }
+
+  // [Tier1] 여러 단계 일괄 값 치환(다음 달 준비) — stepId 없이 스킬 전체에서 from→to.
+  if (kind === "replaceLiteralAll") {
+    const from = args.from != null ? String(args.from) : "";
+    const to = args.to != null ? String(args.to) : "";
+    if (!from) return { ok: false, error: "from 이 비어 있습니다." };
+    if (from === to) return { ok: false, error: "from 과 to 가 같습니다." };
+    const targets = [];
+    steps.forEach((s, i) => {
+      const code = String(s.code || "");
+      const occ = code.split(from).length - 1;
+      if (occ <= 0) return;
+      const newCode = code.split(from).join(to);
+      const fails = _assistGateReplacementCode(newCode, s, "replaceLiteralAll");
+      targets.push({ stepId: s.id, stepNo: i + 1, oldCode: code, newCode, occurrences: occ,
+                     baseHash: assistHashCode(code), gateFails: fails });
+    });
+    if (!targets.length) return { ok: false, error: `어느 단계 코드에도 '${from.slice(0, 60)}' 가 없습니다(0건).` };
+    const blocked = targets.filter(t => t.gateFails.length);
+    if (blocked.length) {
+      return { ok: false, error: `일부 단계의 치환 결과가 정적 검사에 걸렸습니다(Step ${blocked.map(t => t.stepNo).join(", ")}):\n- ` + blocked[0].gateFails.slice(0, 3).join("\n- ") };
+    }
+    const id = assistStoreProposal({
+      kind, from, to, reason: String(args.reason || "").slice(0, 400),
+      targets, pipelineLen: steps.length,
+      // 첫 대상 코드로 신선도 대표값(개별 baseHash 는 각 target 에)
+      baseHash: targets[0].baseHash, stepId: targets[0].stepId, companions: [],
+    });
+    return { ok: true, proposal: { ..._assistProposalPeek(id), id } };
+  }
+
   const idx = (typeof _assistStepIndexById === "function") ? _assistStepIndexById(args.stepId) : -1;
   if (idx < 0) {
     return { ok: false, error: `stepId '${args.stepId}' 를 찾을 수 없습니다. 사용 가능: ${steps.map((s, i) => `${i + 1}:${s.id}`).join(", ")}` };
@@ -485,6 +565,41 @@ function assistCommitProposal(proposalId, accepted) {
   if (!taken.ok) return { ok: false, error: taken.error };
   const p = taken.proposal;
   if (typeof replaceLogicAt !== "function") return { ok: false, error: "수정 함수를 찾을 수 없습니다." };
+
+  // [Tier1] 단계 켜기/끄기 — 코드 교체가 아니라 enabled 플래그만. 라이브 자동 반영은 안 한다(AI 도움
+  // 원칙: 라이브는 사람이 전체실행). 플래그 변경 + '수정됨·미적용' 표시로 재실행이 필요함을 알린다.
+  if (p.kind === "setStepEnabled") {
+    const i = (state.pipeline || []).findIndex(s => s && String(s.id) === String(p.stepId));
+    if (i < 0) return { ok: false, error: "대상 단계를 찾을 수 없습니다." };
+    if (typeof pushHistory === "function") pushHistory("단계 적용 여부 변경(AI 도움)");
+    state.pipeline[i] = { ...state.pipeline[i], enabled: p.enabled };
+    try { if (typeof markPipelinePendingFromIndex === "function") markPipelinePendingFromIndex(i, { label: "수정됨 · 미적용" }); } catch (_) {}
+    try { if (typeof renderPipeline === "function") renderPipeline(); } catch (_) {}
+    try { if (typeof refreshRunButton === "function") refreshRunButton(); } catch (_) {}
+    try { if (typeof scheduleLogicAutoBackup === "function") scheduleLogicAutoBackup("assist-toggle"); } catch (_) {}
+    assistConsumeProposal(proposalId);
+    return { ok: true, toggled: true };
+  }
+
+  // [Tier1] 여러 단계 일괄 값 치환 — 각 대상을 applyMode:"none" 으로 순차 적용. 하나라도 실패하면
+  // 그때까지 성공분은 유지하되(부분 반영), 제안은 소거하지 않아 재시도로 나머지를 마저 할 수 있다.
+  if (p.kind === "replaceLiteralAll") {
+    let done = 0; const failed = [];
+    for (const t of (p.targets || [])) {
+      const cur = (state.pipeline || []).find(s => s && String(s.id) === String(t.stepId));
+      if (!cur) { failed.push(t.stepNo); continue; }
+      const lang = cur.language || "python";
+      const rr = replaceLogicAt(t.stepId, t.newCode, null, lang, { applyMode: "none" });
+      if (rr && rr.unapplied) done += 1; else failed.push(t.stepNo);
+    }
+    try { if (typeof renderPipeline === "function") renderPipeline(); } catch (_) {}
+    if (failed.length) {
+      return { ok: false, error: `${done}개 단계는 반영, Step ${failed.join(", ")} 은 실패. 원인 해소 후 카드에서 다시 시도하면 나머지가 적용됩니다.`, partial: done };
+    }
+    assistConsumeProposal(proposalId);
+    return { ok: true, batch: done };
+  }
+
   // applyMode:"none" — 라이브에 적용하지 않고 스킬만 갱신(가드는 replaceLogicAt 안에 있다).
   const r = replaceLogicAt(p.stepId, p.newCode, null, taken.step.language || "python", { applyMode: "none" });
   if (r && r.unapplied) {

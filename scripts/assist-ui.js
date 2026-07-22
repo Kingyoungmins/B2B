@@ -171,7 +171,36 @@ function assistSubmit(text) {
     },
     onProposal: assistRenderProposalCard,
     onReport: assistRenderReportCard,
+    onHandoff: assistRenderHandoffCard,
   })).catch(() => {}).finally(restore);
+}
+
+// [Tier1] 핸드오프 카드 — 새 단계 생성은 ③ 설계 채팅의 일. 정리된 요청문을 넣어주고 사용자가 검토·전송.
+function assistRenderHandoffCard(meta) {
+  const req = String(meta.request || "");
+  const html = `
+    <div class="assist-card assist-handoff">
+      <div class="assist-card-head">↪ 스킬 설계 채팅으로 넘기기</div>
+      ${meta.reason ? `<div class="assist-card-reason">${escapeHtml(meta.reason)}</div>` : ""}
+      <div class="assist-card-note">새 단계를 만드는 작업은 아래 요청문으로 ③ 설계 채팅에서 진행합니다. 내용을 확인하고 [설계 채팅에 넣기]를 누르세요(자동 전송은 안 됩니다).</div>
+      <div class="assist-handoff-req">${escapeHtml(req)}</div>
+      <div class="assist-card-actions">
+        <button type="button" class="assist-ok assist-handoff-go">설계 채팅에 넣기</button>
+      </div>
+    </div>`;
+  const el = assistAddMsg("assistant", html, { html: true });
+  if (!el) return;
+  el.querySelector(".assist-handoff-go").onclick = () => {
+    try {
+      const ta = document.getElementById("chat-text");
+      if (ta) { ta.value = req; }
+      if (typeof setPage === "function") setPage("generator");
+      if (ta) { ta.focus(); }
+      el.querySelector(".assist-card-actions").innerHTML = `<span class="assist-done">✓ 설계 채팅 입력창에 넣었습니다. 확인 후 전송하세요.</span>`;
+    } catch (_) {
+      el.querySelector(".assist-card-actions").innerHTML = `<span class="assist-fail">✕ 설계 채팅으로 전환하지 못했습니다.</span>`;
+    }
+  };
 }
 
 // 해결 불가 → 제보 카드. [묶음 만들기]를 눌러야만 파일이 만들어진다.
@@ -217,18 +246,33 @@ function assistReportResultHtml(r) {
   return parts.join("");
 }
 
-// 승인 카드 — 여기 버튼을 눌러야만 스킬이 바뀐다.
-function assistRenderProposalCard(p) {
-  const diffHtml = assistBuildDiffHtml(p.oldCode, p.newCode);
+// [Tier1] 카드 본문을 kind 별로 구성(공통 헤더/액션은 아래에서 공유). 반환: {headLabel, body}.
+function _assistProposalCardBody(p) {
+  if (p.kind === "setStepEnabled") {
+    return { headLabel: p.enabled ? "단계 켜기" : "단계 끄기",
+      body: `<div class="assist-card-note">Step ${p.stepNo} 을 <b>${p.enabled ? "켭니다" : "끕니다"}</b>. 코드는 그대로이며, 라이브 반영은 전체실행 때 됩니다.</div>` };
+  }
+  if (p.kind === "replaceLiteralAll") {
+    const targets = Array.isArray(p.targets) ? p.targets : [];
+    const totalOcc = targets.reduce((n, t) => n + Number(t.occurrences || 0), 0);
+    const rows = targets.map(t => `
+      <div class="assist-comp-row" style="cursor:default">
+        <span class="assist-comp-label">Step ${t.stepNo}</span>
+        <div class="assist-diff">${assistBuildDiffHtml(t.oldCode, t.newCode)}</div>
+      </div>`).join("");
+    return { headLabel: "일괄 값 치환",
+      body: `<div class="assist-card-reason">'${escapeHtml(String(p.from))}' → '${escapeHtml(String(p.to))}' · ${targets.length}개 단계 ${totalOcc}곳</div>
+        <div class="assist-warn">⚠ 여러 단계를 한 번에 바꿉니다. 아래 각 단계 diff 를 확인하세요.</div>
+        ${rows}
+        <div class="assist-card-note">적용하지 않고 스킬만 바꿉니다. 반영하려면 전체실행하세요.</div>` };
+  }
+  // 기본: 단일 코드 수정(replaceLiteral / replaceStepCode)
   const warn = (p.touchesNames
     ? `<div class="assist-warn">⚠ 파일명/시트명으로 보이는 문자열을 바꿉니다. 이름이 틀리면 실행이 실패합니다.</div>`
     : "")
-    // [검토 #19] 전역 치환의 부수 변경을 승인 전에 알린다(짧은 from 이 무관한 곳까지 바꾸는 사고 방지).
     + (p.kind === "replaceLiteral" && Number(p.occurrences) > 1
       ? `<div class="assist-warn">⚠ 같은 문자열이 코드에 ${Number(p.occurrences)}곳 있어 전부 바뀝니다. 아래 diff 로 확인하세요.</div>`
       : "");
-  // [동반 수정] 코드만 고치면 단계 이름·설명·대화기록에 옛 값이 남아 헷갈리고, 그 기록이 다음
-  // 스킬 생성 문맥으로 들어가 옛 값으로 되돌리는 원인이 된다. 기본 체크 상태로 함께 제안한다.
   const comps = Array.isArray(p.companions) ? p.companions : [];
   const companionHtml = comps.length ? `
       <div class="assist-comp">
@@ -240,14 +284,20 @@ function assistRenderProposalCard(p) {
             <span class="assist-comp-text"><s>${escapeHtml(String(c.before).slice(0, 70))}</s> → ${escapeHtml(String(c.after).slice(0, 70))}</span>
           </label>`).join("")}
       </div>` : "";
+  return { headLabel: p.kind === "replaceLiteral" ? "값 치환" : "코드 교체",
+    body: `${warn}<div class="assist-diff">${assistBuildDiffHtml(p.oldCode, p.newCode)}</div>${companionHtml}
+      <div class="assist-card-note">적용하지 않고 스킬만 바꿉니다. 라이브 Excel 은 그대로이며, 반영하려면 나중에 전체실행하세요.</div>` };
+}
+
+// 승인 카드 — 여기 버튼을 눌러야만 스킬이 바뀐다.
+function assistRenderProposalCard(p) {
+  const b = _assistProposalCardBody(p);
+  const headScope = p.kind === "replaceLiteralAll" ? "스킬 전체" : `Step ${p.stepNo}`;
   const html = `
     <div class="assist-card" data-pid="${escapeHtml(p.id)}">
-      <div class="assist-card-head">Step ${p.stepNo} 코드 수정 제안 <span class="assist-card-kind">${p.kind === "replaceLiteral" ? "값 치환" : "코드 교체"}</span></div>
+      <div class="assist-card-head">${escapeHtml(headScope)} 제안 <span class="assist-card-kind">${escapeHtml(b.headLabel)}</span></div>
       ${p.reason ? `<div class="assist-card-reason">${escapeHtml(p.reason)}</div>` : ""}
-      ${warn}
-      <div class="assist-diff">${diffHtml}</div>
-      ${companionHtml}
-      <div class="assist-card-note">적용하지 않고 스킬만 바꿉니다. 라이브 Excel 은 그대로이며, 반영하려면 나중에 전체실행하세요.</div>
+      ${b.body}
       <div class="assist-card-actions">
         <button type="button" class="assist-ok">이대로 수정</button>
         <button type="button" class="assist-no">취소</button>
@@ -446,10 +496,23 @@ function assistHandleBridgeMessage(m) {
         onToolTrace: (name, result) => assistSendToPopup({ t: "trace", name, ok: !(result && result.ok === false) }),
         onProposal: (p) => assistSendToPopup({ t: "proposal", proposal: p }),
         onReport: (meta) => assistSendToPopup({ t: "report", meta }),
+        onHandoff: (meta) => assistSendToPopup({ t: "handoff", meta }),
       })).then(
         (res) => { if (res !== false) assistSendToPopup({ t: "done" }); },
         () => assistSendToPopup({ t: "done" })
       );
+      break;
+    case "handoff-go":
+      // [Tier1] 팝업 핸드오프 카드 → 메인 창의 설계 채팅 입력창에 요청문을 넣고 전환(사용자가 검토·전송).
+      try {
+        const ta = document.getElementById("chat-text");
+        if (ta) ta.value = String(m.request || "");
+        if (typeof setPage === "function") setPage("generator");
+        if (ta) ta.focus();
+        assistSendToPopup({ t: "handoff-done", ok: true });
+      } catch (_) {
+        assistSendToPopup({ t: "handoff-done", ok: false });
+      }
       break;
     case "commit": {
       // [검증 항목8] 커밋 도중 예외가 나도 commit-result 는 반드시 보낸다 — 안 보내면 팝업 카드가

@@ -144,8 +144,20 @@ function assistTakeProposal(id) {
   if (steps.length !== p.pipelineLen) {
     return { ok: false, error: "제안을 만든 뒤 스킬 단계 수가 바뀌었습니다. 다시 확인해 주세요." };
   }
+  // [Tier1] 일괄 치환은 대상 여러 개 — 전부 신선해야 통과(하나라도 바뀌었으면 거부).
+  if (p.kind === "replaceLiteralAll") {
+    for (const t of (p.targets || [])) {
+      const c = steps.find(s => s && String(s.id) === String(t.stepId));
+      if (!c) return { ok: false, error: `대상 Step ${t.stepNo} 을 찾을 수 없습니다.` };
+      if (assistHashCode(c.code) !== t.baseHash) {
+        return { ok: false, error: `제안을 만든 뒤 Step ${t.stepNo} 코드가 바뀌었습니다. 다시 확인해 주세요.` };
+      }
+    }
+    return { ok: true, proposal: p, step: null };
+  }
   const cur = steps.find(s => s && String(s.id) === String(p.stepId));
   if (!cur) return { ok: false, error: "대상 단계를 찾을 수 없습니다." };
+  // setStepEnabled 는 코드를 안 건드리니 코드 해시가 같아야 하고(그 사이 코드 수정 방지), 나머지 kind 도 동일.
   if (assistHashCode(cur.code) !== p.baseHash) {
     return { ok: false, error: "제안을 만든 뒤 이 단계의 코드가 바뀌었습니다. 다시 확인해 주세요." };
   }

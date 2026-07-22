@@ -40,11 +40,19 @@ const FORBIDDEN = ["applyLogic", "runPipeline", "reapplyVbaPipelineToLive", "run
 FORBIDDEN.forEach((fn, i) => {
   ck(`(${5 + i}) 도구 레지스트리에 ${fn} 없음`, !new RegExp("\\b" + fn + "\\s*\\(").test(toolsSrc));
 });
-ck("(12) 도구 이름에 apply/run/save 없음",
+ck("(12) 도구 이름에 apply/run/save/exec 동사 없음(전부 읽기 전용)",
    !/assistDefineTool\("(?:[a-z.]*)(apply|run|save|exec)/i.test(toolsSrc));
-ck("(13) 상태 변경은 승인 핸들러 1곳에서만",
-   (coreSrc.match(/replaceLogicAt\(/g) || []).length === 1
-   && /function assistCommitProposal/.test(coreSrc));
+// 상태 변경(replaceLogicAt)은 여러 kind(단일/일괄치환)에서 여러 번 불릴 수 있으나 전부
+// assistCommitProposal 함수 '안'에서만 일어나야 한다(그 함수 밖 호출 0건 = 승인 경유 불변식).
+{
+  const commitStart = coreSrc.indexOf("function assistCommitProposal");
+  const commitEnd = coreSrc.indexOf("\nfunction ", commitStart + 1);
+  const commitBody = coreSrc.slice(commitStart, commitEnd < 0 ? undefined : commitEnd);
+  const totalCalls = (coreSrc.match(/replaceLogicAt\(/g) || []).length;
+  const inCommit = (commitBody.match(/replaceLogicAt\(/g) || []).length;
+  ck("(13) 상태 변경(replaceLogicAt)은 승인 핸들러 안에서만",
+     commitStart >= 0 && totalCalls >= 1 && totalCalls === inCommit, `total=${totalCalls} inCommit=${inCommit}`);
+}
 ck("(14) 승인 커밋은 applyMode:\"none\" 으로만 호출",
    /replaceLogicAt\([^)]*\{ applyMode: "none" \}\)/.test(coreSrc));
 
@@ -134,8 +142,10 @@ ck("(32) 실행 중/백엔드전용이면 거부",
   const uiNoComments = uiSrc
     .replace(/\/\*[\s\S]*?\*\//g, "")
     .split("\n").filter(l => !/^\s*\/\//.test(l)).join("\n");
-  const touchesChat = /(?:getElementById|\$)\(\s*["']chat-(?:messages|text|send)["']\s*\)/.test(uiNoComments);
-  ck("(33) assist UI 가 기존 채팅 DOM 을 직접 만지지 않음", !touchesChat, touchesChat);
+  // 위험한 것: 생성기 '메시지 스트림'(chat-messages) 주입, '자동 전송'(chat-send) 클릭.
+  // 허용: 핸드오프가 '입력창'(chat-text) 을 채우는 것 — 자동 전송이 아니라 사용자가 검토 후 보냄.
+  const touchesChat = /(?:getElementById|\$)\(\s*["']chat-(?:messages|send)["']\s*\)/.test(uiNoComments);
+  ck("(33) assist UI 가 생성기 메시지/전송을 직접 만지지 않음(입력창 채우기만 허용)", !touchesChat, touchesChat);
 }
 ck("(34) 버튼이 Think 왼쪽에 위치",
    htmlSrc.indexOf('id="btn-ai-help"') < htmlSrc.indexOf('id="btn-think-toggle"')
@@ -360,6 +370,68 @@ ck("(79) stall 워치독 재장전", /armStall\(\)/.test(coreSrc) && /ASSIST_STA
 // (80) [#3] assist 는 재시도 래퍼(callOpenAICompat) 경유 + think 방어
 ck("(80) 재시도 래퍼 경유 + stripThink",
    /callOpenAICompat\(systemPrompt/.test(llmAssistSrc) && /assistStripThink/.test(llmAssistSrc));
+
+// ── 9. [Tier0/1] 새 도구·액션·제안 kind 기능 검증 ──────────────────────────
+{
+  // 도구/액션 등록(소스 레벨)
+  ck("(81) Tier0 도구 등록(result.summary·step.error·sheet.headers)",
+     /assistDefineTool\("result\.summary"/.test(toolsSrc) && /assistDefineTool\("step\.error"/.test(toolsSrc) && /assistDefineTool\("sheet\.headers"/.test(toolsSrc));
+  ck("(82) data.query 그룹집계(groupSum/groupCount)",
+     /op === "groupsum" \|\| op === "groupcount"/.test(toolsSrc));
+  ck("(83) 새 액션이 시스템 프롬프트에 문서화(handoff·setStepEnabled·replaceLiteralAll)",
+     /replaceLiteralAll/.test(coreSrc) && /setStepEnabled/.test(coreSrc) && /action="handoff"/.test(coreSrc));
+  ck("(84) handoff 액션이 루프에서 처리",
+     /parsed\.action === "handoff"/.test(coreSrc) && /ui\.onHandoff/.test(coreSrc));
+  ck("(85) 새 kind 가 커밋에서 라우팅(setStepEnabled·replaceLiteralAll)",
+     /p\.kind === "setStepEnabled"/.test(coreSrc) && /p\.kind === "replaceLiteralAll"/.test(coreSrc));
+
+  // 실행 레벨: 통합 컨텍스트에 guard+tools+core 로드 후 실제 호출
+  const ctx = { console, JSON, Date, Math, String, Number, Array, Set, Map, RegExp, Object,
+    window: {}, isStepEnabled: (s) => !s || s.enabled !== false,
+    state: {
+      pipeline: [
+        { id: "s1", language: "python", enabled: true, code: "def transform(ctx):\n  x = '6월 매출'\n  ctx.write('시트','A1',x)" },
+        { id: "s2", language: "python", enabled: true, code: "def transform(ctx):\n  y = '6월 정산'\n  ctx.write('시트','B1',y)" },
+        { id: "s3", language: "python", enabled: false, code: "def transform(ctx):\n  pass" },
+      ],
+      inputs: [{ name: "정산.xlsx", sheetNames: ["VIEW"], sheets: { VIEW: [["거래처","금액"],["A사","100"],["B사","200"],["A사","50"]] } }],
+      outputTemplates: [],
+    } };
+  vm.createContext(ctx);
+  vm.runInContext(guardSrc, ctx);
+  vm.runInContext(toolsSrc, ctx);
+  vm.runInContext(coreSrc, ctx);
+
+  // (86) setStepEnabled 제안 빌드 — 켜진 s1 을 끄기
+  const r86 = vm.runInContext('assistBuildProposal({kind:"setStepEnabled", stepId:"s1", enabled:false, reason:"이번 달 제외"})', ctx);
+  ck("(86) setStepEnabled 제안 빌드", r86.ok === true && r86.proposal.kind === "setStepEnabled" && r86.proposal.enabled === false, JSON.stringify(r86).slice(0, 120));
+
+  // (87) 이미 그 상태면 거부(s3 는 이미 꺼짐)
+  const r87 = vm.runInContext('assistBuildProposal({kind:"setStepEnabled", stepId:"3", enabled:false})', ctx);
+  ck("(87) 이미 같은 상태면 거부", r87.ok === false, JSON.stringify(r87).slice(0, 120));
+
+  // (88) replaceLiteralAll — '6월'→'7월' 이 s1,s2 두 단계에 걸림
+  const r88 = vm.runInContext('assistBuildProposal({kind:"replaceLiteralAll", from:"6월", to:"7월", reason:"다음 달"})', ctx);
+  ck("(88) replaceLiteralAll 다중 대상", r88.ok === true && r88.proposal.targets.length === 2 && r88.proposal.from === "6월", JSON.stringify(r88).slice(0, 160));
+
+  // (89) replaceLiteralAll — 어디에도 없는 값이면 0건 거부
+  const r89 = vm.runInContext('assistBuildProposal({kind:"replaceLiteralAll", from:"존재안함ZZZ", to:"x"})', ctx);
+  ck("(89) 일괄치환 0건 거부", r89.ok === false, JSON.stringify(r89).slice(0, 120));
+
+  // (90) data.query groupSum — 거래처별 금액 합계(A사=150, B사=200). tool.fn 은 동기라 직접 호출.
+  ctx.__q = { file: "정산.xlsx", sheet: "VIEW", op: "groupSum", column: "금액", groupBy: "거래처" };
+  const r90 = vm.runInContext('ASSIST_TOOLS["data.query"].fn(__q)', ctx);
+  ck("(90) data.query groupSum", r90 && r90.ok === true && r90.top && r90.top.find(g => g.key === "A사").value === 150 && r90.top.find(g => g.key === "B사").value === 200, JSON.stringify(r90).slice(0, 200));
+
+  // (91) sheet.headers — 헤더 행 추정 + 열문자
+  ctx.__h = { file: "정산.xlsx", sheet: "VIEW" };
+  const r91 = vm.runInContext('ASSIST_TOOLS["sheet.headers"].fn(__h)', ctx);
+  ck("(91) sheet.headers", r91 && r91.ok === true && r91.headers.length === 2 && r91.headers[0].col === "A" && r91.headers[0].name === "거래처", JSON.stringify(r91).slice(0, 160));
+
+  // (92) 도구 카탈로그에 새 도구가 자동 노출(프롬프트로 감)
+  const cat = vm.runInContext("assistToolCatalog()", ctx);
+  ck("(92) 새 도구가 카탈로그에 자동 노출", cat.includes("result.summary") && cat.includes("sheet.headers") && cat.includes("step.error"), cat.slice(0, 80));
+}
 
 console.log("\n=== RESULT: " + (fails === 0 ? "ALL PASS" : fails + " FAIL") + " ===");
 process.exit(fails ? 1 : 0);

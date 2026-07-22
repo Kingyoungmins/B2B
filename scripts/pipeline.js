@@ -5387,6 +5387,16 @@ function reportPipelineError(err, options) {
     stack: (err && err.stack) || "",
     recoverable: false,
   };
+  // [AI \uB3C4\uC6C0 Tier0] step.error \uB3C4\uAD6C\uAC00 \uC77D\uC744 \uC218 \uC788\uAC8C \uCD5C\uADFC \uC2E4\uD328 \uC815\uBCF4\uB97C \uBCF4\uAD00\uD55C\uB2E4(\uCE74\uB4DC\uB294 \uD718\uBC1C\uC131\uC774\uB77C
+  // "\uBC29\uAE08 3\uB2E8\uACC4 \uC65C \uC2E4\uD328\uD588\uC5B4?"\uC5D0 \uADFC\uAC70\uB85C \uB2F5\uD560 \uC218\uB2E8\uC774 \uC5C6\uC5C8\uB2E4).
+  try {
+    window.__lastPipelineErrorInfo = {
+      stepIdx: Number(info.stepIdx), stepId: info.stepId || null,
+      description: info.description || "", language: info.language || "",
+      message: info.message || "", cause: info.cause || "",
+      rawError: info.rawError || "", at: Date.now(),
+    };
+  } catch (_) {}
   const stepLabel = Number(info.stepIdx) >= 0 ? `Step ${info.stepIdx + 1}` : "\uC2A4\uD0AC";
   toast(`${stepLabel}을 적용하지 못했습니다. 안내 메시지를 확인하세요.`, "error");
   if (options.runner) showRunnerPipelineError(err, options);
