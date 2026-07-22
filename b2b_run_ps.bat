@@ -204,7 +204,11 @@ function Build-Groups($steps, $nameToExcel, $outputExcel) {
     $i++
   }
   # ConvertTo-Json 을 위해 순수 객체로 변환
-  return @($groups | ForEach-Object { [ordered]@{ excelId=$_.excelId; steps=@($_.steps) } })
+  # [단일요소 언랩 방지] 그룹이 1개면 PowerShell 이 배열을 언랩해 OrderedDictionary 로 반환하고,
+  # 그러면 호출부의 $groups[0] 이 (배열 첫 원소가 아니라) 딕셔너리의 첫 '값'을 돌려줘 anchor 가
+  # 깨진다(진행률 0/0). 앞에 콤마(,)를 붙여 배열을 통째로 반환한다.
+  $built = @($groups | ForEach-Object { [ordered]@{ excelId=$_.excelId; steps=@($_.steps) } })
+  return ,$built
 }
 
 # ── 메인 ────────────────────────────────────────────────────────────────────
@@ -282,8 +286,9 @@ try {
     Invoke-RestMethod -Uri $uri -Method Post -Body $b -ContentType "application/json" -TimeoutSec $t
   } -ArgumentList "$base/api/excel/run-full-pipeline", $runBody, $Timeout
 
+  # [폴링 간격] 작은 스킬은 몇 초 만에 끝나 진행률 비-0 구간이 짧다 → 800ms 간격 폴링(앵커가 맞으면 충분)(느린/큰 스킬에도 부담 없음). NotStarted 도 폴링(Start-Job 시동 레이스).
   $last = ""
-  while ($job.State -eq "Running") {
+  while ($job.State -ne "Completed" -and $job.State -ne "Failed" -and $job.State -ne "Stopped") {
     try {
       $p = Invoke-RestMethod -Uri "$base/api/excel/pipeline-progress?excelId=$anchor" -TimeoutSec 5
       if ($p.phase -eq "syncing") {
