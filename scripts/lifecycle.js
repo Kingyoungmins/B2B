@@ -12,6 +12,11 @@
         method: "POST",
         body: sessionId,
         keepalive: !!keepalive,
+      }).then(resp => {
+        // [유휴 누수 수정] 응답 body 를 취소해 data-pipe 핸들을 즉시 반환한다. 이 핑은 모든
+        // 유휴 상황에서 15초마다 항상 도는데, body 를 안 비우면 유휴엔 GC 가 늦어 핸들/priv
+        // 메모리가 단조 증가한다(working set 은 flat, renderer 재생성 때 톱니 = 관측 증상).
+        try { if (resp && resp.body) resp.body.cancel(); } catch (_) {}
       }).catch(() => {});
     } catch {
       // Lifecycle signals are best-effort; app behavior must not depend on them.

@@ -45,7 +45,12 @@
         signal: ctrl.signal,
         cache: "no-store",
       });
-      return resp.ok;
+      const ok = resp.ok;
+      // [유휴 누수 수정] 응답 body 를 취소해 네트워크 data-pipe 핸들을 즉시 반환한다.
+      // 15초 유휴 폴링이라 안 비우면 GC 가 늦게 돌아 핸들/priv 메모리가 단조 증가한다
+      // (postExcelMirror 는 resp.json() 으로 이미 소비 → 이 경로만 누락돼 있었음).
+      try { if (resp.body) await resp.body.cancel(); } catch (_) {}
+      return ok;
     } catch (_) {
       return false;
     } finally {
