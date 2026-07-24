@@ -5360,6 +5360,13 @@ async function explainPipelineErrorForUser(info) {
   }
 }
 
+// [실패 진단 연동] 오류 카드의 'AI 도움에게 진단 요청' 버튼이 넣을 자동 질문. 사용자가 친 것처럼
+// 자연스럽게 — AI 도움은 '왜 실패'를 보고 step.error 도구로 진단한 뒤 고침을 제안한다.
+function _assistErrorDiagnoseQuestion(info) {
+  const stepPart = info && Number(info.stepIdx) >= 0 ? `${Number(info.stepIdx) + 1}단계` : "어느 단계인지";
+  return `방금 실행에서 ${stepPart}가 오류로 실패했어. 왜 실패했는지 확인하고, ${stepPart}가 무슨 문제인지 쉽게 설명한 뒤 고칠 방법을 제안해줘.`;
+}
+
 function reportPipelineError(err, options) {
   options = options || {};
   const rawInfo = (err && (err._stepInfo || err.errorInfo)) || null;
@@ -5411,13 +5418,25 @@ function reportPipelineError(err, options) {
       ${info.cause ? `<div class="error-cause">${escapeHtml(info.cause)}</div>` : ""}
       <div class="error-help">🔎 무엇이 잘못됐는지 쉬운 말로 확인하는 중…</div>
       <textarea class="error-recover-note" rows="2" placeholder="(선택) 무엇을 하려 했는지·실제로 어떻게 됐는지·기대 결과를 적으면 복구가 더 정확해집니다. 예: 매출을 회사별로 합쳐 B열에 넣으려 했는데 #VALUE!가 떴고, 숫자 합계가 보이길 원해요."></textarea>
-      <button class="error-recover-btn" type="button">에러 복구 시도</button>
+      <div class="error-actions">
+        <button class="error-recover-btn" type="button">에러 복구 시도</button>
+        <button class="error-assist-btn" type="button">✦ AI 도움에게 진단 요청</button>
+      </div>
       <details class="error-details">
         <summary>상세 오류 보기 (기술 세부)</summary>
         <pre>${escapeHtml(info.rawError || info.message || err.message || String(err))}${info.stack ? "\n\n" + escapeHtml(info.stack) : ""}</pre>
       </details>
     `;
     chatBox.appendChild(div);
+    // [실패 진단 연동] AI 도움을 열고 이 오류를 자동으로 물어본다(step.error 로 진단→고침 제안).
+    {
+      const assistBtn = div.querySelector(".error-assist-btn");
+      if (assistBtn && typeof assistOpenAndAsk === "function") {
+        assistBtn.onclick = () => assistOpenAndAsk(_assistErrorDiagnoseQuestion(info));
+      } else if (assistBtn) {
+        assistBtn.style.display = "none";
+      }
+    }
     // [#2] 기존 매크로성 안내 대신, LLM 이 코드 모르는 사용자 눈높이로 "무엇을 하려다 어디서 왜
     // 막혔는지 + 의도 확인"을 한 번 더 풀어 쓴다. 실패/미설정이면 기존 안내로 폴백(에러 표시를 막지 않음).
     {
@@ -5685,6 +5704,7 @@ function showRunnerPipelineError(err, options) {
     <textarea class="runner-error-note" rows="2" placeholder="(선택) 하려던 작업·실제 결과·기대 결과를 적으면 LLM 복구가 더 정확해집니다. 적으면 자동 보정 대신 이 설명을 최우선으로 복구합니다."></textarea>
     <div class="runner-error-actions">
       <button class="runner-error-recover" type="button">에러 복구 시도</button>
+      <button class="runner-error-assist" type="button">✦ AI 도움에게 진단 요청</button>
       <button class="runner-error-open-generator" type="button">생성기에서 보기</button>
     </div>
     <details class="runner-error-details" open>
@@ -5692,6 +5712,15 @@ function showRunnerPipelineError(err, options) {
       <pre>${escapeHtml(message)}${stack ? "\n\n" + escapeHtml(stack) : ""}</pre>
     </details>
   `;
+  // [실패 진단 연동] AI 도움을 열고 이 실행기 오류를 자동으로 물어본다.
+  {
+    const assistBtn = panel.querySelector(".runner-error-assist");
+    if (assistBtn && typeof assistOpenAndAsk === "function") {
+      assistBtn.onclick = () => assistOpenAndAsk(_assistErrorDiagnoseQuestion(info || {}));
+    } else if (assistBtn) {
+      assistBtn.style.display = "none";
+    }
+  }
   const recoverBtn = panel.querySelector(".runner-error-recover");
   if (recoverBtn) {
     const runnerStepIdx = resolveRunnerRecoveryStepIndex(info || {});

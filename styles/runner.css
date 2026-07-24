@@ -552,6 +552,10 @@
     cursor: pointer;
   }
   .runner-error-actions button:disabled { opacity: 0.55; cursor: not-allowed; }
+  .runner-error-actions .runner-error-assist {
+    border-color: var(--m-300, #F9A8D4); background: var(--m-50, #FDF2F8); color: var(--m-700, #BE185D);
+  }
+  .runner-error-actions .runner-error-assist:hover { background: var(--m-100, #FCE7F3); }
   .runner-error-details summary { cursor: pointer; font-weight: 700; }
   .runner-error-details pre {
     margin: 8px 0 0;

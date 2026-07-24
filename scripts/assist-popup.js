@@ -270,6 +270,9 @@
       case "commit-result": onCommitResult(m); break;
       case "report": renderReport(m.meta || {}); setBusy(false); break;
       case "report-result": onReportResult(m); break;
+      case "ask":            // [실패 진단 연동] 메인이 자동 질문을 넣어줌 — 사용자가 친 것처럼 전송
+        if (!busy) submit(String(m.text || ""));
+        break;
       case "handoff": renderHandoff(m.meta || {}); setBusy(false); break;
       case "handoff-done":
         if (_handoffCard) { _handoffCard.querySelector(".assist-card-actions").innerHTML = m.ok

@@ -500,6 +500,11 @@ function assistHandleBridgeMessage(m) {
         items: ((state.assist && state.assist.history) || []).slice(-40)
           .map(x => ({ role: x.role, content: String(x.content || "").slice(0, 4000) })),
       });
+      // [실패 진단 연동] 오류 카드로 열린 경우, 창이 준비되면 보관해둔 질문을 자동 전송한다.
+      if (_assistPendingAsk) {
+        const q = _assistPendingAsk; _assistPendingAsk = null;
+        assistSendToPopup({ t: "ask", text: q });
+      }
       break;
     case "user":
       // done 신호는 '인플라이트 슬롯을 잡은 호출'의 모든 종료에서 팝업 busy(중지 버튼)를 원복한다.
@@ -567,6 +572,33 @@ function assistHandleBridgeMessage(m) {
       });
       break;
   }
+}
+
+// [실패 진단 연동] 오류 카드의 'AI 도움에게 진단 요청' 버튼이 부른다 — AI 도움을 열고 질문을 자동 전송.
+// DOM/네이티브 팝업 모두 대응. 네이티브는 창이 뜬 뒤('ready') 전송하도록 질문을 잠깐 보관한다.
+let _assistPendingAsk = null;
+function assistOpenAndAsk(question) {
+  const q = String(question || "").trim();
+  if (!q) return;
+  try {
+    if (assistNativeShellAvailable()) {
+      assistEnsureNativeBridge();
+      if (_assistNativeMode) { assistSendToPopup({ t: "ask", text: q }); return; }  // 이미 열림 → 즉시
+      _assistPendingAsk = q;                                    // 열린 뒤 ready 에서 전송
+      assistPostToHost("B2B_ASSIST_POPUP\ttoggle");             // 닫힘 상태 → 토글=열기
+      clearTimeout(_assistNativeAckTimer);
+      _assistNativeAckTimer = setTimeout(() => {                // 구버전 exe 무응답 → DOM 폴백
+        if (!_assistNativeMode) {
+          const pend = _assistPendingAsk; _assistPendingAsk = null;
+          assistToggleDrawer(true);
+          if (pend) assistSubmit(pend);
+        }
+      }, 1200);
+      return;
+    }
+    assistToggleDrawer(true);
+    assistSubmit(q);
+  } catch (_) {}
 }
 
 (function assistBindButton() {

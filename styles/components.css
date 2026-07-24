@@ -477,6 +477,20 @@
   .msg.system.error .error-recover-btn:hover:not(:disabled) {
     background: #FEF3C7;
   }
+  .msg.system.error .error-actions { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+  .msg.system.error .error-assist-btn {
+    margin-top: 8px;
+    border: 1px solid var(--m-300, #F9A8D4);
+    background: var(--m-50, #FDF2F8);
+    color: var(--m-700, #BE185D);
+    border-radius: 6px;
+    padding: 6px 10px;
+    font-family: inherit;
+    font-size: 11.5px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .msg.system.error .error-assist-btn:hover { background: var(--m-100, #FCE7F3); }
   .msg.system.error .error-recover-btn:disabled {
     opacity: 0.6;
     cursor: not-allowed;

@@ -471,6 +471,17 @@ ck("(80) 재시도 래퍼 경유 + stripThink",
      as && as.ai && as.ai.apiKey && !String(JSON.stringify(as)).includes("khkim-SECRET"), JSON.stringify(as.ai));
   ck("(93j) 새 범용 도구가 카탈로그에 노출",
      vm.runInContext("assistToolCatalog()", ctx).includes("data.read") && vm.runInContext("assistToolCatalog()", ctx).includes("app.state"));
+
+  // [실패 진단 연동] 오류 카드 → AI 도움 자동 질문 배선
+  const pipeSrc2 = rd("scripts/pipeline.js");
+  ck("(93k) 생성기·실행기 오류 카드에 'AI 도움 진단' 버튼",
+     /error-assist-btn/.test(pipeSrc2) && /runner-error-assist/.test(pipeSrc2));
+  ck("(93l) 버튼이 assistOpenAndAsk 로 자동 질문 전송",
+     /assistOpenAndAsk\(_assistErrorDiagnoseQuestion/.test(pipeSrc2) && /function _assistErrorDiagnoseQuestion/.test(pipeSrc2));
+  ck("(93m) assistOpenAndAsk 가 DOM·네이티브 양쪽 대응(ask 브리지)",
+     /function assistOpenAndAsk/.test(uiSrc) && /t: "ask"/.test(uiSrc) && /_assistPendingAsk/.test(uiSrc));
+  ck("(93n) 팝업이 ask 를 사용자 입력처럼 처리",
+     /case "ask"/.test(rd("scripts/assist-popup.js")));
 }
 
 // ── 10. [Tier2] 격리 검증(auto-verify, option A) ────────────────────────────
