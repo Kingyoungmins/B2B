@@ -109,7 +109,7 @@ async function llmRegroupRecordedSteps(steps, opts) {
   let raw;
   try {
     raw = await callLLMOneShot(RECORD_REGROUP_SYSTEM, _recordStepsSummary(steps),
-      { maxTokens: 900, signal: opts && opts.signal });
+      { maxTokens: 900, signal: opts && opts.signal, forceNoThink: true });
   } catch (err) {
     return null; // LLM 비가용/타임아웃 → 결정론 묶음 폴백
   }
@@ -319,7 +319,7 @@ async function llmApplyIntentToStep(entry, intentText, batchCtx) {
     "출력은 수정된 코드 전체를 ```" + fence + " 블록 하나로만.",
   ].join("\n");
   try {
-    const raw = await callLLMOneShot(system, user, { maxTokens: 1600 });
+    const raw = await callLLMOneShot(system, user, { maxTokens: 1600, forceNoThink: true });
     const revised = isVba ? _extractVbaCode(raw) : _extractPythonCode(raw);
     if (!revised) return null;
     // 병합 불변 가드 — 재작성이 merge/unmerge 호출을 바꿨으면 원본 유지(파괴적 병합 확장 차단)
@@ -629,7 +629,7 @@ async function llmSplitRecordedVba(entry, meta) {
     // maxTokens 는 넉넉히 — 분할 출력은 원본 VBA 를 조각마다 Select 재삽입하며 되풀이하므로
     // 입력보다 커진다. 2000 이면 서식(테두리) 많은 긴 녹화에서 JSON 이 잘려 파싱 실패→분할 무산됐다.
     raw = await callLLMOneShot(RECORD_SPLIT_SYSTEM, JSON.stringify(payload),
-      { maxTokens: 8000 });
+      { maxTokens: 8000, forceNoThink: true });
   } catch (err) {
     return _diag("LLM 호출 오류: " + ((err && err.message) || err));
   }

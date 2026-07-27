@@ -154,8 +154,15 @@ async function callLLMOneShot(systemPrompt, userPrompt, options) {
     temperature: 0.4,
     stream: false,
   };
-  // Qwen 계열은 think 비활성으로(해설은 추론 불필요, 응답에 think 토큰 섞임 방지).
-  if (typeof applyQwenThinkControl === "function") applyQwenThinkControl(payload, false);
+  // [think 정책] 분할/의도/재그룹 같은 '구조적 추출'은 신뢰도(끊김·JSON 깨짐 방지) 때문에
+  // 호출측이 forceNoThink 로 항상 OFF 를 요청한다. 그 외 one-shot(에러 해설·AI 도움·clarify 등)은
+  // 상단 think 토글(settings.thinkMode)을 따른다. dev vLLM 은 특수케이스로 항상 OFF —
+  // 결정적 테스트 경로라 토글과 무관하게 no-think 로 고정한다.
+  let _thinkOn;
+  if (options.forceNoThink === true) _thinkOn = false;
+  else if (settings.network === "dev-vllm") _thinkOn = false;
+  else _thinkOn = settings.thinkMode === true;
+  if (typeof applyQwenThinkControl === "function") applyQwenThinkControl(payload, _thinkOn);
   const { resp } = await fetchOpenAICompat("/chat/completions", base, {
     method: "POST",
     headers: {
