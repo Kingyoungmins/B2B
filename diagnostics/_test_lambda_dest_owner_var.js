@@ -26,6 +26,7 @@ const sandbox = { console, Map, Set, RegExp };
 vm.createContext(sandbox);
 ["runnerMappingNorm", "runnerLooksLikeA1Address", "runnerAddGeneratedSheet", "runnerPyBookVarMap",
  "runnerSplitTopLevelArgs", "runnerSliceCallArgs", "runnerExtractGeneratedSheetsFromCode",
+ "runnerRecordedActivatePairs",  // [lesson 45] runnerSheetOwnersFromCode 의존
  "runnerSheetOwnersFromCode"].forEach(fn => vm.runInContext(extract(fn), sandbox));
 sandbox.normalizeText = undefined;
 

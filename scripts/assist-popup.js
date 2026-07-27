@@ -175,7 +175,7 @@
     if (btn) btn.textContent = busy ? "중지" : "전송";
   }
 
-  function submit(text) {
+  function submit(text, images) {
     // [검증 R6] 진행 중 재전송(칩 클릭 포함)은 막는다 — 유령 말풍선 + 조기 done 으로 '중지' 버튼이
     // 풀리는 원인이었다. 칩도 이 함수를 거치므로 여기 한 곳의 가드로 충분하다.
     if (busy) { setStatus("처리 중입니다... (전송 버튼으로 중단할 수 있습니다)"); return; }
@@ -183,7 +183,22 @@
     if (!t) return;
     addMsg("user", t);
     setBusy(true);
-    post({ t: "user", text: t });
+    // [첨부 비전] 첨부 이미지는 메인 창(엔진)으로 함께 relay 한다(LLM 호출은 메인에서 돈다).
+    post({ t: "user", text: t, images: (images && images.length ? images : null) });
+  }
+  // [첨부] 팝업은 백엔드로 첨부를 올려 슬라이드/이미지 base64 를 받는다(팝업도 같은 서버 오리진).
+  async function uploadAttachments(staged) {
+    const MAX = 30; const out = [];
+    for (const a of (staged || [])) {
+      if (!a || !a.file) continue;
+      const buf = await a.file.arrayBuffer();
+      const url = "/api/assist/attachment?name=" + encodeURIComponent(a.name) + "&maxSlides=40";
+      const resp = await fetch(url, { method: "POST", body: buf });
+      const data = await resp.json().catch(() => ({}));
+      if (!data.ok) throw new Error(data.error || ("첨부 처리 실패: " + a.name));
+      (data.slides || []).forEach(s => { if (out.length < MAX) out.push({ mime: s.mime, imageB64: s.imageB64, text: s.text }); });
+    }
+    return out.length ? out : null;
   }
 
   let _reportCard = null;
@@ -230,6 +245,34 @@
   // [Tier1] 핸드오프 카드 — 버튼은 메인 창에 요청문 이관을 부탁한다(팝업은 메인 DOM 을 못 만짐).
   function renderHandoff(meta) {
     meta = meta || {};
+    const steps = (Array.isArray(meta.steps) && meta.steps.length) ? meta.steps : null;
+    // [단계별 핸드오프] 여러 단계면 단계마다 버튼(클릭 시 그 단계만 메인 설계 채팅으로).
+    if (steps) {
+      let stepsHtml = "";
+      steps.forEach((s, i) => {
+        stepsHtml += '<div class="assist-handoff-step">'
+          + '<div class="assist-handoff-step-head">단계 ' + (i + 1) + (s.title ? ". " + esc(s.title) : "") + "</div>"
+          + '<div class="assist-handoff-req">' + esc(s.request || "") + "</div>"
+          + '<div class="assist-card-actions"><button type="button" class="assist-ok assist-handoff-step-go" data-i="' + i + '">이 단계 설계 채팅에 넣기</button></div></div>';
+      });
+      const html = '<div class="assist-card assist-handoff">'
+        + '<div class="assist-card-head">↪ 스킬 설계 채팅으로 넘기기 (' + steps.length + '단계)</div>'
+        + (meta.reason ? '<div class="assist-card-reason">' + esc(meta.reason) + "</div>" : "")
+        + '<div class="assist-card-note">스킬은 한 단계씩 만듭니다. 아래를 <b>1번부터 순서대로</b> [넣기] → 설계 채팅에서 확인·전송·적용 → 다음 단계 순으로 진행하세요.</div>'
+        + stepsHtml + "</div>";
+      const el = addMsg("assistant", html, { html: true });
+      if (!el) return;
+      _handoffCard = null;   // 단계별은 클릭한 버튼만 로컬로 완료 표시(handoff-done 은 단일 카드용)
+      el.querySelectorAll(".assist-handoff-step-go").forEach(btn => {
+        btn.onclick = () => {
+          const box = btn.closest(".assist-card-actions");
+          post({ t: "handoff-go", request: steps[Number(btn.dataset.i)].request });
+          if (box) box.innerHTML = '<span class="assist-done">✓ 설계 채팅에 넣었습니다. 확인 후 전송하세요.</span>';
+        };
+      });
+      return;
+    }
+    // 단일 (기존)
     const req = String(meta.request || "");
     const html = '<div class="assist-card assist-handoff">'
       + '<div class="assist-card-head">↪ 스킬 설계 채팅으로 넘기기</div>'
@@ -295,15 +338,52 @@
   chipsBox.querySelectorAll(".assist-chip").forEach(b => {
     b.onclick = () => submit(CHIPS[Number(b.dataset.i)][1]);
   });
-  const send = () => {
+  // [첨부] 전송 전까지 대기하는 첨부(파일명만 카드로). 팝업은 메시지 표식만 메인으로 relay(실제 처리는 다음 단계).
+  let popupStaged = [];
+  const renderAttach = () => {
+    const box = $id("assist-attach-list");
+    if (!box) return;
+    if (!popupStaged.length) { box.innerHTML = ""; box.style.display = "none"; return; }
+    box.style.display = "flex";
+    box.innerHTML = popupStaged.map((a, i) =>
+      `<span class="assist-attach-chip"><span class="ac-ic">📎</span><span class="ac-nm">${esc(a.name)}</span><button type="button" class="ac-x" data-i="${i}" title="첨부 제거">✕</button></span>`).join("");
+    box.querySelectorAll(".ac-x").forEach(b => { b.onclick = () => { popupStaged.splice(Number(b.dataset.i), 1); renderAttach(); }; });
+  };
+  const send = async () => {
     if (busy) { post({ t: "stop" }); setStatus("중단 중..."); return; }   // [검토 #1] 진행 중 = 중지 버튼
-    const ta = $id("assist-text"); submit(ta.value); ta.value = "";
+    const ta = $id("assist-text");
+    let text = String(ta.value || "").trim();
+    if (!text && !popupStaged.length) return;
+    const staged = popupStaged.slice();
+    if (staged.length) {
+      const names = staged.map(a => a.name).join(", ");
+      if (!text) text = "첨부한 파일을 기반으로 각 단계를 B2B 채팅에 칠 프롬프트로 만들어줘.";
+      text += "\n\n[첨부: " + names + "]";
+    }
+    ta.value = "";
+    popupStaged = []; renderAttach();
+    let images = null;
+    if (staged.length) {
+      setStatus("첨부 분석 중... (슬라이드 렌더)");
+      try { images = await uploadAttachments(staged); }
+      catch (e) { addMsg("system", "첨부 처리 실패: " + ((e && e.message) || e)); }
+      setStatus("");
+    }
+    submit(text, images);
   };
   $id("assist-send").onclick = send;
   $id("assist-text").addEventListener("keydown", (e) => {
     if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); send(); }
   });
-  $id("assist-clear").onclick = () => post({ t: "clear" });
+  const attachBtn = $id("assist-attach-btn"), attachInput = $id("assist-attach-input");
+  if (attachBtn && attachInput) {
+    attachBtn.onclick = () => attachInput.click();
+    attachInput.addEventListener("change", () => {
+      Array.from(attachInput.files || []).forEach(f => popupStaged.push({ name: f.name, size: f.size, file: f }));
+      attachInput.value = ""; renderAttach();
+    });
+  }
+  $id("assist-clear").onclick = () => { popupStaged = []; renderAttach(); post({ t: "clear" }); };
 
   if (bridgeUp) {
     window.chrome.webview.addEventListener("message", (ev) => {

@@ -595,6 +595,68 @@ function runnerCleanWorkbookRequirementName(value) {
   return clean;
 }
 
+// [환경 config 교집합 — 0.6.2 아이디어] 저장 시점의 실제 파일·시트 정본(envConfig)으로 요구를
+// 검증한다: ① 정본에 없는 파일명 요구 = 휴리스틱 오인(제목/서술문 조각) → 제거,
+// ② 파일은 맞는데 그 파일에 없던 시트 = 오귀속 → 시트만 '자동'으로 강등(파일 요구는 유지).
+// 비교는 정규화+안정키(월/날짜 무시)로 — 표기 차이로 멀쩡한 요구를 떨어뜨리지 않는다.
+// 안전장치: 필터가 파일 요구를 전멸시키면 적용하지 않는다(fail-open — 정본 캡처 누락 대비).
+function runnerApplyEnvConfigFilter(map, cfg) {
+  const out = { dropped: [], downgraded: [], fallbackAdded: [], uncovered: [] };
+  if (!cfg || typeof cfg !== "object") return out;
+  const cfgFiles = [...(Array.isArray(cfg.inputs) ? cfg.inputs : []),
+                    ...(Array.isArray(cfg.outputs) ? cfg.outputs : [])]
+    .filter(f => f && f.name);
+  if (!cfgFiles.length) return out;
+  const norm = (n) => runnerMappingNorm(n);
+  const stable = (n) => (typeof pipelineStableWorkbookKey === "function"
+    ? pipelineStableWorkbookKey(n) : norm(n));
+  // name(실제 업로드명)과 displayName(사용자 편집 표시명) 둘 다 매칭 허용 — 표시명 편집된
+  // 파일의 코드 리터럴 요구가 오폐기되지 않게(부분 drop 은 fail-open 이 못 막는다).
+  const _cfgNames = (f) => [f.name, f.displayName].filter(Boolean);
+  const findCfg = (book) => cfgFiles.find(f => _cfgNames(f).some(n => norm(n) === norm(book)))
+    || cfgFiles.find(f => _cfgNames(f).some(n => stable(n) && stable(n) === stable(book)));
+  const plans = [];
+  for (const [key, req] of Array.from(map.entries())) {
+    if (!req || !req.book) continue;                 // 파일 미지정(시트만) 요구는 config 검증 대상 아님
+    const hit = findCfg(req.book);
+    if (!hit) { plans.push({ act: "drop", key, req }); continue; }
+    if (req.sheet && Array.isArray(hit.sheetNames) && hit.sheetNames.length
+        && !hit.sheetNames.some(s => norm(s) === norm(req.sheet))) {
+      plans.push({ act: "downgrade", key, req });
+    }
+  }
+  const bookedCount = Array.from(map.values()).filter(r => r && r.book).length;
+  const dropCount = plans.filter(p => p.act === "drop").length;
+  if (dropCount >= bookedCount && bookedCount > 0) return out;  // fail-open
+  for (const p of plans) {
+    map.delete(p.key);
+    if (p.act === "downgrade") {
+      runnerAddRequirement(map, p.req.book, "", "config-sheet-downgrade");
+      out.downgraded.push(p.req.book + "/" + p.req.sheet);
+    } else {
+      out.dropped.push(p.req.book);
+    }
+  }
+  // [추출 미탐 역보완] 교집합은 추출기가 제안조차 못 한 파일(동적 파일명/간접 참조)을 구제 못 한다.
+  // ① 파일 요구 전멸이면 정본 파일 전체를 폴백 요구로(단일 시트면 그 시트, 아니면 자동) —
+  //    스킬이 아무 파일도 안 찾는 것보다 정본을 보여주는 게 낫다.
+  // ② 부분 미탐(정본에 있는데 어느 요구에도 안 잡힌 파일)은 트레이스로만(과요구 방지 — 미사용일 수 있음).
+  if (bookedCount === 0) {
+    for (const f of cfgFiles) {
+      const nm = f.name || f.displayName;
+      runnerAddRequirement(map, nm,
+        (Array.isArray(f.sheetNames) && f.sheetNames.length === 1) ? f.sheetNames[0] : "",
+        "config-fallback");
+      out.fallbackAdded.push(nm);
+    }
+  } else {
+    out.uncovered = cfgFiles
+      .filter(f => !Array.from(map.values()).some(r => r && r.book && findCfg(r.book) === f))
+      .map(f => f.name || f.displayName);
+  }
+  return out;
+}
+
 function runnerAddRequirement(map, book, sheet, source) {
   const cleanBook = runnerCleanWorkbookRequirementName(book);
   const cleanSheet = String(sheet || "").trim();
@@ -916,6 +978,22 @@ function runnerExtractGeneratedSheetsFromCode(code) {
   return generated;
 }
 
+// [녹화 관용구 (파일,시트) 쌍] MS 매크로 레코더 출력은 Workbooks("X").Worksheets("Y") 대신
+// `Windows("X.xlsx").Activate` 다음 줄에 비한정 `Sheets("Y").Select` 로 나온다 — 기존 vbaDirect
+// 패턴엔 안 보여서 교차파일 녹화 스킬의 두 번째 파일부터 시트 요구·리터럴 재작성이 통째로
+// 빠졌다(다른 달 시트명이면 subscript 오류). 줄 단위로 현재 활성 창을 추적해 쌍을 뽑는다.
+function runnerRecordedActivatePairs(code) {
+  const pairs = [];
+  let win = "";
+  for (const line of String(code || "").split(/\r?\n/)) {
+    const w = line.match(/^\s*(?:Windows|Workbooks)\(\s*["']([^"'\r\n]+\.xls[xmb]?)["']\s*\)\s*\.\s*Activate\b/i);
+    if (w) { win = w[1]; continue; }
+    const s = line.match(/^\s*(?:Sheets|Worksheets)\(\s*["']([^"'\r\n]+)["']\s*\)\s*\.\s*Select\b/i);
+    if (s && win) pairs.push({ book: win, sheet: s[1] });
+  }
+  return pairs;
+}
+
 function runnerAddPairedCodeRequirements(map, code, shouldSkip) {
   const src = String(code || "");
   let m;
@@ -946,6 +1024,13 @@ function runnerAddPairedCodeRequirements(map, code, shouldSkip) {
       runnerAddRequirement(map, m[1], m[2], "vba-pair");
     }
   }
+
+  // [녹화 관용구] Windows("X").Activate + Sheets("Y").Select → (X,Y) 요구(위 vbaDirect 가 못 보는 형태).
+  runnerRecordedActivatePairs(src).forEach((p) => {
+    if (!runnerLooksLikeA1Address(p.sheet) && !(shouldSkip && shouldSkip(p.book, p.sheet))) {
+      runnerAddRequirement(map, p.book, p.sheet, "vba-recorded-pair");
+    }
+  });
 
   // [복붙 캡처] ctx.paste_copied('소스시트','범위','대상시트','셀', src_book='A', dst_book='B') —
   // 소스/대상 시트도 그 파일의 '필요 시트'다. 이걸 안 뽑으면 복붙 스킬 파일이 '시트 자동'으로만 떠서
@@ -988,6 +1073,8 @@ function runnerSheetOwnersFromCode(code) {
   let m;
   const vbaDirect = /Workbooks\(\s*["']([^"']+)["']\s*\)\s*\.\s*Worksheets\(\s*["']([^"']+)["']\s*\)/gi;
   while ((m = vbaDirect.exec(src))) add(m[1], m[2]);
+  // [녹화 관용구] Windows("X").Activate + Sheets("Y").Select — 소유 쌍으로 등록(교차파일 오귀속 방지).
+  runnerRecordedActivatePairs(src).forEach((p) => add(p.book, p.sheet));
   const vbaVars = new Map();
   const setWb = /Set\s+([A-Za-z_]\w*)\s*=\s*(?:Application\.)?Workbooks\(\s*["']([^"']+)["']\s*\)/gi;
   while ((m = setWb.exec(src))) vbaVars.set(m[1].toLowerCase(), m[2]);
@@ -1045,7 +1132,15 @@ function runnerExtractMappingRequirements() {
   const generatedSheets = [];
   for (const step of steps) {
     if (!step || !step.code) continue;
-    const text = [step.prompt, step.description, step.code].filter(Boolean).join("\n");
+    // [녹화 스텝 제목 오염 차단] 녹화 스텝의 prompt/description 은 LLM 서술문이라 파일명이
+    // 문장 속에 섞인다("...복사 + X.xlsx J1에 붙여넣기..."). loose 파일명 수집기가 주변 단어까지
+    // 파일명으로 오인해 실행기 요구 카드가 쓰레기 이름으로 도배됐다(실측 16:09). 녹화 스텝의
+    // 권위 소스는 코드 리터럴+recordedWorkbook 이므로 자유 텍스트는 스캔에서 뺀다.
+    const _recordedFreeTextExcluded = !!(step.recorded || step.recordedWorkbook
+      || /\[녹화됨\/VBA\]/.test(String(step.prompt || "")));
+    const text = _recordedFreeTextExcluded
+      ? String(step.code || "")
+      : [step.prompt, step.description, step.code].filter(Boolean).join("\n");
     const generatedHere = runnerExtractGeneratedSheetsFromCode(step.code);
     const shouldSkipRequirement = (book, sheet) =>
       runnerIsGeneratedSheet(generatedSheets, book, sheet) || runnerIsGeneratedSheet(generatedHere, book, sheet);
@@ -1119,6 +1214,12 @@ function runnerExtractMappingRequirements() {
       else runnerAddRequirement(map, savedBook, "", "target");
     }
 
+    // [녹화 메타 durable] 녹화 스텝에 파일/시트 표시명이 박혀 있으면(다른 달·다른 파일에서도) 파일확인 요구로.
+    // 위 "input:" 게이트와 독립 — 이름 문자열이라 zip 재로드 후에도 도출 가능. 중복/무효는 아래 오탐정리가 걸러줌.
+    if (step.recordedWorkbook || step.recordedSheet) {
+      runnerAddRequirement(map, step.recordedWorkbook, step.recordedSheet, "recorded");
+    }
+
     names.forEach(name => {
       const cleanName = runnerCleanWorkbookRequirementName(name);
       const hasNamedRequirement = Array.from(map.values()).some(req =>
@@ -1151,6 +1252,21 @@ function runnerExtractMappingRequirements() {
     // (3) 같은 파일을 '시트까지' 요구하는 항목이 있으면, 그 파일의 '빈 시트' 중복 요구는 제거.
     if (req.book && emptySheet && booksWithSheet.has(runnerMappingNorm(req.book))) { map.delete(key); continue; }
   }
+  // [환경 config 교집합] 저장 시점 정본이 있으면(0.6.2 채용, 구버전 zip 은 null → 그대로)
+  // 정본에 없는 파일 요구 제거 + 그 파일에 없던 시트는 '자동' 강등. 결과는 트레이스로 남긴다.
+  try {
+    const _cfgRes = runnerApplyEnvConfigFilter(map, state.skillEnvConfig);
+    if ((_cfgRes.dropped.length || _cfgRes.downgraded.length || _cfgRes.fallbackAdded.length
+         || _cfgRes.uncovered.length)
+        && typeof traceClientUiEvent === "function") {
+      traceClientUiEvent("runner.envconfig.filter", {
+        dropped: _cfgRes.dropped.slice(0, 8).join(" | ").slice(0, 300),
+        downgraded: _cfgRes.downgraded.slice(0, 8).join(" | ").slice(0, 300),
+        fallbackAdded: _cfgRes.fallbackAdded.slice(0, 8).join(" | ").slice(0, 300),
+        uncovered: _cfgRes.uncovered.slice(0, 8).join(" | ").slice(0, 300),
+      });
+    }
+  } catch (_) {}
   return Array.from(map.values()).slice(0, 40);
 }
 

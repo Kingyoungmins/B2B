@@ -478,10 +478,16 @@ function applyQwenThinkDirective(messages, thinkMode) {
   const directive = thinkMode ? "/think" : "/no_think";
   for (let i = messages.length - 1; i >= 0; i--) {
     if (messages[i].role !== "user") continue;
-    messages[i] = {
-      ...messages[i],
-      content: `${messages[i].content || ""}\n\n${directive}`,
-    };
+    const c = messages[i].content;
+    if (Array.isArray(c)) {
+      // [첨부 비전] 멀티모달 content 는 텍스트 파트에만 지시어를 덧붙인다(이미지 파트 보존).
+      let parts = c.map(p => (p && p.type === "text")
+        ? { ...p, text: `${p.text || ""}\n\n${directive}` } : p);
+      if (!parts.some(p => p && p.type === "text")) parts = [{ type: "text", text: directive }, ...parts];
+      messages[i] = { ...messages[i], content: parts };
+    } else {
+      messages[i] = { ...messages[i], content: `${c || ""}\n\n${directive}` };
+    }
     return;
   }
 }

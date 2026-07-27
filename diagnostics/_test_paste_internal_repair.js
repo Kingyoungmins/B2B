@@ -28,6 +28,7 @@ vm.createContext(sandbox);
   vm.runInContext(extractFrom("save-load.js", fn), sandbox));
 ["runnerMappingNorm", "runnerMappingKey", "runnerCleanWorkbookRequirementName",
  "runnerAddRequirement", "runnerLooksLikeA1Address", "runnerPyBookVarMap",
+ "runnerRecordedActivatePairs",  // [lesson 45] runnerAddPairedCodeRequirements 의존
  "runnerAddPairedCodeRequirements"].forEach(fn =>
   vm.runInContext(extractFrom("drop-handling.js", fn), sandbox));
 

@@ -931,6 +931,26 @@ function crossWriteDestinationFileIds(code, options = {}) {
   if (typeof pipelinePythonMutatedBookNames === "function") {
     pipelinePythonMutatedBookNames(text).forEach(addName);
   }
+  // [녹화 VBA 교차 쓰기] 지금까지 python(dst_book/ctx.book)만 봐서 녹화 VBA 의
+  // Windows("X.xlsx").Activate / Workbooks("X.xlsx").Activate 가 완전히 안 보였다 —
+  // 그 결과 교차파일 녹화 스텝의 되돌리기/토글이 목적지를 안 되돌리고(조용한 데이터 어긋남),
+  // 체크포인트·빠른수정 가드가 안 걸리고, 전체실행 재실행에서 목적지에 중복이 쌓였다.
+  // MS 레코더 녹화는 다른 파일 작업 전 반드시 Activate 를 찍으므로 이 패턴이 정확한 신호다.
+  // (읽기 전용 Activate 까지 과잉 포함될 수 있으나 — 리셋이 원본과 동일 내용을 다시 놓을 뿐이라 안전.)
+  const reVbaAct = /(?:Windows|Workbooks)\(\s*"([^"\r\n]+\.xls[xmb]?)"\s*\)\s*\.\s*Activate\b/gi;
+  while ((m = reVbaAct.exec(text))) addName(m[1]);
+  // [채팅 생성 VBA 교차 쓰기] LLM 생성 VBA 는 Activate 없이 `Set wbDst = Workbooks("B")` /
+  // `If wb.Name = wbDstName … Set wbDst = wb` 관용구로 목적지를 잡는다(pipelineVbaStringVars
+  // 위 주석 참조). Activate 정규식만으론 이 방언이 안 보여 — 녹화 스킬 사이에 채팅으로 삽입한
+  // 교차파일 VBA 스텝이 빠른경로 가드·리셋 집합·prefix 복원 검증을 전부 통과했다(목적지 미복원,
+  // 재실행 시 중복 누적). pipelineVbaTargetWorkbookNames 는 target-의도 변수(dst/out/target…)만
+  // 추리므로 소스 참조 과잉 포함이 작고, 과잉 포함이어도 리셋이 넓어질 뿐이라 안전 방향이다.
+  // 게이트는 VBA 마커(Sub B2BSkill — 이 시스템의 VBA 러너 필수 형식)로 건다: `Workbooks(` 로 걸면
+  // 지배 관용구(For Each … Application.Workbooks — 괄호 없음)를 놓치고, python COM 코드까지
+  // 단일 워크북 폴백에 노출돼 교차-읽기 스텝의 빠른경로를 불필요하게 잃는다.
+  if (typeof pipelineVbaTargetWorkbookNames === "function" && /\bSub\s+B2BSkill\b/i.test(text)) {
+    try { pipelineVbaTargetWorkbookNames(text).forEach(addName); } catch (_) {}
+  }
   return ids;
 }
 
@@ -1382,6 +1402,24 @@ async function runIsolatedLivePipelineSteps(sourceSteps, initialExcelId, options
       if (typeof invalidateLivePipelineApplied === "function") invalidateLivePipelineApplied();
     } else {
       noteLivePipelineApplied(sourceSteps);
+    }
+    // [하이브리드 검증 게이트] VBA→Python 번역 복구를 거친 스텝이 있고 녹화 기대 다이제스트가
+    // 남아 있으면, 재실행 결과가 녹화 종료 시점과 여전히 일치하는지 자동 대조한다 —
+    // 번역의 '의도 와전'을 텍스트가 아니라 결과로 잡는 게이트(조언성 토스트, 실행은 안 막음).
+    if ((!options || options.outputMode !== "file")
+        && Array.isArray(window.__recordExpected) && window.__recordExpected.length
+        && (sourceSteps || []).some(s => s && s._recoveredFromVba)) {
+      postExcelMirror("/api/excel/record/verify", { expected: window.__recordExpected }, 0, { timeoutMs: 120000 })
+        .then(v => {
+          const bad = ((v && v.results) || []).filter(r => r.match === false);
+          if (bad.length) {
+            const detail = bad.slice(0, 3).map(r => `${r.book}/${r.sheet}${r.reason ? ` — ${r.reason}` : ""}`).join(" · ");
+            toast(`⚠ 번역 검증: 재실행 결과가 녹화 종료 시점과 다른 시트 ${bad.length}개 — ${detail}. 원래 VBA 단계로 되돌리려면 실행 취소를 쓰세요.`, "error");
+          } else if (v && v.checked) {
+            toast(`번역 검증 통과 — Python 변환 결과가 녹화와 일치합니다(시트 ${v.checked}개)`, "success");
+          }
+        })
+        .catch(() => {});
     }
     // [F8] 전체실행도 디버그 패널에 소요/단계수를 기록한다 — 기존엔 단일 적용만 기록돼 전체실행 시 F8 이 비어 보였다.
     try {
@@ -1955,6 +1993,45 @@ function applyLogic(step) {
   // 이 스텝이 만들어진(=지금 보고 있는) 파일을 실행 대상으로 고정한다.
   // 이후 다른 탭에서 실행/토글해도 이 파일로 전환해 실행된다.
   bindPipelineStepTargetContext(step);
+  // [보류 구간 가드] 중간 스텝 토글 OFF 등으로 '보류 체크포인트'(resume=k)가 있으면 라이브는
+  // k 직전 상태다. 여기서 즉시 라이브 적용하면 (a) k..N 이 빠진 상태 위에 새 스텝이 실행되고
+  // (b) 이후 보류 재개 시 suffix(k..)에 방금 붙인 스텝도 포함돼 '두 번' 실행된다(행 삽입/붙여
+  // 넣기형이면 조용한 중복). insertLogic/replaceLogicAt 은 resume 을 반영하는데 append 만 빠져
+  // 있었다 → 보류가 있으면 즉시 적용 대신 체크포인트 경로(min(resume, idx)부터 순서대로)로
+  // 합류하고, 그 경로를 못 쓰면(교차파일 등) insertLogic 맨뒤 삽입(전체 재적용)으로 위임한다.
+  {
+    const _resumeIdx = (typeof getPipelineResumeFromIndex === "function") ? getPipelineResumeFromIndex() : null;
+    if (Number.isInteger(_resumeIdx)) {
+      const beforeAppendSnapshot = (state.pipeline || []).map(s => ({ ...s }));
+      const appendIdx = state.pipeline.length;
+      const next = [...state.pipeline, step];
+      if (typeof canUsePipelineCheckpointFromIndex === "function"
+          && canUsePipelineCheckpointFromIndex(appendIdx, beforeAppendSnapshot, next)) {
+        if (typeof pushHistory === "function") pushHistory("단계 추가");
+        state.pipeline = next;
+        const effStart = Math.min(_resumeIdx, appendIdx);
+        setPipelineRuntimeStatus(
+          state.pipeline.slice(effStart).filter(isStepEnabled).map(s => s && s.id).filter(Boolean),
+          "running", "실행 중");
+        renderPipeline();
+        refreshRunButton();
+        if (typeof scheduleLogicAutoBackup === "function") scheduleLogicAutoBackup("step-added");
+        const promise = runFromCheckpointAfterEdit(appendIdx, beforeAppendSnapshot, {
+          restoreMessage: "보류 지점 직전 상태로 되돌리는 중...",
+        }).catch(err => {
+          rollbackAddedPipelineStep(step.id);
+          reportPipelineError(err);
+          throw err;
+        });
+        return {
+          pending: true,
+          promise,
+          cancel: () => (typeof requestExcelApplyCancel === "function" ? requestExcelApplyCancel() : false),
+        };
+      }
+      return insertLogic(step, state.pipeline.length + 1);
+    }
+  }
   // 라이브 실행기(VBA/Python COM): 파이프라인/시뮬레이터를 우회해 라이브 엑셀에 즉시 실행.
   {
     const liveLang = pipelineStepLiveLanguage(step);
@@ -3009,15 +3086,19 @@ function renderPipeline() {
     item.className = "pipeline-item";
     if (!isStepEnabled(step)) item.classList.add("disabled");
     if (state.editingStepId === step.id) item.classList.add("editing");
+    if (step.intentNeeded) item.classList.add("intent-needed");
     const editing = state.editingStepId === step.id;
     const runtime = getPipelineRuntimeStatus(step.id);
     if (runtime && runtime.status) item.classList.add(`runtime-${runtime.status}`);
     const runtimeBadge = runtime && runtime.label
       ? `<span class="step-runtime ${escapeHtml(runtime.status || "")}">${escapeHtml(runtime.label)}</span>`
       : "";
+    const intentBadge = step.intentNeeded
+      ? `<span class="step-intent-flag" title="${escapeHtml(step.intentReason || "")}">의도 확인</span>`
+      : "";
     item.innerHTML = `
       <div class="step-n">${idx+1}</div>
-      <div class="step-label" title="${escapeHtml(pipelineStepLabel(step, idx))}">${escapeHtml(pipelineStepLabel(step, idx))}${runtimeBadge}</div>
+      <div class="step-label" title="${escapeHtml(pipelineStepLabel(step, idx))}">${escapeHtml(pipelineStepLabel(step, idx))}${runtimeBadge}${intentBadge}</div>
       <button class="step-rename" title="스킬명 바꾸기">스킬명</button>
       <button class="step-toggle ${isStepEnabled(step) ? 'active' : ''}" title="계산 반영 여부">${isStepEnabled(step) ? 'ON' : 'OFF'}</button>
       <button class="step-edit ${editing ? 'active' : ''}" title="${editing ? '수정 모드 해제' : '수정'}">✎</button>
@@ -3216,6 +3297,14 @@ function renderPipeline() {
       e.stopPropagation();
       toggleEditStep(step.id);
     };
+    const intentFlag = item.querySelector(".step-intent-flag");
+    if (intentFlag) {
+      intentFlag.onmousedown = (e) => e.stopPropagation();   // 라벨 편집(포커스 뺏김) 방지
+      intentFlag.onclick = (e) => {
+        e.stopPropagation();
+        if (typeof toast === "function") toast(step.intentReason || "의도 확인이 필요한 스텝입니다", "info");
+      };
+    }
     item.querySelector(".step-del").onclick = async (e) => {
       e.stopPropagation();
       const busyReason = typeof pipelineEditBusyReason === "function" ? pipelineEditBusyReason() : "";
@@ -4088,6 +4177,15 @@ async function _reapplyVbaPipelineToLiveImpl(excelId, options = {}) {
       }
     } catch (_) {}
     if (window.runnerSetDone) window.runnerSetDone();
+    // [스테일 resume 정리] 전체 리셋+재적용 성공 = 보류 구간 없음. 남겨두면 다음 편집이
+    // canUsePipelineCheckpointFromIndex(existingResume<=start)로 빠른경로를 타며 이미 반영된
+    // 접두 구간을 중복 실행한다(applyLogic 보류 가드의 insertLogic 위임 경로에서 실측 위험).
+    // steps 가 현 파이프라인의 부분집합인 이론상 호출엔 손대지 않는다(보수적 가드).
+    try {
+      if (sourceSteps === state.pipeline || (sourceSteps || []).length >= (state.pipeline || []).length) {
+        clearPipelineResumeFromIndex();
+      }
+    } catch (_) {}
     noteLivePipelineApplied(sourceSteps); // 이 적용 상태와 같은 편집은 이후 no-op 으로 생략
     recordVbaDebugTiming({
       action: "reapply",
@@ -5113,6 +5211,16 @@ async function runPipelineWithAutoRepair(options = {}) {
       // Runtime 실패는 이미 앞 단계가 라이브 Excel에 적용된 뒤 발생한다. 복구 후 전체 재실행으로
       // 돌아가면 1..N이 다시 반복되어 값복붙/누적/외부쓰기 단계가 중복될 수 있다. 실패 스텝
       // 직전 스냅샷이 있으면 그 지점으로 되돌린 뒤 실패 스텝부터만 이어 실행한다.
+      // [실행기 파일출력 계약] outputMode:"file"(실행기)은 복구 후에도 '스냅샷 복원+이어실행'을 타면 안 된다:
+      // 이어실행(runPipelineSuffixFromCheckpoint)은 skipReset 때문에 per-group /run-vba-pipeline 경로로 가는데
+      // 그 경로엔 outputMode 개념이 없어 결과를 라이브에 동기화하고(실행기 '라이브 무손상' 계약 위반, 복원
+      // /api/excel/replace 가 headless 가드 없이 창까지 띄움) outputFiles 를 안 만들어 다운로드/결과편집이
+      // 이전 실행 결과를 가리킨다. 파일모드는 라이브 미변경 + 매 실행이 pristine 원본부터 격리 배치라
+      // 중복 적용 위험이 없으므로, 위 '데드엔드 제거'와 동일하게 전체 재실행(loop 계속)이 정답이다.
+      if (runOptions.outputMode === "file") {
+        clearPipelineResumeFromIndex();
+        continue;
+      }
       if (repairedStep && pipelineStepLiveLanguage(repairedStep)) {
         try {
           const restored = restoredToCheckpoint || await restorePipelineCheckpointForSuffix(stepIdx, state.pipeline, {
@@ -5261,6 +5369,11 @@ $("btn-run").onclick = async () => {
   const valuesOnlyInput = (typeof $ === "function") ? $("capture-copypaste-values-only") : null;
   if (!btn) return;
   btn.onclick = async () => {
+    // [녹화중 캡처 차단] 녹화가 복붙까지 함께 기록 — 여기서 또 캡처하면 스킬에 이중 주입된다.
+    if (typeof globalThis !== "undefined" && globalThis.__excelRecordingActive) {
+      toast("녹화 중에는 복붙 캡처를 쓸 수 없습니다 — 녹화가 복사/붙여넣기까지 함께 기록합니다. 녹화 정지 후 이용하세요.", "error");
+      return;
+    }
     const excelId = (typeof vbaTargetExcelId === "function" && vbaTargetExcelId())
       || (typeof currentExcelId === "function" && currentExcelId());
     if (!excelId) { toast("먼저 우측에 엑셀 파일을 열어 주세요", "error"); return; }
@@ -5323,6 +5436,443 @@ $("btn-run").onclick = async () => {
   };
 })();
 
+// 녹화 모드 (ixi-Cell-R recorder 통합): 우측 라이브 엑셀에서 하는 작업을 캡처해
+// 정지 시 역할별 묶음 스텝으로 파이프라인에 삽입한다.
+(function () {
+  const btn = (typeof $ === "function") ? $("btn-excel-record") : null;
+  if (!btn) return;
+  let recording = false;
+  // 녹화 시작 시점에 검증된 대상 세션 — 정지 후 재현(전체실행)에 그대로 전달한다.
+  // 정지→검토 다이얼로그 사이(수십초)에 탭/장부 상태가 바뀌어도 재현 대상이 흔들리지 않는다.
+  let recExcelId = null;
+  // [추가실행 재현] 녹화 시작 시 각 라이브 세션의 스냅샷 — 정지 시 이 상태로 되돌린 뒤
+  // '새로 추가된 스텝만' 실행한다(기존 스텝 전체 재실행 제거). 실패 시 전체실행 폴백.
+  let recPreSnapshots = [];
+  // [커버리지] 시작 시점 '모든' 라이브 세션의 스냅샷이 빠짐없이 떠졌는가 — 하나라도 실패
+  // (타임아웃 등)했으면 fast append(복원+새 스텝만 실행)를 포기해야 한다. 스냅샷 없는
+  // 세션은 복원이 안 돼 그 세션의 녹화 변경분이 수동분+재실행분으로 이중 반영된다.
+  let recSnapshotsComplete = false;
+  const setUi = () => {
+    btn.textContent = recording ? "■ 녹화 정지" : "● 녹화(beta)";
+    btn.style.background = recording ? "#c62828" : "";
+    btn.style.color = recording ? "#fff" : "";
+    // [녹화중 캡처 차단] 녹화는 복사/붙여넣기까지 함께 기록한다 — 녹화 중 복붙 캡처 버튼을
+    // 누르면 같은 동작이 캡처 스텝+녹화 VBA 로 이중 주입된다(실측: 스킬에 1·2단계 중복).
+    // 전역 플래그(캡처 onclick 가드용) + 버튼 잠금을 함께 건다.
+    try { globalThis.__excelRecordingActive = recording; } catch (_) {}
+    try {
+      const cap = (typeof $ === "function") ? $("btn-capture-copypaste") : null;
+      if (cap) {
+        cap.disabled = recording;
+        cap.title = recording ? "녹화 중에는 사용할 수 없습니다 — 녹화가 복사/붙여넣기를 함께 기록합니다" : "";
+      }
+    } catch (_) {}
+  };
+  btn.onclick = async () => {
+    let excelId = (typeof vbaTargetExcelId === "function" && vbaTargetExcelId())
+      || (typeof currentExcelId === "function" && currentExcelId());
+    // [자가복구] 직전 녹화 재현 실패/replace 오류/Excel 재시작 등으로 서버 세션이 죽으면
+    // 폴이 forgetExcelMirrorSession 으로 매핑을 지운다 — 파일은 업로드돼 있는데 녹화 버튼이
+    // "파일을 열어 주세요"로 막히는 실측 증상. 현재 탭 파일이 있으면 세션을 다시 열고 진행한다.
+    if (!recording && !excelId
+        && typeof currentExcelMirrorTarget === "function" && currentExcelMirrorTarget()
+        && typeof openCurrentWorkbookInExcel === "function") {
+      btn.disabled = true;
+      btn.textContent = "… 세션 여는 중";
+      try {
+        await openCurrentWorkbookInExcel();
+        excelId = (typeof vbaTargetExcelId === "function" && vbaTargetExcelId())
+          || (typeof currentExcelId === "function" && currentExcelId());
+      } catch (_) {}
+      btn.disabled = false;
+      setUi();
+      try { if (typeof traceClientUiEvent === "function") traceClientUiEvent("record.start.session_reopen", { recovered: !!excelId }); } catch (_) {}
+    }
+    if (!recording && !excelId) { toast("먼저 우측에 엑셀 파일을 열어 주세요", "error"); return; }
+    btn.disabled = true;
+    try {
+      if (!recording) {
+        // [추가실행 재현] 모든 라이브 세션의 '녹화 이전' 스냅샷을 레코더 시작 '전'에 남긴다
+        // (교차 워크북 녹화도 복원 가능). 예전엔 레코더 ON 뒤에 떠서, 스냅샷 저장이 끝나기
+        // 전(대형 파일이면 수십 초) 사용자가 시작한 편집이 스냅샷과 매크로 양쪽에 들어가
+        // fast append(복원+재실행) 시 이중 반영됐다. 스냅샷을 먼저 뜨면 준비 구간의 편집은
+        // '기록 안 됨' 방향으로만 어긋난다(레코더 ON 전이므로 사용자 기대와 일치).
+        // 실패한 세션은 건너뛰되 recSnapshotsComplete=false 로 기록 → 정지 시 전체실행 폴백.
+        btn.textContent = "… 준비 중";
+        recPreSnapshots = [];
+        recSnapshotsComplete = false;
+        try {
+          const ids = [...new Set(Object.values(
+            (typeof excelMirror !== "undefined" && excelMirror.sessionsByFileId) || {}))].filter(Boolean);
+          recPreSnapshots = (await Promise.all(ids.map(async (eid) => {
+            try {
+              const s = await postExcelMirror("/api/excel/save", { excelId: eid }, 0, { timeoutMs: 60000 });
+              return (s && s.downloadId) ? { excelId: eid, resultId: s.downloadId } : null;
+            } catch (_) { return null; }
+          }))).filter(Boolean);
+          recSnapshotsComplete = ids.length > 0 && recPreSnapshots.length === ids.length;
+        } catch (_) { recPreSnapshots = []; recSnapshotsComplete = false; }
+        // 녹화 스텝은 정지 후 파이프라인에 삽입 → 재현(fast append 또는 전체실행)한다.
+        // 녹화/재현은 무조건 VBA(네이티브 매크로 레코더 → Sub B2BSkill → VBA 러너).
+        // 폴백 없음: 레코더 시작이 실패하면 python 캡처로 새지 않고 명확히 실패시킨다.
+        await postExcelMirror("/api/excel/record/start", { engine: "vba" }, 0, { timeoutMs: 30000 });
+        recording = true;
+        recExcelId = excelId; // 시작 가드에서 non-null 검증됨 — 정지 후 재현 대상으로 고정
+
+        toast("녹화 중 — 편집 잠금이 풀렸습니다. 우측 엑셀에서 입력·서식·병합·필터를 평소처럼 작업한 뒤 ‘■ 녹화 정지’를 누르세요", "success");
+      } else {
+        // 정지 시 서식/객체 스냅샷 diff 가 시트 규모에 따라 오래 걸릴 수 있다.
+        btn.textContent = "■ 정지 중…";
+        const data = await postExcelMirror("/api/excel/record/stop", {}, 0, { timeoutMs: 200000 });
+        recording = false;
+        setUi();
+        let entries = (data && data.steps) || [];
+        if (!entries.length) {
+          toast("녹화 완료 — 캡처된 동작이 없습니다", "error");
+          return;
+        }
+        // [VBA 분할] 백엔드 VBA 녹화는 스텝 1개(Sub B2BSkill …)만 준다 — 업무 의도 단위
+        // N조각(각각 독립 실행 가능한 Sub B2BSkill)으로 쪼개 스텝별 온오프/수정을 가능케 한다.
+        // 어떤 실패에도 llmSplitRecordedVba 는 null → 원본 1스텝 그대로 진행(녹화 흐름 안 깨짐).
+        if (entries.length === 1) {
+          const _e0 = entries[0] || {};
+          const _lang = String(_e0.language || "").toLowerCase();
+          const _isVba = _lang === "vba" || /Sub\s+B2BSkill/i.test(_e0.code || "");
+          const _hasFn = typeof llmSplitRecordedVba === "function";
+          // [진단] 앱에서만 1스텝으로 나오는 원인 추적 — 게이트 값과 분할 결과를 콘솔에 남긴다.
+          try { console.info("[녹화분할] 게이트 language=" + (_e0.language || "(없음)") + " isVba=" + _isVba + " fn=" + _hasFn + " code길이=" + String(_e0.code || "").length); } catch (_) {}
+          if (_isVba && _hasFn) {
+            try { btn.textContent = "… 동작 분할 중"; } catch (_) {}
+            try { globalThis.__recordSplitDiag = ""; } catch (_) {}
+            let _split = null, _splitErr = null;
+            try { _split = await llmSplitRecordedVba(_e0, { summary: (data && data.summary) || "", workbook: (data && data.recordedWorkbook) || "" }); } catch (e) { _splitErr = e; }
+            if (_split && _split.length > 1) {
+              entries = _split;
+              try { console.info("[녹화분할] " + entries.length + "개 스텝으로 분할됨"); } catch (_) {}
+            } else {
+              // 분할이 1스텝으로 폴백 — '왜'를 사용자에게 노출한다(silent 금지).
+              const _why = _splitErr ? ("예외 " + ((_splitErr && _splitErr.message) || _splitErr)) : ((typeof globalThis !== "undefined" && globalThis.__recordSplitDiag) || "원인 미상");
+              try { console.warn("[녹화분할] 1스텝 유지 — " + _why); } catch (_) {}
+              try { toast("동작 분할 안 됨(1스텝 유지) — " + _why, "error"); } catch (_) {}
+            }
+          } else {
+            const _why = !_hasFn ? "분할 함수 없음(구버전 JS/캐시)" : ("VBA 스텝 아님(language=" + (_e0.language || "없음") + ")");
+            try { console.warn("[녹화분할] 게이트 미통과 — " + _why); } catch (_) {}
+            try { toast("동작 분할 건너뜀 — " + _why, "error"); } catch (_) {}
+          }
+        }
+        // LLM 의도 그룹핑(비가용/실패 시 결정론 묶음 그대로) → 검토 다이얼로그 → 삽입
+        // 묶음이 너무 많으면(비정상 녹화/서식 폭주) 프롬프트가 거대해져 '의도 분석'에서
+        // 한세월 걸리므로 건너뛴다. 예전엔 'entries<=24' 개수 게이트라 카드가 작아도 많으면
+        // (=가장 과발생한 서식/병합 녹화일수록) 축소기가 통째로 꺼졌다. 개수 대신 실제
+        // 프롬프트 토큰 추정치로 게이트해, 카드가 많아도 요약이 작으면 재그룹을 돌린다.
+        let regroupNote = "";
+        const regroupTokens = (typeof estimateRegroupPromptTokens === "function")
+          ? estimateRegroupPromptTokens(entries) : entries.length * 60;
+        const REGROUP_TOKEN_BUDGET = 6000;   // 요약 프롬프트 상한(대략 vLLM 컨텍스트 안전선)
+        const REGROUP_ENTRY_HARDCAP = 120;   // 토큰이 작아도 카드 폭주 시 최종 백스톱
+        // [VBA 분할본 보호] VBA 조각들은 Python 병합용 재그룹(_mergeTransformCode)을 태우면
+        // 안 된다 — 재그룹 병합은 def transform 본문을 합치는 경로라 VBA 를 망가뜨린다.
+        const _isVbaEntries = entries.every(e => String(e.language || "").toLowerCase() === "vba");
+        const regroupEligible = !_isVbaEntries
+          && entries.length >= 2
+          && entries.length <= REGROUP_ENTRY_HARDCAP
+          && regroupTokens <= REGROUP_TOKEN_BUDGET
+          && typeof llmRegroupRecordedSteps === "function";
+        if (regroupEligible) {
+          btn.textContent = "… 의도 분석 중";
+          // [저사양/폐쇄망 보호] 의도 분석은 보조 단계 — LLM 이 느리면 25초에서 끊고
+          // 결정론(역할) 묶음으로 바로 진행한다. 분석이 사용자를 기다리게 하면 안 된다.
+          const ctrl = (typeof AbortController !== "undefined") ? new AbortController() : null;
+          const timer = ctrl ? setTimeout(() => ctrl.abort(), 25000) : null;
+          let regrouped = null;
+          try {
+            regrouped = await llmRegroupRecordedSteps(entries, ctrl ? { signal: ctrl.signal } : undefined);
+          } finally {
+            if (timer) clearTimeout(timer);
+          }
+          if (regrouped && regrouped.length) {
+            entries = regrouped;
+            regroupNote = " AI 의도 분석 적용됨.";
+          } else {
+            regroupNote = " 역할 기반 자동 묶음(의도 분석 생략/실패).";
+          }
+        }
+        // 기존 ctx 헬퍼로 통합(서버 등가 게이트) — 셀/행마다의 저수준 호출을 벌크 1회로.
+        // [대기 겹치기] 통합은 code 만 바꾸고 카드 표시(title/desc)는 안 바꾸므로, 검토
+        // 다이얼로그를 먼저 띄우고 사용자가 읽는 동안 백그라운드로 돌린다. 확정(picked)
+        // 후에 완료만 기다린다 — 폐쇄망 LLM 이 느려도 체감 대기가 사람 검토 시간에 흡수됨.
+        let consolidatePromise = null;
+        if (typeof llmConsolidateEntries === "function") {
+          consolidatePromise = llmConsolidateEntries(entries).catch(() => entries);
+        }
+        // [카드 상한 고지] 서식/병합 폭주로 카드가 많으면(서버가 COM 예산 보호로 분할)
+        // 조용히 두지 말고 사용자에게 분할 사실을 노출한다(silent 분할 금지 — D.3).
+        let capNote = "";
+        if (!regroupEligible && entries.length > 24) {
+          capNote = ` ⚠ 카드 ${entries.length}장 — 서식/병합이 많아 성능 보호로 분할됨(AI 의도 묶음 생략).`;
+        }
+        const picked = (typeof showRecordReviewDialog === "function")
+          ? await showRecordReviewDialog(entries,
+              `동작 ${data.raw_actions}개 → 스텝 ${data.distilled}개 → 의도 ${entries.length}묶음.${regroupNote}${capNote}`)
+          : entries;
+        if (!picked || !picked.length) { toast("녹화 결과를 추가하지 않았습니다", "error"); return; }
+        if (consolidatePromise) {
+          btn.textContent = "… 헬퍼 통합 중";
+          try { await consolidatePromise; } catch (e) { /* 원본 유지 */ }
+          const merged = picked.filter((e) => e && e.consolidatedCalls).length;
+          if (merged && typeof toast === "function") toast(`${merged}묶음을 ctx 헬퍼로 통합했습니다`, "success");
+        }
+        // [두 워크북 대상 바인딩] 우선순위:
+        // ① 백엔드가 알려준 '실제 녹화된 워크북' 세션(recordedExcelId) — 권위 있음
+        //    (UI 탭과 사용자가 실제 조작한 Excel 창이 다를 때 이게 유일하게 정확).
+        // ② 녹화 시작 시 고정한 세션(recExcelId) → ③ 현재 excelId → ④ 현재 탭.
+        const recTarget = recExcelId || excelId;
+        let targetFileId = null;
+        if (data.recordedExcelId && typeof fileIdForExcelMirrorId === "function") {
+          targetFileId = fileIdForExcelMirrorId(data.recordedExcelId);
+        }
+        if (!targetFileId && data.recordedWorkbook && typeof pipelineFileIdByWorkbookName === "function") {
+          targetFileId = pipelineFileIdByWorkbookName(data.recordedWorkbook);
+        }
+        if (!targetFileId) {
+          targetFileId = (typeof fileIdForExcelMirrorId === "function" && recTarget
+            ? fileIdForExcelMirrorId(recTarget) : null) || state.currentFileId || null;
+        }
+        try {
+          if (typeof traceClientUiEvent === "function") traceClientUiEvent("record.target.bound", {
+            recordedExcelId: String(data.recordedExcelId || ""),
+            recordedWorkbook: String(data.recordedWorkbook || ""),
+            recExcelId: String(recExcelId || ""),
+            resolvedTargetFileId: String(targetFileId || ""),
+            currentFileId: String(state.currentFileId || ""),
+          });
+        } catch (_) {}
+        // [교차파일 조각 바인딩] 분할 조각이 다른 워크북을 Activate 로 열고 작업하면 '그 파일'이
+        // 이 조각의 실질 대상이다. 예전엔 녹화 시작 파일을 전 조각에 균일 도장해 — 청구내역에 쓰는
+        // 조각까지 targetFileId=정산서/targetSheetName=정산 으로 찍혔고, 그 결과 스텝별 스냅샷·
+        // 되돌리기·시트 사전활성·실행기 요구파일이 전부 첫 파일로 쏠렸다(실측 12단계 스킬).
+        // [위치 가드] Activate 가 조각의 '첫 동작 줄'일 때만 그 워크북을 조각 대상으로 본다.
+        // 중간 Activate(예: 청구내역 작업 후 정산서로 전환하는 1조각)를 대상으로 잡으면 —
+        // 러너 사전 활성화가 정산서로 가서 앞부분 작업이 엉뚱한 북에서 실행됐다(실측 15:30).
+        // 앞의 주석/선언/설정 줄(', Dim, On Error, Application.*)은 동작이 아니므로 건너뛴다.
+        const _chunkPrimaryBook = (code) => {
+          for (const line of String(code || "").split(/\r?\n/)) {
+            const st = line.trim();
+            if (!st || /^'/.test(st) || /^Sub\s+B2BSkill\b/i.test(st) || /^Dim\b/i.test(st)
+                || /^On\s+Error\b/i.test(st) || /^Application\./i.test(st) || /^End\s+Sub\b/i.test(st)) continue;
+            const m = st.match(/^(?:Windows|Workbooks)\(\s*"([^"\r\n]+\.xls[xmb]?)"\s*\)\s*\.\s*Activate\b/i);
+            return m ? m[1] : "";  // 첫 동작이 Activate 가 아니면 앵커 유지("")
+          }
+          return "";
+        };
+        const makeStep = (s) => {
+          // [의도색] 분할이 안 돼도(VBA 1스텝) 월/분기/연/날짜 리터럴 조각이면 _recordedIntentNeeded 로 승격.
+          const _isVbaChunk = String(s.language || "").toLowerCase() === "vba" || /\bSub\s+B2BSkill\b/i.test(String(s.code || ""));
+          const _needIntent = !!s.intentNeeded
+            || (typeof _recordedIntentNeeded === "function" && _isVbaChunk && !!_recordedIntentNeeded(s.code));
+          const _primBook = _isVbaChunk ? _chunkPrimaryBook(s.code) : "";
+          const _primFileId = (_primBook && typeof pipelineFileIdByWorkbookName === "function")
+            ? pipelineFileIdByWorkbookName(_primBook) : null;
+          const _stepFileId = _primFileId || targetFileId;
+          // 앵커(녹화 시작 파일) 조각인가 — 앵커가 아니면 앵커의 recordedSheet 를 이 조각에 찍으면 안
+          // 된다(타 파일엔 그 시트가 없어 사전활성/요구파일이 엉뚱해짐). 대상 파일이 다르면 시트 미상.
+          const _isAnchorChunk = !_primFileId || _primFileId === targetFileId;
+          return normalizeStep({
+            id: (typeof uid === "function" ? uid() : s.id),
+            prompt: s.prompt,
+            code: s.code,
+            description: (s.hazards && s.hazards.length
+              ? (s.title ? s.title + " — " : "") + s.description + " ⚠ " + s.hazards.join(" / ")
+              : (s.title ? s.title + " — " : "") + s.description),
+            language: s.language || "python",
+            targetFileId: _stepFileId,
+            intentNeeded: !!_needIntent,
+            intentReason: s.intentReason || (_needIntent ? "다음 달/다음 파일 재현 시 값 확인 필요" : ""),
+            // [녹화 메타 durable stamp] 세션 표시명/시트명을 스텝에 문자열로 박아 zip 저장·재로드에도 살아남게
+            // 한다(다른 달·다른 파일 재현 시 실행기 '파일확인' 요구 도출용). 빈 값이면 undefined 로 미설정.
+            // 분할 조각은 자기 주 워크북명(Activate 리터럴)을 박는다 — 실행기가 파일별 요구를 만들 수 있게.
+            recordedWorkbook: s.recordedWorkbook || _primBook || (data && data.recordedWorkbook) || undefined,
+            recordedSheet: s.recordedSheet || (_isAnchorChunk ? (data && data.recordedSheet) : "") || undefined,
+            targetSheetName: (s.recordedSheet || (_isAnchorChunk ? (data && data.recordedSheet) : "")) || undefined,
+          });
+        };
+        // [녹화 리플레이 = 배치 전체실행 1콜]
+        // 예전엔 확정 스텝을 하나씩 라이브에 적용(applyVbaStepToLiveExcel)해, 스텝(청크)마다
+        // 창 숨김→스냅샷(SaveCopyAs 통째)→적용→창 복원을 반복 → 수십 번 깜빡이고 느렸다.
+        // 이제 스텝을 파이프라인에 '삽입만' 하고, 검증된 전체실행(원본부터 1리셋 + 전 스텝 배치)
+        // 을 딱 한 번 돌린다 → 창 숨김/복원 1회, 스텝별 스냅샷은 백엔드가 배치 안에서 남겨
+        // 온오프/삭제도 그대로 동작. 재현 실패는 전체실행 경로가 errorInfo 로 보고.
+        if (typeof pushHistory === "function") pushHistory("녹화 스텝 추가");
+        const appendedSteps = picked.map((s) => makeStep(s));
+        for (const st of appendedSteps) state.pipeline.push(st);
+        renderPipeline();
+        refreshRunButton();
+        if (typeof scheduleLogicAutoBackup === "function") scheduleLogicAutoBackup("record-steps-added");
+        const appendedIds = appendedSteps.map((s) => s.id).filter(Boolean);
+        const activeStepIds = (typeof getPipelineExecutionStepIds === "function") ? getPipelineExecutionStepIds() : [];
+        btn.textContent = "… 재현 실행 중";
+        if (typeof clearPipelineResumeFromIndex === "function") clearPipelineResumeFromIndex();
+        // [정지시점 백업] fast append 는 라이브를 '녹화 이전'으로 되돌리는 파괴 연산으로 시작한다.
+        // 재현·폴백이 모두 실패하면 이 백업으로 되돌린다(아래 바깥 catch) — 없으면 사용자가
+        // 실제로 한 작업이 화면에서 사라진다(녹화 VBA 텍스트에만 존재).
+        let stopBackups = [];
+        try {
+          if (typeof clearPipelineExecutionMemory === "function") clearPipelineExecutionMemory({ keepViewer: true });
+          // [추가실행 재현 — 기본 경로] 기존 스텝을 전체 재실행하지 않는다:
+          //   ① 녹화 시작 스냅샷으로 각 라이브 세션을 복원(사용자 수동 조작 되돌림 —
+          //      "녹화 이전 화면"이 뜨는 그 단계)
+          //   ② '새로 추가된 스텝만' 현재 상태 위에 실행(reset:false, 격리+동반 동기화)
+          // 스냅샷이 없거나 실패하면 종전의 전체실행(원본부터 배치)으로 폴백한다.
+          const allVba = appendedSteps.every(
+            (s) => String(s.language || "").toLowerCase() === "vba");
+          let fastAppendDone = false;
+          // [커버리지 게이트] 복원 기반 fast append 는 '모든' 관여 세션을 되돌릴 수 있을 때만 안전하다:
+          //   ① 시작 시 전 세션 스냅샷이 빠짐없이 떠졌고(recSnapshotsComplete — 예전엔 개수>0 만 봐서
+          //      앵커 저장이 타임아웃돼도 진입 → 복원 안 된 세션에 녹화 변경분이 이중 반영됐다)
+          //   ② 앵커(녹화 세션) 스냅샷이 있고
+          //   ③ 녹화 중 새로 열린 세션이 없어야 한다(스냅샷이 없어 복원 불가).
+          // 어긋나면 검증된 전체실행(원본부터 배치, 비파괴)으로 폴백한다.
+          let fastAppendEligible = allVba && recSnapshotsComplete && recExcelId
+            && recPreSnapshots.some((s) => s.excelId === recExcelId);
+          if (fastAppendEligible) {
+            try {
+              const nowIds = [...new Set(Object.values(
+                (typeof excelMirror !== "undefined" && excelMirror.sessionsByFileId) || {}))].filter(Boolean);
+              const snapIds = new Set(recPreSnapshots.map((s) => s.excelId));
+              if (nowIds.some((eid) => !snapIds.has(eid))) fastAppendEligible = false;
+            } catch (_) { fastAppendEligible = false; }
+          }
+          if (!fastAppendEligible && allVba && recPreSnapshots.length) {
+            // 예전 게이트라면 진입했을 상황 — 왜 폴백했는지 추적 가능하게 남긴다(silent 금지).
+            try {
+              if (typeof traceClientUiEvent === "function") traceClientUiEvent("record.append_replay.coverage_fallback", {
+                complete: String(!!recSnapshotsComplete), snapshots: String(recPreSnapshots.length),
+              });
+            } catch (_) {}
+          }
+          if (fastAppendEligible) {
+            // 파괴 복원 전 '정지 시점' 백업 — 하나라도 실패하면 파괴 복원을 포기하고
+            // 비파괴 전체실행 폴백(격리 배치, 실패 시 라이브 무손상)으로 간다.
+            try {
+              for (const snap of recPreSnapshots) {
+                const s = await postExcelMirror("/api/excel/save", { excelId: snap.excelId }, 0, { timeoutMs: 120000 });
+                if (!s || !s.downloadId) throw new Error("정지시점 백업 저장 실패");
+                stopBackups.push({ excelId: snap.excelId, resultId: s.downloadId });
+              }
+            } catch (bkErr) {
+              console.warn("[record] 정지시점 백업 실패 — fast append 포기(비파괴 폴백):", bkErr);
+              stopBackups = [];
+              fastAppendEligible = false;
+            }
+          }
+          if (fastAppendEligible) {
+            setPipelineRuntimeStatus(appendedIds, "running", "실행 중");
+            try {
+              if (typeof beginExcelMirrorApplyLoading === "function") {
+                beginExcelMirrorApplyLoading("녹화 재현 중...", { hideWindows: false, failsafeMs: 600000 });
+              }
+              for (const snap of recPreSnapshots) {
+                await postExcelMirror("/api/excel/replace",
+                  { excelId: snap.excelId, resultId: snap.resultId, readOnlyMirror: false },
+                  0, { timeoutMs: 180000 });
+              }
+              const payloads = appendedSteps.map((s) =>
+                isolatedPipelineStepPayload(s, (state.pipeline || []).indexOf(s)));
+              await postExcelMirror("/api/excel/run-vba-pipeline",
+                { excelId: recExcelId, steps: payloads, reset: false },
+                0, { timeoutMs: 600000 });
+              setPipelineRuntimeStatus(appendedIds, "applied", "적용됨");
+              if (typeof showOnlyExcelMirrorWindow === "function") {
+                try { await showOnlyExcelMirrorWindow(recExcelId, { force: true }); } catch (_) {}
+              }
+              if (typeof scheduleRestoreActiveExcelMirror === "function") {
+                scheduleRestoreActiveExcelMirror(120, { restoreExcelId: recExcelId });
+              }
+              // [이슈2] 재현 완료 직후 실행기 헤드리스면 즉시 재숨김 — 재현/show-only 가드를 뚫고 뜬 오버레이 잔존 방지.
+              if (excelMirror && excelMirror.runnerHeadless) { try { await hideAllExcelMirrorWindows(); } catch (_) {} }
+              fastAppendDone = true;
+            } catch (err) {
+              console.warn("[record] 추가실행 재현 실패 — 전체실행으로 폴백:", err);
+              try {
+                if (typeof traceClientUiEvent === "function") traceClientUiEvent("record.append_replay.fallback", {
+                  error: String((err && err.message) || err || "").slice(0, 200),
+                });
+              } catch (_) {}
+            } finally {
+              if (typeof endExcelMirrorApplyLoading === "function") endExcelMirrorApplyLoading();
+            }
+          }
+          if (!fastAppendDone) {
+            // [폴백: 배치 전체실행 1콜] reset+전스텝을 한 번만 배치 실행(창 1회).
+            setPipelineRuntimeStatus(activeStepIds, "running", "실행 중");
+            await runVbaPipelinePreferLive({
+              ignoreCheckpoint: true, backgroundMode: true,
+              preferExcelId: recExcelId || excelId || null, // 녹화했던 그 세션에서 재현
+            });
+            setPipelineRuntimeStatus(activeStepIds, "applied", "적용됨");
+            // [이슈2] 폴백 전체실행(백그라운드) 직후에도 실행기 헤드리스면 즉시 재숨김.
+            if (excelMirror && excelMirror.runnerHeadless) { try { await hideAllExcelMirrorWindows(); } catch (_) {} }
+          }
+          toast(`녹화 완료 — 동작 ${data.raw_actions}개를 ${picked.length}개 스텝으로 저장하고 재현했습니다`, "success");
+          // [재현 검증] 녹화 정지 시점의 시트 다이제스트(정답)와 재현 결과를 자동 대조.
+          // 어긋난 시트를 정확히 지목해 "결과가 왜 다른지 모름"을 없앤다. 검증 실패가
+          // 재현 성공 처리를 막지는 않는다(보조 진단).
+          if (Array.isArray(data.expected) && data.expected.length) {
+            // [하이브리드 검증 게이트] 기대 다이제스트를 보관 — 이후 복구(VBA→Python 번역)로
+            // 재실행할 때 결과가 녹화 종료 시점과 여전히 같은지 자동 대조하는 근거가 된다.
+            try { window.__recordExpected = data.expected; } catch (_) {}
+            try {
+              const v = await postExcelMirror("/api/excel/record/verify",
+                { expected: data.expected }, 0, { timeoutMs: 120000 });
+              const bad = ((v && v.results) || []).filter((r) => r.match === false);
+              if (bad.length) {
+                const detail = bad.slice(0, 3)
+                  .map((r) => `${r.book}/${r.sheet}${r.reason ? ` — ${r.reason}` : ""}`).join(" · ");
+                toast(`⚠ 재현 검증: 녹화 종료 시점과 다른 시트 ${bad.length}개 — ${detail}`, "error");
+              } else if (v && v.checked) {
+                toast(`재현 검증 통과 — 시트 ${v.checked}개가 녹화 종료 시점과 일치합니다`, "success");
+              }
+            } catch (err) {
+              console.warn("record verify 실패(무시):", err);
+            }
+          }
+        } catch (err) {
+          // [정지시점 복구] fast append(파괴 복원)까지 갔는데 재현·폴백이 모두 실패했다면
+          // 라이브가 '녹화 이전'으로 남아 사용자의 실제 작업이 화면에서 사라진 상태다.
+          // 정지 시점 백업으로 되돌려 작업물을 보존한다(추가된 스텝은 실패 표시로 남는다).
+          if (stopBackups.length) {
+            for (const b of stopBackups) {
+              try {
+                await postExcelMirror("/api/excel/replace",
+                  { excelId: b.excelId, resultId: b.resultId, readOnlyMirror: false },
+                  0, { timeoutMs: 180000 });
+              } catch (rbErr) { console.warn("[record] 정지시점 복구 실패:", b && b.excelId, rbErr); }
+            }
+            toast("재현에 실패해 화면을 녹화 정지 시점으로 되돌렸습니다. 추가된 스텝은 실패 상태로 남아 있습니다.", "error");
+          }
+          if (typeof markPipelineRunFailureStatus === "function") markPipelineRunFailureStatus(err, activeStepIds);
+          if (typeof renderExcelViewer === "function") renderExcelViewer();
+          reportPipelineError(err);
+        }
+        window.__recordPreSnapshot = null;
+        recExcelId = null;
+        recPreSnapshots = [];
+        recSnapshotsComplete = false;
+      }
+    } catch (err) {
+      recording = false;
+      recExcelId = null;
+      recPreSnapshots = [];
+      recSnapshotsComplete = false;
+      toast("녹화 실패: " + (err && err.message ? err.message : String(err)), "error");
+    } finally {
+      setUi();
+      btn.disabled = false;
+    }
+  };
+})();
+
 // item 9: 어느 단계에서 어떤 사유로 실패했는지 토스트 + 채팅 panel 에 모두 노출.
 function hasErrorRecoverySeed(info) {
   if (info && (Number(info.stepIdx) >= 0 || !!info.stepId || !!info.code || !!info.description)) return true;
@@ -5335,7 +5885,27 @@ function hasErrorRecoverySeed(info) {
 // 반환: 사용자용 안내 문자열 또는 null(LLM 미설정/실패 → 호출자가 기존 안내로 폴백).
 async function explainPipelineErrorForUser(info) {
   if (typeof callLLMOneShot !== "function") return null;
-  const req = (typeof latestUserRequestForSafety === "function") ? latestUserRequestForSafety() : "";
+  // [오귀속 방지] '사용자 요청'은 실패한 스텝의 실제 출처(originHistId의 말풍선)에서 가져온다.
+  // 예전엔 무조건 최근 채팅을 붙여서, 녹화 스킬 실패가 방금 인사말("안녕?")에 대한 오류로
+  // 해설되는 실측 오귀속이 있었다. 녹화/캡처 스텝(대화 없음)은 그 사실을 명시한다.
+  const _step = (state.pipeline || []).find(s => s && info.stepId && s.id === info.stepId)
+    || ((Number(info.stepIdx) >= 0 && Array.isArray(state.pipeline)) ? state.pipeline[Number(info.stepIdx)] : null);
+  const _recordedLike = (s) => !!(s && (s.recorded
+    || /\[녹화됨\/VBA\]/.test(String(s.prompt || ""))
+    || /\[복붙 캡처\]/.test(String(s.code || ""))));
+  let req = "";
+  if (_step && _step.originHistId && Array.isArray(state.chatHistory)) {
+    const m = state.chatHistory.find(h => h && h.histId === _step.originHistId && h.role === "user");
+    if (m) req = String(m.content || "").slice(0, 500);
+  }
+  if (!req) {
+    if (_step ? _recordedLike(_step)
+              : (state.pipeline || []).filter(s => s && s.enabled !== false).every(_recordedLike)) {
+      req = "(대화로 만든 단계가 아님 — 화면 녹화/복붙 캡처로 만들어진 스킬입니다. 최근 채팅과 무관한 실패입니다.)";
+    } else if (typeof latestUserRequestForSafety === "function") {
+      req = latestUserRequestForSafety();
+    }
+  }
   const system = [
     typeof OUTPUT_LANGUAGE_RULE === "string" ? OUTPUT_LANGUAGE_RULE : "",
     "당신은 한국어 엑셀 자동화 도우미입니다. 방금 사용자가 시킨 작업이 오류로 실패했습니다.",
@@ -5492,6 +6062,27 @@ function reportPipelineError(err, options) {
           && isPythonComReadLimitRuntimeError(info.message || (err && err.message) || "")) {
         err.__autoReadLimitVbaTried = true;
         setTimeout(() => { if (recoverBtn && !recoverBtn.disabled) recoverBtn.click(); }, 0);
+      }
+      // [녹화 자동 완주] 녹화로 만든 스텝의 실패는 복구 버튼을 기다리지 않는다 — 사용자 관점에서
+      // 녹화 재현은 끝까지 완료되어야 한다. 실패 스텝이 녹화 스텝이면 복구(VBA 원문을 번역 명세로
+      // 넣은 Python 재작성 → 그 스텝부터 끝까지 재실행 → 번역 검증 게이트)를 자동 발사한다.
+      // 스텝당 2회 상한(루프 방지) — 번역까지 실패하면 카드가 남아 수동 복구/AI 진단으로 넘어간다.
+      {
+        const _recStep = (state.pipeline || []).find(s => s && info.stepId && s.id === info.stepId)
+          || ((Number(info.stepIdx) >= 0 && Array.isArray(state.pipeline)) ? state.pipeline[Number(info.stepIdx)] : null);
+        const _isRecordedFail = !!(_recStep && (_recStep.recorded
+          || /\[녹화됨\/VBA\]/.test(String(_recStep.prompt || ""))
+          || _recStep.recordedWorkbook));
+        if (_isRecordedFail && err && typeof err === "object" && !err.__autoRecordedRecoveryTried) {
+          const _tries = Number(_recStep._autoRecoverTries || 0);
+          if (_tries < 2) {
+            _recStep._autoRecoverTries = _tries + 1;
+            err.__autoRecordedRecoveryTried = true;
+            try { if (typeof traceClientUiEvent === "function") traceClientUiEvent("record.auto_recovery.fire", { stepId: String(_recStep.id || ""), attempt: _tries + 1 }); } catch (_) {}
+            toast(`녹화 단계 실패 — 자동으로 변환 복구 후 남은 단계를 이어서 실행합니다 (${_tries + 1}/2)`, "info");
+            setTimeout(() => { if (recoverBtn && !recoverBtn.disabled) recoverBtn.click(); }, 0);
+          }
+        }
       }
     }
     if (typeof offerMissingDependencySkillCandidate === "function") {
@@ -5653,7 +6244,9 @@ async function attemptRunnerAutoRecovery(errorInfo) {
   try {
     const resumeIdx = getPipelineResumeFromIndex();
     // 실패 직후 checkpoint 로 보류된 상태라면, 복구 버튼이 같은 깨진 step을
-    // 먼저 재실행하면 안 된다. 실패 step을 먼저 교체한 뒤 보류 구간을 실행한다.
+    // 먼저 재실행하면 안 된다. 실패 step을 먼저 교체한 뒤 다시 실행한다.
+    // (선복구는 매핑 래핑 '전'(원본 기준)에 한다 — 매핑본 위에서 복구하면 치환된
+    // 파일명 리터럴이 복구 코드에 박혀 restore 병합 때 저장 스킬로 샌다.)
     if (Number.isInteger(stepIdx) && stepIdx >= 0 && state.pipeline[stepIdx] &&
         (Number.isInteger(resumeIdx) || (errorInfo && (errorInfo.restoredToCheckpoint || errorInfo.hardRuntimeBlock)))) {
       await autoRepairPipelineStep(stepIdx, {
@@ -5663,7 +6256,23 @@ async function attemptRunnerAutoRecovery(errorInfo) {
         failures: errorInfo && errorInfo.rawError ? [errorInfo.rawError] : [],
       }, 0);
     }
-    await runPipelineWithAutoRepair({ source: "runner-recovery" });
+    // [실행기 계약] 복구 재실행도 정상 실행 버튼(runner-run-btn)과 동일 계약으로 돈다:
+    // 파일출력(outputMode:"file") + 백그라운드 배치 + 매핑본(beginMappedPipelineRun).
+    // 예전엔 source 만 넘겨 sync(라이브 동기화)·비매핑으로 돌아 — 실행기 '라이브 무손상'
+    // 계약이 깨지고, outputFiles 가 안 생겨 다운로드/결과편집이 이전 실행 결과를 가리켰으며,
+    // 4월 스킬을 5월 파일에 복구 재실행하면 매핑 확정과 무관하게 원본 리터럴로 나갔다.
+    // 파일모드는 항상 pristine 원본부터 배치라 보류 체크포인트는 비우고 전체 재실행한다.
+    clearPipelineResumeFromIndex();
+    const __mapRun = (typeof beginMappedPipelineRun === "function")
+      ? beginMappedPipelineRun() : { steps: state.pipeline, restore: () => {} };
+    try {
+      await runPipelineWithAutoRepair({
+        source: "runner-recovery", ignoreCheckpoint: true, backgroundMode: true,
+        outputMode: "file", pipeline: __mapRun.steps,
+      });
+    } finally {
+      __mapRun.restore();
+    }
     toast("자동 복구 후 실행을 완료했습니다.", "success");
     if (window.runnerSetDone) window.runnerSetDone();
   } catch (err) {

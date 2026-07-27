@@ -31,6 +31,7 @@ vm.createContext(sb);
  "runnerAddRequirement", "runnerLooksLikeA1Address", "runnerAddGeneratedSheet", "runnerIsGeneratedSheet",
  "runnerPyBookVarMap", "runnerSplitTopLevelArgs", "runnerSliceCallArgs",
  "runnerExtractGeneratedSheetsFromCode", "runnerSheetOwnersFromCode",
+ "runnerRecordedActivatePairs",  // [lesson 45] 소유쌍/요구추출이 녹화 관용구 쌍 추출기를 참조
  "runnerAddPairedCodeRequirements", "runnerExtractMappingRequirements"].forEach(f =>
   vm.runInContext(extract(dropSrc, f), sb));
 // pipeline.js 의 이름 수집/대상 추론 계열 일괄 로드(의존 누락 방지)

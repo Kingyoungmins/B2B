@@ -61,6 +61,21 @@ function assistStripThink(s) {
 async function callAssistLLM(systemPrompt, tailMessages, options) {
   options = options || {};
   const messages = assistHistoryMessages(tailMessages);
+  // [첨부 비전] 첨부 이미지가 있으면 마지막 user 메시지 content 를 멀티모달 배열로 만든다.
+  // OpenAI 호환(dev vLLM 등) 경로 전용 — 이 프로젝트 실측상 dev vLLM 이 이미지 content 를 읽는다.
+  const imgs = (options.attachImages && options.attachImages.length) ? options.attachImages : null;
+  if (imgs && settings.provider !== "anthropic") {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].role !== "user") continue;
+      const parts = [{ type: "text", text: String(messages[i].content || "") }];
+      imgs.forEach(im => parts.push({
+        type: "image_url",
+        image_url: { url: "data:" + (im.mime || "image/png") + ";base64," + im.imageB64 },
+      }));
+      messages[i] = { role: "user", content: parts };
+      break;
+    }
+  }
   if (settings.provider === "anthropic") {
     // Anthropic 경로는 히스토리를 인자로 받는 형태가 아니라, 여기선 단발 호출로 충분하다
     // (도구 루프의 문맥은 tailMessages 로 매 라운드 재주입되므로 손실 없음).

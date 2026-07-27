@@ -59,6 +59,10 @@ const harness = `
   };
   var pipelineUsesLiveSkill = () => true;
   var pipelineHasBackendOnlyStep = () => false;
+  // [lesson 45] canUsePipelineCheckpointFromIndex 에 교차파일 가드가 추가됨 — 이 테스트는
+  // resume/인덱스 산수만 검증하므로 교차 없음으로 고정한다.
+  var pipelineSuffixWritesCrossFile = () => false;
+  var isStepEnabled = (s) => !!s && s.enabled !== false;
 `;
 
 eval([
@@ -107,8 +111,12 @@ function assert(cond, msg) {
   H.setPipelineResumeFromIndex(3);
   assert(H.canUsePipelineCheckpointFromIndex(4, [], state.pipeline) === true, "edit after resume can reuse existing resume checkpoint");
   assert(H.canUsePipelineCheckpointFromIndex(1, [], state.pipeline) === false, "edit before resume requires an actual earlier snapshot");
-  assert(H.canUsePipelineCheckpointFromIndex(1, [{}, { _preApplySnapshot: { resultId: "r" } }], state.pipeline) === true,
+  // [수정 미반영 수정 반영] 이어실행 대상(활성+코드) '전부'가 자기 직전 스냅샷을 가질 때만 true —
+  // 스냅샷만 있고 code 가 없는 옛 픽스처는 suffix 집계에서 빠져 false 가 된다(현 계약).
+  assert(H.canUsePipelineCheckpointFromIndex(1, [{}, { code: "s2", _preApplySnapshot: { resultId: "r" } }], state.pipeline) === true,
     "edit before resume can use earlier pre-apply snapshot when present");
+  assert(H.canUsePipelineCheckpointFromIndex(1, [{}, { code: "s2" }], state.pipeline) === false,
+    "suffix step without its own snapshot must reject the fast path");
 
   console.log("pipeline checkpoint edit-before-resume OK");
 })().catch(err => {

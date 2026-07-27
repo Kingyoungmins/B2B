@@ -9,6 +9,8 @@
 
 let _assistOpen = false;
 let _assistMirrorHidden = false;   // [검토 #20] 👁 미러 버튼의 실제 토글 상태
+// [첨부] 전송 전까지 대기하는 첨부 파일 목록(파일명만 카드로 표시). 실제 렌더/비전 처리는 다음 단계.
+let assistStagedAttachments = [];
 
 // 창 위치/크기는 세션 간 유지한다(매번 가운데로 튀면 거슬린다).
 const ASSIST_POS_KEY = "b2b_assist_popup_rect";
@@ -61,7 +63,10 @@ function assistEnsureDom() {
     </div>
     <div class="assist-messages" id="assist-messages"></div>
     <div class="assist-chips" id="assist-chips"></div>
+    <div class="assist-attach-list" id="assist-attach-list"></div>
     <div class="assist-input-row">
+      <button class="assist-attach-btn" id="assist-attach-btn" type="button" title="파일 첨부 (PPT·이미지 등)">📎</button>
+      <input type="file" id="assist-attach-input" accept=".pptx,.ppt,.pdf,.png,.jpg,.jpeg,image/*" multiple style="display:none">
       <textarea id="assist-text" rows="2" placeholder="예) 3단계가 적용됐다는데 값이 안 바뀌었어 / 이 스킬 뭐 하는 거야? / 5월 파일로 바꾸려면 뭘 고쳐야 해?"></textarea>
       <button class="assist-send" id="assist-send" type="button">전송</button>
     </div>
@@ -78,6 +83,7 @@ function assistEnsureDom() {
     state.assist = { history: [] };
     document.getElementById("assist-messages").innerHTML = "";
     assistRenderChips();
+    assistClearAttachments();
     assistAddMsg("system", "대화를 비웠습니다. 스킬과 파일은 그대로입니다.");
   };
   document.getElementById("assist-mirror-toggle").onclick = () => {
@@ -92,7 +98,7 @@ function assistEnsureDom() {
       }
     } catch (_) {}
   };
-  const send = () => {
+  const send = async () => {
     // [검토 #1] 응답 중엔 같은 버튼이 '중지'로 동작한다.
     if (typeof assistIsBusy === "function" && assistIsBusy()) {
       if (typeof assistAbortCurrent === "function") assistAbortCurrent();
@@ -100,16 +106,82 @@ function assistEnsureDom() {
       return;
     }
     const ta = document.getElementById("assist-text");
-    const text = String(ta.value || "").trim();
-    if (!text) return;
+    let text = String(ta.value || "").trim();
+    if (!text && !assistStagedAttachments.length) return;
+    // [첨부] 대기 중 첨부는 표식을 붙이고, 파일은 백엔드에서 슬라이드/이미지로 렌더해 비전으로 함께 보낸다.
+    const staged = assistStagedAttachments.slice();
+    if (staged.length) {
+      const names = staged.map(a => a.name).join(", ");
+      if (!text) text = "첨부한 파일을 기반으로 각 단계를 B2B 채팅에 칠 프롬프트로 만들어줘.";
+      text += "\n\n[첨부: " + names + "]";
+    }
     ta.value = "";
-    assistSubmit(text);
+    assistClearAttachments();
+    let images = null;
+    if (staged.length) {
+      assistSetStatus("첨부 분석 중... (슬라이드 렌더)");
+      try { images = await assistUploadAttachments(staged); }
+      catch (e) { assistAddMsg("system", "첨부 처리 실패: " + ((e && e.message) || e)); }
+      assistSetStatus("");
+    }
+    assistSubmit(text, images);
   };
   document.getElementById("assist-send").onclick = send;
   document.getElementById("assist-text").addEventListener("keydown", (e) => {
     if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); send(); }
   });
+  // [첨부] 클립 아이콘 → 파일 선택 → 카드로 대기(전송 시 함께 나감)
+  const attachBtn = document.getElementById("assist-attach-btn");
+  const attachInput = document.getElementById("assist-attach-input");
+  if (attachBtn && attachInput) {
+    attachBtn.onclick = () => attachInput.click();
+    attachInput.addEventListener("change", () => {
+      Array.from(attachInput.files || []).forEach(f => {
+        assistStagedAttachments.push({ name: f.name, size: f.size, file: f });
+      });
+      attachInput.value = "";   // 같은 파일 다시 선택 가능하도록
+      assistRenderAttachments();
+    });
+  }
   assistRenderChips();
+  assistRenderAttachments();
+}
+
+// [첨부] 대기 중 첨부 파일을 카드(파일명 + 삭제)로 렌더. 없으면 목록을 숨긴다.
+function assistRenderAttachments() {
+  const box = document.getElementById("assist-attach-list");
+  if (!box) return;
+  if (!assistStagedAttachments.length) { box.innerHTML = ""; box.style.display = "none"; return; }
+  box.style.display = "flex";
+  box.innerHTML = assistStagedAttachments.map((a, i) =>
+    `<span class="assist-attach-chip"><span class="ac-ic">📎</span><span class="ac-nm">${escapeHtml(a.name)}</span><button type="button" class="ac-x" data-i="${i}" title="첨부 제거">✕</button></span>`
+  ).join("");
+  box.querySelectorAll(".ac-x").forEach(b => {
+    b.onclick = () => { assistStagedAttachments.splice(Number(b.dataset.i), 1); assistRenderAttachments(); };
+  });
+}
+function assistClearAttachments() {
+  assistStagedAttachments = [];
+  assistRenderAttachments();
+}
+
+// [첨부] 대기 파일들을 백엔드(/api/assist/attachment)로 보내 슬라이드/이미지 base64 를 받는다.
+// PPT 는 슬라이드마다 PNG 로 렌더된다. 반환: [{mime, imageB64, text}] (비전 content 용), 없으면 null.
+async function assistUploadAttachments(staged) {
+  const MAX_IMAGES = 30;   // 토큰 폭주 방지(슬라이드 합산 상한)
+  const out = [];
+  for (const a of (staged || [])) {
+    if (!a || !a.file) continue;
+    const buf = await a.file.arrayBuffer();
+    const url = "/api/assist/attachment?name=" + encodeURIComponent(a.name) + "&maxSlides=40";
+    const resp = await fetch(url, { method: "POST", body: buf });
+    const data = await resp.json().catch(() => ({}));
+    if (!data.ok) throw new Error(data.error || ("첨부 처리 실패: " + a.name));
+    (data.slides || []).forEach(s => {
+      if (out.length < MAX_IMAGES) out.push({ mime: s.mime, imageB64: s.imageB64, text: s.text });
+    });
+  }
+  return out.length ? out : null;
 }
 
 const ASSIST_CHIPS = [
@@ -146,7 +218,7 @@ function assistSetStatus(s) {
   if (el) el.textContent = s || "";
 }
 
-function assistSubmit(text) {
+function assistSubmit(text, images) {
   if (typeof assistIsBusy === "function" && assistIsBusy()) {
     assistSetStatus("처리 중입니다... (전송 버튼으로 중단할 수 있습니다)");
     return;
@@ -172,11 +244,50 @@ function assistSubmit(text) {
     onProposal: assistRenderProposalCard,
     onReport: assistRenderReportCard,
     onHandoff: assistRenderHandoffCard,
-  })).catch(() => {}).finally(restore);
+  }, images)).catch(() => {}).finally(restore);
 }
 
 // [Tier1] 핸드오프 카드 — 새 단계 생성은 ③ 설계 채팅의 일. 정리된 요청문을 넣어주고 사용자가 검토·전송.
+function assistPutToDesignChat(req) {
+  const ta = document.getElementById("chat-text");
+  if (ta) ta.value = String(req || "");
+  if (typeof setPage === "function") setPage("generator");
+  if (ta) ta.focus();
+}
+
 function assistRenderHandoffCard(meta) {
+  const steps = (Array.isArray(meta.steps) && meta.steps.length) ? meta.steps : null;
+  // [단계별 핸드오프] 여러 단계면 단계마다 요청문 + [이 단계 넣기] 버튼(스킬은 한 메시지=한 단계).
+  if (steps) {
+    const stepsHtml = steps.map((s, i) => `
+      <div class="assist-handoff-step">
+        <div class="assist-handoff-step-head">단계 ${i + 1}${s.title ? ". " + escapeHtml(s.title) : ""}</div>
+        <div class="assist-handoff-req">${escapeHtml(s.request)}</div>
+        <div class="assist-card-actions"><button type="button" class="assist-ok assist-handoff-step-go" data-i="${i}">이 단계 설계 채팅에 넣기</button></div>
+      </div>`).join("");
+    const html = `
+      <div class="assist-card assist-handoff">
+        <div class="assist-card-head">↪ 스킬 설계 채팅으로 넘기기 (${steps.length}단계)</div>
+        ${meta.reason ? `<div class="assist-card-reason">${escapeHtml(meta.reason)}</div>` : ""}
+        <div class="assist-card-note">스킬은 한 단계씩 만듭니다. 아래를 <b>1번부터 순서대로</b> [넣기] → 설계 채팅에서 확인·전송·적용 → 다음 단계 순으로 진행하세요.</div>
+        ${stepsHtml}
+      </div>`;
+    const el = assistAddMsg("assistant", html, { html: true });
+    if (!el) return;
+    el.querySelectorAll(".assist-handoff-step-go").forEach(btn => {
+      btn.onclick = () => {
+        const box = btn.closest(".assist-card-actions");
+        try {
+          assistPutToDesignChat(steps[Number(btn.dataset.i)].request);
+          if (box) box.innerHTML = `<span class="assist-done">✓ 설계 채팅에 넣었습니다. 확인 후 전송하세요.</span>`;
+        } catch (_) {
+          if (box) box.innerHTML = `<span class="assist-fail">✕ 설계 채팅으로 전환하지 못했습니다.</span>`;
+        }
+      };
+    });
+    return;
+  }
+  // 단일 (기존)
   const req = String(meta.request || "");
   const html = `
     <div class="assist-card assist-handoff">
@@ -192,10 +303,7 @@ function assistRenderHandoffCard(meta) {
   if (!el) return;
   el.querySelector(".assist-handoff-go").onclick = () => {
     try {
-      const ta = document.getElementById("chat-text");
-      if (ta) { ta.value = req; }
-      if (typeof setPage === "function") setPage("generator");
-      if (ta) { ta.focus(); }
+      assistPutToDesignChat(req);
       el.querySelector(".assist-card-actions").innerHTML = `<span class="assist-done">✓ 설계 채팅 입력창에 넣었습니다. 확인 후 전송하세요.</span>`;
     } catch (_) {
       el.querySelector(".assist-card-actions").innerHTML = `<span class="assist-fail">✕ 설계 채팅으로 전환하지 못했습니다.</span>`;
@@ -517,7 +625,7 @@ function assistHandleBridgeMessage(m) {
         onProposal: (p) => assistSendToPopup({ t: "proposal", proposal: p }),
         onReport: (meta) => assistSendToPopup({ t: "report", meta }),
         onHandoff: (meta) => assistSendToPopup({ t: "handoff", meta }),
-      })).then(
+      }, (Array.isArray(m.images) && m.images.length ? m.images : null))).then(
         (res) => { if (res !== false) assistSendToPopup({ t: "done" }); },
         () => assistSendToPopup({ t: "done" })
       );
@@ -588,12 +696,15 @@ function assistOpenAndAsk(question) {
       assistPostToHost("B2B_ASSIST_POPUP\ttoggle");             // 닫힘 상태 → 토글=열기
       clearTimeout(_assistNativeAckTimer);
       _assistNativeAckTimer = setTimeout(() => {                // 구버전 exe 무응답 → DOM 폴백
+        // [중단 버그 수정] 파이프라인 오류 처리 중엔 메인이 바빠 팝업 브리지 응답이 1.2초를 넘겨,
+        // 폴백 드로어가 먼저 질문을 제출한 뒤 팝업이 늦게 열려 상태가 꼬였다(사용자 재클릭→abort).
+        // 네이티브 창이 뜰 시간을 넉넉히 준다(진짜 구버전 exe 만 폴백).
         if (!_assistNativeMode) {
           const pend = _assistPendingAsk; _assistPendingAsk = null;
           assistToggleDrawer(true);
           if (pend) assistSubmit(pend);
         }
-      }, 1200);
+      }, 3000);
       return;
     }
     assistToggleDrawer(true);
@@ -614,8 +725,8 @@ function assistOpenAndAsk(question) {
         if (opening) {
           clearTimeout(_assistNativeAckTimer);
           _assistNativeAckTimer = setTimeout(() => {
-            if (!_assistNativeMode) assistToggleDrawer();   // 구버전 exe 폴백
-          }, 1200);
+            if (!_assistNativeMode) assistToggleDrawer();   // 구버전 exe 폴백(창 뜰 시간 넉넉히)
+          }, 3000);
         }
         return;
       }

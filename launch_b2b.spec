@@ -1,6 +1,7 @@
 ﻿# -*- mode: python ; coding: utf-8 -*-
 from pathlib import Path
 import shutil
+from PyInstaller.utils.hooks import collect_submodules
 
 ROOT = Path(SPECPATH)
 NODE_EXE = shutil.which("node")
@@ -27,8 +28,12 @@ a = Analysis(
     binaries=[(NODE_EXE, '.')] if NODE_EXE else [],
     datas=[
         ('index.html', '.'),
+        # AI 도움 네이티브 팝업 페이지 — 프로즌 서빙 루트(_MEIPASS)에 없으면 /assist.html 이 404
+        # (0.6.1.1(구 0.6.1.a) 빌드에서 실측 발견·수정한 것과 동일한 포장 누락)
+        ('assist.html', '.'),
         ('USER_GUIDE.html', '.'),
         ('serve_b2b.py', '.'),
+        ('record_service.py', '.'),
         *collect('styles'),
         *collect('scripts'),
         *collect('vendor'),
@@ -40,10 +45,19 @@ a = Analysis(
         'win32com',
         'win32com.client',
         'win32com.client.dynamic',
+        # 녹화(WithEvents) — gencache 계열이 없으면 frozen 에서 COM 이벤트 바인딩 실패
+        'win32com.client.gencache',
+        'win32com.client.build',
+        'win32com.client.CLSIDToClass',
+        'win32com.client.util',
         'win32con',
         'win32gui',
         'win32process',
         'openpyxl',
+        # 녹화 서비스 + 벤더링된 ixi-Cell-R 레코더(지연 import 라 명시)
+        'record_service',
+        'native_macro_recorder',
+        *collect_submodules('ixicellr'),
     ],
     hookspath=[],
     hooksconfig={},

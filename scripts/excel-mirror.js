@@ -689,6 +689,23 @@ async function autoOpenMirrorAfterUpload(selectedFileId) {
 
 async function switchVisibleExcelMirrorToFileId(fileId) {
   const _busyTok = typeof beginUiBusy === "function" ? beginUiBusy("Excel 탭 전환 중...", { showDelayMs: 180, silentComplete: true }) : null;
+  // [전환 침묵 실패 금지] 실측(12:52): 재현 실패 직후 탭 클릭 15회가 전부 40ms 만에 조용히
+  // return false — 사용자는 "파일 전환 안됨"으로만 인지, 로그엔 원인 없음. 실패 사유를
+  // 트레이스+토스트로 반드시 노출한다(진단 가능하게).
+  const _fail = (reason, err) => {
+    try {
+      if (typeof traceClientUiEvent === "function") traceClientUiEvent("mirror.switch.fail", {
+        fileId: String(fileId || ""), reason: String(reason || ""),
+        error: String((err && err.message) || err || "").slice(0, 200),
+      });
+    } catch (_) {}
+    try {
+      if (typeof toast === "function") toast("파일 전환 실패(" + reason + ")"
+        + ((err && err.message) ? " — " + err.message : "") + ". 다시 클릭하면 재시도합니다.", "error");
+    } catch (_) {}
+    updateMirrorShellStatus();
+    return false;
+  };
   try {
   if (!fileId) return false;
   let excelId = excelMirror.sessionsByFileId[fileId];
@@ -706,15 +723,14 @@ async function switchVisibleExcelMirrorToFileId(fileId) {
         if (!isMissingExcelSessionError(err)) console.warn("Excel mirror result open failed:", err);
       }
     }
+    let _openErr = null;
     try {
       excelId = await ensureExcelMirrorSession(fileId, { makeActive: true });
     } catch (err) {
+      _openErr = err;
       if (!isMissingExcelSessionError(err)) console.warn("Excel mirror lazy open failed:", err);
     }
-    if (!excelId) {
-      updateMirrorShellStatus();
-      return false;
-    }
+    if (!excelId) return _fail("세션 열기 실패", _openErr);
   }
   // 적용으로 변경됐지만 표시 안 한 입력/출력 미러(stale)는 전환 시 최신 결과로 교체.
   if (excelMirror.staleByFileId && excelMirror.staleByFileId[fileId]) {
@@ -734,6 +750,12 @@ async function switchVisibleExcelMirrorToFileId(fileId) {
       }
     }
   }
+  try {
+    if (typeof traceClientUiEvent === "function") traceClientUiEvent("mirror.switch.ok", {
+      fileId: String(fileId || ""), toExcelId: String(excelId || ""),
+      fromExcelId: String(excelMirror.activeExcelId || ""),
+    });
+  } catch (_) {}
   excelMirror.activeExcelId = excelId;
   excelMirror.sessionLastUsedByFileId[fileId] = Date.now();
   // 탭 연타 가드: 이 전환이 끝나기 전에 새 전환이 시작됐으면(seq 변경) 후속 처리를 건너뛴다.
@@ -1979,11 +2001,33 @@ async function postExcelMirror(path, body, attempt = 0, options = {}) {
       // 미러 세션도 정규화된 현재 fileId 로 열어야 탭/미러가 서로 다른 파일을 보지 않는다.
       const fileId = state.currentFileId || args[0];
       clearTimeout(excelMirror.switchTimer);
+      // [전환 침묵 실패 금지] 세션이 죽어 매핑이 forget 된 파일 탭을 클릭하면 재오픈(ensure)로
+      // 오는데, 실패가 console.warn 으로만 삼켜져 사용자는 '클릭해도 무반응'만 겪었다
+      // (실측 12:52 — 재현 실패 후 청구내역 클릭이 이 분기에서 흔적 없이 증발). 토스트+트레이스로 노출.
+      const _lazyFail = (kind, err) => {
+        try {
+          if (typeof traceClientUiEvent === "function") traceClientUiEvent("mirror.lazyopen.fail", {
+            fileId: String(fileId || ""), kind,
+            error: String((err && err.message) || err || "").slice(0, 200),
+          });
+        } catch (_) {}
+        if (!isMissingExcelSessionError(err)) console.warn("Excel mirror " + kind + " failed:", err);
+        try {
+          if (typeof toast === "function") toast("Excel 세션을 다시 열지 못했습니다 — "
+            + ((err && err.message) || err) + ". 탭을 다시 클릭하면 재시도합니다.", "error");
+        } catch (_) {}
+        updateMirrorShellStatus();
+      };
       excelMirror.switchTimer = setTimeout(() => {
         if (!fileId) return;
         // 적용 중(applying)엔 전환을 보류 — 핀(setCurrentView)발 전환이 hideAll/파킹과 경합해
         // 프레임이 꼬이는 문제 방지. 적용 종료 후 scheduleRestoreActiveExcelMirror 가 현재 탭을 표시한다.
-        if (excelMirror.applying) return;
+        if (excelMirror.applying) {
+          try {
+            if (typeof traceClientUiEvent === "function") traceClientUiEvent("mirror.switch.deferred_applying", { fileId: String(fileId || "") });
+          } catch (_) {}
+          return;
+        }
         if (excelMirror.sessionsByFileId[fileId]) {
           // 이미 열린 미러 → 빠른 전환(raise만).
           switchVisibleExcelMirrorToFileId(fileId).catch(err => {
@@ -1998,13 +2042,9 @@ async function postExcelMirror(path, body, attempt = 0, options = {}) {
               openIfMissing: true,
               preserveFocus: true,
               raiseAfter: true,
-            }).catch(err => {
-              if (!isMissingExcelSessionError(err)) console.warn("Excel mirror result lazy open failed:", err);
-            });
+            }).catch(err => _lazyFail("result lazy open", err));
           } else {
-            ensureExcelMirrorSession(fileId, { makeActive: true }).catch(err => {
-              if (!isMissingExcelSessionError(err)) console.warn("Excel mirror lazy open failed:", err);
-            });
+            ensureExcelMirrorSession(fileId, { makeActive: true }).catch(err => _lazyFail("lazy open", err));
           }
         }
       }, 0);

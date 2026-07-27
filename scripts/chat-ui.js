@@ -2895,10 +2895,36 @@ async function requestErrorRecovery(stepIdx, errorInfo, userNote) {
   ].filter(Boolean).join("\n");
   const failedStepLooksVba = recoveryLanguage === "vba" || /Sub\s+B2BSkill\s*\(|End\s+Sub|B2B_RunSkill/i.test(recoverySignals);
   const failedStepLooksPython = recoveryLanguage === "python" || /def\s+transform\s*\(\s*ctx\s*\)\s*:|\bctx\.\w+\s*\(/i.test(recoverySignals);
-  const recoveryBaseSourceUserMessage = [
+  let recoveryBaseSourceUserMessage = [
     failedStep && failedStep.prompt,
     latestUserRequestForSafety(),
   ].filter(Boolean)[0] || "";
+  // [하이브리드 2단계: 녹화 VBA → Python 번역 복구] 녹화 스텝은 대화 명세가 없어 복구 재생성의
+  // 근거가 "[녹화됨/VBA] 제목" 한 줄뿐이었다(오귀속·빈약한 재생성의 원인). 원문 VBA 가 곧 완전한
+  // 명세이므로, 복구 요청문에 VBA 원문+의도를 '번역 명세'로 넣어 기존 재생성 기계(스키마·정적검사·
+  // 적용게이트·ctx 문서)가 등가 Python(ctx) 코드를 만들게 한다. 전면 전환이 아니라 실패 스텝만이며,
+  // 결과 동일성은 재현 검증(record/verify 다이제스트)으로 확인한다. VBA 원문은 절대 요약하지 않는다.
+  const recoveryRecordedVba = !!(failedStep
+    && (failedStep.recorded || /\[녹화됨\/VBA\]/.test(String(failedStep.prompt || "")))
+    && (recoveryLanguage === "vba" || /\bSub\s+B2BSkill\b/i.test(String(failedStep.code || ""))));
+  if (recoveryRecordedVba) {
+    recoveryBaseSourceUserMessage = [
+      "다음 '녹화된 VBA 매크로' 단계가 실행 중 실패했습니다. 이 매크로가 수행하는 작업과 완전히 동일한",
+      "결과를 내도록 재작성해 주세요(동작 순서·입력 값·대상 셀/시트/파일을 임의로 바꾸지 말 것).",
+      "가능하면 ctx 헬퍼 기반 Python 으로 번역하세요 — 셀 좌표 하드코딩보다 헤더/마지막행 기반이 좋지만,",
+      "녹화가 명시한 값·좌표의 '결과'는 반드시 보존해야 합니다.",
+      "```vba",
+      String((failedStep && failedStep.code) || "").trim(),
+      "```",
+      failedStep.intentReason ? `추가 의도(사용자가 검토창에 적음): ${failedStep.intentReason}` : "",
+      failedStep.recordedWorkbook ? `대상 워크북: ${failedStep.recordedWorkbook}` : "",
+      failedStep.targetSheetName ? `기준 시트: ${failedStep.targetSheetName}` : "",
+    ].filter(Boolean).join("\n");
+    try { if (typeof traceClientUiEvent === "function") traceClientUiEvent("recovery.recorded_vba_spec", { stepId: String(failedStep.id || "") }); } catch (_) {}
+    // [검증 게이트 연동] 이 스텝이 번역 복구 대상임을 표시 — 이후 재실행 완료 시
+    // 녹화 기대 다이제스트와 자동 대조(runIsolatedLivePipelineSteps 말미)하는 트리거.
+    try { failedStep._recoveredFromVba = true; } catch (_) {}
+  }
   // [사용자 지시] 에러복구에서는 "실패한 기존 Step 언어"보다 복구창의 사용자 메모가 우선이다.
   // 특히 VBA 로 생성된 코드가 실패한 뒤 복구 후보가 Python/ctx 로 나왔으면 그대로 적용 가능해야 하며,
   // 적용 직전 라우팅 규칙이 다시 VBA 로 되돌리면 안 된다. 사용자가 복구창에서 명시적으로 "vba로"라고

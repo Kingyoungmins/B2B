@@ -30,11 +30,15 @@ function setPage(page) {
       // [깜빡임 방지] 패널을 접기 *전에* Excel 오버레이부터 숨긴다 — 반대 순서면 접힌 WebView 위로 오버레이가
       // 잠깐 떠 깜빡인다. 헤드리스에선 raise/복원이 모두 가드돼 이후 다시 안 뜬다.
       const _hide = (typeof hideAllExcelMirrorWindows === "function") ? hideAllExcelMirrorWindows() : null;
+      // [이슈2] 서버의 라이브 프레임 복원을 억제 — 녹화 재현/폴링이 실행기 화면 위로 오버레이를 다시 띄우지 않게.
+      if (typeof postExcelMirror === "function") postExcelMirror("/api/excel/runner-mode", { suppress: true }).catch(() => {});
       Promise.resolve(_hide).catch(() => {}).then(() => {
         if (typeof publishNativeRunnerMode === "function") publishNativeRunnerMode(true);
       });
     } else {
       if (typeof publishNativeRunnerMode === "function") publishNativeRunnerMode(false);  // 우측 패널 펼침
+      // [이슈2] 서버 억제 해제를 복원 *전에* — 억제가 걸린 상태로 복원하면 미러가 다시 안 뜬다.
+      if (typeof postExcelMirror === "function") postExcelMirror("/api/excel/runner-mode", { suppress: false }).catch(() => {});
       if (typeof scheduleRestoreActiveExcelMirror === "function") scheduleRestoreActiveExcelMirror(220, {});  // 미러 복원
     }
   } catch (_) {}

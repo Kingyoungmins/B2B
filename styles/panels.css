@@ -703,6 +703,28 @@
 }
 .assist-send:hover { background: var(--m-700); }
 
+/* [첨부] 클립 버튼 + 전송 대기 첨부 카드(파일명 + 삭제). 실제 파일 처리는 다음 단계. */
+/* [숨김] 첨부 기능은 아직 비공개 — 나중에 공개할 때 아래 한 줄만 지우면 버튼이 다시 보인다. */
+.assist-attach-btn { display: none !important; }
+.assist-attach-btn {
+  border: 1px solid var(--border); background: #fff; color: var(--ink-500);
+  border-radius: 8px; padding: 0 10px; font-size: 15px; line-height: 1; cursor: pointer;
+  font-family: inherit; flex-shrink: 0;
+}
+.assist-attach-btn:hover { background: var(--m-50); border-color: var(--m-300); color: var(--m-700); }
+.assist-attach-list { display: none; flex-wrap: wrap; gap: 5px; padding: 0 12px 6px; flex-shrink: 0; }
+.assist-attach-chip {
+  display: inline-flex; align-items: center; gap: 5px; max-width: 100%;
+  border: 1px solid var(--m-300); background: var(--m-50); color: var(--m-700);
+  border-radius: 6px; font-size: 11.5px; padding: 3px 5px 3px 8px;
+}
+.assist-attach-chip .ac-nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 220px; }
+.assist-attach-chip .ac-x {
+  border: none; background: transparent; color: var(--m-600); cursor: pointer;
+  font-size: 11px; padding: 0 2px; line-height: 1; font-family: inherit;
+}
+.assist-attach-chip .ac-x:hover { color: #b00020; }
+
 /* 승인 카드 — 이 버튼을 눌러야만 스킬이 바뀐다(LLM 은 누를 수 없다) */
 .assist-card { border: 1px solid var(--m-300); border-radius: 10px; overflow: hidden; }
 .assist-card-head { background: var(--m-50); padding: 7px 10px; font-size: 12px; font-weight: 700; }
@@ -710,6 +732,10 @@
 .assist-card-reason { padding: 7px 10px 0; font-size: 12px; color: var(--ink-500); }
 .assist-warn { margin: 7px 10px 0; padding: 6px 8px; background: #fff7ed; border: 1px solid #fdba74; border-radius: 6px; font-size: 11.5px; }
 .assist-handoff-req { margin: 8px 10px; padding: 8px 10px; background: #f8fafc; border: 1px solid var(--border); border-left: 3px solid var(--m-500); border-radius: 6px; font-size: 12px; white-space: pre-wrap; color: var(--ink-700); }
+/* [단계별 핸드오프] 단계마다 요청문 + [이 단계 넣기] 버튼 블록 */
+.assist-handoff-step { margin: 8px 6px 0; padding: 2px 0 6px; border-top: 1px dashed var(--border); }
+.assist-handoff-step:first-of-type { border-top: none; }
+.assist-handoff-step-head { padding: 4px 10px 0; font-size: 11.5px; font-weight: 700; color: var(--m-700); }
 .assist-verified { margin: 8px 10px 0; padding: 6px 8px; background: #ecfdf5; border: 1px solid #6ee7b7; border-radius: 6px; font-size: 11.5px; color: #047857; }
 .assist-diff {
   margin: 8px 10px; padding: 7px 8px; background: #fcfcfc; border: 1px solid var(--border);

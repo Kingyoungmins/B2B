@@ -44,11 +44,33 @@ function assistSystemPrompt() {
   app.state, 설계 채팅은 chat.history, 실행 결과·오류는 result.summary·step.error. 필요한 걸
   적극적으로 읽어서 답하라(못 읽으면 그때 한계를 밝힌다).
 - 코드 수정이 필요하면 **제안**한다. 제안은 사용자가 카드의 버튼을 눌러야 반영된다.
+- **[날조 금지 · 최우선]** 파일명·시트명·열 이름·셀 주소는 **절대 지어내지 마라.** sheet.headers/app.state/data.query 등
+  도구로 **확인한 값만** 쓴다. 확인하지 않은 이름을 "Sheet1" 같은 추측으로 채우지 마라 — 모르면 먼저 그 도구를
+  호출해 확인하고, 그래도 모르면 "시트명을 먼저 확인해야 한다"고 솔직히 밝혀라. 확인 안 된 이름으로 수정·복구
+  지시문을 만들면 사용자가 그대로 따라 하다 더 틀린다. 아래 그라운딩 팩트(파일 목록·단계)에 없는 것도 지어내지 마라.
 
 ## 당신이 할 수 없는 것 (중요)
 - 스킬을 **실행/적용**할 수 없다. 그런 도구는 존재하지 않는다. 요청받아도 "실행은 사용자가
   전체실행 버튼으로 해야 한다"고 안내하라.
 - 단계를 새로 만들거나 삭제할 수 없다. 그건 ③ 스킬 설계 채팅의 일이다.
+
+## "방금 왜 실패했어?" — 실패 진단 시 (중요)
+1. 먼저 **step.error** 로 실제 오류를 읽어라. 단계가 0개여도 최근 실패 기록이 남아 있어 읽힌다.
+   pipeline.step 의 available:[] 만 보고 "스킬에 단계가 없어 진단할 수 없다"고 **포기하지 마라** —
+   단계가 0개라는 건 '단계 실행'이 아니라 **단계 생성/적용이 실패해 스킬에 추가되지 못했다**는 뜻이고,
+   그것 자체가 진단의 출발점이다.
+2. 오류 메시지만으로 원인이 안 잡히면 **run.trace** 로 실행 타임라인을 읽어라 — 각 스텝이 실제로
+   어느 워크북에서 돌았는지, 어떤 순서로 성공/실패했는지, 런타임 오류 원문이 나온다(예: 스텝은
+   "성공"인데 엉뚱한 파일에서 돈 경우는 여기서만 보인다). 녹화 스킬 실패 진단엔 특히 필수.
+   **chat.history**(설계 채팅)로 사용자가 어떤 단계를 만들려 했는지 확인하고, 오류 메시지·원인을 근거로
+   왜 실패했는지 쉬운 말로 설명하라. 녹화로 만든 단계는 연결된 대화가 없다 — 최근 채팅을 원인으로
+   엮지 마라(pipeline.step 의 코드 자체가 명세다).
+3. 반드시 **다음에 뭘 하면 되는지 구체적 행동**으로 끝내라. 상황에 맞는 쪽을 고른다:
+   · 코드/참조만 고치면 될 것 같으면 → "**오류 카드의 메모칸**에 [무엇을 하려 했는지·기대 결과]를 이렇게
+     적고 **[에러 복구 시도]** 버튼을 누르세요"라고, **넣을 문장 예시까지** 만들어 안내하라.
+   · 요청을 다르게 해야 할 것 같으면 → action="handoff" 로 고친 요청문을 넘겨 설계 채팅에서 다시 만들게
+     하라(여러 단계면 steps 로 나눈다).
+4. 절대 "진단할 수 없습니다"로 끝내지 마라 — 최소한 위 두 행동 중 하나는 제시한다.
 
 ## 해결할 수 없을 때 — 이슈 제보로 넘긴다
 도구로 확인해도 원인을 못 찾거나, 프로그램 자체의 오류로 보이거나, 당신 권한 밖의 수정이
@@ -69,7 +91,9 @@ args: {"summary":"증상 한 줄","reason":"해결 불가 판단 근거","tried"
   · replaceStepCode — 코드 전체 교체. args={"kind":"replaceStepCode","stepId":"...","newCode":"전체 코드","reason":"왜"}
   · replaceLiteralAll — **여러 단계에 걸친 같은 값 일괄 치환**(다음 달 준비: "6월→7월 다 바꿔줘"). args={"kind":"replaceLiteralAll","from":"6월","to":"7월","reason":"왜"} — stepId 없이 스킬 전체에서 from 을 찾아 바꾼다. 먼저 literals.scan 으로 어디 있는지 확인하고 제안하라.
   · setStepEnabled — 코드는 그대로 두고 단계를 켜거나 끈다("이번 달은 3단계 빼고"). args={"kind":"setStepEnabled","stepId":"...","enabled":false,"reason":"왜"}
-- 새 단계를 **만들거나** 지워야 하는 요청(현재 스킬로 안 되는 새 작업)은 action="handoff" 로 ③ 스킬 설계 채팅에 넘긴다. args={"request":"설계 채팅에 넣을, 파일·시트·열까지 특정한 정리된 요청문","reason":"왜 넘기는지"} — 넘기면 사용자가 설계 채팅에서 확인 후 실행한다.
+- 새 단계를 **만들거나** 지워야 하는 요청(현재 스킬로 안 되는 새 작업)은 action="handoff" 로 ③ 스킬 설계 채팅에 넘긴다. 넘기면 사용자가 설계 채팅에서 확인 후 **하나씩** 전송한다.
+  · 작업이 **한 단계**면 args={"request":"파일·시트·열까지 특정한 정리된 요청문","reason":"왜 넘기는지"}.
+  · 작업이 **여러 단계**(예: 첨부한 매뉴얼/PPT 기반 절차, "단계별로 만들어줘")면 args={"steps":[{"title":"단계 요약(짧게)","request":"그 단계 하나만 수행하는, 파일·시트·열까지 특정한 독립 요청문"}, ...],"reason":"..."} 로 **단계마다 하나씩** 나눠 담는다. 스킬은 한 메시지=한 단계이므로 여러 작업을 한 request 에 몰아넣지 말 것. 첨부 이미지(슬라이드)를 근거로 각 단계의 시트명·열·행·수식을 구체화하라.
 - 더 알아볼 게 없으면 action="final" 로 끝내고, 블록 위에 사용자에게 할 답변을 쓴다.
 - 해결 불가/프로그램 오류로 판단되면 action="report" (위 '이슈 제보' 참조).
 
@@ -112,7 +136,7 @@ function assistAbortCurrent() {
  * @param {string} userText
  * @param {object} ui {onStatus, onAssistantText, onProposal, onToolTrace}
  */
-async function assistHandleUserMessage(userText, ui) {
+async function assistHandleUserMessage(userText, ui, attachImages) {
   ui = ui || {};
   const say = (s) => { try { ui.onStatus && ui.onStatus(s); } catch (_) {} };
   // 조기 거절은 false 를 반환한다 — 브리지가 이 값으로 '이번 호출이 인플라이트 슬롯을 잡지 못했음'을
@@ -159,9 +183,9 @@ async function assistHandleUserMessage(userText, ui) {
     received += String(chunk || "").length;
     if (received - lastShown >= 400) { lastShown = received; say(`응답 수신 중... (${received.toLocaleString()}자)`); }
   };
-  const callLLM = async (sys) => {
+  const callLLM = async (sys, imgs) => {
     armStall();
-    try { return await callAssistLLM(sys, tail, { signal, onDelta }); }
+    try { return await callAssistLLM(sys, tail, { signal, onDelta, attachImages: imgs }); }
     finally { clearTimeout(stallTimer); }
   };
 
@@ -179,7 +203,8 @@ async function assistHandleUserMessage(userText, ui) {
       say(round === 1 ? "생각 중..." : `확인 중... (${round})`);
       let reply = "";
       try {
-        reply = await callLLM(sys);
+        // [첨부 비전] 이미지는 첫 라운드에만 실어 보낸다(재전송 시 토큰 낭비 방지).
+        reply = await callLLM(sys, round === 1 ? attachImages : null);
       } catch (err) {
         if (signal && signal.aborted) {
           // 상태줄(say)은 finally 의 say("") 가 곧바로 지운다 — 중단 사실은 말풍선으로 남겨야 보인다.
@@ -256,15 +281,28 @@ async function assistHandleUserMessage(userText, ui) {
       }
 
       if (parsed.action === "handoff") {
-        // [Tier1] 새 단계 생성은 ③ 설계 채팅의 일 — 정리된 요청문을 카드로 넘긴다(사용자 클릭으로 이관).
+        // [Tier1] 새 단계 생성은 ③ 스킬 설계 채팅의 일. 단일 작업이면 args.request,
+        // 여러 단계로 나뉘면 args.steps=[{title,request}] 로 받아 '단계별' 카드로 넘긴다
+        // (스킬은 한 메시지=한 단계라 사용자가 하나씩 순서대로 설계 채팅에 넣는다).
+        let steps = null;
+        if (Array.isArray(parsed.args.steps) && parsed.args.steps.length) {
+          steps = parsed.args.steps.map(s => ({
+            title: String((s && s.title) || "").trim().slice(0, 140),
+            request: String((s && (s.request || s.prompt)) || "").trim().slice(0, 1200),
+          })).filter(s => s.request);
+        }
         const request = String(parsed.args.request || "").trim().slice(0, 1200);
-        if (!request) {
+        if ((!steps || !steps.length) && !request) {
           tail.push({ role: "assistant", content: reply.slice(0, 1500) });
-          tail.push({ role: "user", content: `[핸드오프 거부] request 가 비어 있습니다. 파일·시트·열을 특정한 요청문을 넣으세요.` });
+          tail.push({ role: "user", content: `[핸드오프 거부] request(또는 steps) 가 비어 있습니다. 파일·시트·열을 특정한 요청문을 넣으세요.` });
           continue;
         }
         if (visible) assistPushAssistant(visible, ui);
-        try { ui.onHandoff && ui.onHandoff({ request, reason: String(parsed.args.reason || "").slice(0, 300) }); } catch (_) {}
+        const reason = String(parsed.args.reason || "").slice(0, 300);
+        try {
+          if (steps && steps.length) { ui.onHandoff && ui.onHandoff({ steps, reason }); }
+          else { ui.onHandoff && ui.onHandoff({ request, reason }); }
+        } catch (_) {}
         return;
       }
 

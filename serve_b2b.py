@@ -142,7 +142,7 @@ MAX_PIPELINE_JOBS = 40
 # 이 크기를 넘으면 중간 단계 스냅샷을 건너뛰고 "마지막 단계"만 저장한다(동일 파이프라인 재적용은 여전히 즉시).
 SNAPSHOT_INTERMEDIATE_MAX_BYTES = 8 * 1024 * 1024
 PIPELINE_JOB_TTL_SECONDS = 60 * 60
-APP_BUILD_STAMP = "b2b-0.5.14-20260625-batch"
+APP_BUILD_STAMP = "b2b-0.7.0-20260724-batch"
 EXCEL_MIRROR_PROTECT_PASSWORD = "b2b_mirror_readonly"
 
 
@@ -668,12 +668,25 @@ def ensure_excel_worker():
                 if item is None:
                     break
                 fn, args, kwargs, done = item
+                # 녹화 중이면 B2B 가 직접 하는 Excel 작업(파이프라인 실행 등)이
+                # 레코더에 되잡히지 않도록 잡 실행 동안 replaying 플래그를 켠다.
+                _rec_set_replaying = None
                 try:
+                    from record_service import RECORD_SERVICE
+                    _rec_set_replaying = RECORD_SERVICE.set_replaying
+                except Exception:
+                    pass
+                try:
+                    if _rec_set_replaying:
+                        _rec_set_replaying(True)
                     result = fn(*args, **kwargs)
                     pythoncom.PumpWaitingMessages()
                     done.put((True, result))
                 except Exception as err:
                     done.put((False, err))
+                finally:
+                    if _rec_set_replaying:
+                        _rec_set_replaying(False)
         finally:
             try:
                 _cleanup_excel_sessions_impl()
@@ -976,6 +989,94 @@ def _pipeline_error_guide(message, code=""):
             "요청을 더 구체적으로 적어주세요 — 대상 파일/시트/열/범위를 @파일·@시트·@컬럼·@범위로 지정하고, 한 번에 한 작업씩 나누면 정확도가 올라갑니다.")
 
 
+def _extract_pptx_slide_texts(pptx_path):
+    """pptx(zip) 에서 슬라이드별 텍스트를 뽑는다(python-pptx 없이 XML 직접). 캡션/제목 보조용."""
+    import zipfile, re as _re
+    out = {}
+    try:
+        z = zipfile.ZipFile(pptx_path)
+        slides = [n for n in z.namelist() if _re.match(r"ppt/slides/slide\d+\.xml$", n)]
+        def snum(n):
+            m = _re.search(r"(\d+)", n)
+            return int(m.group(1)) if m else 0
+        for n in sorted(slides, key=snum):
+            xml = z.read(n).decode("utf-8", "ignore")
+            texts = _re.findall(r"<a:t>(.*?)</a:t>", xml, _re.S)
+            txt = " ".join(t.strip() for t in texts if t.strip())
+            out[snum(n)] = txt[:2000]
+    except Exception:
+        pass
+    return out
+
+
+def render_pptx_to_slides_b64(pptx_path, max_slides=40):
+    """PowerPoint COM 으로 슬라이드를 PNG 로 렌더해 base64 로 돌려준다. Excel STA 와 섞이지 않도록
+    전용 스레드에서 자체 CoInitialize 로 실행한다(요청마다 새 스레드라 격리 안전)."""
+    import threading
+    result = {"slides": None, "total": 0, "error": None}
+
+    def worker():
+        import os as _os, tempfile as _tf, base64 as _b64, shutil as _sh
+        try:
+            pythoncom.CoInitialize()
+        except Exception as e:
+            result["error"] = "CoInitialize 실패: %s" % e
+            return
+        ppt = None
+        pres = None
+        tmpdir = _tf.mkdtemp(prefix="b2b_ppt_")
+        try:
+            ppt = win32com.client.Dispatch("PowerPoint.Application")
+            try:
+                pres = ppt.Presentations.Open(pptx_path, ReadOnly=True, WithWindow=False)
+            except Exception:
+                try:
+                    ppt.Visible = True
+                except Exception:
+                    pass
+                pres = ppt.Presentations.Open(pptx_path, ReadOnly=True)
+            total = int(pres.Slides.Count)
+            result["total"] = total
+            texts = _extract_pptx_slide_texts(pptx_path)
+            slides = []
+            for i in range(1, min(int(max_slides), total) + 1):
+                png = _os.path.join(tmpdir, "s%03d.png" % i)
+                pres.Slides(i).Export(png, "PNG", 1600, 900)
+                with open(png, "rb") as fh:
+                    slides.append({"index": i, "mime": "image/png",
+                                   "imageB64": _b64.b64encode(fh.read()).decode(),
+                                   "text": texts.get(i, "")})
+            result["slides"] = slides
+        except Exception as e:
+            result["error"] = str(e)
+        finally:
+            try:
+                if pres is not None:
+                    pres.Close()
+            except Exception:
+                pass
+            try:
+                if ppt is not None:
+                    ppt.Quit()
+            except Exception:
+                pass
+            try:
+                _sh.rmtree(tmpdir, ignore_errors=True)
+            except Exception:
+                pass
+            try:
+                pythoncom.CoUninitialize()
+            except Exception:
+                pass
+
+    t = threading.Thread(target=worker, daemon=True)
+    t.start()
+    t.join(timeout=180)
+    if t.is_alive():
+        return {"slides": None, "total": 0, "error": "PowerPoint 렌더가 시간 내 끝나지 않았습니다."}
+    return result
+
+
 class B2BHandler(http.server.SimpleHTTPRequestHandler):
     def log_message(self, format, *args):
         if os.environ.get("B2B_LOG_REQUESTS") == "1":
@@ -1061,6 +1162,9 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
     def do_POST(self):
         if self.path.startswith("/api/workbooks/upload"):
             self.handle_workbook_upload()
+            return
+        if self.path.startswith("/api/assist/attachment"):
+            self.handle_assist_attachment()
             return
         if self.path == "/api/workbooks/archive":
             self.handle_workbook_archive()
@@ -1158,6 +1262,27 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
             return
         if self.path == "/api/excel/verify-step":
             self.handle_excel_verify_step()
+            return
+        if self.path == "/api/excel/record/start":
+            self.handle_excel_record_start()
+            return
+        if self.path == "/api/excel/record/stop":
+            self.handle_excel_record_stop()
+            return
+        if self.path == "/api/diag/recent-trace":
+            self.handle_diag_recent_trace()
+            return
+        if self.path == "/api/excel/record/status":
+            self.handle_excel_record_status()
+            return
+        if self.path == "/api/excel/record/verify":
+            self.handle_excel_record_verify()
+            return
+        if self.path == "/api/excel/runner-mode":
+            self.handle_excel_runner_mode()
+            return
+        if self.path == "/api/skill/consolidate":
+            self.handle_skill_consolidate()
             return
         if self.path == "/api/excel/run-vba-pipeline":
             self.handle_excel_run_vba_pipeline()
@@ -1367,6 +1492,57 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
             "aoa_cache_hits": 0,
         }
         self.send_json({"ok": True, "workbookId": workbook_id, "name": name, "meta": meta})
+
+    def handle_assist_attachment(self):
+        """[AI 도움 첨부] 첨부 파일을 슬라이드/이미지 base64 로 돌려준다.
+        - pptx/ppt: PowerPoint COM 으로 각 슬라이드를 PNG 렌더 + 슬라이드 텍스트.
+        - 이미지: 그대로 base64 1장.
+        클라이언트가 이 이미지를 비전 모델(dev vLLM 등) content 로 실어 프롬프트를 생성한다."""
+        qs = parse_qs(urlparse(self.path).query)
+        name = Path(unquote(qs.get("name", ["file"])[0])).name or "file"
+        length = int(self.headers.get("content-length") or 0)
+        if length <= 0:
+            self.send_json({"ok": False, "error": "빈 업로드"}, status=400)
+            return
+        try:
+            max_slides = int(qs.get("maxSlides", ["40"])[0])
+        except Exception:
+            max_slides = 40
+        BACKEND_DIR.mkdir(parents=True, exist_ok=True)
+        tmp = BACKEND_DIR / ("attach_%s_%s" % (uuid.uuid4().hex, name))
+        with tmp.open("wb") as f:
+            remaining = length
+            while remaining > 0:
+                chunk = self.rfile.read(min(1024 * 1024, remaining))
+                if not chunk:
+                    break
+                f.write(chunk)
+                remaining -= len(chunk)
+        ext = name.lower().rsplit(".", 1)[-1] if "." in name else ""
+        try:
+            if ext in ("pptx", "ppt"):
+                if win32com is None:
+                    self.send_json({"ok": False, "error": "PowerPoint COM(win32com)이 없어 PPT 를 렌더할 수 없습니다."}, status=500)
+                    return
+                r = render_pptx_to_slides_b64(str(tmp), max_slides=max_slides)
+                if r.get("error") or not r.get("slides"):
+                    self.send_json({"ok": False, "error": r.get("error") or "슬라이드를 렌더하지 못했습니다."}, status=500)
+                    return
+                self.send_json({"ok": True, "kind": "pptx", "name": name,
+                                "total": r.get("total", 0), "rendered": len(r["slides"]), "slides": r["slides"]})
+            elif ext in ("png", "jpg", "jpeg", "gif", "webp", "bmp"):
+                import base64 as _b64
+                mime = "image/jpeg" if ext in ("jpg", "jpeg") else ("image/%s" % ext)
+                b = _b64.b64encode(tmp.read_bytes()).decode()
+                self.send_json({"ok": True, "kind": "image", "name": name, "total": 1, "rendered": 1,
+                                "slides": [{"index": 1, "mime": mime, "imageB64": b, "text": ""}]})
+            else:
+                self.send_json({"ok": False, "error": "지원하지 않는 첨부 형식입니다(현재 PPT·이미지 지원). 파일: %s" % name}, status=400)
+        finally:
+            try:
+                tmp.unlink()
+            except Exception:
+                pass
 
     def handle_workbook_reinspect(self):
         """업로드 때 시트명을 못 읽은 워크북(meta.requiresExcel)을 다시 검사한다.
@@ -1680,6 +1856,20 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
         """[복붙 캡처] 사용자가 라이브 Excel에서 방금 한 Ctrl+C/Ctrl+V 를 역추적해
         ctx.paste_copied(...) Python 스텝으로 만들어 돌려준다(프론트가 파이프라인에 추가)."""
         payload = self.read_json_body()
+        # [녹화중 캡처 차단] 녹화(네이티브/파이썬 양 엔진)는 복붙까지 함께 기록한다 — 녹화 중
+        # 캡처를 허용하면 같은 복붙이 캡처 스텝+녹화 VBA 로 이중 주입된다(실측: 스킬 1·2단계 중복).
+        # 클라 버튼 잠금과 별개로 서버에서도 거부(구버전 JS 캐시로 버튼이 살아있어도 안전).
+        # 게이트는 excel_record_status(양 엔진 정규화)로 — RECORDING_EDIT_UNLOCKED 는 정지 시
+        # 재잠금 excel_call 실패로 True 가 남을 수 있어(캡처 영구 차단 위험) 쓰지 않는다.
+        _rec_active = False
+        try:
+            _rec_active = bool(excel_record_status().get("recording"))
+        except Exception:
+            _rec_active = bool(NATIVE_RECORDING.get("active"))
+        if _rec_active:
+            _vba_trace("capture.copypaste.reject", excelId=payload.get("excelId"), reason="recording-active")
+            self.send_json({"ok": False, "error": "녹화 중에는 복붙 캡처를 쓸 수 없습니다 — 녹화가 복사/붙여넣기까지 함께 기록합니다(정지 후 이용하세요)."})
+            return
         try:
             values_only = str(payload.get("valuesOnly", "")).strip().lower() in ("1", "true", "yes", "on")
             result = run_capture_copypaste(payload.get("excelId"), values_only=values_only)
@@ -1932,6 +2122,103 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
             ))
         except Exception as err:
             self.send_json({"ok": False, "error": str(err)}, status=200)
+
+    # ---- 녹화 (기본: 네이티브 매크로 레코더/VBA · 폴백: ixi-Cell-R recorder) ----
+    def handle_excel_record_start(self):
+        payload = self.read_json_body()
+        try:
+            engine = str((payload or {}).get("engine") or "vba").strip().lower()
+            self.send_json(excel_record_start(engine=engine))
+        except Exception as err:
+            self.send_json({"ok": False, "error": str(err)}, status=500)
+
+    def handle_excel_record_stop(self):
+        self.read_json_body()
+        try:
+            self.send_json(excel_record_stop())
+        except Exception as err:
+            self.send_json({"ok": False, "error": str(err)}, status=500)
+
+    def handle_excel_record_status(self):
+        self.read_json_body()
+        try:
+            self.send_json(excel_record_status())
+        except Exception as err:
+            self.send_json({"ok": False, "error": str(err)}, status=500)
+
+    def handle_diag_recent_trace(self):
+        """[AI 도움 run.trace] 직전 실행의 서버 트레이스 타임라인 — 스텝이 '실제로 어느 워크북에서
+        어떤 순서로 돌고 어디서 죽었는지'는 클라 상태(step.error)만으로는 알 수 없다(실측 15:30:
+        1조각이 동반본에서 실행된 것은 트레이스에만 남았다). 진단용 화이트리스트 이벤트만 압축해 준다."""
+        payload = self.read_json_body()
+        try:
+            limit = max(10, min(200, int(payload.get("limit") or 80)))
+            keep = (
+                "http.run_vba_pipeline.request", "http.run_full_pipeline.request",
+                "pipeline.impl.start", "pipeline.isolated.target.opened",
+                "pipeline.isolated.companion.opened", "pipeline.step.start",
+                "pipeline.step.ok", "pipeline.step.error", "pipeline.step.activate_sheet.skip",
+                "vba.macro.runtime_error", "fullrun.step.start", "fullrun.step.ok",
+                "fullrun.step.error", "fullrun.file.opened", "fullrun.companion.opened",
+                "http.run_vba_pipeline.error", "http.run_full_pipeline.error",
+                "excel.open.reattach", "excel.open.orphan_close",
+            )
+            events = []
+            try:
+                lines = _vba_trace_path().read_text(encoding="utf-8", errors="replace").splitlines()
+            except Exception:
+                lines = []
+            for line in lines[-4000:]:
+                try:
+                    d = json.loads(line)
+                except Exception:
+                    continue
+                ev = str(d.get("event") or "")
+                if ev not in keep:
+                    continue
+                item = {"ts": d.get("ts"), "event": ev}
+                for k in ("description", "errDescription", "errNumber", "error",
+                          "targetName", "companionName", "name", "reason", "ordinal", "stepId"):
+                    v = d.get(k)
+                    if v is not None:
+                        item[k] = str(v)[:220]
+                # 어느 워크북 컨텍스트에서 돌았는지(있으면 Name 만 압축)
+                for k in ("workbook", "targetWorkbook", "liveWorkbook"):
+                    v = d.get(k)
+                    if isinstance(v, dict) and v.get("Name"):
+                        item[k] = str(v.get("Name"))[:120]
+                events.append(item)
+            self.send_json({"ok": True, "events": events[-limit:], "totalMatched": len(events)})
+        except Exception as err:
+            self.send_json({"ok": False, "error": str(err)}, status=500)
+
+    def handle_excel_record_verify(self):
+        payload = self.read_json_body()
+        try:
+            self.send_json(excel_record_verify(payload))
+        except Exception as err:
+            self.send_json({"ok": False, "error": str(err)}, status=500)
+
+    def handle_excel_runner_mode(self):
+        # [2A] 실행기(runner) 전면 진입/복귀를 서버에 알린다. suppress=True 면 서버측
+        # 라이브 프레임 자동 되띄움을 억제(실행기 위 엑셀 오버레이 방지), False 면 복귀.
+        global LIVE_RESTORE_SUPPRESSED
+        payload = self.read_json_body() or {}
+        try:
+            LIVE_RESTORE_SUPPRESSED = bool(payload.get("suppress"))
+            self.send_json({"ok": True, "suppress": LIVE_RESTORE_SUPPRESSED})
+        except Exception as err:
+            self.send_json({"ok": False, "error": str(err)}, status=500)
+
+    def handle_skill_consolidate(self):
+        payload = self.read_json_body()
+        base = (self.headers.get("x-b2b-vllm-base") or "").strip()
+        try:
+            self.send_json(skill_consolidate(payload, base))
+        except Exception as err:
+            # 통합은 보조 기능 — 실패해도 원본 코드를 그대로 돌려줘 재현이 깨지지 않게.
+            self.send_json({"ok": True, "consolidated": False,
+                            "code": (payload or {}).get("code", ""), "error": str(err)})
 
     def handle_excel_save(self):
         payload = self.read_json_body()
@@ -2666,7 +2953,168 @@ def ensure_result_file(result_id):
     return path if path.exists() else None
 
 
+# 녹화 편집 모드 — 녹화 중에는 라이브 미러의 편집 잠금(시트 보호·키 차단·우클릭 금지·리본 숨김)을
+# 풀어 사용자가 실제 Excel 창에서 입력/서식/병합/필터를 직접 조작할 수 있게 한다. 정지 시 원복.
+RECORDING_EDIT_UNLOCKED = False
+
+# [2A] 라이브 프레임 되띄움 억제 — 클라 runner(실행기)가 전면(헤드리스)일 때 True.
+# 서버측 자동 되띄움(_present_live_session_frame)이 실행기 위로 엑셀 오버레이를 얹는 것을 막는다.
+# 오직 /api/excel/runner-mode 로만 세팅(프로세스 재시작 기본 False), 새 라이브 세션 open 시 False 로 리셋.
+LIVE_RESTORE_SUPPRESSED = False
+
+
+def _recording_edit_unlock_active(app=None):
+    """녹화 편집 모드 중이고 대상이 라이브 공유 인스턴스면 True(잠금 적용을 건너뛴다).
+
+    readOnlyMirror 세션은 자체 DispatchEx 인스턴스라 녹화와 무관하게 계속 잠긴다."""
+    if not RECORDING_EDIT_UNLOCKED:
+        return False
+    if app is None:
+        return True
+    try:
+        return _is_live_shared_app(app)
+    except Exception:
+        return False
+
+
+def _restore_excel_default_input(app):
+    """녹화 편집 모드: 미러 입력 차단 원복(셀 내 편집 + 기본 키 동작)."""
+    try:
+        app.EditDirectlyInCell = True
+    except Exception:
+        pass
+    for key in ("{F2}", "{DELETE}", "{BACKSPACE}", "^v", "^x", "+{INSERT}", "+{DELETE}"):
+        try:
+            app.OnKey(key)  # 두 번째 인자 생략 = 기본 동작 복원
+        except Exception:
+            pass
+
+
+def _enable_excel_context_menus(app):
+    """녹화 편집 모드: 우클릭(컨텍스트) 메뉴 복원 — 병합/셀 서식 진입 경로."""
+    try:
+        bars = app.CommandBars
+        count = bars.Count
+    except Exception:
+        return
+    for idx in range(1, count + 1):
+        try:
+            bar = bars.Item(idx)
+            if bar.Type == 2:  # msoBarTypePopup
+                bar.Enabled = True
+        except Exception:
+            continue
+
+
+def _set_excel_ribbon_visible(app, visible):
+    # [클립보드 보존] SHOW.TOOLBAR(XLM) 실행은 Excel 복사 모드(마퀴)를 취소한다(실측).
+    # 이미 원하는 상태면 아무것도 하지 않는다 — 사용자가 복사해 둔 것을 지키기 위해
+    # 중복 호출을 no-op 으로 만든다(읽기 실패 시엔 기존 동작 유지).
+    # ※ SHOW.TOOLBAR 는 리본을 '보이게' 하는 유일한 경로이기도 하다 — 녹화 중이라고 이걸
+    #   통째로 건너뛰면 녹화 시작 시 메뉴바가 안 뜬다(회귀). 그래서 여기선 스킵하지 않고,
+    #   교차복붙 마퀴 보존은 재표시 재적용을 recUnlockDone 게이트로 막는 것으로만 처리한다.
+    try:
+        if bool(app.CommandBars("Ribbon").Visible) == bool(visible):
+            return
+    except Exception:
+        pass
+    try:
+        app.ExecuteExcel4Macro('SHOW.TOOLBAR("Ribbon",%s)' % ("True" if visible else "False"))
+    except Exception:
+        pass
+    try:
+        app.CommandBars("Ribbon").Visible = bool(visible)
+    except Exception:
+        pass
+    if visible:
+        # SHOW.TOOLBAR True 로 리본을 다시 켜면 '최소화(탭만 보이고 버튼 본문은 닫힘)'
+        # 상태로 복원되는 경우가 있다(사용자: "도구탭이 닫힌채로 안 나온다"). 최소화 여부는
+        # GetPressedMso('MinimizeRibbon') 로 정확히 읽어(높이 절대값은 DPI/버전마다 달라
+        # 임계값이 부정확), 최소화면 토글로 펼친다. (토글이라 최소화일 때만 호출해야 안전)
+        try:
+            minimized = bool(app.CommandBars.GetPressedMso("MinimizeRibbon"))
+        except Exception:
+            # GetPressedMso 미지원 환경 폴백 — 높이 비율 대신 보수적으로 건드리지 않음
+            minimized = False
+        if minimized:
+            try:
+                app.CommandBars.ExecuteMso("MinimizeRibbon")
+            except Exception:
+                pass
+
+
+def _set_live_sessions_edit_unlock(unlocked):
+    """녹화 동안 라이브 엑셀뷰의 편집 잠금을 해제/원복한다(Excel 워커에서 실행).
+
+    잠금 해제: 전 라이브 세션 시트 보호 해제 + 입력키/우클릭 복원 + 리본 표시.
+    원복: 전 시트 재보호(녹화 중 만든 새 시트 포함) + 입력 차단 + 리본 숨김."""
+    global RECORDING_EDIT_UNLOCKED
+    RECORDING_EDIT_UNLOCKED = bool(unlocked)
+    apps = {}
+    live_workbooks = []  # (app, wb) — 리본 창별 적용용(SDI)
+    for session in list(EXCEL_SESSIONS.values()):
+        if not session.get("liveEditable"):
+            continue
+        # 녹화 중 탭 전환 시 재적용을 세션당 1회로 제한하는 플래그(클립보드 보존).
+        # 잠금 해제 시 True(이미 해제됨), 원복 시 False 로 리셋.
+        session["recUnlockDone"] = bool(unlocked)
+        wb = session.get("workbook")
+        if wb is not None:
+            try:
+                _protect_workbook_for_read_only_mirror(wb, not unlocked)
+            except Exception:
+                pass
+        app = session.get("app")
+        if app is not None:
+            if wb is not None:
+                live_workbooks.append((app, wb))
+            try:
+                apps[int(app.Hwnd)] = app
+            except Exception:
+                apps[id(app)] = app
+    for app in apps.values():
+        if unlocked:
+            _restore_excel_default_input(app)
+            _enable_excel_context_menus(app)
+        else:
+            _configure_read_only_mirror_input_block(app)
+            _disable_excel_context_menus(app)
+    # [리본은 창마다] Excel 2013+(SDI)는 워크북 창마다 리본이 따로다 — 앱당 1회
+    # SHOW.TOOLBAR 는 '활성 창'에만 적용돼, 두 워크북일 때 다른 워크북은 리본이
+    # 안 열렸다(사용자 보고). 각 세션 창을 잠깐 활성화해 창별로 적용한다.
+    # (파킹된 창은 화면 밖이라 시각 변화 없음. 시작/정지 시점이라 클립보드 걱정 없음.)
+    for app in apps.values():
+        _orig_active = None
+        try:
+            _orig_active = app.ActiveWorkbook
+        except Exception:
+            pass
+        for _app2, _wb2 in live_workbooks:
+            if _app2 is not app:
+                continue
+            try:
+                _wb2.Activate()
+            except Exception:
+                continue
+            _set_excel_ribbon_visible(app, bool(unlocked))
+        try:
+            if _orig_active is not None:
+                _orig_active.Activate()
+        except Exception:
+            pass
+            # 녹화 중 확장된 수식 입력줄을 잠금 원복과 함께 1줄로 되돌린다.
+            _show_excel_formula_bar(app)
+    return {"unlocked": bool(unlocked), "apps": len(apps)}
+
+
 def _protect_workbook_for_read_only_mirror(wb, enabled=True):
+    if enabled:
+        try:
+            # 녹화 편집 모드 중에는 라이브 워크북을 재보호하지 않는다(정지 시 일괄 복구).
+            if _recording_edit_unlock_active(wb.Application):
+                return
+        except Exception:
+            pass
     for idx in range(1, wb.Worksheets.Count + 1):
         ws = wb.Worksheets(idx)
         try:
@@ -2721,6 +3169,8 @@ def _allow_read_only_mirror_selection(ws):
 
 
 def _configure_read_only_mirror_input_block(app):
+    if _recording_edit_unlock_active(app):
+        return
     try:
         app.EditDirectlyInCell = False
     except Exception:
@@ -2740,19 +3190,34 @@ def _configure_read_only_mirror_input_block(app):
             pass
 
 
-def _show_excel_formula_bar(app):
-    """읽기 전용 미러에서도 실제 Excel처럼 수식 입력줄은 보이게 둔다."""
+def _set_display_prop_if_changed(obj, name, value):
+    """Display* 계열 속성은 '쓰기 자체'가 값 무관하게 복사 마퀴(CutCopyMode)를 취소한다
+    (실측 프로브: 같은 값 재대입 7종 전부 킬러, 읽기는 무해). 탭 전환마다 이 속성들을
+    재대입하던 것이 '녹화 중 A 복사 → B 탭 전환 → 붙여넣기 불가'(교차파일 Ctrl+V 사망)의
+    진짜 원인 — 현재값과 다를 때만 쓴다."""
     try:
-        app.DisplayFormulaBar = True
-        app.DisplayStatusBar = True
+        if bool(getattr(obj, name)) == bool(value):
+            return
+    except Exception:
+        pass  # 읽기 실패 → 원래처럼 쓰기 시도
+    try:
+        setattr(obj, name, value)
     except Exception:
         pass
+
+
+def _show_excel_formula_bar(app):
+    """읽기 전용 미러에서도 실제 Excel처럼 수식 입력줄은 보이게 둔다."""
+    _set_display_prop_if_changed(app, "DisplayFormulaBar", True)
+    _set_display_prop_if_changed(app, "DisplayStatusBar", True)
 
 
 def _disable_excel_context_menus(app):
     """오버레이 엑셀에서 마우스 우클릭(컨텍스트) 메뉴를 막는다.
     msoBarTypePopup(2) CommandBar = 우클릭/컨텍스트 메뉴이므로 모두 비활성화한다.
     DispatchEx로 만든 전용 인스턴스라 사용자의 일반 엑셀에는 영향이 없다."""
+    if _recording_edit_unlock_active(app):
+        return
     try:
         bars = app.CommandBars
         count = bars.Count
@@ -2768,6 +3233,7 @@ def _disable_excel_context_menus(app):
 
 
 def _configure_excel_grid_window(app, wb=None):
+    keep_edit = _recording_edit_unlock_active(app)  # 녹화 편집 모드 — 리본/입력 잠금 유지 금지
     try:
         app.DisplayAlerts = False
         _show_excel_formula_bar(app)
@@ -2775,22 +3241,22 @@ def _configure_excel_grid_window(app, wb=None):
         app.UserControl = True
         app.EnableEvents = True
         _configure_read_only_mirror_input_block(app)
-        app.ExecuteExcel4Macro('SHOW.TOOLBAR("Ribbon",False)')
+        if not keep_edit:
+            app.ExecuteExcel4Macro('SHOW.TOOLBAR("Ribbon",False)')
     except Exception:
         pass
-    try:
-        app.CommandBars("Ribbon").Visible = False
-    except Exception:
-        pass
+    if not keep_edit:
+        try:
+            app.CommandBars("Ribbon").Visible = False
+        except Exception:
+            pass
     _show_excel_formula_bar(app)
     _disable_excel_context_menus(app)
     try:
         win = app.ActiveWindow
-        win.DisplayHeadings = True
-        win.DisplayGridlines = True
-        win.DisplayWorkbookTabs = True
-        win.DisplayHorizontalScrollBar = True
-        win.DisplayVerticalScrollBar = True
+        for _p in ("DisplayHeadings", "DisplayGridlines", "DisplayWorkbookTabs",
+                   "DisplayHorizontalScrollBar", "DisplayVerticalScrollBar"):
+            _set_display_prop_if_changed(win, _p, True)
     except Exception:
         pass
     if wb is not None:
@@ -2842,11 +3308,11 @@ def _ensure_excel_workbook_view(app, wb=None, make_visible=True, activate=True, 
                 win.Visible = True
             if maximize_workbook:
                 win.WindowState = -4137  # xlMaximized: fill only the workbook area inside Excel.
-            win.DisplayHeadings = True
-            win.DisplayGridlines = True
-            win.DisplayWorkbookTabs = True
-            win.DisplayHorizontalScrollBar = True
-            win.DisplayVerticalScrollBar = True
+            # [마퀴 보존] Display* 쓰기는 값 무관하게 복사 모드를 취소(실측) — 다를 때만 쓴다.
+            # 이 함수는 탭 전환마다 돌아서(6170), 무조건 대입이 교차파일 Ctrl+V 를 죽였다.
+            for _p in ("DisplayHeadings", "DisplayGridlines", "DisplayWorkbookTabs",
+                       "DisplayHorizontalScrollBar", "DisplayVerticalScrollBar"):
+                _set_display_prop_if_changed(win, _p, True)
     except Exception:
         pass
 
@@ -4224,6 +4690,9 @@ def _open_excel_session_impl(
     source_path = path
     working_copy_path = None
     if live_editable:
+        # [2A 안전장치 b] 새 라이브 세션을 열면 미러는 다시 떠야 한다 — 억제 플래그 리셋.
+        global LIVE_RESTORE_SUPPRESSED
+        LIVE_RESTORE_SUPPRESSED = False
         # 리모콘 모델: 원본은 절대 건드리지 않는다 — 항상 작업용 복사본을 만들어
         # 그 위에서 라이브 실행/스킬(VBA) 적용을 한다. 다운로드는 이 복사본을 저장.
         # 워크북 이름이 원본과 동일해야 VBA 의 Workbooks("원본명")/ActiveWorkbook 와 @파일 참조가 일치하고
@@ -4287,6 +4756,57 @@ def _open_excel_session_impl(
         open_temp_path = None
         frame_hwnd = None
         try:
+            # [동명 세션/고아 자가치유] 공유 라이브 인스턴스에 같은 이름의 워크북이 이미 열려 있으면
+            # Excel 이 동명 2개를 거부해 Workbooks.Open 이 실패한다(실측 14:02 — 재현 실패로 클라
+            # 매핑은 잊혔는데 워크북은 남아 재오픈이 영원히 실패 = '탭 전환 불능'의 뿌리).
+            #  ① 살아있는 세션 소유면: 그 세션을 그대로 재사용(reattach) — 같은 업로드의 라이브 사본.
+            #  ② 소유자 없는 고아면: 저장 없이 닫고 새로 연다(작업사본이라 원본 데이터 무손실).
+            if live_editable:
+                _wanted_name = str(Path(str(path)).name).lower()
+                _same_wb = None
+                try:
+                    for _wb in app.Workbooks:
+                        try:
+                            if str(_wb.Name).lower() == _wanted_name:
+                                _same_wb = _wb
+                                break
+                        except Exception:
+                            continue
+                except Exception:
+                    _same_wb = None
+                if _same_wb is not None:
+                    _owner = None
+                    for _sid, _sess in list(EXCEL_SESSIONS.items()):
+                        try:
+                            _swb = _sess.get("workbook")
+                            if _swb is not None and str(_swb.Name).lower() == _wanted_name:
+                                _owner = _sess
+                                break
+                        except Exception:
+                            continue
+                    if _owner is not None:
+                        _vba_trace("excel.open.reattach", excelId=_owner.get("id"), name=_wanted_name)
+                        try:
+                            shutil.rmtree(live_dir, ignore_errors=True)  # 방금 만든 새 작업사본은 불용
+                        except Exception:
+                            pass
+                        if native_host_hwnd:
+                            _owner["nativeHostHwnd"] = native_host_hwnd
+                        return {
+                            "ok": True,
+                            "excelId": _owner.get("id"),
+                            "name": _owner.get("name"),
+                            "path": _owner.get("path"),
+                            "sheetNames": _excel_collection_names(_owner["workbook"].Worksheets),
+                            "readOnlyMirror": bool(_owner.get("readOnlyMirror")),
+                            "liveEditable": bool(_owner.get("liveEditable")),
+                            "reattached": True,
+                        }
+                    _vba_trace("excel.open.orphan_close", name=_wanted_name)
+                    try:
+                        _same_wb.Close(SaveChanges=False)
+                    except Exception as _cerr:
+                        _vba_trace("excel.open.orphan_close_fail", name=_wanted_name, error=str(_cerr))
             wb, open_temp_path = excel_workbooks_open(app, path, read_only=open_read_only, intended_name=name or path)
             app_pid = _excel_process_id(app)
             excel_id = uuid.uuid4().hex
@@ -4487,6 +5007,11 @@ def _open_excel_session_impl(
                 "nativeHostHwnd": native_host_hwnd,
                 "nativeOverlay": False if live_editable else bool(native_overlay),
                 "hidden": bool(defer_visible),
+                # [이슈1 수정2] 녹화 중 새로 연 라이브 wb 는 최초 표시 때 편집잠금 재적용
+                # (_present_live_session_frame 의 SHOW.TOOLBAR 포함)을 통째로 스킵한다.
+                # SHOW.TOOLBAR 가 소스의 복사 마퀴를 죽여 교차파일 Ctrl+V 가 무동작이 되던
+                # 버그 차단 — 열 때 이미 편집준비(보호해제)를 마치므로 재적용이 불필요.
+                "recUnlockDone": bool(RECORDING_EDIT_UNLOCKED and live_editable),
                 "lastNativePositionKey": (
                     f"{'overlay' if native_overlay else native_parent_hwnd}:{int(float(left or 0))}:{int(float(top or 0))}:{int(float(width or 0))}:{int(float(height or 0))}"
                     if read_only_mirror and (native_parent_hwnd or native_overlay) and width and height
@@ -4494,6 +5019,13 @@ def _open_excel_session_impl(
                 ),
                 "created": time.time(),
             }
+            # [이슈1 수정2] 녹화 편집모드 중 새 라이브 wb 를 열면 최초 표시 재적용을
+            # 스킵(recUnlockDone=True)하므로, 여기서 미리 보호를 풀어 편집 준비를 마친다.
+            if RECORDING_EDIT_UNLOCKED and live_editable and wb is not None:
+                try:
+                    _protect_workbook_for_read_only_mirror(wb, False)
+                except Exception:
+                    pass
             if not manage_overlay:
                 try:
                     app.WindowState = -4143  # xlNormal
@@ -5349,6 +5881,340 @@ def _hide_peer_session_frames(active_excel_id, host_hwnd=None):
     return hidden_ids
 
 
+# 네이티브(VBA) 녹화 세션 상태 — {"baseline": [...], "active": True} (HTTP/워커 공용, 단일 세션)
+NATIVE_RECORDING = {}
+
+
+# 녹화/재현은 무조건 VBA(네이티브 매크로 레코더). python 이벤트 캡처(record_service)는
+# 이 상수를 True 로 바꿔야만 허용 — 기본은 VBA 전용. 폐쇄망/디버그용 뒷문만 남긴다.
+ALLOW_PYTHON_RECORD_ENGINE = os.environ.get("B2B_ALLOW_PYTHON_RECORD", "") == "1"
+
+
+def excel_record_start(engine="vba"):
+    if engine != "vba" and not ALLOW_PYTHON_RECORD_ENGINE:
+        engine = "vba"  # 무조건 VBA — python 엔진 요청은 무시
+    # 녹화는 사용자가 라이브 Excel 창에서 직접 조작한 것을 캡처한다 —
+    # 레코더를 붙이기 전에 편집 잠금(시트 보호·키 차단·우클릭·리본)을 먼저 푼다.
+    excel_call(_set_live_sessions_edit_unlock, True, timeout=60)
+    try:
+        if engine == "vba":
+            # Excel 네이티브 매크로 레코더(MS 매크로 기록기).
+            # 녹화 중 부하 ~0, 정지 시 전체 행동이 VBA 스킬 1개로 청킹된다.
+            from native_macro_recorder import start_native_recording_impl
+
+            def _start_native():
+                return start_native_recording_impl(_get_live_excel_app())
+
+            baseline = excel_call(_start_native, timeout=30)
+            NATIVE_RECORDING.clear()
+            NATIVE_RECORDING.update({"active": True, "baseline": baseline})
+        else:
+            from record_service import RECORD_SERVICE, marshal_app_stream
+
+            def _marshal_live_app():
+                return marshal_app_stream(_get_live_excel_app())
+
+            stream = excel_call(_marshal_live_app, timeout=30)
+            RECORD_SERVICE.start(app_stream=stream)
+    except Exception:
+        NATIVE_RECORDING.clear()
+        try:
+            excel_call(_set_live_sessions_edit_unlock, False, timeout=60)
+        except Exception:
+            pass
+        raise
+    return {"ok": True, "recording": True, "engine": engine, "editUnlocked": True}
+
+
+def _recorded_vba_hazards(code):
+    """녹화 VBA 에서 '절대참조 재현이 불안정한' 패턴을 감지해 사용자 경고를 만든다.
+
+    MS 매크로 레코더는 절대 셀/시트/이름을 하드코딩한다. 새로 만든 시트·피벗은
+    실행 환경마다 이름이 달라(예: Sheet1↔Sheet2) 이후 고정 이름 참조가 어긋나
+    재현이 깨진다(실사례: PivotFields 실패). 검토 카드에 ⚠ 로 노출해 사용자가
+    추가 전에 판단하게 한다(막지는 않음 — 되는 케이스도 있으므로)."""
+    text = str(code or "")
+    hz = []
+    if re.search(r"PivotCaches|PivotTable", text, re.I):
+        hz.append(
+            "피벗테이블 — 새로 만든 시트/피벗 이름과 원본 범위를 고정으로 참조합니다. "
+            "재현 시 시트 이름·필드명이 어긋나면 실패할 수 있어(PivotFields 오류) "
+            "피벗은 채팅으로 만드는 편이 안정적입니다.")
+    if re.search(r"Sheets\.Add|Worksheets\.Add|Sheets\.Add2", text, re.I):
+        hz.append(
+            "새 시트 추가 — 시트 이름이 실행 환경마다 달라질 수 있어(Sheet1↔Sheet2 등) "
+            "이후 고정 시트 이름 참조가 어긋날 수 있습니다.")
+    if re.search(r'Windows\(\s*["\'][^"\']*\.xls', text, re.I) or re.search(r'Workbooks\(\s*["\'][^"\']*\.xls', text, re.I):
+        hz.append(
+            "다른 워크북 참조 — 재현할 때 그 파일이 함께 열려 있어야 합니다(대상 파일과 함께 여세요).")
+    # [보안 게이트 예고] 재생 시 서버가 차단할 동작이 녹화에 들었으면 검토 단계에서 미리 알린다
+    # (지금 추가하면 실행에서 반드시 실패 — 사용자가 카드에서 빼거나 다시 녹화하도록).
+    _sec = _vba_security_scan(text)
+    if _sec:
+        hz.append("⛔ 재생 차단 대상 — %s. 이 동작이 든 조각은 실행이 거부되니 빼거나 다시 녹화하세요." % _sec)
+    if re.search(r"\bWorkbooks\s*\.\s*Add\b", text, re.I):
+        hz.append(
+            "새 통합 문서 만들기(Workbooks.Add) — 재현 환경에서 만든 새 파일은 결과로 수집되지 않고 사라집니다. "
+            "출력할 파일은 미리 만들어 함께 열어 두세요.")
+    return hz
+
+
+def excel_record_stop():
+    try:
+        if NATIVE_RECORDING.get("active"):
+            from native_macro_recorder import stop_native_recording_impl
+
+            def _stop_native():
+                return stop_native_recording_impl(
+                    _get_live_excel_app(), NATIVE_RECORDING.get("baseline"))
+
+            # 정지 시 expected 다이제스트 수확(touched 시트 Value2 해시)이 추가돼 60s 는 빠듯할
+            # 수 있다 — 프론트 stop 타임아웃(200s) 안에서 120s 로 여유를 둔다.
+            rec = excel_call(_stop_native, timeout=120)
+            NATIVE_RECORDING.clear()
+            steps = []
+            if rec.get("code"):
+                steps.append({
+                    "id": f"rec_vba_{int(time.time() * 1000)}",
+                    "language": "vba",
+                    "code": rec["code"],
+                    "title": f"녹화된 작업 ({rec.get('summary') or '기록'})",
+                    "description": f"네이티브 매크로 녹화 — {rec.get('summary') or '기록된 동작'}",
+                    "enabled": True,
+                    "prompt": f"[녹화됨/VBA] {rec.get('summary') or ''}",
+                    "recorded": True,
+                    "hazards": _recorded_vba_hazards(rec["code"]),
+                })
+            result = {"steps": steps, "raw_actions": rec.get("rawLines", 0),
+                      "distilled": len(steps), "groups": len(steps), "engine": "vba"}
+            # [재현 검증] 네이티브 stop 도 expected(정지 시점 시트 다이제스트)를 실어 준다 —
+            # 예전엔 python 엔진 stop 만 실어, 기본(VBA) 경로에서 프론트 검증 블록과
+            # /api/excel/record/verify 인프라가 통째로 死코드였다.
+            result["expected"] = rec.get("expected") or []
+            # [두 워크북 대상 바인딩] 녹화가 실제로 일어난 워크북(새 매크로 모듈이 생긴 곳)의
+            # 세션 excelId 를 실어 준다. 클라가 이걸로 targetFileId 를 정확히 바인딩해야
+            # UI 탭(state.currentFileId)과 실제 녹화 워크북이 다를 때 재현이 엉뚱한
+            # 워크북에 적용되던 문제(예: input 에서 녹화했는데 output:0 로 박힘)를 막는다.
+            rec_full = str(rec.get("recordedWorkbookFullName") or "")
+            rec_name = str(rec.get("recordedWorkbook") or "")
+            result["recordedWorkbook"] = rec_name
+            # [3A] 녹화된 활성 시트명 — 실행기 '파일확인'이 필요 시트를 잡는 데 쓴다.
+            result["recordedSheet"] = str(rec.get("recordedSheet") or "")
+            rec_excel_id = ""
+            if rec_full or rec_name:
+                # COM(_wb.FullName) 을 HTTP 스레드에서 만지지 않도록, 세션에 저장된
+                # 문자열 경로/이름만으로 매칭한다(크로스스레드 COM 접근 회피).
+                def _norm(p):
+                    try:
+                        return str(Path(p).resolve()).lower()
+                    except Exception:
+                        return str(p or "").lower()
+                rec_full_n = _norm(rec_full) if rec_full else ""
+                rec_name_l = rec_name.lower()
+                with EXCEL_LOCK:
+                    _sessions = list(EXCEL_SESSIONS.items())
+                _name_hit = ""
+                for _sid, _sess in _sessions:
+                    try:
+                        cand_paths = [
+                            _norm(_sess.get("openPath") or ""),
+                            _norm(_sess.get("path") or ""),
+                            _norm(_sess.get("openTempPath") or ""),
+                        ]
+                        if rec_full_n and rec_full_n in cand_paths:
+                            rec_excel_id = _sid
+                            break
+                        cand_names = {
+                            str(_sess.get("name") or "").lower(),
+                            str(Path(_sess.get("openPath") or "").name).lower(),
+                            str(Path(_sess.get("path") or "").name).lower(),
+                        }
+                        if rec_name_l and rec_name_l in cand_names and not _name_hit:
+                            _name_hit = _sid  # 경로 매칭 우선, 없으면 이름 폴백
+                    except Exception:
+                        continue
+                if not rec_excel_id and _name_hit:
+                    rec_excel_id = _name_hit
+            if rec_excel_id:
+                result["recordedExcelId"] = rec_excel_id
+            # [3A] 스텝에 파일/시트 메타 stamp — 프론트/실행기가 소비해 필요 워크북/시트를
+            # 정확히 잡는다. recordedWorkbook 은 raw wb.Name(temp 사본일 수 있음) 대신 위
+            # 세션 매칭으로 얻은 세션 표시명으로 정규화한다. 매칭 세션이 없으면(정규화 실패)
+            # 두 필드 모두 stamp 하지 않는다(빈 요구가 실행기에 들어가는 것을 방지).
+            if rec_excel_id and steps:
+                _rec_sess_name = ""
+                with EXCEL_LOCK:
+                    _rs = EXCEL_SESSIONS.get(rec_excel_id)
+                    if _rs:
+                        _rec_sess_name = str(_rs.get("name") or "")
+                if _rec_sess_name:
+                    steps[0]["recordedWorkbook"] = _rec_sess_name
+                    _rec_sheet = str(rec.get("recordedSheet") or "")
+                    if _rec_sheet:
+                        steps[0]["recordedSheet"] = _rec_sheet
+        else:
+            from record_service import RECORD_SERVICE
+            # 정지 시 스냅샷 diff(서식/객체)가 시트 규모에 따라 오래 걸릴 수 있다.
+            result = RECORD_SERVICE.stop(timeout=180.0)
+    finally:
+        # 성공/실패와 무관하게 편집 잠금 원복(녹화 중 만든 새 시트 포함 전 시트 재보호).
+        try:
+            excel_call(_set_live_sessions_edit_unlock, False, timeout=60)
+        except Exception:
+            pass
+    return {"ok": True, "recording": False, **result}
+
+
+def excel_record_status():
+    if NATIVE_RECORDING.get("active"):
+        return {"ok": True, "recording": True, "engine": "vba"}
+    from record_service import RECORD_SERVICE
+    return {"ok": True, **RECORD_SERVICE.status()}
+
+
+def _verify_recorded_expected_live(expected):
+    """Excel 워커 — 녹화 정지 시점 기대 상태(expected)와 현재 라이브 시트를 대조.
+
+    양쪽 모두 record_service.sheet_expected_state(같은 정규화·같은 상한)로 계산해
+    다이제스트가 직접 비교 가능하다. 재현이 정답과 어긋난 시트를 정확히 지목한다."""
+    from record_service import sheet_expected_state
+    wbs = {}
+    for session in list(EXCEL_SESSIONS.values()):
+        wb = session.get("workbook")
+        if wb is None:
+            continue
+        try:
+            wbs.setdefault(str(wb.Name), wb)
+        except Exception:
+            continue
+    results = []
+    for item in (expected or []):
+        book = str(item.get("book") or "")
+        sheet = str(item.get("sheet") or "")
+        res = {"book": book, "sheet": sheet, "match": None, "reason": ""}
+        wb = wbs.get(book)
+        if wb is None:
+            res["reason"] = "라이브 세션에 이 워크북이 없음(대조 생략)"
+            results.append(res)
+            continue
+        try:
+            ws = wb.Worksheets(sheet)
+        except Exception:
+            res["match"] = False
+            res["reason"] = "시트가 없음"
+            results.append(res)
+            continue
+        try:
+            cur = sheet_expected_state(ws)
+        except Exception as err:
+            res["reason"] = f"판독 실패(대조 생략): {err}"
+            results.append(res)
+            continue
+        dims_ok = (cur["rows"] == item.get("rows") and cur["cols"] == item.get("cols"))
+        hash_ok = (str(item.get("hash") or "") == str(cur.get("hash") or "")) if item.get("hash") else None
+        # 병합 지문 대조 — 구버전 expected(merges 없음)는 건너뛴다(하위호환).
+        merge_ok = None
+        exp_merges = item.get("merges")
+        if isinstance(exp_merges, list) and isinstance(cur.get("merges"), list):
+            merge_ok = (sorted(map(str, exp_merges)) == sorted(map(str, cur["merges"])))
+        res["match"] = bool(dims_ok and hash_ok is not False and merge_ok is not False)
+        if not dims_ok:
+            res["reason"] = (f"사용범위 다름: 녹화 {item.get('rows')}x{item.get('cols')}"
+                             f" → 재현 {cur['rows']}x{cur['cols']}")
+        elif merge_ok is False:
+            exp_set = set(map(str, exp_merges))
+            got_set = set(map(str, cur["merges"]))
+            sample = sorted(got_set - exp_set) or sorted(exp_set - got_set)
+            res["reason"] = (f"병합 상태 다름: 녹화 {len(exp_set)}개 → 재현 {len(got_set)}개"
+                             + (f" (예: {sample[0]})" if sample else ""))
+        elif hash_ok is False:
+            hr = int(item.get("hashRows") or 0)
+            res["reason"] = "값 다름(상단 %s행 대조)" % hr if hr and hr < int(item.get("rows") or 0) else "값 다름"
+        results.append(res)
+    checked = [r for r in results if r["match"] is not None]
+    return {"ok": True, "results": results,
+            "allMatch": bool(checked) and all(r["match"] for r in checked),
+            "checked": len(checked)}
+
+
+def excel_record_verify(payload):
+    expected = (payload or {}).get("expected") or []
+    if not expected:
+        return {"ok": True, "results": [], "allMatch": True, "checked": 0}
+    return excel_call(_verify_recorded_expected_live, expected, timeout=120)
+
+
+_VLLM_PROBE_CACHE = {"ts": 0.0, "base": None, "result": None}
+_VLLM_PROBE_TTL = 30.0  # 헬스 프로브 캐시(초) — 매 헬스 호출마다 vLLM 을 두드리지 않게
+
+
+def _vllm_health_probe(base="", timeout=2.0):
+    """vLLM 도달성 프로브 — /v1/models 를 짧은 타임아웃으로 확인(캐시 30s).
+
+    consolidate 가 vLLM 불통 시 조용히 원본 유지하므로, 운영에서 통합이 영구 비활성
+    됐는지 헬스로 드러낸다. 반환 {reachable, base, error}."""
+    target_base = (base or VLLM_BASE).rstrip("/")
+    now = time.time()
+    if (_VLLM_PROBE_CACHE["base"] == target_base
+            and now - _VLLM_PROBE_CACHE["ts"] < _VLLM_PROBE_TTL
+            and _VLLM_PROBE_CACHE["result"] is not None):
+        return _VLLM_PROBE_CACHE["result"]
+    result = {"reachable": False, "base": target_base, "error": None}
+    try:
+        key = os.environ.get("B2B_VLLM_KEY", "khkim")
+        req = urllib.request.Request(
+            target_base + "/v1/models", method="GET",
+            headers={"authorization": f"Bearer {key}", "api-key": key})
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            result["reachable"] = 200 <= int(resp.status) < 500
+    except Exception as err:
+        result["error"] = str(err)[:200]
+    _VLLM_PROBE_CACHE.update({"ts": now, "base": target_base, "result": result})
+    return result
+
+
+def _vllm_chat_once(system, user, base, timeout=30):
+    """서버측 vLLM 단발 호출 — 프록시와 같은 엔드포인트(enable_thinking=False)."""
+    target = (base or VLLM_BASE).rstrip("/") + "/v1/chat/completions"
+    body = json.dumps({
+        "model": os.environ.get("B2B_VLLM_MODEL", "Qwen/Qwen3.6-27B-FP8"),
+        "messages": [{"role": "system", "content": system},
+                     {"role": "user", "content": user + "\n\n/no_think"}],
+        "temperature": 0, "max_tokens": 1600, "stream": False,
+        "chat_template_kwargs": {"enable_thinking": False},
+    }, ensure_ascii=False).encode("utf-8")
+    key = os.environ.get("B2B_VLLM_KEY", "khkim")
+    req = urllib.request.Request(target, data=body, method="POST", headers={
+        "content-type": "application/json", "authorization": f"Bearer {key}", "api-key": key})
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        data = json.loads(resp.read().decode("utf-8", "replace"))
+    return data.get("choices", [{}])[0].get("message", {}).get("content", "") or ""
+
+
+def skill_consolidate(payload, base=""):
+    """녹화 스킬 코드를 '기존 ctx 헬퍼'로 최대한 통합(등가 게이트 통과 시에만).
+
+    LLM 재작성은 서버가 vLLM 으로 하고, 등가는 ixicellr.replay.equivalence 가 MemCtx
+    재현 digest 로 판정한다. 통합 실패/부적격/비등가면 원본을 그대로 돌려준다(무해)."""
+    code = (payload or {}).get("code") or ""
+    if not code.strip():
+        return {"ok": True, "consolidated": False, "reason": "empty_input", "code": code}
+    from ixicellr.replay.equivalence import consolidate_via_llm_reason
+    res, reason = consolidate_via_llm_reason(code, lambda s, u: _vllm_chat_once(s, u, base))
+    if res is None:
+        # 사유(reason)를 실어 조용한 실패를 없앤다 — 특히 llm_unreachable 은 운영에서
+        # 통합이 영구 비활성됐음을 뜻하므로 UI/로그가 반드시 알아야 한다.
+        if reason == "llm_unreachable":
+            try:
+                _perf_trace("skill.consolidate.llm_unreachable", base=(base or VLLM_BASE))
+            except Exception:
+                pass
+        return {"ok": True, "consolidated": False, "reason": reason, "code": code}
+    cand, ca, cb = res
+    return {"ok": True, "consolidated": True, "reason": reason,
+            "code": cand, "calls": [ca, cb]}
+
+
 def _present_live_session_frame(
     session, app, wb,
     left, top, width, height,
@@ -5360,6 +6226,19 @@ def _present_live_session_frame(
     포커스/활성화는 일절 주지 않는다(SW_SHOWNA/SWP_NOACTIVATE) — 전환 직후 호스트의
     첫 클릭이 '창 활성화'에 소비되어 씹히는 문제를 막는다.
     반환: 파킹한 peer id 리스트. 프레임 핸들을 못 구하면 None(호출자가 legacy 경로 사용)."""
+    # [2A 단일 초크포인트] 실행기(runner) 전면 시(LIVE_RESTORE_SUPPRESSED) 라이브 공유
+    # 인스턴스의 프레임은 offscreen 유지하고 되띄우지 않는다. restore/replace/show-only 가
+    # 모두 이 함수를 거치므로 여기 한 곳이면 충분. 범위는 _is_live_shared_app 로 한정해
+    # read-only 격리미러/파일모드 워커엔 영향 0(안전장치 a).
+    # 주의: None 을 반환하면 호출자들의 `if ... is None:` legacy 경로가 창을 강제 표시해
+    # 억제가 무력화된다 → '파킹한 peer 없음'을 뜻하는 빈 리스트 [] 를 반환해 legacy 표시를
+    # 건너뛰고 프레임을 offscreen 그대로 둔다(계약: 반환=파킹 peer 리스트와 일관).
+    if LIVE_RESTORE_SUPPRESSED and _is_live_shared_app(app):
+        try:
+            session["hidden"] = True
+        except Exception:
+            pass
+        return []
     target_hwnd = _session_frame_hwnd(session, wb)
     if not target_hwnd:
         return None
@@ -5408,6 +6287,30 @@ def _present_live_session_frame(
         _ensure_excel_workbook_view(app, wb, make_visible=False, activate=False, maximize_workbook=False, app_level=False)
     except Exception:
         pass
+    # [녹화 중 리본/편집] 녹화 시작 이후 '다른 탭으로 전환/새 파일 오픈'으로 이 프레임이 표시될 때도
+    # 편집 잠금 해제 + 리본 펼침을 다시 적용한다. 예전엔 녹화 시작 시점의 워크북에만 적용돼,
+    # 이후 연 워크북은 리본이 닫히고 편집이 잠긴 채였다(사용자 보고).
+    # [클립보드 보존] 단, 이 재적용(Unprotect·SHOW.TOOLBAR 등)은 Excel 복사 모드(마퀴)를
+    # 취소한다 — 이미 잠금 해제된 워크북이면 통째로 건너뛴다(ProtectContents 읽기는 무해).
+    # 안 그러면 '녹화 중 A에서 복사 → B 탭 전환 → 재적용이 복사 취소 → B에 붙여넣기 불가'.
+    # [클립보드 실측] 이 재적용에서 복사 모드(마퀴)를 죽이는 건 정확히
+    # SHOW.TOOLBAR(XLM) 하나다(프로브로 이등분 — 파킹/Activate/Select/OnKey 는 무해).
+    # ProtectContents 휴리스틱은 사용자가 자체 비밀번호로 보호한 시트(우리 암호로
+    # Unprotect 불가)가 있으면 항상 '재적용 필요'로 오판해 탭 전환마다 복사를 죽였다.
+    # → 세션당 1회 플래그(recUnlockDone)로 바꾼다: 녹화 시작 시 일괄 해제된 세션은
+    # 전환 시 no-op, 녹화 중 새로 연 워크북만 최초 표시 때 1회 해제.
+    if RECORDING_EDIT_UNLOCKED and _is_live_shared_app(app) and not session.get("recUnlockDone"):
+        try:
+            _protect_workbook_for_read_only_mirror(wb, False)
+        except Exception:
+            pass
+        try:
+            _restore_excel_default_input(app)
+            _enable_excel_context_menus(app)
+            _set_excel_ribbon_visible(app, True)
+        except Exception:
+            pass
+        session["recUnlockDone"] = True
     session["hidden"] = False
     return hidden_ids
 
@@ -5874,8 +6777,98 @@ def _apply_openpyxl_text_format_for_long_digit_columns(raw_ws, grid, start_row=1
                 continue
 
 
+# [VBA 보안 게이트] 녹화/생성 VBA 가 실행 PC 에서 임의 파일을 열고·저장하고·프로세스를 띄우는 것을
+# 주입 전에 차단한다. MS 매크로 레코더는 녹화 중 사용자의 파일 열기(Workbooks.Open "C:\녹화PC경로\..."),
+# 다른 이름 저장(SaveAs), 닫기까지 전부 절대경로로 기록하는데, sanitize 는 스크롤 제거뿐이라 그대로
+# 재생됐다(게다가 실행 직전 AutomationSecurity 를 Low 로 낮춰 열린 파일의 매크로까지 실행됨).
+# python 엔진의 AST 금지목록(SaveAs/Close/Quit 등)과 대칭 — VBA 만 무검사였던 비대칭을 닫는다.
+# 문자열 리터럴·주석 제거 후 검사해 셀 값("Shell 주유소" 등) 오탐을 막는다.
+_VBA_FORBIDDEN_BARE = [
+    # (패턴, 사용자 안내) — 문자열/주석 제거된 텍스트에 적용
+    (re.compile(r"\bWorkbooks\s*\.\s*Open\b", re.I),
+     "파일 열기(Workbooks.Open) — 녹화 중 다른 파일을 열면 실행 PC의 그 경로를 그대로 열게 됩니다. "
+     "필요한 파일은 미리 함께 열어두거나 업로드하고 다시 녹화하세요."),
+    (re.compile(r"\.\s*Save(?:As|CopyAs)\b", re.I),
+     "다른 이름으로 저장(SaveAs/SaveCopyAs) — 실행 PC의 임의 경로에 파일을 쓰게 됩니다. "
+     "저장은 실행이 끝나면 자동으로 처리되니 녹화에서 빼세요."),
+    (re.compile(r"\.\s*Close\b", re.I),
+     "워크북/창 닫기(.Close) — 파이프라인이 관리하는 파일이 닫혀 이후 단계가 깨집니다. "
+     "닫기는 녹화에서 빼세요."),
+    (re.compile(r"\.\s*PrintOut\b", re.I), "인쇄(PrintOut)"),
+    (re.compile(r"\.\s*SendMail\b", re.I), "메일 발송(SendMail)"),
+    (re.compile(r"\.\s*Quit\b", re.I), "Excel 종료(.Quit)"),
+    (re.compile(r"\bCh(?:Dir|Drive)\b", re.I), "작업 폴더 변경(ChDir/ChDrive)"),
+    (re.compile(r"\bShell\b", re.I), "외부 프로그램 실행(Shell)"),
+    (re.compile(r"\bKill\b", re.I), "파일 삭제(Kill)"),
+    (re.compile(r"\bEnviron\b", re.I), "환경변수 접근(Environ)"),
+    (re.compile(r"\bSendKeys\b", re.I), "키 입력 주입(SendKeys)"),
+]
+_VBA_FORBIDDEN_RAW = [
+    # 문자열 안 내용을 봐야 하는 패턴 — 원문에 적용(Scripting.Dictionary 는 허용해야 하므로
+    # CreateObject 전면 금지는 안 됨).
+    (re.compile(r"CreateObject\s*\(\s*[\"'](?:WScript|Shell\.Application|Scripting\.FileSystemObject)", re.I),
+     "시스템 개체 생성(WScript/Shell.Application/FileSystemObject)"),
+    (re.compile(r"\bGetObject\s*\(", re.I), "외부 개체 연결(GetObject)"),
+    (re.compile(r"FileSystemObject", re.I), "파일시스템 접근(FileSystemObject)"),
+]
+
+
+def _normalize_vba_llm_comment_slips(code):
+    """LLM 이 VBA 에 C 계열 주석(//)을 섞는 사고 교정 — 줄머리 // 는 ' 주석으로 변환.
+
+    // 는 VBA 컴파일 오류인데, 컴파일 오류 모듈에 Application.Run 을 하면 숨김 격리
+    인스턴스에서 VBE 모달이 떠 영구 블록된다(실측 14:45: '의도 반영' 코드의 // 주석 4줄로
+    '녹화 재현 중' 무한 대기 + 중단 불능 → 강제종료). 주석 변환은 의미 무손실이라
+    실패 대신 구조한다. 줄 중간 // 는 문자열("http://...") 오탐 위험이 있어 안 건드리고
+    _validate_vba_source_before_inject 가 명확한 에러로 거부한다."""
+    out = []
+    for line in str(code or "").splitlines():
+        stripped = line.lstrip()
+        if stripped.startswith("//"):
+            indent = line[:len(line) - len(stripped)]
+            out.append(indent + "'" + stripped[2:])
+        else:
+            out.append(line)
+    return "\n".join(out)
+
+
+def _vba_strip_strings_and_comments(code):
+    """따옴표 문자열("" 이스케이프 포함) → 빈 문자열로, 이후 ' 주석 제거 — 키워드 오탐 방지."""
+    text = re.sub(r'"(?:[^"]|"")*"', '""', str(code or ""))
+    out = []
+    for line in text.splitlines():
+        i = line.find("'")
+        out.append(line[:i] if i >= 0 else line)
+    return "\n".join(out)
+
+
+def _vba_security_scan(code):
+    """금지 구문 발견 시 사용자 안내 문자열 반환, 없으면 None."""
+    stripped = _vba_strip_strings_and_comments(code)
+    for pat, why in _VBA_FORBIDDEN_BARE:
+        if pat.search(stripped):
+            return why
+    raw = str(code or "")
+    for pat, why in _VBA_FORBIDDEN_RAW:
+        if pat.search(raw):
+            return why
+    return None
+
+
 def _validate_vba_source_before_inject(code):
     """VBE 디버거를 띄우는 명백한 컴파일 오류는 Excel에 주입하기 전에 차단한다."""
+    _sec = _vba_security_scan(code)
+    if _sec:
+        raise RuntimeError(
+            "VBA 보안 검사: 이 스킬에 실행할 수 없는 동작이 들어 있습니다 — %s "
+            "(녹화라면 해당 동작 없이 다시 녹화해 주세요.)" % _sec)
+    # [// 주석 잔존 차단] 줄머리 // 는 normalize 가 ' 로 변환하지만, 줄 중간 // 는 컴파일 오류
+    # 그대로다(문자열 제거 후 검사라 "http://..." 오탐 없음). 숨김 인스턴스에서 VBE 모달로
+    # 영구 블록되는 대신 즉시 명확한 에러를 낸다.
+    if "//" in _vba_strip_strings_and_comments(code):
+        raise RuntimeError(
+            "VBA 문법 오류: '//' 주석은 VBA 에서 지원되지 않습니다(작은따옴표 ' 를 쓰세요). "
+            "컴파일 오류로 실행이 멈추는 것을 막기 위해 실행 전에 차단했습니다.")
     lines = str(code or "").splitlines()
     block_stack = []
     code_text = str(code or "")
@@ -7235,6 +8228,7 @@ def _inject_and_run_vba(app, wb, code, entry):
     original_code = code
     code = _extract_vba_source_for_injection(code, entry)
     code = _strip_empty_vba_loops(code)  # 빈 For Each(워크북 헛순회 등) 제거 → 형식불일치 실패-재생성 사이클 차단
+    code = _normalize_vba_llm_comment_slips(code)  # LLM 의 // 주석 → ' 변환(컴파일 오류 모달 영구블록 방지)
     _vba_trace(
         "vba.code.normalized",
         workbook=_trace_workbook_info(wb),
@@ -8056,9 +9050,27 @@ def _run_vba_pipeline_on_session_impl(excel_id, steps, reset=True, entry=None, v
                     _protect_workbook_for_read_only_mirror(ftarget, False)
                 except Exception:
                     pass
+                # [교차파일 쓰기 1004 수정] 동반본도 보호 해제 — 라이브 미러의 UserInterfaceOnly 보호는
+                # SaveCopyAs→재오픈을 거치면 '완전 보호'로 바뀐다(Excel 고전 함정). 타깃만 풀고 동반본을
+                # 안 풀어서, 교차파일 녹화 재현(정산서 D1 붙여넣기)이 '보호된 시트' 1004 로 즉사했다
+                # (실측 14:02 step2). 풀런 경로(9372)는 이미 동반본을 풀고 있어 이 경로만 비대칭이었다.
+                for _comp in (companions or []):
+                    try:
+                        _protect_workbook_for_read_only_mirror(_comp.get("wb"), False)
+                    except Exception:
+                        pass
                 def _activate_step_target_sheet(st):
                     if not isinstance(st, dict):
                         return
+                    # [초기 컨텍스트 결정론화] 시트명 유무와 무관하게 먼저 앵커 워크북을 활성화한다.
+                    # 격리 인스턴스는 '마지막에 연 동반본'이 활성이라, 선행 Windows.Activate 없는
+                    # 녹화 조각이 엉뚱한 워크북에서 실행됐다(실측 15:30: 1조각 복붙 절반 유실).
+                    # COM Workbook.Activate 는 복사 마퀴 무해(프로브 실측) — 스텝 자신의
+                    # Windows().Activate 가 있으면 그게 다시 대상을 잡으므로 안전한 기본값이다.
+                    try:
+                        ftarget.Activate()
+                    except Exception:
+                        pass
                     sheet_name = (
                         st.get("targetSheetName")
                         or st.get("targetSheet")
@@ -8518,8 +9530,14 @@ def _run_full_pipeline_single_instance_impl(groups, reset_excel_ids=None, view_s
                     except Exception as _snap_err:
                         _vba_trace("fullrun.step.snapshot.skip", anchorExcelId=anchor_excel_id, isolatedPid=fpid,
                                    excelId=gid, error=str(_snap_err))
-                    # 대상 시트 활성화(있으면)
+                    # 대상 시트 활성화(있으면). 시트명이 없어도 앵커 워크북은 먼저 활성화 —
+                    # 선행 Windows.Activate 없는 녹화 조각이 '마지막에 연 동반본'에서 실행되는
+                    # 초기 컨텍스트 비결정론 차단(실측 15:30, 격리 경로와 대칭).
                     if isinstance(st, dict):
+                        try:
+                            ftarget.Activate()
+                        except Exception:
+                            pass
                         _sheet = st.get("targetSheetName") or st.get("targetSheet") or st.get("viewSheet")
                         if _sheet:
                             try:

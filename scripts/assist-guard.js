@@ -68,6 +68,15 @@ function assistParseAction(reply) {
   let action = String(obj.action || obj.tool || obj.name || obj.function || "final").trim();
   let args = obj.args || obj.arguments || obj.parameters || obj.input || {};
   args = (args && typeof args === "object") ? args : {};
+  // [단계별 핸드오프] 실측: 모델이 action="steps" 로 내거나 steps/request/reason 을 args 밖(최상위)에
+  // 두는 변형이 흔하다. handoff 로 정규화하고 최상위 필드를 args 로 흡수한다.
+  if (action === "steps" || action === "handoff" || action === "handoffsteps"
+      || action.toLowerCase() === "handoff_steps" || action.toLowerCase() === "handoffsteps") {
+    action = "handoff";
+    if (!args.steps && Array.isArray(obj.steps)) args = { ...args, steps: obj.steps };
+    if (!args.request && obj.request) args = { ...args, request: obj.request };
+    if (!args.reason && obj.reason) args = { ...args, reason: obj.reason };
+  }
   // [검토 #6] 모델이 {"action":"pipeline.list"} / {"tool":"diag.stepStatus"} 처럼 도구명을 action 에
   // 직접 쓰는 위반이 흔한데, 오케스트레이터는 action==="tool" 만 디스패치한다 — 등록된 도구명이면
   // 정식 형태로 재작성한다. hasOwnProperty 로 상속 키(constructor 등) 오인을 막고, 대소문자 변형

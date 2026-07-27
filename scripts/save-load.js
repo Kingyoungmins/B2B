@@ -184,6 +184,28 @@ function _buildLogicZipEntriesImpl(safeBase, name) {
     saveBaseName: currentLogicSaveBaseName(stripLogicTimestampSuffix(name)),
     createdAt: new Date().toISOString(),
     stepCount: state.pipeline.length,
+    // [환경 config — 0.6.2 아이디어 채용] 저장 시점의 실제 업로드 파일·시트 목록(휴리스틱이 아닌
+    // 사실). 실행기가 코드 스캔으로 뽑은 요구 파일을 이 목록과 '교집합'으로 검증해, 제목/서술문에서
+    // 오인된 쓰레기 이름과 (파일,시트) 오귀속을 걸러낸다(수동 저장·자동백업 공용 빌더라 항상 최신).
+    envConfig: {
+      // name = 실제 업로드 파일명(코드 리터럴이 참조하는 그 이름), displayName = 사용자 편집 표시명.
+      // 둘 다 담아야 한다 — 표시명만 담으면 편집된 파일의 코드 리터럴 요구가 '정본에 없음'으로
+      // 오폐기된다(교집합의 부분 drop 은 fail-open 이 못 막는다).
+      inputs: (state.inputs || []).map((f, idx) => ({
+        name: (f && f.name) || "",
+        displayName: (typeof workbookDisplayName === "function"
+          ? workbookDisplayName(f, `입력 파일 ${idx + 1}`) : "") || "",
+        sheetNames: (f && Array.isArray(f.sheetNames)) ? [...f.sheetNames] : [],
+      })).filter(x => x.name || x.displayName),
+      outputs: (state.outputTemplates || []).map(t => {
+        const f = t && (t.file || t.original);
+        return f && f.name ? {
+          name: f.name,
+          displayName: (typeof workbookDisplayName === "function" ? workbookDisplayName(f, "") : "") || "",
+          sheetNames: Array.isArray(f.sheetNames) ? [...f.sheetNames] : [],
+        } : null;
+      }).filter(Boolean),
+    },
     pipeline: state.pipeline.map((s, idx) => ({
       id: s.id,
       description: s.description,
@@ -198,6 +220,13 @@ function _buildLogicZipEntriesImpl(safeBase, name) {
       code: s.code,
       targetFileId: s.targetFileId || null,  // [#18] 스텝의 대상 파일 바인딩 — 저장/불러오기로 유지되어야 재실행 시 올바른 파일에 적용됨
       targetSheetName: s.targetSheetName || null,
+      // [녹화 메타 durable] makeStep 이 도장한 워크북/시트명이 저장에서 빠져 있었다(화이트리스트 누락)
+      // — 실행기 '파일확인'의 파일별 요구 도출과 재바인딩이 zip 왕복 후 무력화되던 원인.
+      recordedWorkbook: s.recordedWorkbook || null,
+      recordedSheet: s.recordedSheet || null,
+      // [의도색] 월/날짜 확인 필요 표시(보라 카드)도 왕복 보존 — 불러온 스킬에서 표시가 사라졌다.
+      intentNeeded: s.intentNeeded === true || undefined,
+      intentReason: s.intentReason || null,
       // 저장된 스킬은 사용자가 적용/확인한 실행 단위다. 이후 전체실행에서 정적검사/재생성으로
       // 원본 코드를 다시 흔들지 않도록 신뢰 플래그를 함께 보존한다.
       // [미적용 편집 방어] '적용됨' 상태면 작성자 확인본으로 보고 trustedStatic 을 박아 왔는데,
@@ -713,6 +742,11 @@ async function loadLogicFiles(files) {
       code,
       targetFileId: s.targetFileId || null,  // [#18] 저장된 대상 파일 바인딩 복원(재실행이 올바른 파일에 적용되도록)
       targetSheetName: s.targetSheetName || s.targetSheet || null,
+      // [녹화 메타 durable] 저장된 워크북/시트명 복원 — 실행기 파일별 요구 도출·재바인딩용.
+      recordedWorkbook: s.recordedWorkbook || null,
+      recordedSheet: s.recordedSheet || null,
+      intentNeeded: s.intentNeeded === true,
+      intentReason: s.intentReason || null,
       trustedStatic: s.trustedStatic !== false, // 불러온 zip/json 스킬은 작성자가 확인한 저장본으로 취급
     };
   });
@@ -775,6 +809,10 @@ function promoteStepChatOrigins() {
 function loadLogic(data, filename, meta) {
   // 파이프라인 복원. 자동 실행 X (사용자가 "전체 실행"을 눌러야 적용됨).
   state.pipeline = deepClone(data.pipeline || []);
+  // [환경 config] 저장 시점 파일·시트 정본 — 실행기 요구 추출의 교집합 검증 근거.
+  // config 없는 구버전 zip 은 null → 필터가 통째로 꺼져 기존 동작 그대로(폴백).
+  state.skillEnvConfig = (data && data.envConfig && typeof data.envConfig === "object")
+    ? deepClone(data.envConfig) : null;
   rememberLogicSaveBaseName(data.saveBaseName || data.name || filename || "logic");
   if (typeof ensurePipelineStepIds === "function") ensurePipelineStepIds();
   // 채팅 히스토리도 함께 복원 (있으면)

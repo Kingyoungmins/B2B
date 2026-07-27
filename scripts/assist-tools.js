@@ -334,6 +334,19 @@ assistDefineTool("step.error", { desc: "직전 실행에서 실패한 스텝의 
   });
 
 // ── 11. [Tier0] 대상 시트 헤더(열 이름) 다이제스트 ──────────────────────────
+// ── [실행 타임라인] 서버 트레이스 — step.error 보다 한 층 깊은 '실제로 무슨 일이 있었나' ──
+// 실측 15:30: 1조각이 엉뚱한 워크북(마지막에 연 동반본)에서 실행된 사실은 클라 상태 어디에도
+// 없고 서버 트레이스에만 남았다 — 이 도구가 없으면 그 층의 진단은 원천 불가.
+assistDefineTool("run.trace", {
+  desc: "직전 실행의 서버 트레이스 타임라인(스텝 시작/성공/실패 순서·런타임 오류 원문·격리 인스턴스에 열린 파일과 각 스텝이 실제로 돈 워크북). step.error 로 부족할 때 — '어느 파일에서 돌았는지/어디서 멈췄는지'의 결정적 근거.",
+  args: "limit?(기본 80)",
+}, async (a) => {
+  if (typeof postExcelMirror !== "function") return { ok: false, error: "no_backend" };
+  const r = await postExcelMirror("/api/diag/recent-trace",
+    { limit: Number(a && a.limit) || 80 }, 0, { timeoutMs: 15000 });
+  return r || { ok: false, error: "empty" };
+});
+
 assistDefineTool("sheet.headers", { desc: "특정 파일/시트의 헤더(열 이름) 목록. data.query 전에 열 이름을 미리 알아 unknown_column 재시도를 없앤다.", args: "file, sheet, headerRow?" },
   (a) => {
     const fname = String(a.file || "").trim();

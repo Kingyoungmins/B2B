@@ -281,7 +281,7 @@
     color: var(--ink-900);
     transition: border-color 0.15s, box-shadow 0.15s;
   }
-  .modal input[type="radio"] {
+  .modal input[type="radio"], .modal input[type="checkbox"] {
     width: auto;
     padding: 0;
     margin: 0;
@@ -294,7 +294,7 @@
     border-color: var(--m-400);
     box-shadow: 0 0 0 3px rgba(255,0,128,0.1);
   }
-  .modal input[type="radio"]:focus {
+  .modal input[type="radio"]:focus, .modal input[type="checkbox"]:focus {
     outline: auto;
     border-color: transparent;
     box-shadow: none;
