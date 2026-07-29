@@ -41,7 +41,7 @@ function extractFn(str, name) {
 const REAL = [
   "getPipelineResumeFromIndex", "setPipelineResumeFromIndex", "clearPipelineResumeFromIndex",
   "markPipelinePendingFromIndex", "handlePipelineStepToggle", "insertLogic", "applyLogic",
-  "replaceLogicAt", "applyMappedSingleStep",
+  "replaceLogicAt", "applyMappedSingleStep", "_syncPipelineToggleStatus",
 ].map(n => extractFn(src, n)).join("\n\n");
 
 const DEPS = [
@@ -61,7 +61,7 @@ const DEPS = [
 ];
 const factory = new Function(...DEPS, REAL + `
   return { toggle: handlePipelineStepToggle, insert: insertLogic, append: applyLogic,
-           edit: replaceLogicAt,
+           edit: replaceLogicAt, syncStatus: _syncPipelineToggleStatus,
            mark: markPipelinePendingFromIndex, getResume: getPipelineResumeFromIndex,
            setResume: setPipelineResumeFromIndex };
 `);
@@ -422,6 +422,45 @@ function makeEnv(opts = {}) {
     t("R8 직접 applyLastEnabledStepFast 호출은 헬퍼 안에서만(단일축 경로 누수 없음)",
       (src.match(/await applyLastEnabledStepFast\(/g) || []).length === 1);
   }
+
+  // ══ TS. [상태칩 정착] 'ON인데 보류' 방지 — 실측(2026-07-29): 3 OFF→4 ON→3 ON 시 3 ON 이
+  //   reconcile 로 적용됐는데 상태칩이 옛 '보류'로 남음. 수정: 토글 성공 후 ON=적용/OFF=보류 동기화.
+  {
+    // ON 이 서명 불일치로 reconcile 경로를 타도 상태칩이 '적용됨'이어야(보류 아님).
+    const { api, CALLS, STATUS, state } = makeEnv({ _sig: "OTHER" });   // 서명 불일치 → ON reconcile
+    state.pipeline = mk(4, [true, true, false, true]);                  // 3 OFF, 4 ON(사용자 중간상태)
+    STATUS.s3 = { status: "review", label: "보류" };
+    STATUS.s4 = { status: "applied", label: "적용됨" };
+    await api.toggle("s3");                                             // 3 ON
+    t("TS1 3 ON(reconcile 경유) → 상태칩 '적용됨'(보류 아님)", STATUS.s3 && STATUS.s3.status === "applied", STATUS.s3);
+    t("TS2 reconcile 경로 확인 + sync 로 정착", CALLS.some(c => c.kind === "reconcile"));
+  }
+  {
+    // ON 단일적용 성공 후에도 나머지 상태칩이 스위치에 맞아야(옛 보류 잔존 없음).
+    const { api, STATUS, state } = makeEnv();                           // 서명 일치(SIG) → 단일적용
+    state.pipeline = mk(4, [true, true, false, true]);
+    STATUS.s3 = { status: "review", label: "보류" };
+    STATUS.s4 = { status: "applied", label: "적용됨" };
+    await api.toggle("s3");                                             // 3 ON(단일적용)
+    t("TS3 3 ON(단일적용) → 상태칩 '적용됨'", STATUS.s3 && STATUS.s3.status === "applied", STATUS.s3);
+  }
+  {
+    // sync 헬퍼: ON=적용됨 / OFF=보류 / '오류'·'실행중'은 보존.
+    const { api, STATUS, state } = makeEnv();
+    state.pipeline = mk(5, [true, false, true, false, true]);
+    STATUS.s3 = { status: "error", label: "오류" };
+    STATUS.s5 = { status: "running", label: "실행 중" };
+    api.syncStatus();
+    t("TS4a ON→적용됨(s1)", STATUS.s1 && STATUS.s1.status === "applied");
+    t("TS4b OFF→보류(s2,s4)", STATUS.s2.label === "보류" && STATUS.s4.label === "보류");
+    t("TS4c 오류 보존(s3, 적용됨으로 안 덮음)", STATUS.s3.status === "error");
+    t("TS4d 실행중 보존(s5)", STATUS.s5.status === "running");
+  }
+  // 배선/서명정합 소스 검증
+  t("TS5 ON reconcile·단일적용 둘 다 _syncPipelineToggleStatus 호출",
+    (src.match(/_syncPipelineToggleStatus\(\);/g) || []).length >= 2);
+  t("TS6 applyMappedSingleStep: 복원 후 원본 파이프라인 서명 재기록(불필요 reconcile 방지)",
+    /_result && typeof noteLivePipelineApplied === "function"[\s\S]{0,90}noteLivePipelineApplied\(state\.pipeline\)/.test(src));
 
   console.log(pass + "/" + (pass + fail) + " PASS");
   process.exit(fail ? 1 : 0);

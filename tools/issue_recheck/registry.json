@@ -2642,6 +2642,17 @@
         ]
       ],
       "fix": "applyMappedSingleStep(stepId) 헬퍼 신설 — beginMappedPipelineRun 으로 매핑본을 스왑한 뒤 그 스텝(매핑된 코드/targetFileId)을 applyLastEnabledStepFast 로 적용하고 restore(코드는 원본 복원, _preApplySnapshot 은 ...cur 로 보존→이후 OFF fast). 매핑 미확인/치환대상 없음이면 beginMappedPipelineRun noop→원본 그대로(무회귀). 단일 적용 3곳(handlePipelineStepToggle ON:3611, insertLogic:2167, replaceLogicAt:2450)을 전부 이 헬퍼로 교체. 직접 applyLastEnabledStepFast 호출은 헬퍼 안 1곳만. 진단: drop-handling.js buildRunnerMappedPipeline 에 client.runner.mapping.build 트레이스(reason=mapped/skip:not-checked/skip:no-mapped-rows + map=book→actual/sheet→actual) — reconcile 은 mapped 찍히는데 단일적용은 트레이스 자체가 안 찍혀 관문 누락 확정. 실행검증 R1~R8(_test_switch_axis_model.js)."
+    },
+    {
+      "id": "TOGGLE-ON-SHOWS-HELD-STATUS",
+      "title": "ON인데 상태칩이 '보류'로 남음 — 3 OFF→4 ON→3 ON 시 3 ON 이 reconcile 로 적용됐는데 상태칩 미갱신. 근본: applyMappedSingleStep 스왑이 매핑본 코드 서명을 기록→다음 토글이 코드기반 서명 불일치로 reconcile 로 빠짐(실측 2026-07-29)",
+      "checks": [
+        [
+          "node",
+          "diagnostics/_test_switch_axis_model.js"
+        ]
+      ],
+      "fix": "① applyMappedSingleStep: 스왑 복원 후 원본 state.pipeline 로 noteLivePipelineApplied 재호출 — applyLastEnabledStepFast 가 남긴 '매핑본 코드' 서명을 원본 코드 서명으로 교정(liveEnabledStepsSignature 는 code 포함이라 불일치→불필요 reconcile→상태칩 미갱신 유발했음). ② _syncPipelineToggleStatus(): 토글 정착 후 ON=적용됨/OFF=보류로 상태칩 동기화('오류'·'실행중'은 보존). ON reconcile 경로와 단일적용 성공 두 곳에서 호출. 실행검증 TS1~TS6(_test_switch_axis_model.js 68 assert)."
     }
   ]
 }

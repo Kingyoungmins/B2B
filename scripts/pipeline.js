@@ -3487,6 +3487,22 @@ function renderPipeline() {
   renderRunnerWorkflow();
 }
 
+// [단일 축 · 상태칩 정착] 토글이 끝난 뒤 상태칩을 스위치에 맞춘다 — ON=적용됨 · OFF=보류.
+// 실측(2026-07-29): 3 OFF→4 ON→3 ON 시, 3 ON 이 reconcile 로 적용됐는데 상태칩이 옛 '보류'로 남아
+// 'ON인데 보류'로 보였다(reconcile 은 상태칩을 안 고침). 사용자 요청대로 단순화한다: 토글 성공 후
+// 켜진 스텝=적용됨, 꺼진 스텝=보류. '오류'/'실행 중' 상태는 건드리지 않는다(진짜 실패를 덮지 않도록).
+function _syncPipelineToggleStatus() {
+  const applied = [], held = [];
+  (state.pipeline || []).forEach(s => {
+    if (!s || !s.id) return;
+    const st = (typeof getPipelineRuntimeStatus === "function" && (getPipelineRuntimeStatus(s.id) || {}).status) || "";
+    if (st === "error" || st === "running") return;
+    (isStepEnabled(s) ? applied : held).push(s.id);
+  });
+  if (applied.length) setPipelineRuntimeStatus(applied, "applied", "적용됨");
+  if (held.length) setPipelineRuntimeStatus(held, "review", "보류");
+}
+
 // [스위치 = 라이브 적용 상태, 단일 축] (사용자 확정 모델 2026-07-29)
 //   ON = 적용됨 · OFF = 보류(미적용). 한 스텝이 ON+보류로 공존하는 상태는 존재하지 않는다.
 //   OFF(끄기): 그 스텝 '및 뒤 스텝 전부' OFF+보류 → 라이브는 그 스텝 직전으로 롤백.
@@ -3601,6 +3617,7 @@ async function handlePipelineStepToggle(stepId) {
     try {
       await reconcilePipelineSimulationAfterEdit({ affectedStep: toggledStep, restorePipeline: beforeToggleSnapshot });
       clearPipelineResumeFromIndex();
+      _syncPipelineToggleStatus();   // reconcile 은 상태칩을 안 고침 → ON=적용/OFF=보류로 맞춤('ON인데 보류' 방지)
       refreshRunButton();
     } catch (err) { revertOn(err); }
     return;
@@ -3620,6 +3637,7 @@ async function handlePipelineStepToggle(stepId) {
     }
     setPipelineRuntimeStatus([stepId], "applied", "적용됨");
     clearPipelineResumeFromIndex();   // 라이브가 더는 순수 프리픽스가 아님 — 체크포인트 이어실행 무효화
+    _syncPipelineToggleStatus();       // 나머지 스텝 상태칩도 스위치에 맞춤(ON=적용/OFF=보류)
     refreshRunButton();
     if (typeof toast === "function") toast(`Step ${currentIdx + 1}을(를) 적용했습니다.`, "success");
   } catch (err) {
@@ -4035,12 +4053,21 @@ function canUsePipelineCheckpointFromIndex(startIdx, beforeSteps, nextSteps) {
 async function applyMappedSingleStep(stepId, options = {}) {
   const __mapRun = (typeof beginMappedPipelineRun === "function")
     ? beginMappedPipelineRun() : { restore: () => {} };
+  let _result = false;
   try {
     const step = (state.pipeline || []).find(s => s && s.id === stepId);
     if (!step) return false;
-    return await applyLastEnabledStepFast(step, { steps: state.pipeline, ...options });
+    _result = await applyLastEnabledStepFast(step, { steps: state.pipeline, ...options });
+    return _result;
   } finally {
     try { __mapRun.restore(); } catch (_) {}
+    // [서명 정합] applyLastEnabledStepFast 가 스왑된 '매핑본 코드'의 서명을 기록했다(_lastLiveAppliedSignature).
+    // 복원 후엔 state.pipeline 이 '원본 코드'라, 다음 토글의 liveEnabledStepsSignature(원본)와 불일치해
+    // 불필요하게 reconcile 로 빠지고(그때 상태칩이 옛 '보류'로 남아 'ON인데 보류') 느려졌다.
+    // 복원된 원본 파이프라인 서명으로 다시 기록해 단일 적용 경로를 유지한다(실측 2026-07-29).
+    if (_result && typeof noteLivePipelineApplied === "function") {
+      try { noteLivePipelineApplied(state.pipeline); } catch (_) {}
+    }
   }
 }
 
