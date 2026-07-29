@@ -372,7 +372,9 @@ function finalizeActionButtonFromResult(button, result, doneText, onFailure, opt
           if (typeof onFailure === "function") onFailure();
           return;
         }
-        button.textContent = doneText || "\u2713 \uC801\uC6A9\uB428";
+        // [\uBCF4\uB958=OFF \uBAA8\uB378] \uC218\uC815\uC740 \uC0C8 \uCF54\uB4DC\uB97C \uC801\uC6A9\uD558\uC9C0 \uC54A\uACE0 \uBCF4\uB958(\uAEBC\uC9D0)\uB85C \uC800\uC7A5\uD55C\uB2E4 \u2014 '\uC801\uC6A9\uB428'\uC73C\uB85C
+        // \uCE60\uD558\uBA74 \uB77C\uC774\uBE0C \uBC18\uC601\uC73C\uB85C \uC624\uD574\uD55C\uB2E4. held \uACB0\uACFC\uB294 \uBCF4\uB958 \uC800\uC7A5\uC73C\uB85C \uC815\uC9C1\uD558\uAC8C \uD45C\uC2DC.
+        button.textContent = (result && result.held) ? "\u2713 \uC800\uC7A5\uB428 \u2014 \uBCF4\uB958(\uAEBC\uC9D0)" : (doneText || "\u2713 \uC801\uC6A9\uB428");
         button.classList.remove("pending");
       })
       .catch(() => {
@@ -390,7 +392,8 @@ function finalizeActionButtonFromResult(button, result, doneText, onFailure, opt
     if (typeof onFailure === "function") onFailure();
     return;
   }
-  button.textContent = doneText || "\u2713 \uC801\uC6A9\uB428";
+  // [\uBCF4\uB958=OFF \uBAA8\uB378] \uC717 \uB2E8\uACC4 OFF \uB85C \uBCF4\uB958 \uCD94\uAC00/\uC800\uC7A5\uB41C \uACBD\uC6B0 \u2014 \uC801\uC6A9\uB41C \uAC8C \uC544\uB2D8\uC744 \uC815\uC9C1\uD558\uAC8C \uD45C\uC2DC.
+  button.textContent = (result && result.held) ? "\u2713 \uC800\uC7A5\uB428 \u2014 \uBCF4\uB958(\uAEBC\uC9D0)" : (doneText || "\u2713 \uC801\uC6A9\uB428");
 }
 
 function restoreActionButtonsAfterFailure(buttons, primaryButton, retryText) {

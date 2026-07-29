@@ -38,6 +38,47 @@ async function assistRunTool(name, args) {
 function _assistSteps() {
   return Array.isArray(state.pipeline) ? state.pipeline : [];
 }
+
+// [라이브 캐시 갱신] AI 도움 data 도구는 state.inputs 미리보기 캐시만 읽는다. 파이프라인이
+// 교차파일 붙여넣기 대상(컴패니언)을 바꿔도 liveSchema 는 주 세션만 실어 그 파일 캐시가 stale
+// 로 남는다(실측: 정산서에 붙여넣었는데 AI 도움이 '데이터 없음'). 조회 직전, 그 파일에 열린
+// 라이브 세션이 있으면 서버에서 '현재' 미리보기를 받아 캐시를 갱신한다 — '보이는 것'과 일치.
+async function _assistRefreshLiveFile(f, sheet) {
+  try {
+    if (!f || typeof excelMirror === "undefined" || !excelMirror || !excelMirror.sessionsByFileId) return;
+    if (typeof postExcelMirror !== "function" || typeof applyLiveSchemaToFileCache !== "function") return;
+    let excelId = null;
+    for (const [fid, eid] of Object.entries(excelMirror.sessionsByFileId)) {
+      if (typeof getFile === "function" && getFile(fid) === f) { excelId = eid; break; }
+    }
+    if (!excelId) return;   // 업로드만 되고 라이브 미러 세션이 없는 파일 → 캐시 그대로
+    // 조회 대상 시트만 읽는다(전 시트 UsedRange 읽기 회피 → excel_call 워커 점유 최소화,
+    // record-start 등 다른 요청이 뒤에 줄서는 '준비 중' 지연 완화). 시트 미지정이면 전체.
+    const body = { excelId };
+    const sn = String(sheet || "").trim();
+    if (sn) body.sheet = sn;
+    const r = await postExcelMirror("/api/excel/preview-schema", body, 0, { timeoutMs: 15000 });
+    if (r && r.ok && r.schema) applyLiveSchemaToFileCache(excelId, r.schema);
+  } catch (_) { /* 라이브 직독 실패는 무해 — 캐시 그대로 진행 */ }
+}
+
+// [헤더행 감지 통일] 실무 파일은 제목/빈 행이 헤더 위에 있는 경우가 흔하다. sheet.headers 는
+// 자동 감지하는데 data.query 는 rows[0] 을 하드코딩해 둘이 어긋났다(헤더가 2행이면 data.query 가
+// 제목행을 헤더로 봐 unknown_column/오열). 같은 규칙을 공유해 일치시킨다.
+function _assistDetectHeaderRow(rows, explicitHeaderRow) {
+  if (Number.isInteger(Number(explicitHeaderRow)) && Number(explicitHeaderRow) >= 1) {
+    return Math.min(Number(explicitHeaderRow) - 1, Math.max(0, (rows || []).length - 1));
+  }
+  let best = 0, bestScore = -1;
+  for (let r = 0; r < Math.min((rows || []).length, 5); r++) {
+    const row = rows[r] || [];
+    const filled = row.filter(v => String(v == null ? "" : v).trim()).length;
+    const texty = row.filter(v => typeof v === "string" && v.trim() && isNaN(Number(v))).length;
+    const score = filled + texty;
+    if (score > bestScore) { bestScore = score; best = r; }
+  }
+  return best;
+}
 function _assistStepIndexById(stepId) {
   const t = String(stepId || "").trim();
   if (!t) return -1;
@@ -186,13 +227,14 @@ assistDefineTool("literals.scan", { desc: "코드에 박힌 월·날짜·파일�
 // ── 7. 데이터 질의 (클라이언트 미리보기 한정, 백엔드 호출 없음) ──────────────
 assistDefineTool("data.query", {
   desc: "업로드 미리보기 데이터 조회. op=count|sum|distinct|sample|groupSum|groupCount. groupSum/groupCount 는 groupBy 열로 묶어 상위 topN(기본20). where=[{col,op,value}] 로 조건.",
-  args: "file, sheet, op, column, groupBy?, topN?, where?",
-}, (a) => {
+  args: "file, sheet, op, column, groupBy?, topN?, where?, headerRow?",
+}, async (a) => {
     const files = _assistFileList();
     const fname = String(a.file || "").trim();
     const f = (state.inputs || []).find(x => x && x.name === fname)
       || ((state.outputTemplates || []).map(t => t && (t.file || t.original)).find(x => x && x.name === fname));
     if (!f) return { ok: false, error: "unknown_file", given: fname, available: files.map(x => x.name) };
+    await _assistRefreshLiveFile(f, a.sheet);   // 라이브 세션 있으면 캐시를 '현재'로 갱신 후 읽는다
     const sheets = f.sheets || {};
     const sname = String(a.sheet || "").trim();
     const rows = Array.isArray(sheets[sname]) ? sheets[sname] : null;
@@ -201,15 +243,28 @@ assistDefineTool("data.query", {
                available: f.sheetNames || Object.keys(sheets) };
     }
     if (!rows.length) return { ok: false, error: "empty_preview", note: "이 시트는 미리보기 데이터가 비어 있습니다." };
-    const header = (rows[0] || []).map(v => String(v == null ? "" : v).trim());
+    // 헤더행 자동 감지(sheet.headers 와 동일) — 제목행이 위에 있어도 정확한 헤더/데이터 분리.
+    const hr = _assistDetectHeaderRow(rows, a.headerRow);
+    const header = (rows[hr] || []).map(v => String(v == null ? "" : v).trim());
+    const _body = rows.slice(hr + 1);
+    // [중복 헤더 개선] 같은 이름 헤더가 여러 열이면(예: 템플릿의 빈 '회사' A열 + 붙여넣은 '회사' D열)
+    // '데이터가 있는' 열을 고른다 — first-match(빈 A열)로 잡아 개수 0 이 되던 실측 버그 방지.
+    const _nonEmptyInCol = (idx) => _body.reduce((n, r) => n + ((r && String(r[idx] == null ? "" : r[idx]).trim()) ? 1 : 0), 0);
+    const _pickBestCol = (indices) => {
+      if (indices.length <= 1) return indices.length ? indices[0] : -1;
+      let best = indices[0], bestN = _nonEmptyInCol(best);
+      for (const i of indices.slice(1)) { const n = _nonEmptyInCol(i); if (n > bestN) { best = i; bestN = n; } }
+      return best;
+    };
     const colIdx = (name) => {
       const t = String(name || "").trim();
       if (!t) return -1;
-      const exact = header.indexOf(t);
-      if (exact >= 0) return exact;
+      const exacts = header.reduce((acc, h, i) => (h === t ? (acc.push(i), acc) : acc), []);
+      if (exacts.length) return _pickBestCol(exacts);
       const norm = s => String(s || "").toLowerCase().replace(/\s+/g, "");
-      const i2 = header.findIndex(h => norm(h) === norm(t));
-      if (i2 >= 0) return i2;
+      const nt = norm(t);
+      const normMatches = header.reduce((acc, h, i) => (norm(h) === nt ? (acc.push(i), acc) : acc), []);
+      if (normMatches.length) return _pickBestCol(normMatches);
       if (/^[A-Z]{1,2}$/i.test(t)) {                       // 열문자(A, B, AA)
         let n = 0; for (const ch of t.toUpperCase()) n = n * 26 + (ch.charCodeAt(0) - 64);
         return n - 1;
@@ -218,7 +273,7 @@ assistDefineTool("data.query", {
     };
     const ci = colIdx(a.column);
     if (ci < 0) return { ok: false, error: "unknown_column", given: a.column, available: header.slice(0, 40) };
-    const body = rows.slice(1);
+    const body = rows.slice(hr + 1);
     const conds = Array.isArray(a.where) ? a.where : [];
     const norm = v => String(v == null ? "" : v).trim();
     const pass = (row) => conds.every(c => {
@@ -238,10 +293,20 @@ assistDefineTool("data.query", {
     });
     const hit = body.filter(r => Array.isArray(r) && pass(r));
     const op = String(a.op || "count").toLowerCase();
-    const previewNote = `미리보기 ${body.length}행 기준(파일 전체가 아닐 수 있음)`;
+    // [행상한 명시] 미리보기(라이브 직독도)는 최대 60행이라, 실제 데이터가 더 많으면 count/sum/
+    // distinct 가 '최소값'일 뿐이다. dims 로 실제 데이터 행수를 얻어 truncated 를 크게 알린다 —
+    // LLM 이 잘린 수를 '확정 개수'로 단정하던 실측 오답 방지.
+    const _dims = (f.backendPreviewDimensions && f.backendPreviewDimensions[sname]) || null;
+    const _totalRows = _dims && Number(_dims.maxRow) ? Number(_dims.maxRow) : null;
+    const _dataRowsTotal = _totalRows != null ? Math.max(0, _totalRows - (hr + 1)) : null;
+    const _truncated = _dataRowsTotal != null && _dataRowsTotal > body.length;
+    const previewNote = _truncated
+      ? `⚠ 미리보기 ${body.length}행만 계산했습니다. 이 시트 실제 데이터는 약 ${_dataRowsTotal}행 — 개수/합계는 '최소값'이며 정확한 전체값이 아닙니다. 정확한 전체 집계가 필요하면 사용자에게 그 사실을 밝히세요.`
+      : `데이터 ${body.length}행 전체 기준(잘림 없음).`;
+    const _trunc = { truncated: _truncated, previewRows: body.length, totalDataRowsEstimate: _dataRowsTotal };
     if (op === "count") {
       const nonEmpty = hit.filter(r => norm(r[ci]) !== "").length;
-      return { ok: true, op, matchedRows: hit.length, nonEmptyInColumn: nonEmpty, scannedRows: body.length, note: previewNote };
+      return { ok: true, op, matchedRows: hit.length, nonEmptyInColumn: nonEmpty, scannedRows: body.length, ..._trunc, note: previewNote };
     }
     if (op === "sum") {
       let sum = 0, used = 0;
@@ -249,13 +314,13 @@ assistDefineTool("data.query", {
         const x = parseFloat(norm(r[ci]).replace(/[,\s₩]/g, ""));
         if (isFinite(x)) { sum += x; used += 1; }
       });
-      return { ok: true, op, sum, numericCells: used, matchedRows: hit.length, scannedRows: body.length, note: previewNote };
+      return { ok: true, op, sum, numericCells: used, matchedRows: hit.length, scannedRows: body.length, ..._trunc, note: previewNote };
     }
     if (op === "distinct") {
       const set = new Map();
       hit.forEach(r => { const v = norm(r[ci]); if (v) set.set(v, (set.get(v) || 0) + 1); });
       const items = [...set.entries()].sort((x, y) => y[1] - x[1]).slice(0, 30).map(([v, c]) => ({ value: v, count: c }));
-      return { ok: true, op, distinctCount: set.size, top: items, scannedRows: body.length, note: previewNote };
+      return { ok: true, op, distinctCount: set.size, top: items, scannedRows: body.length, ..._trunc, note: previewNote };
     }
     if (op === "sample") {
       return { ok: true, op, header, rows: hit.slice(0, 8).map(r => r.slice(0, 12)), matchedRows: hit.length, note: previewNote };
@@ -348,29 +413,19 @@ assistDefineTool("run.trace", {
 });
 
 assistDefineTool("sheet.headers", { desc: "특정 파일/시트의 헤더(열 이름) 목록. data.query 전에 열 이름을 미리 알아 unknown_column 재시도를 없앤다.", args: "file, sheet, headerRow?" },
-  (a) => {
+  async (a) => {
     const fname = String(a.file || "").trim();
     const f = (state.inputs || []).find(x => x && x.name === fname)
       || ((state.outputTemplates || []).map(t => t && (t.file || t.original)).find(x => x && x.name === fname));
     if (!f) return { ok: false, error: "unknown_file", given: fname, available: _assistFileList().map(x => x.name) };
+    await _assistRefreshLiveFile(f, a.sheet);
     const sheets = f.sheets || {};
     const sname = String(a.sheet || "").trim();
     const rows = Array.isArray(sheets[sname]) ? sheets[sname] : null;
     if (!rows) return { ok: false, error: "unknown_sheet", given: sname, available: f.sheetNames || Object.keys(sheets) };
     if (!rows.length) return { ok: false, error: "empty_preview", note: "이 시트는 미리보기 데이터가 비어 있습니다." };
-    // 헤더 행 자동 추정: 지정 없으면 '가장 많이 채워진' 상위 5행 중 텍스트 비율 높은 행.
-    let hr = Number.isInteger(Number(a.headerRow)) && Number(a.headerRow) >= 1 ? Number(a.headerRow) - 1 : 0;
-    if (!(a.headerRow >= 1)) {
-      let best = 0, bestScore = -1;
-      for (let r = 0; r < Math.min(rows.length, 5); r++) {
-        const row = rows[r] || [];
-        const filled = row.filter(v => String(v == null ? "" : v).trim()).length;
-        const texty = row.filter(v => typeof v === "string" && v.trim() && isNaN(Number(v))).length;
-        const score = filled + texty;
-        if (score > bestScore) { bestScore = score; best = r; }
-      }
-      hr = best;
-    }
+    // 헤더 행 자동 추정(지정 없으면) — data.query 와 동일 규칙(공용 헬퍼)으로 일치.
+    const hr = _assistDetectHeaderRow(rows, a.headerRow);
     const header = (rows[hr] || []).map((v, i) => ({ col: _assistColLetter(i), name: String(v == null ? "" : v).trim() }))
       .filter(h => h.name);
     return { ok: true, file: fname, sheet: sname, headerRow: hr + 1, columnCount: header.length,
@@ -419,11 +474,12 @@ function _assistColToIdx(col) {
 assistDefineTool("data.read", {
   desc: "파일/시트의 셀 값을 A1 범위로 '있는 그대로' 읽는다. range 예: 'A2:C20', 'F:F'(열 전체), 'B5'(한 셀). 최대 3000셀(미리보기 기준).",
   args: "file, sheet, range",
-}, (a) => {
+}, async (a) => {
   const fname = String(a.file || "").trim();
   const f = (state.inputs || []).find(x => x && x.name === fname)
     || ((state.outputTemplates || []).map(t => t && (t.file || t.original)).find(x => x && x.name === fname));
   if (!f) return { ok: false, error: "unknown_file", given: fname, available: _assistFileList().map(x => x.name) };
+  await _assistRefreshLiveFile(f, a.sheet);
   const sheets = f.sheets || {};
   const sname = String(a.sheet || "").trim();
   const rows = Array.isArray(sheets[sname]) ? sheets[sname] : null;

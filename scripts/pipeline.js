@@ -1993,6 +1993,22 @@ function applyLogic(step) {
   // 이 스텝이 만들어진(=지금 보고 있는) 파일을 실행 대상으로 고정한다.
   // 이후 다른 탭에서 실행/토글해도 이 파일로 전환해 실행된다.
   bindPipelineStepTargetContext(step);
+  // [모델: 윗 단계가 OFF(보류)면 새 단계도 OFF+보류] (사용자 확정 2026-07-29) 마지막 스텝이
+  // 꺼져 있으면 새 스텝을 적용하지 않고 OFF+보류로만 붙인다(라이브 무변경). 켜면 그때 적용된다.
+  {
+    const _lastStep = state.pipeline.length ? state.pipeline[state.pipeline.length - 1] : null;
+    if (_lastStep && !isStepEnabled(_lastStep)) {
+      if (typeof pushHistory === "function") pushHistory("단계 추가");
+      step.enabled = false;
+      state.pipeline.push(step);
+      setPipelineRuntimeStatus([step.id], "review", "보류");
+      renderPipeline();
+      refreshRunButton();
+      if (typeof scheduleLogicAutoBackup === "function") scheduleLogicAutoBackup("step-added");
+      if (typeof toast === "function") toast("윗 단계가 꺼져 있어(보류) 새 단계도 보류(OFF)로 추가했습니다. 스위치를 켜면 적용됩니다.", "info");
+      return { pending: false, applied: false, held: true };
+    }
+  }
   // [보류 구간 가드] 중간 스텝 토글 OFF 등으로 '보류 체크포인트'(resume=k)가 있으면 라이브는
   // k 직전 상태다. 여기서 즉시 라이브 적용하면 (a) k..N 이 빠진 상태 위에 새 스텝이 실행되고
   // (b) 이후 보류 재개 시 suffix(k..)에 방금 붙인 스텝도 포함돼 '두 번' 실행된다(행 삽입/붙여
@@ -2109,9 +2125,74 @@ function insertLogic(step, position) {
   const next = state.pipeline.slice();
   const beforeInsertSnapshot = (state.pipeline || []).map(s => ({ ...s }));
   next.splice(idx, 0, step);
+  // [모델: 윗 단계가 OFF(보류)면 새 단계도 OFF+보류] (사용자 확정 2026-07-29) 바로 위 스텝이
+  // 꺼져 있으면 새 스텝을 적용하지 않고 OFF+보류로만 넣는다(라이브 무변경). 켜면 그때 적용된다.
+  if (idx > 0 && !isStepEnabled(next[idx - 1])) {
+    if (typeof pushHistory === "function") pushHistory("단계 삽입");
+    step.enabled = false;
+    state.pipeline = next;
+    { const _r = getPipelineResumeFromIndex(); if (Number.isInteger(_r) && idx <= _r) setPipelineResumeFromIndex(_r + 1); }
+    setPipelineRuntimeStatus([step.id], "review", "보류");
+    renderPipeline();
+    refreshRunButton();
+    if (typeof scheduleLogicAutoBackup === "function") scheduleLogicAutoBackup("step-inserted");
+    if (typeof toast === "function") toast("윗 단계가 꺼져 있어(보류) 새 단계도 보류(OFF)로 추가했습니다. 스위치를 켜면 적용됩니다.", "info");
+    return { pending: false, inserted: true, held: true };
+  }
+  // [모델: 삽입 = 새 스텝 '하나만' 즉시 적용] (사용자 확정 3-a + "왜 처음부터 전체실행?" 제거)
+  // 윗 스텝이 ON 이면 삽입 지점 뒤 스텝을 재실행하지도, 전체를 처음부터 재적용하지도 않는다 —
+  // 켜기(ON)와 같은 의미론으로 새 스텝만 현재 라이브 위에 적용한다(직전 스냅샷 자동 캡처 →
+  // 이후 이 스텝 OFF/삭제도 fast). 리스트 순서 정합화는 다음 전체실행(pristine reset)이 담당.
+  // 교차파일 쓰기 스텝·백엔드 전용 파이프라인은 아래 기존 경로(정합 우선)로 남긴다.
+  {
+    const _liveLang = pipelineStepLiveLanguage(step);
+    if ((_liveLang === "vba" || _liveLang === "python")
+        && !(typeof pipelineHasBackendOnlyStep === "function" && pipelineHasBackendOnlyStep(next))
+        && !(typeof pipelineStepWritesCrossFile === "function" && pipelineStepWritesCrossFile(step))) {
+      if (typeof pushHistory === "function") pushHistory("단계 삽입");
+      state.pipeline = next;
+      { const _r = getPipelineResumeFromIndex(); if (Number.isInteger(_r) && idx <= _r) setPipelineResumeFromIndex(_r + 1); }
+      setPipelineRuntimeStatus([step.id], "running", "적용 중");
+      renderPipeline();
+      refreshRunButton();
+      if (typeof scheduleLogicAutoBackup === "function") scheduleLogicAutoBackup("step-inserted");
+      const _demoteHeld = () => {
+        const i2 = state.pipeline.findIndex(s => s && s.id === step.id);
+        if (i2 >= 0) state.pipeline[i2] = { ...state.pipeline[i2], enabled: false };
+        setPipelineRuntimeStatus([step.id], "review", "보류");
+        renderPipeline();
+        refreshRunButton();
+      };
+      const promise = (async () => {
+        const ok = await applyLastEnabledStepFast(step, { steps: state.pipeline });
+        if (!ok) {
+          _demoteHeld();
+          if (typeof toast === "function") toast("적용할 Excel 세션을 찾지 못해 새 단계를 보류(꺼짐)로 남겼습니다. 파일 탭을 선택한 뒤 스위치를 켜 주세요.", "error");
+          return false;
+        }
+        setPipelineRuntimeStatus([step.id], "applied", "적용됨");
+        clearPipelineResumeFromIndex();   // 라이브가 더는 순수 프리픽스가 아님 — 체크포인트 이어실행 무효화
+        refreshRunButton();
+        return true;
+      })().catch(err => {
+        // 실패 → 스텝은 남기되 보류(꺼짐)로 강등(사용자가 고쳐서 켤 수 있게), 오류 보고.
+        _demoteHeld();
+        if (typeof reportPipelineError === "function") reportPipelineError(err);
+        return false;
+      });
+      return {
+        pending: true,
+        promise,
+        cancel: () => (typeof requestExcelApplyCancel === "function" ? requestExcelApplyCancel() : false),
+      };
+    }
+  }
   if (idx < total && canUsePipelineCheckpointFromIndex(idx, beforeInsertSnapshot, next)) {
     if (typeof pushHistory === "function") pushHistory("단계 삽입");
     state.pipeline = next;
+    // [배리어 인덱스 시프트] 보류 배리어 앞(idx<=resume)에 삽입하면 배리어가 가리키던 스텝이 한 칸
+    // 밀린다 — resume 도 +1 해야 배리어가 같은 스텝을 계속 가리킨다(안 하면 엉뚱한 스텝이 배리어가 됨).
+    { const _r = getPipelineResumeFromIndex(); if (Number.isInteger(_r) && idx <= _r) setPipelineResumeFromIndex(_r + 1); }
     setPipelineRuntimeStatus(state.pipeline.slice(idx).filter(isStepEnabled).map(s => s && s.id).filter(Boolean), "running", "실행 중");
     renderPipeline();
     refreshRunButton();
@@ -2135,13 +2216,18 @@ function insertLogic(step, position) {
     if (liveExcelId) {
       if (typeof pushHistory === "function") pushHistory("단계 삽입");
       state.pipeline = next;
+      // [배리어 시프트+cap] 보류 배리어 앞에 삽입하면 배리어를 +1 시프트하고, 재적용은 배리어
+      // 앞까지만(cap) — held 스텝(배리어 뒤)은 실행하지 않는다(교차파일 전체 재적용 경로).
+      { const _r = getPipelineResumeFromIndex(); if (Number.isInteger(_r) && idx <= _r) setPipelineResumeFromIndex(_r + 1); }
+      const _barrier = getPipelineResumeFromIndex();
       setPipelineRuntimeStatus([step.id], "running", "작업 중");
       renderPipeline();
       refreshRunButton();
       if (typeof scheduleLogicAutoBackup === "function") scheduleLogicAutoBackup("step-inserted");
       const cancelToken = { cancelled: false };
       window.__activeVbaApply = { token: cancelToken, excelId: liveExcelId, stepId: step.id };
-      const promise = reapplyVbaPipelineToLive(liveExcelId)
+      const promise = reapplyVbaPipelineToLive(liveExcelId,
+          Number.isInteger(_barrier) ? { capIndexExclusive: _barrier } : {})
         .then(() => {
           if (cancelToken.cancelled) {
             if (window.__activeVbaApply && window.__activeVbaApply.token === cancelToken) window.__activeVbaApply = null;
@@ -2306,6 +2392,86 @@ function replaceLogicAt(stepId, newCode, newDescription, language, opts) {
     if (typeof scheduleLogicAutoBackup === "function") scheduleLogicAutoBackup("step-updated-unapplied");
     toast(`Step ${idx + 1} 코드를 수정했습니다(라이브 미적용). 저장하거나 전체실행하면 반영됩니다.`, "success");
     return { applied: false, unapplied: true, startIndex: start };
+  }
+  // ── [모델: 수정 적용 = 그 스텝 즉시 ON+적용, 뒤 스텝만 OFF+보류] (사용자 확정 2026-07-29) ──
+  // 예전엔 수정 지점부터 뒤 전부(스냅샷 없거나 교차파일이면 '처음부터 전체')를 재실행했다.
+  // 새 모델: ① [idx..) 에 적용돼 있던 옛 효과만 롤백 ② 수정 스텝은 새 코드로 '그 스텝만' 즉시 적용
+  // (ON 유지) ③ 뒤 스텝은 OFF+보류(수정으로 전제가 바뀌었으니 켜서 다시 적용). 뒤 재실행 없음.
+  {
+    const _liveLang = pipelineStepLiveLanguage(originalStep) || pipelineStepLiveLanguage(next[idx]);
+    if (_liveLang && !(typeof pipelineHasBackendOnlyStep === "function" && pipelineHasBackendOnlyStep(next))) {
+      const _busy = (typeof pipelineEditBusyReason === "function") ? pipelineEditBusyReason() : "";
+      if (_busy) { toast(_busy, "error"); return false; }
+      if (typeof pushHistory === "function") pushHistory("단계 수정");
+      // 미검증 새 코드 — 작성자 확인본(trustedStatic) 승격 차단(에러복구 대용량 예외는 유지)
+      if (!recoveredFromVba) { next[idx].trustedStatic = false; next[idx].extendedTimeout = false; }
+      // 옛 코드 기준의 하류 스냅샷 폐기(스테일 복원 방지). 자기 것(=이 스텝 직전 상태)은 복원점으로 보존.
+      for (let i = idx + 1; i < next.length; i += 1) {
+        if (next[i] && next[i]._preApplySnapshot) delete next[i]._preApplySnapshot;
+      }
+      // [idx..) 구간에 '적용됨' 스텝이 있는가 — 있으면 옛 효과 롤백이 먼저 필요하다.
+      const _anyApplied = (state.pipeline || []).slice(idx).some(s => s && s.id
+        && typeof getPipelineRuntimeStatus === "function"
+        && (getPipelineRuntimeStatus(s.id) || {}).status === "applied");
+      // 수정 스텝은 ON(수정 적용 = 즉시 적용), 그 '뒤'만 캐스케이드 OFF+보류.
+      next[idx] = { ...next[idx], enabled: true };
+      for (let i = idx + 1; i < next.length; i += 1) next[i] = { ...next[i], enabled: false };
+      state.pipeline = next;
+      renderPipeline();
+      refreshRunButton();
+      if (typeof scheduleLogicAutoBackup === "function") scheduleLogicAutoBackup("step-updated");
+      const editedStep = state.pipeline[idx];
+      const promise = (async () => {
+        if (_anyApplied) {
+          // 옛 효과 롤백([idx..) 제거). hold 는 [idx..) 을 보류로 마킹하지만, 아래 단일 적용
+          // 성공 시 markPipelinePendingFromIndex(idx+1) 이 idx=적용됨/뒤=보류로 재마킹한다.
+          let _rolled = false;
+          if (_lastLiveAppliedSignature !== null
+              && !pipelineSuffixWritesCrossFile(beforeReplaceSnapshot, idx)) {
+            try {
+              _rolled = await restorePipelineToCheckpointAndHold(idx, beforeReplaceSnapshot, {
+                message: "수정 위치 직전 상태로 되돌리는 중...",
+              });
+            } catch (err) {
+              console.warn("[pipeline] edit rollback failed; falling back to full reconcile", err);
+            }
+          }
+          if (!_rolled) {
+            // 폴백: reset + enabled(=프리픽스+수정 스텝) 재적용 — 이 자체가 '수정 반영+뒤 보류'와 등가
+            // (교차파일 목적지 리셋 포함). 수정 스텝은 enabled 라 reconcile 이 새 코드로 실행한다.
+            await reconcilePipelineSimulationAfterEdit({ affectedStep: editedStep, restorePipeline: beforeReplaceSnapshot });
+            markPipelinePendingFromIndex(idx + 1, { label: "보류" });
+            toast(`Step ${idx + 1} 수정을 적용했습니다 — 이후 단계는 보류(꺼짐)입니다. 켜면 적용됩니다.`, "success");
+            return true;
+          }
+        }
+        // 새 코드 '그 스텝만' 현재 라이브 위에 적용(직전 스냅샷 자동 캡처 → 이후 OFF/삭제 fast)
+        setPipelineRuntimeStatus([stepId], "running", "적용 중");
+        const ok = await applyLastEnabledStepFast(editedStep, { steps: state.pipeline });
+        if (!ok) {
+          state.pipeline[idx] = { ...state.pipeline[idx], enabled: false };
+          markPipelinePendingFromIndex(idx, { label: "보류" });
+          renderPipeline();
+          refreshRunButton();
+          toast("적용할 Excel 세션을 찾지 못해 수정 스텝을 보류(꺼짐)로 남겼습니다. 파일 탭을 선택한 뒤 켜 주세요.", "error");
+          return false;
+        }
+        // idx=적용됨 · [idx+1..)=보류 · resume=idx+1(라이브=프리픽스 [0,idx+1) — 정합)
+        markPipelinePendingFromIndex(idx + 1, { label: "보류" });
+        toast(`Step ${idx + 1} 수정을 적용했습니다 — 이후 단계는 보류(꺼짐)입니다. 켜면 적용됩니다.`, "success");
+        return true;
+      })().catch(err => {
+        // 실패 → 수정 스텝을 보류(꺼짐)로 강등(새 코드는 유지 — 고쳐서 다시 켤 수 있게)
+        const _i2 = state.pipeline.findIndex(s => s && s.id === stepId);
+        if (_i2 >= 0) state.pipeline[_i2] = { ...state.pipeline[_i2], enabled: false };
+        markPipelinePendingFromIndex(idx, { label: "보류" });
+        renderPipeline();
+        refreshRunButton();
+        if (typeof reportPipelineError === "function") reportPipelineError(err);
+        return false;
+      });
+      return { pending: true, promise };
+    }
   }
   // [0.5.15 Bug2 본수정] 마지막 스텝을 수정/에러복구해도 '그 스텝 직전 스냅샷'에서 이어실행한다(전체 재실행 금지).
   // 예전엔 idx<lastBeforeIdx(=마지막이 아님)이거나 resume 보류 중일 때만 이어실행 → 마지막 스텝(예: 6단계)
@@ -3168,130 +3334,7 @@ function renderPipeline() {
     }
     item.querySelector(".step-toggle").onclick = async (e) => {
       e.stopPropagation();
-      const busyReason = typeof pipelineEditBusyReason === "function" ? pipelineEditBusyReason() : "";
-      if (busyReason) {
-        if (typeof toast === "function") toast(busyReason, "error");
-        return;
-      }
-      const stepId = step.id;
-      const currentIdx = state.pipeline.findIndex(s => s.id === stepId);
-      if (currentIdx < 0) return;
-      if (typeof pushHistory === "function") pushHistory("단계 적용 여부 변경");
-      const prevEnabled = isStepEnabled(state.pipeline[currentIdx]);
-      const beforeToggleSnapshot = (state.pipeline || []).map(s => ({ ...s })); // [중단 복원] 변경 전
-      const fastLast = canFastEditLastPipelineStep(state.pipeline[currentIdx], currentIdx, beforeToggleSnapshot);
-      const resumeBeforeToggle = getPipelineResumeFromIndex();
-      state.pipeline[currentIdx] = { ...state.pipeline[currentIdx], enabled: !prevEnabled };
-      const toggledStep = state.pipeline[currentIdx];
-      renderPipeline();
-      refreshRunButton();
-      if (typeof scheduleLogicAutoBackup === "function") scheduleLogicAutoBackup("step-toggled");
-      if (Number.isInteger(resumeBeforeToggle) && currentIdx >= resumeBeforeToggle) {
-        // [토글 즉시 반영] 보류 구간 안의 스텝을 ON/OFF 하면 보류 지점부터 바로 이어실행해 라이브에 반영한다.
-        // 단 runFromCheckpointAfterEdit 는 '실패 step 직전 스냅샷'이 없으면(이어실행 불가) false 를 반환한다 —
-        // 이때 보류로 방치하면 "ON 했는데 안 돌아오고 계속 보류"가 된다(STEP4 ON 사례). false/예외면 보류를
-        // 비우고 전체 재실행으로 폴백한다(현재 ON/OFF 반영, 전체실행은 pristine reset 이라 중복 없이 안전).
-        let _resumed = false;
-        try {
-          _resumed = await runFromCheckpointAfterEdit(currentIdx, beforeToggleSnapshot, {
-            restoreMessage: "보류 구간을 다시 적용하는 중...",
-          });
-        } catch (err) {
-          console.warn("[pipeline] pending-region toggle resume threw; falling back to full re-run", err);
-        }
-        if (_resumed) return;
-        clearPipelineResumeFromIndex();
-        try {
-          await reconcilePipelineSimulationAfterEdit({ affectedStep: toggledStep, restorePipeline: beforeToggleSnapshot });
-        } catch (err2) {
-          state.pipeline[currentIdx] = { ...state.pipeline[currentIdx], enabled: prevEnabled };
-          renderPipeline();
-          refreshRunButton();
-          markPipelinePendingFromIndex(resumeBeforeToggle, { label: "보류" });
-          if (typeof reportPipelineError === "function") reportPipelineError(err2);
-        }
-        return;
-      }
-      // [#3] 라이브가 '알려진 적용 상태'가 아니면(예: 실행기 파일출력 전체실행 직후 — 라이브 무손상이라 시그니처를
-      // invalidate) fast 토글/체크포인트-보류를 쓰지 말고 곧장 full reconcile(reset→enabled 재적용)로 라이브에
-      // 결정적으로 반영한다. 거짓 baseline 위 fast 토글이 'ON 안 먹힘/보류'로 플레이키하던 것을 제거(이 reconcile
-      // 이 끝나면 시그니처가 채워져 다음 토글부터는 기존 빠른 경로). #2 '최종 반영 보기'를 먼저 눌렀다면 이미
-      // 시그니처가 있어 이 분기는 안 탄다.
-      if (_lastLiveAppliedSignature === null && pipelineStepLiveLanguage(beforeToggleSnapshot[currentIdx])) {
-        try {
-          await reconcilePipelineSimulationAfterEdit({ affectedStep: toggledStep, restorePipeline: beforeToggleSnapshot });
-        } catch (err) {
-          const idxNow = state.pipeline.findIndex(s => s.id === stepId);
-          if (idxNow >= 0) {
-            state.pipeline[idxNow] = { ...state.pipeline[idxNow], enabled: prevEnabled };
-            renderPipeline();
-            refreshRunButton();
-          }
-          if (typeof reportPipelineError === "function") reportPipelineError(err);
-        }
-        return;
-      }
-      if (fastLast) {
-        try {
-          if (prevEnabled) {
-            if (await restoreLastStepPreApplySnapshot(beforeToggleSnapshot[currentIdx], { message: "마지막 단계 OFF 반영 중..." })) {
-              noteLivePipelineApplied(state.pipeline);
-              if (typeof toast === "function") toast("마지막 단계만 빠르게 OFF 처리했습니다.", "success");
-              return;
-            }
-            // [스냅샷 없음 폴백] 실행기 파일출력 결과를 '결과 편집하기'로 불러온 뒤엔 라이브에 스텝별 OFF용
-            // 스냅샷이 없다(스냅샷은 격리 실행분이라 replace 로드 상태와 어긋남). 취소/에러 대신 full reconcile
-            // (reset→enabled 재적용)로 결정적으로 반영한다(느리지만 정확). state.pipeline 은 이미 OFF 가 반영된 상태.
-            try {
-              await reconcilePipelineSimulationAfterEdit({ affectedStep: toggledStep, restorePipeline: beforeToggleSnapshot });
-              return;
-            } catch (err2) {
-              state.pipeline = beforeToggleSnapshot;
-              renderPipeline();
-              refreshRunButton();
-              if (typeof reportPipelineError === "function") reportPipelineError(err2);
-              return;
-            }
-          } else if (_lastLiveAppliedSignature !== null &&
-              liveEnabledStepsSignature(beforeToggleSnapshot) === _lastLiveAppliedSignature) {
-            await applyLastEnabledStepFast(toggledStep, { steps: state.pipeline });
-            if (typeof toast === "function") toast("마지막 단계만 빠르게 ON 처리했습니다.", "success");
-            return;
-          }
-        } catch (err) {
-          console.warn("[pipeline] fast last-step toggle failed; cancelling fast edit", err);
-          state.pipeline = beforeToggleSnapshot;
-          renderPipeline();
-          refreshRunButton();
-          if (typeof toast === "function") {
-            toast("마지막 단계 ON/OFF 반영에 실패해 변경을 취소했습니다. 전체실행을 다시 완료한 뒤 시도해 주세요.", "error");
-          }
-          return;
-        }
-      }
-      if (!fastLast && pipelineStepLiveLanguage(beforeToggleSnapshot[currentIdx])
-          && !pipelineSuffixWritesCrossFile(beforeToggleSnapshot, currentIdx)) {
-        try {
-          if (await restorePipelineToCheckpointAndHold(currentIdx, beforeToggleSnapshot, {
-            message: "선택한 단계 직전 상태로 되돌리는 중...",
-            toast: `Step ${currentIdx + 1}부터 보류 상태로 전환했습니다.`,
-          })) {
-            return;
-          }
-        } catch (err) {
-          console.warn("[pipeline] middle-step toggle checkpoint restore failed; falling back to full reconcile", err);
-        }
-      }
-      reconcilePipelineSimulationAfterEdit({ affectedStep: toggledStep, restorePipeline: beforeToggleSnapshot }).catch(err => {
-        // [0.5.2.2 §5.5] 라이브 반영 실패 — ON 표시인데 미적용인 '유령 상태'를 막기 위해 토글 원복.
-        const idxNow = state.pipeline.findIndex(s => s.id === stepId);
-        if (idxNow >= 0) {
-          state.pipeline[idxNow] = { ...state.pipeline[idxNow], enabled: prevEnabled };
-          renderPipeline();
-          refreshRunButton();
-        }
-        reportPipelineError(err);
-      });
+      await handlePipelineStepToggle(step.id);
     };
     item.querySelector(".step-edit").onclick = (e) => {
       e.stopPropagation();
@@ -3374,18 +3417,38 @@ function renderPipeline() {
           return;
         }
       }
-      if (!fastLast && removedWasApplied && isStepEnabled(removedStep) && pipelineStepLiveLanguage(removedStep)
-          && !pipelineSuffixWritesCrossFile(beforeDeleteSnapshot, currentIdx)) {
-        try {
-          if (await restorePipelineToCheckpointAndHold(currentIdx, beforeDeleteSnapshot, {
-            message: "선택한 단계 직전 상태로 되돌리는 중...",
-            toast: `Step ${currentIdx + 1}부터 보류 상태로 전환했습니다.`,
-          })) {
-            return;
-          }
-        } catch (err) {
-          console.warn("[pipeline] middle-step delete checkpoint restore failed; falling back to full reconcile", err);
+      if (!fastLast && removedWasApplied && isStepEnabled(removedStep) && pipelineStepLiveLanguage(removedStep)) {
+        // [모델 5-a: 삭제 = 끄기와 동일] (사용자 확정 2026-07-29) 적용돼 있던 중간 스텝을 삭제하면
+        // 라이브는 그 스텝 직전으로 롤백하고, 그 지점부터 뒤 스텝은 전부 OFF+보류가 된다
+        // (다시 켜면 그때 적용). 뒤쪽을 자동 재적용하지 않는다.
+        for (let j = currentIdx; j < state.pipeline.length; j += 1) {
+          state.pipeline[j] = { ...state.pipeline[j], enabled: false };
         }
+        renderPipeline();
+        refreshRunButton();
+        if (!pipelineSuffixWritesCrossFile(beforeDeleteSnapshot, currentIdx)) {
+          try {
+            if (await restorePipelineToCheckpointAndHold(currentIdx, beforeDeleteSnapshot, {
+              message: "선택한 단계 직전 상태로 되돌리는 중...",
+              toast: `단계를 삭제했습니다 — Step ${currentIdx + 1}부터는 보류(OFF)입니다. 스위치를 켜면 적용됩니다.`,
+            })) {
+              return;
+            }
+          } catch (err) {
+            console.warn("[pipeline] middle-step delete rollback failed; falling back to full reconcile", err);
+          }
+        }
+        // 폴백: reset + enabled(=프리픽스만) 재적용 → 롤백 등가(교차파일 목적지도 reconcile 이 리셋)
+        try {
+          await reconcilePipelineSimulationAfterEdit({ affectedStep: removedStep, restorePipeline: beforeDeleteSnapshot });
+          markPipelinePendingFromIndex(currentIdx, { label: "보류" });
+        } catch (err2) {
+          state.pipeline = beforeDeleteSnapshot;   // 삭제 취소(원래 배열·enabled 복원)
+          renderPipeline();
+          refreshRunButton();
+          if (typeof reportPipelineError === "function") reportPipelineError(err2);
+        }
+        return;
       }
       reconcilePipelineSimulationAfterEdit({ affectedStep: removedStep, restorePipeline: beforeDeleteSnapshot }).catch(err => {
         // [0.5.2.2 §5.5] 라이브 반영 실패 — UI 에선 지워졌는데 라이브엔 남는 어긋남 방지, 원위치 복원.
@@ -3422,6 +3485,146 @@ function renderPipeline() {
   }
   if (typeof renderEditingBanner === "function") renderEditingBanner();
   renderRunnerWorkflow();
+}
+
+// [스위치 = 라이브 적용 상태, 단일 축] (사용자 확정 모델 2026-07-29)
+//   ON = 적용됨 · OFF = 보류(미적용). 한 스텝이 ON+보류로 공존하는 상태는 존재하지 않는다.
+//   OFF(끄기): 그 스텝 '및 뒤 스텝 전부' OFF+보류 → 라이브는 그 스텝 직전으로 롤백.
+//   ON(켜기): '그 스텝 하나만' 현재 라이브 위에 즉시 적용(앞의 OFF 스텝은 건너뜀 — 순서 건너뛰기 허용).
+//     단일 적용 성공 후엔 라이브가 더는 '프리픽스' 형태가 아니므로 resume(체크포인트 마커)을 해제한다
+//     (이어실행이 켠 스텝을 중복 실행하는 것 방지 — 이후 전체실행은 pristine reset이라 항상 옳다).
+//   예외: 교차파일 쓰기 스텝·라이브 서명 미기록·서명 불일치 → 결정적 reset+enabled 재적용(reconcile).
+// onclick 인라인이 아닌 top-level 함수로 분리 — 헤드리스 추출-실행 테스트로 시나리오를 잠근다.
+async function handlePipelineStepToggle(stepId) {
+  const busyReason = typeof pipelineEditBusyReason === "function" ? pipelineEditBusyReason() : "";
+  if (busyReason) {
+    if (typeof toast === "function") toast(busyReason, "error");
+    return;
+  }
+  const currentIdx = state.pipeline.findIndex(s => s && s.id === stepId);
+  if (currentIdx < 0) return;
+  if (typeof pushHistory === "function") pushHistory("단계 적용 여부 변경");
+  const prevEnabled = isStepEnabled(state.pipeline[currentIdx]);
+  const beforeToggleSnapshot = (state.pipeline || []).map(s => ({ ...s })); // [중단 복원] 변경 전
+  const fastLast = canFastEditLastPipelineStep(state.pipeline[currentIdx], currentIdx, beforeToggleSnapshot);
+
+  if (prevEnabled) {
+    // ══ OFF: 이 스텝부터 끝까지 OFF+보류, 라이브는 이 스텝 직전으로 롤백 ══
+    for (let j = currentIdx; j < state.pipeline.length; j += 1) {
+      state.pipeline[j] = { ...state.pipeline[j], enabled: false };
+    }
+    renderPipeline();
+    refreshRunButton();
+    if (typeof scheduleLogicAutoBackup === "function") scheduleLogicAutoBackup("step-toggled");
+    const markHeld = () => markPipelinePendingFromIndex(currentIdx, { label: "보류" });
+    const revertAll = (err) => {
+      state.pipeline = beforeToggleSnapshot;
+      renderPipeline();
+      refreshRunButton();
+      if (typeof reportPipelineError === "function") reportPipelineError(err);
+    };
+    // 비라이브(백엔드 전용) 스텝 → 기존 reconcile 경로(시뮬레이터 재계산)
+    if (!pipelineStepLiveLanguage(beforeToggleSnapshot[currentIdx])) {
+      reconcilePipelineSimulationAfterEdit({ affectedStep: beforeToggleSnapshot[currentIdx], restorePipeline: beforeToggleSnapshot })
+        .then(markHeld).catch(revertAll);
+      return;
+    }
+    // [#3] 라이브 서명 미기록(실행기 파일출력 직후 등) → 결정적 full reconcile(reset→enabled 재적용).
+    // 캐스케이드로 enabled=프리픽스만 남았으므로 reconcile 결과가 곧 롤백이다.
+    if (_lastLiveAppliedSignature === null) {
+      try {
+        await reconcilePipelineSimulationAfterEdit({ affectedStep: beforeToggleSnapshot[currentIdx], restorePipeline: beforeToggleSnapshot });
+        markHeld();
+      } catch (err) { revertAll(err); }
+      return;
+    }
+    // 마지막 스텝: 직전 스냅샷 복원 fast path(뒤 스텝이 없어 캐스케이드 대상 없음)
+    if (fastLast) {
+      try {
+        if (await restoreLastStepPreApplySnapshot(beforeToggleSnapshot[currentIdx], { message: "단계 OFF 반영 중..." })) {
+          noteLivePipelineApplied(state.pipeline);
+          markHeld();
+          if (typeof toast === "function") toast("단계를 껐습니다(보류). 다시 켜면 그때 적용됩니다.", "success");
+          return;
+        }
+      } catch (err) {
+        console.warn("[pipeline] fast last-step OFF failed; falling back to rollback/reconcile", err);
+      }
+    }
+    // 중간 스텝: 스냅샷 롤백 + [idx..) 보류 라벨(교차파일 쓰기 구간은 스냅샷 복원이 목적지를 못 되돌리므로 스킵)
+    if (!pipelineSuffixWritesCrossFile(beforeToggleSnapshot, currentIdx)) {
+      try {
+        if (await restorePipelineToCheckpointAndHold(currentIdx, beforeToggleSnapshot, {
+          message: "선택한 단계 직전 상태로 되돌리는 중...",
+          toast: `Step ${currentIdx + 1}부터 껐습니다(보류). 스위치를 켜면 그때 적용됩니다.`,
+        })) {
+          return;
+        }
+      } catch (err) {
+        console.warn("[pipeline] middle-step OFF rollback failed; falling back to full reconcile", err);
+      }
+    }
+    // 폴백: reset + enabled(=프리픽스만) 재적용 → 롤백 등가(느리지만 항상 옳다)
+    try {
+      await reconcilePipelineSimulationAfterEdit({ affectedStep: beforeToggleSnapshot[currentIdx], restorePipeline: beforeToggleSnapshot });
+      markHeld();
+    } catch (err) { revertAll(err); }
+    return;
+  }
+
+  // ══ ON: 이 스텝 '하나만' 현재 라이브 위에 즉시 적용 ══
+  state.pipeline[currentIdx] = { ...state.pipeline[currentIdx], enabled: true };
+  const toggledStep = state.pipeline[currentIdx];
+  renderPipeline();
+  refreshRunButton();
+  if (typeof scheduleLogicAutoBackup === "function") scheduleLogicAutoBackup("step-toggled");
+  const revertOn = (err) => {
+    const idxNow = state.pipeline.findIndex(s => s && s.id === stepId);
+    if (idxNow >= 0) {
+      state.pipeline[idxNow] = { ...state.pipeline[idxNow], enabled: false };
+      setPipelineRuntimeStatus([stepId], "review", "보류");
+      renderPipeline();
+      refreshRunButton();
+    }
+    if (typeof reportPipelineError === "function") reportPipelineError(err);
+  };
+  // 비라이브(백엔드 전용) 스텝 → 기존 reconcile 경로
+  if (!pipelineStepLiveLanguage(toggledStep)) {
+    reconcilePipelineSimulationAfterEdit({ affectedStep: toggledStep, restorePipeline: beforeToggleSnapshot }).catch(revertOn);
+    return;
+  }
+  // 서명 미기록/불일치(라이브가 알려진 상태 아님) 또는 교차파일 쓰기 스텝(라이브 단일적용은 소스 워크북
+  // 뷰 풀림 위험) → 단일적용 대신 결정적 reset+enabled 재적용(이 스텝 포함, 파이프라인 순서대로).
+  if (_lastLiveAppliedSignature === null
+      || liveEnabledStepsSignature(beforeToggleSnapshot) !== _lastLiveAppliedSignature
+      || (typeof pipelineStepWritesCrossFile === "function" && pipelineStepWritesCrossFile(toggledStep))) {
+    try {
+      await reconcilePipelineSimulationAfterEdit({ affectedStep: toggledStep, restorePipeline: beforeToggleSnapshot });
+      clearPipelineResumeFromIndex();
+      refreshRunButton();
+    } catch (err) { revertOn(err); }
+    return;
+  }
+  // 단일 스텝 즉시 적용 — 적용 '직전' 스냅샷을 자동 캡처하므로 이후 이 스텝 OFF 롤백도 fast 로 동작.
+  setPipelineRuntimeStatus([stepId], "running", "적용 중");
+  try {
+    const _applied = await applyLastEnabledStepFast(toggledStep, { steps: state.pipeline });
+    if (!_applied) {
+      // 세션 없음 등 '조용한 미적용'(false) — 성공으로 칠하면 ON인데 미적용인 유령 상태가 된다.
+      state.pipeline[currentIdx] = { ...state.pipeline[currentIdx], enabled: false };
+      setPipelineRuntimeStatus([stepId], "review", "보류");
+      renderPipeline();
+      refreshRunButton();
+      if (typeof toast === "function") toast("적용할 Excel 세션을 찾지 못해 보류(OFF) 상태로 남겼습니다. 파일 탭을 선택한 뒤 다시 켜 주세요.", "error");
+      return;
+    }
+    setPipelineRuntimeStatus([stepId], "applied", "적용됨");
+    clearPipelineResumeFromIndex();   // 라이브가 더는 순수 프리픽스가 아님 — 체크포인트 이어실행 무효화
+    refreshRunButton();
+    if (typeof toast === "function") toast(`Step ${currentIdx + 1}을(를) 적용했습니다.`, "success");
+  } catch (err) {
+    revertOn(err);
+  }
 }
 
 // 0.4.9 리모콘 모델: 라이브 실행 가능한 파이프라인을 현재 Excel 세션에 적용한다.
@@ -3682,15 +3885,26 @@ async function runPipelineSuffixFromCheckpoint(startIdx, options = {}) {
 async function _runPipelineSuffixFromCheckpointImpl(startIdx, options = {}) {
   const start = Math.max(0, Number(startIdx) | 0);
   const steps = state.pipeline || [];
+  // [보류 배리어 유지] endIndexExclusive 가 주어지면 [start, endExclusive) 만 실행하고 그 뒤는
+  // 계속 보류로 남긴다. 보류 배리어(step N 미적용) 앞을 편집/삽입해도 배리어 뒤 스텝(step N+1…)이
+  // 같이 실행되던 실측 버그 방지 — "N 보류 풀기 전까지 뒤 스텝 실행 금지". 미지정이면 끝까지(=이어실행).
+  const endExclusive = Number.isInteger(options.endIndexExclusive)
+    ? Math.max(start, Math.min(Number(options.endIndexExclusive), steps.length))
+    : steps.length;
+  const barrierRemains = endExclusive < steps.length;
+  const _finishBarrier = () => {
+    if (barrierRemains) markPipelinePendingFromIndex(endExclusive, { label: options.pendingLabel || "보류" });
+    else clearPipelineResumeFromIndex();
+  };
   if (start >= steps.length) {
     clearPipelineResumeFromIndex();
     return { ok: true, applied: 0 };
   }
-  const suffix = steps.slice(start);
+  const suffix = steps.slice(start, endExclusive);
   const activeSuffix = suffix.filter(isStepEnabled);
   if (!activeSuffix.length) {
-    markPipelinePendingFromIndex(steps.length);
-    clearPipelineResumeFromIndex();
+    // [start, endExclusive) 에 실행할 게 없다 — 배리어가 남으면 그 지점부터 보류 유지, 아니면 해제.
+    _finishBarrier();
     return { ok: true, applied: 0 };
   }
   if (pipelineHasBackendOnlyStep(suffix)) {
@@ -3724,15 +3938,21 @@ async function _runPipelineSuffixFromCheckpointImpl(startIdx, options = {}) {
     if (fid) excelId = await excelIdForPipelineFileId(fid);
   }
   if (!excelId) throw new Error("보류 구간을 실행할 Excel 창을 찾지 못했습니다. 파일 탭을 먼저 선택해 주세요.");
-  const data = await runIsolatedLivePipelineSteps(steps, excelId, {
+  // 배리어가 남으면 [0, endExclusive) 만 러너에 넘겨 그 뒤 held 스텝은 열지도/실행하지도 않는다.
+  const runSteps = barrierRemains ? steps.slice(0, endExclusive) : steps;
+  const data = await runIsolatedLivePipelineSteps(runSteps, excelId, {
     ...options,
     startIndex: start,
     skipReset: true,
   });
   setPipelineRuntimeStatus(ids, "applied", "적용됨");
-  clearPipelineResumeFromIndex();
-  noteLivePipelineApplied(steps);
-  if (typeof toast === "function") toast(`보류된 ${activeSuffix.length}개 단계를 실행했습니다.`, "success");
+  _finishBarrier();                              // 배리어 유지(있으면) 또는 해제
+  noteLivePipelineApplied(steps.slice(0, endExclusive));
+  if (typeof toast === "function") {
+    toast(barrierRemains
+      ? `${activeSuffix.length}개 단계를 적용했습니다(보류 지점 이후는 그대로 보류).`
+      : `보류된 ${activeSuffix.length}개 단계를 실행했습니다.`, "success");
+  }
   return data || { ok: true, applied: activeSuffix.length };
 }
 
@@ -3765,9 +3985,20 @@ async function runFromCheckpointAfterEdit(startIdx, beforeSteps, options = {}) {
       throw new Error("수정 위치 직전 상태로 복원하지 못해 재실행을 중단했습니다. '전체 실행'으로 다시 적용해 주세요.");
     }
   }
+  // [보류 배리어 유지 — '앞' 편집만] 기존 보류가 있고 배리어 '앞'(requestedStart < existingResume)을
+  // 편집/삽입한 경우에만 endExclusive=existingResume 로 캡해 배리어 뒤 held 스텝을 실행하지 않는다
+  // (불변식: 보류 스텝 풀기 전, '앞 구간' 편집이 뒤 스텝을 딸려 실행하면 안 됨).
+  // [보류 구간 안 토글/수정은 캡 없음] requestedStart >= existingResume 면 사용자가 held 스텝을 직접
+  // 건드린 것 → 보류 지점부터 끝까지 이어실행해 라이브에 반영하고 배리어를 해제한다(사용자 결정:
+  // "즉시 반영(보류 해제)"). 여기에도 캡을 걸면 [resume,resume)=무실행이라 "보류 스텝 ON 눌렀는데
+  // 아무 일도 안 남"(실측 2026-07-29)이 된다.
+  const _capEnd = (Number.isInteger(existingResume) && requestedStart < existingResume)
+    ? existingResume : undefined;
   markPipelinePendingFromIndex(start, { label: "보류" });
   // mustRestore 로 이미 복원했으면 임플 내부의 '미적용 수정 복원'을 건너뛴다(이중 복원 방지).
-  return runPipelineSuffixFromCheckpoint(start, { ...options, skipUnappliedRestore: mustRestore });
+  return runPipelineSuffixFromCheckpoint(start, {
+    ...options, skipUnappliedRestore: mustRestore, endIndexExclusive: _capEnd,
+  });
 }
 
 function canUsePipelineCheckpointFromIndex(startIdx, beforeSteps, nextSteps) {
@@ -3851,8 +4082,11 @@ function applyLiveSchemaToFileCache(excelId, schema) {
   if (schema.sheets && typeof schema.sheets === "object") {
     f.sheets = f.sheets || {};
     names.forEach(nm => { if (Array.isArray(schema.sheets[nm])) f.sheets[nm] = schema.sheets[nm]; });
-    // 서버에 없는(삭제된) 시트의 캐시는 제거 — syncFileMetadata 가 sheetNames 를 f.sheets 키로 재구성.
-    Object.keys(f.sheets).forEach(nm => { if (!names.includes(nm)) delete f.sheets[nm]; });
+    // [partial 병합] 단일 시트만 읽은 갱신(AI 도움 라이브 직독)은 '병합만' 한다 — 안 읽은 다른
+    // 시트 캐시를 지우면 안 된다. 전체 읽기(partial 아님)일 때만 삭제된 시트 캐시를 정리한다.
+    if (!schema.partial) {
+      Object.keys(f.sheets).forEach(nm => { if (!names.includes(nm)) delete f.sheets[nm]; });
+    }
   }
   if (schema.dims && typeof schema.dims === "object") {
     f.backendPreviewDimensions = f.backendPreviewDimensions || {};
@@ -3945,7 +4179,14 @@ function beginMappedPipelineRun() {
 async function reapplyVbaPipelineToLive(excelId, options = {}) {
   const __mapRun = options.steps ? null : beginMappedPipelineRun();
   try {
-    return await _reapplyVbaPipelineToLiveImpl(excelId, options);
+    const res = await _reapplyVbaPipelineToLiveImpl(excelId, options);
+    // [보류 배리어 유지] capIndexExclusive 로 '배리어 앞'만 리셋+재적용했으면, 그 뒤 held 스텝은
+    // 다시 보류로 마킹한다(전체 재적용이 배리어를 풀어 뒤 스텝까지 실행하던 실측 버그 방지).
+    if (Number.isInteger(options.capIndexExclusive)
+        && options.capIndexExclusive < (state.pipeline || []).length) {
+      markPipelinePendingFromIndex(options.capIndexExclusive, { label: "보류" });
+    }
+    return res;
   } finally {
     if (__mapRun) __mapRun.restore();
   }
@@ -3955,7 +4196,13 @@ async function _reapplyVbaPipelineToLiveImpl(excelId, options = {}) {
   const perfStartedAt = performance.now();
   let prehideMs = 0;
   let requestMs = 0;
-  const sourceSteps = options.steps || state.pipeline;
+  let sourceSteps = options.steps || state.pipeline;
+  // [보류 배리어 cap] capIndexExclusive 가 있으면 '배리어 앞' [0, cap) 만 리셋+재적용한다.
+  // (held 스텝이 건드리는 파일은 held=미적용이라 이미 pristine → 리셋 대상에서 빠져도 안전.)
+  const _capIdx = Number.isInteger(options.capIndexExclusive)
+    ? Math.max(0, Math.min(Number(options.capIndexExclusive), (sourceSteps || []).length))
+    : null;
+  if (_capIdx != null) sourceSteps = (sourceSteps || []).slice(0, _capIdx);
   const liveLangOf = s => pipelineStepLiveLanguage(s);
   // 꺼진 스텝 포함 전체 라이브 스텝 — 리셋 대상 계산에 사용(토글 OFF 의 효과를 되돌리려면
   // 그 꺼진 스텝이 건드렸던 워크북도 리셋해야 한다).
@@ -5489,6 +5736,10 @@ $("btn-run").onclick = async () => {
       try { if (typeof traceClientUiEvent === "function") traceClientUiEvent("record.start.session_reopen", { recovered: !!excelId }); } catch (_) {}
     }
     if (!recording && !excelId) { toast("먼저 우측에 엑셀 파일을 열어 주세요", "error"); return; }
+    // [정지 실패 = 이중 상태 방지] 이 클릭이 '정지' 시도였고 수확(record/stop)까지 못 갔다면
+    // 서버 레코더는 계속 돌고 있다 — 버튼만 풀면 녹화를 잃는다. catch 에서 이 플래그로 구분한다.
+    const _isStopAttempt = recording;
+    let _stopHarvested = false;
     btn.disabled = true;
     try {
       if (!recording) {
@@ -5498,12 +5749,21 @@ $("btn-run").onclick = async () => {
         // fast append(복원+재실행) 시 이중 반영됐다. 스냅샷을 먼저 뜨면 준비 구간의 편집은
         // '기록 안 됨' 방향으로만 어긋난다(레코더 ON 전이므로 사용자 기대와 일치).
         // 실패한 세션은 건너뛰되 recSnapshotsComplete=false 로 기록 → 정지 시 전체실행 폴백.
+        // [녹화 워치독 억제] 준비(스냅샷 저장)~record/start(블록)~세션~정지 전 구간을 '녹화 중'으로
+        // 표시한다. 이 사이 서버 COM 은 매크로 레코더로 잠깐 블록/느려질 수 있는데(정상), 클라 자동
+        // 강제재시작(noteExcelComTimeout)이 이를 '행'으로 오판해 발동하면 공유 라이브 Excel 이 죽어
+        // 진행 중 녹화가 통째로 유실된다(실측 2026-07-28: harvested=0). finally 의 setUi() 가 정지·
+        // 실패 시 recording=false 로 되돌리며 이 플래그도 함께 내린다.
+        try { globalThis.__excelRecordingActive = true; } catch (_) {}
         btn.textContent = "… 준비 중";
         recPreSnapshots = [];
         recSnapshotsComplete = false;
+        const _prepT0 = (typeof performance !== "undefined") ? performance.now() : Date.now();
+        let _snapMs = 0, _snapCount = 0;
         try {
           const ids = [...new Set(Object.values(
             (typeof excelMirror !== "undefined" && excelMirror.sessionsByFileId) || {}))].filter(Boolean);
+          _snapCount = ids.length;
           recPreSnapshots = (await Promise.all(ids.map(async (eid) => {
             try {
               const s = await postExcelMirror("/api/excel/save", { excelId: eid }, 0, { timeoutMs: 60000 });
@@ -5512,10 +5772,25 @@ $("btn-run").onclick = async () => {
           }))).filter(Boolean);
           recSnapshotsComplete = ids.length > 0 && recPreSnapshots.length === ids.length;
         } catch (_) { recPreSnapshots = []; recSnapshotsComplete = false; }
+        _snapMs = Math.round(((typeof performance !== "undefined") ? performance.now() : Date.now()) - _prepT0);
         // 녹화 스텝은 정지 후 파이프라인에 삽입 → 재현(fast append 또는 전체실행)한다.
         // 녹화/재현은 무조건 VBA(네이티브 매크로 레코더 → Sub B2BSkill → VBA 러너).
         // 폴백 없음: 레코더 시작이 실패하면 python 캡처로 새지 않고 명확히 실패시킨다.
+        // [수동 확인 안내] 레코더 시작은 Excel '매크로 기록' 모달을 자동 확인(포커스 무관 워커)한 뒤
+        // 켜진다. 그런데 이 모달은 활성/포그라운드가 아니면 자동 확인이 씹혀 시작이 지연될 수 있다
+        // — 그 사이 사용자가 우측 엑셀을 한 번 클릭하면 즉시 확인된다. record/start(블록) 직전에 안내.
+        btn.textContent = "… 녹화 시작 중";
+        toast("녹화 시작 중 — 우측 엑셀 화면을 한 번 클릭해 주세요.", "info");
+        // [준비 중 진단] 스냅샷(전 세션 저장) vs 레코더 시작 중 어디가 느린지 각각 계측.
+        const _recStartT0 = (typeof performance !== "undefined") ? performance.now() : Date.now();
         await postExcelMirror("/api/excel/record/start", { engine: "vba" }, 0, { timeoutMs: 30000 });
+        const _recStartMs = Math.round(((typeof performance !== "undefined") ? performance.now() : Date.now()) - _recStartT0);
+        try {
+          if (typeof traceClientUiEvent === "function") traceClientUiEvent("record.prep.timing", {
+            snapshotSessions: String(_snapCount), snapshotMs: String(_snapMs),
+            recordStartMs: String(_recStartMs), totalPrepMs: String(_snapMs + _recStartMs),
+          });
+        } catch (_) {}
         recording = true;
         recExcelId = excelId; // 시작 가드에서 non-null 검증됨 — 정지 후 재현 대상으로 고정
 
@@ -5524,6 +5799,7 @@ $("btn-run").onclick = async () => {
         // 정지 시 서식/객체 스냅샷 diff 가 시트 규모에 따라 오래 걸릴 수 있다.
         btn.textContent = "■ 정지 중…";
         const data = await postExcelMirror("/api/excel/record/stop", {}, 0, { timeoutMs: 200000 });
+        _stopHarvested = true;   // 수확 완료 — 이후 실패는 레코더가 아니라 후처리(분할/재현) 실패
         recording = false;
         setUi();
         let entries = (data && data.steps) || [];
@@ -5616,7 +5892,43 @@ $("btn-run").onclick = async () => {
           ? await showRecordReviewDialog(entries,
               `동작 ${data.raw_actions}개 → 스텝 ${data.distilled}개 → 의도 ${entries.length}묶음.${regroupNote}${capNote}`)
           : entries;
-        if (!picked || !picked.length) { toast("녹화 결과를 추가하지 않았습니다", "error"); return; }
+        if (!picked || !picked.length) {
+          // [녹화 취소 = 원상복구] 검토에서 아무 스텝도 추가하지 않으면(취소) 라이브를 '녹화 전'
+          // 스냅샷으로 되돌린다 — 예전엔 그냥 return 해서 녹화 중 수작업 변경이 라이브에 남았다(실측).
+          // (성공 경로도 복원→재현이므로, 취소는 그중 복원만 수행하는 것 — 의미론 일관)
+          if (recPreSnapshots.length) {
+            btn.textContent = "… 녹화 전으로 되돌리는 중";
+            if (typeof beginExcelMirrorApplyLoading === "function") {
+              beginExcelMirrorApplyLoading("녹화 취소 — 녹화 전 상태로 되돌리는 중...", { hideWindows: false, failsafeMs: 180000 });
+            }
+            let _cancelFailed = 0;
+            try {
+              // 녹화 세션(활성)을 마지막에 복원 — 재현 루프와 동일 순서(화면엔 녹화 세션만 유지)
+              const _cancelOrder = [...recPreSnapshots].sort((a, b) =>
+                (a.excelId === recExcelId ? 1 : 0) - (b.excelId === recExcelId ? 1 : 0));
+              for (const snap of _cancelOrder) {
+                try {
+                  await postExcelMirror("/api/excel/replace",
+                    { excelId: snap.excelId, resultId: snap.resultId, readOnlyMirror: false },
+                    0, { timeoutMs: 180000 });
+                } catch (e) { _cancelFailed += 1; console.warn("[record] 취소 복원 실패:", snap && snap.excelId, e); }
+              }
+              if (typeof showOnlyExcelMirrorWindow === "function" && recExcelId) {
+                try { await showOnlyExcelMirrorWindow(recExcelId, { force: true }); } catch (_) {}
+              }
+            } finally {
+              if (typeof endExcelMirrorApplyLoading === "function") endExcelMirrorApplyLoading();
+            }
+            if (_cancelFailed || !recSnapshotsComplete) {
+              toast("녹화를 취소했습니다 — 일부 파일은 녹화 전 스냅샷이 없거나 복원에 실패해 되돌리지 못했습니다.", "error");
+            } else {
+              toast("녹화를 취소하고 녹화 전 상태로 되돌렸습니다.", "success");
+            }
+          } else {
+            toast("녹화 결과를 추가하지 않았습니다 — 녹화 전 스냅샷이 없어 화면은 그대로입니다.", "error");
+          }
+          return;
+        }
         if (consolidatePromise) {
           btn.textContent = "… 헬퍼 통합 중";
           try { await consolidatePromise; } catch (e) { /* 원본 유지 */ }
@@ -5666,18 +5978,51 @@ $("btn-run").onclick = async () => {
           }
           return "";
         };
-        const makeStep = (s) => {
+        // 조각 '안 마지막' Windows/Workbooks(...).Activate 워크북명 — 이 조각을 실행하고 나면
+        // 활성 워크북이 여기로 바뀐다(다음 조각의 상속 기준).
+        const _chunkLastActivateBook = (code) => {
+          let last = "";
+          for (const line of String(code || "").split(/\r?\n/)) {
+            const m = line.trim().match(/^(?:Windows|Workbooks)\(\s*"([^"\r\n]+\.xls[xmb]?)"\s*\)\s*\.\s*Activate\b/i);
+            if (m) last = m[1];
+          }
+          return last;
+        };
+        // [활성 워크북 캐리오버] 무자격 Sheets("X").Select 로 시작하는 조각(예: 앞 조각이 만든 시트에
+        // 값 입력)은 '앞 조각이 남긴 활성 워크북'에서 동작한다. 라이브 녹화에선 활성 컨텍스트가 조각
+        // 사이로 이어지지만, 분할된 독립 조각은 그 컨텍스트를 잃어 전역 앵커(녹화 시작 파일)로 폴백됐다
+        // — 그래서 정산서에 만든 asd 시트를 청구내역에서 찾다 subscript out of range(실측 4단계 스킬).
+        // 조각들을 실행 순서로 훑어 각 조각의 '시작 시 활성 워크북'을 이어 계산한다:
+        //   시작북 = (첫 동작이 Activate면 그 북) 아니면 (앞 조각 끝의 활성 북) — 앵커에서 출발.
+        //   조각 끝 활성 북 = (조각 안 마지막 Activate) 아니면 (시작북 그대로).
+        const _chunkBooks = [];
+        {
+          let runningBook = String((data && data.recordedWorkbook) || "");  // 앵커(녹화 시작) 워크북명
+          for (const s of picked) {
+            const _isVba = String(s.language || "").toLowerCase() === "vba"
+              || /\bSub\s+B2BSkill\b/i.test(String(s.code || ""));
+            const leadBook = _isVba ? _chunkPrimaryBook(s.code) : "";
+            const startBook = leadBook || runningBook;   // 이 조각이 시작될 때의 활성 워크북명
+            const startFileId = (startBook && typeof pipelineFileIdByWorkbookName === "function")
+              ? (pipelineFileIdByWorkbookName(startBook) || null) : null;
+            _chunkBooks.push({ startFileId: startFileId || targetFileId, startBook });
+            const lastBook = _isVba ? _chunkLastActivateBook(s.code) : "";
+            runningBook = lastBook || startBook;         // 이 조각 실행 후의 활성 워크북명
+          }
+        }
+        const makeStep = (s, _idx) => {
           // [의도색] 분할이 안 돼도(VBA 1스텝) 월/분기/연/날짜 리터럴 조각이면 _recordedIntentNeeded 로 승격.
           const _isVbaChunk = String(s.language || "").toLowerCase() === "vba" || /\bSub\s+B2BSkill\b/i.test(String(s.code || ""));
           const _needIntent = !!s.intentNeeded
             || (typeof _recordedIntentNeeded === "function" && _isVbaChunk && !!_recordedIntentNeeded(s.code));
-          const _primBook = _isVbaChunk ? _chunkPrimaryBook(s.code) : "";
-          const _primFileId = (_primBook && typeof pipelineFileIdByWorkbookName === "function")
-            ? pipelineFileIdByWorkbookName(_primBook) : null;
-          const _stepFileId = _primFileId || targetFileId;
+          // 실행순서 캐리오버(_chunkBooks)로 계산한 '이 조각의 시작 활성 워크북'. 무자격
+          // Sheets().Select 로 시작하는 조각도 앞 조각이 남긴 워크북을 상속한다(앵커 폴백 X).
+          const _bk = _chunkBooks[_idx] || {};
+          const _stepFileId = _bk.startFileId || targetFileId;
+          const _primBook = _bk.startBook || "";
           // 앵커(녹화 시작 파일) 조각인가 — 앵커가 아니면 앵커의 recordedSheet 를 이 조각에 찍으면 안
           // 된다(타 파일엔 그 시트가 없어 사전활성/요구파일이 엉뚱해짐). 대상 파일이 다르면 시트 미상.
-          const _isAnchorChunk = !_primFileId || _primFileId === targetFileId;
+          const _isAnchorChunk = _stepFileId === targetFileId;
           return normalizeStep({
             id: (typeof uid === "function" ? uid() : s.id),
             prompt: s.prompt,
@@ -5704,7 +6049,7 @@ $("btn-run").onclick = async () => {
         // 을 딱 한 번 돌린다 → 창 숨김/복원 1회, 스텝별 스냅샷은 백엔드가 배치 안에서 남겨
         // 온오프/삭제도 그대로 동작. 재현 실패는 전체실행 경로가 errorInfo 로 보고.
         if (typeof pushHistory === "function") pushHistory("녹화 스텝 추가");
-        const appendedSteps = picked.map((s) => makeStep(s));
+        const appendedSteps = picked.map((s, i) => makeStep(s, i));
         for (const st of appendedSteps) state.pipeline.push(st);
         renderPipeline();
         refreshRunButton();
@@ -5772,7 +6117,13 @@ $("btn-run").onclick = async () => {
               if (typeof beginExcelMirrorApplyLoading === "function") {
                 beginExcelMirrorApplyLoading("녹화 재현 중...", { hideWindows: false, failsafeMs: 600000 });
               }
-              for (const snap of recPreSnapshots) {
+              // [회색 엑셀] 녹화 세션(활성)을 '마지막'에 복원 — 교체는 표시 중인 세션의 프레임을
+              // 다시 제시하므로, 활성 세션을 먼저 갈고 다른(숨김) 세션을 나중에 갈면 중간 상태가
+              // 어색해진다. 숨김 세션 교체는 서버가 표시하지 않으므로(hidden 유지) 순서를 이렇게
+              // 두면 재현 내내 화면엔 녹화 세션 프레임만 보인다.
+              const _orderedSnaps = [...recPreSnapshots].sort((a, b) =>
+                (a.excelId === recExcelId ? 1 : 0) - (b.excelId === recExcelId ? 1 : 0));
+              for (const snap of _orderedSnaps) {
                 await postExcelMirror("/api/excel/replace",
                   { excelId: snap.excelId, resultId: snap.resultId, readOnlyMirror: false },
                   0, { timeoutMs: 180000 });
@@ -5814,7 +6165,32 @@ $("btn-run").onclick = async () => {
             // [이슈2] 폴백 전체실행(백그라운드) 직후에도 실행기 헤드리스면 즉시 재숨김.
             if (excelMirror && excelMirror.runnerHeadless) { try { await hideAllExcelMirrorWindows(); } catch (_) {} }
           }
+          // [녹화 종료 착지 통일] 빠른재현·폴백 두 경로 모두 '녹화 시작(=스킬 바인딩) 파일'로 착지시키고
+          // 앱 탭도 그 파일로 맞춘다. 예전엔 빠른재현=시작파일 / 폴백=마지막 쓴 파일 로 갈렸고,
+          // 탭(state.currentFileId)은 아무도 안 맞춰서 교차파일 녹화 시 '탭은 청구내역인데 화면은
+          // 정산서' 로 어긋났다. recExcelId 로 통일 + setCurrentView 로 탭·미러를 함께 이동한다.
+          if (!(excelMirror && excelMirror.runnerHeadless)) {
+            try {
+              const _recFileId = (typeof fileIdForExcelMirrorId === "function") ? fileIdForExcelMirrorId(recExcelId) : null;
+              if (_recFileId && typeof setCurrentView === "function") {
+                setCurrentView(_recFileId, { source: "record-land" });   // 탭 하이라이트+뷰 동기화
+              }
+              if (typeof showOnlyExcelMirrorWindow === "function") {
+                await showOnlyExcelMirrorWindow(recExcelId, { force: true });
+              }
+              if (typeof scheduleRestoreActiveExcelMirror === "function") {
+                // 폴백 경로가 lastTouched 로 예약한 복원을 recExcelId 로 덮어쓴다(clearTimeout 로 최신이 승리).
+                scheduleRestoreActiveExcelMirror(120, { restoreExcelId: recExcelId, restoreFileId: _recFileId || null });
+              }
+            } catch (_) {}
+          }
           toast(`녹화 완료 — 동작 ${data.raw_actions}개를 ${picked.length}개 스텝으로 저장하고 재현했습니다`, "success");
+          // [이어 편집 안내] 녹화 종료 직후 곧바로 이어서 편집하려면 상단 파일 탭을 다시 선택해야
+          // 편집 대상 세션이 확정된다 — 종료 착지가 미러/탭을 재정렬하는 사이 편집이 엉뚱한 세션으로
+          // 새지 않도록 사용자에게 명시 안내한다(runner 헤드리스는 탭이 없으므로 제외).
+          if (!(excelMirror && excelMirror.runnerHeadless) && typeof toast === "function") {
+            setTimeout(() => toast("이어서 편집하려면 상단 파일 탭을 다시 선택해 주세요.", "info"), 1200);
+          }
           // [재현 검증] 녹화 정지 시점의 시트 다이제스트(정답)와 재현 결과를 자동 대조.
           // 어긋난 시트를 정확히 지목해 "결과가 왜 다른지 모름"을 없앤다. 검증 실패가
           // 재현 성공 처리를 막지는 않는다(보조 진단).
@@ -5861,11 +6237,19 @@ $("btn-run").onclick = async () => {
         recSnapshotsComplete = false;
       }
     } catch (err) {
-      recording = false;
-      recExcelId = null;
-      recPreSnapshots = [];
-      recSnapshotsComplete = false;
-      toast("녹화 실패: " + (err && err.message ? err.message : String(err)), "error");
+      const _msg = (err && err.message ? err.message : String(err));
+      if (_isStopAttempt && !_stopHarvested) {
+        // [셀 편집 중 정지 실패] 수확(record/stop) 전에 실패 — 서버 레코더는 계속 돌고 있다.
+        // 녹화 상태를 유지해 사용자가 '■ 녹화 정지'를 다시 눌러 이어서 정지할 수 있게 한다
+        // (서버가 Enter 로 셀 편집을 확정하므로 대부분 자동 회복되지만, 모달 등엔 재시도 필요).
+        toast("녹화 정지 실패: " + _msg + " — 엑셀 편집(입력)을 마친 뒤 '■ 녹화 정지'를 다시 눌러 주세요.", "error");
+      } else {
+        recording = false;
+        recExcelId = null;
+        recPreSnapshots = [];
+        recSnapshotsComplete = false;
+        toast("녹화 실패: " + _msg, "error");
+      }
     } finally {
       setUi();
       btn.disabled = false;

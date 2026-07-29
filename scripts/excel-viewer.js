@@ -91,7 +91,8 @@ function isExplicitViewSwitchSource(options) {
   const source = typeof options === "string"
     ? options
     : String((options && (options.source || options.reason)) || "");
-  return source === "upload" || source === "user-tab";
+  // record-land: 녹화 정지·재현 후 '녹화 시작(=스킬 바인딩) 파일'로 탭·미러를 함께 착지시키는 전환.
+  return source === "upload" || source === "user-tab" || source === "record-land";
 }
 
 function setCurrentView(fileId, options = {}) {

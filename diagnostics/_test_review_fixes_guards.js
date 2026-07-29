@@ -138,7 +138,8 @@ t("F1-5 선복구가 매핑 래핑 전(원본 기준) — autoRepair 가 beginMa
 // ---------- F3. 녹화 fast append 게이트/백업 (소스 — IIFE 라 extractFn 불가) ----------
 {
   const recStart = pj.indexOf("녹화 모드 (ixi-Cell-R recorder 통합)");
-  const rec = recStart >= 0 ? pj.slice(recStart, recStart + 30000) : "";
+  // 윈도우 45000: 녹화 IIFE 가 커지며(취소 복원·셀편집 가드 등) 30000 을 넘었다 — 실제 IIFE 끝까지 커버.
+  const rec = recStart >= 0 ? pj.slice(recStart, recStart + 45000) : "";
   t("F3-0 녹화 IIFE 존재", recStart >= 0);
   const snapDone = rec.indexOf("recSnapshotsComplete = ids.length > 0");
   const recStartCall = rec.indexOf('"/api/excel/record/start"');

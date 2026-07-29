@@ -1168,6 +1168,10 @@ function noteExcelComTimeout(err) {
   try {
     const msg = String((err && err.message) || "");
     if (!/COM 작업이 .*초 안에 끝나지 않았습니다/.test(msg)) return;
+    // [녹화 보호] 녹화 중에는 서버가 매크로 레코더로 COM 을 의도적으로 블록/지연시킬 수 있다 —
+    // 이때의 타임아웃을 '행(hang)'으로 오판해 강제 재시작하면 공유 라이브 Excel 이 죽어 진행 중
+    // 녹화가 통째로 유실된다(실측 2026-07-28: 시작~정지 사이 사망 → harvested=0). 워치독을 끈다.
+    if (typeof globalThis !== "undefined" && globalThis.__excelRecordingActive) return;
     // 적용/업로드 중의 타임아웃은 '바쁨'일 가능성이 높으므로 행 판정에서 제외.
     if (excelMirror.applying || excelMirror.preopening) return;
     const now = Date.now();
@@ -1183,6 +1187,12 @@ function noteExcelComTimeout(err) {
 }
 
 async function forceRestartExcelMirrors(reason) {
+  // [녹화 보호] 녹화 중에는 어떤 경로로 불려도 강제 재시작하지 않는다 — 공유 라이브 Excel 이 죽어
+  // 진행 중 녹화가 통째로 유실된다(서버도 동일 사유로 스킵하지만, 클라 UI 교란/재오픈까지 막는다).
+  if (typeof globalThis !== "undefined" && globalThis.__excelRecordingActive) {
+    try { console.warn("[record] 녹화 중 강제 재시작 요청 무시:", reason || ""); } catch (_) {}
+    return false;
+  }
   // [0.5.2.2] 라이브 세션이 사라지면 no-op 생략 시그니처를 무효화 — 다음 편집은 반드시 실제 재적용.
   if (typeof invalidateLivePipelineApplied === "function") { try { invalidateLivePipelineApplied(); } catch (_) {} }
   if (excelMirror.forceRestarting) return false;
@@ -1459,7 +1469,13 @@ async function closeCurrentExcelMirror() {
   const excelId = currentExcelId();
   if (!excelId) return;
   try {
-    await postExcelMirror("/api/excel/close", { excelId });
+    const _closed = await postExcelMirror("/api/excel/close", { excelId });
+    if (_closed && _closed.keptAliveForRecording) {
+      // [녹화 보호] 녹화 중엔 서버가 라이브 세션을 닫지 않고 유지한다(진행 중 녹화 유실 방지).
+      // 여기서 매핑을 지우면 살아있는 워크북 창이 클라 관리 밖 '고아'가 돼 회색 창으로 남는다 —
+      // 매핑을 유지해 이후 정상 닫힘/전환 관리가 계속 되게 한다.
+      return;
+    }
     Object.keys(excelMirror.sessionsByFileId).forEach(fileId => {
       if (excelMirror.sessionsByFileId[fileId] === excelId) {
         delete excelMirror.sessionsByFileId[fileId];

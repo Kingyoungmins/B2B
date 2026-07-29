@@ -330,6 +330,8 @@ def _spawn_dialog_confirmer(app, timeout=8.0):
             h = _find_dialog()
             if h:
                 # Enter → 다이얼로그 기본 버튼(확인). 한 번 더 여유있게 재전송.
+                # (포그라운드 강탈은 회색 프레임/포커스 흔들림을 유발할 수 있어 쓰지 않는다 —
+                #  자동 확인이 씹히면 클라 토스트가 '우측 엑셀 클릭'을 안내한다.)
                 for _ in range(2):
                     try:
                         win32gui.PostMessage(h, win32con.WM_KEYDOWN, win32con.VK_RETURN, 0)
@@ -371,6 +373,11 @@ def _restore_numlock_state(prev):
         pass
 
 
+# [진단] 마지막 start/stop 의 레코더 상태 스냅샷 — serve_b2b 가 _vba_trace 로 남긴다.
+# '두 번째 녹화 empty' 등 레코더 라이프사이클 desync 를 실측으로 잡기 위한 계측(동작 불변).
+RECORD_DIAG = {}
+
+
 def start_native_recording_impl(app):
     """레코더 토글 ON. 반환: 시작 전 모듈 기준선(정지 시 새 모듈 식별용).
 
@@ -378,6 +385,8 @@ def start_native_recording_impl(app):
     이미 기록 중이면 그대로 두고, 아니면 '매크로 기록' 모달을 Win32 로 자동 확인
     (+SendKeys 병행)한 뒤 토글. 상태 판정이 가능한데도 안 켜졌으면 명확한 에러."""
     baseline = _existing_macro_modules(app)
+    RECORD_DIAG.clear()
+    RECORD_DIAG["baseModules"] = len(baseline)
     # [절대참조 강제] '상대 참조로 기록'이 켜져 있으면(사용자/이전 세션 잔재 — 앱 전역
     # sticky) 기록이 ActiveCell.Offset 기반이 돼 재현 위치가 실행 시점 커서에 좌우된다.
     # 항상 끄고 시작한다(RecordRelative 는 읽기전용 → 리본 토글로 전환, 실측 검증).
@@ -387,7 +396,12 @@ def start_native_recording_impl(app):
     except Exception:
         pass
     state = _macro_recording_active(app)
+    RECORD_DIAG["labelStateBefore"] = "recording" if state is True else ("idle" if state is False else "unknown")
     if state is True:
+        # [진단] 여기로 오면 '이미 기록 중'으로 보고 조기 반환한다. 직전 정지가 라벨상 완전히
+        # 안 꺼졌으면(stale True) 새 세션을 실제로 시작 안 해 두 번째 녹화가 비게 된다 — 이 경로가
+        # 실측에서 잡히는지 확인하기 위해 표시(reused). 확정되면 여기서 재토글로 강제 클린스타트한다.
+        RECORD_DIAG["path"] = "reused_already_on"
         return sorted(baseline)  # 이미 기록 중(사용자가 리본에서 켰음) — 재사용
     # ExecuteMso 는 '매크로 기록' 다이얼로그(모달)를 띄운다. 확인은 포커스 무관 Win32
     # 워커(PostMessage Enter)가 전담한다. 예전의 보조 SendKeys("~") 큐잉은 제거 —
@@ -399,6 +413,9 @@ def start_native_recording_impl(app):
     _spawn_dialog_confirmer(app)
     app.CommandBars.ExecuteMso(_MACRO_RECORD_IDMSO)
     _restore_numlock_state(_numlock_before)  # 벨트+서스펜더(SendKeys 제거로 사실상 무동작)
+    RECORD_DIAG["path"] = "toggled_fresh"
+    _after = _macro_recording_active(app)
+    RECORD_DIAG["labelStateAfter"] = "recording" if _after is True else ("idle" if _after is False else "unknown")
     # 상태를 읽을 수 있으면(True/False) 확실히 켜졌는지 확인. 못 읽으면(None) 통과.
     if _macro_recording_active(app) is False:
         raise RuntimeError(
@@ -444,12 +461,16 @@ def stop_native_recording_impl(app, baseline):
     반환: {"code": Sub B2BSkill 전체, "rawLines": 원본 줄수, "summary": 요약}
     기록이 없으면 code 가 빈 문자열.
     """
+    RECORD_DIAG.clear()
     try:
-        if _macro_recording_active(app) is not False:
+        _lbl = _macro_recording_active(app)
+        RECORD_DIAG["stopLabelBefore"] = "recording" if _lbl is True else ("idle" if _lbl is False else "unknown")
+        if _lbl is not False:
             app.CommandBars.ExecuteMso(_MACRO_RECORD_IDMSO)  # 토글 OFF(기록 중지)
     except Exception:
         pass  # 이미 꺼져 있으면(사용자가 리본에서 껐으면) 추출만 진행
     base = {tuple(b) for b in (baseline or [])}
+    RECORD_DIAG["baselineModules"] = len(base)
     # [교차 워크북] 회전(탭 전환 시 stop/start — 모달 때문에 느림) 대신, 정지 시 '모든
     # 워크북'의 새 매크로 모듈을 각각 수확한다. MS 레코더가 워크북별로 모듈을 만들면
     # 워크북 경계가 그대로 잡힌다(안 만들면 한 청크 = 종전과 동일, 탭 전환 부하 0).
@@ -497,6 +518,8 @@ def stop_native_recording_impl(app, baseline):
                     raw_total += code.count("\n") + 1
             except Exception:
                 continue
+    RECORD_DIAG["harvested"] = len(harvested)
+    RECORD_DIAG["rawLines"] = raw_total
     if not harvested:
         return {"code": "", "rawLines": 0, "summary": "",
                 "recordedWorkbook": "", "recordedWorkbookFullName": "",

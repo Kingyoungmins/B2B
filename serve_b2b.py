@@ -74,6 +74,21 @@ EXCEL_LOCK = threading.RLock()
 EXCEL_QUEUE = None
 EXCEL_THREAD = None
 LIVE_EXCEL_APP = None  # 라이브 편집 세션들이 공유하는 앱 전용 Excel.Application
+LIVE_EXCEL_APP_PID = None  # 위 인스턴스의 프로세스 pid — '죽음' 판정을 COM 예외가 아니라 pid 생존으로 한다
+
+
+def _note_live_app_reset(reason, **extra):
+    """[진단] 공유 라이브 Excel 인스턴스가 리셋/종료되는 순간을 남긴다. 녹화 중(NATIVE_RECORDING.active)
+    에 이게 찍히면 = 그 인스턴스가 죽어 녹화가 통째로 유실된 것(실측: 첫 녹화부터 harvested 0).
+    무엇이 녹화 중 라이브 앱을 죽였는지 추적하는 결정적 단서."""
+    try:
+        recording = bool(NATIVE_RECORDING.get("active")) if "NATIVE_RECORDING" in globals() else False
+    except Exception:
+        recording = False
+    try:
+        _vba_trace("live_app.reset", reason=reason, duringRecording=recording, **extra)
+    except Exception:
+        pass
 LAST_COPY_SOURCE = {}  # 복사(Ctrl+C) 중 스냅샷한 클립보드 소스 {"source":{book,sheet,range}, "ts":monotonic}
 # [최소화 중 미러 유출] 네이티브 호스트가 최소화되어 있는 동안엔 어떤 경로도 미러 창을
 # 화면에 띄우면 안 된다(오버레이는 최상위 창이라 호스트가 사라지면 '따로 뜬' 것처럼 보임).
@@ -761,6 +776,7 @@ def _cleanup_excel_sessions_impl():
         except Exception:
             pass
     global LIVE_EXCEL_APP
+    _note_live_app_reset("close_all_sessions", pids=len(pids))
     LIVE_EXCEL_APP = None
     for pid in pids:
         deadline = time.time() + 1.5
@@ -780,6 +796,14 @@ def _force_restart_excel_sessions_direct(wait=False):
     wait=True 는 종료(/api/app/shutdown) 전용: kill 완료까지 이 스레드에서 기다린다.
     백그라운드 kill 인 채로 응답하면 호스트가 응답을 받자마자 서버를 죽여 kill 스레드가
     함께 죽고 EXCEL.EXE 고아가 남는 경합이 있다."""
+    # [녹화 보호] 녹화 중(종료 제외)에는 절대 강제 재시작하지 않는다. 녹화는 공유 라이브 Excel 을
+    # 매크로 레코더 상태로 두므로 이 사이의 COM 타임아웃/모달을 클라 워치독(noteExcelComTimeout)이
+    # '행'으로 오판해 /api/excel/force-restart 로 들어오면, 여기서 공유 인스턴스를 죽여 진행 중 녹화가
+    # 통째로 유실된다(실측 2026-07-28: 시작~정지 사이 사망 → 정지 시 새 빈 인스턴스라 harvested=0).
+    # 종료(wait=True, /api/app/shutdown)만 예외 — 어차피 프로세스가 내려간다.
+    if not wait and "NATIVE_RECORDING" in globals() and NATIVE_RECORDING.get("active"):
+        _note_live_app_reset("force_restart_skipped_during_recording", skipped=True)
+        return {"ok": True, "skipped": True, "reason": "recording_active"}
     acquired = False
     try:
         acquired = EXCEL_LOCK.acquire(timeout=2)
@@ -813,6 +837,7 @@ def _force_restart_excel_sessions_direct(wait=False):
     # COM 프록시 전역을 그냥 None 으로 떨어뜨리면 마지막 참조 해제(Release)가 이 HTTP 스레드에서
     # 일어난다. 행 상태의 STA 워커로 마샬링되는 Release 는 같이 굳을 수 있으므로(초기화가 영영
     # 안 끝나는 증상) 참조를 graveyard 로 옮겨 Release 자체를 막는다.
+    _note_live_app_reset("force_restart_direct")
     if LIVE_EXCEL_APP is not None:
         _COM_REF_GRAVEYARD.append(LIVE_EXCEL_APP)
     if PYTHON_SKILL_APP is not None:
@@ -1271,6 +1296,9 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
             return
         if self.path == "/api/diag/recent-trace":
             self.handle_diag_recent_trace()
+            return
+        if self.path == "/api/excel/preview-schema":
+            self.handle_excel_preview_schema()
             return
         if self.path == "/api/excel/record/status":
             self.handle_excel_record_status()
@@ -2145,6 +2173,36 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
             self.send_json(excel_record_status())
         except Exception as err:
             self.send_json({"ok": False, "error": str(err)}, status=500)
+
+    def handle_excel_preview_schema(self):
+        """[AI 도움 라이브 직독] 열린 라이브 세션의 '현재' 시트/그리드(경량 60행 미리보기)를 돌려준다.
+        AI 도움 data 도구는 state.inputs 캐시만 읽는데, 교차파일 붙여넣기 대상(컴패니언)은 파이프라인
+        liveSchema 가 주 세션만 실어 캐시가 stale 로 남는다(실측: 정산서에 붙여넣었는데 '데이터 없음').
+        도구가 조회 직전 이걸 불러 캐시를 라이브로 갱신 → '보이는 것'과 일치한다."""
+        payload = self.read_json_body()
+        try:
+            excel_id = payload.get("excelId")
+            only_sheet = str(payload.get("sheet") or "").strip()
+            session = get_excel_session(excel_id)
+
+            def _read():
+                app, wb = session_workbook(session)
+                # [경합 완화] AI 도움은 대개 한 시트만 묻는다. sheet 를 주면 그 시트만 읽어
+                # excel_call 워커 점유 시간을 최소화한다(전 시트 UsedRange 읽기 회피 → record-start
+                # 등 다른 excel_call 이 그 뒤에 줄서서 '준비 중'이 느려지던 커플링 완화). partial 표시.
+                if only_sheet:
+                    return _live_preview_schema(wb, only_sheet=only_sheet)
+                return _live_preview_schema(wb)
+
+            _t0 = time.perf_counter()
+            schema = excel_call(_read, timeout=30)
+            _ms = round((time.perf_counter() - _t0) * 1000, 1)
+            _vba_trace("assist.preview_schema", excelId=excel_id, sheet=only_sheet or "(all)",
+                       sheets=len((schema or {}).get("sheetNames") or []), ms=_ms,
+                       partial=bool((schema or {}).get("partial")))
+            self.send_json({"ok": True, "schema": schema})
+        except Exception as err:
+            self.send_json({"ok": False, "error": str(err)})
 
     def handle_diag_recent_trace(self):
         """[AI 도움 run.trace] 직전 실행의 서버 트레이스 타임라인 — 스텝이 '실제로 어느 워크북에서
@@ -4612,14 +4670,35 @@ def _get_live_excel_app():
     사용자가 직접 띄운 Excel을 잡지 않기 위해 GetActiveObject는 쓰지 않고, 앱 전용
     DispatchEx 인스턴스를 최초 1회만 만든다.
     """
-    global LIVE_EXCEL_APP
+    global LIVE_EXCEL_APP, LIVE_EXCEL_APP_PID
     app = LIVE_EXCEL_APP
     if app is not None:
         try:
             _ = app.Workbooks.Count
             return app
-        except Exception:
+        except Exception as probe_err:
+            # [죽음 오판 방지] Workbooks.Count 예외 ≠ 프로세스 사망. 사용자가 셀 편집/모달 중이면
+            # Excel 이 COM 호출을 일시 거부한다(RPC_E_CALL_REJECTED/RETRYLATER — 정상 동작).
+            # 이때 재스폰하면 ① 워크북 0개 빈 EXCEL.EXE 고아가 남고(회색 창, 안 사라짐)
+            # ② 진행 중 녹화의 stop 이 새 빈 인스턴스를 조회해 harvested=0 이 된다
+            # (실측 2026-07-29 15:34:21 — pid 13124 생존 중인데 get_live_found_dead 로 62860 재스폰).
+            # → pid 가 실제로 살아 있으면 기존 프록시를 그대로 반환한다(호출측 작업은 재시도로 회복).
+            _alive = False
+            try:
+                _alive = bool(LIVE_EXCEL_APP_PID) and _is_pid_alive(LIVE_EXCEL_APP_PID)
+            except Exception:
+                _alive = False
+            if _alive:
+                try:
+                    _vba_trace("live_app.busy_not_dead", pid=int(LIVE_EXCEL_APP_PID),
+                               error=str(probe_err)[:160],
+                               duringRecording=bool(NATIVE_RECORDING.get("active")) if "NATIVE_RECORDING" in globals() else False)
+                except Exception:
+                    pass
+                return app
+            _note_live_app_reset("get_live_found_dead")   # pid 도 죽었다 — 진짜 사망, 새로 만든다(=스폰)
             LIVE_EXCEL_APP = None
+            LIVE_EXCEL_APP_PID = None
     _ensure_vbom_access()
     app = win32com.client.DispatchEx("Excel.Application")
     _track_spawned_excel_app(app)  # [0.5.2 이식] 고아 Excel 추적
@@ -4632,12 +4711,99 @@ def _get_live_excel_app():
         except Exception:
             pass
     LIVE_EXCEL_APP = app
+    try:
+        LIVE_EXCEL_APP_PID = int(_excel_process_id(app) or 0) or None
+    except Exception:
+        LIVE_EXCEL_APP_PID = None
     return app
+
+
+def _excel_grid_hwnds_for_pid(pid):
+    """해당 pid 의 XLMAIN 최상위 창 아래 EXCEL7(그리드) 자식 hwnd 목록 — 셀 편집 확정 키 전송 대상."""
+    result = []
+    if win32gui is None or not pid:
+        return result
+
+    def _top(hwnd, _):
+        try:
+            _tid, wpid = win32process.GetWindowThreadProcessId(hwnd)
+            if int(wpid) != int(pid) or win32gui.GetClassName(hwnd) != "XLMAIN":
+                return True
+
+            def _child(ch, _2):
+                try:
+                    if win32gui.GetClassName(ch) == "EXCEL7":
+                        result.append(int(ch))
+                except Exception:
+                    pass
+                return True
+
+            try:
+                win32gui.EnumChildWindows(hwnd, _child, None)
+            except Exception:
+                pass
+        except Exception:
+            pass
+        return True
+
+    try:
+        win32gui.EnumWindows(_top, None)
+    except Exception:
+        pass
+    return result
+
+
+def _commit_pending_excel_cell_edit(app, max_wait_s=2.5):
+    """[셀 편집 확정] 사용자가 셀 편집(in-cell edit) 중이면 Excel 이 COM 을 거부해
+    (RPC_E_CALL_REJECTED) 녹화 시작/정지가 실패한다 — 클라 버튼만 눌리고 레코더는 계속 도는
+    이중 상태가 됐다(실측 2026-07-29: '셀 편집 중 녹화 종료 안 됨, 다시 찍어야 함').
+    포커스/포그라운드를 훔치지 않고(EXCEL7 그리드에 PostMessage Enter — 다이얼로그 자동확인과
+    동일 관용구) 편집을 '확정'시킨 뒤 COM 이 응답할 때까지 짧게 재시도한다.
+    정상 상태면 키 전송 0회로 즉시 True(부작용 없음). Enter 확정이므로 입력 중이던 값은 셀에
+    반영되고, 그 대입은 매크로 레코더에 정상 기록된다(사용자 의도 보존)."""
+    try:
+        _ = app.Workbooks.Count
+        return True     # COM 정상 응답 — 편집 중 아님, 아무 것도 안 보낸다
+    except Exception:
+        pass
+    pid = LIVE_EXCEL_APP_PID
+    if not pid:
+        try:
+            pid = _excel_process_id(app)   # 편집 중엔 이것도 거부될 수 있음 — 폴백일 뿐
+        except Exception:
+            pid = None
+    deadline = time.time() + float(max_wait_s)
+    sent = 0
+    while time.time() < deadline:
+        for hwnd in _excel_grid_hwnds_for_pid(pid):
+            try:
+                win32gui.PostMessage(hwnd, win32con.WM_KEYDOWN, win32con.VK_RETURN, 0)
+                win32gui.PostMessage(hwnd, win32con.WM_KEYUP, win32con.VK_RETURN, 0)
+                sent += 1
+            except Exception:
+                pass
+        time.sleep(0.2)
+        try:
+            _ = app.Workbooks.Count
+            try:
+                _vba_trace("record.cell_edit.committed", sentKeys=sent)
+            except Exception:
+                pass
+            return True
+        except Exception:
+            continue
+    try:
+        _vba_trace("record.cell_edit.commit_failed", sentKeys=sent)
+    except Exception:
+        pass
+    return False
 
 
 def _quit_live_excel_app():
     global LIVE_EXCEL_APP
     app = LIVE_EXCEL_APP
+    if app is not None:
+        _note_live_app_reset("quit_live_excel_app")
     LIVE_EXCEL_APP = None
     if app is None:
         return
@@ -5330,6 +5496,10 @@ def _replace_excel_session_workbook_impl(excel_id, path, name=None, result_id=No
         old_replace_dir = session.get("replaceOpenDir")  # [이름 보존] 직전 replace 가 만든 원본명 사본 디렉토리
         _rt_close = time.perf_counter()
         live_editable = bool(session.get("liveEditable"))
+        # [회색 엑셀] 교체 '전' 숨김 상태 — 교체가 숨김 세션을 표시로 승격하면 안 된다.
+        # 실측(2026-07-29): 녹화 재현 직전 전세션 스냅샷 복원(replace 루프)이 숨겨져 있던
+        # 비활성 파일 프레임까지 띄워 회색/겹침 창이 남았다(표시는 show-only 의 몫).
+        was_hidden = bool(session.get("hidden"))
         if read_only_mirror or live_editable:
             try:
                 app.ScreenUpdating = False
@@ -5422,11 +5592,13 @@ def _replace_excel_session_workbook_impl(excel_id, path, name=None, result_id=No
         session["name"] = clean_name
         session["resultId"] = result_id
         session["readOnlyMirror"] = bool(read_only_mirror)
-        session["hidden"] = False
+        session["hidden"] = was_hidden  # [회색 엑셀] 숨김 세션 교체는 숨김 유지(표시 승격 금지)
         session["snapshots"] = {}
         session["appliedStepSigs"] = None  # 워크북이 외부 결과로 교체됨 → 적용 단계 추적 무효화
         sheets = _excel_collection_names(new_wb.Worksheets)
-        if active_sheet and active_sheet in sheets:
+        # [회색 엑셀] Worksheet.Activate 는 그 워크북을 ActiveWorkbook 으로 끌어올린다 —
+        # 숨김 세션 교체에서는 건너뛴다(활성/포커스가 비활성 파일로 새는 것 방지).
+        if active_sheet and active_sheet in sheets and not (live_editable and was_hidden and LIVE_FRAME_MODE):
             try:
                 new_wb.Worksheets(active_sheet).Activate()
             except Exception:
@@ -5458,6 +5630,25 @@ def _replace_excel_session_workbook_impl(excel_id, path, name=None, result_id=No
                 app.ScreenUpdating = True
             except Exception:
                 pass
+        elif live_editable and was_hidden and LIVE_FRAME_MODE:
+            # [회색 엑셀 수정] 숨겨져 있던 라이브 세션의 교체는 '내용만' 바꾸고 표시하지 않는다.
+            # 예전엔 아래 일반 경로가 무조건 _present_live_session_frame 으로 새 프레임을 띄워,
+            # 녹화 재현 직전 전세션 복원에서 비활성 파일 프레임이 화면에 뜨고 남았다(실측).
+            # 새 프레임은 오픈 직후 이미 offscreen 파킹돼 있으므로(위 _move_hwnd_offscreen)
+            # 그대로 두고, 보호/그리드 설정만 해 둔다 — 이후 탭 전환/show-only 가 표시를 담당.
+            # (Activate/Worksheet.Activate 도 하지 않는다 — ActiveWorkbook 이 비활성 파일로 새는
+            #  것 방지. 기능 손실 0: 표시 시점에 show-only 가 위치·보기 구성을 다시 잡는다.)
+            try:
+                _protect_workbook_for_read_only_mirror(new_wb, True)
+                _configure_excel_grid_window(app, new_wb)
+            except Exception:
+                pass
+            session["hidden"] = True
+            try:
+                app.ScreenUpdating = True
+            except Exception:
+                pass
+            _rt["presentMs"] = 0.0
         elif live_editable:
             _rt_show = time.perf_counter()
             # Python(openpyxl) 결과 교체의 라이브 반영 경로. 공유 인스턴스(frame 모드)에서는
@@ -5895,6 +6086,11 @@ def excel_record_start(engine="vba"):
         engine = "vba"  # 무조건 VBA — python 엔진 요청은 무시
     # 녹화는 사용자가 라이브 Excel 창에서 직접 조작한 것을 캡처한다 —
     # 레코더를 붙이기 전에 편집 잠금(시트 보호·키 차단·우클릭·리본)을 먼저 푼다.
+    # [셀 편집 중 시작] 사용자가 셀 입력 중이면 아래 COM 호출들이 전부 거부된다 — 먼저 확정.
+    try:
+        excel_call(lambda: _commit_pending_excel_cell_edit(_get_live_excel_app()), timeout=15)
+    except Exception:
+        pass
     excel_call(_set_live_sessions_edit_unlock, True, timeout=60)
     try:
         if engine == "vba":
@@ -5905,9 +6101,22 @@ def excel_record_start(engine="vba"):
             def _start_native():
                 return start_native_recording_impl(_get_live_excel_app())
 
-            baseline = excel_call(_start_native, timeout=30)
+            # [녹화 보호] active 를 레코더 시작(ExecuteMso — 단일 COM 워커를 모달 확인까지 블록) '전에'
+            # 올린다. 이 블록 동안에도 배경 폴러(/changes·/selection·/hover-info)가 워커 뒤에 줄서서
+            # 타임아웃 → 클라 워치독 → /api/excel/force-restart 로 들어올 수 있는데, 서버 force-restart
+            # 가드(NATIVE_RECORDING.active)가 '이 시작 창'까지 자립적으로 커버해 공유 Excel 을 지킨다
+            # (active 를 시작 반환 후에 올리면 이 창이 서버측에 뚫려 클라 플래그에만 의존하게 된다).
+            # 시작이 실패하면 아래 except 의 NATIVE_RECORDING.clear() 가 되돌린다.
             NATIVE_RECORDING.clear()
-            NATIVE_RECORDING.update({"active": True, "baseline": baseline})
+            NATIVE_RECORDING["active"] = True
+            NATIVE_RECORDING["baseline"] = None
+            baseline = excel_call(_start_native, timeout=30)
+            try:
+                from native_macro_recorder import RECORD_DIAG as _rd
+                _vba_trace("record.native.start", editUnlocked=bool(RECORDING_EDIT_UNLOCKED), **dict(_rd))
+            except Exception:
+                pass
+            NATIVE_RECORDING["baseline"] = baseline
         else:
             from record_service import RECORD_SERVICE, marshal_app_stream
 
@@ -5965,12 +6174,20 @@ def excel_record_stop():
             from native_macro_recorder import stop_native_recording_impl
 
             def _stop_native():
-                return stop_native_recording_impl(
-                    _get_live_excel_app(), NATIVE_RECORDING.get("baseline"))
+                app = _get_live_excel_app()
+                # [셀 편집 중 정지] 편집을 확정(Enter)시켜 COM 을 되살린 뒤 수확한다 —
+                # 안 하면 in-cell edit 중 정지가 COM 거부로 실패해 녹화를 다시 찍어야 했다.
+                _commit_pending_excel_cell_edit(app)
+                return stop_native_recording_impl(app, NATIVE_RECORDING.get("baseline"))
 
             # 정지 시 expected 다이제스트 수확(touched 시트 Value2 해시)이 추가돼 60s 는 빠듯할
             # 수 있다 — 프론트 stop 타임아웃(200s) 안에서 120s 로 여유를 둔다.
             rec = excel_call(_stop_native, timeout=120)
+            try:
+                from native_macro_recorder import RECORD_DIAG as _rd
+                _vba_trace("record.native.stop", hasCode=bool(rec.get("code")), **dict(_rd))
+            except Exception:
+                pass
             NATIVE_RECORDING.clear()
             steps = []
             if rec.get("code"):
@@ -6058,8 +6275,17 @@ def excel_record_stop():
             result = RECORD_SERVICE.stop(timeout=180.0)
     finally:
         # 성공/실패와 무관하게 편집 잠금 원복(녹화 중 만든 새 시트 포함 전 시트 재보호).
+        # [진단] '정지 후 편집 가능 상태로 남음' 실측 — 재잠금이 실제로 됐는지/RECORDING_EDIT_UNLOCKED
+        # 가 풀렸는지 트레이스한다(실패해도 무해, 다음 재현서 원인 특정).
+        _relock_ok = False
         try:
             excel_call(_set_live_sessions_edit_unlock, False, timeout=60)
+            _relock_ok = True
+        except Exception as _rlerr:
+            try: _vba_trace("record.stop.relock_fail", error=str(_rlerr))
+            except Exception: pass
+        try:
+            _vba_trace("record.stop.relock", ok=_relock_ok, editUnlockedAfter=bool(RECORDING_EDIT_UNLOCKED))
         except Exception:
             pass
     return {"ok": True, "recording": False, **result}
@@ -6655,6 +6881,23 @@ def _hide_inactive_excel_sessions_impl():
 
 
 def _close_excel_session_impl(excel_id):
+    # [녹화 보호] 녹화 중에는 공유 라이브 세션을 절대 닫지 않는다. 이 세션의 워크북을 닫으면
+    # 공유 LIVE_EXCEL_APP 의 워크북 수가 줄고(마지막이면 앱 quit) 진행 중 녹화가 통째로 유실된다.
+    # 실측(2026-07-28): 녹화 중 캐시 트림(trimExcelMirrorSessionCache→/api/excel/close)이
+    # 라이브 인스턴스를 죽여, 정지 시 새 빈 인스턴스에서 돌아 harvested=0. registry pop 전에 막는다.
+    if NATIVE_RECORDING.get("active"):
+        with EXCEL_LOCK:
+            _peek = EXCEL_SESSIONS.get(excel_id)
+        if _peek is not None:
+            _live = False
+            try:
+                _live = _is_live_shared_app(_peek.get("app")) or bool(_peek.get("liveEditable"))
+            except Exception:
+                _live = bool(_peek.get("liveEditable"))
+            if _live:
+                _note_live_app_reset("close_session_skipped_during_recording",
+                                     skipped=True, excelId=excel_id)
+                return {"ok": True, "closed": False, "keptAliveForRecording": True}
     with EXCEL_LOCK:
         session = EXCEL_SESSIONS.pop(excel_id, None)
     if not session:
@@ -6677,6 +6920,7 @@ def _close_excel_session_impl(excel_id):
             app.Quit()
             if _is_live_shared_app(app):
                 global LIVE_EXCEL_APP
+                _note_live_app_reset("close_session_last_workbook")
                 LIVE_EXCEL_APP = None
     except Exception:
         pass
@@ -13357,11 +13601,22 @@ _SNAPSHOT_MAX_ROWS = 20000
 _SNAPSHOT_MAX_COLS = 256
 
 
-def _live_preview_schema(wb, max_rows=60, max_cols=_SNAPSHOT_MAX_COLS):
+def _live_preview_schema(wb, max_rows=60, max_cols=_SNAPSHOT_MAX_COLS, only_sheet=None):
     """라이브 적용 후 클라 스키마 캐시 갱신용 경량 미리보기(시트명 + 상위 N행 AoA + 차원).
     구조 변경(열삭제/시트추가 등) 뒤 다음 단계 생성이 옛 구조(삭제된 열 등)를 보지 않게 한다.
-    Value2 라 날짜도 숫자(serial)로 와 JSON 직렬화가 안전하다(클라 ctx.read 와 동일)."""
-    names = list(_excel_collection_names(wb.Worksheets))
+    Value2 라 날짜도 숫자(serial)로 와 JSON 직렬화가 안전하다(클라 ctx.read 와 동일).
+    only_sheet 지정 시 그 한 시트만 읽고 partial=True 로 표시(캐시 병합만, 타 시트 삭제 금지)."""
+    all_names = list(_excel_collection_names(wb.Worksheets))
+    partial = False
+    if only_sheet:
+        match = next((n for n in all_names if str(n) == str(only_sheet)), None)
+        if match is not None:
+            names = [match]
+            partial = True
+        else:
+            names = all_names  # 못 찾으면 전체(안전)
+    else:
+        names = all_names
     sheets, dims = {}, {}
     for nm in names:
         try:
@@ -13380,7 +13635,13 @@ def _live_preview_schema(wb, max_rows=60, max_cols=_SNAPSHOT_MAX_COLS):
         except Exception:
             sheets[nm] = []
             dims[nm] = {"maxRow": 0, "maxCol": 0}
-    return {"sheetNames": names, "sheets": sheets, "dims": dims}
+    # partial(단일 시트) 이면 전체 시트명도 함께 줘 클라가 시트 목록은 온전히 유지하되
+    # 그리드는 읽은 시트만 병합하도록 한다(applyLiveSchemaToFileCache 가 partial 존중).
+    out = {"sheetNames": names, "sheets": sheets, "dims": dims}
+    if partial:
+        out["partial"] = True
+        out["allSheetNames"] = all_names
+    return out
 
 
 def _sheet_snapshot(ws):

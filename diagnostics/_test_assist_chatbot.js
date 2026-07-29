@@ -8,6 +8,7 @@ const path = require("path");
 const vm = require("vm");
 
 let fails = 0;
+const pending = [];  // async 도구(await 필요) 검사 블록들 — 최종 리포트 전에 Promise.all 로 기다린다.
 const ck = (n, c, g) => { console.log((c ? " OK  " : "FAIL ") + n + (c ? "" : "  got=" + JSON.stringify(g))); if (!c) fails++; };
 
 const ROOT = path.join(__dirname, "..");
@@ -40,8 +41,11 @@ const FORBIDDEN = ["applyLogic", "runPipeline", "reapplyVbaPipelineToLive", "run
 FORBIDDEN.forEach((fn, i) => {
   ck(`(${5 + i}) 도구 레지스트리에 ${fn} 없음`, !new RegExp("\\b" + fn + "\\s*\\(").test(toolsSrc));
 });
-ck("(12) 도구 이름에 apply/run/save/exec 동사 없음(전부 읽기 전용)",
-   !/assistDefineTool\("(?:[a-z.]*)(apply|run|save|exec)/i.test(toolsSrc));
+// run.trace 는 '실행 트레이스 읽기'(읽기 전용) — 이름에 run 이 들어가지만 상태를 안 바꾼다.
+// 이름 동사 검사에서만 비-동사 이름으로 치환해 오탐을 없앤다(도구 자체는 읽기 전용 유지).
+const _toolSrcForVerbCheck = toolsSrc.replace(/assistDefineTool\("run\.trace"/g, 'assistDefineTool("trace.read"');
+ck("(12) 도구 이름에 apply/run/save/exec 동사 없음(전부 읽기 전용; run.trace=읽기 예외)",
+   !/assistDefineTool\("(?:[a-z.]*)(apply|run|save|exec)/i.test(_toolSrcForVerbCheck));
 // 상태 변경(replaceLogicAt)은 여러 kind(단일/일괄치환)에서 여러 번 불릴 수 있으나 전부
 // assistCommitProposal 함수 '안'에서만 일어나야 한다(그 함수 밖 호출 0건 = 승인 경유 불변식).
 {
@@ -155,7 +159,7 @@ ck("(35) assist 스크립트가 pipeline/chat-ui 뒤에 로드",
    && htmlSrc.indexOf("scripts/assist-core.js") > htmlSrc.indexOf("scripts/chat-ui.js"));
 
 // ── 8. 도구가 throw 하지 않고 {ok} 를 반환하는지(빈 상태에서) ──────────────
-{
+pending.push((async () => {
   const tb = { console, JSON, Date, Math, String, Number, Array, Set, Map, RegExp, parseFloat, isFinite,
     state: { pipeline: [], inputs: [], outputTemplates: [] } };
   vm.createContext(tb);
@@ -166,17 +170,18 @@ ck("(35) assist 스크립트가 pipeline/chat-ui 뒤에 로드",
   for (const n of names) {
     try {
       tb.__n = n;
-      const r = vm.runInContext(`(function(){ const t = ASSIST_TOOLS[__n];
-        try { const o = t.fn({}); return (o && typeof o === "object") ? o : {ok:true}; }
-        catch(e) { return {__threw: String(e && e.message)}; } })()`, tb);
-      if (r && r.__threw) bad = `${n}: ${r.__threw}`;
-      else if (!r || typeof r.ok !== "boolean") bad = `${n}: ok 필드 없음`;
-    } catch (e) { bad = `${n}: ${e.message}`; }
+      // [async 계약] data.query/sheet.headers/data.read/run.trace 등은 async 도구 — 런타임
+      // (assistRunTool)이 await 하므로 테스트도 await 한다. 동기 도구는 값이 그대로 온다.
+      let o = vm.runInContext('ASSIST_TOOLS[__n].fn({})', tb);
+      if (o && typeof o.then === "function") o = await o;
+      const r = (o && typeof o === "object") ? o : { ok: true };
+      if (!r || typeof r.ok !== "boolean") bad = `${n}: ok 필드 없음`;
+    } catch (e) { bad = `${n}: ${e && e.message}`; }
   }
   ck("(37) 빈 상태에서도 모든 도구가 {ok}를 반환(throw 없음)", bad === null, bad);
   ck("(38) 알 수 없는 도구는 available 목록을 되먹임",
      /error: "unknown_tool"[\s\S]{0,80}available/.test(toolsSrc));
-}
+})());
 
 // ── 9. 동반 수정: 코드만 바뀌고 이름/설명/대화가 옛 값으로 남지 않아야 한다 ──────
 // 사용자 실측: 4단계 100→1000 을 고쳤는데 카드 이름·설명·대화기록은 100으로 남아 헷갈렸다.
@@ -372,7 +377,7 @@ ck("(80) 재시도 래퍼 경유 + stripThink",
    /callOpenAICompat\(systemPrompt/.test(llmAssistSrc) && /assistStripThink/.test(llmAssistSrc));
 
 // ── 9. [Tier0/1] 새 도구·액션·제안 kind 기능 검증 ──────────────────────────
-{
+pending.push((async () => {
   // 도구/액션 등록(소스 레벨)
   ck("(81) Tier0 도구 등록(result.summary·step.error·sheet.headers)",
      /assistDefineTool\("result\.summary"/.test(toolsSrc) && /assistDefineTool\("step\.error"/.test(toolsSrc) && /assistDefineTool\("sheet\.headers"/.test(toolsSrc));
@@ -420,12 +425,12 @@ ck("(80) 재시도 래퍼 경유 + stripThink",
 
   // (90) data.query groupSum — 거래처별 금액 합계(A사=150, B사=200). tool.fn 은 동기라 직접 호출.
   ctx.__q = { file: "정산.xlsx", sheet: "VIEW", op: "groupSum", column: "금액", groupBy: "거래처" };
-  const r90 = vm.runInContext('ASSIST_TOOLS["data.query"].fn(__q)', ctx);
+  const r90 = await vm.runInContext('ASSIST_TOOLS["data.query"].fn(__q)', ctx);
   ck("(90) data.query groupSum", r90 && r90.ok === true && r90.top && r90.top.find(g => g.key === "A사").value === 150 && r90.top.find(g => g.key === "B사").value === 200, JSON.stringify(r90).slice(0, 200));
 
   // (91) sheet.headers — 헤더 행 추정 + 열문자
   ctx.__h = { file: "정산.xlsx", sheet: "VIEW" };
-  const r91 = vm.runInContext('ASSIST_TOOLS["sheet.headers"].fn(__h)', ctx);
+  const r91 = await vm.runInContext('ASSIST_TOOLS["sheet.headers"].fn(__h)', ctx);
   ck("(91) sheet.headers", r91 && r91.ok === true && r91.headers.length === 2 && r91.headers[0].col === "A" && r91.headers[0].name === "거래처", JSON.stringify(r91).slice(0, 160));
 
   // (92) 도구 카탈로그에 새 도구가 자동 노출(프롬프트로 감)
@@ -451,14 +456,14 @@ ck("(80) 재시도 래퍼 경유 + stripThink",
 
   // [범용 읽기] data.read — 원시 범위 읽기
   ctx.__r1 = { file: "정산.xlsx", sheet: "VIEW", range: "A1:B2" };
-  const rr1 = vm.runInContext('ASSIST_TOOLS["data.read"].fn(__r1)', ctx);
+  const rr1 = await vm.runInContext('ASSIST_TOOLS["data.read"].fn(__r1)', ctx);
   ck("(93e) data.read A1:B2 원시값",
      rr1 && rr1.ok === true && rr1.rows.length === 2 && rr1.rows[0][0] === "거래처" && rr1.rows[1][0] === "A사", JSON.stringify(rr1).slice(0, 160));
   ctx.__r2 = { file: "정산.xlsx", sheet: "VIEW", range: "A:A" };
-  const rr2 = vm.runInContext('ASSIST_TOOLS["data.read"].fn(__r2)', ctx);
+  const rr2 = await vm.runInContext('ASSIST_TOOLS["data.read"].fn(__r2)', ctx);
   ck("(93f) data.read 열전체(A:A)", rr2 && rr2.ok === true && rr2.colCount === 1 && rr2.rows.length === 4);
   ctx.__r3 = { file: "정산.xlsx", sheet: "VIEW", range: "ZZ99" };
-  const rr3 = vm.runInContext('ASSIST_TOOLS["data.read"].fn(__r3)', ctx);
+  const rr3 = await vm.runInContext('ASSIST_TOOLS["data.read"].fn(__r3)', ctx);
   ck("(93g) data.read 범위 밖은 빈결과지 크래시 아님", rr3 && rr3.ok === true);
 
   // [범용 읽기] app.state — 비밀값 마스킹 필수
@@ -482,7 +487,7 @@ ck("(80) 재시도 래퍼 경유 + stripThink",
      /function assistOpenAndAsk/.test(uiSrc) && /t: "ask"/.test(uiSrc) && /_assistPendingAsk/.test(uiSrc));
   ck("(93n) 팝업이 ask 를 사용자 입력처럼 처리",
      /case "ask"/.test(rd("scripts/assist-popup.js")));
-}
+})());
 
 // ── 10. [Tier2] 격리 검증(auto-verify, option A) ────────────────────────────
 {
@@ -530,5 +535,7 @@ ck("(80) 재시도 래퍼 경유 + stripThink",
   ck("(105) 검증 불가는 무배지(오늘 동작)", badge({ verifiable: false }) === "" && badge(null) === "");
 }
 
-console.log("\n=== RESULT: " + (fails === 0 ? "ALL PASS" : fails + " FAIL") + " ===");
-process.exit(fails ? 1 : 0);
+Promise.all(pending).then(() => {
+  console.log("\n=== RESULT: " + (fails === 0 ? "ALL PASS" : fails + " FAIL") + " ===");
+  process.exit(fails ? 1 : 0);
+}).catch((e) => { console.log("FAIL 비동기 검사 예외: " + (e && e.message)); process.exit(1); });

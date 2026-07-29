@@ -210,5 +210,15 @@ t("7a 의도 반영 이웃 컨텍스트+계약 규칙 배선",
 t("7a2 한 행 밀림 함정 규칙 배선",
   /한 행 밀림 함정/.test(rrSrc) && /그 산출물을 찾아 같은 행에/.test(rrSrc));
 
+// 녹화 종료 착지: 빠른재현·폴백 두 경로를 recExcelId(=녹화 시작/바인딩 파일)로 통일하고,
+// 앱 탭(setCurrentView, source=record-land)까지 동기화 — 교차파일 녹화 시 탭↔미러 불일치 방지.
+const viewerSrc = fs.readFileSync(path.join(ROOT, "scripts", "excel-viewer.js"), "utf8");
+t("8a 녹화 착지 전환 소스 허용(record-land)",
+  /source === "record-land"/.test(viewerSrc));
+t("8b 녹화 종료 착지 통일 배선(recExcelId + 탭 동기화)",
+  /녹화 종료 착지 통일/.test(pipelineSrc)
+  && /setCurrentView\(_recFileId, \{ source: "record-land" \}\)/.test(pipelineSrc)
+  && /restoreExcelId: recExcelId, restoreFileId: _recFileId/.test(pipelineSrc));
+
 console.log(pass + "/" + (pass + fail) + " PASS");
 process.exit(fail ? 1 : 0);
