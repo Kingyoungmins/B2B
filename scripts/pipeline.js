@@ -2164,7 +2164,7 @@ function insertLogic(step, position) {
         refreshRunButton();
       };
       const promise = (async () => {
-        const ok = await applyLastEnabledStepFast(step, { steps: state.pipeline });
+        const ok = await applyMappedSingleStep(step.id);   // [실행기 매핑] 삽입 스텝도 매핑본으로 적용
         if (!ok) {
           _demoteHeld();
           if (typeof toast === "function") toast("적용할 Excel 세션을 찾지 못해 새 단계를 보류(꺼짐)로 남겼습니다. 파일 탭을 선택한 뒤 스위치를 켜 주세요.", "error");
@@ -2447,7 +2447,7 @@ function replaceLogicAt(stepId, newCode, newDescription, language, opts) {
         }
         // 새 코드 '그 스텝만' 현재 라이브 위에 적용(직전 스냅샷 자동 캡처 → 이후 OFF/삭제 fast)
         setPipelineRuntimeStatus([stepId], "running", "적용 중");
-        const ok = await applyLastEnabledStepFast(editedStep, { steps: state.pipeline });
+        const ok = await applyMappedSingleStep(stepId);   // [실행기 매핑] 수정 스텝도 매핑본으로 적용
         if (!ok) {
           state.pipeline[idx] = { ...state.pipeline[idx], enabled: false };
           markPipelinePendingFromIndex(idx, { label: "보류" });
@@ -3608,7 +3608,7 @@ async function handlePipelineStepToggle(stepId) {
   // 단일 스텝 즉시 적용 — 적용 '직전' 스냅샷을 자동 캡처하므로 이후 이 스텝 OFF 롤백도 fast 로 동작.
   setPipelineRuntimeStatus([stepId], "running", "적용 중");
   try {
-    const _applied = await applyLastEnabledStepFast(toggledStep, { steps: state.pipeline });
+    const _applied = await applyMappedSingleStep(stepId);   // [실행기 매핑] 옛 파일/시트명 → 실제명으로 치환 후 적용
     if (!_applied) {
       // 세션 없음 등 '조용한 미적용'(false) — 성공으로 칠하면 ON인데 미적용인 유령 상태가 된다.
       state.pipeline[currentIdx] = { ...state.pipeline[currentIdx], enabled: false };
@@ -4022,6 +4022,26 @@ function canUsePipelineCheckpointFromIndex(startIdx, beforeSteps, nextSteps) {
   // 빠른경로를 탄다(아니면 pristine 전체 재적용 경로로 — 느리지만 항상 옳다).
   const suffix = (beforeSteps || []).slice(start).filter(s => s && s.code && isStepEnabled(s));
   return suffix.length > 0 && suffix.every(s => s._preApplySnapshot && s._preApplySnapshot.resultId);
+}
+
+// [실행기 매핑 · 단일 적용] 단일 스텝 즉시 적용(토글 ON / 중간 삽입 / 수정 적용)도 반드시 '실행기
+// 매핑본'으로 실행한다. 실측(2026-07-29 test_mapping): 파일확인으로 매핑 후 전체실행 성공 → 4번
+// OFF→ON 하면 저장 스킬의 옛 파일명(expected_output.xlsx)이 매핑 안 된 채 실행돼 "워크북이 열려
+// 있지 않습니다"로 실패. 편집발 reconcile 은 beginMappedPipelineRun 을 타 매핑되는데, 단일 적용
+// (applyLastEnabledStepFast)만 그 관문을 안 거쳐 뚫렸다(단일축 토글 재작성 회귀). 여기서
+// beginMappedPipelineRun 으로 잠시 매핑본을 스왑해 그 스텝을 적용하고 원복한다 — restore 가 코드는
+// 원본으로 되돌리되 _preApplySnapshot 은 보존(...cur)해, 이후 이 스텝 OFF 도 fast 로 되돌아간다.
+// 매핑 미확인/치환대상 없음이면 beginMappedPipelineRun 이 noop → 원본 그대로(무회귀).
+async function applyMappedSingleStep(stepId, options = {}) {
+  const __mapRun = (typeof beginMappedPipelineRun === "function")
+    ? beginMappedPipelineRun() : { restore: () => {} };
+  try {
+    const step = (state.pipeline || []).find(s => s && s.id === stepId);
+    if (!step) return false;
+    return await applyLastEnabledStepFast(step, { steps: state.pipeline, ...options });
+  } finally {
+    try { __mapRun.restore(); } catch (_) {}
+  }
 }
 
 async function applyLastEnabledStepFast(step, options = {}) {

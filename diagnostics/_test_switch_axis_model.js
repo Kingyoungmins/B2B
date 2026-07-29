@@ -41,13 +41,14 @@ function extractFn(str, name) {
 const REAL = [
   "getPipelineResumeFromIndex", "setPipelineResumeFromIndex", "clearPipelineResumeFromIndex",
   "markPipelinePendingFromIndex", "handlePipelineStepToggle", "insertLogic", "applyLogic",
-  "replaceLogicAt",
+  "replaceLogicAt", "applyMappedSingleStep",
 ].map(n => extractFn(src, n)).join("\n\n");
 
 const DEPS = [
   "state", "window", "console", "isStepEnabled", "renderPipeline", "refreshRunButton",
   "scheduleLogicAutoBackup", "pushHistory", "toast", "reportPipelineError", "pipelineEditBusyReason",
   "canFastEditLastPipelineStep", "restoreLastStepPreApplySnapshot", "applyLastEnabledStepFast",
+  "beginMappedPipelineRun",
   "restorePipelineToCheckpointAndHold", "reconcilePipelineSimulationAfterEdit",
   "setPipelineRuntimeStatus", "noteLivePipelineApplied", "_lastLiveAppliedSignature",
   "liveEnabledStepsSignature", "pipelineStepLiveLanguage", "pipelineSuffixWritesCrossFile",
@@ -86,10 +87,19 @@ function makeEnv(opts = {}) {
     canFastEditLastPipelineStep: (stp, idx, before) => idx === (before.length - 1) && !opts.noFastLast,
     restoreLastStepPreApplySnapshot: async (stp) => { CALLS.push({ kind: "restoreLast", id: stp.id }); return opts.restoreLastFails ? false : true; },
     applyLastEnabledStepFast: async (stp) => {
-      CALLS.push({ kind: "applySingle", id: stp.id });
+      CALLS.push({ kind: "applySingle", id: stp.id, code: stp && stp.code });
       if (opts.applyThrows) throw new Error("apply boom");
       if (opts.applyReturnsFalse) return false;
       return true;
+    },
+    // [실행기 매핑 시뮬] 스왑 시 코드의 expected_* → actual_* 치환(실제 buildRunnerMappedPipeline 등가).
+    // opts.noMapping 이면 noop(매핑 미확인 등가) — 원본 그대로 적용됨을 검증.
+    beginMappedPipelineRun: () => {
+      if (opts.noMapping) { CALLS.push({ kind: "mapRun.noop" }); return { steps: state.pipeline, restore: () => {} }; }
+      CALLS.push({ kind: "mapRun.begin" });
+      const orig = state.pipeline;
+      state.pipeline = orig.map(s => ({ ...s, code: String((s && s.code) || "").replace(/expected_output\.xlsx/g, "actual_output_template.xlsx") }));
+      return { steps: state.pipeline, restore: () => { CALLS.push({ kind: "mapRun.restore" }); state.pipeline = orig; } };
     },
     restorePipelineToCheckpointAndHold: async (idx, before, o) => {
       CALLS.push({ kind: "hold", idx });
@@ -371,6 +381,46 @@ function makeEnv(opts = {}) {
       && !/runFromCheckpointAfterEdit\(currentIdx, beforeDeleteSnapshot/.test(delBlock));
     t("S14c 폴백 reconcile + 보류 마킹", /reconcilePipelineSimulationAfterEdit\(\{ affectedStep: removedStep/.test(delBlock)
       && /markPipelinePendingFromIndex\(currentIdx, \{ label: "보류" \}\)/.test(delBlock));
+  }
+
+  // ══ R. [실행기 매핑] 단일 적용(토글 ON/삽입/수정)이 매핑본으로 실행되는가 ══
+  //   실측(2026-07-29 test_mapping): 파일확인 매핑 후 전체실행 성공 → 4번 OFF→ON 시 옛 파일명
+  //   expected_output.xlsx 로 실행돼 "워크북이 열려 있지 않습니다" 실패(단일축 토글 회귀).
+  //   수정: 단일 적용을 applyMappedSingleStep 으로 — beginMappedPipelineRun 스왑 후 매핑본 적용.
+  {
+    // 보류 스텝을 ON → 그 스텝만 단일 적용. 코드에 옛 파일명이 있으면 매핑본(actual_*)으로 실행돼야.
+    const { api, CALLS, state } = makeEnv();
+    state.pipeline = mk(5, [true, true, false, false, false]);
+    state.pipeline[3].code = "def transform(ctx):\n    ctx.book('expected_output.xlsx')";  // s4 = 옛 파일명
+    api.mark(2, { label: "보류" });
+    await api.toggle("s4");   // ON
+    const single = CALLS.find(c => c.kind === "applySingle" && c.id === "s4");
+    t("R1 ON 단일 적용 전 beginMappedPipelineRun 스왑", CALLS.some(c => c.kind === "mapRun.begin"));
+    t("R2 적용된 코드가 매핑본(actual_output_template, expected_output 아님)",
+      single && /actual_output_template\.xlsx/.test(single.code) && !/expected_output\.xlsx/.test(single.code), single && single.code);
+    t("R3 적용 후 restore 로 코드 원복(원본 보존)",
+      CALLS.some(c => c.kind === "mapRun.restore") && /expected_output\.xlsx/.test(state.pipeline[3].code));
+  }
+  {
+    // 매핑 미확인(noMapping) — beginMappedPipelineRun noop → 원본 그대로 적용(무회귀).
+    const { api, CALLS, state } = makeEnv({ noMapping: true });
+    state.pipeline = mk(5, [true, true, false, false, false]);
+    state.pipeline[3].code = "def transform(ctx):\n    ctx.book('expected_output.xlsx')";
+    api.mark(2, { label: "보류" });
+    await api.toggle("s4");
+    const single = CALLS.find(c => c.kind === "applySingle" && c.id === "s4");
+    t("R4 매핑 미확인이면 원본 코드 그대로(noop, 무회귀)", single && /expected_output\.xlsx/.test(single.code));
+  }
+  {
+    // 삽입(위가 ON) 단일 적용도 매핑본으로 — 소스 배선 검증(insertLogic 이 applyMappedSingleStep 사용).
+    t("R5 삽입 단일 적용이 applyMappedSingleStep 사용",
+      /const ok = await applyMappedSingleStep\(step\.id\)/.test(src));
+    t("R6 수정 단일 적용이 applyMappedSingleStep 사용",
+      /const ok = await applyMappedSingleStep\(stepId\)/.test(src));
+    t("R7 토글 ON 단일 적용이 applyMappedSingleStep 사용",
+      /const _applied = await applyMappedSingleStep\(stepId\)/.test(src));
+    t("R8 직접 applyLastEnabledStepFast 호출은 헬퍼 안에서만(단일축 경로 누수 없음)",
+      (src.match(/await applyLastEnabledStepFast\(/g) || []).length === 1);
   }
 
   console.log(pass + "/" + (pass + fail) + " PASS");

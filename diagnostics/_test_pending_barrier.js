@@ -137,8 +137,8 @@ t("6a 토글 핸들러가 top-level 함수(테스트 가능하게 분리)",
 t("6b 끄기 = 캐스케이드 OFF(그 스텝부터 끝까지) + hold 롤백",
   /for \(let j = currentIdx; j < state\.pipeline\.length; j \+= 1\)/.test(src)
   && /restorePipelineToCheckpointAndHold\(currentIdx, beforeToggleSnapshot/.test(src));
-t("6c 켜기 = 그 스텝 '하나만' 단일 적용 + resume 해제",
-  /applyLastEnabledStepFast\(toggledStep, \{ steps: state\.pipeline \}\)/.test(src)
+t("6c 켜기 = 그 스텝 '하나만' 단일 적용(매핑본) + resume 해제",
+  /const _applied = await applyMappedSingleStep\(stepId\)/.test(src)   // 실행기 매핑 경유(옛 파일명 치환)
   && /clearPipelineResumeFromIndex\(\);\s*\/\/ 라이브가 더는 순수 프리픽스가 아님/.test(src));
 t("6d 삭제 = 캐스케이드 OFF + hold(자동 재적용 아님)",
   /restorePipelineToCheckpointAndHold\(currentIdx, beforeDeleteSnapshot/.test(src)

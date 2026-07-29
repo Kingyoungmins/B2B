@@ -1675,12 +1675,31 @@ function runnerReplaceLiteral(text, from, to) {
 }
 
 window.buildRunnerMappedPipeline = function(steps) {
-  if (!state.runnerMappingChecked) return steps || state.pipeline;
+  // [진단] '실행기 매핑이 생성기 재실행에 안 실려 옛 파일명으로 실패'(실측 2026-07-29 test_mapping)의
+  // 정확한 원인 게이트를 실측으로 잡는다 — checked=false 인가, 매핑행이 0인가.
+  const _traceMap = (reason, extra) => {
+    try {
+      if (typeof traceClientUiEvent === "function") traceClientUiEvent("runner.mapping.build", {
+        reason: String(reason),
+        checked: String(!!state.runnerMappingChecked),
+        knownFiles: String((typeof runnerMappingKnownFiles === "function" ? runnerMappingKnownFiles() : []).length),
+        mappings: String(Object.keys(state.runnerMappings || {}).length),
+        runActive: String(!!state.runnerMappingRunActive),
+        ...(extra || {}),
+      });
+    } catch (_) {}
+  };
+  if (!state.runnerMappingChecked) { _traceMap("skip:not-checked"); return steps || state.pipeline; }
   // [뻑남 수정] 예전엔 '시트까지 해결된 행'만 남겨서, 시트가 안 잡히면 그 행을 통째로 버려 파일명조차
   // 치환 안 됐다 → 코드에 옛 파일명(expected_output.xlsx)이 남아 "워크북이 열려 있지 않습니다"로 실패.
   // 이제 '파일이 매핑된 행'은 모두 남겨 파일명을 반드시 치환하고(시트는 해결됐을 때만 치환) 파일 누락 실패를 막는다.
-  const rows = runnerBuildMappingRows().filter(row => row.fileItem);
-  if (!rows.length) return steps || state.pipeline;
+  const _allRows = runnerBuildMappingRows();
+  const rows = _allRows.filter(row => row.fileItem);
+  if (!rows.length) { _traceMap("skip:no-mapped-rows", { totalReqRows: String(_allRows.length) }); return steps || state.pipeline; }
+  // mapped: 파일은 치환되지만 '시트'는 row.sheet 가 비면(스킬 기본값/미해결) 치환 안 됨 → 시트명 오류 가능.
+  // book→actual, sheet→row.sheet(빈값이면 '(기본값)') 을 함께 남겨 파일/시트 어느 쪽이 문제인지 구분한다.
+  _traceMap("mapped", { rows: String(rows.length),
+    map: rows.slice(0, 6).map(r => `${(r.req && r.req.book) || "?"}→${(r.fileItem && r.fileItem.name) || "?"}/${(r.req && r.req.sheet) || "?"}→${r.sheet || "(기본값)"}`).join(" | ") });
   return (steps || state.pipeline || []).map(step => {
     if (!step || !step.code) return step;
     let code = String(step.code || "");

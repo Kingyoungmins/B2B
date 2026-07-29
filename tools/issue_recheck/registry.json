@@ -2627,6 +2627,21 @@
         ]
       ],
       "fix": "취소 분기(!picked.length)에서 recPreSnapshots(녹화 시작 시 전세션 스냅샷)로 /api/excel/replace 복원(녹화 세션 마지막 순서 — 재현 루프와 동일), showOnly 로 녹화 세션 착지. 완전 복원=성공 토스트, 실패/recSnapshotsComplete false=경고 토스트(silent 실패 금지), 스냅샷 없으면 화면 유지 안내. '캡처된 동작 없음' 경로는 의도적으로 비복원(캡처 없이 복원하면 수작업만 파괴)."
+    },
+    {
+      "id": "SINGLE-APPLY-SKIPS-RUNNER-MAPPING",
+      "title": "실행기 매핑 후 토글 ON(및 삽입/수정)이 옛 파일/시트명으로 실행돼 '워크북이 열려 있지 않습니다' — 단일축 토글 재작성 회귀. 단일 적용(applyLastEnabledStepFast)이 편집 reconcile 과 달리 beginMappedPipelineRun 관문을 안 거침(실측 2026-07-29 test_mapping: 4번 OFF→ON, expected_output.xlsx not found)",
+      "checks": [
+        [
+          "node",
+          "diagnostics/_test_switch_axis_model.js"
+        ],
+        [
+          "node",
+          "diagnostics/_test_pending_barrier.js"
+        ]
+      ],
+      "fix": "applyMappedSingleStep(stepId) 헬퍼 신설 — beginMappedPipelineRun 으로 매핑본을 스왑한 뒤 그 스텝(매핑된 코드/targetFileId)을 applyLastEnabledStepFast 로 적용하고 restore(코드는 원본 복원, _preApplySnapshot 은 ...cur 로 보존→이후 OFF fast). 매핑 미확인/치환대상 없음이면 beginMappedPipelineRun noop→원본 그대로(무회귀). 단일 적용 3곳(handlePipelineStepToggle ON:3611, insertLogic:2167, replaceLogicAt:2450)을 전부 이 헬퍼로 교체. 직접 applyLastEnabledStepFast 호출은 헬퍼 안 1곳만. 진단: drop-handling.js buildRunnerMappedPipeline 에 client.runner.mapping.build 트레이스(reason=mapped/skip:not-checked/skip:no-mapped-rows + map=book→actual/sheet→actual) — reconcile 은 mapped 찍히는데 단일적용은 트레이스 자체가 안 찍혀 관문 누락 확정. 실행검증 R1~R8(_test_switch_axis_model.js)."
     }
   ]
 }
