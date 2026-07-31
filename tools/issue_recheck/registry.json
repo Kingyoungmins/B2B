@@ -2653,6 +2653,17 @@
         ]
       ],
       "fix": "① applyMappedSingleStep: 스왑 복원 후 원본 state.pipeline 로 noteLivePipelineApplied 재호출 — applyLastEnabledStepFast 가 남긴 '매핑본 코드' 서명을 원본 코드 서명으로 교정(liveEnabledStepsSignature 는 code 포함이라 불일치→불필요 reconcile→상태칩 미갱신 유발했음). ② _syncPipelineToggleStatus(): 토글 정착 후 ON=적용됨/OFF=보류로 상태칩 동기화('오류'·'실행중'은 보존). ON reconcile 경로와 단일적용 성공 두 곳에서 호출. 실행검증 TS1~TS6(_test_switch_axis_model.js 68 assert)."
+    },
+    {
+      "id": "PIVOT-GROUP-FIELD-AS-VALUE-COLLAPSE",
+      "title": "행 필드를 값(개수)에도 넣으면(예: 행 MVNO상품명 + 값 개수:MVNO상품명) 상품별 행이 사라지고 '총합 1줄'로 붕괴 — value=None('~별 개수')도 동일. 원인: 엑셀 PivotField Orientation 은 하나뿐이라 AddDataField 가 행 필드를 값으로 이동시킴(실측 2026-07-31, 사용자 스크린샷 대조)",
+      "checks": [
+        [
+          "com",
+          "test_runs/_test_native_pivot_com.py"
+        ]
+      ],
+      "fix": "native_pivot: AddDataField 직후 그 필드가 행/열 필드였으면 Orientation 재지정해 행·값 동시 배치 복구(값-데이터 필드는 유지). value=None 경로도 동일 처리. docs/lessons/47. 실측검증 _test_native_pivot_com.py 체크 (11b)(13)(14)(15). 참고: 이 테스트가 예전엔 0.6.1 경로를 하드코딩 import 해 정작 해당 버전을 검증 못 하던 것도 로컬 리포 import 로 수정."
     }
   ]
 }

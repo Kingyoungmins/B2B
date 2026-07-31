@@ -1,8 +1,10 @@
 # [실측] ctx.native_pivot: 엑셀 '진짜 피벗테이블(PivotTable 개체)' 생성 — 원본 연결·새로고침 되는 살아있는 피벗.
 # 다중 키(행 필드 여러 개) + 다중 값(데이터 필드 여러 개) + 개수/크로스탭/새로고침 검증. 값은 GetPivotData 로 확인
 # (DataBodyRange 는 소계·총합을 포함하므로 단순 합산으로 검증하면 안 됨).
-import sys
-sys.path.insert(0, r"C:\Users\Admin\Desktop\KGM_git\B2B_ver0.6.1")
+import sys, os
+# [수정] 예전엔 0.6.1 경로가 하드코딩돼 정작 이 버전 serve_b2b 를 테스트하지 않았음.
+# 이 파일이 사는 리포(= test_runs 의 부모)의 serve_b2b 를 import 한다.
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import win32com.client as w
 import serve_b2b as S
 
@@ -54,9 +56,20 @@ try:
 
     # ── 개수(value=None) + 크로스탭(column) ──
     f.native_pivot("매출", group_by="회사", value=None, agg="count", dest_name="P4")
-    ck("(11) 개수 피벗 생성(데이터필드 1)", int(wb.Worksheets("P4").PivotTables(1).DataFields.Count) == 1)
+    pt4 = wb.Worksheets("P4").PivotTables(1)
+    ck("(11) 개수 피벗 생성(데이터필드 1)", int(pt4.DataFields.Count) == 1)
+    # [이슈 47] value=None 개수도 group_by 필드를 count 로 옮겨 행이 붕괴하면 안 됨(행 필드 유지)
+    ck("(11b) 개수 피벗도 행 필드 유지(회사 행 1개)", int(pt4.RowFields.Count) == 1, pt4.RowFields.Count)
     f.native_pivot("매출", group_by="회사", column="지점", value="금액", agg="sum", dest_name="P5")
     ck("(12) 크로스탭: 열 필드 1개", int(wb.Worksheets("P5").PivotTables(1).ColumnFields.Count) == 1, wb.Worksheets("P5").PivotTables(1).ColumnFields.Count)
+
+    # ── [이슈 47] 행 필드를 값(개수)에도 넣어도 행 그룹이 유지된다 (붕괴 회귀 방지) ──
+    # 수정 전: AddDataField(회사, count) 가 회사를 행→값으로 옮겨 RowFields.Count==0 → 총합 1줄로 붕괴.
+    f.native_pivot("매출", group_by="회사", value=["회사", "금액"], agg=["count", "sum"], dest_name="P6")
+    pt6 = wb.Worksheets("P6").PivotTables(1)
+    ck("(13) 행 필드 유지(회사 행 1개, 붕괴 아님)", int(pt6.RowFields.Count) == 1, pt6.RowFields.Count)
+    ck("(14) 데이터 필드 2개(개수+합계)", int(pt6.DataFields.Count) == 2, pt6.DataFields.Count)
+    ck("(15) 회사 A 금액 sum=600(상품별 집계 유지)", pt6.GetPivotData("금액", "회사", "A").Value == 600, pt6.GetPivotData("금액", "회사", "A").Value)
 finally:
     try: app.Quit()
     except Exception: pass
