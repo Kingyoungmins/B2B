@@ -50,8 +50,10 @@ function assistSystemPrompt() {
   지시문을 만들면 사용자가 그대로 따라 하다 더 틀린다. 아래 그라운딩 팩트(파일 목록·단계)에 없는 것도 지어내지 마라.
 
 ## 당신이 할 수 없는 것 (중요)
-- 스킬을 **실행/적용**할 수 없다. 그런 도구는 존재하지 않는다. 요청받아도 "실행은 사용자가
-  전체실행 버튼으로 해야 한다"고 안내하라.
+- 스킬을 직접 **실행/적용**할 수 없다. 그런 도구는 없다. 다만 네가 코드 수정을 제안하고 사용자가
+  카드에서 반영하면, 프로그램이 그 단계를 자동으로 꺼(OFF·보류) 둔다. 그러니 "실행/적용해라"는
+  요청이나 수정 반영 후 안내는 **"그 단계 스위치를 켜(ON) 주시면 새 코드로 적용됩니다"**라고 하라.
+  (생성기에는 '전체실행' 버튼이 없다 — "전체실행하세요"라고 안내하지 마라.)
 - 단계를 새로 만들거나 삭제할 수 없다. 그건 ③ 스킬 설계 채팅의 일이다.
 
 ## "방금 왜 실패했어?" — 실패 진단 시 (중요)
@@ -698,9 +700,30 @@ function assistCommitProposal(proposalId, accepted) {
     // 동반 수정은 코드 교체가 성공한 뒤에만 반영한다(코드가 안 바뀌었는데 라벨만 바뀌면 더 헷갈린다).
     const picked = Array.isArray(accepted) ? accepted : (p.companions || []).map((_, i) => i);
     const applied = assistApplyCompanions(p, picked);
-    try { if (typeof renderPipeline === "function") renderPipeline(); } catch (_) {}
+    // [교체 후 적용] 생성기엔 '전체실행' 버튼이 없어 예전 "전체실행하세요" 안내는 눌러볼 수가 없었다.
+    // 코드를 교체한 단계는 기존 토글 로직(handlePipelineStepToggle)으로 OFF(보류)로 만들어, 사용자가
+    // 스위치를 켜(ON) 주면 그때 새 코드로 단일 적용되게 한다. on/off 는 이 함수 하나로만 태운다 —
+    // 상태칩·캐스케이드·라이브 롤백·서명 갱신이 UI 토글과 완전히 동일(ON=적용/OFF=보류 단일 축).
+    // 이미 OFF인 단계면 켜기만 하면 되므로 토글은 생략하고 안내만 동일하게 준다.
+    const swIdx = (state.pipeline || []).findIndex(s => s && String(s.id) === String(p.stepId));
+    const stepNo = swIdx >= 0 ? swIdx + 1 : null;
+    if (swIdx >= 0 && typeof isStepEnabled === "function" && isStepEnabled(state.pipeline[swIdx])
+        && typeof handlePipelineStepToggle === "function") {
+      // assistCommitProposal 은 동기 반환(양쪽 팝업이 반환값을 동기 사용)이라 await 하지 않는다.
+      // handlePipelineStepToggle 이 자체적으로 renderPipeline·toast·실패 복원을 하므로 fire-and-forget
+      // 으로도 UI 가 일관되게 갱신된다(호출 즉시 enabled=false + renderPipeline 이 동기로 먼저 돈다).
+      try {
+        Promise.resolve(handlePipelineStepToggle(p.stepId))
+          .catch(e => console.warn("[assist] 교체 후 자동 OFF 실패", e));
+      } catch (e) {
+        console.warn("[assist] 교체 후 자동 OFF 호출 실패", e);
+        try { if (typeof renderPipeline === "function") renderPipeline(); } catch (_) {}
+      }
+    } else {
+      try { if (typeof renderPipeline === "function") renderPipeline(); } catch (_) {}
+    }
     try { if (typeof renderChatFromHistory === "function" && applied.chat > 0) renderChatFromHistory(); } catch (_) {}
-    return { ok: true, startIndex: r.startIndex, companions: applied };
+    return { ok: true, startIndex: r.startIndex, companions: applied, heldForToggle: true, stepNo };
   }
   // [검증 항목8] r 이 undefined/null 로 떨어져도 거짓 성공(소거+ok)이 되지 않게 명시적으로 실패 처리.
   if (!r || r === false) return { ok: false, error: "수정을 적용하지 못했습니다. 원인이 해소되면 카드에서 다시 시도할 수 있습니다." };

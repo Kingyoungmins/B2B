@@ -160,7 +160,10 @@
       cards.delete(String(m.pid));   // 성공했을 때만 소거 — 실패는 재시도 가능해야 한다
       const c = m.companions || { step: 0, chat: 0 };
       const extra = (c.step || c.chat) ? ` · 이름/설명 ${c.step}곳, 대화 ${c.chat}곳 함께 수정` : "";
-      box.innerHTML = '<span class="assist-done">✓ 수정했습니다 (라이브 미적용)' + esc(extra) + "</span>";
+      const msg = m.heldForToggle
+        ? ('✓ 코드를 교체했습니다. ' + (m.stepNo ? 'Step ' + m.stepNo + ' ' : '해당 단계 ') + '스위치를 켜(ON) 주시면 새 코드로 적용됩니다')
+        : '✓ 수정했습니다 (라이브 미적용)';
+      box.innerHTML = '<span class="assist-done">' + esc(msg) + esc(extra) + "</span>";
     } else {
       entry.bindActions('<span class="assist-fail">✕ ' + esc(m.error || "실패") + "</span> ");
     }

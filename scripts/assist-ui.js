@@ -448,7 +448,10 @@ function assistRenderProposalCard(p) {
         const extra = (c.step || c.chat)
           ? ` · 이름/설명 ${c.step}곳, 대화 ${c.chat}곳 함께 수정`
           : "";
-        box.innerHTML = `<span class="assist-done">✓ 수정했습니다 (라이브 미적용)${escapeHtml(extra)}</span>`;
+        const msg = r.heldForToggle
+          ? `✓ 코드를 교체했습니다. ${r.stepNo ? "Step " + r.stepNo + " " : "해당 단계 "}스위치를 켜(ON) 주시면 새 코드로 적용됩니다`
+          : "✓ 수정했습니다 (라이브 미적용)";
+        box.innerHTML = `<span class="assist-done">${escapeHtml(msg)}${escapeHtml(extra)}</span>`;
       } else {
         bindActions(`<span class="assist-fail">✕ ${escapeHtml((r && r.error) || "실패")}</span>`);
       }
@@ -655,6 +658,8 @@ function assistHandleBridgeMessage(m) {
         t: "commit-result", pid: m.pid,
         ok: !!(r && r.ok), error: (r && r.error) || "",
         companions: (r && r.companions) || null,
+        heldForToggle: !!(r && r.heldForToggle),
+        stepNo: (r && r.stepNo) || null,
       });
       break;
     }
