@@ -56,8 +56,9 @@
         <h1 id="page-title">B2B 빌링 Agent</h1>
         <div class="sub" id="model-label">AI: ixi 모델</div>
       </div>
-      <button class="ai-help-btn" id="btn-ai-help" type="button" aria-pressed="false"
-              title="AI 도움 — 스킬 진단·수정·데이터 질의 (프로그램 안의 도우미)">
+      <!-- [0.7.1] UI 노출 숨김 — F11 단축키로 대체(scripts/assist-ui.js 의 hotkey 바인딩). 핸들러는 그대로. -->
+      <button class="ai-help-btn" id="btn-ai-help" type="button" aria-pressed="false" hidden style="display:none"
+              title="AI 도움 (단축키 F11) — 스킬 진단·수정·데이터 질의 (프로그램 안의 도우미)">
         <span class="ai-help-spark">✦</span>
         <span class="ai-help-text">AI 도움</span>
       </button>
@@ -159,7 +160,8 @@
           <span>값만</span>
         </label>
         <button class="btn-secondary" id="btn-capture-copypaste" title="우측 엑셀에서 복사(Ctrl+C)→붙여넣기(Ctrl+V) 한 직후 누르면 그 복붙을 스킬 단계로 저장합니다">📋 복붙 캡처</button>
-        <button class="btn-secondary" id="btn-excel-record" title="우측 엑셀에서 하는 작업(입력·정렬·서식·복붙·시트 등)을 그대로 캡처해 스킬 단계로 저장합니다 (베타)">● 녹화(beta)</button>
+        <!-- [0.7.1] UI 노출 숨김 — F10 단축키로 시작/정지(scripts/assist-ui.js 의 hotkey 바인딩). 핸들러는 그대로. -->
+        <button class="btn-secondary" id="btn-excel-record" hidden style="display:none" title="화면 녹화 (단축키 F10 시작/정지) — 우측 엑셀에서 하는 작업을 그대로 캡처해 스킬 단계로 저장합니다 (베타)">● 녹화(beta)</button>
       </div>
       </div>
 

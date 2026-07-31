@@ -736,3 +736,24 @@ function assistOpenAndAsk(question) {
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", bind);
   else bind();
 })();
+
+// [0.7.1 단축키] 녹화 버튼·AI 도움 버튼은 UI 에서 숨겼다(index.html) — 대신 전역 단축키로 연다.
+//   F10 = 화면 녹화 시작/정지 토글(btn-excel-record)   F11 = AI 도움 토글(btn-ai-help)
+// 숨긴 버튼의 기존 onclick 을 그대로 재사용한다(.click()) — 로직 중복/분기 없음(display:none 버튼도
+// click() 은 정상 발화). 녹화 버튼이 전환 중(disabled)이면 무시해 상태 꼬임을 막는다.
+// F11 은 브라우저/WebView 기본 전체화면이라 preventDefault 로 가로챈다. 입력칸 포커스 중에도
+// F10/F11 은 기능키라 텍스트 입력과 충돌하지 않으므로 그대로 처리한다(키 반복은 1회로 제한).
+(function bindHiddenButtonHotkeys() {
+  document.addEventListener("keydown", (e) => {
+    if (e.repeat) return;
+    if (e.key === "F10") {
+      e.preventDefault();
+      const b = document.getElementById("btn-excel-record");
+      if (b && !b.disabled) b.click();
+    } else if (e.key === "F11") {
+      e.preventDefault();
+      const b = document.getElementById("btn-ai-help");
+      if (b) b.click();
+    }
+  }, true);   // capture 단계 — 앱/WebView 기본 동작(F11 전체화면)보다 먼저 가로챈다
+})();

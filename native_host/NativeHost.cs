@@ -138,7 +138,10 @@ namespace B2BNativeHost
         private DateTime lastServerRestartUtc = DateTime.MinValue;
         private int recentRestartCount;
         private bool debugHotkeyRegistered;
+        private bool hiddenButtonHotkeysRegistered;   // [0.7.1] F10/F11 (숨긴 녹화·AI 도움 버튼용)
         private const int DEBUG_HOTKEY_ID = 0xB2B8;
+        private const int RECORD_HOTKEY_ID = 0xB2BA;  // [0.7.1] F10 = 화면 녹화 시작/정지
+        private const int ASSIST_HOTKEY_ID = 0xB2BB;  // [0.7.1] F11 = AI 도움 토글
         private const int WM_HOTKEY = 0x0312;
         private const int WM_CLOSE = 0x0010;
         private const int SW_HIDE = 0;
@@ -348,29 +351,71 @@ namespace B2BNativeHost
 
         private void RegisterDebugHotkey()
         {
-            if (debugHotkeyRegistered || Handle == IntPtr.Zero) return;
-            try
+            if (Handle == IntPtr.Zero) return;
+            if (!debugHotkeyRegistered)
             {
-                debugHotkeyRegistered = RegisterHotKey(Handle, DEBUG_HOTKEY_ID, 0, (uint)Keys.F8);
-                if (!debugHotkeyRegistered) Program.Log("F8 debug hotkey registration failed");
+                try
+                {
+                    debugHotkeyRegistered = RegisterHotKey(Handle, DEBUG_HOTKEY_ID, 0, (uint)Keys.F8);
+                    if (!debugHotkeyRegistered) Program.Log("F8 debug hotkey registration failed");
+                }
+                catch (Exception ex)
+                {
+                    Program.Log("F8 debug hotkey registration failed: " + ex.Message);
+                }
             }
-            catch (Exception ex)
+            // [0.7.1] 녹화 버튼·AI 도움 버튼은 UI 에서 숨겼다 — F10/F11 전역 핫키로 대체한다.
+            // 전역 핫키라 Excel 미러(우측)가 포커스를 가진 녹화 중에도 F10 정지가 동작한다(F8 과 동일 근거).
+            if (!hiddenButtonHotkeysRegistered)
             {
-                Program.Log("F8 debug hotkey registration failed: " + ex.Message);
+                try
+                {
+                    bool r10 = RegisterHotKey(Handle, RECORD_HOTKEY_ID, 0, (uint)Keys.F10);
+                    bool r11 = RegisterHotKey(Handle, ASSIST_HOTKEY_ID, 0, (uint)Keys.F11);
+                    hiddenButtonHotkeysRegistered = r10 || r11;
+                    if (!r10) Program.Log("F10 record hotkey registration failed");
+                    if (!r11) Program.Log("F11 assist hotkey registration failed");
+                }
+                catch (Exception ex)
+                {
+                    Program.Log("F10/F11 hotkey registration failed: " + ex.Message);
+                }
             }
         }
 
         private void UnregisterDebugHotkey()
         {
-            if (!debugHotkeyRegistered || Handle == IntPtr.Zero) return;
+            if (Handle == IntPtr.Zero) return;
+            if (debugHotkeyRegistered)
+            {
+                try { UnregisterHotKey(Handle, DEBUG_HOTKEY_ID); } catch { }
+                debugHotkeyRegistered = false;
+            }
+            if (hiddenButtonHotkeysRegistered)
+            {
+                try { UnregisterHotKey(Handle, RECORD_HOTKEY_ID); } catch { }
+                try { UnregisterHotKey(Handle, ASSIST_HOTKEY_ID); } catch { }
+                hiddenButtonHotkeysRegistered = false;
+            }
+        }
+
+        // [0.7.1] UI 에서 숨긴 버튼(녹화/AI 도움)의 기존 onclick 을 그대로 실행 — 로직 재사용(분기 없음).
+        // disabled(전환 중) 버튼은 무시해 상태 꼬임을 막는다. WebView 미준비면 조용히 무시.
+        private void ClickHiddenButton(string id)
+        {
             try
             {
-                UnregisterHotKey(Handle, DEBUG_HOTKEY_ID);
+                if (webView != null && webView.CoreWebView2 != null)
+                {
+                    string js = "(function(){try{var b=document.getElementById(" + JsString(id)
+                              + ");if(b&&!b.disabled){b.click();}}catch(e){}})();";
+                    webView.CoreWebView2.ExecuteScriptAsync(js);
+                }
             }
-            catch
+            catch (Exception ex)
             {
+                Program.Log("hidden-button hotkey click failed (" + id + "): " + ex.Message);
             }
-            debugHotkeyRegistered = false;
         }
 
         private void ToggleDebugPanel()
@@ -1385,11 +1430,25 @@ namespace B2BNativeHost
 
         protected override void WndProc(ref Message m)
         {
-            if (m.Msg == WM_HOTKEY && ((int)(long)m.WParam) == DEBUG_HOTKEY_ID)
+            if (m.Msg == WM_HOTKEY)
             {
-                // F8 전역 핫키: Excel 미러가 포커스를 가진 상태에서도 속도 디버그 패널을 토글한다.
-                ToggleDebugPanel();
-                return;
+                int hk = (int)(long)m.WParam;
+                if (hk == DEBUG_HOTKEY_ID)
+                {
+                    // F8 전역 핫키: Excel 미러가 포커스를 가진 상태에서도 속도 디버그 패널을 토글한다.
+                    ToggleDebugPanel();
+                    return;
+                }
+                if (hk == RECORD_HOTKEY_ID)   // [0.7.1] F10 = 화면 녹화 시작/정지(숨긴 녹화 버튼 클릭)
+                {
+                    ClickHiddenButton("btn-excel-record");
+                    return;
+                }
+                if (hk == ASSIST_HOTKEY_ID)   // [0.7.1] F11 = AI 도움 토글(숨긴 AI 도움 버튼 클릭)
+                {
+                    ClickHiddenButton("btn-ai-help");
+                    return;
+                }
             }
             if (m.Msg == WM_SYSCOMMAND && (((int)(long)m.WParam) & 0xFFF0) == SC_MINIMIZE)
             {
