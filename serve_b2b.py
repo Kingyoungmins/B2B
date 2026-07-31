@@ -11712,14 +11712,27 @@ class PythonComSkillContext:
         aggs = list(agg) if isinstance(agg, (list, tuple)) else [agg] * len(values)
         while len(aggs) < len(values):
             aggs.append(aggs[-1] if aggs else "sum")
+        # [행=값 동일 필드] 엑셀 COM 의 AddDataField 는 '행/열 필드를 값 영역으로 이동'시킨다(한 필드
+        # Orientation 은 하나). 그래서 group_by 한 필드를 값(개수 등)으로도 넣으면 그 필드가 행에서 빠져
+        # 행 그룹이 통째로 사라지고 피벗이 '전체 총합 1줄'로 붕괴한다(사용자 제보 "개수:MVNO상품명" → 1줄).
+        # 엑셀 UI 는 드래그하면 행·값에 동시 배치되므로, AddDataField 직후 그 필드의 행/열 방향을 재지정해
+        # 둘 다 유지한다(실측 검증: 재지정 시 값-데이터 필드는 유지되고 행 그룹이 되살아남).
+        row_field_names = set(_fname(g) for g in groups)
+        col_field_name = _fname(column) if column is not None else None
         for v, a in zip(values, aggs):
             an = str(a or "sum").lower()
             fn = AGG.get(an, -4157)
             if v is None:
-                pt.AddDataField(pt.PivotFields(_fname(groups[0])), "개수", -4112)
+                gfn = _fname(groups[0])
+                pt.AddDataField(pt.PivotFields(gfn), "개수", -4112)
+                pt.PivotFields(gfn).Orientation = XL_ROW          # 개수용으로 옮겨간 행 필드 복구
             else:
                 fnm = _fname(v)
                 pt.AddDataField(pt.PivotFields(fnm), ("%s_%s" % (fnm, an))[:250], fn)
+                if fnm in row_field_names:
+                    pt.PivotFields(fnm).Orientation = XL_ROW      # 행 필드를 값에도 넣은 경우 행 유지
+                elif col_field_name is not None and fnm == col_field_name:
+                    pt.PivotFields(fnm).Orientation = XL_COL      # 열 필드를 값에도 넣은 경우 열 유지
         self._shared["structural"].append("native_pivot:%s->%s" % (ws.Name, name))
         return name
 

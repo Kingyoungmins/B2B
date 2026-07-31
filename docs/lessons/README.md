@@ -48,6 +48,7 @@
 | 셀 텍스트의 월/날짜를 +N(다음달 등) 했는데 첫 셀·첫 월만 바뀜·롤오버/말일보정 | `19_v0510_text_month_date_shift.md` |
 | VBA 기본 전환 후 코드 생성 품질 저하·에러 잦음 / "python·COM 으로 짜줘"를 우선 적용 | `20_v0510_vba_codegen_quality_and_explicit_engine.md`, `02_python_engine_risks.md` |
 | 피벗/유사 피벗, 선행 0 보존, 시간 환산 | `07_v058_regression_scenarios.md`, `04_vba_regression_checklist.md` |
+| 피벗에서 `개수:행필드`(행 필드를 값에도)·`~별 개수`가 총합 1줄로 붕괴 | `47_native_pivot_group_field_as_value_collapse.md` |
 | VBA 생성 흐름 전체를 설명해야 함 | `05_chat_to_excel_flow_prompt.md` |
 | Excel 미러/네이티브 구조 파악 | `03_excel_mirror_architecture.md` |
 | 테스트 데이터가 왜 있는지 확인 | `11_test_data_guide.md`, `10_v056_bug_validation_scenarios.md` |
