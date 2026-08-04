@@ -595,6 +595,88 @@ function runnerCleanWorkbookRequirementName(value) {
   return clean;
 }
 
+// [역할(안정키) 정규화 — 같은 파일의 다른 달 이름 통합] 스킬 안에는 같은 파일이 시기마다 다른
+// 이름(4월/5월)으로 스텝 꼬리표·@범위 에코·코드 리터럴에 남을 수 있다(사용자 실측 zip 2건).
+// 요구 추출이 그 이름들을 그대로 행으로 만들면 파일확인이 같은 파일을 여러 줄로 요구한다.
+// 여기서 envConfig(저장 시점 정본)를 '역할표'로 삼아 요구의 book 을 정본 이름으로 정규화하고,
+// 같은 (정본, 시트) 요구를 한 행으로 합친다. 원문 이름은 req.aliases 로 보존해 실행 치환이
+// 코드/프롬프트 속 옛 이름까지 전부 실제 파일명으로 바꾼다 — v4 자리표의 실패 원인이던
+// '코드 자체를 훼손'하는 방식이 아니라 경계(요구·치환)에서만 정규화한다.
+// 가드: 정본 없으면 무변화(구버전 zip). 정본에 같은 안정키 파일이 2개면(진짜로 두 달을 함께 쓰는
+// 스킬) 그 키는 정규화하지 않는다(모호 금지 — 월 재바인딩과 동일 원칙).
+function runnerCanonicalizeRequirementsByEnv(map, cfg) {
+  const out = { renamed: [], merged: [] };
+  if (!cfg || typeof cfg !== "object") return out;
+  const cfgFiles = [...(Array.isArray(cfg.inputs) ? cfg.inputs : []),
+                    ...(Array.isArray(cfg.outputs) ? cfg.outputs : [])]
+    .filter(f => f && (f.name || f.displayName));
+  if (!cfgFiles.length) return out;
+  const stable = (n) => {
+    try {
+      return ((typeof pipelineStableWorkbookKey === "function")
+        ? pipelineStableWorkbookKey(n) : "") || "";
+    } catch (_) { return ""; }
+  };
+  const byKey = new Map();   // 안정키 → Set(정본 파일)
+  for (const f of cfgFiles) {
+    for (const n of [f.name, f.displayName]) {
+      if (!n) continue;
+      const k = stable(n);
+      if (!k || k.length < 4) continue;
+      if (!byKey.has(k)) byKey.set(k, new Set());
+      byKey.get(k).add(f);
+    }
+  }
+  const cfgOf = (book) => {   // book 이 가리키는 정본 파일(안정키 유일일 때만)
+    const k = stable(book);
+    if (!k || k.length < 4) return null;
+    const set = byKey.get(k);
+    if (!set || set.size !== 1) return null;   // 모호(같은 계열 정본 2개) → 정규화 금지
+    return Array.from(set)[0];
+  };
+  // [시트도 동일 원칙] 시트명에 월이 박힌 경우("원가_4월", "202605_..._P")도 정본 시트로 정규화.
+  // 파일보다 후보 공간이 좁아(한 파일의 시트들) 키 길이 하한은 2자. 유일 일치만, 원문은 sheetAliases.
+  const sheetCanonOf = (cfgFile, sheet) => {
+    const names = (cfgFile && Array.isArray(cfgFile.sheetNames)) ? cfgFile.sheetNames : [];
+    if (!names.length || !sheet) return null;
+    if (names.some(n => runnerMappingNorm(n) === runnerMappingNorm(sheet))) return null;   // 이미 정본
+    const k = stable(sheet);
+    if (!k || k.length < 2) return null;
+    const hits = names.filter(n => stable(n) === k);
+    return hits.length === 1 ? hits[0] : null;
+  };
+  for (const [key, req] of Array.from(map.entries())) {
+    if (!req || !req.book) continue;
+    const cfgF = cfgOf(req.book);
+    if (!cfgF) continue;
+    const canon = cfgF.name || cfgF.displayName || null;
+    if (!canon) continue;
+    const bookChanged = runnerMappingNorm(canon) !== runnerMappingNorm(req.book);
+    const sheetCanon = sheetCanonOf(cfgF, req.sheet);
+    if (!bookChanged && !sheetCanon) continue;
+    map.delete(key);
+    const newSheet = sheetCanon || req.sheet;
+    const newKey = runnerMappingKey(canon, newSheet);
+    const exist = map.get(newKey);
+    const mergeAliases = (a, b) => Array.from(new Set([...(a || []), ...(b || [])]));
+    if (exist) {   // 같은 (정본,시트) 행이 이미 있음 → 별칭만 흡수(한 행으로 합쳐짐)
+      if (bookChanged) exist.aliases = mergeAliases(exist.aliases, [req.book, ...(req.aliases || [])]);
+      else exist.aliases = mergeAliases(exist.aliases, req.aliases);
+      if (sheetCanon) exist.sheetAliases = mergeAliases(exist.sheetAliases, [req.sheet, ...(req.sheetAliases || [])]);
+      else exist.sheetAliases = mergeAliases(exist.sheetAliases, req.sheetAliases);
+      out.merged.push(req.book + "/" + (req.sheet || "") + " -> " + canon + "/" + (newSheet || ""));
+    } else {
+      map.set(newKey, {
+        ...req, key: newKey, book: canon, sheet: newSheet,
+        aliases: bookChanged ? mergeAliases([req.book], req.aliases) : (req.aliases || []),
+        sheetAliases: sheetCanon ? mergeAliases([req.sheet], req.sheetAliases) : (req.sheetAliases || []),
+      });
+      out.renamed.push(req.book + "/" + (req.sheet || "") + " -> " + canon + "/" + (newSheet || ""));
+    }
+  }
+  return out;
+}
+
 // [환경 config 교집합 — 0.6.2 아이디어] 저장 시점의 실제 파일·시트 정본(envConfig)으로 요구를
 // 검증한다: ① 정본에 없는 파일명 요구 = 휴리스틱 오인(제목/서술문 조각) → 제거,
 // ② 파일은 맞는데 그 파일에 없던 시트 = 오귀속 → 시트만 '자동'으로 강등(파일 요구는 유지).
@@ -621,7 +703,10 @@ function runnerApplyEnvConfigFilter(map, cfg) {
     const hit = findCfg(req.book);
     if (!hit) { plans.push({ act: "drop", key, req }); continue; }
     if (req.sheet && Array.isArray(hit.sheetNames) && hit.sheetNames.length
-        && !hit.sheetNames.some(s => norm(s) === norm(req.sheet))) {
+        && !hit.sheetNames.some(s => norm(s) === norm(req.sheet))
+        // [월 변형 시트] 정본 시트와 안정키(월·날짜 무시)로 같으면 오귀속이 아니다 — 강등하면
+        // 시트 요구가 사라져 치환이 끊기고 옛 시트명이 실행까지 살아남는다.
+        && !hit.sheetNames.some(s => stable(s) && stable(s) === stable(req.sheet))) {
       plans.push({ act: "downgrade", key, req });
     }
   }
@@ -632,6 +717,13 @@ function runnerApplyEnvConfigFilter(map, cfg) {
     map.delete(p.key);
     if (p.act === "downgrade") {
       runnerAddRequirement(map, p.req.book, "", "config-sheet-downgrade");
+      // [별칭 보존] 강등 재등록이 원 요구의 aliases(옛 달 이름들)를 버리면 실행 치환이 그 이름을 놓친다.
+      try {
+        const ne = map.get(runnerMappingKey(runnerCleanWorkbookRequirementName(p.req.book), ""));
+        if (ne && Array.isArray(p.req.aliases) && p.req.aliases.length) {
+          ne.aliases = Array.from(new Set([...(ne.aliases || []), ...p.req.aliases]));
+        }
+      } catch (_) {}
       out.downgraded.push(p.req.book + "/" + p.req.sheet);
     } else {
       out.dropped.push(p.req.book);
@@ -1252,6 +1344,18 @@ function runnerExtractMappingRequirements() {
     // (3) 같은 파일을 '시트까지' 요구하는 항목이 있으면, 그 파일의 '빈 시트' 중복 요구는 제거.
     if (req.book && emptySheet && booksWithSheet.has(runnerMappingNorm(req.book))) { map.delete(key); continue; }
   }
+  // [역할 정규화] 같은 파일의 다른 달 이름 요구를 정본 이름 한 행으로 통합(원문은 aliases 보존).
+  // 반드시 envConfig 필터 '앞' — 필터가 canonical 이름 기준으로 정확 일치하게.
+  try {
+    const _canonRes = runnerCanonicalizeRequirementsByEnv(map, state.skillEnvConfig);
+    if ((_canonRes.renamed.length || _canonRes.merged.length)
+        && typeof traceClientUiEvent === "function") {
+      traceClientUiEvent("runner.requirement.canonicalize", {
+        renamed: _canonRes.renamed.slice(0, 8).join(" | ").slice(0, 300),
+        merged: _canonRes.merged.slice(0, 8).join(" | ").slice(0, 300),
+      });
+    }
+  } catch (_) {}
   // [환경 config 교집합] 저장 시점 정본이 있으면(0.6.2 채용, 구버전 zip 은 null → 그대로)
   // 정본에 없는 파일 요구 제거 + 그 파일에 없던 시트는 '자동' 강등. 결과는 트레이스로 남긴다.
   try {
@@ -1358,6 +1462,20 @@ function runnerFindSheet(req, file, preferredSheet, generatedNames) {
   // 채택하면 새 시트 참조가 엉뚱한 원본 시트로 치환돼, 만들어 둔 시트 대신 원본을 덮어쓴다.
   // 추측을 포기하면 runnerBuildMappingRows 가 '스킬 기본값(자동)'으로 잡아 원래 이름 그대로 실행한다.
   if (req && req.sheet && generatedNames && generatedNames.has(runnerMappingNorm(req.sheet))) return "";
+  // [월 변형 시트] 표기 정규화로도 못 잡으면 안정키(월·날짜 무시)로 '유일' 일치 시 채택 —
+  // 파일 재바인딩과 동일 원칙("원가_4월" 요구 → 6월 파일의 "원가_6월"). 생성시트 이름은 후보에서
+  // 제외(위 가드와 대칭). 2개 이상 걸리면 모호 → 채택하지 않는다(사용자 선택으로).
+  if (req && req.sheet && typeof pipelineStableWorkbookKey === "function") {
+    let k = "";
+    try { k = pipelineStableWorkbookKey(req.sheet) || ""; } catch (_) { k = ""; }
+    if (k && k.length >= 2) {
+      const hits = sheets.filter(s => {
+        if (generatedNames && generatedNames.has(runnerMappingNorm(s))) return false;
+        try { return (pipelineStableWorkbookKey(s) || "") === k; } catch (_) { return false; }
+      });
+      if (hits.length === 1) return hits[0];
+    }
+  }
   return sheets.length === 1 ? sheets[0] : "";
 }
 
@@ -1708,11 +1826,19 @@ window.buildRunnerMappedPipeline = function(steps) {
     const stepText = [step.prompt, step.description, step.code, step.targetFileId, step.targetSheetName].filter(Boolean).join("\n");
     rows.forEach(row => {
       const actualName = row.fileItem ? row.fileItem.name : "";
+      // [역할 정규화 별칭] 요구 book 이 정본 이름으로 정규화됐어도, 코드에는 옛 달 이름(4월 등)이
+      // 그대로 있을 수 있다 — canonical + aliases 전부 치환해야 실행이 그 워크북을 찾는다.
+      const bookNames = [row.req.book, ...((row.req && row.req.aliases) || [])].filter(Boolean);
       // 파일명 치환은 '스킬 기본값'에서도 유지한다 — 안 하면 옛 파일명이 남아 워크북을 못 찾는다.
-      if (row.req.book && actualName) code = runnerReplaceLiteral(code, row.req.book, actualName);
+      if (actualName) bookNames.forEach(bn => { code = runnerReplaceLiteral(code, bn, actualName); });
       // 시트는 사용자가 '스킬 기본값'을 고르면 손대지 않는다(row.sheet 가 비어 있음).
-      if (row.req.sheet && row.sheet) code = runnerReplaceLiteral(code, row.req.sheet, row.sheet);
-      const touchesBook = row.req.book && stepText.includes(row.req.book);
+      // [월 변형 시트 별칭] 정규화된 시트의 원문 이름들(sheetAliases)도 함께 치환 — 코드에
+      // "원가_4월"이 남아 있으면 실제 시트로 못 간다.
+      if (row.sheet) {
+        const sheetNames = [row.req.sheet, ...((row.req && row.req.sheetAliases) || [])].filter(Boolean);
+        sheetNames.forEach(sn => { code = runnerReplaceLiteral(code, sn, row.sheet); });
+      }
+      const touchesBook = bookNames.some(bn => stepText.includes(bn));
       const touchesSheet = row.req.sheet && stepText.includes(row.req.sheet);
       if (touchesBook || (!row.req.book && touchesSheet)) {
         targetFileId = row.fileItem.id;

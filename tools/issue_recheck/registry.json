@@ -2723,6 +2723,32 @@
         ]
       ],
       "fix": "scripts/soft-refresh.js 신설: ① Excel 전부 강제종료(멈춘 COM 해소, 8초 가드) ② 스냅샷(sessionStorage) = 파일은 workbookId만 + 스킬은 buildLogicZipEntries 매니페스트(수동 저장과 동일 포맷) ③ location.reload ④ 부팅 시 /api/workbooks/reinspect 로 업로드와 동형 레코드(createBackendPreviewRecord) 재구성 + loadLogic 으로 스킬·대화 복원 + 미러 재오픈 + [사용자 요청] 복원 후 runPipelineWithAutoRepair(ignoreCheckpoint)로 스킬 자동 재적용(실패 시 미적용 유지+수동 전체실행 안내). fileId가 'input:'+이름 규칙이라 targetFileId 바인딩 유지. 진입: 초기화 옆 [🔄 새로고침] 버튼 + F5/Ctrl+R 가로채기(기본 리로드는 빈 화면이 되므로 대체). 부분실패는 파일명 나열 토스트. AI 도움 버튼은 소스에서 이미 노출(숨김은 구빌드 잔재) — 낡은 주석 정정."
+    },
+    {
+      "id": "SKILL-SAVE-MIXED-MONTH-TARGETS",
+      "title": "4월 스킬을 5월 파일로 전체실행→결과편집→수정→저장하면 zip 에 스텝별 targetFileId 가 4월·5월 혼재(수정한 스텝만 재바인딩) → 6월 파일확인이 '4월도 필요, 5월도 필요' 중복 요구(사용자 실측 zip 2026-08-04). envConfig 필터는 안정키 폴백 때문에 옛 달 이름도 통과 + 2번째 실측 zip: 꼬리표는 깨끗한데 prompt 의 @범위 선택 에코에 4월이 남아 동일 증상",
+      "checks": [
+        [
+          "node",
+          "test_runs/_test_stale_targetfile_repair.js"
+        ]
+      ],
+      "fix": "save-load.js 2중 수리: (a) 저장 시 normalizeStaleTargetFileIdForSave — 현재 업로드에 없는 stale targetFileId 만 기존 4단계 유일 매칭(안정키 포함)으로 재해석해 zip 에 기록(라이브 미변경). (b) 로드 시 repairStaleTargetFileIds — envConfig.inputs 정본에 없는 이름을 안정키 유일 일치 시에만 교정(모호·구버전 zip·짧은 키 무수정, v4 자리표 복원 뒤 실행). 기존 계약 테스트 3종(runner_requirements 23/16/automap) 무회귀 확인. (c) prompt/description 속 옛 달 파일명도 같은 유일-매칭 원칙으로 저장/로드 시 교정(repairStalePromptBookNames/normalizeStaleBooksInSavedText) — 코드·chatHistory 는 불변."
+    },
+    {
+      "id": "RUNNER-ROLE-CANONICALIZE",
+      "title": "파일확인이 같은 파일을 여러 달 이름(4월/5월)으로 중복 요구 — 역할(안정키) 정규화로 정본 한 행 통합 + 별칭 치환. v4 자리표 실패(lesson 0.6.2/44) 회피형: 저장 포맷 불변, 경계(요구·치환)에서만 정규화, 모호(정본에 두 달 실존)면 무변화",
+      "checks": [
+        [
+          "node",
+          "test_runs/_test_runner_role_canonicalize.js"
+        ],
+        [
+          "node",
+          "test_runs/_test_stale_targetfile_repair.js"
+        ]
+      ],
+      "fix": "drop-handling.js runnerCanonicalizeRequirementsByEnv(envConfig 필터 앞): 요구 book 을 정본 이름으로 정규화, 같은 (정본,시트) 행 병합, 원문은 req.aliases 보존. buildRunnerMappedPipeline 치환/targetFileId 판정을 canonical+aliases 전체로 확장(코드 속 옛 이름 잔존 방지). envConfig 필터 강등 경로도 aliases 보존. [시트 확장] 시트명 월 변형(원가_4월→정본 원가_5월→업로드 원가_6월)도 동일 원칙: 정규화(sheetAliases 보존, 키 하한 2자)·envConfig 필터 안정키 인정(오귀속 강등 방지)·runnerFindSheet 4단계(안정키 유일, 생성시트 제외)·치환 sheetAliases 포함."
     }
   ]
 }

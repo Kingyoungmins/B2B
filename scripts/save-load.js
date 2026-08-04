@@ -208,17 +208,24 @@ function _buildLogicZipEntriesImpl(safeBase, name) {
     },
     pipeline: state.pipeline.map((s, idx) => ({
       id: s.id,
-      description: s.description,
+      // [다른 달 혼재] prompt/설명 속 옛 달 파일명(@범위 에코 등)도 저장 시 현재 업로드로 유일-재해석
+      // — 파일확인 요구 추출이 이 텍스트의 파일명을 읽으므로, 옛 달이 굳으면 두 달을 중복 요구한다.
+      description: (typeof normalizeStaleBooksInSavedText === "function"
+        ? normalizeStaleBooksInSavedText(s.description) : s.description),
       // [설명 유실 수정] 카드 라벨은 description 이 제네릭("스킬 생성")이면 prompt(사용자 요청)로
       // 폴백한다. prompt 를 저장하지 않아 불러오면 라벨이 "스킬 생성"으로 남던 문제 → prompt 를 함께 보존.
-      prompt: s.prompt || null,
+      prompt: (typeof normalizeStaleBooksInSavedText === "function"
+        ? normalizeStaleBooksInSavedText(s.prompt || null) : (s.prompt || null)),
       originHistId: s.originHistId || null,   // [번호표 연결] chatHistory 의 histId 와 짝 — 함께 저장돼야 왕복된다
       title: s.title || null,   // [사용자 편집 이름] 카드 라벨을 직접 편집한 이름 → zip 에 보존, 불러오면 그 이름으로 표시
       enabled: isStepEnabled(s),
       language: s.language || "javascript",
       stepFile: stepFiles[idx],
       code: s.code,
-      targetFileId: s.targetFileId || null,  // [#18] 스텝의 대상 파일 바인딩 — 저장/불러오기로 유지되어야 재실행 시 올바른 파일에 적용됨
+      // [#18] 스텝의 대상 파일 바인딩 — 저장/불러오기로 유지되어야 재실행 시 올바른 파일에 적용됨.
+      // [다른 달 혼재] 옛 달 이름이 zip 에 그대로 굳지 않게, 저장 시점 업로드로 유일-재해석해 기록.
+      targetFileId: (typeof normalizeStaleTargetFileIdForSave === "function"
+        ? normalizeStaleTargetFileIdForSave(s.targetFileId) : (s.targetFileId || null)),
       targetSheetName: s.targetSheetName || null,
       // [녹화 메타 durable] makeStep 이 도장한 워크북/시트명이 저장에서 빠져 있었다(화이트리스트 누락)
       // — 실행기 '파일확인'의 파일별 요구 도출과 재바인딩이 zip 왕복 후 무력화되던 원인.
@@ -637,6 +644,135 @@ function repairPasteCopiedInternalBookNames(steps) {
   return touched;
 }
 
+// ── [다른 달 꼬리표 혼재 수정] ───────────────────────────────────────────────
+// 스텝의 targetFileId 는 그 단계를 '만든 달'의 파일명 그대로다. 다른 달 파일로 전체실행/수정한
+// 세션에서 저장하면, 수정한 스텝만 이번 달로 되새겨지고 안 건드린 스텝은 옛 달로 남아
+// zip 안에 4월·5월이 섞인다(사용자 실측 zip: step1=4월, step2=5월, envConfig=5월만).
+// 실행기 파일확인은 스텝별 대상을 원문 이름 그대로 요구 행으로 만들므로 "4월도 필요, 5월도 필요"가 떴다.
+// 원칙(사이드이펙트 방지): '유일하게' 해석될 때만 고치고, 모호하면 절대 손대지 않는다(현행 유지).
+
+// [저장 시] 현재 업로드에 없는(stale) targetFileId 만, 기존 4단계 유일 매칭(안정키 포함)으로
+// '현재 업로드의 그 파일'로 되새겨 zip 에 기록한다. 라이브 state.pipeline 은 건드리지 않는다.
+// 현재 업로드에 실존하는 이름·매칭 실패·모호는 전부 원본 그대로(기존 동작과 동일).
+function normalizeStaleTargetFileIdForSave(targetFileId) {
+  try {
+    const tid = String(targetFileId || "");
+    if (!tid.startsWith("input:")) return targetFileId || null;
+    if (typeof getFile === "function" && getFile(tid)) return tid;   // 현재 업로드에 실존 → 정상
+    if (typeof pipelineResolveSavedTargetFileId === "function") {
+      const rebound = pipelineResolveSavedTargetFileId(tid);
+      if (rebound && String(rebound).startsWith("input:")) return rebound;
+    }
+  } catch (_) {}
+  return targetFileId || null;
+}
+
+// [로드 시] 이미 저장된 zip 의 혼재도 수리한다. envConfig.inputs(저장 시점 업로드 '정본')에 없는
+// targetFileId 가 정본의 한 파일과 안정키(월·날짜 무시)로 '유일하게' 일치할 때만 그 이름으로 교정.
+// envConfig 없는 구버전 zip·모호(정본에 같은 계열 2개, 예: 4월+5월 동시 업로드)·짧은 키(<4)는
+// 전부 무수정 — 기존 동작으로 폴백. 코드/프롬프트 속 리터럴은 건드리지 않는다(요구 행 중복의
+// 원인은 꼬리표뿐이고, 리터럴 재작성은 실행 코드를 바꾸는 위험이 있어 범위에서 제외).
+function repairStaleTargetFileIds(steps, envConfig) {
+  const inputs = (envConfig && Array.isArray(envConfig.inputs)) ? envConfig.inputs : [];
+  const cands = inputs
+    .map(i => ({ name: String((i && i.name) || "").trim(),
+                 displayName: String((i && i.displayName) || "").trim() }))
+    .filter(c => c.name || c.displayName);
+  if (!cands.length || !Array.isArray(steps)) return 0;
+  if (typeof pipelineStableWorkbookKey !== "function") return 0;
+  const known = new Set();
+  for (const c of cands) {
+    if (c.name) known.add(c.name.toLowerCase());
+    if (c.displayName) known.add(c.displayName.toLowerCase());
+  }
+  const keyOf = (v) => { try { return pipelineStableWorkbookKey(v) || ""; } catch (_) { return ""; } };
+  let touched = 0;
+  for (const s of steps) {
+    if (!s) continue;
+    const tid = String(s.targetFileId || "");
+    if (!tid.startsWith("input:")) continue;
+    const book = tid.slice(6).trim();
+    if (!book || known.has(book.toLowerCase())) continue;      // 정본에 실존 → 정상
+    const key = keyOf(book);
+    if (!key || key.length < 4) continue;                      // 짧은 키 매칭 금지(기존 가드와 동일)
+    const matches = cands.filter(c =>
+      (c.name && keyOf(c.name) === key) || (c.displayName && keyOf(c.displayName) === key));
+    if (matches.length !== 1) continue;                        // 모호하면 손대지 않는다
+    s.targetFileId = "input:" + (matches[0].name || matches[0].displayName);
+    touched++;
+  }
+  return touched;
+}
+
+// [프롬프트/설명 속 옛 달 파일명 교정] 파일확인 요구 추출은 꼬리표만이 아니라 스텝 prompt 의
+// @범위[파일/시트!셀] 표기와 자유 텍스트 파일명도 읽는다. 실측(2026-08-04 두 번째 zip): 생성기에서
+// 4월 파일 선택 에코가 prompt 에 남은 채 5월 세션에서 단계가 만들어져 — 꼬리표는 전부 5월인데
+// prompt 의 "input_원가_2026_4월.xlsx" 때문에 파일확인이 4월·5월을 동시 요구했다.
+// 치환 대상은 '.xls* 로 끝나는 정확한 파일명 문자열'만이고 targetFileId 수리와 같은 유일-매칭
+// 원칙을 따른다. 코드(step.code)와 chatHistory 는 건드리지 않는다(실행/이력 불변).
+function _replaceStaleBookNamesInText(text, resolveName) {
+  const s = String(text || "");
+  if (!s || !/\.xls(?:x|m|b)?/i.test(s)) return text;
+  if (typeof pipelineCollectWorkbookNames !== "function") return text;
+  let out = s;
+  let changed = false;
+  for (const nm of pipelineCollectWorkbookNames(s)) {
+    let to = null;
+    try { to = resolveName(nm); } catch (_) { to = null; }
+    if (to && to !== nm) { out = out.split(nm).join(to); changed = true; }
+  }
+  return changed ? out : text;
+}
+
+function repairStalePromptBookNames(steps, envConfig) {
+  const inputs = (envConfig && Array.isArray(envConfig.inputs)) ? envConfig.inputs : [];
+  const cands = inputs
+    .map(i => ({ name: String((i && i.name) || "").trim(),
+                 displayName: String((i && i.displayName) || "").trim() }))
+    .filter(c => c.name || c.displayName);
+  if (!cands.length || !Array.isArray(steps)) return 0;
+  if (typeof pipelineStableWorkbookKey !== "function") return 0;
+  const known = new Set();
+  for (const c of cands) {
+    if (c.name) known.add(c.name.toLowerCase());
+    if (c.displayName) known.add(c.displayName.toLowerCase());
+  }
+  const keyOf = (v) => { try { return pipelineStableWorkbookKey(v) || ""; } catch (_) { return ""; } };
+  const resolveName = (nm) => {
+    const book = String(nm || "").trim();
+    if (!book || known.has(book.toLowerCase())) return null;   // 정본에 실존 → 정상, 무수정
+    const key = keyOf(book);
+    if (!key || key.length < 4) return null;
+    const matches = cands.filter(c =>
+      (c.name && keyOf(c.name) === key) || (c.displayName && keyOf(c.displayName) === key));
+    if (matches.length !== 1) return null;                     // 모호하면 손대지 않는다
+    return matches[0].name || matches[0].displayName;
+  };
+  let touched = 0;
+  for (const s of steps) {
+    if (!s) continue;
+    let stepChanged = false;
+    const p2 = _replaceStaleBookNamesInText(s.prompt, resolveName);
+    if (p2 !== s.prompt) { s.prompt = p2; stepChanged = true; }
+    const d2 = _replaceStaleBookNamesInText(s.description, resolveName);
+    if (d2 !== s.description) { s.description = d2; stepChanged = true; }
+    if (stepChanged) touched++;
+  }
+  return touched;
+}
+
+// [저장 시] 위와 같은 교정을 '현재 업로드' 기준으로 — stale 파일명이 유일 재해석될 때만.
+function normalizeStaleBooksInSavedText(text) {
+  return _replaceStaleBookNamesInText(text, (nm) => {
+    const tid = "input:" + String(nm || "").trim();
+    if (typeof getFile === "function" && getFile(tid)) return null;   // 현재 업로드에 실존 → 정상
+    if (typeof pipelineResolveSavedTargetFileId !== "function") return null;
+    const rebound = pipelineResolveSavedTargetFileId(tid);
+    if (rebound && String(rebound).startsWith("input:")) return String(rebound).slice(6);
+    return null;
+  });
+}
+
 async function loadLogicFiles(files) {
   if (files.length === 0) return;
   files = await normalizeLoadedFiles(files);
@@ -833,6 +969,23 @@ function loadLogic(data, filename, meta) {
         rfs.forEach(rf => { c = runnerReplaceLiteral(c, rf.handle, rf.name); });
         step.code = c;
       });
+    }
+  } catch (_) {}
+  // [다른 달 꼬리표 수리] 저장 zip 에 스텝별로 다른 달 파일명이 섞여 있으면(실측: 1단계=4월,
+  // 2단계=5월) 실행기 파일확인이 같은 파일을 여러 달로 중복 요구한다 — envConfig 정본 기준
+  // '유일' 매칭만 교정(모호·구버전 zip 은 무수정). v4 자리표 복원 '뒤'에 돌아야 한다.
+  try {
+    if (typeof repairStaleTargetFileIds === "function") {
+      const fixedMonths = repairStaleTargetFileIds(state.pipeline, state.skillEnvConfig);
+      if (fixedMonths) console.log("[load] 다른 달 대상 꼬리표 수리:", fixedMonths, "단계");
+    }
+  } catch (_) {}
+  // [프롬프트 에코 수리] prompt/@범위 속 옛 달 파일명도 같은 원칙(유일 매칭)으로 교정 —
+  // 꼬리표는 깨끗한데 선택 에코가 4월로 남아 파일확인이 두 달을 요구한 실측(2026-08-04 2번째 zip).
+  try {
+    if (typeof repairStalePromptBookNames === "function") {
+      const fixedPrompts = repairStalePromptBookNames(state.pipeline, state.skillEnvConfig);
+      if (fixedPrompts) console.log("[load] 프롬프트 옛 달 파일명 수리:", fixedPrompts, "단계");
     }
   } catch (_) {}
   // [구버전 승격] 대화·파이프라인이 모두 복원된 이 시점에 1회. typeof 가드: 진단 하네스가
