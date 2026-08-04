@@ -628,7 +628,17 @@ function userRequestsSort(text) {
 // 파일명에 '작성/복사/정산/계산' 같은 라우팅 키워드가 들어 있으면(예: output_..._LG작성.xlsx)
 // 의도가 오분류되어 엔진이 잘못 선택되던 버그를 막는다. 대상 '존재' 판정(@범위 유무 등)은 원문을 쓴다.
 function routingIntentText(text) {
-  return String(text || "").replace(/@(?:범위|컬럼|시트)\[[^\]]*\]/g, " ");
+  let s = String(text || "").replace(/@(?:범위|컬럼|시트)\[[^\]]*\]/g, " ");
+  // 기계가 붙인 '정확 참조' 에코(파일/시트/열 '이름')는 사용자 의도가 아니다. 시트명에 '중복건 제거'·'요약'·
+  // '번호' 등이 들어가면 duplicateRowDelete/idPivot 등 의도판정이 오탐한다(예: 시트 "…CCU중복건 제거…"
+  // 로 값붙여넣기 요청이 '중복행 삭제'로 오분류돼 무관한 규칙이 주입됨). 의도 텍스트에서만 제거한다.
+  // 주의: 사용자가 직접 쓴 자유문("… 삭제해줘")은 남겨야 하므로 '- '로 시작하는 에코 불릿과 지정 헤더만 지운다.
+  s = s
+    .replace(/^\s*(?:\[정확\s*참조[^\]]*\]|##\s*정확\s*시트명).*$/gim, " ")
+    .replace(/^\s*[-•*]\s*(?:정확\s*(?:파일명|시트명|주소|컬럼명)|선택\s*범위|시트명|파일명|주소|컬럼명)\s*[:：].*$/gim, " ")
+    .replace(/^\s*정확\s*시트명\s*\(절대\s*변경\s*금지\).*$/gim, " ")
+    .replace(/^.*(?:절대\s*번역하지|번역\s*[·,]?\s*영문화|코드에\s*그대로\s*복사하세요).*$/gim, " ");
+  return s;
 }
 
 function shouldRouteSimpleStructureEditToPython(text) {
@@ -763,6 +773,17 @@ function lookupJoinIntent(text) {
   if (/(한\s*셀|셀\s*안|셀안|여러\s*값|병합|줄\s*바꿈|줄바꿈|split)/i.test(intent)) return false;
   const lookupWord = /(vlookup|lookup|조인|join|매핑|단가(?:표)?\s*(?:에서|를|을|로|적용|매칭|붙)|찾아\s*(?:와|서)\s*(?:채워|넣어|기입|작성|가져)|매칭(?:해|하여|해서)?\s*(?:가져|채워|넣어|기입|작성))/i.test(intent);
   return lookupWord && /(채워|넣어|기입|작성|가져|붙여|반영|매핑|매칭|적용)/i.test(intent);
+}
+// [0.7.1] 피벗/요약 값을 다른 시트의 '구분명(이름)'에 맞춰 '여러 값 열'을 채우는 붙여넣기 = ctx.match_fill.
+// lookup(단일 값열)보다 넓은 다중열+퍼지매칭+불일치리포트. 손코딩 read→dict→부분매칭 루프를 막는다.
+function matchFillIntent(text) {
+  const intent = routingIntentText(String(text || ""));
+  const nameMatch = /(이름|구분명|명칭|항목명|상품명|품목명)\s*[^\n]{0,10}(맞춰|맞추|기준|매칭|일치|같지\s*않아도|다르(?:면|어도)|비슷)/i.test(intent)
+      || /(이름\s*맞춰|매칭\s*해|매칭해|매칭시켜)/i.test(intent);
+  const fillVerb = /(채워|채우|붙여\s*넣|붙여넣|값만|기입|반영|넣어|입력)/i.test(intent);
+  // 값-요약/피벗 소스이거나, '구분명/여러 값/각각' 신호가 있어야(단일 셀 vlookup 은 lookup 이 담당).
+  const multiOrSummary = /(피벗|pivot|요약|집계|그룹|구분명|여러\s*값|각각(?:의)?|열에\s*각각|값만)/i.test(intent);
+  return nameMatch && fillVerb && multiOrSummary;
 }
 function dedupeIntent(text) {
   const intent = routingIntentText(String(text || ""));
@@ -1242,8 +1263,13 @@ function vbaStaticSafetyFailures(code, sourceUserMessage) {
   // 값을 쓴 뒤 NumberFormat="@"를 적용하면 Excel 이 이미 선행 0을 제거한 상태라 복구되지 않는다.
   // 주의: 'ID' 는 단어경계(\bID\b)로 — 안 그러면 mIdx/bIdx 같은 루프 변수의 'Id' 에 오탐해
   // 일반 숫자 피벗(지점/월/매출)을 '식별자 피벗'으로 잘못 보고 NumberFormat="@" 안전재생성을 유발한다.
-  const idPivotIntent = /(피벗|pivot|그룹|요약|호유형|분리|열로)/i.test(String(sourceUserMessage || "") + "\n" + text)
-    && /(발신번호|전화번호|휴대폰|번호|\bID\b|코드|계정)/i.test(String(sourceUserMessage || "") + "\n" + text);
+  // [오탐 수정] 1) sourceUserMessage 는 routingIntentText 로 '정확 참조' 에코를 지운다 — 규칙문의
+  //   "컬럼명은 '코드'에 그대로 복사하세요"(소스코드의 '코드')가 예전 bare '코드' 토큰에 걸려, 상품명
+  //   피벗(선행 0 없는 텍스트 키)까지 '식별자 피벗'으로 오판해 NumberFormat="@" 재생성을 유발했다.
+  //   2) bare 번호/코드/계정 대신 '복합 식별자어'만 본다(발신/전화/가입번호·EID·ID·식별자 등).
+  const idPivotBlob = (typeof routingIntentText === "function" ? routingIntentText(String(sourceUserMessage || "")) : String(sourceUserMessage || "")) + "\n" + text;
+  const idPivotIntent = /(피벗|pivot|그룹|요약|호유형|분리|열로)/i.test(idPivotBlob)
+    && /(발신번호|전화번호|휴대폰번호|가입번호|고객번호|계약번호|계좌번호|사업자번호|주민(?:등록)?번호|우편번호|청구계정번호|계정번호|\bEID\b|\bID\b|식별자)/i.test(idPivotBlob);
   if (idPivotIntent) {
     const fmtMatch = /(?:Columns\s*\(\s*(?:1|"A"|'A')\s*\)|Range\s*\(\s*["']A:A["']\s*\))\s*\.\s*NumberFormat\s*=\s*["']@["']/i.exec(text);
     const dataWriteMatch = /(?:Cells\s*\(\s*(?:outRow|outR|rowNo|rIdx|kIdx\s*\+\s*\d+)\s*,\s*1\s*\)\s*\.\s*(?:Value|Value2)|Range\s*\(\s*["']A[2-9]\d*:?)/i.exec(text);
@@ -3536,6 +3562,7 @@ async function sendChat() {
   const routeDuplicateRowDelete = typeof duplicateRowDeleteIntent === "function" && duplicateRowDeleteIntent(msg);
   const routeConditionalRowDelete = typeof conditionalRowDeleteIntent === "function" && conditionalRowDeleteIntent(msg);
   const routeFilterToNewSheet = typeof filterToNewSheetIntent === "function" && filterToNewSheetIntent(msg);
+  const routeMatchFill = routeToPython && typeof matchFillIntent === "function" && matchFillIntent(msg);
   const routeLookupJoin = routeToPython && typeof lookupJoinIntent === "function" && lookupJoinIntent(msg);
   const routeDedupe = routeToPython && typeof dedupeIntent === "function" && dedupeIntent(msg);
   const routeSplitColumn = routeToPython && typeof splitColumnIntent === "function" && splitColumnIntent(msg);
@@ -3588,6 +3615,8 @@ async function sendChat() {
         routingHint = "범위 값을 산술 계산해 다른 범위에 쓰는 단순 요청입니다. 반드시 Python ctx로 작성하고 VBA(Sub B2BSkill())는 출력하지 마세요. ctx.book(\"파일명.xlsx\").read(\"시트명\", \"E6:E16\")로 읽고 2차원 배열로 계산한 뒤 ctx.book(\"파일명.xlsx\").write(\"시트명\", \"D6\", out, overwrite_formulas=True)처럼 한 번에 쓰세요. @범위의 파일명·시트명·주소는 번역·영문화·띄어쓰기 보정 없이 그대로 사용하세요.";
       } else if (routeAppendSameFormat) {
         routingHint = "동일 포맷의 여러 입력 파일 표를 출력 파일 새 시트에 헤더 1회만 남기고 이어붙이는 요청입니다. 반드시 Python ctx 헬퍼만 쓰고 VBA(Sub B2BSkill())는 출력하지 마세요. 출력 파일 ctx에서 ctx.book(\"출력파일.xlsx\").append_same_format_sheets([\"입력1.xlsx\", \"입력2.xlsx\"], dest_sheet=\"가입자별청구내역_통합\", src_sheet=None) 형태로 작성하세요. src_sheet가 명확히 'sheet'이면 src_sheet=\"sheet\"를 넘기고, 아니면 None으로 두어 각 입력 파일 첫 시트를 쓰세요. 이 헬퍼가 상단 30행에서 실제 헤더를 자동 탐지하고 첫 파일은 헤더 포함, 이후 파일은 헤더 다음 행부터 Excel 네이티브 Copy로 붙입니다. 자유 VBA로 hdrRow=1/A열 lastRow/1행 lastCol을 직접 짜지 마세요. 빈 새 시트가 생기거나 긴 가입번호/EID/날짜/회계 서식이 손상됩니다.";
+      } else if (routeMatchFill) {
+        routingHint = "소스(피벗/요약)의 행을 대상 시트의 '구분명(키 열)'과 이름 맞춰 '여러 값 열'을 채우는 붙여넣기 요청입니다. 직접 read→딕셔너리→부분매칭 루프를 손코딩하지 말고(이름 정규화·중복포함 실수로 대부분 미매칭됩니다) 반드시 ctx.match_fill 한 줄로 처리하세요: ctx.match_fill(\"소스파일.xlsx!소스시트\", \"대상시트\", {\"소스값열\": \"대상값열\", ...}, key=(\"소스키열\",\"대상키열\"), source_header_row=1, header_row=대상헤더행). 값 열은 헤더명 또는 열문자로 지정합니다. 이름이 완전히 같지 않아도 헬퍼가 정확→공백무시→기호무시(\"안전제일(망개통용)\"=\"안전제일_망개통용\")→부분포함(\"인포콘 프리미엄\"↔\"프리미엄\", \"KGM FOTA\"↔\"FOTA\")으로 자동 매칭하고, \"올인원\"과 \"올인원2.0\"처럼 헷갈리는 건 유일 최선만 채택합니다. 대상 헤더가 4행이면 header_row=4, 키 열(구분명)이 A면 key 생략 가능. 못 맞춘 대상 이름은 후보와 함께 오류로 알리므로, 사용자가 확정하면 aliases={\"대상이름\":\"소스이름\"} 를 넣어 재실행하세요. 소스/대상 시트명·파일명은 한 글자도 바꾸지 말고 그대로 쓰고, VBA(Sub B2BSkill())는 출력하지 마세요.";
       } else if (routePivot) {
         routingHint = "그룹 요약/피벗/크로스탭 요청입니다. 직접 집계·정렬·헤더를 손코딩하지 말고 반드시 ctx.pivot 한 줄로 처리하세요. 1D 그룹요약: ctx.pivot(\"시트\", group_by=\"지점\", value=\"매출\", agg=\"sum\", dest_name=\"결과시트\"). 2D 크로스탭(행/열/값): ctx.pivot(\"시트\", group_by=\"지점\", column=\"월\", value=\"매출\", agg=\"sum\", dest_name=\"결과시트\"). agg는 sum/count/avg/max/min. group_by/column/value 는 헤더명을 쓰고, 시트명은 한 글자도 바꾸지 말고 그대로 쓰세요. dest_name 시트가 이미 있으면 다른 이름을 쓰세요.";
       } else if (routeFilterToNewSheet) {

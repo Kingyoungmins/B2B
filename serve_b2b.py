@@ -12708,6 +12708,327 @@ class PythonComSkillContext:
         self.write(sheet, "%s%d" % (icl, hr + 1), out)
         return matched
 
+    def match_fill(self, source, target, columns, key=None,
+                   source_header_row=1, header_row=1, rows=None,
+                   aliases=None, allow_partial=False):
+        """소스 표(예: 피벗)의 행을 대상 시트의 '키 열(구분명)'과 이름 매칭해서, 지정한 값 열들을 대상의
+        해당 열에 '값만' 채운다. 이름이 완전히 일치하지 않아도 (정확→공백무시→기호무시→부분포함) 순서로
+        자동 매칭하고, 확실히 못 맞춘 대상 이름은 '후보'와 함께 오류로 알려 한 번에 확정하게 한다.
+        '피벗/요약값을 다른 시트에 이름 맞춰 붙여넣기/채우기' 요청의 기본 수단(손코딩 매칭 루프 금지).
+
+        source/target : 시트명. 다른 파일이면 "파일.xlsx!시트" 형식(예: "input_...001.xlsx!MVNO상품명별요약").
+        columns : {소스 값열: 대상 값열} 매핑(헤더명 또는 "B" 열문자). 예:
+                  {"MVNO상품명_count":"건수", "수납금액_sum":"고객납부금액", "가입자당단가_도매대가_sum":"청구금액"}
+        key : (소스 키열, 대상 키열). 생략 시 둘 다 A열. 헤더명/열문자/번호 허용.
+        source_header_row : 소스 헤더 행(피벗 값표는 보통 1). header_row : 대상 헤더 행(예: 4).
+        rows : 대상 데이터 행 (start, end). 생략 시 header_row+1 부터 키열 마지막 행까지(합계/소계 행은 자동 제외).
+        aliases : {대상이름: 소스이름} 강제 매핑 — 리포트에 뜬 못 맞춘 이름을 확정할 때 넣어 재실행.
+        allow_partial : True 면 못 맞춘 행은 건너뛰고 맞춘 것만 채운다(오류 없이). 기본 False.
+        반환: {"matched": n, "unmatched": [대상이름...], "rows": (start,end)}."""
+        import difflib as _difflib
+
+        def _nlite(s):
+            return normalize_text(s)  # 소문자 + 모든 공백 제거
+
+        def _nhard(s):
+            # 소문자화 후 한글/영숫자만 남긴다(괄호·밑줄·점·공백 제거). "안전제일(망개통용)" == "안전제일_망개통용".
+            return re.sub(r"[^0-9a-z가-힣]", "", str(s or "").lower())
+
+        def _is_summary(s):
+            n = _nhard(s)
+            # 단독 '계/합/합계계' 같은 짧은 총계 라벨(부분포함으로 오탐 안 나게 '정확' 판정)
+            if n in ("계", "합", "합계", "소계", "총계", "누계", "총합", "합계계"):
+                return True
+            return any(w in n for w in ("합계", "소계", "총계", "누계", "부가세", "vat", "total", "subtotal", "grand"))
+
+        def _num(v):
+            try:
+                return float(v)
+            except (TypeError, ValueError):
+                return None
+
+        def _row_num(tok):
+            m = re.search(r"(\d+)", str(tok if tok is not None else ""))
+            return int(m.group(1)) if m else None
+
+        def _parse_rows(rw):
+            """rows 인자를 (start, end) 로 관대하게 해석. None/튜플(int·'A5')/문자열('A5:E11','5:11','A5')·
+            열 정보는 무시하고 '행 번호'만 뽑는다. 끝을 못 정하면 None(→ 자동 last_row)."""
+            if rw is None:
+                return None
+            if isinstance(rw, (list, tuple)):
+                nums = [n for n in (_row_num(x) for x in rw) if n]
+                if len(nums) >= 2:
+                    return (min(nums), max(nums))
+                if len(nums) == 1:
+                    return (nums[0], None)
+                return None
+            s = str(rw).strip()
+            if ":" in s:
+                a, b = s.split(":", 1)
+                ra, rb = _row_num(a), _row_num(b)
+                if ra and rb:
+                    return (min(ra, rb), max(ra, rb))
+                if ra:
+                    return (ra, None)
+            n = _row_num(s)
+            return (n, None) if n else None
+
+        _AGG_SUF = ("합계", "총합", "소계", "총계", "sum", "count", "개수", "건수",
+                    "평균", "average", "avg", "mean", "max", "min", "최대값", "최소값", "최대", "최소")
+
+        def _agg_base(s):
+            # 집계 접미사(합계/sum/개수/count 등)를 떼어 '기준 이름'만 남긴다("수납금액 합계"≈"수납금액_sum").
+            n = _nhard(s)
+            for suf in _AGG_SUF:
+                if len(n) > len(suf) and n.endswith(suf):
+                    return n[:-len(suf)]
+            return n
+
+        def _resolve_val_col(rc, sh, spec, hr):
+            """값 열 해석: 열문자/번호/헤더(정확+부분포함) → 실패 시 집계접미사 무시 퍼지(수납금액 합계=수납금액_sum)."""
+            if spec is None:
+                raise PythonComSkillError("match_fill: 값 열 스펙이 비어 있습니다(소스/대상 열을 지정하세요).")
+            try:
+                return rc._resolve_col(sh, spec, hr)
+            except PythonComSkillError:
+                pass
+            base = _agg_base(spec)
+            if base:
+                last_c = rc.last_col(sh, hr)
+                row = rc.read(sh, "%s%d:%s%d" % (_col_letter(1), hr, _col_letter(max(1, last_c)), hr))
+                hdrs = row[0] if row else []
+                cands = []
+                for i, h in enumerate(hdrs, start=1):
+                    hb = _agg_base(h)
+                    if hb and (hb == base or base in hb or hb in base):
+                        cands.append((abs(len(hb) - len(base)), i))
+                if cands:
+                    cands.sort()
+                    if len(cands) == 1 or cands[0][0] < cands[1][0]:
+                        return cands[0][1]
+            raise PythonComSkillError("match_fill: '%s' 시트에서 값 열 '%s' 을 찾지 못했습니다(열문자나 정확 헤더명을 쓰세요)." % (sh, spec))
+
+        def _resolve_key_col(rc, sh, spec, hr):
+            """키(구분명/이름) 열 해석. 값 열과 달리 '집계 열(_count/_sum/개수/합계)'에 부분매칭하면 안 된다
+            — 피벗은 group_by 이름이 데이터필드 헤더(예: 'MVNO상품명_count')에 들어가 그 숫자 열을 잘못 잡는다.
+            우선순위: 열문자/번호 → 정확/정규화 헤더 → 피벗 '행 레이블' 열(A) → 비집계 부분포함(유일) → A열."""
+            if isinstance(spec, bool):
+                raise PythonComSkillError("match_fill: 키 열 지정이 잘못되었습니다.")
+            if isinstance(spec, (int, float)):
+                return int(spec)
+            s = str(spec).strip()
+            if re.fullmatch(r"[A-Za-z]{1,3}", s):
+                return rc._col_index(s)
+            last_c = rc.last_col(sh, hr)
+            hrow = rc.read(sh, "%s%d:%s%d" % (_col_letter(1), hr, _col_letter(max(1, last_c)), hr))
+            hdr = hrow[0] if hrow else []
+            # 1) 정확 / 정규화 일치
+            for i, h in enumerate(hdr, 1):
+                if h is not None and str(h).strip() == s:
+                    return i
+            ns = _nlite(s)
+            for i, h in enumerate(hdr, 1):
+                if h is not None and _nlite(h) == ns:
+                    return i
+            # 2) 피벗 '행 레이블'(Row Labels) 열 → A열
+            c1 = _nlite(hdr[0]) if hdr else ""
+            if c1 in ("행레이블", "rowlabels", "레이블", "labels") or "행레이블" in c1:
+                return 1
+            # 3) 비집계 열 중 부분포함 유일 매칭('_count'/'_sum' 등 집계 열은 후보에서 제외)
+            cands = []
+            for i, h in enumerate(hdr, 1):
+                if h is None:
+                    continue
+                ht = _nhard(h)
+                if not ht or ht != _agg_base(h):   # 접미사가 떨어지는 = 집계 열 → 키 후보 아님
+                    continue
+                if s in str(h) or str(h).strip() in s:
+                    cands.append(i)
+            if len(cands) == 1:
+                return cands[0]
+            # 4) 못 정하면 A열(피벗/요약표의 구분명은 대개 좌측 첫 열)
+            return 1
+
+        src_ctx, src_sheet = self._ctx_and_sheet_from_spec(source)
+        tgt_ctx, tgt_sheet = self._ctx_and_sheet_from_spec(target)
+        s_hr = max(1, int(source_header_row or 1))
+        t_hr = max(1, int(header_row or 1))
+
+        # 키 열 해석 — key 생략/None/튜플의 None 요소는 모두 첫 열(A, 구분명)로 기본 처리.
+        if key is None:
+            s_key_spec, t_key_spec = "A", "A"
+        elif isinstance(key, (list, tuple)):
+            s_key_spec = key[0] if len(key) > 0 and key[0] is not None else "A"
+            t_key_spec = key[1] if len(key) > 1 and key[1] is not None else "A"
+        else:
+            s_key_spec = t_key_spec = key
+        s_key = _resolve_key_col(src_ctx, src_sheet, s_key_spec, s_hr)
+        t_key = _resolve_key_col(tgt_ctx, tgt_sheet, t_key_spec, t_hr)
+
+        # 값 열 매핑 해석: [(소스열idx, 대상열idx)] — dict 또는 [[소스,대상],...] 리스트 허용, 집계접미사 무시 퍼지.
+        if isinstance(columns, dict) and columns:
+            col_items = list(columns.items())
+        elif isinstance(columns, (list, tuple)) and columns and all(
+                isinstance(x, (list, tuple)) and len(x) >= 2 for x in columns):
+            col_items = [(x[0], x[1]) for x in columns]
+        else:
+            raise PythonComSkillError("match_fill: columns 는 {소스열: 대상열} 매핑(또는 [[소스,대상],...])이어야 합니다.")
+        pairs = []
+        for s_spec, t_spec in col_items:
+            pairs.append((_resolve_val_col(src_ctx, src_sheet, s_spec, s_hr),
+                          _resolve_val_col(tgt_ctx, tgt_sheet, t_spec, t_hr)))
+
+        # 소스 읽기(키 + 값 열들, 헤더 다음 행부터 마지막 행까지)
+        s_last = src_ctx.last_row(src_sheet, s_key)
+        if s_last <= s_hr:
+            raise PythonComSkillError("match_fill: 소스 '%s' 에 매칭할 데이터 행이 없습니다." % src_sheet)
+        s_cols = [s_key] + [sc for sc, _ in pairs]
+        s_lo, s_hi = min(s_cols), max(s_cols)
+        s_block = src_ctx.read(src_sheet, "%s%d:%s%d" % (_col_letter(s_lo), s_hr + 1, _col_letter(s_hi), s_last))
+
+        # 소스 인덱스 구성
+        src_names = []            # [(raw, nlite, nhard)]
+        src_vals = []             # [{대상열idx: 값}]
+        exact_map, nlite_map, nhard_map = {}, {}, {}
+        for ri, row in enumerate(s_block):
+            raw = row[s_key - s_lo]
+            name = "" if raw is None else str(raw).strip()
+            if name == "":
+                src_names.append(None); src_vals.append(None); continue
+            vals = {t_idx: row[s_idx - s_lo] for s_idx, t_idx in pairs}
+            src_names.append((name, _nlite(name), _nhard(name)))
+            src_vals.append(vals)
+            exact_map.setdefault(name, ri)
+            nlite_map.setdefault(_nlite(name), ri)
+            nhard_map.setdefault(_nhard(name), ri)
+
+        alias_map = {}
+        for tk, sk in (aliases or {}).items():
+            alias_map[_nlite(tk)] = _nlite(sk)
+
+        def _match_src(tname):
+            """대상 이름 → 소스 행 인덱스(또는 None). aliases→정확→공백무시→기호무시→부분포함(유일 최선)."""
+            nl, nh = _nlite(tname), _nhard(tname)
+            if nl in alias_map:
+                a = alias_map[nl]
+                if a in nlite_map:
+                    return nlite_map[a]
+                for ri, ent in enumerate(src_names):
+                    if ent and (a in ent[1] or ent[1] in a):
+                        return ri
+            if tname.strip() in exact_map:
+                return exact_map[tname.strip()]
+            if nl in nlite_map:
+                return nlite_map[nl]
+            if nh and nh in nhard_map:
+                return nhard_map[nh]
+            # 부분포함(양방향) — 유일한 '최소 잉여' 후보만 채택(모호하면 미매칭)
+            if len(nh) >= 2:
+                cands = []
+                for ri, ent in enumerate(src_names):
+                    if not ent:
+                        continue
+                    sh = ent[2]
+                    if len(sh) >= 2 and (nh in sh or sh in nh):
+                        cands.append((abs(len(sh) - len(nh)), ri))
+                if cands:
+                    cands.sort()
+                    if len(cands) == 1 or cands[0][0] < cands[1][0]:
+                        return cands[0][1]
+            return None
+
+        def _suggest(tname):
+            pool = [ent[0] for ent in src_names if ent]
+            near = _difflib.get_close_matches(tname, pool, n=1, cutoff=0.3)
+            return near[0] if near else None
+
+        def _combined_parts(tname):
+            # 결합행("올인원+올인원2.0", "A / B", "A 및 B")은 각 부분이 모두 매칭되면 그 소스 인덱스 목록을 반환.
+            # 부분 하나라도 못 맞추면 None(→ 통짜 매칭/미매칭 리포트로 폴백). 오탐 방지로 '전부 매칭'만 인정.
+            parts = [p.strip() for p in re.split(r"\s*[+＋/／]\s*|\s+및\s+", tname) if p.strip()]
+            if len(parts) < 2:
+                return None
+            idxs = []
+            for p in parts:
+                pri = _match_src(p)
+                if pri is None:
+                    return None
+                idxs.append(pri)
+            return idxs
+
+        # 대상 행 범위 — rows 는 (start,end)/'A5:E11'/'5:11' 등 관대하게 해석(열 정보 무시). 끝 미정이면 last_row.
+        parsed = _parse_rows(rows)
+        if parsed:
+            r0, r1 = parsed
+            if r0 is None:
+                r0 = t_hr + 1
+            if r1 is None:
+                r1 = tgt_ctx.last_row(tgt_sheet, t_key)
+        else:
+            r0 = t_hr + 1
+            r1 = tgt_ctx.last_row(tgt_sheet, t_key)
+        if r1 < r0:
+            raise PythonComSkillError("match_fill: 대상 '%s' 에 채울 데이터 행이 없습니다." % tgt_sheet)
+        t_keys = [r[0] for r in tgt_ctx.read(tgt_sheet, "%s%d:%s%d" % (_col_letter(t_key), r0, _col_letter(t_key), r1))]
+
+        matched, unmatched, fills = {}, [], {t_idx: {} for _, t_idx in pairs}  # fills: 대상열idx -> {row: 값}
+        for off, raw in enumerate(t_keys):
+            row = r0 + off
+            tname = "" if raw is None else str(raw).strip()
+            if tname == "" or _is_summary(tname):
+                continue  # 빈 행/합계·소계·'계' 등 요약 행은 건드리지 않는다
+            ri = _match_src(tname)
+            if ri is not None:
+                matched[row] = ri
+                for t_idx, v in src_vals[ri].items():
+                    fills[t_idx][row] = v
+                continue
+            # 통짜 매칭 실패 → 결합행("A+B")이면 각 부분 값 합산
+            combo = _combined_parts(tname)
+            if combo:
+                matched[row] = combo
+                for t_idx in fills:
+                    tot, anynum = 0.0, False
+                    for cri in combo:
+                        nv = _num(src_vals[cri].get(t_idx))
+                        if nv is not None:
+                            tot += nv
+                            anynum = True
+                    fills[t_idx][row] = tot if anynum else None
+                continue
+            unmatched.append((tname, _suggest(tname)))
+
+        if unmatched and not allow_partial:
+            lines = []
+            for nm, cand in unmatched:
+                lines.append("  · '%s'%s" % (nm, (" — 혹시 '%s'?" % cand) if cand else " — 후보 없음"))
+            raise PythonComSkillError(
+                "대상 '%s' 의 다음 이름을 소스 '%s' 에서 확실히 매칭하지 못했습니다:\n%s\n"
+                "확정하려면 aliases={'대상이름':'소스이름', ...} 로 다시 실행하세요"
+                "(맞춘 것만 우선 채우려면 allow_partial=True)."
+                % (tgt_sheet, src_sheet, "\n".join(lines))
+            )
+
+        # 쓰기: 대상 값열별로 '매칭된 행'만(연속 구간 묶어서). 키/요약/미매칭 셀은 안 건드림.
+        for t_idx, rowvals in fills.items():
+            if not rowvals:
+                continue
+            cl = _col_letter(t_idx)
+            rs = sorted(rowvals)
+            i = 0
+            while i < len(rs):
+                j = i
+                while j + 1 < len(rs) and rs[j + 1] == rs[j] + 1:
+                    j += 1
+                run = rs[i:j + 1]
+                tgt_ctx.write(tgt_sheet, "%s%d" % (cl, run[0]), [[rowvals[r]] for r in run])
+                i = j + 1
+
+        self._shared["structural"].append(
+            "match_fill:%s->%s:%d matched" % (src_sheet, tgt_sheet, len(matched)))
+        return {"matched": len(matched), "unmatched": [nm for nm, _ in unmatched], "rows": (r0, r1)}
+
     def add_total_row(self, sheet, sum_cols, label_col=None, label="합계", header_row=1):
         """표 끝(마지막 데이터행 바로 아래)에 합계 행을 만든다. sum_cols(열 리스트/단일)에 =SUM(데이터범위) 수식을
         넣고, label_col 이 있으면 그 셀에 label 을 쓴다. 열은 'A'/번호/헤더명 허용. 반환: 합계행 번호."""
@@ -13027,12 +13348,17 @@ def _python_com_static_check(code):
 
     def _dynamic_range_text_is_wide(a1):
         s = str(a1 or "").replace("$", "").strip()
+        # 폭을 알 수 없는 동적 열(전체 열/열문자 계산/사용범위)은 항상 '넓음'으로 본다.
         if re.search(r"last_col|col_letter|UsedRange", s, re.I):
             return True
         m = re.match(r"^([A-Z]{1,3})\d+\s*:\s*([A-Z]{1,3})(?:\d+|\{[^}]+\})$", s, re.I)
         if not m:
             return False
-        return abs(_col_to_index(m.group(2)) - _col_to_index(m.group(1))) + 1 > 1
+        # [오탐 완화] 시작·끝 '행'이 명시된(끝행이 변수 {n} 여도) '좁은 열 스팬(≤8열)' 읽기는 값-요약/이름매칭
+        # 같은 소형 작업의 정상 패턴이다. 예전엔 열이 2개만 돼도 무조건 막아, A2:D{last} 같은 8행짜리 값
+        # 붙여넣기가 차단되고 불필요하게 VBA 로 넘어갔다. 폭이 넓은(>8열) 동적 읽기만 '대용량 위험'으로 막는다.
+        # (전체 열 A:D 는 위 _a1_cells_estimate 가 inf 로 잡아 risky_read 로 막으므로 여기 영향 없음.)
+        return abs(_col_to_index(m.group(2)) - _col_to_index(m.group(1))) + 1 > 8
 
     has_read_call = bool(re.search(r"\b(?:ctx|[A-Za-z_]\w*)\s*\.\s*read\s*\(", code_text))
     has_data_move = bool(re.search(

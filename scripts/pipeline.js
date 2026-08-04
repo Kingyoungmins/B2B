@@ -5632,9 +5632,26 @@ $("btn-run").onclick = async () => {
             if (match) viewExcelId = match;
           }
         } catch (_) {}
+        // [선택→채팅 미반영 수정] 화면(미러)만 결과 파일로 바꾸고 앱 탭(state.currentFileId)을 안 맞추면,
+        // selection 폴이 '옛 탭' 세션의 Selection 을 읽어 보이는 결과 창에서 셀을 선택해도 채팅에 안 찍혔다
+        // (상단 탭을 한 번 클릭해 setCurrentView 가 돌고 나서야 반영되던 실측 버그, 2026-07-31).
+        // 탭도 같은 파일로 착지시키고, 착지 직후 현재 선택을 baseline 으로 잡아 '이전에 남아있던 선택'이
+        // 채팅에 오발사되는 것을 막는다(이후 사용자가 실제로 선택을 바꾸면 정상 반영).
+        try {
+          if (typeof suppressExcelMirrorSelection === "function") suppressExcelMirrorSelection(1200);
+          const viewFileId = typeof fileIdForExcelMirrorId === "function" ? fileIdForExcelMirrorId(viewExcelId) : null;
+          if (viewFileId && typeof setCurrentView === "function") {
+            setCurrentView(viewFileId, { source: "edit-result" });
+          }
+        } catch (_) {}
         if (viewExcelId && typeof showOnlyExcelMirrorWindow === "function") {
           try { await showOnlyExcelMirrorWindow(viewExcelId, { force: true }); } catch (_) {}
         }
+        try {
+          if (viewExcelId && typeof scheduleExcelMirrorBaselinePoll === "function") {
+            scheduleExcelMirrorBaselinePoll(viewExcelId, 300);
+          }
+        } catch (_) {}
         if (typeof toast === "function") toast("실행기 결과(최종본)를 라이브에 불러왔습니다. 이제 편집/ON·OFF가 가능합니다.", "success");
       } else {
         // 폴백: 실행기 결과가 없으면 생성기 sync 재적용(라이브 reset→재적용)으로 최종 상태를 만든다.

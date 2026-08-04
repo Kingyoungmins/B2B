@@ -56,11 +56,15 @@
         <h1 id="page-title">B2B 빌링 Agent</h1>
         <div class="sub" id="model-label">AI: ixi 모델</div>
       </div>
-      <!-- [0.7.1] UI 노출 숨김 — F11 단축키로 대체(scripts/assist-ui.js 의 hotkey 바인딩). 핸들러는 그대로. -->
-      <button class="ai-help-btn" id="btn-ai-help" type="button" aria-pressed="false" hidden style="display:none"
+      <button class="ai-help-btn" id="btn-ai-help" type="button" aria-pressed="false"
               title="AI 도움 (단축키 F11) — 스킬 진단·수정·데이터 질의 (프로그램 안의 도우미)">
         <span class="ai-help-spark">✦</span>
         <span class="ai-help-text">AI 도움</span>
+      </button>
+      <button class="ai-help-btn" id="btn-soft-refresh" type="button"
+              title="새로고침 (단축키 F5) — 프로그램/Excel이 먹통일 때. 업로드한 파일과 스킬·대화를 유지한 채 새로 시작하고, 스킬을 자동으로 다시 적용합니다">
+        <span class="ai-help-spark">🔄</span>
+        <span class="ai-help-text">새로고침</span>
       </button>
       <button class="think-toggle" id="btn-think-toggle" type="button" aria-pressed="false" title="Think 모드 켜기">
         <span class="think-toggle-knob"></span>
@@ -369,6 +373,7 @@
   <script src="scripts/pipeline.js"></script>
   <script src="scripts/output-template.js"></script>
   <script src="scripts/save-load.js"></script>
+  <script src="scripts/soft-refresh.js"></script>
   <script src="scripts/menu.js"></script>
   <script src="scripts/resizer.js"></script>
   <script src="scripts/model-modal.js"></script>

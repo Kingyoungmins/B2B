@@ -92,7 +92,9 @@ function isExplicitViewSwitchSource(options) {
     ? options
     : String((options && (options.source || options.reason)) || "");
   // record-land: 녹화 정지·재현 후 '녹화 시작(=스킬 바인딩) 파일'로 탭·미러를 함께 착지시키는 전환.
-  return source === "upload" || source === "user-tab" || source === "record-land";
+  // edit-result: '결과 편집하기'로 결과를 라이브에 불러온 뒤 '보여주는 파일'로 탭을 함께 착지시키는 전환.
+  //   (탭을 안 맞추면 selection 폴이 옛 탭 세션을 읽어, 보이는 결과 창의 셀 선택이 채팅에 안 찍힌다 — 실측 2026-07-31)
+  return source === "upload" || source === "user-tab" || source === "record-land" || source === "edit-result";
 }
 
 function setCurrentView(fileId, options = {}) {
