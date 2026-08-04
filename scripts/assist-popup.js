@@ -83,7 +83,7 @@
       return { headScope: "스킬 전체", headLabel: "일괄 값 치환",
         body: '<div class="assist-card-reason">\'' + esc(String(p.from)) + '\' → \'' + esc(String(p.to)) + '\' · ' + targets.length + '개 단계 ' + totalOcc + '곳</div>'
           + '<div class="assist-warn">⚠ 여러 단계를 한 번에 바꿉니다. 아래 각 단계 diff 를 확인하세요.</div>' + rows
-          + '<div class="assist-card-note">적용하지 않고 스킬만 바꿉니다. 반영하려면 전체실행하세요.</div>' };
+          + '<div class="assist-card-note">적용하지 않고 스킬만 바꿉니다. 반영하려면 바뀐 단계 스위치를 한 번 껐다 켜 주세요(끄면 보류됐다가, 켜면 새 코드로 적용).</div>' };
     }
     const comps = Array.isArray(p.companions) ? p.companions : [];
     const companionHtml = comps.length ? '<div class="assist-comp"><div class="assist-comp-head">같이 고칠 곳 (옛 값이 남아 헷갈리는 것 방지)</div>'
@@ -162,7 +162,15 @@
       const extra = (c.step || c.chat) ? ` · 이름/설명 ${c.step}곳, 대화 ${c.chat}곳 함께 수정` : "";
       const msg = m.heldForToggle
         ? ('✓ 코드를 교체했습니다. ' + (m.stepNo ? 'Step ' + m.stepNo + ' ' : '해당 단계 ') + '스위치를 켜(ON) 주시면 새 코드로 적용됩니다')
-        : '✓ 수정했습니다 (라이브 미적용)';
+        : m.toggled
+          ? (m.enabled
+            ? ('✓ Step ' + (m.stepNo || '?') + ' 스위치를 켰습니다 — 지금 적용됩니다')
+            : ('✓ Step ' + (m.stepNo || '?') + ' 스위치를 껐습니다 — 그 단계부터 보류되고 Excel 은 직전 상태로 돌아갑니다'))
+          : (m.stepNo && typeof m.enabled === 'boolean')
+            ? ('✓ Step ' + m.stepNo + '은(는) 이미 ' + (m.enabled ? '켜져' : '꺼져') + ' 있었습니다 (변경 없음)')
+            : m.batch
+              ? ('✓ ' + m.batch + '개 단계의 값을 바꿨습니다 — 반영하려면 바뀐 단계 스위치를 껐다 켜 주세요')
+              : '✓ 수정했습니다 (라이브 미적용)';
       box.innerHTML = '<span class="assist-done">' + esc(msg) + esc(extra) + "</span>";
     } else {
       entry.bindActions('<span class="assist-fail">✕ ' + esc(m.error || "실패") + "</span> ");

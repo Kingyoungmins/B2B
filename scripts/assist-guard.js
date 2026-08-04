@@ -53,7 +53,21 @@ function assistParseAction(reply) {
       }
     }
   }
-  if (!obj || typeof obj !== "object") return { action: "final", args: {}, raw: text, parsed: false, block: null };
+  if (!obj || typeof obj !== "object") {
+    // [실측 사고] 모델이 액션 블록 대신 ```python\nstep.error()\n``` 처럼 '코드'로 도구를 부르는
+    // 경우가 있다 — 실행은 안 되고 코드 원문만 사용자에게 노출됐다("??"). 응답이 사실상 인자 없는
+    // 도구 호출 하나뿐이고 그 이름이 실제 등록된 도구면 tool 액션으로 구제한다.
+    // (긴 설명문 속 예시를 오인하지 않게 짧은 응답에서만, 등록 도구명일 때만)
+    const call = /```[a-z-]{0,16}\s*\n?\s*([a-z][a-z0-9_]*\.[a-z][a-z0-9_.]*)\s*\(\s*\)\s*;?\s*\n?\s*```/i.exec(text)
+              || /(?:^|\n)\s*([a-z][a-z0-9_]*\.[a-z][a-z0-9_.]*)\s*\(\s*\)\s*;?\s*(?:\n|$)/.exec(text);
+    if (call && text.length < 1200) {
+      const name = call[1];
+      let known = false;
+      try { known = typeof ASSIST_TOOLS !== "undefined" && !!ASSIST_TOOLS[name]; } catch (_) {}
+      if (known) return { action: "tool", args: { tool: name }, raw: text, parsed: true, block: call[0] };
+    }
+    return { action: "final", args: {}, raw: text, parsed: false, block: null };
+  }
 
   // [검증 R8] 액션 키(action/tool/name/function)가 하나도 없는 객체는 답변 속 '데이터 예시'일 수
   // 있다({"단가":1000} 등). b2b-action 펜스로 명시한 경우가 아니면 액션으로 채택하지 않는다 —

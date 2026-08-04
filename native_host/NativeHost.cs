@@ -364,7 +364,8 @@ namespace B2BNativeHost
                     Program.Log("F8 debug hotkey registration failed: " + ex.Message);
                 }
             }
-            // [0.7.1] 녹화 버튼·AI 도움 버튼은 UI 에서 숨겼다 — F10/F11 전역 핫키로 대체한다.
+            // [0.7.1] F10=녹화 토글, F11=AI 도움 토글 전역 핫키. (녹화 버튼은 UI 숨김 유지,
+            // AI 도움 버튼은 2026-07-31 사용자 요청으로 다시 노출 — 핫키와 버튼 둘 다 동작)
             // 전역 핫키라 Excel 미러(우측)가 포커스를 가진 녹화 중에도 F10 정지가 동작한다(F8 과 동일 근거).
             if (!hiddenButtonHotkeysRegistered)
             {

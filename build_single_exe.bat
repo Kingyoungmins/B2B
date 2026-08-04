@@ -2,7 +2,7 @@
 setlocal
 cd /d "%~dp0"
 
-set "APP_VERSION=0.7.1"
+set "APP_VERSION=0.7.2"
 set "PACKAGE_DIR=dist\B2B_ver%APP_VERSION%"
 set "PAYLOAD=build\b2b_ver0516_single_payload.zip"
 set "OUT_EXE=dist\B2B_ver%APP_VERSION%_single.exe"

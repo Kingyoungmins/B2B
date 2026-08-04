@@ -369,7 +369,12 @@ assistDefineTool("result.summary", { desc: "직전 전체실행 결과 요약(�
     const outs = (typeof window !== "undefined" && Array.isArray(window.lastRunnerOutputs)) ? window.lastRunnerOutputs : [];
     const snaps = (typeof window !== "undefined" && Array.isArray(window.lastRunnerStepSnapshots)) ? window.lastRunnerStepSnapshots : [];
     if (!outs.length && !snaps.length) {
-      return { ok: true, hasRun: false, note: "이번 세션에 기록된 전체실행 결과가 없습니다(아직 실행하지 않았거나 라이브 동기화 모드였을 수 있습니다)." };
+      // [감사 G4] '기록 없음'을 "실행 안 함/실패"로 단정하게 하던 문구 교정 — 라이브 모드 실행이나
+      // 앱 재시작(기록 휘발) 뒤에도 여기로 온다. 라이브 적용 여부는 diag.stepStatus 가 정답.
+      return { ok: true, hasRun: false,
+               note: "이번 세션에 '파일 출력' 전체실행 기록이 없습니다. 이것은 미실행/실패의 증거가 아닙니다 — "
+                   + "라이브(화면 직접 적용) 모드였거나 앱 재시작으로 기록이 사라졌을 수 있습니다. "
+                   + "라이브 적용 여부는 diag.stepStatus 로 확인하세요." };
     }
     return {
       ok: true, hasRun: true,
@@ -512,7 +517,7 @@ assistDefineTool("data.read", {
 // ── 14. [범용 읽기] 현재 앱 상태 스냅샷 ──────────────────────────────────────
 // "지금 어떤 파일/시트 보고 있어?", "내가 뭘 선택했지?", "엔진/모델 뭐로 돼 있어?" 등에 답한다.
 // 안전: API 키 등 비밀값은 노출하지 않는다(마스킹). 상태 '읽기'만, 변경 없음.
-assistDefineTool("app.state", { desc: "현재 앱 상태 스냅샷 — 보고 있는 파일/시트, 선택 범위, 페이지, 스킬 엔진, AI 모델/네트워크(키 제외), 업로드 파일 목록. '지금 뭐 선택했지/어떤 설정이지'에 답." },
+assistDefineTool("app.state", { desc: "현재 앱 상태 스냅샷 — 보고 있는 파일/시트, 선택 범위, 페이지, 스킬 엔진, AI 모델/네트워크(키 제외), 업로드 파일 목록, 실행기 파일확인 매핑, 녹화 중 여부. '지금 뭐 선택했지/어떤 설정이지/어느 파일이 연결됐지'에 답." },
   () => {
     const s = (typeof settings !== "undefined" && settings) ? settings : {};
     const sel = state.selectedRange || state.selectedCell || null;
@@ -522,6 +527,20 @@ assistDefineTool("app.state", { desc: "현재 앱 상태 스냅샷 — 보고 �
         if (state.selectedCell) { const c = state.selectedCell; return `${_assistColLetter(c.c)}${c.r + 1}`; }
       } catch (_) {}
       return null;
+    })();
+    // [감사 G1] 실행기 '파일확인' 매핑(스킬 요구파일 → 실제 업로드 파일/시트) — 이전엔 어떤 도구도
+    // 못 읽어 "어떤 파일이 연결됐어?"에 답 못 했다. userSet=true 는 사용자가 직접 고른 연결.
+    const mappings = (() => {
+      try {
+        const m = state.runnerMappings || {};
+        const out = {};
+        for (const k of Object.keys(m).slice(0, 40)) {
+          const v = m[k] || {};
+          out[k] = { file: String(v.fileId || "").replace(/^input:/, "") || null,
+                     sheet: v.sheet || null, userSet: !!v.userSet };
+        }
+        return out;
+      } catch (_) { return {}; }
     })();
     return {
       ok: true,
@@ -539,6 +558,10 @@ assistDefineTool("app.state", { desc: "현재 앱 상태 스냅샷 — 보고 �
       },
       files: _assistFileList(),
       stepCount: _assistSteps().length,
+      runnerMappings: mappings,                     // 파일확인: 요구키 → {file, sheet, userSet}
+      runnerMappingRunActive: !!state.runnerMappingRunActive,   // 실행기 전체실행 진행 중 여부
+      // [감사 G2] 화면 녹화 진행 여부 — "지금 녹화 중이야?"에 답(F10 으로 시작/정지).
+      recordingActive: !!(typeof globalThis !== "undefined" && globalThis.__excelRecordingActive),
       note: "상태 '읽기'만 한 결과다(아무것도 바꾸지 않음). API 키 등 비밀값은 마스킹돼 있다.",
     };
   });

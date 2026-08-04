@@ -372,7 +372,7 @@ function _assistProposalCardBody(p) {
       body: `<div class="assist-card-reason">'${escapeHtml(String(p.from))}' → '${escapeHtml(String(p.to))}' · ${targets.length}개 단계 ${totalOcc}곳</div>
         <div class="assist-warn">⚠ 여러 단계를 한 번에 바꿉니다. 아래 각 단계 diff 를 확인하세요.</div>
         ${rows}
-        <div class="assist-card-note">적용하지 않고 스킬만 바꿉니다. 반영하려면 전체실행하세요.</div>` };
+        <div class="assist-card-note">적용하지 않고 스킬만 바꿉니다. 반영하려면 바뀐 단계 스위치를 한 번 껐다 켜 주세요(끄면 보류됐다가, 켜면 새 코드로 적용).</div>` };
   }
   // 기본: 단일 코드 수정(replaceLiteral / replaceStepCode)
   const warn = (p.touchesNames
@@ -450,7 +450,15 @@ function assistRenderProposalCard(p) {
           : "";
         const msg = r.heldForToggle
           ? `✓ 코드를 교체했습니다. ${r.stepNo ? "Step " + r.stepNo + " " : "해당 단계 "}스위치를 켜(ON) 주시면 새 코드로 적용됩니다`
-          : "✓ 수정했습니다 (라이브 미적용)";
+          : r.toggled
+            ? (r.enabled
+              ? `✓ Step ${r.stepNo || "?"} 스위치를 켰습니다 — 지금 적용됩니다`
+              : `✓ Step ${r.stepNo || "?"} 스위치를 껐습니다 — 그 단계부터 보류되고 Excel 은 직전 상태로 돌아갑니다`)
+            : (r.stepNo && typeof r.enabled === "boolean")
+              ? `✓ Step ${r.stepNo}은(는) 이미 ${r.enabled ? "켜져" : "꺼져"} 있었습니다 (변경 없음)`
+              : r.batch
+                ? `✓ ${r.batch}개 단계의 값을 바꿨습니다 — 반영하려면 바뀐 단계 스위치를 껐다 켜 주세요`
+                : "✓ 수정했습니다 (라이브 미적용)";
         box.innerHTML = `<span class="assist-done">${escapeHtml(msg)}${escapeHtml(extra)}</span>`;
       } else {
         bindActions(`<span class="assist-fail">✕ ${escapeHtml((r && r.error) || "실패")}</span>`);
@@ -659,7 +667,10 @@ function assistHandleBridgeMessage(m) {
         ok: !!(r && r.ok), error: (r && r.error) || "",
         companions: (r && r.companions) || null,
         heldForToggle: !!(r && r.heldForToggle),
+        toggled: !!(r && r.toggled),
+        enabled: (r && typeof r.enabled === "boolean") ? r.enabled : null,
         stepNo: (r && r.stepNo) || null,
+        batch: (r && r.batch) || 0,
       });
       break;
     }
@@ -742,8 +753,9 @@ function assistOpenAndAsk(question) {
   else bind();
 })();
 
-// [0.7.1 단축키] 녹화 버튼·AI 도움 버튼은 UI 에서 숨겼다(index.html) — 대신 전역 단축키로 연다.
-//   F10 = 화면 녹화 시작/정지 토글(btn-excel-record)   F11 = AI 도움 토글(btn-ai-help)
+// [0.7.1 단축키] F10 = 화면 녹화 시작/정지 토글(btn-excel-record)   F11 = AI 도움 토글(btn-ai-help)
+//   녹화 버튼은 UI 에서 숨김 유지(index.html hidden). AI 도움 버튼은 [사용자 요청 2026-07-31] 다시
+//   노출 — 헤더의 [✦ AI 도움] 버튼과 F11 둘 다 동작한다(같은 onclick 재사용).
 // 숨긴 버튼의 기존 onclick 을 그대로 재사용한다(.click()) — 로직 중복/분기 없음(display:none 버튼도
 // click() 은 정상 발화). 녹화 버튼이 전환 중(disabled)이면 무시해 상태 꼬임을 막는다.
 // F11 은 브라우저/WebView 기본 전체화면이라 preventDefault 로 가로챈다. 입력칸 포커스 중에도
