@@ -86,6 +86,27 @@ function currentInputSignature() {
   } catch (_) { return ""; }
 }
 
+// [지난달 이름 갱신] 불러온 스킬에는 '그 스킬을 만들 때 쓴 파일 이름'(예: ..._2026_4월)이 저장돼
+// 있다. 그 스킬을 이번 달 파일로 돌린 뒤(실행기 전체실행 → 결과 편집) 저장하면 저장 창 기본값이
+// 지난달 이름으로 떠서, 그대로 저장하면 파일명이 실제 대상과 어긋났다(사용자 실측 2026-08-04).
+// 지금 올라온 입력 중 '월·날짜만 다른 같은 계열' 파일이 딱 하나면 그 이름으로 바꿔 제안한다.
+// 계열이 다르면(사용자가 직접 지은 이름 등) 손대지 않는다 — 월 재바인딩과 같은 '유일 매칭만' 원칙.
+function refreshSaveBaseNameToCurrentInputs(name) {
+  try {
+    const base = String(name || "").trim();
+    if (!base || typeof pipelineStableWorkbookKey !== "function") return name;
+    const key = pipelineStableWorkbookKey(base);
+    if (!key || key.length < 4) return name;          // 키가 너무 짧으면 매칭 금지(오연결 방지)
+    const cur = ((state && state.inputs) || [])
+      .map(f => (typeof workbookDisplayName === "function" ? workbookDisplayName(f, "") : (f && f.name) || ""))
+      .map(n => String(n || "").replace(/\.(xls[xmb]?|csv|tsv)$/i, "").trim())
+      .filter(Boolean);
+    const hits = Array.from(new Set(cur.filter(n => pipelineStableWorkbookKey(n) === key)));
+    if (hits.length === 1 && hits[0] !== base) return hits[0];   // 유일 일치일 때만 교체
+  } catch (_) {}
+  return name;
+}
+
 function currentLogicSaveBaseName(fallback) {
   const curSig = currentInputSignature();
   // 서명이 유효(비어있거나 == 현재)한 이름만 후보로 본다. 서명이 비어있으면(입력 없이 저장/불러온
@@ -102,7 +123,11 @@ function currentLogicSaveBaseName(fallback) {
   }
   // 이름이 없거나 옛 기본값 "logic" 이면 호출자 fallback(=현재 입력 파일명)을 쓴다.
   const chosen = (name && name.trim().toLowerCase() !== "logic") ? name : (fallback || name || "logic");
-  return stripLogicTimestampSuffix(chosen || "logic");
+  // 기억된 이름이 지난달 파일 이름이면 지금 올라온 같은 계열 파일 이름으로 갱신한다.
+  // (typeof 가드: 진단 하네스가 이 함수만 떼어 실행하는 관행이 있어 미로드 시 조용히 건너뛴다)
+  const fresh = (typeof refreshSaveBaseNameToCurrentInputs === "function")
+    ? refreshSaveBaseNameToCurrentInputs(chosen) : chosen;
+  return stripLogicTimestampSuffix(fresh || "logic");
 }
 
 function defaultLogicBaseNameFromInputs() {

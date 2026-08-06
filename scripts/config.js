@@ -69,6 +69,115 @@ const IXI_SERVER_PRESETS = [
 
 const SETTINGS_KEY = "mvno_llm_settings_v4";
 const SETTINGS_KEY_MIGRATE = ["mvno_llm_settings_v3", "mvno_llm_settings_v2", "mvno_llm_settings_v1"];
+
+/* [버전 확인 2026-08-04] AX-Cell.exe 의 파일 버전(예 0.7.2.0)과 버전 서버의 version.txt 를 비교한다.
+
+   [2026-08-04 변경] 통신은 AI 호출과 '똑같은 길'을 쓴다 — 기존 Base URL(로컬 /v1 프록시)로 보내고,
+   서버가 X-B2B-Vllm-Base 헤더의 주소로 전달한다. 그래서 버전 확인용으로 새로 정할 값은
+   **실제 주소 하나뿐**이다(버전 서버는 AI 서버와 다른 곳에 있으므로).
+     프론트 fetch(baseUrl + "/version")  →  serve_b2b /v1/* 프록시  →  <실제주소>/v1/version
+   버전 서버(versionTest)가 /v1/version 별칭을 받아주는 이유가 이것이다.
+
+   저장은 AI 설정과 별도 키로 한다 — AI 쪽 normalizeSettings 가 모르는 키를 버려서
+   같이 넣으면 저장이 남지 않는다. */
+const VERSION_CHECK_KEY = "axcell_version_check_v1";
+const VERSION_CHECK_DEFAULTS = { upstreamUrl: "" };
+
+function loadVersionCheckSettings() {
+  try {
+    const raw = localStorage.getItem(VERSION_CHECK_KEY);
+    const parsed = raw ? JSON.parse(raw) : null;
+    if (parsed && typeof parsed === "object") {
+      // baseUrl 은 0.7.2 초기 구현에서 쓰던 칸 — 지금은 기존 AI Base URL 을 그대로 쓴다.
+      // 예전 저장값에 실제 주소가 baseUrl 쪽에만 남아 있으면 그걸 살려 준다(설정 유실 방지).
+      return { upstreamUrl: String(parsed.upstreamUrl || parsed.baseUrl || "").trim() };
+    }
+  } catch {}
+  return { ...VERSION_CHECK_DEFAULTS };
+}
+
+function saveVersionCheckSettings(next) {
+  const clean = { upstreamUrl: String((next && next.upstreamUrl) || "").trim() };
+  try { localStorage.setItem(VERSION_CHECK_KEY, JSON.stringify(clean)); } catch {}
+  return clean;
+}
+
+/* '0.7.2' 와 '0.7.2.0' 은 같은 버전이다. 문자열 그대로 비교하면 다르다고 나와서
+   멀쩡한 사용자에게 업데이트 안내가 뜬다. 서버(serve_b2b._normalize_version_text /
+   versionTest.normalize_version)와 같은 규칙 — 한쪽만 바꾸면 안 된다. */
+function normalizeVersionText(text) {
+  const s = String(text == null ? "" : text).trim().replace(/^[vV]/, "").trim();
+  if (!s) return "";
+  const parts = s.split(".").filter(p => p !== "");
+  if (!parts.length || !parts.every(p => /^\d+$/.test(p))) return "";
+  return parts.concat(["0", "0", "0", "0"]).slice(0, 4).map(p => String(parseInt(p, 10))).join(".");
+}
+
+/* 버전 확인 실행. 반환 {ok, current, latest, match, checkedUrl, error}
+   현재 버전은 백엔드(exe 파일 속성)에서, 최신 버전은 기존 프록시를 통해 버전 서버에서 받는다. */
+async function runVersionCheck(cfg) {
+  const conf = cfg || loadVersionCheckSettings();
+  const out = { ok: false, current: null, latest: null, match: null, checkedUrl: "", error: "" };
+
+  // 1) 지금 이 AX-Cell 의 버전 — 배포본이면 exe 파일 버전, 소스 실행이면 CURRENT_VERSION.
+  try {
+    const r = await fetch("/api/app/version");
+    out.current = await r.json();
+  } catch (err) {
+    out.error = `현재 버전을 읽지 못했습니다: ${err.message || err}`;
+    return out;
+  }
+
+  if (!conf.upstreamUrl) {
+    out.error = "버전 서버의 실제 주소를 입력해 주세요.";
+    return out;
+  }
+
+  // 2) 최신 버전 — AI 호출과 같은 길(기존 Base URL → /v1 프록시 → 실제 주소).
+  const proxyBase = String(
+    (typeof settings === "object" && settings && settings.provider === "openai-compat" && settings.baseUrl)
+      || (DEFAULTS && DEFAULTS["openai-compat"] && DEFAULTS["openai-compat"].baseUrl)
+      || `${location.origin}/v1`
+  ).replace(/\/$/, "");
+  const url = proxyBase + "/version";
+  out.checkedUrl = `${url}  →  ${conf.upstreamUrl}`;
+  let body = "";
+  try {
+    const resp = await fetch(url, {
+      headers: { accept: "application/json", "X-B2B-Vllm-Base": conf.upstreamUrl },
+    });
+    body = (await resp.text()).trim();
+    if (!resp.ok) throw new Error(`HTTP ${resp.status} ${body.slice(0, 120)}`);
+  } catch (err) {
+    out.error = `버전 서버에 연결하지 못했습니다: ${err.message || err}`;
+    return out;
+  }
+
+  // 우리 서버(JSON)든 평문 version.txt(쉐어포인트 등)든 받아준다.
+  let latestRaw = "";
+  let updatedAt = null;
+  try {
+    const data = JSON.parse(body);
+    if (data && typeof data === "object") {
+      if (!data.ok && data.error) { out.error = String(data.error); return out; }
+      latestRaw = data.version || data.normalized || "";
+      updatedAt = data.updatedAt || null;
+    }
+  } catch {
+    latestRaw = (body.split("\n")[0] || "").trim();
+  }
+  const latestNorm = normalizeVersionText(latestRaw);
+  if (!latestNorm) {
+    out.error = `버전 형식이 아닙니다: ${JSON.stringify(latestRaw.slice(0, 60))}`;
+    return out;
+  }
+
+  out.latest = { version: latestRaw, normalized: latestNorm, updatedAt };
+  out.ok = true;
+  const curNorm = (out.current && out.current.normalized) || "";
+  out.match = !!curNorm && curNorm === latestNorm;
+  return out;
+}
 const DEFAULT_SKILL_ENGINE = "python";
 const SKILL_ENGINE_LABELS = {
   python: "Python",

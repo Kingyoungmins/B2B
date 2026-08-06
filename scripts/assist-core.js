@@ -35,7 +35,7 @@ function assistSystemPrompt() {
     outs.length ? `출력 템플릿: ${outs.join(" | ")}` : "",
   ].filter(Boolean).join("\n");
 
-  return `${typeof OUTPUT_LANGUAGE_RULE === "string" ? OUTPUT_LANGUAGE_RULE + "\n\n" : ""}당신은 B2B 빌링 Agent 프로그램 '안에서' 동작하는 도우미입니다.
+  return `${typeof OUTPUT_LANGUAGE_RULE === "string" ? OUTPUT_LANGUAGE_RULE + "\n\n" : ""}${typeof PLAIN_LANGUAGE_RULE === "string" ? PLAIN_LANGUAGE_RULE + "\n\n" : ""}당신은 AX-Cell 프로그램 '안에서' 동작하는 도우미입니다.
 사용자는 이미 만들어진 Excel 자동화 '스킬'(여러 단계로 된 파이프라인)을 쓰고 있고,
 스킬이 뜻대로 안 되거나 어떻게 고칠지 모를 때 당신에게 묻습니다.
 

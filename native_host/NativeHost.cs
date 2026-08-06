@@ -72,7 +72,7 @@ namespace B2BNativeHost
             {
                 if (!createdNew)
                 {
-                    try { MessageBox.Show("B2B 빌링 Agent 가 이미 실행 중입니다.\n기존 창을 사용해 주세요.", "B2B", MessageBoxButtons.OK, MessageBoxIcon.Information); }
+                    try { MessageBox.Show("AX-Cell 이 이미 실행 중입니다.\n기존 창을 사용해 주세요.", "AX-Cell", MessageBoxButtons.OK, MessageBoxIcon.Information); }
                     catch { }
                     return;
                 }
@@ -215,7 +215,7 @@ namespace B2BNativeHost
         public MainForm()
         {
             rootDir = FindRootDir();
-            Text = "B2B 빌링 Agent";
+            Text = "AX-Cell";
             StartPosition = FormStartPosition.CenterScreen;
             KeyPreview = true;
             // [듀얼모니터] MaximizedBounds 를 '설정하지 않는다'. 값을 박아두면(캐싱) 최대화 버튼 클릭이
@@ -243,7 +243,7 @@ namespace B2BNativeHost
             // 초기 실행 스플래시: 서버 부팅+WebView 로드까지 빈 화면 대신 안내를 보여준다(저사양 PC 첫 실행 10~20초).
             startupSplash = new Label();
             startupSplash.Dock = DockStyle.Fill;
-            startupSplash.Text = "B2B 빌링 Agent 준비 중입니다...\n\n처음 실행은 컴퓨터 성능에 따라 10~20초 정도 걸릴 수 있습니다.";
+            startupSplash.Text = "AX-Cell 준비 중입니다...\n\n처음 실행은 컴퓨터 성능에 따라 10~20초 정도 걸릴 수 있습니다.";
             startupSplash.TextAlign = ContentAlignment.MiddleCenter;
             startupSplash.Font = new Font(Font.FontFamily, 12F, FontStyle.Bold);
             startupSplash.ForeColor = Color.FromArgb(80, 80, 96);

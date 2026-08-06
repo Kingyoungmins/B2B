@@ -130,6 +130,42 @@ function activePipelineSteps(steps = state.pipeline) {
   return (steps || []).filter(step => step && isStepEnabled(step));
 }
 
+/* [새로고침 즉시복원 2026-08-04] '지금 파이프라인을 원본부터 전부 적용하면 나오는 상태'의 서명.
+   백엔드는 이 문자열을 해석하지 않고 스냅샷 키의 재료로만 쓴다 — 저장 때와 조회 때 같은 규칙으로
+   만들어지기만 하면 된다. 코드 전문을 그대로 보내면 크니 64비트 해시로 줄인다(32비트 2개 — 한 개는
+   대량 스텝에서 충돌 확률이 무시 못 할 수준이고, 충돌은 '엉뚱한 상태로 복원'이라 위험하다). */
+function _pipelineSigHash(text) {
+  let h1 = 0x811c9dc5, h2 = 0x01000193;
+  for (let i = 0; i < text.length; i++) {
+    const c = text.charCodeAt(i);
+    h1 = Math.imul(h1 ^ c, 0x01000193) >>> 0;
+    h2 = Math.imul(h2 + c, 0x85ebca6b) >>> 0;
+    h2 = ((h2 << 13) | (h2 >>> 19)) >>> 0;
+  }
+  return h1.toString(16).padStart(8, "0") + h2.toString(16).padStart(8, "0");
+}
+
+function pipelineLiveStateSig(steps) {
+  const list = activePipelineSteps(steps || state.pipeline);
+  if (!list.length) return "";
+  const body = list.map(s => [
+    (s && s.id) || "",
+    (s && (s.language || "javascript")) || "",
+    (s && s.targetFileId) || "",
+    String((s && s.code) || "").replace(/\r\n/g, "\n").trim(),
+  ].join("")).join("");
+  return "v1:" + list.length + ":" + body.length + ":" + _pipelineSigHash(body);
+}
+
+/* 이번 실행이 '전체 파이프라인을 원본부터' 인 경우에만 서명을 낸다.
+   부분 실행/이어실행(suffix)의 결과는 최종 상태가 아니므로 사본을 남기면 안 된다
+   — 남기면 새로고침 복원이 '덜 적용된 상태'를 최종본으로 착각한다. */
+function pipelineFullRunStateSig(runSteps) {
+  const all = pipelineLiveStateSig(state.pipeline);
+  if (!all) return "";
+  return all === pipelineLiveStateSig(runSteps) ? all : "";
+}
+
 function stepRequiresFullWorkbookExecution(step) {
   if (!step || !isStepEnabled(step)) return false;
   if (step.manual || step.manualEdit) return false;
@@ -1232,6 +1268,9 @@ async function runIsolatedLivePipelineSteps(sourceSteps, initialExcelId, options
           resetExcelIds,
           viewSheet: options.viewSheet || null,
           outputMode: options.outputMode || "sync",   // 실행기='file'(라이브 미반영+파일출력), 생성기='sync'
+          // [새로고침 즉시복원] 원본부터 전체 적용일 때만 값이 있다 → 백엔드가 최종 상태 사본을 남긴다.
+          // (여기가 VBA 전체실행 경로. 이 경로엔 원래 사본이 없어 새로고침 후 항상 전 스텝 재실행이었다)
+          stateSig: pipelineFullRunStateSig(sourceSteps),
         }, 0, {
           // [저사양 거짓실패 방지] 백그라운드 전체실행은 1콜에 전 스텝 실행 + 스텝별 스냅샷 + 최종 동기화(통째 시트
           // 교체)까지 포함된다. 저사양 PC 에선 75스텝급이 10분(기존)을 훌쩍 넘겨, 'N/N' 후 동기화 중에 타임아웃으로
@@ -3511,8 +3550,32 @@ function _syncPipelineToggleStatus() {
 //     (이어실행이 켠 스텝을 중복 실행하는 것 방지 — 이후 전체실행은 pristine reset이라 항상 옳다).
 //   예외: 교차파일 쓰기 스텝·라이브 서명 미기록·서명 불일치 → 결정적 reset+enabled 재적용(reconcile).
 // onclick 인라인이 아닌 top-level 함수로 분리 — 헤드리스 추출-실행 테스트로 시나리오를 잠근다.
-async function handlePipelineStepToggle(stepId) {
-  const busyReason = typeof pipelineEditBusyReason === "function" ? pipelineEditBusyReason() : "";
+//
+// [연타 직렬화] (사용자 실측 2026-08-04) 토글 정착은 비동기(서버 스냅샷 복원/단일 적용)인데,
+// 이전 토글이 끝나기 전에 다음 토글이 통과하면 두 서버 복원·적용이 경합해 '늦게 끝난 쪽'이 이긴다
+// — 화면 라벨은 마지막 클릭 기준, Excel 은 마지막 완료 기준으로 갈려 "OFF 인데 값이 남는" 유령
+// 상태가 됐다. 그래서 토글은 항상 큐로 직렬화한다: 연타해도 순서대로 하나씩 정착하고, 각 토글은
+// 이전 토글이 완전히 끝난 상태 위에서 실행된다(사용자 클릭 의도 보존 — 거절이 아니라 대기).
+let _pipelineToggleChain = Promise.resolve();
+let _pipelineToggleSettling = 0;
+
+function handlePipelineStepToggle(stepId) {
+  const run = async () => {
+    _pipelineToggleSettling += 1;
+    try {
+      return await _handlePipelineStepToggleImpl(stepId);
+    } finally {
+      _pipelineToggleSettling -= 1;
+    }
+  };
+  const p = _pipelineToggleChain.then(run, run);
+  _pipelineToggleChain = p.catch(() => {});   // 실패해도 큐는 계속 흐른다
+  return p;
+}
+
+async function _handlePipelineStepToggleImpl(stepId) {
+  // 자기 자신(토글 정착 중)으로는 안 막힌다 — 큐가 직렬화를 보장. VBA 적용/중단 중만 본다.
+  const busyReason = typeof _pipelineCoreBusyReason === "function" ? _pipelineCoreBusyReason() : "";
   if (busyReason) {
     if (typeof toast === "function") toast(busyReason, "error");
     return;
@@ -4100,7 +4163,9 @@ async function applyLastEnabledStepFast(step, options = {}) {
   return result || true;
 }
 
-function pipelineEditBusyReason() {
+// [토글 제외 공용 사유] 토글 구현부(_handlePipelineStepToggleImpl)는 이걸 쓴다 — 자기 자신의
+// '정착 중' 상태로 스스로를 막지 않기 위해(큐가 이미 직렬화를 보장).
+function _pipelineCoreBusyReason() {
   if (window.__activeVbaApply && window.__activeVbaApply.token && !window.__activeVbaApply.token.cancelled) {
     return "현재 Excel 적용 작업이 끝난 뒤 다시 시도하세요.";
   }
@@ -4111,6 +4176,16 @@ function pipelineEditBusyReason() {
     return "작업을 중단하고 이전 상태로 되돌리는 중입니다. 잠시 후 다시 시도하세요.";
   }
   return "";
+}
+
+function pipelineEditBusyReason() {
+  // [토글 정착 중 편집 차단] 켜기/끄기의 비동기 정착(스냅샷 복원·단일 적용)이 진행되는 동안
+  // 다른 편집(삭제·코드수정·AI 도움 커밋)이 끼어들면 서버 복원과 경합해 'OFF인데 값이 남는'
+  // 유령 상태를 만들었다(마구잡이 연타 실측 2026-08-04). 토글끼리는 아래 큐가 직렬화한다.
+  if (_pipelineToggleSettling > 0) {
+    return "단계 켜기/끄기를 반영하는 중입니다. 잠시 후 다시 시도하세요.";
+  }
+  return _pipelineCoreBusyReason();
 }
 
 // [#5] 라이브 COM 적용으로 구조가 바뀐 파일의 클라 스키마 캐시(미리보기 AoA/시트명/차원)를
@@ -6357,20 +6432,64 @@ async function explainPipelineErrorForUser(info) {
   const system = [
     typeof OUTPUT_LANGUAGE_RULE === "string" ? OUTPUT_LANGUAGE_RULE : "",
     "당신은 한국어 엑셀 자동화 도우미입니다. 방금 사용자가 시킨 작업이 오류로 실패했습니다.",
-    "엑셀/코드 지식이 전혀 없는 사용자에게 친절하고 평이하게 설명하세요. 반드시 이 흐름을 지키세요:",
-    "(1) 사용자가 무엇을 하려 했는지 한 문장으로 되짚기",
-    "(2) 어느 단계/어느 부분에서 막혔는지(엑셀 화면 기준의 일상어로)",
-    "(3) 왜 막혔는지 쉬운 말로 — 함수명·영문 오류·코드·스택트레이스는 절대 쓰지 말 것",
-    "(4) 사용자의 의도가 '…'가 맞는지 확인하는 질문 하나, 또는 어떻게 바꿔 말하면 되는지 1가지 제안",
-    "전체 3~5문장, 따뜻하고 명확하게. 기술 용어/코드/영문 오류 메시지를 그대로 옮기지 마세요.",
+    "엑셀/코드 지식이 없는 사용자에게, 근거를 가지고 '무엇이 어긋났는지' 콕 집어 설명하세요.",
+    "반드시 이 흐름을 지키세요:",
+    "(1) 무엇이 막혔는지 한 문장으로 — 잘못은 사용자가 아니라 내가 못한 것으로 말할 것",
+    "    (예: \"피벗을 만드는 명령에 제가 알지 못하는 설정이 하나 있었어요(…를 지정하는 부분)\")",
+    "(2) 사용자가 무엇을 하려 했는지는 이해했다고 짚어 주기(안심시키기)",
+    "(3) 아래 자료(실패한 코드·시트 구조·오류 원문)에서 찾은 '구체적인 지점'을 쉬운 말로 한 줄",
+    "    — 코드 줄·스택트레이스·영문 예외 문구를 그대로 붙여넣지 말 것",
+    "(4) 마무리는 반드시 '바로 할 수 있는 행동'으로:",
+    "    오류 창의 메모칸에 그대로 붙여넣을 한국어 문장을 큰따옴표로 감싸 제시하고,",
+    "    [에러 복구 시도] 버튼을 눌러 달라고 안내하세요.",
+    "    그 문장은 원인을 피해 가도록 구체적으로 쓰되(예: 머리글이 몇 번째 줄인지 알려주기),",
+    "    사용자가 읽어도 무슨 말인지 아는 일상어여야 합니다.",
+    "",
+    "중요한 판단 규칙:",
+    "- '이 옵션은 지원하지 않는다' 류의 오류에 '쓸 수 있는 옵션' 목록이 함께 있으면, 그중 무엇을 쓰면 되는지 짚어주세요.",
+    "- 시트 구조 자료가 있으면 헤더가 몇 행에 있는지, 찾는 이름이 실제로 있는지 대조해 말하세요.",
+    "- 자료로 확인되지 않는 원인은 단정하지 말고 '확인이 필요하다'고 하세요. 추측을 사실처럼 쓰지 마세요.",
+    "",
+    typeof PLAIN_LANGUAGE_RULE === "string" ? PLAIN_LANGUAGE_RULE : "",
+    "전체 3~6문장.",
   ].join("\n");
-  const user = [
+
+  // [설명 품질 2026-08-06] 예전엔 요청·단계설명·오류문구 3줄만 줬다. 그래서 "무언가 잘못됐어요"
+  // 수준의 하나마나 한 설명이 나왔다(사용자 지적). AI 도움이 같은 상황에서 정확했던 이유는
+  // step.error·skill 코드·sheet.headers 를 '직접 조회'해 근거를 쥐고 답했기 때문 —
+  // 여기서도 같은 근거를 미리 실어 준다(에이전트 루프 없이 1회 호출로 같은 품질을 노린다).
+  const parts = [
     `사용자 요청: ${req || "(기록 없음)"}`,
     `실패한 단계 설명: ${info.description || "(설명 없음)"}`,
-    `내부 오류(참고용 — 사용자에게 그대로 보여주지 말 것): ${info.rawError || info.message || info.cause || ""}`,
-  ].join("\n");
+    `실패한 단계 번호: ${Number(info.stepIdx) >= 0 ? Number(info.stepIdx) + 1 + "단계" : "(모름)"}`,
+  ];
+  // 이 스텝이 스킬에 정식으로 남았는지 — '생성 중 실패라 목록에 없다'는 사실 자체가 큰 단서다.
+  if (info.stepId) {
+    const inSkill = (state.pipeline || []).some(s => s && s.id === info.stepId);
+    parts.push(`이 단계가 스킬 목록에 남아 있는가: ${inSkill ? "예" : "아니오 (만들다가 실패해 목록에 없음)"}`);
+  }
+  const codeText = String((info.code || (_step && _step.code) || "")).trim();
+  if (codeText) {
+    parts.push(`실패한 코드(${info.language || (_step && _step.language) || "python"}):\n${codeText.slice(0, 2500)}`);
+  }
+  // 대상 시트의 실제 구조 — "헤더가 2행인데 1행으로 찾고 있다" 류를 대조로 잡아낸다.
   try {
-    const out = await callLLMOneShot(system, user, { maxTokens: 500 });
+    if (typeof buildSheetStructureDigest === "function") {
+      const fid = (_step && _step.targetFileId) || null;
+      const f = fid && typeof getFile === "function" ? getFile(fid) : null;
+      const sheetName = (_step && _step.targetSheetName) || "";
+      const aoa = f && f.sheets ? f.sheets[sheetName] : null;
+      if (Array.isArray(aoa) && aoa.length) {
+        const digest = buildSheetStructureDigest(aoa, sheetName);   // {text, hasLandmarks, totalRows}
+        const digestText = digest && typeof digest === "object" ? digest.text : digest;
+        if (digestText) parts.push(`대상 시트 구조:\n${String(digestText).slice(0, 1200)}`);
+      }
+    }
+  } catch (_) {}
+  parts.push(`오류 원문(참고용 — 그대로 옮기지 말 것): ${info.rawError || info.message || info.cause || ""}`);
+
+  try {
+    const out = await callLLMOneShot(system, parts.join("\n\n"), { maxTokens: 700 });
     const text = String(out || "").trim();
     return text || null;
   } catch (_) {

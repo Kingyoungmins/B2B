@@ -12,7 +12,7 @@ function setPage(page) {
   document.querySelectorAll(".menu-item[data-page]").forEach(el => {
     el.classList.toggle("active", el.dataset.page === page);
   });
-  $("page-title").textContent = page === "runner" ? "스킬 실행기" : "B2B 빌링 Agent";
+  $("page-title").textContent = page === "runner" ? "스킬 실행기" : "AX-Cell";
   // [0.5.16 #1] 실행기(runner)는 헤드리스 — Excel 뷰를 아예 안 보이고 한 화면을 꽉 채운다.
   //  - 브라우저 모드: body.page-runner-active 로 .right/.resizer 를 숨기고 .left 풀폭(CSS).
   //  - 네이티브 셸: 호스트에 B2B_RUNNER_MODE 를 보내 우측 패널을 접고 WebView 풀폭.
@@ -61,6 +61,7 @@ document.querySelectorAll(".menu-item[data-page]").forEach(item => {
   item.onclick = () => setPage(item.dataset.page);
 });
 
+// [사용 가이드 제거] 메뉴 항목을 뺐다. 버튼이 없으면 조용히 건너뛴다(구버전 index.html 대비).
 const guideButton = $("btn-open-guide");
 if (guideButton) {
   guideButton.onclick = () => {

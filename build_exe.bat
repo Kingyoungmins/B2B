@@ -45,6 +45,13 @@ if errorlevel 1 (
 if exist "build" rmdir /s /q "build"
 if exist "dist" rmdir /s /q "dist"
 
+rem [version resource] regenerate after build/ was wiped above (idempotent)
+python "tools\gen_version_meta.py"
+if errorlevel 1 (
+    echo [ERROR] Version metadata generation failed.
+    exit /b 1
+)
+
 echo.
 echo [INFO] Building Python server EXE...
 python -m PyInstaller --clean launch_b2b.spec

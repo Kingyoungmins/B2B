@@ -151,6 +151,9 @@ function openSettingsModal(devMode) {
   const claudeUrl = settings.provider === "anthropic"
     ? (settings.baseUrl || DEFAULTS.anthropic.baseUrl)
     : DEFAULTS.anthropic.baseUrl;
+  // [버전 확인] AI 설정과 별도 저장(다른 서버라서). DEV 모달에서만 노출한다.
+  const verCfg = (typeof loadVersionCheckSettings === "function")
+    ? loadVersionCheckSettings() : { baseUrl: "", upstreamUrl: "" };
 
   modal.innerHTML = `
     <h3>AI 연결 설정${devMode ? ' <span style="font-size:11px;color:#FF0080;background:#FFE0F2;padding:2px 8px;border-radius:8px;font-weight:600;margin-left:6px;">DEV</span>' : ''}</h3>
@@ -207,6 +210,26 @@ function openSettingsModal(devMode) {
       </select>
       <label style="font-size:11.5px; color:#666">Base URL</label>
       <input type="text" id="set-c-url" value="${escapeHtml(claudeUrl)}" />
+    </div>
+    ` : ""}
+
+    ${devMode ? `
+    <div style="margin-top:16px; padding-top:14px; border-top:1px solid #eee">
+      <div style="font-weight:700; font-size:12.5px; margin-bottom:2px">버전 확인</div>
+      <div style="font-size:11px; color:#777; margin-bottom:8px">
+        지금 AX-Cell 의 파일 버전과 버전 서버의 최신 버전을 비교합니다.
+        (지금은 확인만 — 안내창은 배포 전에 붙일 예정)
+      </div>
+      <label style="font-size:11.5px; color:#666">버전 서버 실제 주소</label>
+      <input type="text" id="set-ver-upstream" value="${escapeHtml(verCfg.upstreamUrl)}" placeholder="http://10.0.0.5:8100" />
+      <div style="font-size:11px; color:#777; margin:-6px 0 8px">
+        AI 호출과 같은 길(위 Base URL → 로컬 /v1 프록시)로 나갑니다. 버전 서버만 다른 곳이라
+        실제 주소만 여기서 정합니다.
+      </div>
+      <div class="row" style="margin-top:6px">
+        <button class="btn-secondary" id="btn-version-check">버전 확인</button>
+      </div>
+      <div id="version-result" style="margin-top:8px; font-size:11.5px"></div>
     </div>
     ` : ""}
 
@@ -308,12 +331,51 @@ function openSettingsModal(devMode) {
     }
   };
 
+  // [버전 확인] 지금 AX-Cell 파일 버전 vs 버전 서버의 최신 버전. 확인만 하고 아무것도 강제하지 않는다.
+  if (devMode && $("btn-version-check")) {
+    $("btn-version-check").onclick = async () => {
+      const res = $("version-result");
+      // 누를 때 주소를 같이 저장 — 다음에 또 입력하지 않게.
+      const cfg = saveVersionCheckSettings({ upstreamUrl: $("set-ver-upstream").value });
+      if (!cfg.upstreamUrl) {
+        res.innerHTML = '<span style="color:#dc3545">버전 서버 실제 주소를 먼저 입력해 주세요.</span>';
+        return;
+      }
+      res.innerHTML = '<span class="loader"></span> 버전 확인 중...';
+      try {
+        const data = await runVersionCheck(cfg);
+        const cur = (data.current && data.current.normalized) || "(알 수 없음)";
+        const curSrc = (data.current && data.current.source) || "";
+        if (!data.ok) {
+          res.innerHTML = `<div style="color:#dc3545">확인 실패: ${escapeHtml(String(data.error || "알 수 없는 오류"))}</div>`
+            + `<div style="color:#777; margin-top:2px">지금 버전: ${escapeHtml(cur)}${curSrc ? " · " + escapeHtml(curSrc) : ""}</div>`;
+          return;
+        }
+        const latest = (data.latest && data.latest.normalized) || "";
+        const where = data.checkedUrl ? `<div style="color:#777; margin-top:2px">${escapeHtml(data.checkedUrl)}</div>` : "";
+        if (data.match) {
+          res.innerHTML = `<div style="color:#28a745">최신 버전입니다 · ${escapeHtml(latest)}</div>`
+            + `<div style="color:#777; margin-top:2px">지금 버전: ${escapeHtml(cur)}${curSrc ? " · " + escapeHtml(curSrc) : ""}</div>` + where;
+        } else {
+          // 배포 전에는 여기서 "최신버전을 다운로드 해주세요" 안내 + 확인 시 종료를 붙일 자리다.
+          res.innerHTML = `<div style="color:#dc3545">버전이 다릅니다 — 지금 ${escapeHtml(cur)} · 최신 ${escapeHtml(latest)}</div>`
+            + `<div style="color:#777; margin-top:2px">${escapeHtml(curSrc)}</div>` + where;
+        }
+      } catch (err) {
+        res.innerHTML = `<span style="color:#dc3545">확인 실패: ${escapeHtml(err.message)}</span>`;
+      }
+    };
+  }
+
   $("modal-cancel").onclick = () => $("modal-bg").classList.remove("show");
   $("modal-save").onclick = () => {
     const form = readForm();
     if (form.provider === "anthropic" && !form.apiKey) {
       toast("Claude API Key가 비어 있습니다.", "error");
       return;
+    }
+    if (devMode && $("set-ver-upstream")) {
+      saveVersionCheckSettings({ upstreamUrl: $("set-ver-upstream").value });
     }
     settings = {
       ...settings,

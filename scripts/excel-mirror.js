@@ -579,11 +579,27 @@ async function ensureExcelMirrorSession(fileId, { makeActive = false, deferVisib
     data = await postExcelMirror("/api/excel/open-result", { resultId, liveEditable: true, deferVisible, ...mirrorRect });
   } else {
     if (!file.backendWorkbookId) throw new Error("백엔드 workbookId가 없습니다.");
-    data = await postExcelMirror("/api/excel/open", { workbookId: file.backendWorkbookId, liveEditable: true, deferVisible, ...mirrorRect });
+    data = await postExcelMirror("/api/excel/open", {
+      workbookId: file.backendWorkbookId,
+      liveEditable: true,
+      deferVisible,
+      // [새로고침 즉시복원] 새로고침 복원 중이고 '스킬 적용 끝난 사본'이 서버에 있으면 그걸로 연다
+      // (없으면 서버가 조용히 원본으로 연다). 평소에는 빈 값이라 기존 동작 그대로.
+      fromStateSig: excelMirror.restoreFromStateSig || "",
+      ...mirrorRect,
+    });
   }
   excelMirror.sessionsByFileId[fileId] = data.excelId;
   excelMirror.sessionLastUsedByFileId[fileId] = Date.now();
   excelMirror.hiddenByExcelId[data.excelId] = !!deferVisible;
+  // [실행기 오버레이 수정 2026-08-04] deferVisible 은 '요청 시점' 값으로 굳는다 — 요청이 서버에
+  // 줄 서 있는 동안 사용자가 실행기(헤드리스)로 이동하면, 보이게 열린 창이 실행기 화면 위로 뜬다.
+  // 응답 시점에 헤드리스면 방금 연 세션을 즉시 숨겨 사후 정리한다(가드들은 멱등이라 안전).
+  if (!deferVisible && excelMirror.runnerHeadless) {
+    excelMirror.hiddenByExcelId[data.excelId] = true;
+    try { await hideAllExcelMirrorWindows(); } catch (_) {}
+    return data.excelId;
+  }
   if (!deferVisible) {
     await positionExcelMirrorWindow(data.excelId, { force: true });
     await pollExcelMirrorChanges(data.excelId, { baselineOnly: true });

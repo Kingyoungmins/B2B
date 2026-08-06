@@ -27,7 +27,7 @@ function assistBuildJiraGuideText(meta, extras) {
   const files = (state.inputsOriginal || []).map(f => f && f.name).filter(Boolean);
   const lines = [
     "==========================================",
-    " B2B 빌링 Agent — 이슈 제보 안내",
+    " AX-Cell — 이슈 제보 안내",
     "==========================================",
     "",
     "이 zip 하나에 재현에 필요한 것이 모두 들어 있습니다.",

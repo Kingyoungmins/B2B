@@ -437,3 +437,6 @@
   }
   .chat-messages .msg:hover .msg-del { display: block; }
   .chat-messages .msg .msg-del:hover { opacity: 1; }
+
+  /* [크기 조절 손잡이] 대화창·입력창의 손잡이 스타일은 base.css 의 전역 ::-webkit-resizer
+     규칙이 담당한다(스킬 파이프라인 등 다른 크기조절 영역과 같은 모양). */

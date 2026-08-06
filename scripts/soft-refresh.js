@@ -47,6 +47,18 @@ function collectSoftRefreshSnapshot() {
     activeOutputIndex: state.activeOutputIndex >= 0 ? state.activeOutputIndex : 0,
     currentFileId: state.currentFileId || null,
     logic,
+    // [실행기 파일 연결 유지 2026-08-04] 스킬이 찾는 파일 ↔ 실제 업로드 파일의 짝(파일확인 결과).
+    // 이걸 안 담으면 새로고침 후 자동 재적용이 '스킬에 적힌 옛 파일명' 그대로 돌아 실패한다
+    // (그리고 실행기 전체실행 첫 클릭이 실행 대신 파일확인 패널만 여는 원인). fileId 는
+    // "input:"+표시명 규칙이라 같은 파일을 복원하면 그대로 유효하다.
+    runnerMappings: (state.runnerMappings && typeof state.runnerMappings === "object")
+      ? JSON.parse(JSON.stringify(state.runnerMappings)) : null,
+    runnerMappingChecked: !!state.runnerMappingChecked,
+    // 저장된 값이 아니라 '지금 계산한' 시그니처를 담는다(state 쪽은 지연 갱신이라 낡을 수 있다).
+    // 복원 때 이 값과 현재 시그니처가 같을 때만 매핑을 되살린다 — 파일/스킬이 실제로 달라졌으면
+    // 옛 짝을 억지로 씌우지 않고 평소처럼 사용자가 파일확인을 하게 둔다.
+    runnerMappingSignature: (typeof runnerCurrentMappingSignature === "function")
+      ? runnerCurrentMappingSignature() : (state.runnerMappingSignature || ""),
   };
 }
 
@@ -96,6 +108,39 @@ async function _softRefreshRebuildFile(saved) {
   );
   if (!rec) throw new Error("레코드 재구성 실패");
   return rec;
+}
+
+/* [새로고침 즉시복원 2026-08-04] 스킬 재실행 없이 '적용 끝난 상태'로 열 수 있는지 확인한다.
+   가능하면 그 상태 서명을 반환(미러를 그 사본으로 연다), 아니면 "" — 호출부는 평소대로 전체 재실행.
+   조건: ① 적용할 스텝이 있고 ② 관여 파일 '전부' 서버에 최종상태 사본이 있을 것.
+   사본이 없는 경우(엔진이 안 남겼거나·정리로 지워졌거나·스킬/파일이 달라짐)는 전부 여기서 ""가 된다. */
+async function _softRefreshResolveInstantRestore() {
+  try {
+    if (typeof pipelineLiveStateSig !== "function") return "";
+    const sig = pipelineLiveStateSig(state.pipeline);
+    if (!sig) return "";
+    const ids = [];
+    const push = f => { if (f && f.backendWorkbookId && !ids.includes(f.backendWorkbookId)) ids.push(f.backendWorkbookId); };
+    (state.inputs || []).forEach(push);
+    (state.outputTemplates || []).forEach(t => push(t && (t.original || t.file)));
+    if (!ids.length) return "";
+    const resp = await fetch("/api/pipeline/live-final-snapshot", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ workbookIds: ids, stateSig: sig }),
+    });
+    const data = await resp.json().catch(() => null);
+    if (!resp.ok || !data || !data.ok || !data.ready) {
+      if (data && Array.isArray(data.missing) && data.missing.length) {
+        console.info("soft-refresh: 최종상태 사본 없음 → 전체 재실행", data.missing);
+      }
+      return "";
+    }
+    return sig;
+  } catch (err) {
+    console.warn("soft-refresh: 즉시복원 확인 실패(전체 재실행으로 진행):", err);
+    return "";
+  }
 }
 
 async function restoreSoftRefreshSnapshot() {
@@ -148,12 +193,47 @@ async function restoreSoftRefreshSnapshot() {
     if (snap.logic && typeof loadLogic === "function") {
       try { loadLogic(snap.logic, "새로고침 복원"); } catch (err) { console.warn("soft-refresh: 스킬 복원 실패:", err); }
     }
+    // [즉시복원 2026-08-04] 스킬을 처음부터 다시 돌리는 대신, 서버에 '전부 적용된 최종 상태' 사본이
+    // 있으면 그 파일로 미러를 연다. 라이브 Excel 은 작업복사본이고 저장을 안 하므로(SaveChanges=False)
+    // 창을 닫는 순간 적용 결과가 사라진다 — 그래서 원래는 항상 전 스텝 재실행이었다.
+    // 전부(all-or-nothing) 있을 때만 쓴다. 일부만 쓰면 파일마다 적용 시점이 달라 어긋난다.
+    const restoreSig = await _softRefreshResolveInstantRestore();
+    if (restoreSig && typeof excelMirror === "object" && excelMirror) {
+      excelMirror.restoreFromStateSig = restoreSig;
+    }
     // 미러 재오픈 — 업로드 직후와 같은 경로(현재 탭 우선, 나머지 백그라운드).
     const landing = snap.currentFileId && typeof getFile === "function" && getFile(snap.currentFileId)
       ? snap.currentFileId : null;
-    if ((state.inputs.length || state.outputTemplates.length) && typeof preopenAllExcelMirrors === "function") {
-      try { await preopenAllExcelMirrors(landing, { source: "upload" }); } catch (err) { console.warn("soft-refresh: 미러 재오픈 실패:", err); }
+    try {
+      if ((state.inputs.length || state.outputTemplates.length) && typeof preopenAllExcelMirrors === "function") {
+        try { await preopenAllExcelMirrors(landing, { source: "upload" }); } catch (err) { console.warn("soft-refresh: 미러 재오픈 실패:", err); }
+      }
+    } finally {
+      // 복원 오픈이 끝나면 반드시 해제 — 이후의 평범한 열기가 옛 사본으로 열리면 안 된다.
+      if (typeof excelMirror === "object" && excelMirror) excelMirror.restoreFromStateSig = "";
     }
+    // [실행기 파일 연결 복원] 스킬이 찾는 파일 ↔ 실제 업로드 파일의 짝. 파일·스킬이 스냅샷 때와
+    // 같을 때(시그니처 일치)만 되살린다. 안 되살리면 자동 재적용이 옛 파일명으로 돌아 실패하고,
+    // 실행기 전체실행 첫 클릭도 실행 대신 파일확인 패널만 열린다.
+    try {
+      if (snap.runnerMappings && typeof runnerCurrentMappingSignature === "function") {
+        const curSig = runnerCurrentMappingSignature();
+        if (curSig && curSig === snap.runnerMappingSignature) {
+          state.runnerMappings = snap.runnerMappings;
+          state.runnerMappingChecked = !!snap.runnerMappingChecked;
+          state.runnerMappingSignature = curSig;   // 재-앵커: 다음 소스변경 검사가 지우지 않게
+          if (typeof renderRunnerWorkflow === "function") renderRunnerWorkflow();
+        } else {
+          console.warn("soft-refresh: 파일/스킬이 달라져 실행기 매핑은 복원하지 않음");
+        }
+      }
+    } catch (err) {
+      console.warn("soft-refresh: 실행기 매핑 복원 실패:", err);
+    }
+    // [중복 자동복구 차단] 'b2bJustReset'(첫 미러 빈화면 자가복구 표식)이 소비되지 않은 채 남으면,
+    // 나중에 세션을 확보하는 시점(전체실행 도중일 수 있음)에 '창 다시 열고 자동 재적용'이 겹쳐
+    // 발화해 적용 표시가 풀리거나 값이 어긋난다. 미러를 이미 다시 연 지금 시점에 소비한다.
+    try { sessionStorage.removeItem("b2bJustReset"); } catch (_) {}
     const restored = state.inputs.length + state.outputTemplates.length;
     if (failures.length) {
       toast(`새로고침 복원: 파일 ${restored}개 복원, ${failures.length}개 실패(${failures.slice(0, 3).join(", ")}${failures.length > 3 ? " 외" : ""}) — 실패한 파일은 다시 업로드해 주세요.`, "error");
@@ -163,14 +243,50 @@ async function restoreSoftRefreshSnapshot() {
     // 리로드 직후라 resume/checkpoint 잔재가 없고 라이브는 원본 상태 → ignoreCheckpoint 로 처음부터 1회.
     // 실패하면 표준 오류 카드가 뜨고 스킬은 미적용으로 남는다(수동 '전체 실행'으로 재시도 가능).
     const hasSteps = Array.isArray(state.pipeline) && state.pipeline.some(s => s && s.code && s.enabled !== false);
-    if (hasSteps && typeof runPipelineWithAutoRepair === "function") {
+    if (hasSteps && restoreSig) {
+      // 즉시복원 성공 — 이미 '적용 끝난 파일'로 열렸으니 재실행하지 않는다.
+      // 화면 표시를 실제와 맞춰준다(안 하면 전부 '보류'로 보여 사용자가 또 실행을 누른다).
+      try {
+        const ids = (typeof activePipelineSteps === "function" ? activePipelineSteps(state.pipeline) : [])
+          .map(s => s && s.id).filter(Boolean);
+        if (ids.length && typeof setPipelineRuntimeStatus === "function") {
+          setPipelineRuntimeStatus(ids, "applied", "적용됨");
+        }
+        if (typeof noteLivePipelineApplied === "function") noteLivePipelineApplied(state.pipeline);
+      } catch (err) {
+        console.warn("soft-refresh: 즉시복원 후 상태 표시 실패:", err);
+      }
+      toast("새로고침 완료 — 적용된 상태 그대로 되살렸습니다.", "success");
+    } else if (hasSteps && typeof runPipelineWithAutoRepair === "function") {
       toast("복원한 스킬을 다시 적용하는 중...", "success");
+      // [매핑 적용] 실행기 버튼(pipeline.js)과 동일하게 매핑본으로 돌린다 — 이걸 안 감싸면
+      // 스킬에 적힌 옛 파일명 그대로 실행돼 "워크북이 열려 있지 않습니다"로 실패한다.
+      const __mapRun = (typeof beginMappedPipelineRun === "function") ? beginMappedPipelineRun() : null;
+      // [화면 잠금] 복원 중 사용자가 '전체 실행'을 또 눌러 같은 라이브 세션에 2중 실행되는 것 방지.
+      if (typeof setGeneratorRunLoading === "function") {
+        try { setGeneratorRunLoading(true, "복원한 스킬을 다시 적용하는 중..."); } catch (_) {}
+      }
       try {
         await runPipelineWithAutoRepair({ source: "generator", ignoreCheckpoint: true, backgroundMode: true });
         toast("새로고침 완료 — 파일 복원 후 스킬 적용까지 마쳤습니다.", "success");
       } catch (err) {
         console.warn("soft-refresh: 스킬 자동 적용 실패:", err);
-        toast("파일·스킬은 복원했지만 자동 적용에 실패했습니다. '전체 실행'으로 다시 적용해 주세요.", "error");
+        // [오류 카드] 예전엔 토스트 한 줄로만 알려 '조용히 안 됨'으로 느껴졌다 — 표준 오류 카드로
+        // 올려 원인과 복구 버튼([에러 복구 시도] 등)을 쓸 수 있게 한다.
+        let shown = false;
+        if (typeof reportPipelineError === "function") {
+          try { reportPipelineError(err); shown = true; } catch (_) {}
+        }
+        if (!shown) {
+          toast("파일·스킬은 복원했지만 자동 적용에 실패했습니다. '전체 실행'으로 다시 적용해 주세요.", "error");
+        }
+      } finally {
+        if (typeof setGeneratorRunLoading === "function") {
+          try { setGeneratorRunLoading(false); } catch (_) {}
+        }
+        if (__mapRun && typeof __mapRun.restore === "function") {
+          try { __mapRun.restore(); } catch (_) {}
+        }
       }
     } else if (!failures.length && restored) {
       toast("새로고침 완료 — 파일을 복원했습니다.", "success");

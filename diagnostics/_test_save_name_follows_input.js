@@ -33,7 +33,11 @@ function makeSandbox(inputNames) {
     workbookDisplayName: (f, fb) => (f && f.name) || fb,
   };
   vm.createContext(sb);
+  // refreshSaveBaseNameToCurrentInputs 는 pipelineStableWorkbookKey(pipeline.js)에 의존한다.
+  // 이 하네스에는 그 함수가 없으므로 typeof 가드로 자연히 건너뛴다 — '지난달 이름 갱신'의 실동작
+  // 검증은 test_runs/_test_save_basename_month.js 가 담당(그쪽은 pipeline.js 도 함께 추출).
   ["safeLogicBaseName", "stripLogicTimestampSuffix", "currentInputSignature",
+   "refreshSaveBaseNameToCurrentInputs",
    "currentLogicSaveBaseName", "rememberLogicSaveBaseName", "defaultLogicBaseNameFromInputs"]
     .forEach(f => vm.runInContext(ex(f), sb));
   return sb;

@@ -39,6 +39,18 @@ if errorlevel 1 (
     exit /b 1
 )
 
+rem [version resource] generate assembly attributes (version read from launch_b2b.py only)
+python "tools\gen_version_meta.py"
+if errorlevel 1 (
+    echo [ERROR] Version metadata generation failed.
+    exit /b 1
+)
+
+rem [OriginalFilename] C# takes this field from the compiler output name. So build with a
+rem fixed, version-free name and copy it to the versioned distribution name below
+rem (same convention as chrome.exe / Excel.exe).
+set "BUILD_EXE=dist\AX-Cell.exe"
+
 echo [INFO] Compiling single exe...
 "%CSC%" /nologo /target:winexe /platform:x64 /optimize+ /codepage:65001 ^
   /reference:System.dll ^
@@ -47,10 +59,18 @@ echo [INFO] Compiling single exe...
   /reference:System.IO.Compression.dll ^
   /reference:System.IO.Compression.FileSystem.dll ^
   /resource:%PAYLOAD%,payload.zip ^
-  /out:"%OUT_EXE%" ^
-  "single_exe\B2BSingleExeLauncher.cs"
+  /out:"%BUILD_EXE%" ^
+  "single_exe\B2BSingleExeLauncher.cs" ^
+  "build_meta\AssemblyInfo_single.cs"
 if errorlevel 1 (
     echo [ERROR] Single exe compile failed.
+    exit /b 1
+)
+
+rem Create the versioned distribution file. OriginalFilename stays AX-Cell.exe.
+copy /y "%BUILD_EXE%" "%OUT_EXE%" >nul
+if not exist "%OUT_EXE%" (
+    echo [ERROR] Failed to create distribution exe.
     exit /b 1
 )
 

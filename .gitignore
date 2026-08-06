@@ -1,5 +1,7 @@
 ﻿# PyInstaller build artifacts
 build/
+# 자동 생성된 exe 버전 리소스(tools/gen_version_meta.py 산출물)
+build_meta/
 dist/
 *.spec.bak
 
@@ -33,6 +35,8 @@ vba_pipeline_trace.jsonl
 runtime_load_trace.jsonl
 vba_runner_fail.log
 *_log.txt
+# 빌드 스크립트가 남기는 로그(bn_a/bn_b/bv_a/bv_b 등) — 커밋 대상 아님
+b[nv]_[ab].log
 
 # Regression test generated reports
 tests/vba_regression/reports/**

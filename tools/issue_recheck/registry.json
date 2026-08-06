@@ -2749,6 +2749,118 @@
         ]
       ],
       "fix": "drop-handling.js runnerCanonicalizeRequirementsByEnv(envConfig 필터 앞): 요구 book 을 정본 이름으로 정규화, 같은 (정본,시트) 행 병합, 원문은 req.aliases 보존. buildRunnerMappedPipeline 치환/targetFileId 판정을 canonical+aliases 전체로 확장(코드 속 옛 이름 잔존 방지). envConfig 필터 강등 경로도 aliases 보존. [시트 확장] 시트명 월 변형(원가_4월→정본 원가_5월→업로드 원가_6월)도 동일 원칙: 정규화(sheetAliases 보존, 키 하한 2자)·envConfig 필터 안정키 인정(오귀속 강등 방지)·runnerFindSheet 4단계(안정키 유일, 생성시트 제외)·치환 sheetAliases 포함."
+    },
+    {
+      "id": "SAVE-BASENAME-STALE-MONTH",
+      "title": "실행기에서 4월 스킬을 5월 파일로 전체실행→결과 편집→스킬 저장 시, 저장 창 기본 이름이 지난달 파일명(input_원가_2026_4월)으로 뜸(사용자 실측 2026-08-04). 원인: loadLogic 이 zip 의 saveBaseName 을 현재 입력 서명과 함께 기억해, 이후 서명이 일치해 옛 이름이 계속 채택됨",
+      "checks": [
+        [
+          "node",
+          "test_runs/_test_save_basename_month.js"
+        ],
+        [
+          "node",
+          "diagnostics/_test_save_name_follows_input.js"
+        ]
+      ],
+      "fix": "save-load.js refreshSaveBaseNameToCurrentInputs: 기억된 저장 이름과 '월·날짜만 다른 같은 계열'(pipelineStableWorkbookKey) 입력이 지금 딱 하나면 그 이름으로 갱신. 유일 매칭만·키 4자 미만 금지·계열 불일치(사용자 지정 이름)는 보존. currentLogicSaveBaseName 반환 직전에 적용(typeof 가드)."
+    },
+    {
+      "id": "TOGGLE-RAPID-RACE-GHOST-VALUES",
+      "title": "스텝 ON/OFF 마구잡이 연타 시 OFF인데 Excel 값이 남음(사용자 실측 2026-08-04, D5~D7 스크린샷). 원인: 토글 정착(서버 복원/적용)이 비동기인데 직렬화 없음 — pipelineEditBusyReason 이 토글 정착을 안 봐서 다음 토글이 통과, 서버 작업 경합으로 늦게 끝난 쪽이 이김",
+      "checks": [
+        [
+          "node",
+          "test_runs/_test_toggle_serialization.js"
+        ],
+        [
+          "node",
+          "diagnostics/_test_switch_axis_model.js"
+        ]
+      ],
+      "fix": "pipeline.js handlePipelineStepToggle 를 큐 래퍼로 직렬화(_pipelineToggleChain, 거절 아닌 대기 — 클릭 의도 보존). 정착 중(_pipelineToggleSettling>0) 다른 편집은 pipelineEditBusyReason 로 차단, 토글 구현부(_handlePipelineStepToggleImpl)는 _pipelineCoreBusyReason 만 봐 자기 자신에 안 막힘."
+    },
+    {
+      "id": "RUNNER-GRAY-OVERLAY-AFTER-TOGGLE",
+      "title": "ON/OFF·수정 직후 실행기로 이동하면 회색(빈) Excel 이 실행기 화면 위 오버레이로 뜸. 원인 2중: ① /api/excel/open(live) 가 defer_visible 무시하고 LIVE_RESTORE_SUPPRESSED 를 무조건 해제 ② /api/excel/replace 가 워크북 닫힌 빈 인스턴스를 무가드 app.Visible=True(파킹 전) — 토글/수정의 주 경로가 전부 replace",
+      "checks": [
+        [
+          "node",
+          "diagnostics/_test_switch_axis_model.js"
+        ]
+      ],
+      "fix": "serve_b2b.py: ① open 의 억제 리셋을 not defer_visible 일 때로 한정 ② replace 의 Visible=True 를 frame모드 라이브/was_hidden/억제(공유 인스턴스) 시 스킵(표시는 presenter 위임 — open 경로 4895·5017 과 동형). excel-mirror.js: open 응답 시점에 runnerHeadless 면 방금 연 세션 즉시 숨김(in-flight 경합 사후 정리)."
+    },
+    {
+      "id": "SOFT-REFRESH-RERUN-FAILS",
+      "title": "새로고침(작업 유지) 후 스킬 자동 재적용이 '가끔 안 됨'. 원인 4중: ① state.runnerMappings(실행기 파일 짝)를 스냅샷에 안 담아 리로드로 소실 → 스킬에 적힌 옛 달 파일명 그대로 실행 ② 자동 재적용이 beginMappedPipelineRun 을 안 거쳐 매핑본이 아닌 원본으로 실행 ③ 실패가 토스트 한 줄뿐이라 '조용히 안 됨'(trustedStatic 이라 런타임 자동복구도 스킵) ④ b2bJustReset 표식이 복원 경로에서 소비되지 않아 나중 자동복구가 실행 도중 겹쳐 발화",
+      "checks": [
+        [
+          "node",
+          "test_runs/_test_soft_refresh_runner_mapping.js"
+        ]
+      ],
+      "fix": "soft-refresh.js: collectSoftRefreshSnapshot 에 runnerMappings/runnerMappingChecked/'지금 계산한' runnerMappingSignature 저장. restoreSoftRefreshSnapshot 은 미러 재오픈 뒤 시그니처가 일치할 때만 매핑 복원 + state.runnerMappingSignature 재-앵커(runnerResetMappingIfSourceChanged 가 지우지 않게). 자동 재적용을 beginMappedPipelineRun 으로 감싸고 setGeneratorRunLoading 으로 잠금, 실패는 reportPipelineError 로 승격, b2bJustReset 은 복원 완료 시점에 제거."
+    },
+    {
+      "id": "SOFT-REFRESH-INSTANT-RESTORE",
+      "title": "새로고침 후 스킬을 처음부터 전 스텝 재실행하던 문제. 라이브 Excel 은 작업복사본+SaveChanges=False 라 창을 닫으면 적용 결과가 증발한다. VBA 경로는 아예 사본이 없었고(Python 만 스텝 스냅샷 보유) 그래서 항상 재실행이었다.",
+      "checks": [
+        [
+          "node",
+          "test_runs/_test_live_final_snapshot.js"
+        ],
+        [
+          "python",
+          "test_runs/_test_live_final_snapshot_backend.py"
+        ],
+        [
+          "com",
+          "test_runs/_test_live_final_snapshot_com.py"
+        ]
+      ],
+      "fix": "serve_b2b.py: 엔진 무관 LIVE_FINAL_SNAPSHOTS(키=원본지문+클라 stateSig) 추가. VBA 전체실행은 라이브 반영용으로 이미 쓰고 rmtree 로 버리던 결과 파일을 move 로 옮겨 담고(추가 COM 저장 없음), Python 은 기존 스텝 스냅샷 파일을 link 로 가리킨다. /api/pipeline/live-final-snapshot 조회 + /api/excel/open 의 fromStateSig 로 '원본 대신 사본'을 작업복사본 원료로 사용(워크북 레코드 path 는 원본 유지 → 리셋/되돌리기 무영향). pipeline.js: pipelineLiveStateSig/pipelineFullRunStateSig — 전체실행일 때만 서명 발행(부분·이어실행 제외). soft-refresh.js: 관여 파일 전부에 사본이 있을 때만(all-or-nothing) 사본으로 열고 재실행 생략 + 스텝을 '적용됨'으로 표시, 아니면 기존 전체 재실행 폴백."
+    },
+    {
+      "id": "APP-VERSION-CHECK",
+      "title": "AX-Cell.exe 파일 버전 vs 버전 서버(version.txt) 비교. F9 개발자 설정에서 확인만 수행(안내창/종료는 배포 전 추가 예정).",
+      "checks": [
+        [
+          "python",
+          "../versionTest/test_version_service.py"
+        ]
+      ],
+      "fix": "versionTest/ FastAPI 서버(--version-file 인자, 요청마다 재읽기, 경로는 요청으로 안 받음). serve_b2b.py: _exe_file_version(ctypes/version.dll)로 exe 파일버전 읽기 + _normalize_version_text(0.7.2↔0.7.2.0) + /api/app/version-check(백엔드가 대신 호출 — CORS/사설망 회피, baseUrl 실패 시 upstreamUrl 폴백). config.js: 별도 localStorage 키(AI설정 normalizeSettings가 모르는 키를 버리므로). model-modal.js: F9 DEV 모달에 Base URL/실제 주소 칸 + [버전 확인]."
+    },
+    {
+      "id": "PIVOT-HEADER-ROW-KWARG",
+      "title": "피벗 스킬이 'pivot() got an unexpected keyword argument header_row' 로 적용 실패(사용자 제보 2026-08-06). 같은 뜻을 두 이름으로 쓴 API 가 원인 — find_header 등 13곳은 header_row(단수), pivot/filter_to_sheet 등 8곳은 header_rows(복수). 덤으로 피벗은 헤더 행 자동탐색이 없어 2행 헤더면 '필드를 못 찾음'으로 끝났다(find_header 는 인접 행을 훑어 구제해 줌 → '전엔 됐는데'의 정체).",
+      "checks": [
+        [
+          "com",
+          "test_runs/_test_pivot_header_row_com.py"
+        ],
+        [
+          "com",
+          "test_runs/_test_native_pivot_com.py"
+        ],
+        [
+          "com",
+          "test_runs/_test_pivot_dup_headers_com.py"
+        ]
+      ],
+      "fix": "serve_b2b.py: _install_ctx_kwarg_tolerance() 로 3개 ctx 클래스(PythonComSkillContext/ExcelSkillContext/OpenpyxlSkillContext)의 header_row·header_rows 보유 메서드를 일괄 래핑 — ① 두 이름을 서로 받아준다 ② 정말 없는 옵션은 원시 TypeError 대신 '쓸 수 있는 옵션 목록'을 담은 PythonComSkillError 로 승격(자동복구가 보고 고칠 수 있게). native_pivot: 요청 필드가 지정 행에 없으면 1~10행을 훑어 '전 필드를 담은 행이 유일할 때만' 헤더 행을 자동 보정(find_header 의 인접행 구제와 동형). chat-ui.js 피벗 routingHint 에 header_row 사용법 + '없는 옵션 지어내지 말 것' 명시."
+    },
+    {
+      "id": "ERROR-EXPLAIN-SMARTER",
+      "title": "오류 카드의 '원인 설명'이 AI 도움보다 훨씬 멍청했다(사용자 지적 2026-08-06). 설명기가 LLM 에 넘기던 재료가 3줄뿐(요청/단계설명/오류문구) — 실패한 코드도 시트 구조도 안 봤고, 시스템 프롬프트가 '함수명·코드 절대 금지'라 구체적으로 말하는 것 자체가 막혀 있었다. 덤으로 AI 도움 프롬프트엔 말투 지침이 아예 없어 개발자 말투로 답했다.",
+      "checks": [
+        [
+          "node",
+          "test_runs/_test_error_explain_context.js"
+        ]
+      ],
+      "fix": "pipeline.js explainPipelineErrorForUser: 실패 코드·언어·단계번호·'스킬 목록에 남았는지'·대상 시트 구조 다이제스트를 LLM 에 함께 전달(AI 도움이 step.error/sheet.headers 로 직접 조회하던 근거를 1회 호출로 미리 실어줌), maxTokens 500→700. 시스템 프롬프트를 '이름은 그대로 말해도 됨(단 스택트레이스·코드줄 금지)'으로 완화 + '쓸 수 있는 옵션 목록 활용'·'근거 없는 단정 금지'·'다음 행동 1가지' 추가. file-schema.js: 공용 PLAIN_LANGUAGE_RULE(사업팀·청소년 눈높이, 개발용어 금지목록, 어려운 말 즉시 풀이) 신설 — assist-core.js(AI 도움)와 pipeline.js(설명기) 양쪽이 물게 함. 코드 생성 프롬프트에는 넣지 않음(상충)."
     }
   ]
 }

@@ -31,7 +31,7 @@ a = Analysis(
         # AI 도움 네이티브 팝업 페이지 — 프로즌 서빙 루트(_MEIPASS)에 없으면 /assist.html 이 404
         # (0.6.1.1(구 0.6.1.a) 빌드에서 실측 발견·수정한 것과 동일한 포장 누락)
         ('assist.html', '.'),
-        ('USER_GUIDE.html', '.'),
+        # [사용 가이드 제거] 메뉴에서 뺐으므로 exe 에도 넣지 않는다(파일은 저장소에 남겨 둠).
         ('serve_b2b.py', '.'),
         ('record_service.py', '.'),
         *collect('styles'),
@@ -75,6 +75,10 @@ exe = EXE(
     a.datas,
     [],
     name='B2B_Server',
+    # [파일 속성] 버전 리소스 — tools/gen_version_meta.py 가 빌드 직전에 생성한다.
+    # 없으면(생성기 미실행) 속성이 비어 있을 뿐 빌드는 그대로 진행된다.
+    version=(str(ROOT / 'build_meta' / 'version_server.txt')
+             if (ROOT / 'build_meta' / 'version_server.txt').exists() else None),
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,

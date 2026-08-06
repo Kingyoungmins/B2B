@@ -53,6 +53,18 @@ if (!(Test-Path $csc)) {
 $outExe = Join-Path $BinDir "B2B_NativeHost.exe"
 $src = Join-Path $ScriptDir "NativeHost.cs"
 
+# [version resource] generate assembly attributes (version read from launch_b2b.py only).
+# If generation fails the build continues; only the file properties stay empty.
+$repoRoot = Split-Path $ScriptDir -Parent
+$asmInfo = Join-Path $repoRoot "build_meta\AssemblyInfo_host.cs"
+try {
+  & python (Join-Path $repoRoot "tools\gen_version_meta.py") | Out-Host
+} catch {
+  Write-Host "[warn] version metadata generation skipped: $_"
+}
+$asmArg = @()
+if (Test-Path $asmInfo) { $asmArg = @($asmInfo) } else { Write-Host "[warn] $asmInfo not found - version info will be empty" }
+
 Write-Host "Compiling native host..."
 & $csc /nologo /target:winexe /platform:x64 /optimize+ /codepage:65001 `
   /reference:System.dll `
@@ -62,7 +74,7 @@ Write-Host "Compiling native host..."
   /reference:"$coreDll" `
   /reference:"$winFormsDll" `
   /out:"$outExe" `
-  "$src"
+  "$src" @asmArg
 if ($LASTEXITCODE -ne 0) {
   throw "Native host compile failed with exit code $LASTEXITCODE"
 }

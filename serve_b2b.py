@@ -5,6 +5,8 @@ import atexit
 import csv
 import ctypes
 import datetime
+import functools
+import inspect
 import gc
 import hashlib
 import io
@@ -68,6 +70,13 @@ RESULTS = {}
 PIPELINE_PROGRESS = {}  # excelId -> {current, total, ts} : 전체실행 진행률(클라 폴링용, 락 불필요)
 DIFFS = {}
 PIPELINE_STEP_SNAPSHOTS = {}
+# [새로고침 즉시복원 2026-08-04] '스킬을 전부 적용한 뒤의 라이브 상태' 파일 사본.
+#   PIPELINE_STEP_SNAPSHOTS 와 다른 점:
+#     - 저것은 Python 격리 파이프라인의 '스텝 prefix 이어달리기' 캐시(엔진 내부용, 입력/출력 역할 구분)
+#     - 이것은 엔진 무관(Python/VBA 공통) '파일 1개의 최종 상태' — 새로고침 후 재실행 대신 이 파일로 연다
+#   키 = sha256(원본파일 지문 + 클라가 준 파이프라인 상태 서명). 값 = {"path", ...}
+#   비용: 두 엔진 모두 '이미 디스크에 쓰고 있던 파일'을 지우지 않고 옮겨 담을 뿐이라 추가 COM 저장이 없다.
+LIVE_FINAL_SNAPSHOTS = {}
 PIPELINE_JOBS = {}
 EXCEL_SESSIONS = {}
 EXCEL_LOCK = threading.RLock()
@@ -163,6 +172,93 @@ EXCEL_MIRROR_PROTECT_PASSWORD = "b2b_mirror_readonly"
 
 def app_base_dir():
     return Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
+
+
+# ===== 버전 확인 =====================================================================
+# AX-Cell.exe 가 가진 '파일 버전'(윈도우 파일 속성, 예 0.7.2.0)과 버전 서버(versionTest)의
+# version.txt 값을 비교한다. 지금은 확인만 한다 — 다르면 뜨는 안내창은 최종 배포 전에 붙인다.
+
+def _normalize_version_text(text):
+    """'0.7.2' / 'v0.7.2' / '0.7.2.0' 을 모두 '0.7.2.0' 으로 맞춘다.
+    문자열 그대로 비교하면 '0.7.2' 와 '0.7.2.0' 이 다르다고 나오므로 양쪽 다 여기를 거친다.
+    (버전 서버의 normalize_version 과 같은 규칙 — 한쪽만 바꾸면 안 된다)"""
+    s = str(text or "").strip().lstrip("vV").strip()
+    if not s:
+        return ""
+    parts = [p for p in s.split(".") if p != ""]
+    if not parts or not all(p.isdigit() for p in parts):
+        return ""
+    parts = (parts + ["0", "0", "0", "0"])[:4]
+    try:
+        return ".".join(str(int(p)) for p in parts)
+    except Exception:
+        return ""
+
+
+def _exe_file_version(exe_path):
+    """윈도우 exe 의 파일 버전 리소스를 읽는다(파일 속성 → 자세히 → 파일 버전).
+    pywin32 없이 ctypes 만으로 처리 — 백엔드에 새 의존성을 들이지 않기 위해서다."""
+    try:
+        p = Path(exe_path)
+        if not p.exists():
+            return ""
+        ver_dll = ctypes.WinDLL("version.dll")
+        size = ver_dll.GetFileVersionInfoSizeW(ctypes.c_wchar_p(str(p)), None)
+        if not size:
+            return ""
+        buf = ctypes.create_string_buffer(size)
+        if not ver_dll.GetFileVersionInfoW(ctypes.c_wchar_p(str(p)), 0, size, buf):
+            return ""
+        block = ctypes.c_void_p()
+        length = ctypes.c_uint()
+        if not ver_dll.VerQueryValueW(buf, ctypes.c_wchar_p("\\"),
+                                      ctypes.byref(block), ctypes.byref(length)):
+            return ""
+        # VS_FIXEDFILEINFO: dwFileVersionMS/LS 에 4자리가 16비트씩 들어있다.
+        ffi = ctypes.cast(block, ctypes.POINTER(ctypes.c_uint * 4)).contents
+        ms, ls = ffi[2], ffi[3]
+        return f"{ms >> 16}.{ms & 0xFFFF}.{ls >> 16}.{ls & 0xFFFF}"
+    except Exception:
+        return ""
+
+
+def _current_app_version():
+    """지금 돌고 있는 AX-Cell 의 버전. 반환 {version, normalized, source}.
+      · 배포(프로즌): 실제 exe 의 파일 버전 리소스를 읽는다 — 사용자가 실제로 들고 있는 값
+      · 개발(소스 실행): exe 가 없으니 launch_b2b.py 의 CURRENT_VERSION 을 쓴다
+    두 경로가 다른 값을 낼 수 있으므로 source 를 같이 돌려줘 화면에서 구분할 수 있게 한다."""
+    # 1) 프로즌이면 실행 중인 exe → 같은 폴더의 AX-Cell.exe 순으로 시도
+    candidates = []
+    try:
+        if getattr(sys, "frozen", False):
+            exe = Path(sys.executable).resolve()
+            candidates.append(exe)
+            candidates.append(exe.parent / "AX-Cell.exe")
+    except Exception:
+        pass
+    try:
+        candidates.append(app_base_dir() / "AX-Cell.exe")
+    except Exception:
+        pass
+    seen = set()
+    for cand in candidates:
+        key = str(cand).lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        raw = _exe_file_version(cand)
+        if raw:
+            return {"version": raw, "normalized": _normalize_version_text(raw), "source": f"exe:{cand.name}"}
+    # 2) 소스 실행 — launch_b2b.py 의 CURRENT_VERSION(단일 진실)
+    try:
+        src = (app_base_dir() / "launch_b2b.py").read_text("utf-8", errors="replace")
+        m = re.search(r'^CURRENT_VERSION\s*=\s*["\']([0-9][0-9.]*)["\']', src, re.M)
+        if m:
+            return {"version": m.group(1), "normalized": _normalize_version_text(m.group(1)),
+                    "source": "source:launch_b2b.py"}
+    except Exception:
+        pass
+    return {"version": "", "normalized": "", "source": ""}
 
 
 def writable_app_dir():
@@ -1179,6 +1275,11 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
         if self.path.startswith("/api/diff/"):
             self.handle_cached_diff()
             return
+        if self.path == "/api/app/version":
+            # [버전 확인] 지금 AX-Cell 의 버전(exe 파일 버전). 최신 버전은 클라가 기존 /v1 프록시로
+            # 버전 서버에 물어본다 — 여기서 외부로 나가지 않는다.
+            self.send_json({"ok": True, **_current_app_version()})
+            return
         if self.path.startswith("/v1/"):
             self.proxy()
             return
@@ -1314,6 +1415,9 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
             return
         if self.path == "/api/excel/run-vba-pipeline":
             self.handle_excel_run_vba_pipeline()
+            return
+        if self.path == "/api/pipeline/live-final-snapshot":
+            self.handle_pipeline_live_final_snapshot()
             return
         if self.path == "/api/excel/run-full-pipeline":
             self.handle_excel_run_full_pipeline()
@@ -1812,6 +1916,8 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
                 native_host_hwnd=payload.get("nativeHostHwnd"),
                 native_overlay=bool(payload.get("nativeOverlay")),
                 defer_visible=bool(payload.get("deferVisible")),
+                # [새로고침 즉시복원] 있으면 원본 대신 '스킬 적용 끝난 사본'으로 연다(없으면 원본).
+                from_state_sig=payload.get("fromStateSig"),
             )))
         except Exception as err:
             self.send_json({"ok": False, "error": str(err)}, status=500)
@@ -1857,6 +1963,8 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
                 native_host_hwnd=payload.get("nativeHostHwnd"),
                 native_overlay=bool(payload.get("nativeOverlay")),
                 defer_visible=bool(payload.get("deferVisible")),
+                # [새로고침 즉시복원] 있으면 원본 대신 '스킬 적용 끝난 사본'으로 연다(없으면 원본).
+                from_state_sig=payload.get("fromStateSig"),
             )))
         except Exception as err:
             self.send_json({"ok": False, "error": str(err)}, status=500)
@@ -1948,6 +2056,27 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
         except Exception as err:
             self.send_json({"ok": False, "error": str(err)}, status=500)
 
+    def handle_pipeline_live_final_snapshot(self):
+        """[새로고침 즉시복원] 요청한 파일들에 '스킬 전부 적용된 최종 상태' 사본이 있는지 조회.
+        요청 {workbookIds:[...], stateSig}. 응답 {ok, ready:bool, have:[workbookId...], missing:[...]}
+        ready 는 '전부 있음' — 일부만 있으면 반쪽 복원이 되므로 호출부가 전체 재실행으로 폴백한다."""
+        payload = self.read_json_body()
+        state_sig = payload.get("stateSig")
+        ids = [str(i) for i in (payload.get("workbookIds") or []) if i]
+        have, missing = [], []
+        for wid in ids:
+            rec = WORKBOOKS.get(wid)
+            if rec and _find_live_final_snapshot(rec, state_sig):
+                have.append(wid)
+            else:
+                missing.append(wid)
+        self.send_json({
+            "ok": True,
+            "ready": bool(state_sig) and bool(ids) and not missing,
+            "have": have,
+            "missing": missing,
+        })
+
     def handle_excel_run_vba_pipeline(self):
         payload = self.read_json_body()
         reset = payload.get("reset")
@@ -2014,6 +2143,8 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
                 view_sheet=payload.get("viewSheet"),
                 entry=payload.get("entry"),
                 output_mode=(payload.get("outputMode") or "sync"),
+                # 클라가 '원본부터 전체 적용'일 때만 보낸다(부분/이어실행이면 없음 → 사본을 남기지 않는다).
+                state_sig=payload.get("stateSig"),
             )
             _vba_trace("http.run_full_pipeline.response", traceId=trace_id, ok=True, applied=result.get("applied"))
             self.send_json(result)
@@ -3378,7 +3509,10 @@ def _ensure_excel_workbook_view(app, wb=None, make_visible=True, activate=True, 
 def _capture_browser_hwnd(title_hint=None):
     if win32gui is None:
         return None
-    title_hint = normalize_text(title_hint or "B2B 빌링 Agent")
+    # [이름 변경] 창 제목이 'B2B 빌링 Agent' → 'AX-Cell' 로 바뀌었다(NativeHost.Text).
+    # 이 함수는 그 제목으로 우리 창을 찾으므로 기본값도 함께 바꿔야 한다 — 안 바꾸면 Excel 미러가
+    # 붙을 창을 못 찾는다. 구 이름 창(옛 배포본)도 계속 인정한다.
+    title_hint = normalize_text(title_hint or "AX-Cell")
 
     def usable(hwnd):
         try:
@@ -3390,7 +3524,11 @@ def _capture_browser_hwnd(title_hint=None):
             normalized = normalize_text(title)
             if "excel" in normalized:
                 return False
-            return title_hint in normalized or "b2b" in normalized and "agent" in normalized
+            if title_hint and title_hint in normalized:
+                return True
+            if "axcell" in normalized.replace("-", ""):      # 새 이름(표기 변형 포함)
+                return True
+            return "b2b" in normalized and "agent" in normalized   # 구 이름 하위호환
         except Exception:
             return False
 
@@ -3621,6 +3759,9 @@ def _position_excel_window(
                     left, top = win32gui.ScreenToClient(parent_hwnd, (left, top))
             except Exception:
                 pass
+        # [최대화 배치 무시] SetWindowPos 는 최대화된 창의 좌표/크기를 무시한다 — 미러 좌표로
+        # 배치하기 전에 비활성 복원해 둔다(안 하면 프레임이 화면 전체를 덮은 채 남는다).
+        _unmaximize_hwnd_no_activate(hwnd)
         # NOACTIVATE 를 항상 적용: 재배치/표시가 배경 미러 창을 활성화해 위로 튀어나오며
         # 회색 플래시를 만들고 활성 창의 포커스를 빼앗는 문제 방지(이 함수는 미러 창 전용).
         flags = win32con.SWP_NOOWNERZORDER | win32con.SWP_NOACTIVATE
@@ -3808,6 +3949,31 @@ def _show_window_na(hwnd):
         pass
 
 
+def _unmaximize_hwnd_no_activate(hwnd):
+    """최대화된 창을 '활성화 없이' 보통 크기로 되돌린다.
+
+    [핵심] Windows 의 SetWindowPos 는 **최대화(zoomed) 상태 창의 위치/크기 변경을 무시**한다.
+    그래서 새로 열린 Excel 프레임이 최대화 상태면 화면 밖 파킹도, 미러 좌표 배치도 조용히
+    실패해 프레임이 화면을 덮은 채 남았다(단계 OFF 되돌리기 직후 '엑셀이 최대화되며 튀어나옴'
+    → 최소화/복원 시 회색 오버레이, 사용자 실측 2026-08-04).
+    ShowWindow(SW_RESTORE)는 활성화를 동반해 호스트 포커스를 뺏으므로, SetWindowPlacement 에
+    SW_SHOWNOACTIVATE 를 넣어 비활성 복원한다. 미러는 어차피 지정 좌표/크기로 배치하므로
+    '보통 크기로 되돌리기'가 정상 경로다.
+    """
+    if win32gui is None:
+        return
+    try:
+        hwnd = int(hwnd)
+        if not hwnd or not win32gui.IsWindow(hwnd):
+            return
+        if not win32gui.IsZoomed(hwnd):
+            return
+        flags, _show_cmd, minpos, maxpos, normalpos = win32gui.GetWindowPlacement(hwnd)
+        win32gui.SetWindowPlacement(hwnd, (flags, 4, minpos, maxpos, normalpos))  # 4 = SW_SHOWNOACTIVATE
+    except Exception:
+        pass
+
+
 def _move_hwnd_offscreen(hwnd):
     """프레임을 숨기지 않고 화면 밖(-32000)으로만 이동(WS_VISIBLE 유지).
     SW_HIDE 와 달리 '활성 창 소멸'이 일어나지 않아 OS 가 z-order 의 임의 다음 창
@@ -3818,6 +3984,7 @@ def _move_hwnd_offscreen(hwnd):
         hwnd = int(hwnd)
         if not hwnd or not win32gui.IsWindow(hwnd):
             return
+        _unmaximize_hwnd_no_activate(hwnd)   # 최대화면 SetWindowPos 가 위치를 무시한다
         flags = (
             getattr(win32con, "SWP_NOACTIVATE", 0x0010) |
             getattr(win32con, "SWP_NOOWNERZORDER", 0x0200) |
@@ -3826,6 +3993,45 @@ def _move_hwnd_offscreen(hwnd):
         win32gui.SetWindowPos(hwnd, getattr(win32con, "HWND_BOTTOM", 1), -32000, -32000, 0, 0, flags)
     except Exception:
         pass
+
+
+def _visible_excel_top_hwnds_for_pids(pids):
+    """주어진 pid 들의 '보이는' 최상위 Excel 창(XLMAIN) 목록.
+
+    SDI 모드에서 워크북 프레임과 루트 창은 둘 다 XLMAIN 이다 — 호출부가 이미 파킹한 프레임
+    hwnd 를 제외하면 '워크북 없는 루트 창'만 남는다(회색 빈 Excel 의 정체)."""
+    out = []
+    if win32gui is None or win32process is None:
+        return out
+    targets = set()
+    for p in (pids or []):
+        try:
+            p = int(p or 0)
+            if p:
+                targets.add(p)
+        except Exception:
+            pass
+    if not targets:
+        return out
+
+    def visit(hwnd, _):
+        try:
+            if not win32gui.IsWindowVisible(hwnd):
+                return True
+            _tid, window_pid = win32process.GetWindowThreadProcessId(hwnd)
+            if int(window_pid or 0) not in targets:
+                return True
+            if "XLMAIN" in (win32gui.GetClassName(hwnd) or "").upper():
+                out.append(int(hwnd))
+        except Exception:
+            pass
+        return True
+
+    try:
+        win32gui.EnumWindows(visit, None)
+    except Exception:
+        pass
+    return out
 
 
 def _handoff_foreground_to_host(host_hwnd, hwnds):
@@ -4847,6 +5053,7 @@ def _open_excel_session_impl(
     native_overlay=False,
     live_editable=False,
     defer_visible=False,
+    from_state_sig=None,
 ):
     if not excel_available():
         raise RuntimeError("Microsoft Excel COM automation is not available. Excel and pywin32 are required.")
@@ -4857,8 +5064,12 @@ def _open_excel_session_impl(
     working_copy_path = None
     if live_editable:
         # [2A 안전장치 b] 새 라이브 세션을 열면 미러는 다시 떠야 한다 — 억제 플래그 리셋.
-        global LIVE_RESTORE_SUPPRESSED
-        LIVE_RESTORE_SUPPRESSED = False
+        # [실행기 오버레이 수정 2026-08-04] 단, defer_visible(실행기 헤드리스가 '숨겨서' 여는
+        # 오픈)은 리셋하지 않는다 — 토글/수정의 잔여 open 이 실행기 이동 후 도착하면서 억제를
+        # 무장해제해, 이후 서버 표시 경로가 실행기 화면 위로 회색 Excel 을 띄웠다(실측).
+        if not defer_visible:
+            global LIVE_RESTORE_SUPPRESSED
+            LIVE_RESTORE_SUPPRESSED = False
         # 리모콘 모델: 원본은 절대 건드리지 않는다 — 항상 작업용 복사본을 만들어
         # 그 위에서 라이브 실행/스킬(VBA) 적용을 한다. 다운로드는 이 복사본을 저장.
         # 워크북 이름이 원본과 동일해야 VBA 의 Workbooks("원본명")/ActiveWorkbook 와 @파일 참조가 일치하고
@@ -4868,7 +5079,16 @@ def _open_excel_session_impl(
         live_dir = BACKEND_DIR / f"live_{uuid.uuid4().hex}"
         live_dir.mkdir(parents=True, exist_ok=True)
         working_copy_path = live_dir / clean_name
-        shutil.copy2(source_path, working_copy_path)
+        # [새로고침 즉시복원 2026-08-04] 복원 요청(from_state_sig)이면 '원본' 대신 '스킬 전부 적용된
+        # 최종 상태 사본'을 작업복사본의 원료로 쓴다. 워크북 레코드의 path(원본)는 손대지 않으므로
+        # 리셋/되돌리기는 그대로 진짜 원본을 찾는다 — 오염 없음. 사본이 없으면 조용히 원본으로 간다.
+        copy_src = source_path
+        if from_state_sig and workbook_id:
+            _snap = _find_live_final_snapshot(WORKBOOKS.get(workbook_id), from_state_sig)
+            if _snap:
+                copy_src = Path(_snap["path"])
+                _vba_trace("excel.open.from_live_final_snapshot", workbookId=workbook_id, path=str(copy_src))
+        shutil.copy2(copy_src, working_copy_path)
         path = working_copy_path
         # VBA 주입(스킬 적용)이 가능하도록, 이 라이브 인스턴스를 띄우기 전에 AccessVBOM 을 켠다.
         _ensure_vbom_access()
@@ -5522,6 +5742,12 @@ def _replace_excel_session_workbook_impl(excel_id, path, name=None, result_id=No
                 shutil.rmtree(old_replace_dir, ignore_errors=True)
             except Exception:
                 pass
+        # [되돌림 2026-08-04] 여기서 app.Visible=True 를 '조건부'로 바꿨더니(frame 모드 라이브는
+        # 표시를 presenter 에 위임) 단계 OFF 직후 Excel 이 최대화된 채 튀어나오는 회귀가 났다
+        # (사용자 실측). 새 프레임이 만들어지는 시점에 인스턴스가 보이는 상태여야 프레임 hwnd 가
+        # 정상 생성되고 뒤이은 파킹/배치가 먹는다 — 원래 동작으로 되돌린다.
+        # 실행기 헤드리스에서 이 창이 새는 문제는 (a) 아래 새 프레임 WindowState 정규화 +
+        # (b) _move_hwnd_offscreen/_position_excel_window 의 최대화 해제 로 막는다.
         if not read_only_mirror:
             app.Visible = True
         else:
@@ -5565,6 +5791,13 @@ def _replace_excel_session_workbook_impl(excel_id, path, name=None, result_id=No
         _rt["openMs"] = round((time.perf_counter() - _rt_open) * 1000, 1)
         if session.get("liveEditable") and LIVE_FRAME_MODE:
             # 새 SDI 프레임이 기본 위치로 번쩍 뜨지 않게 즉시 파킹(끝의 presenter 가 제자리 표시).
+            # [최대화 정규화] open 경로(5039)는 새 프레임에 xlNormal 을 걸어 두는데 replace 에는
+            # 그게 빠져 있었다 — 새 프레임이 (직전 창 상태를 물려받아) 최대화로 뜨면 SetWindowPos 가
+            # 위치를 무시해 파킹이 실패하고 화면을 덮은 채 남는다(OFF 직후 '엑셀 최대화' 실측).
+            try:
+                new_wb.Windows(1).WindowState = -4143  # xlNormal (이 프레임만)
+            except Exception:
+                pass
             _new_frame_hwnd = _workbook_window_hwnd(new_wb)
             if _new_frame_hwnd:
                 _move_hwnd_offscreen(_new_frame_hwnd)
@@ -6827,6 +7060,8 @@ def _hide_all_excel_sessions_impl():
                 host_hwnd = session.get("nativeHostHwnd")
         if frame_hwnds:
             _handoff_foreground_to_host(host_hwnd, frame_hwnds)
+    parked_frame_hwnds = set()   # 아래 '루트 창' 정리에서 제외할, 이미 파킹한 워크북 프레임
+    live_frame_pids = set()      # 라이브 공유 인스턴스 pid (그 프로세스만 추가 정리 대상)
     for session in sessions:
         try:
             app, wb = session_workbook(session)
@@ -6834,8 +7069,18 @@ def _hide_all_excel_sessions_impl():
                 hwnd = _session_frame_hwnd(session, wb)
                 if hwnd:
                     _move_hwnd_offscreen(hwnd)
+                    try:
+                        parked_frame_hwnds.add(int(hwnd))
+                    except Exception:
+                        pass
                 else:
                     _hide_excel_app_window(app)
+                try:
+                    _p = int(session.get("pid") or 0)
+                    if _p:
+                        live_frame_pids.add(_p)
+                except Exception:
+                    pass
             else:
                 _hide_excel_app_window(app)
             session["hidden"] = True
@@ -6843,6 +7088,21 @@ def _hide_all_excel_sessions_impl():
             hidden += 1
         except Exception:
             pass
+    # [회색 빈 Excel — 단계 OFF 후 실행기 이동 실측 2026-08-04]
+    # 위 루프는 '워크북 프레임'만 파킹한다. 그런데 되돌리기(replace)는 워크북을 닫았다 다시 여는
+    # 과정에서 app.Visible=True 를 켜므로(프레임 hwnd 생성에 필요 — 빼면 최대화 회귀), 그 인스턴스의
+    # '워크북 없는 루트 창'이 화면에 남는다. 아래 SPAWNED_EXCEL_PIDS 정리는 session_pids 를 건너뛰어
+    # (라이브 인스턴스가 세션 소유라) 이 창을 못 덮었다 → 실행기 화면 위 회색 Excel.
+    # 안전장치: ① 라이브 프레임 세션의 pid 만 ② 보이는 XLMAIN 창만 ③ 이미 파킹한 프레임은 제외
+    #          ④ 숨김(SW_HIDE)/app.Visible 토글이 아니라 '화면 밖 이동'만 — 활성 창 소멸로 인한
+    #            무관 창 최상단 점프가 없고, 사용자가 직접 연 Excel(우리 pid 아님)은 건드리지 않는다.
+    try:
+        for _hwnd in _visible_excel_top_hwnds_for_pids(live_frame_pids):
+            if _hwnd in parked_frame_hwnds:
+                continue
+            _move_hwnd_offscreen(_hwnd)
+    except Exception:
+        pass
     # [최소화 회색 창] 세션에 속하지 않은 '우리가 띄운' Excel 창(격리 실행 워커, 복원 경로가
     # app.Visible=True 로 띄운 작업사본, Quit 실패 잔존 등)은 위 루프가 못 덮는다 — 호스트가
     # 최소화되면 그 창이 워크북 0개짜리 회색 'Excel' 로 화면에 드러난다(실측: 결과 편집 후 최소화).
@@ -9587,7 +9847,7 @@ def run_vba_pipeline_on_session(excel_id, steps, reset=True, entry=None, view_sh
     return excel_call(_run_vba_pipeline_on_session_impl, excel_id, steps, reset=reset, entry=entry, view_sheet=view_sheet, timeout=PY_UNLIMITED_OUTER_S)
 
 
-def _run_full_pipeline_single_instance_impl(groups, reset_excel_ids=None, view_sheet=None, entry=None, output_mode="sync"):
+def _run_full_pipeline_single_instance_impl(groups, reset_excel_ids=None, view_sheet=None, entry=None, output_mode="sync", state_sig=None):
     """[0.5.15 백그라운드 전체실행] 격리 인스턴스 '1개'에서 관여 파일 전부를 '원본'부터 열고, 전 그룹·스텝을
     순서대로 실행한 뒤, 변경된 파일만 라이브 세션에 '파일당 1회' 반영한다. 그룹마다 새 인스턴스를 spawn 하고
     파일을 통째 동기화하던 오버헤드(전체실행 '멈춤'의 주원인)를 제거한다 — 실행 중 라이브 뷰는 갱신하지 않고
@@ -9909,6 +10169,16 @@ def _run_full_pipeline_single_instance_impl(groups, reset_excel_ids=None, view_s
                     pass
                 _vba_trace("fullrun.file.synced", anchorExcelId=anchor_excel_id, isolatedPid=fpid,
                            excelId=sid, name=ent["name"], resultPath=str(rpath))
+                # [새로고침 즉시복원] 방금 라이브에 반영한 그 파일이 곧 '스킬 전부 적용된 최종 상태'다.
+                # 어차피 finally 의 rmtree(work) 로 버려질 파일이라 옮겨 담을 뿐 — 추가 COM 저장이 없다.
+                # (이 경로가 VBA 전체실행. 예전엔 VBA 만 사본이 없어 새로고침 후 항상 전 스텝 재실행이었다)
+                if state_sig:
+                    try:
+                        _wb_rec = WORKBOOKS.get(s.get("workbookId"))
+                        if _wb_rec:
+                            _save_live_final_snapshot(_wb_rec, state_sig, rpath, move=True)
+                    except Exception as _serr:
+                        _warn_excel_nonfatal("fullrun live final snapshot", _serr)
 
             result["applied"] = ordinal
             return result
@@ -9974,10 +10244,10 @@ def _run_full_pipeline_single_instance_impl(groups, reset_excel_ids=None, view_s
                     pass
 
 
-def run_full_pipeline_single_instance(groups, reset_excel_ids=None, view_sheet=None, entry=None, output_mode="sync"):
+def run_full_pipeline_single_instance(groups, reset_excel_ids=None, view_sheet=None, entry=None, output_mode="sync", state_sig=None):
     return excel_call(_run_full_pipeline_single_instance_impl, groups,
                       reset_excel_ids=reset_excel_ids, view_sheet=view_sheet, entry=entry,
-                      output_mode=output_mode, timeout=PY_UNLIMITED_OUTER_S)
+                      output_mode=output_mode, state_sig=state_sig, timeout=PY_UNLIMITED_OUTER_S)
 
 
 # ===== 복붙 캡처(녹화): 사용자의 Ctrl+C/Ctrl+V 를 역추적해 스킬 스텝으로 저장 =====
@@ -11646,12 +11916,47 @@ class PythonComSkillContext:
         hr = max(1, int(header_rows or 1))
         last_r = max(hr, self.used_last_row(ws.Name))
         last_c = max(1, self.used_last_col(ws.Name))
-        hdr_vals = ws.Range(ws.Cells(hr, 1), ws.Cells(hr, last_c)).Value
-        if isinstance(hdr_vals, (tuple, list)):
-            row0 = hdr_vals[0] if (hdr_vals and isinstance(hdr_vals[0], (tuple, list))) else hdr_vals
-            headers = [("" if v is None else str(v)).strip() for v in row0]
-        else:
-            headers = [("" if hdr_vals is None else str(hdr_vals)).strip()]
+
+        def _headers_at(row_idx):
+            vals = ws.Range(ws.Cells(row_idx, 1), ws.Cells(row_idx, last_c)).Value
+            if isinstance(vals, (tuple, list)):
+                row0 = vals[0] if (vals and isinstance(vals[0], (tuple, list))) else vals
+                return [("" if v is None else str(v)).strip() for v in row0]
+            return [("" if vals is None else str(vals)).strip()]
+
+        headers = _headers_at(hr)
+
+        # [헤더 행 자동 보정 2026-08-06] 1행이 제목/공백이고 실제 헤더가 2행인 표가 흔한데, 예전엔
+        # header_rows 를 정확히 주지 않으면 "피벗 필드 '서비스' 을 찾지 못했습니다"로 끝났다.
+        # ctx.find_header 는 예전부터 인접 행까지 훑어 구제해 주는데(11027) 피벗만 안 그래서
+        # "전엔 헤더를 잡았던 것 같은데 왜 안 되지"가 됐다. 여기서도 같은 구제를 해 준다.
+        #   찾는 이름 전부를 담은 행이 '딱 하나'일 때만 옮긴다 — 모호하면 손대지 않고 기존 오류로 간다.
+        _wanted = []
+        for _spec in ([group_by] if not isinstance(group_by, (list, tuple)) else list(group_by)):
+            if _spec is not None:
+                _wanted.append(str(_spec).strip())
+        for _spec in ([value] if not isinstance(value, (list, tuple)) else list(value or [])):
+            if _spec is not None:
+                _wanted.append(str(_spec).strip())
+        if column is not None:
+            _wanted.append(str(column).strip())
+        _wanted = [w for w in _wanted if w and not re.fullmatch(r"[A-Za-z]{1,3}|\d+", w)]
+        if _wanted and not all(w in headers for w in _wanted):
+            _hits = []
+            for _r in range(1, min(last_r, 10) + 1):
+                if _r == hr:
+                    continue
+                if all(w in _headers_at(_r) for w in _wanted):
+                    _hits.append(_r)
+            if len(_hits) == 1:
+                try:
+                    _vba_trace("python_com.native_pivot.header_row_autofix",
+                               sheet=str(ws.Name), given=hr, used=_hits[0], fields=_wanted)
+                except Exception:
+                    pass
+                hr = _hits[0]
+                last_r = max(hr, last_r)
+                headers = _headers_at(hr)
 
         # [중복 헤더] 엑셀 피벗은 같은 헤더가 2개면 2번째를 '헤더명2'(3번째는 '헤더명3')로 자동 리네임한다
         # (예: 상품명 두 열 → 필드 '상품명', '상품명2'). 필드명 목록을 엑셀과 동일하게 만들어 매칭한다.
@@ -14356,6 +14661,7 @@ def open_excel_session(
     native_overlay=False,
     live_editable=False,
     defer_visible=False,
+    from_state_sig=None,
 ):
     return excel_call(
         _open_excel_session_impl,
@@ -14380,6 +14686,7 @@ def open_excel_session(
         native_overlay=native_overlay,
         live_editable=live_editable,
         defer_visible=defer_visible,
+        from_state_sig=from_state_sig,
         timeout=180,  # 느린 PC/대용량 파일에서 Excel 열기가 길어질 수 있음
     )
 
@@ -16854,6 +17161,77 @@ class OpenpyxlSkillContext:
         return dest
 
 
+# ===== 헬퍼 인자 이름 관용 처리 ==========================================================
+# [실측 2026-08-06] 사용자 제보: 피벗 생성 스킬이 `ctx.pivot(..., header_row=2)` 로 만들어져
+#   "pivot() got an unexpected keyword argument 'header_row'" 로 통째로 실패했다.
+#
+#   진짜 원인은 모델이 아니라 우리 API 다. 같은 뜻(헤더가 몇 번째 행인지)을 두 이름으로 쓴다:
+#     header_row  (단수) : find_header, apply_filter, lookup, dedupe, add_total_row, split_column ...
+#     header_rows (복수) : pivot, native_pivot, filter_to_sheet ...
+#   단수 쪽이 훨씬 많아서, 그 습관대로 pivot 에 쓰면 터졌다. 프롬프트로 "pivot 은 복수"를 외우게
+#   하는 건 임시방편이라(그 힌트는 filter_to_sheet 용으로만 있었다), 아예 **둘 다 받도록** 한다.
+#
+#   덤으로, 정말 없는 옵션을 준 경우에도 원시 TypeError 대신 '쓸 수 있는 옵션 목록'을 알려준다.
+#   자동복구가 그 메시지를 보고 고칠 수 있어야 한 번에 끝난다.
+
+_HEADER_ALIAS_PAIR = ("header_row", "header_rows")
+
+
+def _wrap_ctx_helper_kwargs(fn, primary, other, has_varkw, allowed):
+    @functools.wraps(fn)
+    def wrapper(*args, **kwargs):
+        # ① header_row ↔ header_rows: 어느 쪽으로 불러도 받는다(같은 뜻).
+        if primary and other in kwargs:
+            value = kwargs.pop(other)
+            kwargs.setdefault(primary, value)
+        # ② 없는 옵션은 '무엇을 쓸 수 있는지' 까지 말해 주는 오류로 바꾼다.
+        if not has_varkw:
+            unknown = [k for k in kwargs if k not in allowed]
+            if unknown:
+                raise PythonComSkillError(
+                    "%s() 에 없는 옵션 %s 를 넘겼습니다. 쓸 수 있는 옵션: %s"
+                    % (fn.__name__, ", ".join(sorted(unknown)), ", ".join(sorted(allowed)) or "(없음)")
+                )
+        return fn(*args, **kwargs)
+    wrapper._b2b_kwarg_tolerant = True       # 검증/테스트에서 '내가 씌운 것'만 세기 위한 표식
+    return wrapper
+
+
+def _install_ctx_kwarg_tolerance(*classes):
+    """ctx 클래스의 공개 메서드를 훑어 header_row/header_rows 를 서로 받아 주도록 감싼다.
+    두 이름 중 하나를 가진 메서드만 감싸므로 나머지 동작에는 영향이 없다."""
+    for cls in classes:
+        for name, member in list(vars(cls).items()):
+            if name.startswith("_") and name != "_pivot_value_table":
+                continue
+            if not inspect.isfunction(member):
+                continue
+            try:
+                sig = inspect.signature(member)
+            except (TypeError, ValueError):
+                continue
+            params = sig.parameters
+            has_varkw = any(p.kind == inspect.Parameter.VAR_KEYWORD for p in params.values())
+            primary = None
+            for cand in _HEADER_ALIAS_PAIR:
+                if cand in params:
+                    primary = cand
+                    break
+            if primary is None:
+                continue                     # 헤더 인자가 없는 메서드는 건드리지 않는다
+            other = _HEADER_ALIAS_PAIR[1] if primary == _HEADER_ALIAS_PAIR[0] else _HEADER_ALIAS_PAIR[0]
+            allowed = {
+                p.name for p in params.values()
+                if p.kind in (inspect.Parameter.POSITIONAL_OR_KEYWORD, inspect.Parameter.KEYWORD_ONLY)
+                and p.name != "self"
+            }
+            allowed.add(other)               # 별칭도 '쓸 수 있는 옵션'으로 안내
+            setattr(cls, name, _wrap_ctx_helper_kwargs(member, primary, other, has_varkw, allowed))
+
+
+_install_ctx_kwarg_tolerance(PythonComSkillContext, ExcelSkillContext, OpenpyxlSkillContext)
+
+
 def _run_openpyxl_python_pipeline_impl(payload, job_id=None):
     _pp0 = time.perf_counter(); _pp = {"mode": "openpyxl"}  # F8 패널용
     if openpyxl is None:
@@ -17212,6 +17590,124 @@ def _find_best_pipeline_snapshot(input_items, input_wbs, output_item, output_wb_
 
 def _cleanup_pipeline_step_snapshots():
     _cleanup_pipeline_snapshots_by_limits()
+
+
+# ===== 라이브 최종상태 스냅샷(엔진 무관) — 새로고침 후 재실행 대신 이 파일로 연다 =====
+
+LIVE_FINAL_SNAPSHOT_DIRNAME = "live_final_snapshots"
+
+
+def _live_final_snapshot_key(wb_record, state_sig):
+    """키 = 원본 파일 지문 + 클라가 계산한 파이프라인 상태 서명.
+    원본 지문에 크기·mtime 이 들어가는데, 라이브는 작업복사본을 쓰고 원본을 저장하지 않으므로
+    (Close(SaveChanges=False)) 새로고침 뒤에도 지문이 그대로다 → 같은 키가 재현된다.
+    상태 서명은 백엔드가 해석하지 않는다 — 저장 때와 조회 때 클라가 같은 규칙으로 만들기만 하면 된다."""
+    payload = {
+        "version": 1,
+        "workbook": _workbook_fingerprint(wb_record),
+        "stateSig": str(state_sig or ""),
+    }
+    raw = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return hashlib.sha256(raw).hexdigest()
+
+
+def _live_final_snapshot_stats():
+    root = (BACKEND_DIR / LIVE_FINAL_SNAPSHOT_DIRNAME).resolve()
+    total = 0
+    files = 0
+    missing = 0
+    for snap in list(LIVE_FINAL_SNAPSHOTS.values()):
+        try:
+            path = Path(snap.get("path") or "")
+            if root not in path.resolve().parents:
+                continue
+            if path.exists():
+                total += path.stat().st_size
+                files += 1
+            else:
+                missing += 1
+        except Exception:
+            missing += 1
+    return {"count": len(LIVE_FINAL_SNAPSHOTS), "files": files, "missingFiles": missing, "bytes": total}
+
+
+def _cleanup_live_final_snapshots():
+    """오래된 것부터 정리(개수·용량 한도는 스텝 스냅샷과 공유). 지워졌으면 조회가 실패하고
+    호출부는 '평소대로 전체 재실행'으로 폴백하므로, 정리가 기능을 깨지 않는다."""
+    root = (BACKEND_DIR / LIVE_FINAL_SNAPSHOT_DIRNAME).resolve()
+    ordered = sorted(LIVE_FINAL_SNAPSHOTS.items(), key=lambda item: item[1].get("created", 0))
+    removed = 0
+    while ordered:
+        stats = _live_final_snapshot_stats()
+        if stats["count"] <= MAX_PIPELINE_STEP_SNAPSHOTS and stats["bytes"] <= HOUSEKEEPING_SNAPSHOT_MAX_BYTES:
+            break
+        key, snap = ordered.pop(0)
+        LIVE_FINAL_SNAPSHOTS.pop(key, None)
+        try:
+            path = Path(snap.get("path") or "").resolve()
+            if root in path.parents:
+                path.unlink(missing_ok=True)
+                shutil.rmtree(path.parent, ignore_errors=True)
+        except Exception:
+            pass
+        removed += 1
+    return removed
+
+
+def _save_live_final_snapshot(wb_record, state_sig, src_path, move=False, link=False):
+    """이미 디스크에 있는 결과 파일(src_path)을 최종상태 사본으로 등록한다. 모드 3가지:
+      move=True : 옮긴다 — VBA 전체실행의 임시 결과 파일(어차피 rmtree 로 버려질 것).
+      link=True : 그 자리를 가리키기만 한다 — Python 경로의 스텝 스냅샷(이미 저장돼 있고 수명도 관리됨).
+                  그쪽이 정리로 지워지면 조회가 없음으로 떨어져 평소대로 전체 재실행이 된다(안전).
+      기본      : 복사.
+    실패해도 절대 예외를 올리지 않는다 — 이건 '있으면 빠른' 부가기능이지 실행 성패와 무관하다."""
+    if not wb_record or not state_sig:
+        return None
+    try:
+        src = Path(src_path)
+        if not src.exists():
+            return None
+        key = _live_final_snapshot_key(wb_record, state_sig)
+        if link:
+            dest = src
+        else:
+            dest_dir = BACKEND_DIR / LIVE_FINAL_SNAPSHOT_DIRNAME / key
+            dest_dir.mkdir(parents=True, exist_ok=True)
+            dest = dest_dir / (Path(wb_record.get("name") or src.name).name or src.name)
+            if move:
+                try:
+                    shutil.move(str(src), str(dest))
+                except Exception:
+                    shutil.copy2(str(src), str(dest))
+            else:
+                shutil.copy2(str(src), str(dest))
+        LIVE_FINAL_SNAPSHOTS[key] = {
+            "key": key,
+            "path": str(dest),
+            "workbookId": wb_record.get("id"),
+            "name": wb_record.get("name"),
+            "created": time.time(),
+        }
+        _cleanup_live_final_snapshots()
+        return LIVE_FINAL_SNAPSHOTS[key]
+    except Exception as err:
+        _warn_excel_nonfatal("live final snapshot", err)
+        return None
+
+
+def _find_live_final_snapshot(wb_record, state_sig):
+    if not wb_record or not state_sig:
+        return None
+    snap = LIVE_FINAL_SNAPSHOTS.get(_live_final_snapshot_key(wb_record, state_sig))
+    if not snap:
+        return None
+    try:
+        if not Path(snap["path"]).exists():
+            LIVE_FINAL_SNAPSHOTS.pop(snap.get("key"), None)   # 파일만 사라진 유령 항목 제거
+            return None
+    except Exception:
+        return None
+    return snap
 
 
 def _save_pipeline_step_snapshot(key, step_idx, app, output_wb, input_wb_by_name, input_stable_src=None):
@@ -17728,6 +18224,8 @@ def _run_excel_python_pipeline_impl(payload, job_id=None):
         raise RuntimeError("Python Excel skills require an output workbook.")
 
     input_items = payload.get("inputs", [])
+    # [새로고침 즉시복원] 클라가 '원본부터 전체 적용'일 때만 보낸다(부분/이어실행이면 없음).
+    state_sig = payload.get("stateSig")
     output_wb_record = get_workbook_or_raise(output_item.get("backendWorkbookId"))
     input_wb_records = [get_workbook_or_raise(item.get("backendWorkbookId")) for item in input_items]
     active_steps = [s for s in (payload.get("pipeline") or []) if not (s and s.get("enabled") is False)]
@@ -17980,7 +18478,19 @@ def _run_excel_python_pipeline_impl(payload, job_id=None):
                         output_wb_record,
                         python_steps[:idx],
                     )
-                    _save_pipeline_step_snapshot(snapshot_key, idx, app, output_wb, input_wb_by_name, input_stable_src)
+                    _saved = _save_pipeline_step_snapshot(snapshot_key, idx, app, output_wb, input_wb_by_name, input_stable_src)
+                    # [새로고침 즉시복원] 마지막 스텝까지 끝났으면 그 사본이 곧 '최종 상태'다.
+                    # 방금 저장한 파일을 그대로 가리키기만 한다 — 추가 저장/복사가 없다(VBA 경로와 대칭).
+                    if is_last_step and state_sig and _saved:
+                        _files = _saved.get("files") or {}
+                        for _item, _rec in zip(input_items, input_wb_records):
+                            _nm = _item.get("name") or _rec["name"]
+                            _p = _files.get(f"input:{_nm}")
+                            if _p:
+                                _save_live_final_snapshot(_rec, state_sig, _p, link=True)
+                        _op = _files.get("output:output")
+                        if _op and output_wb_record:
+                            _save_live_final_snapshot(output_wb_record, state_sig, _op, link=True)
                 except Exception as err:
                     _warn_excel_nonfatal("pipeline snapshot", err)
 

@@ -608,6 +608,10 @@ async function runPipelineOnBackend(options = {}) {
     beginExcelMirrorApplyLoading("적용 반영 중...", { hideWindows: shouldUseLiveExcel || skillEngine !== "python" });
   }
   const payload = {
+    // [새로고침 즉시복원] 원본부터 전체 적용일 때만 값이 있다 → 백엔드가 최종 상태 사본을 등록한다
+    // (Python 경로는 이미 저장하는 스텝 스냅샷 파일을 가리키기만 하므로 추가 저장이 없다).
+    stateSig: (typeof pipelineFullRunStateSig === "function")
+      ? pipelineFullRunStateSig(pipelineForRun) : "",
     inputs: (state.inputsOriginal || []).map(f => ({
       name: f.name,
       backendWorkbookId: f.backendWorkbookId,

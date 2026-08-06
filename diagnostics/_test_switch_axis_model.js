@@ -38,15 +38,20 @@ function extractFn(str, name) {
   throw new Error("unbalanced: " + name);
 }
 
-const REAL = [
+// [연타 직렬화 대응] handlePipelineStepToggle 은 이제 큐 래퍼(+모듈 변수)이고 실제 시나리오
+// 로직은 _handlePipelineStepToggleImpl 에 있다 — 둘 다 추출하고 큐 변수는 여기서 선언해 준다.
+// (큐 자체의 계약은 test_runs/_test_toggle_serialization.js 가 별도로 잠근다)
+const REAL = "let _pipelineToggleChain = Promise.resolve();\nlet _pipelineToggleSettling = 0;\n" + [
   "getPipelineResumeFromIndex", "setPipelineResumeFromIndex", "clearPipelineResumeFromIndex",
-  "markPipelinePendingFromIndex", "handlePipelineStepToggle", "insertLogic", "applyLogic",
+  "markPipelinePendingFromIndex", "handlePipelineStepToggle", "_handlePipelineStepToggleImpl",
+  "insertLogic", "applyLogic",
   "replaceLogicAt", "applyMappedSingleStep", "_syncPipelineToggleStatus",
 ].map(n => extractFn(src, n)).join("\n\n");
 
 const DEPS = [
   "state", "window", "console", "isStepEnabled", "renderPipeline", "refreshRunButton",
   "scheduleLogicAutoBackup", "pushHistory", "toast", "reportPipelineError", "pipelineEditBusyReason",
+  "_pipelineCoreBusyReason",   // [연타 직렬화] 토글 구현부는 이제 이걸 본다(자기 정착으로 안 막히게)
   "canFastEditLastPipelineStep", "restoreLastStepPreApplySnapshot", "applyLastEnabledStepFast",
   "beginMappedPipelineRun",
   "restorePipelineToCheckpointAndHold", "reconcilePipelineSimulationAfterEdit",
@@ -84,6 +89,7 @@ function makeEnv(opts = {}) {
     toast: (msg, kind) => CALLS.push({ kind: "toast", msg: String(msg).slice(0, 40), level: kind }),
     reportPipelineError: (err) => CALLS.push({ kind: "reportError", msg: String(err && err.message || err).slice(0, 60) }),
     pipelineEditBusyReason: () => opts.busy || "",
+    _pipelineCoreBusyReason: () => opts.busy || "",   // 토글 구현부용 — 동일 스텁
     canFastEditLastPipelineStep: (stp, idx, before) => idx === (before.length - 1) && !opts.noFastLast,
     restoreLastStepPreApplySnapshot: async (stp) => { CALLS.push({ kind: "restoreLast", id: stp.id }); return opts.restoreLastFails ? false : true; },
     applyLastEnabledStepFast: async (stp) => {
