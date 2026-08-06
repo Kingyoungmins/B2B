@@ -3754,7 +3754,12 @@ async function captureStepPreApplySnapshot(step, excelId) {
   try {
     // Do not pass name here. /api/excel/save with name uses SaveAs and mutates
     // the live session path/name; without name it uses SaveCopyAs.
-    const snap = await postExcelMirror("/api/excel/save", { excelId });
+    //
+    // [스텝 적용 속도 0.7.2.1 / 2026-08-06] internal:true — 이건 '되돌리기용 백업'이다.
+    //   사용자가 열어 볼 파일이 아니라 나중에 다시 열기만 하는 파일이라, 서버가 보호 해제/재적용과
+    //   화면 설정 복구를 건너뛴다. VM 실측에서 스텝 적용의 35~45%가 이 백업이었고,
+    //   정작 파일 저장은 17ms 인데 그 앞뒤 뒤치다꺼리가 307ms 였다.
+    const snap = await postExcelMirror("/api/excel/save", { excelId, internal: true });
     if (snap && snap.downloadId) {
       step._preApplySnapshot = {
         resultId: snap.downloadId,

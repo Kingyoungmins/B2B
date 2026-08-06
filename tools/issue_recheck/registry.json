@@ -2861,6 +2861,50 @@
         ]
       ],
       "fix": "pipeline.js explainPipelineErrorForUser: 실패 코드·언어·단계번호·'스킬 목록에 남았는지'·대상 시트 구조 다이제스트를 LLM 에 함께 전달(AI 도움이 step.error/sheet.headers 로 직접 조회하던 근거를 1회 호출로 미리 실어줌), maxTokens 500→700. 시스템 프롬프트를 '이름은 그대로 말해도 됨(단 스택트레이스·코드줄 금지)'으로 완화 + '쓸 수 있는 옵션 목록 활용'·'근거 없는 단정 금지'·'다음 행동 1가지' 추가. file-schema.js: 공용 PLAIN_LANGUAGE_RULE(사업팀·청소년 눈높이, 개발용어 금지목록, 어려운 말 즉시 풀이) 신설 — assist-core.js(AI 도움)와 pipeline.js(설명기) 양쪽이 물게 함. 코드 생성 프롬프트에는 넣지 않음(상충)."
+    },
+    {
+      "id": "APP-VERSION-LABEL",
+      "title": "상단 'AX-Cell' 옆 버전 표기(사용자 요청 2026-08-06). 값은 하드코딩이 아니라 실행 파일 속성(자세히→파일 버전)에서 읽어온 것이어야 한다.",
+      "checks": [
+        [
+          "node",
+          "test_runs/_test_app_version_label.js"
+        ]
+      ],
+      "fix": "index.html: 제목 h1 안에 빈 <span id=app-version>. panels.css: 'AI: …' 라벨과 같은 초록(#28a745)·11px, :empty 면 숨김. scripts/app-version.js 신설 — /api/app/version 응답으로 채우고 실패 시 비워 둠. menu.js: 페이지 전환이 textContent 로 제목을 덮어써 버전 span 이 지워지던 것을 querySelector+appendChild 로 보존. serve_b2b._current_app_version: 사용자가 실행한 AX-Cell.exe 를 먼저 조회하고, 없으면 실행 중 exe → 소스 CURRENT_VERSION 순 폴백."
+    },
+    {
+      "id": "UPLOAD-LAZY-CACHED-LOAD",
+      "title": "업로드가 같은 파일을 두 번 읽던 문제(0.7.2.1). openpyxl 은 '수식 글자'와 '계산된 값' 중 하나만 줘서 둘 다 필요하면 두 번 여는데, 값용은 수식 셀에만 쓰인다 — 수식 없는 파일에선 통째로 낭비(실측 47MB 업로드 13.5초 중 6.6초).",
+      "checks": [
+        [
+          "python",
+          "test_runs/_test_inspect_lazy_cached_load.py"
+        ]
+      ],
+      "fix": "inspect_workbook: 값용(data_only=True) 로드를 '수식 셀을 처음 만났을 때'로 미룬다(건너뛰기가 아니라 미루기라 결과 동일). 시트별 미리보기 격자를 떠서 행 정렬 유지. 파일 183개 old/new JSON 전수 비교 불일치 0건, 업로드 -45%."
+    },
+    {
+      "id": "STEP-APPLY-INTERNAL-SNAPSHOT",
+      "title": "스텝 적용 시간의 35~45%가 '적용 전 백업'이었다(VM 실측 3.84초/2.56초). 정작 파일 저장은 17ms 이고 앞뒤 뒤치다꺼리(시트 보호 해제·재적용, 화면 설정 복구)가 307ms 로 18배였다.",
+      "checks": [
+        [
+          "com",
+          "test_runs/_test_snapshot_internal_com.py"
+        ]
+      ],
+      "fix": "/api/excel/save 에 internal 플래그 추가 — 되돌리기용 백업은 보호 해제/재적용·화면 복구를 건너뛴다(복원 replace 가 스스로 보호를 다시 걸므로 안전). 배포본 실측 387ms→44ms(-89%). [회귀 동시수정] UserInterfaceOnly 보호는 파일에 저장되지 않아, 보호된 백업을 verify-step 이 다시 열면 COM 쓰기가 막혀 AI 도움 검증이 실패한다 → _verify_step_isolated_impl 이 열자마자 보호 해제. 측정 구간도 핸들러 전 구간으로 확대(unprotectMs/restoreMs/totalMs)."
+    },
+    {
+      "id": "SINGLE-EXE-STALE-ENTRY",
+      "title": "단일 exe 래퍼가 안쪽 본체 이름을 하드코딩해, 버전을 올려 빌드하면 'Packaged app entry was not found.' 로 실행 자체가 죽었다. 빌드는 성공으로 끝나 배포 직전까지 모른다(0.7.2.1 실측).",
+      "checks": [
+        [
+          "python",
+          "tools/verify_single_exe.py|dist/B2B_ver0.7.2.1_single.exe"
+        ]
+      ],
+      "fix": "B2BSingleExeLauncher.cs: 이름 하드코딩 제거, 풀어놓은 폴더에서 B2B_ver*.exe 패턴으로 찾는다. 없으면 패키지 안 exe 목록까지 담아 오류. build_single_exe.bat 마지막에 tools/verify_single_exe.py 자동 검사(래퍼 하드코딩 vs 실제 패키지 엔트리 대조) — 안 맞으면 빌드 실패."
     }
   ]
 }

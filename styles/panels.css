@@ -55,6 +55,18 @@
     margin-top: 2px;
     font-weight: 500;
   }
+  /* [사용자 요청 2026-08-06] 제목 옆 버전 표기. 아래 'AI: …' 라벨과 같은 초록(#28a745)·같은 결.
+     값은 실행 파일 속성의 '파일 버전'(예 0.7.2.0) — scripts/app-version.js 가 채운다.
+     제목 줄이 좁아지면 제목보다 이쪽이 먼저 줄어들도록 두고, 줄바꿈은 막는다. */
+  .brand h1 .app-version {
+    font-size: 11px;
+    font-weight: 600;
+    color: #28a745;
+    margin-left: 6px;
+    letter-spacing: 0;
+    white-space: nowrap;
+  }
+  .brand h1 .app-version:empty { display: none; }   /* 못 읽었으면 아무것도 안 보이게 */
   .brand-btn {
     background: transparent;
     border: 1px solid var(--border);

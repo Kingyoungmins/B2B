@@ -227,17 +227,25 @@ def _current_app_version():
       · 배포(프로즌): 실제 exe 의 파일 버전 리소스를 읽는다 — 사용자가 실제로 들고 있는 값
       · 개발(소스 실행): exe 가 없으니 launch_b2b.py 의 CURRENT_VERSION 을 쓴다
     두 경로가 다른 값을 낼 수 있으므로 source 를 같이 돌려줘 화면에서 구분할 수 있게 한다."""
-    # 1) 프로즌이면 실행 중인 exe → 같은 폴더의 AX-Cell.exe 순으로 시도
+    # 1) 사용자가 실제로 실행한 파일 = AX-Cell.exe 를 먼저 본다.
+    #    (백엔드는 B2B_Server.exe 로 도는데, 화면에 띄울 버전은 사용자가 속성 창에서 보는
+    #     AX-Cell.exe 의 '파일 버전'이어야 한다. 지금은 gen_version_meta 가 둘 다 같은 값으로
+    #     찍지만, 한쪽만 다시 빌드되는 상황에서 표기가 엇갈리지 않게 순서를 못박는다.)
     candidates = []
+    exe_dir = None
     try:
         if getattr(sys, "frozen", False):
-            exe = Path(sys.executable).resolve()
-            candidates.append(exe)
-            candidates.append(exe.parent / "AX-Cell.exe")
+            exe_dir = Path(sys.executable).resolve().parent
+            candidates.append(exe_dir / "AX-Cell.exe")
     except Exception:
         pass
     try:
         candidates.append(app_base_dir() / "AX-Cell.exe")
+    except Exception:
+        pass
+    try:
+        if getattr(sys, "frozen", False):
+            candidates.append(Path(sys.executable).resolve())   # 폴백: 지금 돌고 있는 exe
     except Exception:
         pass
     seen = set()
@@ -1604,6 +1612,10 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
         BACKEND_DIR.mkdir(parents=True, exist_ok=True)
         workbook_id = uuid.uuid4().hex
         path = BACKEND_DIR / f"{workbook_id}_{name}"
+        # [업로드 계측 0.7.2.1] 현장(VM/저사양 PC)에서 '업로드가 느리다'는 제보가 오면 어디서
+        # 시간을 쓰는지 로그만 보고 알 수 있어야 한다. 여기 계측이 없어 매번 추측해야 했다.
+        # 저장 위치: %LOCALAPPDATA%\B2B_logs\vba_pipeline_trace.jsonl
+        _t_write0 = time.perf_counter()
         with path.open("wb") as f:
             remaining = length
             while remaining > 0:
@@ -1612,7 +1624,24 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
                     break
                 f.write(chunk)
                 remaining -= len(chunk)
+        _t_write = (time.perf_counter() - _t_write0) * 1000
+        _t_inspect0 = time.perf_counter()
         meta = inspect_workbook(path)
+        _t_inspect = (time.perf_counter() - _t_inspect0) * 1000
+        try:
+            _sheets = (meta or {}).get("sheets") or {}
+            _vba_trace(
+                "upload.done",
+                name=name,
+                sizeMB=round(length / (1024 * 1024), 2),
+                writeMs=round(_t_write),
+                inspectMs=round(_t_inspect),
+                totalMs=round(_t_write + _t_inspect),
+                sheets=len(_sheets),
+                formulaCells=sum(len((s or {}).get("formulas") or {}) for s in _sheets.values()),
+            )
+        except Exception:
+            pass
         WORKBOOKS[workbook_id] = {
             "id": workbook_id,
             "name": name,
@@ -2412,7 +2441,9 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
     def handle_excel_save(self):
         payload = self.read_json_body()
         try:
-            self.send_json(save_excel_session(payload.get("excelId"), payload.get("name")))
+            # internal=True 는 되돌리기용 백업(사용자가 여는 파일이 아님) — 보호/화면 복구를 건너뛴다.
+            self.send_json(save_excel_session(payload.get("excelId"), payload.get("name"),
+                                              internal=bool(payload.get("internal"))))
         except Exception as err:
             self.send_json({"ok": False, "error": str(err)}, status=400)
 
@@ -5563,18 +5594,33 @@ def _activate_excel_session_impl(excel_id, sheet=None, address=None):
         return {"ok": True, "excelId": excel_id, "sheet": ws.Name, "address": selected_address}
 
 
-def _save_excel_session_impl(excel_id, name=None):
+def _save_excel_session_impl(excel_id, name=None, internal=False):
+    """워크북을 파일로 저장한다.
+
+    internal=True 는 '되돌리기용 백업'(스텝 적용 전 스냅샷)이다. 사용자가 열어 볼 파일이 아니라
+    나중에 /api/excel/replace 로 다시 열기만 하는 파일이라, 보호 해제/재적용과 화면 설정 복구를
+    통째로 건너뛴다.
+      · 왜 안전한가: 복원(replace)이 워크북을 새로 열고 스스로 보호를 다시 건다(_replace…:5839).
+        보호는 시트에 걸린 플래그일 뿐이라 파일을 열고 읽는 데 지장이 없다.
+      · 왜 하는가: VM 실측에서 스텝 적용 시간의 35~45%가 이 백업이었고, 정작 파일 저장은
+        17ms 인데 앞뒤 뒤치다꺼리(보호 해제/재적용/화면 설정)가 307ms 였다(파일 저장의 18배).
+        VM 은 Excel 명령 하나하나가 느려 이 격차가 더 크게 벌어진다.
+    """
     with EXCEL_LOCK:
+        _t_all0 = time.perf_counter()
         session = get_excel_session(excel_id)
         app, wb = session_workbook(session)
         read_only_mirror = bool(session.get("readOnlyMirror"))
         live_protected = bool(session.get("liveEditable"))
-        if read_only_mirror or live_protected:
+        _t_unprotect = 0.0
+        if (read_only_mirror or live_protected) and not internal:
             # 저장(다운로드)본은 보호 없는 깨끗한 파일이 되도록 먼저 보호 해제.
+            _t0 = time.perf_counter()
             try:
                 _protect_workbook_for_read_only_mirror(wb, False)
             except Exception:
                 pass
+            _t_unprotect = (time.perf_counter() - _t0) * 1000
         # [멈춤 방지/측정] 적용-前 스냅샷 저장이 라이브(숨김) Excel 에서 분 단위로 블록되던 4분 구간 — 트레이스에
         # 안 남아 안 보였다. 외부링크 '업데이트?' 모달, 저장-전 재계산, '다른이름저장' 알림이 숨김 창에서 사용자
         # 입력을 기다리며 멈출 수 있어, 저장 동안 모달 억제 + 재계산 없이 저장하고 소요 ms 를 남긴다.
@@ -5632,12 +5678,11 @@ def _save_excel_session_impl(excel_id, name=None):
             _save_link_n = len(_ls) if _ls is not None else 0
         except Exception:
             _save_link_n = -1
-        try:
-            _vba_trace("excel.save.snapshot", excelId=excel_id, name=safe_name,
-                       ms=round((time.perf_counter() - _save_t0) * 1000, 1), linkCount=_save_link_n)
-        except Exception:
-            pass
-        if read_only_mirror:
+        _t_core = (time.perf_counter() - _save_t0) * 1000
+        _t_restore0 = time.perf_counter()
+        if internal:
+            pass          # 되돌리기용 백업 — 보호/화면을 건드리지 않았으니 되돌릴 것도 없다
+        elif read_only_mirror:
             try:
                 _protect_workbook_for_read_only_mirror(wb, True)
                 _configure_excel_grid_window(app, wb)
@@ -5651,6 +5696,19 @@ def _save_excel_session_impl(excel_id, name=None):
                 _disable_excel_context_menus(app)
             except Exception:
                 pass
+        _t_restore = (time.perf_counter() - _t_restore0) * 1000
+        # [측정 구간 확대] 예전엔 SaveCopyAs 주변만 재서, 실제 소요의 상당 부분(보호 해제/재적용,
+        # 화면 설정 복구)이 로그에 안 잡혔다 — VM 로그에서 서버 1.2초 vs 클라 3.8초로 벌어진 원인.
+        # 이제 핸들러 전 구간을 쪼개서 남긴다.
+        try:
+            _vba_trace("excel.save.snapshot", excelId=excel_id, name=safe_name,
+                       ms=round(_t_core, 1), linkCount=_save_link_n,
+                       internal=bool(internal),
+                       unprotectMs=round(_t_unprotect, 1),
+                       restoreMs=round(_t_restore, 1),
+                       totalMs=round((time.perf_counter() - _t_all0) * 1000, 1))
+        except Exception:
+            pass
         result_id = uuid.uuid4().hex
         RESULTS[result_id] = {
             "path": str(result_path),
@@ -14028,6 +14086,16 @@ def _verify_step_isolated_impl(result_id, code, sheet_name=None):
             except Exception:
                 pass
             wb = app.Workbooks.Open(str(path), ReadOnly=False)
+            # [보호 해제 0.7.2.1 / 2026-08-06] 검증용 격리 사본은 보호가 걸려 있으면 안 된다.
+            #   라이브는 시트를 UserInterfaceOnly 로 보호해 화면 편집만 막고 COM 쓰기는 허용하는데,
+            #   **그 UserInterfaceOnly 는 파일에 저장되지 않는다**(엑셀 규격). 그래서 보호가 걸린 채
+            #   저장된 사본을 여기서 다시 열면 COM 쓰기까지 막혀
+            #   "변경하려는 셀 또는 차트가 보호된 시트에 있습니다" 로 검증이 통째로 실패한다(실측).
+            #   여긴 버려지는 격리 사본이라 보호를 유지할 이유가 없다 → 열자마자 푼다.
+            try:
+                _protect_workbook_for_read_only_mirror(wb, False)
+            except Exception:
+                pass
             before = _verify_capture_sheet_aoa(wb, sheet_name)
             # 격리 인스턴스라 정적검사는 클라가 이미 통과시킨 코드 — skip_static 로 중복 우회.
             session = {"rev": 0, "excelId": "verify", "companionNames": [], "companionTemps": []}
@@ -14695,8 +14763,8 @@ def activate_excel_session(excel_id, sheet=None, address=None):
     return excel_call(_activate_excel_session_impl, excel_id, sheet=sheet, address=address)
 
 
-def save_excel_session(excel_id, name=None):
-    return excel_call(_save_excel_session_impl, excel_id, name=name)
+def save_excel_session(excel_id, name=None, internal=False):
+    return excel_call(_save_excel_session_impl, excel_id, name=name, internal=internal)
 
 
 def close_excel_session(excel_id):
@@ -18765,7 +18833,14 @@ def inspect_workbook(path):
         return inspect_csv_workbook(path)
     try:
         wb = openpyxl_load_workbook_compatible(path, read_only=True, data_only=False)
-        cached_wb = openpyxl_load_workbook_compatible(path, read_only=True, data_only=True)
+        # [값 로드 미루기 0.7.2.1 / 2026-08-06] 예전엔 여기서 값용(data_only=True)까지 곧바로 열었다.
+        #   openpyxl 은 '수식 글자'와 '계산된 값' 중 하나만 줄 수 있어(열 때 정하는 옵션) 둘 다
+        #   필요하면 같은 파일을 두 번 열어야 한다. 그런데 값용은 아래에서 **수식 셀에만** 쓰인다.
+        #   청구내역처럼 수식이 하나도 없는 파일에서는 그 로드가 통째로 낭비였다
+        #   (실측: 47MB 파일 업로드 13.5초 중 6.6초 = 49%).
+        #   그래서 '건너뛰기'가 아니라 '미루기'로 바꾼다 — 수식 셀을 처음 만나는 순간 연다.
+        #   수식이 있는 파일은 결국 열게 되므로 결과·동작이 예전과 완전히 같다.
+        cached_wb = None
     except Exception as err:
         if excel_available():
             # [실제 시트명 보존] 위장 파일(확장자 .xlsx, 내용 OLE/HTML)은 openpyxl 이 못 읽어 이 분기로 온다.
@@ -18797,22 +18872,40 @@ def inspect_workbook(path):
         return inspect_workbook_fallback(path, err)
     try:
         sheets = {}
+        # 값용 워크북은 '수식 셀을 처음 만났을 때' 딱 한 번 연다. 그 뒤로는 재사용한다.
+        # read_only 시트는 한 번만 훑을 수 있으므로, 시트별 미리보기 격자를 통째로 떠서 들고 있는다
+        # (예전 코드가 next(cached_rows) 로 한 줄씩 맞춰 읽던 것과 같은 범위·같은 순서).
+        cached_grids = {}
+        _cached_load_ms = [0.0]          # 값용 로드에 실제로 쓴 시간(0 이면 안 열었다는 뜻)
+
+        def _cached_grid(sheet_title):
+            nonlocal cached_wb
+            if sheet_title in cached_grids:
+                return cached_grids[sheet_title]
+            if cached_wb is None:
+                _t0 = time.perf_counter()
+                cached_wb = openpyxl_load_workbook_compatible(path, read_only=True, data_only=True)
+                _cached_load_ms[0] = (time.perf_counter() - _t0) * 1000
+            if sheet_title in cached_wb.sheetnames:
+                cws = cached_wb[sheet_title]
+                grid = [list(r) for r in cws.iter_rows(max_row=PREVIEW_ROWS, max_col=PREVIEW_COLS)]
+            else:
+                grid = []          # 값용에 그 시트가 없으면 예전처럼 '빈 줄' 취급
+            cached_grids[sheet_title] = grid
+            return grid
+
         for ws in wb.worksheets:
-            cached_ws = cached_wb[ws.title] if ws.title in cached_wb.sheetnames else None
-            cached_rows = cached_ws.iter_rows(max_row=PREVIEW_ROWS, max_col=PREVIEW_COLS) if cached_ws else None
             rows = []
             formulas = {}
             original_formula_values = {}
             formats = []
             for row_idx, row in enumerate(ws.iter_rows(max_row=PREVIEW_ROWS, max_col=PREVIEW_COLS), start=1):
-                try:
-                    cached_row = next(cached_rows) if cached_rows else []
-                except StopIteration:
-                    cached_row = []
                 values = []
                 format_row = []
                 for cell_idx, cell in enumerate(row):
                     if cell.data_type == "f":
+                        grid = _cached_grid(ws.title)                      # ← 여기서 처음으로 값용 로드
+                        cached_row = grid[row_idx - 1] if row_idx - 1 < len(grid) else []
                         cached_value = cached_row[cell_idx].value if cell_idx < len(cached_row) else None
                         json_cached = cell_to_json(cached_value)
                         values.append(json_cached if json_cached is not None else "")
@@ -18832,10 +18925,24 @@ def inspect_workbook(path):
                 "maxRow": ws.max_row or len(rows),
                 "maxCol": ws.max_column or (max((len(r) for r in rows), default=0)),
             }
+        # [계측] 값용 로드를 실제로 했는지 / 얼마나 걸렸는지 — '미루기'가 현장에서 얼마나
+        # 이득인지 로그만으로 알 수 있게 남긴다(수식 없는 파일이면 cachedLoadMs=0).
+        try:
+            _vba_trace(
+                "inspect.openpyxl",
+                name=Path(str(path)).name,
+                sheets=len(sheets),
+                formulaCells=sum(len((s or {}).get("formulas") or {}) for s in sheets.values()),
+                cachedLoaded=cached_wb is not None,
+                cachedLoadMs=round(_cached_load_ms[0]),
+            )
+        except Exception:
+            pass
         return {"sheetNames": wb.sheetnames, "sheets": sheets}
     finally:
         wb.close()
-        cached_wb.close()
+        if cached_wb is not None:
+            cached_wb.close()
 
 
 def inspect_workbook_fallback(path, err=None):

@@ -2,7 +2,7 @@
 setlocal
 cd /d "%~dp0"
 
-set "APP_VERSION=0.7.2"
+set "APP_VERSION=0.7.2.1"
 set "PACKAGE_DIR=dist\B2B_ver%APP_VERSION%"
 set "PAYLOAD=build\b2b_ver0516_single_payload.zip"
 set "OUT_EXE=dist\B2B_ver%APP_VERSION%_single.exe"
@@ -75,6 +75,16 @@ if not exist "%OUT_EXE%" (
 )
 
 del /f /q "%PAYLOAD%" >nul 2>nul
+
+rem [self-check] The wrapper must be able to find the app entry inside its own payload.
+rem A stale hardcoded name used to pass the build and fail only at first launch
+rem ("Packaged app entry was not found") - verify it here instead.
+echo [INFO] Verifying packaged entry...
+python "tools\verify_single_exe.py" "%OUT_EXE%"
+if errorlevel 1 (
+    echo [ERROR] Packaged entry check failed - the built exe would not start.
+    exit /b 1
+)
 
 echo.
 echo ============================================

@@ -12,7 +12,14 @@ function setPage(page) {
   document.querySelectorAll(".menu-item[data-page]").forEach(el => {
     el.classList.toggle("active", el.dataset.page === page);
   });
-  $("page-title").textContent = page === "runner" ? "스킬 실행기" : "AX-Cell";
+  // [버전 표기 2026-08-06] textContent 로 덮어쓰면 제목 안의 버전 <span> 이 같이 지워진다.
+  // 제목 글자만 바꾸고 버전 칩은 살려 둔 뒤, 다시 채워 넣는다(페이지 전환마다 사라지던 문제 방지).
+  {
+    const titleEl = $("page-title");
+    const verEl = titleEl ? titleEl.querySelector(".app-version") : null;
+    if (titleEl) titleEl.textContent = page === "runner" ? "스킬 실행기" : "AX-Cell";
+    if (titleEl && verEl) titleEl.appendChild(verEl);
+  }
   // [0.5.16 #1] 실행기(runner)는 헤드리스 — Excel 뷰를 아예 안 보이고 한 화면을 꽉 채운다.
   //  - 브라우저 모드: body.page-runner-active 로 .right/.resizer 를 숨기고 .left 풀폭(CSS).
   //  - 네이티브 셸: 호스트에 B2B_RUNNER_MODE 를 보내 우측 패널을 접고 WebView 풀폭.
