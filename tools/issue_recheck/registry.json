@@ -2949,6 +2949,28 @@
         ]
       ],
       "fix": "assist-tools.js step.error: inSkill 필드 추가 + false 면 '만들다 실패한 게 정상, pipeline.step 찾지 말고 오류+chat.history 로 진단' 안내를 데이터에 포함. pipeline.js _assistErrorDiagnoseQuestion: 실패 스텝이 목록에 없으면 질문을 '새 단계를 만들다 실패' 서사로 전환(step.error·chat.history 지목). assist-core.js 프롬프트: inSkill:false 에서 '없다'로 끝내기 금지 + 재촉 대기 금지. [결론 의무 추가] 자동 질문이 '결론까지 내줘(고친 요청문 handoff 또는 메모칸 문장)'를 요구하고, 프롬프트에 '설명만 하고 끝내는 것은 미완성 — 마지막은 반드시 메모칸 문장+[에러 복구 시도] 또는 handoff 결론' 규칙 추가."
+    },
+    {
+      "id": "ASSIST-MARKDOWN-RAW",
+      "title": "AI 도움 답변에 **별표** 마크다운이 글자 그대로 노출(지라/사업팀 스크린샷 2026-08-10). 화면이 마크다운을 렌더링하지 않는데 모델이 굵게 문법을 섞어 보냄.",
+      "checks": [
+        [
+          "node",
+          "test_runs/_test_assist_markdown_plain.js"
+        ]
+      ],
+      "fix": "PLAIN_LANGUAGE_RULE 에 마크다운 금지(이유·대안 포함, 번호 목록은 허용). assist-ui/assist-popup 렌더러: 이스케이프 후 **…** 만 <b>로 최소 변환(새는 별표 방지, XSS 불가)."
+    },
+    {
+      "id": "ASSIST-FAKE-BUTTON-SBAGENT-248",
+      "title": "SBAGENT-248: AI 도움이 '아래 버튼을 누르면…' + [새 단계 만들기 요청하기] 대괄호 글자만 쓰고 action=handoff 블록을 안 내서 버튼이 안 생김 — 사업팀이 없는 버튼을 찾음.",
+      "checks": [
+        [
+          "node",
+          "test_runs/_test_assist_fake_button.js"
+        ]
+      ],
+      "fix": "방향②(버튼이 확실히 뜨게): 프롬프트 handoff 규칙에 '절차 설명 금지·대괄호 글자 금지·블록을 내야만 버튼 생성' 명시 + assistLooksLikeFakeButtonNarration 가드 — 가짜 버튼 서술 감지 시 종료하지 않고 handoff 블록 출력을 강제(재촉 상한 공유). 실제 앱 버튼([에러 복구 시도] 인라인 등) 안내는 오탐 제외."
     }
   ]
 }

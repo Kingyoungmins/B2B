@@ -38,7 +38,9 @@
     const div = document.createElement("div");
     div.className = "assist-msg " + role;
     if (opts && opts.html) div.innerHTML = text;
-    else div.textContent = text;
+    // [지라 제보 2026-08-10] **굵게** 마크다운이 별표 그대로 보이던 것 — assist-ui 와 동일한
+    // 최소 변환(이스케이프 후 **…** 만 굵게). 두 창은 의도적으로 코드가 분리돼 있어 같이 고친다.
+    else div.innerHTML = esc(text).replace(/\*\*([^*\n]{1,200}?)\*\*/g, "<b>$1</b>");
     box.appendChild(div);
     box.scrollTop = box.scrollHeight;
     return div;

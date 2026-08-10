@@ -203,13 +203,25 @@ function assistRenderChips() {
   });
 }
 
+/* [지라 제보 2026-08-10] 모델이 **굵게** 마크다운을 섞어 보내면 별표가 화면에 그대로 보였다
+   (사업팀 스크린샷 — "**새 단계를 만드는 요청문**" 처럼). 화면은 마크다운을 렌더링하지 않는다.
+   ① 프롬프트(PLAIN_LANGUAGE_RULE)로 마크다운을 금지하고 ② 그래도 새면 여기서 **…** 만 굵게
+   바꿔 준다 — 전체 마크다운 지원이 아니라 '별표 노출 방지'용 최소 변환이다(먼저 이스케이프하므로
+   셀 값/코드에 든 < > 가 HTML 로 실행될 일은 없다). */
+function assistRenderPlainText(text) {
+  const esc = String(text == null ? "" : text)
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+  return esc.replace(/\*\*([^*\n]{1,200}?)\*\*/g, "<b>$1</b>");
+}
+
 function assistAddMsg(role, text, opts) {
   const box = document.getElementById("assist-messages");
   if (!box) return null;
   const div = document.createElement("div");
   div.className = "assist-msg " + role;
   if (opts && opts.html) div.innerHTML = text;
-  else div.textContent = text;
+  else div.innerHTML = assistRenderPlainText(text);   // pre-wrap 이라 줄바꿈은 그대로 산다
   box.appendChild(div);
   box.scrollTop = box.scrollHeight;
   return div;

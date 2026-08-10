@@ -137,6 +137,10 @@ args: {"summary":"증상 한 줄","reason":"해결 불가 판단 근거","tried"
     상태로 되돌아간다. '중간 한 단계만 건너뛰고 뒤는 그대로'는 불가능하다 — 사용자가 그걸 원하면
     제안 전에 이 동작을 설명하고 의사를 확인하라. 켜면(enabled:true) 그 단계가 즉시 적용된다.
 - 새 단계를 **만들거나** 지워야 하는 요청(현재 스킬로 안 되는 새 작업)은 action="handoff" 로 ③ 스킬 설계 채팅에 넘긴다. 넘기면 사용자가 설계 채팅에서 확인 후 **하나씩** 전송한다.
+  **절차를 설명하지 말고 그냥 넘겨라** — "아래 버튼을 누르면 …" 같은 안내문이나 [새 단계 만들기]
+  같은 대괄호 글자를 직접 쓰는 것 금지. 네가 쓴 대괄호 글자는 버튼이 되지 않는다(지라 실측 —
+  사업팀이 없는 버튼을 찾았다). 버튼(카드)은 action="handoff" 블록을 출력해야만 생기고,
+  카드가 뜨면 무엇을 누를지는 앱이 알아서 보여준다.
   · 작업이 **한 단계**면 args={"request":"파일·시트·열까지 특정한 정리된 요청문","reason":"왜 넘기는지"}.
   · 작업이 **여러 단계**(예: 첨부한 매뉴얼/PPT 기반 절차, "단계별로 만들어줘")면 args={"steps":[{"title":"단계 요약(짧게)","request":"그 단계 하나만 수행하는, 파일·시트·열까지 특정한 독립 요청문"}, ...],"reason":"..."} 로 **단계마다 하나씩** 나눠 담는다. 스킬은 한 메시지=한 단계이므로 여러 작업을 한 request 에 몰아넣지 말 것. 첨부 이미지(슬라이드)를 근거로 각 단계의 시트명·열·행·수식을 구체화하라.
 - 더 알아볼 게 없으면 action="final" 로 끝내고, 블록 위에 사용자에게 할 답변을 쓴다.
@@ -187,6 +191,18 @@ function assistLooksLikeDanglingAnnouncement(text) {
   if (!t || t.length > 240) return false;
   if (!/(겠습니다|볼게요|할게요|드릴게요)\s*[.!…~]*\s*$/.test(t)) return false;
   return /(찾|확인|조회|살펴|알아보|검토|점검|파악|분석|읽|실행|적용|만들|정리|비교|계산|수정|제안|진행|시작|말씀드리)/.test(t);
+}
+
+/* [지라 SBAGENT-248 / 2026-08-10] "아래 버튼을 누르면 …" 이라 안내하고 [새 단계 만들기 요청하기]
+   같은 대괄호 글자까지 써 놓고, 정작 action="handoff" 블록을 안 내서 버튼이 안 생긴 실측.
+   대괄호 글자는 버튼이 되지 않는다 — final 응답이 '자기 메시지 안의 버튼'을 안내하면 가짜다.
+   주의: "[에러 복구 시도] 버튼을 누르세요" 같은 실제 앱 버튼 안내는 문장 속 인라인이라 다르다 —
+   ① "아래/이 버튼" 처럼 자기 응답 속 버튼을 가리키거나 ② 대괄호 라벨이 한 줄을 통째로 차지할 때만 잡는다. */
+function assistLooksLikeFakeButtonNarration(text) {
+  const t = String(text || "").trim();
+  if (!t) return false;
+  if (/(아래|위|다음)\s*버튼(을|이|으로)?\s*(누르|클릭|눌러)/.test(t)) return true;
+  return /^\s*\[[^\[\]\n]{2,40}\]\s*$/m.test(t);
 }
 
 let _assistInFlight = false;
@@ -433,6 +449,17 @@ async function assistHandleUserMessage(userText, ui, attachImages) {
           tail.push({ role: "user", content:
             "방금 응답이 \"~하겠습니다\" 예고로 끝났고 아무것도 실행되지 않았습니다. 예고하지 말고 지금 바로 하세요: "
             + "조회가 필요하면 action=\"tool\" 블록을 출력하고, 필요 없으면 지금 아는 것으로 완결된 답(action=\"final\")을 작성하세요." });
+          continue;
+        }
+        // [지라 SBAGENT-248] '버튼을 누르라'고 안내했는데 실제 액션 블록이 없으면 버튼은 안 생긴다 —
+        // 종료하지 말고 handoff(또는 다른 액션) 블록을 지금 출력하게 한다(상한은 위와 공유).
+        if (!lastRound && danglingNudges < 2 && assistLooksLikeFakeButtonNarration(finalText)) {
+          danglingNudges += 1;
+          tail.push({ role: "assistant", content: reply.slice(0, 1500) });
+          tail.push({ role: "user", content:
+            "방금 응답이 '버튼'을 안내했지만 실제 버튼은 만들어지지 않았습니다 — 대괄호 글자는 버튼이 되지 않습니다. "
+            + "새 단계를 설계 채팅에 넘기려던 것이면 지금 즉시 action=\"handoff\" 블록을 출력하세요(그래야 카드가 뜹니다). "
+            + "아니면 버튼 안내를 빼고 완결된 답(action=\"final\")을 작성하세요." });
           continue;
         }
       }
