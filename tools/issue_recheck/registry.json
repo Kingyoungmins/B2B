@@ -2916,6 +2916,39 @@
         ]
       ],
       "fix": "history.js: bytes 기준 제거, 실제 스냅샷 무게인 셀 수(25만) 기준만 유지. 진짜 무거워서 끌 때는 조용히 죽이지 말고 세션당 1회 토스트로 안내."
+    },
+    {
+      "id": "ASSIST-DANGLING-ANNOUNCE",
+      "title": "AI 도움이 'A를 ~하기 위해 ~를 찾아보겠습니다' 예고만 하고 멈춤(사용자 제보 2026-08-10, ?? 라고 재촉해야 이어짐). 루프가 액션 블록 없는 응답을 final 로 강등해 그대로 종료하므로, 모델이 도구 블록 없이 예고문만 내면 그 예고문이 마지막 답이 됐다.",
+      "checks": [
+        [
+          "node",
+          "test_runs/_test_assist_dangling_announce.js"
+        ]
+      ],
+      "fix": "assist-core.js: ① 응답 규약에 '예고로 끝내기 금지' 규칙(예고 대신 즉시 action=tool 출력) ② assistLooksLikeDanglingAnnouncement — 짧고(≤240자) '~하겠습니다'류로 끝나며 조회/작업 동사가 있으면 예고로 판정, final 경로에서 감지 시 종료하지 않고 같은 턴에서 즉시 실행을 재촉(상한 2회, lastRound 제외)."
+    },
+    {
+      "id": "ASSIST-POPUP-TOPMOST-SIZE",
+      "title": "AI 도움 창이 가끔 Excel 창에 가려짐 + 기본 크기 확대 요청(사용자 2026-08-10). 네이티브 팝업이 TopMost 가 아니라 Excel 미러의 표시 갱신(TOPMOST 순간토글 트릭) 때마다 아래로 깔렸다.",
+      "checks": [
+        [
+          "node",
+          "test_runs/_test_assist_popup_topmost_size.js"
+        ]
+      ],
+      "fix": "NativeHost.cs: assistForm.TopMost=true(과거 '다른 앱 방해' 우려로 미사용 — Owner 유지·✕ 숨김으로 완화, 결정 변경 주석), 기본 940x1280(2배)+작업영역 클램프. panels.css: DOM 팝업 880x1120(max 96vw/92vh 클램프 유지). assist-ui.js: 저장 키 _v2 버전업(옛 저장 크기가 새 기본을 가리지 않게) + 기본 위치 새 폭 기준."
+    },
+    {
+      "id": "ASSIST-CREATION-FAILURE-DIAGNOSE",
+      "title": "오류 후 'AI 도움 진단 요청'이 '그 단계는 스킬에 없다'로 끝남(사용자 제보 2026-08-10). 만들다 실패한 단계는 목록에 없는 게 당연한데, 자동 질문이 'N단계가 실패했어'라 AI 가 목록만 뒤졌고, 사용자가 '채팅을 봐라'고 재촉해야 진단했다. + 설명만 하고 끝나 '그래서 뭘 넣으라는 건지'가 없던 것도 함께 수정.",
+      "checks": [
+        [
+          "node",
+          "test_runs/_test_assist_creation_failure_diagnose.js"
+        ]
+      ],
+      "fix": "assist-tools.js step.error: inSkill 필드 추가 + false 면 '만들다 실패한 게 정상, pipeline.step 찾지 말고 오류+chat.history 로 진단' 안내를 데이터에 포함. pipeline.js _assistErrorDiagnoseQuestion: 실패 스텝이 목록에 없으면 질문을 '새 단계를 만들다 실패' 서사로 전환(step.error·chat.history 지목). assist-core.js 프롬프트: inSkill:false 에서 '없다'로 끝내기 금지 + 재촉 대기 금지. [결론 의무 추가] 자동 질문이 '결론까지 내줘(고친 요청문 handoff 또는 메모칸 문장)'를 요구하고, 프롬프트에 '설명만 하고 끝내는 것은 미완성 — 마지막은 반드시 메모칸 문장+[에러 복구 시도] 또는 handoff 결론' 규칙 추가."
     }
   ]
 }

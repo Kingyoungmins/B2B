@@ -6504,9 +6504,25 @@ async function explainPipelineErrorForUser(info) {
 
 // [실패 진단 연동] 오류 카드의 'AI 도움에게 진단 요청' 버튼이 넣을 자동 질문. 사용자가 친 것처럼
 // 자연스럽게 — AI 도움은 '왜 실패'를 보고 step.error 도구로 진단한 뒤 고침을 제안한다.
+// [생성 실패 2026-08-10] 만들다가 실패한 단계는 스킬 목록에 없다. 그런데 질문이 "N단계가 실패했어"면
+// AI 는 목록에서 N단계를 찾다가 "그런 단계가 없다"로 끝냈다(사용자 실측 — 채팅을 보라고 한 번 더
+// 말해야 진단함). 목록에 없는 실패면 질문 자체를 '만들다 실패' 서사로 바꿔 처음부터 오류 기록과
+// 설계 채팅을 보게 한다.
 function _assistErrorDiagnoseQuestion(info) {
-  const stepPart = info && Number(info.stepIdx) >= 0 ? `${Number(info.stepIdx) + 1}단계` : "어느 단계인지";
-  return `방금 실행에서 ${stepPart}가 오류로 실패했어. 왜 실패했는지 확인하고, ${stepPart}가 무슨 문제인지 쉽게 설명한 뒤 고칠 방법을 제안해줘.`;
+  const inSkill = !!(info && info.stepId && Array.isArray(state.pipeline)
+    && state.pipeline.some(s => s && s.id === info.stepId));
+  // [결론 의무 2026-08-10] "왜 실패했는지" 설명에서 멈추면 사용자는 여전히 뭘 해야 할지 모른다.
+  // 질문 자체가 '그대로 복사해 쓸 결론'까지 요구한다 — 설계 채팅에 넣을 고친 요청문(handoff)
+  // 또는 오류 창 메모칸에 넣을 문장.
+  if (!inSkill) {
+    return "방금 새 단계를 만들다가 오류로 실패했어(실패해서 스킬 목록에는 안 들어갔어). "
+      + "step.error 로 실제 오류를 읽고, chat.history 에서 내가 뭘 요청했는지 확인해서 "
+      + "왜 실패했는지 쉽게 설명해줘. 그리고 결론까지 내줘 — 원인을 피해 가도록 고친 요청문을 만들어서 "
+      + "설계 채팅에 바로 넣게 넘겨주거나(handoff), 오류 창 메모칸에 그대로 붙여넣을 문장을 따옴표로 줘.";
+  }
+  const stepPart = Number(info.stepIdx) >= 0 ? `${Number(info.stepIdx) + 1}단계` : "어느 단계인지";
+  return `방금 실행에서 ${stepPart}가 오류로 실패했어. 왜 실패했는지 확인하고, ${stepPart}가 무슨 문제인지 쉽게 설명해줘. `
+    + "그리고 결론까지 내줘 — 코드 수정으로 될 일이면 수정을 제안하고, 아니면 오류 창 메모칸에 그대로 붙여넣을 문장을 따옴표로 줘.";
 }
 
 function reportPipelineError(err, options) {

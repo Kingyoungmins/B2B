@@ -655,8 +655,9 @@
 /* 앱에 붙지 않고 떠 있는 창 — 제목줄 드래그로 이동, 우하단 손잡이로 크기 조절 */
 .assist-popup {
   position: fixed;
-  width: 440px;
-  height: 560px;
+  /* [2026-08-10] 기본 크기 2배(440x560 → 880x1120) — 작은 화면은 max-*(96vw/92vh)가 줄여준다 */
+  width: 880px;
+  height: 1120px;
   min-width: 300px;
   min-height: 240px;
   max-width: 96vw;

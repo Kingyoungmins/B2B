@@ -739,8 +739,10 @@ namespace B2BNativeHost
         }
 
         // ── [AI 도움 팝업] ─────────────────────────────────────────────────────────
-        // TopMost 를 쓰지 않는다 — 항상 위 창은 다른 앱 사용까지 방해한다. Owner 관계면 호스트/Excel
-        // 오버레이와 자연스러운 z-순서로 겹치고(클릭한 쪽이 위), 호스트 최소화 때 같이 숨는다.
+        // [2026-08-10 결정 변경] TopMost 를 쓴다 — 예전엔 '항상 위 창은 다른 앱 사용까지 방해한다'며
+        // 자연 z-순서(클릭한 쪽이 위)로 뒀는데, Excel 미러가 표시 갱신 때마다 위로 올라와
+        // 팝업이 가려지는 실측 불편(사용자 제보)이 더 컸다. Owner 관계는 유지하므로 호스트를
+        // 최소화하면 같이 숨고, 창의 ✕(숨김)로 언제든 치울 수 있다 — 다른 앱 방해는 그 둘로 완화.
         private void HandleAssistPopupCommand(string action)
         {
             bool visible = assistForm != null && !assistForm.IsDisposed && assistForm.Visible;
@@ -762,14 +764,24 @@ namespace B2BNativeHost
                     assistForm = new Form();
                     assistForm.Text = "AI 도움";
                     assistForm.StartPosition = FormStartPosition.Manual;
-                    assistForm.Size = new Size(470, 640);
+                    // [2026-08-10] 기본 크기 2배(470x640 → 940x1280) — 화면(작업영역)보다 크면 줄인다.
+                    int wantW = 940, wantH = 1280;
+                    try
+                    {
+                        Rectangle wa = Screen.FromControl(this).WorkingArea;
+                        wantW = Math.Min(wantW, Math.Max(330, wa.Width - 60));
+                        wantH = Math.Min(wantH, Math.Max(320, wa.Height - 60));
+                    }
+                    catch { }
+                    assistForm.Size = new Size(wantW, wantH);
                     assistForm.MinimumSize = new Size(330, 320);
                     assistForm.ShowInTaskbar = false;
                     assistForm.Owner = this;
+                    assistForm.TopMost = true;   // Excel 미러가 위로 올라와도 팝업이 가려지지 않게(위 결정 변경 참조)
                     try
                     {
                         assistForm.Location = new Point(
-                            Math.Max(0, this.Location.X + this.Width - 500),
+                            Math.Max(0, this.Location.X + this.Width - wantW - 30),
                             Math.Max(0, this.Location.Y + 90));
                     }
                     catch { }

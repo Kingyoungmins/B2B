@@ -13,7 +13,9 @@ let _assistMirrorHidden = false;   // [검토 #20] 👁 미러 버튼의 실제 
 let assistStagedAttachments = [];
 
 // 창 위치/크기는 세션 간 유지한다(매번 가운데로 튀면 거슬린다).
-const ASSIST_POS_KEY = "b2b_assist_popup_rect";
+// [2026-08-10] 키 버전업(_v2) — 기본 크기를 2배로 키웠는데 옛 키의 저장 크기가 이기면
+// 기존 사용자는 영영 새 기본을 못 받는다. 새 키로 한 번 리셋(이후 조절은 그대로 저장됨).
+const ASSIST_POS_KEY = "b2b_assist_popup_rect_v2";
 function assistLoadRect() {
   try {
     const r = JSON.parse(localStorage.getItem(ASSIST_POS_KEY) || "null");
@@ -49,8 +51,8 @@ function assistEnsureDom() {
     if (r.w) el.style.width = r.w + "px";
     if (r.h) el.style.height = r.h + "px";
   } else {
-    // 처음엔 오른쪽 위, 화면 안쪽으로
-    el.style.left = Math.max(12, window.innerWidth - 460) + "px";
+    // 처음엔 오른쪽 위, 화면 안쪽으로(기본 폭 880 + 여백 40 기준)
+    el.style.left = Math.max(12, window.innerWidth - 920) + "px";
     el.style.top = "72px";
   }
   el.innerHTML = `

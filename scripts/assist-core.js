@@ -90,6 +90,10 @@ function assistSystemPrompt() {
    pipeline.step 의 available:[] 만 보고 "스킬에 단계가 없어 진단할 수 없다"고 **포기하지 마라** —
    단계가 0개라는 건 '단계 실행'이 아니라 **단계 생성/적용이 실패해 스킬에 추가되지 못했다**는 뜻이고,
    그것 자체가 진단의 출발점이다.
+   step.error 의 **inSkill:false** 도 같은 뜻이다 — 실패한 그 단계는 만들다가 실패해 목록에 없는 게
+   **정상**이니, "그런 단계가 없다"고 답하고 끝내는 것은 **금지**. 사용자가 "채팅을 봐라"고 다시
+   말해 줄 때까지 기다리지 말고, step.error 의 오류 내용과 **chat.history**(무엇을 요청했는지)로
+   바로 진단을 이어가라.
 2. 오류 메시지만으로 원인이 안 잡히면 **run.trace** 로 실행 타임라인을 읽어라 — 각 스텝이 실제로
    어느 워크북에서 돌았는지, 어떤 순서로 성공/실패했는지, 런타임 오류 원문이 나온다(예: 스텝은
    "성공"인데 엉뚱한 파일에서 돈 경우는 여기서만 보인다). 녹화 스킬 실패 진단엔 특히 필수.
@@ -102,6 +106,11 @@ function assistSystemPrompt() {
    · 요청을 다르게 해야 할 것 같으면 → action="handoff" 로 고친 요청문을 넘겨 설계 채팅에서 다시 만들게
      하라(여러 단계면 steps 로 나눈다).
 4. 절대 "진단할 수 없습니다"로 끝내지 마라 — 최소한 위 두 행동 중 하나는 제시한다.
+5. **설명만 하고 끝내는 것도 미완성이다.** 진단 답변의 마지막은 반드시 아래 둘 중 하나의
+   '그대로 쓸 수 있는 결론'이어야 한다:
+   · "오류 창 메모칸에 이 문장을 넣고 [에러 복구 시도]를 누르세요:" + 큰따옴표로 감싼 문장
+   · action="handoff" 로, 원인을 피해 가도록 고친 요청문을 설계 채팅에 넘기기
+   원인 설명이 아무리 정확해도 이 결론이 없으면 사용자는 다음에 뭘 할지 모른다.
 
 ## 해결할 수 없을 때 — 이슈 제보로 넘긴다
 도구로 확인해도 원인을 못 찾거나, 프로그램 자체의 오류로 보이거나, 당신 권한 밖의 수정이
@@ -132,6 +141,10 @@ args: {"summary":"증상 한 줄","reason":"해결 불가 판단 근거","tried"
   · 작업이 **여러 단계**(예: 첨부한 매뉴얼/PPT 기반 절차, "단계별로 만들어줘")면 args={"steps":[{"title":"단계 요약(짧게)","request":"그 단계 하나만 수행하는, 파일·시트·열까지 특정한 독립 요청문"}, ...],"reason":"..."} 로 **단계마다 하나씩** 나눠 담는다. 스킬은 한 메시지=한 단계이므로 여러 작업을 한 request 에 몰아넣지 말 것. 첨부 이미지(슬라이드)를 근거로 각 단계의 시트명·열·행·수식을 구체화하라.
 - 더 알아볼 게 없으면 action="final" 로 끝내고, 블록 위에 사용자에게 할 답변을 쓴다.
 - 해결 불가/프로그램 오류로 판단되면 action="report" (위 '이슈 제보' 참조).
+- **예고로 끝내기 금지**: "~를 찾아보겠습니다", "확인해 보겠습니다" 같은 예고만 하고 멈추지 마라.
+  당신이 응답을 끝내면 대화는 거기서 멈춘다 — 사용자가 재촉해야 이어지는 게 아니다.
+  조회할 게 있으면 그 말 대신 **지금 즉시 action="tool" 블록을 출력**하고, 없으면 지금 아는
+  것으로 완결된 답(action="final")을 써라. "~하겠습니다"로 끝나는 final 응답은 규약 위반이다.
 
 ### 값 하나만 바꿀 때는 반드시 replaceLiteral 을 쓸 것
 숫자·문자 하나를 바꾸는 요청(예: "100을 1000으로")에 replaceStepCode 로 코드 전체를 다시 쓰면
@@ -161,6 +174,19 @@ ${facts}
   없다"고 한계를 솔직히 밝히고 대신 할 수 있는 것을 제안**하라. 관련 없는 답으로 넘어가는 것은 금지.
 - 파일명·시트명·열 이름은 위 '사실' 목록에 있는 것만 그대로 쓴다. 번역·변형 금지.
 - 답변은 짧고 구체적으로. 사용자는 엑셀 실무자이지 개발자가 아니다.`;
+}
+
+/* [말 끊김 수정 2026-08-10] "A를 하기 위해 ~를 찾아보겠습니다" 라고 예고만 하고 도구 블록 없이
+   응답을 끝내는 경우가 있었다(사용자 실측 — "??" 라고 재촉해야 이어짐). 루프는 액션 블록이 없으면
+   final 로 강등해 그대로 종료하므로, 예고문이 곧 '마지막 답'이 되어 버린다.
+   이 함수가 그런 '하다 만 예고'를 감지한다 — 짧고(≤240자), "~하겠습니다"류로 끝나고,
+   조회/작업 동사가 들어 있으면 완결된 답이 아니라 예고로 본다.
+   (긴 답변 끝의 "언제든 도와드리겠습니다" 같은 맺음 인사는 길이 조건에서 걸러진다) */
+function assistLooksLikeDanglingAnnouncement(text) {
+  const t = String(text || "").trim();
+  if (!t || t.length > 240) return false;
+  if (!/(겠습니다|볼게요|할게요|드릴게요)\s*[.!…~]*\s*$/.test(t)) return false;
+  return /(찾|확인|조회|살펴|알아보|검토|점검|파악|분석|읽|실행|적용|만들|정리|비교|계산|수정|제안|진행|시작|말씀드리)/.test(t);
 }
 
 let _assistInFlight = false;
@@ -196,6 +222,7 @@ async function assistHandleUserMessage(userText, ui, attachImages) {
   const t0 = Date.now();
   const seenCalls = new Set();
   let toolCalls = 0;
+  let danglingNudges = 0;   // [말 끊김 수정] '예고만 하고 멈춤' 재촉 횟수(무한루프 방지 상한 2회)
 
   state.assist = state.assist || { history: [] };
   state.assist.history.push({ role: "user", content: String(userText || "") });
@@ -394,6 +421,20 @@ async function assistHandleUserMessage(userText, ui, attachImages) {
         // [검증 항목6] 불균형/절단 액션 블록은 파서가 못 잡는다(parsed=false) — 미완 펜스부터 끝까지
         // 걷어내 원시 JSON 노출을 막고, 남는 본문이 있으면 그것만 보여준다.
         rawShown = String(reply || "").replace(new RegExp("```\\s*" + ASSIST_FENCE + "[\\s\\S]*$", "i"), "").trim();
+      }
+      // [말 끊김 수정 2026-08-10] "~를 찾아보겠습니다" 예고로 끝나고 도구를 안 부른 응답은
+      // 완결이 아니다 — 여기서 종료하면 사용자가 "??" 라고 재촉해야 이어진다(실측).
+      // 종료하지 말고 같은 턴 안에서 즉시 실행을 요구한다(상한 2회 — 무한루프 방지).
+      {
+        const finalText = (visible || salvaged || rawShown || "").trim();
+        if (!lastRound && danglingNudges < 2 && assistLooksLikeDanglingAnnouncement(finalText)) {
+          danglingNudges += 1;
+          tail.push({ role: "assistant", content: reply.slice(0, 1500) });
+          tail.push({ role: "user", content:
+            "방금 응답이 \"~하겠습니다\" 예고로 끝났고 아무것도 실행되지 않았습니다. 예고하지 말고 지금 바로 하세요: "
+            + "조회가 필요하면 action=\"tool\" 블록을 출력하고, 필요 없으면 지금 아는 것으로 완결된 답(action=\"final\")을 작성하세요." });
+          continue;
+        }
       }
       assistPushAssistant(
         visible || salvaged || rawShown

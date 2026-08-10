@@ -391,6 +391,11 @@ assistDefineTool("step.error", { desc: "직전 실행에서 실패한 스텝의 
     const e = (typeof window !== "undefined" && window.__lastPipelineErrorInfo) || null;
     if (!e) return { ok: true, hasError: false, note: "이번 세션에 기록된 실패가 없습니다(성공했거나 아직 실행하지 않음)." };
     const ageMin = Math.round((Date.now() - (e.at || 0)) / 60000);
+    // [생성 실패 진단 2026-08-10] 만들다가 실패한 단계는 스킬 목록에 없다 — 그걸 모르면
+    // AI 가 pipeline.step 만 뒤지다 "그런 단계가 없다"로 끝낸다(사용자 실측). 목록에 있는지를
+    // 도구가 직접 알려주고, 없으면 다음에 뭘 봐야 하는지까지 데이터에 담는다.
+    const inSkill = !!(e.stepId && Array.isArray(state.pipeline)
+      && state.pipeline.some(s => s && s.id === e.stepId));
     return {
       ok: true, hasError: true,
       step: Number(e.stepIdx) >= 0 ? Number(e.stepIdx) + 1 : null,
@@ -399,7 +404,11 @@ assistDefineTool("step.error", { desc: "직전 실행에서 실패한 스텝의 
       cause: String(e.cause || "").slice(0, 600),
       rawError: String(e.rawError || "").slice(0, 800),
       ageMinutes: ageMin,
-      note: "이 오류는 마지막 실패 시점의 기록이다. 지금 스킬이 그 사이 수정됐으면 최신 상태와 다를 수 있다.",
+      inSkill,
+      note: inSkill
+        ? "이 오류는 마지막 실패 시점의 기록이다. 지금 스킬이 그 사이 수정됐으면 최신 상태와 다를 수 있다."
+        : "이 단계는 스킬 목록에 없다 — 없어진 게 아니라 '만들다가 실패해 등록되지 못한' 단계다. "
+          + "pipeline.step 으로 찾으려 하지 말고(없는 게 정상), 위 message/rawError 와 chat.history(사용자가 뭘 요청했는지)로 진단하라.",
     };
   });
 
