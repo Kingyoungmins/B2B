@@ -55,13 +55,16 @@ function pushHistory(label) {
 }
 
 function shouldSkipHeavyHistory() {
-  const HEAVY_FILE_BYTES = 8 * 1024 * 1024;
+  // [Undo 죽어있던 원인 0.7.2.1 / 2026-08-10] 예전엔 file.size 합계 8MB 를 넘으면 히스토리를
+  // 통째로 꺼 버렸다. 그런데 size 는 '디스크 원본 크기'고, 스냅샷은 그 바이트를 복제하지 않는다
+  // (cloneFileForHistory 가 originalBuffer 를 참조 공유). 실제로 복제되는 건 미리보기 격자(sheets)뿐.
+  // 백엔드 미리보기(500행) 모델에서는 30MB 파일도 격자는 몇 만 셀이라, 이 기준 때문에 실무 파일을
+  // 올리면 Undo/Redo 버튼이 영원히 비활성이었다(실측: 33MB 업로드 세트 = 셀 10만 개 = 전혀 무겁지 않음).
+  // → 진짜 스냅샷 무게인 '셀 수'로만 판정한다.
   const HEAVY_CELL_COUNT = 250000;
-  let bytes = 0;
   let cells = 0;
   const countFile = (file) => {
     if (!file) return;
-    bytes += file.size || 0;
     Object.values(file.sheets || {}).forEach(sheet => {
       cells += (sheet || []).reduce((sum, row) => sum + (row ? row.length : 0), 0);
     });
@@ -74,7 +77,13 @@ function shouldSkipHeavyHistory() {
     countFile(tpl && tpl.file);
     countFile(tpl && tpl.original);
   });
-  return bytes >= HEAVY_FILE_BYTES || cells >= HEAVY_CELL_COUNT;
+  const heavy = cells >= HEAVY_CELL_COUNT;
+  // 여전히 무거우면 조용히 죽이지 말고 세션당 1번은 이유를 알려준다(예전엔 아무 말 없이 비활성).
+  if (heavy && !window.__b2bHeavyHistoryNotified && typeof toast === "function") {
+    window.__b2bHeavyHistoryNotified = true;
+    toast("파일 데이터가 매우 커서 되돌리기(Undo) 기록을 잠시 꺼 둡니다.", "error");
+  }
+  return heavy;
 }
 
 function restoreHistorySnapshot(snapshot) {

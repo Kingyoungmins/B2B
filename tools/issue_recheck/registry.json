@@ -2905,6 +2905,17 @@
         ]
       ],
       "fix": "B2BSingleExeLauncher.cs: 이름 하드코딩 제거, 풀어놓은 폴더에서 B2B_ver*.exe 패턴으로 찾는다. 없으면 패키지 안 exe 목록까지 담아 오류. build_single_exe.bat 마지막에 tools/verify_single_exe.py 자동 검사(래퍼 하드코딩 vs 실제 패키지 엔트리 대조) — 안 맞으면 빌드 실패."
+    },
+    {
+      "id": "UNDO-REDO-DEAD-HEAVY-GATE",
+      "title": "Undo/Redo 버튼이 영원히 비활성(사용자 제보 2026-08-10). shouldSkipHeavyHistory 가 file.size 합계 8MB 초과 시 히스토리를 통째로 꺼버렸는데, size 는 디스크 원본 크기고 스냅샷은 그 바이트를 복제하지 않는다(originalBuffer 참조 공유). 실무 파일 세트(33MB, 미리보기 셀 10만)면 항상 스킵 — bytes 로 걸림 True / cells 로 걸림 False 실측.",
+      "checks": [
+        [
+          "node",
+          "test_runs/_test_history_heavy_gate.js"
+        ]
+      ],
+      "fix": "history.js: bytes 기준 제거, 실제 스냅샷 무게인 셀 수(25만) 기준만 유지. 진짜 무거워서 끌 때는 조용히 죽이지 말고 세션당 1회 토스트로 안내."
     }
   ]
 }
