@@ -1022,6 +1022,12 @@ function loadLogic(data, filename, meta) {
   if (typeof invalidateLivePipelineApplied === "function") {
     try { invalidateLivePipelineApplied(); } catch (_) {}
   }
+  // [0.7.3 적대 검증] 이전 스킬의 resume(체크포인트) 마커도 함께 무효화 — 남겨두면
+  // '보류 일괄 실행' 버튼이 새 스킬에서 살아남아, 리셋 없이 옛 라이브 위에 새 스킬의
+  // 뒷단계만 얹는 사고가 난다(체크포인트 이어실행 계열 전부 같은 위험).
+  if (typeof clearPipelineResumeFromIndex === "function") {
+    try { clearPipelineResumeFromIndex(); } catch (_) {}
+  }
   renderPipeline();
   renderChatFromHistory();
   refreshChatState();

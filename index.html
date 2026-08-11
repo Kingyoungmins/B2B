@@ -146,6 +146,8 @@
 
       <div class="action-row">
         <button class="btn-secondary" id="btn-reset">↻ 초기화</button>
+        <!-- [0.7.3] 보류 일괄 실행 — 보류(OFF) 단계가 있을 때만 보인다(scripts/pipeline.js refreshBatchResumeButton) -->
+        <button class="btn-secondary" id="btn-batch-resume" style="display:none" title="보류 중인 단계들을 체크박스로 골라 순서대로 한 번에 다시 적용합니다">⏯ 보류 일괄 실행</button>
         <button class="btn-primary" id="btn-run" disabled="" style="display:none">▶ 전체 실행</button>
         <button class="btn-secondary" id="btn-undo" disabled title="Undo">Undo</button>
         <button class="btn-secondary" id="btn-redo" disabled title="Redo">Redo</button>

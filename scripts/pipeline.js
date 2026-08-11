@@ -235,10 +235,13 @@ function setPipelineResumeFromIndex(idx) {
   window.__pipelineResumeFromIndex = Number.isInteger(n) && n >= 0 && n < (state.pipeline || []).length
     ? n
     : null;
+  // [0.7.3 보류 일괄 실행] 버튼 표시는 resume 마커 유무를 따른다 — 마커가 바뀌는 모든 지점에서 갱신.
+  if (typeof refreshBatchResumeButton === "function") { try { refreshBatchResumeButton(); } catch (_) {} }
 }
 
 function clearPipelineResumeFromIndex() {
   window.__pipelineResumeFromIndex = null;
+  if (typeof refreshBatchResumeButton === "function") { try { refreshBatchResumeButton(); } catch (_) {} }
 }
 
 function pipelineExecutionStartIndex() {
@@ -2694,17 +2697,60 @@ function computeStateBeforeStep(stepIdx) {
   return { inputsMap, outputSheets };
 }
 
+/* [0.7.3 사용자 요청] 수정(✎)을 누르면 그 스텝을 만들 때 '내가 쳤던 원문'을 채팅 입력창에
+   그대로 채워 준다 — 예: "선택 범위: @범위[input_....xlsx/청구내역!D18] 300써줘".
+   말풍선 스크롤+강조만으로는 다시 타이핑해야 했는데, 원문에서 고칠 부분만 바꿔 보내면 된다.
+   · 사용자가 이미 쓰던 초안이 있으면 덮어쓰지 않는다(초안 유실 방지).
+   · 녹화/복붙 캡처 스텝은 자연어 요청이 아니라 채우지 않는다(기존 안내 토스트 유지).
+   · 수정 모드 해제/전환 시, 입력창이 '우리가 채운 그대로'면 지우거나 새 원문으로 교체한다
+     (사용자가 손댔으면 보존). */
+function _editPrefillPromptOf(step) {
+  const p = String((step && step.prompt) || "").trim();
+  if (!p) return "";
+  if (/^\[녹화됨\/VBA\]/.test(p) || /^\[복붙 캡처\]/.test(p)) return "";
+  return p;
+}
+
+function _applyEditPrefill(step) {
+  const ta = (typeof document !== "undefined") && document.getElementById("chat-text");
+  if (!ta) return;
+  const prev = window.__b2bEditPrefill || null;
+  const cur = String(ta.value || "");
+  const mine = prev && cur === prev.text;          // 입력창이 아직 '우리가 채운 그대로'인가
+  const next = step ? _editPrefillPromptOf(step) : "";
+  if (step && next) {
+    if (cur.trim() && !mine) return;               // 사용자 초안 보존 — 덮어쓰지 않는다
+    ta.value = next;
+    window.__b2bEditPrefill = { stepId: step.id, text: next };
+  } else if (!step && mine) {
+    ta.value = "";                                  // 해제: 손 안 댄 프리필만 치운다
+    window.__b2bEditPrefill = null;
+  } else if (!step) {
+    window.__b2bEditPrefill = null;
+    return;
+  } else {
+    return;                                         // 프리필할 원문이 없는 스텝(녹화 등)
+  }
+  try {
+    ta.dispatchEvent(new Event("input", { bubbles: true }));   // 자동 높이/멘션 갱신
+    ta.focus();
+    ta.setSelectionRange(ta.value.length, ta.value.length);
+  } catch (_) {}
+}
+
 function toggleEditStep(stepId) {
   if (state.editingStepId === stepId) {
     state.editingStepId = null;
+    _applyEditPrefill(null);
     toast("수정 모드 해제", "success");
   } else {
     state.editingStepId = stepId;
     const idx = state.pipeline.findIndex(s => s.id === stepId);
     toast(`Step ${idx + 1} 수정 모드 활성화 — 채팅으로 수정 사항을 입력하세요`, "success");
+    const step = state.pipeline[idx];
+    _applyEditPrefill(step);
     // 이 스텝을 만든 '원 요청' 말풍선으로 채팅을 스크롤하고 잠깐 강조(어떻게 요청했는지 바로 보이게).
     if (typeof scrollChatToStepRequest === "function") {
-      const step = state.pipeline[idx];
       setTimeout(() => scrollChatToStepRequest(step), 0);
     }
   }
@@ -3700,6 +3746,18 @@ async function _handlePipelineStepToggleImpl(stepId) {
     }
     setPipelineRuntimeStatus([stepId], "applied", "적용됨");
     clearPipelineResumeFromIndex();   // 라이브가 더는 순수 프리픽스가 아님 — 체크포인트 이어실행 무효화
+    // [0.7.3 적대 검증에서 잡은 잠재결함] '구멍 위 얹기'였다면(뒤에 이미 적용된 스텝이 있음),
+    // 뒤 스텝들의 직전 스냅샷은 이 스텝 효과가 없는 상태라 이제 낡았다 — 남겨두면 나중에
+    // 뒤 스텝을 OFF 할 때 fast 롤백이 그 낡은 스냅샷(이 스텝 미포함)을 복원해 이 스텝의
+    // 결과가 소리 없이 사라진다(칩은 적용됨 그대로). 무효화해서 그 OFF 가 결정적 reconcile
+    // (pristine 재적용 — 느리지만 항상 옳다)로 흐르게 한다. 순수 축 흐름(뒤가 전부 OFF)에선
+    // 조건이 성립하지 않아 기존 fast 경로 성능에 영향 없음.
+    if ((state.pipeline || []).some((s, i) => i > currentIdx && s && isStepEnabled(s))) {
+      for (let i = currentIdx + 1; i < state.pipeline.length; i++) {
+        const s = state.pipeline[i];
+        if (s && s._preApplySnapshot) state.pipeline[i] = { ...s, _preApplySnapshot: undefined };
+      }
+    }
     _syncPipelineToggleStatus();       // 나머지 스텝 상태칩도 스위치에 맞춤(ON=적용/OFF=보류)
     refreshRunButton();
     if (typeof toast === "function") toast(`Step ${currentIdx + 1}을(를) 적용했습니다.`, "success");
@@ -4086,6 +4144,311 @@ async function runFromCheckpointAfterEdit(startIdx, beforeSteps, options = {}) {
     ...options, skipUnappliedRestore: mustRestore, endIndexExclusive: _capEnd,
   });
 }
+
+/* ===================================================================
+   [0.7.3] 보류 일괄 실행 — 초기화 옆 [⏯ 보류 일괄 실행] 버튼
+   ===================================================================
+   시나리오: 10단계 스킬에서 5단계를 수정하면 6~10이 보류(OFF)가 된다. 예전엔 하나씩
+   ON 을 눌러야 했다 → 보류 단계들을 체크박스로 골라(기본 전체 체크, 예: 7만 제외)
+   '한 번에 순서대로' 재적용한다.
+
+   설계 근거(전 코드 추적 결과):
+   · 실행 경로 = 체크된 스텝만 enabled=true 로 만든 뒤 runPipelineSuffixFromCheckpoint(start)
+     1회 호출. 이 경로가 창 처리 계약(mute → 오버레이 → 복원, 회색 창 방지)·스텝별 직전
+     스냅샷 갱신(wirePipelineStepSnapshots)·순차 실행·OFF 스텝 건너뛰기(activeSuffix 필터)를
+     전부 내장하고 있어 새 실행 엔진이 필요 없다. per-step 토글 반복(applyMappedSingleStep
+     루프)은 창 오버레이 계약이 없어 기각.
+   · 타이밍: 배치 전체를 토글과 같은 직렬화 큐(_pipelineToggleChain)에 '단일 태스크'로
+     등록한다 — 스텝 사이에 사용자의 토글/삭제/AI 커밋이 끼어들 수 없다. 실행 동안
+     _pipelineToggleSettling 을 올려 pipelineEditBusyReason() 이 다른 편집을 막는다.
+   · resume(체크포인트) 마커가 정수일 때만 동작한다 — 그때만 "라이브 = start 직전 프리픽스"
+     전제(skipReset)가 성립한다. 단일 ON 으로 구멍이 난 상태에선 마커가 해제돼 버튼도 숨는다.
+   =================================================================== */
+
+// 보류 구간 정보. ok=false 면 버튼을 숨긴다.
+function pipelineHeldBatchInfo() {
+  const start = getPipelineResumeFromIndex();
+  if (!Number.isInteger(start)) return { ok: false };
+  const steps = state.pipeline || [];
+  const held = [];
+  for (let i = start; i < steps.length; i++) {
+    const s = steps[i];
+    if (s && s.code) held.push({ idx: i, step: s });
+  }
+  if (!held.length) return { ok: false };
+  const suffix = steps.slice(start);
+  return {
+    ok: true,
+    start,
+    held,
+    // 교차파일 쓰기 스텝이 구간에 있으면 부분 선택 금지 — 건너뛴 스텝의 목적지 잔재/누락이
+    // 다른 파일에 남는 조합을 걸러낼 방법이 없다(토글/삭제 가드와 같은 이유).
+    crossFile: typeof pipelineSuffixWritesCrossFile === "function"
+      && pipelineSuffixWritesCrossFile(steps, start),
+    // 구버전 백엔드 전용 스텝은 부분 실행 자체가 불가(임플이 throw) — 사전 차단.
+    hasBackendOnly: typeof pipelineHasBackendOnlyStep === "function"
+      && pipelineHasBackendOnlyStep(suffix),
+  };
+}
+
+function refreshBatchResumeButton() {
+  const btn = document.getElementById("btn-batch-resume");
+  if (!btn) return;
+  btn.style.display = pipelineHeldBatchInfo().ok ? "" : "none";
+}
+
+// 체크박스 모달. resolve: 체크된 stepId 배열 | null(취소).
+function _showBatchResumeChecklist(info) {
+  return new Promise(resolve => {
+    const prev = document.getElementById("b2b-batch-resume-modal");
+    if (prev) {
+      // [적대 검증] 그냥 remove 하면 이전 인스턴스의 promise 가 영구 pending + document 캡처
+      // keydown(Escape) 리스너가 잔존해, 나중 Escape 한 번이 유령 취소 경로(미러 복원)를 발화한다.
+      // 이전 인스턴스의 취소 훅을 불러 정상 종료시킨다.
+      try { if (typeof prev.__b2bCancel === "function") prev.__b2bCancel(); else prev.remove(); } catch (_) {}
+    }
+    const wrap = document.createElement("div");
+    wrap.id = "b2b-batch-resume-modal";
+    wrap.style.cssText = "position:fixed;inset:0;z-index:2147483600;display:flex;align-items:center;justify-content:center;background:rgba(15,17,26,0.55);";
+    const box = document.createElement("div");
+    box.style.cssText = "background:#fff;color:#1f2330;border-radius:10px;box-shadow:0 12px 40px rgba(0,0,0,.35);max-width:520px;width:calc(100% - 48px);max-height:80vh;display:flex;flex-direction:column;padding:20px 22px;font-size:14px;line-height:1.6;";
+    const title = document.createElement("div");
+    title.style.cssText = "font-weight:700;margin-bottom:4px;";
+    title.textContent = "보류 일괄 실행";
+    const desc = document.createElement("div");
+    desc.style.cssText = "font-size:12.5px;color:#5b6270;margin-bottom:10px;";
+    desc.textContent = info.crossFile
+      ? "체크된 단계를 순서대로 다시 적용합니다. 이 스킬에는 다른 파일에 쓰는 단계가 있어 일부만 골라 실행할 수 없습니다(전부 함께 실행)."
+      : "체크된 단계를 순서대로 다시 적용합니다. 건너뛸 단계는 체크를 해제하세요(해제한 단계는 보류로 남습니다).";
+    const list = document.createElement("div");
+    list.style.cssText = "overflow-y:auto;border:1px solid #e4e7ee;border-radius:8px;padding:6px 4px;flex:1;min-height:0;";
+    const boxes = [];
+    info.held.forEach(h => {
+      const label = document.createElement("label");
+      label.style.cssText = "display:flex;align-items:flex-start;gap:8px;padding:6px 8px;cursor:pointer;border-radius:6px;";
+      const cb = document.createElement("input");
+      cb.type = "checkbox";
+      cb.checked = true;
+      cb.disabled = !!info.crossFile;              // 교차파일이면 전체 고정
+      cb.dataset.stepId = h.step.id;
+      cb.style.cssText = "margin-top:3px;flex:0 0 auto;";
+      const txt = document.createElement("span");
+      // 카드와 같은 라벨 함수 재사용 — 제네릭("스킬 생성")/코드 첫줄/빈 라벨이 그대로 노출되지 않게.
+      const stepTitle = (typeof pipelineStepLabel === "function"
+        ? String(pipelineStepLabel(h.step, h.idx) || "")
+        : String(h.step.title || h.step.description || "단계")).split("\n")[0].trim().slice(0, 60) || `단계 ${h.idx + 1}`;
+      txt.textContent = `Step ${h.idx + 1} · ${stepTitle}`;
+      txt.style.cssText = "font-size:13px;word-break:break-all;";
+      label.appendChild(cb); label.appendChild(txt);
+      list.appendChild(label);
+      boxes.push(cb);
+    });
+    const row = document.createElement("div");
+    row.style.cssText = "display:flex;gap:8px;justify-content:flex-end;margin-top:14px;flex:0 0 auto;";
+    const cancelBtn = document.createElement("button");
+    cancelBtn.type = "button";
+    cancelBtn.textContent = "취소";
+    cancelBtn.style.cssText = "padding:7px 14px;border-radius:7px;border:1px solid #c9cdd6;background:#f5f6f8;cursor:pointer;font-size:13px;";
+    const okBtn = document.createElement("button");
+    okBtn.type = "button";
+    okBtn.style.cssText = "padding:7px 14px;border-radius:7px;border:1px solid #2f6fed;background:#2f6fed;color:#fff;cursor:pointer;font-size:13px;";
+    const syncOk = () => {
+      const n = boxes.filter(b => b.checked).length;
+      okBtn.textContent = n ? `선택한 ${n}개 단계 실행` : "실행할 단계를 선택하세요";
+      okBtn.disabled = !n;
+      okBtn.style.opacity = n ? "1" : "0.5";
+    };
+    boxes.forEach(b => { b.onchange = syncOk; });
+    syncOk();
+    const done = val => {
+      try { wrap.remove(); } catch (_) {}
+      document.removeEventListener("keydown", onKey, true);
+      resolve(val);
+    };
+    const onKey = e => {
+      if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); done(null); }
+    };
+    wrap.__b2bCancel = () => done(null);                 // 재진입 시 이전 인스턴스 정상 종료용 훅
+    cancelBtn.onclick = () => done(null);
+    okBtn.onclick = () => done(boxes.filter(b => b.checked).map(b => String(b.dataset.stepId)));
+    document.addEventListener("keydown", onKey, true);
+    row.appendChild(cancelBtn); row.appendChild(okBtn);
+    box.appendChild(title); box.appendChild(desc); box.appendChild(list); box.appendChild(row);
+    wrap.appendChild(box);
+    document.body.appendChild(wrap);
+    // [적대 검증] 포커스를 모달로 옮긴다 — 안 옮기면 ⏯ 버튼에 포커스가 남아 Enter 가 모달을
+    // 중복으로 다시 연다(openB2bConfirmModal 의 okBtn.focus() 관례와 동일).
+    try { okBtn.focus(); } catch (_) {}
+  });
+}
+
+// 버튼 클릭 진입점. 모달을 띄우기 전에 미러를 숨긴다(항상-위 Excel 이 모달을 가리는 문제 —
+// 초기화/새로고침 확인 모달과 같은 관례). 취소하면 즉시 되살리고, 실행하면 실행 경로의
+// scheduleRestoreActiveExcelMirror 가 끝에 되살린다.
+async function openBatchResumeModal() {
+  if (document.getElementById("b2b-batch-resume-modal")) return;   // 재진입 가드(더블클릭/Enter)
+  const busy = typeof pipelineEditBusyReason === "function" ? pipelineEditBusyReason() : "";
+  if (busy) { toast(busy, "error"); return; }
+  const info = pipelineHeldBatchInfo();
+  if (!info.ok) { toast("보류 중인 단계가 없습니다.", "error"); refreshBatchResumeButton(); return; }
+  if (info.hasBackendOnly) {
+    toast("보류 구간에 구버전 백엔드 전용 스킬이 있어 부분 실행할 수 없습니다. '전체 실행'으로 다시 동기화해 주세요.", "error");
+    return;
+  }
+  try { if (typeof hideAllExcelMirrorWindows === "function") await hideAllExcelMirrorWindows(); } catch (_) {}
+  const picked = await _showBatchResumeChecklist(info);
+  if (!picked || !picked.length) {
+    try { if (typeof scheduleRestoreActiveExcelMirror === "function") scheduleRestoreActiveExcelMirror(0); } catch (_) {}
+    return;
+  }
+  // [적대 검증] 모달이 떠 있는 동안엔 편집 게이트가 없다 — AI 도움 팝업(별도 OS 창) 커밋이나
+  // 핫키(Undo 등)로 스킬 상태가 바뀔 수 있다. '모달에 실제로 보였던 상태'의 지문을 실행에
+  // 같이 넘겨, 임플이 재계산 상태와 다르면 실행을 접게 한다(낡은 체크 목록으로 엉뚱한 스텝을
+  // 끄고 재적용하는 조용한 손상 방지).
+  const fingerprint = { start: info.start, heldIds: info.held.map(h => String(h.step.id)) };
+  let ok = false;
+  try {
+    ok = await runHeldStepsBatch(picked, fingerprint);
+  } finally {
+    if (ok !== true) {
+      // 거부/실패/예외 — 실행 경로의 복원이 안 돌았을 수 있다. 모달 때 숨긴 미러를 되살린다(멱등).
+      try { if (typeof scheduleRestoreActiveExcelMirror === "function") scheduleRestoreActiveExcelMirror(0); } catch (_) {}
+    } else {
+      // 성공 — 실행 경로가 180ms 복원을 예약하지만, 그 단발 타이머는 사용자 클릭 가드에 조용히
+      // 드롭될 수 있다(배치는 '전부 숨김' 전제라 드롭되면 회색 화면). 여유를 두고 한 번 더 예약(멱등).
+      try { if (typeof scheduleRestoreActiveExcelMirror === "function") scheduleRestoreActiveExcelMirror(900); } catch (_) {}
+    }
+  }
+}
+
+// 토글과 같은 큐에 '단일 태스크'로 등록 — 배치 도중 다른 토글 클릭은 배치가 끝난 뒤 실행되고,
+// _pipelineToggleSettling 유지로 pipelineEditBusyReason() 이 삭제/수정/AI 커밋도 막는다.
+function runHeldStepsBatch(checkedIds, fingerprint) {
+  const run = async () => {
+    _pipelineToggleSettling += 1;
+    try { return await _runHeldStepsBatchImpl(checkedIds, fingerprint); }
+    finally { _pipelineToggleSettling -= 1; }
+  };
+  const p = _pipelineToggleChain.then(run, run);
+  _pipelineToggleChain = p.catch(() => {});
+  return p;
+}
+
+async function _runHeldStepsBatchImpl(checkedIds, fingerprint) {
+  // 토글 임플과 같은 이유로 core 게이트만 본다(자기 settling 에 자기가 막히지 않게).
+  const busyReason = typeof _pipelineCoreBusyReason === "function" ? _pipelineCoreBusyReason() : "";
+  if (busyReason) { toast(busyReason, "error"); return false; }
+  const info = pipelineHeldBatchInfo();
+  if (!info.ok) { toast("보류 중인 단계가 없습니다.", "error"); return false; }
+  // [적대 검증] 모달 표시 시점의 지문과 대조 — 모달이 떠 있는 동안(게이트 없음) AI 커밋/Undo
+  // 등으로 상태가 바뀌었으면, 낡은 체크 목록으로 실행하지 않고 접는다.
+  if (fingerprint) {
+    const nowIds = info.held.map(h => String(h.step.id));
+    const same = fingerprint.start === info.start
+      && Array.isArray(fingerprint.heldIds)
+      && fingerprint.heldIds.length === nowIds.length
+      && fingerprint.heldIds.every((id, i) => id === nowIds[i]);
+    if (!same) {
+      toast("단계 상태가 바뀌어 일괄 실행을 취소했습니다. 버튼을 다시 눌러 확인해 주세요.", "error");
+      return false;
+    }
+  }
+  const start = info.start;
+  // dataset 경유 id 는 항상 문자열 — 숫자형 id(구버전 zip)도 맞도록 양쪽을 문자열로 정규화.
+  const checked = new Set((checkedIds || []).map(String));
+  const checkedHeld = info.held.filter(h => checked.has(String(h.step.id)));
+  if (!checkedHeld.length) { toast("실행할 단계를 선택하지 않았습니다.", "error"); return false; }
+  const uncheckedHeld = info.held.filter(h => !checked.has(String(h.step.id)));
+  if (info.crossFile && uncheckedHeld.length) {
+    toast("다른 파일에 쓰는 단계가 있어 일부만 골라 실행할 수 없습니다. 전부 선택해 주세요.", "error");
+    return false;
+  }
+  if (info.hasBackendOnly) {
+    toast("보류 구간에 구버전 백엔드 전용 스킬이 있어 부분 실행할 수 없습니다.", "error");
+    return false;
+  }
+
+  if (typeof pushHistory === "function") pushHistory("보류 일괄 실행");
+  // 체크 반영은 suffix 호출 '전'이어야 한다 — 임플 내부 폴백(reapplyVbaPipelineToLive)이
+  // 'enabled 스텝만' 재적용하므로, 나중에 켜면 선택이 반영되지 않는다.
+  for (const h of info.held) {
+    const on = checked.has(String(h.step.id));
+    const next = { ...state.pipeline[h.idx], enabled: on };
+    // 보류 구간 '전체'의 낡은 직전 스냅샷 제거(bg 전체실행의 실행 전 purge 와 동형) —
+    //  · 미체크: 남겨두면 나중 OFF 롤백이 excelId별 '첫 스냅샷'으로 이번 실행 전의 옛 상태를
+    //    집어 되돌아간다(restorePipelineCheckpointForSuffix 계약).
+    //  · 체크: 이번 실행이 새 스냅샷을 다시 찍는데(wirePipelineStepSnapshots), 백엔드가 캡처를
+    //    건너뛴 스텝은 '이전 실행의 낡은 스냅샷'이 남아 실패 복원이 오복원한다(적대 검증 확정).
+    //    지우고 시작하면 신선한 것만 복원 후보가 되고, 없으면 복원 생략(=라이브 무손상과 일치).
+    delete next._preApplySnapshot;
+    state.pipeline[h.idx] = next;
+  }
+  renderPipeline();
+  try {
+    // endIndexExclusive 없음 = 구간 끝까지. OFF(미체크) 스텝은 activeSuffix 필터가 건너뛴다.
+    // 창 처리(mute/오버레이/복원)·스텝별 스냅샷 갱신·순차 실행은 이 경로에 내장돼 있다.
+    await runPipelineSuffixFromCheckpoint(start, {});
+    // 임플의 조기 return 경로(_unappliedEdit 폴백 → reapplyVbaPipelineToLive)는 resume 해제와
+    // 적용 서명 기록을 생략한다 — 성공이면 무조건 정착시킨다(정상 경로에선 멱등).
+    clearPipelineResumeFromIndex();
+    if (typeof noteLivePipelineApplied === "function") noteLivePipelineApplied(state.pipeline);
+    if (uncheckedHeld.length) {
+      toast(`건너뛴 ${uncheckedHeld.length}개 단계는 보류로 남았습니다. 나중에 켜면 지금 결과 '위에' 적용됩니다.`, "success");
+    }
+    return true;
+  } catch (err) {
+    // 실패 정책: '성공분 유지'. 격리/그룹 동기화 구조상 라이브에는 '성공해서 동기화된 그룹'만
+    // 반영돼 있다(그룹은 격리 사본에서 실행되고, 전 스텝 성공 후에야 라이브에 1회 반영 —
+    // 실패한 그룹은 반영 전에 raise 하므로 라이브 무손상). 성공한 스텝은 ON+적용됨으로 두고,
+    // 적용되지 못한 체크 스텝만 도로 OFF 한다.
+    //
+    // [적대 검증에서 잡은 사고] 처음엔 여기서 '실패 스텝의 _preApplySnapshot 복원'을 했는데,
+    // 그 스냅샷은 **격리 인스턴스** 상태(같은 그룹 선행 스텝의 효과 포함)라 복원하는 순간
+    // 라이브에 반영된 적 없는 선행 스텝 변경이 몰래 설치된다 — 화면은 OFF+보류인데 Excel 엔
+    // 값이 있고, 그 스텝을 다시 켜면 이중 적용. 라이브는 실패 시 이미 깨끗하므로 복원하지 않는다.
+    const failedId = typeof pipelineFailedStepIdFromError === "function" ? pipelineFailedStepIdFromError(err) : null;
+    const backToHeld = [];
+    for (const h of checkedHeld) {
+      const cur = state.pipeline[h.idx];
+      const st = typeof getPipelineRuntimeStatus === "function" ? getPipelineRuntimeStatus(cur && cur.id) : null;
+      if (!(st && st.status === "applied")) {
+        state.pipeline[h.idx] = { ...cur, enabled: false };
+        backToHeld.push(cur.id);
+      }
+    }
+    // 칩 정리: 실패 스텝=오류, 나머지 미적용=보류 (running 으로 굳는 것 방지)
+    if (failedId && typeof setPipelineRuntimeStatus === "function") {
+      setPipelineRuntimeStatus([failedId], "error", "오류");
+    }
+    const reviewIds = backToHeld.filter(id => id !== failedId);
+    if (reviewIds.length && typeof setPipelineRuntimeStatus === "function") {
+      setPipelineRuntimeStatus(reviewIds, "review", "보류");
+    }
+    // 이 시점의 라이브 = '현재 enabled 인 스텝 전부 적용된 상태'(성공분+기존 프리픽스) —
+    // 프리픽스 마커는 의미가 없으므로 해제하고 서명만 기록한다(단일 ON 성공 후와 같은 정착).
+    clearPipelineResumeFromIndex();
+    if (typeof noteLivePipelineApplied === "function") noteLivePipelineApplied(state.pipeline);
+    renderPipeline();
+    if (typeof reportPipelineError === "function") reportPipelineError(err);
+    else console.error(err);
+    return false;
+  } finally {
+    if (typeof _syncPipelineToggleStatus === "function") _syncPipelineToggleStatus();
+    refreshRunButton();
+    refreshBatchResumeButton();
+    if (typeof scheduleLogicAutoBackup === "function") { try { scheduleLogicAutoBackup("batch-resume"); } catch (_) {} }
+  }
+}
+
+// 버튼 배선 — 스크립트가 마크업 뒤에 로드되므로 즉시 바인딩 가능(save-load.js 의 btn-reset 관례).
+// document 가드: 노드 테스트 스텁 환경(문서 없음)에서 로드 시점에 죽지 않게(history.js 관례).
+(function bindBatchResumeButton() {
+  const btn = (typeof document !== "undefined") && document.getElementById("btn-batch-resume");
+  if (btn && !btn.__b2bBound) {
+    btn.__b2bBound = true;
+    btn.onclick = () => { openBatchResumeModal(); };
+  }
+})();
 
 function canUsePipelineCheckpointFromIndex(startIdx, beforeSteps, nextSteps) {
   const start = Math.max(0, Number(startIdx) | 0);
@@ -4830,6 +5193,7 @@ function refreshRunButton() {
   $("btn-run").disabled = !(hasAnyFile && hasSteps);
   $("btn-save").disabled = !hasSteps;
   $("btn-download").disabled = !hasDownloadableFiles;
+  if (typeof refreshBatchResumeButton === "function") { try { refreshBatchResumeButton(); } catch (_) {} }
   renderRunnerWorkflow();
 }
 

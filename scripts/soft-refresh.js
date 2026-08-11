@@ -63,6 +63,17 @@ function collectSoftRefreshSnapshot() {
 }
 
 async function softRefreshApp() {
+  // [0.7.3] 보류 일괄 실행 모달이 떠 있거나 단계 편집(토글/일괄 실행)이 반영 중이면 보류 —
+  // F5 는 캡처 핫키라 게이트를 안 지나는데, 이때 새로고침이 끼면 인플라이트 실행 콜과
+  // Excel 강제 종료가 경합하고, 취소만 해도 미러 복원이 일괄 실행 모달을 덮는다.
+  if (document.getElementById("b2b-batch-resume-modal")) {
+    if (typeof toast === "function") toast("보류 일괄 실행 창을 먼저 닫아 주세요.", "error");
+    return;
+  }
+  {
+    const busy = typeof pipelineEditBusyReason === "function" ? pipelineEditBusyReason() : "";
+    if (busy) { if (typeof toast === "function") toast(busy, "error"); return; }
+  }
   // 초기화와 같은 이유로 confirm 전에 미러 숨김(항상-위 Excel 이 모달을 가리는 문제).
   try { if (typeof hideAllExcelMirrorWindows === "function") await hideAllExcelMirrorWindows(); } catch (_) {}
   const confirmed = typeof openB2bConfirmModal === "function"

@@ -2971,6 +2971,28 @@
         ]
       ],
       "fix": "방향②(버튼이 확실히 뜨게): 프롬프트 handoff 규칙에 '절차 설명 금지·대괄호 글자 금지·블록을 내야만 버튼 생성' 명시 + assistLooksLikeFakeButtonNarration 가드 — 가짜 버튼 서술 감지 시 종료하지 않고 handoff 블록 출력을 강제(재촉 상한 공유). 실제 앱 버튼([에러 복구 시도] 인라인 등) 안내는 오탐 제외."
+    },
+    {
+      "id": "BATCH-RESUME-HELD-STEPS",
+      "title": "[0.7.3 신기능] 보류 일괄 실행 — 중간 단계 수정 후 6~10 보류를 하나씩 켜야 했던 것을, 체크박스로 골라(특정 단계 제외 가능) 한 번에 순서대로 재적용. 초기화 옆 버튼, resume 마커 있을 때만 표시.",
+      "checks": [
+        [
+          "node",
+          "test_runs/_test_batch_resume.js"
+        ]
+      ],
+      "fix": "pipeline.js: pipelineHeldBatchInfo/refreshBatchResumeButton/체크박스 모달/runHeldStepsBatch(토글 큐 단일 태스크 — 도중 토글은 종료 후 처리, settling 유지로 편집 게이트)/_runHeldStepsBatchImpl(체크→enabled 반영 후 runPipelineSuffixFromCheckpoint 1회 — 창 처리·스냅샷 갱신·순차실행 내장 경로 재사용). 미체크는 OFF 유지+낡은 _preApplySnapshot 제거. 교차파일=부분선택 금지, 백엔드전용=사전 차단. 실패=성공분 유지+실패 스텝 스냅샷 복원+오류칩. assist 프롬프트 2곳 안내, 패치노트 v0.7.3. [적대 검증(5관점·30에이전트) 확정 18건 반영] ①실패 시 실패스텝 스냅샷 복원 제거(격리 스냅샷=미동기화 선행 스텝 포함 — 복원하면 OFF인데 값 남는 유령상태) ②구멍 위 얹기(단일 ON) 성공 시 뒤 스텝 스냅샷 무효화(낡은 스냅샷 fast 롤백이 얹은 결과를 소리없이 지우던 잠재결함) ③모달 시점 지문(start+held ids) 대조 — 모달 중 AI커밋/Undo로 상태가 바뀌면 실행 취소 ④모달 재진입 가드+이전 인스턴스 정상종료 훅+okBtn.focus ⑤실행 안 되면 미러 즉시 복원, 성공 시 2차 복원 예약(클릭가드 드롭 대비) ⑥보류 구간 전체 스냅샷 purge(bg 동형) ⑦loadLogic 에 resume 마커 무효화(불러온 스킬에 낡은 체크포인트 잔존 버그) ⑧숫자 id 문자열 정규화 ⑨F5/Undo/Redo 에 모달·편집 중 가드 ⑩모달 라벨 pipelineStepLabel 재사용."
+    },
+    {
+      "id": "EDIT-PREFILL-ORIGINAL-PROMPT",
+      "title": "[0.7.3 신기능] 수정(✎) 클릭 시 그 단계를 만들 때 사용자가 쳤던 원문(@범위 토큰 포함)을 채팅 입력창에 프리필 — 처음부터 다시 쓰지 않고 고칠 부분만 고침.",
+      "checks": [
+        [
+          "node",
+          "test_runs/_test_edit_prefill.js"
+        ]
+      ],
+      "fix": "pipeline.js: _editPrefillPromptOf(step.prompt 원문, [녹화됨/VBA]·[복붙 캡처] 마커는 제외)/_applyEditPrefill(초안 있으면 덮어쓰지 않음 — window.__b2bEditPrefill 로 '우리가 채운 그대로'인지 추적, 해제 시 손 안 댄 프리필만 제거, input 이벤트 발화로 자동높이·멘션 갱신, 포커스+커서 끝)/toggleEditStep 배선(프리필이 scrollChatToStepRequest 강조보다 먼저). 기존 채팅 스크롤+깜빡 강조는 그대로 유지."
     }
   ]
 }

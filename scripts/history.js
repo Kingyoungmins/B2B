@@ -121,6 +121,16 @@ function restoreHistorySnapshot(snapshot) {
 
 function undoHistory() {
   if (!state.history || !state.history.undo.length) return;
+  // [0.7.3] 단계 편집(토글/보류 일괄 실행)이 반영 중이거나 그 모달이 떠 있으면 되돌리기 보류 —
+  // 실행 도중 파이프라인을 스냅샷으로 갈아끼우면 실행 결과 정착과 충돌한다.
+  if (typeof document !== "undefined" && document.getElementById("b2b-batch-resume-modal")) {
+    if (typeof toast === "function") toast("보류 일괄 실행 창을 먼저 닫아 주세요.", "error");
+    return;
+  }
+  {
+    const busy = typeof pipelineEditBusyReason === "function" ? pipelineEditBusyReason() : "";
+    if (busy) { if (typeof toast === "function") toast(busy, "error"); return; }
+  }
   const previousSteps = (state.pipeline || []).slice();  // 복원 '전' 스텝 — 교차 목적지 리셋용
   state.history.redo.push(makeHistorySnapshot("redo"));
   restoreHistorySnapshot(state.history.undo.pop());
@@ -130,6 +140,14 @@ function undoHistory() {
 
 function redoHistory() {
   if (!state.history || !state.history.redo.length) return;
+  if (typeof document !== "undefined" && document.getElementById("b2b-batch-resume-modal")) {
+    if (typeof toast === "function") toast("보류 일괄 실행 창을 먼저 닫아 주세요.", "error");
+    return;
+  }
+  {
+    const busy = typeof pipelineEditBusyReason === "function" ? pipelineEditBusyReason() : "";
+    if (busy) { if (typeof toast === "function") toast(busy, "error"); return; }
+  }
   const previousSteps = (state.pipeline || []).slice();
   state.history.undo.push(makeHistorySnapshot("undo"));
   restoreHistorySnapshot(state.history.redo.pop());
