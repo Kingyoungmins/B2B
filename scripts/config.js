@@ -83,9 +83,11 @@ const SETTINGS_KEY_MIGRATE = ["mvno_llm_settings_v3", "mvno_llm_settings_v2", "m
 const VERSION_CHECK_KEY = "axcell_version_check_v1";
 // 기본 실제주소 — 사용자가 F9 설정에서 비워 두면 이 주소로 버전을 확인한다(2026-08-11 지정).
 const VERSION_CHECK_UPSTREAM_URL = "https://version-ns-17786299267796664.mng-1.ip.violet.uplus.co.kr";
-// 인증 키는 코드에 박지 않는다 — 설정(F9)에서 받아 이 PC 에만 저장한다.
-// 비워 두면 AI 설정의 키를 그대로 쓴다(같은 게이트웨이면 그것으로 통과).
-const VERSION_CHECK_DEFAULTS = { upstreamUrl: VERSION_CHECK_UPSTREAM_URL, apiKey: "" };
+// 버전 서버 게이트웨이 인증 키. 이 헤더 없이는 통과하지 못한다(curl 실측).
+// [사용자 지시 2026-08-11] 내부망 전용이라 기본값으로 코드에 둔다 — AI 키(openai-compat)와
+// 같은 관례. 설정(F9)에서 바꾸면 그 값이 우선하고, 바꾼 값은 이 PC 에만 저장된다.
+const VERSION_CHECK_API_KEY = "76657273";
+const VERSION_CHECK_DEFAULTS = { upstreamUrl: VERSION_CHECK_UPSTREAM_URL, apiKey: VERSION_CHECK_API_KEY };
 
 function loadVersionCheckSettings() {
   try {
@@ -98,7 +100,8 @@ function loadVersionCheckSettings() {
       const saved = String(parsed.upstreamUrl || parsed.baseUrl || "").trim();
       return {
         upstreamUrl: saved || VERSION_CHECK_UPSTREAM_URL,
-        apiKey: String(parsed.apiKey || "").trim(),
+        // 저장값이 비어 있으면 기본 키로 — '한 번 지웠던' 사용자도 기본 동작으로 돌아온다.
+        apiKey: String(parsed.apiKey || "").trim() || VERSION_CHECK_API_KEY,
       };
     }
   } catch {}

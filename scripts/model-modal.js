@@ -228,10 +228,11 @@ function openSettingsModal(devMode) {
         실제 주소만 여기서 정합니다.
       </div>
       <label style="font-size:11.5px; color:#666">인증 키 (Api-Key)</label>
-      <input type="text" id="set-ver-apikey" value="${escapeHtml(verCfg.apiKey || "")}" placeholder="비워 두면 위 AI 키를 씁니다" />
+      <input type="text" id="set-ver-apikey" value="${escapeHtml(verCfg.apiKey || "")}"
+             placeholder="${escapeHtml(typeof VERSION_CHECK_API_KEY === "string" ? VERSION_CHECK_API_KEY : "")}" />
       <div style="font-size:11px; color:#777; margin:-6px 0 8px">
-        게이트웨이가 Api-Key 헤더를 요구합니다. 버전 서버 키가 AI 키와 다르면 여기에 넣으세요.
-        (이 PC 에만 저장되고 서버로는 버전 확인 요청에만 실려 나갑니다)
+        게이트웨이가 Api-Key 헤더를 요구합니다. 기본값이 채워져 있으니 그대로 두시면 되고,
+        키가 바뀌면 여기서 고치면 됩니다(바꾼 값은 이 PC 에만 저장됩니다).
       </div>
       <div class="row" style="margin-top:6px">
         <button class="btn-secondary" id="btn-version-check">버전 확인</button>

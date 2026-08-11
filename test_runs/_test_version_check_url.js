@@ -46,7 +46,7 @@ globalThis.__base = versionCheckUpstreamBase;
 
 console.log("[1] 기본 실제주소");
 check("상수로 박혀 있음", cfg.includes(`const VERSION_CHECK_UPSTREAM_URL = "${DEFAULT_URL}"`));
-check("기본값이 그 상수", /const VERSION_CHECK_DEFAULTS = \{ upstreamUrl: VERSION_CHECK_UPSTREAM_URL, apiKey: "" \};/.test(cfg));
+check("기본 주소가 그 상수", /const VERSION_CHECK_DEFAULTS = \{ upstreamUrl: VERSION_CHECK_UPSTREAM_URL,/.test(cfg));
 check("저장값이 비어 있으면 기본값으로 되살림", /upstreamUrl: saved \|\| VERSION_CHECK_UPSTREAM_URL,/.test(cfg));
 check("입력칸 placeholder 도 기본 주소", /placeholder="\$\{escapeHtml\(typeof VERSION_CHECK_UPSTREAM_URL/.test(modal));
 check("비워 둔 채 눌러도 기본 주소로 확인", /_typed \|\| \(typeof VERSION_CHECK_UPSTREAM_URL === "string" \? VERSION_CHECK_UPSTREAM_URL : ""\)/.test(modal));
@@ -86,10 +86,12 @@ check("AI 호출과 같은 헤더 생성기를 쓴다", /openAICompatAuthHeaders
 check("요청에 인증 헤더를 실어 보낸다", /headers: \{ accept: "application\/json", "X-B2B-Vllm-Base": conf\.upstreamUrl, \.\.\._authHeaders \}/.test(cfg));
 check("버전 서버 전용 키를 설정에서 받는다", /apiKey: String\(parsed\.apiKey \|\| ""\)\.trim\(\)/.test(cfg));
 check("비어 있으면 AI 키로 폴백", /String\(conf\.apiKey \|\| ""\)\.trim\(\)\s*\|\|\s*String\(\(typeof settings === "object"/.test(cfg));
-// 키 값은 이 파일에도 적지 않는다(테스트 파일도 저장소에 올라간다).
-// '버전 확인용 키가 코드에 박혔는지'는 값을 몰라도 형태로 판별할 수 있다.
-check("버전 확인 키 기본값은 빈 문자열", /VERSION_CHECK_DEFAULTS = \{[^}]*apiKey: ""/.test(cfg));
-check("설정 화면 입력칸에 키가 미리 박혀 있지 않다", /id="set-ver-apikey" value="\$\{escapeHtml\(verCfg\.apiKey \|\| ""\)\}"/.test(modal));
+// [사용자 지시] 사내망 전용이라 기본 키를 코드에 둔다. 값 자체는 여기 적지 않는다 —
+// 키가 바뀌면 config.js 한 곳만 고치면 되게(테스트가 값을 따라다니지 않도록) 상수 참조만 검증한다.
+check("기본 키 상수가 있다", /const VERSION_CHECK_API_KEY = "[^"]+";/.test(cfg));
+check("기본값이 그 상수를 쓴다", /VERSION_CHECK_DEFAULTS = \{[^}]*apiKey: VERSION_CHECK_API_KEY/.test(cfg));
+check("저장값이 비면 기본 키로 되살림", /String\(parsed\.apiKey \|\| ""\)\.trim\(\) \|\| VERSION_CHECK_API_KEY/.test(cfg));
+check("설정 화면 입력칸은 저장값을 채운다", /id="set-ver-apikey" value="\$\{escapeHtml\(verCfg\.apiKey \|\| ""\)\}"/.test(modal));
 check("설정 화면에 키 입력칸", /id="set-ver-apikey"/.test(modal));
 check("버전 확인 누를 때 키도 저장", /apiKey: \(\$\("set-ver-apikey"\) \|\| \{\}\)\.value \|\| ""/.test(modal));
 check("화면에는 키 값을 찍지 않는다(헤더 이름만)", /<설정한 키>/.test(modal) && !/data\.apiKey/.test(modal));
