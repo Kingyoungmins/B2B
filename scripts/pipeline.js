@@ -3727,14 +3727,33 @@ async function _handlePipelineStepToggleImpl(stepId) {
   };
   // 비라이브(백엔드 전용) 스텝 → 기존 reconcile 경로
   if (!pipelineStepLiveLanguage(toggledStep)) {
+    traceToggleOnRoute("full_reapply", {
+      cause: "non_live_step", stepIdx: currentIdx, stepId: stepId,
+      lang: (toggledStep && toggledStep.language) || "",
+    });
     reconcilePipelineSimulationAfterEdit({ affectedStep: toggledStep, restorePipeline: beforeToggleSnapshot }).catch(revertOn);
     return;
   }
   // 서명 미기록/불일치(라이브가 알려진 상태 아님) 또는 교차파일 쓰기 스텝(라이브 단일적용은 소스 워크북
   // 뷰 풀림 위험) → 단일적용 대신 결정적 reset+enabled 재적용(이 스텝 포함, 파이프라인 순서대로).
-  if (_lastLiveAppliedSignature === null
-      || liveEnabledStepsSignature(beforeToggleSnapshot) !== _lastLiveAppliedSignature
-      || (typeof pipelineStepWritesCrossFile === "function" && pipelineStepWritesCrossFile(toggledStep))) {
+  const _sigNull = _lastLiveAppliedSignature === null;
+  const _sigMismatch = !_sigNull && liveEnabledStepsSignature(beforeToggleSnapshot) !== _lastLiveAppliedSignature;
+  const _crossFile = (typeof pipelineStepWritesCrossFile === "function" && pipelineStepWritesCrossFile(toggledStep));
+  if (_sigNull || _sigMismatch || _crossFile) {
+    // [진단 계측] 넷 중 무엇 때문에 전체 재적용으로 갔는지 남긴다(판정은 위 조건 그대로 — 무변경).
+    traceToggleOnRoute("full_reapply", {
+      cause: _sigNull ? "signature_missing" : (_sigMismatch ? "signature_mismatch" : "cross_file_write"),
+      stepIdx: currentIdx,
+      stepId: stepId,
+      sigNull: _sigNull,
+      sigMismatch: _sigMismatch,
+      crossFile: _crossFile,
+      runnerMappingChecked: !!state.runnerMappingChecked,
+      runnerMappingRunActive: !!state.runnerMappingRunActive,
+      enabledBefore: (beforeToggleSnapshot || []).filter(s => s && s.code && isStepEnabled(s)).length,
+      totalSteps: (state.pipeline || []).length,
+      diff: _sigMismatch ? _diffLiveSignatureParts(_lastLiveAppliedParts, liveEnabledStepsSignatureParts(beforeToggleSnapshot)) : "",
+    });
     try {
       await reconcilePipelineSimulationAfterEdit({ affectedStep: toggledStep, restorePipeline: beforeToggleSnapshot });
       clearPipelineResumeFromIndex();
@@ -3744,6 +3763,8 @@ async function _handlePipelineStepToggleImpl(stepId) {
     return;
   }
   // 단일 스텝 즉시 적용 — 적용 '직전' 스냅샷을 자동 캡처하므로 이후 이 스텝 OFF 롤백도 fast 로 동작.
+  // [진단 계측] 정상 경로도 같이 남긴다 — 전체 재적용 기록만 있으면 '몇 번 중 몇 번'인지 알 수 없다.
+  traceToggleOnRoute("single_step", { stepIdx: currentIdx, stepId: stepId });
   setPipelineRuntimeStatus([stepId], "running", "적용 중");
   try {
     const _applied = await applyMappedSingleStep(stepId);   // [실행기 매핑] 옛 파일/시트명 → 실제명으로 치환 후 적용
@@ -3783,6 +3804,7 @@ async function _handlePipelineStepToggleImpl(stepId) {
 // Python 전용 파이프라인은 기존 reset 가능한 서버 번들 경로를 유지한다.
 // [0.5.2.2] 마지막으로 라이브에 적용 완료된 '켜진 스텝 집합' 시그니처 — no-op 편집 생략용.
 let _lastLiveAppliedSignature = null;
+let _lastLiveAppliedParts = null;   // [진단] 위 서명의 스텝별 구성요소 — 불일치 원인 지목용(기록 전용)
 
 function liveEnabledStepsSignature(steps = state.pipeline) {
   return (steps || [])
@@ -3791,8 +3813,25 @@ function liveEnabledStepsSignature(steps = state.pipeline) {
     .join("");
 }
 
+/* [진단 계측 2026-08-11] 서명은 통짜 문자열이라 '안 맞다'까지만 알 수 있고 '무엇이 달라졌나'를
+   못 알려준다. 실사용 로그(8/11 09:24)에서 단계 ON 한 번에 리셋+1단계부터 재적용(3분 59초)이
+   찍혔는데, 원인 후보 4개 중 무엇이었는지 사후 판별이 불가능했다. 서명과 같은 재료를 스텝별로
+   쪼개 함께 보관해, 불일치 시 어느 스텝의 어느 항목(대상 파일/코드/켜짐)이 달라졌는지 지목한다.
+   코드 전문은 남기지 않는다(해시 앞 8자리만). 판정에는 절대 쓰지 않는 순수 기록용. */
+function liveEnabledStepsSignatureParts(steps = state.pipeline) {
+  return (steps || [])
+    .filter(s => !!(s && s.code && isStepEnabled(s) && pipelineStepLiveLanguage(s)))
+    .map(s => ({
+      id: s.id || "",
+      lang: s.language || "",
+      fid: s.targetFileId || "",
+      code: _pipelineSigHash(String(s.code || "")).slice(0, 8),
+    }));
+}
+
 function noteLivePipelineApplied(steps = state.pipeline) {
   _lastLiveAppliedSignature = liveEnabledStepsSignature(steps);
+  try { _lastLiveAppliedParts = liveEnabledStepsSignatureParts(steps); } catch (_) { _lastLiveAppliedParts = null; }
   // [검토 #9 + 검증 R3] 'AI 도움 미검증 수정' 낙인 해제 — 단, 호출부들이 전체 배열을 넘기는 경우가
   // 많아(단일 스텝 적용·결과 편집하기 등) 일괄 삭제하면 '실행 안 된 수정'의 낙인까지 지워진다.
   // 활성 상태이고 런타임 상태칩이 '적용됨'인 스텝만 해제한다(수정 스텝은 '수정됨 · 미적용'(review)
@@ -3811,6 +3850,44 @@ function noteLivePipelineApplied(steps = state.pipeline) {
 // 다음 편집은 무조건 실제 재적용을 수행한다.
 function invalidateLivePipelineApplied() {
   _lastLiveAppliedSignature = null;
+  _lastLiveAppliedParts = null;
+}
+
+/* [진단 계측 2026-08-11] 단계 ON 이 '그 단계만 적용' 대신 '리셋 + 1단계부터 전체 재적용'으로
+   떨어진 이유를 남긴다. 판정 자체는 건드리지 않는다(로그만).
+   왜 필요한가: 실사용 로그에 ON 한 번당 3분 59초짜리 전체 재적용이 이틀간 8번 찍혔는데,
+   판정부에 기록이 없어 원인 후보(비라이브/서명없음/서명불일치/교차파일) 중 무엇인지 사후에
+   가릴 수 없었다. 불일치일 때는 어느 스텝의 무엇이 달라졌는지까지 남긴다. */
+function _diffLiveSignatureParts(prevParts, curParts) {
+  const prev = Array.isArray(prevParts) ? prevParts : null;
+  const cur = Array.isArray(curParts) ? curParts : [];
+  if (!prev) return "prev:none";
+  const prevById = new Map(prev.map(p => [p.id, p]));
+  const curById = new Map(cur.map(p => [p.id, p]));
+  const out = [];
+  prev.forEach(p => { if (!curById.has(p.id)) out.push(p.id + ":꺼짐"); });
+  cur.forEach(c => {
+    const p = prevById.get(c.id);
+    if (!p) { out.push(c.id + ":켜짐"); return; }
+    const fields = [];
+    if (p.fid !== c.fid) fields.push(`파일 ${p.fid}→${c.fid}`);
+    if (p.code !== c.code) fields.push(`코드 ${p.code}→${c.code}`);
+    if (p.lang !== c.lang) fields.push(`언어 ${p.lang}→${c.lang}`);
+    if (fields.length) out.push(c.id + ":" + fields.join(","));
+  });
+  // 순서만 바뀐 경우도 서명은 달라진다 — 위 비교로는 안 잡히므로 별도로 표시.
+  if (!out.length && prev.map(p => p.id).join(",") !== cur.map(c => c.id).join(",")) out.push("순서변경");
+  return out.length ? out.slice(0, 8).join(" | ") : "동일(원인불명)";
+}
+
+function traceToggleOnRoute(route, info) {
+  try {
+    if (typeof traceClientUiEvent !== "function") return;
+    traceClientUiEvent("pipeline.toggle_on.route", {
+      route: String(route),
+      ...Object.keys(info || {}).reduce((acc, k) => { acc[k] = String(info[k]); return acc; }, {}),
+    });
+  } catch (_) {}
 }
 
 // 직전에 라이브 파이프라인이 적용돼 있었는지. 강제재시작 직전에 캡처해 '자동 1회 재적용' 여부 판단에 쓴다
