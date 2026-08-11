@@ -2707,7 +2707,15 @@ function computeStateBeforeStep(stepIdx) {
 function _editPrefillPromptOf(step) {
   const p = String((step && step.prompt) || "").trim();
   if (!p) return "";
-  if (/^\[녹화됨\/VBA\]/.test(p) || /^\[복붙 캡처\]/.test(p)) return "";
+  // '대화 없이 태어난 스텝' 판별은 채팅 매칭(chat-ui.js stepChatOriginless)과 같은 기준을 쓴다.
+  // 실제 저장 형태를 직접 확인할 것 — 복붙 캡처의 prompt 는 "복붙 캡처: …"(대괄호 없음)이고
+  // 대괄호 마커 [복붙 캡처] 는 code 주석에만 있다. 녹화도 "[녹화됨] …"(병합)과
+  // "[녹화됨/VBA] …" 두 형태다. 대괄호를 가정한 정규식은 둘 다 못 잡아서, 기계 문구가
+  // 입력창에 채워진 채 "연결된 대화가 없습니다" 안내가 같이 뜨는 모순이 났다.
+  if (typeof stepChatOriginless === "function" && stepChatOriginless(step)) return "";
+  if (p === "manual cell edit") return "";              // 폴백(chat-ui 미로드 환경)
+  if (/^\[녹화됨/.test(p)) return "";                    // [녹화됨] / [녹화됨/VBA]
+  if (/^복붙\s*캡처\s*[:：]/.test(p)) return "";          // pipeline.js 복붙 캡처 저장 형식
   return p;
 }
 
@@ -2735,6 +2743,10 @@ function _applyEditPrefill(step) {
     ta.dispatchEvent(new Event("input", { bubbles: true }));   // 자동 높이/멘션 갱신
     ta.focus();
     ta.setSelectionRange(ta.value.length, ta.value.length);
+    // 원문이 @시트[...] 같은 멘션 토큰으로 끝나면 위 input 이 자동완성 메뉴를 열어 버린다.
+    // 그러면 첫 Enter 가 '전송'이 아니라 '같은 토큰 재삽입'으로 먹힌다(실측). 프리필은 사용자가
+    // 방금 @ 를 친 상황이 아니므로 메뉴가 뜰 이유가 없다 — 바로 닫는다.
+    if (typeof hideMentionMenu === "function") hideMentionMenu();
   } catch (_) {}
 }
 

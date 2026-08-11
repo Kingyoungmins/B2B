@@ -38,6 +38,10 @@ function fn(src, name) {
 
 const pj = fs.readFileSync(path.join(ROOT, "scripts", "pipeline.js"), "utf8").replace(/^﻿/, "");
 
+// stepChatOriginless 는 스텁이 아니라 chat-ui.js 원문을 그대로 가져온다 —
+// '대화 없이 태어난 스텝' 판별 기준이 두 파일에서 갈라지면(대괄호 가정 등) 바로 이 테스트가 깨지도록.
+const cu = fs.readFileSync(path.join(ROOT, "scripts", "chat-ui.js"), "utf8").replace(/^﻿/, "");
+
 const STUBS = `
 var window = globalThis;
 var state = { pipeline: [], editingStepId: null };
@@ -46,6 +50,7 @@ function renderPipeline() {}
 function renderEditingBanner() {}
 var _scrolled = []; function scrollChatToStepRequest(step) { _scrolled.push(step && step.id); return true; }
 function Event(name, opts) { this.type = name; }
+var _mentionHidden = 0; function hideMentionMenu() { _mentionHidden += 1; }
 var _ta = {
   value: "", focused: 0, sel: null, events: [],
   focus() { this.focused += 1; },
@@ -55,6 +60,7 @@ var _ta = {
 var document = { getElementById: id => (id === "chat-text" ? _ta : null) };
 `;
 const EXTRACT = [
+  fn(cu, "stepChatOriginless"),
   fn(pj, "_editPrefillPromptOf"),
   fn(pj, "_applyEditPrefill"),
   fn(pj, "toggleEditStep"),
@@ -65,8 +71,9 @@ module.exports = {
   get ta() { return _ta; },
   get toasts() { return _toasts; },
   get scrolled() { return _scrolled; },
+  get mentionHidden() { return _mentionHidden; },
   reset(steps) {
-    _toasts.length = 0; _scrolled.length = 0;
+    _toasts.length = 0; _scrolled.length = 0; _mentionHidden = 0;
     _ta.value = ""; _ta.focused = 0; _ta.sel = null; _ta.events.length = 0;
     window.__b2bEditPrefill = null;
     state.pipeline = steps; state.editingStepId = null;
@@ -84,12 +91,19 @@ function check(name, cond, detail) {
 }
 
 const PROMPT3 = "선택 범위: @범위[input_v056_청구내역.xlsx/청구내역!D18] 300써줘";
+// 아래 prompt/code 형식은 '실제 저장 형태'다(추측 금지):
+//   record-review.js:709 "[녹화됨/VBA] " + title       — VBA 녹화
+//   record-review.js:144 `[녹화됨] ${title}: ${intent}` — 병합 녹화
+//   pipeline.js:6147/6171 "복붙 캡처: " + description   — 복붙 캡처(대괄호 없음! 마커는 code 주석)
 function makeSteps() {
   return [
     { id: "s1", code: "c1", prompt: "1단계 요청" },
     { id: "s2", code: "c2", prompt: "" },
     { id: "s3", code: "c3", prompt: PROMPT3 },
     { id: "s4", code: "c4", prompt: "[녹화됨/VBA] Sub ..." },
+    { id: "s5", code: "# [복붙 캡처] ctx.paste_copied(...)", prompt: "복붙 캡처: 복붙: 청구내역!D18:F20 → 정산!H18" },
+    { id: "s6", code: "c6", prompt: "[녹화됨] 정렬: 금액 내림차순" },
+    { id: "s7", code: "c7", prompt: "manual cell edit" },
   ];
 }
 
@@ -129,16 +143,32 @@ T.toggleEditStep("s1");                     // s3 프리필 그대로인 채 s1 
 check("s1 원문으로 교체", T.ta.value === "1단계 요청", T.ta.value);
 check("수정 대상 갱신", T.state.editingStepId === "s1");
 
-console.log("[5] 프리필하지 않는 스텝");
-T.reset(makeSteps());
-T.toggleEditStep("s4");                     // 녹화 스텝
-check("녹화 스텝은 비워 둠", T.ta.value === "", T.ta.value);
-check("수정 모드는 진입(기존 동작 유지)", T.state.editingStepId === "s4");
-T.reset(makeSteps());
-T.toggleEditStep("s2");                     // prompt 빈 스텝
-check("prompt 없으면 비워 둠", T.ta.value === "");
+console.log("[5] 프리필하지 않는 스텝 — '실제 저장 형태' 기준(대괄호 가정 금지)");
+for (const [id, label] of [
+  ["s4", "VBA 녹화 [녹화됨/VBA]"],
+  ["s6", "병합 녹화 [녹화됨] — 대괄호+슬래시 가정으론 못 잡던 형태"],
+  ["s5", "복붙 캡처 \"복붙 캡처: …\" — prompt 에 대괄호 없음(마커는 code)"],
+  ["s7", "수동 셀편집 manual cell edit"],
+  ["s2", "prompt 없음"],
+]) {
+  T.reset(makeSteps());
+  T.toggleEditStep(id);
+  check(label + " → 입력창 비워 둠", T.ta.value === "", T.ta.value);
+  check(label + " → 수정 모드는 진입(기존 동작 유지)", T.state.editingStepId === id);
+}
+// 판별 기준이 chat-ui.js 와 갈라지지 않는지: 채팅 원문이 없다고 보는 스텝엔 절대 프리필하지 않는다.
+check("stepChatOriginless 를 실제로 사용(중복 판별 금지)", /stepChatOriginless\(step\)/.test(pj));
 
-console.log("[6] 배선 — 렌더/스크롤 기존 동작 유지");
+console.log("[6] 멘션 자동완성 메뉴 — 프리필 직후엔 닫는다(첫 Enter 가 전송되도록)");
+T.reset(makeSteps());
+T.toggleEditStep("s3");
+check("hideMentionMenu 호출", T.mentionHidden === 1, T.mentionHidden);
+T.reset([{ id: "m1", code: "c", prompt: "여기에 붙여넣기 @시트[매출.xlsx/2월]" }]);
+T.toggleEditStep("m1");                     // 멘션 토큰으로 끝나는 원문 = 메뉴가 열리는 경우
+check("멘션으로 끝나는 원문도 메뉴 닫힘", T.mentionHidden === 1, T.mentionHidden);
+check("입력창 값은 원문 그대로", T.ta.value === "여기에 붙여넣기 @시트[매출.xlsx/2월]");
+
+console.log("[7] 배선 — 렌더/스크롤 기존 동작 유지");
 check("scrollChatToStepRequest 예약 코드 존재", /setTimeout\(\(\) => scrollChatToStepRequest\(step\), 0\)/.test(pj));
 check("프리필이 스크롤보다 먼저(원문이 입력창에 이미 있는 채 강조)", /_applyEditPrefill\(step\);[\s\S]{0,220}scrollChatToStepRequest/.test(pj));
 
