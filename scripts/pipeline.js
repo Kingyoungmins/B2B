@@ -1195,6 +1195,22 @@ async function runIsolatedLivePipelineSteps(sourceSteps, initialExcelId, options
     else groups.push({ fileId, steps: [payload] });
   }
 
+  // [진단 계측] 실행에 실제로 넘어가는 스텝을 켜짐/꺼짐과 함께 남긴다. sentIdx 는 이번에 보낼 스텝,
+  // offSent 는 그중 '지금 꺼져 있는' 스텝 — 여기에 값이 찍히면 OFF 인데 반영되는 그 현상이다.
+  {
+    const _sent = groups.reduce((acc, g) => acc.concat((g.steps || []).map(p => p && p.stepIdx)), []);
+    tracePipelineRun("request", {
+      mode: options.backgroundMode ? "fullrun_bg" : "isolated",
+      startIndex, skipReset,
+      outputMode: options.outputMode || "sync",
+      groups: groups.length,
+      sentIdx: _sent.join(","),
+      offSent: _offStepsAmongSent(sourceSteps || state.pipeline, _sent),
+      resetFileIds: explicitResetFileIds.join(","),
+      steps: _stepsOnOffMap(sourceSteps || state.pipeline),
+    });
+  }
+
   const mutedExcelIds = [];
   const resetDone = new Set();
   let loadingStarted = false;
@@ -3654,6 +3670,18 @@ async function _handlePipelineStepToggleImpl(stepId) {
     refreshRunButton();
     if (typeof scheduleLogicAutoBackup === "function") scheduleLogicAutoBackup("step-toggled");
     const markHeld = () => markPipelinePendingFromIndex(currentIdx, { label: "보류" });
+    // [진단 계측] OFF 는 '라이브를 그 단계 직전으로 되돌리기'가 핵심이다. 어느 경로로 되돌렸고
+    // 성공했는지를 남기지 않으면, 되돌리기가 조용히 실패해 꺼진 단계의 효과가 시트에 남아도
+    // 사후에 알 수 없다(제보: "4단계는 off 인데 4단계가 반영돼 있더라").
+    const _crossSuffix = (typeof pipelineSuffixWritesCrossFile === "function")
+      && pipelineSuffixWritesCrossFile(beforeToggleSnapshot, currentIdx);
+    const traceOff = (route, ok, extra) => tracePipelineRun("toggle_off", {
+      route, ok: ok === true, stepIdx: currentIdx, stepId,
+      fastLast: !!fastLast, crossFileSuffix: !!_crossSuffix,
+      sigNull: _lastLiveAppliedSignature === null,
+      steps: _stepsOnOffMap(state.pipeline),
+      ...(extra || {}),
+    });
     const revertAll = (err) => {
       state.pipeline = beforeToggleSnapshot;
       renderPipeline();
@@ -3662,6 +3690,7 @@ async function _handlePipelineStepToggleImpl(stepId) {
     };
     // 비라이브(백엔드 전용) 스텝 → 기존 reconcile 경로(시뮬레이터 재계산)
     if (!pipelineStepLiveLanguage(beforeToggleSnapshot[currentIdx])) {
+      traceOff("non_live_reconcile", true);
       reconcilePipelineSimulationAfterEdit({ affectedStep: beforeToggleSnapshot[currentIdx], restorePipeline: beforeToggleSnapshot })
         .then(markHeld).catch(revertAll);
       return;
@@ -3671,8 +3700,9 @@ async function _handlePipelineStepToggleImpl(stepId) {
     if (_lastLiveAppliedSignature === null) {
       try {
         await reconcilePipelineSimulationAfterEdit({ affectedStep: beforeToggleSnapshot[currentIdx], restorePipeline: beforeToggleSnapshot });
+        traceOff("reconcile_no_signature", true);
         markHeld();
-      } catch (err) { revertAll(err); }
+      } catch (err) { traceOff("reconcile_no_signature", false, { error: String((err && err.message) || err).slice(0, 200) }); revertAll(err); }
       return;
     }
     // 마지막 스텝: 직전 스냅샷 복원 fast path(뒤 스텝이 없어 캐스케이드 대상 없음)
@@ -3680,32 +3710,43 @@ async function _handlePipelineStepToggleImpl(stepId) {
       try {
         if (await restoreLastStepPreApplySnapshot(beforeToggleSnapshot[currentIdx], { message: "단계 OFF 반영 중..." })) {
           noteLivePipelineApplied(state.pipeline);
+          traceOff("fast_last_snapshot", true);
           markHeld();
           if (typeof toast === "function") toast("단계를 껐습니다(보류). 다시 켜면 그때 적용됩니다.", "success");
           return;
         }
+        // false = 스냅샷이 없거나 대상 세션을 못 찾음. 예외가 아니라 조용한 실패라 특히 중요하다.
+        traceOff("fast_last_snapshot", false, { reason: "no_snapshot_or_session" });
       } catch (err) {
+        traceOff("fast_last_snapshot", false, { error: String((err && err.message) || err).slice(0, 200) });
         console.warn("[pipeline] fast last-step OFF failed; falling back to rollback/reconcile", err);
       }
     }
     // 중간 스텝: 스냅샷 롤백 + [idx..) 보류 라벨(교차파일 쓰기 구간은 스냅샷 복원이 목적지를 못 되돌리므로 스킵)
-    if (!pipelineSuffixWritesCrossFile(beforeToggleSnapshot, currentIdx)) {
+    if (!_crossSuffix) {
       try {
         if (await restorePipelineToCheckpointAndHold(currentIdx, beforeToggleSnapshot, {
           message: "선택한 단계 직전 상태로 되돌리는 중...",
           toast: `Step ${currentIdx + 1}부터 껐습니다(보류). 스위치를 켜면 그때 적용됩니다.`,
         })) {
+          traceOff("checkpoint_rollback", true);
           return;
         }
+        traceOff("checkpoint_rollback", false, { reason: "restore_returned_false" });
       } catch (err) {
+        traceOff("checkpoint_rollback", false, { error: String((err && err.message) || err).slice(0, 200) });
         console.warn("[pipeline] middle-step OFF rollback failed; falling back to full reconcile", err);
       }
     }
     // 폴백: reset + enabled(=프리픽스만) 재적용 → 롤백 등가(느리지만 항상 옳다)
     try {
       await reconcilePipelineSimulationAfterEdit({ affectedStep: beforeToggleSnapshot[currentIdx], restorePipeline: beforeToggleSnapshot });
+      traceOff("reconcile_fallback", true);
       markHeld();
-    } catch (err) { revertAll(err); }
+    } catch (err) {
+      traceOff("reconcile_fallback", false, { error: String((err && err.message) || err).slice(0, 200) });
+      revertAll(err);
+    }
     return;
   }
 
@@ -3910,6 +3951,43 @@ function _diffLiveSignatureParts(prevParts, curParts) {
   // 순서만 바뀐 경우도 서명은 달라진다 — 위 비교로는 안 잡히므로 별도로 표시.
   if (!out.length && prev.map(p => p.id).join(",") !== cur.map(c => c.id).join(",")) out.push("순서변경");
   return out.length ? out.slice(0, 8).join(" | ") : "동일(원인불명)";
+}
+
+/* [진단 계측 2026-08-11] "4단계는 꺼져 있는데 4단계가 시트에 반영돼 있더라" 제보를 사후에 가려내려면
+   ① 실행에 무엇을 넘겼는지(켜짐/꺼짐까지) ② 그중 실제로 보낸 스텝이 무엇인지 ③ 꺼진 스텝이 섞였는지
+   를 한 자리에서 봐야 한다. 아래 두 함수가 그 기록을 만든다(판정에는 쓰지 않는 순수 기록용).
+   스텝이 많아도 로그가 터지지 않게 앞 40개까지만 남긴다. */
+function _stepsOnOffMap(steps, limit) {
+  const list = steps || [];
+  const cap = Number.isInteger(limit) ? limit : 40;
+  const body = list.slice(0, cap).map((s, i) => {
+    if (!s) return i + ":∅";
+    const on = (typeof isStepEnabled === "function") ? isStepEnabled(s) : s.enabled !== false;
+    return i + ":" + (s.id || "?") + ":" + (on ? "on" : "off");
+  }).join("|");
+  return list.length > cap ? body + "|…+" + (list.length - cap) : body;
+}
+
+/* 보낸 스텝 중 '지금 꺼져 있는' 스텝이 있으면 그 자리에서 잡아낸다 — 이게 제보의 핵심 증거다. */
+function _offStepsAmongSent(steps, sentIdxList) {
+  const list = steps || [];
+  const bad = [];
+  (sentIdxList || []).forEach(i => {
+    const s = list[i];
+    if (!s) { bad.push(i + ":없음"); return; }
+    const on = (typeof isStepEnabled === "function") ? isStepEnabled(s) : s.enabled !== false;
+    if (!on) bad.push(i + ":" + (s.id || "?"));
+  });
+  return bad.join(",");
+}
+
+function tracePipelineRun(phase, info) {
+  try {
+    if (typeof traceClientUiEvent !== "function") return;
+    traceClientUiEvent("pipeline.run." + String(phase), {
+      ...Object.keys(info || {}).reduce((acc, k) => { acc[k] = String(info[k]); return acc; }, {}),
+    });
+  } catch (_) {}
 }
 
 function traceToggleOnRoute(route, info) {
@@ -4836,6 +4914,22 @@ async function _reapplyVbaPipelineToLiveImpl(excelId, options = {}) {
       trustedStatic: s.trustedStatic === true,
     }));
   const hasVbaStep = enabledSteps.some(s => String((s && s.language) || "").toLowerCase() !== "python");
+  // [진단 계측] 리셋 후 '켜진 스텝'을 처음부터 다시 올리는 경로. 여기에 꺼진 스텝이 섞이면
+  // OFF 인데 시트에 반영되는 그 현상이 된다. sourceSteps 는 호출자가 넘긴 배열일 수 있어
+  // (편집 직전 스냅샷 등) state.pipeline 과 다를 수 있다 — 둘 다 남겨 어긋남을 볼 수 있게 한다.
+  {
+    const _sent = enabledSteps.map(s => s.stepIdx);
+    tracePipelineRun("request", {
+      mode: "reapply_from_pristine",
+      capIndexExclusive: _capIdx == null ? "" : _capIdx,
+      sentIdx: _sent.join(","),
+      offSent: _offStepsAmongSent(sourceSteps, _sent),
+      offSentVsLive: _offStepsAmongSent(state.pipeline, _sent),
+      sourceIsLivePipeline: (options.steps ? "no" : "yes"),
+      steps: _stepsOnOffMap(sourceSteps),
+      liveSteps: options.steps ? _stepsOnOffMap(state.pipeline) : "",
+    });
+  }
   // 대상 고정: 호출자가 넘긴 excelId(보통 '현재 탭')보다 스텝이 만들어졌던 파일이 우선.
   // B 탭을 보던 중 토글/실행해도 A에서 만든 스킬은 A로 전환 후 A에 리셋·재적용된다.
   let pinnedFileId = null;

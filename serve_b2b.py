@@ -9558,6 +9558,12 @@ def _run_vba_pipeline_on_session_impl(excel_id, steps, reset=True, entry=None, v
             workbook=_trace_workbook_info(wb),
             steps=len(steps or []),
             runSteps=len(run_steps),
+            # [진단 계측 2026-08-11] 클라가 '무엇을 보냈는지'를 백엔드 쪽에도 남긴다.
+            # 클라 로그(pipeline.run.request 의 sentIdx)와 대조하면, 꺼진 단계가 실행에
+            # 섞여 들어갔는지를 양쪽에서 교차 확인할 수 있다(제보: OFF 인데 시트에 반영).
+            stepIdxs=",".join(
+                str(s.get("stepIdx")) for s in run_steps if isinstance(s, dict)
+            ),
         )
         try:
             if not run_steps:
