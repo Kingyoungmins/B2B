@@ -227,6 +227,12 @@ function openSettingsModal(devMode) {
         AI 호출과 같은 길(위 Base URL → 로컬 /v1 프록시)로 나갑니다. 버전 서버만 다른 곳이라
         실제 주소만 여기서 정합니다.
       </div>
+      <label style="font-size:11.5px; color:#666">인증 키 (Api-Key)</label>
+      <input type="text" id="set-ver-apikey" value="${escapeHtml(verCfg.apiKey || "")}" placeholder="비워 두면 위 AI 키를 씁니다" />
+      <div style="font-size:11px; color:#777; margin:-6px 0 8px">
+        게이트웨이가 Api-Key 헤더를 요구합니다. 버전 서버 키가 AI 키와 다르면 여기에 넣으세요.
+        (이 PC 에만 저장되고 서버로는 버전 확인 요청에만 실려 나갑니다)
+      </div>
       <div class="row" style="margin-top:6px">
         <button class="btn-secondary" id="btn-version-check">버전 확인</button>
       </div>
@@ -341,6 +347,7 @@ function openSettingsModal(devMode) {
       const _typed = String($("set-ver-upstream").value || "").trim();
       const cfg = saveVersionCheckSettings({
         upstreamUrl: _typed || (typeof VERSION_CHECK_UPSTREAM_URL === "string" ? VERSION_CHECK_UPSTREAM_URL : ""),
+        apiKey: ($("set-ver-apikey") || {}).value || "",
       });
       if (!_typed && cfg.upstreamUrl) $("set-ver-upstream").value = cfg.upstreamUrl;
       if (!cfg.upstreamUrl) {
@@ -359,9 +366,11 @@ function openSettingsModal(devMode) {
         }
         const latest = (data.latest && data.latest.normalized) || "";
         // 실제로 버전 서버가 받은 주소를 그대로 보여준다 — 복사해서 curl 로 확인할 수 있게.
+        // 키 값 자체는 화면에 찍지 않는다(어깨너머 노출 방지) — 헤더 이름만 보여준다.
+        const curlAuth = data.authHeader ? ` -H "${escapeHtml(data.authHeader)}: <설정한 키>"` : "";
         const where = data.upstreamUrl
           ? `<div style="color:#777; margin-top:4px">호출 주소: <code style="user-select:all">${escapeHtml(data.upstreamUrl)}</code></div>`
-            + `<div style="color:#999; margin-top:2px">curl -s ${escapeHtml(data.upstreamUrl)}</div>`
+            + `<div style="color:#999; margin-top:2px">curl -s${curlAuth} "${escapeHtml(data.upstreamUrl)}"</div>`
           : (data.checkedUrl ? `<div style="color:#777; margin-top:2px">${escapeHtml(data.checkedUrl)}</div>` : "");
         if (data.match) {
           res.innerHTML = `<div style="color:#28a745">최신 버전입니다 · ${escapeHtml(latest)}</div>`
@@ -385,7 +394,10 @@ function openSettingsModal(devMode) {
       return;
     }
     if (devMode && $("set-ver-upstream")) {
-      saveVersionCheckSettings({ upstreamUrl: $("set-ver-upstream").value });
+      saveVersionCheckSettings({
+        upstreamUrl: $("set-ver-upstream").value,
+        apiKey: ($("set-ver-apikey") || {}).value || "",
+      });
     }
     settings = {
       ...settings,

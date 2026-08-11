@@ -46,8 +46,8 @@ globalThis.__base = versionCheckUpstreamBase;
 
 console.log("[1] 기본 실제주소");
 check("상수로 박혀 있음", cfg.includes(`const VERSION_CHECK_UPSTREAM_URL = "${DEFAULT_URL}"`));
-check("기본값이 그 상수", /const VERSION_CHECK_DEFAULTS = \{ upstreamUrl: VERSION_CHECK_UPSTREAM_URL \};/.test(cfg));
-check("저장값이 비어 있으면 기본값으로 되살림", /return \{ upstreamUrl: saved \|\| VERSION_CHECK_UPSTREAM_URL \};/.test(cfg));
+check("기본값이 그 상수", /const VERSION_CHECK_DEFAULTS = \{ upstreamUrl: VERSION_CHECK_UPSTREAM_URL, apiKey: "" \};/.test(cfg));
+check("저장값이 비어 있으면 기본값으로 되살림", /upstreamUrl: saved \|\| VERSION_CHECK_UPSTREAM_URL,/.test(cfg));
 check("입력칸 placeholder 도 기본 주소", /placeholder="\$\{escapeHtml\(typeof VERSION_CHECK_UPSTREAM_URL/.test(modal));
 check("비워 둔 채 눌러도 기본 주소로 확인", /_typed \|\| \(typeof VERSION_CHECK_UPSTREAM_URL === "string" \? VERSION_CHECK_UPSTREAM_URL : ""\)/.test(modal));
 
@@ -77,11 +77,21 @@ check("base 는 끝의 /v1·/version 을 떼어냄",
 
 console.log("[4] 결과에 curl 로 쓸 완성 주소가 나온다");
 check("runVersionCheck 가 upstreamUrl 을 채움", /out\.upstreamUrl = versionCheckUpstreamEndpoint\(conf\.upstreamUrl\);/.test(cfg));
-check("반환 초기값에 upstreamUrl 포함", /const out = \{ ok: false, current: null, latest: null, match: null, checkedUrl: "", upstreamUrl: "", error: "" \};/.test(cfg));
+check("반환 초기값에 upstreamUrl·authHeader 포함", /const out = \{ ok: false,[^\n]*upstreamUrl: "", authHeader: "", error: "" \};/.test(cfg));
 check("화면에 호출 주소 표시", /호출 주소: <code style="user-select:all">/.test(modal));
-check("화면에 curl 예시 표시", /curl -s \$\{escapeHtml\(data\.upstreamUrl\)\}/.test(modal));
+check("화면에 curl 예시 표시(인증 헤더 포함)", /curl -s\$\{curlAuth\} "\$\{escapeHtml\(data\.upstreamUrl\)\}"/.test(modal));
 
-console.log("[5] 프록시 규칙과 어긋나지 않는가(서버 쪽 계약)");
+console.log("[5] 인증 헤더 — 게이트웨이가 Api-Key 를 요구한다(curl 실측)");
+check("AI 호출과 같은 헤더 생성기를 쓴다", /openAICompatAuthHeaders\(_verKey,/.test(cfg));
+check("요청에 인증 헤더를 실어 보낸다", /headers: \{ accept: "application\/json", "X-B2B-Vllm-Base": conf\.upstreamUrl, \.\.\._authHeaders \}/.test(cfg));
+check("버전 서버 전용 키를 설정에서 받는다", /apiKey: String\(parsed\.apiKey \|\| ""\)\.trim\(\)/.test(cfg));
+check("비어 있으면 AI 키로 폴백", /String\(conf\.apiKey \|\| ""\)\.trim\(\)\s*\|\|\s*String\(\(typeof settings === "object"/.test(cfg));
+check("키를 코드에 박지 않았다", !/76657273/.test(cfg) && !/76657273/.test(modal));
+check("설정 화면에 키 입력칸", /id="set-ver-apikey"/.test(modal));
+check("버전 확인 누를 때 키도 저장", /apiKey: \(\$\("set-ver-apikey"\) \|\| \{\}\)\.value \|\| ""/.test(modal));
+check("화면에는 키 값을 찍지 않는다(헤더 이름만)", /<설정한 키>/.test(modal) && !/data\.apiKey/.test(modal));
+
+console.log("[6] 프록시 규칙과 어긋나지 않는가(서버 쪽 계약)");
 const serve = fs.readFileSync(path.join(ROOT, "serve_b2b.py"), "utf8");
 check("프록시는 경로를 그대로 붙인다(target = base + path)", /target = base \+ self\.path/.test(serve));
 check("실제주소 헤더를 읽는다", /x-b2b-vllm-base/.test(serve));

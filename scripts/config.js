@@ -83,7 +83,9 @@ const SETTINGS_KEY_MIGRATE = ["mvno_llm_settings_v3", "mvno_llm_settings_v2", "m
 const VERSION_CHECK_KEY = "axcell_version_check_v1";
 // 기본 실제주소 — 사용자가 F9 설정에서 비워 두면 이 주소로 버전을 확인한다(2026-08-11 지정).
 const VERSION_CHECK_UPSTREAM_URL = "https://version-ns-17786299267796664.mng-1.ip.violet.uplus.co.kr";
-const VERSION_CHECK_DEFAULTS = { upstreamUrl: VERSION_CHECK_UPSTREAM_URL };
+// 인증 키는 코드에 박지 않는다 — 설정(F9)에서 받아 이 PC 에만 저장한다.
+// 비워 두면 AI 설정의 키를 그대로 쓴다(같은 게이트웨이면 그것으로 통과).
+const VERSION_CHECK_DEFAULTS = { upstreamUrl: VERSION_CHECK_UPSTREAM_URL, apiKey: "" };
 
 function loadVersionCheckSettings() {
   try {
@@ -94,7 +96,10 @@ function loadVersionCheckSettings() {
       // 예전 저장값에 실제 주소가 baseUrl 쪽에만 남아 있으면 그걸 살려 준다(설정 유실 방지).
       // 저장값이 비어 있으면 기본 주소로 — '한 번 저장했다가 지운' 사용자도 기본값으로 돌아온다.
       const saved = String(parsed.upstreamUrl || parsed.baseUrl || "").trim();
-      return { upstreamUrl: saved || VERSION_CHECK_UPSTREAM_URL };
+      return {
+        upstreamUrl: saved || VERSION_CHECK_UPSTREAM_URL,
+        apiKey: String(parsed.apiKey || "").trim(),
+      };
     }
   } catch {}
   return { ...VERSION_CHECK_DEFAULTS };
@@ -122,7 +127,10 @@ function versionCheckUpstreamEndpoint(raw) {
 function saveVersionCheckSettings(next) {
   // 저장은 '기본 주소' 형태로 통일한다(끝의 /v1, /version 은 떼어낸다) — 화면에 다시 채울 때도 깔끔하고,
   // 호출 직전에 /v1/version 을 붙이므로 중복될 일이 없다.
-  const clean = { upstreamUrl: versionCheckUpstreamBase((next && next.upstreamUrl) || "") };
+  const clean = {
+    upstreamUrl: versionCheckUpstreamBase((next && next.upstreamUrl) || ""),
+    apiKey: String((next && next.apiKey) || "").trim(),
+  };
   try { localStorage.setItem(VERSION_CHECK_KEY, JSON.stringify(clean)); } catch {}
   return clean;
 }
@@ -143,7 +151,7 @@ function normalizeVersionText(text) {
    upstreamUrl 은 버전 서버가 실제로 받은 완성 주소 — 그대로 curl 로 확인할 수 있다. */
 async function runVersionCheck(cfg) {
   const conf = cfg || loadVersionCheckSettings();
-  const out = { ok: false, current: null, latest: null, match: null, checkedUrl: "", upstreamUrl: "", error: "" };
+  const out = { ok: false, current: null, latest: null, match: null, checkedUrl: "", upstreamUrl: "", authHeader: "", error: "" };
 
   // 1) 지금 이 AX-Cell 의 버전 — 배포본이면 exe 파일 버전, 소스 실행이면 CURRENT_VERSION.
   try {
@@ -170,10 +178,20 @@ async function runVersionCheck(cfg) {
   // (LLM 호출과 같은 규칙 — 로컬 /v1 프록시가 경로를 그대로 붙여 <실제주소>/v1/version 으로 보낸다)
   out.upstreamUrl = versionCheckUpstreamEndpoint(conf.upstreamUrl);
   out.checkedUrl = `${url}  →  ${out.upstreamUrl}`;
+  // [인증 2026-08-11] 게이트웨이가 Api-Key 헤더를 요구한다(curl 실측: 헤더 없이는 통과 못 함).
+  // AI 호출이 쓰는 것과 같은 헤더를 그대로 붙인다 — 프록시(serve_b2b)가 api-key 를 그대로 전달한다.
+  // 버전 서버 키가 AI 키와 다를 수 있어 설정에 따로 받고, 비어 있으면 AI 키로 폴백한다.
+  const _verKey = String(conf.apiKey || "").trim()
+    || String((typeof settings === "object" && settings && settings.apiKey) || "").trim()
+    || String((DEFAULTS && DEFAULTS["openai-compat"] && DEFAULTS["openai-compat"].apiKey) || "").trim();
+  const _authHeaders = (typeof openAICompatAuthHeaders === "function")
+    ? openAICompatAuthHeaders(_verKey, (typeof settings === "object" && settings && settings.network) || "ixi")
+    : (_verKey ? { "Api-Key": _verKey } : {});
+  out.authHeader = _verKey ? "Api-Key" : "";
   let body = "";
   try {
     const resp = await fetch(url, {
-      headers: { accept: "application/json", "X-B2B-Vllm-Base": conf.upstreamUrl },
+      headers: { accept: "application/json", "X-B2B-Vllm-Base": conf.upstreamUrl, ..._authHeaders },
     });
     body = (await resp.text()).trim();
     if (!resp.ok) throw new Error(`HTTP ${resp.status} ${body.slice(0, 120)}`);
