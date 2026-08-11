@@ -86,7 +86,10 @@ check("AI 호출과 같은 헤더 생성기를 쓴다", /openAICompatAuthHeaders
 check("요청에 인증 헤더를 실어 보낸다", /headers: \{ accept: "application\/json", "X-B2B-Vllm-Base": conf\.upstreamUrl, \.\.\._authHeaders \}/.test(cfg));
 check("버전 서버 전용 키를 설정에서 받는다", /apiKey: String\(parsed\.apiKey \|\| ""\)\.trim\(\)/.test(cfg));
 check("비어 있으면 AI 키로 폴백", /String\(conf\.apiKey \|\| ""\)\.trim\(\)\s*\|\|\s*String\(\(typeof settings === "object"/.test(cfg));
-check("키를 코드에 박지 않았다", !/76657273/.test(cfg) && !/76657273/.test(modal));
+// 키 값은 이 파일에도 적지 않는다(테스트 파일도 저장소에 올라간다).
+// '버전 확인용 키가 코드에 박혔는지'는 값을 몰라도 형태로 판별할 수 있다.
+check("버전 확인 키 기본값은 빈 문자열", /VERSION_CHECK_DEFAULTS = \{[^}]*apiKey: ""/.test(cfg));
+check("설정 화면 입력칸에 키가 미리 박혀 있지 않다", /id="set-ver-apikey" value="\$\{escapeHtml\(verCfg\.apiKey \|\| ""\)\}"/.test(modal));
 check("설정 화면에 키 입력칸", /id="set-ver-apikey"/.test(modal));
 check("버전 확인 누를 때 키도 저장", /apiKey: \(\$\("set-ver-apikey"\) \|\| \{\}\)\.value \|\| ""/.test(modal));
 check("화면에는 키 값을 찍지 않는다(헤더 이름만)", /<설정한 키>/.test(modal) && !/data\.apiKey/.test(modal));
