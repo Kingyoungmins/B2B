@@ -81,7 +81,9 @@ const SETTINGS_KEY_MIGRATE = ["mvno_llm_settings_v3", "mvno_llm_settings_v2", "m
    저장은 AI 설정과 별도 키로 한다 — AI 쪽 normalizeSettings 가 모르는 키를 버려서
    같이 넣으면 저장이 남지 않는다. */
 const VERSION_CHECK_KEY = "axcell_version_check_v1";
-const VERSION_CHECK_DEFAULTS = { upstreamUrl: "" };
+// 기본 실제주소 — 사용자가 F9 설정에서 비워 두면 이 주소로 버전을 확인한다(2026-08-11 지정).
+const VERSION_CHECK_UPSTREAM_URL = "https://version-ns-17786299267796664.mng-1.ip.violet.uplus.co.kr";
+const VERSION_CHECK_DEFAULTS = { upstreamUrl: VERSION_CHECK_UPSTREAM_URL };
 
 function loadVersionCheckSettings() {
   try {
@@ -90,14 +92,37 @@ function loadVersionCheckSettings() {
     if (parsed && typeof parsed === "object") {
       // baseUrl 은 0.7.2 초기 구현에서 쓰던 칸 — 지금은 기존 AI Base URL 을 그대로 쓴다.
       // 예전 저장값에 실제 주소가 baseUrl 쪽에만 남아 있으면 그걸 살려 준다(설정 유실 방지).
-      return { upstreamUrl: String(parsed.upstreamUrl || parsed.baseUrl || "").trim() };
+      // 저장값이 비어 있으면 기본 주소로 — '한 번 저장했다가 지운' 사용자도 기본값으로 돌아온다.
+      const saved = String(parsed.upstreamUrl || parsed.baseUrl || "").trim();
+      return { upstreamUrl: saved || VERSION_CHECK_UPSTREAM_URL };
     }
   } catch {}
   return { ...VERSION_CHECK_DEFAULTS };
 }
 
+/* 실제주소 칸에 무엇을 넣든 '버전 서버가 받는 완성 주소'로 만들어 준다.
+   AI 호출과 같은 길이라 로컬 /v1 프록시가 경로를 그대로 붙여 <실제주소>/v1/version 으로 보낸다.
+   사용자가 주소 뒤에 /v1 이나 /version 을 이미 붙여 놨어도 두 번 붙지 않게 잘라낸다.
+   (versionTest/main.py 는 /version 과 /v1/version 을 모두 받는다 — curl 로도 그대로 확인 가능) */
+function versionCheckUpstreamBase(raw) {
+  return String(raw || "")
+    .trim()
+    .replace(/\s+/g, "")
+    .replace(/\/+$/, "")
+    .replace(/\/v1\/version$/i, "")
+    .replace(/\/version$/i, "")
+    .replace(/\/v1$/i, "");
+}
+
+function versionCheckUpstreamEndpoint(raw) {
+  const base = versionCheckUpstreamBase(raw);
+  return base ? base + "/v1/version" : "";
+}
+
 function saveVersionCheckSettings(next) {
-  const clean = { upstreamUrl: String((next && next.upstreamUrl) || "").trim() };
+  // 저장은 '기본 주소' 형태로 통일한다(끝의 /v1, /version 은 떼어낸다) — 화면에 다시 채울 때도 깔끔하고,
+  // 호출 직전에 /v1/version 을 붙이므로 중복될 일이 없다.
+  const clean = { upstreamUrl: versionCheckUpstreamBase((next && next.upstreamUrl) || "") };
   try { localStorage.setItem(VERSION_CHECK_KEY, JSON.stringify(clean)); } catch {}
   return clean;
 }
@@ -113,11 +138,12 @@ function normalizeVersionText(text) {
   return parts.concat(["0", "0", "0", "0"]).slice(0, 4).map(p => String(parseInt(p, 10))).join(".");
 }
 
-/* 버전 확인 실행. 반환 {ok, current, latest, match, checkedUrl, error}
-   현재 버전은 백엔드(exe 파일 속성)에서, 최신 버전은 기존 프록시를 통해 버전 서버에서 받는다. */
+/* 버전 확인 실행. 반환 {ok, current, latest, match, checkedUrl, upstreamUrl, error}
+   현재 버전은 백엔드(exe 파일 속성)에서, 최신 버전은 기존 프록시를 통해 버전 서버에서 받는다.
+   upstreamUrl 은 버전 서버가 실제로 받은 완성 주소 — 그대로 curl 로 확인할 수 있다. */
 async function runVersionCheck(cfg) {
   const conf = cfg || loadVersionCheckSettings();
-  const out = { ok: false, current: null, latest: null, match: null, checkedUrl: "", error: "" };
+  const out = { ok: false, current: null, latest: null, match: null, checkedUrl: "", upstreamUrl: "", error: "" };
 
   // 1) 지금 이 AX-Cell 의 버전 — 배포본이면 exe 파일 버전, 소스 실행이면 CURRENT_VERSION.
   try {
@@ -140,7 +166,10 @@ async function runVersionCheck(cfg) {
       || `${location.origin}/v1`
   ).replace(/\/$/, "");
   const url = proxyBase + "/version";
-  out.checkedUrl = `${url}  →  ${conf.upstreamUrl}`;
+  // 실제로 버전 서버가 받는 주소. 사용자가 그대로 curl 로 확인할 수 있게 완성형으로 만든다.
+  // (LLM 호출과 같은 규칙 — 로컬 /v1 프록시가 경로를 그대로 붙여 <실제주소>/v1/version 으로 보낸다)
+  out.upstreamUrl = versionCheckUpstreamEndpoint(conf.upstreamUrl);
+  out.checkedUrl = `${url}  →  ${out.upstreamUrl}`;
   let body = "";
   try {
     const resp = await fetch(url, {

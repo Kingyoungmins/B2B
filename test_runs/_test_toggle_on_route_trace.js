@@ -223,7 +223,9 @@ check("비라이브 분기 유지", /if \(!pipelineStepLiveLanguage\(toggledStep
 check("정상 경로에도 계측", /traceToggleOnRoute\("single_step"/.test(pj));
 check("계측은 실패해도 조용히 무시(try/catch)", /function traceToggleOnRoute[\s\S]{0,120}try \{/.test(pj));
 check("무효화 시 진단 데이터도 함께 비움", /_lastLiveAppliedSignature = null;\s*\n\s*_lastLiveAppliedParts = null;/.test(pj));
-check("적용 기록 시 진단 데이터도 함께 기록", /_lastLiveAppliedParts = liveEnabledStepsSignatureParts\(steps\)/.test(pj));
+// 서명과 진단 데이터는 반드시 '같은 입력'으로 만들어져야 한다(하나만 매핑 환산되면 진단이 거짓말을 한다).
+check("적용 기록 시 진단 데이터도 같은 입력으로 함께 기록",
+  /_lastLiveAppliedSignature = liveEnabledStepsSignature\((\w+)\);[\s\S]{0,160}_lastLiveAppliedParts = liveEnabledStepsSignatureParts\(\1\)/.test(pj));
 
 console.log("");
 console.log(fails === 0 ? "RESULT: ALL PASS" : `RESULT: ${fails} FAIL`);

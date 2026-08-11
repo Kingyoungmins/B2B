@@ -34,7 +34,8 @@ def iter_events(path: Path):
             obj = json.loads(line)
         except Exception:
             continue
-        if obj.get("event") == "pipeline.toggle_on.route":
+        # 서버가 클라 이벤트를 저장할 때 "client." 접두사를 붙인다(excel-mirror.js traceClientUiEvent).
+        if str(obj.get("event", "")).endswith("pipeline.toggle_on.route"):
             yield obj
 
 

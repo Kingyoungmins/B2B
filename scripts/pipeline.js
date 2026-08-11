@@ -3829,9 +3829,41 @@ function liveEnabledStepsSignatureParts(steps = state.pipeline) {
     }));
 }
 
+/* [실행기 매핑 서명 어긋남 — 2026-08-11 실측으로 확정] 파일확인(실행기 매핑)을 켜면 실행 직전에
+   파이프라인이 '매핑본'(파일/시트명이 실제 파일로 치환된 사본)으로 바뀐다. 그런데 적용 기록을
+   그 매핑본 기준으로 남기고, 실행이 끝나면 beginMappedPipelineRun.restore() 가 파이프라인을 원본으로
+   되돌린다 → 기록과 현재가 영구히 어긋나 이후 '단계 켜기'가 매번 리셋+1단계부터 전체 재적용으로
+   떨어졌다(실사용 로그 16:07/16:08 — cause=signature_mismatch,
+   diff="duc4s5om:파일 input:output_02월 검증파일.xlsx→output:0,코드 …"). 단일 적용 경로에만 사후
+   보정이 있었고(applyMappedSingleStep) 전체실행·재적용·이어실행에는 없었다.
+   → 기록 시점에 '되돌린 뒤의 모습'으로 환산해서 남긴다. 환산 규칙은 restore() 와 정확히 대칭이다:
+     · 실행 중 코드가 매핑본 그대로면 → 원본의 코드/대상파일/대상시트로 되돌려 기록(restore 와 동일)
+     · 실행 중 코드가 바뀌었으면(자동복구 등) → restore 가 그 변경을 유지하므로 기록도 그대로 둔다
+   켜짐/꺼짐은 실행 시점 값을 그대로 쓴다(무엇이 적용됐는지는 실행 시점이 진실). */
+function _signatureStepsAsRestored(steps) {
+  const orig = state.pipelineOriginalDuringRun;
+  if (!state.runnerMappingRunActive || !Array.isArray(orig) || !orig.length) return steps;
+  const origById = new Map(orig.map(s => [s && s.id, s]));
+  // 기준은 '실행 시작 시점의 매핑본'이어야 한다 — 실행 중 state.pipeline 은 자동복구/편집으로
+  // 바뀔 수 있어, 그걸 기준으로 삼으면 '바뀐 코드'를 매핑본으로 착각해 잘못 환산한다.
+  const mappedBase = Array.isArray(state.pipelineMappedDuringRun) ? state.pipelineMappedDuringRun : (state.pipeline || []);
+  const mappedById = new Map(mappedBase.map(s => [s && s.id, s]));
+  return (steps || []).map(s => {
+    if (!s || !s.id) return s;
+    const o = origById.get(s.id);
+    if (!o) return s;                                   // 실행 중 새로 생긴 스텝 — 원본에 없다
+    const m = mappedById.get(s.id);
+    if (m && s.code !== m.code) return s;               // 실행 중 실제로 바뀐 코드 → restore 도 유지
+    return { ...s, code: o.code, targetFileId: o.targetFileId, targetSheetName: o.targetSheetName };
+  });
+}
+
 function noteLivePipelineApplied(steps = state.pipeline) {
-  _lastLiveAppliedSignature = liveEnabledStepsSignature(steps);
-  try { _lastLiveAppliedParts = liveEnabledStepsSignatureParts(steps); } catch (_) { _lastLiveAppliedParts = null; }
+  // 서명은 '되돌린 뒤의 모습'으로 — 단, 아래 낙인 해제는 반드시 원본 객체(steps)에 해야 한다
+  // (환산본은 복사본이라 delete 가 실물에 안 먹는다).
+  const sigSteps = _signatureStepsAsRestored(steps);
+  _lastLiveAppliedSignature = liveEnabledStepsSignature(sigSteps);
+  try { _lastLiveAppliedParts = liveEnabledStepsSignatureParts(sigSteps); } catch (_) { _lastLiveAppliedParts = null; }
   // [검토 #9 + 검증 R3] 'AI 도움 미검증 수정' 낙인 해제 — 단, 호출부들이 전체 배열을 넘기는 경우가
   // 많아(단일 스텝 적용·결과 편집하기 등) 일괄 삭제하면 '실행 안 된 수정'의 낙인까지 지워진다.
   // 활성 상태이고 런타임 상태칩이 '적용됨'인 스텝만 해제한다(수정 스텝은 '수정됨 · 미적용'(review)
@@ -4716,6 +4748,9 @@ function beginMappedPipelineRun() {
   // 그냥 지역변수로만 들고 있으면, 실행 중 renderPipeline→ensurePipelineStepIds 가 state.pipeline 을
   // '새 배열'로 갈아끼우는 순간 원본 참조가 끊겨 복원이 어긋난다(치환본이 정본으로 굳어 저장에 샘).
   state.pipelineOriginalDuringRun = original;
+  // [서명 환산용] 실행 '시작 시점'의 매핑본. 실행 중 state.pipeline 은 자동복구/편집으로 바뀔 수
+  // 있어 기준으로 쓸 수 없다 — restore() 가 클로저의 mapped 를 쓰는 것과 같은 기준을 공유한다.
+  state.pipelineMappedDuringRun = mapped;
   state.pipeline = mapped;
   return {
     steps: mapped,
@@ -4743,6 +4778,7 @@ function beginMappedPipelineRun() {
         state.pipeline = original;
       }
       state.pipelineOriginalDuringRun = null;
+      state.pipelineMappedDuringRun = null;
       state.runnerMappingRunActive = false;
     },
   };

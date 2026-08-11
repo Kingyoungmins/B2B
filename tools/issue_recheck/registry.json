@@ -3004,6 +3004,32 @@
         ]
       ],
       "fix": "pipeline.js: traceToggleOnRoute + pipeline.toggle_on.route 이벤트(정상 single_step 도 기록 — 전체 재적용만 남기면 빈도를 알 수 없다). cause=non_live_step|signature_missing|signature_mismatch|cross_file_write 로 4후보 분리. 불일치일 때는 liveEnabledStepsSignatureParts(스텝별 id/lang/targetFileId/코드해시8) 를 noteLivePipelineApplied 시점에 함께 보관해 두고 _diffLiveSignatureParts 로 '어느 스텝의 무엇이 달라졌는지'(파일/코드/켜짐·꺼짐/순서변경)까지 남긴다. 코드 전문은 로그에 넣지 않음(해시만). 판정 조건식은 무변경 — 테스트가 원문 조건식을 정규식으로 잠근다. 배경: ON 경로는 스냅샷을 쓰지 않으므로(단일적용 아니면 pristine 전체 재적용 2갈래) 스냅샷 제한/복원 실패와 무관하며, 판정부에 기록이 없어 실사용 로그로 원인을 가릴 수 없었다."
+    },
+    {
+      "id": "RUNNER-MAPPED-SIGNATURE-FULL-REAPPLY",
+      "title": "[근본 수정] 실행기 파일확인(매핑)을 켠 뒤로는 단계를 켤 때마다 리셋+1단계부터 전체 재적용(실측 3분 59초, 이틀간 8회). 매핑본 기준으로 남긴 적용 기록이 실행 후 원본 복귀와 영구 불일치.",
+      "checks": [
+        [
+          "node",
+          "test_runs/_test_mapped_signature_note.js"
+        ],
+        [
+          "node",
+          "test_runs/_test_toggle_on_route_trace.js"
+        ]
+      ],
+      "fix": "pipeline.js: noteLivePipelineApplied 가 _signatureStepsAsRestored 로 '되돌린 뒤의 모습'으로 환산해 기록. 환산 규칙은 beginMappedPipelineRun.restore() 와 정확히 대칭 — 실행 중 코드가 매핑본 그대로면 원본 code/targetFileId/targetSheetName 으로, 실행 중 바뀐 코드(자동복구)는 restore 가 유지하므로 그대로 둔다. 기준 매핑본은 state.pipelineMappedDuringRun(실행 시작 시점)을 새로 보관해 쓴다 — state.pipeline 을 기준으로 하면 실행 중 변형을 매핑본으로 오인해 잘못 환산한다(테스트가 잡음). 켜짐/꺼짐은 실행 시점 값 유지. 낙인 해제(_unappliedEdit)는 환산본이 아니라 실물 steps 에 계속 적용. 확진 근거: 계측 pipeline.toggle_on.route cause=signature_mismatch, diff='duc4s5om:파일 input:output_02월 검증파일.xlsx→output:0,코드 6d412eee→92c4cf75'. 기존에는 applyMappedSingleStep 에만 사후 보정이 있었고 전체실행/재적용/이어실행 경로에는 없었다."
+    },
+    {
+      "id": "VERSION-CHECK-DEFAULT-URL",
+      "title": "[설정] 버전 확인 기본 실제주소를 https://version-ns-17786299267796664.mng-1.ip.violet.uplus.co.kr 로 지정. 주소 뒤에 무엇을 붙여 넣든 최종 호출은 <주소>/v1/version 하나로 정규화.",
+      "checks": [
+        [
+          "node",
+          "test_runs/_test_version_check_url.js"
+        ]
+      ],
+      "fix": "config.js: VERSION_CHECK_UPSTREAM_URL 상수 + VERSION_CHECK_DEFAULTS 기본값, 저장값이 비면 기본값 복귀. versionCheckUpstreamBase/Endpoint 로 끝의 /, /v1, /version 을 떼고 /v1/version 을 붙인다(중복 방지 — 프록시가 경로를 그대로 붙이므로 serve_b2b target=base+path 계약과 맞물림). runVersionCheck 가 upstreamUrl(완성 주소)을 반환하고 model-modal 이 '호출 주소' + curl 예시를 표시해 사용자가 그대로 확인 가능. 버전 서버(versionTest/main.py)는 /version 과 /v1/version 을 모두 받는다."
     }
   ]
 }

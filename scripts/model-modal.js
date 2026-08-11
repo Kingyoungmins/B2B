@@ -221,7 +221,8 @@ function openSettingsModal(devMode) {
         (지금은 확인만 — 안내창은 배포 전에 붙일 예정)
       </div>
       <label style="font-size:11.5px; color:#666">버전 서버 실제 주소</label>
-      <input type="text" id="set-ver-upstream" value="${escapeHtml(verCfg.upstreamUrl)}" placeholder="http://10.0.0.5:8100" />
+      <input type="text" id="set-ver-upstream" value="${escapeHtml(verCfg.upstreamUrl)}"
+             placeholder="${escapeHtml(typeof VERSION_CHECK_UPSTREAM_URL === "string" ? VERSION_CHECK_UPSTREAM_URL : "http://10.0.0.5:8100")}" />
       <div style="font-size:11px; color:#777; margin:-6px 0 8px">
         AI 호출과 같은 길(위 Base URL → 로컬 /v1 프록시)로 나갑니다. 버전 서버만 다른 곳이라
         실제 주소만 여기서 정합니다.
@@ -336,7 +337,12 @@ function openSettingsModal(devMode) {
     $("btn-version-check").onclick = async () => {
       const res = $("version-result");
       // 누를 때 주소를 같이 저장 — 다음에 또 입력하지 않게.
-      const cfg = saveVersionCheckSettings({ upstreamUrl: $("set-ver-upstream").value });
+      // 칸을 비워 뒀으면 기본 주소로 확인한다(입력 없이도 바로 동작).
+      const _typed = String($("set-ver-upstream").value || "").trim();
+      const cfg = saveVersionCheckSettings({
+        upstreamUrl: _typed || (typeof VERSION_CHECK_UPSTREAM_URL === "string" ? VERSION_CHECK_UPSTREAM_URL : ""),
+      });
+      if (!_typed && cfg.upstreamUrl) $("set-ver-upstream").value = cfg.upstreamUrl;
       if (!cfg.upstreamUrl) {
         res.innerHTML = '<span style="color:#dc3545">버전 서버 실제 주소를 먼저 입력해 주세요.</span>';
         return;
@@ -352,7 +358,11 @@ function openSettingsModal(devMode) {
           return;
         }
         const latest = (data.latest && data.latest.normalized) || "";
-        const where = data.checkedUrl ? `<div style="color:#777; margin-top:2px">${escapeHtml(data.checkedUrl)}</div>` : "";
+        // 실제로 버전 서버가 받은 주소를 그대로 보여준다 — 복사해서 curl 로 확인할 수 있게.
+        const where = data.upstreamUrl
+          ? `<div style="color:#777; margin-top:4px">호출 주소: <code style="user-select:all">${escapeHtml(data.upstreamUrl)}</code></div>`
+            + `<div style="color:#999; margin-top:2px">curl -s ${escapeHtml(data.upstreamUrl)}</div>`
+          : (data.checkedUrl ? `<div style="color:#777; margin-top:2px">${escapeHtml(data.checkedUrl)}</div>` : "");
         if (data.match) {
           res.innerHTML = `<div style="color:#28a745">최신 버전입니다 · ${escapeHtml(latest)}</div>`
             + `<div style="color:#777; margin-top:2px">지금 버전: ${escapeHtml(cur)}${curSrc ? " · " + escapeHtml(curSrc) : ""}</div>` + where;
