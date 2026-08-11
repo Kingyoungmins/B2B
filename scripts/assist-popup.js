@@ -45,9 +45,31 @@
     box.scrollTop = box.scrollHeight;
     return div;
   }
+  // [사용자 요청 2026-08-11] '생각 중'을 창 맨 위 말고 채팅창 아래에 애니메이션으로.
+  // 팝업은 assist-ui 와 코드가 의도적으로 분리돼 있어 같이 고친다(마크다운 변환과 같은 관례).
   function setStatus(s) {
     const el = $id("assist-status");
     if (el) el.textContent = s || "";
+    const box = $id("assist-messages");
+    if (!box) return;
+    const text = String(s || "").trim();
+    let bubble = $id("assist-thinking");
+    if (!text) {
+      if (bubble) bubble.remove();
+      return;
+    }
+    if (!bubble) {
+      bubble = document.createElement("div");
+      bubble.id = "assist-thinking";
+      bubble.className = "assist-thinking";
+      bubble.setAttribute("aria-live", "polite");
+      bubble.innerHTML = '<span class="assist-thinking-text"></span>'
+        + '<span class="assist-thinking-dots"><i></i><i></i><i></i></span>';
+    }
+    if (bubble.parentNode !== box || box.lastElementChild !== bubble) box.appendChild(bubble);
+    const label = bubble.querySelector(".assist-thinking-text");
+    if (label && label.textContent !== text) label.textContent = text.replace(/\.{2,}$/, "");
+    box.scrollTop = box.scrollHeight;
   }
 
   // [검토 #10] 같은 줄번호끼리 비교하면 줄 하나 삽입에도 이후 전체가 어긋난 diff 로 보였다(승인 근거

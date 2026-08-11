@@ -227,9 +227,34 @@ function assistAddMsg(role, text, opts) {
   return div;
 }
 
+/* [사용자 요청 2026-08-11] '생각 중' 표시가 창 맨 위에만 떠서 잘 안 보였다.
+   → 대화가 흐르는 채팅창 '맨 아래'에, 말풍선처럼 작게 애니메이션과 함께 띄운다.
+   상단 표시는 그대로 두되(팝업/좁은 화면 호환), 눈이 가는 곳은 채팅 쪽이다.
+   컨테이너 id 는 창 안(assist-ui.js)과 팝업(assist.html)이 같아 한 곳만 고치면 둘 다 적용된다. */
 function assistSetStatus(s) {
   const el = document.getElementById("assist-status");
   if (el) el.textContent = s || "";
+  const box = document.getElementById("assist-messages");
+  if (!box) return;
+  const text = String(s || "").trim();
+  let bubble = document.getElementById("assist-thinking");
+  if (!text) {
+    if (bubble) bubble.remove();
+    return;
+  }
+  if (!bubble) {
+    bubble = document.createElement("div");
+    bubble.id = "assist-thinking";
+    bubble.className = "assist-thinking";
+    bubble.setAttribute("aria-live", "polite");
+    bubble.innerHTML = '<span class="assist-thinking-text"></span>'
+      + '<span class="assist-thinking-dots"><i></i><i></i><i></i></span>';
+  }
+  // 항상 목록의 맨 끝으로 옮긴다 — 새 말풍선이 추가돼도 표시가 위에 파묻히지 않는다.
+  if (bubble.parentNode !== box || box.lastElementChild !== bubble) box.appendChild(bubble);
+  const label = bubble.querySelector(".assist-thinking-text");
+  if (label && label.textContent !== text) label.textContent = text.replace(/\.{2,}$/, "");
+  try { box.scrollTop = box.scrollHeight; } catch (_) {}
 }
 
 function assistSubmit(text, images) {

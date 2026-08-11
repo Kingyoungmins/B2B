@@ -7091,7 +7091,7 @@ async function explainPipelineErrorForUser(info) {
 // AI 는 목록에서 N단계를 찾다가 "그런 단계가 없다"로 끝냈다(사용자 실측 — 채팅을 보라고 한 번 더
 // 말해야 진단함). 목록에 없는 실패면 질문 자체를 '만들다 실패' 서사로 바꿔 처음부터 오류 기록과
 // 설계 채팅을 보게 한다.
-function _assistErrorDiagnoseQuestion(info) {
+function _assistErrorDiagnoseQuestion(info, options) {
   const inSkill = !!(info && info.stepId && Array.isArray(state.pipeline)
     && state.pipeline.some(s => s && s.id === info.stepId));
   // [결론 의무 2026-08-10] "왜 실패했는지" 설명에서 멈추면 사용자는 여전히 뭘 해야 할지 모른다.
@@ -7104,6 +7104,24 @@ function _assistErrorDiagnoseQuestion(info) {
       + "설계 채팅에 바로 넣게 넘겨주거나(handoff), 오류 창 메모칸에 그대로 붙여넣을 문장을 따옴표로 줘.";
   }
   const stepPart = Number(info.stepIdx) >= 0 ? `${Number(info.stepIdx) + 1}단계` : "어느 단계인지";
+  // [실행기 2026-08-11] 실행기에는 '에러 복구 시도' 버튼이 없다(사용자 지시로 제거) — 실행기 오류에서
+  // "메모칸에 붙여넣으세요" 같은 안내는 존재하지 않는 UI 를 가리키는 헛말이 된다. 실행기에서는
+  // 사용자가 곧바로 [전체실행]을 다시 누를 것이므로, 결론이 '코드 수정 제안'이어야 한다.
+  if (options && options.runner) {
+    return `실행기에서 전체실행을 눌렀는데 ${stepPart}가 오류로 실패했어. 왜 실패했는지 확인하고 쉽게 설명해줘.\n`
+      + "중요 — 이 스킬은 **이미 만들어서 저장해 둔, 잘 돌아가던 검증된 스킬**이야. 설계가 틀린 게 아니라 "
+      + "이번 실행 환경(파일·시트·헤더 이름, 앞 단계가 만든 중간 시트 등)이 어긋난 것으로 보고 접근해줘. "
+      + "그러니 '다시 만드세요'로 넘기지 말고, **이 스킬을 반드시 성공시키는 방향으로 코드를 고쳐 놔야 해.**\n"
+      + "여기는 실행기라서 '에러 복구 시도' 버튼도, 오류 창 메모칸도 없어. 나는 네 수정을 반영한 뒤 "
+      + "곧바로 [전체실행]을 다시 누를 거야. 그러니 결론은 반드시 **코드 수정 제안**이어야 해 "
+      + "(내가 카드의 버튼을 누르면 반영된다).\n"
+      + "고칠 때 지켜줘: ① 추측하지 말고 도구로 **실제 파일·시트·헤더 이름을 읽어 확인**한 뒤 그 값에 맞춰라. "
+      + "② 전체실행은 원본 파일부터 순서대로 다시 도니까 '지금 화면에 그 시트가 있다'는 전제를 쓰지 말고, "
+      + "앞 단계가 실제로 만드는 이름을 코드에서 확인해 맞춰라. ③ 그 단계가 하려던 일(설명·원래 요청)은 "
+      + "그대로 두고 참조만 바로잡아라 — 기능을 빼거나 단순화해서 '오류만 안 나게' 만들지 마라.\n"
+      + "정말 코드로 못 고치는 문제(예: 실행기 [파일 확인]에서 파일·시트가 잘못 연결됨)라면, 그때만 "
+      + "그 화면에서 무엇을 어떻게 바꾸면 되는지 콕 집어 알려줘.";
+  }
   return `방금 실행에서 ${stepPart}가 오류로 실패했어. 왜 실패했는지 확인하고, ${stepPart}가 무슨 문제인지 쉽게 설명해줘. `
     + "그리고 결론까지 내줘 — 코드 수정으로 될 일이면 수정을 제안하고, 아니면 오류 창 메모칸에 그대로 붙여넣을 문장을 따옴표로 줘.";
 }
@@ -7480,11 +7498,9 @@ function showRunnerPipelineError(err, options) {
       <span>확인 필요</span>
     </div>
     <div class="runner-error-step">${escapeHtml(stepText)}</div>
-    <div class="runner-error-help">입력 파일명, 시트명, 선택 범위 또는 불러온 스킬의 대상이 현재 파일과 맞는지 확인하세요. 복구 버튼은 현재 파일 구조에 맞게 스킬 참조를 보정한 뒤 다시 실행합니다.</div>
-    <textarea class="runner-error-note" rows="2" placeholder="(선택) 하려던 작업·실제 결과·기대 결과를 적으면 LLM 복구가 더 정확해집니다. 적으면 자동 보정 대신 이 설명을 최우선으로 복구합니다."></textarea>
+    <div class="runner-error-help">AI 도움이 원인을 찾아 <b>스킬 코드를 고쳐 줍니다</b>. 수정을 반영한 뒤 [전체실행]을 다시 누르면 됩니다.</div>
     <div class="runner-error-actions">
-      <button class="runner-error-recover" type="button">에러 복구 시도</button>
-      <button class="runner-error-assist" type="button">✦ AI 도움에게 진단 요청</button>
+      <button class="runner-error-assist" type="button">✦ AI 도움에게 물어보기</button>
       <button class="runner-error-open-generator" type="button">생성기에서 보기</button>
     </div>
     <details class="runner-error-details" open>
@@ -7492,64 +7508,50 @@ function showRunnerPipelineError(err, options) {
       <pre>${escapeHtml(message)}${stack ? "\n\n" + escapeHtml(stack) : ""}</pre>
     </details>
   `;
-  // [실패 진단 연동] AI 도움을 열고 이 실행기 오류를 자동으로 물어본다.
+  // [사용자 지시 2026-08-11] 실행기 오류에서 [에러 복구 시도]를 없앴다.
+  //   왜: 그 버튼은 '생성기로 돌아가 다시 만들어야 하는 것'처럼 보였다(복구가 설계 채팅을 여는 흐름).
+  //   대신: AI 도움이 원인을 찾아 '코드 수정'을 제안하고, 사용자는 반영 후 [전체실행]만 다시 누르면 된다.
+  //   그래서 이 화면의 진단 질문에는 runner:true 를 넘겨 "메모칸/복구버튼" 안내를 못 하게 막는다.
   {
     const assistBtn = panel.querySelector(".runner-error-assist");
+    const askAssist = () => assistOpenAndAsk(_assistErrorDiagnoseQuestion(info || {}, { runner: true }));
     if (assistBtn && typeof assistOpenAndAsk === "function") {
-      assistBtn.onclick = () => assistOpenAndAsk(_assistErrorDiagnoseQuestion(info || {}));
+      assistBtn.onclick = askAssist;
+      // 스킬 안의 단계가 실패한 경우(=코드를 고치면 풀리는 경우)만 자동으로 열어 준다.
+      // 일시적 오류/단계 밖 실패까지 자동으로 물으면 불필요한 호출이 된다.
+      const _inSkill = !!(info && info.stepId && Array.isArray(state.pipeline)
+        && state.pipeline.some(s => s && s.id === info.stepId));
+      if (_inSkill && err && typeof err === "object" && !err.__runnerAssistAutoAsked) {
+        err.__runnerAssistAutoAsked = true;
+        setTimeout(() => { try { askAssist(); } catch (_) {} }, 0);
+      }
     } else if (assistBtn) {
       assistBtn.style.display = "none";
     }
   }
-  const recoverBtn = panel.querySelector(".runner-error-recover");
-  if (recoverBtn) {
-    const runnerStepIdx = resolveRunnerRecoveryStepIndex(info || {});
-    // [사용자 지시] 읽기 한도 초과 오류는 파일/시트 참조 자동보정(attemptRunnerAutoRecovery)으로 풀리지 않는다.
-    // 구조보정을 건너뛰고 LLM 복구(requestErrorRecovery → VBA 전환)로 보내, 아래에서 즉시 자동 발사한다.
+  // [읽기 한도 초과] 예전엔 이 오류만 복구 버튼을 자동으로 눌러 VBA 전환 복구를 걸었다(사용자 지시).
+  // 버튼이 사라져도 그 자동 복구는 유지한다 — 이건 코드 수정 제안이 아니라 '엔진 전환'이라
+  // AI 도움이 대신해 줄 수 없고, 사용자가 할 수 있는 일도 아니다.
+  {
     const isReadLimitRuntime = typeof isPythonComReadLimitRuntimeError === "function"
       && isPythonComReadLimitRuntimeError(message);
-    const canAutoRecover = Number.isInteger(runnerStepIdx) && runnerStepIdx >= 0
-      && !!state.pipeline[runnerStepIdx] && !isReadLimitRuntime;
-    // 복구 버튼은 항상 활성화한다(사용자 요구). 자동 복구 불가하면 LLM 복구 요청으로 폴백.
-    recoverBtn.disabled = false;
-    recoverBtn.onclick = async () => {
-      recoverBtn.disabled = true;
-      const originalText = recoverBtn.textContent;
-      recoverBtn.textContent = "자동 복구 중...";
-      try {
-        const recoverNote = ((panel.querySelector(".runner-error-note") || {}).value || "").trim();
-        const recoveryInfo = {
-          stepIdx: info && info.stepIdx,
-          stepId: info && info.stepId || null,
-          description: info && info.description || "",
-          code: info && info.code || "",
-          language: info && info.language || "",
-          message,
-          stack,
-          compatibilityCheck: !!options.compatibilityCheck,
-        };
-        // 사용자가 추가 설명을 적었으면, 그 설명을 못 쓰는 자동 보정 대신 LLM 복구(대화+설명 반영)로 보낸다.
-        if (canAutoRecover && !recoverNote) {
-          recoverBtn.textContent = "자동 복구 중...";
-          await attemptRunnerAutoRecovery(recoveryInfo);
-        } else {
-          recoverBtn.textContent = "복구 요청 중...";
-          await requestErrorRecovery(info && info.stepIdx, recoveryInfo, recoverNote);
-        }
-      } catch (recoverErr) {
-        reportPipelineError(recoverErr, { compatibilityCheck: true, runner: true });
-      } finally {
-        recoverBtn.textContent = originalText;
-        recoverBtn.disabled = false;
-      }
-    };
-    // [사용자 지시] 읽기 한도 초과 오류는 버튼을 기다리지 말고 즉시 VBA 전환 복구를 자동 발사한다.
-    // 가드 플래그는 공유 err 객체에 둔다(reportPipelineError 가 이 함수를 먼저 호출하므로 chat 쪽은 중복 발사 안 함).
-    if (err && typeof err === "object"
-        && !err.__autoReadLimitVbaTried
-        && isReadLimitRuntime) {
+    if (isReadLimitRuntime && err && typeof err === "object" && !err.__autoReadLimitVbaTried) {
       err.__autoReadLimitVbaTried = true;
-      setTimeout(() => { if (recoverBtn && !recoverBtn.disabled) recoverBtn.click(); }, 0);
+      const recoveryInfo = {
+        stepIdx: info && info.stepIdx,
+        stepId: (info && info.stepId) || null,
+        description: (info && info.description) || "",
+        code: (info && info.code) || "",
+        language: (info && info.language) || "",
+        message,
+        stack,
+        compatibilityCheck: !!options.compatibilityCheck,
+      };
+      setTimeout(() => {
+        Promise.resolve()
+          .then(() => requestErrorRecovery(info && info.stepIdx, recoveryInfo, ""))
+          .catch(recoverErr => reportPipelineError(recoverErr, { compatibilityCheck: true, runner: true }));
+      }, 0);
     }
   }
   const openBtn = panel.querySelector(".runner-error-open-generator");

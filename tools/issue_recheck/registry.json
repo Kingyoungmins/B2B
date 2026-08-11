@@ -3041,6 +3041,28 @@
         ]
       ],
       "fix": "pipeline.js: _stepsOnOffMap(idx:id:on/off 한 줄, 40개 초과 시 절단)/_offStepsAmongSent(보낸 목록 중 지금 꺼진 단계 지목)/tracePipelineRun. ①pipeline.run.request — 격리·전체실행(runIsolatedLivePipelineSteps)과 리셋후재적용(_reapplyVbaPipelineToLiveImpl) 두 진입점에서 sentIdx(실제 payload 에서 추출)·offSent·steps 지도·skipReset·resetFileIds 기록. 재적용은 호출자가 넘긴 배열과 화면 상태가 다를 수 있어 offSentVsLive 도 함께. ②pipeline.run.toggle_off — OFF 5갈래(non_live/reconcile_no_signature/fast_last_snapshot/checkpoint_rollback/reconcile_fallback) 별 성공·실패. 예외 없이 false 로 끝나는 '조용한 실패'(no_snapshot_or_session, restore_returned_false)를 특히 남긴다 — 되돌리기가 조용히 실패하면 꺼진 단계 결과가 라이브에 남는다. ③serve_b2b.py pipeline.impl.start 에 stepIdxs 추가로 클라↔백엔드 교차 확인. 판정 로직 무변경(테스트가 조건식 정규식으로 잠금). 리더: tools/read_pipeline_audit.py."
+    },
+    {
+      "id": "RUNNER-ERROR-ASSIST-ONLY",
+      "title": "[사용자 지시] 실행기 오류에서 [에러 복구 시도] 제거 — 그 버튼이 설계 채팅을 열어 '생성기에서 다시 만들어야 하는 것'처럼 보였다. AI 도움이 코드를 고쳐 주고 사용자는 [전체실행]만 다시 누른다.",
+      "checks": [
+        [
+          "node",
+          "test_runs/_test_runner_error_assist_only.js"
+        ]
+      ],
+      "fix": "pipeline.js showRunnerPipelineError: 복구 버튼·메모칸 마크업/핸들러 제거, AI 도움 단독(스킬 안 단계 실패면 자동 오픈, err.__runnerAssistAutoAsked 로 1회). 읽기 한도 초과 자동 VBA 전환 복구는 버튼 없이 requestErrorRecovery 직접 호출로 유지(엔진 전환이라 AI 가 대신 못 함). _assistErrorDiagnoseQuestion(info, {runner:true}) 신설 — 없는 UI(메모칸/복구버튼) 안내 금지, 결론은 코드 수정 제안, 전체실행은 원본부터 돈다는 전제 명시. [추가 지시] 저장된 스킬은 이미 검증된 것이므로 설계를 의심하지 말고 '반드시 성공시키는 방향'으로 고칠 것 — handoff/report 는 마지막 수단, 실제 이름을 도구로 읽어 확인, 기능을 빼서 오류만 없애는 것 금지. assist-core.js 지침에도 동일 반영."
+    },
+    {
+      "id": "ASSIST-THINKING-IN-CHAT",
+      "title": "[사용자 요청] AI 도움 '생각 중' 표시가 창 맨 위에만 떠서 잘 안 보였다 → 채팅창 맨 아래에 애니메이션 말풍선으로.",
+      "checks": [
+        [
+          "node",
+          "test_runs/_test_assist_thinking_in_chat.js"
+        ]
+      ],
+      "fix": "assist-ui.js assistSetStatus / assist-popup.js setStatus(두 창은 의도적으로 코드 분리 — 같이 수정): #assist-messages 맨 끝에 #assist-thinking 말풍선을 붙이고 새 메시지가 와도 항상 끝으로 재배치, 상태가 비면 제거. 상단 표시는 호환 위해 유지. panels.css: 글자 shimmer + 점 3개 시차 바운스, prefers-reduced-motion 이면 애니메이션 제거."
     }
   ]
 }
