@@ -1,4 +1,4 @@
-﻿  /* ============ RUNNER (redesigned) ============ */
+  /* ============ RUNNER (redesigned) ============ */
   .runner-hero {
     display: flex; align-items: center; gap: 14px;
     padding: 16px; border-radius: var(--r-md);
@@ -583,4 +583,59 @@
     border-color: var(--m-300); background: var(--m-50); color: var(--m-600);
   }
 
-</style>
+  /* [사용자 지시 2026-08-12] 실행이 끝나면 결과 요약 카드를 띄우고 사용자가 직접 닫게 한다.
+     예전엔 '완료'가 2.5초 뒤 스스로 '실행 준비'로 돌아가, 잠깐 눈을 떼면 성공인지 뻗은 건지
+     구분이 안 됐다. 실수로 닫히지 않게 바깥 클릭으로는 안 닫힌다([확인]/ESC 만). */
+  .runner-summary-backdrop {
+    position: fixed; inset: 0; z-index: 9000;
+    background: rgba(17, 17, 17, 0.38);
+    display: flex; align-items: center; justify-content: center;
+    animation: runnerSummaryFade 0.14s ease-out;
+  }
+  .runner-summary-card {
+    width: min(440px, calc(100vw - 32px));
+    background: #fff; border: 1px solid var(--border); border-radius: var(--r-md);
+    box-shadow: 0 18px 48px rgba(0,0,0,0.22);
+    padding: 18px 20px 16px;
+    animation: runnerSummaryPop 0.18s cubic-bezier(.2,.9,.3,1.2);
+  }
+  .runner-summary-head { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+  .runner-summary-check {
+    flex: 0 0 auto; width: 34px; height: 34px; border-radius: 50%;
+    background: #10B981; color: #fff; font-size: 19px; font-weight: 800;
+    display: flex; align-items: center; justify-content: center;
+    animation: runnerSummaryCheck 0.32s cubic-bezier(.2,.9,.3,1.4);
+  }
+  .runner-summary-title { font-size: 15px; font-weight: 800; color: var(--ink-700, #1f2937); }
+  .runner-summary-sub { font-size: 12px; color: var(--ink-500); margin-top: 2px; }
+  .runner-summary-files {
+    border: 1px solid var(--border); border-radius: var(--r-sm);
+    background: var(--ink-50, #fafafa); padding: 10px 12px; margin-bottom: 14px;
+  }
+  .runner-summary-files-title { font-size: 12px; font-weight: 700; color: var(--ink-600, #374151); }
+  .runner-summary-files ul { margin: 6px 0 0; padding-left: 16px; max-height: 132px; overflow-y: auto; }
+  .runner-summary-files li {
+    font-size: 12px; color: var(--ink-600, #374151); line-height: 1.6;
+    word-break: break-all;
+  }
+  .runner-summary-files li.more { color: var(--ink-400); list-style: none; margin-left: -16px; }
+  .runner-summary-note { font-size: 11.5px; color: var(--ink-500); margin-top: 4px; line-height: 1.5; }
+  .runner-summary-actions { display: flex; gap: 8px; justify-content: flex-end; }
+  .runner-summary-actions button {
+    border-radius: 6px; padding: 7px 14px; font-size: 12.5px; font-weight: 700;
+    cursor: pointer; font-family: inherit; border: 1px solid var(--border); background: #fff;
+    color: var(--ink-600, #374151);
+  }
+  .runner-summary-actions .runner-summary-edit {
+    border-color: var(--m-300); background: var(--m-50); color: var(--m-700);
+  }
+  .runner-summary-actions .runner-summary-close {
+    border-color: var(--m-600, #DB2777); background: var(--m-600, #DB2777); color: #fff;
+  }
+  .runner-summary-actions button:hover { filter: brightness(0.97); }
+  @keyframes runnerSummaryFade { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes runnerSummaryPop { from { opacity: 0; transform: translateY(8px) scale(.98); } to { opacity: 1; transform: none; } }
+  @keyframes runnerSummaryCheck { from { transform: scale(.4); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+  @media (prefers-reduced-motion: reduce) {
+    .runner-summary-backdrop, .runner-summary-card, .runner-summary-check { animation: none; }
+  }

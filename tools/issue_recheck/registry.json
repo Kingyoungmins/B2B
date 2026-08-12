@@ -3085,6 +3085,17 @@
         ]
       ],
       "fix": "assist-core.js handoff 규칙: ①request 는 '사용자가 하려던 엑셀 작업'을 다시 쓴 문장이어야 한다 — 오류 상황 서술문은 지시가 없어 아무 단계도 못 만든다(실측 제보). ②결론이 '요청문을 바꿔서 될 일이 아니다'면 handoff 를 내지 말고 action=final 로 지금 화면에서 할 수 있는 행동만 알려라."
+    },
+    {
+      "id": "RUNNER-RUN-SUMMARY-CARD",
+      "title": "[사용자 지시] 실행기 완료 표시가 2.5초 뒤 스스로 '실행 준비'로 돌아가 실행이 뻗은 것처럼 보였다 → 완료 시 결과 요약 카드를 띄우고 사용자가 직접 닫게.",
+      "checks": [
+        [
+          "node",
+          "test_runs/_test_runner_run_summary_card.js"
+        ]
+      ],
+      "fix": "drop-handling.js window.runnerShowRunSummary: 단계 수·소요 시간(1분 넘으면 분/초)·완료 시각 + 결과 파일 목록(8개까지, 나머지는 '외 N개'). 결과 파일이 없으면 그 사실과 확인할 지점을 알려 준다(빈 카드 금지). [확인]/ESC 로만 닫히고 바깥 클릭으로는 안 닫힘(실수 방지), 재실행 시 이전 카드 제거, [결과 편집하기]는 기존 runner-edit-result-btn 을 그대로 클릭(중복 구현 금지). pipeline.js 실행기 성공 경로에서만 호출(_runT0 로 실제 소요 측정, catch 경로엔 없음). runner.css 스타일 + prefers-reduced-motion. 겸사겸사 runner.css 끝에 남아 있던 </style> 잔재 제거(이 파일은 link 로 로드되는 순수 CSS)."
     }
   ]
 }

@@ -1994,6 +1994,74 @@ window.runnerSetProgress = function(text) {
   }
 };
 
+/* [사용자 지시 2026-08-12] 실행이 끝나면 '완료'가 2.5초 뒤 스스로 '실행 준비'로 돌아가서,
+   잠깐 눈을 떼면 성공했는지·아무 일도 없었는지·뻗었는지 구분이 안 됐다.
+   → 끝나면 결과 요약 카드를 띄우고 **사용자가 직접 닫게** 한다. 자리를 비웠다 와도 결과가 남는다.
+   실수로 닫히지 않게 바깥 클릭으로는 안 닫고, [확인]과 ESC 로만 닫는다. */
+window.runnerShowRunSummary = function(info) {
+  info = info || {};
+  const prev = document.getElementById("runner-run-summary");
+  if (prev) prev.remove();
+
+  const outs = Array.isArray(window.lastRunnerOutputs) ? window.lastRunnerOutputs.filter(Boolean) : [];
+  const steps = Number(info.steps) || 0;
+  const ms = Number(info.ms) || 0;
+  const took = ms >= 60000
+    ? `${Math.floor(ms / 60000)}분 ${Math.round((ms % 60000) / 1000)}초`
+    : `${(ms / 1000).toFixed(1)}초`;
+  const now = info.finishedAt instanceof Date ? info.finishedAt : new Date();
+  const hh = String(now.getHours()).padStart(2, "0");
+  const mm = String(now.getMinutes()).padStart(2, "0");
+  const esc = (s) => String(s == null ? "" : s)
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+
+  const wrap = document.createElement("div");
+  wrap.id = "runner-run-summary";
+  wrap.className = "runner-summary-backdrop";
+  wrap.innerHTML = `
+    <div class="runner-summary-card" role="dialog" aria-modal="true" aria-labelledby="runner-summary-title">
+      <div class="runner-summary-head">
+        <span class="runner-summary-check" aria-hidden="true">✓</span>
+        <div>
+          <div class="runner-summary-title" id="runner-summary-title">실행이 끝났습니다</div>
+          <div class="runner-summary-sub">${esc(steps)}개 단계 · ${esc(took)} 걸림 · ${esc(hh)}:${esc(mm)} 완료</div>
+        </div>
+      </div>
+      ${outs.length ? `
+      <div class="runner-summary-files">
+        <div class="runner-summary-files-title">결과 파일 ${outs.length}개</div>
+        <ul>${outs.slice(0, 8).map(o => `<li>${esc(o.name || "결과 파일")}</li>`).join("")}
+        ${outs.length > 8 ? `<li class="more">외 ${outs.length - 8}개</li>` : ""}</ul>
+      </div>` : `
+      <div class="runner-summary-files">
+        <div class="runner-summary-files-title">결과 파일이 만들어지지 않았습니다</div>
+        <div class="runner-summary-note">단계는 모두 끝났지만 저장된 파일이 없습니다. 스킬이 값을 쓰는 대상이 맞는지 확인해 주세요.</div>
+      </div>`}
+      <div class="runner-summary-actions">
+        ${outs.length ? '<button class="runner-summary-edit" type="button">📝 결과 편집하기</button>' : ""}
+        <button class="runner-summary-close" type="button">확인</button>
+      </div>
+    </div>`;
+  document.body.appendChild(wrap);
+
+  const close = () => {
+    try { document.removeEventListener("keydown", onKey, true); } catch (_) {}
+    wrap.remove();
+  };
+  const onKey = (e) => { if (e.key === "Escape") { e.preventDefault(); close(); } };
+  document.addEventListener("keydown", onKey, true);
+  wrap.querySelector(".runner-summary-close").onclick = close;
+  const editBtn = wrap.querySelector(".runner-summary-edit");
+  if (editBtn) {
+    editBtn.onclick = () => {
+      close();
+      const real = document.getElementById("runner-edit-result-btn");
+      if (real && !real.disabled) real.click();
+    };
+  }
+  try { wrap.querySelector(".runner-summary-close").focus(); } catch (_) {}
+};
+
 window.runnerSetDone = function() {
   const node = document.getElementById("runner-result-node");
   const sub = document.getElementById("runner-center-sub");

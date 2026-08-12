@@ -7590,10 +7590,20 @@ $("runner-run-btn").onclick = () => {
     const runnerPipeline = __mapRun.steps;
     try {
       clearPipelineExecutionMemory({ keepViewer: true });
+      const _runT0 = Date.now();
       await runPipelineWithAutoRepair({ source: "runner", ignoreCheckpoint: true, backgroundMode: true, outputMode: "file", pipeline: runnerPipeline });
       setPipelineRuntimeStatus(activeStepIds, "applied", "적용됨");
       toast(`${state.pipeline.length}개 단계 실행 완료`, "success");
       if (window.runnerSetDone) window.runnerSetDone();
+      // [사용자 지시] 완료 표시가 2.5초 뒤 사라져 '뻗은 것'처럼 보였다 → 결과 요약 카드를 띄우고
+      // 사용자가 직접 닫게 한다. 자리를 비웠다 와도 끝난 사실과 결과가 화면에 남는다.
+      if (window.runnerShowRunSummary) {
+        window.runnerShowRunSummary({
+          steps: activeStepIds.length || state.pipeline.length,
+          ms: Date.now() - _runT0,
+          finishedAt: new Date(),
+        });
+      }
     } catch (err) {
       renderExcelViewer();
       markPipelineRunFailureStatus(err, activeStepIds);
