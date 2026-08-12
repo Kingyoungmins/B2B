@@ -1207,8 +1207,11 @@ function wirePipelineStepCrossEvidence(stepCross, sourceSteps) {
   for (const rec of stepCross) {
     if (!rec || !rec.tracked) continue;   // 추적 못 한 스텝(VBA·구조변경)은 정적 탐지 그대로 둔다
     let orig = Number.isInteger(rec.stepIdx) ? allSteps[rec.stepIdx] : null;
-    if (rec.stepId && (!orig || orig.id !== rec.stepId)) {
-      orig = allSteps.find(s => s && s.id === rec.stepId) || orig;
+    if (rec.stepId) {
+      // id 가 있으면 id 로만 정한다. 인덱스로 잡힌 다른 스텝에 붙이면 '교차인 진짜 스텝'은
+      // 표시가 안 된 채 남아 빠른 되돌리기가 목적지를 안 되돌린다(스냅샷과 달리 여기선
+      // 엉뚱한 데 붙는 게 안 붙는 것보다 나쁘다 — 단일 적용은 payload 인덱스가 배열과 다르다).
+      orig = allSteps.find(s => s && s.id === rec.stepId) || null;
     }
     if (!orig) continue;
     const ids = Array.isArray(rec.excelIds) ? rec.excelIds.filter(Boolean) : [];
@@ -2145,10 +2148,23 @@ async function runLivePipelineStepSequentially(step, excelId, options = {}) {
     if (data && data.liveSchema) {
       try { applyLiveSchemaToFileCache(excelId, data.liveSchema); } catch (_) {}
     }
+    // [교차파일 런타임 증거] 단계 켜기(단일 적용)가 지나는 길이 여기다 — 실제로 가장 자주 도는
+    // 경로다. 전체실행 쪽에만 붙여 두면 증거가 거의 안 쌓이고, 정적으로 안 보이는 교차 쓰기가
+    // 계속 '교차 아님'으로 남아 빠른 되돌리기가 목적지를 안 되돌린다.
+    if (data && Array.isArray(data.stepCross) && typeof wirePipelineStepCrossEvidence === "function") {
+      wirePipelineStepCrossEvidence(data.stepCross, [step]);
+    }
     if (stepId) setPipelineRuntimeStatus([stepId], "applied", "적용됨");
     return { data, requestMs: performance.now() - requestStarted };
   } catch (err) {
     if (stepId) setPipelineRuntimeStatus([stepId], "error", "오류");
+    // 실패해도 '실패 전까지 실제로 쓴 파일'은 사실이다 — 되돌리기 판정에 그대로 쓴다.
+    try {
+      const einfo = err && (err.errorInfo || err._stepInfo);
+      if (einfo && Array.isArray(einfo.stepCross) && typeof wirePipelineStepCrossEvidence === "function") {
+        wirePipelineStepCrossEvidence(einfo.stepCross, [step]);
+      }
+    } catch (_) {}
     attachPipelineStepError(err, step, stepIdx);
     throw err;
   }

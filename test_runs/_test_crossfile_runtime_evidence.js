@@ -205,9 +205,26 @@ async function main() {
     check("다음 적용부터는 목적지 사본이 갖춰진다", T.hasFullSnapshots(first) === true, JSON.stringify(first._crossPreApplySnapshots));
   }
 
-  console.log("[8] 배선");
-  check("성공/실패/전체실행 세 경로 모두에서 증거를 붙인다",
-    (pj.match(/wirePipelineStepCrossEvidence\(/g) || []).length >= 4);
+  console.log("[8] payload 인덱스가 배열과 달라도 id 로 정확히 찾는다  ← 단일 적용 경로");
+  {
+    // 단일 스텝 적용은 payload 에 '파이프라인 인덱스'(예: 3)를 싣지만, wiring 에 넘기는 배열은
+    // 그 스텝 하나뿐이다. 인덱스로 잡으면 빗나가고, 빗나간 채 다른 스텝에 붙이면 진짜 교차
+    // 스텝이 표시 안 된 채 남는다.
+    const only = { id: "s7", code: CODE_HIDDEN };
+    T.setLive([{ id: "other" }, { id: "s7", code: CODE_HIDDEN }]);
+    T.wire([{ stepIdx: 3, stepId: "s7", tracked: true, excelIds: ["x_out"] }], [only]);
+    check("인덱스가 빗나가도 id 로 찾아 붙인다", T.runtimeIds(only).length === 1, T.runtimeIds(only));
+    const wrong = { id: "zz", code: CODE_HIDDEN };
+    T.setLive([wrong]);
+    T.wire([{ stepIdx: 0, stepId: "없는id", tracked: true, excelIds: ["x_out"] }], [wrong]);
+    check("id 가 안 맞으면 엉뚱한 스텝에 붙이지 않는다", T.runtimeIds(wrong).length === 0);
+  }
+
+  console.log("[9] 배선");
+  check("단일 적용·전체실행·실패 경로 모두에서 증거를 붙인다",
+    (pj.match(/wirePipelineStepCrossEvidence\(/g) || []).length >= 6);
+  check("단계 켜기(단일 적용) 경로가 stepCross 를 받는다",
+    /wirePipelineStepCrossEvidence\(data\.stepCross, \[step\]\)/.test(pj));
   check("코드를 고치면 그 스텝 증거를 버린다", /delete next\[idx\]\._runtimeCrossExcelIds;/.test(pj));
   check("버리기 전에 교차 판정을 먼저 끝낸다(폐기 범위 보존)",
     pj.indexOf("if (writesCross) dropFrom = idx;") < pj.indexOf("delete next[idx]._runtimeCrossExcelIds;"));
