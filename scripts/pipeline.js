@@ -1038,10 +1038,13 @@ function pipelineSuffixCrossUnresolvedNames(steps, startIdx) {
 // 이제 확정 못 한 이름이 하나라도 있으면 교차로 본다. 목적지를 모르니 사본도 못 떠서
 // stepHasFullRollbackSnapshots 가 false 가 되고 전체 재적용으로 간다 — 느릴 뿐 안전하다.
 //
-// 남은 한계(의도적): 파일명이 셀 데이터에서 오거나 ctx.book 없이 시트명만으로 남의 워크북에
-// 쓰는 스킬은 코드 어디에도 이름이 없어 정적으로는 보이지 않는다. 이건 백엔드가 실행 중에
-// 실제로 쓴 워크북을 기록하는 쪽(_mark_mutated)으로만 닫을 수 있다.
+// [런타임 증거와 OR 2026-08-12] 정적 탐지는 파일명이 셀 데이터에서 오거나 ctx.book 없이 시트명만으로
+// 남의 워크북에 쓰는 스킬을 아예 못 본다. 백엔드가 실행 중 실제로 쓴 세션을 스텝별로 돌려주므로
+// (wirePipelineStepCrossEvidence) 둘을 OR 로 합친다. 대체가 아니라 보강인 이유: VBA 스텝은 런타임
+// 증거를 만들 수단이 없어(tracked=false) '증거 없음=교차'로 몰면 VBA 섞인 스킬의 되돌리기가 전부
+// 느려진다. OR 로 두면 Python 미탐만 닫히고 VBA 는 지금까지와 똑같이 정적 탐지로 남는다.
 function pipelineStepWritesCrossFile(step) {
+  if (typeof stepRuntimeCrossExcelIds === "function" && stepRuntimeCrossExcelIds(step).length > 0) return true;
   // 자기 대상 파일에 쓰는 건 교차가 아니다 — 대상 추론이 되면 그 파일은 제외하고 판단한다.
   const selfFileId = (step && step.targetFileId)
     || (typeof inferPipelineStepTargetFileId === "function" ? inferPipelineStepTargetFileId(step) : null);
@@ -1188,6 +1191,44 @@ function wirePipelineStepSnapshots(stepSnapshots, excelId, sourceSteps) {
       syncStepPreApplySnapshot(orig, snapObj, Number.isInteger(snap.stepIdx) ? snap.stepIdx : null);
     }
   }
+}
+
+// [교차파일 런타임 증거 2026-08-12] 정적 탐지는 코드 문자열에서 파일명을 찾는다. 그래서 파일명이
+// 셀 데이터에서 오거나 ctx.book 없이 시트명만으로 남의 워크북에 쓰는 스킬은 아예 안 보인다.
+// 그런 스텝을 '교차 아님'으로 보면 빠른 되돌리기가 목적지를 안 되돌린 채 끝난다(UI=보류, 실제=적용됨).
+// 백엔드가 실행 중 실제로 쓴 세션을 스텝별로 돌려주므로, 그걸 스텝에 붙여 정적 탐지와 OR 로 합친다.
+//
+// 첫 적용 때는 아직 증거가 없어 목적지 사본을 못 뜬다 → 그 스텝의 되돌리기는 전체 재적용으로 간다.
+// 실행이 끝나면 증거가 생기므로 '다음 적용'부터는 목적지 사본까지 떠서 빠른 롤백이 된다.
+// (안전한 쪽으로 시작해서 알게 되면 빨라지는 순서 — 반대였다면 첫 판이 조용히 깨졌다.)
+function wirePipelineStepCrossEvidence(stepCross, sourceSteps) {
+  if (!Array.isArray(stepCross) || !stepCross.length) return;
+  const allSteps = sourceSteps || state.pipeline || [];
+  for (const rec of stepCross) {
+    if (!rec || !rec.tracked) continue;   // 추적 못 한 스텝(VBA·구조변경)은 정적 탐지 그대로 둔다
+    let orig = Number.isInteger(rec.stepIdx) ? allSteps[rec.stepIdx] : null;
+    if (rec.stepId && (!orig || orig.id !== rec.stepId)) {
+      orig = allSteps.find(s => s && s.id === rec.stepId) || orig;
+    }
+    if (!orig) continue;
+    const ids = Array.isArray(rec.excelIds) ? rec.excelIds.filter(Boolean) : [];
+    // 매핑 실행(runner)은 스텝 사본을 돌리므로 원본 파이프라인 쪽에도 같이 남긴다 —
+    // 안 그러면 실행이 끝나 사본이 버려질 때 증거도 같이 사라진다.
+    const targets = [orig];
+    if (Array.isArray(state.pipeline)) {
+      const live = state.pipeline.find(s => s && orig.id && s.id === orig.id);
+      if (live && live !== orig) targets.push(live);
+    }
+    for (const t of targets) {
+      t._runtimeCrossExcelIds = ids;
+      t._runtimeCrossTracked = true;
+    }
+  }
+}
+
+// 이 스텝이 '다른 파일에 쓴다'고 런타임이 말해 준 세션들(없으면 빈 배열).
+function stepRuntimeCrossExcelIds(step) {
+  return (step && Array.isArray(step._runtimeCrossExcelIds)) ? step._runtimeCrossExcelIds.filter(Boolean) : [];
 }
 
 async function runIsolatedLivePipelineSteps(sourceSteps, initialExcelId, options = {}) {
@@ -1357,6 +1398,9 @@ async function runIsolatedLivePipelineSteps(sourceSteps, initialExcelId, options
       if (lastData && Array.isArray(lastData.stepSnapshots)) {
         wirePipelineStepSnapshots(lastData.stepSnapshots, anchorExcelId, sourceSteps);
       }
+      if (lastData && Array.isArray(lastData.stepCross)) {
+        wirePipelineStepCrossEvidence(lastData.stepCross, sourceSteps);
+      }
       // 파일별 라이브 미러 캐시(시트명/미리보기) 갱신 (sync 모드 — file 모드는 perFileLiveSchema 비어있음)
       if (lastData && lastData.perFileLiveSchema) {
         for (const exId of Object.keys(lastData.perFileLiveSchema)) {
@@ -1487,6 +1531,9 @@ async function runIsolatedLivePipelineSteps(sourceSteps, initialExcelId, options
       if (data && Array.isArray(data.stepSnapshots)) {
         wirePipelineStepSnapshots(data.stepSnapshots, excelId, sourceSteps);
       }
+      if (data && Array.isArray(data.stepCross)) {
+        wirePipelineStepCrossEvidence(data.stepCross, sourceSteps);
+      }
     }
     if (loadingStarted && typeof endExcelMirrorApplyLoading === "function") endExcelMirrorApplyLoading();
     if (typeof releaseExcelMirrorPipelineMute === "function") {
@@ -1550,6 +1597,10 @@ async function runIsolatedLivePipelineSteps(sourceSteps, initialExcelId, options
       const einfo = err && (err.errorInfo || err._stepInfo);
       if (einfo && Array.isArray(einfo.stepSnapshots)) {
         wirePipelineStepSnapshots(einfo.stepSnapshots, lastTouchedExcelId || initialExcelId, sourceSteps);
+      }
+      // 실패해도 '실패 전까지 실제로 쓴 파일'은 사실이다 — 그 증거로 되돌리기 판정을 정확히 한다.
+      if (einfo && Array.isArray(einfo.stepCross)) {
+        wirePipelineStepCrossEvidence(einfo.stepCross, sourceSteps);
       }
     } catch (_) {}
     if (loadingStarted && typeof endExcelMirrorApplyLoading === "function") endExcelMirrorApplyLoading();
@@ -2484,6 +2535,12 @@ function replaceLogicAt(stepId, newCode, newDescription, language, opts) {
     for (let i = dropFrom; i < next.length; i += 1) {
       if (next[i] && next[i]._preApplySnapshot) delete next[i]._preApplySnapshot;
     }
+    // 런타임 쓰기 증거는 '고치기 전 코드'가 어디에 썼는지다. 코드가 바뀌면 목적지도 바뀔 수 있으니
+    // 이 스텝의 증거는 버린다(위 writesCross 판정을 먼저 끝낸 뒤에 버려야 폐기 범위가 맞다).
+    // 다시 적용하면 새 코드 기준으로 증거가 다시 쌓인다.
+    delete next[idx]._runtimeCrossExcelIds;
+    delete next[idx]._runtimeCrossTracked;
+    if (next[idx]._crossPreApplySnapshots) delete next[idx]._crossPreApplySnapshots;
     if (typeof pushHistory === "function") pushHistory("단계 수정(미적용)");
     state.pipeline = next;
     const existingResume = (typeof getPipelineResumeFromIndex === "function") ? getPipelineResumeFromIndex() : null;
@@ -4146,19 +4203,37 @@ async function captureCrossFileDestinationSnapshots(step, selfExcelId) {
     console.warn("[pipeline] 교차 목적지를 확정 못 함 — 되돌리기는 전체 재적용으로", unresolved);
     return [];
   }
-  if (!fileIds.length) return [];
+  // 지난 실행에서 '실제로 여기에 썼다'고 확인된 세션도 함께 뜬다. 정적으로는 안 보이는 목적지
+  // (파일명이 셀에서 오는 스킬 등)가 여기서 들어온다 — 첫 판은 증거가 없어 비고, 그 판의
+  // 되돌리기는 전체 재적용으로 간다. 두 번째 판부터 사본이 갖춰져 빠른 롤백이 된다.
+  const runtimeIds = (typeof stepRuntimeCrossExcelIds === "function") ? stepRuntimeCrossExcelIds(step) : [];
+  if (!fileIds.length && !runtimeIds.length) return [];
   const out = [];
+  const done = new Set();
+  const snapExcel = async (dstExcelId, fid) => {
+    if (!dstExcelId || dstExcelId === selfExcelId || done.has(dstExcelId)) return true;
+    done.add(dstExcelId);
+    const s = await postExcelMirror("/api/excel/save", { excelId: dstExcelId, internal: true });
+    if (!s || !s.downloadId) return false;
+    out.push({ resultId: s.downloadId, downloadUrl: s.downloadUrl || "", name: s.name || "",
+               excelId: dstExcelId, fileId: fid || "", capturedAt: Date.now() });
+    return true;
+  };
   for (const fid of fileIds) {
     try {
       const dstExcelId = (typeof excelIdForPipelineFileId === "function")
         ? await excelIdForPipelineFileId(fid) : null;
-      if (!dstExcelId || dstExcelId === selfExcelId) continue;
-      const s = await postExcelMirror("/api/excel/save", { excelId: dstExcelId, internal: true });
-      if (!s || !s.downloadId) return (step._crossPreApplySnapshots = []);   // 반쪽 복원 금지
-      out.push({ resultId: s.downloadId, downloadUrl: s.downloadUrl || "", name: s.name || "",
-                 excelId: dstExcelId, fileId: fid, capturedAt: Date.now() });
+      if (!(await snapExcel(dstExcelId, fid))) return (step._crossPreApplySnapshots = []);   // 반쪽 복원 금지
     } catch (err) {
       console.warn("[pipeline] cross-file destination snapshot failed", err);
+      return (step._crossPreApplySnapshots = []);
+    }
+  }
+  for (const eid of runtimeIds) {
+    try {
+      if (!(await snapExcel(eid, ""))) return (step._crossPreApplySnapshots = []);
+    } catch (err) {
+      console.warn("[pipeline] cross-file destination snapshot failed (runtime)", err);
       return (step._crossPreApplySnapshots = []);
     }
   }
@@ -4173,7 +4248,14 @@ function stepHasFullRollbackSnapshots(step) {
     && pipelineStepWritesCrossFile(step);
   if (!writesCross) return true;
   const extra = Array.isArray(step._crossPreApplySnapshots) ? step._crossPreApplySnapshots : [];
-  return extra.length > 0 && extra.every(s => s && s.resultId);
+  if (!extra.length || !extra.some(s => s && s.resultId)) return false;
+  if (!extra.every(s => s && s.resultId)) return false;
+  // '사본이 있다'로는 부족하다 — 런타임이 알려 준 목적지가 그 사본들에 전부 들어 있어야 한다.
+  // 스텝을 고쳐 목적지가 바뀌면 사본은 '예전 목적지' 것만 남는데, 개수만 세면 그걸 완전하다고
+  // 착각해 빠른 롤백을 타고 새 목적지가 안 되돌아간다.
+  const covered = new Set(extra.map(s => s && s.excelId).filter(Boolean));
+  const known = (typeof stepRuntimeCrossExcelIds === "function") ? stepRuntimeCrossExcelIds(step) : [];
+  return known.every(id => covered.has(id));
 }
 
 function syncStepPreApplySnapshot(step, snap, stepIdx = null) {

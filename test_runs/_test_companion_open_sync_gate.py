@@ -141,7 +141,7 @@ check("철회 사유가 코드에 남아 있다(다음 사람이 같은 함정�
 
 print("[5] 배선 — 실제 실행 경로에 붙어 있는가")
 check("Python 스텝 요약에서 바뀐 워크북을 모은다",
-      re.search(r'_psum\.get\("mutationTracked"\)[\s\S]{0,120}_mutated_books\.update', SRC) is not None)
+      re.search(r'_psum\.get\("mutationTracked"\)[\s\S]{0,240}_mutated_books\.update', SRC) is not None)
 check("VBA 스텝이 하나라도 있으면 추적을 포기한다",
       re.search(r'_inject_and_run_vba\(fapp, ftarget, code, entry\)\s*\n\s*_mutation_tracked = False', SRC) is not None)
 check("동기화 호출이 증거를 넘긴다",

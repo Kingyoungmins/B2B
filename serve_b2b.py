@@ -2404,7 +2404,9 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
                     continue
                 item = {"ts": d.get("ts"), "event": ev}
                 for k in ("description", "errDescription", "errNumber", "error",
-                          "targetName", "companionName", "name", "reason", "ordinal", "stepId"):
+                          "targetName", "companionName", "name", "reason", "ordinal", "stepId",
+                          # 동반본 여는 비용 분해(사본 뜨기 vs 열기) — 캐시로 줄일 수 있는 몫을 가른다
+                          "copySec", "openSec", "sizeMb"):
                     v = d.get(k)
                     if v is not None:
                         item[k] = str(v)[:220]
@@ -9695,8 +9697,15 @@ def _setup_isolated_pipeline_instance(session, excel_id, reset, work):
         cdir.mkdir(parents=True, exist_ok=True)
         cpath = cdir / cname
         try:
+            # [계측 2026-08-12] 동반본 여는 비용을 '사본 뜨기'와 '열기'로 나눠 찍는다.
+            # 캐시(안 변한 동반본은 사본 재사용)가 먹는 건 사본 몫뿐이라, 둘을 합쳐 놓으면
+            # 캐시 효과를 과대평가하게 된다 — 31MB 실측이 사본 6초 / 열기 14초였다.
+            _t_copy0 = time.monotonic()
             o_wb.SaveCopyAs(str(cpath))
+            _t_copy = time.monotonic() - _t_copy0
+            _t_open0 = time.monotonic()
             cwb, _ct = excel_workbooks_open(fapp, str(cpath), read_only=False, intended_name=cname)
+            _t_open = time.monotonic() - _t_open0
             opened.add(cname.lower())
             # [교차파일 유실 수정] 이 동반본을 '쓰기 대상'으로 변형하는 스텝(입력→출력 .Copy,
             # 출력→입력 매칭쓰기 등)이 있으면, 실행 후 변경된 동반본을 그 라이브 세션으로 되돌려써야 한다.
@@ -9714,11 +9723,51 @@ def _setup_isolated_pipeline_instance(session, excel_id, reset, work):
                 _name_unknown = True
             companions.append({"excelId": oid, "name": cname, "openedName": _opened_name,
                                "nameUnknown": _name_unknown, "wb": cwb})
-            _vba_trace("pipeline.isolated.companion.opened", excelId=excel_id, isolatedPid=fpid, companionName=cname, companionPath=str(cpath))
+            try:
+                _c_mb = round(Path(cpath).stat().st_size / (1024 * 1024), 1)
+            except Exception:
+                _c_mb = None
+            _vba_trace("pipeline.isolated.companion.opened", excelId=excel_id, isolatedPid=fpid,
+                       companionName=cname, companionPath=str(cpath),
+                       copySec=round(_t_copy, 2), openSec=round(_t_open, 2), sizeMb=_c_mb)
         except Exception:
             _vba_trace("pipeline.isolated.companion.error", excelId=excel_id, isolatedPid=fpid, companionName=cname, companionPath=str(cpath))
             pass
     return fapp, ftarget, fpid, companions
+
+
+def _step_cross_payload(step_cross, companions):
+    """스텝별 쓰기 증거를 클라가 쓸 형태로: 워크북 이름 → 라이브 세션 excelId."""
+    out = []
+    for rec in (step_cross or []):
+        try:
+            out.append({
+                "stepIdx": rec.get("stepIdx"),
+                "stepId": rec.get("stepId"),
+                "tracked": bool(rec.get("tracked")),
+                "excelIds": _companion_excel_ids_for_books(companions, rec.get("books")),
+            })
+        except Exception:
+            continue
+    return out
+
+
+def _companion_excel_ids_for_books(companions, books):
+    """바뀐 워크북 이름 집합 → 그게 어느 라이브 세션인지(excelId). 대상 세션은 동반본이 아니므로
+    자연히 빠진다 = 여기 남는 건 전부 '다른 파일에 썼다'는 증거다."""
+    want = set(books or ())
+    out = []
+    if not want:
+        return out
+    for comp in (companions or []):
+        oid = comp.get("excelId")
+        if not oid or oid in out:
+            continue
+        keys = {unicodedata.normalize("NFC", str(n)).casefold()
+                for n in (comp.get("name"), comp.get("openedName")) if n}
+        if keys & want:
+            out.append(oid)
+    return out
 
 
 def _sync_modified_companions_into_live(companions, excel_id, fpid, work, mutated_books=None, mutation_tracked=False):
@@ -9868,6 +9917,7 @@ def _run_vba_pipeline_on_session_impl(excel_id, steps, reset=True, entry=None, v
             step_snapshots = []  # [0.5.14 batch 빠른복구] 스텝 실행 '전' ftarget 스냅샷(downloadId) 목록
             _mutated_books = set()   # 이번 실행에서 '실제로 바뀐' 워크북 이름(소문자)
             _mutation_tracked = True  # 하나라도 추적 불가한 스텝이 있으면 False → 전부 동기화(기존 동작)
+            _step_cross = []          # 스텝별 쓰기 증거(클라의 교차파일 되돌리기 판정 보강용)
             try:
                 fapp, ftarget, fpid, companions = _setup_isolated_pipeline_instance(session, excel_id, reset, work)
                 try:
@@ -10001,6 +10051,8 @@ def _run_vba_pipeline_on_session_impl(excel_id, steps, reset=True, entry=None, v
                         )
                     try:
                         _activate_step_target_sheet(st)
+                        _step_books = []
+                        _step_tracked = False
                         if str(lang).lower() == "python":
                             _psum = _exec_python_com_skill(
                                 fapp,
@@ -10012,17 +10064,32 @@ def _run_vba_pipeline_on_session_impl(excel_id, steps, reset=True, entry=None, v
                             )
                             # [되돌려쓰기 게이트] 이 스텝이 실제로 건드린 워크북만 모은다.
                             if isinstance(_psum, dict) and _psum.get("mutationTracked"):
-                                _mutated_books.update(_psum.get("mutatedBooks") or [])
+                                _step_books = list(_psum.get("mutatedBooks") or [])
+                                _step_tracked = True
+                                _mutated_books.update(_step_books)
                             else:
                                 _mutation_tracked = False  # 구조변경 등 → 어느 파일인지 특정 불가
                         else:
                             _inject_and_run_vba(fapp, ftarget, code, entry)
                             _mutation_tracked = False  # VBA 는 쓰기 추적 수단이 없다
+                        # [교차파일 런타임 증거] 정적 탐지(코드 문자열에서 파일명 찾기)는 파일명이 셀
+                        # 데이터에서 오거나 시트명만으로 남의 워크북에 쓰는 스킬을 못 본다. 그런 스텝을
+                        # '교차 아님'으로 보면 빠른 되돌리기가 목적지를 안 되돌린 채 끝난다.
+                        # 실제로 쓴 워크북을 스텝 단위로 돌려줘 클라가 정적 탐지와 OR 로 합치게 한다.
+                        # (전체 합산이 아니라 스텝별이어야 한다 — 합산하면 한 스텝의 교차가 모든
+                        #  스텝에 번져 되돌리기가 늘 전체 재적용으로 떨어진다.)
+                        _step_cross.append({
+                            "stepIdx": st.get("stepIdx") if isinstance(st, dict) else None,
+                            "stepId": st.get("stepId") if isinstance(st, dict) else None,
+                            "books": sorted(_step_books),
+                            "tracked": bool(_step_tracked),
+                        })
                     except PipelineExecutionError as _pe:
                         # 스텝 내부에서 던진 PipelineExecutionError 에도 직전 스냅샷을 실어 자동복구 이어실행을 살린다.
                         try:
                             if isinstance(getattr(_pe, "info", None), dict):
                                 _pe.info["stepSnapshots"] = list(step_snapshots)
+                                _pe.info["stepCross"] = _step_cross_payload(_step_cross, companions)
                         except Exception:
                             pass
                         raise
@@ -10044,6 +10111,7 @@ def _run_vba_pipeline_on_session_impl(excel_id, steps, reset=True, entry=None, v
                         # 이어실행(중복 적용 없이) 가능. (없으면 "스냅샷 없음"으로 이어실행이 중단됐었음.)
                         try:
                             info["stepSnapshots"] = list(step_snapshots)
+                            info["stepCross"] = _step_cross_payload(_step_cross, companions)
                         except Exception:
                             pass
                         raise PipelineExecutionError(info)
@@ -10129,6 +10197,13 @@ def _run_vba_pipeline_on_session_impl(excel_id, steps, reset=True, entry=None, v
                     pass
             result = {"ok": True, "excelId": excel_id, "applied": len(run_steps)}
             result["stepSnapshots"] = step_snapshots  # [0.5.14] 스텝별 적용-전 스냅샷(클라가 _preApplySnapshot 로 사용)
+            # [교차파일 런타임 증거] 스텝별로 '실제로 쓴 다른 세션'을 excelId 로 돌려준다.
+            # 이름이 아니라 excelId 인 이유: 이름→파일 매핑이 모호해지는 게 정적 탐지의 약점인데,
+            # 여기서 이름을 돌려주면 클라가 같은 모호성을 다시 만난다. 세션 id 는 애매할 수 없다.
+            try:
+                result["stepCross"] = _step_cross_payload(_step_cross, companions)
+            except Exception:
+                pass
             # [#5] 격리 적용도 라이브 미러 캐시(시트명/미리보기/차원)를 갱신하도록 경량 스키마를 함께 싣는다.
             # 반영(_copy_source_workbook_into_target) 이후 라이브 wb 기준 → 새로 생긴 시트(추가/복사/피벗)가
             # @멘션 목록에 안 뜨던 문제 해결. Python 단일 경로(_run_python_on_session_impl)와 동일 패턴.

@@ -3217,6 +3217,48 @@
         ]
       ],
       "fix": "crossWriteDestinationFileIds 는 코드에서 뽑은 이름을 pipelineFileIdByWorkbookName 으로 파일에 매핑하는데, 동명 후보가 둘 이상이면 pickUnique 가 null 을 주고 그 이름을 그냥 버렸다 — 이름이 모호할수록 안전장치가 풀리는 거꾸로 된 구조. crossWriteDestinationScan 이 {ids, unresolved} 를 돌려주고 pipelineStepWritesCrossFile 이 unresolved 도 교차로 본다. 목적지를 모르니 사본도 못 떠서 stepHasFullRollbackSnapshots=false → 전체 재적용(느리지만 전부 되돌아감). 포기 사유는 toggle_off 트레이스의 crossUnresolved 에 이름으로 남는다. 남은 한계(의도): 파일명이 셀 데이터에서 오거나 ctx.book 없이 _ws() 폴백으로 남의 워크북에 쓰면 코드에 이름이 없어 정적으로는 안 보인다 — 백엔드 런타임 증거(_mark_mutated/mutatedBooks)로만 닫을 수 있다."
+    },
+    {
+      "id": "CROSSFILE-RUNTIME-EVIDENCE",
+      "title": "[정합] 정적 탐지가 못 보는 교차 쓰기(파일명이 셀에서 오거나 시트명만으로 남의 워크북에 쓰는 스킬) — 되돌리기가 목적지를 안 되돌린 채 끝났다.",
+      "checks": [
+        [
+          "node",
+          "test_runs/_test_crossfile_runtime_evidence.js"
+        ],
+        [
+          "node",
+          "test_runs/_test_crossfile_detect_failclosed.js"
+        ]
+      ],
+      "fix": "백엔드가 실행 중 실제로 쓴 세션을 스텝별로 돌려주고(result/errorInfo 의 stepCross, _step_cross_payload → excelId. 이름이 아니라 세션 id 인 이유는 이름→파일 매핑 모호성이 정적 탐지의 약점이기 때문), 클라가 wirePipelineStepCrossEvidence 로 스텝에 붙여 pipelineStepWritesCrossFile 에서 정적 탐지와 OR 로 합친다. 대체가 아니라 OR 인 이유: VBA 스텝은 증거를 만들 수단이 없어(tracked=false) '증거 없음=교차'로 몰면 VBA 섞인 스킬의 되돌리기가 전부 느려진다. stepHasFullRollbackSnapshots 는 사본 개수가 아니라 '아는 목적지를 전부 덮는가'로 판정한다(스텝을 고쳐 목적지가 바뀐 경우 방지). 첫 판은 증거가 없어 전체 재적용, 두 번째 판부터 목적지 사본이 갖춰져 빠른 롤백 — 안전에서 시작해 알게 되면 빨라진다."
+    },
+    {
+      "id": "TEST-EXTRACTION-BY-NAME-FRAGILE",
+      "title": "[테스트 구조] 진단 테스트가 함수를 '이름으로 떼어내' 샌드박스에서 돌린다 — 함수를 쪼개면 새 의존 함수를 같이 안 떼어 파일 전체가 ReferenceError 로 죽는다.",
+      "checks": [
+        [
+          "node",
+          "diagnostics/_test_cross_reset.js"
+        ],
+        [
+          "node",
+          "diagnostics/_test_recorded_ref_guards.js"
+        ],
+        [
+          "node",
+          "diagnostics/_test_review_fixes_guards.js"
+        ],
+        [
+          "node",
+          "diagnostics/_test_mapping_persistence.js"
+        ],
+        [
+          "node",
+          "diagnostics/_test_applied_label_truth.js"
+        ]
+      ],
+      "fix": "실제 사고: crossWriteDestinationFileIds 를 crossWriteDestinationScan 호출로 쪼갰더니 등록 회귀 26건이 한 뿌리로 실패했다. 추출 목록이 흩어져 있는 자리 = diagnostics/_test_cross_reset.js(이름 배열), _test_mapping_persistence.js(^function 정규식 alternation), _test_recorded_ref_guards.js(extractFn 연결), _test_review_fixes_guards.js(이름 배열), _test_applied_label_truth.js(스텁 객체). pipeline.js 의 함수를 쪼개거나 이름을 바꾸면 이 5곳을 같이 본다. 이 항목의 checks 가 그 5개 파일이라 recheck 만 돌려도 바로 걸린다."
     }
   ]
 }
