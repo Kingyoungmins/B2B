@@ -9,7 +9,7 @@ signature: "(self)"
 role: "시트 이름 목록."
 role_source: docstring
 version: "0.7.3"
-loc: "serve_b2b.py:11353-11356"
+loc: "serve_b2b.py:11286-11289"
 
 # ── 입출력 ──
 inputs:
