@@ -8,7 +8,7 @@ signature: "(value)"
 role: "Normalize workbook names for generated-code lookups."
 role_source: docstring
 version: "0.7.3"
-loc: "serve_b2b.py:7867-7881"
+loc: "serve_b2b.py:7931-7945"
 
 # ── 입출력 ──
 inputs:

@@ -8,7 +8,7 @@ signature: "(path)"
 role: "[진단 계측 2026-08-12] 이 파일에 사내 보안 라벨(MIP)이 붙었는지 한 줄로 판별한다."
 role_source: docstring
 version: "0.7.3"
-loc: "serve_b2b.py:3394-3424"
+loc: "serve_b2b.py:3435-3466"
 
 # ── 입출력 ──
 inputs:
@@ -22,6 +22,7 @@ raises: []
 
 # ── 유기적 관계 ──
 calls:
+  - "is_encrypted_ooxml"
   - "read"
 calls_external:
   - "Path"
@@ -52,7 +53,7 @@ timestamp: "0.7.3-gen"
 - 파일시스템 변경/IO
 
 ## 관계
-- 호출: `read`
+- 호출: `is_encrypted_ooxml`, `read`
 - 피호출(영향 전파 경로): `B2BHandler.handle_workbook_upload`, `_replace_excel_session_workbook_impl`, `_run_full_pipeline_single_instance_impl`, `_run_vba_pipeline_on_session_impl`, `_save_excel_session_impl`
 
 ## 실패/예외

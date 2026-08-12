@@ -8,7 +8,7 @@ signature: "(path)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
 version: "0.7.3"
-loc: "serve_b2b.py:2758-2782"
+loc: "serve_b2b.py:2796-2823"
 
 # ── 입출력 ──
 inputs:
@@ -24,6 +24,7 @@ raises: []
 calls:
   - "_excel_suffix_matches_content"
   - "excel_zip_file_suffix"
+  - "is_encrypted_ooxml"
   - "is_ole_excel_file"
   - "sniff_text_excel_suffix"
 calls_external:
@@ -55,7 +56,7 @@ timestamp: "0.7.3-gen"
 - 파일시스템 변경/IO
 
 ## 관계
-- 호출: `_excel_suffix_matches_content`, `excel_zip_file_suffix`, `is_ole_excel_file`, `sniff_text_excel_suffix`
+- 호출: `_excel_suffix_matches_content`, `excel_zip_file_suffix`, `is_encrypted_ooxml`, `is_ole_excel_file`, `sniff_text_excel_suffix`
 - 피호출(영향 전파 경로): `excel_workbooks_open`
 
 ## 실패/예외

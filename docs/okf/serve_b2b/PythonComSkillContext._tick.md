@@ -9,7 +9,7 @@ signature: "(self, n=1)"
 role: "---- 내부 가드 ----"
 role_source: banner
 version: "0.7.3"
-loc: "serve_b2b.py:10930-10938"
+loc: "serve_b2b.py:10987-10995"
 
 # ── 입출력 ──
 inputs:

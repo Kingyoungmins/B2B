@@ -31,6 +31,7 @@ calls:
   - "inferPipelineStepLanguage"
   - "isolatedPipelineStepPayload"
   - "pipelineStepLiveLanguage"
+  - "pipelineStepWritesCrossFile"
   - "postExcelMirror"
   - "setPipelineRuntimeStatus"
 calls_external:
@@ -57,7 +58,7 @@ timestamp: "0.7.3-gen"
 - 네트워크/서버 호출
 
 ## 관계
-- 호출: `applyLiveSchemaToFileCache`, `attachPipelineStepError`, `captureStepPreApplySnapshot`, `hideAllExcelMirrorWindows`, `inferPipelineStepLanguage`, `isolatedPipelineStepPayload`, `pipelineStepLiveLanguage`, `postExcelMirror`, `setPipelineRuntimeStatus`
+- 호출: `applyLiveSchemaToFileCache`, `attachPipelineStepError`, `captureStepPreApplySnapshot`, `hideAllExcelMirrorWindows`, `inferPipelineStepLanguage`, `isolatedPipelineStepPayload`, `pipelineStepLiveLanguage`, `pipelineStepWritesCrossFile`, `postExcelMirror`, `setPipelineRuntimeStatus`
 - 피호출(영향 전파 경로): `applyLastEnabledStepFast`
 
 ## 실패/예외

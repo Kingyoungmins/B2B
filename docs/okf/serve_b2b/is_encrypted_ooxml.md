@@ -1,14 +1,14 @@
 ---
 type: function
-title: inspect_csv_workbook
+title: is_encrypted_ooxml
 module: serve_b2b.py
 lang: python
 extraction: ast
 signature: "(path)"
-role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
-role_source: none
+role: "[사내 MIP 라벨 2026-08-12] 암호화된 xlsx 인가 — 구형 .xls 와 구분한다."
+role_source: docstring
 version: "0.7.3"
-loc: "serve_b2b.py:19374-19397"
+loc: "serve_b2b.py:2732-2767"
 
 # ── 입출력 ──
 inputs:
@@ -22,34 +22,36 @@ raises: []
 
 # ── 유기적 관계 ──
 calls:
-  - "csv_sheet_name"
-  - "read_csv_rows"
-  - "rows"
+  - "range"
+  - "read"
 calls_external:
-  - "PREVIEW_ROWS"
   - "Path"
+  - "decode"
+  - "dir_data"
+  - "from_bytes"
   - "len"
-  - "max"
   - "open"
   - "path"
+  - "sect_size"
+  - "seek"
 called_by:
-  - "inspect_workbook"
-reads:
-  - "PREVIEW_ROWS"
+  - "_file_label_kind"
+  - "excel_compatible_open_path"
+reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
 timestamp: "0.7.3-gen"
 ---
 
 ## 역할
-(추정) 역할 주석 없음 — 담당자 1줄 보완 필요  _(자동 추정 — 확인 필요)_
+[사내 MIP 라벨 2026-08-12] 암호화된 xlsx 인가 — 구형 .xls 와 구분한다.
 
 ## 사이드이펙트 & 주의
 - 파일시스템 변경/IO
 
 ## 관계
-- 호출: `csv_sheet_name`, `read_csv_rows`, `rows`
-- 피호출(영향 전파 경로): `inspect_workbook`
+- 호출: `range`, `read`
+- 피호출(영향 전파 경로): `_file_label_kind`, `excel_compatible_open_path`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

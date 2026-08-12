@@ -8,7 +8,7 @@ signature: "(stepId, options = {})"
 role: "[실행기 매핑 · 단일 적용] 단일 스텝 즉시 적용(토글 ON / 중간 삽입 / 수정 적용)도 반드시 '실행기"
 role_source: banner
 version: "0.7.3"
-loc: "pipeline.js:4683-4683"
+loc: "pipeline.js:4700-4700"
 
 # ── 입출력 ──
 inputs:
@@ -24,7 +24,9 @@ raises: []
 # ── 유기적 관계 ──
 calls:
   - "applyLastEnabledStepFast"
+  - "beginExcelMirrorApplyLoading"
   - "beginMappedPipelineRun"
+  - "endExcelMirrorApplyLoading"
   - "liveEnabledStepsSignature"
   - "noteLivePipelineApplied"
   - "restore"
@@ -49,7 +51,7 @@ timestamp: "0.7.3-gen"
 - 없음(정적 분석 기준)
 
 ## 관계
-- 호출: `applyLastEnabledStepFast`, `beginMappedPipelineRun`, `liveEnabledStepsSignature`, `noteLivePipelineApplied`, `restore`
+- 호출: `applyLastEnabledStepFast`, `beginExcelMirrorApplyLoading`, `beginMappedPipelineRun`, `endExcelMirrorApplyLoading`, `liveEnabledStepsSignature`, `noteLivePipelineApplied`, `restore`
 - 피호출(영향 전파 경로): `_handlePipelineStepToggleImpl`, `insertLogic`, `promise`, `replaceLogicAt`
 
 ## 실패/예외

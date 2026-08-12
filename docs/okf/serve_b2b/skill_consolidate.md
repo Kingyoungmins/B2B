@@ -8,7 +8,7 @@ signature: "(payload, base='')"
 role: "녹화 스킬 코드를 '기존 ctx 헬퍼'로 최대한 통합(등가 게이트 통과 시에만)."
 role_source: docstring
 version: "0.7.3"
-loc: "serve_b2b.py:6824-6845"
+loc: "serve_b2b.py:6887-6908"
 
 # ── 입출력 ──
 inputs:

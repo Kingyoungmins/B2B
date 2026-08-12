@@ -32,6 +32,7 @@ calls_external:
 called_by:
   - "_reapplyVbaPipelineToLiveImpl"
   - "applyBackendPipelineResult"
+  - "applyMappedSingleStep"
   - "applyVbaStepToLiveExcel"
   - "restoreLastStepPreApplySnapshot"
   - "restoreVbaExcelAfterError"
@@ -56,7 +57,7 @@ timestamp: "0.7.3-gen"
 
 ## 관계
 - 호출: `endUiBusy`, `isNativeExcelShell`, `publishNativeExcelLoading`, `showExcelApplyCancelButton`, `traceClientUiEvent`
-- 피호출(영향 전파 경로): `_reapplyVbaPipelineToLiveImpl`, `applyBackendPipelineResult`, `applyVbaStepToLiveExcel`, `restoreLastStepPreApplySnapshot`, `restoreVbaExcelAfterError`, `runIsolatedLivePipelineSteps`, `runPipelineOnBackend`
+- 피호출(영향 전파 경로): `_reapplyVbaPipelineToLiveImpl`, `applyBackendPipelineResult`, `applyMappedSingleStep`, `applyVbaStepToLiveExcel`, `restoreLastStepPreApplySnapshot`, `restoreVbaExcelAfterError`, `runIsolatedLivePipelineSteps`, `runPipelineOnBackend`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`
