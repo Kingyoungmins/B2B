@@ -8,8 +8,8 @@ class: OpenpyxlWorkbookProxy
 signature: "(self, name=None)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
-version: "0.5.19"
-loc: "serve_b2b.py:13371-13372"
+version: "0.7.3"
+loc: "serve_b2b.py:16652-16653"
 
 # ── 입출력 ──
 inputs:
@@ -27,12 +27,13 @@ calls: []
 calls_external: []
 called_by:
   - "build_result_previews"
+  - "inspect_workbook"
   - "write_result_workbook"
 reads:
   - "self._sheets_proxy"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.19-gen"
+timestamp: "0.7.3-gen"
 ---
 
 ## 역할
@@ -43,7 +44,7 @@ timestamp: "0.5.19-gen"
 
 ## 관계
 - 호출: 없음
-- 피호출(영향 전파 경로): `build_result_previews`, `write_result_workbook`
+- 피호출(영향 전파 경로): `build_result_previews`, `inspect_workbook`, `write_result_workbook`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

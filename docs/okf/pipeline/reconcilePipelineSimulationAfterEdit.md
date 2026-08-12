@@ -7,8 +7,8 @@ extraction: regex   # 정규식 근사
 signature: "(options = {})"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
-version: "0.5.19"
-loc: "pipeline.js:3404-3404"
+version: "0.7.3"
+loc: "pipeline.js:5221-5221"
 
 # ── 입출력 ──
 inputs:
@@ -17,71 +17,39 @@ returns: "(추정)"
 
 # ── 사이드이펙트 (정적 추정) ──
 side_effects:
-  - "DOM/브라우저 전역 조작"
+  - "없음(정적 분석 기준)"
 raises: []
 
 # ── 유기적 관계 ──
 calls:
-  - "affectedStepViewFileId"
-  - "affectedStepViewSheetHint"
-  - "clearPipelineExecutionMemory"
-  - "ensurePinnedVbaTargetExcelId"
-  - "excelIdForPipelineFileId"
-  - "getSkillEngine"
-  - "hasBackendOnlyWorkbooks"
-  - "inferPipelineStepLanguage"
-  - "isStepEnabled"
-  - "liveEnabledStepsSignature"
-  - "pipelineHasBackendOnlyStep"
-  - "pipelineHasUnresolvedTarget"
-  - "pipelinePinnedTargetFileId"
-  - "pipelineStepLiveLanguage"
-  - "pipelineUsesPython"
-  - "preferredVbaRunFileId"
-  - "reapplyVbaPipelineToLive"
-  - "refreshTabs"
-  - "renderExcelViewer"
-  - "runPipeline"
-  - "runPipelinePreferBackend"
-  - "shouldDeferImmediatePipelineRun"
-  - "shouldUseFastPreviewPipelineRun"
-  - "toast"
-  - "vbaTargetExcelId"
-  - "warnUnresolvedPipelineTarget"
-calls_external:
-  - "Error"
-  - "String"
-  - "finally"
-  - "isArray"
-  - "runnerSetDone"
-  - "runnerSetRunning"
-  - "some"
-  - "then"
+  - "_reconcilePipelineSimulationAfterEditImpl"
+  - "beginMappedPipelineRun"
+  - "restore"
+calls_external: []
 called_by:
+  - "_handlePipelineStepToggleImpl"
   - "applyLogic"
   - "commitCellEdit"
   - "insertLogic"
+  - "promise"
   - "reconcileHistoryRestore"
   - "renderPipeline"
   - "replaceLogicAt"
-reads:
-  - "state.inputsOriginal"
-  - "state.outputOriginal"
-  - "state.pipeline"
+reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.19-gen"
+timestamp: "0.7.3-gen"
 ---
 
 ## 역할
 (추정) 역할 주석 없음 — 담당자 1줄 보완 필요  _(자동 추정 — 확인 필요)_
 
 ## 사이드이펙트 & 주의
-- DOM/브라우저 전역 조작
+- 없음(정적 분석 기준)
 
 ## 관계
-- 호출: `affectedStepViewFileId`, `affectedStepViewSheetHint`, `clearPipelineExecutionMemory`, `ensurePinnedVbaTargetExcelId`, `excelIdForPipelineFileId`, `getSkillEngine`, `hasBackendOnlyWorkbooks`, `inferPipelineStepLanguage`, `isStepEnabled`, `liveEnabledStepsSignature`, `pipelineHasBackendOnlyStep`, `pipelineHasUnresolvedTarget`, `pipelinePinnedTargetFileId`, `pipelineStepLiveLanguage`, `pipelineUsesPython`, `preferredVbaRunFileId`, `reapplyVbaPipelineToLive`, `refreshTabs`, `renderExcelViewer`, `runPipeline`, `runPipelinePreferBackend`, `shouldDeferImmediatePipelineRun`, `shouldUseFastPreviewPipelineRun`, `toast`, `vbaTargetExcelId`, `warnUnresolvedPipelineTarget`
-- 피호출(영향 전파 경로): `applyLogic`, `commitCellEdit`, `insertLogic`, `reconcileHistoryRestore`, `renderPipeline`, `replaceLogicAt`
+- 호출: `_reconcilePipelineSimulationAfterEditImpl`, `beginMappedPipelineRun`, `restore`
+- 피호출(영향 전파 경로): `_handlePipelineStepToggleImpl`, `applyLogic`, `commitCellEdit`, `insertLogic`, `promise`, `reconcileHistoryRestore`, `renderPipeline`, `replaceLogicAt`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

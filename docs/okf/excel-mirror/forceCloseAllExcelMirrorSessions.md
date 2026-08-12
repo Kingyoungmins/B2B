@@ -7,8 +7,8 @@ extraction: regex   # 정규식 근사
 signature: "()"
 role: "초기화(전부 폐기)용 강제 정리: graceful 닫기(워크북별 wb.Close, 대형 파일은 건당 수 초 +"
 role_source: banner
-version: "0.5.19"
-loc: "excel-mirror.js:998-998"
+version: "0.7.3"
+loc: "excel-mirror.js:1046-1046"
 
 # ── 입출력 ──
 inputs: []
@@ -26,11 +26,12 @@ calls:
   - "postExcelMirror"
 calls_external:
   - "warn"
-called_by: []
+called_by:
+  - "softRefreshApp"
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.19-gen"
+timestamp: "0.7.3-gen"
 ---
 
 ## 역할
@@ -41,7 +42,7 @@ timestamp: "0.5.19-gen"
 
 ## 관계
 - 호출: `clearExcelMirrorClientState`, `isMissingExcelSessionError`, `postExcelMirror`
-- 피호출(영향 전파 경로): 없음
+- 피호출(영향 전파 경로): `softRefreshApp`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

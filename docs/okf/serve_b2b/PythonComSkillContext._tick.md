@@ -8,8 +8,8 @@ class: PythonComSkillContext
 signature: "(self, n=1)"
 role: "---- 내부 가드 ----"
 role_source: banner
-version: "0.5.19"
-loc: "serve_b2b.py:8629-8637"
+version: "0.7.3"
+loc: "serve_b2b.py:10840-10848"
 
 # ── 입출력 ──
 inputs:
@@ -30,11 +30,14 @@ calls_external:
   - "monotonic"
 called_by:
   - "PythonComSkillContext._journal_save"
+  - "PythonComSkillContext._pivot_value_table"
   - "PythonComSkillContext._ws"
   - "PythonComSkillContext.add_sheet"
   - "PythonComSkillContext.append_same_format_sheets"
+  - "PythonComSkillContext.apply_filter"
   - "PythonComSkillContext.book"
   - "PythonComSkillContext.clear"
+  - "PythonComSkillContext.clear_filter"
   - "PythonComSkillContext.copy"
   - "PythonComSkillContext.copy_key_blocks"
   - "PythonComSkillContext.copy_sheet"
@@ -42,9 +45,11 @@ called_by:
   - "PythonComSkillContext.delete_cols"
   - "PythonComSkillContext.delete_rows"
   - "PythonComSkillContext.delete_sheet"
+  - "PythonComSkillContext.enable_filter"
   - "PythonComSkillContext.fill_sum_col"
   - "PythonComSkillContext.filter_to_sheet"
   - "PythonComSkillContext.find_header"
+  - "PythonComSkillContext.first_empty_col"
   - "PythonComSkillContext.formula_mask"
   - "PythonComSkillContext.has_formulas"
   - "PythonComSkillContext.hide_cols"
@@ -56,12 +61,15 @@ called_by:
   - "PythonComSkillContext.merge"
   - "PythonComSkillContext.move_col_clear"
   - "PythonComSkillContext.move_cols"
+  - "PythonComSkillContext.native_pivot"
   - "PythonComSkillContext.paste_copied"
-  - "PythonComSkillContext.pivot"
   - "PythonComSkillContext.read"
   - "PythonComSkillContext.read_formulas"
   - "PythonComSkillContext.rename_sheet"
   - "PythonComSkillContext.replace"
+  - "PythonComSkillContext.set_border"
+  - "PythonComSkillContext.set_fill"
+  - "PythonComSkillContext.set_font"
   - "PythonComSkillContext.set_number_format"
   - "PythonComSkillContext.sheets"
   - "PythonComSkillContext.shift_months"
@@ -81,7 +89,7 @@ reads:
   - "self._shared"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.19-gen"
+timestamp: "0.7.3-gen"
 ---
 
 ## 역할
@@ -92,7 +100,7 @@ timestamp: "0.5.19-gen"
 
 ## 관계
 - 호출: 없음
-- 피호출(영향 전파 경로): `PythonComSkillContext._journal_save`, `PythonComSkillContext._ws`, `PythonComSkillContext.add_sheet`, `PythonComSkillContext.append_same_format_sheets`, `PythonComSkillContext.book`, `PythonComSkillContext.clear`, `PythonComSkillContext.copy`, `PythonComSkillContext.copy_key_blocks`, `PythonComSkillContext.copy_sheet`, `PythonComSkillContext.copy_values`, `PythonComSkillContext.delete_cols`, `PythonComSkillContext.delete_rows`, `PythonComSkillContext.delete_sheet`, `PythonComSkillContext.fill_sum_col`, `PythonComSkillContext.filter_to_sheet`, `PythonComSkillContext.find_header`, `PythonComSkillContext.formula_mask`, `PythonComSkillContext.has_formulas`, `PythonComSkillContext.hide_cols`, `PythonComSkillContext.hide_rows`, `PythonComSkillContext.insert_cols`, `PythonComSkillContext.insert_rows`, `PythonComSkillContext.last_col`, `PythonComSkillContext.last_row`, `PythonComSkillContext.merge`, `PythonComSkillContext.move_col_clear`, `PythonComSkillContext.move_cols`, `PythonComSkillContext.paste_copied`, `PythonComSkillContext.pivot`, `PythonComSkillContext.read`, `PythonComSkillContext.read_formulas`, `PythonComSkillContext.rename_sheet`, `PythonComSkillContext.replace`, `PythonComSkillContext.set_number_format`, `PythonComSkillContext.sheets`, `PythonComSkillContext.shift_months`, `PythonComSkillContext.sort`, `PythonComSkillContext.sum_column`, `PythonComSkillContext.sum_lookup`, `PythonComSkillContext.sum_where`, `PythonComSkillContext.swap_cols`, `PythonComSkillContext.unmerge`, `PythonComSkillContext.used_last_col`, `PythonComSkillContext.used_last_row`, `PythonComSkillContext.used_range`, `PythonComSkillContext.write`, `PythonComSkillContext.write_formulas`
+- 피호출(영향 전파 경로): `PythonComSkillContext._journal_save`, `PythonComSkillContext._pivot_value_table`, `PythonComSkillContext._ws`, `PythonComSkillContext.add_sheet`, `PythonComSkillContext.append_same_format_sheets`, `PythonComSkillContext.apply_filter`, `PythonComSkillContext.book`, `PythonComSkillContext.clear`, `PythonComSkillContext.clear_filter`, `PythonComSkillContext.copy`, `PythonComSkillContext.copy_key_blocks`, `PythonComSkillContext.copy_sheet`, `PythonComSkillContext.copy_values`, `PythonComSkillContext.delete_cols`, `PythonComSkillContext.delete_rows`, `PythonComSkillContext.delete_sheet`, `PythonComSkillContext.enable_filter`, `PythonComSkillContext.fill_sum_col`, `PythonComSkillContext.filter_to_sheet`, `PythonComSkillContext.find_header`, `PythonComSkillContext.first_empty_col`, `PythonComSkillContext.formula_mask`, `PythonComSkillContext.has_formulas`, `PythonComSkillContext.hide_cols`, `PythonComSkillContext.hide_rows`, `PythonComSkillContext.insert_cols`, `PythonComSkillContext.insert_rows`, `PythonComSkillContext.last_col`, `PythonComSkillContext.last_row`, `PythonComSkillContext.merge`, `PythonComSkillContext.move_col_clear`, `PythonComSkillContext.move_cols`, `PythonComSkillContext.native_pivot`, `PythonComSkillContext.paste_copied`, `PythonComSkillContext.read`, `PythonComSkillContext.read_formulas`, `PythonComSkillContext.rename_sheet`, `PythonComSkillContext.replace`, `PythonComSkillContext.set_border`, `PythonComSkillContext.set_fill`, `PythonComSkillContext.set_font`, `PythonComSkillContext.set_number_format`, `PythonComSkillContext.sheets`, `PythonComSkillContext.shift_months`, `PythonComSkillContext.sort`, `PythonComSkillContext.sum_column`, `PythonComSkillContext.sum_lookup`, `PythonComSkillContext.sum_where`, `PythonComSkillContext.swap_cols`, `PythonComSkillContext.unmerge`, `PythonComSkillContext.used_last_col`, `PythonComSkillContext.used_last_row`, `PythonComSkillContext.used_range`, `PythonComSkillContext.write`, `PythonComSkillContext.write_formulas`
 
 ## 실패/예외
 - `PythonComSkillError`

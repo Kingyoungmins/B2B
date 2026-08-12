@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(fileRef, sheetName, atColIdx, count)"
 role: "시트 안 atColIdx 위치에 빈 컬럼 count 개 삽입. Excel 의 \"열 삽입\" 동작."
 role_source: banner
-version: "0.5.19"
+version: "0.7.3"
 loc: "sheet-ops.js:117-117"
 
 # ── 입출력 ──
@@ -43,7 +43,7 @@ called_by: []
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.19-gen"
+timestamp: "0.7.3-gen"
 ---
 
 ## 역할

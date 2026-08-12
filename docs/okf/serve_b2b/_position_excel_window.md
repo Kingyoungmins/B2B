@@ -7,8 +7,8 @@ extraction: ast
 signature: "(app, left, top, width, height, browser_hwnd=None, native_parent_hwnd=None, native_host_hwnd=None, native_overlay=False, client_left=None, client_top=None, client_width=None, client_height=None, viewport_width=None, viewport_height=None, show=True, keep_zorder=False, hwnd=None, no_activate=False)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
-version: "0.5.19"
-loc: "serve_b2b.py:2765-2940"
+version: "0.7.3"
+loc: "serve_b2b.py:3704-3882"
 
 # ── 입출력 ──
 inputs:
@@ -42,6 +42,7 @@ raises: []
 calls:
   - "_focus_excel_grid_child"
   - "_resolve_excel_mirror_rect"
+  - "_unmaximize_hwnd_no_activate"
 calls_external:
   - "GetParent"
   - "GetWindowLong"
@@ -83,7 +84,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.19-gen"
+timestamp: "0.7.3-gen"
 ---
 
 ## 역할
@@ -93,7 +94,7 @@ timestamp: "0.5.19-gen"
 - 없음(정적 분석 기준)
 
 ## 관계
-- 호출: `_focus_excel_grid_child`, `_resolve_excel_mirror_rect`
+- 호출: `_focus_excel_grid_child`, `_resolve_excel_mirror_rect`, `_unmaximize_hwnd_no_activate`
 - 피호출(영향 전파 경로): `_open_excel_session_impl`, `_position_excel_session_impl`, `_present_live_session_frame`, `_replace_excel_session_workbook_impl`, `_restore_live_window`, `_show_only_excel_session_impl`
 
 ## 실패/예외

@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(fileId)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
-version: "0.5.19"
+version: "0.7.3"
 loc: "output-template.js:8-8"
 
 # ── 입출력 ──
@@ -17,6 +17,7 @@ returns: "(추정)"
 
 # ── 사이드이펙트 (정적 추정) ──
 side_effects:
+  - "DOM/브라우저 전역 조작"
   - "네트워크/서버 호출"
 raises: []
 
@@ -26,31 +27,37 @@ calls:
   - "excelMirrorSessionIdForFileId"
   - "exportOutputCsv"
   - "exportOutputXlsx"
+  - "fileIdForExcelMirrorId"
   - "getFile"
   - "getOriginalFile"
   - "postExcelMirror"
   - "safeCurrentWorkbookDownloadName"
   - "toast"
 calls_external:
+  - "String"
   - "encodeURIComponent"
   - "error"
+  - "excelId"
+  - "find"
+  - "isArray"
   - "test"
 called_by:
   - "downloadWorkbookFileFromList"
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.19-gen"
+timestamp: "0.7.3-gen"
 ---
 
 ## 역할
 (추정) 역할 주석 없음 — 담당자 1줄 보완 필요  _(자동 추정 — 확인 필요)_
 
 ## 사이드이펙트 & 주의
+- DOM/브라우저 전역 조작
 - 네트워크/서버 호출
 
 ## 관계
-- 호출: `downloadBackendOutput`, `excelMirrorSessionIdForFileId`, `exportOutputCsv`, `exportOutputXlsx`, `getFile`, `getOriginalFile`, `postExcelMirror`, `safeCurrentWorkbookDownloadName`, `toast`
+- 호출: `downloadBackendOutput`, `excelMirrorSessionIdForFileId`, `exportOutputCsv`, `exportOutputXlsx`, `fileIdForExcelMirrorId`, `getFile`, `getOriginalFile`, `postExcelMirror`, `safeCurrentWorkbookDownloadName`, `toast`
 - 피호출(영향 전파 경로): `downloadWorkbookFileFromList`
 
 ## 실패/예외

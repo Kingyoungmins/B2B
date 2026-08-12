@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(s)"
 role: "[혼합 호환] 스텝의 라이브 실행 언어 — vba/python(COM bulk)이면 라이브 Excel 에서 실행 가능."
 role_source: banner
-version: "0.5.19"
+version: "0.7.3"
 loc: "pipeline.js:96-96"
 
 # ── 입출력 ──
@@ -26,19 +26,23 @@ calls:
   - "pythonStepUsesLegacyDialect"
 calls_external: []
 called_by:
+  - "_handlePipelineStepToggleImpl"
+  - "_reapplyVbaPipelineToLiveImpl"
+  - "_reconcilePipelineSimulationAfterEditImpl"
   - "applyLastEnabledStepFast"
   - "applyLogic"
   - "canFastEditLastPipelineStep"
+  - "insertLogic"
   - "isLastLivePipelineStep"
   - "lastLiveStepIndex"
   - "liveEnabledStepsSignature"
+  - "liveEnabledStepsSignatureParts"
   - "pipelineHasBackendOnlyStep"
   - "pipelinePinnedAnyTargetFileId"
   - "pipelinePinnedTargetFileId"
   - "pipelineUsesLiveSkill"
-  - "reapplyVbaPipelineToLive"
-  - "reconcilePipelineSimulationAfterEdit"
   - "renderPipeline"
+  - "replaceLogicAt"
   - "runIsolatedLivePipelineSteps"
   - "runLivePipelineStepSequentially"
   - "runPipelineWithAutoRepair"
@@ -46,7 +50,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.19-gen"
+timestamp: "0.7.3-gen"
 ---
 
 ## 역할
@@ -57,7 +61,7 @@ timestamp: "0.5.19-gen"
 
 ## 관계
 - 호출: `inferPipelineStepLanguage`, `pythonStepUsesLegacyDialect`
-- 피호출(영향 전파 경로): `applyLastEnabledStepFast`, `applyLogic`, `canFastEditLastPipelineStep`, `isLastLivePipelineStep`, `lastLiveStepIndex`, `liveEnabledStepsSignature`, `pipelineHasBackendOnlyStep`, `pipelinePinnedAnyTargetFileId`, `pipelinePinnedTargetFileId`, `pipelineUsesLiveSkill`, `reapplyVbaPipelineToLive`, `reconcilePipelineSimulationAfterEdit`, `renderPipeline`, `runIsolatedLivePipelineSteps`, `runLivePipelineStepSequentially`, `runPipelineWithAutoRepair`, `runVbaPipelinePreferLive`
+- 피호출(영향 전파 경로): `_handlePipelineStepToggleImpl`, `_reapplyVbaPipelineToLiveImpl`, `_reconcilePipelineSimulationAfterEditImpl`, `applyLastEnabledStepFast`, `applyLogic`, `canFastEditLastPipelineStep`, `insertLogic`, `isLastLivePipelineStep`, `lastLiveStepIndex`, `liveEnabledStepsSignature`, `liveEnabledStepsSignatureParts`, `pipelineHasBackendOnlyStep`, `pipelinePinnedAnyTargetFileId`, `pipelinePinnedTargetFileId`, `pipelineUsesLiveSkill`, `renderPipeline`, `replaceLogicAt`, `runIsolatedLivePipelineSteps`, `runLivePipelineStepSequentially`, `runPipelineWithAutoRepair`, `runVbaPipelinePreferLive`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

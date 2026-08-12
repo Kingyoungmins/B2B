@@ -7,8 +7,8 @@ extraction: ast
 signature: "(payload)"
 role: "openpyxl 엔진이 안전하지 않으면 사유 문자열을 반환(없으면 \"\")."
 role_source: docstring
-version: "0.5.19"
-loc: "serve_b2b.py:16728-16775"
+version: "0.7.3"
+loc: "serve_b2b.py:20276-20323"
 
 # ── 입출력 ──
 inputs:
@@ -46,7 +46,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.19-gen"
+timestamp: "0.7.3-gen"
 ---
 
 ## 역할

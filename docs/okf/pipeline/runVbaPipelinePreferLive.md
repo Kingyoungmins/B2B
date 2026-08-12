@@ -7,8 +7,8 @@ extraction: regex   # 정규식 근사
 signature: "(options = {})"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
-version: "0.5.19"
-loc: "pipeline.js:1211-1211"
+version: "0.7.3"
+loc: "pipeline.js:1533-1533"
 
 # ── 입출력 ──
 inputs:
@@ -27,6 +27,7 @@ calls:
   - "captureStepPreApplySnapshot"
   - "createPipelineRuntimeExecutionBlockError"
   - "createPipelineStepError"
+  - "crossWriteDestinationFileIds"
   - "currentExcelId"
   - "ensurePinnedVbaTargetExcelId"
   - "ensureVbaRunExcelId"
@@ -40,6 +41,7 @@ calls:
   - "pipelineStepLiveLanguage"
   - "pipelineStepReadsOtherFile"
   - "preferredVbaRunFileId"
+  - "push"
   - "requirePipelineSessionExcelId"
   - "runIsolatedLivePipelineSteps"
   - "syncStepPreApplySnapshot"
@@ -47,9 +49,12 @@ calls:
   - "warnUnresolvedPipelineTarget"
 calls_external:
   - "Error"
+  - "Set"
   - "book"
   - "filter"
   - "findIndex"
+  - "forEach"
+  - "from"
   - "includes"
   - "some"
 called_by:
@@ -59,7 +64,7 @@ reads:
   - "state.pipeline"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.19-gen"
+timestamp: "0.7.3-gen"
 ---
 
 ## 역할
@@ -69,7 +74,7 @@ timestamp: "0.5.19-gen"
 - 없음(정적 분석 기준)
 
 ## 관계
-- 호출: `activePipelineSteps`, `applyVbaStepToLiveExcel`, `captureStepPreApplySnapshot`, `createPipelineRuntimeExecutionBlockError`, `createPipelineStepError`, `currentExcelId`, `ensurePinnedVbaTargetExcelId`, `ensureVbaRunExcelId`, `excelIdForPipelineFileId`, `findPipelineRuntimeExecutionBlocker`, `inferPipelineStepLanguage`, `inferPipelineStepTargetFileId`, `pipelineHasUnresolvedTarget`, `pipelinePinnedTargetFileId`, `pipelinePythonMutatedBookNames`, `pipelineStepLiveLanguage`, `pipelineStepReadsOtherFile`, `preferredVbaRunFileId`, `requirePipelineSessionExcelId`, `runIsolatedLivePipelineSteps`, `syncStepPreApplySnapshot`, `vbaTargetExcelId`, `warnUnresolvedPipelineTarget`
+- 호출: `activePipelineSteps`, `applyVbaStepToLiveExcel`, `captureStepPreApplySnapshot`, `createPipelineRuntimeExecutionBlockError`, `createPipelineStepError`, `crossWriteDestinationFileIds`, `currentExcelId`, `ensurePinnedVbaTargetExcelId`, `ensureVbaRunExcelId`, `excelIdForPipelineFileId`, `findPipelineRuntimeExecutionBlocker`, `inferPipelineStepLanguage`, `inferPipelineStepTargetFileId`, `pipelineHasUnresolvedTarget`, `pipelinePinnedTargetFileId`, `pipelinePythonMutatedBookNames`, `pipelineStepLiveLanguage`, `pipelineStepReadsOtherFile`, `preferredVbaRunFileId`, `push`, `requirePipelineSessionExcelId`, `runIsolatedLivePipelineSteps`, `syncStepPreApplySnapshot`, `vbaTargetExcelId`, `warnUnresolvedPipelineTarget`
 - 피호출(영향 전파 경로): `runPipelinePreferBackend`
 
 ## 실패/예외

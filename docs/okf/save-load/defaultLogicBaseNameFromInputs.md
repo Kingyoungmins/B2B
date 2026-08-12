@@ -7,8 +7,8 @@ extraction: regex   # 정규식 근사
 signature: "()"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
-version: "0.5.19"
-loc: "save-load.js:80-80"
+version: "0.7.3"
+loc: "save-load.js:133-133"
 
 # ── 입출력 ──
 inputs: []
@@ -27,6 +27,7 @@ calls_external:
   - "String"
   - "replace"
 called_by:
+  - "collectSoftRefreshSnapshot"
   - "openSaveModal"
   - "saveLogicAutoBackup"
 reads:
@@ -35,7 +36,7 @@ reads:
   - "state.outputTemplates"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.19-gen"
+timestamp: "0.7.3-gen"
 ---
 
 ## 역할
@@ -46,7 +47,7 @@ timestamp: "0.5.19-gen"
 
 ## 관계
 - 호출: `stripLogicTimestampSuffix`, `workbookDisplayName`
-- 피호출(영향 전파 경로): `openSaveModal`, `saveLogicAutoBackup`
+- 피호출(영향 전파 경로): `collectSoftRefreshSnapshot`, `openSaveModal`, `saveLogicAutoBackup`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

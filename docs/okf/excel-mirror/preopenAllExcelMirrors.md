@@ -7,8 +7,8 @@ extraction: regex   # 정규식 근사
 signature: "(selectedFileId, options = {})"
 role: "업로드 직후: 모든 파일의 미러를 미리 열어 같은 위치에 스택해 둔다."
 role_source: banner
-version: "0.5.19"
-loc: "excel-mirror.js:606-606"
+version: "0.7.3"
+loc: "excel-mirror.js:622-622"
 
 # ── 입출력 ──
 inputs:
@@ -44,6 +44,7 @@ called_by:
   - "forceRestartExcelMirrors"
   - "loadInputFiles"
   - "loadOutputTemplates"
+  - "restoreSoftRefreshSnapshot"
 reads:
   - "state.currentFileId"
 writes:
@@ -51,7 +52,7 @@ writes:
   - "excelMirror.preopenSeq"
   - "excelMirror.preopening"
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.19-gen"
+timestamp: "0.7.3-gen"
 ---
 
 ## 역할
@@ -63,7 +64,7 @@ timestamp: "0.5.19-gen"
 
 ## 관계
 - 호출: `ensureExcelMirrorSession`, `excelMirrorAllowsViewSwitch`, `isMissingExcelSessionError`, `listAllWorkbookFileIds`, `publishNativeExcelLoading`, `push`, `scheduleExcelMirrorBaselinePoll`, `setCurrentView`, `showOnlyExcelMirrorWindow`, `startExcelMirrorPolling`, `toast`, `updateMirrorShellStatus`
-- 피호출(영향 전파 경로): `autoOpenMirrorAfterUpload`, `forceRestartExcelMirrors`, `loadInputFiles`, `loadOutputTemplates`
+- 피호출(영향 전파 경로): `autoOpenMirrorAfterUpload`, `forceRestartExcelMirrors`, `loadInputFiles`, `loadOutputTemplates`, `restoreSoftRefreshSnapshot`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

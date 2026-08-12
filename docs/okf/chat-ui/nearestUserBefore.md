@@ -7,8 +7,8 @@ extraction: regex   # 정규식 근사
 signature: "(i)"
 role: "코드 말풍선 앞의 '진짜' 사용자 요청을 찾는다. 자동 재생성/복구 프롬프트는 건너뛰고 더 앞으로."
 role_source: banner
-version: "0.5.19"
-loc: "chat-ui.js:156-156"
+version: "0.7.3"
+loc: "chat-ui.js:178-178"
 
 # ── 입출력 ──
 inputs:
@@ -29,7 +29,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.19-gen"
+timestamp: "0.7.3-gen"
 ---
 
 ## 역할

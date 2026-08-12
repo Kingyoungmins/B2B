@@ -8,8 +8,8 @@ class: PythonComSkillContext
 signature: "(self, sheet, a1_range, key_col, ascending=True, has_header=True)"
 role: "실제 범위 정렬. key_col 은 범위 내 1-based 열 번호/'B' 열 문자, 또는 이들의 리스트(다중키)."
 role_source: docstring
-version: "0.5.19"
-loc: "serve_b2b.py:10248-10310"
+version: "0.7.3"
+loc: "serve_b2b.py:12978-13040"
 
 # ── 입출력 ──
 inputs:
@@ -66,6 +66,7 @@ calls_external:
   - "strip"
   - "ws"
 called_by:
+  - "PythonComSkillContext.match_fill"
   - "_browser_content_target"
 reads:
   - "self._col_index"
@@ -76,7 +77,7 @@ reads:
   - "self.find_header"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.19-gen"
+timestamp: "0.7.3-gen"
 ---
 
 ## 역할
@@ -87,7 +88,7 @@ timestamp: "0.5.19-gen"
 
 ## 관계
 - 호출: `Columns`, `_col_index`, `_journal_save`, `_rng`, `_tick`, `_ws`, `append`, `find_header`, `sheet`
-- 피호출(영향 전파 경로): `_browser_content_target`
+- 피호출(영향 전파 경로): `PythonComSkillContext.match_fill`, `_browser_content_target`
 
 ## 실패/예외
 - `PythonComSkillError`

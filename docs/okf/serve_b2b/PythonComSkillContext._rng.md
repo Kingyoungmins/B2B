@@ -8,8 +8,8 @@ class: PythonComSkillContext
 signature: "(self, ws, a1)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
-version: "0.5.19"
-loc: "serve_b2b.py:8737-8752"
+version: "0.7.3"
+loc: "serve_b2b.py:10980-10995"
 
 # ── 입출력 ──
 inputs:
@@ -52,6 +52,9 @@ called_by:
   - "PythonComSkillContext.read"
   - "PythonComSkillContext.read_formulas"
   - "PythonComSkillContext.replace"
+  - "PythonComSkillContext.set_border"
+  - "PythonComSkillContext.set_fill"
+  - "PythonComSkillContext.set_font"
   - "PythonComSkillContext.set_number_format"
   - "PythonComSkillContext.shift_months"
   - "PythonComSkillContext.sort"
@@ -62,7 +65,7 @@ reads:
   - "self._col_num"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.19-gen"
+timestamp: "0.7.3-gen"
 ---
 
 ## 역할
@@ -73,7 +76,7 @@ timestamp: "0.5.19-gen"
 
 ## 관계
 - 호출: `Range`, `_col_num`
-- 피호출(영향 전파 경로): `PythonComSkillContext.clear`, `PythonComSkillContext.copy`, `PythonComSkillContext.copy_values`, `PythonComSkillContext.formula_mask`, `PythonComSkillContext.has_formulas`, `PythonComSkillContext.merge`, `PythonComSkillContext.paste_copied`, `PythonComSkillContext.read`, `PythonComSkillContext.read_formulas`, `PythonComSkillContext.replace`, `PythonComSkillContext.set_number_format`, `PythonComSkillContext.shift_months`, `PythonComSkillContext.sort`, `PythonComSkillContext.unmerge`, `PythonComSkillContext.write`, `PythonComSkillContext.write_formulas`
+- 피호출(영향 전파 경로): `PythonComSkillContext.clear`, `PythonComSkillContext.copy`, `PythonComSkillContext.copy_values`, `PythonComSkillContext.formula_mask`, `PythonComSkillContext.has_formulas`, `PythonComSkillContext.merge`, `PythonComSkillContext.paste_copied`, `PythonComSkillContext.read`, `PythonComSkillContext.read_formulas`, `PythonComSkillContext.replace`, `PythonComSkillContext.set_border`, `PythonComSkillContext.set_fill`, `PythonComSkillContext.set_font`, `PythonComSkillContext.set_number_format`, `PythonComSkillContext.shift_months`, `PythonComSkillContext.sort`, `PythonComSkillContext.unmerge`, `PythonComSkillContext.write`, `PythonComSkillContext.write_formulas`
 
 ## 실패/예외
 - `PythonComSkillError`

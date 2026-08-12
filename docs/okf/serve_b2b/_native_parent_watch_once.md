@@ -7,8 +7,8 @@ extraction: ast
 signature: "(now)"
 role: "Native host가 사라졌는데 Python 서버만 살아남으면 Excel COM 인스턴스도 고아로 남는다."
 role_source: docstring
-version: "0.5.19"
-loc: "serve_b2b.py:3603-3635"
+version: "0.7.3"
+loc: "serve_b2b.py:4673-4705"
 
 # ── 입출력 ──
 inputs:
@@ -44,7 +44,7 @@ reads:
 writes:
   - "PARENT_WATCH_MISSING_SINCE"
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.19-gen"
+timestamp: "0.7.3-gen"
 ---
 
 ## 역할

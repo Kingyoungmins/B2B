@@ -7,8 +7,8 @@ extraction: ast
 signature: "(app)"
 role: "라이브 Excel 창이 WebView 에 임베드(WS_CHILD/owner)돼 있으면 독립 top-level 로 분리한다."
 role_source: docstring
-version: "0.5.19"
-loc: "serve_b2b.py:7328-7362"
+version: "0.7.3"
+loc: "serve_b2b.py:9366-9400"
 
 # ── 입출력 ──
 inputs:
@@ -37,7 +37,7 @@ called_by: []
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.19-gen"
+timestamp: "0.7.3-gen"
 ---
 
 ## 역할

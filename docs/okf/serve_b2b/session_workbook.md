@@ -7,8 +7,8 @@ extraction: ast
 signature: "(session)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
-version: "0.5.19"
-loc: "serve_b2b.py:4278-4301"
+version: "0.7.3"
+loc: "serve_b2b.py:5536-5559"
 
 # ── 입출력 ──
 inputs:
@@ -33,6 +33,7 @@ calls_external:
   - "resolve"
   - "str"
 called_by:
+  - "B2BHandler.handle_excel_preview_schema"
   - "PythonComSkillContext.copy_sheet"
   - "_activate_excel_session_impl"
   - "_capture_copypaste_on_session_impl"
@@ -60,7 +61,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.19-gen"
+timestamp: "0.7.3-gen"
 ---
 
 ## 역할
@@ -71,7 +72,7 @@ timestamp: "0.5.19-gen"
 
 ## 관계
 - 호출: 없음
-- 피호출(영향 전파 경로): `PythonComSkillContext.copy_sheet`, `_activate_excel_session_impl`, `_capture_copypaste_on_session_impl`, `_cleanup_excel_sessions_impl`, `_close_excel_session_impl`, `_ensure_companion_workbooks`, `_get_excel_hover_info_impl`, `_hide_all_excel_sessions_impl`, `_hide_excel_session_impl`, `_poll_excel_session_changes_impl`, `_position_excel_session_impl`, `_raise_excel_session_impl`, `_read_excel_session_selection_impl`, `_recover_excel_session_impl`, `_replace_excel_session_workbook_impl`, `_run_excel_python_pipeline_impl`, `_run_full_pipeline_single_instance_impl`, `_run_python_on_session_impl`, `_run_vba_on_session_impl`, `_run_vba_pipeline_on_session_impl`, `_save_excel_session_impl`, `_setup_isolated_pipeline_instance`, `_show_only_excel_session_impl`, `_sync_modified_companions_into_live`
+- 피호출(영향 전파 경로): `B2BHandler.handle_excel_preview_schema`, `PythonComSkillContext.copy_sheet`, `_activate_excel_session_impl`, `_capture_copypaste_on_session_impl`, `_cleanup_excel_sessions_impl`, `_close_excel_session_impl`, `_ensure_companion_workbooks`, `_get_excel_hover_info_impl`, `_hide_all_excel_sessions_impl`, `_hide_excel_session_impl`, `_poll_excel_session_changes_impl`, `_position_excel_session_impl`, `_raise_excel_session_impl`, `_read_excel_session_selection_impl`, `_recover_excel_session_impl`, `_replace_excel_session_workbook_impl`, `_run_excel_python_pipeline_impl`, `_run_full_pipeline_single_instance_impl`, `_run_python_on_session_impl`, `_run_vba_on_session_impl`, `_run_vba_pipeline_on_session_impl`, `_save_excel_session_impl`, `_setup_isolated_pipeline_instance`, `_show_only_excel_session_impl`, `_sync_modified_companions_into_live`
 
 ## 실패/예외
 - `RuntimeError`

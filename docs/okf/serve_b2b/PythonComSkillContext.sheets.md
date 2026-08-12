@@ -8,8 +8,8 @@ class: PythonComSkillContext
 signature: "(self)"
 role: "시트 이름 목록."
 role_source: docstring
-version: "0.5.19"
-loc: "serve_b2b.py:8783-8786"
+version: "0.7.3"
+loc: "serve_b2b.py:11026-11029"
 
 # ── 입출력 ──
 inputs:
@@ -28,13 +28,14 @@ calls:
 calls_external: []
 called_by:
   - "build_result_previews"
+  - "inspect_workbook"
   - "write_result_workbook"
 reads:
   - "self._tick"
   - "self._wb"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.19-gen"
+timestamp: "0.7.3-gen"
 ---
 
 ## 역할
@@ -45,7 +46,7 @@ timestamp: "0.5.19-gen"
 
 ## 관계
 - 호출: `_excel_collection_names`, `_tick`
-- 피호출(영향 전파 경로): `build_result_previews`, `write_result_workbook`
+- 피호출(영향 전파 경로): `build_result_previews`, `inspect_workbook`, `write_result_workbook`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

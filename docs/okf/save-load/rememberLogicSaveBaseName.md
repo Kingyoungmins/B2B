@@ -7,8 +7,8 @@ extraction: regex   # 정규식 근사
 signature: "(name)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
-version: "0.5.19"
-loc: "save-load.js:101-101"
+version: "0.7.3"
+loc: "save-load.js:154-154"
 
 # ── 입출력 ──
 inputs:
@@ -18,11 +18,12 @@ returns: "(추정)"
 # ── 사이드이펙트 (정적 추정) ──
 side_effects:
   - "localStorage/세션스토리지 접근"
-  - "상태 변경: logicSaveBaseName"
+  - "상태 변경: logicSaveBaseName, logicSaveInputSig"
 raises: []
 
 # ── 유기적 관계 ──
 calls:
+  - "currentInputSignature"
   - "stripLogicTimestampSuffix"
 calls_external:
   - "setItem"
@@ -31,10 +32,12 @@ called_by:
   - "openSaveModal"
 reads:
   - "state.logicSaveBaseName"
+  - "state.logicSaveInputSig"
 writes:
   - "logicSaveBaseName"
+  - "logicSaveInputSig"
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.19-gen"
+timestamp: "0.7.3-gen"
 ---
 
 ## 역할
@@ -42,11 +45,11 @@ timestamp: "0.5.19-gen"
 
 ## 사이드이펙트 & 주의
 - localStorage/세션스토리지 접근
-- 상태 변경: logicSaveBaseName
-- 변경 상태 `logicSaveBaseName` — 수정 시 이 상태를 읽는 곳 동반 점검.
+- 상태 변경: logicSaveBaseName, logicSaveInputSig
+- 변경 상태 `logicSaveBaseName, logicSaveInputSig` — 수정 시 이 상태를 읽는 곳 동반 점검.
 
 ## 관계
-- 호출: `stripLogicTimestampSuffix`
+- 호출: `currentInputSignature`, `stripLogicTimestampSuffix`
 - 피호출(영향 전파 경로): `loadLogic`, `openSaveModal`
 
 ## 실패/예외

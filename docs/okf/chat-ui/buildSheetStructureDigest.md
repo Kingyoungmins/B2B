@@ -7,8 +7,8 @@ extraction: regex   # 정규식 근사
 signature: "(aoa, sheetName)"
 role: "aoa → { text, hasLandmarks, totalRows[] }. 순수 함수(테스트 가능)."
 role_source: banner
-version: "0.5.19"
-loc: "chat-ui.js:3190-3190"
+version: "0.7.3"
+loc: "chat-ui.js:3338-3338"
 
 # ── 입출력 ──
 inputs:
@@ -37,10 +37,11 @@ calls_external:
   - "test"
 called_by:
   - "clarifyVerifierAskIfNeeded"
+  - "explainPipelineErrorForUser"
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.19-gen"
+timestamp: "0.7.3-gen"
 ---
 
 ## 역할
@@ -51,7 +52,7 @@ aoa → { text, hasLandmarks, totalRows[] }. 순수 함수(테스트 가능).
 
 ## 관계
 - 호출: `_clarifyCellText`, `_clarifyRowHasNumber`, `_clarifyRowLeftLabel`, `push`
-- 피호출(영향 전파 경로): `clarifyVerifierAskIfNeeded`
+- 피호출(영향 전파 경로): `clarifyVerifierAskIfNeeded`, `explainPipelineErrorForUser`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

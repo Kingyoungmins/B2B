@@ -7,8 +7,8 @@ extraction: regex   # 정규식 근사
 signature: "(fullText, replyContext)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
-version: "0.5.19"
-loc: "chat-ui.js:2255-2255"
+version: "0.7.3"
+loc: "chat-ui.js:2354-2354"
 
 # ── 입출력 ──
 inputs:
@@ -37,6 +37,7 @@ calls:
   - "inferCodeLanguage"
   - "insertLogic"
   - "openInsertPositionDialog"
+  - "originHistIdForPrompt"
   - "replaceLogicAt"
   - "replyStepPrompt"
   - "restoreActionButtonsAfterFailure"
@@ -54,6 +55,7 @@ calls_external:
   - "appendChild"
   - "click"
   - "createElement"
+  - "find"
   - "insertBefore"
   - "isFinite"
   - "join"
@@ -73,7 +75,7 @@ reads:
   - "state.pipeline"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.19-gen"
+timestamp: "0.7.3-gen"
 ---
 
 ## 역할
@@ -84,7 +86,7 @@ timestamp: "0.5.19-gen"
 - 타이머
 
 ## 관계
-- 호출: `$`, `applyLogic`, `assistantReplyCodeProblems`, `autoRegenerateForMissingCode`, `bindChatHistoryEntryToMessage`, `createReasoningBox`, `escapeHtml`, `extractCode`, `extractDescription`, `finalizeActionButtonFromResult`, `inferCodeLanguage`, `insertLogic`, `openInsertPositionDialog`, `replaceLogicAt`, `replyStepPrompt`, `restoreActionButtonsAfterFailure`, `runApply`, `runEditApply`, `runInsert`, `scrollChatToBottom`, `showCodeGuardBlock`, `traceClientUiEvent`, `uid`, `validateAssistantCodeBeforeApply`
+- 호출: `$`, `applyLogic`, `assistantReplyCodeProblems`, `autoRegenerateForMissingCode`, `bindChatHistoryEntryToMessage`, `createReasoningBox`, `escapeHtml`, `extractCode`, `extractDescription`, `finalizeActionButtonFromResult`, `inferCodeLanguage`, `insertLogic`, `openInsertPositionDialog`, `originHistIdForPrompt`, `replaceLogicAt`, `replyStepPrompt`, `restoreActionButtonsAfterFailure`, `runApply`, `runEditApply`, `runInsert`, `scrollChatToBottom`, `showCodeGuardBlock`, `traceClientUiEvent`, `uid`, `validateAssistantCodeBeforeApply`
 - 피호출(영향 전파 경로): `autoRegenerateAsVbaFallback`, `autoRegenerateForMissingCode`, `autoRegenerateForStaticSafety`, `offerMissingDependencySkillCandidate`, `requestErrorRecovery`, `sendChat`, `showThinkRetryPrompt`
 
 ## 실패/예외

@@ -7,8 +7,8 @@ extraction: ast
 signature: "()"
 role: "Delete runtime-only result/snapshot files created under BACKEND_DIR."
 role_source: docstring
-version: "0.5.19"
-loc: "serve_b2b.py:332-383"
+version: "0.7.3"
+loc: "serve_b2b.py:473-524"
 
 # ── 입출력 ──
 inputs: []
@@ -44,14 +44,15 @@ calls_external:
   - "rmtree"
   - "snapshot"
   - "unlink"
-called_by: []
+called_by:
+  - "B2BHandler.do_POST"
 reads:
   - "BACKEND_DIR"
   - "PIPELINE_STEP_SNAPSHOTS"
   - "RESULTS"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.19-gen"
+timestamp: "0.7.3-gen"
 ---
 
 ## 역할
@@ -62,7 +63,7 @@ Delete runtime-only result/snapshot files created under BACKEND_DIR.
 
 ## 관계
 - 호출: `_delete_pipeline_snapshot_entry`, `_perf_trace`, `clear`, `values`
-- 피호출(영향 전파 경로): 없음
+- 피호출(영향 전파 경로): `B2BHandler.do_POST`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

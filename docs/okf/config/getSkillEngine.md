@@ -7,8 +7,8 @@ extraction: regex   # 정규식 근사
 signature: "()"
 role: "==================================================================="
 role_source: banner
-version: "0.5.19"
-loc: "config.js:306-306"
+version: "0.7.3"
+loc: "config.js:495-495"
 
 # ── 입출력 ──
 inputs: []
@@ -25,9 +25,9 @@ calls:
 calls_external: []
 called_by:
   - "_buildDefaultTargetHint"
+  - "_reconcilePipelineSimulationAfterEditImpl"
   - "autoRegenerateForMissingCode"
   - "callLLM"
-  - "reconcilePipelineSimulationAfterEdit"
   - "replaceLogicAt"
   - "requestErrorRecovery"
   - "runPipelineOnBackend"
@@ -38,7 +38,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.19-gen"
+timestamp: "0.7.3-gen"
 ---
 
 ## 역할
@@ -49,7 +49,7 @@ timestamp: "0.5.19-gen"
 
 ## 관계
 - 호출: `normalizeSkillEngine`
-- 피호출(영향 전파 경로): `_buildDefaultTargetHint`, `autoRegenerateForMissingCode`, `callLLM`, `reconcilePipelineSimulationAfterEdit`, `replaceLogicAt`, `requestErrorRecovery`, `runPipelineOnBackend`, `shouldRunPipelineAsVba`, `skillEnginePromptNote`, `toggleSkillEngine`, `updateSkillEngineToggle`
+- 피호출(영향 전파 경로): `_buildDefaultTargetHint`, `_reconcilePipelineSimulationAfterEditImpl`, `autoRegenerateForMissingCode`, `callLLM`, `replaceLogicAt`, `requestErrorRecovery`, `runPipelineOnBackend`, `shouldRunPipelineAsVba`, `skillEnginePromptNote`, `toggleSkillEngine`, `updateSkillEngineToggle`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

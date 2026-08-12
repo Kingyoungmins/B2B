@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(fileId, { makeActive = false, deferVisible = false } = {})"
 role: "지정한 파일의 미러 세션을 보장(없으면 연다). 활성화/최상단 올리기는 makeActive 일 때만."
 role_source: banner
-version: "0.5.19"
+version: "0.7.3"
 loc: "excel-mirror.js:559-559"
 
 # ── 입출력 ──
@@ -28,6 +28,7 @@ calls:
   - "excelMirrorScreenRect"
   - "extractResultIdFromDownloadUrl"
   - "getFile"
+  - "hideAllExcelMirrorWindows"
   - "isBackendResultDownloadUrl"
   - "pollExcelMirrorChanges"
   - "positionExcelMirrorWindow"
@@ -45,7 +46,7 @@ reads: []
 writes:
   - "excelMirror.activeExcelId"
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.19-gen"
+timestamp: "0.7.3-gen"
 ---
 
 ## 역할
@@ -57,7 +58,7 @@ timestamp: "0.5.19-gen"
 - 변경 상태 `excelMirror.activeExcelId` — 수정 시 이 상태를 읽는 곳 동반 점검.
 
 ## 관계
-- 호출: `excelMirrorScreenRect`, `extractResultIdFromDownloadUrl`, `getFile`, `isBackendResultDownloadUrl`, `pollExcelMirrorChanges`, `positionExcelMirrorWindow`, `postExcelMirror`, `showOnlyExcelMirrorWindow`, `stabilizeExcelMirrorZOrder`
+- 호출: `excelMirrorScreenRect`, `extractResultIdFromDownloadUrl`, `getFile`, `hideAllExcelMirrorWindows`, `isBackendResultDownloadUrl`, `pollExcelMirrorChanges`, `positionExcelMirrorWindow`, `postExcelMirror`, `showOnlyExcelMirrorWindow`, `stabilizeExcelMirrorZOrder`
 - 피호출(영향 전파 경로): `openExcelMirrorForFileId`, `preopenAllExcelMirrors`, `switchVisibleExcelMirrorToFileId`
 
 ## 실패/예외

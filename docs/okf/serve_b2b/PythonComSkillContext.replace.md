@@ -8,8 +8,8 @@ class: PythonComSkillContext
 signature: "(self, sheet, a1_range, find, repl, match_entire=False)"
 role: "범위 안 셀에서 find 를 repl 로 바꾼다(부분 치환, match_entire=True면 셀 전체 일치만). 수식 셀은 보존."
 role_source: docstring
-version: "0.5.19"
-loc: "serve_b2b.py:10477-10515"
+version: "0.7.3"
+loc: "serve_b2b.py:13528-13566"
 
 # ── 입출력 ──
 inputs:
@@ -58,7 +58,9 @@ called_by:
   - "ExcelSkillContext._num"
   - "OpenpyxlSkillContext._num"
   - "OpenpyxlWorksheetProxy.Range"
-  - "PythonComSkillContext.pivot"
+  - "PythonComSkillContext._pivot_value_table"
+  - "PythonComSkillContext.set_border"
+  - "_capture_browser_hwnd"
   - "_capture_copypaste_on_session_impl"
   - "_capture_live_view_state"
   - "_coerce_number"
@@ -90,7 +92,7 @@ reads:
   - "self._ws"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.19-gen"
+timestamp: "0.7.3-gen"
 ---
 
 ## 역할
@@ -101,7 +103,7 @@ timestamp: "0.5.19-gen"
 
 ## 관계
 - 호출: `_journal_save`, `_range_matrix`, `_rng`, `_tick`, `_ws`, `append`, `row`, `sheet`
-- 피호출(영향 전파 경로): `ExcelSkillContext._num`, `OpenpyxlSkillContext._num`, `OpenpyxlWorksheetProxy.Range`, `PythonComSkillContext.pivot`, `_capture_copypaste_on_session_impl`, `_capture_live_view_state`, `_coerce_number`, `_diag_vba_run_failure`, `_extract_vba_source_for_injection`, `_inject_and_run_vba_in_host`, `_normalize_vba_workbook_literals`, `_opxl_coord`, `_opxl_eval_formula`, `_opxl_numeric_values`, `_opxl_range_values`, `_pivot_to_num`, `_poll_excel_session_changes_impl`, `_python_com_static_check`, `_range_formula_info`, `_read_excel_session_selection_impl`, `_recover_excel_session_impl`, `_trace_text`, `_vba_macro_ref`, `_vba_macro_refs`, `_vba_string_literal`, `_workbook_name_lookup_key`, `normalize_python_pipeline_code`, `safe_archive_filename`
+- 피호출(영향 전파 경로): `ExcelSkillContext._num`, `OpenpyxlSkillContext._num`, `OpenpyxlWorksheetProxy.Range`, `PythonComSkillContext._pivot_value_table`, `PythonComSkillContext.set_border`, `_capture_browser_hwnd`, `_capture_copypaste_on_session_impl`, `_capture_live_view_state`, `_coerce_number`, `_diag_vba_run_failure`, `_extract_vba_source_for_injection`, `_inject_and_run_vba_in_host`, `_normalize_vba_workbook_literals`, `_opxl_coord`, `_opxl_eval_formula`, `_opxl_numeric_values`, `_opxl_range_values`, `_pivot_to_num`, `_poll_excel_session_changes_impl`, `_python_com_static_check`, `_range_formula_info`, `_read_excel_session_selection_impl`, `_recover_excel_session_impl`, `_trace_text`, `_vba_macro_ref`, `_vba_macro_refs`, `_vba_string_literal`, `_workbook_name_lookup_key`, `normalize_python_pipeline_code`, `safe_archive_filename`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

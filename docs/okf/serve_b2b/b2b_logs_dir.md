@@ -7,8 +7,8 @@ extraction: ast
 signature: "()"
 role: "트레이스 로그 저장 폴더 — 프로즌/개발 무관하게 항상 %LOCALAPPDATA%\\B2B_logs 로 고정."
 role_source: docstring
-version: "0.5.19"
-loc: "serve_b2b.py:147-157"
+version: "0.7.3"
+loc: "serve_b2b.py:282-292"
 
 # ── 입출력 ──
 inputs: []
@@ -34,7 +34,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.19-gen"
+timestamp: "0.7.3-gen"
 ---
 
 ## 역할

@@ -7,8 +7,8 @@ extraction: ast
 signature: "(excel_id, steps, reset=True, entry=None, view_sheet=None)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
-version: "0.5.19"
-loc: "serve_b2b.py:7877-7878"
+version: "0.7.3"
+loc: "serve_b2b.py:9953-9954"
 
 # ── 입출력 ──
 inputs:
@@ -29,6 +29,7 @@ calls:
   - "_run_vba_pipeline_on_session_impl"
   - "excel_call"
 calls_external:
+  - "PY_UNLIMITED_OUTER_S"
   - "entry"
   - "excel_id"
   - "reset"
@@ -36,10 +37,11 @@ calls_external:
   - "view_sheet"
 called_by:
   - "B2BHandler.handle_excel_run_vba_pipeline"
-reads: []
+reads:
+  - "PY_UNLIMITED_OUTER_S"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.19-gen"
+timestamp: "0.7.3-gen"
 ---
 
 ## 역할

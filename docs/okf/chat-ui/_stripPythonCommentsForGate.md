@@ -7,8 +7,8 @@ extraction: regex   # 정규식 근사
 signature: "(code)"
 role: "게이트 검사용 주석 제거 — 모델이 프롬프트의 금지 규칙을 주석으로 메아리치는 일이 흔한데"
 role_source: banner
-version: "0.5.19"
-loc: "chat-ui.js:1417-1417"
+version: "0.7.3"
+loc: "chat-ui.js:1504-1504"
 
 # ── 입출력 ──
 inputs:
@@ -34,7 +34,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.19-gen"
+timestamp: "0.7.3-gen"
 ---
 
 ## 역할

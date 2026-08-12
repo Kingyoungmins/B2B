@@ -4,11 +4,11 @@ title: open_excel_session
 module: serve_b2b.py
 lang: python
 extraction: ast
-signature: "(path, name=None, workbook_id=None, result_id=None, read_only_mirror=False, left=None, top=None, width=None, height=None, client_left=None, client_top=None, client_width=None, client_height=None, viewport_width=None, viewport_height=None, browser_title=None, native_parent_hwnd=None, native_host_hwnd=None, native_overlay=False, live_editable=False, defer_visible=False)"
+signature: "(path, name=None, workbook_id=None, result_id=None, read_only_mirror=False, left=None, top=None, width=None, height=None, client_left=None, client_top=None, client_width=None, client_height=None, viewport_width=None, viewport_height=None, browser_title=None, native_parent_hwnd=None, native_host_hwnd=None, native_overlay=False, live_editable=False, defer_visible=False, from_state_sig=None)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
-version: "0.5.19"
-loc: "serve_b2b.py:11486-11533"
+version: "0.7.3"
+loc: "serve_b2b.py:14765-14814"
 
 # ── 입출력 ──
 inputs:
@@ -33,6 +33,7 @@ inputs:
   - "native_overlay"
   - "live_editable"
   - "defer_visible"
+  - "from_state_sig"
 returns: "(추정)"
 
 # ── 사이드이펙트 (정적 추정) ──
@@ -51,6 +52,7 @@ calls_external:
   - "client_top"
   - "client_width"
   - "defer_visible"
+  - "from_state_sig"
   - "height"
   - "left"
   - "live_editable"
@@ -72,7 +74,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.19-gen"
+timestamp: "0.7.3-gen"
 ---
 
 ## 역할

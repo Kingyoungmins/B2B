@@ -7,8 +7,8 @@ extraction: ast
 signature: "(excel_id)"
 role: "[0.5.17] 현재 탭의 선택(Selection)만 가볍게 읽는다 — active-sync(포그라운드/탭 따라가기)·복사소스"
 role_source: docstring
-version: "0.5.19"
-loc: "serve_b2b.py:11454-11475"
+version: "0.7.3"
+loc: "serve_b2b.py:14733-14754"
 
 # ── 입출력 ──
 inputs:
@@ -43,7 +43,7 @@ reads:
   - "LIVE_FRAME_MODE"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.19-gen"
+timestamp: "0.7.3-gen"
 ---
 
 ## 역할

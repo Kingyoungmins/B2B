@@ -7,8 +7,8 @@ extraction: ast
 signature: "(excel_id)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
-version: "0.5.19"
-loc: "serve_b2b.py:5462-5509"
+version: "0.7.3"
+loc: "serve_b2b.py:7244-7309"
 
 # ── 입출력 ──
 inputs:
@@ -32,6 +32,7 @@ calls:
   - "_hide_excel_windows_for_pid"
   - "_is_live_shared_app"
   - "_is_pid_alive"
+  - "_note_live_app_reset"
   - "_remaining_sessions_for_pid"
   - "session_workbook"
 calls_external:
@@ -39,6 +40,7 @@ calls_external:
   - "Path"
   - "Quit"
   - "app"
+  - "bool"
   - "cdir"
   - "excel_id"
   - "get"
@@ -57,10 +59,11 @@ reads:
   - "EXCEL_LOCK"
   - "EXCEL_SESSIONS"
   - "LIVE_FRAME_MODE"
+  - "NATIVE_RECORDING"
 writes:
   - "LIVE_EXCEL_APP"
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.19-gen"
+timestamp: "0.7.3-gen"
 ---
 
 ## 역할
@@ -74,7 +77,7 @@ timestamp: "0.5.19-gen"
 - 변경 상태 `LIVE_EXCEL_APP` — 수정 시 이 상태를 읽는 곳 동반 점검.
 
 ## 관계
-- 호출: `_close_companion_workbooks`, `_force_kill_pid`, `_handoff_foreground_to_host`, `_hide_excel_app_window`, `_hide_excel_windows_for_pid`, `_is_live_shared_app`, `_is_pid_alive`, `_remaining_sessions_for_pid`, `session_workbook`
+- 호출: `_close_companion_workbooks`, `_force_kill_pid`, `_handoff_foreground_to_host`, `_hide_excel_app_window`, `_hide_excel_windows_for_pid`, `_is_live_shared_app`, `_is_pid_alive`, `_note_live_app_reset`, `_remaining_sessions_for_pid`, `session_workbook`
 - 피호출(영향 전파 경로): `close_excel_session`
 
 ## 실패/예외

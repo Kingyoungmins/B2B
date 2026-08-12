@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "()"
 role: "==================================================================="
 role_source: banner
-version: "0.5.19"
+version: "0.7.3"
 loc: "chat-ui.js:4-4"
 
 # ── 입출력 ──
@@ -35,12 +35,13 @@ called_by:
   - "removeInputFileAt"
   - "removeOutputTemplateAt"
   - "restoreHistorySnapshot"
+  - "restoreSoftRefreshSnapshot"
 reads:
   - "state.inputs"
   - "state.output"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.19-gen"
+timestamp: "0.7.3-gen"
 ---
 
 ## 역할
@@ -51,7 +52,7 @@ timestamp: "0.5.19-gen"
 
 ## 관계
 - 호출: `$`, `addMessage`, `refreshRunButton`, `renderEditingBanner`
-- 피호출(영향 전파 경로): `loadInputFiles`, `loadLogic`, `loadOutputTemplates`, `removeInputFileAt`, `removeOutputTemplateAt`, `restoreHistorySnapshot`
+- 피호출(영향 전파 경로): `loadInputFiles`, `loadLogic`, `loadOutputTemplates`, `removeInputFileAt`, `removeOutputTemplateAt`, `restoreHistorySnapshot`, `restoreSoftRefreshSnapshot`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

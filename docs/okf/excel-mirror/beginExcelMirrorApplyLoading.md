@@ -7,8 +7,8 @@ extraction: regex   # 정규식 근사
 signature: "(message, options = {})"
 role: "적용 시작: 모든 미러 창을 숨기고(park) 네이티브 패널의 로딩 애니메이션을 돌린다."
 role_source: banner
-version: "0.5.19"
-loc: "excel-mirror.js:1214-1214"
+version: "0.7.3"
+loc: "excel-mirror.js:1297-1297"
 
 # ── 입출력 ──
 inputs:
@@ -43,8 +43,8 @@ calls_external:
   - "max"
   - "setInterval"
 called_by:
+  - "_reapplyVbaPipelineToLiveImpl"
   - "applyVbaStepToLiveExcel"
-  - "reapplyVbaPipelineToLive"
   - "restoreLastStepPreApplySnapshot"
   - "runIsolatedLivePipelineSteps"
   - "runPipelineOnBackend"
@@ -54,7 +54,7 @@ writes:
   - "excelMirror.applyLoadingTimer"
   - "excelMirror.applying"
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.19-gen"
+timestamp: "0.7.3-gen"
 ---
 
 ## 역할
@@ -68,7 +68,7 @@ timestamp: "0.5.19-gen"
 
 ## 관계
 - 호출: `beginUiBusy`, `cancelActiveBackendPipeline`, `hideAllExcelMirrorWindows`, `isNativeExcelShell`, `publishNativeExcelLoading`, `requestExcelApplyCancel`, `showExcelApplyCancelButton`, `tick`, `traceClientUiEvent`, `updateMirrorShellStatus`
-- 피호출(영향 전파 경로): `applyVbaStepToLiveExcel`, `reapplyVbaPipelineToLive`, `restoreLastStepPreApplySnapshot`, `runIsolatedLivePipelineSteps`, `runPipelineOnBackend`
+- 피호출(영향 전파 경로): `_reapplyVbaPipelineToLiveImpl`, `applyVbaStepToLiveExcel`, `restoreLastStepPreApplySnapshot`, `runIsolatedLivePipelineSteps`, `runPipelineOnBackend`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

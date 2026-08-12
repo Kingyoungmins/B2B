@@ -7,8 +7,8 @@ extraction: regex   # 정규식 근사
 signature: "(container, modeLabel, aiName, onStop, onStopThinking)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
-version: "0.5.19"
-loc: "chat-ui.js:2492-2492"
+version: "0.7.3"
+loc: "chat-ui.js:2605-2605"
 
 # ── 입출력 ──
 inputs:
@@ -33,6 +33,7 @@ calls:
   - "initialize"
   - "scrollChatToBottom"
   - "scrollReasoningToBottom"
+  - "setStatus"
   - "stopButtonsHtml"
   - "wireStopButtons"
 calls_external:
@@ -44,7 +45,6 @@ calls_external:
   - "remove"
   - "setAnswer"
   - "setReasoning"
-  - "setStatus"
   - "setTarget"
   - "stopped"
   - "toggle"
@@ -58,7 +58,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.19-gen"
+timestamp: "0.7.3-gen"
 ---
 
 ## 역할
@@ -68,7 +68,7 @@ timestamp: "0.5.19-gen"
 - DOM/브라우저 전역 조작
 
 ## 관계
-- 호출: `add`, `createSmoothStructuredRenderer`, `createSmoothTextRenderer`, `escapeHtml`, `initialize`, `scrollChatToBottom`, `scrollReasoningToBottom`, `stopButtonsHtml`, `wireStopButtons`
+- 호출: `add`, `createSmoothStructuredRenderer`, `createSmoothTextRenderer`, `escapeHtml`, `initialize`, `scrollChatToBottom`, `scrollReasoningToBottom`, `setStatus`, `stopButtonsHtml`, `wireStopButtons`
 - 피호출(영향 전파 경로): `autoRegenerateAsVbaFallback`, `autoRegenerateForMissingCode`, `autoRegenerateForStaticSafety`, `requestErrorRecovery`, `sendChat`, `showThinkRetryPrompt`
 
 ## 실패/예외

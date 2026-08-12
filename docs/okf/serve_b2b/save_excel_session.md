@@ -4,16 +4,17 @@ title: save_excel_session
 module: serve_b2b.py
 lang: python
 extraction: ast
-signature: "(excel_id, name=None)"
+signature: "(excel_id, name=None, internal=False)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
-version: "0.5.19"
-loc: "serve_b2b.py:11540-11541"
+version: "0.7.3"
+loc: "serve_b2b.py:14821-14822"
 
 # ── 입출력 ──
 inputs:
   - "excel_id"
   - "name"
+  - "internal"
 returns: "(추정)"
 
 # ── 사이드이펙트 (정적 추정) ──
@@ -27,6 +28,7 @@ calls:
   - "excel_call"
 calls_external:
   - "excel_id"
+  - "internal"
   - "name"
 called_by:
   - "B2BHandler.handle_excel_save"
@@ -34,7 +36,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.19-gen"
+timestamp: "0.7.3-gen"
 ---
 
 ## 역할

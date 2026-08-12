@@ -7,8 +7,8 @@ extraction: regex   # 정규식 근사
 signature: "(name)"
 role: "보조: 파일명에서 step 번호 힌트 추출. \"foo_step_3.js\" 또는 \"step3.js\" 모두 OK."
 role_source: banner
-version: "0.5.19"
-loc: "save-load.js:535-535"
+version: "0.7.3"
+loc: "save-load.js:854-854"
 
 # ── 입출력 ──
 inputs:
@@ -30,7 +30,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.19-gen"
+timestamp: "0.7.3-gen"
 ---
 
 ## 역할

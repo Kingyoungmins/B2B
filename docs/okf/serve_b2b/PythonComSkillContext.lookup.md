@@ -8,8 +8,8 @@ class: PythonComSkillContext
 signature: "(self, sheet, key_col, into_col, table_sheet, table_key_col, table_val_col, header_row=1, default=None)"
 role: "VLOOKUP/조인: sheet 의 key_col 값을 table_sheet 의 table_key_col 에서 찾아 그 행의 table_val_col 값을"
 role_source: docstring
-version: "0.5.19"
-loc: "serve_b2b.py:10365-10397"
+version: "0.7.3"
+loc: "serve_b2b.py:13095-13127"
 
 # ── 입출력 ──
 inputs:
@@ -65,7 +65,7 @@ reads:
   - "self.write"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.19-gen"
+timestamp: "0.7.3-gen"
 ---
 
 ## 역할

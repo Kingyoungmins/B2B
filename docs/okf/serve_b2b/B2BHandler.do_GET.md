@@ -8,8 +8,8 @@ class: B2BHandler
 signature: "(self)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
-version: "0.5.19"
-loc: "serve_b2b.py:928-991"
+version: "0.7.3"
+loc: "serve_b2b.py:1227-1295"
 
 # ── 입출력 ──
 inputs:
@@ -23,6 +23,7 @@ raises: []
 
 # ── 유기적 관계 ──
 calls:
+  - "_current_app_version"
   - "_excel_queue_size"
   - "_health_excel_diagnostics"
   - "_maintenance_status"
@@ -70,7 +71,7 @@ reads:
   - "self.send_json"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.19-gen"
+timestamp: "0.7.3-gen"
 ---
 
 ## 역할
@@ -80,7 +81,7 @@ timestamp: "0.5.19-gen"
 - 없음(정적 분석 기준)
 
 ## 관계
-- 호출: `_excel_queue_size`, `_health_excel_diagnostics`, `_maintenance_status`, `_pipeline_job_stats`, `_pipeline_snapshot_stats`, `_runtime_counts_snapshot`, `app_base_dir`, `excel_available`, `handle_backend_download`, `handle_cached_diff`, `handle_pipeline_progress`, `handle_pipeline_status`, `handle_workbook_source_download`, `logic_backup_dir_info`, `node_executable`, `proxy`, `send_json`
+- 호출: `_current_app_version`, `_excel_queue_size`, `_health_excel_diagnostics`, `_maintenance_status`, `_pipeline_job_stats`, `_pipeline_snapshot_stats`, `_runtime_counts_snapshot`, `app_base_dir`, `excel_available`, `handle_backend_download`, `handle_cached_diff`, `handle_pipeline_progress`, `handle_pipeline_status`, `handle_workbook_source_download`, `logic_backup_dir_info`, `node_executable`, `proxy`, `send_json`
 - 피호출(영향 전파 경로): 없음
 
 ## 실패/예외

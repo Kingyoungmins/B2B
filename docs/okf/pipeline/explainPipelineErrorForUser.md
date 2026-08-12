@@ -7,8 +7,8 @@ extraction: regex   # 정규식 근사
 signature: "(info)"
 role: "[#2] 실행 오류를 코드 지식이 없는 사용자에게 풀어 설명한다(단발 LLM 호출, 대화 기록 무관)."
 role_source: banner
-version: "0.5.19"
-loc: "pipeline.js:4500-4500"
+version: "0.7.3"
+loc: "pipeline.js:6997-6997"
 
 # ── 입출력 ──
 inputs:
@@ -22,18 +22,32 @@ raises: []
 
 # ── 유기적 관계 ──
 calls:
+  - "_recordedLike"
+  - "buildSheetStructureDigest"
   - "callLLMOneShot"
+  - "getFile"
   - "latestUserRequestForSafety"
+  - "push"
 calls_external:
+  - "Number"
   - "String"
+  - "every"
+  - "filter"
+  - "find"
+  - "isArray"
   - "join"
+  - "slice"
+  - "some"
+  - "test"
   - "trim"
 called_by:
   - "reportPipelineError"
-reads: []
+reads:
+  - "state.chatHistory"
+  - "state.pipeline"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.19-gen"
+timestamp: "0.7.3-gen"
 ---
 
 ## 역할
@@ -43,7 +57,7 @@ timestamp: "0.5.19-gen"
 - 없음(정적 분석 기준)
 
 ## 관계
-- 호출: `callLLMOneShot`, `latestUserRequestForSafety`
+- 호출: `_recordedLike`, `buildSheetStructureDigest`, `callLLMOneShot`, `getFile`, `latestUserRequestForSafety`, `push`
 - 피호출(영향 전파 경로): `reportPipelineError`
 
 ## 실패/예외

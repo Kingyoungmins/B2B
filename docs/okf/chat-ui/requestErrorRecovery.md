@@ -7,8 +7,8 @@ extraction: regex   # 정규식 근사
 signature: "(stepIdx, errorInfo, userNote)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
-version: "0.5.19"
-loc: "chat-ui.js:2762-2762"
+version: "0.7.3"
+loc: "chat-ui.js:2880-2880"
 
 # ── 입출력 ──
 inputs:
@@ -41,9 +41,11 @@ calls:
   - "notePythonRuntimeFailure"
   - "resolveErrorRecoveryStepIndex"
   - "scrollChatToBottom"
+  - "setStatus"
   - "setupStreamingAssistantMessage"
   - "showThinkRetryPrompt"
   - "toast"
+  - "traceClientUiEvent"
   - "userExplicitlyRequestsPython"
   - "userExplicitlyRequestsVba"
 calls_external:
@@ -51,6 +53,7 @@ calls_external:
   - "B2BSkill"
   - "COM"
   - "Number"
+  - "Python"
   - "SpecialCells"
   - "String"
   - "Workbooks"
@@ -65,12 +68,12 @@ calls_external:
   - "remove"
   - "setAnswer"
   - "setReasoning"
-  - "setStatus"
   - "slice"
   - "stopped"
   - "test"
   - "transform"
   - "trim"
+  - "true"
 called_by:
   - "reportPipelineError"
   - "showRunnerPipelineError"
@@ -79,7 +82,7 @@ reads:
   - "state.pipeline"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.19-gen"
+timestamp: "0.7.3-gen"
 ---
 
 ## 역할
@@ -89,7 +92,7 @@ timestamp: "0.5.19-gen"
 - DOM/브라우저 전역 조작
 
 ## 관계
-- 호출: `$`, `add`, `addAssistantReply`, `addMessage`, `buildSchemaSummary`, `callLLM`, `col`, `escapeHtml`, `findInputBySheet`, `getSkillEngine`, `inferPipelineStepLanguage`, `isPythonComReadLimitRuntimeError`, `isThinkModeEnabled`, `latestUserRequestForSafety`, `notePythonRuntimeFailure`, `resolveErrorRecoveryStepIndex`, `scrollChatToBottom`, `setupStreamingAssistantMessage`, `showThinkRetryPrompt`, `toast`, `userExplicitlyRequestsPython`, `userExplicitlyRequestsVba`
+- 호출: `$`, `add`, `addAssistantReply`, `addMessage`, `buildSchemaSummary`, `callLLM`, `col`, `escapeHtml`, `findInputBySheet`, `getSkillEngine`, `inferPipelineStepLanguage`, `isPythonComReadLimitRuntimeError`, `isThinkModeEnabled`, `latestUserRequestForSafety`, `notePythonRuntimeFailure`, `resolveErrorRecoveryStepIndex`, `scrollChatToBottom`, `setStatus`, `setupStreamingAssistantMessage`, `showThinkRetryPrompt`, `toast`, `traceClientUiEvent`, `userExplicitlyRequestsPython`, `userExplicitlyRequestsVba`
 - 피호출(영향 전파 경로): `reportPipelineError`, `showRunnerPipelineError`
 
 ## 실패/예외

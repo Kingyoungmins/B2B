@@ -8,8 +8,8 @@ class: ExcelSkillContext
 signature: "(self, name, workbook=None)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
-version: "0.5.19"
-loc: "serve_b2b.py:12228-12242"
+version: "0.7.3"
+loc: "serve_b2b.py:15509-15523"
 
 # ── 입출력 ──
 inputs:
@@ -49,8 +49,9 @@ called_by:
   - "ExcelSkillContext.pivot"
   - "OpenpyxlSkillContext.filter_to_sheet"
   - "OpenpyxlSkillContext.pivot"
+  - "PythonComSkillContext._pivot_value_table"
   - "PythonComSkillContext.filter_to_sheet"
-  - "PythonComSkillContext.pivot"
+  - "PythonComSkillContext.native_pivot"
   - "_OpenpyxlSheetsProxy.add"
 reads:
   - "self._default_workbook"
@@ -60,7 +61,7 @@ reads:
 writes:
   - "self.last_output_sheet"
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.19-gen"
+timestamp: "0.7.3-gen"
 ---
 
 ## 역할
@@ -73,7 +74,7 @@ timestamp: "0.5.19-gen"
 
 ## 관계
 - 호출: `Worksheets`, `_default_workbook`, `_excel_names`, `_is_output_workbook`, `_unwrap_workbook`, `normalize`
-- 피호출(영향 전파 경로): `ExcelSkillContext.filter_to_sheet`, `ExcelSkillContext.pivot`, `OpenpyxlSkillContext.filter_to_sheet`, `OpenpyxlSkillContext.pivot`, `PythonComSkillContext.filter_to_sheet`, `PythonComSkillContext.pivot`, `_OpenpyxlSheetsProxy.add`
+- 피호출(영향 전파 경로): `ExcelSkillContext.filter_to_sheet`, `ExcelSkillContext.pivot`, `OpenpyxlSkillContext.filter_to_sheet`, `OpenpyxlSkillContext.pivot`, `PythonComSkillContext._pivot_value_table`, `PythonComSkillContext.filter_to_sheet`, `PythonComSkillContext.native_pivot`, `_OpenpyxlSheetsProxy.add`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

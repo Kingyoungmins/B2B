@@ -8,8 +8,8 @@ class: B2BHandler
 signature: "(self)"
 role: "[복붙 캡처] 사용자가 라이브 Excel에서 방금 한 Ctrl+C/Ctrl+V 를 역추적해"
 role_source: docstring
-version: "0.5.19"
-loc: "serve_b2b.py:1507-1518"
+version: "0.7.3"
+loc: "serve_b2b.py:2021-2046"
 
 # ── 입출력 ──
 inputs:
@@ -24,10 +24,12 @@ raises: []
 # ── 유기적 관계 ──
 calls:
   - "_vba_trace"
+  - "excel_record_status"
   - "read_json_body"
   - "run_capture_copypaste"
   - "send_json"
 calls_external:
+  - "bool"
   - "err"
   - "get"
   - "lower"
@@ -38,11 +40,12 @@ calls_external:
 called_by:
   - "B2BHandler.do_POST"
 reads:
+  - "NATIVE_RECORDING"
   - "self.read_json_body"
   - "self.send_json"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.19-gen"
+timestamp: "0.7.3-gen"
 ---
 
 ## 역할
@@ -52,7 +55,7 @@ timestamp: "0.5.19-gen"
 - 없음(정적 분석 기준)
 
 ## 관계
-- 호출: `_vba_trace`, `read_json_body`, `run_capture_copypaste`, `send_json`
+- 호출: `_vba_trace`, `excel_record_status`, `read_json_body`, `run_capture_copypaste`, `send_json`
 - 피호출(영향 전파 경로): `B2BHandler.do_POST`
 
 ## 실패/예외

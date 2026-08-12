@@ -8,8 +8,8 @@ class: OpenpyxlSkillContext
 signature: "(self, sheet_or_name, by, ascending=True, header=True, workbook=None)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
-version: "0.5.19"
-loc: "serve_b2b.py:13790-13835"
+version: "0.7.3"
+loc: "serve_b2b.py:17071-17116"
 
 # ── 입출력 ──
 inputs:
@@ -68,6 +68,7 @@ calls_external:
   - "workbook"
   - "ws"
 called_by:
+  - "PythonComSkillContext.match_fill"
   - "_browser_content_target"
 reads:
   - "self._col0"
@@ -80,7 +81,7 @@ reads:
 writes:
   - "self.last_output_sheet"
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.19-gen"
+timestamp: "0.7.3-gen"
 ---
 
 ## 역할
@@ -92,7 +93,7 @@ timestamp: "0.5.19-gen"
 
 ## 관계
 - 호출: `_col0`, `_is_output_workbook`, `_num`, `_write_grid`, `_ws_of`, `append`, `cell`, `normalize`, `range`, `rows`
-- 피호출(영향 전파 경로): `_browser_content_target`
+- 피호출(영향 전파 경로): `PythonComSkillContext.match_fill`, `_browser_content_target`
 
 ## 실패/예외
 - `RuntimeError`

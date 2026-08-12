@@ -7,8 +7,8 @@ extraction: regex   # 정규식 근사
 signature: "(string message)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
-version: "0.5.19"
-loc: "NativeHost.cs:617-617"
+version: "0.7.3"
+loc: "NativeHost.cs:695-695"
 
 # ── 입출력 ──
 inputs:
@@ -22,6 +22,8 @@ raises: []
 
 # ── 유기적 관계 ──
 calls:
+  - "HandleAssistPopupCommand"
+  - "RelayToAssistPopup"
   - "RestartPythonServerAsync"
   - "SetRunnerMode"
   - "UpdateExcelLoading"
@@ -31,12 +33,13 @@ calls_external:
   - "BeginInvoke"
   - "IsNullOrEmpty"
   - "StartsWith"
+  - "Substring"
 called_by:
   - "InitializeAsync"
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.19-gen"
+timestamp: "0.7.3-gen"
 ---
 
 ## 역할
@@ -46,7 +49,7 @@ timestamp: "0.5.19-gen"
 - 없음(정적 분석 기준)
 
 ## 관계
-- 호출: `RestartPythonServerAsync`, `SetRunnerMode`, `UpdateExcelLoading`, `UpdateNativeFileTabs`, `UpdateUiBusyLock`
+- 호출: `HandleAssistPopupCommand`, `RelayToAssistPopup`, `RestartPythonServerAsync`, `SetRunnerMode`, `UpdateExcelLoading`, `UpdateNativeFileTabs`, `UpdateUiBusyLock`
 - 피호출(영향 전파 경로): `InitializeAsync`
 
 ## 실패/예외

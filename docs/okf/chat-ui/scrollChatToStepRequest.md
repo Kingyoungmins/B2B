@@ -7,8 +7,8 @@ extraction: regex   # 정규식 근사
 signature: "(step)"
 role: "스텝의 원 요청 말풍선을 찾아 스크롤+강조. 못 찾으면 false."
 role_source: banner
-version: "0.5.19"
-loc: "chat-ui.js:220-220"
+version: "0.7.3"
+loc: "chat-ui.js:242-242"
 
 # ── 입출력 ──
 inputs:
@@ -26,8 +26,12 @@ calls:
   - "_chatMsgPlainText"
   - "_flashChatMessage"
   - "_matchStepToChatIndex"
+  - "stepChatOriginless"
+  - "toast"
 calls_external:
+  - "String"
   - "contains"
+  - "find"
   - "findIndex"
   - "from"
   - "map"
@@ -39,7 +43,7 @@ reads:
   - "state.pipeline"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.19-gen"
+timestamp: "0.7.3-gen"
 ---
 
 ## 역할
@@ -49,7 +53,7 @@ timestamp: "0.5.19-gen"
 - 없음(정적 분석 기준)
 
 ## 관계
-- 호출: `$`, `_chatMsgPlainText`, `_flashChatMessage`, `_matchStepToChatIndex`
+- 호출: `$`, `_chatMsgPlainText`, `_flashChatMessage`, `_matchStepToChatIndex`, `stepChatOriginless`, `toast`
 - 피호출(영향 전파 경로): `toggleEditStep`
 
 ## 실패/예외

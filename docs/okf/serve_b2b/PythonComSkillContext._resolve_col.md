@@ -8,8 +8,8 @@ class: PythonComSkillContext
 signature: "(self, sheet, col, header_row=1)"
 role: "열 지정을 1-based 번호로 해석한다. 'A' 같은 열 문자 / 1 같은 번호 / 헤더명 모두 허용."
 role_source: docstring
-version: "0.5.19"
-loc: "serve_b2b.py:10354-10363"
+version: "0.7.3"
+loc: "serve_b2b.py:13084-13093"
 
 # ── 입출력 ──
 inputs:
@@ -47,6 +47,7 @@ called_by:
   - "PythonComSkillContext.dedupe"
   - "PythonComSkillContext.fill_sum_col"
   - "PythonComSkillContext.lookup"
+  - "PythonComSkillContext.match_fill"
   - "PythonComSkillContext.move_col_clear"
   - "PythonComSkillContext.split_column"
   - "PythonComSkillContext.sum_column"
@@ -58,7 +59,7 @@ reads:
   - "self.find_header"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.19-gen"
+timestamp: "0.7.3-gen"
 ---
 
 ## 역할
@@ -69,7 +70,7 @@ timestamp: "0.5.19-gen"
 
 ## 관계
 - 호출: `_col_index`, `col`, `find_header`, `header_row`, `sheet`
-- 피호출(영향 전파 경로): `PythonComSkillContext.add_total_row`, `PythonComSkillContext.copy_key_blocks`, `PythonComSkillContext.dedupe`, `PythonComSkillContext.fill_sum_col`, `PythonComSkillContext.lookup`, `PythonComSkillContext.move_col_clear`, `PythonComSkillContext.split_column`, `PythonComSkillContext.sum_column`, `PythonComSkillContext.sum_lookup`, `PythonComSkillContext.sum_where`, `PythonComSkillContext.swap_cols`
+- 피호출(영향 전파 경로): `PythonComSkillContext.add_total_row`, `PythonComSkillContext.copy_key_blocks`, `PythonComSkillContext.dedupe`, `PythonComSkillContext.fill_sum_col`, `PythonComSkillContext.lookup`, `PythonComSkillContext.match_fill`, `PythonComSkillContext.move_col_clear`, `PythonComSkillContext.split_column`, `PythonComSkillContext.sum_column`, `PythonComSkillContext.sum_lookup`, `PythonComSkillContext.sum_where`, `PythonComSkillContext.swap_cols`
 
 ## 실패/예외
 - `PythonComSkillError`

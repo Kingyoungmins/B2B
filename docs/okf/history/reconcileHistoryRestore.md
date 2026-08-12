@@ -4,14 +4,15 @@ title: reconcileHistoryRestore
 module: history.js
 lang: js
 extraction: regex   # 정규식 근사
-signature: "()"
-role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
-role_source: none
-version: "0.5.19"
-loc: "history.js:129-129"
+signature: "(previousSteps)"
+role: "previousSteps = 되돌리기/다시하기 '직전'의 파이프라인. 이걸 안 넘기면 사라진 스텝의 교차파일"
+role_source: banner
+version: "0.7.3"
+loc: "history.js:161-161"
 
 # ── 입출력 ──
-inputs: []
+inputs:
+  - "previousSteps"
 returns: "(추정)"
 
 # ── 사이드이펙트 (정적 추정) ──
@@ -32,11 +33,11 @@ reads:
   - "state.pipeline"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.19-gen"
+timestamp: "0.7.3-gen"
 ---
 
 ## 역할
-(추정) 역할 주석 없음 — 담당자 1줄 보완 필요  _(자동 추정 — 확인 필요)_
+previousSteps = 되돌리기/다시하기 '직전'의 파이프라인. 이걸 안 넘기면 사라진 스텝의 교차파일
 
 ## 사이드이펙트 & 주의
 - 없음(정적 분석 기준)

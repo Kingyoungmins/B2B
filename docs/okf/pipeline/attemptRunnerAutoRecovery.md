@@ -7,8 +7,8 @@ extraction: regex   # 정규식 근사
 signature: "(errorInfo)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
-version: "0.5.19"
-loc: "pipeline.js:4761-4761"
+version: "0.7.3"
+loc: "pipeline.js:7407-7407"
 
 # ── 입출력 ──
 inputs:
@@ -25,7 +25,9 @@ raises: []
 calls:
   - "adaptPipelineForRun"
   - "autoRepairPipelineStep"
+  - "beginMappedPipelineRun"
   - "clearPipelineExecutionMemory"
+  - "clearPipelineResumeFromIndex"
   - "clearRunnerPipelineError"
   - "ensurePipelineStepIds"
   - "getPipelineResumeFromIndex"
@@ -33,21 +35,22 @@ calls:
   - "renderPipeline"
   - "renderRunnerWorkflow"
   - "resolveRunnerRecoveryStepIndex"
+  - "restore"
   - "runPipelineWithAutoRepair"
+  - "sync"
   - "toast"
 calls_external:
   - "Error"
   - "isInteger"
   - "runnerSetDone"
   - "runnerSetRunning"
-called_by:
-  - "showRunnerPipelineError"
+called_by: []
 reads:
   - "state.pipeline"
 writes:
   - "pipeline"
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.19-gen"
+timestamp: "0.7.3-gen"
 ---
 
 ## 역할
@@ -59,8 +62,8 @@ timestamp: "0.5.19-gen"
 - 변경 상태 `pipeline` — 수정 시 이 상태를 읽는 곳 동반 점검.
 
 ## 관계
-- 호출: `adaptPipelineForRun`, `autoRepairPipelineStep`, `clearPipelineExecutionMemory`, `clearRunnerPipelineError`, `ensurePipelineStepIds`, `getPipelineResumeFromIndex`, `renderExcelViewer`, `renderPipeline`, `renderRunnerWorkflow`, `resolveRunnerRecoveryStepIndex`, `runPipelineWithAutoRepair`, `toast`
-- 피호출(영향 전파 경로): `showRunnerPipelineError`
+- 호출: `adaptPipelineForRun`, `autoRepairPipelineStep`, `beginMappedPipelineRun`, `clearPipelineExecutionMemory`, `clearPipelineResumeFromIndex`, `clearRunnerPipelineError`, `ensurePipelineStepIds`, `getPipelineResumeFromIndex`, `renderExcelViewer`, `renderPipeline`, `renderRunnerWorkflow`, `resolveRunnerRecoveryStepIndex`, `restore`, `runPipelineWithAutoRepair`, `sync`, `toast`
+- 피호출(영향 전파 경로): 없음
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

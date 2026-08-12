@@ -7,8 +7,8 @@ extraction: ast
 signature: "()"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
-version: "0.5.19"
-loc: "serve_b2b.py:684-736"
+version: "0.7.3"
+loc: "serve_b2b.py:838-891"
 
 # ── 입출력 ──
 inputs: []
@@ -25,6 +25,7 @@ calls:
   - "_close_companion_workbooks"
   - "_force_kill_pid"
   - "_is_pid_alive"
+  - "_note_live_app_reset"
   - "_quit_python_skill_app"
   - "add"
   - "append"
@@ -41,8 +42,10 @@ calls_external:
   - "id"
   - "int"
   - "key"
+  - "len"
   - "list"
   - "pid"
+  - "pids"
   - "rmtree"
   - "session"
   - "set"
@@ -58,7 +61,7 @@ reads:
 writes:
   - "LIVE_EXCEL_APP"
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.19-gen"
+timestamp: "0.7.3-gen"
 ---
 
 ## 역할
@@ -70,7 +73,7 @@ timestamp: "0.5.19-gen"
 - 변경 상태 `LIVE_EXCEL_APP` — 수정 시 이 상태를 읽는 곳 동반 점검.
 
 ## 관계
-- 호출: `_close_companion_workbooks`, `_force_kill_pid`, `_is_pid_alive`, `_quit_python_skill_app`, `add`, `append`, `clear`, `session_workbook`, `values`
+- 호출: `_close_companion_workbooks`, `_force_kill_pid`, `_is_pid_alive`, `_note_live_app_reset`, `_quit_python_skill_app`, `add`, `append`, `clear`, `session_workbook`, `values`
 - 피호출(영향 전파 경로): `cleanup_excel_sessions`, `ensure_excel_worker`
 
 ## 실패/예외

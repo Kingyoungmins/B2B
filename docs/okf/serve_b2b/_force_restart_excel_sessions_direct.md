@@ -4,14 +4,15 @@ title: _force_restart_excel_sessions_direct
 module: serve_b2b.py
 lang: python
 extraction: ast
-signature: "()"
+signature: "(wait=False)"
 role: "COM 큐를 '우회'하는 응급 복구. 공유 EXCEL.EXE 가 모달/행으로 굳으면 모든 excel_call 이"
 role_source: docstring
-version: "0.5.19"
-loc: "serve_b2b.py:739-823"
+version: "0.7.3"
+loc: "serve_b2b.py:894-1016"
 
 # ── 입출력 ──
-inputs: []
+inputs:
+  - "wait"
 returns: "(추정)"
 
 # ── 사이드이펙트 (정적 추정) ──
@@ -25,6 +26,7 @@ raises: []
 calls:
   - "_force_kill_pid"
   - "_is_pid_alive"
+  - "_note_live_app_reset"
   - "_perf_trace"
   - "add"
   - "append"
@@ -41,6 +43,7 @@ calls_external:
   - "any"
   - "cdir"
   - "get"
+  - "globals"
   - "int"
   - "key"
   - "len"
@@ -55,6 +58,7 @@ calls_external:
   - "sleep"
   - "sorted"
   - "start"
+  - "t"
   - "temp_path"
   - "time"
   - "unlink"
@@ -66,17 +70,22 @@ reads:
   - "EXCEL_LOCK"
   - "EXCEL_SESSIONS"
   - "LIVE_EXCEL_APP"
+  - "NATIVE_RECORDING"
+  - "PIPELINE_JOBS"
+  - "PIPELINE_JOBS_LOCK"
   - "PYTHON_SKILL_APP"
   - "PYTHON_SKILL_APP_PID"
   - "SPAWNED_EXCEL_PIDS"
   - "_COM_REF_GRAVEYARD"
+  - "_KILL_INFLIGHT"
+  - "_KILL_INFLIGHT_LOCK"
 writes:
   - "LIVE_EXCEL_APP"
   - "PYTHON_SKILL_APP"
   - "PYTHON_SKILL_APP_LAST_USED"
   - "PYTHON_SKILL_APP_PID"
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.19-gen"
+timestamp: "0.7.3-gen"
 ---
 
 ## 역할
@@ -89,7 +98,7 @@ COM 큐를 '우회'하는 응급 복구. 공유 EXCEL.EXE 가 모달/행으로 �
 - 변경 상태 `LIVE_EXCEL_APP, PYTHON_SKILL_APP, PYTHON_SKILL_APP_LAST_USED, PYTHON_SKILL_APP_PID` — 수정 시 이 상태를 읽는 곳 동반 점검.
 
 ## 관계
-- 호출: `_force_kill_pid`, `_is_pid_alive`, `_perf_trace`, `add`, `append`, `clear`, `values`
+- 호출: `_force_kill_pid`, `_is_pid_alive`, `_note_live_app_reset`, `_perf_trace`, `add`, `append`, `clear`, `values`
 - 피호출(영향 전파 경로): `B2BHandler.do_POST`, `run_python_on_session`
 
 ## 실패/예외

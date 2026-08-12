@@ -7,8 +7,8 @@ extraction: ast
 signature: "(pid)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
-version: "0.5.19"
-loc: "serve_b2b.py:14453-14475"
+version: "0.7.3"
+loc: "serve_b2b.py:17923-17945"
 
 # ── 입출력 ──
 inputs:
@@ -31,11 +31,12 @@ calls_external:
   - "visit"
 called_by:
   - "_close_excel_session_impl"
+  - "_hide_all_excel_sessions_impl"
   - "_prepare_vba_macro_run_window_state"
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.19-gen"
+timestamp: "0.7.3-gen"
 ---
 
 ## 역할
@@ -46,7 +47,7 @@ timestamp: "0.5.19-gen"
 
 ## 관계
 - 호출: `_hide_excel_hwnd`
-- 피호출(영향 전파 경로): `_close_excel_session_impl`, `_prepare_vba_macro_run_window_state`
+- 피호출(영향 전파 경로): `_close_excel_session_impl`, `_hide_all_excel_sessions_impl`, `_prepare_vba_macro_run_window_state`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

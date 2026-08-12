@@ -7,8 +7,8 @@ extraction: ast
 signature: "(app, host_wb, vbproj, module, module_name, safe_code, err)"
 role: "[임시 진단] 러너 매크로 실행 실패 원인 포착: 컴파일에러 vs 매크로차단 vs 기타."
 role_source: docstring
-version: "0.5.19"
-loc: "serve_b2b.py:6525-6627"
+version: "0.7.3"
+loc: "serve_b2b.py:8562-8664"
 
 # ── 입출력 ──
 inputs:
@@ -82,7 +82,7 @@ reads:
   - "SPAWNED_EXCEL_PIDS"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.19-gen"
+timestamp: "0.7.3-gen"
 ---
 
 ## 역할

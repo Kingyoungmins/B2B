@@ -7,8 +7,8 @@ extraction: regex   # 정규식 근사
 signature: "()"
 role: "모든 파일/시트의 수식을 현재 데이터로 재평가해 state.formulaResults 에 저장."
 role_source: banner
-version: "0.5.19"
-loc: "pipeline.js:2496-2496"
+version: "0.7.3"
+loc: "pipeline.js:3265-3265"
 
 # ── 입출력 ──
 inputs: []
@@ -41,7 +41,7 @@ reads:
 writes:
   - "formulaResults"
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.19-gen"
+timestamp: "0.7.3-gen"
 ---
 
 ## 역할

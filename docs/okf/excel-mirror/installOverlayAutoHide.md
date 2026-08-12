@@ -7,8 +7,8 @@ extraction: regex   # 정규식 근사
 signature: "()"
 role: "앱이 포커스를 잃으면(최소화 / 파일 대화상자 / 다른 앱 전환) overlay Excel 이 위로 튀어나오지"
 role_source: banner
-version: "0.5.19"
-loc: "excel-mirror.js:1981-1981"
+version: "0.7.3"
+loc: "excel-mirror.js:2092-2092"
 
 # ── 입출력 ──
 inputs: []
@@ -50,7 +50,7 @@ writes:
   - "excelMirror.hostActive"
   - "excelMirror.lastHideInactiveAt"
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.19-gen"
+timestamp: "0.7.3-gen"
 ---
 
 ## 역할

@@ -7,8 +7,8 @@ extraction: regex   # 정규식 근사
 signature: "(step, options = {})"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
-version: "0.5.19"
-loc: "pipeline.js:2916-2916"
+version: "0.7.3"
+loc: "pipeline.js:4079-4079"
 
 # ── 입출력 ──
 inputs:
@@ -34,12 +34,14 @@ calls:
   - "showOnlyExcelMirrorWindow"
 calls_external: []
 called_by:
+  - "_handlePipelineStepToggleImpl"
   - "renderPipeline"
   - "restorePipelineCheckpointForSuffix"
+  - "restorePipelineToCheckpointAndHold"
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.19-gen"
+timestamp: "0.7.3-gen"
 ---
 
 ## 역할
@@ -50,7 +52,7 @@ timestamp: "0.5.19-gen"
 
 ## 관계
 - 호출: `applyLiveSchemaToFileCache`, `beginExcelMirrorApplyLoading`, `endExcelMirrorApplyLoading`, `inferPipelineStepTargetFileId`, `postExcelMirror`, `preferredVbaRunFileId`, `requirePipelineSessionExcelId`, `scheduleRestoreActiveExcelMirror`, `showOnlyExcelMirrorWindow`
-- 피호출(영향 전파 경로): `renderPipeline`, `restorePipelineCheckpointForSuffix`
+- 피호출(영향 전파 경로): `_handlePipelineStepToggleImpl`, `renderPipeline`, `restorePipelineCheckpointForSuffix`, `restorePipelineToCheckpointAndHold`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

@@ -7,8 +7,8 @@ extraction: ast
 signature: "(excel_id, values_only=False)"
 role: "라이브 세션에서 '방금 한 복붙'을 캡처한다."
 role_source: docstring
-version: "0.5.19"
-loc: "serve_b2b.py:8414-8550"
+version: "0.7.3"
+loc: "serve_b2b.py:10540-10685"
 
 # ── 입출력 ──
 inputs:
@@ -29,6 +29,7 @@ calls:
   - "Range"
   - "Worksheets"
   - "_read_excel_clipboard_source"
+  - "_user_facing_workbook_name_for_live"
   - "_vba_trace"
   - "_workbook_name_lookup_key"
   - "get_excel_session"
@@ -37,10 +38,12 @@ calls:
 calls_external:
   - "RuntimeError"
   - "Windows"
+  - "app"
   - "bool"
   - "desc"
   - "dims_match"
   - "dst_book"
+  - "dst_book_out"
   - "dst_cell"
   - "dst_sheet"
   - "dst_via"
@@ -57,6 +60,7 @@ calls_external:
   - "session_book"
   - "snap_used"
   - "source"
+  - "src_book_out"
   - "src_cols"
   - "src_found"
   - "src_rows"
@@ -69,7 +73,7 @@ reads:
   - "LAST_COPY_SOURCE"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.19-gen"
+timestamp: "0.7.3-gen"
 ---
 
 ## 역할
@@ -80,7 +84,7 @@ timestamp: "0.5.19-gen"
 - Excel COM 조작(파괴적일 수 있음)
 
 ## 관계
-- 호출: `Cells`, `Range`, `Worksheets`, `_read_excel_clipboard_source`, `_vba_trace`, `_workbook_name_lookup_key`, `get_excel_session`, `replace`, `session_workbook`
+- 호출: `Cells`, `Range`, `Worksheets`, `_read_excel_clipboard_source`, `_user_facing_workbook_name_for_live`, `_vba_trace`, `_workbook_name_lookup_key`, `get_excel_session`, `replace`, `session_workbook`
 - 피호출(영향 전파 경로): `run_capture_copypaste`
 
 ## 실패/예외

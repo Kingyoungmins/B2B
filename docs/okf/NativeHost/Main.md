@@ -7,8 +7,8 @@ extraction: regex   # 정규식 근사
 signature: "()"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
-version: "0.5.19"
-loc: "NativeHost.cs:49-49"
+version: "0.7.3"
+loc: "NativeHost.cs:65-65"
 
 # ── 입출력 ──
 inputs: []
@@ -23,6 +23,7 @@ raises: []
 calls:
   - "Log"
   - "MainForm"
+  - "RotateLogAtStartup"
   - "ShowFatal"
 calls_external:
   - "EnableVisualStyles"
@@ -37,7 +38,7 @@ called_by: []
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.19-gen"
+timestamp: "0.7.3-gen"
 ---
 
 ## 역할
@@ -47,7 +48,7 @@ timestamp: "0.5.19-gen"
 - 없음(정적 분석 기준)
 
 ## 관계
-- 호출: `Log`, `MainForm`, `ShowFatal`
+- 호출: `Log`, `MainForm`, `RotateLogAtStartup`, `ShowFatal`
 - 피호출(영향 전파 경로): 없음
 
 ## 실패/예외

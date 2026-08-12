@@ -7,8 +7,8 @@ extraction: ast
 signature: "(excel_id, code, skip_static=False, timeout_s=None)"
 role: "라이브 세션에 떠 있는 실제 워크북에 Python COM 스킬을 실행한다(VBA 경로와 동일한 외피:"
 role_source: docstring
-version: "0.5.19"
-loc: "serve_b2b.py:10899-10953"
+version: "0.7.3"
+loc: "serve_b2b.py:14026-14080"
 
 # ── 입출력 ──
 inputs:
@@ -60,7 +60,7 @@ reads:
   - "EXCEL_LOCK"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.19-gen"
+timestamp: "0.7.3-gen"
 ---
 
 ## 역할

@@ -7,8 +7,8 @@ extraction: ast
 signature: "(value)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
-version: "0.5.19"
-loc: "serve_b2b.py:10987-10994"
+version: "0.7.3"
+loc: "serve_b2b.py:14249-14256"
 
 # ── 입출력 ──
 inputs:
@@ -32,10 +32,11 @@ called_by:
   - "_excel_output_preview_sheets"
   - "_range_formula_info"
   - "_sheet_snapshot"
+  - "_verify_capture_sheet_aoa"
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.19-gen"
+timestamp: "0.7.3-gen"
 ---
 
 ## 역할
@@ -46,7 +47,7 @@ timestamp: "0.5.19-gen"
 
 ## 관계
 - 호출: `value`
-- 피호출(영향 전파 경로): `_excel_output_preview_sheets`, `_range_formula_info`, `_sheet_snapshot`
+- 피호출(영향 전파 경로): `_excel_output_preview_sheets`, `_range_formula_info`, `_sheet_snapshot`, `_verify_capture_sheet_aoa`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

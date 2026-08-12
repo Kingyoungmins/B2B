@@ -7,8 +7,8 @@ extraction: ast
 signature: "(app)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
-version: "0.5.19"
-loc: "serve_b2b.py:3204-3214"
+version: "0.7.3"
+loc: "serve_b2b.py:4211-4221"
 
 # ── 입출력 ──
 inputs:
@@ -30,7 +30,9 @@ calls_external:
 called_by:
   - "_alias_open_workbook_name"
   - "_clear_workbook_name_aliases"
+  - "_commit_pending_excel_cell_edit"
   - "_diag_vba_run_failure"
+  - "_get_live_excel_app"
   - "_get_python_skill_app"
   - "_inject_and_run_vba"
   - "_open_excel_session_impl"
@@ -40,10 +42,12 @@ called_by:
   - "_setup_isolated_pipeline_instance"
   - "_stash_workbook_name_alias"
   - "_track_spawned_excel_app"
+  - "_user_facing_workbook_name_for_live"
+  - "_verify_step_isolated_impl"
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.19-gen"
+timestamp: "0.7.3-gen"
 ---
 
 ## 역할
@@ -54,7 +58,7 @@ timestamp: "0.5.19-gen"
 
 ## 관계
 - 호출: 없음
-- 피호출(영향 전파 경로): `_alias_open_workbook_name`, `_clear_workbook_name_aliases`, `_diag_vba_run_failure`, `_get_python_skill_app`, `_inject_and_run_vba`, `_open_excel_session_impl`, `_prepare_vba_macro_run_window_state`, `_reopen_excel_session_workbook`, `_run_full_pipeline_single_instance_impl`, `_setup_isolated_pipeline_instance`, `_stash_workbook_name_alias`, `_track_spawned_excel_app`
+- 피호출(영향 전파 경로): `_alias_open_workbook_name`, `_clear_workbook_name_aliases`, `_commit_pending_excel_cell_edit`, `_diag_vba_run_failure`, `_get_live_excel_app`, `_get_python_skill_app`, `_inject_and_run_vba`, `_open_excel_session_impl`, `_prepare_vba_macro_run_window_state`, `_reopen_excel_session_workbook`, `_run_full_pipeline_single_instance_impl`, `_setup_isolated_pipeline_instance`, `_stash_workbook_name_alias`, `_track_spawned_excel_app`, `_user_facing_workbook_name_for_live`, `_verify_step_isolated_impl`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

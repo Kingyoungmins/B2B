@@ -7,8 +7,8 @@ extraction: ast
 signature: "(event, **fields)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
-version: "0.5.19"
-loc: "serve_b2b.py:3310-3321"
+version: "0.7.3"
+loc: "serve_b2b.py:4359-4370"
 
 # ── 입출력 ──
 inputs:
@@ -36,6 +36,7 @@ calls_external:
   - "str"
   - "update"
 called_by:
+  - "B2BHandler.do_POST"
   - "B2BHandler.handle_client_trace"
   - "_force_kill_pid"
   - "_force_restart_excel_sessions_direct"
@@ -50,10 +51,11 @@ called_by:
   - "_track_spawned_excel_app"
   - "cleanup_backend_runtime_files"
   - "cleanup_excel_sessions"
+  - "skill_consolidate"
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.19-gen"
+timestamp: "0.7.3-gen"
 ---
 
 ## 역할
@@ -64,7 +66,7 @@ timestamp: "0.5.19-gen"
 
 ## 관계
 - 호출: `_perf_trace_path`, `write`
-- 피호출(영향 전파 경로): `B2BHandler.handle_client_trace`, `_force_kill_pid`, `_force_restart_excel_sessions_direct`, `_get_python_skill_app`, `_maybe_perf_trace_runtime`, `_maybe_quit_idle_python_skill_app`, `_native_parent_watch_once`, `_quit_python_skill_app`, `_run_low_risk_housekeeping`, `_runtime_maintenance_loop`, `_runtime_sampler_once`, `_track_spawned_excel_app`, `cleanup_backend_runtime_files`, `cleanup_excel_sessions`
+- 피호출(영향 전파 경로): `B2BHandler.do_POST`, `B2BHandler.handle_client_trace`, `_force_kill_pid`, `_force_restart_excel_sessions_direct`, `_get_python_skill_app`, `_maybe_perf_trace_runtime`, `_maybe_quit_idle_python_skill_app`, `_native_parent_watch_once`, `_quit_python_skill_app`, `_run_low_risk_housekeeping`, `_runtime_maintenance_loop`, `_runtime_sampler_once`, `_track_spawned_excel_app`, `cleanup_backend_runtime_files`, `cleanup_excel_sessions`, `skill_consolidate`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

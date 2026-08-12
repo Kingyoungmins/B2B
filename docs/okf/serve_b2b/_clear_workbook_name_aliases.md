@@ -7,8 +7,8 @@ extraction: ast
 signature: "(app)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
-version: "0.5.19"
-loc: "serve_b2b.py:6073-6079"
+version: "0.7.3"
+loc: "serve_b2b.py:8064-8071"
 
 # ── 입출력 ──
 inputs:
@@ -33,9 +33,10 @@ called_by:
   - "_run_vba_pipeline_on_session_impl"
 reads:
   - "_WB_NAME_ALIASES"
+  - "_WB_NAME_REVERSE_ALIASES"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.19-gen"
+timestamp: "0.7.3-gen"
 ---
 
 ## 역할

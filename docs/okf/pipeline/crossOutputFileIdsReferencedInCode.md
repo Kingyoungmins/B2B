@@ -7,8 +7,8 @@ extraction: regex   # 정규식 근사
 signature: "(code)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
-version: "0.5.19"
-loc: "pipeline.js:739-739"
+version: "0.7.3"
+loc: "pipeline.js:904-904"
 
 # ── 입출력 ──
 inputs:
@@ -24,23 +24,27 @@ raises: []
 calls:
   - "outputTemplateFileId"
   - "pipelineCollectWorkbookNames"
+  - "pipelineStableWorkbookKey"
   - "pipelineWorkbookNameKey"
   - "push"
 calls_external:
   - "String"
+  - "Workbooks"
   - "forEach"
   - "includes"
   - "some"
 called_by:
+  - "_reapplyVbaPipelineToLiveImpl"
+  - "_reconcilePipelineSimulationAfterEditImpl"
   - "affectedStepViewFileId"
   - "collectPipelineReferencedFileIds"
   - "pipelineStepMutationFileId"
-  - "reapplyVbaPipelineToLive"
+  - "verifyPrefixRestoreCoverage"
 reads:
   - "state.outputTemplates"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.19-gen"
+timestamp: "0.7.3-gen"
 ---
 
 ## 역할
@@ -50,8 +54,8 @@ timestamp: "0.5.19-gen"
 - 없음(정적 분석 기준)
 
 ## 관계
-- 호출: `outputTemplateFileId`, `pipelineCollectWorkbookNames`, `pipelineWorkbookNameKey`, `push`
-- 피호출(영향 전파 경로): `affectedStepViewFileId`, `collectPipelineReferencedFileIds`, `pipelineStepMutationFileId`, `reapplyVbaPipelineToLive`
+- 호출: `outputTemplateFileId`, `pipelineCollectWorkbookNames`, `pipelineStableWorkbookKey`, `pipelineWorkbookNameKey`, `push`
+- 피호출(영향 전파 경로): `_reapplyVbaPipelineToLiveImpl`, `_reconcilePipelineSimulationAfterEditImpl`, `affectedStepViewFileId`, `collectPipelineReferencedFileIds`, `pipelineStepMutationFileId`, `verifyPrefixRestoreCoverage`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

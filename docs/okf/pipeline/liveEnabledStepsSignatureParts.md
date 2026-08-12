@@ -1,0 +1,53 @@
+---
+type: endpoint
+title: liveEnabledStepsSignatureParts
+module: pipeline.js
+lang: js
+extraction: regex   # 정규식 근사
+signature: "(steps = state.pipeline)"
+role: "코드 전문은 남기지 않는다(해시 앞 8자리만). 판정에는 절대 쓰지 않는 순수 기록용."
+role_source: banner
+version: "0.7.3"
+loc: "pipeline.js:3862-3862"
+
+# ── 입출력 ──
+inputs:
+  - "steps = state.pipeline"
+returns: "(추정)"
+
+# ── 사이드이펙트 (정적 추정) ──
+side_effects:
+  - "없음(정적 분석 기준)"
+raises: []
+
+# ── 유기적 관계 ──
+calls:
+  - "_pipelineSigHash"
+  - "isStepEnabled"
+  - "pipelineStepLiveLanguage"
+calls_external:
+  - "String"
+  - "filter"
+  - "map"
+  - "slice"
+called_by:
+  - "_handlePipelineStepToggleImpl"
+  - "noteLivePipelineApplied"
+reads: []
+writes: []
+affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
+timestamp: "0.7.3-gen"
+---
+
+## 역할
+코드 전문은 남기지 않는다(해시 앞 8자리만). 판정에는 절대 쓰지 않는 순수 기록용.
+
+## 사이드이펙트 & 주의
+- 없음(정적 분석 기준)
+
+## 관계
+- 호출: `_pipelineSigHash`, `isStepEnabled`, `pipelineStepLiveLanguage`
+- 피호출(영향 전파 경로): `_handlePipelineStepToggleImpl`, `noteLivePipelineApplied`
+
+## 실패/예외
+- `(명시적 raise 없음/미탐지)`

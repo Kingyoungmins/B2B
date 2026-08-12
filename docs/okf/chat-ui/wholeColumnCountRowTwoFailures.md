@@ -7,8 +7,8 @@ extraction: regex   # 정규식 근사
 signature: "(code, sourceUserMessage)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
-version: "0.5.19"
-loc: "chat-ui.js:546-546"
+version: "0.7.3"
+loc: "chat-ui.js:595-595"
 
 # ── 입출력 ──
 inputs:
@@ -18,7 +18,7 @@ returns: "(추정)"
 
 # ── 사이드이펙트 (정적 추정) ──
 side_effects:
-  - "없음(정적 분석 기준)"
+  - "DOM/브라우저 전역 조작"
 raises: []
 
 # ── 유기적 관계 ──
@@ -39,6 +39,7 @@ calls:
   - "copyValuesIntent"
   - "ctxHelperPreferredIntent"
   - "ctxSortIntent"
+  - "decimalSplitNumberExtractFailures"
   - "dedupeIntent"
   - "duplicateRowDeleteIntent"
   - "dynamicRangeTextIsWide"
@@ -51,7 +52,9 @@ calls:
   - "isHardVbaStaticFailure"
   - "isNewSheetWriteLine"
   - "lookupJoinIntent"
+  - "matchFillIntent"
   - "monthShiftIntent"
+  - "move"
   - "multiValueLookupIntent"
   - "negativeSignLossFailures"
   - "numericArithmeticIntent"
@@ -103,6 +106,7 @@ calls_external:
   - "X"
   - "abs"
   - "b"
+  - "bfind"
   - "book"
   - "charCodeAt"
   - "clear"
@@ -114,23 +118,22 @@ calls_external:
   - "del"
   - "exec"
   - "f"
-  - "filter"
 called_by:
   - "validateAssistantCodeBeforeApply"
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.19-gen"
+timestamp: "0.7.3-gen"
 ---
 
 ## 역할
 (추정) 역할 주석 없음 — 담당자 1줄 보완 필요  _(자동 추정 — 확인 필요)_
 
 ## 사이드이펙트 & 주의
-- 없음(정적 분석 기준)
+- DOM/브라우저 전역 조작
 
 ## 관계
-- 호출: `_indentLen`, `_stripPythonCommentsForGate`, `_stripVbaCommentsForGate`, `add`, `appendSameFormatSheetsIntent`, `clearDataIntent`, `codeHasBroadValueRewrite`, `colIndex`, `columnCopyClearIntent`, `columnCopyIntent`, `columnMoveIntent`, `columnSwapIntent`, `conditionalRowDeleteIntent`, `copyValuesIntent`, `ctxHelperPreferredIntent`, `ctxSortIntent`, `dedupeIntent`, `duplicateRowDeleteIntent`, `dynamicRangeTextIsWide`, `estimateCells`, `excelColumnLetterToIndex`, `fillSumColIntent`, `filterToNewSheetIntent`, `hideUnhideIntent`, `isBenignRepeatedCodeLine`, `isHardVbaStaticFailure`, `isNewSheetWriteLine`, `lookupJoinIntent`, `monthShiftIntent`, `multiValueLookupIntent`, `negativeSignLossFailures`, `numericArithmeticIntent`, `pivotIntent`, `push`, `pythonComStaticSafetyFailures`, `pythonDegenerateOutputFailure`, `requestedExcelColumnLetters`, `routingIntentText`, `sheetOpIntent`, `shouldRouteRequestToPython`, `shouldRouteRequestToVba`, `shouldRouteSimpleStructureEditToPython`, `simpleRangeArithmeticIntent`, `simpleValueWriteIntent`, `splitColumnIntent`, `totalRowIntent`, `userExplicitlyRequestsForceProceed`, `userExplicitlyRequestsVba`, `userRequestsAbsoluteValue`, `userRequestsSort`, `vbaStaticSafetyFailures`
+- 호출: `_indentLen`, `_stripPythonCommentsForGate`, `_stripVbaCommentsForGate`, `add`, `appendSameFormatSheetsIntent`, `clearDataIntent`, `codeHasBroadValueRewrite`, `colIndex`, `columnCopyClearIntent`, `columnCopyIntent`, `columnMoveIntent`, `columnSwapIntent`, `conditionalRowDeleteIntent`, `copyValuesIntent`, `ctxHelperPreferredIntent`, `ctxSortIntent`, `decimalSplitNumberExtractFailures`, `dedupeIntent`, `duplicateRowDeleteIntent`, `dynamicRangeTextIsWide`, `estimateCells`, `excelColumnLetterToIndex`, `fillSumColIntent`, `filterToNewSheetIntent`, `hideUnhideIntent`, `isBenignRepeatedCodeLine`, `isHardVbaStaticFailure`, `isNewSheetWriteLine`, `lookupJoinIntent`, `matchFillIntent`, `monthShiftIntent`, `move`, `multiValueLookupIntent`, `negativeSignLossFailures`, `numericArithmeticIntent`, `pivotIntent`, `push`, `pythonComStaticSafetyFailures`, `pythonDegenerateOutputFailure`, `requestedExcelColumnLetters`, `routingIntentText`, `sheetOpIntent`, `shouldRouteRequestToPython`, `shouldRouteRequestToVba`, `shouldRouteSimpleStructureEditToPython`, `simpleRangeArithmeticIntent`, `simpleValueWriteIntent`, `splitColumnIntent`, `totalRowIntent`, `userExplicitlyRequestsForceProceed`, `userExplicitlyRequestsVba`, `userRequestsAbsoluteValue`, `userRequestsSort`, `vbaStaticSafetyFailures`
 - 피호출(영향 전파 경로): `validateAssistantCodeBeforeApply`
 
 ## 실패/예외

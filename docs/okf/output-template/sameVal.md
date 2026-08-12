@@ -7,8 +7,8 @@ extraction: regex   # 정규식 근사
 signature: "(a, b)"
 role: "원본 값과 동일한지 비교 (문자/숫자/Date 모두 안정 비교)"
 role_source: banner
-version: "0.5.19"
-loc: "output-template.js:297-297"
+version: "0.7.3"
+loc: "output-template.js:314-314"
 
 # ── 입출력 ──
 inputs:
@@ -31,7 +31,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.19-gen"
+timestamp: "0.7.3-gen"
 ---
 
 ## 역할

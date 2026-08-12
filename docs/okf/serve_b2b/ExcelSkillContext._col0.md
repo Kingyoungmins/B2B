@@ -8,8 +8,8 @@ class: ExcelSkillContext
 signature: "(self, rows, name_or_idx, header_rows=20)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
-version: "0.5.19"
-loc: "serve_b2b.py:12212-12226"
+version: "0.7.3"
+loc: "serve_b2b.py:15493-15507"
 
 # ── 입출력 ──
 inputs:
@@ -39,12 +39,12 @@ called_by:
   - "ExcelSkillContext.sort"
   - "OpenpyxlSkillContext.pivot"
   - "OpenpyxlSkillContext.sort"
-  - "PythonComSkillContext.pivot"
+  - "PythonComSkillContext._pivot_value_table"
 reads:
   - "self.normalize"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.19-gen"
+timestamp: "0.7.3-gen"
 ---
 
 ## 역할
@@ -55,7 +55,7 @@ timestamp: "0.5.19-gen"
 
 ## 관계
 - 호출: `normalize`
-- 피호출(영향 전파 경로): `ExcelSkillContext.pivot`, `ExcelSkillContext.sort`, `OpenpyxlSkillContext.pivot`, `OpenpyxlSkillContext.sort`, `PythonComSkillContext.pivot`
+- 피호출(영향 전파 경로): `ExcelSkillContext.pivot`, `ExcelSkillContext.sort`, `OpenpyxlSkillContext.pivot`, `OpenpyxlSkillContext.sort`, `PythonComSkillContext._pivot_value_table`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

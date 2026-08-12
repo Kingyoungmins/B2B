@@ -7,8 +7,8 @@ extraction: ast
 signature: "()"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
-version: "0.5.19"
-loc: "serve_b2b.py:3528-3582"
+version: "0.7.3"
+loc: "serve_b2b.py:4590-4649"
 
 # ── 입출력 ──
 inputs: []
@@ -31,13 +31,17 @@ calls:
   - "prune_pipeline_jobs_locked"
 calls_external:
   - "HOUSEKEEPING_ERROR"
+  - "HOUSEKEEPING_INTERVAL_SECONDS"
   - "HOUSEKEEPING_LAST_DURATION_MS"
   - "HOUSEKEEPING_LAST_SKIPPED_REASON"
   - "acquire"
+  - "bool"
   - "collect"
   - "detail"
   - "err"
   - "float"
+  - "get"
+  - "max"
   - "perf_counter"
   - "release"
   - "round"
@@ -49,10 +53,12 @@ reads:
   - "EXCEL_LOCK"
   - "HOUSEKEEPING_ERROR"
   - "HOUSEKEEPING_GC_LAST_AT"
+  - "HOUSEKEEPING_INTERVAL_SECONDS"
   - "HOUSEKEEPING_LAST_DURATION_MS"
   - "HOUSEKEEPING_LAST_SKIPPED_REASON"
   - "HOUSEKEEPING_RUNNING"
   - "PIPELINE_JOBS_LOCK"
+  - "RUNTIME_LAST_ACTIVITY_AT"
 writes:
   - "HOUSEKEEPING_ERROR"
   - "HOUSEKEEPING_GC_LAST_AT"
@@ -62,7 +68,7 @@ writes:
   - "HOUSEKEEPING_RUNNING"
   - "HOUSEKEEPING_RUN_COUNT"
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.19-gen"
+timestamp: "0.7.3-gen"
 ---
 
 ## 역할

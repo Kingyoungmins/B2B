@@ -7,8 +7,8 @@ extraction: ast
 signature: "()"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
-version: "0.5.19"
-loc: "serve_b2b.py:3585-3600"
+version: "0.7.3"
+loc: "serve_b2b.py:4652-4670"
 
 # ── 입출력 ──
 inputs: []
@@ -27,6 +27,7 @@ calls:
   - "_runtime_sampler_once"
 calls_external:
   - "HOUSEKEEPING_INTERVAL_SECONDS"
+  - "PARENT_WATCH_INTERVAL_SECONDS"
   - "RUNTIME_SAMPLER_INTERVAL_SECONDS"
   - "err"
   - "max"
@@ -38,10 +39,11 @@ called_by:
   - "start_runtime_maintenance_threads"
 reads:
   - "HOUSEKEEPING_INTERVAL_SECONDS"
+  - "PARENT_WATCH_INTERVAL_SECONDS"
   - "RUNTIME_SAMPLER_INTERVAL_SECONDS"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.19-gen"
+timestamp: "0.7.3-gen"
 ---
 
 ## 역할

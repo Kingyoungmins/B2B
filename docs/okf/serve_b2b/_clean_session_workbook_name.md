@@ -7,8 +7,8 @@ extraction: ast
 signature: "(name)"
 role: "스냅샷/결과 파일명에 붙는 우리 접두사(prestep_<32hex>_, <32hex>_)를 반복 제거해 원본 표시명을 복원한다."
 role_source: docstring
-version: "0.5.19"
-loc: "serve_b2b.py:4472-4483"
+version: "0.7.3"
+loc: "serve_b2b.py:5770-5781"
 
 # ── 입출력 ──
 inputs:
@@ -32,7 +32,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.19-gen"
+timestamp: "0.7.3-gen"
 ---
 
 ## 역할

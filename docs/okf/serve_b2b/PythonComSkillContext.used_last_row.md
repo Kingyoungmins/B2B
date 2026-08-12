@@ -8,8 +8,8 @@ class: PythonComSkillContext
 signature: "(self, sheet)"
 role: "시트 '사용 범위' 마지막 행(1-based). 특정 열 기준 last_row(col=N) 은 그 열이 희소/병합이면 표 하단을"
 role_source: docstring
-version: "0.5.19"
-loc: "serve_b2b.py:8815-8835"
+version: "0.7.3"
+loc: "serve_b2b.py:11058-11078"
 
 # ── 입출력 ──
 inputs:
@@ -42,6 +42,10 @@ calls_external:
   - "rows_n"
 called_by:
   - "PythonComSkillContext.append_same_format_sheets"
+  - "PythonComSkillContext.apply_filter"
+  - "PythonComSkillContext.enable_filter"
+  - "PythonComSkillContext.first_empty_col"
+  - "PythonComSkillContext.native_pivot"
   - "PythonComSkillContext.sum_lookup"
 reads:
   - "_XL_UP"
@@ -50,7 +54,7 @@ reads:
   - "self.used_last_col"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.19-gen"
+timestamp: "0.7.3-gen"
 ---
 
 ## 역할
@@ -61,7 +65,7 @@ timestamp: "0.5.19-gen"
 
 ## 관계
 - 호출: `Cells`, `_tick`, `_ws`, `range`, `sheet`, `used_last_col`
-- 피호출(영향 전파 경로): `PythonComSkillContext.append_same_format_sheets`, `PythonComSkillContext.sum_lookup`
+- 피호출(영향 전파 경로): `PythonComSkillContext.append_same_format_sheets`, `PythonComSkillContext.apply_filter`, `PythonComSkillContext.enable_filter`, `PythonComSkillContext.first_empty_col`, `PythonComSkillContext.native_pivot`, `PythonComSkillContext.sum_lookup`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

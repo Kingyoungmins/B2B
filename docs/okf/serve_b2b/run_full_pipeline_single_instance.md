@@ -4,11 +4,11 @@ title: run_full_pipeline_single_instance
 module: serve_b2b.py
 lang: python
 extraction: ast
-signature: "(groups, reset_excel_ids=None, view_sheet=None, entry=None, output_mode='sync')"
+signature: "(groups, reset_excel_ids=None, view_sheet=None, entry=None, output_mode='sync', state_sig=None)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
-version: "0.5.19"
-loc: "serve_b2b.py:8228-8231"
+version: "0.7.3"
+loc: "serve_b2b.py:10354-10357"
 
 # ── 입출력 ──
 inputs:
@@ -17,6 +17,7 @@ inputs:
   - "view_sheet"
   - "entry"
   - "output_mode"
+  - "state_sig"
 returns: "(추정)"
 
 # ── 사이드이펙트 (정적 추정) ──
@@ -29,17 +30,20 @@ calls:
   - "_run_full_pipeline_single_instance_impl"
   - "excel_call"
 calls_external:
+  - "PY_UNLIMITED_OUTER_S"
   - "entry"
   - "groups"
   - "output_mode"
   - "reset_excel_ids"
+  - "state_sig"
   - "view_sheet"
 called_by:
   - "B2BHandler.handle_excel_run_full_pipeline"
-reads: []
+reads:
+  - "PY_UNLIMITED_OUTER_S"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.19-gen"
+timestamp: "0.7.3-gen"
 ---
 
 ## 역할

@@ -8,8 +8,8 @@ class: PythonComSkillContext
 signature: "(self, sheet, sum_cols, label_col=None, label='합계', header_row=1)"
 role: "표 끝(마지막 데이터행 바로 아래)에 합계 행을 만든다. sum_cols(열 리스트/단일)에 =SUM(데이터범위) 수식을"
 role_source: docstring
-version: "0.5.19"
-loc: "serve_b2b.py:10399-10418"
+version: "0.7.3"
+loc: "serve_b2b.py:13450-13469"
 
 # ── 입출력 ──
 inputs:
@@ -54,7 +54,7 @@ reads:
   - "self.write_formulas"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.19-gen"
+timestamp: "0.7.3-gen"
 ---
 
 ## 역할

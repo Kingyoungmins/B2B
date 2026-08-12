@@ -6,10 +6,10 @@ lang: python
 extraction: ast
 class: PythonComSkillContext
 signature: "(self, sheet, group_by, value=None, agg='sum', dest_name=None, header_rows=1, after=None, column=None)"
-role: "그룹별 집계 요약 표를 **새 시트(현재 활성 파일)**에 만든다(Python 집계 — 안정적)."
+role: "그룹별 집계 피벗을 새 시트에 만든다. **기본은 엑셀 '진짜 피벗테이블(PivotTable 개체)'**(원본과 연결돼"
 role_source: docstring
-version: "0.5.19"
-loc: "serve_b2b.py:9358-9463"
+version: "0.7.3"
+loc: "serve_b2b.py:12155-12184"
 
 # ── 입출력 ──
 inputs:
@@ -32,83 +32,41 @@ raises:
 
 # ── 유기적 관계 ──
 calls:
-  - "_col0"
-  - "_col_index"
+  - "Worksheets"
   - "_excel_collection_names"
-  - "_pivot_crosstab"
-  - "_tick"
-  - "add_sheet"
-  - "append"
-  - "range"
-  - "read"
-  - "replace"
+  - "_vba_trace"
+  - "native_pivot"
   - "sheet"
   - "value"
-  - "values"
-  - "write"
 calls_external:
+  - "Delete"
   - "PythonComSkillError"
-  - "_agg"
-  - "_to_num"
-  - "after"
+  - "_e"
   - "agg"
-  - "aggs"
-  - "bool"
-  - "c_i"
-  - "ckeys"
   - "column"
-  - "data"
-  - "enumerate"
-  - "float"
-  - "fullmatch"
-  - "g"
-  - "g_i"
-  - "gidx"
-  - "grid"
+  - "dest_name"
+  - "eff"
   - "group_by"
-  - "h"
-  - "header"
-  - "int"
-  - "isinstance"
-  - "key"
-  - "len"
-  - "list"
+  - "header_rows"
   - "lower"
-  - "max"
-  - "min"
-  - "name"
-  - "nums"
-  - "order"
-  - "out"
-  - "r"
-  - "rkeys"
-  - "row_label"
-  - "s"
-  - "spec"
   - "str"
-  - "strip"
 called_by: []
 reads:
-  - "self._col_index"
-  - "self._shared"
-  - "self._tick"
   - "self._wb"
-  - "self.add_sheet"
-  - "self.read"
-  - "self.write"
+  - "self.native_pivot"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.19-gen"
+timestamp: "0.7.3-gen"
 ---
 
 ## 역할
-그룹별 집계 요약 표를 **새 시트(현재 활성 파일)**에 만든다(Python 집계 — 안정적).
+그룹별 집계 피벗을 새 시트에 만든다. **기본은 엑셀 '진짜 피벗테이블(PivotTable 개체)'**(원본과 연결돼
 
 ## 사이드이펙트 & 주의
 - Excel COM 조작(파괴적일 수 있음)
 
 ## 관계
-- 호출: `_col0`, `_col_index`, `_excel_collection_names`, `_pivot_crosstab`, `_tick`, `add_sheet`, `append`, `range`, `read`, `replace`, `sheet`, `value`, `values`, `write`
+- 호출: `Worksheets`, `_excel_collection_names`, `_vba_trace`, `native_pivot`, `sheet`, `value`
 - 피호출(영향 전파 경로): 없음
 
 ## 실패/예외

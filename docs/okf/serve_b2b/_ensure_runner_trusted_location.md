@@ -7,8 +7,8 @@ extraction: ast
 signature: "()"
 role: "러너 폴더를 Excel '신뢰할 수 있는 위치(Trusted Location)'로 등록한다."
 role_source: docstring
-version: "0.5.19"
-loc: "serve_b2b.py:3762-3798"
+version: "0.7.3"
+loc: "serve_b2b.py:4832-4868"
 
 # ── 입출력 ──
 inputs: []
@@ -37,7 +37,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.19-gen"
+timestamp: "0.7.3-gen"
 ---
 
 ## 역할

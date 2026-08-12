@@ -7,8 +7,8 @@ extraction: regex   # 정규식 근사
 signature: "(v)"
 role: "── [데이터 구조 다이제스트] 검증의 근거를 '요청 단어'가 아니라 '실제 시트 구조'에서 뽑는다."
 role_source: banner
-version: "0.5.19"
-loc: "chat-ui.js:3170-3170"
+version: "0.7.3"
+loc: "chat-ui.js:3318-3318"
 
 # ── 입출력 ──
 inputs:
@@ -31,7 +31,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.19-gen"
+timestamp: "0.7.3-gen"
 ---
 
 ## 역할

@@ -7,8 +7,8 @@ extraction: ast
 signature: "(code, context_wb)"
 role: "임시 .xlsm 러너에서 실행할 때 ThisWorkbook 은 러너 자신을 가리킨다."
 role_source: docstring
-version: "0.5.19"
-loc: "serve_b2b.py:6289-6301"
+version: "0.7.3"
+loc: "serve_b2b.py:8317-8329"
 
 # ── 입출력 ──
 inputs:
@@ -36,7 +36,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.19-gen"
+timestamp: "0.7.3-gen"
 ---
 
 ## 역할

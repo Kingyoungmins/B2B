@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(label)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
-version: "0.5.19"
+version: "0.7.3"
 loc: "history.js:43-43"
 
 # ── 입출력 ──
@@ -29,9 +29,13 @@ calls:
 calls_external:
   - "shift"
 called_by:
+  - "_handlePipelineStepToggleImpl"
+  - "_runHeldStepsBatchImpl"
   - "applyLogic"
   - "applyVbaStepToLiveExcel"
   - "autoRepairPipelineStep"
+  - "clearRunnerLogic"
+  - "commit"
   - "commitCellEdit"
   - "insertLogic"
   - "removeInputFileAt"
@@ -43,7 +47,7 @@ reads:
 writes:
   - "history"
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.19-gen"
+timestamp: "0.7.3-gen"
 ---
 
 ## 역할
@@ -55,7 +59,7 @@ timestamp: "0.5.19-gen"
 
 ## 관계
 - 호출: `makeHistorySnapshot`, `push`, `refreshHistoryButtons`, `shouldSkipHeavyHistory`
-- 피호출(영향 전파 경로): `applyLogic`, `applyVbaStepToLiveExcel`, `autoRepairPipelineStep`, `commitCellEdit`, `insertLogic`, `removeInputFileAt`, `removeOutputTemplateAt`, `renderPipeline`, `replaceLogicAt`
+- 피호출(영향 전파 경로): `_handlePipelineStepToggleImpl`, `_runHeldStepsBatchImpl`, `applyLogic`, `applyVbaStepToLiveExcel`, `autoRepairPipelineStep`, `clearRunnerLogic`, `commit`, `commitCellEdit`, `insertLogic`, `removeInputFileAt`, `removeOutputTemplateAt`, `renderPipeline`, `replaceLogicAt`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

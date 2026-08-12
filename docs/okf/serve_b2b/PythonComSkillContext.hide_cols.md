@@ -8,8 +8,8 @@ class: PythonComSkillContext
 signature: "(self, sheet, col_range, hidden=True)"
 role: "예: ctx.hide_cols(\"매출\", \"B:D\")"
 role_source: docstring
-version: "0.5.19"
-loc: "serve_b2b.py:10313-10319"
+version: "0.7.3"
+loc: "serve_b2b.py:13043-13049"
 
 # ── 입출력 ──
 inputs:
@@ -43,7 +43,7 @@ reads:
   - "self._ws"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.19-gen"
+timestamp: "0.7.3-gen"
 ---
 
 ## 역할

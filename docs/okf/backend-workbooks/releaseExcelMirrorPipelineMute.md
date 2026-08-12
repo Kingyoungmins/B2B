@@ -7,8 +7,8 @@ extraction: regex   # 정규식 근사
 signature: "(outputExcelId)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
-version: "0.5.19"
-loc: "backend-workbooks.js:121-121"
+version: "0.7.3"
+loc: "backend-workbooks.js:127-127"
 
 # ── 입출력 ──
 inputs:
@@ -30,8 +30,8 @@ calls_external:
   - "then"
   - "warn"
 called_by:
+  - "_reapplyVbaPipelineToLiveImpl"
   - "applyVbaStepToLiveExcel"
-  - "reapplyVbaPipelineToLive"
   - "restoreVbaExcelAfterError"
   - "runIsolatedLivePipelineSteps"
   - "runPipelineOnBackend"
@@ -41,7 +41,7 @@ writes:
   - "excelMirror.mutedUntil"
   - "excelMirror.selectionMutedUntil"
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.19-gen"
+timestamp: "0.7.3-gen"
 ---
 
 ## 역할
@@ -54,7 +54,7 @@ timestamp: "0.5.19-gen"
 
 ## 관계
 - 호출: `baselineExcelMirrorSession`
-- 피호출(영향 전파 경로): `applyVbaStepToLiveExcel`, `reapplyVbaPipelineToLive`, `restoreVbaExcelAfterError`, `runIsolatedLivePipelineSteps`, `runPipelineOnBackend`
+- 피호출(영향 전파 경로): `_reapplyVbaPipelineToLiveImpl`, `applyVbaStepToLiveExcel`, `restoreVbaExcelAfterError`, `runIsolatedLivePipelineSteps`, `runPipelineOnBackend`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

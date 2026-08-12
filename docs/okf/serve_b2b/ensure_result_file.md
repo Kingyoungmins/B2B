@@ -7,8 +7,8 @@ extraction: ast
 signature: "(result_id)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
-version: "0.5.19"
-loc: "serve_b2b.py:2445-2463"
+version: "0.7.3"
+loc: "serve_b2b.py:3156-3174"
 
 # ── 입출력 ──
 inputs:
@@ -35,13 +35,14 @@ called_by:
   - "B2BHandler.handle_backend_download"
   - "B2BHandler.handle_excel_open_result"
   - "B2BHandler.handle_excel_replace"
+  - "_verify_step_isolated_impl"
   - "resolve_archive_item"
 reads:
   - "BACKEND_DIR"
   - "RESULTS"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.19-gen"
+timestamp: "0.7.3-gen"
 ---
 
 ## 역할
@@ -52,7 +53,7 @@ timestamp: "0.5.19-gen"
 
 ## 관계
 - 호출: `export_node_worker_workbook`, `write_result_workbook`
-- 피호출(영향 전파 경로): `B2BHandler.handle_backend_download`, `B2BHandler.handle_excel_open_result`, `B2BHandler.handle_excel_replace`, `resolve_archive_item`
+- 피호출(영향 전파 경로): `B2BHandler.handle_backend_download`, `B2BHandler.handle_excel_open_result`, `B2BHandler.handle_excel_replace`, `_verify_step_isolated_impl`, `resolve_archive_item`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

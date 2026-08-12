@@ -7,8 +7,8 @@ extraction: regex   # 정규식 근사
 signature: "(bool fromCrash)"
 role: "죽었거나 멈춘 서버를 강제 종료 후 같은 포트로 다시 띄운다. 웹 페이지는 그대로 유지."
 role_source: xmldoc/banner
-version: "0.5.19"
-loc: "NativeHost.cs:1082-1082"
+version: "0.7.3"
+loc: "NativeHost.cs:1379-1379"
 
 # ── 입출력 ──
 inputs:
@@ -39,7 +39,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.19-gen"
+timestamp: "0.7.3-gen"
 ---
 
 ## 역할

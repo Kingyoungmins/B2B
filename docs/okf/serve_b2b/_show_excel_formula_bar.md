@@ -7,8 +7,8 @@ extraction: ast
 signature: "(app)"
 role: "읽기 전용 미러에서도 실제 Excel처럼 수식 입력줄은 보이게 둔다."
 role_source: docstring
-version: "0.5.19"
-loc: "serve_b2b.py:2540-2546"
+version: "0.7.3"
+loc: "serve_b2b.py:3472-3475"
 
 # ── 입출력 ──
 inputs:
@@ -21,15 +21,18 @@ side_effects:
 raises: []
 
 # ── 유기적 관계 ──
-calls: []
-calls_external: []
+calls:
+  - "_set_display_prop_if_changed"
+calls_external:
+  - "app"
 called_by:
   - "_configure_excel_grid_window"
   - "_ensure_excel_workbook_view"
+  - "_set_live_sessions_edit_unlock"
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.19-gen"
+timestamp: "0.7.3-gen"
 ---
 
 ## 역할
@@ -39,8 +42,8 @@ timestamp: "0.5.19-gen"
 - 없음(정적 분석 기준)
 
 ## 관계
-- 호출: 없음
-- 피호출(영향 전파 경로): `_configure_excel_grid_window`, `_ensure_excel_workbook_view`
+- 호출: `_set_display_prop_if_changed`
+- 피호출(영향 전파 경로): `_configure_excel_grid_window`, `_ensure_excel_workbook_view`, `_set_live_sessions_edit_unlock`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

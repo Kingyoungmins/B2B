@@ -7,8 +7,8 @@ extraction: ast
 signature: "(name)"
 role: "'같은 템플릿, 다른 월/날짜/버전' 파일을 같게 보기 위한 안정 키(소문자·기호제거)."
 role_source: docstring
-version: "0.5.19"
-loc: "serve_b2b.py:5948-5961"
+version: "0.7.3"
+loc: "serve_b2b.py:7900-7922"
 
 # ── 입출력 ──
 inputs:
@@ -23,6 +23,7 @@ raises: []
 # ── 유기적 관계 ──
 calls:
   - "_strip_generated_workbook_prefix"
+  - "range"
 calls_external:
   - "Path"
   - "lower"
@@ -35,9 +36,10 @@ called_by:
   - "_match_workbook_by_stable_key"
 reads:
   - "_VOLATILE_NAME_TOKENS"
+  - "_VOLATILE_SUFFIX_TOKENS"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.19-gen"
+timestamp: "0.7.3-gen"
 ---
 
 ## 역할
@@ -47,7 +49,7 @@ timestamp: "0.5.19-gen"
 - 없음(정적 분석 기준)
 
 ## 관계
-- 호출: `_strip_generated_workbook_prefix`
+- 호출: `_strip_generated_workbook_prefix`, `range`
 - 피호출(영향 전파 경로): `_match_workbook_by_stable_key`
 
 ## 실패/예외

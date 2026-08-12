@@ -7,8 +7,8 @@ extraction: regex   # 정규식 근사
 signature: "(options = {})"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
-version: "0.5.19"
-loc: "backend-workbooks.js:563-563"
+version: "0.7.3"
+loc: "backend-workbooks.js:569-569"
 
 # ── 입출력 ──
 inputs:
@@ -39,6 +39,7 @@ calls:
   - "inferPipelineStepLanguage"
   - "inferPipelineStepTargetFileId"
   - "muteExcelMirrorForPipeline"
+  - "pipelineFullRunStateSig"
   - "pipelineUsesPython"
   - "releaseExcelMirrorPipelineMute"
   - "restoreActiveExcelMirrorWindow"
@@ -75,7 +76,7 @@ reads:
   - "state.pipeline"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.19-gen"
+timestamp: "0.7.3-gen"
 ---
 
 ## 역할
@@ -87,7 +88,7 @@ timestamp: "0.5.19-gen"
 - 타이머
 
 ## 관계
-- 호출: `adaptPipelineForRun`, `applyBackendPipelineResult`, `attachBackendRunClientContext`, `beginExcelMirrorApplyLoading`, `canRunPipelineOnBackend`, `captureBackendCurrentViewForApply`, `endExcelMirrorApplyLoading`, `excelMirrorSessionIdForFileId`, `formatBackendProgress`, `getBackendOutputTarget`, `getFile`, `getSkillEngine`, `inferPipelineStepLanguage`, `inferPipelineStepTargetFileId`, `muteExcelMirrorForPipeline`, `pipelineUsesPython`, `releaseExcelMirrorPipelineMute`, `restoreActiveExcelMirrorWindow`, `setProgress`, `toast`
+- 호출: `adaptPipelineForRun`, `applyBackendPipelineResult`, `attachBackendRunClientContext`, `beginExcelMirrorApplyLoading`, `canRunPipelineOnBackend`, `captureBackendCurrentViewForApply`, `endExcelMirrorApplyLoading`, `excelMirrorSessionIdForFileId`, `formatBackendProgress`, `getBackendOutputTarget`, `getFile`, `getSkillEngine`, `inferPipelineStepLanguage`, `inferPipelineStepTargetFileId`, `muteExcelMirrorForPipeline`, `pipelineFullRunStateSig`, `pipelineUsesPython`, `releaseExcelMirrorPipelineMute`, `restoreActiveExcelMirrorWindow`, `setProgress`, `toast`
 - 피호출(영향 전파 경로): `runPipelinePreferBackend`
 
 ## 실패/예외

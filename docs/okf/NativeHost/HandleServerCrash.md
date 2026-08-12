@@ -7,8 +7,8 @@ extraction: regex   # 정규식 근사
 signature: "()"
 role: "서버 프로세스가 예기치 않게 종료되면 자동 재시작(짧은 시간 내 반복 크래시는 중단)."
 role_source: xmldoc/banner
-version: "0.5.19"
-loc: "NativeHost.cs:1059-1059"
+version: "0.7.3"
+loc: "NativeHost.cs:1356-1356"
 
 # ── 입출력 ──
 inputs: []
@@ -34,7 +34,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.19-gen"
+timestamp: "0.7.3-gen"
 ---
 
 ## 역할

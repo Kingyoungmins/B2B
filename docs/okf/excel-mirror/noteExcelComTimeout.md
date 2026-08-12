@@ -7,8 +7,8 @@ extraction: regex   # 정규식 근사
 signature: "(err)"
 role: "---- COM 응답불능(행) 자동 복구: 단일 Excel 인스턴스의 유일한 약점 보호 ----"
 role_source: banner
-version: "0.5.19"
-loc: "excel-mirror.js:1110-1110"
+version: "0.7.3"
+loc: "excel-mirror.js:1183-1183"
 
 # ── 입출력 ──
 inputs:
@@ -36,7 +36,7 @@ writes:
   - "excelMirror.comTimeoutTimes"
   - "excelMirror.forceRestartCooldownUntil"
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.19-gen"
+timestamp: "0.7.3-gen"
 ---
 
 ## 역할

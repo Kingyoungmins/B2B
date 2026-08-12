@@ -7,8 +7,8 @@ extraction: regex   # 정규식 근사
 signature: "()"
 role: "라이브 상태를 더 이상 신뢰할 수 없을 때(세션 전부 닫힘/초기화/적용 실패) 호출 —"
 role_source: banner
-version: "0.5.19"
-loc: "pipeline.js:2844-2844"
+version: "0.7.3"
+loc: "pipeline.js:3924-3924"
 
 # ── 입출력 ──
 inputs: []
@@ -23,15 +23,18 @@ raises: []
 calls: []
 calls_external: []
 called_by:
+  - "_reapplyVbaPipelineToLiveImpl"
   - "clearExcelMirrorClientState"
+  - "clearRunnerLogic"
   - "forceRestartExcelMirrors"
   - "loadLogic"
-  - "reapplyVbaPipelineToLive"
+  - "markLivePipelineOutOfSync"
+  - "restorePipelineToCheckpointAndHold"
   - "runIsolatedLivePipelineSteps"
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.19-gen"
+timestamp: "0.7.3-gen"
 ---
 
 ## 역할
@@ -42,7 +45,7 @@ timestamp: "0.5.19-gen"
 
 ## 관계
 - 호출: 없음
-- 피호출(영향 전파 경로): `clearExcelMirrorClientState`, `forceRestartExcelMirrors`, `loadLogic`, `reapplyVbaPipelineToLive`, `runIsolatedLivePipelineSteps`
+- 피호출(영향 전파 경로): `_reapplyVbaPipelineToLiveImpl`, `clearExcelMirrorClientState`, `clearRunnerLogic`, `forceRestartExcelMirrors`, `loadLogic`, `markLivePipelineOutOfSync`, `restorePipelineToCheckpointAndHold`, `runIsolatedLivePipelineSteps`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

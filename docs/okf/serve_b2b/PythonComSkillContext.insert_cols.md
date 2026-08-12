@@ -8,8 +8,8 @@ class: PythonComSkillContext
 signature: "(self, sheet, col, count=1)"
 role: "전체 열 삽입(병합셀 안전). col 은 'B', 2, 또는 'B:D' 범위 모두 허용."
 role_source: docstring
-version: "0.5.19"
-loc: "serve_b2b.py:9257-9271"
+version: "0.7.3"
+loc: "serve_b2b.py:11665-11679"
 
 # ── 입출력 ──
 inputs:
@@ -53,7 +53,7 @@ reads:
   - "self._ws"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.19-gen"
+timestamp: "0.7.3-gen"
 ---
 
 ## 역할

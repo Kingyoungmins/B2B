@@ -8,8 +8,8 @@ class: B2BHandler
 signature: "(self, payload, status=200)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
-version: "0.5.19"
-loc: "serve_b2b.py:1136-1147"
+version: "0.7.3"
+loc: "serve_b2b.py:1535-1546"
 
 # ── 입출력 ──
 inputs:
@@ -38,13 +38,16 @@ calls_external:
   - "status"
   - "str"
 called_by:
+  - "B2BHandler._reject_show_while_host_minimized"
   - "B2BHandler.do_GET"
   - "B2BHandler.do_POST"
+  - "B2BHandler.handle_assist_attachment"
   - "B2BHandler.handle_backend_pipeline_run"
   - "B2BHandler.handle_backend_pipeline_start"
   - "B2BHandler.handle_cached_diff"
   - "B2BHandler.handle_client_trace"
   - "B2BHandler.handle_current_view_diff"
+  - "B2BHandler.handle_diag_recent_trace"
   - "B2BHandler.handle_excel_activate"
   - "B2BHandler.handle_excel_capture_copypaste"
   - "B2BHandler.handle_excel_changes"
@@ -54,21 +57,31 @@ called_by:
   - "B2BHandler.handle_excel_open"
   - "B2BHandler.handle_excel_open_result"
   - "B2BHandler.handle_excel_position"
+  - "B2BHandler.handle_excel_preview_schema"
   - "B2BHandler.handle_excel_raise"
+  - "B2BHandler.handle_excel_record_start"
+  - "B2BHandler.handle_excel_record_status"
+  - "B2BHandler.handle_excel_record_stop"
+  - "B2BHandler.handle_excel_record_verify"
   - "B2BHandler.handle_excel_recover"
   - "B2BHandler.handle_excel_replace"
   - "B2BHandler.handle_excel_run_full_pipeline"
   - "B2BHandler.handle_excel_run_python"
   - "B2BHandler.handle_excel_run_vba"
   - "B2BHandler.handle_excel_run_vba_pipeline"
+  - "B2BHandler.handle_excel_runner_mode"
   - "B2BHandler.handle_excel_save"
   - "B2BHandler.handle_excel_selection"
   - "B2BHandler.handle_excel_show_only"
+  - "B2BHandler.handle_excel_verify_step"
   - "B2BHandler.handle_logic_backup"
   - "B2BHandler.handle_pipeline_cancel"
+  - "B2BHandler.handle_pipeline_live_final_snapshot"
   - "B2BHandler.handle_pipeline_progress"
   - "B2BHandler.handle_pipeline_status"
+  - "B2BHandler.handle_skill_consolidate"
   - "B2BHandler.handle_workbook_archive"
+  - "B2BHandler.handle_workbook_reinspect"
   - "B2BHandler.handle_workbook_upload"
 reads:
   - "self.end_headers"
@@ -77,7 +90,7 @@ reads:
   - "self.wfile"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.19-gen"
+timestamp: "0.7.3-gen"
 ---
 
 ## 역할
@@ -88,7 +101,7 @@ timestamp: "0.5.19-gen"
 
 ## 관계
 - 호출: `end_headers`, `write`
-- 피호출(영향 전파 경로): `B2BHandler.do_GET`, `B2BHandler.do_POST`, `B2BHandler.handle_backend_pipeline_run`, `B2BHandler.handle_backend_pipeline_start`, `B2BHandler.handle_cached_diff`, `B2BHandler.handle_client_trace`, `B2BHandler.handle_current_view_diff`, `B2BHandler.handle_excel_activate`, `B2BHandler.handle_excel_capture_copypaste`, `B2BHandler.handle_excel_changes`, `B2BHandler.handle_excel_close`, `B2BHandler.handle_excel_hide`, `B2BHandler.handle_excel_hover_info`, `B2BHandler.handle_excel_open`, `B2BHandler.handle_excel_open_result`, `B2BHandler.handle_excel_position`, `B2BHandler.handle_excel_raise`, `B2BHandler.handle_excel_recover`, `B2BHandler.handle_excel_replace`, `B2BHandler.handle_excel_run_full_pipeline`, `B2BHandler.handle_excel_run_python`, `B2BHandler.handle_excel_run_vba`, `B2BHandler.handle_excel_run_vba_pipeline`, `B2BHandler.handle_excel_save`, `B2BHandler.handle_excel_selection`, `B2BHandler.handle_excel_show_only`, `B2BHandler.handle_logic_backup`, `B2BHandler.handle_pipeline_cancel`, `B2BHandler.handle_pipeline_progress`, `B2BHandler.handle_pipeline_status`, `B2BHandler.handle_workbook_archive`, `B2BHandler.handle_workbook_upload`
+- 피호출(영향 전파 경로): `B2BHandler._reject_show_while_host_minimized`, `B2BHandler.do_GET`, `B2BHandler.do_POST`, `B2BHandler.handle_assist_attachment`, `B2BHandler.handle_backend_pipeline_run`, `B2BHandler.handle_backend_pipeline_start`, `B2BHandler.handle_cached_diff`, `B2BHandler.handle_client_trace`, `B2BHandler.handle_current_view_diff`, `B2BHandler.handle_diag_recent_trace`, `B2BHandler.handle_excel_activate`, `B2BHandler.handle_excel_capture_copypaste`, `B2BHandler.handle_excel_changes`, `B2BHandler.handle_excel_close`, `B2BHandler.handle_excel_hide`, `B2BHandler.handle_excel_hover_info`, `B2BHandler.handle_excel_open`, `B2BHandler.handle_excel_open_result`, `B2BHandler.handle_excel_position`, `B2BHandler.handle_excel_preview_schema`, `B2BHandler.handle_excel_raise`, `B2BHandler.handle_excel_record_start`, `B2BHandler.handle_excel_record_status`, `B2BHandler.handle_excel_record_stop`, `B2BHandler.handle_excel_record_verify`, `B2BHandler.handle_excel_recover`, `B2BHandler.handle_excel_replace`, `B2BHandler.handle_excel_run_full_pipeline`, `B2BHandler.handle_excel_run_python`, `B2BHandler.handle_excel_run_vba`, `B2BHandler.handle_excel_run_vba_pipeline`, `B2BHandler.handle_excel_runner_mode`, `B2BHandler.handle_excel_save`, `B2BHandler.handle_excel_selection`, `B2BHandler.handle_excel_show_only`, `B2BHandler.handle_excel_verify_step`, `B2BHandler.handle_logic_backup`, `B2BHandler.handle_pipeline_cancel`, `B2BHandler.handle_pipeline_live_final_snapshot`, `B2BHandler.handle_pipeline_progress`, `B2BHandler.handle_pipeline_status`, `B2BHandler.handle_skill_consolidate`, `B2BHandler.handle_workbook_archive`, `B2BHandler.handle_workbook_reinspect`, `B2BHandler.handle_workbook_upload`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

@@ -7,8 +7,8 @@ extraction: ast
 signature: "(value)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
-version: "0.5.19"
-loc: "serve_b2b.py:10997-11004"
+version: "0.7.3"
+loc: "serve_b2b.py:14259-14266"
 
 # ── 입출력 ──
 inputs:
@@ -36,12 +36,13 @@ called_by:
   - "_excel_output_preview_sheets"
   - "_live_preview_schema"
   - "_sheet_snapshot"
+  - "_verify_capture_sheet_aoa"
   - "inspect_workbook_with_excel"
   - "load_workbook_aoa_with_excel"
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.19-gen"
+timestamp: "0.7.3-gen"
 ---
 
 ## 역할
@@ -52,7 +53,7 @@ timestamp: "0.5.19-gen"
 
 ## 관계
 - 호출: `row`, `value`
-- 피호출(영향 전파 경로): `PythonComSkillContext._journal_save`, `PythonComSkillContext._shaped_matrix`, `PythonComSkillContext.find_header`, `PythonComSkillContext.replace`, `_excel_output_preview_sheets`, `_live_preview_schema`, `_sheet_snapshot`, `inspect_workbook_with_excel`, `load_workbook_aoa_with_excel`
+- 피호출(영향 전파 경로): `PythonComSkillContext._journal_save`, `PythonComSkillContext._shaped_matrix`, `PythonComSkillContext.find_header`, `PythonComSkillContext.replace`, `_excel_output_preview_sheets`, `_live_preview_schema`, `_sheet_snapshot`, `_verify_capture_sheet_aoa`, `inspect_workbook_with_excel`, `load_workbook_aoa_with_excel`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

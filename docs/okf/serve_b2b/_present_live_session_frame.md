@@ -7,8 +7,8 @@ extraction: ast
 signature: "(session, app, wb, left, top, width, height, client_left=None, client_top=None, client_width=None, client_height=None, viewport_width=None, viewport_height=None, skip_position=False)"
 role: "frame 모드 표시 경로: 대상 프레임만 배치/표시하고 나머지 라이브 프레임은 파킹."
 role_source: docstring
-version: "0.5.19"
-loc: "serve_b2b.py:5073-5133"
+version: "0.7.3"
+loc: "serve_b2b.py:6778-6875"
 
 # ── 입출력 ──
 inputs:
@@ -35,11 +35,16 @@ raises: []
 
 # ── 유기적 관계 ──
 calls:
+  - "_enable_excel_context_menus"
   - "_ensure_excel_workbook_view"
   - "_hide_peer_session_frames"
+  - "_is_live_shared_app"
   - "_position_excel_window"
+  - "_protect_workbook_for_read_only_mirror"
   - "_raise_excel_hwnd"
+  - "_restore_excel_default_input"
   - "_session_frame_hwnd"
+  - "_set_excel_ribbon_visible"
   - "_set_window_owner_hwnd"
   - "_show_window_na"
   - "_style_live_frame"
@@ -67,10 +72,12 @@ called_by:
   - "_replace_excel_session_workbook_impl"
   - "_restore_live_window"
   - "_show_only_excel_session_impl"
-reads: []
+reads:
+  - "LIVE_RESTORE_SUPPRESSED"
+  - "RECORDING_EDIT_UNLOCKED"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.19-gen"
+timestamp: "0.7.3-gen"
 ---
 
 ## 역할
@@ -80,7 +87,7 @@ frame 모드 표시 경로: 대상 프레임만 배치/표시하고 나머지 �
 - Excel COM 조작(파괴적일 수 있음)
 
 ## 관계
-- 호출: `_ensure_excel_workbook_view`, `_hide_peer_session_frames`, `_position_excel_window`, `_raise_excel_hwnd`, `_session_frame_hwnd`, `_set_window_owner_hwnd`, `_show_window_na`, `_style_live_frame`
+- 호출: `_enable_excel_context_menus`, `_ensure_excel_workbook_view`, `_hide_peer_session_frames`, `_is_live_shared_app`, `_position_excel_window`, `_protect_workbook_for_read_only_mirror`, `_raise_excel_hwnd`, `_restore_excel_default_input`, `_session_frame_hwnd`, `_set_excel_ribbon_visible`, `_set_window_owner_hwnd`, `_show_window_na`, `_style_live_frame`
 - 피호출(영향 전파 경로): `_recover_excel_session_impl`, `_replace_excel_session_workbook_impl`, `_restore_live_window`, `_show_only_excel_session_impl`
 
 ## 실패/예외

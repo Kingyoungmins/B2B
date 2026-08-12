@@ -7,8 +7,8 @@ extraction: ast
 signature: "(hwnd)"
 role: "프레임을 숨기지 않고 화면 밖(-32000)으로만 이동(WS_VISIBLE 유지)."
 role_source: docstring
-version: "0.5.19"
-loc: "serve_b2b.py:3084-3101"
+version: "0.7.3"
+loc: "serve_b2b.py:4051-4069"
 
 # ── 입출력 ──
 inputs:
@@ -21,7 +21,8 @@ side_effects:
 raises: []
 
 # ── 유기적 관계 ──
-calls: []
+calls:
+  - "_unmaximize_hwnd_no_activate"
 calls_external:
   - "IsWindow"
   - "SetWindowPos"
@@ -40,7 +41,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.19-gen"
+timestamp: "0.7.3-gen"
 ---
 
 ## 역할
@@ -50,7 +51,7 @@ timestamp: "0.5.19-gen"
 - 없음(정적 분석 기준)
 
 ## 관계
-- 호출: 없음
+- 호출: `_unmaximize_hwnd_no_activate`
 - 피호출(영향 전파 경로): `_hide_all_excel_sessions_impl`, `_hide_excel_session_impl`, `_hide_peer_session_frames`, `_open_excel_session_impl`, `_reopen_excel_session_workbook`, `_replace_excel_session_workbook_impl`
 
 ## 실패/예외

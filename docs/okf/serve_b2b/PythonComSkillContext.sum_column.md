@@ -8,8 +8,8 @@ class: PythonComSkillContext
 signature: "(self, sheet, col, header_row=None, exclude_total_rows=True)"
 role: "열(col: 열문자 'F' / 헤더명 '합계' / 열번호 6)의 숫자 값을 더해 **합계 값을 반환**한다."
 role_source: docstring
-version: "0.5.19"
-loc: "serve_b2b.py:9704-9747"
+version: "0.7.3"
+loc: "serve_b2b.py:12427-12470"
 
 # ── 입출력 ──
 inputs:
@@ -66,7 +66,7 @@ reads:
   - "self.read"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.19-gen"
+timestamp: "0.7.3-gen"
 ---
 
 ## 역할

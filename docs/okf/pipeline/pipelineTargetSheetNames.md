@@ -7,8 +7,8 @@ extraction: regex   # 정규식 근사
 signature: "(step)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
-version: "0.5.19"
-loc: "pipeline.js:522-522"
+version: "0.7.3"
+loc: "pipeline.js:672-672"
 
 # ── 입출력 ──
 inputs:
@@ -36,10 +36,11 @@ calls_external:
 called_by:
   - "inferPipelineStepTargetFileId"
   - "inferPipelineStepTargetSheetName"
+  - "runnerExtractMappingRequirements"
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.19-gen"
+timestamp: "0.7.3-gen"
 ---
 
 ## 역할
@@ -50,7 +51,7 @@ timestamp: "0.5.19-gen"
 
 ## 관계
 - 호출: `add`, `inferPipelineStepLanguage`, `pipelineConstStringVars`, `pipelineResolvePyArg`, `push`
-- 피호출(영향 전파 경로): `inferPipelineStepTargetFileId`, `inferPipelineStepTargetSheetName`
+- 피호출(영향 전파 경로): `inferPipelineStepTargetFileId`, `inferPipelineStepTargetSheetName`, `runnerExtractMappingRequirements`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

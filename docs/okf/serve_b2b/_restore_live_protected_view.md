@@ -7,8 +7,8 @@ extraction: ast
 signature: "(app, wb)"
 role: "VBA 실행 후 라이브 보기 상태(편집 차단+선택 허용, 리본/우클릭 숨김, 화면갱신)를 복구."
 role_source: docstring
-version: "0.5.19"
-loc: "serve_b2b.py:6916-6937"
+version: "0.7.3"
+loc: "serve_b2b.py:8954-8975"
 
 # ── 입출력 ──
 inputs:
@@ -38,7 +38,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.5.19-gen"
+timestamp: "0.7.3-gen"
 ---
 
 ## 역할
