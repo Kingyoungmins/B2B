@@ -2738,6 +2738,12 @@ def is_encrypted_ooxml(path):
     Excel 은 MIP 로 복호화해 열어 주지만, 그 뒤로는 '이 문서는 구형 xls'라는 잘못된 전제가 붙는다.
     OLE 안에 'EncryptedPackage' 스트림이 있으면 암호화된 OOXML 이다(구형 .xls 엔 'Workbook' 이 있다).
     헤더 512바이트 + 디렉터리 1섹터만 읽는다."""
+    # [적대 검증에서 잡은 결함] 디렉터리를 1섹터만 읽으면 512바이트 섹터에서 엔트리 4개까지만 본다.
+    # MIP/IRM 암호화본의 실제 배치는 Root / \x06DataSpaces / DataSpaceMap / DataSpaceInfo /
+    # TransformInfo / DRMEncryptedTransform / EncryptedPackage / EncryptionInfo 순이라 7번째에 있다
+    # → 못 찾고 예전 동작(.xls 로 복사해 열기)으로 조용히 되돌아갔다.
+    # 그래서 FAT 를 따라 디렉터리 체인을 이어 읽는다(상한 32섹터 — 무한 체인 방어).
+    MAX_DIR_SECTORS = 32
     try:
         with Path(path).open("rb") as f:
             hdr = f.read(512)
@@ -2749,21 +2755,52 @@ def is_encrypted_ooxml(path):
             dir_sect = int.from_bytes(hdr[48:52], "little")
             if dir_sect >= 0xFFFFFFFA:
                 return False
-            f.seek((dir_sect + 1) * sect_size)
-            dir_data = f.read(sect_size)
+
+            fat_cache = {}
+
+            def _fat_next(sect):
+                """FAT 에서 다음 섹터를 읽는다. 헤더 DIFAT(109개)만 본다 — 그 범위를 넘는 거대 파일은
+                체인 추적을 포기하고 지금까지 읽은 것으로 판단한다(오탐보다 미탐이 안전)."""
+                per = sect_size // 4
+                fat_idx, ent_idx = divmod(sect, per)
+                if fat_idx >= 109:
+                    return 0xFFFFFFFE
+                if fat_idx not in fat_cache:
+                    fat_sect = int.from_bytes(hdr[76 + fat_idx * 4:80 + fat_idx * 4], "little")
+                    if fat_sect >= 0xFFFFFFFA:
+                        return 0xFFFFFFFE
+                    f.seek((fat_sect + 1) * sect_size)
+                    fat_cache[fat_idx] = f.read(sect_size)
+                blk = fat_cache[fat_idx]
+                off = ent_idx * 4
+                if off + 4 > len(blk):
+                    return 0xFFFFFFFE
+                return int.from_bytes(blk[off:off + 4], "little")
+
+            seen = set()
+            cur = dir_sect
+            for _ in range(MAX_DIR_SECTORS):
+                if cur >= 0xFFFFFFFA or cur in seen:
+                    break
+                seen.add(cur)
+                f.seek((cur + 1) * sect_size)
+                dir_data = f.read(sect_size)
+                if not dir_data:
+                    break
+                for off in range(0, len(dir_data) - 127, 128):
+                    ent = dir_data[off:off + 128]
+                    n_len = int.from_bytes(ent[64:66], "little")
+                    if not (4 <= n_len <= 64):
+                        continue
+                    try:
+                        nm = ent[:n_len - 2].decode("utf-16-le", "ignore")
+                    except Exception:
+                        continue
+                    if nm == "EncryptedPackage":
+                        return True
+                cur = _fat_next(cur)
     except Exception:
         return False
-    for off in range(0, len(dir_data) - 127, 128):
-        ent = dir_data[off:off + 128]
-        n_len = int.from_bytes(ent[64:66], "little")
-        if not (4 <= n_len <= 64):
-            continue
-        try:
-            nm = ent[:n_len - 2].decode("utf-16-le", "ignore")
-        except Exception:
-            continue
-        if nm == "EncryptedPackage":
-            return True
     return False
 
 
@@ -5653,17 +5690,25 @@ def session_workbook(session):
     # 워크북이 안 열려 있는 시점이라 덮어쓰기가 가능하다(열려 있으면 위에서 이미 반환됐다).
     _pristine = session.get("diskPristineFrom")
     if _pristine:
+        # [표시 소진 조건 — 적대 검증에서 잡은 결함] '여기까지 왔다 = 워크북이 안 열려 있다'가 항상
+        # 참은 아니다. 라이브 앱은 ROT 에 안 잡히는 전용 인스턴스라 위 2차 조회가 사실상 무력하고,
+        # 1차 판정인 wb.FullName 은 사용자가 셀 편집/모달 중이면 정상 상황에서도 COM 호출을 일시
+        # 거부해(RPC_E_CALL_REJECTED) 예외를 던진다. 그때 이 폴백까지 내려오면 '열려 있는 파일'을
+        # 덮어쓰려다 실패하는데, 그 실패에도 표시를 지워 버리면 이후 진짜 재오픈이 옛 실행 결과를
+        # 그대로 로드한다 = wb.Save() 가 막던 SBAGENT-138 재발.
+        # → 실제로 복구했거나, 복구할 것이 없을 때만 표시를 소진한다. 실패하면 남겨 다음 기회에 다시.
         try:
-            if Path(_pristine).exists() and Path(_pristine).resolve() != Path(session["path"]).resolve():
+            _same = Path(_pristine).resolve() == Path(session["path"]).resolve()
+            if not Path(_pristine).exists() or _same:
+                session["diskPristineFrom"] = ""     # 복구할 게 없다 — 표시만 정리
+            else:
                 shutil.copy2(_pristine, session["path"])
+                session["diskPristineFrom"] = ""
                 _vba_trace("excel.session.disk_restored", excelId=session.get("excelId"),
                            source=str(_pristine), target=str(session["path"]))
         except Exception as _restore_err:
-            # 실패해도 아래에서 그냥 연다 — 예전(Save 안 된 경우)과 같은 상태이지 더 나쁘지 않다.
             _vba_trace("excel.session.disk_restore.skip", excelId=session.get("excelId"),
-                       error=str(_restore_err))
-        finally:
-            session["diskPristineFrom"] = ""
+                       error=str(_restore_err), retained=True)
     try:
         wb = win32com.client.GetObject(str(session["path"]))
         app = wb.Application

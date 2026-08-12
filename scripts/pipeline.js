@@ -4736,6 +4736,15 @@ async function applyLastEnabledStepFast(step, options = {}) {
     "마지막 단계 적용"
   );
   if (!excelId) return false;
+  // [교차파일 단일 적용 2026-08-12] 이 스텝이 다른 파일을 참조/변형하면 그 파일 세션이 '열려 있어야'
+  // 격리 인스턴스가 동반 워크북으로 함께 연다(백엔드는 이미 열린 라이브 세션만 동반으로 잡는다 —
+  // serve_b2b.py `for oid, other in EXCEL_SESSIONS...`). 예전엔 교차파일 스텝이 전체 재적용으로 갔고
+  // 그 경로(runIsolatedLivePipelineSteps)가 실행 전에 참조 세션을 전부 동기로 열어 줬다.
+  // 단일 적용으로 바꾸면서 그 보장이 빠지면, 느린 PC 의 preopen 미완료나 세션 LRU 정리로 목적지가
+  // 안 열려 있을 때 "워크북이 열려 있지 않습니다"로 죽는다 → 여기서 같은 보장을 건다.
+  if (typeof ensurePipelineReferencedSessionsOpen === "function") {
+    try { await ensurePipelineReferencedSessionsOpen([step]); } catch (_) {}
+  }
   // [fast OFF 대칭] 이 마지막 단계를 적용하기 '직전' 상태(=1..N-1)를 스냅샷해 둔다.
   // 반드시 적용 '전'에 캡처해야 한다 — 적용 후에 잡으면 N 까지 반영된 상태가 잡혀, 이후 이 단계 OFF/삭제가
   // 1..N 으로 되돌아가 사실상 아무것도 안 되돌린다(검증 지적사항). 이게 있어야 ON 직후의 OFF/삭제도 fast.

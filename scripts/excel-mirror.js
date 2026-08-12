@@ -223,7 +223,15 @@ function beginUiBusy(label = "작업 중...", options = {}) {
             stopBtn.disabled = true;
             stopBtn.textContent = options.stoppingLabel || "중단 중...";
             try {
-              await options.onStop();
+              // [죽은 중단 버튼 2026-08-12] 취소할 대상이 없으면 onStop 이 false 를 돌려준다.
+              // 예전엔 그 경우에도 버튼이 '중단 중...' 인 채로 굳어(작업이 끝날 때까지, 실측 34초)
+              // 사용자는 중단을 눌렀는데 아무 일도 안 일어나는 것으로 보였다. 되살리고 사실대로 알린다.
+              const _ok = await options.onStop();
+              if (_ok === false) {
+                stopBtn.disabled = false;
+                stopBtn.textContent = options.stopLabel || "작업 중단";
+                if (typeof toast === "function") toast("지금은 중단할 수 없는 작업입니다. 끝날 때까지 기다려 주세요.", "error");
+              }
             } catch (err) {
               console.warn("busy stop failed:", err);
               if (typeof toast === "function") toast("작업 중단 요청에 실패했습니다: " + (err.message || err), "error");
@@ -1312,13 +1320,15 @@ function beginExcelMirrorApplyLoading(message, options = {}) {
       // [검증패치#1] 말풍선 '작업 중단' 버튼과 완전히 같은 로직을 쓴다(버튼 복사).
       // 이전 버전은 토큰이 아직 등록되지 않은 찰나에 누르면 forceRestart(Excel 강제 재시작)로
       // 빠져 '중단'이 세션 전체 재시작처럼 동작했다 — 협조 취소만 수행하고 강제 재시작은 하지 않는다.
+      // 결과를 그대로 돌려준다 — false 면 '취소할 대상이 없었다'는 뜻이고, 위 핸들러가 버튼을 되살린다.
       onStop: async () => {
         const vbaActive = window.__activeVbaApply && window.__activeVbaApply.token && !window.__activeVbaApply.token.cancelled;
         if (!vbaActive && window.__activeBackendPipelineJobId && typeof cancelActiveBackendPipeline === "function") {
           await cancelActiveBackendPipeline();
-          return;
+          return true;
         }
-        if (typeof requestExcelApplyCancel === "function") await requestExcelApplyCancel();
+        if (typeof requestExcelApplyCancel === "function") return await requestExcelApplyCancel();
+        return false;
       },
     });
   }

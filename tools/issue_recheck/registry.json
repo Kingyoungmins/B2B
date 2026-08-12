@@ -3140,9 +3140,24 @@
         [
           "com",
           "test_runs/_test_reset_no_office_save_com.py"
+        ],
+        [
+          "python",
+          "test_runs/_test_encrypted_ooxml_detect.py"
         ]
       ],
-      "fix": "serve_b2b.py: 리셋은 메모리 복원 후 session['diskPristineFrom'] 표시만 남기고 Office 저장을 하지 않는다. 실제 디스크 복구는 session_workbook 이 정말 디스크에서 다시 열어야 할 때(COM 참조 사망 폴백)에만 shutil.copy2 로 — 파이썬 복사엔 MIP 가 개입하지 않는다. SBAGENT-138(저사양 재오픈 시 원본 보장)은 그대로 지켜진다. 표시는 session['path'] 가 바뀌는 4곳(SaveAs 2곳, replace, open)에서 해제 — 안 하면 나중 재오픈이 결과를 원본으로 덮어쓴다. 실측(COM 9/9): 리셋 후 파일 수정시각 불변, 디스크 오염 후 재오픈하면 원본 복구, 표시 1회 소진, 이후 결과 보존, SaveAs 후 해제. 함께: is_encrypted_ooxml() 추가로 암호화 OOXML 을 구형 .xls 로 오인해 .xls 확장자로 복사해 열던 것 수정(사내 DRM 컨테이너는 EncryptedPackage 가 없어 기존 동작 유지)."
+      "fix": "serve_b2b.py: 리셋은 메모리 복원 후 session['diskPristineFrom'] 표시만 남기고 Office 저장을 하지 않는다. 실제 디스크 복구는 session_workbook 이 정말 디스크에서 다시 열어야 할 때(COM 참조 사망 폴백)에만 shutil.copy2 로 — 파이썬 복사엔 MIP 가 개입하지 않는다. SBAGENT-138(저사양 재오픈 시 원본 보장)은 그대로 지켜진다. 표시는 session['path'] 가 바뀌는 4곳(SaveAs 2곳, replace, open)에서 해제 — 안 하면 나중 재오픈이 결과를 원본으로 덮어쓴다. 실측(COM 9/9): 리셋 후 파일 수정시각 불변, 디스크 오염 후 재오픈하면 원본 복구, 표시 1회 소진, 이후 결과 보존, SaveAs 후 해제. 함께: is_encrypted_ooxml() 추가로 암호화 OOXML 을 구형 .xls 로 오인해 .xls 확장자로 복사해 열던 것 수정(사내 DRM 컨테이너는 EncryptedPackage 가 없어 기존 동작 유지). [적대 검증 반영] ①session_workbook 의 표시 소진을 finally→성공 시에만으로 수정 — 라이브 앱은 ROT 에 안 잡히는 전용 인스턴스라 2차 조회가 무력하고, 1차 판정 wb.FullName 은 사용자가 셀 편집/모달 중이면 정상 상황에서도 COM 을 일시 거부해 예외를 던진다. 그때 폴백까지 내려와 copy2 가 실패하는데 표시를 지우면 이후 진짜 재오픈이 옛 결과를 로드 = SBAGENT-138 재발. ②is_encrypted_ooxml 이 디렉터리를 1섹터만 읽어 512B 섹터에서 엔트리 4개까지만 봤다 — MIP/IRM 배치는 EncryptedPackage 가 7번째라 못 찾고 조용히 예전 동작(.xls 변환)으로 되돌아갔다. FAT 체인 추적(상한 32섹터)으로 수정. 실제 사용자 파일 7개 중 6개가 이 오판정이었고 수정 후 encrypted 로 정정됨(1개는 헤더 DIFAT 109 상한 초과로 예전 동작 유지 — 안전한 실패)."
+    },
+    {
+      "id": "DEAD-STOP-BUTTON-ON-UNCANCELLABLE",
+      "title": "[적대 검증] 취소할 대상이 없는 작업에서도 '작업 중단' 버튼이 뜨고, 누르면 '중단 중...' 에서 작업이 끝날 때까지 굳었다(실측 34초).",
+      "checks": [
+        [
+          "node",
+          "test_runs/_test_single_apply_overlay_and_snapshot.js"
+        ]
+      ],
+      "fix": "excel-mirror.js: beginExcelMirrorApplyLoading 의 onStop 이 결과를 반환하고(requestExcelApplyCancel 은 취소 대상이 없으면 false), beginUiBusy 의 중단 핸들러가 false 면 버튼을 되살리고 '지금은 중단할 수 없는 작업' 이라고 알린다. 예전엔 throw 일 때만 되살렸다. 단일 적용 ON 에 오버레이를 새로 붙이면서 드러난 결함."
     }
   ]
 }
