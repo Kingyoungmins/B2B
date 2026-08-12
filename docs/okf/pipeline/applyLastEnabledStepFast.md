@@ -26,6 +26,7 @@ calls:
   - "captureStepPreApplySnapshot"
   - "createPipelineRuntimeExecutionBlockError"
   - "createPipelineStepError"
+  - "ensurePipelineReferencedSessionsOpen"
   - "findPipelineRuntimeExecutionBlocker"
   - "inferPipelineStepTargetFileId"
   - "noteLivePipelineApplied"
@@ -51,7 +52,7 @@ timestamp: "0.7.3-gen"
 - 없음(정적 분석 기준)
 
 ## 관계
-- 호출: `captureStepPreApplySnapshot`, `createPipelineRuntimeExecutionBlockError`, `createPipelineStepError`, `findPipelineRuntimeExecutionBlocker`, `inferPipelineStepTargetFileId`, `noteLivePipelineApplied`, `pipelineStepLiveLanguage`, `preferredVbaRunFileId`, `requirePipelineSessionExcelId`, `runLivePipelineStepSequentially`
+- 호출: `captureStepPreApplySnapshot`, `createPipelineRuntimeExecutionBlockError`, `createPipelineStepError`, `ensurePipelineReferencedSessionsOpen`, `findPipelineRuntimeExecutionBlocker`, `inferPipelineStepTargetFileId`, `noteLivePipelineApplied`, `pipelineStepLiveLanguage`, `preferredVbaRunFileId`, `requirePipelineSessionExcelId`, `runLivePipelineStepSequentially`
 - 피호출(영향 전파 경로): `applyMappedSingleStep`
 
 ## 실패/예외

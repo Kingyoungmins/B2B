@@ -8,7 +8,7 @@ signature: "()"
 role: "[매핑 보존] 실행기에서 사용자가 확정한 파일·시트 매핑을 '생성기 재실행'에도 적용한다."
 role_source: banner
 version: "0.7.3"
-loc: "pipeline.js:4841-4841"
+loc: "pipeline.js:4850-4850"
 
 # ── 입출력 ──
 inputs: []

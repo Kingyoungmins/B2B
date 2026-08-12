@@ -8,7 +8,7 @@ signature: "(app)"
 role: "녹화 편집 모드: 미러 입력 차단 원복(셀 내 편집 + 기본 키 동작)."
 role_source: docstring
 version: "0.7.3"
-loc: "serve_b2b.py:3248-3258"
+loc: "serve_b2b.py:3285-3295"
 
 # ── 입출력 ──
 inputs:

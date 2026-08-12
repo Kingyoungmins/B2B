@@ -8,7 +8,7 @@ signature: "(msg)"
 role: "[임시 진단] VBA 실행 결과 한 줄을 vba_runner_fail.log 에 남긴다(성공/런타임에러/실행예외 구분)."
 role_source: docstring
 version: "0.7.3"
-loc: "serve_b2b.py:8582-8590"
+loc: "serve_b2b.py:8627-8635"
 
 # ── 입출력 ──
 inputs:

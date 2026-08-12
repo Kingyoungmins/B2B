@@ -8,7 +8,7 @@ signature: "(app, max_wait_s=2.5)"
 role: "[셀 편집 확정] 사용자가 셀 편집(in-cell edit) 중이면 Excel 이 COM 을 거부해"
 role_source: docstring
 version: "0.7.3"
-loc: "serve_b2b.py:5132-5175"
+loc: "serve_b2b.py:5169-5212"
 
 # ── 입출력 ──
 inputs:

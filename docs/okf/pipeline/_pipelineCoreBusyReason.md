@@ -8,7 +8,7 @@ signature: "()"
 role: "[토글 제외 공용 사유] 토글 구현부(_handlePipelineStepToggleImpl)는 이걸 쓴다 — 자기 자신의"
 role_source: banner
 version: "0.7.3"
-loc: "pipeline.js:4765-4765"
+loc: "pipeline.js:4774-4774"
 
 # ── 입출력 ──
 inputs: []

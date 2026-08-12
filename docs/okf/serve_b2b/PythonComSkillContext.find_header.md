@@ -9,7 +9,7 @@ signature: "(self, sheet, header_text, header_row=1)"
 role: "헤더 행에서 헤더 텍스트로 열 번호(1-based)를 찾는다. 없으면 오류."
 role_source: docstring
 version: "0.7.3"
-loc: "serve_b2b.py:11280-11335"
+loc: "serve_b2b.py:11325-11380"
 
 # ── 입출력 ──
 inputs:

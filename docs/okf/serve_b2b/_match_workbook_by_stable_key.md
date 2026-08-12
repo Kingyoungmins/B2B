@@ -8,7 +8,7 @@ signature: "(names, requested)"
 role: "열린 워크북 이름들 중 requested 와 '월/날짜 무시 안정 키'가 같은 것이 '정확히 하나'면 그 이름 반환."
 role_source: docstring
 version: "0.7.3"
-loc: "serve_b2b.py:8084-8091"
+loc: "serve_b2b.py:8129-8136"
 
 # ── 입출력 ──
 inputs:

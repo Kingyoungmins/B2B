@@ -8,7 +8,7 @@ signature: "()"
 role: "업로드된 모든 파일의 fileId 목록(입력 + 출력). publishNativeFileTabs 와 동일한 규칙."
 role_source: banner
 version: "0.7.3"
-loc: "excel-mirror.js:536-536"
+loc: "excel-mirror.js:544-544"
 
 # ── 입출력 ──
 inputs: []

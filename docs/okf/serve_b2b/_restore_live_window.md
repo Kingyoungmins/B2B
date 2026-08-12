@@ -8,7 +8,7 @@ signature: "(session, app, wb)"
 role: "리셋(_copy_source_workbook_into_target)으로 offscreen park 된 라이브 창을 owner 모드 방식으로"
 role_source: docstring
 version: "0.7.3"
-loc: "serve_b2b.py:9219-9261"
+loc: "serve_b2b.py:9264-9306"
 
 # ── 입출력 ──
 inputs:

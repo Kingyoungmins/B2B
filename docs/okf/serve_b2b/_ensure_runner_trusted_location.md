@@ -8,7 +8,7 @@ signature: "()"
 role: "러너 폴더를 Excel '신뢰할 수 있는 위치(Trusted Location)'로 등록한다."
 role_source: docstring
 version: "0.7.3"
-loc: "serve_b2b.py:4928-4964"
+loc: "serve_b2b.py:4965-5001"
 
 # ── 입출력 ──
 inputs: []

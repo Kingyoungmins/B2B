@@ -8,7 +8,7 @@ signature: "(step, input_wb_by_name, output_wb)"
 role: "[혼합 호환] 워커에서 VBA/COM-bulk 스텝의 기준 워크북 결정:"
 role_source: docstring
 version: "0.7.3"
-loc: "serve_b2b.py:18475-18486"
+loc: "serve_b2b.py:18520-18531"
 
 # ── 입출력 ──
 inputs:

@@ -8,7 +8,7 @@ signature: "(excel_id, name=None, internal=False)"
 role: "워크북을 파일로 저장한다."
 role_source: docstring
 version: "0.7.3"
-loc: "serve_b2b.py:5754-5891"
+loc: "serve_b2b.py:5799-5936"
 
 # ── 입출력 ──
 inputs:

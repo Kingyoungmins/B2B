@@ -8,7 +8,7 @@ signature: "(name)"
 role: "워크북 이름 → 업로드/세션 레지스트리의 파일 경로(교차파일 재생 시 소스 자동 열기용)."
 role_source: docstring
 version: "0.7.3"
-loc: "serve_b2b.py:10656-10684"
+loc: "serve_b2b.py:10701-10729"
 
 # ── 입출력 ──
 inputs:

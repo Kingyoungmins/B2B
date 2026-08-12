@@ -9,7 +9,7 @@ signature: "(self, sheet, a1, value, overwrite_formulas=True)"
 role: "단일 셀 쓰기(소량 전용 — 루프에서 반복 호출하면 예산 초과로 차단됨)."
 role_source: docstring
 version: "0.7.3"
-loc: "serve_b2b.py:11459-11461"
+loc: "serve_b2b.py:11504-11506"
 
 # ── 입출력 ──
 inputs:

@@ -26,6 +26,7 @@ calls:
   - "excelIdForPipelineFileId"
 calls_external: []
 called_by:
+  - "applyLastEnabledStepFast"
   - "runIsolatedLivePipelineSteps"
 reads: []
 writes: []
@@ -41,7 +42,7 @@ timestamp: "0.7.3-gen"
 
 ## 관계
 - 호출: `collectPipelineReferencedFileIds`, `excelIdForPipelineFileId`
-- 피호출(영향 전파 경로): `runIsolatedLivePipelineSteps`
+- 피호출(영향 전파 경로): `applyLastEnabledStepFast`, `runIsolatedLivePipelineSteps`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

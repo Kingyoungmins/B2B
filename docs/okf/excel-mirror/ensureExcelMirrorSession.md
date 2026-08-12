@@ -8,7 +8,7 @@ signature: "(fileId, { makeActive = false, deferVisible = false } = {})"
 role: "지정한 파일의 미러 세션을 보장(없으면 연다). 활성화/최상단 올리기는 makeActive 일 때만."
 role_source: banner
 version: "0.7.3"
-loc: "excel-mirror.js:559-559"
+loc: "excel-mirror.js:567-567"
 
 # ── 입출력 ──
 inputs:
