@@ -3158,6 +3158,17 @@
         ]
       ],
       "fix": "excel-mirror.js: beginExcelMirrorApplyLoading 의 onStop 이 결과를 반환하고(requestExcelApplyCancel 은 취소 대상이 없으면 false), beginUiBusy 의 중단 핸들러가 false 면 버튼을 되살리고 '지금은 중단할 수 없는 작업' 이라고 알린다. 예전엔 throw 일 때만 되살렸다. 단일 적용 ON 에 오버레이를 새로 붙이면서 드러난 결함."
+    },
+    {
+      "id": "TOGGLE-ONOFF-SCENARIOS",
+      "title": "[시나리오 회귀] 단일축 토글(ON=적용/OFF=보류) 판정을 실제 구현으로 돌려 32가지 상황을 고정.",
+      "checks": [
+        [
+          "node",
+          "test_runs/_test_toggle_scenarios.js"
+        ]
+      ],
+      "fix": "_test_toggle_scenarios.js: _handlePipelineStepToggleImpl 을 실제 소스에서 추출하고 주변만 스텁으로 두어 판정 경로를 관찰한다. [A]OFF 6갈래(마지막 사본/체크포인트/교차파일 스킵/조용한 false 폴백/서명없음/비라이브) [B]ON 5갈래(단일/교차파일 단일=2026-08-12 변경/서명없음/불일치/비라이브) [C]구멍 위 얹기 후 뒤 스냅샷 무효화 [D]실패 시 되돌림(throw·조용한 false·전부 실패) [E]연속 조작(OFF→ON, 보류 연속 켜기) [F]바쁠 때 무변경. 스텁이 성공/실패를 주입해 폴백 순서를 그대로 관찰하므로, 판정 순서가 바뀌면 즉시 깨진다."
     }
   ]
 }
