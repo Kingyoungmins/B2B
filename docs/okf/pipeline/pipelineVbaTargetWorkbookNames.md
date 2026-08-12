@@ -37,7 +37,7 @@ calls_external:
   - "toLowerCase"
   - "trim"
 called_by:
-  - "crossWriteDestinationFileIds"
+  - "crossWriteDestinationScan"
   - "inferPipelineStepTargetFileId"
   - "runnerExtractMappingRequirements"
 reads: []
@@ -54,7 +54,7 @@ timestamp: "0.7.3-gen"
 
 ## 관계
 - 호출: `add`, `pipelineCollectWorkbookNames`, `pipelineVbaStringVars`, `push`
-- 피호출(영향 전파 경로): `crossWriteDestinationFileIds`, `inferPipelineStepTargetFileId`, `runnerExtractMappingRequirements`
+- 피호출(영향 전파 경로): `crossWriteDestinationScan`, `inferPipelineStepTargetFileId`, `runnerExtractMappingRequirements`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

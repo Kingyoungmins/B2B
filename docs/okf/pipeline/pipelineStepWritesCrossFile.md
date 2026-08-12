@@ -8,7 +8,7 @@ signature: "(step)"
 role: "이 스텝이 '다른 파일에 쓰는' 교차파일 스텝인가(dst_book 대상이 알려진 파일로 해석되면)."
 role_source: banner
 version: "0.7.3"
-loc: "pipeline.js:999-999"
+loc: "pipeline.js:1044-1044"
 
 # ── 입출력 ──
 inputs:
@@ -22,7 +22,7 @@ raises: []
 
 # ── 유기적 관계 ──
 calls:
-  - "crossWriteDestinationFileIds"
+  - "crossWriteDestinationScan"
   - "inferPipelineStepTargetFileId"
 calls_external: []
 called_by:
@@ -46,7 +46,7 @@ timestamp: "0.7.3-gen"
 - 없음(정적 분석 기준)
 
 ## 관계
-- 호출: `crossWriteDestinationFileIds`, `inferPipelineStepTargetFileId`
+- 호출: `crossWriteDestinationScan`, `inferPipelineStepTargetFileId`
 - 피호출(영향 전파 경로): `_handlePipelineStepToggleImpl`, `canFastEditLastPipelineStep`, `insertLogic`, `pipelineSuffixWritesCrossFile`, `replaceLogicAt`, `runLivePipelineStepSequentially`, `stepHasFullRollbackSnapshots`
 
 ## 실패/예외

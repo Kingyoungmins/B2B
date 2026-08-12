@@ -29,7 +29,7 @@ calls_external:
   - "exec"
   - "trim"
 called_by:
-  - "crossWriteDestinationFileIds"
+  - "crossWriteDestinationScan"
   - "pipelinePythonBookVarNames"
   - "pipelinePythonMutatedBookNames"
   - "pipelineTargetSheetNames"
@@ -47,7 +47,7 @@ timestamp: "0.7.3-gen"
 
 ## 관계
 - 호출: 없음
-- 피호출(영향 전파 경로): `crossWriteDestinationFileIds`, `pipelinePythonBookVarNames`, `pipelinePythonMutatedBookNames`, `pipelineTargetSheetNames`
+- 피호출(영향 전파 경로): `crossWriteDestinationScan`, `pipelinePythonBookVarNames`, `pipelinePythonMutatedBookNames`, `pipelineTargetSheetNames`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

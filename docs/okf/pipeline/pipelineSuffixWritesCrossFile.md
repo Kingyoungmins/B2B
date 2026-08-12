@@ -8,7 +8,7 @@ signature: "(steps, startIdx)"
 role: "체크포인트 빠른경로는 startIdx '이후 전 스텝'을 되돌린다. 그런데 스텝별 _preApplySnapshot 은"
 role_source: banner
 version: "0.7.3"
-loc: "pipeline.js:1011-1011"
+loc: "pipeline.js:1057-1057"
 
 # ── 입출력 ──
 inputs:

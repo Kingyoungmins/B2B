@@ -8,7 +8,7 @@ signature: "(stepId)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
 version: "0.7.3"
-loc: "pipeline.js:3661-3661"
+loc: "pipeline.js:3707-3707"
 
 # ── 입출력 ──
 inputs:
@@ -37,6 +37,7 @@ calls:
   - "noteLivePipelineApplied"
   - "pipelineStepLiveLanguage"
   - "pipelineStepWritesCrossFile"
+  - "pipelineSuffixCrossUnresolvedNames"
   - "pipelineSuffixWritesCrossFile"
   - "pushHistory"
   - "reconcilePipelineSimulationAfterEdit"
@@ -87,7 +88,7 @@ timestamp: "0.7.3-gen"
 - 변경 상태 `pipeline` — 수정 시 이 상태를 읽는 곳 동반 점검.
 
 ## 관계
-- 호출: `_diffLiveSignatureParts`, `_pipelineCoreBusyReason`, `_stepsOnOffMap`, `_syncPipelineToggleStatus`, `applyMappedSingleStep`, `canFastEditLastPipelineStep`, `clearPipelineResumeFromIndex`, `isStepEnabled`, `liveEnabledStepsSignature`, `liveEnabledStepsSignatureParts`, `markHeld`, `markPipelinePendingFromIndex`, `noteLivePipelineApplied`, `pipelineStepLiveLanguage`, `pipelineStepWritesCrossFile`, `pipelineSuffixWritesCrossFile`, `pushHistory`, `reconcilePipelineSimulationAfterEdit`, `refreshRunButton`, `renderPipeline`, `reportPipelineError`, `restoreLastStepPreApplySnapshot`, `restorePipelineToCheckpointAndHold`, `revertAll`, `revertOn`, `scheduleLogicAutoBackup`, `setPipelineRuntimeStatus`, `toast`, `traceOff`, `tracePipelineRun`, `traceToggleOnRoute`
+- 호출: `_diffLiveSignatureParts`, `_pipelineCoreBusyReason`, `_stepsOnOffMap`, `_syncPipelineToggleStatus`, `applyMappedSingleStep`, `canFastEditLastPipelineStep`, `clearPipelineResumeFromIndex`, `isStepEnabled`, `liveEnabledStepsSignature`, `liveEnabledStepsSignatureParts`, `markHeld`, `markPipelinePendingFromIndex`, `noteLivePipelineApplied`, `pipelineStepLiveLanguage`, `pipelineStepWritesCrossFile`, `pipelineSuffixCrossUnresolvedNames`, `pipelineSuffixWritesCrossFile`, `pushHistory`, `reconcilePipelineSimulationAfterEdit`, `refreshRunButton`, `renderPipeline`, `reportPipelineError`, `restoreLastStepPreApplySnapshot`, `restorePipelineToCheckpointAndHold`, `revertAll`, `revertOn`, `scheduleLogicAutoBackup`, `setPipelineRuntimeStatus`, `toast`, `traceOff`, `tracePipelineRun`, `traceToggleOnRoute`
 - 피호출(영향 전파 경로): `handlePipelineStepToggle`, `run`
 
 ## 실패/예외

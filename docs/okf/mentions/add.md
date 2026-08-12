@@ -45,7 +45,7 @@ called_by:
   - "chooseBackendRestoreView"
   - "codeHasBroadValueRewrite"
   - "collectPipelineReferencedFileIds"
-  - "crossWriteDestinationFileIds"
+  - "crossWriteDestinationScan"
   - "ensurePipelineStepIds"
   - "exactSheetNamesFromMentions"
   - "finalizeActionButtonFromResult"
@@ -70,6 +70,7 @@ called_by:
   - "pipelinePythonMutatedBookNames"
   - "pipelineRuntimeExecutionBlockersForStep"
   - "pipelineSheetLiteralsFromCode"
+  - "pipelineSuffixCrossUnresolvedNames"
   - "pipelineTargetSheetNames"
   - "pipelineVbaTargetWorkbookNames"
   - "push"
@@ -119,7 +120,7 @@ timestamp: "0.7.3-gen"
 
 ## 관계
 - 호출: `push`
-- 피호출(영향 전파 경로): `_flashChatMessage`, `_highlightCurrent`, `_recordedWindowSheetPairs`, `_renderViewerInitial`, `_toggleSheetSelection`, `addCell`, `applyBackendPipelineResult`, `askUserChoice`, `assistHandleUserMessage`, `augmentUserPromptWithMentions`, `autoRegenerateAsVbaFallback`, `autoRegenerateForMissingCode`, `autoRegenerateForStaticSafety`, `beginUiBusy`, `bindChatHistoryEntryToMessage`, `captureCurrentViewSnapshot`, `chooseBackendRestoreView`, `codeHasBroadValueRewrite`, `collectPipelineReferencedFileIds`, `crossWriteDestinationFileIds`, `ensurePipelineStepIds`, `exactSheetNamesFromMentions`, `finalizeActionButtonFromResult`, `flashChangedViewCells`, `flashFilled`, `loadLogicFiles`, `negativeSignLossFailures`, `offerMissingDependencySkillCandidate`, `onDown`, `openDownloadModal`, `openInsertPositionDialog`, `openMenu`, `openRunnerFileEditor`, `openRunnerLogicEditor`, `openSaveModal`, `openSettingsModal`, `openUserSettingsModal`, `paintViewerSelections`, `pipelineCollectWorkbookNames`, `pipelineExactSheetNamesFromText`, `pipelineKnownFiles`, `pipelinePythonMutatedBookNames`, `pipelineRuntimeExecutionBlockersForStep`, `pipelineSheetLiteralsFromCode`, `pipelineTargetSheetNames`, `pipelineVbaTargetWorkbookNames`, `push`, `pythonComStaticSafetyFailures`, `renderEditingBanner`, `renderPipeline`, `renderRunnerWorkflow`, `repairPasteCopiedInternalBookNames`, `repairStalePromptBookNames`, `repairStaleTargetFileIds`, `replaceSimulatorWithMirrorShell`, `requestErrorRecovery`, `requestedExcelColumnLetters`, `restorePipelineCheckpointForSuffix`, `restorePipelineToCheckpointAndHold`, `runIsolatedLivePipelineSteps`, `runPipeline`, `runSearch`, `runnerCanonicalizeRequirementsByEnv`, `runnerGeneratedSheetNameSet`, `runnerSheetOwnersFromCode`, `sendChat`, `setActionButtonPending`, `setGeneratorRunLoading`, `setupDrop`, `setupNodeDrop`, `setupStreamingAssistantMessage`, `showFindBar`, `showRecordReviewDialog`, `showThinkRetryPrompt`, `syncStepPreApplySnapshot`, `vbaSheetReferenceLiterals`, `vbaStaticSafetyFailures`, `verifyPrefixRestoreCoverage`, `wholeColumnCountRowTwoFailures`
+- 피호출(영향 전파 경로): `_flashChatMessage`, `_highlightCurrent`, `_recordedWindowSheetPairs`, `_renderViewerInitial`, `_toggleSheetSelection`, `addCell`, `applyBackendPipelineResult`, `askUserChoice`, `assistHandleUserMessage`, `augmentUserPromptWithMentions`, `autoRegenerateAsVbaFallback`, `autoRegenerateForMissingCode`, `autoRegenerateForStaticSafety`, `beginUiBusy`, `bindChatHistoryEntryToMessage`, `captureCurrentViewSnapshot`, `chooseBackendRestoreView`, `codeHasBroadValueRewrite`, `collectPipelineReferencedFileIds`, `crossWriteDestinationScan`, `ensurePipelineStepIds`, `exactSheetNamesFromMentions`, `finalizeActionButtonFromResult`, `flashChangedViewCells`, `flashFilled`, `loadLogicFiles`, `negativeSignLossFailures`, `offerMissingDependencySkillCandidate`, `onDown`, `openDownloadModal`, `openInsertPositionDialog`, `openMenu`, `openRunnerFileEditor`, `openRunnerLogicEditor`, `openSaveModal`, `openSettingsModal`, `openUserSettingsModal`, `paintViewerSelections`, `pipelineCollectWorkbookNames`, `pipelineExactSheetNamesFromText`, `pipelineKnownFiles`, `pipelinePythonMutatedBookNames`, `pipelineRuntimeExecutionBlockersForStep`, `pipelineSheetLiteralsFromCode`, `pipelineSuffixCrossUnresolvedNames`, `pipelineTargetSheetNames`, `pipelineVbaTargetWorkbookNames`, `push`, `pythonComStaticSafetyFailures`, `renderEditingBanner`, `renderPipeline`, `renderRunnerWorkflow`, `repairPasteCopiedInternalBookNames`, `repairStalePromptBookNames`, `repairStaleTargetFileIds`, `replaceSimulatorWithMirrorShell`, `requestErrorRecovery`, `requestedExcelColumnLetters`, `restorePipelineCheckpointForSuffix`, `restorePipelineToCheckpointAndHold`, `runIsolatedLivePipelineSteps`, `runPipeline`, `runSearch`, `runnerCanonicalizeRequirementsByEnv`, `runnerGeneratedSheetNameSet`, `runnerSheetOwnersFromCode`, `sendChat`, `setActionButtonPending`, `setGeneratorRunLoading`, `setupDrop`, `setupNodeDrop`, `setupStreamingAssistantMessage`, `showFindBar`, `showRecordReviewDialog`, `showThinkRetryPrompt`, `syncStepPreApplySnapshot`, `vbaSheetReferenceLiterals`, `vbaStaticSafetyFailures`, `verifyPrefixRestoreCoverage`, `wholeColumnCountRowTwoFailures`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

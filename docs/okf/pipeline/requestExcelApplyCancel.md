@@ -8,7 +8,7 @@ signature: "()"
 role: "[#19] 진행 중인 단일 VBA 적용을 취소하고 안전 복귀한다."
 role_source: banner
 version: "0.7.3"
-loc: "pipeline.js:1777-1777"
+loc: "pipeline.js:1823-1823"
 
 # ── 입출력 ──
 inputs: []

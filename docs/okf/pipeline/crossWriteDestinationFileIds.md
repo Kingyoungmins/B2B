@@ -5,10 +5,10 @@ module: pipeline.js
 lang: js
 extraction: regex   # 정규식 근사
 signature: "(code, options = {})"
-role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
-role_source: none
+role: "확정된 목적지만 — 리셋 집합·스냅샷 대상처럼 '실제로 파일을 집어야 하는' 곳이 쓴다."
+role_source: banner
 version: "0.7.3"
-loc: "pipeline.js:941-941"
+loc: "pipeline.js:1010-1010"
 
 # ── 입출력 ──
 inputs:
@@ -23,32 +23,11 @@ raises: []
 
 # ── 유기적 관계 ──
 calls:
-  - "add"
-  - "pipelineConstStringVars"
-  - "pipelineFileIdByWorkbookName"
-  - "pipelinePythonMutatedBookNames"
-  - "pipelineResolvePyArg"
-  - "pipelineStripCodeComments"
-  - "pipelineVbaTargetWorkbookNames"
-  - "push"
-calls_external:
-  - "Set"
-  - "Windows"
-  - "Workbooks"
-  - "addName"
-  - "addToken"
-  - "book"
-  - "exec"
-  - "forEach"
-  - "has"
-  - "python"
-  - "test"
-  - "write"
+  - "crossWriteDestinationScan"
+calls_external: []
 called_by:
   - "_reapplyVbaPipelineToLiveImpl"
   - "_reconcilePipelineSimulationAfterEditImpl"
-  - "captureCrossFileDestinationSnapshots"
-  - "pipelineStepWritesCrossFile"
   - "runVbaPipelinePreferLive"
   - "verifyPrefixRestoreCoverage"
 reads: []
@@ -58,14 +37,14 @@ timestamp: "0.7.3-gen"
 ---
 
 ## 역할
-(추정) 역할 주석 없음 — 담당자 1줄 보완 필요  _(자동 추정 — 확인 필요)_
+확정된 목적지만 — 리셋 집합·스냅샷 대상처럼 '실제로 파일을 집어야 하는' 곳이 쓴다.
 
 ## 사이드이펙트 & 주의
 - 없음(정적 분석 기준)
 
 ## 관계
-- 호출: `add`, `pipelineConstStringVars`, `pipelineFileIdByWorkbookName`, `pipelinePythonMutatedBookNames`, `pipelineResolvePyArg`, `pipelineStripCodeComments`, `pipelineVbaTargetWorkbookNames`, `push`
-- 피호출(영향 전파 경로): `_reapplyVbaPipelineToLiveImpl`, `_reconcilePipelineSimulationAfterEditImpl`, `captureCrossFileDestinationSnapshots`, `pipelineStepWritesCrossFile`, `runVbaPipelinePreferLive`, `verifyPrefixRestoreCoverage`
+- 호출: `crossWriteDestinationScan`
+- 피호출(영향 전파 경로): `_reapplyVbaPipelineToLiveImpl`, `_reconcilePipelineSimulationAfterEditImpl`, `runVbaPipelinePreferLive`, `verifyPrefixRestoreCoverage`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

@@ -1,17 +1,19 @@
 ---
 type: endpoint
-title: _syncPipelineToggleStatus
+title: pipelineSuffixCrossUnresolvedNames
 module: pipeline.js
 lang: js
 extraction: regex   # 정규식 근사
-signature: "()"
-role: "[단일 축 · 상태칩 정착] 토글이 끝난 뒤 상태칩을 스위치에 맞춘다 — ON=적용됨 · OFF=보류."
+signature: "(steps, startIdx)"
+role: "되돌리기 안전 판정용: 이 구간에서 '어느 파일인지 모르겠다'고 나온 이름들."
 role_source: banner
 version: "0.7.3"
-loc: "pipeline.js:3664-3664"
+loc: "pipeline.js:1016-1016"
 
 # ── 입출력 ──
-inputs: []
+inputs:
+  - "steps"
+  - "startIdx"
 returns: "(추정)"
 
 # ── 사이드이펙트 (정적 추정) ──
@@ -21,15 +23,18 @@ raises: []
 
 # ── 유기적 관계 ──
 calls:
-  - "getPipelineRuntimeStatus"
-  - "isStepEnabled"
-  - "push"
-  - "setPipelineRuntimeStatus"
+  - "add"
+  - "crossWriteDestinationScan"
+  - "inferPipelineStepTargetFileId"
 calls_external:
+  - "Set"
   - "forEach"
+  - "from"
+  - "join"
+  - "max"
+  - "slice"
 called_by:
   - "_handlePipelineStepToggleImpl"
-  - "_runHeldStepsBatchImpl"
 reads:
   - "state.pipeline"
 writes: []
@@ -38,14 +43,14 @@ timestamp: "0.7.3-gen"
 ---
 
 ## 역할
-[단일 축 · 상태칩 정착] 토글이 끝난 뒤 상태칩을 스위치에 맞춘다 — ON=적용됨 · OFF=보류.
+되돌리기 안전 판정용: 이 구간에서 '어느 파일인지 모르겠다'고 나온 이름들.
 
 ## 사이드이펙트 & 주의
 - 없음(정적 분석 기준)
 
 ## 관계
-- 호출: `getPipelineRuntimeStatus`, `isStepEnabled`, `push`, `setPipelineRuntimeStatus`
-- 피호출(영향 전파 경로): `_handlePipelineStepToggleImpl`, `_runHeldStepsBatchImpl`
+- 호출: `add`, `crossWriteDestinationScan`, `inferPipelineStepTargetFileId`
+- 피호출(영향 전파 경로): `_handlePipelineStepToggleImpl`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

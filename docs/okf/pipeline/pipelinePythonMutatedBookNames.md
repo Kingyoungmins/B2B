@@ -38,7 +38,7 @@ calls_external:
   - "replace"
   - "test"
 called_by:
-  - "crossWriteDestinationFileIds"
+  - "crossWriteDestinationScan"
   - "inferPipelineStepTargetFileId"
   - "runVbaPipelinePreferLive"
 reads: []
@@ -55,7 +55,7 @@ ctx.book("X") 로 가져온 다른 파일을 '변형'(delete_sheet/write/clear/.
 
 ## 관계
 - 호출: `add`, `pipelineConstStringVars`, `pipelinePythonBookVarNames`, `pipelineResolvePyArg`, `push`
-- 피호출(영향 전파 경로): `crossWriteDestinationFileIds`, `inferPipelineStepTargetFileId`, `runVbaPipelinePreferLive`
+- 피호출(영향 전파 경로): `crossWriteDestinationScan`, `inferPipelineStepTargetFileId`, `runVbaPipelinePreferLive`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`
