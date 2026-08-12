@@ -8,7 +8,7 @@ signature: "(wait=False)"
 role: "COM 큐를 '우회'하는 응급 복구. 공유 EXCEL.EXE 가 모달/행으로 굳으면 모든 excel_call 이"
 role_source: docstring
 version: "0.7.3"
-loc: "serve_b2b.py:894-1016"
+loc: "serve_b2b.py:895-1017"
 
 # ── 입출력 ──
 inputs:

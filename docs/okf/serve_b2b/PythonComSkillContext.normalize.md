@@ -9,7 +9,7 @@ signature: "(self, value)"
 role: "텍스트 정규화(공백/표기 차이 제거). 값 비교 보조용."
 role_source: docstring
 version: "0.7.3"
-loc: "serve_b2b.py:12378-12380"
+loc: "serve_b2b.py:12513-12515"
 
 # ── 입출력 ──
 inputs:
@@ -41,8 +41,13 @@ called_by:
   - "OpenpyxlSkillContext.col"
   - "OpenpyxlSkillContext.sort"
   - "OpenpyxlSkillContext.workbook_like"
+  - "PythonComSkillContext._mark_mutated"
   - "PythonComSkillContext.dedupe"
   - "PythonComSkillContext.lookup"
+  - "_companion_referenced"
+  - "_isolated_companion_reference_blob"
+  - "_sync_modified_companions_into_live"
+  - "_workbook_link_source_names"
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
@@ -57,7 +62,7 @@ timestamp: "0.7.3-gen"
 
 ## 관계
 - 호출: `normalize_text`, `value`
-- 피호출(영향 전파 경로): `ExcelSkillContext._col0`, `ExcelSkillContext._find_sheet_name`, `ExcelSkillContext._merge_pivot_grid_into_base`, `ExcelSkillContext.add_sheet`, `ExcelSkillContext.col`, `ExcelSkillContext.workbook_like`, `OpenpyxlSkillContext._col0`, `OpenpyxlSkillContext._find_sheet_name`, `OpenpyxlSkillContext._merge_pivot_grid_into_base`, `OpenpyxlSkillContext.add_sheet`, `OpenpyxlSkillContext.col`, `OpenpyxlSkillContext.sort`, `OpenpyxlSkillContext.workbook_like`, `PythonComSkillContext.dedupe`, `PythonComSkillContext.lookup`
+- 피호출(영향 전파 경로): `ExcelSkillContext._col0`, `ExcelSkillContext._find_sheet_name`, `ExcelSkillContext._merge_pivot_grid_into_base`, `ExcelSkillContext.add_sheet`, `ExcelSkillContext.col`, `ExcelSkillContext.workbook_like`, `OpenpyxlSkillContext._col0`, `OpenpyxlSkillContext._find_sheet_name`, `OpenpyxlSkillContext._merge_pivot_grid_into_base`, `OpenpyxlSkillContext.add_sheet`, `OpenpyxlSkillContext.col`, `OpenpyxlSkillContext.sort`, `OpenpyxlSkillContext.workbook_like`, `PythonComSkillContext._mark_mutated`, `PythonComSkillContext.dedupe`, `PythonComSkillContext.lookup`, `_companion_referenced`, `_isolated_companion_reference_blob`, `_sync_modified_companions_into_live`, `_workbook_link_source_names`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

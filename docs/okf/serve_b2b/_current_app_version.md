@@ -8,7 +8,7 @@ signature: "()"
 role: "지금 돌고 있는 AX-Cell 의 버전. 반환 {version, normalized, source}."
 role_source: docstring
 version: "0.7.3"
-loc: "serve_b2b.py:226-270"
+loc: "serve_b2b.py:227-271"
 
 # ── 입출력 ──
 inputs: []

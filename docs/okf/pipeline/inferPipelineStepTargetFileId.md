@@ -37,6 +37,7 @@ called_by:
   - "_reapplyVbaPipelineToLiveImpl"
   - "affectedStepViewFileId"
   - "applyLastEnabledStepFast"
+  - "captureCrossFileDestinationSnapshots"
   - "collectPipelineReferencedFileIds"
   - "inferPipelineStepTargetSheetName"
   - "pipelineHasUnresolvedTarget"
@@ -62,7 +63,7 @@ timestamp: "0.7.3-gen"
 
 ## 관계
 - 호출: `inferPipelineStepLanguage`, `pipelineFileIdByWorkbookName`, `pipelineFileIdsBySheetName`, `pipelinePythonMutatedBookNames`, `pipelinePythonTargetWorkbookNames`, `pipelineResolveSavedTargetFileId`, `pipelineStepMutatesMainCtx`, `pipelineTargetSheetNames`, `pipelineVbaTargetWorkbookNames`
-- 피호출(영향 전파 경로): `_reapplyVbaPipelineToLiveImpl`, `affectedStepViewFileId`, `applyLastEnabledStepFast`, `collectPipelineReferencedFileIds`, `inferPipelineStepTargetSheetName`, `pipelineHasUnresolvedTarget`, `pipelinePinnedAnyTargetFileId`, `pipelinePinnedTargetFileId`, `pipelineStepMutationFileId`, `pipelineStepWritesCrossFile`, `restoreLastStepPreApplySnapshot`, `runPipelineOnBackend`, `runVbaPipelinePreferLive`, `verifyPrefixRestoreCoverage`
+- 피호출(영향 전파 경로): `_reapplyVbaPipelineToLiveImpl`, `affectedStepViewFileId`, `applyLastEnabledStepFast`, `captureCrossFileDestinationSnapshots`, `collectPipelineReferencedFileIds`, `inferPipelineStepTargetSheetName`, `pipelineHasUnresolvedTarget`, `pipelinePinnedAnyTargetFileId`, `pipelinePinnedTargetFileId`, `pipelineStepMutationFileId`, `pipelineStepWritesCrossFile`, `restoreLastStepPreApplySnapshot`, `runPipelineOnBackend`, `runVbaPipelinePreferLive`, `verifyPrefixRestoreCoverage`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

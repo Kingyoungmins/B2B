@@ -8,7 +8,7 @@ signature: "(step, excelId)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
 version: "0.7.3"
-loc: "pipeline.js:4026-4026"
+loc: "pipeline.js:4039-4039"
 
 # ── 입출력 ──
 inputs:
@@ -23,6 +23,7 @@ raises: []
 
 # ── 유기적 관계 ──
 calls:
+  - "captureCrossFileDestinationSnapshots"
   - "postExcelMirror"
   - "syncStepPreApplySnapshot"
 calls_external:
@@ -46,7 +47,7 @@ timestamp: "0.7.3-gen"
 - 네트워크/서버 호출
 
 ## 관계
-- 호출: `postExcelMirror`, `syncStepPreApplySnapshot`
+- 호출: `captureCrossFileDestinationSnapshots`, `postExcelMirror`, `syncStepPreApplySnapshot`
 - 피호출(영향 전파 경로): `applyLastEnabledStepFast`, `applyVbaStepToLiveExcel`, `runLivePipelineStepSequentially`, `runVbaPipelinePreferLive`
 
 ## 실패/예외

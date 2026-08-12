@@ -25,11 +25,11 @@ calls: []
 calls_external: []
 called_by:
   - "_reapplyVbaPipelineToLiveImpl"
+  - "_restoreSnapshotByIds"
   - "ensureExcelMirrorSession"
   - "openCurrentWorkbookInExcel"
   - "openExcelMirrorResultForFileId"
   - "preopenAllExcelMirrors"
-  - "restoreLastStepPreApplySnapshot"
   - "restoreVbaExcelAfterError"
   - "switchVisibleExcelMirrorToFileId"
 reads: []
@@ -46,7 +46,7 @@ timestamp: "0.7.3-gen"
 
 ## 관계
 - 호출: 없음
-- 피호출(영향 전파 경로): `_reapplyVbaPipelineToLiveImpl`, `ensureExcelMirrorSession`, `openCurrentWorkbookInExcel`, `openExcelMirrorResultForFileId`, `preopenAllExcelMirrors`, `restoreLastStepPreApplySnapshot`, `restoreVbaExcelAfterError`, `switchVisibleExcelMirrorToFileId`
+- 피호출(영향 전파 경로): `_reapplyVbaPipelineToLiveImpl`, `_restoreSnapshotByIds`, `ensureExcelMirrorSession`, `openCurrentWorkbookInExcel`, `openExcelMirrorResultForFileId`, `preopenAllExcelMirrors`, `restoreVbaExcelAfterError`, `switchVisibleExcelMirrorToFileId`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

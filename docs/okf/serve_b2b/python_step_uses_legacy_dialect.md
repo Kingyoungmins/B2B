@@ -8,7 +8,7 @@ signature: "(code)"
 role: "[혼합 호환] 구버전 openpyxl/excel-com 방언인가 — True 면 ExcelSkillContext(레거시 ctx)로,"
 role_source: docstring
 version: "0.7.3"
-loc: "serve_b2b.py:15179-15182"
+loc: "serve_b2b.py:15342-15345"
 
 # ── 입출력 ──
 inputs:

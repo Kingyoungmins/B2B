@@ -8,7 +8,7 @@ signature: "(code)"
 role: "녹화 VBA 에서 '절대참조 재현이 불안정한' 패턴을 감지해 사용자 경고를 만든다."
 role_source: docstring
 version: "0.7.3"
-loc: "serve_b2b.py:6650-6680"
+loc: "serve_b2b.py:6651-6681"
 
 # ── 입출력 ──
 inputs:

@@ -8,7 +8,7 @@ signature: "()"
 role: "보류 구간 정보. ok=false 면 버튼을 숨긴다."
 role_source: banner
 version: "0.7.3"
-loc: "pipeline.js:4385-4385"
+loc: "pipeline.js:4488-4488"
 
 # ── 입출력 ──
 inputs: []

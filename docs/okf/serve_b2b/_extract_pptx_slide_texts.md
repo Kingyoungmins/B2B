@@ -8,7 +8,7 @@ signature: "(pptx_path)"
 role: "pptx(zip) 에서 슬라이드별 텍스트를 뽑는다(python-pptx 없이 XML 직접). 캡션/제목 보조용."
 role_source: docstring
 version: "0.7.3"
-loc: "serve_b2b.py:1122-1139"
+loc: "serve_b2b.py:1123-1140"
 
 # ── 입출력 ──
 inputs:

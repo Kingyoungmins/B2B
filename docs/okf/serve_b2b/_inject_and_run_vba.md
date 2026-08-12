@@ -8,7 +8,7 @@ signature: "(app, wb, code, entry)"
 role: "VBA 모듈을 임시 추가해 entry Sub를 실행하고, 끝나면 제거한다."
 role_source: docstring
 version: "0.7.3"
-loc: "serve_b2b.py:9001-9061"
+loc: "serve_b2b.py:9002-9062"
 
 # ── 입출력 ──
 inputs:

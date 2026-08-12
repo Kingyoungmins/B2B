@@ -8,7 +8,7 @@ signature: "(groups, reset_excel_ids=None, view_sheet=None, entry=None, output_m
 role: "[0.5.15 백그라운드 전체실행] 격리 인스턴스 '1개'에서 관여 파일 전부를 '원본'부터 열고, 전 그룹·스텝을"
 role_source: docstring
 version: "0.7.3"
-loc: "serve_b2b.py:10140-10543"
+loc: "serve_b2b.py:10256-10659"
 
 # ── 입출력 ──
 inputs:

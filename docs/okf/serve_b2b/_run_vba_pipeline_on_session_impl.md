@@ -8,7 +8,7 @@ signature: "(excel_id, steps, reset=True, entry=None, view_sheet=None)"
 role: "VBA/Python 스킬 파이프라인을 적용한다."
 role_source: docstring
 version: "0.7.3"
-loc: "serve_b2b.py:9756-10129"
+loc: "serve_b2b.py:9862-10245"
 
 # ── 입출력 ──
 inputs:
@@ -70,7 +70,10 @@ calls_external:
   - "SaveAs"
   - "SaveCopyAs"
   - "_activate_step_target_sheet"
+  - "_mutated_books"
+  - "_mutation_tracked"
   - "_pe"
+  - "_psum"
   - "_snap_err"
   - "_snap_name"
   - "_snap_path"
@@ -99,9 +102,6 @@ calls_external:
   - "list"
   - "lower"
   - "mkdir"
-  - "mkdtemp"
-  - "perf_counter"
-  - "pop"
 called_by:
   - "_run_vba_on_session_impl"
   - "run_vba_pipeline_on_session"

@@ -9,7 +9,7 @@ signature: "(self)"
 role: "업로드 때 시트명을 못 읽은 워크북(meta.requiresExcel)을 다시 검사한다."
 role_source: docstring
 version: "0.7.3"
-loc: "serve_b2b.py:1715-1739"
+loc: "serve_b2b.py:1716-1740"
 
 # ── 입출력 ──
 inputs:

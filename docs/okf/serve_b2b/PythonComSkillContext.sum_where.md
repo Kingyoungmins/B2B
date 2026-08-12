@@ -9,7 +9,7 @@ signature: "(self, sheet, value_col, conditions, header_row=None)"
 role: "조건(AND 전부 만족)에 맞는 행의 value_col 숫자를 합산해 값을 반환한다(쓰기 X → 반환값을"
 role_source: docstring
 version: "0.7.3"
-loc: "serve_b2b.py:12751-12794"
+loc: "serve_b2b.py:12886-12929"
 
 # ── 입출력 ──
 inputs:

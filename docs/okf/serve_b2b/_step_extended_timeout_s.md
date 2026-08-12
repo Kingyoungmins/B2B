@@ -8,7 +8,7 @@ signature: "(st)"
 role: "스텝 dict 이 extendedTimeout=True(VBA→Python 복구/강제 대용량)면 확장 데드라인(초)을, 아니면 None 을"
 role_source: docstring
 version: "0.7.3"
-loc: "serve_b2b.py:14121-14129"
+loc: "serve_b2b.py:14284-14292"
 
 # ── 입출력 ──
 inputs:

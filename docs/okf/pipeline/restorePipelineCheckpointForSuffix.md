@@ -8,7 +8,7 @@ signature: "(startIdx, beforeSteps, options = {})"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
 version: "0.7.3"
-loc: "pipeline.js:4131-4131"
+loc: "pipeline.js:4213-4213"
 
 # ── 입출력 ──
 inputs:
@@ -27,6 +27,7 @@ calls:
   - "add"
   - "push"
   - "restoreLastStepPreApplySnapshot"
+  - "restoreSnapshotIntoSession"
 calls_external:
   - "Number"
   - "Set"
@@ -52,7 +53,7 @@ timestamp: "0.7.3-gen"
 - 없음(정적 분석 기준)
 
 ## 관계
-- 호출: `add`, `push`, `restoreLastStepPreApplySnapshot`
+- 호출: `add`, `push`, `restoreLastStepPreApplySnapshot`, `restoreSnapshotIntoSession`
 - 피호출(영향 전파 경로): `_runPipelineSuffixFromCheckpointImpl`, `restorePipelineToCheckpointAndHold`, `runFromCheckpointAfterEdit`, `runPipelineWithAutoRepair`
 
 ## 실패/예외

@@ -56,6 +56,7 @@ calls:
 calls_external:
   - "String"
   - "enabled"
+  - "every"
   - "filter"
   - "findIndex"
   - "map"

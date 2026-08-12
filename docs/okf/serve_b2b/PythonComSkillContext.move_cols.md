@@ -9,7 +9,7 @@ signature: "(self, sheet, columns, before, header_row=1, scan_from=None)"
 role: "여러 열을 헤더+데이터까지 통째로 before 열 앞으로 옮긴다(원본 제거). 인덱스 시프트 자동."
 role_source: docstring
 version: "0.7.3"
-loc: "serve_b2b.py:12382-12452"
+loc: "serve_b2b.py:12517-12587"
 
 # ── 입출력 ──
 inputs:

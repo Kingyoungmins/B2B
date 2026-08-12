@@ -4,11 +4,11 @@ title: _sync_modified_companions_into_live
 module: serve_b2b.py
 lang: python
 extraction: ast
-signature: "(companions, excel_id, fpid, work)"
+signature: "(companions, excel_id, fpid, work, mutated_books=None, mutation_tracked=False)"
 role: "격리 인스턴스에서 '대상(ftarget)'이 아닌 동반 워크북이 변형됐으면(Saved=False),"
 role_source: docstring
 version: "0.7.3"
-loc: "serve_b2b.py:9698-9753"
+loc: "serve_b2b.py:9791-9859"
 
 # ── 입출력 ──
 inputs:
@@ -16,6 +16,8 @@ inputs:
   - "excel_id"
   - "fpid"
   - "work"
+  - "mutated_books"
+  - "mutation_tracked"
 returns: "(추정)"
 
 # ── 사이드이펙트 (정적 추정) ──
@@ -29,11 +31,13 @@ calls:
   - "_protect_workbook_for_read_only_mirror"
   - "_restore_live_window"
   - "_vba_trace"
+  - "normalize"
   - "session_workbook"
 calls_external:
   - "Path"
   - "SaveCopyAs"
   - "bool"
+  - "casefold"
   - "cname"
   - "err"
   - "excel_id"
@@ -41,10 +45,12 @@ calls_external:
   - "get"
   - "int"
   - "mkdir"
+  - "n"
   - "oapp"
   - "oid"
   - "other"
   - "owb"
+  - "set"
   - "spath"
   - "str"
   - "uuid4"
@@ -65,7 +71,7 @@ timestamp: "0.7.3-gen"
 - 파일시스템 변경/IO
 
 ## 관계
-- 호출: `_copy_source_workbook_into_target`, `_protect_workbook_for_read_only_mirror`, `_restore_live_window`, `_vba_trace`, `session_workbook`
+- 호출: `_copy_source_workbook_into_target`, `_protect_workbook_for_read_only_mirror`, `_restore_live_window`, `_vba_trace`, `normalize`, `session_workbook`
 - 피호출(영향 전파 경로): `_run_vba_pipeline_on_session_impl`
 
 ## 실패/예외

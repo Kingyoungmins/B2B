@@ -9,7 +9,7 @@ signature: "(self)"
 role: "[새로고침 즉시복원] 요청한 파일들에 '스킬 전부 적용된 최종 상태' 사본이 있는지 조회."
 role_source: docstring
 version: "0.7.3"
-loc: "serve_b2b.py:2095-2114"
+loc: "serve_b2b.py:2096-2115"
 
 # ── 입출력 ──
 inputs:

@@ -8,7 +8,7 @@ signature: "(timeout)"
 role: "진행 중인 비동기 force-restart kill 스레드를 기다린다(종료 경로 전용)."
 role_source: docstring
 version: "0.7.3"
-loc: "serve_b2b.py:1019-1034"
+loc: "serve_b2b.py:1020-1035"
 
 # ── 입출력 ──
 inputs:

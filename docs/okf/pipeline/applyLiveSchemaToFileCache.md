@@ -8,7 +8,7 @@ signature: "(excelId, schema)"
 role: "[#5] 라이브 COM 적용으로 구조가 바뀐 파일의 클라 스키마 캐시(미리보기 AoA/시트명/차원)를"
 role_source: banner
 version: "0.7.3"
-loc: "pipeline.js:4801-4801"
+loc: "pipeline.js:4904-4904"
 
 # ── 입출력 ──
 inputs:
@@ -33,8 +33,8 @@ calls_external:
   - "keys"
 called_by:
   - "_assistRefreshLiveFile"
+  - "_restoreSnapshotByIds"
   - "applyVbaStepToLiveExcel"
-  - "restoreLastStepPreApplySnapshot"
   - "runIsolatedLivePipelineSteps"
   - "runLivePipelineStepSequentially"
 reads:
@@ -52,7 +52,7 @@ timestamp: "0.7.3-gen"
 
 ## 관계
 - 호출: `fileIdForExcelMirrorId`, `getFile`, `syncFileMetadata`
-- 피호출(영향 전파 경로): `_assistRefreshLiveFile`, `applyVbaStepToLiveExcel`, `restoreLastStepPreApplySnapshot`, `runIsolatedLivePipelineSteps`, `runLivePipelineStepSequentially`
+- 피호출(영향 전파 경로): `_assistRefreshLiveFile`, `_restoreSnapshotByIds`, `applyVbaStepToLiveExcel`, `runIsolatedLivePipelineSteps`, `runLivePipelineStepSequentially`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`
