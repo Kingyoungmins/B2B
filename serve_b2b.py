@@ -2,6 +2,7 @@
 import http.server
 import ast
 import atexit
+import contextlib
 import csv
 import ctypes
 import datetime
@@ -3344,35 +3345,77 @@ def _protect_workbook_for_read_only_mirror(wb, enabled=True):
         except Exception:
             pass
         if enabled:
+            _protect_sheet_for_read_only_mirror(ws)
+
+
+def _protect_sheet_for_read_only_mirror(ws):
+    """시트 하나에 라이브 미러 편집 잠금을 건다(워크북 일괄 보호와 같은 옵션).
+    ctx.copy 처럼 '잠깐 풀고 원복'해야 하는 곳에서 재사용한다 — 옵션이 갈라지면
+    복사 뒤에 잠금이 미묘하게 달라져 화면 편집이 열리거나 정렬이 막힌다."""
+    try:
+        ws.Cells.Locked = True
+    except Exception:
+        pass
+    try:
+        ws.Protect(
+            EXCEL_MIRROR_PROTECT_PASSWORD,  # Password
+            True,   # DrawingObjects
+            True,   # Contents
+            True,   # Scenarios
+            True,   # UserInterfaceOnly
+            False,  # AllowFormattingCells
+            True,   # AllowFormattingColumns: column width drag/double-click autofit
+            True,   # AllowFormattingRows: row height drag/double-click autofit
+            False,  # AllowInsertingColumns
+            False,  # AllowInsertingRows
+            False,  # AllowInsertingHyperlinks
+            False,  # AllowDeletingColumns
+            False,  # AllowDeletingRows
+            True,   # AllowSorting
+            True,   # AllowFiltering
+            False,  # AllowUsingPivotTables
+        )
+    except TypeError:
+        ws.Protect(Password=EXCEL_MIRROR_PROTECT_PASSWORD)
+    except Exception:
+        pass
+    try:
+        _allow_read_only_mirror_selection(ws)
+    except Exception:
+        pass
+
+
+@contextlib.contextmanager
+def _mirror_unprotected_for_paste(ws):
+    """[붙여넣기 1004 수정 2026-08-12] 잠긴 시트에 '네이티브 복사'가 안 되는 문제.
+
+    사용자 제보: 보호를 건 적이 없는데 `ctx.copy` 가 "'정산' 시트가 보호되어 있어" 로 실패하고,
+    같은 일을 `ctx.read`→`ctx.write` 로 바꾸면 성공했다. 원인은 사용자 파일이 아니라 **우리 앱이
+    라이브 미러에 거는 편집 잠금**이다:
+      · 라이브 시트는 UserInterfaceOnly=True 로 보호한다 → 사용자 화면 편집만 막고 COM 쓰기는 허용.
+      · 그래서 `ws.Range.Value = ...`(ctx.write)는 통과한다.
+      · 그런데 `Range.Copy(Destination)` 은 붙여넣기라 **UI 동작으로 취급돼 보호에 막힌다**
+        (엑셀 고전 함정 — UserInterfaceOnly 는 '쓰기'는 열어 주지만 '붙여넣기'는 못 열어 준다).
+    즉 서식까지 보존하는 복사는 잠긴 채로는 불가능하다. 그 순간에만 잠금을 풀고 원복한다.
+
+    사용자가 자기 파일에 진짜로 건 암호 보호는 우리 암호로 안 풀린다 → 그때는 그대로 두고
+    원래 오류가 나게 둔다(남의 보호를 몰래 푸는 일은 하지 않는다)."""
+    unlocked = False
+    try:
+        if bool(ws.ProtectContents):
             try:
-                ws.Cells.Locked = True
+                ws.Unprotect(Password=EXCEL_MIRROR_PROTECT_PASSWORD)
+                unlocked = True
             except Exception:
-                pass
+                unlocked = False   # 우리 잠금이 아니다(사용자 암호) → 건드리지 않는다
+    except Exception:
+        unlocked = False
+    try:
+        yield
+    finally:
+        if unlocked:
             try:
-                ws.Protect(
-                    EXCEL_MIRROR_PROTECT_PASSWORD,  # Password
-                    True,   # DrawingObjects
-                    True,   # Contents
-                    True,   # Scenarios
-                    True,   # UserInterfaceOnly
-                    False,  # AllowFormattingCells
-                    True,   # AllowFormattingColumns: column width drag/double-click autofit
-                    True,   # AllowFormattingRows: row height drag/double-click autofit
-                    False,  # AllowInsertingColumns
-                    False,  # AllowInsertingRows
-                    False,  # AllowInsertingHyperlinks
-                    False,  # AllowDeletingColumns
-                    False,  # AllowDeletingRows
-                    True,   # AllowSorting
-                    True,   # AllowFiltering
-                    False,  # AllowUsingPivotTables
-                )
-            except TypeError:
-                ws.Protect(Password=EXCEL_MIRROR_PROTECT_PASSWORD)
-            except Exception:
-                pass
-            try:
-                _allow_read_only_mirror_selection(ws)
+                _protect_sheet_for_read_only_mirror(ws)
             except Exception:
                 pass
 
@@ -11326,7 +11369,8 @@ class PythonComSkillContext:
         except Exception:
             self._shared["structural"].append(f"copy:{dst_sheet}!{dst_cell}")
         t0 = time.perf_counter()
-        src.Copy(dst)
+        with _mirror_unprotected_for_paste(dst_ws):
+            src.Copy(dst)
         self._tick(1)
         try:
             cells = int(src.Rows.Count) * int(src.Columns.Count)
@@ -11430,11 +11474,14 @@ class PythonComSkillContext:
                     except Exception:
                         pass
                 self._tick(1)
-                src.Copy()
-                self._tick(1)
-                dst.PasteSpecial(Paste=-4163)  # xlPasteValues
+                # 붙여넣기는 잠긴 시트에서 막힌다(_mirror_unprotected_for_paste 주석 참조).
+                with _mirror_unprotected_for_paste(dst_ws):
+                    src.Copy()
+                    self._tick(1)
+                    dst.PasteSpecial(Paste=-4163)  # xlPasteValues
             else:
-                src.Copy(dst)
+                with _mirror_unprotected_for_paste(dst_ws):
+                    src.Copy(dst)
             self._tick(1)
             try:
                 self._app.CutCopyMode = False
@@ -12280,15 +12327,17 @@ class PythonComSkillContext:
             dst_ctx._journal_save(dst_ws, dst_target)
         except Exception:
             self._shared["structural"].append(f"copy_values:{dst_sheet}!{dst_cell}")
-        src.Copy()
-        try:
-            dst.PasteSpecial(Paste=-4104)   # xlPasteAll: 서식+테두리+병합+숫자서식(+수식)
-            dst.PasteSpecial(Paste=12)      # xlPasteValuesAndNumberFormats: 수식→계산값(참조 시프트 제거, EID 안전)
-        finally:
+        # 붙여넣기는 잠긴 시트에서 막힌다(_mirror_unprotected_for_paste 주석 참조).
+        with _mirror_unprotected_for_paste(dst_ws):
+            src.Copy()
             try:
-                self._app.CutCopyMode = False
-            except Exception:
-                pass
+                dst.PasteSpecial(Paste=-4104)   # xlPasteAll: 서식+테두리+병합+숫자서식(+수식)
+                dst.PasteSpecial(Paste=12)      # xlPasteValuesAndNumberFormats: 수식→계산값(참조 시프트 제거, EID 안전)
+            finally:
+                try:
+                    self._app.CutCopyMode = False
+                except Exception:
+                    pass
         return True
 
     def swap_cols(self, sheet, col_a, col_b, header_row=None):
