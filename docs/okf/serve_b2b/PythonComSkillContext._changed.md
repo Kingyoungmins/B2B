@@ -9,7 +9,7 @@ signature: "(self)"
 role: "---- 마무리/롤백 ----"
 role_source: banner
 version: "0.7.3"
-loc: "serve_b2b.py:13684-13685"
+loc: "serve_b2b.py:13774-13775"
 
 # ── 입출력 ──
 inputs:

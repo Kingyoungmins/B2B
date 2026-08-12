@@ -9,7 +9,7 @@ signature: "(self, sheet, a1_range, keep_formulas=False)"
 role: "범위 내용 삭제(서식 유지). keep_formulas=True 면 '수식 셀은 남기고 값(상수) 셀만' 비운다"
 role_source: docstring
 version: "0.7.3"
-loc: "serve_b2b.py:11598-11616"
+loc: "serve_b2b.py:11688-11706"
 
 # ── 입출력 ──
 inputs:

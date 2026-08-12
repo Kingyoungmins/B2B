@@ -8,7 +8,7 @@ signature: "(app)"
 role: "녹화 편집 모드: 우클릭(컨텍스트) 메뉴 복원 — 병합/셀 서식 진입 경로."
 role_source: docstring
 version: "0.7.3"
-loc: "serve_b2b.py:3214-3227"
+loc: "serve_b2b.py:3220-3233"
 
 # ── 입출력 ──
 inputs:

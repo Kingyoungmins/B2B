@@ -9,7 +9,7 @@ signature: "(self, row=None, column=None, value=_EXCEL_NO_CELL_VALUE)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
 version: "0.7.3"
-loc: "serve_b2b.py:15115-15119"
+loc: "serve_b2b.py:15205-15209"
 
 # ── 입출력 ──
 inputs:

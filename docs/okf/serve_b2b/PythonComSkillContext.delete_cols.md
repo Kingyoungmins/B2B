@@ -9,7 +9,7 @@ signature: "(self, sheet, col, count=1)"
 role: "전체 열 삭제. col 은 'Q', 17, 또는 'Q:AU' 범위 모두 허용."
 role_source: docstring
 version: "0.7.3"
-loc: "serve_b2b.py:11704-11719"
+loc: "serve_b2b.py:11794-11809"
 
 # ── 입출력 ──
 inputs:

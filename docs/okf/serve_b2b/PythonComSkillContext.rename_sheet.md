@@ -9,7 +9,7 @@ signature: "(self, old_name, new_name)"
 role: "시트 이름만 변경한다(위치·내용 유지). '복사/이동'이 아니라 순수 이름 변경 전용."
 role_source: docstring
 version: "0.7.3"
-loc: "serve_b2b.py:12669-12688"
+loc: "serve_b2b.py:12759-12778"
 
 # ── 입출력 ──
 inputs:

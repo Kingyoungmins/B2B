@@ -8,7 +8,7 @@ signature: "(wb_record, state_sig, src_path, move=False, link=False)"
 role: "이미 디스크에 있는 결과 파일(src_path)을 최종상태 사본으로 등록한다. 모드 3가지:"
 role_source: docstring
 version: "0.7.3"
-loc: "serve_b2b.py:17780-17818"
+loc: "serve_b2b.py:17870-17908"
 
 # ── 입출력 ──
 inputs:

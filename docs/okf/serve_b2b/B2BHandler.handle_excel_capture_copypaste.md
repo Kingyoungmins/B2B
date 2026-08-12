@@ -9,7 +9,7 @@ signature: "(self)"
 role: "[복붙 캡처] 사용자가 라이브 Excel에서 방금 한 Ctrl+C/Ctrl+V 를 역추적해"
 role_source: docstring
 version: "0.7.3"
-loc: "serve_b2b.py:2021-2046"
+loc: "serve_b2b.py:2027-2052"
 
 # ── 입출력 ──
 inputs:

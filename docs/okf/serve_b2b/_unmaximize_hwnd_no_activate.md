@@ -8,7 +8,7 @@ signature: "(hwnd)"
 role: "최대화된 창을 '활성화 없이' 보통 크기로 되돌린다."
 role_source: docstring
 version: "0.7.3"
-loc: "serve_b2b.py:4026-4048"
+loc: "serve_b2b.py:4080-4102"
 
 # ── 입출력 ──
 inputs:

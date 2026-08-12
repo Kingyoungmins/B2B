@@ -8,7 +8,7 @@ signature: "(app, wb)"
 role: "VBA 실행 후 라이브 보기 상태(편집 차단+선택 허용, 리본/우클릭 숨김, 화면갱신)를 복구."
 role_source: docstring
 version: "0.7.3"
-loc: "serve_b2b.py:8954-8975"
+loc: "serve_b2b.py:9024-9045"
 
 # ── 입출력 ──
 inputs:

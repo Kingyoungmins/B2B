@@ -8,7 +8,7 @@ signature: "(hwnd)"
 role: "프레임을 숨기지 않고 화면 밖(-32000)으로만 이동(WS_VISIBLE 유지)."
 role_source: docstring
 version: "0.7.3"
-loc: "serve_b2b.py:4051-4069"
+loc: "serve_b2b.py:4105-4123"
 
 # ── 입출력 ──
 inputs:

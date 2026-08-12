@@ -9,7 +9,7 @@ signature: "(self)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
 version: "0.7.3"
-loc: "serve_b2b.py:1601-1656"
+loc: "serve_b2b.py:1601-1662"
 
 # ── 입출력 ──
 inputs:
@@ -24,6 +24,7 @@ raises: []
 
 # ── 유기적 관계 ──
 calls:
+  - "_file_label_kind"
   - "_vba_trace"
   - "excel_available"
   - "inspect_workbook"
@@ -37,6 +38,7 @@ calls_external:
   - "_sheets"
   - "_t_inspect"
   - "_t_write"
+  - "bool"
   - "chunk"
   - "get"
   - "int"
@@ -81,7 +83,7 @@ timestamp: "0.7.3-gen"
 - 변경 상태 `WORKBOOKS` — 수정 시 이 상태를 읽는 곳 동반 점검.
 
 ## 관계
-- 호출: `_vba_trace`, `excel_available`, `inspect_workbook`, `is_csv_path`, `read`, `send_json`, `values`, `write`
+- 호출: `_file_label_kind`, `_vba_trace`, `excel_available`, `inspect_workbook`, `is_csv_path`, `read`, `send_json`, `values`, `write`
 - 피호출(영향 전파 경로): `B2BHandler.do_POST`
 
 ## 실패/예외

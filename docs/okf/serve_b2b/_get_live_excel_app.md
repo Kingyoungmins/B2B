@@ -8,7 +8,7 @@ signature: "()"
 role: "라이브 편집 워크북을 한 Excel 프로세스 안에 모으기 위한 앱 전용 Excel.Application."
 role_source: docstring
 version: "0.7.3"
-loc: "serve_b2b.py:4944-4998"
+loc: "serve_b2b.py:4998-5052"
 
 # ── 입출력 ──
 inputs: []
