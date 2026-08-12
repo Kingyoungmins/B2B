@@ -3096,6 +3096,17 @@
         ]
       ],
       "fix": "drop-handling.js window.runnerShowRunSummary: 단계 수·소요 시간(1분 넘으면 분/초)·완료 시각 + 결과 파일 목록(8개까지, 나머지는 '외 N개'). 결과 파일이 없으면 그 사실과 확인할 지점을 알려 준다(빈 카드 금지). [확인]/ESC 로만 닫히고 바깥 클릭으로는 안 닫힘(실수 방지), 재실행 시 이전 카드 제거, [결과 편집하기]는 기존 runner-edit-result-btn 을 그대로 클릭(중복 구현 금지). pipeline.js 실행기 성공 경로에서만 호출(_runT0 로 실제 소요 측정, catch 경로엔 없음). runner.css 스타일 + prefers-reduced-motion. 겸사겸사 runner.css 끝에 남아 있던 </style> 잔재 제거(이 파일은 link 로 로드되는 순수 CSS)."
+    },
+    {
+      "id": "ENVCONFIG-UNRELIABLE-SHEETNAMES",
+      "title": "[사내 MIP 라벨] 라벨 걸린 파일은 못 읽어 시트명을 '파일명'으로 지어내는데, 스킬 저장이 그 가짜 이름을 envConfig 에 담아 나중 실행에서 시트 요구가 강등되고 실행이 깨졌다.",
+      "checks": [
+        [
+          "node",
+          "test_runs/_test_envconfig_unreliable_sheets.js"
+        ]
+      ],
+      "fix": "save-load.js envConfigSheetNames(file): sheetNamesUnreliable(=백엔드 inspect 실패 → inspect_workbook_fallback 이 파일명을 시트명으로 지어낸 경우)면 빈 배열로 저장. 입력·출력 양쪽 적용. 비어 있으면 runnerApplyEnvConfigFilter 의 시트 강등 조건이 length 게이트에서 성립하지 않아 스킬에 적힌 진짜 시트명이 그대로 쓰인다(파일 요구는 name 으로 유지). 실행기 런타임에는 이미 방어가 있었고(runnerFindSheet 가 unreliable 파일에 빈 시트 반환) 저장 경로만 비대칭이었다."
     }
   ]
 }

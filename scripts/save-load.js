@@ -196,6 +196,21 @@ function buildLogicZipEntries(name) {
   }
 }
 
+/* [보안 라벨(MIP) 파일 저장 오염 2026-08-12] 백엔드가 워크북을 끝내 못 읽으면(사내 MIP Gateway 가
+   붙인 라벨/암호화, DRM 등) inspect_workbook_fallback 이 **파일명을 시트명인 척 지어낸다**.
+   앱은 그걸 sheetNamesUnreliable 로 표시해 실행기에서는 무시하는데(drop-handling.js runnerFindSheet),
+   스킬 저장은 그 가짜 이름을 envConfig 에 그대로 담고 있었다. 표시는 파일 객체에만 있고 저장 JSON
+   에는 안 남으므로, 그 스킬을 나중에 열면 가짜 이름이 '정본'으로 둔갑한다
+   → runnerApplyEnvConfigFilter 가 스킬의 진짜 시트 요구를 "그 파일엔 없는 시트"로 보고 강등
+   → 시트 치환이 끊겨 나중 실행에서 '시트를 찾을 수 없음'.
+   믿을 수 없는 이름은 아예 담지 않는다. 비어 있으면 그 파일은 시트 검증 대상에서 빠지고
+   (envConfig 필터가 length 로 게이트한다) 스킬에 적힌 진짜 시트명이 그대로 쓰인다. */
+function envConfigSheetNames(file) {
+  if (!file || !Array.isArray(file.sheetNames)) return [];
+  if (file.sheetNamesUnreliable) return [];
+  return [...file.sheetNames];
+}
+
 function _buildLogicZipEntriesImpl(safeBase, name) {
   const stepFiles = state.pipeline.map((s, idx) => {
     const lang = s && s.language ? s.language : "javascript";
@@ -220,14 +235,14 @@ function _buildLogicZipEntriesImpl(safeBase, name) {
         name: (f && f.name) || "",
         displayName: (typeof workbookDisplayName === "function"
           ? workbookDisplayName(f, `입력 파일 ${idx + 1}`) : "") || "",
-        sheetNames: (f && Array.isArray(f.sheetNames)) ? [...f.sheetNames] : [],
+        sheetNames: envConfigSheetNames(f),
       })).filter(x => x.name || x.displayName),
       outputs: (state.outputTemplates || []).map(t => {
         const f = t && (t.file || t.original);
         return f && f.name ? {
           name: f.name,
           displayName: (typeof workbookDisplayName === "function" ? workbookDisplayName(f, "") : "") || "",
-          sheetNames: Array.isArray(f.sheetNames) ? [...f.sheetNames] : [],
+          sheetNames: envConfigSheetNames(f),
         } : null;
       }).filter(Boolean),
     },
