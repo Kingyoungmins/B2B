@@ -8,7 +8,7 @@ signature: "(excelId, options = {})"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
 version: "0.7.3"
-loc: "pipeline.js:5190-5190"
+loc: "pipeline.js:5231-5231"
 
 # ── 입출력 ──
 inputs:
@@ -61,6 +61,7 @@ calls:
   - "stabilizeExcelMirrorZOrder"
   - "tracePipelineRun"
   - "warnUnresolvedPipelineTarget"
+  - "wirePipelineStepCrossEvidence"
 calls_external:
   - "Error"
   - "Number"
@@ -73,6 +74,7 @@ calls_external:
   - "from"
   - "includes"
   - "indexOf"
+  - "isArray"
   - "isInteger"
   - "join"
   - "liveLangOf"
@@ -106,7 +108,7 @@ timestamp: "0.7.3-gen"
 - 네트워크/서버 호출
 
 ## 관계
-- 호출: `_offStepsAmongSent`, `_stepsOnOffMap`, `attachPipelineStepError`, `beginExcelMirrorApplyLoading`, `canUsePipelineCheckpointFromIndex`, `clearPipelineResumeFromIndex`, `crossOutputFileIdsReferencedInCode`, `crossWriteDestinationFileIds`, `currentExcelId`, `endExcelMirrorApplyLoading`, `ensurePinnedVbaTargetExcelId`, `excelIdForPipelineFileId`, `fileIdForExcelMirrorId`, `getFile`, `hideAllExcelMirrorWindows`, `inferPipelineStepTargetFileId`, `inferPipelineStepTargetSheetName`, `invalidateLivePipelineApplied`, `muteExcelMirrorForPipeline`, `noteLivePipelineApplied`, `pipelineHasUnresolvedTarget`, `pipelinePinnedTargetFileId`, `pipelineStepLiveLanguage`, `pipelineTimeoutMs`, `positionExcelMirrorWindow`, `postExcelMirror`, `push`, `recordVbaDebugTiming`, `releaseExcelMirrorPipelineMute`, `requirePipelineSessionExcelId`, `restoreVbaExcelAfterError`, `runIsolatedLivePipelineSteps`, `scheduleRestoreActiveExcelMirror`, `showOnlyExcelMirrorWindow`, `stabilizeExcelMirrorZOrder`, `tracePipelineRun`, `warnUnresolvedPipelineTarget`
+- 호출: `_offStepsAmongSent`, `_stepsOnOffMap`, `attachPipelineStepError`, `beginExcelMirrorApplyLoading`, `canUsePipelineCheckpointFromIndex`, `clearPipelineResumeFromIndex`, `crossOutputFileIdsReferencedInCode`, `crossWriteDestinationFileIds`, `currentExcelId`, `endExcelMirrorApplyLoading`, `ensurePinnedVbaTargetExcelId`, `excelIdForPipelineFileId`, `fileIdForExcelMirrorId`, `getFile`, `hideAllExcelMirrorWindows`, `inferPipelineStepTargetFileId`, `inferPipelineStepTargetSheetName`, `invalidateLivePipelineApplied`, `muteExcelMirrorForPipeline`, `noteLivePipelineApplied`, `pipelineHasUnresolvedTarget`, `pipelinePinnedTargetFileId`, `pipelineStepLiveLanguage`, `pipelineTimeoutMs`, `positionExcelMirrorWindow`, `postExcelMirror`, `push`, `recordVbaDebugTiming`, `releaseExcelMirrorPipelineMute`, `requirePipelineSessionExcelId`, `restoreVbaExcelAfterError`, `runIsolatedLivePipelineSteps`, `scheduleRestoreActiveExcelMirror`, `showOnlyExcelMirrorWindow`, `stabilizeExcelMirrorZOrder`, `tracePipelineRun`, `warnUnresolvedPipelineTarget`, `wirePipelineStepCrossEvidence`
 - 피호출(영향 전파 경로): `reapplyVbaPipelineToLive`
 
 ## 실패/예외

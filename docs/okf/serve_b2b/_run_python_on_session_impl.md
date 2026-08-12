@@ -8,7 +8,7 @@ signature: "(excel_id, code, skip_static=False, timeout_s=None)"
 role: "라이브 세션에 떠 있는 실제 워크북에 Python COM 스킬을 실행한다(VBA 경로와 동일한 외피:"
 role_source: docstring
 version: "0.7.3"
-loc: "serve_b2b.py:14389-14443"
+loc: "serve_b2b.py:14452-14513"
 
 # ── 입출력 ──
 inputs:
@@ -29,6 +29,7 @@ calls:
   - "_ensure_companion_workbooks"
   - "_exec_python_com_skill"
   - "_live_preview_schema"
+  - "_live_session_excel_ids_for_books"
   - "_protect_workbook_for_read_only_mirror"
   - "_restore_app_state"
   - "_restore_live_protected_view"
@@ -70,7 +71,7 @@ timestamp: "0.7.3-gen"
 - EXCEL_LOCK 직렬화
 
 ## 관계
-- 호출: `_ensure_companion_workbooks`, `_exec_python_com_skill`, `_live_preview_schema`, `_protect_workbook_for_read_only_mirror`, `_restore_app_state`, `_restore_live_protected_view`, `_restore_live_window`, `_vba_trace`, `get_excel_session`, `session_workbook`
+- 호출: `_ensure_companion_workbooks`, `_exec_python_com_skill`, `_live_preview_schema`, `_live_session_excel_ids_for_books`, `_protect_workbook_for_read_only_mirror`, `_restore_app_state`, `_restore_live_protected_view`, `_restore_live_window`, `_vba_trace`, `get_excel_session`, `session_workbook`
 - 피호출(영향 전파 경로): `run_python_on_session`
 
 ## 실패/예외

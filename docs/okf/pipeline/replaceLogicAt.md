@@ -8,7 +8,7 @@ signature: "(stepId, newCode, newDescription, language, opts)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
 version: "0.7.3"
-loc: "pipeline.js:2489-2489"
+loc: "pipeline.js:2515-2515"
 
 # ── 입출력 ──
 inputs:
@@ -30,6 +30,7 @@ calls:
   - "applyMappedSingleStep"
   - "canUsePipelineCheckpointFromIndex"
   - "cancelActiveBackendPipeline"
+  - "dropStepCrossEvidence"
   - "getFile"
   - "getPipelineResumeFromIndex"
   - "getPipelineRuntimeStatus"
@@ -106,7 +107,7 @@ timestamp: "0.7.3-gen"
 - 변경 상태 `pipeline` — 수정 시 이 상태를 읽는 곳 동반 점검.
 
 ## 관계
-- 호출: `applyMappedSingleStep`, `canUsePipelineCheckpointFromIndex`, `cancelActiveBackendPipeline`, `getFile`, `getPipelineResumeFromIndex`, `getPipelineRuntimeStatus`, `getSkillEngine`, `hasBackendOnlyWorkbooks`, `markPipelinePendingFromIndex`, `normalizeStep`, `noteLivePipelineApplied`, `pipelineEditBusyReason`, `pipelineHasBackendOnlyStep`, `pipelineResolveSavedTargetFileId`, `pipelineStepLiveLanguage`, `pipelineStepWritesCrossFile`, `pipelineSuffixWritesCrossFile`, `pipelineUsesPython`, `pipelineUsesVba`, `pushHistory`, `reapplyVbaPipelineToLive`, `reconcilePipelineSimulationAfterEdit`, `refreshRunButton`, `renderPipeline`, `reportPipelineError`, `requestExcelApplyCancel`, `restore`, `restorePipelineStep`, `restorePipelineToCheckpointAndHold`, `runFromCheckpointAfterEdit`, `runPipeline`, `scheduleLogicAutoBackup`, `setPipelineRuntimeStatus`, `shouldDeferImmediatePipelineRun`, `toast`, `vbaTargetExcelId`
+- 호출: `applyMappedSingleStep`, `canUsePipelineCheckpointFromIndex`, `cancelActiveBackendPipeline`, `dropStepCrossEvidence`, `getFile`, `getPipelineResumeFromIndex`, `getPipelineRuntimeStatus`, `getSkillEngine`, `hasBackendOnlyWorkbooks`, `markPipelinePendingFromIndex`, `normalizeStep`, `noteLivePipelineApplied`, `pipelineEditBusyReason`, `pipelineHasBackendOnlyStep`, `pipelineResolveSavedTargetFileId`, `pipelineStepLiveLanguage`, `pipelineStepWritesCrossFile`, `pipelineSuffixWritesCrossFile`, `pipelineUsesPython`, `pipelineUsesVba`, `pushHistory`, `reapplyVbaPipelineToLive`, `reconcilePipelineSimulationAfterEdit`, `refreshRunButton`, `renderPipeline`, `reportPipelineError`, `requestExcelApplyCancel`, `restore`, `restorePipelineStep`, `restorePipelineToCheckpointAndHold`, `runFromCheckpointAfterEdit`, `runPipeline`, `scheduleLogicAutoBackup`, `setPipelineRuntimeStatus`, `shouldDeferImmediatePipelineRun`, `toast`, `vbaTargetExcelId`
 - 피호출(영향 전파 경로): `addAssistantReply`, `assistCommitProposal`, `runEditApply`
 
 ## 실패/예외

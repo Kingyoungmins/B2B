@@ -8,7 +8,7 @@ signature: "(step_cross, companions)"
 role: "스텝별 쓰기 증거를 클라가 쓸 형태로: 워크북 이름 → 라이브 세션 excelId."
 role_source: docstring
 version: "0.7.3"
-loc: "serve_b2b.py:9739-9752"
+loc: "serve_b2b.py:9739-9758"
 
 # ── 입출력 ──
 inputs:
@@ -26,6 +26,7 @@ calls:
   - "_companion_excel_ids_for_books"
   - "append"
 calls_external:
+  - "any"
   - "bool"
   - "companions"
   - "get"

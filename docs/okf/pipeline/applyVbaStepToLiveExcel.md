@@ -8,7 +8,7 @@ signature: "(step, excelId, options = {})"
 role: "0.4.9 리모콘 모델: 생성된 VBA를 라이브 워크북에 즉시 주입 실행한다."
 role_source: banner
 version: "0.7.3"
-loc: "pipeline.js:1946-1946"
+loc: "pipeline.js:1971-1971"
 
 # ── 입출력 ──
 inputs:
@@ -53,6 +53,7 @@ calls:
   - "setPipelineRuntimeStatus"
   - "toast"
   - "traceClientUiEvent"
+  - "wireStepCrossFromResponse"
 calls_external:
   - "Python"
   - "String"
@@ -86,7 +87,7 @@ timestamp: "0.7.3-gen"
 - 네트워크/서버 호출
 
 ## 관계
-- 호출: `applyLiveSchemaToFileCache`, `attachPipelineStepError`, `beginExcelMirrorApplyLoading`, `captureStepPreApplySnapshot`, `endExcelMirrorApplyLoading`, `fileIdForExcelMirrorId`, `hideAllExcelMirrorWindows`, `inferPipelineStepLanguage`, `isolatedPipelineStepPayload`, `muteExcelMirrorForPipeline`, `noteLivePipelineApplied`, `pipelineErrorMayHaveAppliedInExcel`, `postExcelMirror`, `push`, `pushHistory`, `recordVbaDebugTiming`, `refreshRunButton`, `releaseExcelMirrorPipelineMute`, `renderPipeline`, `reportPipelineError`, `requestExcelApplyCancel`, `restoreVbaExcelAfterError`, `rollbackAddedPipelineStep`, `scheduleLogicAutoBackup`, `scheduleRestoreActiveExcelMirror`, `setPipelineRuntimeStatus`, `toast`, `traceClientUiEvent`
+- 호출: `applyLiveSchemaToFileCache`, `attachPipelineStepError`, `beginExcelMirrorApplyLoading`, `captureStepPreApplySnapshot`, `endExcelMirrorApplyLoading`, `fileIdForExcelMirrorId`, `hideAllExcelMirrorWindows`, `inferPipelineStepLanguage`, `isolatedPipelineStepPayload`, `muteExcelMirrorForPipeline`, `noteLivePipelineApplied`, `pipelineErrorMayHaveAppliedInExcel`, `postExcelMirror`, `push`, `pushHistory`, `recordVbaDebugTiming`, `refreshRunButton`, `releaseExcelMirrorPipelineMute`, `renderPipeline`, `reportPipelineError`, `requestExcelApplyCancel`, `restoreVbaExcelAfterError`, `rollbackAddedPipelineStep`, `scheduleLogicAutoBackup`, `scheduleRestoreActiveExcelMirror`, `setPipelineRuntimeStatus`, `toast`, `traceClientUiEvent`, `wireStepCrossFromResponse`
 - 피호출(영향 전파 경로): `applyLogic`, `runVbaPipelinePreferLive`
 
 ## 실패/예외

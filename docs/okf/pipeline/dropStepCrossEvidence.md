@@ -1,18 +1,18 @@
 ---
 type: endpoint
-title: wrapSheets
+title: dropStepCrossEvidence
 module: pipeline.js
 lang: js
 extraction: regex   # 정규식 근사
-signature: "(sheetsObj)"
-role: "유사도 매칭 Proxy로 감싸기 (item 1)."
+signature: "(step)"
+role: "코드가 바뀌면 '어디에 썼는지'도 바뀐다 — 증거와 그 증거로 뜬 목적지 사본을 함께 버린다."
 role_source: banner
 version: "0.7.3"
-loc: "pipeline.js:3093-3093"
+loc: "pipeline.js:1254-1254"
 
 # ── 입출력 ──
 inputs:
-  - "sheetsObj"
+  - "step"
 returns: "(추정)"
 
 # ── 사이드이펙트 (정적 추정) ──
@@ -21,28 +21,25 @@ side_effects:
 raises: []
 
 # ── 유기적 관계 ──
-calls:
-  - "fuzzyProxy"
+calls: []
 calls_external: []
 called_by:
-  - "computeStateBeforeStep"
-  - "runPipeline"
-reads:
-  - "state.fuzzyResolution"
+  - "replaceLogicAt"
+reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
 timestamp: "0.7.3-gen"
 ---
 
 ## 역할
-유사도 매칭 Proxy로 감싸기 (item 1).
+코드가 바뀌면 '어디에 썼는지'도 바뀐다 — 증거와 그 증거로 뜬 목적지 사본을 함께 버린다.
 
 ## 사이드이펙트 & 주의
 - 없음(정적 분석 기준)
 
 ## 관계
-- 호출: `fuzzyProxy`
-- 피호출(영향 전파 경로): `computeStateBeforeStep`, `runPipeline`
+- 호출: 없음
+- 피호출(영향 전파 경로): `replaceLogicAt`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

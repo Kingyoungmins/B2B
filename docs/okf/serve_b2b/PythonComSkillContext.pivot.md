@@ -9,7 +9,7 @@ signature: "(self, sheet, group_by, value=None, agg='sum', dest_name=None, heade
 role: "그룹별 집계 피벗을 새 시트에 만든다. **기본은 엑셀 '진짜 피벗테이블(PivotTable 개체)'**(원본과 연결돼"
 role_source: docstring
 version: "0.7.3"
-loc: "serve_b2b.py:12490-12519"
+loc: "serve_b2b.py:12553-12582"
 
 # ── 입출력 ──
 inputs:

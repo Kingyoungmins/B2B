@@ -30,8 +30,10 @@ calls_external:
   - "isArray"
   - "isInteger"
 called_by:
+  - "_reapplyVbaPipelineToLiveImpl"
   - "runIsolatedLivePipelineSteps"
   - "runLivePipelineStepSequentially"
+  - "wireStepCrossFromResponse"
 reads:
   - "state.pipeline"
 writes: []
@@ -47,7 +49,7 @@ timestamp: "0.7.3-gen"
 
 ## 관계
 - 호출: `push`
-- 피호출(영향 전파 경로): `runIsolatedLivePipelineSteps`, `runLivePipelineStepSequentially`
+- 피호출(영향 전파 경로): `_reapplyVbaPipelineToLiveImpl`, `runIsolatedLivePipelineSteps`, `runLivePipelineStepSequentially`, `wireStepCrossFromResponse`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

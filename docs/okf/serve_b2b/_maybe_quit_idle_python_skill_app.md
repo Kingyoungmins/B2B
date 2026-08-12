@@ -8,7 +8,7 @@ signature: "()"
 role: "Run only on the Excel COM STA worker. Do not call from HTTP threads."
 role_source: docstring
 version: "0.7.3"
-loc: "serve_b2b.py:17984-18003"
+loc: "serve_b2b.py:18054-18073"
 
 # ── 입출력 ──
 inputs: []
