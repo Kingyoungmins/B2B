@@ -2015,7 +2015,15 @@ async function runLivePipelineStepSequentially(step, excelId, options = {}) {
   // [0.5.15 크래시 수정] VBA 는 라이브(임베드) Excel 에서 직접 Application.Run 하면 RPC 사망으로 백엔드가
   // 통째 죽을 수 있다(앱 재시작). 마지막 스텝 fast-apply 도 격리 인스턴스에서 1스텝 reset:false(현재 상태 위)로
   // 실행한다. Python COM 은 RPC 사망을 안 일으켜 기존 라이브 경로 유지.
-  const isVbaSeq = lang !== "python";
+  // [교차파일 단일 적용 2026-08-12] 다른 파일에 쓰는 Python 스텝도 격리 1스텝(reset:false)으로 보낸다.
+  //   왜: 라이브 경로는 '보던 탭' 세션에서 돌아 목적지 파일의 보호가 안 풀리고 소스 워크북 뷰가 풀린다
+  //   (runIsolatedLivePipelineSteps 주석과 같은 이유). 그래서 지금까지 교차파일 스텝을 켜면
+  //   '리셋 + 켜진 스텝 전부 재적용'으로 도망갔는데, 앞 단계가 이미 적용돼 있어도 전부 다시 돌아
+  //   VM 실측 4분 35초가 걸렸다(사용자 제보: "1,2단계는 이미 on 인데 전체 재적용이 되는 게 이상하다").
+  //   격리 경로는 목적지 파일을 함께 열고 끝나면 라이브로 동기화하므로(_sync_companion) 안전하다.
+  const writesCrossFile = (typeof pipelineStepWritesCrossFile === "function")
+    && pipelineStepWritesCrossFile(step);
+  const isVbaSeq = lang !== "python" || writesCrossFile;
   const stepId = step.stepId || step.id || null;
   const stepIdx = Number.isInteger(step.stepIdx) ? step.stepIdx : -1;
   const endpoint = isVbaSeq ? "/api/excel/run-vba-pipeline" : "/api/excel/run-python";
@@ -2026,7 +2034,10 @@ async function runLivePipelineStepSequentially(step, excelId, options = {}) {
     if (options.prehide !== false && typeof hideAllExcelMirrorWindows === "function") {
       try { await hideAllExcelMirrorWindows(); } catch (_) {}
     }
-    await captureStepPreApplySnapshot(step, excelId);
+    // 호출자가 방금 찍었으면 다시 찍지 않는다(같은 상태를 두 번 저장하는 낭비 — 대용량에서 6초씩).
+    if (options.skipPreApplySnapshot !== true) {
+      await captureStepPreApplySnapshot(step, excelId);
+    }
     const payload = isVbaSeq
       ? { excelId, steps: [isolatedPipelineStepPayload(step, stepIdx >= 0 ? stepIdx : (state.pipeline || []).indexOf(step))], reset: false }
       : { excelId, code: step.code || "" };
@@ -3779,16 +3790,21 @@ async function _handlePipelineStepToggleImpl(stepId) {
   // 뷰 풀림 위험) → 단일적용 대신 결정적 reset+enabled 재적용(이 스텝 포함, 파이프라인 순서대로).
   const _sigNull = _lastLiveAppliedSignature === null;
   const _sigMismatch = !_sigNull && liveEnabledStepsSignature(beforeToggleSnapshot) !== _lastLiveAppliedSignature;
-  const _crossFile = (typeof pipelineStepWritesCrossFile === "function" && pipelineStepWritesCrossFile(toggledStep));
-  if (_sigNull || _sigMismatch || _crossFile) {
-    // [진단 계측] 넷 중 무엇 때문에 전체 재적용으로 갔는지 남긴다(판정은 위 조건 그대로 — 무변경).
+  // [교차파일 가드 해제 2026-08-12] 예전엔 '다른 파일에 쓰는 스텝'이면 무조건 리셋+전체 재적용이었다.
+  // 라이브 단일적용이 목적지 파일을 제대로 못 다뤄서였는데, 이제 그런 스텝은 격리 1스텝으로 보낸다
+  // (runLivePipelineStepSequentially 의 writesCrossFile 분기). 앞 단계가 이미 적용돼 있는데 전부
+  // 다시 돌 이유가 없다 — VM 실측 4분 35초 중 실제 일한 시간은 35초였다.
+  // 판정에는 더 이상 쓰지 않고, 어느 길로 갔는지 알아볼 수 있게 기록에만 남긴다.
+  const _crossFileStep = (typeof pipelineStepWritesCrossFile === "function" && pipelineStepWritesCrossFile(toggledStep));
+  if (_sigNull || _sigMismatch) {
+    // [진단 계측] 무엇 때문에 전체 재적용으로 갔는지 남긴다.
     traceToggleOnRoute("full_reapply", {
-      cause: _sigNull ? "signature_missing" : (_sigMismatch ? "signature_mismatch" : "cross_file_write"),
+      cause: _sigNull ? "signature_missing" : "signature_mismatch",
       stepIdx: currentIdx,
       stepId: stepId,
       sigNull: _sigNull,
       sigMismatch: _sigMismatch,
-      crossFile: _crossFile,
+      crossFile: _crossFileStep,
       runnerMappingChecked: !!state.runnerMappingChecked,
       runnerMappingRunActive: !!state.runnerMappingRunActive,
       enabledBefore: (beforeToggleSnapshot || []).filter(s => s && s.code && isStepEnabled(s)).length,
@@ -3805,7 +3821,8 @@ async function _handlePipelineStepToggleImpl(stepId) {
   }
   // 단일 스텝 즉시 적용 — 적용 '직전' 스냅샷을 자동 캡처하므로 이후 이 스텝 OFF 롤백도 fast 로 동작.
   // [진단 계측] 정상 경로도 같이 남긴다 — 전체 재적용 기록만 있으면 '몇 번 중 몇 번'인지 알 수 없다.
-  traceToggleOnRoute("single_step", { stepIdx: currentIdx, stepId: stepId });
+  // crossFile 이면 라이브가 아니라 격리 1스텝으로 도는데, 로그만 보고 그걸 구분할 수 있어야 한다.
+  traceToggleOnRoute("single_step", { stepIdx: currentIdx, stepId: stepId, crossFile: _crossFileStep });
   setPipelineRuntimeStatus([stepId], "running", "적용 중");
   try {
     const _applied = await applyMappedSingleStep(stepId);   // [실행기 매핑] 옛 파일/시트명 → 실제명으로 치환 후 적용
@@ -4684,12 +4701,21 @@ async function applyMappedSingleStep(stepId, options = {}) {
   const __mapRun = (typeof beginMappedPipelineRun === "function")
     ? beginMappedPipelineRun() : { restore: () => {} };
   let _result = false;
+  // [무표시 34초 2026-08-12 실측] 단계를 켜면 이 경로로 오는데 로딩 오버레이가 없었다.
+  // VM 로그 13:06:53~13:07:27 구간에 apply_loading 이 아예 없다 — 사용자는 34초 동안 화면이
+  // 잠기지도, 무슨 일이 벌어지는지도 모른 채 '멈춘 것처럼' 봤다(제보).
+  // 전체 재적용 경로와 같은 문구를 쓴다 — 사용자 입장에선 둘 다 '스킬을 다시 적용하는 중'이다.
+  const _loading = (typeof beginExcelMirrorApplyLoading === "function");
+  if (_loading) beginExcelMirrorApplyLoading("스킬 재적용 중...", { failsafeMs: 330000 });
   try {
     const step = (state.pipeline || []).find(s => s && s.id === stepId);
     if (!step) return false;
     _result = await applyLastEnabledStepFast(step, { steps: state.pipeline, ...options });
     return _result;
   } finally {
+    if (_loading && typeof endExcelMirrorApplyLoading === "function") {
+      try { endExcelMirrorApplyLoading(); } catch (_) {}
+    }
     try { __mapRun.restore(); } catch (_) {}
     // [서명 정합] applyLastEnabledStepFast 가 스왑된 '매핑본 코드'의 서명을 기록했다(_lastLiveAppliedSignature).
     // 복원 후엔 state.pipeline 이 '원본 코드'라, 다음 토글의 liveEnabledStepsSignature(원본)와 불일치해
@@ -4725,6 +4751,10 @@ async function applyLastEnabledStepFast(step, options = {}) {
   const result = await runLivePipelineStepSequentially(step, excelId, {
     timeoutMs: 90000,
     prehide: true,
+    // [중복 스냅샷 2026-08-12 실측] 바로 위에서 이미 찍었다. 그 사이 워크북을 건드리는 것이
+    // 없으므로 두 번째는 같은 내용을 또 저장하는 순수 낭비다 — VM 로그에서 32MB 파일 기준
+    // 6.1초 + 6.2초로 12초를 썼다(13:06:59, 13:07:05). 한 번만 찍는다.
+    skipPreApplySnapshot: true,
   });
   noteLivePipelineApplied(options.steps || state.pipeline);
   return result || true;

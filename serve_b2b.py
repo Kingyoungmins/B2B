@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env python3
+#!/usr/bin/env python3
 import http.server
 import ast
 import atexit
@@ -2729,6 +2729,44 @@ def is_ole_excel_file(path):
     return office_file_signature(path).startswith(b"\xD0\xCF\x11\xE0")
 
 
+def is_encrypted_ooxml(path):
+    """[사내 MIP 라벨 2026-08-12] 암호화된 xlsx 인가 — 구형 .xls 와 구분한다.
+
+    왜 필요한가: 암호화된 OOXML(민감도 라벨이 암호화를 걸면 이렇게 된다)은 겉모습이 구형 .xls 와
+    똑같은 OLE 복합문서다. 그래서 excel_compatible_open_path 가 '확장자만 .xlsx 인 위장 .xls'로
+    오인해 **.xls 로 복사한 뒤 열고 있었다**(VM 실측: 격리 대상 워크북 경로가 .xls 로 잡힘).
+    Excel 은 MIP 로 복호화해 열어 주지만, 그 뒤로는 '이 문서는 구형 xls'라는 잘못된 전제가 붙는다.
+    OLE 안에 'EncryptedPackage' 스트림이 있으면 암호화된 OOXML 이다(구형 .xls 엔 'Workbook' 이 있다).
+    헤더 512바이트 + 디렉터리 1섹터만 읽는다."""
+    try:
+        with Path(path).open("rb") as f:
+            hdr = f.read(512)
+            if hdr[:8] != b"\xD0\xCF\x11\xE0\xA1\xB1\x1A\xE1":
+                return False
+            sect_size = 1 << int.from_bytes(hdr[30:32], "little")
+            if not (64 <= sect_size <= 65536):
+                return False
+            dir_sect = int.from_bytes(hdr[48:52], "little")
+            if dir_sect >= 0xFFFFFFFA:
+                return False
+            f.seek((dir_sect + 1) * sect_size)
+            dir_data = f.read(sect_size)
+    except Exception:
+        return False
+    for off in range(0, len(dir_data) - 127, 128):
+        ent = dir_data[off:off + 128]
+        n_len = int.from_bytes(ent[64:66], "little")
+        if not (4 <= n_len <= 64):
+            continue
+        try:
+            nm = ent[:n_len - 2].decode("utf-16-le", "ignore")
+        except Exception:
+            continue
+        if nm == "EncryptedPackage":
+            return True
+    return False
+
+
 def sniff_text_excel_suffix(path):
     try:
         raw = Path(path).read_bytes()[:8192]
@@ -2766,7 +2804,10 @@ def excel_compatible_open_path(path):
         zip_suffix = excel_zip_file_suffix(path)
         if zip_suffix and not _excel_suffix_matches_content(suffix, zip_suffix):
             wanted_suffix = zip_suffix
-    if not wanted_suffix and is_ole_excel_file(path) and suffix != ".xls":
+    # [사내 MIP 라벨 2026-08-12] 암호화된 xlsx 는 겉모습이 구형 .xls 와 같은 OLE 다.
+    # 여기서 .xls 로 바꿔 열면 '구형 문서'라는 잘못된 전제가 붙는다 — 암호화본은 확장자를 그대로 두고
+    # 연다(Excel + MIP 가 복호화해 정상 OOXML 로 열어 준다).
+    if not wanted_suffix and is_ole_excel_file(path) and suffix != ".xls" and not is_encrypted_ooxml(path):
         wanted_suffix = ".xls"
     if not wanted_suffix:
         return path, None
@@ -3418,7 +3459,8 @@ def _file_label_kind(path):
             return "none"
         if head[:4] == b"\xd0\xcf\x11\xe0":
             # OLE 복합문서 — 구형 .xls 이거나, 암호화된 OOXML(라벨이 암호화를 걸면 이 모양이 된다).
-            return "legacy-ole" if p.suffix.lower() in (".xls", ".xlt", ".xlm") else "encrypted"
+            # 확장자로 찍으면 틀린다(암호화본을 .xls 로 복사해 여는 경로가 있었다) → 내용으로 본다.
+            return "encrypted" if is_encrypted_ooxml(p) else "legacy-ole"
     except Exception:
         pass
     return ""
@@ -5604,6 +5646,24 @@ def session_workbook(session):
                 return app, wb
     except Exception:
         pass
+    # 여기까지 왔다 = 열려 있는 워크북을 못 찾았다(COM 참조 사망) → 디스크에서 다시 연다.
+    # [리셋 지연 반영 2026-08-12] 리셋은 메모리에서만 되돌리고 디스크에는 표시만 남긴다
+    # (Office 저장을 하면 사내 MIP 가 라벨을 붙여 버린다 — _run_vba_pipeline_on_session_impl 주석).
+    # 정말로 디스크에서 다시 여는 이 순간에만, 파이썬 파일 복사로 원본 상태를 만들어 준다.
+    # 워크북이 안 열려 있는 시점이라 덮어쓰기가 가능하다(열려 있으면 위에서 이미 반환됐다).
+    _pristine = session.get("diskPristineFrom")
+    if _pristine:
+        try:
+            if Path(_pristine).exists() and Path(_pristine).resolve() != Path(session["path"]).resolve():
+                shutil.copy2(_pristine, session["path"])
+                _vba_trace("excel.session.disk_restored", excelId=session.get("excelId"),
+                           source=str(_pristine), target=str(session["path"]))
+        except Exception as _restore_err:
+            # 실패해도 아래에서 그냥 연다 — 예전(Save 안 된 경우)과 같은 상태이지 더 나쁘지 않다.
+            _vba_trace("excel.session.disk_restore.skip", excelId=session.get("excelId"),
+                       error=str(_restore_err))
+        finally:
+            session["diskPristineFrom"] = ""
     try:
         wb = win32com.client.GetObject(str(session["path"]))
         app = wb.Application
@@ -5746,6 +5806,7 @@ def _save_excel_session_impl(excel_id, name=None, internal=False):
                 wb.SaveAs(str(result_path))
             session["path"] = str(result_path)
             session["name"] = safe_name
+            session["diskPristineFrom"] = ""   # 이 파일은 '현재 상태'다 — 원본 복구 표시 해제
         else:
             BACKEND_DIR.mkdir(parents=True, exist_ok=True)
             _src_path = Path(session["path"])
@@ -5760,6 +5821,7 @@ def _save_excel_session_impl(excel_id, name=None, internal=False):
                 wb.SaveAs(str(result_path), FileFormat=51)
                 session["path"] = str(result_path)
                 session["name"] = _promoted
+                session["diskPristineFrom"] = ""   # 위와 같은 이유로 해제
                 safe_name = _promoted
             else:
                 wb.SaveCopyAs(str(result_path))
@@ -5991,6 +6053,7 @@ def _replace_excel_session_workbook_impl(excel_id, path, name=None, result_id=No
         # session_workbook 가 재오픈(GetObject)해도 깨끗한 이름을 유지해, 이름 비교 VBA 가 안 깨진다.
         session["path"] = str(replace_open_path)
         session["openPath"] = str(new_wb.FullName)
+        session["diskPristineFrom"] = ""   # 교체본이 곧 현재 상태 — 원본 복구 표시 해제
         session["openTempPath"] = str(new_temp_path) if new_temp_path else ""
         session["replaceOpenDir"] = str(replace_open_dir) if replace_open_dir else ""
         session["name"] = clean_name
@@ -7087,6 +7150,7 @@ def _reopen_excel_session_workbook(session):
     session["pid"] = _excel_process_id(app)
     session["path"] = str(path)
     session["openPath"] = str(wb.FullName)
+    session["diskPristineFrom"] = ""   # 새로 연 파일이 곧 현재 상태 — 원본 복구 표시 해제
     session["openTempPath"] = str(open_temp_path) if open_temp_path else session.get("openTempPath", "")
     session["snapshots"] = {}
     try:
@@ -9696,27 +9760,20 @@ def _run_vba_pipeline_on_session_impl(excel_id, steps, reset=True, entry=None, v
                     # [SBAGENT-138] 리셋은 워크북을 '메모리'에서만 원본으로 되돌린다. 저사양 PC 는 다음 스텝 콜
                     # 사이에 Excel COM 참조가 죽어 session_workbook 이 '디스크(작업복사본)'에서 재오픈하는데,
                     # 그 파일은 아직 직전 실행 결과(예: Sheet1→06_DAS) 상태라 1단계가 "시트 못 찾음"으로 터졌다
-                    # (고사양은 참조가 살아 메모리 복원본을 봐서 정상). → 복원 직후 디스크에 저장해 재오픈해도
-                    # 항상 원본을 보장한다(직후 reset:false 격리 SaveCopyAs 도 pristine 을 복사).
-                    try:
-                        _da_prev = app.DisplayAlerts
-                    except Exception:
-                        _da_prev = None
-                    try:
-                        app.DisplayAlerts = False
-                    except Exception:
-                        pass
-                    try:
-                        wb.Save()
-                        _vba_trace("pipeline.reset.persisted", excelId=excel_id, workbook=_trace_workbook_info(wb))
-                    except Exception as _reset_save_err:
-                        _vba_trace("pipeline.reset.save.skip", excelId=excel_id, error=str(_reset_save_err))
-                    finally:
-                        if _da_prev is not None:
-                            try:
-                                app.DisplayAlerts = _da_prev
-                            except Exception:
-                                pass
+                    # (고사양은 참조가 살아 메모리 복원본을 봐서 정상).
+                    #
+                    # [사내 MIP 라벨 2026-08-12] 예전엔 여기서 곧바로 wb.Save() 를 했다. 그런데 Save() 는
+                    # Office 의 '정식 저장'이라 사내 보안 부가기능(MIP)이 반드시 끼어들어 기본 라벨을 붙인다
+                    # — VM 실측에서 이 저장 직후부터 작업 파일이 암호화됐고(13:02 srcLabel=none →
+                    # 13:06 srcLabel=encrypted), 이후 모든 사본이 암호화를 물려받아 되돌리기가 느려지고
+                    # 스킬이 꼬였다. 저장 자체도 리셋 1회당 8~19초를 먹었다.
+                    # → 디스크에 지금 쓰지 않고 '재오픈하면 원본부터'라는 표시만 남긴다. 실제 복구는
+                    #   session_workbook 이 정말로 디스크에서 다시 열어야 할 때(=COM 이 죽은 그 드문 경우)
+                    #   파이썬 파일 복사로 한다. 파이썬 복사는 Office 저장이 아니라 MIP 가 개입하지 않는다.
+                    session["diskPristineFrom"] = str(source) if source else ""
+                    _vba_trace("pipeline.reset.persisted", excelId=excel_id,
+                               mode="deferred", source=str(source or ""),
+                               workbook=_trace_workbook_info(wb))
                 return {"ok": True, "excelId": excel_id, "applied": 0}
 
             # 스텝 있음: 격리된 새 인스턴스에서 reset+실행 후 결과를 라이브에 반영.

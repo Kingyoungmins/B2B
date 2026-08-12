@@ -77,12 +77,12 @@ function decideToggleOnRoute(currentIdx, stepId, toggledStep, beforeToggleSnapsh
   }
   var _sigNull = _lastLiveAppliedSignature === null;
   var _sigMismatch = !_sigNull && liveEnabledStepsSignature(beforeToggleSnapshot) !== _lastLiveAppliedSignature;
-  var _crossFile = !!(crossFileFn && crossFileFn(toggledStep));
-  if (_sigNull || _sigMismatch || _crossFile) {
+  var _crossFileStep = !!(crossFileFn && crossFileFn(toggledStep));
+  if (_sigNull || _sigMismatch) {
     traceToggleOnRoute("full_reapply", {
-      cause: _sigNull ? "signature_missing" : (_sigMismatch ? "signature_mismatch" : "cross_file_write"),
+      cause: _sigNull ? "signature_missing" : "signature_mismatch",
       stepIdx: currentIdx, stepId: stepId,
-      sigNull: _sigNull, sigMismatch: _sigMismatch, crossFile: _crossFile,
+      sigNull: _sigNull, sigMismatch: _sigMismatch, crossFile: _crossFileStep,
       runnerMappingChecked: !!state.runnerMappingChecked,
       runnerMappingRunActive: !!state.runnerMappingRunActive,
       enabledBefore: (beforeToggleSnapshot || []).filter(function (s) { return s && s.code && isStepEnabled(s); }).length,
@@ -91,7 +91,7 @@ function decideToggleOnRoute(currentIdx, stepId, toggledStep, beforeToggleSnapsh
     });
     return "full_reapply";
   }
-  traceToggleOnRoute("single_step", { stepIdx: currentIdx, stepId: stepId });
+  traceToggleOnRoute("single_step", { stepIdx: currentIdx, stepId: stepId, crossFile: _crossFileStep });
   return "single_step";
 }
 `;
@@ -152,16 +152,25 @@ T.invalidate();
   check("불일치 진단은 비어 있음", T.last().fields.diff === "", T.last().fields.diff);
 }
 
-console.log("[3] 교차파일(cross_file_write) — 서명이 맞아도 걸린다");
+console.log("[3] 교차파일 — 이제 전체 재적용으로 도망가지 않는다  ← 2026-08-12 변경");
+// 예전엔 '다른 파일에 쓰는 스텝'이면 서명이 맞아도 리셋+전체 재적용이었다(VM 실측 4분 35초,
+// 그중 실제 일한 시간 35초). 이제 그런 스텝은 격리 1스텝으로 돌므로 단일 적용으로 간다.
 T.reset(steps());
 {
   const before = T.state.pipeline.slice(0, 2);
   T.note(before);
   const r = T.decideToggleOnRoute(2, "a3", T.state.pipeline[2], before, yesCross);
-  check("route=full_reapply", r === "full_reapply", r);
-  check("cause=cross_file_write", T.last().fields.cause === "cross_file_write", T.last().fields.cause);
-  check("서명은 정상이었음이 기록됨", T.last().fields.sigNull === "false" && T.last().fields.sigMismatch === "false",
-    JSON.stringify(T.last().fields));
+  check("route=single_step", r === "single_step", r);
+  check("교차파일이라는 사실은 기록에 남는다", T.last().fields.crossFile === "true", JSON.stringify(T.last().fields));
+  check("cross_file_write 로 전체 재적용하지 않는다", T.traces.every(t => t.fields.cause !== "cross_file_write"));
+}
+{
+  // 서명이 어긋나면 교차파일이든 아니든 전체 재적용 — 그 판정은 그대로다.
+  T.reset(steps());
+  T.invalidate();
+  const r = T.decideToggleOnRoute(2, "a3", T.state.pipeline[2], T.state.pipeline.slice(0, 2), yesCross);
+  check("서명 문제일 땐 여전히 전체 재적용", r === "full_reapply", r);
+  check("그때도 교차파일 여부는 기록", T.last().fields.crossFile === "true");
 }
 
 console.log("[4] 서명 불일치 — '무엇이 달라졌는지'까지 남는다  ← 이번 조사의 목적");
@@ -215,7 +224,9 @@ T.reset(steps());
 }
 
 console.log("[6] 판정 로직 무변경 — 원문 조건식이 그대로인가");
-check("조건 3개를 그대로 OR 로 판정", /if \(_sigNull \|\| _sigMismatch \|\| _crossFile\) \{/.test(pj));
+check("판정은 서명 두 조건만 — 교차파일은 뺐다(격리 1스텝이 처리)",
+  /if \(_sigNull \|\| _sigMismatch\) \{/.test(pj) && !/\|\| _crossFile\)/.test(pj));
+check("교차파일 스텝은 격리 1스텝으로 라우팅", /const isVbaSeq = lang !== "python" \|\| writesCrossFile;/.test(pj));
 check("_sigNull 정의 동일", /const _sigNull = _lastLiveAppliedSignature === null;/.test(pj));
 check("_sigMismatch 는 sigNull 이 아닐 때만 계산(단축평가 보존)",
   /const _sigMismatch = !_sigNull && liveEnabledStepsSignature\(beforeToggleSnapshot\) !== _lastLiveAppliedSignature;/.test(pj));

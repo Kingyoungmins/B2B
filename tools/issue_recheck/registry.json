@@ -3113,6 +3113,36 @@
       "title": "[진단 계측] 사내 MIP 라벨이 어떤 스냅샷엔 붙고 어떤 건 안 붙는 이유 + 되돌리기 지연을 실측으로 가르기 위한 로그.",
       "checks": [],
       "fix": "serve_b2b.py _file_label_kind(path): 앞 8바이트로 none/label/encrypted/legacy-ole 판별(PK=zip이면 docMetadata/LabelInfo 존재 여부까지, D0CF11E0=OLE면 확장자로 구형 xls 와 암호화 구분). 실제 사용자 파일 18개로 판별 검증(한전 3개·더미 4개=encrypted, 나머지 none). 계측 지점: upload.done(원본 라벨 + inspectFallback), excel.save.snapshot(label+srcLabel+sizeMB), pipeline.step.snapshot.saved / fullrun.step.snapshot.saved(신규 — 이 경로엔 소요 시간 기록조차 없었다: ms+label+srcLabel+sizeMB), excel.replace.opened(신규 — 되돌리기가 느린 지점: openMs+label+sizeMB). 핵심은 label 과 srcLabel 을 함께 남기는 것 — src=none 인데 사본이 label 이면 '저장할 때 새로 붙는다', src 도 label 이면 '문서에 이미 있어 물려받는다'로 가설이 갈린다."
+    },
+    {
+      "id": "REAPPLY-SLOW-AND-SILENT",
+      "title": "[VM 실측] 단계 켜기가 34초 동안 아무 표시 없이 멈춘 듯 보임 + 스냅샷 중복(6초×2) + 교차파일 스텝 ON 이 전체 재적용(4분 35초, 실제 일한 시간 35초)",
+      "checks": [
+        [
+          "node",
+          "test_runs/_test_single_apply_overlay_and_snapshot.js"
+        ],
+        [
+          "node",
+          "test_runs/_test_toggle_on_route_trace.js"
+        ],
+        [
+          "node",
+          "test_runs/_test_isolated_pipeline_sequential_apply.js"
+        ]
+      ],
+      "fix": "pipeline.js ①applyMappedSingleStep 에 beginExcelMirrorApplyLoading('스킬 재적용 중...')/finally endExcelMirrorApplyLoading — VM 로그 13:06:53~13:07:27 에 apply_loading 이 아예 없었다. ②applyLastEnabledStepFast 가 skipPreApplySnapshot:true 로 넘겨 runLivePipelineStepSequentially 의 중복 캡처 제거(32MB 6.1s+6.2s). ③runLivePipelineStepSequentially: 교차파일 python 스텝을 격리 1스텝(reset:false)으로 라우팅하고, ON 판정에서 교차파일 조건 제거 — 격리 경로가 목적지를 함께 열고 끝나면 라이브로 동기화하므로 안전. OFF 쪽 교차파일 가드는 그대로. 부수: _test_isolated_pipeline_sequential_apply.js 가 계측 추가 후 ReferenceError 로 죽어 본래 단언에 못 닿던 것 + 기존 window 스텁 결손을 채워 14/14 로 복구."
+    },
+    {
+      "id": "RESET-OFFICE-SAVE-MIP-LABEL",
+      "title": "[사내 MIP] 리셋의 wb.Save() 가 보안 라벨을 붙이는 원인 — 이 저장 직후부터 작업 파일이 암호화되고(srcLabel none→encrypted) 모든 사본이 물려받아 되돌리기가 느려지고 스킬이 꼬였다. 저장 자체도 리셋 1회당 8~19초.",
+      "checks": [
+        [
+          "com",
+          "test_runs/_test_reset_no_office_save_com.py"
+        ]
+      ],
+      "fix": "serve_b2b.py: 리셋은 메모리 복원 후 session['diskPristineFrom'] 표시만 남기고 Office 저장을 하지 않는다. 실제 디스크 복구는 session_workbook 이 정말 디스크에서 다시 열어야 할 때(COM 참조 사망 폴백)에만 shutil.copy2 로 — 파이썬 복사엔 MIP 가 개입하지 않는다. SBAGENT-138(저사양 재오픈 시 원본 보장)은 그대로 지켜진다. 표시는 session['path'] 가 바뀌는 4곳(SaveAs 2곳, replace, open)에서 해제 — 안 하면 나중 재오픈이 결과를 원본으로 덮어쓴다. 실측(COM 9/9): 리셋 후 파일 수정시각 불변, 디스크 오염 후 재오픈하면 원본 복구, 표시 1회 소진, 이후 결과 보존, SaveAs 후 해제. 함께: is_encrypted_ooxml() 추가로 암호화 OOXML 을 구형 .xls 로 오인해 .xls 확장자로 복사해 열던 것 수정(사내 DRM 컨테이너는 EncryptedPackage 가 없어 기존 동작 유지)."
     }
   ]
 }

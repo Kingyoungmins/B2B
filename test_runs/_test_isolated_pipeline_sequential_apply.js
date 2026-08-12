@@ -69,6 +69,13 @@ function restoreVbaExcelAfterError() {}
 function createPipelineRuntimeExecutionBlockError(b) { const e = new Error("hard block"); e._stepInfo = b; return e; }
 async function ensurePipelineReferencedSessionsOpen() {}
 function findPipelineRuntimeExecutionBlocker() { return null; }
+// [진단 계측 2026-08-12] 실행 직전 '무엇을 보내는지'를 남기는 기록 함수들. 실제 파일에 있는 것과
+// 같은 이름으로 스텁을 둔다 — 없으면 이 테스트가 본래 단언에 닿기도 전에 ReferenceError 로 죽는다.
+var window = globalThis;   // 실행 종료 처리에서 window 를 참조한다(스텁 결손이라 여기서 죽었다)
+var runRequests = [];
+function tracePipelineRun(phase, info) { runRequests.push({ phase, info }); }
+function _stepsOnOffMap(steps) { return (steps || []).map((s, i) => i + ":" + ((s && s.id) || "?")).join("|"); }
+function _offStepsAmongSent() { return ""; }
 `;
 
 eval(prelude + "\n" + src.slice(start, end) + "\nglobalThis.runIsolatedLivePipelineSteps = runIsolatedLivePipelineSteps;");
