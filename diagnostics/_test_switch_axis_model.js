@@ -41,7 +41,13 @@ function extractFn(str, name) {
 // [연타 직렬화 대응] handlePipelineStepToggle 은 이제 큐 래퍼(+모듈 변수)이고 실제 시나리오
 // 로직은 _handlePipelineStepToggleImpl 에 있다 — 둘 다 추출하고 큐 변수는 여기서 선언해 준다.
 // (큐 자체의 계약은 test_runs/_test_toggle_serialization.js 가 별도로 잠근다)
-const REAL = "let _pipelineToggleChain = Promise.resolve();\nlet _pipelineToggleSettling = 0;\n" + [
+// [2026-08-12] 토글 구현부가 판정 갈래를 로그로 남기게 되면서(traceOff → tracePipelineRun)
+// 여기서 그 함수를 안 주면 첫 끄기에서 ReferenceError 로 테스트가 통째로 죽는다.
+// 계측은 판정에 관여하지 않으므로 빈 스텁으로 충분하다.
+const REAL = "let _pipelineToggleChain = Promise.resolve();\nlet _pipelineToggleSettling = 0;\n"
+  + "function tracePipelineRun() {}\nfunction traceToggleOnRoute() {}\nfunction _stepsOnOffMap() { return ''; }\n"
+  + "function _offStepsAmongSent() { return ''; }\nfunction _diffLiveSignatureParts() { return ''; }\n"
+  + "var _lastLiveAppliedParts = null;\nfunction liveEnabledStepsSignatureParts() { return []; }\n" + [
   "getPipelineResumeFromIndex", "setPipelineResumeFromIndex", "clearPipelineResumeFromIndex",
   "markPipelinePendingFromIndex", "handlePipelineStepToggle", "_handlePipelineStepToggleImpl",
   "insertLogic", "applyLogic",
@@ -205,13 +211,19 @@ function makeEnv(opts = {}) {
     t("S5c 오류 보고됨", CALLS.some(c => c.kind === "reportError"));
   }
 
-  // ══ S6. 교차파일 쓰기 스텝 ON → 단일적용 대신 결정적 reset+재적용 ══
+  // ══ S6. 교차파일 쓰기 스텝 ON ══
+  // [계약 변경 2026-08-12] 예전엔 교차파일 스텝을 켜면 무조건 reset+전체 재적용으로 보냈다.
+  // VM 실측에서 그 한 번이 4분 35초였고 그중 실제 일한 시간은 35초였다 — 앞 단계가 전부 켜져
+  // 있는데도 1단계부터 다시 돈다. 교차파일이라고 라이브 상태가 덜 믿을 만한 것은 아니므로
+  // 이제 다른 스텝과 똑같이 '그 스텝 하나만' 적용한다(격리 인스턴스가 동반본까지 열어 실행).
+  // 되돌리기(OFF)의 대칭은 목적지 사본 스냅샷으로 따로 맞췄다 — test_runs/_test_toggle_scenarios.js.
   {
     const { api, CALLS, state } = makeEnv({ crossStep: true });
     state.pipeline = mk(5, [true, true, false, false, false]);
     api.mark(2, { label: "보류" });
     await api.toggle("s4");
-    t("S6a 교차파일 ON → reconcile(단일적용 아님)", CALLS.some(c => c.kind === "reconcile") && !CALLS.some(c => c.kind === "applySingle"));
+    t("S6a 교차파일 ON → 다른 스텝과 같이 단일적용(전체 재적용 아님)",
+      CALLS.some(c => c.kind === "applySingle") && !CALLS.some(c => c.kind === "reconcile"));
     t("S6b resume 해제", api.getResume() === null);
   }
 

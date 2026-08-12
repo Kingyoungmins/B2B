@@ -131,8 +131,12 @@ function editResolve(existingResume, requestedStart) {
 //      ON=적용 · OFF=보류. 끄기=그 스텝+뒤 전부 OFF+보류(롤백) / 켜기=그 스텝 하나만 즉시 적용 /
 //      삽입·추가=윗 스텝 OFF면 새 스텝도 OFF+보류 / 삭제=끄기와 동일.
 //      실행 검증은 diagnostics/_test_switch_axis_model.js (실제 함수 추출-실행, 14시나리오).
+// [2026-08-12] 연타 직렬화가 들어오면서 handlePipelineStepToggle 은 async 가 아닌 '큐 래퍼'가 되고
+// 실제 로직은 _handlePipelineStepToggleImpl 로 갔다. 잠그려는 것은 여전히 '핸들러가 top-level 이라
+// 테스트로 돌릴 수 있는가' 이므로 async 여부는 보지 않는다(실행 검증은 _test_switch_axis_model.js).
 t("6a 토글 핸들러가 top-level 함수(테스트 가능하게 분리)",
-  /async function handlePipelineStepToggle\(stepId\)/.test(src)
+  /\bfunction handlePipelineStepToggle\(stepId\)/.test(src)
+  && /\basync function _handlePipelineStepToggleImpl\(stepId\)/.test(src)
   && /handlePipelineStepToggle\(step\.id\)/.test(src));
 t("6b 끄기 = 캐스케이드 OFF(그 스텝부터 끝까지) + hold 롤백",
   /for \(let j = currentIdx; j < state\.pipeline\.length; j \+= 1\)/.test(src)
