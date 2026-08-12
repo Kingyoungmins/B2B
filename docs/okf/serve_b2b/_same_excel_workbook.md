@@ -8,7 +8,7 @@ signature: "(a, b)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
 version: "0.7.3"
-loc: "serve_b2b.py:9158-9169"
+loc: "serve_b2b.py:9160-9171"
 
 # ── 입출력 ──
 inputs:

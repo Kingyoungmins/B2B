@@ -9,7 +9,7 @@ signature: "(rng, value)"
 role: "_range_matrix 가 빈/None(전부 빈 셀) 결과를 줄 때도 범위 차원을 보존해"
 role_source: docstring
 version: "0.7.3"
-loc: "serve_b2b.py:11207-11219"
+loc: "serve_b2b.py:11282-11294"
 
 # ── 입출력 ──
 inputs:

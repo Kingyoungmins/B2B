@@ -8,7 +8,7 @@ signature: "(pids)"
 role: "주어진 pid 들의 '보이는' 최상위 Excel 창(XLMAIN) 목록."
 role_source: docstring
 version: "0.7.3"
-loc: "serve_b2b.py:4206-4242"
+loc: "serve_b2b.py:4208-4244"
 
 # ── 입출력 ──
 inputs:

@@ -8,7 +8,7 @@ signature: "(excel_id, steps, reset=True, entry=None, view_sheet=None)"
 role: "VBA/Python 스킬 파이프라인을 적용한다."
 role_source: docstring
 version: "0.7.3"
-loc: "serve_b2b.py:9795-10178"
+loc: "serve_b2b.py:9844-10253"
 
 # ── 입출력 ──
 inputs:
@@ -50,6 +50,7 @@ calls:
   - "_restore_live_view_state"
   - "_restore_live_window"
   - "_setup_isolated_pipeline_instance"
+  - "_step_cross_payload"
   - "_step_extended_timeout_s"
   - "_sync_modified_companions_into_live"
   - "_trace_hash"
@@ -77,6 +78,9 @@ calls_external:
   - "_snap_err"
   - "_snap_name"
   - "_snap_path"
+  - "_step_books"
+  - "_step_cross"
+  - "_step_tracked"
   - "app"
   - "bool"
   - "code"
@@ -99,9 +103,6 @@ calls_external:
   - "join"
   - "lang"
   - "len"
-  - "list"
-  - "lower"
-  - "mkdir"
 called_by:
   - "_run_vba_on_session_impl"
   - "run_vba_pipeline_on_session"
@@ -129,7 +130,7 @@ VBA/Python 스킬 파이프라인을 적용한다.
 - 변경 상태 `PIPELINE_PROGRESS, RESULTS` — 수정 시 이 상태를 읽는 곳 동반 점검.
 
 ## 관계
-- 호출: `Worksheets`, `_capture_live_view_state`, `_clear_workbook_name_aliases`, `_copy_source_workbook_into_target`, `_excel_collection_names`, `_exec_python_com_skill`, `_file_label_kind`, `_file_size_mb`, `_inject_and_run_vba`, `_isolated_wb_path`, `_kill_pid_quiet`, `_live_preview_schema`, `_promote_csv_multisheet_name`, `_protect_workbook_for_read_only_mirror`, `_resolve_ephemeral_excel_open_sheet_alias`, `_restore_app_state`, `_restore_live_protected_view`, `_restore_live_view_state`, `_restore_live_window`, `_setup_isolated_pipeline_instance`, `_step_extended_timeout_s`, `_sync_modified_companions_into_live`, `_trace_hash`, `_trace_text`, `_trace_workbook_info`, `_vba_pipeline_step_info`, `_vba_trace`, `append`, `get_excel_session`, `names`, `session_workbook`
+- 호출: `Worksheets`, `_capture_live_view_state`, `_clear_workbook_name_aliases`, `_copy_source_workbook_into_target`, `_excel_collection_names`, `_exec_python_com_skill`, `_file_label_kind`, `_file_size_mb`, `_inject_and_run_vba`, `_isolated_wb_path`, `_kill_pid_quiet`, `_live_preview_schema`, `_promote_csv_multisheet_name`, `_protect_workbook_for_read_only_mirror`, `_resolve_ephemeral_excel_open_sheet_alias`, `_restore_app_state`, `_restore_live_protected_view`, `_restore_live_view_state`, `_restore_live_window`, `_setup_isolated_pipeline_instance`, `_step_cross_payload`, `_step_extended_timeout_s`, `_sync_modified_companions_into_live`, `_trace_hash`, `_trace_text`, `_trace_workbook_info`, `_vba_pipeline_step_info`, `_vba_trace`, `append`, `get_excel_session`, `names`, `session_workbook`
 - 피호출(영향 전파 경로): `_run_vba_on_session_impl`, `run_vba_pipeline_on_session`
 
 ## 실패/예외

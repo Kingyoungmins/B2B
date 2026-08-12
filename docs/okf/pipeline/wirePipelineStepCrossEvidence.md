@@ -1,18 +1,19 @@
 ---
 type: endpoint
-title: wrapSheets
+title: wirePipelineStepCrossEvidence
 module: pipeline.js
 lang: js
 extraction: regex   # 정규식 근사
-signature: "(sheetsObj)"
-role: "유사도 매칭 Proxy로 감싸기 (item 1)."
+signature: "(stepCross, sourceSteps)"
+role: "[교차파일 런타임 증거 2026-08-12] 정적 탐지는 코드 문자열에서 파일명을 찾는다. 그래서 파일명이"
 role_source: banner
 version: "0.7.3"
-loc: "pipeline.js:3020-3020"
+loc: "pipeline.js:1204-1204"
 
 # ── 입출력 ──
 inputs:
-  - "sheetsObj"
+  - "stepCross"
+  - "sourceSteps"
 returns: "(추정)"
 
 # ── 사이드이펙트 (정적 추정) ──
@@ -22,27 +23,30 @@ raises: []
 
 # ── 유기적 관계 ──
 calls:
-  - "fuzzyProxy"
-calls_external: []
+  - "push"
+calls_external:
+  - "filter"
+  - "find"
+  - "isArray"
+  - "isInteger"
 called_by:
-  - "computeStateBeforeStep"
-  - "runPipeline"
+  - "runIsolatedLivePipelineSteps"
 reads:
-  - "state.fuzzyResolution"
+  - "state.pipeline"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
 timestamp: "0.7.3-gen"
 ---
 
 ## 역할
-유사도 매칭 Proxy로 감싸기 (item 1).
+[교차파일 런타임 증거 2026-08-12] 정적 탐지는 코드 문자열에서 파일명을 찾는다. 그래서 파일명이
 
 ## 사이드이펙트 & 주의
 - 없음(정적 분석 기준)
 
 ## 관계
-- 호출: `fuzzyProxy`
-- 피호출(영향 전파 경로): `computeStateBeforeStep`, `runPipeline`
+- 호출: `push`
+- 피호출(영향 전파 경로): `runIsolatedLivePipelineSteps`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

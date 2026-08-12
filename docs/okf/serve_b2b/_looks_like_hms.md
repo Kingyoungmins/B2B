@@ -8,7 +8,7 @@ signature: "(hour, minute, second)"
 role: "파일명에 찍히는 시각(10_55_33)인지 — 00~23 / 00~59 / 00~59 만 참."
 role_source: docstring
 version: "0.7.3"
-loc: "serve_b2b.py:8042-8048"
+loc: "serve_b2b.py:8044-8050"
 
 # ── 입출력 ──
 inputs:

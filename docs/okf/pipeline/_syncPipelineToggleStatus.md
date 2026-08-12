@@ -8,7 +8,7 @@ signature: "()"
 role: "[단일 축 · 상태칩 정착] 토글이 끝난 뒤 상태칩을 스위치에 맞춘다 — ON=적용됨 · OFF=보류."
 role_source: banner
 version: "0.7.3"
-loc: "pipeline.js:3664-3664"
+loc: "pipeline.js:3721-3721"
 
 # ── 입출력 ──
 inputs: []

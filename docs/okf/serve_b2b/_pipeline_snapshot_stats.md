@@ -8,7 +8,7 @@ signature: "()"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
 version: "0.7.3"
-loc: "serve_b2b.py:4560-4584"
+loc: "serve_b2b.py:4562-4586"
 
 # ── 입출력 ──
 inputs: []

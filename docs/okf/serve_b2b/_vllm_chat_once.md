@@ -8,7 +8,7 @@ signature: "(system, user, base, timeout=30)"
 role: "서버측 vLLM 단발 호출 — 프록시와 같은 엔드포인트(enable_thinking=False)."
 role_source: docstring
 version: "0.7.3"
-loc: "serve_b2b.py:6915-6930"
+loc: "serve_b2b.py:6917-6932"
 
 # ── 입출력 ──
 inputs:

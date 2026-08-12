@@ -8,7 +8,7 @@ signature: "(step)"
 role: "이 스텝을 되돌리는 데 필요한 사본이 '전부' 있는가 — 대상 파일 + 교차 목적지 전부."
 role_source: banner
 version: "0.7.3"
-loc: "pipeline.js:4170-4170"
+loc: "pipeline.js:4245-4245"
 
 # ── 입출력 ──
 inputs:
@@ -23,9 +23,15 @@ raises: []
 # ── 유기적 관계 ──
 calls:
   - "pipelineStepWritesCrossFile"
+  - "stepRuntimeCrossExcelIds"
 calls_external:
+  - "Set"
   - "every"
+  - "filter"
+  - "has"
   - "isArray"
+  - "map"
+  - "some"
 called_by: []
 reads: []
 writes: []
@@ -40,7 +46,7 @@ timestamp: "0.7.3-gen"
 - 없음(정적 분석 기준)
 
 ## 관계
-- 호출: `pipelineStepWritesCrossFile`
+- 호출: `pipelineStepWritesCrossFile`, `stepRuntimeCrossExcelIds`
 - 피호출(영향 전파 경로): 없음
 
 ## 실패/예외

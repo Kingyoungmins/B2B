@@ -8,7 +8,7 @@ signature: "()"
 role: "프로그램 시작 시 이전 실행의 트레이스 로그를 비운다(누적 방지). 저장 위치는 %LOCALAPPDATA%\\B2B_logs."
 role_source: docstring
 version: "0.7.3"
-loc: "serve_b2b.py:8692-8709"
+loc: "serve_b2b.py:8694-8711"
 
 # ── 입출력 ──
 inputs: []

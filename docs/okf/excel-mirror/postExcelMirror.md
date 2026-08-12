@@ -71,6 +71,7 @@ called_by:
   - "runLivePipelineStepSequentially"
   - "saveCurrentExcelMirror"
   - "setPage"
+  - "snapExcel"
   - "trimExcelMirrorSessionCache"
 reads: []
 writes: []
@@ -87,7 +88,7 @@ timestamp: "0.7.3-gen"
 
 ## 관계
 - 호출: `noteExcelComTimeout`
-- 피호출(영향 전파 경로): `_assistRefreshLiveFile`, `_reapplyVbaPipelineToLiveImpl`, `_restoreSnapshotByIds`, `activateCurrentSelectionInExcel`, `applyVbaStepToLiveExcel`, `assistVerifyProposal`, `captureCrossFileDestinationSnapshots`, `captureStepPreApplySnapshot`, `closeAllExcelMirrorSessions`, `closeCurrentExcelMirror`, `closeExcelMirrorForFileId`, `downloadCurrentWorkbookFile`, `ensureExcelMirrorSession`, `forceCloseAllExcelMirrorSessions`, `hideAllExcelMirrorWindows`, `hideInactive`, `hideInactiveExcelMirrorSessions`, `installOverlayAutoHide`, `llmConsolidateEntries`, `openCurrentWorkbookInExcel`, `openExcelMirrorResultForFileId`, `pollExcelFormulaInfo`, `pollExcelMirrorChanges`, `pollExcelSelection`, `refreshExcelMirrorForFileId`, `runIsolatedLivePipelineSteps`, `runLivePipelineStepSequentially`, `saveCurrentExcelMirror`, `setPage`, `trimExcelMirrorSessionCache`
+- 피호출(영향 전파 경로): `_assistRefreshLiveFile`, `_reapplyVbaPipelineToLiveImpl`, `_restoreSnapshotByIds`, `activateCurrentSelectionInExcel`, `applyVbaStepToLiveExcel`, `assistVerifyProposal`, `captureCrossFileDestinationSnapshots`, `captureStepPreApplySnapshot`, `closeAllExcelMirrorSessions`, `closeCurrentExcelMirror`, `closeExcelMirrorForFileId`, `downloadCurrentWorkbookFile`, `ensureExcelMirrorSession`, `forceCloseAllExcelMirrorSessions`, `hideAllExcelMirrorWindows`, `hideInactive`, `hideInactiveExcelMirrorSessions`, `installOverlayAutoHide`, `llmConsolidateEntries`, `openCurrentWorkbookInExcel`, `openExcelMirrorResultForFileId`, `pollExcelFormulaInfo`, `pollExcelMirrorChanges`, `pollExcelSelection`, `refreshExcelMirrorForFileId`, `runIsolatedLivePipelineSteps`, `runLivePipelineStepSequentially`, `saveCurrentExcelMirror`, `setPage`, `snapExcel`, `trimExcelMirrorSessionCache`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

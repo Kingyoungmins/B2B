@@ -8,7 +8,7 @@ signature: "(info, options)"
 role: "[실패 진단 연동] 오류 카드의 'AI 도움에게 진단 요청' 버튼이 넣을 자동 질문. 사용자가 친 것처럼"
 role_source: banner
 version: "0.7.3"
-loc: "pipeline.js:7298-7298"
+loc: "pipeline.js:7380-7380"
 
 # ── 입출력 ──
 inputs:

@@ -8,7 +8,7 @@ signature: "(session, excel_id, reset, work)"
 role: "격리 실행용 새 Excel 인스턴스를 띄우고 대상+동반 워크북을 '정확한 이름'으로 연다."
 role_source: docstring
 version: "0.7.3"
-loc: "serve_b2b.py:9609-9721"
+loc: "serve_b2b.py:9611-9736"
 
 # ── 입출력 ──
 inputs:
@@ -39,6 +39,9 @@ calls_external:
   - "DispatchEx"
   - "Path"
   - "SaveCopyAs"
+  - "_c_mb"
+  - "_t_copy"
+  - "_t_open"
   - "attr"
   - "cname"
   - "copy2"
@@ -53,11 +56,14 @@ calls_external:
   - "live_wb0"
   - "lower"
   - "mkdir"
+  - "monotonic"
   - "other"
   - "reset"
+  - "round"
   - "session"
   - "setattr"
   - "src"
+  - "stat"
   - "str"
   - "target_name"
   - "tpath"

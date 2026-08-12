@@ -8,7 +8,7 @@ signature: "(step, position)"
 role: "1-based position. position=1 → 맨 앞, position=N+1 → 맨 뒤(append와 동일)"
 role_source: banner
 version: "0.7.3"
-loc: "pipeline.js:2235-2235"
+loc: "pipeline.js:2286-2286"
 
 # ── 입출력 ──
 inputs:

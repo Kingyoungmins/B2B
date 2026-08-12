@@ -8,7 +8,7 @@ signature: "(step, selfExcelId)"
 role: "'화면은 OFF 인데 다른 파일엔 값이 있는' 유령 상태가 된다(반쪽 복원 금지)."
 role_source: banner
 version: "0.7.3"
-loc: "pipeline.js:4127-4127"
+loc: "pipeline.js:4184-4184"
 
 # ── 입출력 ──
 inputs:
@@ -23,12 +23,19 @@ raises: []
 
 # ── 유기적 관계 ──
 calls:
+  - "add"
   - "crossWriteDestinationScan"
   - "excelIdForPipelineFileId"
   - "inferPipelineStepTargetFileId"
   - "postExcelMirror"
   - "push"
+  - "snapExcel"
+  - "stepRuntimeCrossExcelIds"
 calls_external:
+  - "Set"
+  - "async"
+  - "failed"
+  - "has"
   - "now"
   - "warn"
 called_by:
@@ -46,7 +53,7 @@ timestamp: "0.7.3-gen"
 - 네트워크/서버 호출
 
 ## 관계
-- 호출: `crossWriteDestinationScan`, `excelIdForPipelineFileId`, `inferPipelineStepTargetFileId`, `postExcelMirror`, `push`
+- 호출: `add`, `crossWriteDestinationScan`, `excelIdForPipelineFileId`, `inferPipelineStepTargetFileId`, `postExcelMirror`, `push`, `snapExcel`, `stepRuntimeCrossExcelIds`
 - 피호출(영향 전파 경로): `captureStepPreApplySnapshot`
 
 ## 실패/예외
