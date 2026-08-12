@@ -3686,9 +3686,21 @@ async function _handlePipelineStepToggleImpl(stepId) {
     // 사후에 알 수 없다(제보: "4단계는 off 인데 4단계가 반영돼 있더라").
     const _crossSuffix = (typeof pipelineSuffixWritesCrossFile === "function")
       && pipelineSuffixWritesCrossFile(beforeToggleSnapshot, currentIdx);
+    // [교차파일 OFF 대칭 2026-08-12] 예전엔 뒤 구간에 교차파일 쓰기가 하나라도 있으면 사본 복원을
+    // 통째로 건너뛰고 리셋+전체 재적용으로 갔다 — 사본이 '대상 파일' 것뿐이라 목적지를 못 되돌려서였다
+    // (VM 실측 129초, 그중 실제 일은 1.6초). 이제 교차파일 스텝은 목적지 사본까지 함께 뜬다.
+    // 되돌릴 구간의 교차파일 스텝이 '전부' 목적지 사본을 갖고 있을 때만 빠른 롤백을 허용한다
+    // — 하나라도 없으면 반쪽 복원이 되므로 예전처럼 전체 재적용으로 간다.
+    const _crossRollbackReady = _crossSuffix
+      && typeof stepHasFullRollbackSnapshots === "function"
+      && (beforeToggleSnapshot || []).slice(currentIdx)
+        .filter(s => s && s.code && typeof pipelineStepWritesCrossFile === "function"
+          && pipelineStepWritesCrossFile(s))
+        .every(stepHasFullRollbackSnapshots);
     const traceOff = (route, ok, extra) => tracePipelineRun("toggle_off", {
       route, ok: ok === true, stepIdx: currentIdx, stepId,
       fastLast: !!fastLast, crossFileSuffix: !!_crossSuffix,
+      crossRollbackReady: !!_crossRollbackReady,
       sigNull: _lastLiveAppliedSignature === null,
       steps: _stepsOnOffMap(state.pipeline),
       ...(extra || {}),
@@ -3733,8 +3745,9 @@ async function _handlePipelineStepToggleImpl(stepId) {
         console.warn("[pipeline] fast last-step OFF failed; falling back to rollback/reconcile", err);
       }
     }
-    // 중간 스텝: 스냅샷 롤백 + [idx..) 보류 라벨(교차파일 쓰기 구간은 스냅샷 복원이 목적지를 못 되돌리므로 스킵)
-    if (!_crossSuffix) {
+    // 중간 스텝: 사본 롤백 + [idx..) 보류 라벨.
+    // 교차파일 구간은 목적지 사본까지 갖췄을 때만 여기로 온다(_crossRollbackReady).
+    if (!_crossSuffix || _crossRollbackReady) {
       try {
         if (await restorePipelineToCheckpointAndHold(currentIdx, beforeToggleSnapshot, {
           message: "선택한 단계 직전 상태로 되돌리는 중...",
@@ -4042,6 +4055,12 @@ async function captureStepPreApplySnapshot(step, excelId) {
         excelId,
         capturedAt: Date.now(),
       };
+      // [교차파일 OFF 대칭 2026-08-12] 이 스텝이 '다른 파일'에도 쓰면 그 목적지 사본까지 떠 둔다.
+      //   왜: 지금까지 사본은 대상 파일 것 하나뿐이라, 교차파일 스텝을 끄면 목적지에 쓴 값을
+      //   되돌릴 방법이 없었다 → 되돌리기가 통째로 리셋+전체 재적용으로 갔다(VM 실측 129초).
+      //   ON 은 격리 1스텝으로 빨라졌는데 OFF 만 2분이라 체감이 더 나빠졌다.
+      //   목적지 사본까지 있으면 복원 쪽은 이미 excelId 단위로 훑으므로 그대로 되돌릴 수 있다.
+      await captureCrossFileDestinationSnapshots(step, excelId);
       syncStepPreApplySnapshot(step, step._preApplySnapshot);
       return step._preApplySnapshot;
     }
@@ -4049,6 +4068,50 @@ async function captureStepPreApplySnapshot(step, excelId) {
     console.warn("[pipeline] failed to capture pre-apply snapshot", err);
   }
   return null;
+}
+
+/* 교차파일 쓰기 스텝의 '목적지 파일' 사본을 함께 떠 step._crossPreApplySnapshots 에 담는다.
+   하나라도 못 뜨면 배열을 비워 둔다 — 일부만 있는 상태로 되돌리면 목적지가 더러운 채 남아
+   '화면은 OFF 인데 다른 파일엔 값이 있는' 유령 상태가 된다(반쪽 복원 금지). */
+async function captureCrossFileDestinationSnapshots(step, selfExcelId) {
+  step._crossPreApplySnapshots = [];
+  if (typeof crossWriteDestinationFileIds !== "function") return [];
+  const selfFileId = (typeof inferPipelineStepTargetFileId === "function")
+    ? inferPipelineStepTargetFileId(step) : null;
+  let fileIds = [];
+  try {
+    fileIds = crossWriteDestinationFileIds(step.code || "", { selfFileId }) || [];
+  } catch (_) {
+    fileIds = [];
+  }
+  if (!fileIds.length) return [];
+  const out = [];
+  for (const fid of fileIds) {
+    try {
+      const dstExcelId = (typeof excelIdForPipelineFileId === "function")
+        ? await excelIdForPipelineFileId(fid) : null;
+      if (!dstExcelId || dstExcelId === selfExcelId) continue;
+      const s = await postExcelMirror("/api/excel/save", { excelId: dstExcelId, internal: true });
+      if (!s || !s.downloadId) return (step._crossPreApplySnapshots = []);   // 반쪽 복원 금지
+      out.push({ resultId: s.downloadId, downloadUrl: s.downloadUrl || "", name: s.name || "",
+                 excelId: dstExcelId, fileId: fid, capturedAt: Date.now() });
+    } catch (err) {
+      console.warn("[pipeline] cross-file destination snapshot failed", err);
+      return (step._crossPreApplySnapshots = []);
+    }
+  }
+  step._crossPreApplySnapshots = out;
+  return out;
+}
+
+/* 이 스텝을 되돌리는 데 필요한 사본이 '전부' 있는가 — 대상 파일 + 교차 목적지 전부. */
+function stepHasFullRollbackSnapshots(step) {
+  if (!step || !step._preApplySnapshot || !step._preApplySnapshot.resultId) return false;
+  const writesCross = (typeof pipelineStepWritesCrossFile === "function")
+    && pipelineStepWritesCrossFile(step);
+  if (!writesCross) return true;
+  const extra = Array.isArray(step._crossPreApplySnapshots) ? step._crossPreApplySnapshots : [];
+  return extra.length > 0 && extra.every(s => s && s.resultId);
 }
 
 function syncStepPreApplySnapshot(step, snap, stepIdx = null) {
@@ -4093,6 +4156,13 @@ function isLastLivePipelineStep(step, idx, beforeSteps) {
   return idx >= 0 && idx === lastLiveStepIndex(list);
 }
 
+/* 사본 하나를 그 세션에 되돌린다. 스텝의 대상 파일이든 교차파일 목적지든 되돌리는 방법은 같다
+   — 그래서 여기로 모았다(restoreLastStepPreApplySnapshot 은 스텝에서 사본을 꺼내 이걸 부른다). */
+async function restoreSnapshotIntoSession(snap, options = {}) {
+  if (!snap || !snap.resultId || !snap.excelId) return false;
+  return _restoreSnapshotByIds(snap.resultId, snap.excelId, options);
+}
+
 async function restoreLastStepPreApplySnapshot(step, options = {}) {
   const snap = step && step._preApplySnapshot;
   if (!snap || !snap.resultId) return false;
@@ -4102,6 +4172,18 @@ async function restoreLastStepPreApplySnapshot(step, options = {}) {
     if (fileId) excelId = await requirePipelineSessionExcelId(fileId, "스킬 빠른 복구");
   }
   if (!excelId) return false;
+  // 이 스텝이 다른 파일에도 썼다면 그 목적지 사본까지 함께 되돌려야 '그 단계 직전'이 된다.
+  // 하나라도 실패하면 전체를 실패로 본다(반쪽 복원 금지 — 화면은 OFF 인데 값이 남는다).
+  for (const ex of (Array.isArray(step && step._crossPreApplySnapshots) ? step._crossPreApplySnapshots : [])) {
+    if (!ex || !ex.resultId || !ex.excelId) return false;
+    if (ex.excelId === excelId) continue;
+    if (!await _restoreSnapshotByIds(ex.resultId, ex.excelId, options)) return false;
+  }
+  return _restoreSnapshotByIds(snap.resultId, excelId, options);
+}
+
+async function _restoreSnapshotByIds(resultId, excelId, options = {}) {
+  const snap = { resultId };
   if (typeof beginExcelMirrorApplyLoading === "function") beginExcelMirrorApplyLoading(options.message || "마지막 단계 되돌리는 중...");
   try {
     const data = await postExcelMirror("/api/excel/replace", {
@@ -4133,16 +4215,28 @@ async function restorePipelineCheckpointForSuffix(startIdx, beforeSteps, options
   const start = Math.max(0, Number(startIdx) | 0);
   const restoreSteps = [];
   const seen = new Set();
+  // [교차파일 OFF 대칭 2026-08-12] 파일(excelId)당 '가장 앞선' 사본 하나씩 되돌린다.
+  // 교차파일 스텝은 목적지 사본도 함께 갖고 있으므로, 그것도 같은 규칙으로 목록에 넣는다
+  // — 그래야 대상 파일과 목적지 파일이 '같은 시점'으로 함께 돌아간다.
+  const extraRestores = [];
   for (let i = start; i < steps.length; i += 1) {
     const step = steps[i];
     const snap = step && step._preApplySnapshot;
     if (!snap || !snap.resultId) continue;
     const key = snap.excelId || snap.resultId;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    restoreSteps.push(step);
+    if (!seen.has(key)) {
+      seen.add(key);
+      restoreSteps.push(step);
+    }
+    for (const ex of (Array.isArray(step._crossPreApplySnapshots) ? step._crossPreApplySnapshots : [])) {
+      if (!ex || !ex.resultId) continue;
+      const k2 = ex.excelId || ex.resultId;
+      if (seen.has(k2)) continue;
+      seen.add(k2);
+      extraRestores.push(ex);
+    }
   }
-  if (!restoreSteps.length) return false;
+  if (!restoreSteps.length && !extraRestores.length) return false;
   const label = options.message || "선택한 단계 직전 상태로 되돌리는 중...";
   let restored = 0;
   const restoredExcelIds = new Set();
@@ -4154,8 +4248,17 @@ async function restorePipelineCheckpointForSuffix(startIdx, beforeSteps, options
       if (sid) restoredExcelIds.add(sid);
     }
   }
+  // 교차파일 목적지 사본 — 스텝이 아니라 사본 자체를 되돌린다(같은 replace 경로).
+  for (const ex of extraRestores) {
+    const ok = await restoreSnapshotIntoSession(ex, { message: label });
+    if (ok) {
+      restored += 1;
+      if (ex.excelId) restoredExcelIds.add(ex.excelId);
+    }
+  }
   // 전부 성공 시 '복원된 세션 집합'(truthy)을 반환 — 호출자가 커버리지 검증에 쓴다.
-  return restored === restoreSteps.length ? restoredExcelIds : false;
+  // 하나라도 실패하면 false — 반쪽 복원은 '화면은 OFF 인데 값이 남은' 상태를 만든다.
+  return restored === (restoreSteps.length + extraRestores.length) ? restoredExcelIds : false;
 }
 
 // [적용됨-미반영 수정] prefix(0..start-1) 스텝들이 변형하는 파일의 라이브 세션이 전부

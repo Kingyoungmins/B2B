@@ -124,7 +124,10 @@ for (const route of ["non_live_reconcile", "reconcile_no_signature", "fast_last_
 }
 check("'조용한 false'(예외 아님)도 실패로 남긴다", /traceOff\("fast_last_snapshot", false, \{ reason: "no_snapshot_or_session" \}\)/.test(pj)
   && /traceOff\("checkpoint_rollback", false, \{ reason: "restore_returned_false" \}\)/.test(pj));
-check("교차파일 판정을 한 번만 계산해 공유(중복 호출 제거)", /const _crossSuffix = /.test(pj) && /if \(!_crossSuffix\) \{/.test(pj));
+// [2026-08-12] 교차파일 구간도 목적지 사본까지 갖췄으면 빠른 롤백을 한다(_crossRollbackReady).
+// 판정은 여전히 한 번만 계산해 공유한다.
+check("교차파일 판정을 한 번만 계산해 공유(중복 호출 제거)",
+  /const _crossSuffix = /.test(pj) && /if \(!_crossSuffix \|\| _crossRollbackReady\) \{/.test(pj));
 
 console.log("[6] 백엔드도 받은 단계를 남기는가(교차 확인용)");
 check("pipeline.impl.start 에 stepIdxs", /stepIdxs=",".join\(/.test(sb));
@@ -132,7 +135,10 @@ check("pipeline.impl.start 에 stepIdxs", /stepIdxs=",".join\(/.test(sb));
 console.log("[7] 판정 로직 무변경");
 check("OFF 캐스케이드 그대로", /for \(let j = currentIdx; j < state\.pipeline\.length; j \+= 1\) \{/.test(pj));
 check("마지막 단계 빠른 되돌리기 조건 그대로", /if \(fastLast\) \{/.test(pj));
-check("교차파일이면 사본 되돌리기 건너뛰는 규칙 유지", /if \(!_crossSuffix\) \{[\s\S]{0,200}restorePipelineToCheckpointAndHold\(currentIdx/.test(pj));
+check("교차파일이라도 목적지 사본이 갖춰졌을 때만 사본 되돌리기로 간다",
+  /if \(!_crossSuffix \|\| _crossRollbackReady\) \{[\s\S]{0,220}restorePipelineToCheckpointAndHold\(currentIdx/.test(pj));
+check("목적지 사본이 하나라도 없으면 빠른 롤백을 안 한다(반쪽 복원 금지)",
+  /\.every\(stepHasFullRollbackSnapshots\)/.test(pj));
 
 console.log("");
 console.log(fails === 0 ? "RESULT: ALL PASS" : `RESULT: ${fails} FAIL`);

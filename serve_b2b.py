@@ -22,6 +22,7 @@ import shutil
 import socket
 import socketserver
 import subprocess
+import unicodedata
 import sys
 import tempfile
 import threading
@@ -9605,10 +9606,79 @@ def _reattach_live_excel_window(state):
         pass
 
 
-def _setup_isolated_pipeline_instance(session, excel_id, reset, work):
+# 스텝 코드가 '다른 워크북'을 집는 호출 형태. 괄호 다음 첫 글자가 따옴표면 파일명이 코드에 그대로
+# 박혀 있다는 뜻이고, 아니면(변수/인덱스/f-string) 코드만 봐서는 어느 파일인지 알 수 없다.
+_BOOK_CALL_RE = re.compile(r"(?:\.\s*book|\bWorkbooks|\bWindows)\s*\(\s*(.)", re.IGNORECASE)
+
+
+def _isolated_companion_reference_blob(steps):
+    """스텝 코드에서 참조 파일명을 확실히 읽어낼 수 있으면 그 코드 뭉치(소문자)를 돌려주고,
+    한 곳이라도 리터럴이 아닌 워크북 참조가 있으면 None 을 돌려준다.
+    None = '판단 불가 → 예전처럼 전부 연다'. 게이트는 항상 안전한 쪽(더 여는 쪽)으로 실패한다."""
+    if not steps:
+        return None
+    parts = []
+    for st in steps:
+        code = (st.get("code") if isinstance(st, dict) else st) or ""
+        if code:
+            parts.append(str(code))
+    if not parts:
+        return None
+    blob = "\n".join(parts)
+    for m in _BOOK_CALL_RE.finditer(blob):
+        if m.group(1) not in ('"', "'"):
+            return None  # 변수로 워크북을 잡는 스텝이 하나라도 있으면 게이트를 포기한다
+    return unicodedata.normalize("NFC", blob).casefold()
+
+
+def _companion_referenced(name, blob, link_names):
+    """이 동반 파일을 격리 인스턴스에 열어야 하는가.
+    - 스텝 코드에 파일명(또는 확장자 뗀 이름)이 박혀 있으면 연다
+    - 대상 워크북이 수식으로 링크하고 있으면 연다(코드엔 안 나오지만 계산에 필요)"""
+    n = unicodedata.normalize("NFC", str(name or "")).casefold()
+    if not n:
+        return False
+    if n in (link_names or set()):
+        return True
+    if blob is None:
+        return True
+    if n in blob:
+        return True
+    stem = n.rsplit(".", 1)[0] if "." in n else n
+    return len(stem) >= 2 and stem in blob
+
+
+def _workbook_link_source_names(wb):
+    """워크북이 수식으로 참조하는 외부 엑셀 링크의 파일명 집합(소문자)."""
+    names = set()
+    try:
+        links = wb.LinkSources(1)  # xlLinkTypeExcelLinks
+    except Exception:
+        return names
+    if not links:
+        return names
+    if isinstance(links, str):
+        seq = [links]  # 링크가 하나면 COM 이 문자열로 준다 — list() 하면 글자 단위로 쪼개진다
+    else:
+        try:
+            seq = list(links)
+        except Exception:
+            seq = [links]
+    for item in seq:
+        try:
+            nm = Path(str(item)).name
+        except Exception:
+            continue
+        if nm:
+            names.add(unicodedata.normalize("NFC", nm).casefold())
+    return names
+
+
+def _setup_isolated_pipeline_instance(session, excel_id, reset, work, steps=None):
     """격리 실행용 새 Excel 인스턴스를 띄우고 대상+동반 워크북을 '정확한 이름'으로 연다.
     - 대상: reset 이면 source 원본, 아니면 현재 라이브 상태(SaveCopyAs).
     - 동반(다른 라이브 편집 세션): 현재 라이브 상태(SaveCopyAs) — VBA 의 Workbooks("파일명") 교차참조용.
+      단 '이번 스텝이 실제로 이름을 대고 부르는 파일'만 연다(steps 를 받은 경우).
     반환: (fapp, ftarget, fpid). 호출자가 finally 에서 정리한다."""
     live_app0, live_wb0 = session_workbook(session)
     target_name = Path(str(session.get("name") or "")).name
@@ -9660,6 +9730,14 @@ def _setup_isolated_pipeline_instance(session, excel_id, reset, work):
     )
     opened = {target_name.lower()}
     companions = []
+    # [동반 열기 게이트 2026-08-12] 예전엔 다른 라이브 세션을 무조건 전부 SaveCopyAs 해서 열었다.
+    # VM 실측에서 output 한 개만 건드리는 스텝이 31MB 짜리를 포함해 4개를 여느라 25.5초를 먹었고,
+    # 실행이 끝나면 그 4개를 다시 라이브로 되돌려쓰느라 34.4초를 더 먹었다(둘 다 순수 낭비).
+    # 이번 스텝 코드가 이름을 대고 부르는 파일 + 대상이 수식으로 링크한 파일만 연다.
+    # 코드에서 파일명을 확신할 수 없으면(변수로 워크북을 잡는 등) 게이트를 포기하고 전부 연다.
+    _ref_blob = _isolated_companion_reference_blob(steps)
+    _link_names = _workbook_link_source_names(ftarget)
+    _skipped = []
     # 동반 워크북(다른 라이브 편집 세션의 현재 상태)
     for oid, other in list(EXCEL_SESSIONS.items()):
         if oid == excel_id or not other.get("liveEditable"):
@@ -9676,6 +9754,9 @@ def _setup_isolated_pipeline_instance(session, excel_id, reset, work):
                 cname = ""
         if not cname or cname.lower() in opened:
             continue
+        if not _companion_referenced(cname, _ref_blob, _link_names):
+            _skipped.append(cname)
+            continue
         cdir = work / ("c_" + uuid.uuid4().hex[:6])
         cdir.mkdir(parents=True, exist_ok=True)
         cpath = cdir / cname
@@ -9687,15 +9768,27 @@ def _setup_isolated_pipeline_instance(session, excel_id, reset, work):
             # 출력→입력 매칭쓰기 등)이 있으면, 실행 후 변경된 동반본을 그 라이브 세션으로 되돌려써야 한다.
             # 안 하면 라우팅이 어느 세션을 ftarget 으로 잡았든 '다른 파일에 쓴 결과'가 통째로 버려진다
             # (8↔22 가 판마다 깨지던 비결정 버그의 근본원인). _sync_modified_companions_into_live 가 반영.
-            companions.append({"excelId": oid, "name": cname, "wb": cwb})
+            # openedName: 실제로 열린 워크북 이름. 위장 포맷(.xls=HTML/CSV)은 excel_open_<uuid> 로
+            # 리네임돼 열리므로 intended_name(cname)과 다를 수 있다. 쓰기 추적은 실제 이름으로
+            # 기록되니 되돌려쓰기 판정은 둘 다 대조해야 한다(안 그러면 쓴 파일을 안 썼다고 본다).
+            _opened_name = ""
+            try:
+                _opened_name = Path(str(cwb.Name)).name
+            except Exception:
+                _opened_name = ""
+            companions.append({"excelId": oid, "name": cname, "openedName": _opened_name, "wb": cwb})
             _vba_trace("pipeline.isolated.companion.opened", excelId=excel_id, isolatedPid=fpid, companionName=cname, companionPath=str(cpath))
         except Exception:
             _vba_trace("pipeline.isolated.companion.error", excelId=excel_id, isolatedPid=fpid, companionName=cname, companionPath=str(cpath))
             pass
+    if _skipped:
+        _vba_trace("pipeline.isolated.companion.skipped", excelId=excel_id, isolatedPid=fpid,
+                   skipped=",".join(_skipped), opened=len(companions),
+                   gate=("code" if _ref_blob is not None else "none"))
     return fapp, ftarget, fpid, companions
 
 
-def _sync_modified_companions_into_live(companions, excel_id, fpid, work):
+def _sync_modified_companions_into_live(companions, excel_id, fpid, work, mutated_books=None, mutation_tracked=False):
     """격리 인스턴스에서 '대상(ftarget)'이 아닌 동반 워크북이 변형됐으면(Saved=False),
     그 변경을 해당 라이브 세션 워크북으로도 되돌려쓴다.
     교차파일 스텝(입력↔출력 쓰기)이 어느 세션을 ftarget 으로 잡았든 결과가 버려지지 않게 한다.
@@ -9712,6 +9805,19 @@ def _sync_modified_companions_into_live(companions, excel_id, fpid, work):
                 continue  # 읽기만 함(변경 없음) → 되돌려쓸 것 없음
         except Exception:
             continue
+        # [되돌려쓰기 게이트 2026-08-12] Saved=False 는 '변경됨'의 증거로 약하다 — 그냥 읽기만 해도
+        # Excel 은 재계산 등으로 워크북을 dirty 로 만든다. 그래서 입력 파일을 읽기만 한 스텝도
+        # 31MB 짜리를 통째로 라이브에 되돌려쓰느라(SaveCopyAs+복사) 매 실행 34초를 버렸고,
+        # 덤으로 appliedStepSigs 를 지워 그 파일의 다음 적용까지 전체 재적용으로 만들었다.
+        # 이번 실행에서 '어느 워크북이 바뀌었는지' 정확히 아는 경우에만 안 바뀐 것을 건너뛴다.
+        # 하나라도 추적 불가한 스텝(VBA·구조변경)이 있었으면 예전처럼 전부 되돌려쓴다.
+        if mutation_tracked:
+            _keys = {unicodedata.normalize("NFC", str(n)).casefold()
+                     for n in (cname, comp.get("openedName")) if n}
+            if not (_keys & set(mutated_books or ())):
+                _vba_trace("pipeline.companion.sync.skipped", excelId=excel_id, isolatedPid=fpid,
+                           companionExcelId=oid, companionName=cname, reason="not_written")
+                continue
         other = EXCEL_SESSIONS.get(oid)
         if not other:
             continue
@@ -9827,8 +9933,10 @@ def _run_vba_pipeline_on_session_impl(excel_id, steps, reset=True, entry=None, v
             fpid = None
             companions = []
             step_snapshots = []  # [0.5.14 batch 빠른복구] 스텝 실행 '전' ftarget 스냅샷(downloadId) 목록
+            _mutated_books = set()   # 이번 실행에서 '실제로 바뀐' 워크북 이름(소문자)
+            _mutation_tracked = True  # 하나라도 추적 불가한 스텝이 있으면 False → 전부 동기화(기존 동작)
             try:
-                fapp, ftarget, fpid, companions = _setup_isolated_pipeline_instance(session, excel_id, reset, work)
+                fapp, ftarget, fpid, companions = _setup_isolated_pipeline_instance(session, excel_id, reset, work, steps)
                 try:
                     _protect_workbook_for_read_only_mirror(ftarget, False)
                 except Exception:
@@ -9961,7 +10069,7 @@ def _run_vba_pipeline_on_session_impl(excel_id, steps, reset=True, entry=None, v
                     try:
                         _activate_step_target_sheet(st)
                         if str(lang).lower() == "python":
-                            _exec_python_com_skill(
+                            _psum = _exec_python_com_skill(
                                 fapp,
                                 ftarget,
                                 session,
@@ -9969,8 +10077,14 @@ def _run_vba_pipeline_on_session_impl(excel_id, steps, reset=True, entry=None, v
                                 skip_static=bool(isinstance(st, dict) and st.get("trustedStatic") is True),
                                 timeout_s=_step_extended_timeout_s(st),
                             )
+                            # [되돌려쓰기 게이트] 이 스텝이 실제로 건드린 워크북만 모은다.
+                            if isinstance(_psum, dict) and _psum.get("mutationTracked"):
+                                _mutated_books.update(_psum.get("mutatedBooks") or [])
+                            else:
+                                _mutation_tracked = False  # 구조변경 등 → 어느 파일인지 특정 불가
                         else:
                             _inject_and_run_vba(fapp, ftarget, code, entry)
+                            _mutation_tracked = False  # VBA 는 쓰기 추적 수단이 없다
                     except PipelineExecutionError as _pe:
                         # 스텝 내부에서 던진 PipelineExecutionError 에도 직전 스냅샷을 실어 자동복구 이어실행을 살린다.
                         try:
@@ -10044,7 +10158,9 @@ def _run_vba_pipeline_on_session_impl(excel_id, steps, reset=True, entry=None, v
                 )
                 # [교차파일 유실 수정] 이 스텝이 '다른 파일(동반본)'을 변형했으면 그 변경도
                 # 해당 라이브 세션으로 되돌려쓴다. (ftarget 한 개만 반영하던 한계 보완)
-                _sync_modified_companions_into_live(companions, excel_id, fpid, work)
+                _sync_modified_companions_into_live(companions, excel_id, fpid, work,
+                                                    mutated_books=_mutated_books,
+                                                    mutation_tracked=_mutation_tracked)
                 session["appliedStepSigs"] = None
             finally:
                 # [리뷰#12] 이 격리 인스턴스(fapp)의 워크북 이름 별칭을 정리한다(pid 단위 누수 방지 +
@@ -11204,11 +11320,30 @@ class PythonComSkillContext:
             raise PythonComSkillError("write() 에 빈 행을 전달할 수 없습니다.")
         return tuple(rows), len(rows), width
 
+    def _mark_mutated(self, ws):
+        """이 쓰기가 '어느 워크북'을 바꿨는지 기록한다. self._wb 가 아니라 시트의 부모를 본다 —
+        _ws() 는 시트가 고정 워크북에 없으면 같은 인스턴스의 다른 워크북에서 찾아주기 때문에,
+        self._wb 로 기록하면 엉뚱한 파일을 지목하고 진짜 바뀐 파일을 놓친다.
+        (이 기록은 격리 실행 후 '동반본을 라이브로 되돌려쓸지' 판단에 쓰인다.)"""
+        try:
+            full = str(ws.Parent.Name)
+            self._shared.setdefault("mutatedBooks", set()).add(
+                unicodedata.normalize("NFC", Path(full).name).casefold())
+            return full
+        except Exception:
+            # 어느 파일인지 못 알아냈다 → 추적 실패로 남겨 호출자가 '전부 동기화'로 되돌아가게 한다.
+            self._shared["structural"].append("mutation-track-failed")
+            return ""
+
     def _journal_save(self, ws, rng):
+        book = self._mark_mutated(ws)
         try:
             address = str(rng.Address)
             formulas = _range_matrix(rng.Formula)
-            self._shared["journal"].append((str(ws.Name), address, formulas))
+            # 워크북 이름까지 남긴다. 예전엔 시트명만 남겨서, 교차파일 쓰기(ctx.book / _ws 의 타 워크북
+            # 폴백)로 저널된 항목을 롤백할 때 self._wb 에서 같은 이름의 시트를 찾았다 —
+            # 동명 시트가 있으면 '엉뚱한 파일'에 남의 수식을 덮어썼고, 없으면 조용히 롤백을 걸렀다.
+            self._shared["journal"].append((str(ws.Name), address, formulas, book))
             self._tick(2)
         except Exception:
             # 저널 실패는 실행을 막지 않는다(롤백 불가로만 기록).
@@ -13876,12 +14011,34 @@ class PythonComSkillContext:
     def _changed(self):
         return bool(self._shared["journal"]) or bool(self._shared["structural"])
 
+    def _rollback_book(self, book_name):
+        """저널에 적힌 워크북을 같은 인스턴스에서 찾는다. 못 찾으면 고정 워크북(예전 동작)."""
+        if not book_name:
+            return self._wb
+        try:
+            if str(self._wb.Name) == str(book_name):
+                return self._wb
+        except Exception:
+            return self._wb
+        try:
+            for b in self._app.Workbooks:
+                try:
+                    if str(b.Name) == str(book_name):
+                        return b
+                except Exception:
+                    continue
+        except Exception:
+            pass
+        return self._wb
+
     def _rollback(self):
         """실패 시 저널 역순 복원(쓰기 범위만 정밀 원복). 구조 변경은 롤백 불가."""
         restored = 0
-        for ws_name, address, formulas in reversed(self._shared["journal"]):
+        for entry in reversed(self._shared["journal"]):
+            ws_name, address, formulas = entry[0], entry[1], entry[2]
+            book_name = entry[3] if len(entry) > 3 else ""
             try:
-                ws = self._wb.Worksheets(ws_name)
+                ws = self._rollback_book(book_name).Worksheets(ws_name)
                 data = tuple(tuple("" if v is None else v for v in row) for row in formulas)
                 if data:
                     ws.Range(address).Formula = data
@@ -13891,10 +14048,16 @@ class PythonComSkillContext:
         return restored, bool(self._shared["structural"])
 
     def summary(self):
+        # [동반본 되돌려쓰기 게이트] 어느 워크북이 바뀌었는지 정확히 말할 수 있을 때만 mutationTracked=True.
+        # 구조 변경(시트 추가/삭제/정렬 등)은 저널에 안 남아 '어느 파일'인지 특정할 수 없으므로,
+        # 하나라도 있으면 추적 실패로 보고 호출자가 예전처럼 '변경된 것 전부 동기화'로 되돌아가게 한다.
+        # 판정을 낙관하면 라이브에 반영돼야 할 결과가 통째로 버려진다 — 항상 안전한 쪽으로 실패한다.
         return {
             "comCalls": self._shared["com_calls"],
             "writes": len(self._shared["journal"]),
             "structural": list(self._shared["structural"]),
+            "mutatedBooks": sorted(self._shared.get("mutatedBooks") or []),
+            "mutationTracked": not self._shared["structural"],
         }
 
 

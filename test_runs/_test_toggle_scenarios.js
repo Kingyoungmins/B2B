@@ -99,6 +99,7 @@ const EXTRACT = [
   fn(pj, "_signatureStepsAsRestored"),
   fn(pj, "noteLivePipelineApplied"),
   fn(pj, "_diffLiveSignatureParts"),
+  fn(pj, "stepHasFullRollbackSnapshots"),
   fn(pj, "_stepsOnOffMap"),
   fn(pj, "_offStepsAmongSent"),
   fn(pj, "tracePipelineRun"),
@@ -165,10 +166,30 @@ await T.toggle("s2");
 check("중간 단계 OFF → 체크포인트 롤백", T.offRoutes()[0] === "checkpoint_rollback:true", T.offRoutes());
 check("그 뒤 전부 꺼짐(캐스케이드)", T.enabledMap() === "1000", T.enabledMap());
 
+// [교차파일 OFF 대칭 2026-08-12] 목적지 사본이 없으면 예전처럼 전체 재적용,
+// 목적지 사본까지 있으면 빠른 롤백. 반쪽 복원은 절대 안 된다.
 T.reset(mk(4, { cross: [2] }));
 T.note(T.state.pipeline);
 await T.toggle("s2");
-check("뒤에 교차파일이 있으면 사본 복원을 건너뛴다", T.offRoutes()[0] === "reconcile_fallback:true", T.offRoutes());
+check("교차파일인데 목적지 사본이 없으면 전체 재적용", T.offRoutes()[0] === "reconcile_fallback:true", T.offRoutes());
+
+{
+  const steps = mk(4, { cross: [2] });
+  steps[2]._crossPreApplySnapshots = [{ resultId: "rdst", excelId: "x2", fileId: "f2" }];
+  T.reset(steps);
+  T.note(steps);
+  await T.toggle("s2");
+  check("목적지 사본까지 있으면 빠른 롤백  ← 이번 변경", T.offRoutes()[0] === "checkpoint_rollback:true", T.offRoutes());
+}
+{
+  // 교차파일 스텝이 둘인데 하나만 목적지 사본을 가진 경우 = 반쪽 → 전체 재적용
+  const steps = mk(5, { cross: [2, 3] });
+  steps[2]._crossPreApplySnapshots = [{ resultId: "rdst", excelId: "x2" }];
+  T.reset(steps);
+  T.note(steps);
+  await T.toggle("s2");
+  check("하나라도 빠지면 반쪽 복원 대신 전체 재적용", T.offRoutes()[0] === "reconcile_fallback:true", T.offRoutes());
+}
 
 T.reset(mk(3), { __fastLast: false, __restoreCkptOk: false });
 T.note(T.state.pipeline);
