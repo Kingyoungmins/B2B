@@ -1640,6 +1640,12 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
                 totalMs=round(_t_write + _t_inspect),
                 sheets=len(_sheets),
                 formulaCells=sum(len((s or {}).get("formulas") or {}) for s in _sheets.values()),
+                # [보안 라벨 진단] 업로드된 '원본'에 이미 라벨이 있었는지. 이 값이 none 인데
+                # 스냅샷이 label/encrypted 로 나오면, 라벨은 물려받은 게 아니라 우리가 저장할 때
+                # 새로 붙는다는 뜻이다(그 반대면 문서에 이미 들어 있던 것).
+                label=_file_label_kind(path),
+                # 못 읽어서 시트명을 지어낸 경우(=라벨/DRM 의 대표 증상)도 같이 본다.
+                inspectFallback=bool((meta or {}).get("requiresExcel")),
             )
         except Exception:
             pass
@@ -3383,6 +3389,54 @@ def _protect_sheet_for_read_only_mirror(ws):
         _allow_read_only_mirror_selection(ws)
     except Exception:
         pass
+
+
+def _file_label_kind(path):
+    """[진단 계측 2026-08-12] 이 파일에 사내 보안 라벨(MIP)이 붙었는지 한 줄로 판별한다.
+
+    왜: 사내 VM 에서 어떤 스냅샷은 라벨이 붙은 채 저장되고 어떤 건 안 붙는데, 지금은 그 사실이
+    로그에 전혀 안 남아 "어떤 되돌리기는 오래 걸린다"가 느낌으로만 남았다. 라벨 여부를 저장·복원
+    양쪽에 남기면 '라벨이 정말 비용인지 / 얼마인지'를 실측으로 가릴 수 있다.
+
+    비용은 파일당 앞 8바이트 + (zip 이면) 중앙 디렉터리 한 번이라 사실상 0이다.
+    반환: "none"(평문) / "label"(라벨만) / "encrypted"(암호화) / "legacy-ole"(구형 .xls) / ""(판별 실패)
+    """
+    try:
+        p = Path(path)
+        with p.open("rb") as f:
+            head = f.read(8)
+        if head[:4] == b"PK\x03\x04":
+            # 라벨만 붙은(암호화 없는) 파일은 여전히 zip 이고, 안에 라벨 메타가 들어간다.
+            try:
+                with zipfile.ZipFile(str(p)) as z:
+                    for n in z.namelist():
+                        low = n.lower()
+                        if "labelinfo" in low or low.startswith("docmetadata/"):
+                            return "label"
+            except Exception:
+                return ""
+            return "none"
+        if head[:4] == b"\xd0\xcf\x11\xe0":
+            # OLE 복합문서 — 구형 .xls 이거나, 암호화된 OOXML(라벨이 암호화를 걸면 이 모양이 된다).
+            return "legacy-ole" if p.suffix.lower() in (".xls", ".xlt", ".xlm") else "encrypted"
+    except Exception:
+        pass
+    return ""
+
+
+def _isolated_wb_path(wb):
+    """열려 있는 워크북의 실제 파일 경로(라벨 판별용). 못 구하면 빈 문자열."""
+    try:
+        return wb.FullName
+    except Exception:
+        return ""
+
+
+def _file_size_mb(path):
+    try:
+        return round(Path(path).stat().st_size / (1024 * 1024), 2)
+    except Exception:
+        return -1
 
 
 @contextlib.contextmanager
@@ -5749,6 +5803,14 @@ def _save_excel_session_impl(excel_id, name=None, internal=False):
                        internal=bool(internal),
                        unprotectMs=round(_t_unprotect, 1),
                        restoreMs=round(_t_restore, 1),
+                       # [보안 라벨 진단 2026-08-12] 사본에 사내 라벨(MIP)이 붙었는지 + 원본에도 있었는지.
+                       # 이 둘을 같이 봐야 원인이 갈린다:
+                       #   src=none, label=label/encrypted → 저장할 때 정책이 새로 붙였다(저장 방식 문제)
+                       #   src=label/encrypted, label=같음   → 문서에 이미 들어 있어 사본이 물려받았다
+                       #                                       (파이썬으로 저장해도 그대로 — 떼면 보안 우회)
+                       label=_file_label_kind(result_path),
+                       srcLabel=_file_label_kind(session.get("path") or ""),
+                       sizeMB=_file_size_mb(result_path),
                        totalMs=round((time.perf_counter() - _t_all0) * 1000, 1))
         except Exception:
             pass
@@ -5890,6 +5952,14 @@ def _replace_excel_session_workbook_impl(excel_id, path, name=None, result_id=No
             intended_name=clean_name,
         )
         _rt["openMs"] = round((time.perf_counter() - _rt_open) * 1000, 1)
+        # [보안 라벨 진단 2026-08-12] 되돌리기가 느린 지점은 '다시 여는' 여기다. 라벨 붙은 파일은
+        # 열 때 사내 MIP 가 권한 확인을 하므로, 여는 시간과 라벨 여부를 같이 남겨야 비용을 가릴 수 있다.
+        try:
+            _vba_trace("excel.replace.opened", excelId=excel_id, name=clean_name,
+                       openMs=_rt["openMs"], label=_file_label_kind(path),
+                       sizeMB=_file_size_mb(path), readOnly=bool(read_only_mirror))
+        except Exception:
+            pass
         if session.get("liveEditable") and LIVE_FRAME_MODE:
             # 새 SDI 프레임이 기본 위치로 번쩍 뜨지 않게 즉시 파킹(끝의 presenter 가 제자리 표시).
             # [최대화 정규화] open 경로(5039)는 새 프레임에 xlNormal 을 걸어 두는데 replace 에는
@@ -9752,7 +9822,18 @@ def _run_vba_pipeline_on_session_impl(excel_id, steps, reset=True, entry=None, v
                         if not Path(_snap_name).suffix:
                             _snap_name += ".xlsx"
                         _snap_path = BACKEND_DIR / ("prestep_%s_%s" % (uuid.uuid4().hex, _snap_name))
+                        _snap_t0 = time.perf_counter()
                         ftarget.SaveCopyAs(str(_snap_path))
+                        # [보안 라벨 진단 2026-08-12] 이 저장은 Excel 이 하므로 사내 MIP 정책의 대상이다.
+                        # 예전엔 이 경로에 소요 시간 기록조차 없어, 대용량·라벨 비용이 로그에 안 잡혔다.
+                        _vba_trace("pipeline.step.snapshot.saved",
+                                   excelId=excel_id, isolatedPid=fpid,
+                                   stepIdx=st.get("stepIdx") if isinstance(st, dict) else None,
+                                   stepId=st.get("stepId") if isinstance(st, dict) else None,
+                                   ms=round((time.perf_counter() - _snap_t0) * 1000, 1),
+                                   label=_file_label_kind(_snap_path), sizeMB=_file_size_mb(_snap_path),
+                                   # 원본에도 라벨이 있었나 = '물려받은 것'인지 '저장하며 새로 붙은 것'인지 가름
+                                   srcLabel=_file_label_kind(_isolated_wb_path(ftarget)))
                         _snap_rid = uuid.uuid4().hex
                         RESULTS[_snap_rid] = {
                             "path": str(_snap_path),
@@ -10127,7 +10208,16 @@ def _run_full_pipeline_single_instance_impl(groups, reset_excel_ids=None, view_s
                     try:
                         BACKEND_DIR.mkdir(parents=True, exist_ok=True)
                         _snap_path = BACKEND_DIR / ("prestep_%s_%s" % (uuid.uuid4().hex, byExcel[gid]["name"]))
+                        _snap_t0 = time.perf_counter()
                         ftarget.SaveCopyAs(str(_snap_path))
+                        # [보안 라벨 진단] 전체실행 경로도 같은 기록을 남긴다(여기가 스냅샷이 제일 많이 생기는 곳).
+                        _vba_trace("fullrun.step.snapshot.saved",
+                                   anchorExcelId=anchor_excel_id, isolatedPid=fpid, excelId=gid,
+                                   stepIdx=st.get("stepIdx") if isinstance(st, dict) else None,
+                                   stepId=st.get("stepId") if isinstance(st, dict) else None,
+                                   ms=round((time.perf_counter() - _snap_t0) * 1000, 1),
+                                   label=_file_label_kind(_snap_path), sizeMB=_file_size_mb(_snap_path),
+                                   srcLabel=_file_label_kind(_isolated_wb_path(ftarget)))
                         _snap_rid = uuid.uuid4().hex
                         RESULTS[_snap_rid] = {"path": str(_snap_path), "name": Path(_snap_path).name, "created": time.time()}
                         step_snapshots.append({
