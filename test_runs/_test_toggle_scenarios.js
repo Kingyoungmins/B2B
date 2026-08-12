@@ -176,6 +176,9 @@ check("교차파일인데 목적지 사본이 없으면 전체 재적용", T.off
 {
   const steps = mk(4, { cross: [2] });
   steps[2]._crossPreApplySnapshots = [{ resultId: "rdst", excelId: "x2", fileId: "f2" }];
+  // 대상 사본과 목적지 사본이 '같은 시점'이라는 표식(실제 코드가 둘을 같이 뜨면서 남긴다).
+  // 없으면 시점이 어긋난 것으로 보고 전체 재적용으로 간다 — 섞인 복원 금지.
+  steps[2]._crossSnapshotFor = steps[2]._preApplySnapshot.resultId;
   T.reset(steps);
   T.note(steps);
   await T.toggle("s2");
@@ -185,6 +188,7 @@ check("교차파일인데 목적지 사본이 없으면 전체 재적용", T.off
   // 교차파일 스텝이 둘인데 하나만 목적지 사본을 가진 경우 = 반쪽 → 전체 재적용
   const steps = mk(5, { cross: [2, 3] });
   steps[2]._crossPreApplySnapshots = [{ resultId: "rdst", excelId: "x2" }];
+  steps[2]._crossSnapshotFor = steps[2]._preApplySnapshot.resultId;
   T.reset(steps);
   T.note(steps);
   await T.toggle("s2");

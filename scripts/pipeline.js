@@ -1234,6 +1234,31 @@ function stepRuntimeCrossExcelIds(step) {
   return (step && Array.isArray(step._runtimeCrossExcelIds)) ? step._runtimeCrossExcelIds.filter(Boolean) : [];
 }
 
+// 응답 한 건에서 이 스텝의 쓰기 증거를 뽑아 붙인다. 백엔드 경로가 둘이라 모양도 둘이다.
+//   격리(run-vba-pipeline): 여러 스텝을 보내므로 stepCross[] (스텝별)
+//   라이브(run-python):     한 스텝씩 보내므로 crossExcelIds + mutationTracked (이번 것 하나)
+// 라이브 경로를 빼먹으면 순수 Python 스킬 — 즉 증거를 만들 수 있는 유일한 종류 — 이 거의
+// 언제나 증거 없이 남는다(적대 검증 지적).
+function wireStepCrossFromResponse(data, step) {
+  if (!data || !step) return;
+  if (Array.isArray(data.stepCross)) {
+    wirePipelineStepCrossEvidence(data.stepCross, [step]);
+    return;
+  }
+  if (!Array.isArray(data.crossExcelIds) || data.mutationTracked !== true) return;
+  wirePipelineStepCrossEvidence(
+    [{ stepId: step.id || null, tracked: true, excelIds: data.crossExcelIds }], [step]);
+}
+
+// 코드가 바뀌면 '어디에 썼는지'도 바뀐다 — 증거와 그 증거로 뜬 목적지 사본을 함께 버린다.
+function dropStepCrossEvidence(step) {
+  if (!step) return;
+  delete step._runtimeCrossExcelIds;
+  delete step._runtimeCrossTracked;
+  delete step._crossPreApplySnapshots;
+  delete step._crossSnapshotFor;
+}
+
 async function runIsolatedLivePipelineSteps(sourceSteps, initialExcelId, options = {}) {
   const _runPerfT0 = performance.now();  // [F8] 전체실행 소요 측정(디버그 패널 기록용)
   const startIndex = Number.isInteger(Number(options.startIndex)) ? Math.max(0, Number(options.startIndex)) : 0;
@@ -2024,6 +2049,9 @@ function applyVbaStepToLiveExcel(step, excelId, options = {}) {
       })
         .then(data => {
           requestMs = performance.now() - requestStarted;
+          // 스텝 추가/단일 적용의 라이브 경로 — 순수 Python 스킬이 실제로 도는 자리다.
+          // 여기서 증거를 안 받으면 정적으로 안 보이는 교차 쓰기가 계속 안 보인 채 남는다.
+          if (typeof wireStepCrossFromResponse === "function") wireStepCrossFromResponse(data, step);
           try { if (typeof traceClientUiEvent === "function") traceClientUiEvent("pipeline.apply_live.request_after", { stepId: step.id || "", endpoint: reqUrl, requestMs: Math.round(requestMs), ok: !!(data && data.ok !== false) }); } catch (_) {}
           return data;
         });
@@ -2151,9 +2179,7 @@ async function runLivePipelineStepSequentially(step, excelId, options = {}) {
     // [교차파일 런타임 증거] 단계 켜기(단일 적용)가 지나는 길이 여기다 — 실제로 가장 자주 도는
     // 경로다. 전체실행 쪽에만 붙여 두면 증거가 거의 안 쌓이고, 정적으로 안 보이는 교차 쓰기가
     // 계속 '교차 아님'으로 남아 빠른 되돌리기가 목적지를 안 되돌린다.
-    if (data && Array.isArray(data.stepCross) && typeof wirePipelineStepCrossEvidence === "function") {
-      wirePipelineStepCrossEvidence(data.stepCross, [step]);
-    }
+    if (typeof wireStepCrossFromResponse === "function") wireStepCrossFromResponse(data, step);
     if (stepId) setPipelineRuntimeStatus([stepId], "applied", "적용됨");
     return { data, requestMs: performance.now() - requestStarted };
   } catch (err) {
@@ -2554,9 +2580,7 @@ function replaceLogicAt(stepId, newCode, newDescription, language, opts) {
     // 런타임 쓰기 증거는 '고치기 전 코드'가 어디에 썼는지다. 코드가 바뀌면 목적지도 바뀔 수 있으니
     // 이 스텝의 증거는 버린다(위 writesCross 판정을 먼저 끝낸 뒤에 버려야 폐기 범위가 맞다).
     // 다시 적용하면 새 코드 기준으로 증거가 다시 쌓인다.
-    delete next[idx]._runtimeCrossExcelIds;
-    delete next[idx]._runtimeCrossTracked;
-    if (next[idx]._crossPreApplySnapshots) delete next[idx]._crossPreApplySnapshots;
+    dropStepCrossEvidence(next[idx]);
     if (typeof pushHistory === "function") pushHistory("단계 수정(미적용)");
     state.pipeline = next;
     const existingResume = (typeof getPipelineResumeFromIndex === "function") ? getPipelineResumeFromIndex() : null;
@@ -2597,6 +2621,10 @@ function replaceLogicAt(stepId, newCode, newDescription, language, opts) {
       for (let i = idx + 1; i < next.length; i += 1) {
         if (next[i] && next[i]._preApplySnapshot) delete next[i]._preApplySnapshot;
       }
+      // 런타임 쓰기 증거도 옛 코드 기준이다. 목적지가 B→C 로 바뀌는 수정 뒤에 남아 있으면
+      // 재적용이 낡은 B 사본을 뜨고, 그게 '아는 목적지를 다 덮었다'로 통과해 새 목적지 C 가
+      // 안 되돌아간다. 이 스텝 것을 버린다(뒤 스텝은 코드가 안 바뀌었으니 그대로 둔다).
+      dropStepCrossEvidence(next[idx]);
       // [idx..) 구간에 '적용됨' 스텝이 있는가 — 있으면 옛 효과 롤백이 먼저 필요하다.
       const _anyApplied = (state.pipeline || []).slice(idx).some(s => s && s.id
         && typeof getPipelineRuntimeStatus === "function"
@@ -4185,6 +4213,11 @@ async function captureStepPreApplySnapshot(step, excelId) {
       //   ON 은 격리 1스텝으로 빨라졌는데 OFF 만 2분이라 체감이 더 나빠졌다.
       //   목적지 사본까지 있으면 복원 쪽은 이미 excelId 단위로 훑으므로 그대로 되돌릴 수 있다.
       await captureCrossFileDestinationSnapshots(step, excelId);
+      // 두 사본이 '같은 시점'의 것임을 표시해 둔다. 대상 사본은 나중에 다른 실행이 갈아끼우는데
+      // (wirePipelineStepSnapshots), 목적지 사본은 그대로 남는다 — 그러면 되돌리기가 대상은 t2,
+      // 목적지는 t1 로 복원해 그 사이 목적지에 생긴 것(앞 단계 결과·사용자 직접 편집)이 조용히
+      // 사라진다. 시점이 안 맞으면 완전하다고 말하지 않고 전체 재적용으로 보낸다.
+      step._crossSnapshotFor = snap.downloadId;
       syncStepPreApplySnapshot(step, step._preApplySnapshot);
       return step._preApplySnapshot;
     }
@@ -4247,7 +4280,14 @@ async function captureCrossFileDestinationSnapshots(step, selfExcelId) {
   }
   for (const eid of runtimeIds) {
     try {
-      if (!(await snapExcel(eid, ""))) return (step._crossPreApplySnapshots = []);
+      if (!(await snapExcel(eid, ""))) {
+        // 그 세션이 이미 닫혔을 수 있다(파일을 내렸다 다시 올리면 excelId 가 바뀐다).
+        // 안 열려 있는 파일은 되돌릴 대상도 아니므로, 낡은 id 는 증거에서 빼고 계속 간다.
+        // 안 그러면 그 스텝의 되돌리기가 영원히 전체 재적용(실측 129초)으로 굳는다.
+        console.warn("[pipeline] 낡은 교차 목적지 세션 — 증거에서 제외", eid);
+        step._runtimeCrossExcelIds = stepRuntimeCrossExcelIds(step).filter(id => id !== eid);
+        continue;
+      }
     } catch (err) {
       console.warn("[pipeline] cross-file destination snapshot failed (runtime)", err);
       return (step._crossPreApplySnapshots = []);
@@ -4264,8 +4304,9 @@ function stepHasFullRollbackSnapshots(step) {
     && pipelineStepWritesCrossFile(step);
   if (!writesCross) return true;
   const extra = Array.isArray(step._crossPreApplySnapshots) ? step._crossPreApplySnapshots : [];
-  if (!extra.length || !extra.some(s => s && s.resultId)) return false;
-  if (!extra.every(s => s && s.resultId)) return false;
+  if (!extra.length || !extra.every(s => s && s.resultId)) return false;
+  // 목적지 사본이 '지금의 대상 사본과 같은 시점'의 것인가. 다르면 섞인 시점으로 복원하게 된다.
+  if (step._crossSnapshotFor !== step._preApplySnapshot.resultId) return false;
   // '사본이 있다'로는 부족하다 — 런타임이 알려 준 목적지가 그 사본들에 전부 들어 있어야 한다.
   // 스텝을 고쳐 목적지가 바뀌면 사본은 '예전 목적지' 것만 남는데, 개수만 세면 그걸 완전하다고
   // 착각해 빠른 롤백을 타고 새 목적지가 안 되돌아간다.
@@ -5362,6 +5403,11 @@ async function _reapplyVbaPipelineToLiveImpl(excelId, options = {}) {
           timeoutMs: pipelineTimeoutMs(enabledSteps.length),
           timeoutMessage: pipelineTimeoutMessage,
         });
+        // 순수 Python 재적용은 격리 실행 함수를 안 거치고 여기서 직접 POST 한다 — 증거를 여기서
+        // 안 받으면 정적으로 안 보이는 교차 쓰기가 계속 '교차 아님'으로 남는다.
+        if (data && Array.isArray(data.stepCross) && typeof wirePipelineStepCrossEvidence === "function") {
+          wirePipelineStepCrossEvidence(data.stepCross, enabledSteps);
+        }
       } else {
         for (const fid of resetFileIds) {
           const sessionExcelId = await requirePipelineSessionExcelId(fid, "워크북 리셋");
@@ -5394,6 +5440,9 @@ async function _reapplyVbaPipelineToLiveImpl(excelId, options = {}) {
             timeoutMs: pipelineTimeoutMs(group.steps.length),
             timeoutMessage: pipelineTimeoutMessage,
           });
+          if (data && Array.isArray(data.stepCross) && typeof wirePipelineStepCrossEvidence === "function") {
+            wirePipelineStepCrossEvidence(data.stepCross, group.steps);
+          }
         }
       }
     }

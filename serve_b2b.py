@@ -9737,18 +9737,65 @@ def _setup_isolated_pipeline_instance(session, excel_id, reset, work):
 
 
 def _step_cross_payload(step_cross, companions):
-    """스텝별 쓰기 증거를 클라가 쓸 형태로: 워크북 이름 → 라이브 세션 excelId."""
+    """스텝별 쓰기 증거를 클라가 쓸 형태로: 워크북 이름 → 라이브 세션 excelId.
+
+    이름을 못 읽은 동반본이 하나라도 있으면 전부 tracked=False 로 내린다.
+    그 동반본은 이름 대조가 불가능해 되돌려쓰기 쪽에서 '무조건 반영' 대상인데(nameUnknown),
+    여기서만 '안 썼다'로 보고하면 백엔드는 라이브에 반영하고 클라는 되돌릴 목록에서 빼는
+    비대칭이 생긴다 — 그 파일이 되돌리기에서 통째로 누락된다."""
+    unknown = any(c.get("nameUnknown") for c in (companions or []))
     out = []
     for rec in (step_cross or []):
         try:
             out.append({
                 "stepIdx": rec.get("stepIdx"),
                 "stepId": rec.get("stepId"),
-                "tracked": bool(rec.get("tracked")),
+                "tracked": bool(rec.get("tracked")) and not unknown,
                 "excelIds": _companion_excel_ids_for_books(companions, rec.get("books")),
             })
         except Exception:
             continue
+    return out
+
+
+def _fullrun_excel_ids_for_books(by_excel, books, self_excel_id):
+    """전체실행(한 인스턴스에 관여 파일 전부 오픈)에서 바뀐 워크북 이름 → excelId.
+    byExcel 이 이미 excelId→{name} 을 들고 있으므로 그걸 그대로 쓴다."""
+    want = set(books or ())
+    out = []
+    if not want:
+        return out
+    for eid, ent in (by_excel or {}).items():
+        if eid == self_excel_id or eid in out:
+            continue
+        try:
+            nm = Path(str((ent or {}).get("name") or "")).name
+        except Exception:
+            nm = ""
+        if nm and unicodedata.normalize("NFC", nm).casefold() in want:
+            out.append(eid)
+    return out
+
+
+def _live_session_excel_ids_for_books(books, self_excel_id):
+    """바뀐 워크북 이름 → 그게 어느 라이브 세션인지. 라이브(공유 앱) 경로용 —
+    거기선 다른 파일이 '동반 사본'이 아니라 진짜 라이브 워크북이라 EXCEL_SESSIONS 를 직접 본다.
+    자기 세션은 뺀다(= 남는 건 전부 '다른 파일에 썼다'는 증거)."""
+    want = set(books or ())
+    out = []
+    if not want:
+        return out
+    for oid, sess in list(EXCEL_SESSIONS.items()):
+        if oid == self_excel_id or oid in out:
+            continue
+        try:
+            nm = Path(str(sess.get("name") or "")).name
+        except Exception:
+            nm = ""
+        if not nm:
+            continue
+        if unicodedata.normalize("NFC", nm).casefold() in want:
+            out.append(oid)
     return out
 
 
@@ -10315,6 +10362,7 @@ def _run_full_pipeline_single_instance_impl(groups, reset_excel_ids=None, view_s
         step_snapshots = []
         byExcel = {}   # excelId -> {"wb","name","session"}
         result = {"ok": True, "applied": 0, "stepSnapshots": step_snapshots, "perFileLiveSchema": {}, "outputFiles": []}
+        _fr_step_cross = []   # 스텝별 쓰기 증거(클라의 교차파일 되돌리기 판정 보강용)
         try:
             fapp = win32com.client.DispatchEx("Excel.Application")
             _track_spawned_excel_app(fapp)
@@ -10475,16 +10523,30 @@ def _run_full_pipeline_single_instance_impl(groups, reset_excel_ids=None, view_s
                                excelId=gid, ordinal=ordinal, total=total_steps, language=lang,
                                stepIdx=st.get("stepIdx") if isinstance(st, dict) else None, codeHash=_trace_hash(code))
                     try:
+                        _fr_books, _fr_tracked = [], False
                         if str(lang).lower() == "python":
-                            _exec_python_com_skill(fapp, ftarget, fsession, code,
+                            _fr_sum = _exec_python_com_skill(fapp, ftarget, fsession, code,
                                                    skip_static=bool(isinstance(st, dict) and st.get("trustedStatic") is True),
                                                    timeout_s=_step_extended_timeout_s(st))
+                            # [교차파일 런타임 증거] 전체실행도 스텝별로 '실제로 쓴 파일'을 남긴다.
+                            # 여기가 비어 있으면 클라의 전체실행 wiring 이 죽은 코드가 되고,
+                            # 정적으로 안 보이는 교차 쓰기가 계속 안 보인 채 남는다(적대 검증 지적).
+                            if isinstance(_fr_sum, dict) and _fr_sum.get("mutationTracked"):
+                                _fr_books = list(_fr_sum.get("mutatedBooks") or [])
+                                _fr_tracked = True
                         else:
                             _inject_and_run_vba(fapp, ftarget, code, entry)
+                        _fr_step_cross.append({
+                            "stepIdx": st.get("stepIdx") if isinstance(st, dict) else None,
+                            "stepId": st.get("stepId") if isinstance(st, dict) else None,
+                            "tracked": bool(_fr_tracked),
+                            "excelIds": _fullrun_excel_ids_for_books(byExcel, _fr_books, gid),
+                        })
                     except PipelineExecutionError as _pe:
                         try:
                             if isinstance(getattr(_pe, "info", None), dict):
                                 _pe.info["stepSnapshots"] = list(step_snapshots)
+                                _pe.info["stepCross"] = list(_fr_step_cross)
                                 _pe.info["failStateSnapshots"] = _capture_fail_state_snapshots()
                         except Exception:
                             pass
@@ -10604,6 +10666,7 @@ def _run_full_pipeline_single_instance_impl(groups, reset_excel_ids=None, view_s
                         _warn_excel_nonfatal("fullrun live final snapshot", _serr)
 
             result["applied"] = ordinal
+            result["stepCross"] = list(_fr_step_cross)
             return result
         finally:
             # 격리 인스턴스 정리(1회) — 누수 방지(0.5.x 디스크 누수 교훈)
@@ -14424,6 +14487,13 @@ def _run_python_on_session_impl(excel_id, code, skip_static=False, timeout_s=Non
             except Exception:
                 pass
         result = {"ok": True, "excelId": excel_id, "engine": "python-com", **summary}
+        # [교차파일 런타임 증거] 라이브 경로도 '실제로 쓴 다른 세션'을 세션 id 로 알려준다.
+        # 여긴 스텝을 하나씩 보내므로 스텝별 목록 대신 이번 실행 것 하나만 싣는다.
+        try:
+            result["crossExcelIds"] = _live_session_excel_ids_for_books(
+                summary.get("mutatedBooks"), excel_id)
+        except Exception:
+            result["crossExcelIds"] = []
         # [#5] 구조 변경(열삭제·시트추가 등)이 있었으면 경량 미리보기 스키마를 함께 실어,
         # 클라가 대상 파일 캐시를 갱신해 다음 단계 생성이 옛 구조를 보지 않게 한다.
         if summary.get("structural"):

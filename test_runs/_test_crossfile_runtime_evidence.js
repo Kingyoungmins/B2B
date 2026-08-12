@@ -178,6 +178,8 @@ async function main() {
       _preApplySnapshot: { resultId: "r1" },
       _runtimeCrossExcelIds: ["x_out"], _runtimeCrossTracked: true,
       _crossPreApplySnapshots: [{ resultId: "rA", excelId: "x_out" }],
+      // 실제 코드는 대상 사본과 목적지 사본을 같이 뜨면서 이 표식을 남긴다(시점 일치 증명)
+      _crossSnapshotFor: "r1",
     };
     check("아는 목적지가 사본에 있으면 완전", T.hasFullSnapshots(step) === true);
     // 스텝을 고쳐 목적지가 바뀐 모양 — 사본은 예전 목적지 것만 남아 있다
@@ -201,7 +203,9 @@ async function main() {
     // 다음 적용: 증거를 보고 목적지 사본까지 뜬다 → 빠른 롤백 가능
     T.resetSaved();
     await T.capture(first, "x_self");
+    // captureStepPreApplySnapshot 이 대상 사본을 뜨면서 같은 시점 표식을 남긴다
     first._preApplySnapshot = { resultId: "r2" };
+    first._crossSnapshotFor = "r2";
     check("다음 적용부터는 목적지 사본이 갖춰진다", T.hasFullSnapshots(first) === true, JSON.stringify(first._crossPreApplySnapshots));
   }
 
@@ -220,14 +224,45 @@ async function main() {
     check("id 가 안 맞으면 엉뚱한 스텝에 붙이지 않는다", T.runtimeIds(wrong).length === 0);
   }
 
-  console.log("[9] 배선");
+  console.log("[9] 적대 검증에서 나온 결함들");
+  {
+    // (3) 코드 수정 주 경로도 증거를 버리는가 — 예전엔 '미적용 수정' 분기에만 있었다
+    check("코드 수정 두 경로 모두 증거를 버린다",
+      (pj.match(/dropStepCrossEvidence\(next\[idx\]\)/g) || []).length >= 2);
+    // (4) 대상 사본과 목적지 사본의 시점이 어긋나면 완전하다고 말하지 않는다
+    const skew = {
+      id: "s8", code: CODE_HIDDEN,
+      _preApplySnapshot: { resultId: "r_t2" },        // 다른 실행이 갈아끼운 새 사본
+      _runtimeCrossExcelIds: ["x_out"], _runtimeCrossTracked: true,
+      _crossPreApplySnapshots: [{ resultId: "rB", excelId: "x_out" }],
+      _crossSnapshotFor: "r_t1",                      // 목적지 사본은 예전 시점 것
+    };
+    check("시점이 어긋나면 불완전 — 섞인 복원 금지", T.hasFullSnapshots(skew) === false);
+    skew._crossSnapshotFor = "r_t2";
+    check("같은 시점이면 완전", T.hasFullSnapshots(skew) === true);
+    // (7) 닫힌 세션 id 는 증거에서 빼고 계속 간다(영구 전체 재적용 방지)
+    T.resetSaved();
+    T.failSave("x_gone");
+    const stale = { id: "s10", code: CODE_HIDDEN, _runtimeCrossExcelIds: ["x_gone", "x_out"], _runtimeCrossTracked: true };
+    return T.capture(stale, "x_self").then(out => {
+      check("닫힌 세션은 빼고 나머지는 사본을 뜬다",
+        out.length === 1 && out[0].excelId === "x_out", JSON.stringify(out));
+      check("낡은 id 가 증거에서 제거된다", JSON.stringify(T.runtimeIds(stale)) === '["x_out"]', T.runtimeIds(stale));
+      tail();
+    });
+  }
+}
+
+function tail() {
+  console.log("[10] 배선");
   check("단일 적용·전체실행·실패 경로 모두에서 증거를 붙인다",
     (pj.match(/wirePipelineStepCrossEvidence\(/g) || []).length >= 6);
   check("단계 켜기(단일 적용) 경로가 stepCross 를 받는다",
     /wirePipelineStepCrossEvidence\(data\.stepCross, \[step\]\)/.test(pj));
-  check("코드를 고치면 그 스텝 증거를 버린다", /delete next\[idx\]\._runtimeCrossExcelIds;/.test(pj));
   check("버리기 전에 교차 판정을 먼저 끝낸다(폐기 범위 보존)",
-    pj.indexOf("if (writesCross) dropFrom = idx;") < pj.indexOf("delete next[idx]._runtimeCrossExcelIds;"));
+    pj.indexOf("if (writesCross) dropFrom = idx;") < pj.indexOf("dropStepCrossEvidence(next[idx]);"));
+  check("증거와 그 증거로 뜬 목적지 사본을 함께 버린다",
+    /function dropStepCrossEvidence\(step\) \{[\s\S]{0,320}delete step\._crossSnapshotFor;/.test(pj));
   check("백엔드가 스텝별로 증거를 모은다", /_step_cross\.append\(\{/.test(sb));
   check("백엔드가 이름이 아니라 세션 id 로 돌려준다", /def _companion_excel_ids_for_books\(/.test(sb)
     && /result\["stepCross"\] = _step_cross_payload\(/.test(sb));
@@ -235,6 +270,18 @@ async function main() {
   check("실패 응답에도 증거를 싣는다", (sb.match(/\["stepCross"\] = _step_cross_payload\(/g) || []).length >= 3);
   check("동반본 여는 비용을 사본/열기로 나눠 찍는다",
     /copySec=round\(_t_copy, 2\), openSec=round\(_t_open, 2\)/.test(sb));
+  check("전체실행 백엔드도 증거를 만든다(예전엔 없어서 클라 wiring 이 죽은 코드였다)",
+    /_fr_step_cross\.append\(\{/.test(sb) && /result\["stepCross"\] = list\(_fr_step_cross\)/.test(sb));
+  check("라이브 Python 경로도 세션 id 로 증거를 싣는다",
+    /result\["crossExcelIds"\] = _live_session_excel_ids_for_books\(/.test(sb));
+  check("클라가 두 응답 모양을 모두 처리한다",
+    /function wireStepCrossFromResponse\(data, step\)/.test(pj)
+    && /data\.mutationTracked !== true/.test(pj));
+  check("이름 못 읽은 동반본이 있으면 전부 tracked=False(되돌려쓰기와 대칭)",
+    /unknown = any\(c\.get\("nameUnknown"\) for c in \(companions or \[\]\)\)/.test(sb));
+  check("순수 Python 재적용 두 경로도 증거를 받는다",
+    (pj.match(/wirePipelineStepCrossEvidence\(data\.stepCross, enabledSteps\)/g) || []).length === 1
+    && (pj.match(/wirePipelineStepCrossEvidence\(data\.stepCross, group\.steps\)/g) || []).length === 1);
 
   console.log("");
   console.log(fails === 0 ? "RESULT: ALL PASS" : `RESULT: ${fails} FAIL`);

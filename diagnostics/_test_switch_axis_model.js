@@ -47,7 +47,11 @@ function extractFn(str, name) {
 const REAL = "let _pipelineToggleChain = Promise.resolve();\nlet _pipelineToggleSettling = 0;\n"
   + "function tracePipelineRun() {}\nfunction traceToggleOnRoute() {}\nfunction _stepsOnOffMap() { return ''; }\n"
   + "function _offStepsAmongSent() { return ''; }\nfunction _diffLiveSignatureParts() { return ''; }\n"
-  + "var _lastLiveAppliedParts = null;\nfunction liveEnabledStepsSignatureParts() { return []; }\n" + [
+  + "var _lastLiveAppliedParts = null;\nfunction liveEnabledStepsSignatureParts() { return []; }\n"
+  // [2026-08-12] 스텝 수정 경로가 교차 쓰기 증거를 버리게 되면서 이 함수를 부른다.
+  // 증거는 되돌리기 판정 보강용이라 이 시나리오(판정 갈래)에는 관여하지 않는다 — 스텁으로 충분하다.
+  + "function dropStepCrossEvidence(s) { if (!s) return; delete s._runtimeCrossExcelIds;"
+  + " delete s._crossPreApplySnapshots; delete s._crossSnapshotFor; }\n" + [
   "getPipelineResumeFromIndex", "setPipelineResumeFromIndex", "clearPipelineResumeFromIndex",
   "markPipelinePendingFromIndex", "handlePipelineStepToggle", "_handlePipelineStepToggleImpl",
   "insertLogic", "applyLogic",

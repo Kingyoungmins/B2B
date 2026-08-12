@@ -131,6 +131,9 @@ console.log("[3] 모호하면 되돌리기 사본이 '완전'하다고 말하지
   const step = { code: CODE_CROSS, _preApplySnapshot: { resultId: "r1" } };
   check("대상 사본만 있으면 불완전", T.hasFullSnapshots(step) === false);
   step._crossPreApplySnapshots = [{ resultId: "rdst" }];
+  // 대상 사본과 목적지 사본이 '같은 시점'이라는 표식(실제 코드가 둘을 같이 뜨면서 남긴다).
+  // 없으면 시점이 어긋난 것으로 보고 불완전 판정 — 섞인 시점으로 복원하는 걸 막는다.
+  step._crossSnapshotFor = "r1";
   check("목적지 사본까지 있으면 완전", T.hasFullSnapshots(step) === true);
   step._crossPreApplySnapshots = [];
   check("빈 배열은 불완전(반쪽 복원 금지)", T.hasFullSnapshots(step) === false);
