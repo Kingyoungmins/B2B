@@ -39,6 +39,7 @@ const needed = [
   "pipelineVbaTargetWorkbookNames",
   // inferPipelineStepTargetFileId 는 의존 체인이 커서 로드하지 않는다(typeof 가드로 생략됨).
   // 자기파일 제외는 step.targetFileId 경로로 검증한다.
+  "crossWriteDestinationScan",          // crossWriteDestinationFileIds 가 이걸 부른다(모호한 이름 판정)
   "crossWriteDestinationFileIds",
   "pipelineStepWritesCrossFile",
   "pipelineSuffixWritesCrossFile",

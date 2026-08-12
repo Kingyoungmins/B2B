@@ -57,6 +57,7 @@ const stubs = {
   pipelinePythonMutatedBookNames: () => [],
 };
 const fnSrc = extractFn(pipelineSrc, "pipelineStripCodeComments") + "\n"
+  + extractFn(pipelineSrc, "crossWriteDestinationScan") + "\n"
   + extractFn(pipelineSrc, "crossWriteDestinationFileIds");
 const maker = new Function(
   "pipelineFileIdByWorkbookName", "pipelineConstStringVars", "pipelineResolvePyArg", "pipelinePythonMutatedBookNames",

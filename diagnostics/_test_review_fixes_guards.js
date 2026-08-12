@@ -51,7 +51,7 @@ const FILE_IDS = {
 };
 const fnSrc = [
   "pipelineStripCodeComments", "pipelineCollectWorkbookNames", "pipelineVbaStringVars",
-  "pipelineVbaTargetWorkbookNames", "crossWriteDestinationFileIds",
+  "pipelineVbaTargetWorkbookNames", "crossWriteDestinationScan", "crossWriteDestinationFileIds",
 ].map(n => extractFn(pj, n)).join("\n");
 const crossWrite = new Function(
   "pipelineFileIdByWorkbookName", "pipelineConstStringVars", "pipelineResolvePyArg", "pipelinePythonMutatedBookNames",

@@ -51,7 +51,7 @@ function makeSandbox() {
   for (const m of pipeSrc.matchAll(/^const (PIPELINE_VOLATILE_\w+)\s*=\s*\[/gm)) {
     vm.runInContext(pipeSrc.slice(m.index, pipeSrc.indexOf("\n];", m.index) + 3), sb);
   }
-  [...pipeSrc.matchAll(/^function (pipeline\w*|inferPipelineStep\w*|crossOutputFileIdsReferencedInCode|crossWriteDestinationFileIds|activePipelineSteps)\s*\(/gm)]
+  [...pipeSrc.matchAll(/^function (pipeline\w*|inferPipelineStep\w*|crossOutputFileIdsReferencedInCode|crossWriteDestinationScan|crossWriteDestinationFileIds|activePipelineSteps)\s*\(/gm)]
     .map(m => m[1]).forEach(f => { const s = extractFrom(pipeSrc, f); if (s) { try { vm.runInContext(s, sb); } catch (_) {} } });
   vm.runInContext(extractFrom(pipeSrc, "beginMappedPipelineRun"), sb);
   // drop-handling 의 최상위 const 상수(RUNNER_SHEET_SKILL_DEFAULT 등)도 로드
