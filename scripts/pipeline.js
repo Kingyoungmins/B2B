@@ -938,17 +938,30 @@ function pipelineStripCodeComments(code) {
     .replace(/\/\*[\s\S]*?\*\//g, " ");                // 블록 주석
 }
 
-function crossWriteDestinationFileIds(code, options = {}) {
+// 코드가 '다른 파일에 쓴다'고 지목한 워크북들을 훑는다.
+//   ids        — 어느 파일인지 확정된 목적지(스냅샷을 뜰 수 있다)
+//   unresolved — 이름은 나왔는데 어느 파일인지 확정 못 한 것(동명 후보가 둘 이상이거나 모르는 이름)
+// unresolved 가 있으면 '교차가 아니다'가 아니라 '모른다'다 — 호출부는 이걸 교차로 취급해야 한다.
+// (예전엔 못 찾으면 그냥 버려서, 이름이 모호할수록 교차 판정이 풀리고 빠른 롤백이 목적지를
+//  안 되돌린 채 끝났다. 판정이 흐릴수록 안전장치가 느슨해지는 거꾸로 된 구조였다.)
+function crossWriteDestinationScan(code, options = {}) {
   const text = pipelineStripCodeComments(code);
-  if (!text) return [];
+  if (!text) return { ids: [], unresolved: [] };
   const ids = [];
   const seen = new Set();
+  const unresolved = [];
+  const unresolvedSeen = new Set();
   // 스텝 자신의 대상 파일은 '교차'가 아니다(같은 파일 복사에 dst_book 을 명시하는 복붙 캡처 스텝이
   // 전부 교차로 오판돼, 빠른 토글/삭제 경로를 통째로 잃었다).
   const selfFileId = options.selfFileId || null;
   const addName = name => {
     const fid = typeof pipelineFileIdByWorkbookName === "function" ? pipelineFileIdByWorkbookName(name) : null;
-    if (!fid || fid === selfFileId || seen.has(fid)) return;
+    if (!fid) {
+      const key = String(name || "").trim();
+      if (key && !unresolvedSeen.has(key)) { unresolvedSeen.add(key); unresolved.push(key); }
+      return;
+    }
+    if (fid === selfFileId || seen.has(fid)) return;
     seen.add(fid);
     ids.push(fid);
   };
@@ -990,17 +1003,50 @@ function crossWriteDestinationFileIds(code, options = {}) {
   if (typeof pipelineVbaTargetWorkbookNames === "function" && /\bSub\s+B2BSkill\b/i.test(text)) {
     try { pipelineVbaTargetWorkbookNames(text).forEach(addName); } catch (_) {}
   }
-  return ids;
+  return { ids, unresolved };
+}
+
+// 확정된 목적지만 — 리셋 집합·스냅샷 대상처럼 '실제로 파일을 집어야 하는' 곳이 쓴다.
+function crossWriteDestinationFileIds(code, options = {}) {
+  return crossWriteDestinationScan(code, options).ids;
+}
+
+// 되돌리기 안전 판정용: 이 구간에서 '어느 파일인지 모르겠다'고 나온 이름들.
+// 비어 있지 않으면 빠른 롤백을 포기한 이유가 로그에 남는다(느려진 이유를 사후에 알 수 있게).
+function pipelineSuffixCrossUnresolvedNames(steps, startIdx) {
+  const list = steps || state.pipeline || [];
+  const out = new Set();
+  list.slice(Math.max(0, startIdx)).forEach(s => {
+    if (!s || !s.code) return;
+    try {
+      const selfFileId = s.targetFileId
+        || (typeof inferPipelineStepTargetFileId === "function" ? inferPipelineStepTargetFileId(s) : null);
+      crossWriteDestinationScan(s.code, { selfFileId }).unresolved.forEach(n => out.add(n));
+    } catch (_) {}
+  });
+  return Array.from(out).join(",");
 }
 
 // 이 스텝이 '다른 파일에 쓰는' 교차파일 스텝인가(dst_book 대상이 알려진 파일로 해석되면).
 // 빠른(마지막 스텝) 삭제 스냅샷 복구는 대상 파일만 되돌려 교차 목적지를 놓치므로, 이런 스텝은
 // 전체 reconcile(목적지까지 리셋)로 보낸다.
+//
+// [모호하면 교차로 본다 2026-08-12] 이 판정은 '빠른 되돌리기를 해도 되는가'의 안전장치다.
+// 그런데 예전엔 코드가 지목한 이름을 파일로 확정 못 하면(동명 후보 둘 이상 등) 그 이름을 그냥
+// 버려서 '교차 아님'으로 떨어졌다 — 이름이 모호할수록 안전장치가 풀리는 거꾸로 된 구조였고,
+// 그 상태로 빠른 롤백을 타면 목적지 파일이 안 되돌아간 채 남는다(UI=보류, 실제=적용됨).
+// 이제 확정 못 한 이름이 하나라도 있으면 교차로 본다. 목적지를 모르니 사본도 못 떠서
+// stepHasFullRollbackSnapshots 가 false 가 되고 전체 재적용으로 간다 — 느릴 뿐 안전하다.
+//
+// 남은 한계(의도적): 파일명이 셀 데이터에서 오거나 ctx.book 없이 시트명만으로 남의 워크북에
+// 쓰는 스킬은 코드 어디에도 이름이 없어 정적으로는 보이지 않는다. 이건 백엔드가 실행 중에
+// 실제로 쓴 워크북을 기록하는 쪽(_mark_mutated)으로만 닫을 수 있다.
 function pipelineStepWritesCrossFile(step) {
   // 자기 대상 파일에 쓰는 건 교차가 아니다 — 대상 추론이 되면 그 파일은 제외하고 판단한다.
   const selfFileId = (step && step.targetFileId)
     || (typeof inferPipelineStepTargetFileId === "function" ? inferPipelineStepTargetFileId(step) : null);
-  return crossWriteDestinationFileIds((step && step.code) || "", { selfFileId }).length > 0;
+  const scan = crossWriteDestinationScan((step && step.code) || "", { selfFileId });
+  return scan.ids.length > 0 || scan.unresolved.length > 0;
 }
 
 // 체크포인트 빠른경로는 startIdx '이후 전 스텝'을 되돌린다. 그런데 스텝별 _preApplySnapshot 은
@@ -3697,10 +3743,15 @@ async function _handlePipelineStepToggleImpl(stepId) {
         .filter(s => s && s.code && typeof pipelineStepWritesCrossFile === "function"
           && pipelineStepWritesCrossFile(s))
         .every(stepHasFullRollbackSnapshots);
+    // 빠른 롤백을 포기했을 때 '왜 느렸는지'가 로그에 남게 한다 — 목적지 이름을 확정 못 해
+    // 교차로 본 경우가 여기 찍힌다(값이 있으면 그 이름들이 모호했다는 뜻).
+    const _crossUnresolved = (typeof pipelineSuffixCrossUnresolvedNames === "function")
+      ? pipelineSuffixCrossUnresolvedNames(beforeToggleSnapshot, currentIdx) : "";
     const traceOff = (route, ok, extra) => tracePipelineRun("toggle_off", {
       route, ok: ok === true, stepIdx: currentIdx, stepId,
       fastLast: !!fastLast, crossFileSuffix: !!_crossSuffix,
       crossRollbackReady: !!_crossRollbackReady,
+      crossUnresolved: _crossUnresolved,
       sigNull: _lastLiveAppliedSignature === null,
       steps: _stepsOnOffMap(state.pipeline),
       ...(extra || {}),
@@ -4079,10 +4130,21 @@ async function captureCrossFileDestinationSnapshots(step, selfExcelId) {
   const selfFileId = (typeof inferPipelineStepTargetFileId === "function")
     ? inferPipelineStepTargetFileId(step) : null;
   let fileIds = [];
+  let unresolved = [];
   try {
-    fileIds = crossWriteDestinationFileIds(step.code || "", { selfFileId }) || [];
+    const scan = crossWriteDestinationScan(step.code || "", { selfFileId });
+    fileIds = scan.ids || [];
+    unresolved = scan.unresolved || [];
   } catch (_) {
     fileIds = [];
+    unresolved = [];
+  }
+  // 목적지를 하나라도 확정 못 했으면 사본을 아예 남기지 않는다. 확정된 것만 떠 두면
+  // '사본이 있다'는 이유로 빠른 롤백을 타면서 모르는 목적지는 안 되돌아간다 — 반쪽 복원이다.
+  // 사본이 없으면 stepHasFullRollbackSnapshots 가 false → 전체 재적용(느리지만 전부 되돌아감).
+  if (unresolved.length) {
+    console.warn("[pipeline] 교차 목적지를 확정 못 함 — 되돌리기는 전체 재적용으로", unresolved);
+    return [];
   }
   if (!fileIds.length) return [];
   const out = [];

@@ -3202,6 +3202,21 @@
         ]
       ],
       "fix": "저널 항목이 시트명만 담아서 _rollback 이 self._wb 에서 시트를 찾았다. ctx.book()/_ws() 타 워크북 폴백으로 남긴 항목은 동명 시트가 있으면 남의 파일에 남의 수식을 덮어썼고, 없으면 조용히 걸렀다. 저널을 (시트, 주소, 수식, 워크북) 4-튜플로 바꾸고 _rollback_book 이 같은 인스턴스에서 그 워크북을 찾는다(못 찾으면 예전 동작 유지, 옛 3-튜플도 안 터짐)."
+    },
+    {
+      "id": "CROSSFILE-DETECT-FAIL-OPEN",
+      "title": "[정합] 교차파일 되돌리기의 안전 판정이 fail-open — 목적지 이름을 확정 못 하면 '교차 아님'으로 떨어져 빠른 롤백이 목적지를 안 되돌린 채 끝났다.",
+      "checks": [
+        [
+          "node",
+          "test_runs/_test_crossfile_detect_failclosed.js"
+        ],
+        [
+          "node",
+          "test_runs/_test_toggle_scenarios.js"
+        ]
+      ],
+      "fix": "crossWriteDestinationFileIds 는 코드에서 뽑은 이름을 pipelineFileIdByWorkbookName 으로 파일에 매핑하는데, 동명 후보가 둘 이상이면 pickUnique 가 null 을 주고 그 이름을 그냥 버렸다 — 이름이 모호할수록 안전장치가 풀리는 거꾸로 된 구조. crossWriteDestinationScan 이 {ids, unresolved} 를 돌려주고 pipelineStepWritesCrossFile 이 unresolved 도 교차로 본다. 목적지를 모르니 사본도 못 떠서 stepHasFullRollbackSnapshots=false → 전체 재적용(느리지만 전부 되돌아감). 포기 사유는 toggle_off 트레이스의 crossUnresolved 에 이름으로 남는다. 남은 한계(의도): 파일명이 셀 데이터에서 오거나 ctx.book 없이 _ws() 폴백으로 남의 워크북에 쓰면 코드에 이름이 없어 정적으로는 안 보인다 — 백엔드 런타임 증거(_mark_mutated/mutatedBooks)로만 닫을 수 있다."
     }
   ]
 }
