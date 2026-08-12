@@ -8,7 +8,7 @@ signature: "(step, excelId, options = {})"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
 version: "0.7.3"
-loc: "pipeline.js:2106-2106"
+loc: "pipeline.js:2109-2109"
 
 # ── 입출력 ──
 inputs:
@@ -34,12 +34,14 @@ calls:
   - "pipelineStepWritesCrossFile"
   - "postExcelMirror"
   - "setPipelineRuntimeStatus"
+  - "wirePipelineStepCrossEvidence"
 calls_external:
   - "Error"
   - "Number"
   - "false"
   - "includes"
   - "indexOf"
+  - "isArray"
   - "isInteger"
   - "now"
 called_by:
@@ -58,7 +60,7 @@ timestamp: "0.7.3-gen"
 - 네트워크/서버 호출
 
 ## 관계
-- 호출: `applyLiveSchemaToFileCache`, `attachPipelineStepError`, `captureStepPreApplySnapshot`, `hideAllExcelMirrorWindows`, `inferPipelineStepLanguage`, `isolatedPipelineStepPayload`, `pipelineStepLiveLanguage`, `pipelineStepWritesCrossFile`, `postExcelMirror`, `setPipelineRuntimeStatus`
+- 호출: `applyLiveSchemaToFileCache`, `attachPipelineStepError`, `captureStepPreApplySnapshot`, `hideAllExcelMirrorWindows`, `inferPipelineStepLanguage`, `isolatedPipelineStepPayload`, `pipelineStepLiveLanguage`, `pipelineStepWritesCrossFile`, `postExcelMirror`, `setPipelineRuntimeStatus`, `wirePipelineStepCrossEvidence`
 - 피호출(영향 전파 경로): `applyLastEnabledStepFast`
 
 ## 실패/예외

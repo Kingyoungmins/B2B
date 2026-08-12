@@ -31,6 +31,7 @@ calls_external:
   - "isInteger"
 called_by:
   - "runIsolatedLivePipelineSteps"
+  - "runLivePipelineStepSequentially"
 reads:
   - "state.pipeline"
 writes: []
@@ -46,7 +47,7 @@ timestamp: "0.7.3-gen"
 
 ## 관계
 - 호출: `push`
-- 피호출(영향 전파 경로): `runIsolatedLivePipelineSteps`
+- 피호출(영향 전파 경로): `runIsolatedLivePipelineSteps`, `runLivePipelineStepSequentially`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

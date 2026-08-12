@@ -8,7 +8,7 @@ signature: "(restore, excelId, opts)"
 role: "복귀가 끝날 때까지 기다리되, 진행이 stallMs 동안 '한 발짝도' 못 나가면 멈춤으로 본다."
 role_source: banner
 version: "0.7.3"
-loc: "pipeline.js:1834-1834"
+loc: "pipeline.js:1837-1837"
 
 # ── 입출력 ──
 inputs:

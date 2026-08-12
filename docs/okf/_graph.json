@@ -32330,7 +32330,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:1230-1230",
+      "loc": "pipeline.js:1233-1233",
       "signature": "(step)",
       "calls": [],
       "side_effects": [
@@ -32345,7 +32345,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:1234-1234",
+      "loc": "pipeline.js:1237-1237",
       "signature": "(sourceSteps, initialExcelId, options = {})",
       "calls": [
         "_offStepsAmongSent",
@@ -32401,7 +32401,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:1246-1246",
+      "loc": "pipeline.js:1249-1249",
       "signature": "()",
       "calls": [],
       "side_effects": [
@@ -32416,7 +32416,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:1309-1309",
+      "loc": "pipeline.js:1312-1312",
       "signature": "()",
       "calls": [],
       "side_effects": [
@@ -32431,7 +32431,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:1617-1617",
+      "loc": "pipeline.js:1620-1620",
       "signature": "(step)",
       "calls": [
         "pipelineWorkbookNameKey"
@@ -32448,7 +32448,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:1630-1630",
+      "loc": "pipeline.js:1633-1633",
       "signature": "(options = {})",
       "calls": [
         "activePipelineSteps",
@@ -32492,7 +32492,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:1750-1750",
+      "loc": "pipeline.js:1753-1753",
       "signature": "(record)",
       "calls": [],
       "side_effects": [
@@ -32507,7 +32507,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:1764-1764",
+      "loc": "pipeline.js:1767-1767",
       "signature": "(excelId, options = {})",
       "calls": [
         "endExcelMirrorApplyLoading",
@@ -32532,7 +32532,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:1811-1811",
+      "loc": "pipeline.js:1814-1814",
       "signature": "(excelId)",
       "calls": [],
       "side_effects": [
@@ -32547,7 +32547,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:1824-1824",
+      "loc": "pipeline.js:1827-1827",
       "signature": "(p)",
       "calls": [],
       "side_effects": [
@@ -32562,7 +32562,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:1834-1834",
+      "loc": "pipeline.js:1837-1837",
       "signature": "(restore, excelId, opts)",
       "calls": [
         "excelPipelineProgressSignature",
@@ -32580,7 +32580,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:1856-1856",
+      "loc": "pipeline.js:1859-1859",
       "signature": "()",
       "calls": [
         "forceRestartExcelMirrors"
@@ -32597,7 +32597,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:1874-1874",
+      "loc": "pipeline.js:1877-1877",
       "signature": "()",
       "calls": [
         "escalateExcelStopToForceRestart",
@@ -32626,7 +32626,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:1936-1936",
+      "loc": "pipeline.js:1939-1939",
       "signature": "(err)",
       "calls": [],
       "side_effects": [
@@ -32641,7 +32641,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:1943-1943",
+      "loc": "pipeline.js:1946-1946",
       "signature": "(step, excelId, options = {})",
       "calls": [
         "applyLiveSchemaToFileCache",
@@ -32688,7 +32688,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:2106-2106",
+      "loc": "pipeline.js:2109-2109",
       "signature": "(step, excelId, options = {})",
       "calls": [
         "applyLiveSchemaToFileCache",
@@ -32700,7 +32700,8 @@
         "pipelineStepLiveLanguage",
         "pipelineStepWritesCrossFile",
         "postExcelMirror",
-        "setPipelineRuntimeStatus"
+        "setPipelineRuntimeStatus",
+        "wirePipelineStepCrossEvidence"
       ],
       "side_effects": [
         "네트워크/서버 호출"
@@ -32716,7 +32717,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:2157-2157",
+      "loc": "pipeline.js:2173-2173",
       "signature": "(step)",
       "calls": [
         "applyVbaStepToLiveExcel",
@@ -32766,7 +32767,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:2286-2286",
+      "loc": "pipeline.js:2302-2302",
       "signature": "(step, position)",
       "calls": [
         "_demoteHeld",
@@ -32817,7 +32818,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:2325-2325",
+      "loc": "pipeline.js:2341-2341",
       "signature": "()",
       "calls": [
         "refreshRunButton",
@@ -32838,7 +32839,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:2332-2332",
+      "loc": "pipeline.js:2348-2348",
       "signature": "(async ()",
       "calls": [
         "_demoteHeld",
@@ -32860,7 +32861,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:2473-2473",
+      "loc": "pipeline.js:2489-2489",
       "signature": "(stepId, newCode, newDescription, language, opts)",
       "calls": [
         "applyMappedSingleStep",
@@ -32918,7 +32919,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:2596-2596",
+      "loc": "pipeline.js:2612-2612",
       "signature": "(async ()",
       "calls": [
         "applyMappedSingleStep",
@@ -32945,7 +32946,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:2759-2759",
+      "loc": "pipeline.js:2775-2775",
       "signature": "(stepIdx)",
       "calls": [
         "cloneFileRecord",
@@ -32971,7 +32972,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:2767-2767",
+      "loc": "pipeline.js:2783-2783",
       "signature": "(s)",
       "calls": [],
       "side_effects": [
@@ -32986,7 +32987,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:2772-2772",
+      "loc": "pipeline.js:2788-2788",
       "signature": "(fileRef, sheetName, r, c, value)",
       "calls": [],
       "side_effects": [
@@ -33001,7 +33002,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:2837-2837",
+      "loc": "pipeline.js:2853-2853",
       "signature": "(step)",
       "calls": [
         "stepChatOriginless"
@@ -33018,7 +33019,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:2852-2852",
+      "loc": "pipeline.js:2868-2868",
       "signature": "(step)",
       "calls": [
         "_editPrefillPromptOf",
@@ -33036,7 +33037,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:2883-2883",
+      "loc": "pipeline.js:2899-2899",
       "signature": "(stepId)",
       "calls": [
         "_applyEditPrefill",
@@ -33063,7 +33064,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:2903-2903",
+      "loc": "pipeline.js:2919-2919",
       "signature": "(edit, inputsMap, outputSheets)",
       "calls": [
         "clearManualEditFormulaMetadata",
@@ -33084,7 +33085,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:2926-2926",
+      "loc": "pipeline.js:2942-2942",
       "signature": "(edit)",
       "calls": [
         "clearFormulaCellMetadataForFileId"
@@ -33101,7 +33102,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:2931-2931",
+      "loc": "pipeline.js:2947-2947",
       "signature": "(fileId, sheetName, r, c)",
       "calls": [
         "_excelCol",
@@ -33121,7 +33122,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:2950-2950",
+      "loc": "pipeline.js:2966-2966",
       "signature": "(steps, options = {})",
       "calls": [
         "_stepError",
@@ -33182,7 +33183,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:2995-2995",
+      "loc": "pipeline.js:3011-3011",
       "signature": "(fileId, sheetName, r, c)",
       "calls": [],
       "side_effects": [
@@ -33197,7 +33198,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:2996-2996",
+      "loc": "pipeline.js:3012-3012",
       "signature": "(fileId, sheetName, r, c, value)",
       "calls": [
         "clearFormulaCellMetadataForFileId",
@@ -33215,7 +33216,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:3008-3008",
+      "loc": "pipeline.js:3024-3024",
       "signature": "(row, fileId, sheetName, r)",
       "calls": [
         "trackClearThenSet"
@@ -33232,7 +33233,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:3027-3027",
+      "loc": "pipeline.js:3043-3043",
       "signature": "(sheet, fileId, sheetName)",
       "calls": [
         "trackedRowProxy"
@@ -33249,7 +33250,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:3044-3044",
+      "loc": "pipeline.js:3060-3060",
       "signature": "(sheetsObj, fileId)",
       "calls": [
         "fuzzyGetKey",
@@ -33267,7 +33268,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:3077-3077",
+      "loc": "pipeline.js:3093-3093",
       "signature": "(sheetsObj)",
       "calls": [
         "fuzzyProxy"
@@ -33286,7 +33287,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:3203-3203",
+      "loc": "pipeline.js:3219-3219",
       "signature": "(steps)",
       "calls": [
         "captureCurrentViewSnapshot",
@@ -33311,7 +33312,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:3220-3220",
+      "loc": "pipeline.js:3236-3236",
       "signature": "(label)",
       "calls": [
         "$",
@@ -33335,7 +33336,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:3228-3228",
+      "loc": "pipeline.js:3244-3244",
       "signature": "(r, c)",
       "calls": [
         "add",
@@ -33353,7 +33354,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:3249-3249",
+      "loc": "pipeline.js:3265-3265",
       "signature": "(before, after)",
       "calls": [
         "normalizeDiffValue"
@@ -33370,7 +33371,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:3255-3255",
+      "loc": "pipeline.js:3271-3271",
       "signature": "(value)",
       "calls": [],
       "side_effects": [
@@ -33385,7 +33386,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:3261-3261",
+      "loc": "pipeline.js:3277-3277",
       "signature": "(changes)",
       "calls": [
         "$",
@@ -33403,7 +33404,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:3276-3276",
+      "loc": "pipeline.js:3292-3292",
       "signature": "(before, after, step, stepIdx)",
       "calls": [],
       "side_effects": [
@@ -33419,7 +33420,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:3290-3290",
+      "loc": "pipeline.js:3306-3306",
       "signature": "(options = {})",
       "calls": [
         "canRunPipelineOnBackend",
@@ -33444,7 +33445,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:3312-3312",
+      "loc": "pipeline.js:3328-3328",
       "signature": "(inputsMap)",
       "calls": [
         "syncFileMetadata"
@@ -33467,7 +33468,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:3330-3330",
+      "loc": "pipeline.js:3346-3346",
       "signature": "(options = {})",
       "calls": [
         "clearViewerDomForPipelineRun"
@@ -33484,7 +33485,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:3334-3334",
+      "loc": "pipeline.js:3350-3350",
       "signature": "()",
       "calls": [
         "$"
@@ -33501,7 +33502,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:3347-3347",
+      "loc": "pipeline.js:3363-3363",
       "signature": "(info)",
       "calls": [],
       "side_effects": [
@@ -33516,7 +33517,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:3354-3354",
+      "loc": "pipeline.js:3370-3370",
       "signature": "(err, step, stepIdx, extra = {})",
       "calls": [
         "inferPipelineStepLanguage"
@@ -33533,7 +33534,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:3379-3379",
+      "loc": "pipeline.js:3395-3395",
       "signature": "()",
       "calls": [
         "isHeavyFormulaRecompute",
@@ -33559,7 +33560,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:3401-3401",
+      "loc": "pipeline.js:3417-3417",
       "signature": "(filesById)",
       "calls": [],
       "side_effects": [
@@ -33574,7 +33575,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:3413-3413",
+      "loc": "pipeline.js:3429-3429",
       "signature": "()",
       "calls": [
         "$",
@@ -33597,7 +33598,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:3441-3441",
+      "loc": "pipeline.js:3457-3457",
       "signature": "(step, idx)",
       "calls": [],
       "side_effects": [
@@ -33612,7 +33613,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:3456-3456",
+      "loc": "pipeline.js:3472-3472",
       "signature": "()",
       "calls": [
         "$",
@@ -33670,7 +33671,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:3518-3518",
+      "loc": "pipeline.js:3534-3534",
       "signature": "(save)",
       "calls": [
         "pushHistory",
@@ -33696,7 +33697,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:3541-3541",
+      "loc": "pipeline.js:3557-3557",
       "signature": "()",
       "calls": [
         "renderPipeline"
@@ -33721,7 +33722,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:3721-3721",
+      "loc": "pipeline.js:3737-3737",
       "signature": "()",
       "calls": [
         "getPipelineRuntimeStatus",
@@ -33743,7 +33744,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:3750-3750",
+      "loc": "pipeline.js:3766-3766",
       "signature": "(stepId)",
       "calls": [
         "_handlePipelineStepToggleImpl"
@@ -33760,7 +33761,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:3751-3751",
+      "loc": "pipeline.js:3767-3767",
       "signature": "()",
       "calls": [
         "_handlePipelineStepToggleImpl"
@@ -33777,7 +33778,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:3764-3764",
+      "loc": "pipeline.js:3780-3780",
       "signature": "(stepId)",
       "calls": [
         "_diffLiveSignatureParts",
@@ -33831,7 +33832,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:3786-3786",
+      "loc": "pipeline.js:3802-3802",
       "signature": "()",
       "calls": [],
       "side_effects": [
@@ -33846,7 +33847,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:3807-3807",
+      "loc": "pipeline.js:3823-3823",
       "signature": "(route, ok, extra)",
       "calls": [],
       "side_effects": [
@@ -33861,7 +33862,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:3816-3816",
+      "loc": "pipeline.js:3832-3832",
       "signature": "(err)",
       "calls": [
         "refreshRunButton",
@@ -33884,7 +33885,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:3891-3891",
+      "loc": "pipeline.js:3907-3907",
       "signature": "(err)",
       "calls": [
         "refreshRunButton",
@@ -33906,7 +33907,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:3988-3988",
+      "loc": "pipeline.js:4004-4004",
       "signature": "(steps = state.pipeline)",
       "calls": [
         "isStepEnabled",
@@ -33924,7 +33925,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:4000-4000",
+      "loc": "pipeline.js:4016-4016",
       "signature": "(steps = state.pipeline)",
       "calls": [
         "_pipelineSigHash",
@@ -33943,7 +33944,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:4022-4022",
+      "loc": "pipeline.js:4038-4038",
       "signature": "(steps)",
       "calls": [],
       "side_effects": [
@@ -33963,7 +33964,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:4040-4040",
+      "loc": "pipeline.js:4056-4056",
       "signature": "(steps = state.pipeline)",
       "calls": [
         "_signatureStepsAsRestored",
@@ -33984,7 +33985,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:4062-4062",
+      "loc": "pipeline.js:4078-4078",
       "signature": "()",
       "calls": [],
       "side_effects": [
@@ -33999,7 +34000,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:4072-4072",
+      "loc": "pipeline.js:4088-4088",
       "signature": "(prevParts, curParts)",
       "calls": [
         "push"
@@ -34016,7 +34017,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:4098-4098",
+      "loc": "pipeline.js:4114-4114",
       "signature": "(steps, limit)",
       "calls": [
         "isStepEnabled"
@@ -34033,7 +34034,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:4110-4110",
+      "loc": "pipeline.js:4126-4126",
       "signature": "(steps, sentIdxList)",
       "calls": [
         "isStepEnabled",
@@ -34051,7 +34052,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:4122-4122",
+      "loc": "pipeline.js:4138-4138",
       "signature": "(phase, info)",
       "calls": [
         "traceClientUiEvent"
@@ -34068,7 +34069,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:4131-4131",
+      "loc": "pipeline.js:4147-4147",
       "signature": "(route, info)",
       "calls": [
         "traceClientUiEvent"
@@ -34085,7 +34086,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:4143-4143",
+      "loc": "pipeline.js:4159-4159",
       "signature": "()",
       "calls": [],
       "side_effects": [
@@ -34100,7 +34101,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:4147-4147",
+      "loc": "pipeline.js:4163-4163",
       "signature": "(step, excelId)",
       "calls": [
         "captureCrossFileDestinationSnapshots",
@@ -34119,7 +34120,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:4184-4184",
+      "loc": "pipeline.js:4200-4200",
       "signature": "(step, selfExcelId)",
       "calls": [
         "add",
@@ -34143,7 +34144,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:4213-4213",
+      "loc": "pipeline.js:4229-4229",
       "signature": "(dstExcelId, fid)",
       "calls": [
         "add",
@@ -34162,7 +34163,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:4245-4245",
+      "loc": "pipeline.js:4261-4261",
       "signature": "(step)",
       "calls": [
         "pipelineStepWritesCrossFile",
@@ -34180,7 +34181,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:4261-4261",
+      "loc": "pipeline.js:4277-4277",
       "signature": "(step, snap, stepIdx = null)",
       "calls": [
         "add",
@@ -34200,7 +34201,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:4275-4275",
+      "loc": "pipeline.js:4291-4291",
       "signature": "(steps = state.pipeline)",
       "calls": [
         "pipelineStepLiveLanguage"
@@ -34217,7 +34218,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:4283-4283",
+      "loc": "pipeline.js:4299-4299",
       "signature": "(step, idx, beforeSteps)",
       "calls": [
         "getPipelineRuntimeStatus",
@@ -34239,7 +34240,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:4297-4297",
+      "loc": "pipeline.js:4313-4313",
       "signature": "(step, idx, beforeSteps)",
       "calls": [
         "lastLiveStepIndex",
@@ -34259,7 +34260,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:4305-4305",
+      "loc": "pipeline.js:4321-4321",
       "signature": "(snap, options = {})",
       "calls": [
         "_restoreSnapshotByIds"
@@ -34276,7 +34277,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:4310-4310",
+      "loc": "pipeline.js:4326-4326",
       "signature": "(step, options = {})",
       "calls": [
         "_restoreSnapshotByIds",
@@ -34296,7 +34297,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:4329-4329",
+      "loc": "pipeline.js:4345-4345",
       "signature": "(resultId, excelId, options = {})",
       "calls": [
         "applyLiveSchemaToFileCache",
@@ -34318,7 +34319,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:4357-4357",
+      "loc": "pipeline.js:4373-4373",
       "signature": "(startIdx, beforeSteps, options = {})",
       "calls": [
         "add",
@@ -34340,7 +34341,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:4412-4412",
+      "loc": "pipeline.js:4428-4428",
       "signature": "(start, restoredExcelIds)",
       "calls": [
         "add",
@@ -34364,7 +34365,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:4435-4435",
+      "loc": "pipeline.js:4451-4451",
       "signature": "(startIdx, beforeSteps, options = {})",
       "calls": [
         "add",
@@ -34390,7 +34391,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:4483-4483",
+      "loc": "pipeline.js:4499-4499",
       "signature": "(startIdx, options = {})",
       "calls": [
         "_runPipelineSuffixFromCheckpointImpl",
@@ -34409,7 +34410,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:4492-4492",
+      "loc": "pipeline.js:4508-4508",
       "signature": "(startIdx, options = {})",
       "calls": [
         "_finishBarrier",
@@ -34442,7 +34443,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:4502-4502",
+      "loc": "pipeline.js:4518-4518",
       "signature": "()",
       "calls": [
         "clearPipelineResumeFromIndex",
@@ -34460,7 +34461,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:4566-4566",
+      "loc": "pipeline.js:4582-4582",
       "signature": "(startIdx, beforeSteps, options = {})",
       "calls": [
         "currentExcelId",
@@ -34484,7 +34485,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:4632-4632",
+      "loc": "pipeline.js:4648-4648",
       "signature": "()",
       "calls": [
         "getPipelineResumeFromIndex",
@@ -34506,7 +34507,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:4657-4657",
+      "loc": "pipeline.js:4673-4673",
       "signature": "()",
       "calls": [
         "pipelineHeldBatchInfo"
@@ -34523,7 +34524,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:4664-4664",
+      "loc": "pipeline.js:4680-4680",
       "signature": "(info)",
       "calls": [
         "pipelineStepLabel",
@@ -34542,7 +34543,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:4718-4718",
+      "loc": "pipeline.js:4734-4734",
       "signature": "()",
       "calls": [],
       "side_effects": [
@@ -34557,7 +34558,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:4751-4751",
+      "loc": "pipeline.js:4767-4767",
       "signature": "()",
       "calls": [
         "_showBatchResumeChecklist",
@@ -34581,7 +34582,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:4789-4789",
+      "loc": "pipeline.js:4805-4805",
       "signature": "(checkedIds, fingerprint)",
       "calls": [
         "_runHeldStepsBatchImpl"
@@ -34598,7 +34599,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:4790-4790",
+      "loc": "pipeline.js:4806-4806",
       "signature": "()",
       "calls": [
         "_runHeldStepsBatchImpl"
@@ -34615,7 +34616,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:4800-4800",
+      "loc": "pipeline.js:4816-4816",
       "signature": "(checkedIds, fingerprint)",
       "calls": [
         "_pipelineCoreBusyReason",
@@ -34650,7 +34651,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:4916-4916",
+      "loc": "pipeline.js:4932-4932",
       "signature": "(startIdx, beforeSteps, nextSteps)",
       "calls": [
         "getPipelineResumeFromIndex",
@@ -34673,7 +34674,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:4947-4947",
+      "loc": "pipeline.js:4963-4963",
       "signature": "(stepId, options = {})",
       "calls": [
         "applyLastEnabledStepFast",
@@ -34698,7 +34699,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:4977-4977",
+      "loc": "pipeline.js:4993-4993",
       "signature": "(step, options = {})",
       "calls": [
         "captureStepPreApplySnapshot",
@@ -34727,7 +34728,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:5021-5021",
+      "loc": "pipeline.js:5037-5037",
       "signature": "()",
       "calls": [],
       "side_effects": [
@@ -34742,7 +34743,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:5034-5034",
+      "loc": "pipeline.js:5050-5050",
       "signature": "()",
       "calls": [
         "_pipelineCoreBusyReason"
@@ -34759,7 +34760,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:5048-5048",
+      "loc": "pipeline.js:5064-5064",
       "signature": "(excelId, schema)",
       "calls": [
         "fileIdForExcelMirrorId",
@@ -34780,7 +34781,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:5097-5097",
+      "loc": "pipeline.js:5113-5113",
       "signature": "()",
       "calls": [
         "restore"
@@ -34808,7 +34809,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:5158-5158",
+      "loc": "pipeline.js:5174-5174",
       "signature": "(excelId, options = {})",
       "calls": [
         "_reapplyVbaPipelineToLiveImpl",
@@ -34830,7 +34831,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:5174-5174",
+      "loc": "pipeline.js:5190-5190",
       "signature": "(excelId, options = {})",
       "calls": [
         "_offStepsAmongSent",
@@ -34887,7 +34888,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:5315-5315",
+      "loc": "pipeline.js:5331-5331",
       "signature": "()",
       "calls": [],
       "side_effects": [
@@ -34902,7 +34903,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:5478-5478",
+      "loc": "pipeline.js:5494-5494",
       "signature": "(affected)",
       "calls": [],
       "side_effects": [
@@ -34917,7 +34918,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:5494-5494",
+      "loc": "pipeline.js:5510-5510",
       "signature": "(affected)",
       "calls": [
         "crossOutputFileIdsReferencedInCode",
@@ -34936,7 +34937,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:5507-5507",
+      "loc": "pipeline.js:5523-5523",
       "signature": "(options = {})",
       "calls": [
         "_reconcilePipelineSimulationAfterEditImpl",
@@ -34955,7 +34956,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:5519-5519",
+      "loc": "pipeline.js:5535-5535",
       "signature": "(options = {})",
       "calls": [
         "affectedStepViewFileId",
@@ -35004,7 +35005,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:5691-5691",
+      "loc": "pipeline.js:5707-5707",
       "signature": "()",
       "calls": [
         "$",
@@ -35029,7 +35030,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:5705-5705",
+      "loc": "pipeline.js:5721-5721",
       "signature": "()",
       "calls": [],
       "side_effects": [
@@ -35046,7 +35047,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:5709-5709",
+      "loc": "pipeline.js:5725-5725",
       "signature": "(err)",
       "calls": [
         "resolveRunnerRecoveryStepIndex"
@@ -35065,7 +35066,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:5725-5725",
+      "loc": "pipeline.js:5741-5741",
       "signature": "(err, activeStepIds)",
       "calls": [
         "getPipelineRuntimeStatus",
@@ -35085,7 +35086,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:5745-5745",
+      "loc": "pipeline.js:5761-5761",
       "signature": "(running, text)",
       "calls": [
         "$",
@@ -35104,7 +35105,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:5769-5769",
+      "loc": "pipeline.js:5785-5785",
       "signature": "(step, options = {})",
       "calls": [],
       "side_effects": [
@@ -35119,7 +35120,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:5785-5785",
+      "loc": "pipeline.js:5801-5801",
       "signature": "(code)",
       "calls": [],
       "side_effects": [
@@ -35134,7 +35135,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:5811-5811",
+      "loc": "pipeline.js:5827-5827",
       "signature": "(step)",
       "calls": [
         "add",
@@ -35154,7 +35155,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:5855-5855",
+      "loc": "pipeline.js:5871-5871",
       "signature": "(steps = state.pipeline)",
       "calls": [
         "isStepEnabled",
@@ -35174,7 +35175,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:5868-5868",
+      "loc": "pipeline.js:5884-5884",
       "signature": "(blocker)",
       "calls": [
         "createPipelineStepError"
@@ -35191,7 +35192,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:5884-5884",
+      "loc": "pipeline.js:5900-5900",
       "signature": "(step)",
       "calls": [],
       "side_effects": [
@@ -35206,7 +35207,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:5894-5894",
+      "loc": "pipeline.js:5910-5910",
       "signature": "(code, language, sourceUserMessage)",
       "calls": [
         "pythonComStaticSafetyFailures",
@@ -35224,7 +35225,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:5905-5905",
+      "loc": "pipeline.js:5921-5921",
       "signature": "(step)",
       "calls": [
         "inferPipelineStepLanguage",
@@ -35243,7 +35244,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:5911-5911",
+      "loc": "pipeline.js:5927-5927",
       "signature": "(step)",
       "calls": [
         "getPipelineRuntimeStatus"
@@ -35260,7 +35261,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:5918-5918",
+      "loc": "pipeline.js:5934-5934",
       "signature": "(steps = state.pipeline, options = {})",
       "calls": [
         "isStepEnabled",
@@ -35279,7 +35280,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:5933-5933",
+      "loc": "pipeline.js:5949-5949",
       "signature": "(stepIdx, step, message, details)",
       "calls": [
         "inferPipelineStepLanguage"
@@ -35296,7 +35297,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:5948-5948",
+      "loc": "pipeline.js:5964-5964",
       "signature": "(step, reason, repairCount)",
       "calls": [
         "filterToNewSheetIntent",
@@ -35318,7 +35319,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:5980-5980",
+      "loc": "pipeline.js:5996-5996",
       "signature": "(step, reason, repairCount)",
       "calls": [
         "choosePipelineRepairLanguage"
@@ -35335,7 +35336,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:5984-5984",
+      "loc": "pipeline.js:6000-6000",
       "signature": "(targetLanguage)",
       "calls": [
         "buildSchemaSummary"
@@ -35352,7 +35353,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:5995-5995",
+      "loc": "pipeline.js:6011-6011",
       "signature": "(step, stepIdx, reason, targetLanguage)",
       "calls": [
         "duplicateRowDeleteVbaHint",
@@ -35372,7 +35373,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:6070-6070",
+      "loc": "pipeline.js:6086-6086",
       "signature": "(reply)",
       "calls": [
         "extractCode"
@@ -35389,7 +35390,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:6076-6076",
+      "loc": "pipeline.js:6092-6092",
       "signature": "(body)",
       "calls": [],
       "side_effects": [
@@ -35404,7 +35405,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:6082-6082",
+      "loc": "pipeline.js:6098-6098",
       "signature": "(value)",
       "calls": [],
       "side_effects": [
@@ -35419,7 +35420,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:6086-6086",
+      "loc": "pipeline.js:6102-6102",
       "signature": "(code, step)",
       "calls": [
         "inferPipelineStepTargetSheetName",
@@ -35439,7 +35440,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:6141-6141",
+      "loc": "pipeline.js:6157-6157",
       "signature": "(code)",
       "calls": [],
       "side_effects": [
@@ -35454,7 +35455,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:6172-6172",
+      "loc": "pipeline.js:6188-6188",
       "signature": "(code)",
       "calls": [],
       "side_effects": [
@@ -35469,7 +35470,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:6235-6235",
+      "loc": "pipeline.js:6251-6251",
       "signature": "(step, failures)",
       "calls": [
         "inferPipelineStepLanguage",
@@ -35488,7 +35489,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:6250-6250",
+      "loc": "pipeline.js:6266-6266",
       "signature": "(stepIdx, reason, repairCount)",
       "calls": [
         "addMessage",
@@ -35527,7 +35528,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:6351-6351",
+      "loc": "pipeline.js:6367-6367",
       "signature": "(options = {})",
       "calls": [
         "autoRepairPipelineStep",
@@ -35559,7 +35560,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:6715-6715",
+      "loc": "pipeline.js:6731-6731",
       "signature": "()",
       "calls": [
         "$"
@@ -35576,7 +35577,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:6984-6984",
+      "loc": "pipeline.js:7000-7000",
       "signature": "(code)",
       "calls": [],
       "side_effects": [
@@ -35591,7 +35592,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:6996-6996",
+      "loc": "pipeline.js:7012-7012",
       "signature": "(code)",
       "calls": [],
       "side_effects": [
@@ -35606,7 +35607,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:7026-7026",
+      "loc": "pipeline.js:7042-7042",
       "signature": "(s, _idx)",
       "calls": [
         "_recordedIntentNeeded",
@@ -35625,7 +35626,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:7274-7274",
+      "loc": "pipeline.js:7290-7290",
       "signature": "(info)",
       "calls": [],
       "side_effects": [
@@ -35642,7 +35643,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:7283-7283",
+      "loc": "pipeline.js:7299-7299",
       "signature": "(info)",
       "calls": [
         "_recordedLike",
@@ -35667,7 +35668,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:7290-7290",
+      "loc": "pipeline.js:7306-7306",
       "signature": "(s)",
       "calls": [],
       "side_effects": [
@@ -35682,7 +35683,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:7380-7380",
+      "loc": "pipeline.js:7396-7396",
       "signature": "(info, options)",
       "calls": [],
       "side_effects": [
@@ -35699,7 +35700,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:7415-7415",
+      "loc": "pipeline.js:7431-7431",
       "signature": "(err, options)",
       "calls": [
         "_assistErrorDiagnoseQuestion",
@@ -35728,7 +35729,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:7570-7570",
+      "loc": "pipeline.js:7586-7586",
       "signature": "(text)",
       "calls": [
         "extractCode"
@@ -35745,7 +35746,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:7576-7576",
+      "loc": "pipeline.js:7592-7592",
       "signature": "(code)",
       "calls": [
         "add"
@@ -35762,7 +35763,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:7594-7594",
+      "loc": "pipeline.js:7610-7610",
       "signature": "(code, sheetName)",
       "calls": [],
       "side_effects": [
@@ -35777,7 +35778,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:7603-7603",
+      "loc": "pipeline.js:7619-7619",
       "signature": "(stepIdx, sheetName)",
       "calls": [
         "pipelineCodeCreatesSheetNamed"
@@ -35796,7 +35797,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:7613-7613",
+      "loc": "pipeline.js:7629-7629",
       "signature": "(sheetName, failedCode)",
       "calls": [
         "pipelineCodeCreatesSheetNamed",
@@ -35816,7 +35817,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:7636-7636",
+      "loc": "pipeline.js:7652-7652",
       "signature": "(info)",
       "calls": [
         "findChatHistorySheetCreationCandidate",
@@ -35835,7 +35836,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:7651-7651",
+      "loc": "pipeline.js:7667-7667",
       "signature": "(info)",
       "calls": [
         "add",
@@ -35855,7 +35856,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:7674-7674",
+      "loc": "pipeline.js:7690-7690",
       "signature": "(errorInfo)",
       "calls": [
         "resolveErrorRecoveryStepIndex"
@@ -35874,7 +35875,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:7693-7693",
+      "loc": "pipeline.js:7709-7709",
       "signature": "(errorInfo)",
       "calls": [
         "adaptPipelineForRun",
@@ -35911,7 +35912,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:7760-7760",
+      "loc": "pipeline.js:7776-7776",
       "signature": "()",
       "calls": [],
       "side_effects": [
@@ -35926,7 +35927,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:7767-7767",
+      "loc": "pipeline.js:7783-7783",
       "signature": "(err, options)",
       "calls": [
         "_assistErrorDiagnoseQuestion",
@@ -35954,7 +35955,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "pipeline.js:7803-7803",
+      "loc": "pipeline.js:7819-7819",
       "signature": "()",
       "calls": [],
       "side_effects": [
@@ -61863,6 +61864,11 @@
       "lang": "js"
     },
     {
+      "from": "runLivePipelineStepSequentially",
+      "to": "wirePipelineStepCrossEvidence",
+      "lang": "js"
+    },
+    {
       "from": "applyLogic",
       "to": "applyVbaStepToLiveExcel",
       "lang": "js"
@@ -67020,7 +67026,7 @@
   ],
   "stats": {
     "functions": 1974,
-    "edges": 5498,
+    "edges": 5499,
     "by_lang": {
       "python": 633,
       "js": 1108,
