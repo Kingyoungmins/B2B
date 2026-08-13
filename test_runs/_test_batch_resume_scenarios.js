@@ -80,6 +80,14 @@ async function runPipelineSuffixFromCheckpoint(start, opt) {
   if (window.__suffixThrow) { var e = new Error("실행 실패"); e.failedId = window.__failedId || null; throw e; }
   return { ok: true };
 }
+// liveUnknown(방금 불러온 스킬) 일 때 배치가 타는 '원본부터 전체 재적용' 경로
+function vbaTargetExcelId() { return window.__excelId || "ex1"; }
+function currentExcelId() { return window.__excelId || "ex1"; }
+async function reapplyVbaPipelineToLive(excelId) {
+  rec("reapply_all", { excelId: excelId,
+    enabled: state.pipeline.map(function (s) { return s.enabled !== false ? 1 : 0; }).join("") });
+  return { ok: true };
+}
 var _lastLiveAppliedSignature = null;
 var _lastLiveAppliedParts = null;
 function _pipelineSigHash(t) { var h = 0; for (var i = 0; i < t.length; i++) h = (h * 31 + t.charCodeAt(i)) >>> 0; return h.toString(16); }
@@ -200,9 +208,17 @@ console.log("[4] 일부만 되살린 뒤 — 남은 보류는 하나씩 켠다(�
   const info = T.info();
   await T.batch(["s3", "s4"], { start: 2, heldIds: heldIds(info) });
   check("고른 것만 켜짐", T.enabledMap() === "111100", T.enabledMap());
-  // 구멍이 생긴 순간 '라이브 = 앞에서부터 연속 적용'이라는 전제가 깨진다 → 이어실행 지점을 지운다.
-  // 그래서 배치 버튼도 숨는다. 남은 보류는 하나씩 켜서 '지금 결과 위에' 얹는다.
-  check("이어실행 지점이 사라진다(버튼도 숨는다)", T.info().ok === false, JSON.stringify(T.info()));
+  // [계약 변경 2026-08-13] 예전엔 여기서 이어실행 지점이 사라져 배치 버튼도 같이 숨었다.
+  // 실행기에 '처음부터 꺼진 채 저장된 스킬'이 들어오면 버튼이 아예 안 보이는 문제가 같은 뿌리라
+  // 버튼은 '꺼진 단계가 있으면' 항상 보이게 바꿨다. 대신 어떻게 도느냐를 나눈다.
+  //   구멍이 생긴 순간 '라이브 = 앞에서부터 연속 적용'이라는 전제가 깨지므로 이어실행 지점은
+  //   여전히 안 세운다 → liveUnknown=true → 다음 배치는 원본부터 전부(느리지만 항상 옳다).
+  {
+    const after = T.info();
+    check("버튼은 계속 보인다(남은 보류가 있으니)", after.ok === true, JSON.stringify(after).slice(0, 160));
+    check("구멍이 있으면 '앞단계 적용됨'을 주장하지 않는다", after.liveUnknown === true, JSON.stringify(after).slice(0, 160));
+    check("시작 지점은 남은 첫 보류 단계", after.start === 4, after.start);
+  }
   await T.toggle("s5");
   check("남은 보류는 단일 적용으로 얹힌다", T.routes()[0] === "single_step", T.routes());
   check("전체 재적용으로 새지 않는다", !T.kinds().includes("full_reapply"), T.kinds().join(","));
@@ -264,6 +280,36 @@ console.log("[8] 실행 중에는 배치도 막힌다");
   const before = T.enabledMap();
   await T.batch(["s3", "s4"], { start: 2, heldIds: ["s3", "s4"] });
   check("아무것도 안 바꾼다", T.enabledMap() === before, T.enabledMap());
+}
+
+console.log("");
+console.log("[9] 실행기에 '처음부터 꺼진 채 저장된 스킬'이 들어왔을 때  ← 제보 건");
+{
+  // 저장 스킬은 스위치(enabled)만 갖고 들어온다. 이어실행 지점은 런타임 상태라 저장되지 않고,
+  // 불러올 때 일부러 지운다(옛 스킬의 지점이 새 스킬에 살아남는 사고 방지). 그래서 예전엔
+  // 보류 단계가 뻔히 보이는데 버튼이 안 떴다.
+  T.reset(mk(5, { off: [3, 4] }), null);      // resume 없음 = 방금 불러온 상태
+  const info = T.info();
+  check("버튼이 뜬다(꺼진 단계가 있으니)", info.ok === true, JSON.stringify(info).slice(0, 120));
+  check("시작 지점을 꺼진 첫 단계로 잡는다", info.start === 3, info.start);
+  check("앞단계가 적용됐다고 주장하지 않는다", info.liveUnknown === true, info.liveUnknown);
+
+  T.reset(mk(5, { off: [3, 4] }), null);
+  const i2 = T.info();
+  await T.batch(["s4", "s5"], { start: i2.start, heldIds: heldIds(i2) });
+  check("고른 단계가 켜진다", T.enabledMap() === "11111", T.enabledMap());
+  // liveUnknown 이면 구간 이어실행이 아니라 '원본부터 전체 재적용'으로 가야 한다 —
+  // 앞단계가 파일에 없는데 뒷단계만 얹으면 결과가 조용히 틀린다.
+  check("구간 이어실행이 아니라 처음부터 다시 적용한다",
+    T.kinds().includes("reapply_all") && !T.kinds().includes("suffix_run"), T.kinds().join(","));
+  check("다 켜졌으면 버튼이 사라진다", T.info().ok === false, JSON.stringify(T.info()).slice(0, 120));
+}
+
+console.log("");
+console.log("[10] 전부 켜진 스킬은 버튼이 안 뜬다(오작동 방지)");
+{
+  T.reset(mk(4), null);
+  check("보류가 없으면 안 뜬다", T.info().ok === false, JSON.stringify(T.info()).slice(0, 120));
 }
 }
 

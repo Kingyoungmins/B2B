@@ -4759,9 +4759,23 @@ async function runFromCheckpointAfterEdit(startIdx, beforeSteps, options = {}) {
 
 // 보류 구간 정보. ok=false 면 버튼을 숨긴다.
 function pipelineHeldBatchInfo() {
-  const start = getPipelineResumeFromIndex();
-  if (!Number.isInteger(start)) return { ok: false };
   const steps = state.pipeline || [];
+  const resume = getPipelineResumeFromIndex();
+  // [항상 보이게 2026-08-13] 예전엔 resume 지점이 있어야만 버튼이 떴다. 그런데 resume 은
+  // '런타임 상태'라 스킬에 저장되지 않고, 불러올 때 일부러 지운다(save-load.js — 옛 스킬의
+  // resume 이 새 스킬에 살아남아 뒷단계만 옛 라이브에 얹는 사고를 막으려고). 그래서 '처음부터
+  // 꺼진 채로 저장된 스킬'을 실행기에 넣으면 보류 단계가 뻔히 보이는데 버튼이 안 나왔다.
+  // 이제 꺼진 단계가 있으면 거기서부터로 보고 버튼을 띄운다.
+  //   liveUnknown = '켜진 앞단계가 라이브에 적용돼 있다'는 보장이 없는 상태.
+  //   이때 뒷단계만 돌리면 앞단계 결과가 없는 파일 위에 얹혀 결과가 틀린다 → 실행 쪽에서
+  //   원본부터 전체로 돌린다(_runHeldStepsBatchImpl). 버튼을 띄우는 것과 어떻게 도느냐는 별개다.
+  let start = Number.isInteger(resume) ? resume : -1;
+  let derived = false;
+  if (start < 0) {
+    start = steps.findIndex(s => s && s.code && !isStepEnabled(s));
+    derived = start >= 0;
+  }
+  if (start < 0) return { ok: false };
   const held = [];
   for (let i = start; i < steps.length; i++) {
     const s = steps[i];
@@ -4773,6 +4787,12 @@ function pipelineHeldBatchInfo() {
     ok: true,
     start,
     held,
+    // resume 지점이 있다는 건 '이번 세션에서 거기까지 적용해 놓고 뒤를 보류했다'는 뜻이라
+    // 앞 단계가 라이브에 들어가 있음이 보장된다. 반대로 꺼진 스위치만 보고 찾아낸 경우
+    // (=방금 불러온 스킬)는 그 보장이 없다.
+    //   적용 서명(_lastLiveAppliedSignature)으로 판단하면 안 된다 — 끄기가 그 서명을 무효화하므로
+    //   정상 배치까지 전부 '처음부터'로 떨어져 느려진다.
+    liveUnknown: derived,
     // 교차파일 쓰기 스텝이 구간에 있으면 부분 선택 금지 — 건너뛴 스텝의 목적지 잔재/누락이
     // 다른 파일에 남는 조합을 걸러낼 방법이 없다(토글/삭제 가드와 같은 이유).
     crossFile: typeof pipelineSuffixWritesCrossFile === "function"
@@ -4812,6 +4832,15 @@ function _showBatchResumeChecklist(info) {
     desc.textContent = info.crossFile
       ? "체크된 단계를 순서대로 다시 적용합니다. 이 스킬에는 다른 파일에 쓰는 단계가 있어 일부만 골라 실행할 수 없습니다(전부 함께 실행)."
       : "체크된 단계를 순서대로 다시 적용합니다. 건너뛸 단계는 체크를 해제하세요(해제한 단계는 보류로 남습니다).";
+    // 방금 불러온 스킬처럼 '앞 단계가 아직 파일에 안 들어간' 상태면 처음부터 돈다 —
+    // 누르기 전에 알려 줘야 "왜 이렇게 오래 걸리지"가 안 된다.
+    let note = null;
+    if (info.liveUnknown) {
+      note = document.createElement("div");
+      note.style.cssText = "font-size:12.5px;color:#8a5a00;background:#fff7e6;border:1px solid #ffe0a3;"
+        + "border-radius:6px;padding:6px 8px;margin-bottom:10px;";
+      note.textContent = "앞 단계가 아직 파일에 적용되지 않아, 스킬을 처음부터 실행합니다(시간이 더 걸립니다).";
+    }
     const list = document.createElement("div");
     list.style.cssText = "overflow-y:auto;border:1px solid #e4e7ee;border-radius:8px;padding:6px 4px;flex:1;min-height:0;";
     const boxes = [];
@@ -4865,7 +4894,9 @@ function _showBatchResumeChecklist(info) {
     okBtn.onclick = () => done(boxes.filter(b => b.checked).map(b => String(b.dataset.stepId)));
     document.addEventListener("keydown", onKey, true);
     row.appendChild(cancelBtn); row.appendChild(okBtn);
-    box.appendChild(title); box.appendChild(desc); box.appendChild(list); box.appendChild(row);
+    box.appendChild(title); box.appendChild(desc);
+    if (note) box.appendChild(note);
+    box.appendChild(list); box.appendChild(row);
     wrap.appendChild(box);
     document.body.appendChild(wrap);
     // [적대 검증] 포커스를 모달로 옮긴다 — 안 옮기면 ⏯ 버튼에 포커스가 남아 Enter 가 모달을
@@ -4977,12 +5008,40 @@ async function _runHeldStepsBatchImpl(checkedIds, fingerprint) {
   }
   renderPipeline();
   try {
-    // endIndexExclusive 없음 = 구간 끝까지. OFF(미체크) 스텝은 activeSuffix 필터가 건너뛴다.
-    // 창 처리(mute/오버레이/복원)·스텝별 스냅샷 갱신·순차 실행은 이 경로에 내장돼 있다.
-    await runPipelineSuffixFromCheckpoint(start, {});
+    if (info.liveUnknown) {
+      // [항상 보이게 2026-08-13] '켜진 앞단계가 라이브에 들어가 있다'는 보장이 없는 상태
+      // (방금 불러온 스킬이 대표적 — resume 도 적용 서명도 없다). 이때 뒷단계만 돌리면
+      // 앞단계 결과가 없는 파일 위에 얹혀 결과가 조용히 틀린다. 원본부터 전부 다시 적용한다.
+      // 위에서 체크 결과를 enabled 에 이미 반영했으므로, 이 재적용이 앞단계 + 고른 보류단계를
+      // 한 번에 올린다. 느리지만 항상 옳다.
+      const _excelId = (typeof vbaTargetExcelId === "function" && vbaTargetExcelId())
+        || (typeof currentExcelId === "function" && currentExcelId())
+        || (typeof preferredVbaRunFileId === "function"
+          ? await excelIdForPipelineFileId(preferredVbaRunFileId()) : null);
+      if (!_excelId) throw new Error("실행할 Excel 창을 찾지 못했습니다. 파일 탭을 먼저 선택해 주세요.");
+      if (typeof toast === "function") {
+        toast("앞 단계가 아직 적용되지 않아, 스킬을 처음부터 실행합니다...", "info");
+      }
+      await reapplyVbaPipelineToLive(_excelId);
+    } else {
+      // endIndexExclusive 없음 = 구간 끝까지. OFF(미체크) 스텝은 activeSuffix 필터가 건너뛴다.
+      // 창 처리(mute/오버레이/복원)·스텝별 스냅샷 갱신·순차 실행은 이 경로에 내장돼 있다.
+      await runPipelineSuffixFromCheckpoint(start, {});
+    }
     // 임플의 조기 return 경로(_unappliedEdit 폴백 → reapplyVbaPipelineToLive)는 resume 해제와
     // 적용 서명 기록을 생략한다 — 성공이면 무조건 정착시킨다(정상 경로에선 멱등).
     clearPipelineResumeFromIndex();
+    // [항상 보이게 2026-08-13] 아직 꺼진 단계가 남았고 그게 '뒤쪽 연속 구간'이면, 지금 라이브는
+    // 정확히 그 앞까지 적용된 상태다 → 이어실행 지점을 다시 세워 다음 배치가 빠른 길을 탄다.
+    // 중간에 구멍이 있으면(고른 것만 켜서 켜짐/꺼짐이 섞임) '어디까지 적용됨'을 한 숫자로 표현할
+    // 수 없으므로 세우지 않는다 — 그 경우 다음 배치는 처음부터 돈다(느리지만 항상 옳다).
+    try {
+      const _steps = state.pipeline || [];
+      const _firstOff = _steps.findIndex(s => s && s.code && !isStepEnabled(s));
+      const _holeFree = _firstOff > 0
+        && _steps.slice(0, _firstOff).every(s => !s || !s.code || isStepEnabled(s));
+      if (_firstOff > 0 && _holeFree) setPipelineResumeFromIndex(_firstOff);
+    } catch (_) {}
     if (typeof noteLivePipelineApplied === "function") noteLivePipelineApplied(state.pipeline);
     if (uncheckedHeld.length) {
       toast(`건너뛴 ${uncheckedHeld.length}개 단계는 보류로 남았습니다. 나중에 켜면 지금 결과 '위에' 적용됩니다.`, "success");

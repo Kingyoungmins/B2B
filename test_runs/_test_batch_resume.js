@@ -163,15 +163,23 @@ function makeSteps() {
 const heldIds = ["s6", "s7", "s8", "s9", "s10"];
 
 (async () => {
-  console.log("[1] 버튼 표시 — resume 마커가 있을 때만");
+  // [계약 변경 2026-08-13] 예전엔 'resume 마커가 있을 때만' 버튼이 떴다. 그런데 마커는 런타임
+  // 상태라 스킬에 저장되지 않고 불러올 때 지워진다 — 그래서 실행기에 '처음부터 꺼진 채 저장된
+  // 스킬'이 들어오면 보류 단계가 뻔히 보이는데 버튼이 안 나왔다(사용자 제보).
+  // 이제 '꺼진 단계가 있으면' 뜬다. 마커 유무는 표시가 아니라 '어떻게 도느냐'(liveUnknown)를 가른다.
+  console.log("[1] 버튼 표시 — 꺼진 단계가 있으면 뜬다");
   T.reset(makeSteps(), 5);
   T.refreshBatchResumeButton();
   check("보류 있음 → 버튼 보임", T.btn.style.display === "");
   T.clearPipelineResumeFromIndex();
-  check("마커 해제 → 버튼 숨김(마커 훅)", T.btn.style.display === "none");
+  T.refreshBatchResumeButton();
+  check("마커를 지워도 꺼진 단계가 남았으면 계속 보임", T.btn.style.display === "");
   T.reset(makeSteps(), null);
   T.refreshBatchResumeButton();
-  check("마커 없음 → 숨김", T.btn.style.display === "none");
+  check("마커 없이 불러온 스킬도 보임  ← 제보 건", T.btn.style.display === "");
+  T.reset(makeSteps().map(s => ({ ...s, enabled: true })), null);
+  T.refreshBatchResumeButton();
+  check("전부 켜져 있으면 숨김(보류가 없으니)", T.btn.style.display === "none");
   check("정보도 ok=false", T.state.pipeline.length === 10);
 
   console.log("[2] 전체 체크 성공 — 계약 전부");
