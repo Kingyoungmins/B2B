@@ -8,7 +8,7 @@ signature: "(rowIdx)"
 role: "search.js 가 호출 — 특정 행이 보이도록 가상 스크롤 확장"
 role_source: banner
 version: "0.7.3"
-loc: "excel-viewer.js:882-882"
+loc: "excel-viewer.js:887-887"
 
 # ── 입출력 ──
 inputs:

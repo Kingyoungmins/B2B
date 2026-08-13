@@ -8,7 +8,7 @@ signature: "(code)"
 role: "[교차파일 조각 바인딩] 분할 조각이 다른 워크북을 Activate 로 열고 작업하면 '그 파일'이"
 role_source: banner
 version: "0.7.3"
-loc: "pipeline.js:7198-7198"
+loc: "pipeline.js:7241-7241"
 
 # ── 입출력 ──
 inputs:

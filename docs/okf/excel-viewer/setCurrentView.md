@@ -8,7 +8,7 @@ signature: "(fileId, options = {})"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
 version: "0.7.3"
-loc: "excel-viewer.js:100-100"
+loc: "excel-viewer.js:105-105"
 
 # ── 입출력 ──
 inputs:
@@ -36,6 +36,7 @@ calls_external:
   - "includes"
   - "startsWith"
 called_by:
+  - "landAppTabOnExcelSession"
   - "loadOutputTemplates"
   - "openExcelMirrorForFileId"
   - "openExcelMirrorResultForFileId"
@@ -64,7 +65,7 @@ timestamp: "0.7.3-gen"
 
 ## 관계
 - 호출: `activateOutputTemplate`, `getFile`, `isExplicitViewSwitchSource`, `outputTemplateFileId`, `outputTemplateIndexFromFileId`, `refreshTabs`, `renderExcelViewer`, `renderInputList`, `renderOutputChip`
-- 피호출(영향 전파 경로): `loadOutputTemplates`, `openExcelMirrorForFileId`, `openExcelMirrorResultForFileId`, `preopenAllExcelMirrors`, `switchWorkbookFileFromUserTab`
+- 피호출(영향 전파 경로): `landAppTabOnExcelSession`, `loadOutputTemplates`, `openExcelMirrorForFileId`, `openExcelMirrorResultForFileId`, `preopenAllExcelMirrors`, `switchWorkbookFileFromUserTab`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

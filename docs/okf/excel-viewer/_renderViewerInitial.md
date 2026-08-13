@@ -8,7 +8,7 @@ signature: "(viewer, file)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
 version: "0.7.3"
-loc: "excel-viewer.js:342-342"
+loc: "excel-viewer.js:347-347"
 
 # ── 입출력 ──
 inputs:

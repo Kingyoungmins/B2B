@@ -27,6 +27,7 @@ calls:
   - "applyLiveSchemaToFileCache"
   - "beginExcelMirrorApplyLoading"
   - "endExcelMirrorApplyLoading"
+  - "landAppTabOnExcelSession"
   - "postExcelMirror"
   - "scheduleRestoreActiveExcelMirror"
   - "showOnlyExcelMirrorWindow"
@@ -47,7 +48,7 @@ timestamp: "0.7.3-gen"
 - 네트워크/서버 호출
 
 ## 관계
-- 호출: `applyLiveSchemaToFileCache`, `beginExcelMirrorApplyLoading`, `endExcelMirrorApplyLoading`, `postExcelMirror`, `scheduleRestoreActiveExcelMirror`, `showOnlyExcelMirrorWindow`
+- 호출: `applyLiveSchemaToFileCache`, `beginExcelMirrorApplyLoading`, `endExcelMirrorApplyLoading`, `landAppTabOnExcelSession`, `postExcelMirror`, `scheduleRestoreActiveExcelMirror`, `showOnlyExcelMirrorWindow`
 - 피호출(영향 전파 경로): `restoreLastStepPreApplySnapshot`, `restoreSnapshotIntoSession`
 
 ## 실패/예외

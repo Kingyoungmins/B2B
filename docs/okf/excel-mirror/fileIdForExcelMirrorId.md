@@ -29,6 +29,7 @@ called_by:
   - "applyLiveSchemaToFileCache"
   - "applyVbaStepToLiveExcel"
   - "downloadCurrentWorkbookFile"
+  - "landAppTabOnExcelSession"
   - "pollExcelMirrorChanges"
   - "pollExcelSelection"
   - "restoreActiveExcelMirrorWindow"
@@ -47,7 +48,7 @@ timestamp: "0.7.3-gen"
 
 ## 관계
 - 호출: 없음
-- 피호출(영향 전파 경로): `_reapplyVbaPipelineToLiveImpl`, `applyLiveSchemaToFileCache`, `applyVbaStepToLiveExcel`, `downloadCurrentWorkbookFile`, `pollExcelMirrorChanges`, `pollExcelSelection`, `restoreActiveExcelMirrorWindow`, `runIsolatedLivePipelineSteps`
+- 피호출(영향 전파 경로): `_reapplyVbaPipelineToLiveImpl`, `applyLiveSchemaToFileCache`, `applyVbaStepToLiveExcel`, `downloadCurrentWorkbookFile`, `landAppTabOnExcelSession`, `pollExcelMirrorChanges`, `pollExcelSelection`, `restoreActiveExcelMirrorWindow`, `runIsolatedLivePipelineSteps`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`
