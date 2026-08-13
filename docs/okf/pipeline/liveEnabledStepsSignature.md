@@ -31,6 +31,7 @@ calls_external:
   - "map"
 called_by:
   - "_handlePipelineStepToggleImpl"
+  - "_liveMatchesEnabledSteps"
   - "_reconcilePipelineSimulationAfterEditImpl"
   - "applyMappedSingleStep"
   - "noteLivePipelineApplied"
@@ -48,7 +49,7 @@ timestamp: "0.7.3-gen"
 
 ## 관계
 - 호출: `isStepEnabled`, `pipelineStepLiveLanguage`
-- 피호출(영향 전파 경로): `_handlePipelineStepToggleImpl`, `_reconcilePipelineSimulationAfterEditImpl`, `applyMappedSingleStep`, `noteLivePipelineApplied`
+- 피호출(영향 전파 경로): `_handlePipelineStepToggleImpl`, `_liveMatchesEnabledSteps`, `_reconcilePipelineSimulationAfterEditImpl`, `applyMappedSingleStep`, `noteLivePipelineApplied`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

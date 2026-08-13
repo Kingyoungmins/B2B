@@ -5,10 +5,10 @@ module: pipeline.js
 lang: js
 extraction: regex   # 정규식 근사
 signature: "()"
-role: "보류 구간 정보. ok=false 면 버튼을 숨긴다."
-role_source: banner
+role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
+role_source: none
 version: "0.7.3"
-loc: "pipeline.js:4761-4761"
+loc: "pipeline.js:4772-4772"
 
 # ── 입출력 ──
 inputs: []
@@ -21,6 +21,7 @@ raises: []
 
 # ── 유기적 관계 ──
 calls:
+  - "_liveMatchesEnabledSteps"
   - "getPipelineResumeFromIndex"
   - "isStepEnabled"
   - "pipelineHasBackendOnlyStep"
@@ -30,6 +31,7 @@ calls_external:
   - "findIndex"
   - "isInteger"
   - "slice"
+  - "some"
 called_by:
   - "_runHeldStepsBatchImpl"
   - "openBatchResumeModal"
@@ -42,13 +44,13 @@ timestamp: "0.7.3-gen"
 ---
 
 ## 역할
-보류 구간 정보. ok=false 면 버튼을 숨긴다.
+(추정) 역할 주석 없음 — 담당자 1줄 보완 필요  _(자동 추정 — 확인 필요)_
 
 ## 사이드이펙트 & 주의
 - 없음(정적 분석 기준)
 
 ## 관계
-- 호출: `getPipelineResumeFromIndex`, `isStepEnabled`, `pipelineHasBackendOnlyStep`, `pipelineSuffixWritesCrossFile`, `push`
+- 호출: `_liveMatchesEnabledSteps`, `getPipelineResumeFromIndex`, `isStepEnabled`, `pipelineHasBackendOnlyStep`, `pipelineSuffixWritesCrossFile`, `push`
 - 피호출(영향 전파 경로): `_runHeldStepsBatchImpl`, `openBatchResumeModal`, `refreshBatchResumeButton`
 
 ## 실패/예외
