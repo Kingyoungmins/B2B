@@ -28,6 +28,7 @@ called_by:
   - "_handlePipelineStepToggleImpl"
   - "_offStepsAmongSent"
   - "_reconcilePipelineSimulationAfterEditImpl"
+  - "_runHeldStepsBatchImpl"
   - "_stepsOnOffMap"
   - "_syncPipelineToggleStatus"
   - "activePipelineSteps"
@@ -44,6 +45,7 @@ called_by:
   - "liveEnabledStepsSignatureParts"
   - "noteLivePipelineApplied"
   - "pipelineHasBackendOnlyStep"
+  - "pipelineHeldBatchInfo"
   - "pipelineUsesPython"
   - "pipelineUsesVba"
   - "renderPipeline"
@@ -65,7 +67,7 @@ timestamp: "0.7.3-gen"
 
 ## 관계
 - 호출: 없음
-- 피호출(영향 전파 경로): `_buildLogicZipEntriesImpl`, `_handlePipelineStepToggleImpl`, `_offStepsAmongSent`, `_reconcilePipelineSimulationAfterEditImpl`, `_stepsOnOffMap`, `_syncPipelineToggleStatus`, `activePipelineSteps`, `applyLogic`, `assistBuildProposal`, `assistCommitProposal`, `canUsePipelineCheckpointFromIndex`, `computeStateBeforeStep`, `findPipelineRuntimeExecutionBlocker`, `findPipelineStaticPreflightFailure`, `getPipelineExecutionStepIds`, `insertLogic`, `liveEnabledStepsSignature`, `liveEnabledStepsSignatureParts`, `noteLivePipelineApplied`, `pipelineHasBackendOnlyStep`, `pipelineUsesPython`, `pipelineUsesVba`, `renderPipeline`, `renderRunnerWorkflow`, `runPipeline`, `stepRequiresFullWorkbookExecution`, `verifyPrefixRestoreCoverage`
+- 피호출(영향 전파 경로): `_buildLogicZipEntriesImpl`, `_handlePipelineStepToggleImpl`, `_offStepsAmongSent`, `_reconcilePipelineSimulationAfterEditImpl`, `_runHeldStepsBatchImpl`, `_stepsOnOffMap`, `_syncPipelineToggleStatus`, `activePipelineSteps`, `applyLogic`, `assistBuildProposal`, `assistCommitProposal`, `canUsePipelineCheckpointFromIndex`, `computeStateBeforeStep`, `findPipelineRuntimeExecutionBlocker`, `findPipelineStaticPreflightFailure`, `getPipelineExecutionStepIds`, `insertLogic`, `liveEnabledStepsSignature`, `liveEnabledStepsSignatureParts`, `noteLivePipelineApplied`, `pipelineHasBackendOnlyStep`, `pipelineHeldBatchInfo`, `pipelineUsesPython`, `pipelineUsesVba`, `renderPipeline`, `renderRunnerWorkflow`, `runPipeline`, `stepRequiresFullWorkbookExecution`, `verifyPrefixRestoreCoverage`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

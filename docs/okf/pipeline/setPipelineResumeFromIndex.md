@@ -27,6 +27,7 @@ calls_external:
   - "Number"
   - "isInteger"
 called_by:
+  - "_runHeldStepsBatchImpl"
   - "insertLogic"
   - "markLivePipelineOutOfSync"
   - "markPipelinePendingFromIndex"
@@ -45,7 +46,7 @@ timestamp: "0.7.3-gen"
 
 ## 관계
 - 호출: `refreshBatchResumeButton`
-- 피호출(영향 전파 경로): `insertLogic`, `markLivePipelineOutOfSync`, `markPipelinePendingFromIndex`
+- 피호출(영향 전파 경로): `_runHeldStepsBatchImpl`, `insertLogic`, `markLivePipelineOutOfSync`, `markPipelinePendingFromIndex`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

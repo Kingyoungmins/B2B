@@ -8,7 +8,7 @@ signature: "(checkedIds, fingerprint)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
 version: "0.7.3"
-loc: "pipeline.js:4929-4929"
+loc: "pipeline.js:4960-4960"
 
 # ── 입출력 ──
 inputs:
@@ -26,31 +26,41 @@ calls:
   - "_pipelineCoreBusyReason"
   - "_syncPipelineToggleStatus"
   - "clearPipelineResumeFromIndex"
+  - "currentExcelId"
+  - "excelIdForPipelineFileId"
   - "getPipelineRuntimeStatus"
+  - "isStepEnabled"
   - "noteLivePipelineApplied"
   - "pipelineFailedStepIdFromError"
   - "pipelineHeldBatchInfo"
+  - "preferredVbaRunFileId"
   - "push"
   - "pushHistory"
+  - "reapplyVbaPipelineToLive"
   - "refreshBatchResumeButton"
   - "refreshRunButton"
   - "renderPipeline"
   - "reportPipelineError"
   - "runPipelineSuffixFromCheckpoint"
   - "scheduleLogicAutoBackup"
+  - "setPipelineResumeFromIndex"
   - "setPipelineRuntimeStatus"
   - "toast"
+  - "vbaTargetExcelId"
 calls_external:
+  - "Error"
   - "OFF"
   - "Set"
   - "String"
   - "error"
   - "every"
   - "filter"
+  - "findIndex"
   - "has"
   - "id"
   - "isArray"
   - "map"
+  - "slice"
 called_by:
   - "run"
   - "runHeldStepsBatch"
@@ -68,7 +78,7 @@ timestamp: "0.7.3-gen"
 - 없음(정적 분석 기준)
 
 ## 관계
-- 호출: `_pipelineCoreBusyReason`, `_syncPipelineToggleStatus`, `clearPipelineResumeFromIndex`, `getPipelineRuntimeStatus`, `noteLivePipelineApplied`, `pipelineFailedStepIdFromError`, `pipelineHeldBatchInfo`, `push`, `pushHistory`, `refreshBatchResumeButton`, `refreshRunButton`, `renderPipeline`, `reportPipelineError`, `runPipelineSuffixFromCheckpoint`, `scheduleLogicAutoBackup`, `setPipelineRuntimeStatus`, `toast`
+- 호출: `_pipelineCoreBusyReason`, `_syncPipelineToggleStatus`, `clearPipelineResumeFromIndex`, `currentExcelId`, `excelIdForPipelineFileId`, `getPipelineRuntimeStatus`, `isStepEnabled`, `noteLivePipelineApplied`, `pipelineFailedStepIdFromError`, `pipelineHeldBatchInfo`, `preferredVbaRunFileId`, `push`, `pushHistory`, `reapplyVbaPipelineToLive`, `refreshBatchResumeButton`, `refreshRunButton`, `renderPipeline`, `reportPipelineError`, `runPipelineSuffixFromCheckpoint`, `scheduleLogicAutoBackup`, `setPipelineResumeFromIndex`, `setPipelineRuntimeStatus`, `toast`, `vbaTargetExcelId`
 - 피호출(영향 전파 경로): `run`, `runHeldStepsBatch`
 
 ## 실패/예외

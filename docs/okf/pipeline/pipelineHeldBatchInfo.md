@@ -22,10 +22,12 @@ raises: []
 # ── 유기적 관계 ──
 calls:
   - "getPipelineResumeFromIndex"
+  - "isStepEnabled"
   - "pipelineHasBackendOnlyStep"
   - "pipelineSuffixWritesCrossFile"
   - "push"
 calls_external:
+  - "findIndex"
   - "isInteger"
   - "slice"
 called_by:
@@ -46,7 +48,7 @@ timestamp: "0.7.3-gen"
 - 없음(정적 분석 기준)
 
 ## 관계
-- 호출: `getPipelineResumeFromIndex`, `pipelineHasBackendOnlyStep`, `pipelineSuffixWritesCrossFile`, `push`
+- 호출: `getPipelineResumeFromIndex`, `isStepEnabled`, `pipelineHasBackendOnlyStep`, `pipelineSuffixWritesCrossFile`, `push`
 - 피호출(영향 전파 경로): `_runHeldStepsBatchImpl`, `openBatchResumeModal`, `refreshBatchResumeButton`
 
 ## 실패/예외

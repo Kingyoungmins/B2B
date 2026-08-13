@@ -25,6 +25,7 @@ calls:
 calls_external: []
 called_by:
   - "_reconcilePipelineSimulationAfterEditImpl"
+  - "_runHeldStepsBatchImpl"
   - "_runPipelineSuffixFromCheckpointImpl"
   - "applyLogic"
   - "ensureVbaRunExcelId"
@@ -47,7 +48,7 @@ VBA 스킬은 '사용자가 보고 있는 파일'(현재 세션)을 대상으로
 
 ## 관계
 - 호출: `currentExcelId`
-- 피호출(영향 전파 경로): `_reconcilePipelineSimulationAfterEditImpl`, `_runPipelineSuffixFromCheckpointImpl`, `applyLogic`, `ensureVbaRunExcelId`, `insertLogic`, `replaceLogicAt`, `requestExcelApplyCancel`, `runFromCheckpointAfterEdit`, `runVbaPipelinePreferLive`
+- 피호출(영향 전파 경로): `_reconcilePipelineSimulationAfterEditImpl`, `_runHeldStepsBatchImpl`, `_runPipelineSuffixFromCheckpointImpl`, `applyLogic`, `ensureVbaRunExcelId`, `insertLogic`, `replaceLogicAt`, `requestExcelApplyCancel`, `runFromCheckpointAfterEdit`, `runVbaPipelinePreferLive`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

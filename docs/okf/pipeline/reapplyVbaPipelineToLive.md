@@ -8,7 +8,7 @@ signature: "(excelId, options = {})"
 role: "[매핑 보존] 수정 후 적용 / ON·OFF / 삽입 등 편집발 재적용의 최종 관문. 호출자가 steps 를 명시하지"
 role_source: banner
 version: "0.7.3"
-loc: "pipeline.js:5287-5287"
+loc: "pipeline.js:5346-5346"
 
 # ── 입출력 ──
 inputs:
@@ -31,6 +31,7 @@ calls_external:
   - "isInteger"
 called_by:
   - "_reconcilePipelineSimulationAfterEditImpl"
+  - "_runHeldStepsBatchImpl"
   - "_runPipelineSuffixFromCheckpointImpl"
   - "insertLogic"
   - "maybeAutoReapplyAfterRecover"
@@ -52,7 +53,7 @@ timestamp: "0.7.3-gen"
 
 ## 관계
 - 호출: `_reapplyVbaPipelineToLiveImpl`, `beginMappedPipelineRun`, `markPipelinePendingFromIndex`, `restore`
-- 피호출(영향 전파 경로): `_reconcilePipelineSimulationAfterEditImpl`, `_runPipelineSuffixFromCheckpointImpl`, `insertLogic`, `maybeAutoReapplyAfterRecover`, `replaceLogicAt`, `requestExcelApplyCancel`, `runFromCheckpointAfterEdit`
+- 피호출(영향 전파 경로): `_reconcilePipelineSimulationAfterEditImpl`, `_runHeldStepsBatchImpl`, `_runPipelineSuffixFromCheckpointImpl`, `insertLogic`, `maybeAutoReapplyAfterRecover`, `replaceLogicAt`, `requestExcelApplyCancel`, `runFromCheckpointAfterEdit`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

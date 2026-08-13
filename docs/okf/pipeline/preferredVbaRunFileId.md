@@ -27,6 +27,7 @@ calls:
 calls_external: []
 called_by:
   - "_reconcilePipelineSimulationAfterEditImpl"
+  - "_runHeldStepsBatchImpl"
   - "_runPipelineSuffixFromCheckpointImpl"
   - "applyLastEnabledStepFast"
   - "ensureVbaRunExcelId"
@@ -52,7 +53,7 @@ timestamp: "0.7.3-gen"
 
 ## 관계
 - 호출: `getFile`, `outputTemplateFileId`, `workbookDisplayName`
-- 피호출(영향 전파 경로): `_reconcilePipelineSimulationAfterEditImpl`, `_runPipelineSuffixFromCheckpointImpl`, `applyLastEnabledStepFast`, `ensureVbaRunExcelId`, `restoreLastStepPreApplySnapshot`, `runIsolatedLivePipelineSteps`, `runVbaPipelinePreferLive`
+- 피호출(영향 전파 경로): `_reconcilePipelineSimulationAfterEditImpl`, `_runHeldStepsBatchImpl`, `_runPipelineSuffixFromCheckpointImpl`, `applyLastEnabledStepFast`, `ensureVbaRunExcelId`, `restoreLastStepPreApplySnapshot`, `runIsolatedLivePipelineSteps`, `runVbaPipelinePreferLive`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`
