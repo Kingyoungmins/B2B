@@ -14137,117 +14137,20 @@ def _python_com_static_check(code):
     import ast as _ast
     failures = []
     code_text = str(code or "")
-    # Field regression: Python COM can hang the UI on multi-file, multi-token
-    # lookup/aggregation jobs even when the generated code is syntactically
-    # "bulk-ish". This class should be generated/executed as VBA.
-    if (re.search(r"\bctx\s*\.\s*book\s*\(", code_text, re.I)
-            and re.search(r"\b(?:split|re\s*\.\s*split)\s*\(", code_text, re.I)
-            and re.search(r"(?:BP|BQ|P:P|H:H|token|tokens|account|key|가입)", code_text, re.I)
-            and re.search(r"\b(?:sum|total|amount|fee)\b", code_text, re.I)
-            and re.search(r"\bctx\s*\.\s*(?:write|write_cell)\s*\(", code_text, re.I)):
-        failures.append(
-            "다중 토큰 매칭/합산/쓰기 작업은 Python COM으로 실행하지 마세요. "
-            "현장 멈춤 재현 패턴이므로 VBA(Scripting.Dictionary + 배열 처리)로 작성해야 합니다."
-        )
-    if (re.search(r"\bctx\s*\.\s*read\s*\(", code_text, re.I)
-            and re.search(r"(?:\bsorted\s*\(|\.\s*sort\s*\()", code_text, re.I)
-            and re.search(r"\bctx\s*\.\s*(?:write|write_cell)\s*\(", code_text, re.I)):
-        failures.append(
-            "정렬을 ctx.read → Python sorted/list.sort → ctx.write 로 구현하면 헤더/행 관계가 깨지고 "
-            "긴 숫자 식별자가 8.90E+31 형태로 손실될 수 있습니다. ctx.sort(...)를 사용하세요."
-        )
-    # [소수점 쪼개기 차단] '연속 숫자만' findall + 콤마 join 은 '20.0' → '20','0' → "20, 0" 오답
-    # (실측: 한화테크윈 DSMC ':' 뒤 숫자 — 프롬프트 규칙을 모델이 반복 위반해 게이트로 승격).
-    # ''.join(숫자 이어붙이기) 같은 정상 패턴은 콤마 join 이 아니라서 통과한다.
-    if (re.search(r"\bfind(?:all|iter)\s*\(\s*r?['\"](?:\\d\+|\[0-9\]\+)['\"]", code_text)
-            and re.search(r"['\"],\s?['\"]\s*\.\s*join\s*\(", code_text)):
-        failures.append(
-            "re.findall 의 숫자 패턴이 '연속 숫자만'(\\d+)이라 '20.0' 같은 소수점 값을 '20'과 '0'으로 "
-            "쪼개 콤마 나열합니다. 소수점 포함 r'\\d+(?:\\.\\d+)?' 패턴을 쓰거나 구분자로 자른 조각을 "
-            "통째로 기입하고, 매칭이 1개면 join 나열 대신 그 값 하나만 쓰세요."
-        )
-
-    def _col_to_index(col):
-        n = 0
-        for ch in str(col or "").upper():
-            if "A" <= ch <= "Z":
-                n = n * 26 + (ord(ch) - 64)
-        return n
-
-    def _a1_cells_estimate(a1):
-        s = str(a1 or "").replace("$", "").strip()
-        m = re.match(r"^([A-Z]{1,3})(\d+)?\s*:\s*([A-Z]{1,3})(\d+)?$", s, re.I)
-        if not m:
-            return None
-        c1, c2 = _col_to_index(m.group(1)), _col_to_index(m.group(3))
-        if not c1 or not c2:
-            return None
-        cols = abs(c2 - c1) + 1
-        if not m.group(2) and not m.group(4):
-            return float("inf")
-        if not m.group(2) or not m.group(4):
-            return None
-        r1, r2 = int(m.group(2)), int(m.group(4))
-        return (abs(r2 - r1) + 1) * cols
-
-    def _dynamic_range_text_is_wide(a1):
-        s = str(a1 or "").replace("$", "").strip()
-        # 폭을 알 수 없는 동적 열(전체 열/열문자 계산/사용범위)은 항상 '넓음'으로 본다.
-        if re.search(r"last_col|col_letter|UsedRange", s, re.I):
-            return True
-        m = re.match(r"^([A-Z]{1,3})\d+\s*:\s*([A-Z]{1,3})(?:\d+|\{[^}]+\})$", s, re.I)
-        if not m:
-            return False
-        # [오탐 완화] 시작·끝 '행'이 명시된(끝행이 변수 {n} 여도) '좁은 열 스팬(≤8열)' 읽기는 값-요약/이름매칭
-        # 같은 소형 작업의 정상 패턴이다. 예전엔 열이 2개만 돼도 무조건 막아, A2:D{last} 같은 8행짜리 값
-        # 붙여넣기가 차단되고 불필요하게 VBA 로 넘어갔다. 폭이 넓은(>8열) 동적 읽기만 '대용량 위험'으로 막는다.
-        # (전체 열 A:D 는 위 _a1_cells_estimate 가 inf 로 잡아 risky_read 로 막으므로 여기 영향 없음.)
-        return abs(_col_to_index(m.group(2)) - _col_to_index(m.group(1))) + 1 > 8
-
-    has_read_call = bool(re.search(r"\b(?:ctx|[A-Za-z_]\w*)\s*\.\s*read\s*\(", code_text))
-    has_data_move = bool(re.search(
-        r"\b(?:ctx|[A-Za-z_]\w*)\s*\.\s*(?:write|write_cell|write_formulas|copy|copy_sheet|filter_to_sheet|sort)\s*\(",
-        code_text,
-        re.I,
-    ))
-    has_python_transform = bool(re.search(
-        r"\bfor\s+\w+\s+in\s+\w+|\bsorted\s*\(|\.\s*sort\s*\(|\.\s*append\s*\(|\bfilter\s*\(|\blambda\b",
-        code_text,
-        re.I,
-    ))
-    if has_read_call and has_data_move and has_python_transform:
-        risky_read = False
-        for m in re.finditer(r"\.\s*read\s*\(\s*[^,\n]+,\s*[fF]?([\"'])([^\"']+)\1", code_text, re.I):
-            cells = _a1_cells_estimate(m.group(2))
-            if cells == float("inf") or (cells is not None and cells >= 200000):
-                risky_read = True
-                break
-        dynamic_wide_read = False
-        for m in re.finditer(r"\.\s*read\s*\(\s*[^,\n]+,\s*f([\"'])([^\"']+)\1", code_text, re.I):
-            if _dynamic_range_text_is_wide(m.group(2)):
-                dynamic_wide_read = True
-                break
-        if not dynamic_wide_read:
-            for m in re.finditer(
-                r"\b(?:rng|range_|a1|src_range|read_range)\w*\s*=\s*f([\"'])([^\"']+)\1",
-                code_text,
-                re.I,
-            ):
-                if _dynamic_range_text_is_wide(m.group(2)):
-                    dynamic_wide_read = True
-                    break
-        if not dynamic_wide_read:
-            dynamic_wide_read = bool(
-                re.search(r"\.\s*read\s*\(\s*[^,\n]+,\s*(?:rng|range_|a1|src_range|read_range)\w*\b", code_text, re.I)
-                and re.search(r"\blast_col\b|col_letter|UsedRange", code_text, re.I)
-            )
-        if risky_read or dynamic_wide_read:
-            failures.append(
-                "큰 표를 ctx.read 로 Python 리스트에 올려 가공한 뒤 다시 쓰거나 복사하지 마세요. "
-                "대용량 파일에서 WebView/COM 응답이 멈추고 긴 숫자·날짜·서식이 손실될 수 있습니다. "
-                "복사/이어붙이기는 ctx.copy 또는 ctx.append_same_format_sheets, 정렬은 ctx.sort, "
-                "필터 새 시트는 VBA AutoFilter/전용 헬퍼를 사용하세요."
-            )
+    # [사용자 지시 2026-08-12] '품질·라우팅' 규칙은 걷어냈다.
+    #   걷어낸 것: 다중 토큰 매칭/합산 → VBA 강제, sorted/list.sort → ctx.sort 강제,
+    #             re.findall 소수점 쪼개기 차단, '큰 표를 ctx.read 로 올려 가공' 차단,
+    #             루프 안 ctx 쓰기 반복 차단.
+    #   이유: 전부 '돌기는 도는데 더 나은 방법이 있다'는 규칙이라, 잘 도는 코드까지 막아
+    #        재생성 루프를 돌렸다. 느릴 수는 있어도 사용자가 감수한다는 결정.
+    #        (클라의 '큰 표 read' 규칙은 이미 같은 이유로 꺼져 있었는데 백엔드만 계속 막고
+    #         있어, 클라가 통과시킨 코드를 실행 직전에 거절하는 비대칭이었다.)
+    #   남긴 것: 샌드박스(import/os/sys/win32com/openpyxl, open/eval/exec/getattr 등),
+    #           COM 안정성(Select/Activate/ActiveWorkbook/ActiveSheet/Application/Quit),
+    #           while True, ws["A1"] 관용구, 진입 함수 확인.
+    #   되살리려면 B2B_PY_QUALITY_GATE=1 — 걷어낸 규칙 원문은 git 이력에 있다.
+    #   과도한 read/루프는 실행 중 COM 호출 예산(PY_COM_BUDGET)과 데드라인이 여전히 잡고,
+    #   실패하면 저널 롤백이 쓰기 범위를 원복한다.
     try:
         tree = _ast.parse(code)
     except SyntaxError as err:
@@ -14322,7 +14225,10 @@ def _python_com_static_check(code):
             if isinstance(func, _ast.Attribute):
                 if func.attr in forbidden_attrs:
                     failures.append(f".{func.attr} 는 사용할 수 없습니다(ctx API 만 사용).")
-                if loop_stack and func.attr in write_ops and _is_ctx_receiver(func.value):
+                # [사용자 지시 2026-08-12] 루프 안 ctx 쓰기 반복은 더 막지 않는다 — 느릴 뿐
+                # 결과는 맞는 코드였고, 진짜 폭주는 실행 중 COM 호출 예산이 잡는다.
+                if (loop_stack and func.attr in write_ops and _is_ctx_receiver(func.value)
+                        and os.environ.get("B2B_PY_QUALITY_GATE") == "1"):
                     failures.append(
                         f"루프 안에서 ctx.{func.attr}() 를 반복 호출하면 안 됩니다. "
                         "데이터를 메모리(리스트)에서 모두 계산한 뒤 ctx.write() 한 번으로 쓰세요."

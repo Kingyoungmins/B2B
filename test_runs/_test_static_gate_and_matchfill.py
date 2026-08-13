@@ -1,9 +1,6 @@
 # -*- coding: utf-8 -*-
-"""[정적게이트 wide-read 오탐 + match_fill 이름매칭] 순수 로직 회귀(Excel 불필요).
+"""[match_fill 이름매칭] 순수 로직 회귀(Excel 불필요).
 
-정적게이트: 좁은 열 스팬(≤8열) 동적 read(예: A2:D{last}, A5:A12)를 '대용량 위험'으로 잘못 막아
-  8행짜리 값붙여넣기가 불필요하게 VBA 로 넘어가던 오탐을 제거하되, 넓은/폭불명/전체열 동적 read 는
-  계속 막는지 확인. serve_b2b.py 의 '실제' _a1_cells_estimate / _dynamic_range_text_is_wide 를 추출해 구동.
 match_fill: 소스(피벗)↔대상 구분명 이름이 완전히 안 맞아도(망개통용/올인원/올인원2.0/FOTA/프리미엄)
   규칙 0개로 자동 매칭되고, 올인원 vs 올인원2.0 이 교차오매칭되지 않는지(매칭 4단계 로직) 확인.
 실측: output_02월 검증파일_5단계 (2026-07-31, 사용자 제보).
@@ -41,49 +38,12 @@ def extract_def(src, name):
         block = "\n".join(l[indent:] if len(l) >= indent else l for l in block.split("\n"))
     return block
 
-# ── 실제 소스에서 게이트 판정 함수 추출 ──
-ns = {"re": re, "float": float, "int": int, "str": str, "abs": abs}
-exec(extract_def(SRC, "_col_to_index"), ns)
-exec(extract_def(SRC, "_a1_cells_estimate"), ns)
-exec(extract_def(SRC, "_dynamic_range_text_is_wide"), ns)
-_a1 = ns["_a1_cells_estimate"]
-_wide = ns["_dynamic_range_text_is_wide"]
-
-def gate_blocks(code):
-    has_read = bool(re.search(r"\b(?:ctx|[A-Za-z_]\w*)\s*\.\s*read\s*\(", code))
-    has_move = bool(re.search(r"\b(?:ctx|[A-Za-z_]\w*)\s*\.\s*(?:write|write_cell|write_formulas|copy|copy_sheet|filter_to_sheet|sort)\s*\(", code, re.I))
-    has_tr = bool(re.search(r"\bfor\s+\w+\s+in\s+\w+|\bsorted\s*\(|\.\s*sort\s*\(|\.\s*append\s*\(|\bfilter\s*\(|\blambda\b", code, re.I))
-    if not (has_read and has_move and has_tr):
-        return False
-    risky = False
-    for m in re.finditer(r"\.\s*read\s*\(\s*[^,\n]+,\s*[fF]?([\"'])([^\"']+)\1", code, re.I):
-        c = _a1(m.group(2))
-        if c == float("inf") or (c is not None and c >= 200000):
-            risky = True; break
-    dyn = False
-    for m in re.finditer(r"\.\s*read\s*\(\s*[^,\n]+,\s*f([\"'])([^\"']+)\1", code, re.I):
-        if _wide(m.group(2)):
-            dyn = True; break
-    return risky or dyn
-
-CODE_NARROW = (  # 실측 실패코드 형태: 좁은 동적 A2:D{n} + 정적 소형
-    'def transform(ctx):\n'
-    '    n = ctx.book("i.xlsx").used_last_row("MVNO상품명별요약")\n'
-    '    d = ctx.book("i.xlsx").read("MVNO상품명별요약", f"A2:D{n}")\n'
-    '    h = ctx.read("t", "A4:E4")\n'
-    '    names = ctx.read("t", "A5:A12")\n'
-    '    out = [r for r in names]\n'
-    '    ctx.write("t", "A5", out)\n')
-CODE_WIDE = 'def transform(ctx):\n    n=ctx.used_last_row("S")\n    d=ctx.read("S", f"A2:Z{n}")\n    o=[r for r in d]\n    ctx.write("S","A1",o)\n'
-CODE_INF = 'def transform(ctx):\n    d=ctx.read("S","A:D")\n    o=[r for r in d]\n    ctx.write("S","A1",o)\n'
-CODE_COLLETTER = 'def transform(ctx):\n    lc=ctx.used_last_col("S")\n    d=ctx.read("S", f"A2:{col_letter(lc)}500")\n    o=[r for r in d]\n    ctx.write("S","A1",o)\n'
-
-t("게이트: 좁은 동적 소형(A2:D{n}) 통과", gate_blocks(CODE_NARROW) is False, gate_blocks(CODE_NARROW))
-t("게이트: 넓은 동적(A2:Z{n}) 차단", gate_blocks(CODE_WIDE) is True)
-t("게이트: 전체열(A:D) 차단", gate_blocks(CODE_INF) is True)
-t("게이트: 폭불명(col_letter) 차단", gate_blocks(CODE_COLLETTER) is True)
-t("게이트: _wide('A2:H{n}')=False(8열 경계)", _wide("A2:H{n}") is False)
-t("게이트: _wide('A2:I{n}')=True(9열)", _wide("A2:I{n}") is True)
+# ── [2026-08-12] 정적게이트 wide-read 판정은 사라졌다 ──
+# 사용자 지시로 '품질·라우팅' 규칙(큰 표 read → 차단, sorted → ctx.sort 강제 등)을 걷어내면서
+# _col_to_index / _a1_cells_estimate / _dynamic_range_text_is_wide 도 함께 없앴다.
+# 이 파일의 게이트 절은 그 규칙의 '오탐 완화'를 잠그던 것이라 존재 이유가 사라졌다.
+# 지금 게이트가 무엇을 막고 무엇을 통과시키는지는 _test_python_quality_gate_off.py 가 잠근다.
+# match_fill 절은 그대로 유효하므로 남긴다.
 
 # ── match_fill 매칭 4단계 로직(정확→공백무시→기호무시→부분포함 유일최선) 재현 ──
 def _nlite(s): return "".join(str(s or "").lower().split())

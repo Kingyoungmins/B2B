@@ -1598,7 +1598,10 @@ function pythonComStaticSafetyFailures(code, sourceUserMessage) {
         if (ctxWriteRe.test(_ln)) { _loopWriteHit = true; break; }  // 루프 본문에서 ctx 쓰기 반복
       }
     }
-    if (_loopWriteHit) { // 루프 본문 주석("# ctx.write 는 밖에서")은 _stripPythonCommentsForGate 가 이미 제거
+    // [사용자 지시 2026-08-12] 루프 안 ctx 쓰기 반복은 더 막지 않는다 — 느릴 뿐 결과는 맞는
+    // 코드였는데, 이 규칙 때문에 재생성 루프를 돌았다. 진짜 폭주는 실행 중 COM 호출 예산이 잡는다.
+    // 되살리려면 window.B2B_PY_QUALITY_GATE = true.
+    if (_loopWriteHit && typeof window !== "undefined" && window.B2B_PY_QUALITY_GATE === true) {
       failures.push("루프 안에서 ctx 쓰기 함수를 반복 호출하면 안 됩니다. 값을 2차원 리스트로 모은 뒤 ctx.write() 한 번으로 쓰세요.");
     }
   }
@@ -1750,7 +1753,11 @@ function pythonComMustUseVbaReason(code, sourceUserMessage) {
     && /\b(?:sum|total|합계|amount|fee)\b/i.test(text)
     && /\bctx\s*\.\s*(?:write|write_cell)\s*\(/i.test(text)
   );
-  if (codeLooksLikeMultiValueLookup) {
+  // [사용자 지시 2026-08-12] '생성된 코드의 모양'을 보고 VBA 로 되돌리는 판정은 더 하지 않는다.
+  // 백엔드 정적 게이트에서 같은 규칙을 걷어냈고, 여기만 남으면 클라가 먼저 막아 효과가 없다.
+  // (요청 의도로 엔진을 고르는 위쪽 라우팅은 성격이 달라 그대로 둔다 — 그건 '무엇을 생성할지'지
+  //  '잘 도는 코드를 막을지'가 아니다.) 되살리려면 window.B2B_PY_QUALITY_GATE = true.
+  if (codeLooksLikeMultiValueLookup && typeof window !== "undefined" && window.B2B_PY_QUALITY_GATE === true) {
     return "생성된 Python COM 코드가 다중 토큰 매칭/합산/쓰기 패턴입니다. 이 패턴은 현장 멈춤 재현 케이스라 실행하지 않고 VBA로 전환해야 합니다.";
   }
   const timeToSecondsIntent = /(시간|time).{0,30}(초|second)|초.{0,30}(환산|변환|계산)/i.test(source);
