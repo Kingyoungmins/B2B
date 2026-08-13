@@ -3190,7 +3190,7 @@
           "test_runs/_test_companion_open_sync_gate.py"
         ]
       ],
-      "fix": "Saved==False 는 증거가 못 된다 — 엑셀은 읽기만 해도 재계산으로 dirty 가 된다. PythonComSkillContext._mark_mutated 가 저널 시점에 ws.Parent.Name(고정 워크북이 아니라 시트의 실제 부모)을 기록하고, 구조변경이 하나라도 있거나 VBA 스텝이 섞이면 mutationTracked=False 로 떨어뜨려 전부 동기화한다. 위장 포맷(excel_open_<uuid>)을 위해 등록명·실제 열린 이름 둘 다로 대조하고, 이름을 못 읽으면 판정에서 뺀다. ※ '여는 쪽' 게이트(스텝 코드에 이름이 박힌 파일만 열기)는 만들었다가 철회했다 — 코드에 적힌 이름은 워크북을 찾는 여러 경로 중 하나일 뿐이라, 안 여는 판단이 퍼지 매칭·_ws() 폴백·셀에서 오는 파일명을 전부 무력화하고 paste_copied 는 디스크 낡은 데이터로 조용히 성공한다. 사유는 _setup_isolated_pipeline_instance 도크스트링에 남겼고 테스트가 철회 유지를 잠근다."
+      "fix": "Saved==False 는 증거가 못 된다 — 엑셀은 읽기만 해도 재계산으로 dirty 가 된다. PythonComSkillContext._mark_mutated 가 저널 시점에 ws.Parent.Name(고정 워크북이 아니라 시트의 실제 부모)을 기록하고, 구조변경이 하나라도 있거나 VBA 스텝이 섞이면 mutationTracked=False 로 떨어뜨려 전부 동기화한다. 위장 포맷(excel_open_<uuid>)을 위해 등록명·실제 열린 이름 둘 다로 대조하고, 이름을 못 읽으면 판정에서 뺀다. ※ '여는 쪽' 게이트(스텝 코드에 이름이 박힌 파일만 열기)는 만들었다가 철회했다 — 코드에 적힌 이름은 워크북을 찾는 여러 경로 중 하나일 뿐이라, 안 여는 판단이 퍼지 매칭·_ws() 폴백·셀에서 오는 파일명을 전부 무력화하고 paste_copied 는 디스크 낡은 데이터로 조용히 성공한다. 사유는 _setup_isolated_pipeline_instance 도크스트링에 남겼고 테스트가 철회 유지를 잠근다. 로그 읽기: python tools/read_companion_cost.py — 동반본 여는 비용을 '사본 뜨기(캐시로 줄일 수 있음)'와 '파일 열기(인스턴스 재사용으로만 줄어듦)'로 갈라 보여주고, 되돌려쓰기 반영/건너뜀 건수를 함께 센다."
     },
     {
       "id": "PYCOM-ROLLBACK-WRONG-BOOK",
