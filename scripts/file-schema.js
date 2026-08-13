@@ -186,6 +186,10 @@ const VBA_SYSTEM_PROMPT = `${OUTPUT_LANGUAGE_RULE}
   예) "3행과 4행 사이에 행 추가" → \`ctx.insert_rows("시트", 4)\`.
   선택 범위가 \`S:T\` 로 잡혀 있어도 마찬가지입니다 — 선택은 '어디 근처인지'를 알려줄 뿐이고, "사이"는 **뒤쪽 열/행의 자리**를 가리킵니다. 선택 범위를 그대로 삽입 위치로 쓰지 마세요.
 - 반대로 "S열 앞에", "S열 왼쪽에" 는 \`"S"\` 가 맞고, "T열 뒤에", "T열 오른쪽에" 는 T 다음 열(=\`"U"\`)이 아니라 **T 다음 자리**이므로 \`insert_cols(시트, "U")\` 가 맞습니다.
+- **수식을 넣는 칸이 그 수식의 집계 범위 안에 있으면 순환참조입니다 — 결과가 0 이 되거나 경고가 뜹니다. 대상 칸을 범위에서 반드시 빼세요.**
+  예) T3 에 "이 아래 전부 합계" → \`=SUM(T4:T1048576)\`. \`=SUM(T:T)\` 는 T3 자신을 포함해 순환참조가 됩니다(실측 사고).
+  선택 범위가 \`T:T\`(열 전체)로 주어져도 **수식 안에 그대로 쓰지 마세요.** 열 전체 선택은 "이 열을 대상으로"라는 뜻이지 "\`T:T\` 를 수식에 넣으라"는 뜻이 아닙니다.
+- 행 수가 매번 달라 끝을 못 박겠으면, 범위를 좁히지 말고 **대상 칸 다음 행부터 열 끝까지**(\`T4:T1048576\`)로 쓰세요. 빈 칸은 SUM 이 알아서 무시하므로 데이터가 늘어도 그대로 맞습니다. \`ctx.used_last_row\` 로 잰 값을 굳이 박아 넣으면 나중에 행이 늘었을 때 빠집니다.
 
 ## 성능 — 벌크 입출력 (매우 중요, 셀 단위 COM 은 느림)
 - Sub 시작에서 Application.ScreenUpdating = False, Application.Calculation = xlCalculationManual 로 끄고, 끝에서 원복(Application.Calculation = xlCalculationAutomatic, Application.ScreenUpdating = True)하세요. 단 "On Error Resume Next" 는 쓰지 마세요(아래 '실패를 숨기지 말 것').
@@ -673,11 +677,23 @@ function _describeFile(f, opts, lines) {
     lines.push(`시트 "${sn}": 전체 ${totalRows}행${previewNote}`);
 
     const tables = (f.tables || {})[sn] || [];
-    if (tables.length > 1) {
+    // [헤더 인식 사고 2026-08-13] 예전엔 '표가 2개 이상'일 때만 헤더 행을 적었다. 표가 하나인
+    // 보통 시트(대부분)는 헤더 행이 스키마에 아예 없었는데, 프롬프트는 "스키마에서 실제 헤더 행을
+    // 확인하세요"라고 시킨다 — 없는 걸 확인하라니 모델이 매번 새로 추측했고, 그래서 같은 파일·같은
+    // 요청인데 판마다 답이 달라졌다(헤더를 결과에 섞거나, 반대로 1행을 헤더로 보고 빼먹거나).
+    // 표가 하나여도 헤더 행을 반드시 한 줄 적는다. 못 찾았으면 '없음'이라고 적는다 — 침묵보다 낫다.
+    if (tables.length === 1 && tables[0]) {
+      const hr = Number(tables[0].headerRow);
+      lines.push(Number.isFinite(hr) && hr >= 0
+        ? `  헤더 행: ${hr + 1}행 (데이터는 ${hr + 2}행부터)`
+        : "  헤더 행: 감지 못 함 — 1행부터 데이터로 보세요");
+    } else if (tables.length > 1) {
       lines.push(`  감지된 표 후보 ${tables.length}개`);
       tables.slice(0, 5).forEach((t, i) => {
         lines.push(`     ${i + 1}) "${t.label}" 범위 ${t.range}, 헤더 행 ${t.headerRow + 1}`);
       });
+    } else {
+      lines.push("  헤더 행: 감지 못 함 — 1행부터 데이터로 보세요");
     }
 
     const formulas = (f.formulas || {})[sn] || {};
