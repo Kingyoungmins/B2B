@@ -8,7 +8,7 @@ signature: "(steps)"
 role: "대상을 못 찾은 스텝들 — 파일이 둘 이상일 때만 문제다(하나뿐이면 고를 여지가 없다)."
 role_source: banner
 version: "0.7.3"
-loc: "pipeline.js:571-571"
+loc: "pipeline.js:588-588"
 
 # ── 입출력 ──
 inputs:

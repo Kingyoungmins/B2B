@@ -22,9 +22,15 @@ raises: []
 
 # ── 유기적 관계 ──
 calls:
+  - "add"
   - "pipelineDecodeWorkbookName"
 calls_external:
+  - "Set"
   - "X"
+  - "has"
+  - "isNaN"
+  - "matchAll"
+  - "parseInt"
   - "replace"
   - "toLowerCase"
   - "trim"
@@ -52,7 +58,7 @@ timestamp: "0.7.3-gen"
 - 없음(정적 분석 기준)
 
 ## 관계
-- 호출: `pipelineDecodeWorkbookName`
+- 호출: `add`, `pipelineDecodeWorkbookName`
 - 피호출(영향 전파 경로): `crossOutputFileIdsReferencedInCode`, `keyOf`, `pipelineFileIdByWorkbookName`, `refreshSaveBaseNameToCurrentInputs`, `repairStalePromptBookNames`, `repairStaleTargetFileIds`, `runnerApplyEnvConfigFilter`, `runnerCanonicalizeRequirementsByEnv`, `runnerFindSheet`, `stable`
 
 ## 실패/예외

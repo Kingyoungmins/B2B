@@ -8,7 +8,7 @@ signature: "(name)"
 role: "'같은 템플릿, 다른 월/날짜/버전' 파일을 같게 보기 위한 안정 키(소문자·기호제거)."
 role_source: docstring
 version: "0.7.3"
-loc: "serve_b2b.py:8082-8104"
+loc: "serve_b2b.py:8082-8124"
 
 # ── 입출력 ──
 inputs:
@@ -23,12 +23,18 @@ raises: []
 # ── 유기적 관계 ──
 calls:
   - "_strip_generated_workbook_prefix"
+  - "add"
   - "range"
 calls_external:
   - "Path"
+  - "_drop_month_seq"
+  - "finditer"
+  - "group"
+  - "int"
   - "lower"
   - "rep"
   - "s"
+  - "set"
   - "str"
   - "sub"
   - "unquote"
@@ -49,7 +55,7 @@ timestamp: "0.7.3-gen"
 - 없음(정적 분석 기준)
 
 ## 관계
-- 호출: `_strip_generated_workbook_prefix`, `range`
+- 호출: `_strip_generated_workbook_prefix`, `add`, `range`
 - 피호출(영향 전파 경로): `_match_workbook_by_stable_key`
 
 ## 실패/예외

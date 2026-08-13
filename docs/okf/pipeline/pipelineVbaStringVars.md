@@ -8,7 +8,7 @@ signature: "(code)"
 role: "VBA 문자열 변수 맵: `x = \"A.xlsx\"` / `Dim x As String: x = \"A.xlsx\"` / `Const x = \"A.xlsx\"`."
 role_source: banner
 version: "0.7.3"
-loc: "pipeline.js:605-605"
+loc: "pipeline.js:622-622"
 
 # ── 입출력 ──
 inputs:

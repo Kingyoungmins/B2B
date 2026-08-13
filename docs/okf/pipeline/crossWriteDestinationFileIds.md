@@ -8,7 +8,7 @@ signature: "(code, options = {})"
 role: "확정된 목적지만 — 리셋 집합·스냅샷 대상처럼 '실제로 파일을 집어야 하는' 곳이 쓴다."
 role_source: banner
 version: "0.7.3"
-loc: "pipeline.js:1041-1041"
+loc: "pipeline.js:1058-1058"
 
 # ── 입출력 ──
 inputs:

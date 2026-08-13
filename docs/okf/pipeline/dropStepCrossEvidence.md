@@ -8,7 +8,7 @@ signature: "(step)"
 role: "코드가 바뀌면 '어디에 썼는지'도 바뀐다 — 증거와 그 증거로 뜬 목적지 사본을 함께 버린다."
 role_source: banner
 version: "0.7.3"
-loc: "pipeline.js:1285-1285"
+loc: "pipeline.js:1302-1302"
 
 # ── 입출력 ──
 inputs:

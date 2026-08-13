@@ -8,7 +8,7 @@ signature: "(*classes)"
 role: "ctx 클래스의 공개 메서드를 훑어 header_row/header_rows 를 서로 받아 주도록 감싼다."
 role_source: docstring
 version: "0.7.3"
-loc: "serve_b2b.py:17662-17691"
+loc: "serve_b2b.py:17682-17711"
 
 # ── 입출력 ──
 inputs:

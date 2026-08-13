@@ -8,7 +8,7 @@ signature: "()"
 role: "라이브 상태를 더 이상 신뢰할 수 없을 때(세션 전부 닫힘/초기화/적용 실패) 호출 —"
 role_source: banner
 version: "0.7.3"
-loc: "pipeline.js:4161-4161"
+loc: "pipeline.js:4178-4178"
 
 # ── 입출력 ──
 inputs: []

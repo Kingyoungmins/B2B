@@ -8,7 +8,7 @@ signature: "(steps, startIdx)"
 role: "되돌리기 안전 판정용: 이 구간에서 '어느 파일인지 모르겠다'고 나온 이름들."
 role_source: banner
 version: "0.7.3"
-loc: "pipeline.js:1047-1047"
+loc: "pipeline.js:1064-1064"
 
 # ── 입출력 ──
 inputs:

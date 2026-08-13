@@ -8,7 +8,7 @@ signature: "(steps = state.pipeline)"
 role: "스킬이 참조하는 '모든' 파일의 fileId — 쓰기 대상 + 교차 출력 + '읽기 소스'(교차파일)까지."
 role_source: banner
 version: "0.7.3"
-loc: "pipeline.js:1172-1172"
+loc: "pipeline.js:1189-1189"
 
 # ── 입출력 ──
 inputs:

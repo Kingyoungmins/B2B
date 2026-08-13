@@ -9,7 +9,7 @@ signature: "(self, sheet, a1_start, values, overwrite_formulas=True)"
 role: "2차원 리스트를 시작 셀 기준으로 한 번에 쓴다(COM 1회)."
 role_source: docstring
 version: "0.7.3"
-loc: "serve_b2b.py:11669-11708"
+loc: "serve_b2b.py:11689-11728"
 
 # ── 입출력 ──
 inputs:

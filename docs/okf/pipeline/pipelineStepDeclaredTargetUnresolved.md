@@ -8,7 +8,7 @@ signature: "(step)"
 role: "실행기에서만 터지는 이유: 생성기는 대상이 늘 실재하는 현재 파일이라 폴백이 안 일어난다."
 role_source: banner
 version: "0.7.3"
-loc: "pipeline.js:559-559"
+loc: "pipeline.js:576-576"
 
 # ── 입출력 ──
 inputs:
