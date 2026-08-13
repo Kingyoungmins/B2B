@@ -103,6 +103,7 @@ const EXTRACT = [
   fn(pj, "_offStepsAmongSent"),
   fn(pj, "tracePipelineRun"),
   fn(pj, "traceToggleOnRoute"),
+  fn(pj, "_liveMatchesEnabledSteps"),
   fn(pj, "pipelineHeldBatchInfo"),
   fn(pj, "_runHeldStepsBatchImpl"),
   fn(pj, "_handlePipelineStepToggleImpl"),
@@ -208,16 +209,17 @@ console.log("[4] 일부만 되살린 뒤 — 남은 보류는 하나씩 켠다(�
   const info = T.info();
   await T.batch(["s3", "s4"], { start: 2, heldIds: heldIds(info) });
   check("고른 것만 켜짐", T.enabledMap() === "111100", T.enabledMap());
-  // [계약 변경 2026-08-13] 예전엔 여기서 이어실행 지점이 사라져 배치 버튼도 같이 숨었다.
+  // [계약 변경 2026-08-13] 예전엔 배치 뒤 이어실행 지점이 사라져 버튼이 같이 숨었다.
   // 실행기에 '처음부터 꺼진 채 저장된 스킬'이 들어오면 버튼이 아예 안 보이는 문제가 같은 뿌리라
-  // 버튼은 '꺼진 단계가 있으면' 항상 보이게 바꿨다. 대신 어떻게 도느냐를 나눈다.
-  //   구멍이 생긴 순간 '라이브 = 앞에서부터 연속 적용'이라는 전제가 깨지므로 이어실행 지점은
-  //   여전히 안 세운다 → liveUnknown=true → 다음 배치는 원본부터 전부(느리지만 항상 옳다).
+  // 버튼은 '꺼진 단계가 있으면' 항상 보이게 바꿨다. 대신 어떻게 도느냐(liveUnknown)를 나눈다.
   {
+    // 여기서 고른 s3·s4 는 보류 구간의 '앞쪽 연속'이라 결과에 구멍이 없다(1234 켜짐 / 56 꺼짐).
+    // 그러면 '어디까지 적용됨'을 숫자 하나로 말할 수 있으므로 이어실행 지점을 다시 세우고,
+    // 다음 배치는 빠른 길을 탄다.
     const after = T.info();
     check("버튼은 계속 보인다(남은 보류가 있으니)", after.ok === true, JSON.stringify(after).slice(0, 160));
-    check("구멍이 있으면 '앞단계 적용됨'을 주장하지 않는다", after.liveUnknown === true, JSON.stringify(after).slice(0, 160));
     check("시작 지점은 남은 첫 보류 단계", after.start === 4, after.start);
+    check("구멍이 없으면 빠른 길 유지", after.liveUnknown === false, JSON.stringify(after).slice(0, 160));
   }
   await T.toggle("s5");
   check("남은 보류는 단일 적용으로 얹힌다", T.routes()[0] === "single_step", T.routes());
@@ -231,6 +233,22 @@ console.log("[4] 일부만 되살린 뒤 — 남은 보류는 하나씩 켠다(�
   await T.batch(heldIds(info), { start: 2, heldIds: heldIds(info) });
   check("전부 고르면 전부 켜짐", T.enabledMap() === "11111", T.enabledMap());
   check("한 번만 실행", T.kinds().filter(k => k === "suffix_run").length === 1);
+}
+
+console.log("");
+console.log("[4b] 진짜 구멍이 생긴 경우 — 이어실행하면 이미 켜진 단계를 두 번 적용한다");
+{
+  // 보류 [s3,s4,s5,s6] 중 s4 와 s6 만 고른다 → s4 켜짐 / s5 꺼짐 / s6 켜짐 = 중간에 구멍.
+  T.reset(mk(6, { off: [2, 3, 4, 5] }), 2);
+  const info = T.info();
+  await T.batch(["s4", "s6"], { start: 2, heldIds: heldIds(info) });
+  check("고른 것만 켜짐", T.enabledMap() === "110101", T.enabledMap());
+  const after = T.info();
+  check("버튼은 보인다", after.ok === true, JSON.stringify(after).slice(0, 120));
+  check("시작 지점 = 꺼진 첫 단계", after.start === 2, after.start);
+  // 이어실행은 지금 라이브 '위에' 얹는 방식이라, 구간 안에 이미 켜진 s4·s6 이 한 번 더 적용된다.
+  // 그래서 구멍이 있으면 원본부터 전체로 보낸다(켜진 스텝을 정확히 한 번씩 올린다).
+  check("구멍이 있으면 이어실행하지 않는다", after.liveUnknown === true, JSON.stringify(after).slice(0, 160));
 }
 
 console.log("");
@@ -303,6 +321,29 @@ console.log("[9] 실행기에 '처음부터 꺼진 채 저장된 스킬'이 들�
   check("구간 이어실행이 아니라 처음부터 다시 적용한다",
     T.kinds().includes("reapply_all") && !T.kinds().includes("suffix_run"), T.kinds().join(","));
   check("다 켜졌으면 버튼이 사라진다", T.info().ok === false, JSON.stringify(T.info()).slice(0, 120));
+}
+
+console.log("");
+console.log("[9b] 실행기 전체실행 → '결과 편집하기' → 생성기  ← 제보 흐름 그대로");
+{
+  // 이 흐름에서 무슨 일이 나는가:
+  //   전체실행은 켜진 단계만 돌린다(꺼진 건 건너뜀) → 결과 편집하기가 그 결과를 라이브로 불러오며
+  //   resume 은 지우고(clearPipelineResumeFromIndex) 적용 서명은 채운다(noteLivePipelineApplied).
+  //   즉 resume 은 없지만 '켜진 단계들은 실제로 파일에 들어가 있는' 상태다.
+  T.reset(mk(5, { off: [3, 4] }), null);
+  T.note(T.state.pipeline);        // = noteLivePipelineApplied (결과 편집하기가 하는 일)
+  const info = T.info();
+  check("버튼이 뜬다", info.ok === true, JSON.stringify(info).slice(0, 120));
+  check("시작 지점 = 꺼진 첫 단계", info.start === 3, info.start);
+  check("앞단계는 이미 적용된 걸로 본다(처음부터 안 돈다)", info.liveUnknown === false, info.liveUnknown);
+
+  T.reset(mk(5, { off: [3, 4] }), null);
+  T.note(T.state.pipeline);
+  const i2 = T.info();
+  await T.batch(["s4", "s5"], { start: i2.start, heldIds: heldIds(i2) });
+  check("고른 단계가 켜진다", T.enabledMap() === "11111", T.enabledMap());
+  check("구간 이어실행으로 간다(원본 전체 재적용 아님)",
+    T.kinds().includes("suffix_run") && !T.kinds().includes("reapply_all"), T.kinds().join(","));
 }
 
 console.log("");

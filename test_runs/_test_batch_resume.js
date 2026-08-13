@@ -101,6 +101,10 @@ const EXTRACT = [
   fn(pj, "pipelineEditBusyReason"),
   fn(pj, "pipelineFailedStepIdFromError"),
   fn(pj, "handlePipelineStepToggle"),
+  // 적용 서명 — '지금 켜진 단계들이 파일에 들어가 있는가' 판정에 쓴다(결과 편집하기 흐름).
+  // 이 테스트는 표시/모달 계약만 보므로 '모름'(null)으로 고정한다.
+  "var _lastLiveAppliedSignature = null; function liveEnabledStepsSignature() { return 'sig'; }",
+  fn(pj, "_liveMatchesEnabledSteps"),
   fn(pj, "pipelineHeldBatchInfo"),
   fn(pj, "refreshBatchResumeButton"),
   fn(pj, "runHeldStepsBatch"),

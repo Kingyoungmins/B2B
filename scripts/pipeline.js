@@ -4758,6 +4758,17 @@ async function runFromCheckpointAfterEdit(startIdx, beforeSteps, options = {}) {
    =================================================================== */
 
 // 보류 구간 정보. ok=false 면 버튼을 숨긴다.
+/* 지금 라이브가 '켜져 있는 스텝들'을 그대로 반영한 상태인가.
+   적용 서명이 비어 있으면(불러오기·무효화) 모른다 = false. */
+function _liveMatchesEnabledSteps(steps) {
+  if (_lastLiveAppliedSignature === null) return false;
+  try {
+    return liveEnabledStepsSignature(steps) === _lastLiveAppliedSignature;
+  } catch (_) {
+    return false;
+  }
+}
+
 function pipelineHeldBatchInfo() {
   const steps = state.pipeline || [];
   const resume = getPipelineResumeFromIndex();
@@ -4787,12 +4798,19 @@ function pipelineHeldBatchInfo() {
     ok: true,
     start,
     held,
-    // resume 지점이 있다는 건 '이번 세션에서 거기까지 적용해 놓고 뒤를 보류했다'는 뜻이라
-    // 앞 단계가 라이브에 들어가 있음이 보장된다. 반대로 꺼진 스위치만 보고 찾아낸 경우
-    // (=방금 불러온 스킬)는 그 보장이 없다.
-    //   적용 서명(_lastLiveAppliedSignature)으로 판단하면 안 된다 — 끄기가 그 서명을 무효화하므로
-    //   정상 배치까지 전부 '처음부터'로 떨어져 느려진다.
-    liveUnknown: derived,
+    // '켜진 앞단계가 지금 파일에 들어가 있는가'. 둘 중 하나라도 보장되면 그 지점부터 이어 실행한다.
+    //   (a) resume 지점이 있다 = 이번 세션에서 거기까지 적용해 놓고 뒤를 보류했다
+    //   (b) 적용 서명이 '지금 켜진 스텝들'과 일치한다 = 라이브가 그 집합을 반영한 상태
+    // (b)가 필요한 이유: 실행기에서 전체실행 → '결과 편집하기' 로 넘어오면 resume 은 지워지지만
+    // noteLivePipelineApplied 로 서명이 채워진다. 이때 켜진 단계들은 실제로 파일에 들어가 있으므로
+    // 원본부터 다시 돌 이유가 없다(사용자 제보 흐름이 정확히 이것).
+    // (a)만 보면 그 경우가 통째로 느린 길로 떨어지고, (b)만 보면 끄기가 서명을 무효화하는 정상
+    // 배치가 느린 길로 떨어진다 — 둘 다 봐야 한다.
+    // 그리고 구간 안에 '이미 켜져서 적용된' 스텝이 섞여 있으면(구멍) 이어실행이 그걸 한 번 더
+    // 적용한다 — 이어실행은 시작 지점으로 되돌리고 다시 도는 게 아니라 지금 라이브 '위에' 얹는다.
+    // 그 경우도 원본부터 전체로 보낸다(전체 재적용은 켜진 스텝을 정확히 한 번씩 올린다).
+    liveUnknown: steps.slice(start).some(s => s && s.code && isStepEnabled(s))
+      || (derived && !_liveMatchesEnabledSteps(steps)),
     // 교차파일 쓰기 스텝이 구간에 있으면 부분 선택 금지 — 건너뛴 스텝의 목적지 잔재/누락이
     // 다른 파일에 남는 조합을 걸러낼 방법이 없다(토글/삭제 가드와 같은 이유).
     crossFile: typeof pipelineSuffixWritesCrossFile === "function"
