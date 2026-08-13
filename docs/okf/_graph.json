@@ -25034,7 +25034,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "drop-handling.js:2099-2099",
+      "loc": "drop-handling.js:2103-2103",
       "signature": "()",
       "calls": [],
       "side_effects": [
@@ -25049,7 +25049,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "drop-handling.js:2103-2103",
+      "loc": "drop-handling.js:2107-2107",
       "signature": "(e)",
       "calls": [
         "close"
@@ -25066,7 +25066,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "drop-handling.js:2141-2141",
+      "loc": "drop-handling.js:2176-2176",
       "signature": "()",
       "calls": [
         "toast"
@@ -25083,7 +25083,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "drop-handling.js:2147-2147",
+      "loc": "drop-handling.js:2182-2182",
       "signature": "(fileId)",
       "calls": [
         "switchWorkbookFileFromUserTab"
@@ -25100,7 +25100,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "drop-handling.js:2151-2151",
+      "loc": "drop-handling.js:2186-2186",
       "signature": "(fileId)",
       "calls": [
         "downloadCurrentWorkbookFile",
@@ -25118,7 +25118,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "drop-handling.js:2159-2159",
+      "loc": "drop-handling.js:2194-2194",
       "signature": "()",
       "calls": [
         "publishNativeFileTabs",
@@ -28264,7 +28264,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "file-schema.js:582-582",
+      "loc": "file-schema.js:587-587",
       "signature": "()",
       "calls": [
         "getSkillEngine"
@@ -28281,7 +28281,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "file-schema.js:617-617",
+      "loc": "file-schema.js:622-622",
       "signature": "(text)",
       "calls": [],
       "side_effects": [
@@ -28296,7 +28296,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "file-schema.js:621-621",
+      "loc": "file-schema.js:626-626",
       "signature": "(value, maxLen)",
       "calls": [],
       "side_effects": [
@@ -28311,7 +28311,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "file-schema.js:637-637",
+      "loc": "file-schema.js:642-642",
       "signature": "(file, sheetName, aoa)",
       "calls": [],
       "side_effects": [
@@ -28326,7 +28326,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "file-schema.js:643-643",
+      "loc": "file-schema.js:648-648",
       "signature": "(n)",
       "calls": [],
       "side_effects": [
@@ -28341,7 +28341,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "file-schema.js:650-650",
+      "loc": "file-schema.js:655-655",
       "signature": "(f, opts, lines)",
       "calls": [
         "_colLetter",
@@ -28361,7 +28361,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "file-schema.js:705-705",
+      "loc": "file-schema.js:710-710",
       "signature": "()",
       "calls": [
         "_buildSchemaSummaryAtLevel",
@@ -28379,7 +28379,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "file-schema.js:722-722",
+      "loc": "file-schema.js:727-727",
       "signature": "(lvl)",
       "calls": [
         "_buildDefaultTargetHint",
@@ -28407,7 +28407,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "file-schema.js:766-766",
+      "loc": "file-schema.js:771-771",
       "signature": "()",
       "calls": [
         "getFile",
@@ -28431,7 +28431,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "file-schema.js:1183-1183",
+      "loc": "file-schema.js:1188-1188",
       "signature": "(sheets, headRows)",
       "calls": [
         "_truncSchemaCell",
@@ -28449,7 +28449,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "file-schema.js:1208-1208",
+      "loc": "file-schema.js:1213-1213",
       "signature": "(editIdx)",
       "calls": [
         "computeStateBeforeStep",
