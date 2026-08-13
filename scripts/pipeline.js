@@ -548,6 +548,37 @@ function pipelineResolveSavedTargetFileId(targetFileId) {
   return null;
 }
 
+/* 이 스텝은 '어디에 쓸지'를 스스로 밝혔는데 그 파일을 못 찾은 상태인가.
+   밝힌 적이 없으면(단일 파일 스킬 등) 빈 문자열 — 그건 폴백을 써도 되는 정상 상황이다.
+
+   [조용히 남의 파일에 쓰던 버그 2026-08-13] 지금까지 대상을 못 풀면 아무 말 없이
+   fallbackFileId(= 보통 '먼저 대상이 풀린 다른 스텝의 파일')로 흘려보냈다. 그러면
+   B 에 만들 피벗이 A 에 생긴다 — 그런데 기존 시트에 값만 쓰는 스텝은 백엔드가 시트 이름으로
+   다른 워크북을 찾아가 주기 때문에 멀쩡해 보여서, '어떤 단계만 엉뚱한 파일로 간다'가 된다.
+   실행기에서만 터지는 이유: 생성기는 대상이 늘 실재하는 현재 파일이라 폴백이 안 일어난다. */
+function pipelineStepDeclaredTargetUnresolved(step) {
+  const tid = String((step && step.targetFileId) || "");
+  if (!tid) return "";
+  if (pipelineResolveSavedTargetFileId(tid)) return "";
+  // 코드가 대상을 직접 지목하는 스텝(ctx.book("X").write 등)은 그쪽으로 복구되므로 미해결이 아니다.
+  try {
+    if (typeof inferPipelineStepTargetFileId === "function" && inferPipelineStepTargetFileId(step)) return "";
+  } catch (_) { /* 추론 실패는 '미해결'로 본다 */ }
+  return tid.startsWith("input:") ? tid.slice(6) : tid;
+}
+
+/* 대상을 못 찾은 스텝들 — 파일이 둘 이상일 때만 문제다(하나뿐이면 고를 여지가 없다). */
+function pipelineStepsWithUnresolvedTarget(steps) {
+  const list = (steps || []).filter(s => s && s.code);
+  if (!list.length) return [];
+  let fileCount = 0;
+  try { fileCount = (typeof pipelineKnownFiles === "function" ? pipelineKnownFiles() : []).length; } catch (_) { fileCount = 0; }
+  if (fileCount < 2) return [];
+  return list
+    .map((s, i) => ({ step: s, idx: i, missing: pipelineStepDeclaredTargetUnresolved(s) }))
+    .filter(r => r.missing);
+}
+
 function pipelineCollectWorkbookNames(text) {
   const source = String(text || "");
   const names = [];
@@ -1292,6 +1323,30 @@ async function runIsolatedLivePipelineSteps(sourceSteps, initialExcelId, options
   const fallbackFileId = options.fallbackFileId || pinnedFileId || visibleFileId || explicitResetFileIds[0] || state.currentFileId || preferredVbaRunFileId();
   if (!fallbackFileId) {
     throw new Error("전체실행 대상 파일을 결정할 수 없습니다. 파일 탭을 먼저 선택한 뒤 다시 실행하세요.");
+  }
+  // [조용히 남의 파일에 쓰던 버그 2026-08-13] 대상을 밝힌 스텝인데 그 파일을 못 찾으면, 예전엔
+  // 아무 말 없이 fallbackFileId(보통 다른 스텝의 파일)로 흘려보냈다. 그러면 B 에 만들 피벗이
+  // A 에 생기고, 사용자는 실행이 '성공'했다고 본다. 파일이 둘 이상일 때만 멈춘다 — 하나뿐이면
+  // 애초에 고를 여지가 없어 폴백이 정답이다.
+  try {
+    const _unresolved = (typeof pipelineStepsWithUnresolvedTarget === "function")
+      ? pipelineStepsWithUnresolvedTarget(activeSteps) : [];
+    if (_unresolved.length) {
+      // output:N 은 내부 식별자라 사용자에게 그대로 보이면 안 된다 — '출력 파일 N'으로 풀어 준다.
+      const label = m => (/^output:(\d+)$/.test(m) ? `출력 파일 ${Number(RegExp.$1) + 1}` : m);
+      const names = Array.from(new Set(_unresolved.map(r => label(r.missing)))).slice(0, 3).join(", ");
+      const first = _unresolved[0];
+      throw createPipelineStepError(
+        first.idx, first.step,
+        `${first.idx + 1}단계가 쓸 파일('${names}')을 찾지 못했습니다. `
+        + "다른 파일에 잘못 쓰지 않도록 실행을 멈췄습니다 — 실행기의 '파일 확인'에서 이 파일을 지정한 뒤 다시 실행하세요.",
+        "unresolved step target file"
+      );
+    }
+  } catch (err) {
+    if (err && err._stepInfo) throw err;   // 위에서 우리가 던진 '대상 못 찾음'
+    // 검사 자체가 터진 경우엔 실행을 막지 않는다(기존 동작 유지).
+    console.warn("[pipeline] 대상 미해결 검사 실패", err);
   }
 
   // [느린 PC 레이스 수정] 교차파일 스텝이 참조하는 '읽기 소스'(예: 한전의 05_DAS)는 기존 라우팅/리셋이

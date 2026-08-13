@@ -1792,6 +1792,23 @@ function runnerReplaceLiteral(text, from, to) {
   return src.replace(new RegExp(`(["'])${esc}\\1`, "g"), (_, quote) => `${quote}${b}${quote}`);
 }
 
+// 스텝이 스스로 밝힌 '쓰기 대상' 파일 이름. 저장 스킬의 targetFileId 는 "input:파일명.xlsx" 꼴이다.
+// (출력 템플릿 대상은 "output:N" 이라 이름이 없다 → 빈 문자열 = 선언 없음으로 본다.)
+function runnerDeclaredTargetBookName(step) {
+  const tid = String((step && step.targetFileId) || "");
+  return tid.startsWith("input:") ? tid.slice(6).trim() : "";
+}
+
+// 같은 워크북 이름인가. 실행기 매핑은 확장자/공백 표기가 조금씩 다른 파일을 다루므로
+// 정확 일치 → 확장자 뗀 이름 일치까지만 본다(그 이상 느슨하게 보면 남의 파일을 대상으로 삼는다).
+function runnerSameBookName(a, b) {
+  const norm = s => String(s || "").trim().toLowerCase();
+  const stem = s => norm(s).replace(/\.[a-z0-9]+$/, "");
+  const x = norm(a), y = norm(b);
+  if (!x || !y) return false;
+  return x === y || stem(x) === stem(y);
+}
+
 window.buildRunnerMappedPipeline = function(steps) {
   // [진단] '실행기 매핑이 생성기 재실행에 안 실려 옛 파일명으로 실패'(실측 2026-07-29 test_mapping)의
   // 정확한 원인 게이트를 실측으로 잡는다 — checked=false 인가, 매핑행이 0인가.
@@ -1824,6 +1841,10 @@ window.buildRunnerMappedPipeline = function(steps) {
     let targetFileId = step.targetFileId || null;
     let targetSheetName = step.targetSheetName || null;
     const stepText = [step.prompt, step.description, step.code, step.targetFileId, step.targetSheetName].filter(Boolean).join("\n");
+    // 스텝이 스스로 밝힌 '쓰기 대상' 파일 이름("input:파일명" 형태). 없으면 빈 문자열.
+    const declaredBook = runnerDeclaredTargetBookName(step);
+    const matchedRows = [];    // 텍스트에 이름이 등장한 행(읽기 소스도 섞인다)
+    const declaredRows = [];   // 그중 '선언된 쓰기 대상'과 같은 파일인 행
     rows.forEach(row => {
       const actualName = row.fileItem ? row.fileItem.name : "";
       // [역할 정규화 별칭] 요구 book 이 정본 이름으로 정규화됐어도, 코드에는 옛 달 이름(4월 등)이
@@ -1840,11 +1861,31 @@ window.buildRunnerMappedPipeline = function(steps) {
       }
       const touchesBook = bookNames.some(bn => stepText.includes(bn));
       const touchesSheet = row.req.sheet && stepText.includes(row.req.sheet);
-      if (touchesBook || (!row.req.book && touchesSheet)) {
-        targetFileId = row.fileItem.id;
-        if (row.sheet) targetSheetName = row.sheet;
-      }
+      // [쓰기 대상 오염 수정 2026-08-13] 예전엔 여기서 곧바로 targetFileId 를 덮었다. 조건이
+      // '스텝 텍스트 어딘가에 이 파일 이름이 있다'뿐이라 읽기 소스와 쓰기 대상을 구분하지 못했고,
+      // rows 를 끝까지 돌아 '마지막에 걸린 행이 이기는' 구조였다.
+      //   실측 모양: 3단계가 A 를 읽어 B 에 붙여넣는데(ctx.copy("A.xlsx!시트", ...)),
+      //   스텝 텍스트에 A(코드 리터럴)와 B(targetFileId 문자열)가 둘 다 있어 두 행이 걸리고,
+      //   A 행이 뒤에 있으면 대상이 A 로 바뀐다 → 붙여넣기·피벗이 B 가 아니라 A 에 생긴다.
+      //   생성기에선 매핑이 안 돌아(파일확인 미확정) 안 보이고 실행기에서만 터졌다.
+      // 이제 '걸린 행'을 모아 두기만 하고, 무엇으로 정할지는 아래에서 한 번에 판단한다.
+      if (touchesBook || (!row.req.book && touchesSheet)) matchedRows.push(row);
+      if (declaredBook && bookNames.some(bn => runnerSameBookName(bn, declaredBook))) declaredRows.push(row);
     });
+    // 스텝이 대상을 선언했으면 그 선언에 해당하는 행으로만 다시 묶는다(읽기 소스는 대상이 아니다).
+    // 선언이 없는 옛 스킬은 예전처럼 텍스트로 찾되, 여러 행이 걸리면 '마지막 승' 대신 손대지 않는다
+    // — 어느 쪽인지 모르는 채 고르면 그게 바로 위 버그다.
+    const pick = declaredRows.length ? declaredRows : matchedRows;
+    if (pick.length === 1) {
+      targetFileId = pick[0].fileItem.id;
+      if (pick[0].sheet) targetSheetName = pick[0].sheet;
+    } else if (pick.length > 1) {
+      _traceMap("target.ambiguous", {
+        stepId: String(step.id || ""),
+        declared: declaredBook || "(없음)",
+        rows: pick.map(r => (r.fileItem && r.fileItem.name) || "?").join(","),
+      });
+    }
     return { ...step, code, targetFileId, targetSheetName, runnerMapped: true };
   });
 };

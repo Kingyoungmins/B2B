@@ -3259,6 +3259,17 @@
         ]
       ],
       "fix": "실제 사고: crossWriteDestinationFileIds 를 crossWriteDestinationScan 호출로 쪼갰더니 등록 회귀 26건이 한 뿌리로 실패했다. 추출 목록이 흩어져 있는 자리 = diagnostics/_test_cross_reset.js(이름 배열), _test_mapping_persistence.js(^function 정규식 alternation), _test_recorded_ref_guards.js(extractFn 연결), _test_review_fixes_guards.js(이름 배열), _test_applied_label_truth.js(스텁 객체). pipeline.js 의 함수를 쪼개거나 이름을 바꾸면 이 5곳을 같이 본다. 이 항목의 checks 가 그 5개 파일이라 recheck 만 돌려도 바로 걸린다."
+    },
+    {
+      "id": "RUNNER-WRITE-TARGET-GOES-TO-WRONG-FILE",
+      "title": "[제보] A→B 교차파일 쓰기(피벗/붙여넣기)가 실행기에서 B 로 안 가고 A 안에 만들어짐. 생성기에선 정상.",
+      "checks": [
+        [
+          "node",
+          "test_runs/_test_runner_write_target_routing.js"
+        ]
+      ],
+      "fix": "원인 둘. (1) buildRunnerMappedPipeline 이 '스텝 텍스트에 이 파일 이름이 있다'만으로 targetFileId 를 덮었다 — 읽기 소스와 쓰기 대상을 구분 못 했고 rows 를 끝까지 돌아 마지막 행이 이겼다. A 를 읽어 B 에 쓰는 스텝은 텍스트에 A·B 가 둘 다 있어 A 행이 뒤에 오면 대상이 A 가 된다. → 스텝이 선언한 대상(input:파일명)에 해당하는 행으로만 다시 묶고, 여러 행이 걸리면 손대지 않는다(runnerDeclaredTargetBookName/runnerSameBookName, target.ambiguous 트레이스). (2) 대상을 못 풀면 조용히 fallbackFileId(보통 먼저 풀린 다른 스텝의 파일)로 갔다 — output:N 대상은 이름이 없어 재바인딩 자체가 불가. → pipelineStepsWithUnresolvedTarget 로 실행 직전에 잡아 명확한 오류로 멈춘다(파일이 2개 이상일 때만 — 1개면 고를 여지가 없어 폴백이 정답). 왜 '피벗만' 티가 나는가: 기존 시트에 값 쓰기는 백엔드 _ws() 가 시트명으로 다른 워크북을 찾아가 덮어주므로 대상이 틀려도 결과가 맞는다. 새로 만드는 동작(pivot dest/add_sheet/dst_book 없는 paste_copied)만 엉뚱한 파일에 남는다. 백엔드는 결백 — 새 시트는 늘 그룹 wb(self._wb)에 생긴다. 생성기에서 안 터지는 이유: 매핑이 '파일확인' 확정 전엔 noop 이고 대상이 늘 실재하는 현재 파일이다."
     }
   ]
 }
