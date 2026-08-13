@@ -1,0 +1,49 @@
+// [제보 2026-08-13] 선택 범위가 3:5 인 상태에서
+//     "숨겨진 행을 숨기기 취소하고 숨겨진 4행을 삭제해줘"
+// 라고 했더니 생성된 코드가
+//     ctx.hide_rows("VIEW", "3:5", hidden=False)
+//     ctx.delete_rows("VIEW", "3:5")      ← 4행만 지워야 하는데 3~5 를 다 지웠다
+//
+// 원인: 프롬프트 규칙이 "'현재 선택 범위'가 제공되면 대상 범위로 그 주소를 사용하세요" 라고만
+// 적혀 있었다. 선택이 '기본값'이라는 말도, 요청문이 그 안에서 특정 행을 집으면 그게 이긴다는
+// 말도, 동작이 여러 개면 각각 대상을 따로 잡으라는 말도 없었다.
+//
+// 행 삭제는 되돌리기 어렵다 — 넓게 지우면 데이터가 사라진다. 규칙으로 못박는다.
+"use strict";
+const fs = require("fs");
+const path = require("path");
+const ROOT = path.join(__dirname, "..");
+const fsch = fs.readFileSync(path.join(ROOT, "scripts", "file-schema.js"), "utf8").replace(/^﻿/, "");
+
+let fails = 0;
+function check(name, cond, detail) {
+  if (cond) console.log("  PASS  " + name);
+  else { fails++; console.log("  FAIL  " + name + (detail !== undefined ? "  → " + String(detail).slice(0, 200) : "")); }
+}
+
+console.log("[1] 선택 범위는 '기본값'이고 요청문의 지목이 이긴다");
+check("선택 범위가 기본값이라고 말한다", /선택 범위는 '기본값'일 뿐입니다/.test(fsch));
+check("요청문이 특정 행/열/셀을 집으면 그게 이긴다", /특정 행\/열\/셀을 콕 집으면 그 지목이 이깁니다/.test(fsch));
+check("제보된 사례를 예시로 남겼다(3:5 선택 + 4행 삭제)",
+  /선택이 .*3:5.* 인데 요청이 "숨겨진 \*\*4행\*\*을 삭제해줘"/.test(fsch));
+check("넓게 지우면 무슨 일이 나는지 적었다", /3·5행까지 날아가 데이터가 사라집니다/.test(fsch));
+
+console.log("[2] 동작이 여러 개면 대상을 각각 정한다");
+check("앞 동작의 범위를 뒤 동작에 재사용하지 말라고 한다",
+  /앞 동작의 범위를 뒤 동작에 그대로 쓰지 마세요/.test(fsch));
+check("숨김해제 3:5 · 삭제 4:4 로 갈리는 예시가 있다",
+  /숨김 해제는 .*3:5.*, 삭제는 .*4:4.*/.test(fsch));
+
+console.log("[3] 행 삭제는 특히 좁게");
+check("숫자로 명시된 행만 지우라고 한다", /그 숫자만.*지우고, 범위를 넓히지 마세요/.test(fsch));
+check("되돌리기 어렵다는 이유를 밝힌다", /행 삭제는 되돌리기 어렵습니다/.test(fsch));
+
+console.log("[4] 기존 규칙을 지우지 않았다(선택이 없을 때의 동작 보존)");
+check("선택이 제공되면 그 주소를 쓴다는 원칙은 그대로",
+  /"현재 선택 범위"가 제공되면 대상 범위로 그 주소\(Selection 영역\)를 사용하세요/.test(fsch));
+check("명시도 선택도 없으면 데이터 실제 범위로 한정",
+  /명시 범위가 없고 선택도 없으면 데이터 실제 범위를 스스로 계산해 한정하세요/.test(fsch));
+
+console.log("");
+console.log(fails === 0 ? "RESULT: ALL PASS" : `RESULT: ${fails} FAIL`);
+process.exit(fails === 0 ? 0 : 1);

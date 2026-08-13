@@ -61,10 +61,30 @@ El.prototype.querySelector = function (sel) {
   if (!this._fake[cls]) { const e = new El("button"); e.className = cls; this._fake[cls] = e; }
   return this._fake[cls];
 };
+// 결과 파일마다 붙는 개별 다운로드 버튼 — innerHTML 안의 data-idx 개수만큼 가짜 버튼을 만든다.
+El.prototype.querySelectorAll = function (sel) {
+  const cls = String(sel).replace(/^\./, "");
+  if (!this.innerHTML.includes(cls)) return [];
+  this._fakeAll = this._fakeAll || {};
+  if (!this._fakeAll[cls]) {
+    const idxs = [];
+    const re = /data-idx="([0-9]+)"/g;
+    let m;
+    while ((m = re.exec(this.innerHTML))) idxs.push(m[1]);
+    this._fakeAll[cls] = idxs.map(i => {
+      const e = new El("button");
+      e.className = cls;
+      e.dataset = { idx: i };
+      return e;
+    });
+  }
+  return this._fakeAll[cls];
+};
 var _byId = {};
+var _anchors = [];   // 개별 다운로드가 만드는 <a download> 추적
 var document = {
   getElementById: (id) => _byId[id] || null,
-  createElement: (tag) => new El(tag),
+  createElement: (tag) => { const e = new El(tag); if (tag === "a") _anchors.push(e); return e; },
   addEventListener: (t, fn, cap) => _listeners.push({ t, fn, cap }),
   removeEventListener: (t, fn) => { _listeners = _listeners.filter(l => l.fn !== fn); },
   body: new El("body"),
@@ -75,6 +95,9 @@ function _reset() {
   document.body = new El("body");
   const eb = new El("button"); eb.id = "runner-edit-result-btn"; eb.disabled = false;
   _byId["runner-edit-result-btn"] = eb;
+  const db = new El("button"); db.id = "runner-download-btn"; db.disabled = false;
+  _byId["runner-download-btn"] = db;
+  _anchors = [];
   window.lastRunnerOutputs = [];
 }
 `;
@@ -84,7 +107,9 @@ m._compile(STUBS + "\n" + body
   + "setOutputs(list) { window.lastRunnerOutputs = list; }, "
   + "get card() { return _byId['runner-run-summary']; }, get body() { return document.body; }, "
   + "get listeners() { return _listeners; }, get removed() { return _removed; }, "
-  + "get editBtn() { return _byId['runner-edit-result-btn']; } };\n",
+  + "get editBtn() { return _byId['runner-edit-result-btn']; }, "
+  + "get dlBtn() { return _byId['runner-download-btn']; }, "
+  + "get anchors() { return _anchors; } };\n",
   path.join(__dirname, "_extracted_runner_summary.js"));
 const T = m.exports;
 
@@ -157,6 +182,33 @@ T.show({ steps: 1, ms: 100 });
   card.querySelector(".runner-summary-edit").click();
   check("실제 [결과 편집하기] 버튼이 눌림", T.editBtn.clicked === 1, T.editBtn.clicked);
   check("누른 뒤 카드는 닫힘", !T.card);
+}
+
+console.log("[7b] 다운로드 — 전체는 기존 버튼, 개별은 결과의 downloadUrl");
+T._reset();
+T.setOutputs([
+  { name: "a.xlsx", downloadUrl: "/api/workbooks/download/r1", downloadId: "r1" },
+  { name: "b.xlsx", downloadId: "r2" },
+  { name: "c.xlsx" },                     // 받을 수 없는 파일
+]);
+T.show({ steps: 3, ms: 300 });
+{
+  const card = T.card;
+  check("전체 다운로드 버튼이 있다", /runner-summary-dlall/.test(card.innerHTML));
+  card.querySelector(".runner-summary-dlall").click();
+  check("실제 [전체 파일 다운로드] 버튼을 누른다(중복 구현 금지)", T.dlBtn.clicked === 1, T.dlBtn.clicked);
+  check("전체 받기는 카드를 닫지 않는다(zip 생성 동안 머문다)", !!T.card);
+
+  const ones = card.querySelectorAll(".runner-summary-dl1");
+  check("받을 수 있는 파일에만 개별 버튼", ones.length === 2, ones.length);
+  ones[0].click();
+  check("downloadUrl 로 받는다", T.anchors.some(a => a.href === "/api/workbooks/download/r1"),
+    JSON.stringify(T.anchors.map(a => a.href)));
+  check("파일 이름을 붙인다", T.anchors.some(a => a.download === "a.xlsx"));
+  ones[1].click();
+  check("downloadUrl 이 없으면 downloadId 로 만든다",
+    T.anchors.some(a => a.href === "/api/workbooks/download/r2"),
+    JSON.stringify(T.anchors.map(a => a.href)));
 }
 
 console.log("[8] 배선 — 성공했을 때만 뜬다");

@@ -2082,7 +2082,10 @@ window.runnerShowRunSummary = function(info) {
       ${outs.length ? `
       <div class="runner-summary-files">
         <div class="runner-summary-files-title">결과 파일 ${outs.length}개</div>
-        <ul>${outs.slice(0, 8).map(o => `<li>${esc(o.name || "결과 파일")}</li>`).join("")}
+        <ul>${outs.slice(0, 8).map((o, i) => `<li><span class="runner-summary-fname">${esc(o.name || "결과 파일")}</span>`
+          + (o.downloadUrl || o.downloadId
+            ? `<button class="runner-summary-dl1" type="button" data-idx="${i}" title="이 파일만 내려받기">⬇</button>`
+            : "") + `</li>`).join("")}
         ${outs.length > 8 ? `<li class="more">외 ${outs.length - 8}개</li>` : ""}</ul>
       </div>` : `
       <div class="runner-summary-files">
@@ -2091,6 +2094,7 @@ window.runnerShowRunSummary = function(info) {
       </div>`}
       <div class="runner-summary-actions">
         ${outs.length ? '<button class="runner-summary-edit" type="button">📝 결과 편집하기</button>' : ""}
+        ${outs.length ? '<button class="runner-summary-dlall" type="button">📥 전체 파일 다운로드</button>' : ""}
         <button class="runner-summary-close" type="button">확인</button>
       </div>
     </div>`;
@@ -2111,6 +2115,37 @@ window.runnerShowRunSummary = function(info) {
       if (real && !real.disabled) real.click();
     };
   }
+  // [사용자 지시 2026-08-13] 완료 카드에서 바로 받을 수 있게 — 로직은 기존 것을 그대로 쓴다.
+  //   전체: 실행기의 '전체 파일 다운로드' 버튼을 그대로 누른다(zip 생성·이름 규칙·토스트까지 동일).
+  //   개별: 결과 파일마다 백엔드가 이미 downloadUrl 을 실어 준다(/api/workbooks/download/<id>).
+  const dlAllBtn = wrap.querySelector(".runner-summary-dlall");
+  if (dlAllBtn) {
+    dlAllBtn.onclick = () => {
+      const real = document.getElementById("runner-download-btn");
+      if (!real || real.disabled) {
+        if (typeof toast === "function") toast("내려받을 결과 파일이 없습니다.", "error");
+        return;
+      }
+      real.click();   // 카드는 닫지 않는다 — zip 생성이 끝날 때까지 사용자가 여기 머문다
+    };
+  }
+  wrap.querySelectorAll(".runner-summary-dl1").forEach(btn => {
+    btn.onclick = () => {
+      const out = outs[Number(btn.dataset.idx)];
+      const url = out && (out.downloadUrl || (out.downloadId ? "/api/workbooks/download/" + out.downloadId : ""));
+      if (!url) { if (typeof toast === "function") toast("이 파일은 내려받을 수 없습니다.", "error"); return; }
+      try {
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = out.name || "";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      } catch (err) {
+        if (typeof toast === "function") toast("다운로드 오류: " + (err && err.message ? err.message : err), "error");
+      }
+    };
+  });
   try { wrap.querySelector(".runner-summary-close").focus(); } catch (_) {}
 };
 
