@@ -4493,16 +4493,23 @@ async function _restoreSnapshotByIds(resultId, excelId, options = {}) {
    마지막 것 하나만 반영되게 짧게 모아서 한 번만 전환한다. 탭이 이미 그 파일이면 아무것도 안 한다. */
 let _pipelineTabLandTimer = null;
 let _pipelineTabLandExcelId = null;
+let _pipelineTabLandFromFileId = null;
 function landAppTabOnExcelSession(excelId) {
   if (!excelId) return;
   _pipelineTabLandExcelId = excelId;
   if (_pipelineTabLandTimer) return;
+  // 예약 시점의 탭을 기억해 둔다 — 기다리는 사이 사용자가 직접 탭을 눌렀으면 그 선택이 우선이다.
+  _pipelineTabLandFromFileId = state.currentFileId;
   _pipelineTabLandTimer = setTimeout(() => {
     _pipelineTabLandTimer = null;
     const target = _pipelineTabLandExcelId;
+    const from = _pipelineTabLandFromFileId;
     _pipelineTabLandExcelId = null;
+    _pipelineTabLandFromFileId = null;
     try {
       if (!target || typeof fileIdForExcelMirrorId !== "function") return;
+      // 사용자가 그 사이 탭을 옮겼으면 덮어쓰지 않는다(사람의 선택이 항상 이긴다).
+      if (state.currentFileId !== from) return;
       const fid = fileIdForExcelMirrorId(target);
       if (!fid || fid === state.currentFileId) return;
       if (typeof setCurrentView === "function") setCurrentView(fid, { source: "pipeline-land" });

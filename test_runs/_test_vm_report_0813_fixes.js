@@ -44,8 +44,10 @@ check("모달이 '처음부터 실행합니다'를 미리 알려 준다", /앞 �
 console.log("[3] 되돌리기 후 앱 탭까지 착지 — '클릭이 안 먹는' 증상의 정체");
 check("복원이 보여준 세션으로 앱 탭을 맞춘다", /landAppTabOnExcelSession\(excelId\);/.test(pj));
 check("여러 파일 복원 시 탭 전환을 한 번으로 모은다(창 튀는 것 방지)",
-  /_pipelineTabLandTimer/.test(pj) && /setTimeout\(\(\) => \{[\s\S]{0,400}setCurrentView\(fid, \{ source: "pipeline-land" \}\)/.test(pj));
+  /_pipelineTabLandTimer/.test(pj) && /setTimeout\(\(\) => \{[\s\S]{0,900}setCurrentView\(fid, \{ source: "pipeline-land" \}\)/.test(pj));
 check("이미 그 탭이면 아무것도 안 한다", /if \(!fid \|\| fid === state\.currentFileId\) return;/.test(pj));
+check("기다리는 사이 사용자가 탭을 옮겼으면 덮어쓰지 않는다",
+  /if \(state\.currentFileId !== from\) return;/.test(pj));
 check("전환 소스 화이트리스트에 pipeline-land 가 있다(없으면 setCurrentView 가 무시된다)",
   /source === "pipeline-land"/.test(ev));
 
