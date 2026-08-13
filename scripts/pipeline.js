@@ -452,7 +452,24 @@ function pipelineStableWorkbookKey(value) {
   s = s.replace(/^(?:[0-9a-f]{12,}|excel_open_[0-9a-f]{12,}|live_reset_[0-9a-f]{12,})[_-]+/i, ""); // \uC0DD\uC131 \uC811\uB450 \uD574\uC2DC
   s = s.toLowerCase();
   s = s.replace(/[​-‍﻿]/g, "");  // zero-width — 2·3단(pipelineWorkbookNameKey)과 정규화 일치
+  // [월 순번 2026-08-13] serve_b2b.py 의 _stable_workbook_key 와 '반드시' 같은 규칙이어야 한다
+  // (한쪽만 고치면 클라는 맞다 하고 백엔드는 아니라 해서 엉뚱한 파일에 쓴다 — a4609ce 의 경고).
+  // "input_작업파일_03. 관악_03월.xlsx" 처럼 월이 앞쪽 순번으로 한 번 더 나오는 실제 관행:
+  // 순번 토큰은 ^ 앵커라 중간 번호를 안 지우고(지점 105 같은 식별자 보존이 목적), 그 탓에
+  // 3월 파일과 5월 파일 키가 03/05 로 갈려 재바인딩이 안 됐다. 'NN월' 이 있을 때 그 NN 만 지운다.
+  const _months = new Set();
+  for (const m of s.matchAll(/(\d{1,2})\s*월/g)) {
+    const n = parseInt(m[1], 10);
+    if (!Number.isNaN(n)) _months.add(n);
+  }
   for (const [rx, rep] of PIPELINE_VOLATILE_NAME_TOKENS) s = s.replace(rx, rep);
+  if (_months.size) {
+    // 날짜/시각 토큰이 지워진 뒤에 돈다 — 먼저 돌면 "2026-03-01" 의 03 을 건드려 날짜 판정이 깨진다.
+    s = s.replace(/(?<!\d)(\d{1,2})(?=\s*[.\s_\-])/g, (whole, num) => {
+      const n = parseInt(num, 10);
+      return _months.has(n) ? " " : whole;
+    });
+  }
   for (let i = 0; i < 4; i++) {                 // 접미사 조합("X (2) - 복사본")까지 흡수
     const prev = s;
     for (const [rx, rep] of PIPELINE_VOLATILE_SUFFIX_TOKENS) s = s.replace(rx, rep);

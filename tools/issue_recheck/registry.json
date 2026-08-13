@@ -3278,6 +3278,36 @@
         ]
       ],
       "fix": "원인 둘. (1) buildRunnerMappedPipeline 이 '스텝 텍스트에 이 파일 이름이 있다'만으로 targetFileId 를 덮었다 — 읽기 소스와 쓰기 대상을 구분 못 했고 rows 를 끝까지 돌아 마지막 행이 이겼다. A 를 읽어 B 에 쓰는 스텝은 텍스트에 A·B 가 둘 다 있어 A 행이 뒤에 오면 대상이 A 가 된다. → 스텝이 선언한 대상(input:파일명)에 해당하는 행으로만 다시 묶고, 여러 행이 걸리면 손대지 않는다(runnerDeclaredTargetBookName/runnerSameBookName, target.ambiguous 트레이스). (2) 대상을 못 풀면 조용히 fallbackFileId(보통 먼저 풀린 다른 스텝의 파일)로 갔다 — output:N 대상은 이름이 없어 재바인딩 자체가 불가. → pipelineStepsWithUnresolvedTarget 로 실행 직전에 잡아 명확한 오류로 멈춘다(파일이 2개 이상일 때만 — 1개면 고를 여지가 없어 폴백이 정답). 왜 '피벗만' 티가 나는가: 기존 시트에 값 쓰기는 백엔드 _ws() 가 시트명으로 다른 워크북을 찾아가 덮어주므로 대상이 틀려도 결과가 맞는다. 새로 만드는 동작(pivot dest/add_sheet/dst_book 없는 paste_copied)만 엉뚱한 파일에 남는다. 백엔드는 결백 — 새 시트는 늘 그룹 wb(self._wb)에 생긴다. 생성기에서 안 터지는 이유: 매핑이 '파일확인' 확정 전엔 noop 이고 대상이 늘 실재하는 현재 파일이다. 스모크: _test_fullrun_crossfile_write_target_com.py 가 실제 Excel 로 '그룹이 맞으면 피벗이 B 에, 그룹이 틀리면 A 에' 를 둘 다 재현한다 — 백엔드가 결백함을 실물로 못박는다. _test_runner_mapping_e2e_crossfile.js 는 buildRunnerMappedPipeline 을 통째로 돌려 제보 스킬 3단계가 B 를 지키는지, 행 순서를 뒤집어도 같은지 본다."
+    },
+    {
+      "id": "STABLE-KEY-MONTH-AS-SEQUENCE",
+      "title": "[재바인딩] '03. 관악_03월' 처럼 월이 앞쪽 순번으로 한 번 더 나오는 파일명은 다른 달 파일로 재바인딩이 안 됐다.",
+      "checks": [
+        [
+          "node",
+          "test_runs/_test_stable_key_parity.js"
+        ],
+        [
+          "com",
+          "test_runs/_test_pycom_month_rebind.py"
+        ],
+        [
+          "python",
+          "test_runs/_test_stable_key_dup_suffix.py"
+        ]
+      ],
+      "fix": "안정키의 순번 토큰이 ^ 앵커라 '앞머리' 번호만 지운다. 중간 번호를 보존하는 건 의도된 설계다(a4609ce: 거래처코드 500255/610344 같은 식별번호까지 지워 서로 다른 파일이 같은 키가 되고 '유일 매칭'을 통과해 조용히 엉뚱한 파일에 쓰던 최악 실패 모드를 막으려고 좁혔다). 그 결과 03. 관악_03월 과 05. 관악_05월 의 키가 03/05 로 갈렸다. → 이름 안에 'NN월' 이 있을 때 그 NN 만 순번 자리에서 함께 지운다. 지점 105·거래처 500255 는 월 번호가 아니라 그대로 보존된다. 날짜/시각 토큰이 지워진 뒤에 돌려 2026-03-01 을 안 건드린다. 백엔드(_stable_workbook_key)와 클라(pipelineStableWorkbookKey) 양쪽에 같은 규칙을 넣었다."
+    },
+    {
+      "id": "STABLE-KEY-CLIENT-SERVER-PARITY",
+      "title": "[구조] 안정키가 백엔드·클라 두 곳에 중복 구현돼 있는데 패리티를 강제하는 테스트가 없었다.",
+      "checks": [
+        [
+          "node",
+          "test_runs/_test_stable_key_parity.js"
+        ]
+      ],
+      "fix": "a4609ce 가 '두 쪽은 반드시 패리티여야 한다'고 적어 뒀지만 강제 수단이 없었다. 한쪽만 고치면 클라는 '이 파일 맞다'며 스텝을 묶어 보내고 백엔드는 '그런 워크북 없다'며 거절하거나 다른 파일을 잡는다 — 조용히 엉뚱한 파일에 쓰는 부류다. 같은 이름 목록을 두 구현에 넣어 키가 글자까지 같은지, 그리고 '같은 파일로 볼지'의 판단이 일치하는지 본다. 안정키 규칙을 건드리면 여기서 바로 걸린다. 알려진 한계도 함께 고정: '2026_03' 처럼 연-월 두 토막은 날짜 토큰(세 토막)에도 YYYYMM(구분자 없음)에도 안 걸려 정규화되지 않는다 — 두 쪽 판단은 일치하므로 패리티 문제는 아니다."
     }
   ]
 }

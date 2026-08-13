@@ -8090,8 +8090,28 @@ def _stable_workbook_key(name):
     s = _strip_generated_workbook_prefix(s)
     s = s.lower()
     s = re.sub(r"[​-‍﻿]", "", s)   # zero-width(다운로드 경로에서 섞여 들어옴)
+    # [월 순번 2026-08-13] "input_작업파일_03. 관악_03월.xlsx" 처럼 월이 '앞쪽 순번'으로 한 번 더
+    # 나오는 실제 관행. 순번 토큰은 ^ 앵커라 앞머리만 지우고(중간 번호 = 지점 105 같은 식별자는
+    # 보존해야 하므로 — a4609ce 가 좁힌 이유), 그 결과 3월 파일과 5월 파일의 키가 03/05 로 갈려
+    # 재바인딩이 안 됐다. 이름 안에 'NN월' 이 있을 때 그 NN 만 순번 자리에서 함께 지운다.
+    # 지점 105·거래처 500255 는 월 번호가 아니므로 그대로 보존된다.
+    _months = set()
+    for _m in re.finditer(r"(\d{1,2})\s*월", s):
+        try:
+            _months.add(int(_m.group(1)))
+        except Exception:
+            pass
     for rx, rep in _VOLATILE_NAME_TOKENS:
         s = rx.sub(rep, s)
+    if _months:
+        def _drop_month_seq(mo):
+            try:
+                return " " if int(mo.group(1)) in _months else mo.group(0)
+            except Exception:
+                return mo.group(0)
+        # 날짜/시각 토큰이 이미 지워진 뒤에 돈다 — 앞서 돌면 "2026-03-01" 의 03 을 건드려
+        # 날짜 판정을 깨뜨린다.
+        s = re.sub(r"(?<!\d)(\d{1,2})(?=\s*[.\s_\-])", _drop_month_seq, s)
     # 접미사는 조합될 수 있다("X (2) - 복사본"). 예전엔 목록 순서대로 1회씩만 적용해
     # 복사본 제거 후 드러나는 "(2)" 가 다시 처리되지 않아 흡수가 되다 말다 했다.
     for _ in range(4):
