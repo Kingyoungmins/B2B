@@ -8,7 +8,7 @@ signature: "()"
 role: "스킬 실행 엔진(Python/openpyxl)이 선택됐을 때 프롬프트에 덧붙이는 안내."
 role_source: banner
 version: "0.7.3"
-loc: "file-schema.js:587-587"
+loc: "file-schema.js:597-597"
 
 # ── 입출력 ──
 inputs: []

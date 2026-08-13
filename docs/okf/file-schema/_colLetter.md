@@ -8,7 +8,7 @@ signature: "(n)"
 role: "1-based 열 번호 → 엑셀 열 문자(A, B, ..., AA ...). 스키마의 열문자↔헤더 매핑 출력용."
 role_source: banner
 version: "0.7.3"
-loc: "file-schema.js:648-648"
+loc: "file-schema.js:658-658"
 
 # ── 입출력 ──
 inputs:
