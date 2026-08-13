@@ -9,7 +9,7 @@ signature: "(self, old, new, count=-1)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
 version: "0.7.3"
-loc: "serve_b2b.py:16617-16627"
+loc: "serve_b2b.py:16523-16533"
 
 # ── 입출력 ──
 inputs:
@@ -55,7 +55,6 @@ called_by:
   - "_opxl_range_values"
   - "_pivot_to_num"
   - "_poll_excel_session_changes_impl"
-  - "_python_com_static_check"
   - "_range_formula_info"
   - "_read_excel_session_selection_impl"
   - "_recover_excel_session_impl"
@@ -82,7 +81,7 @@ timestamp: "0.7.3-gen"
 
 ## 관계
 - 호출: `value`
-- 피호출(영향 전파 경로): `ExcelSkillContext._num`, `OpenpyxlSkillContext._num`, `OpenpyxlWorksheetProxy.Range`, `PythonComSkillContext._pivot_value_table`, `PythonComSkillContext.set_border`, `_capture_browser_hwnd`, `_capture_copypaste_on_session_impl`, `_capture_live_view_state`, `_coerce_number`, `_diag_vba_run_failure`, `_extract_vba_source_for_injection`, `_inject_and_run_vba_in_host`, `_normalize_vba_workbook_literals`, `_opxl_coord`, `_opxl_eval_formula`, `_opxl_numeric_values`, `_opxl_range_values`, `_pivot_to_num`, `_poll_excel_session_changes_impl`, `_python_com_static_check`, `_range_formula_info`, `_read_excel_session_selection_impl`, `_recover_excel_session_impl`, `_trace_text`, `_vba_macro_ref`, `_vba_macro_refs`, `_vba_string_literal`, `_workbook_name_lookup_key`, `normalize_python_pipeline_code`, `safe_archive_filename`
+- 피호출(영향 전파 경로): `ExcelSkillContext._num`, `OpenpyxlSkillContext._num`, `OpenpyxlWorksheetProxy.Range`, `PythonComSkillContext._pivot_value_table`, `PythonComSkillContext.set_border`, `_capture_browser_hwnd`, `_capture_copypaste_on_session_impl`, `_capture_live_view_state`, `_coerce_number`, `_diag_vba_run_failure`, `_extract_vba_source_for_injection`, `_inject_and_run_vba_in_host`, `_normalize_vba_workbook_literals`, `_opxl_coord`, `_opxl_eval_formula`, `_opxl_numeric_values`, `_opxl_range_values`, `_pivot_to_num`, `_poll_excel_session_changes_impl`, `_range_formula_info`, `_read_excel_session_selection_impl`, `_recover_excel_session_impl`, `_trace_text`, `_vba_macro_ref`, `_vba_macro_refs`, `_vba_string_literal`, `_workbook_name_lookup_key`, `normalize_python_pipeline_code`, `safe_archive_filename`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

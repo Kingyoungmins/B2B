@@ -8,7 +8,7 @@ signature: "(fullText, code)"
 role: "코드를 만들어야 하는 응답인데 코드가 없거나 비어 있으면 문제 목록을 돌려준다."
 role_source: banner
 version: "0.7.3"
-loc: "chat-ui.js:2284-2284"
+loc: "chat-ui.js:2291-2291"
 
 # ── 입출력 ──
 inputs:

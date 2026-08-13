@@ -8,7 +8,7 @@ signature: "()"
 role: "오래된 것부터 정리(개수·용량 한도는 스텝 스냅샷과 공유). 지워졌으면 조회가 실패하고"
 role_source: docstring
 version: "0.7.3"
-loc: "serve_b2b.py:18190-18210"
+loc: "serve_b2b.py:18096-18116"
 
 # ── 입출력 ──
 inputs: []

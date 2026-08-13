@@ -8,7 +8,7 @@ signature: "()"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
 version: "0.7.3"
-loc: "chat-ui.js:3245-3245"
+loc: "chat-ui.js:3252-3252"
 
 # ── 입출력 ──
 inputs: []

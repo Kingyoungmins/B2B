@@ -8,7 +8,7 @@ signature: "(code)"
 role: "실행 전 AST 정적 게이트. 위반은 사람이 읽을 수 있는 한국어 사유로 모아 한 번에 반환."
 role_source: docstring
 version: "0.7.3"
-loc: "serve_b2b.py:14135-14352"
+loc: "serve_b2b.py:14135-14258"
 
 # ── 입출력 ──
 inputs:
@@ -25,45 +25,28 @@ raises:
 calls:
   - "add"
   - "append"
-  - "replace"
   - "value"
 calls_external:
   - "PythonComSkillError"
   - "_Checker"
-  - "_a1_cells_estimate"
-  - "_col_to_index"
-  - "_dynamic_range_text_is_wide"
   - "_is_ctx_receiver"
-  - "abs"
-  - "bool"
-  - "ch"
   - "code"
-  - "code_text"
   - "f"
   - "failures"
-  - "finditer"
-  - "float"
   - "fromkeys"
   - "func"
   - "generic_visit"
-  - "group"
-  - "int"
+  - "get"
   - "isinstance"
   - "join"
   - "list"
-  - "match"
   - "node"
-  - "ord"
   - "parse"
   - "pop"
-  - "s"
-  - "search"
   - "str"
-  - "strip"
   - "tgt"
   - "tree"
   - "unique"
-  - "upper"
   - "visit"
 called_by:
   - "_exec_python_com_skill"
@@ -82,7 +65,7 @@ timestamp: "0.7.3-gen"
 - 없음(정적 분석 기준)
 
 ## 관계
-- 호출: `add`, `append`, `replace`, `value`
+- 호출: `add`, `append`, `value`
 - 피호출(영향 전파 경로): `_exec_python_com_skill`
 
 ## 실패/예외

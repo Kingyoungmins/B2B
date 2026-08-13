@@ -8,7 +8,7 @@ signature: "(pythonCode, context)"
 role: "[사용자 지시] VBA 전환 재생성까지 실패(\"뻑나면\")하면, 게이트를 우회해 '원본 Python 코드'를 그대로"
 role_source: banner
 version: "0.7.3"
-loc: "chat-ui.js:1912-1912"
+loc: "chat-ui.js:1919-1919"
 
 # ── 입출력 ──
 inputs:

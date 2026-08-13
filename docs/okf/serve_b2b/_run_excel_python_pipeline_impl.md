@@ -8,7 +8,7 @@ signature: "(payload, job_id=None)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
 version: "0.7.3"
-loc: "serve_b2b.py:18775-19226"
+loc: "serve_b2b.py:18681-19132"
 
 # ── 입출력 ──
 inputs:

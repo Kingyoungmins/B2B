@@ -8,7 +8,7 @@ signature: "(code)"
 role: "전용(네이티브) ctx 헬퍼를 쓰는 코드인지. 이 헬퍼들은 '읽기루프/행삭제 반복'이 아니라 Range 기반"
 role_source: banner
 version: "0.7.3"
-loc: "chat-ui.js:1715-1715"
+loc: "chat-ui.js:1718-1718"
 
 # ── 입출력 ──
 inputs:

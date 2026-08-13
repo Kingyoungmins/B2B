@@ -8,7 +8,7 @@ signature: "(fullText, problems, context)"
 role: "설명만/주석만 응답을 받았을 때 교정 지시와 함께 자동 재생성한다(최대 NO_CODE_MAX_REGEN 회)."
 role_source: banner
 version: "0.7.3"
-loc: "chat-ui.js:2307-2307"
+loc: "chat-ui.js:2314-2314"
 
 # ── 입출력 ──
 inputs:
