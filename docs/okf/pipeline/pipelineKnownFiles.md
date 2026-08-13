@@ -32,6 +32,7 @@ calls_external:
 called_by:
   - "pipelineFileIdByWorkbookName"
   - "pipelineFileIdsBySheetName"
+  - "pipelineStepsWithUnresolvedTarget"
 reads:
   - "state.inputs"
   - "state.output"
@@ -49,7 +50,7 @@ timestamp: "0.7.3-gen"
 
 ## 관계
 - 호출: `add`, `outputTemplateFileId`, `push`, `workbookDisplayName`
-- 피호출(영향 전파 경로): `pipelineFileIdByWorkbookName`, `pipelineFileIdsBySheetName`
+- 피호출(영향 전파 경로): `pipelineFileIdByWorkbookName`, `pipelineFileIdsBySheetName`, `pipelineStepsWithUnresolvedTarget`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

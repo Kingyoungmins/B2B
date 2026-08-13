@@ -32,6 +32,7 @@ called_by:
   - "inferPipelineStepTargetFileId"
   - "normalizeStaleBooksInSavedText"
   - "normalizeStaleTargetFileIdForSave"
+  - "pipelineStepDeclaredTargetUnresolved"
   - "replaceLogicAt"
 reads: []
 writes: []
@@ -47,7 +48,7 @@ timestamp: "0.7.3-gen"
 
 ## 관계
 - 호출: `getFile`, `pipelineFileIdByWorkbookName`
-- 피호출(영향 전파 경로): `inferPipelineStepTargetFileId`, `normalizeStaleBooksInSavedText`, `normalizeStaleTargetFileIdForSave`, `replaceLogicAt`
+- 피호출(영향 전파 경로): `inferPipelineStepTargetFileId`, `normalizeStaleBooksInSavedText`, `normalizeStaleTargetFileIdForSave`, `pipelineStepDeclaredTargetUnresolved`, `replaceLogicAt`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

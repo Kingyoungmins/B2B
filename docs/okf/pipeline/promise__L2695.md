@@ -1,17 +1,18 @@
 ---
 type: endpoint
-title: ensureVbaRunExcelId
+title: promise
 module: pipeline.js
 lang: js
 extraction: regex   # 정규식 근사
-signature: "()"
+signature: "(async ()"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
 version: "0.7.3"
-loc: "pipeline.js:1116-1116"
+loc: "pipeline.js:2695-2695"
 
 # ── 입출력 ──
-inputs: []
+inputs:
+  - "async ("
 returns: "(추정)"
 
 # ── 사이드이펙트 (정적 추정) ──
@@ -21,15 +22,21 @@ raises: []
 
 # ── 유기적 관계 ──
 calls:
-  - "ensureExcelMirrorForFileId"
-  - "preferredVbaRunFileId"
-  - "vbaTargetExcelId"
+  - "applyMappedSingleStep"
+  - "markPipelinePendingFromIndex"
+  - "pipelineSuffixWritesCrossFile"
+  - "reconcilePipelineSimulationAfterEdit"
+  - "refreshRunButton"
+  - "renderPipeline"
+  - "restorePipelineToCheckpointAndHold"
+  - "setPipelineRuntimeStatus"
+  - "toast"
 calls_external:
-  - "Error"
-called_by:
-  - "applyLogic"
-  - "runVbaPipelinePreferLive"
-reads: []
+  - "enabled"
+  - "warn"
+called_by: []
+reads:
+  - "state.pipeline"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
 timestamp: "0.7.3-gen"
@@ -42,8 +49,8 @@ timestamp: "0.7.3-gen"
 - 없음(정적 분석 기준)
 
 ## 관계
-- 호출: `ensureExcelMirrorForFileId`, `preferredVbaRunFileId`, `vbaTargetExcelId`
-- 피호출(영향 전파 경로): `applyLogic`, `runVbaPipelinePreferLive`
+- 호출: `applyMappedSingleStep`, `markPipelinePendingFromIndex`, `pipelineSuffixWritesCrossFile`, `reconcilePipelineSimulationAfterEdit`, `refreshRunButton`, `renderPipeline`, `restorePipelineToCheckpointAndHold`, `setPipelineRuntimeStatus`, `toast`
+- 피호출(영향 전파 경로): 없음
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

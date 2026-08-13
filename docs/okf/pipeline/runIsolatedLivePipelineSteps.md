@@ -8,7 +8,7 @@ signature: "(sourceSteps, initialExcelId, options = {})"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
 version: "0.7.3"
-loc: "pipeline.js:1262-1262"
+loc: "pipeline.js:1293-1293"
 
 # ── 입출력 ──
 inputs:
@@ -34,6 +34,7 @@ calls:
   - "applyLiveSchemaToFileCache"
   - "beginExcelMirrorApplyLoading"
   - "createPipelineRuntimeExecutionBlockError"
+  - "createPipelineStepError"
   - "endExcelMirrorApplyLoading"
   - "ensurePipelineReferencedSessionsOpen"
   - "fileIdForExcelMirrorId"
@@ -46,6 +47,7 @@ calls:
   - "pipelinePinnedTargetFileId"
   - "pipelineStepLiveLanguage"
   - "pipelineStepMutationFileId"
+  - "pipelineStepsWithUnresolvedTarget"
   - "pipelineTimeoutMs"
   - "postExcelMirror"
   - "preferredVbaRunFileId"
@@ -70,6 +72,7 @@ calls_external:
   - "concat"
   - "encodeURIComponent"
   - "excel_call"
+  - "fallbackFileId"
   - "fetch"
   - "filter"
   - "find"
@@ -83,6 +86,7 @@ calls_external:
   - "join"
   - "json"
   - "keys"
+  - "label"
   - "map"
   - "max"
   - "min"
@@ -94,8 +98,10 @@ calls_external:
   - "skipReset"
   - "slice"
   - "some"
+  - "test"
   - "then"
   - "through"
+  - "warn"
   - "wiring"
 called_by:
   - "_reapplyVbaPipelineToLiveImpl"
@@ -118,7 +124,7 @@ timestamp: "0.7.3-gen"
 - 타이머
 
 ## 관계
-- 호출: `_offStepsAmongSent`, `_stepsOnOffMap`, `_throwIfAbandoned`, `activePipelineSteps`, `add`, `applyLiveSchemaToFileCache`, `beginExcelMirrorApplyLoading`, `createPipelineRuntimeExecutionBlockError`, `endExcelMirrorApplyLoading`, `ensurePipelineReferencedSessionsOpen`, `fileIdForExcelMirrorId`, `findPipelineRuntimeExecutionBlocker`, `invalidateLivePipelineApplied`, `isolatedPipelineStepPayload`, `muteExcelMirrorForPipeline`, `noteLivePipelineApplied`, `pipelineFullRunStateSig`, `pipelinePinnedTargetFileId`, `pipelineStepLiveLanguage`, `pipelineStepMutationFileId`, `pipelineTimeoutMs`, `postExcelMirror`, `preferredVbaRunFileId`, `push`, `recordVbaDebugTiming`, `releaseExcelMirrorPipelineMute`, `requirePipelineSessionExcelId`, `restoreVbaExcelAfterError`, `scheduleRestoreActiveExcelMirror`, `setPipelineRuntimeStatus`, `sync`, `toast`, `tracePipelineRun`, `wirePipelineStepCrossEvidence`, `wirePipelineStepSnapshots`
+- 호출: `_offStepsAmongSent`, `_stepsOnOffMap`, `_throwIfAbandoned`, `activePipelineSteps`, `add`, `applyLiveSchemaToFileCache`, `beginExcelMirrorApplyLoading`, `createPipelineRuntimeExecutionBlockError`, `createPipelineStepError`, `endExcelMirrorApplyLoading`, `ensurePipelineReferencedSessionsOpen`, `fileIdForExcelMirrorId`, `findPipelineRuntimeExecutionBlocker`, `invalidateLivePipelineApplied`, `isolatedPipelineStepPayload`, `muteExcelMirrorForPipeline`, `noteLivePipelineApplied`, `pipelineFullRunStateSig`, `pipelinePinnedTargetFileId`, `pipelineStepLiveLanguage`, `pipelineStepMutationFileId`, `pipelineStepsWithUnresolvedTarget`, `pipelineTimeoutMs`, `postExcelMirror`, `preferredVbaRunFileId`, `push`, `recordVbaDebugTiming`, `releaseExcelMirrorPipelineMute`, `requirePipelineSessionExcelId`, `restoreVbaExcelAfterError`, `scheduleRestoreActiveExcelMirror`, `setPipelineRuntimeStatus`, `sync`, `toast`, `tracePipelineRun`, `wirePipelineStepCrossEvidence`, `wirePipelineStepSnapshots`
 - 피호출(영향 전파 경로): `_reapplyVbaPipelineToLiveImpl`, `_runPipelineSuffixFromCheckpointImpl`, `runVbaPipelinePreferLive`
 
 ## 실패/예외

@@ -8,7 +8,7 @@ signature: "(steps = state.pipeline)"
 role: "실행 전에 참조 파일 세션을 '전부 열고 대기'한다(읽기 소스는 reset 없이 오픈만 — 동기 오픈이라 완료 보장)."
 role_source: banner
 version: "0.7.3"
-loc: "pipeline.js:1162-1162"
+loc: "pipeline.js:1193-1193"
 
 # ── 입출력 ──
 inputs:

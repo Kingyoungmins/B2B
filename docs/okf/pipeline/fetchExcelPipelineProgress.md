@@ -8,7 +8,7 @@ signature: "(excelId)"
 role: "[중단 자체 멈춤 수정] 협조적 복귀가 유예 내 안 끝날 때의 강제 중단 — '초기화' 버튼과 동일한"
 role_source: banner
 version: "0.7.3"
-loc: "pipeline.js:1839-1839"
+loc: "pipeline.js:1894-1894"
 
 # ── 입출력 ──
 inputs:

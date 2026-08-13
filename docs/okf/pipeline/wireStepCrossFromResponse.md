@@ -8,7 +8,7 @@ signature: "(data, step)"
 role: "응답 한 건에서 이 스텝의 쓰기 증거를 뽑아 붙인다. 백엔드 경로가 둘이라 모양도 둘이다."
 role_source: banner
 version: "0.7.3"
-loc: "pipeline.js:1242-1242"
+loc: "pipeline.js:1273-1273"
 
 # ── 입출력 ──
 inputs:

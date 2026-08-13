@@ -29,6 +29,7 @@ called_by:
   - "exactReferenceFailures"
   - "promoteStepChatOrigins"
   - "runnerApplyEnvConfigFilter"
+  - "runnerSameBookName"
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
@@ -43,7 +44,7 @@ timestamp: "0.7.3-gen"
 
 ## 관계
 - 호출: 없음
-- 피호출(영향 전파 경로): `assistBuildProposal`, `colIdx`, `exactReferenceFailures`, `promoteStepChatOrigins`, `runnerApplyEnvConfigFilter`
+- 피호출(영향 전파 경로): `assistBuildProposal`, `colIdx`, `exactReferenceFailures`, `promoteStepChatOrigins`, `runnerApplyEnvConfigFilter`, `runnerSameBookName`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

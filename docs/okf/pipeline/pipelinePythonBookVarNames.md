@@ -8,7 +8,7 @@ signature: "(code)"
 role: "VAR = ctx.book(\"X\" | 변수)  ->  { VAR: \"X\" }"
 role_source: banner
 version: "0.7.3"
-loc: "pipeline.js:739-739"
+loc: "pipeline.js:770-770"
 
 # ── 입출력 ──
 inputs:

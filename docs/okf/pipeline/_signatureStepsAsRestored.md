@@ -8,7 +8,7 @@ signature: "(steps)"
 role: "켜짐/꺼짐은 실행 시점 값을 그대로 쓴다(무엇이 적용됐는지는 실행 시점이 진실)."
 role_source: banner
 version: "0.7.3"
-loc: "pipeline.js:4066-4066"
+loc: "pipeline.js:4121-4121"
 
 # ── 입출력 ──
 inputs:

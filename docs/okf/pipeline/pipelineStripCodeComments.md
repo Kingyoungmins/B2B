@@ -8,7 +8,7 @@ signature: "(code)"
 role: "교차파일 '쓰기 대상' 파일 id — ctx.copy_sheet(..., dst_book=\"X.xlsx\") / paste_copied(..., dst_book=\"X.xlsx\")."
 role_source: banner
 version: "0.7.3"
-loc: "pipeline.js:933-933"
+loc: "pipeline.js:964-964"
 
 # ── 입출력 ──
 inputs:

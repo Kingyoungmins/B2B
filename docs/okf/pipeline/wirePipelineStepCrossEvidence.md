@@ -8,7 +8,7 @@ signature: "(stepCross, sourceSteps)"
 role: "[교차파일 런타임 증거 2026-08-12] 정적 탐지는 코드 문자열에서 파일명을 찾는다. 그래서 파일명이"
 role_source: banner
 version: "0.7.3"
-loc: "pipeline.js:1204-1204"
+loc: "pipeline.js:1235-1235"
 
 # ── 입출력 ──
 inputs:

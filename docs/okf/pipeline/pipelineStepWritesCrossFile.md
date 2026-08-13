@@ -8,7 +8,7 @@ signature: "(step)"
 role: "이 스텝이 '다른 파일에 쓰는' 교차파일 스텝인가(dst_book 대상이 알려진 파일로 해석되면)."
 role_source: banner
 version: "0.7.3"
-loc: "pipeline.js:1046-1046"
+loc: "pipeline.js:1077-1077"
 
 # ── 입출력 ──
 inputs:

@@ -8,7 +8,7 @@ signature: "(stepSnapshots, excelId, sourceSteps)"
 role: "[0.5.14 빠른복구] 백엔드가 격리 batch 에서 스텝 실행 '전' 상태를 SaveCopyAs 해 downloadId 로 돌려준다"
 role_source: banner
 version: "0.7.3"
-loc: "pipeline.js:1172-1172"
+loc: "pipeline.js:1203-1203"
 
 # ── 입출력 ──
 inputs:

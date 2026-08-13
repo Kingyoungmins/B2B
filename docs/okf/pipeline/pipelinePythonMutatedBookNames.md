@@ -8,7 +8,7 @@ signature: "(code)"
 role: "ctx.book(\"X\") 로 가져온 다른 파일을 '변형'(delete_sheet/write/clear/...)하는 경우의 X 목록."
 role_source: banner
 version: "0.7.3"
-loc: "pipeline.js:754-754"
+loc: "pipeline.js:785-785"
 
 # ── 입출력 ──
 inputs:

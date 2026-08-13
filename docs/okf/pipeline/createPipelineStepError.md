@@ -8,7 +8,7 @@ signature: "(stepIdx, step, message, details)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
 version: "0.7.3"
-loc: "pipeline.js:5998-5998"
+loc: "pipeline.js:6053-6053"
 
 # ── 입출력 ──
 inputs:
@@ -32,6 +32,7 @@ called_by:
   - "applyLastEnabledStepFast"
   - "autoRepairPipelineStep"
   - "createPipelineRuntimeExecutionBlockError"
+  - "runIsolatedLivePipelineSteps"
   - "runPipelineWithAutoRepair"
   - "runVbaPipelinePreferLive"
 reads: []
@@ -48,7 +49,7 @@ timestamp: "0.7.3-gen"
 
 ## 관계
 - 호출: `inferPipelineStepLanguage`
-- 피호출(영향 전파 경로): `applyLastEnabledStepFast`, `autoRepairPipelineStep`, `createPipelineRuntimeExecutionBlockError`, `runPipelineWithAutoRepair`, `runVbaPipelinePreferLive`
+- 피호출(영향 전파 경로): `applyLastEnabledStepFast`, `autoRepairPipelineStep`, `createPipelineRuntimeExecutionBlockError`, `runIsolatedLivePipelineSteps`, `runPipelineWithAutoRepair`, `runVbaPipelinePreferLive`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

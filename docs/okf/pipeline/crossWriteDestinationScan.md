@@ -8,7 +8,7 @@ signature: "(code, options = {})"
 role: "코드가 '다른 파일에 쓴다'고 지목한 워크북들을 훑는다."
 role_source: banner
 version: "0.7.3"
-loc: "pipeline.js:947-947"
+loc: "pipeline.js:978-978"
 
 # ── 입출력 ──
 inputs:

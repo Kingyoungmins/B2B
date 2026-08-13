@@ -8,7 +8,7 @@ signature: "(step)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
 version: "0.7.3"
-loc: "pipeline.js:788-788"
+loc: "pipeline.js:819-819"
 
 # ── 입출력 ──
 inputs:
@@ -43,6 +43,7 @@ called_by:
   - "pipelineHasUnresolvedTarget"
   - "pipelinePinnedAnyTargetFileId"
   - "pipelinePinnedTargetFileId"
+  - "pipelineStepDeclaredTargetUnresolved"
   - "pipelineStepMutationFileId"
   - "pipelineStepWritesCrossFile"
   - "pipelineSuffixCrossUnresolvedNames"
@@ -64,7 +65,7 @@ timestamp: "0.7.3-gen"
 
 ## 관계
 - 호출: `inferPipelineStepLanguage`, `pipelineFileIdByWorkbookName`, `pipelineFileIdsBySheetName`, `pipelinePythonMutatedBookNames`, `pipelinePythonTargetWorkbookNames`, `pipelineResolveSavedTargetFileId`, `pipelineStepMutatesMainCtx`, `pipelineTargetSheetNames`, `pipelineVbaTargetWorkbookNames`
-- 피호출(영향 전파 경로): `_reapplyVbaPipelineToLiveImpl`, `affectedStepViewFileId`, `applyLastEnabledStepFast`, `captureCrossFileDestinationSnapshots`, `collectPipelineReferencedFileIds`, `inferPipelineStepTargetSheetName`, `pipelineHasUnresolvedTarget`, `pipelinePinnedAnyTargetFileId`, `pipelinePinnedTargetFileId`, `pipelineStepMutationFileId`, `pipelineStepWritesCrossFile`, `pipelineSuffixCrossUnresolvedNames`, `restoreLastStepPreApplySnapshot`, `runPipelineOnBackend`, `runVbaPipelinePreferLive`, `verifyPrefixRestoreCoverage`
+- 피호출(영향 전파 경로): `_reapplyVbaPipelineToLiveImpl`, `affectedStepViewFileId`, `applyLastEnabledStepFast`, `captureCrossFileDestinationSnapshots`, `collectPipelineReferencedFileIds`, `inferPipelineStepTargetSheetName`, `pipelineHasUnresolvedTarget`, `pipelinePinnedAnyTargetFileId`, `pipelinePinnedTargetFileId`, `pipelineStepDeclaredTargetUnresolved`, `pipelineStepMutationFileId`, `pipelineStepWritesCrossFile`, `pipelineSuffixCrossUnresolvedNames`, `restoreLastStepPreApplySnapshot`, `runPipelineOnBackend`, `runVbaPipelinePreferLive`, `verifyPrefixRestoreCoverage`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`
