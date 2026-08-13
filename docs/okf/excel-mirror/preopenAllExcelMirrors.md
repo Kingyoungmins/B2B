@@ -8,7 +8,7 @@ signature: "(selectedFileId, options = {})"
 role: "업로드 직후: 모든 파일의 미러를 미리 열어 같은 위치에 스택해 둔다."
 role_source: banner
 version: "0.7.3"
-loc: "excel-mirror.js:630-630"
+loc: "excel-mirror.js:634-634"
 
 # ── 입출력 ──
 inputs:

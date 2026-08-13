@@ -8,7 +8,7 @@ signature: "(excelId, schema)"
 role: "[#5] 라이브 COM 적용으로 구조가 바뀐 파일의 클라 스키마 캐시(미리보기 AoA/시트명/차원)를"
 role_source: banner
 version: "0.7.3"
-loc: "pipeline.js:5290-5290"
+loc: "pipeline.js:5297-5297"
 
 # ── 입출력 ──
 inputs:

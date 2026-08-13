@@ -8,7 +8,7 @@ signature: "()"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
 version: "0.7.3"
-loc: "excel-mirror.js:1358-1358"
+loc: "excel-mirror.js:1369-1369"
 
 # ── 입출력 ──
 inputs: []
@@ -16,7 +16,7 @@ returns: "(추정)"
 
 # ── 사이드이펙트 (정적 추정) ──
 side_effects:
-  - "상태 변경: excelMirror.applyBusyToken, excelMirror.applyLoadingTimer, excelMirror.applying, excelMirror.quietUntil"
+  - "상태 변경: excelMirror.applyBusyToken, excelMirror.applyDepth, excelMirror.applyLoadingTimer, excelMirror.applying, excelMirror.quietUntil"
 raises: []
 
 # ── 유기적 관계 ──
@@ -28,6 +28,7 @@ calls:
   - "traceClientUiEvent"
 calls_external:
   - "clearInterval"
+  - "max"
   - "now"
 called_by:
   - "_reapplyVbaPipelineToLiveImpl"
@@ -41,6 +42,7 @@ called_by:
 reads: []
 writes:
   - "excelMirror.applyBusyToken"
+  - "excelMirror.applyDepth"
   - "excelMirror.applyLoadingTimer"
   - "excelMirror.applying"
   - "excelMirror.quietUntil"
@@ -52,8 +54,8 @@ timestamp: "0.7.3-gen"
 (추정) 역할 주석 없음 — 담당자 1줄 보완 필요  _(자동 추정 — 확인 필요)_
 
 ## 사이드이펙트 & 주의
-- 상태 변경: excelMirror.applyBusyToken, excelMirror.applyLoadingTimer, excelMirror.applying, excelMirror.quietUntil
-- 변경 상태 `excelMirror.applyBusyToken, excelMirror.applyLoadingTimer, excelMirror.applying, excelMirror.quietUntil` — 수정 시 이 상태를 읽는 곳 동반 점검.
+- 상태 변경: excelMirror.applyBusyToken, excelMirror.applyDepth, excelMirror.applyLoadingTimer, excelMirror.applying, excelMirror.quietUntil
+- 변경 상태 `excelMirror.applyBusyToken, excelMirror.applyDepth, excelMirror.applyLoadingTimer, excelMirror.applying, excelMirror.quietUntil` — 수정 시 이 상태를 읽는 곳 동반 점검.
 
 ## 관계
 - 호출: `endUiBusy`, `isNativeExcelShell`, `publishNativeExcelLoading`, `showExcelApplyCancelButton`, `traceClientUiEvent`

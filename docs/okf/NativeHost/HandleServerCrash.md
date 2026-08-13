@@ -8,7 +8,7 @@ signature: "()"
 role: "서버 프로세스가 예기치 않게 종료되면 자동 재시작(짧은 시간 내 반복 크래시는 중단)."
 role_source: xmldoc/banner
 version: "0.7.3"
-loc: "NativeHost.cs:1356-1356"
+loc: "NativeHost.cs:1367-1367"
 
 # ── 입출력 ──
 inputs: []

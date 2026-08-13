@@ -8,7 +8,7 @@ signature: "(reason)"
 role: "복구가 워크북을 '파일에서 다시 열었다'(reopened) = 메모리에 적용돼 있던 스킬 결과가"
 role_source: banner
 version: "0.7.3"
-loc: "excel-mirror.js:1145-1145"
+loc: "excel-mirror.js:1152-1152"
 
 # ── 입출력 ──
 inputs:

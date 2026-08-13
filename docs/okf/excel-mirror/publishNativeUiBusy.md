@@ -4,7 +4,7 @@ title: publishNativeUiBusy
 module: excel-mirror.js
 lang: js
 extraction: regex   # 정규식 근사
-signature: "(active, label)"
+signature: "(active, label, failsafeMs)"
 role: "업로드한 모든 파일(보통 입력 여러 개 + 출력)을 미리 열어 스택해 둔다."
 role_source: banner
 version: "0.7.3"
@@ -14,6 +14,7 @@ loc: "excel-mirror.js:55-55"
 inputs:
   - "active"
   - "label"
+  - "failsafeMs"
 returns: "(추정)"
 
 # ── 사이드이펙트 (정적 추정) ──
@@ -24,10 +25,13 @@ raises: []
 # ── 유기적 관계 ──
 calls: []
 calls_external:
+  - "Number"
   - "String"
   - "enc"
   - "encodeURIComponent"
+  - "failsafe"
   - "join"
+  - "max"
   - "postMessage"
 called_by:
   - "beginUiBusy"

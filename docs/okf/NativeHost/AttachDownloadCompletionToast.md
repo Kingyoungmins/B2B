@@ -8,7 +8,7 @@ signature: "(CoreWebView2DownloadOperation operation, string path)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
 version: "0.7.3"
-loc: "NativeHost.cs:1036-1036"
+loc: "NativeHost.cs:1047-1047"
 
 # ── 입출력 ──
 inputs:

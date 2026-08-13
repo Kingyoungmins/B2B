@@ -8,7 +8,7 @@ signature: "()"
 role: "초기화(전부 폐기)용 강제 정리: graceful 닫기(워크북별 wb.Close, 대형 파일은 건당 수 초 +"
 role_source: banner
 version: "0.7.3"
-loc: "excel-mirror.js:1054-1054"
+loc: "excel-mirror.js:1058-1058"
 
 # ── 입출력 ──
 inputs: []

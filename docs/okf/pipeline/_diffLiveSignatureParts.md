@@ -8,7 +8,7 @@ signature: "(prevParts, curParts)"
 role: "가릴 수 없었다. 불일치일 때는 어느 스텝의 무엇이 달라졌는지까지 남긴다."
 role_source: banner
 version: "0.7.3"
-loc: "pipeline.js:4188-4188"
+loc: "pipeline.js:4194-4194"
 
 # ── 입출력 ──
 inputs:
