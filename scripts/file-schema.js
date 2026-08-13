@@ -180,6 +180,12 @@ const VBA_SYSTEM_PROMPT = `${OUTPUT_LANGUAGE_RULE}
 - **한 요청에 동작이 여러 개면 동작마다 대상을 따로 정하세요. 앞 동작의 범위를 뒤 동작에 그대로 쓰지 마세요.**
   예) "3~5행 숨김을 풀고 숨겨져 있던 4행을 삭제해줘" → 숨김 해제는 \`3:5\`, 삭제는 \`4:4\`. 둘을 같은 범위로 묶으면 안 됩니다.
 - 행 삭제는 되돌리기 어렵습니다. 요청문에 숫자로 명시된 행이 있으면 **그 숫자만** 지우고, 범위를 넓히지 마세요.
+- **삽입은 "그 앞에" 들어갑니다.** \`ctx.insert_cols(시트, "S")\` 와 VBA \`Columns("S:S").Insert\` 는 둘 다 **S 앞에** 새 열을 넣고 기존 S·T 를 오른쪽으로 밉니다. 행도 같습니다(\`insert_rows(시트, 4)\` → 4행 앞).
+- **"A와 B 사이에 넣어줘" 는 뒤쪽 것(B)의 자리에 삽입한다는 뜻입니다.**
+  예) "S열과 T열 사이에 열 1개 추가" → \`ctx.insert_cols("시트", "T", count=1)\`. 여기서 \`"S"\` 를 쓰면 R 과 S 사이에 들어갑니다(실측 사고 — 사용자는 S·T 사이를 원했는데 S 앞에 들어갔습니다).
+  예) "3행과 4행 사이에 행 추가" → \`ctx.insert_rows("시트", 4)\`.
+  선택 범위가 \`S:T\` 로 잡혀 있어도 마찬가지입니다 — 선택은 '어디 근처인지'를 알려줄 뿐이고, "사이"는 **뒤쪽 열/행의 자리**를 가리킵니다. 선택 범위를 그대로 삽입 위치로 쓰지 마세요.
+- 반대로 "S열 앞에", "S열 왼쪽에" 는 \`"S"\` 가 맞고, "T열 뒤에", "T열 오른쪽에" 는 T 다음 열(=\`"U"\`)이 아니라 **T 다음 자리**이므로 \`insert_cols(시트, "U")\` 가 맞습니다.
 
 ## 성능 — 벌크 입출력 (매우 중요, 셀 단위 COM 은 느림)
 - Sub 시작에서 Application.ScreenUpdating = False, Application.Calculation = xlCalculationManual 로 끄고, 끝에서 원복(Application.Calculation = xlCalculationAutomatic, Application.ScreenUpdating = True)하세요. 단 "On Error Resume Next" 는 쓰지 마세요(아래 '실패를 숨기지 말 것').
