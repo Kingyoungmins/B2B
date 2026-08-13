@@ -94,7 +94,12 @@ function isExplicitViewSwitchSource(options) {
   // record-land: 녹화 정지·재현 후 '녹화 시작(=스킬 바인딩) 파일'로 탭·미러를 함께 착지시키는 전환.
   // edit-result: '결과 편집하기'로 결과를 라이브에 불러온 뒤 '보여주는 파일'로 탭을 함께 착지시키는 전환.
   //   (탭을 안 맞추면 selection 폴이 옛 탭 세션을 읽어, 보이는 결과 창의 셀 선택이 채팅에 안 찍힌다 — 실측 2026-07-31)
-  return source === "upload" || source === "user-tab" || source === "record-land" || source === "edit-result";
+  // pipeline-land: 켜기/끄기 되돌리기가 여러 세션을 순차 복원한 뒤 '마지막에 보이는 창'으로
+  //   앱 탭까지 착지시키는 전환. 이게 없으면 보이는 창은 B, 탭은 A 로 갈라지고 — 선택 폴링이
+  //   탭 기준이라(excel-mirror.js) 보이는 창에서 셀을 눌러도 앱이 아무 반응을 안 한다.
+  //   사용자는 "엑셀이 뻗었다, 상단 탭을 한 번 누르면 풀린다"로 겪는다(VM 실측 2026-08-13).
+  return source === "upload" || source === "user-tab" || source === "record-land"
+    || source === "edit-result" || source === "pipeline-land";
 }
 
 function setCurrentView(fileId, options = {}) {

@@ -1868,6 +1868,11 @@ async function showOnlyExcelMirrorWindow(excelId = currentExcelId(), options = {
   const wasHidden = !!excelMirror.hiddenByExcelId[excelId];
   const skipPosition = !options.force && !wasHidden && excelMirror.positionedKeyByExcelId[excelId] === key;
   const data = await postExcelMirror("/api/excel/show-only", { excelId, ...rect, skipPosition });
+  // [캐시 오염 2026-08-13] 호스트가 최소화된 동안 백엔드는 표시 요청을 조용히 건너뛴다
+  // (skipped:"host-minimized"). 그런데 예전엔 그 응답도 성공으로 보고 '배치됨·보임'으로 캐시해,
+  // 복귀 뒤의 복구가 캐시에서 short-circuit 돼 창이 파킹된 채 남았다(회색 화면·무반응).
+  // 건너뛴 응답은 캐시를 건드리지 않고 실패로 돌려 다음 시도가 다시 배치하게 한다.
+  if (data && data.skipped) return false;
   excelMirror.positionedKeyByExcelId[excelId] = key;
   excelMirror.hiddenByExcelId[excelId] = false;
   (data.hiddenIds || []).forEach(id => {

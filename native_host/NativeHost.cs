@@ -1518,6 +1518,14 @@ namespace B2BNativeHost
                     if (uiBusyActive)
                     {
                         Program.Log("Auto-restore: minimized during busy work");
+                        // [부작용 수정 2026-08-13] 예전엔 lastWindowState 를 갱신하지 않고 바로 return 했다.
+                        // 그러면 뒤이어 들어오는 Maximized 리사이즈에서 restoredFromMinimized 가 false 라,
+                        // 최소화 해제 통지(PostHostMinimizedState(false))와 미러 재배치가 통째로 안 돌았다.
+                        // 그 결과 백엔드는 여전히 '호스트 최소화'로 알고 창 표시 요청을 조용히 건너뛰고
+                        // (skipped:host-minimized), 미러는 파킹된 채 남아 화면이 회색/무반응이 된다.
+                        // 최소화 '상태'는 이미 hostMinimized 로 반영됐으므로, 여기서 lastWindowState 를
+                        // 최소화로 남겨 둬야 복귀 리사이즈가 정상 복원 경로를 탄다.
+                        lastWindowState = FormWindowState.Minimized;
                         WindowState = FormWindowState.Maximized;
                         return;
                     }

@@ -4476,11 +4476,40 @@ async function _restoreSnapshotByIds(resultId, excelId, options = {}) {
     if (typeof showOnlyExcelMirrorWindow === "function") {
       try { await showOnlyExcelMirrorWindow(excelId, { force: true }); } catch (_) {}
     }
+    // [탭 어긋남 2026-08-13] 보이는 창만 바꾸고 앱 탭은 안 맞추면, 선택 폴링이 탭 기준이라
+    // 보이는 창에서 셀을 눌러도 앱이 반응하지 않는다 — 사용자는 "엑셀이 뻗었다"로 겪고
+    // 상단 탭을 한 번 눌러야 풀린다(탭 클릭만이 탭·활성세션·보이는 창 셋을 함께 맞춘다).
+    // 되돌린 그 세션으로 앱 탭까지 착지시킨다.
+    landAppTabOnExcelSession(excelId);
     if (typeof scheduleRestoreActiveExcelMirror === "function") scheduleRestoreActiveExcelMirror(120);
     return true;
   } finally {
     if (typeof endExcelMirrorApplyLoading === "function") endExcelMirrorApplyLoading();
   }
+}
+
+/* 보여준 그 세션으로 '앱 탭'까지 착지시킨다(탭 클릭이 하는 일과 같은 상태로 맞춘다).
+   되돌리기는 파일을 여러 개 순차 복원하므로, 매번 탭을 바꾸면 창이 그만큼 튄다.
+   마지막 것 하나만 반영되게 짧게 모아서 한 번만 전환한다. 탭이 이미 그 파일이면 아무것도 안 한다. */
+let _pipelineTabLandTimer = null;
+let _pipelineTabLandExcelId = null;
+function landAppTabOnExcelSession(excelId) {
+  if (!excelId) return;
+  _pipelineTabLandExcelId = excelId;
+  if (_pipelineTabLandTimer) return;
+  _pipelineTabLandTimer = setTimeout(() => {
+    _pipelineTabLandTimer = null;
+    const target = _pipelineTabLandExcelId;
+    _pipelineTabLandExcelId = null;
+    try {
+      if (!target || typeof fileIdForExcelMirrorId !== "function") return;
+      const fid = fileIdForExcelMirrorId(target);
+      if (!fid || fid === state.currentFileId) return;
+      if (typeof setCurrentView === "function") setCurrentView(fid, { source: "pipeline-land" });
+    } catch (err) {
+      console.warn("[pipeline] 앱 탭 착지 실패", err);
+    }
+  }, 150);
 }
 
 async function restorePipelineCheckpointForSuffix(startIdx, beforeSteps, options = {}) {
@@ -6753,6 +6782,17 @@ $("btn-run").onclick = async () => {
     if (typeof setGeneratorRunLoading === "function") {
       setGeneratorRunLoading(true, outs.length ? "최종 결과를 라이브에 불러오는 중..." : "최종 상태를 라이브에 반영 중...");
     }
+    // [사용자 지시 2026-08-13] '반영 중'에도 스킬 적용 중과 똑같이 화면을 잠근다.
+    //   예전엔 생성기 스피너만 돌고 엑셀 미러는 열려 있어, 30MB 파일을 되돌려쓰는 30초 넘는
+    //   동안 사용자가 클릭할 수 있었다(VM 로그 실측: 14:02:16 실행 종료 → 14:02:28~14:02:49
+    //   파일 3개 replace 33초, 그 사이 오버레이 0건. 사용자는 그 틈에 탭을 9번 눌렀다).
+    //   그 클릭이 미러 전환과 겹치면 탭↔보이는 창이 어긋난다.
+    let _applyLockStarted = false;
+    if (typeof beginExcelMirrorApplyLoading === "function") {
+      beginExcelMirrorApplyLoading(outs.length ? "결과를 라이브에 반영 중..." : "최종 상태를 라이브에 반영 중...",
+        { hideWindows: false, failsafeMs: 600000 });
+      _applyLockStarted = true;
+    }
     setPipelineRuntimeStatus(activeStepIds, "running", "반영 중");
     try {
       if (outs.length) {
@@ -6829,6 +6869,9 @@ $("btn-run").onclick = async () => {
       renderExcelViewer();
       reportPipelineError(err);
     } finally {
+      if (_applyLockStarted && typeof endExcelMirrorApplyLoading === "function") {
+        try { endExcelMirrorApplyLoading(); } catch (_) {}
+      }
       if (typeof setGeneratorRunLoading === "function") setGeneratorRunLoading(false);
     }
   };

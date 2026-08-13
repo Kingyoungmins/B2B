@@ -3323,6 +3323,54 @@
         ]
       ],
       "fix": "버튼이 'resume 지점이 있을 때만' 떴다. resume 은 런타임 상태라 스킬에 저장되지 않고, 불러올 때 일부러 지운다(save-load.js — 옛 스킬의 resume 이 새 스킬에 살아남아 뒷단계만 옛 라이브에 얹는 사고 방지). → pipelineHeldBatchInfo 가 resume 이 없으면 '꺼진 첫 단계'를 시작 지점으로 삼아 버튼을 띄운다. 다만 그냥 항상 띄우면 위험하다 — 이 버튼의 의미는 '앞 단계는 이미 파일에 들어가 있다'는 전제 위의 '거기서부터 실행'이라, 방금 불러온 스킬에 그대로 쓰면 앞단계 결과가 없는 파일에 뒷단계가 얹혀 결과가 조용히 틀린다. 그래서 liveUnknown(=resume 없이 추론한 경우)이면 실행을 구간 이어실행이 아니라 reapplyVbaPipelineToLive(원본부터 전체)로 보내고, 모달에도 '처음부터 실행합니다'를 미리 띄운다. 판단을 _lastLiveAppliedSignature 로 하면 안 된다 — 끄기가 그 서명을 무효화해 정상 배치까지 전부 느린 길로 떨어진다(실측으로 확인). 배치 성공 후에는 남은 보류가 '뒤쪽 연속 구간'이면 resume 을 다시 세워 다음 배치가 빠른 길을 타고, 구멍이 있으면 안 세운다(어디까지 적용됨을 한 숫자로 표현 불가)."
+    },
+    {
+      "id": "TOGGLE-TAB-MISMATCH-DEAD-CLICK",
+      "title": "[VM 제보] on/off 후 탭 위치가 달라져 엑셀 뷰가 뻗은 것처럼 클릭이 안 먹음(상단 탭 한 번 누르면 풀림).",
+      "checks": [
+        [
+          "node",
+          "test_runs/_test_vm_report_0813_fixes.js"
+        ]
+      ],
+      "fix": "되돌리기가 showOnlyExcelMirrorWindow 로 '보이는 창'만 바꾸고 앱 탭(state.currentFileId)은 아무도 안 맞췄다. 교차파일이면 여러 세션을 순차 복원해 '마지막 세션' 창이 화면에 남는다 → 보이는 창은 B, 탭은 A. 선택 폴링은 탭 기준(activeFileId === state.currentFileId)이라 보이는 창에서 셀을 눌러도 앱이 반응하지 않는다 = '뻗은 것처럼'. 탭 클릭만이 탭·활성세션·보이는 창 셋을 함께 맞춰서 풀렸다. → 복원 끝에 landAppTabOnExcelSession 으로 앱 탭까지 착지시킨다. 여러 파일 복원 시 탭 전환이 N번 튀지 않게 150ms 로 모아 한 번만 전환한다. 주의: excel-viewer.js 의 isExplicitViewSwitchSource 화이트리스트에 'pipeline-land' 를 넣지 않으면 setCurrentView 를 불러도 무시된다(같은 계열 RECORD-STOP-LANDING-TAB-SYNC 참고)."
+    },
+    {
+      "id": "HOST-MINIMIZE-AUTORESTORE-SIDEEFFECT",
+      "title": "[VM 제보] 특정 단계에서 프로그램이 최소화됐다 올라옴 — 자동 복귀는 있었으나 복귀 후 미러 재배치가 안 됐다.",
+      "checks": [
+        [
+          "node",
+          "test_runs/_test_vm_report_0813_fixes.js"
+        ]
+      ],
+      "fix": "excel.host_state 는 최소화를 '보고'만 하는 이벤트고, 호스트를 최소화시키는 코드는 없다(창 교체 churn 중 SC_MINIMIZE 인터셉트가 뚫리는 것으로 추정 — 새 SDI 프레임이 TOOLWINDOW/owner 미부착 상태로 포그라운드인 찰나). '다시 올라오는' 건 NativeHost 의 busy 중 자동 복귀다. 그 분기가 lastWindowState 갱신 전에 return 해서, 복귀 리사이즈에서 restoredFromMinimized 가 false → PostHostMinimizedState(false) 와 미러 재배치가 통째로 안 돌았다. 백엔드는 여전히 '호스트 최소화'로 알고 표시 요청을 조용히 건너뛰고(skipped:host-minimized) 미러는 파킹된 채 남는다. → lastWindowState 를 최소화로 남기고 복귀시킨다. 그리고 클라가 skipped 응답을 성공으로 캐시하던 것도 막았다(캐시 오염 → 이후 복구가 short-circuit)."
+    },
+    {
+      "id": "APPLY-LOCK-MISSING-WHILE-LOADING-RESULT",
+      "title": "[사용자 지시] '반영 중'에도 스킬 적용 중처럼 화면을 잠그고 로딩을 표시.",
+      "checks": [
+        [
+          "node",
+          "test_runs/_test_vm_report_0813_fixes.js"
+        ]
+      ],
+      "fix": "결과 편집하기(runner-edit-result-btn)가 setGeneratorRunLoading 스피너만 켜고 엑셀 미러 잠금 오버레이는 안 걸었다. VM 실측: 14:02:16 실행 종료 → 14:02:28~14:02:49 파일 3개를 라이브에 replace 하는 33초 동안 오버레이 0건이고, 사용자가 그 틈에 탭을 9번 눌렀다(mirror.switch.ok 9건). 그 클릭이 미러 전환과 겹치면 탭↔보이는 창이 어긋난다(위 항목과 상호작용). → beginExcelMirrorApplyLoading('결과를 라이브에 반영 중...')를 열고 finally 에서 닫는다."
+    },
+    {
+      "id": "RUNNER-OUTPUT-SLOT-REBOUND-TO-SOURCE",
+      "title": "[VM 로그] 출력 템플릿 대상(output:N) 스텝이 실행기 매핑에서 '읽기 소스' 파일로 끌려감 — target.ambiguous 로 재바인딩 포기되던 것도 같은 뿌리.",
+      "checks": [
+        [
+          "node",
+          "test_runs/_test_runner_mapping_e2e_crossfile.js"
+        ],
+        [
+          "node",
+          "test_runs/_test_runner_write_target_routing.js"
+        ]
+      ],
+      "fix": "targetFileId='output:0' 은 이름이 아니라 슬롯이라 runnerDeclaredTargetBookName 이 빈 값을 준다. 그러면 텍스트 매칭으로 떨어지는데, 코드가 '읽기 소스' 파일만 언급하면 그 소스로 대상이 바뀐다 (실행기에서 결과가 소스 파일에 쓰이는 부류). 두 파일을 다 언급하면 모호로 포기해 재바인딩 자체가 안 됐다(VM 로그 6단계 target.ambiguous). → 출력 슬롯은 실행기에도 같은 슬롯이 있으므로 이름으로 다시 묶지 않고 그대로 둔다. 코드 리터럴 치환은 그대로 돈다."
     }
   ]
 }

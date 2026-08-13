@@ -99,7 +99,9 @@ check("빈 값은 항상 거짓", M.same("", "B.xlsx") === false && M.same("B.xl
 
 console.log("[3] 매핑이 '읽기 소스'로 대상을 덮지 않는가  ← 제보의 핵심");
 check("선언된 대상 행으로만 다시 묶는다",
-  /const pick = declaredRows\.length \? declaredRows : matchedRows;/.test(dh));
+  /let pick = declaredRows\.length \? declaredRows : \(isOutputSlot \? \[\] : matchedRows\);/.test(dh));
+check("출력 슬롯(output:N)은 이름으로 다시 묶지 않는다 — 소스 파일로 끌려가는 걸 막는다",
+  /const isOutputSlot = \/\^output:\/\.test\(/.test(dh));
 check("여러 행이 걸리면 '마지막 승' 대신 손대지 않는다",
   /if \(pick\.length === 1\) \{[\s\S]{0,200}\} else if \(pick\.length > 1\) \{/.test(dh));
 check("모호하면 로그를 남긴다(조용히 넘어가지 않는다)",
