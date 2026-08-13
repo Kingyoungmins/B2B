@@ -1880,10 +1880,9 @@ window.buildRunnerMappedPipeline = function(steps) {
     // 그대로 두면 맞는다. 이름으로 다시 묶으려 들면, 코드가 소스 파일만 언급하는 스텝이
     // 그 소스로 끌려가 엉뚱한 파일에 쓴다(VM 실측 6단계가 정확히 이 모양이었다).
     let pick = declaredRows.length ? declaredRows : (isOutputSlot ? [] : matchedRows);
-    // [보강 2026-08-13] 출력 템플릿 대상(targetFileId="output:N")은 이름이 없어 선언 행을 못 찾는다.
-    // 그런 스텝이 다른 파일을 '읽기'만 해도 텍스트에는 두 파일이 다 나오므로 모호로 떨어져
-    // 재바인딩을 통째로 포기했다(VM 실측: 6단계 target.ambiguous). 대상 '시트' 이름이 한 행에만
-    // 맞으면 그 행이 쓰기 대상이다 — 읽기 소스 행은 다른 시트를 요구하므로 안전하게 갈린다.
+    // 여러 행이 걸렸을 때 대상 '시트' 이름이 한 행에만 맞으면 그 행이 쓰기 대상이다.
+    // (출력 슬롯은 위에서 이미 후보를 비웠으므로 여기 안 온다 — 선언 이름이 여러 행에 걸리는
+    //  경우에만 쓰인다.)
     if (pick.length > 1 && targetSheetName) {
       const bySheet = pick.filter(r => r.req && r.req.sheet && String(r.req.sheet) === String(targetSheetName));
       if (bySheet.length === 1) pick = bySheet;

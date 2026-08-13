@@ -1353,10 +1353,16 @@ async function runIsolatedLivePipelineSteps(sourceSteps, initialExcelId, options
       const label = m => (/^output:(\d+)$/.test(m) ? `출력 파일 ${Number(RegExp.$1) + 1}` : m);
       const names = Array.from(new Set(_unresolved.map(r => label(r.missing)))).slice(0, 3).join(", ");
       const first = _unresolved[0];
+      // 출력 슬롯은 '파일 확인'에서 지정할 수 있는 대상이 아니다(이름이 아니라 자리 번호).
+      // 그 경우엔 무엇을 해야 하는지 다르게 안내한다 — 아니면 사용자가 빠져나갈 길이 없다.
+      const _slotOnly = _unresolved.every(r => /^output:/.test(String(r.missing || "")));
+      const _how = _slotOnly
+        ? "이 스킬은 출력 파일을 만들어 쓰는데 지금 실행에 출력 파일이 없습니다 — 출력 파일을 올린 뒤 다시 실행하세요."
+        : "실행기의 '파일 확인'에서 이 파일을 지정한 뒤 다시 실행하세요.";
       throw createPipelineStepError(
         first.idx, first.step,
         `${first.idx + 1}단계가 쓸 파일('${names}')을 찾지 못했습니다. `
-        + "다른 파일에 잘못 쓰지 않도록 실행을 멈췄습니다 — 실행기의 '파일 확인'에서 이 파일을 지정한 뒤 다시 실행하세요.",
+        + "다른 파일에 잘못 쓰지 않도록 실행을 멈췄습니다 — " + _how,
         "unresolved step target file"
       );
     }
@@ -4479,8 +4485,12 @@ async function _restoreSnapshotByIds(resultId, excelId, options = {}) {
     // [탭 어긋남 2026-08-13] 보이는 창만 바꾸고 앱 탭은 안 맞추면, 선택 폴링이 탭 기준이라
     // 보이는 창에서 셀을 눌러도 앱이 반응하지 않는다 — 사용자는 "엑셀이 뻗었다"로 겪고
     // 상단 탭을 한 번 눌러야 풀린다(탭 클릭만이 탭·활성세션·보이는 창 셋을 함께 맞춘다).
-    // 되돌린 그 세션으로 앱 탭까지 착지시킨다.
-    landAppTabOnExcelSession(excelId);
+    //
+    // [적대 검증 2026-08-13] 반드시 scheduleRestoreActiveExcelMirror '앞에서 동기로' 해야 한다.
+    // 그 복원은 대상을 state.currentFileId 로 잡는데, 탭을 나중에 바꾸면 복원이 '옛 탭' 세션을
+    // 다시 화면에 올려 방금 띄운 창을 덮는다 → 보이는 창은 옛 파일, 탭은 새 파일로 갈라져
+    // 고치려던 증상이 방향만 바뀌어 재현된다.
+    if (options.landTab !== false) landAppTabOnExcelSession(excelId);
     if (typeof scheduleRestoreActiveExcelMirror === "function") scheduleRestoreActiveExcelMirror(120);
     return true;
   } finally {
@@ -4491,32 +4501,19 @@ async function _restoreSnapshotByIds(resultId, excelId, options = {}) {
 /* 보여준 그 세션으로 '앱 탭'까지 착지시킨다(탭 클릭이 하는 일과 같은 상태로 맞춘다).
    되돌리기는 파일을 여러 개 순차 복원하므로, 매번 탭을 바꾸면 창이 그만큼 튄다.
    마지막 것 하나만 반영되게 짧게 모아서 한 번만 전환한다. 탭이 이미 그 파일이면 아무것도 안 한다. */
-let _pipelineTabLandTimer = null;
-let _pipelineTabLandExcelId = null;
-let _pipelineTabLandFromFileId = null;
+/* [적대 검증 2026-08-13] 예전엔 150ms 디바운스로 '여러 번 부르면 마지막 것만' 반영하려 했는데,
+   실제 복원은 파일마다 /api/excel/replace 를 순차로 기다린다(38MB 실측 34.6초). 호출 간격이
+   150ms 를 한참 넘어 아무것도 안 모이면서, 정작 뒤이어 도는 미러 복원(120ms)보다 늦게 터져
+   창을 도로 어긋나게 만들었다. 동기로 즉시 맞춘다. */
 function landAppTabOnExcelSession(excelId) {
-  if (!excelId) return;
-  _pipelineTabLandExcelId = excelId;
-  if (_pipelineTabLandTimer) return;
-  // 예약 시점의 탭을 기억해 둔다 — 기다리는 사이 사용자가 직접 탭을 눌렀으면 그 선택이 우선이다.
-  _pipelineTabLandFromFileId = state.currentFileId;
-  _pipelineTabLandTimer = setTimeout(() => {
-    _pipelineTabLandTimer = null;
-    const target = _pipelineTabLandExcelId;
-    const from = _pipelineTabLandFromFileId;
-    _pipelineTabLandExcelId = null;
-    _pipelineTabLandFromFileId = null;
-    try {
-      if (!target || typeof fileIdForExcelMirrorId !== "function") return;
-      // 사용자가 그 사이 탭을 옮겼으면 덮어쓰지 않는다(사람의 선택이 항상 이긴다).
-      if (state.currentFileId !== from) return;
-      const fid = fileIdForExcelMirrorId(target);
-      if (!fid || fid === state.currentFileId) return;
-      if (typeof setCurrentView === "function") setCurrentView(fid, { source: "pipeline-land" });
-    } catch (err) {
-      console.warn("[pipeline] 앱 탭 착지 실패", err);
-    }
-  }, 150);
+  try {
+    if (!excelId || typeof fileIdForExcelMirrorId !== "function") return;
+    const fid = fileIdForExcelMirrorId(excelId);
+    if (!fid || fid === state.currentFileId) return;
+    if (typeof setCurrentView === "function") setCurrentView(fid, { source: "pipeline-land" });
+  } catch (err) {
+    console.warn("[pipeline] 앱 탭 착지 실패", err);
+  }
 }
 
 async function restorePipelineCheckpointForSuffix(startIdx, beforeSteps, options = {}) {
@@ -4558,8 +4555,11 @@ async function restorePipelineCheckpointForSuffix(startIdx, beforeSteps, options
     }
   }
   // 교차파일 목적지 사본 — 스텝이 아니라 사본 자체를 되돌린다(같은 replace 경로).
+  // [적대 검증 2026-08-13] 여기서는 앱 탭을 옮기지 않는다. 목적지는 '스텝이 곁다리로 쓴 파일'이라
+  // 사용자가 보던 파일이 아니고, 배열 순서에 따라 착지 파일이 달라져 결과가 판마다 흔들린다.
+  // 탭은 위 주 스냅샷 루프(=스텝의 대상 파일)에서만 맞춘다.
   for (const ex of extraRestores) {
-    const ok = await restoreSnapshotIntoSession(ex, { message: label });
+    const ok = await restoreSnapshotIntoSession(ex, { message: label, landTab: false });
     if (ok) {
       restored += 1;
       if (ex.excelId) restoredExcelIds.add(ex.excelId);
@@ -5092,9 +5092,16 @@ async function _runHeldStepsBatchImpl(checkedIds, fingerprint) {
     try {
       const _steps = state.pipeline || [];
       const _firstOff = _steps.findIndex(s => s && s.code && !isStepEnabled(s));
-      const _holeFree = _firstOff > 0
+      // 앞쪽이 전부 켜져 있고 '뒤쪽에도 켜진 게 없어야' 이어실행 지점을 세울 수 있다.
+      // [적대 검증 2026-08-13] 예전엔 앞쪽만 봤다. 모달이 권하는 '보류 중 일부만 체크 해제'를
+      // 하면(예: 3만 해제하고 4·5 실행) 3이 첫 OFF 인데 4·5 는 방금 적용돼 켜져 있다.
+      // 그 상태로 resume=3 을 세우면 "라이브 = 0..2 까지"라는 거짓말이 되고, 다음 이어실행이
+      // 4·5 를 한 번 더 얹는다(오류 없이 조용히 이중 적용).
+      const _tailAllOff = _firstOff > 0
+        && _steps.slice(_firstOff).every(s => !s || !s.code || !isStepEnabled(s));
+      const _headAllOn = _firstOff > 0
         && _steps.slice(0, _firstOff).every(s => !s || !s.code || isStepEnabled(s));
-      if (_firstOff > 0 && _holeFree) setPipelineResumeFromIndex(_firstOff);
+      if (_headAllOn && _tailAllOff) setPipelineResumeFromIndex(_firstOff);
     } catch (_) {}
     if (typeof noteLivePipelineApplied === "function") noteLivePipelineApplied(state.pipeline);
     if (uncheckedHeld.length) {

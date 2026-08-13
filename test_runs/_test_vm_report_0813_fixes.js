@@ -43,19 +43,21 @@ check("모달이 '처음부터 실행합니다'를 미리 알려 준다", /앞 �
 
 console.log("[3] 되돌리기 후 앱 탭까지 착지 — '클릭이 안 먹는' 증상의 정체");
 check("복원이 보여준 세션으로 앱 탭을 맞춘다", /landAppTabOnExcelSession\(excelId\);/.test(pj));
-check("여러 파일 복원 시 탭 전환을 한 번으로 모은다(창 튀는 것 방지)",
-  /_pipelineTabLandTimer/.test(pj) && /setTimeout\(\(\) => \{[\s\S]{0,900}setCurrentView\(fid, \{ source: "pipeline-land" \}\)/.test(pj));
+check("착지는 미러 복원 '앞에서 동기로' — 늦으면 복원이 옛 탭 창을 되살려 증상이 뒤집혀 재현된다",
+  /landAppTabOnExcelSession\(excelId\);[\s\S]{0,80}scheduleRestoreActiveExcelMirror/.test(pj));
+check("디바운스를 걷어냈다(복원이 파일당 수십 초라 아무것도 안 모였다)",
+  !/_pipelineTabLandTimer/.test(pj));
 check("이미 그 탭이면 아무것도 안 한다", /if \(!fid \|\| fid === state\.currentFileId\) return;/.test(pj));
-check("기다리는 사이 사용자가 탭을 옮겼으면 덮어쓰지 않는다",
-  /if \(state\.currentFileId !== from\) return;/.test(pj));
+check("교차파일 목적지 복원은 탭을 옮기지 않는다(사용자가 보던 파일이 아니다)",
+  /restoreSnapshotIntoSession\(ex, \{ message: label, landTab: false \}\)/.test(pj));
 check("전환 소스 화이트리스트에 pipeline-land 가 있다(없으면 setCurrentView 가 무시된다)",
   /source === "pipeline-land"/.test(ev));
 
 console.log("[4] 최소화 — 자동 복귀의 부작용 차단");
-check("busy 중 자동 복귀가 창 상태를 최소화로 남긴다",
-  /lastWindowState = FormWindowState\.Minimized;\s*\n\s*WindowState = FormWindowState\.Maximized;/.test(cs));
-check("그래야 복귀 리사이즈가 정상 복원 경로를 탄다(주석으로 이유 보존)",
-  /restoredFromMinimized 가 false 라/.test(cs));
+check("busy 중 자동 복귀는 그대로 둔다(창 상태는 안 건드린다 — 철회)",
+  /Auto-restore: minimized during busy work/.test(cs));
+check("철회 사유를 코드에 남겼다(다음 사람이 같은 판단을 반복하지 않게)",
+  /인과가 이 경로에선 성립하지 않았다/.test(cs));
 check("건너뛴 표시 요청을 성공으로 캐시하지 않는다",
   /if \(data && data\.skipped\) return false;/.test(em));
 
@@ -70,6 +72,21 @@ console.log("[+] 실행기 매핑 — 출력 슬롯을 소스 파일로 끌고 �
 check("output:N 은 슬롯이라 이름으로 다시 묶지 않는다", /const isOutputSlot = \/\^output:\/\.test\(/.test(dh));
 check("슬롯이면 텍스트 매칭 후보를 비운다",
   /let pick = declaredRows\.length \? declaredRows : \(isOutputSlot \? \[\] : matchedRows\);/.test(dh));
+
+console.log("[6] 적대 검증에서 나온 결함들");
+check("A1 배치 후 이어실행 지점은 '뒤쪽에도 켜진 게 없을 때'만 세운다(이중 적용 방지)",
+  /_tailAllOff[\s\S]{0,400}if \(_headAllOn && _tailAllOff\) setPipelineResumeFromIndex\(_firstOff\);/.test(pj));
+check("D1 배치 요청(position)도 건너뛴 응답을 캐시하지 않는다",
+  /if \(posData && posData\.skipped\) return false;/.test(em));
+check("D2 복구(recover)도 마찬가지", /복구도 같은 게이트 아래다/.test(em));
+check("C 네이티브의 lastWindowState 조작은 철회됐다", !/lastWindowState = FormWindowState\.Minimized;/.test(cs));
+check("C 대신 최소화 알림에 순서 보장(세대 번호)을 넣었다", /hostMinimizedGeneration/.test(cs));
+check("E1 failsafe 를 네이티브에 함께 보낸다", /publishNativeUiBusy\(true, label, options\.failsafeMs\)/.test(em));
+check("E1 네이티브가 그 값을 타이머 간격으로 쓴다", /uiBusyFailsafeTimer\.Interval = uiBusyFailsafeMs;/.test(cs));
+check("E2 적용 잠금이 중첩 카운트로 보호된다(내부 end 가 바깥을 안 닫는다)",
+  /applyDepth/.test(em) && /if \(excelMirror\.applyDepth > 0\) return;/.test(em));
+check("F2 출력 슬롯 미해결은 '파일 확인' 대신 할 수 있는 안내를 준다",
+  /출력 파일을 올린 뒤 다시 실행하세요/.test(pj));
 
 console.log("[2] 배치 속도 — 코드가 아니라 구조 비용임을 기록으로 남긴다");
 check("동반본 여는 비용을 사본/열기로 갈라 찍는다(어디를 고쳐야 하는지 가르려고)",

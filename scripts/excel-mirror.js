@@ -52,11 +52,15 @@ const excelMirror = {
 // [0.5.2 이식] 전역 작업 잠금(busy gate)
 // DOM 오버레이는 WebView 영역만 덮는다. 오른쪽 네이티브 파일탭과 Excel 창(별도 HWND)은
 // 네이티브 호스트가 직접 잠가야 하므로 busy 상태를 호스트에 중계한다.
-function publishNativeUiBusy(active, label) {
+function publishNativeUiBusy(active, label, failsafeMs) {
   const bridge = window.chrome && window.chrome.webview;
   if (!bridge || typeof bridge.postMessage !== "function") return;
   const enc = value => encodeURIComponent(String(value || ""));
-  bridge.postMessage(["B2B_UI_BUSY", active ? "1" : "0", enc(label || "")].join("\t"));
+  // [적대 검증 2026-08-13] 넷째 칸 = 이 작업의 failsafe(ms). 예전엔 안 보내서 네이티브가 90초
+  // 하드코딩으로 스스로 잠금을 풀었다 — 38MB 파일 여러 개를 되돌려쓰면(파일당 34.6초 실측)
+  // 90초를 넘겨, 작업 중인데 파일 탭과 Excel 입력이 다시 열려 원래 사고가 재현된다.
+  const fs = Math.max(0, Number(failsafeMs) || 0);
+  bridge.postMessage(["B2B_UI_BUSY", active ? "1" : "0", enc(label || ""), fs ? String(fs) : ""].join("\t"));
 }
 
 // [0.5.16 #1] 실행기(runner)는 헤드리스 — 네이티브 셸의 우측 패널(파일탭+Excel 영역)을 접어 WebView 가
@@ -243,7 +247,7 @@ function beginUiBusy(label = "작업 중...", options = {}) {
     }
     document.body.classList.add("b2b-ui-busy");
   } catch (_) {}
-  try { publishNativeUiBusy(true, label); } catch (_) {}
+  try { publishNativeUiBusy(true, label, options.failsafeMs); } catch (_) {}
   const token = { released: false, timer: null, showTimer: null };
   token.showTimer = setTimeout(() => {
     if (token.released || !isUiBusy()) return;
@@ -1106,6 +1110,9 @@ async function recoverExcelMirrorWindow(excelId = currentExcelId() || excelMirro
   excelMirror.lastUserSwitchAt = Date.now();
   invalidateExcelMirrorPositionTracking(excelId);
   const data = await postExcelMirror("/api/excel/recover", { excelId, ...rect });
+  // 복구도 같은 게이트 아래다 — 건너뛴 응답에 '보임'을 찍으면 파킹된 창을 보인다고 기록해
+  // 이후 showOnly 가 재배치를 생략한다(회색 화면 재현 경로).
+  if (data && data.skipped) return false;
   const activeExcelId = data.activeExcelId || data.excelId || excelId;
   const activeFileId = fileIdForExcelMirrorId(activeExcelId);
   if (activeFileId) {
@@ -1311,6 +1318,10 @@ function beginExcelMirrorApplyLoading(message, options = {}) {
     hideWindowsOption: options.hideWindows,
   });
   excelMirror.applying = true;
+  // [적대 검증 2026-08-13] 중첩 카운트. 예전엔 begin 이 토큰만 안 만들고 end 는 무조건 닫아서,
+  // 바깥 잠금 구간(예: '결과를 라이브에 반영 중') 안에서 도는 내부 경로가 자기 end 로 바깥
+  // 잠금을 먼저 열어 버렸다 — 작업이 한창인데 화면이 풀린다.
+  excelMirror.applyDepth = (excelMirror.applyDepth || 0) + 1;
   if (!excelMirror.applyBusyToken && typeof beginUiBusy === "function") {
     excelMirror.applyBusyToken = beginUiBusy(message || "적용 반영 중...", {
       showDelayMs: 120,
@@ -1361,6 +1372,9 @@ function endExcelMirrorApplyLoading() {
     hadTimer: !!excelMirror.applyLoadingTimer,
     applying: !!excelMirror.applying,
   });
+  // 중첩됐으면 가장 바깥 end 에서만 실제로 푼다(내부 경로가 바깥 잠금을 먼저 열지 않게).
+  excelMirror.applyDepth = Math.max(0, (excelMirror.applyDepth || 0) - 1);
+  if (excelMirror.applyDepth > 0) return;
   if (excelMirror.applyBusyToken && typeof endUiBusy === "function") {
     endUiBusy(excelMirror.applyBusyToken, { silentComplete: true });
     excelMirror.applyBusyToken = null;
@@ -1846,7 +1860,12 @@ async function positionExcelMirrorWindow(excelId = currentExcelId(), options = {
   // 전역 키가 아니라 세션별이라, 다른 파일로 전환해도 그 파일이 제자리면 재배치 COM 을 생략 → 저사양에서 즉시 전환.
   if (!options.force && excelMirror.positionedKeyByExcelId[excelId] === key) return true;
   // keepZorder: z-order 를 바꾸지 않고 위치/크기만(비활성 창 재배치 시 위로 안 튀어나오게).
-  await postExcelMirror("/api/excel/position", { excelId, ...rect, keepZorder: !!options.keepZorder });
+  const posData = await postExcelMirror("/api/excel/position", { excelId, ...rect, keepZorder: !!options.keepZorder });
+  // [캐시 오염 2026-08-13] 호스트가 최소화된 동안 백엔드는 배치 요청을 조용히 건너뛴다
+  // (skipped:"host-minimized"). 그 응답까지 '이 위치에 배치됨'으로 캐시하면, 복귀 뒤의 복구가
+  // 위 short-circuit(같은 key → return true)에 걸려 창이 파킹된 채 남는다(회색 화면·무반응).
+  // 복구 경로(restoreActiveExcelMirrorWindow)가 force 없이 이 함수를 부르므로 여기가 실제 급소다.
+  if (posData && posData.skipped) return false;
   excelMirror.positionedKeyByExcelId[excelId] = key;
   if (rect.nativeShell) excelMirror.lastNativePositionKey = key;
   excelMirror.lastPositionKey = key;

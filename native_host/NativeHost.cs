@@ -628,12 +628,22 @@ namespace B2BNativeHost
         private System.Collections.Generic.List<IntPtr> uiBusyDisabledWindows = new System.Collections.Generic.List<IntPtr>();
         private System.Windows.Forms.Timer uiBusyFailsafeTimer;
         private volatile bool uiBusyActive;
+        private int uiBusyFailsafeMs = 90000;
 
         private void UpdateUiBusyLock(string message)
         {
             string[] parts = message.Split('	');
             bool active = parts.Length > 1 && parts[1] == "1";
             uiBusyActive = active;
+            // 넷째 칸: 이 작업의 failsafe(ms). 없으면 기존 90초. 웹이 정한 값보다 짧게 풀리면
+            // 작업 중인데 잠금이 먼저 열려 사용자가 끼어든다(대용량 되돌려쓰기에서 실제로 발생).
+            uiBusyFailsafeMs = 90000;
+            if (parts.Length > 3)
+            {
+                int parsedFailsafe;
+                if (Int32.TryParse(parts[3], out parsedFailsafe) && parsedFailsafe > 0)
+                    uiBusyFailsafeMs = Math.Max(90000, parsedFailsafe);
+            }
             if (active)
             {
                 vbaDebugFastUntilUtc = DateTime.UtcNow.AddSeconds(120);
@@ -675,10 +685,11 @@ namespace B2BNativeHost
             if (uiBusyFailsafeTimer == null)
             {
                 uiBusyFailsafeTimer = new System.Windows.Forms.Timer();
-                uiBusyFailsafeTimer.Interval = 90000;
+                uiBusyFailsafeTimer.Interval = uiBusyFailsafeMs;
                 uiBusyFailsafeTimer.Tick += delegate { ReleaseUiBusyLock(); };
             }
             uiBusyFailsafeTimer.Stop();
+            uiBusyFailsafeTimer.Interval = uiBusyFailsafeMs;   // 작업마다 갱신
             uiBusyFailsafeTimer.Start();
         }
 
@@ -1518,14 +1529,14 @@ namespace B2BNativeHost
                     if (uiBusyActive)
                     {
                         Program.Log("Auto-restore: minimized during busy work");
-                        // [부작용 수정 2026-08-13] 예전엔 lastWindowState 를 갱신하지 않고 바로 return 했다.
-                        // 그러면 뒤이어 들어오는 Maximized 리사이즈에서 restoredFromMinimized 가 false 라,
-                        // 최소화 해제 통지(PostHostMinimizedState(false))와 미러 재배치가 통째로 안 돌았다.
-                        // 그 결과 백엔드는 여전히 '호스트 최소화'로 알고 창 표시 요청을 조용히 건너뛰고
-                        // (skipped:host-minimized), 미러는 파킹된 채 남아 화면이 회색/무반응이 된다.
-                        // 최소화 '상태'는 이미 hostMinimized 로 반영됐으므로, 여기서 lastWindowState 를
-                        // 최소화로 남겨 둬야 복귀 리사이즈가 정상 복원 경로를 탄다.
-                        lastWindowState = FormWindowState.Minimized;
+                        // [철회 2026-08-13] 여기서 lastWindowState 를 Minimized 로 남겨 복귀 경로를
+                        // 태우려 했다가 되돌렸다. 이 분기는 PostHostMinimizedState(true) 를 보내지
+                        // 않으므로 백엔드의 HOST_MINIMIZED 는 애초에 false 다 — '백엔드가 최소화로
+                        // 알아서 표시를 건너뛴다'는 인과가 이 경로에선 성립하지 않았다.
+                        // 반면 남기면 위험이 생긴다: WindowState 대입이 Resize 를 동기 재진입시켜
+                        // 값을 되돌린다는 가정에 기대게 되고, 그 재진입이 밀리면 다음 최소화에서
+                        // if(lastWindowState != Minimized) 가 거짓이 돼 자동복귀도 미러 숨김도
+                        // 통째로 건너뛴다(앱은 최소화, Excel 미러만 바탕화면에 남는 유출).
                         WindowState = FormWindowState.Maximized;
                         return;
                     }
@@ -1556,16 +1567,28 @@ namespace B2BNativeHost
             }
         }
 
+        // [순서 보장 2026-08-13] 최소화/복원 알림은 각각 Task.Run 으로 나가는데, 둘 사이에 순서
+        // 보장이 없었다. 빠르게 최소화→복원하면 나중에 도착한 true 가 false 를 덮어 백엔드
+        // HOST_MINIMIZED 가 영구 true 로 굳는다 — 그러면 표시/배치/복구 요청이 전부 조용히
+        // 건너뛰어져(skipped:host-minimized) 미러가 영영 안 뜬다(회색 화면). 세대 번호로
+        // '가장 마지막 상태'만 반영한다.
+        private int hostMinimizedGeneration = 0;
+        private readonly object hostMinimizedLock = new object();
+
         private void PostHostMinimizedState(bool minimized)
         {
             // 표시 게이트의 단일 진실원(백엔드 HOST_MINIMIZED) 갱신. 실패해도 hide-all/복원 스크립트가
             // 기존 동작을 유지하므로 치명적이지 않다(로그만 남김).
             int statePort = port;
             string stateAppUrl = appUrl;
+            int myGeneration;
+            lock (hostMinimizedLock) { myGeneration = ++hostMinimizedGeneration; }
             Task.Run(delegate
             {
                 try
                 {
+                    // 내가 출발한 뒤 더 최신 상태가 예약됐으면 이 요청은 버린다(옛 상태로 덮기 방지).
+                    lock (hostMinimizedLock) { if (myGeneration != hostMinimizedGeneration) return; }
                     if (String.IsNullOrEmpty(stateAppUrl) || statePort <= 0) return;
                     string url = "http://127.0.0.1:" + statePort + "/api/excel/host-state";
                     HttpWebRequest req = (HttpWebRequest)WebRequest.Create(url);
@@ -1573,6 +1596,7 @@ namespace B2BNativeHost
                     req.ContentType = "application/json";
                     req.Timeout = 1500;
                     req.ReadWriteTimeout = 1500;
+                    lock (hostMinimizedLock) { if (myGeneration != hostMinimizedGeneration) return; }
                     byte[] body = Encoding.UTF8.GetBytes(minimized ? "{\"minimized\":true}" : "{\"minimized\":false}");
                     req.ContentLength = body.Length;
                     using (Stream s = req.GetRequestStream())
