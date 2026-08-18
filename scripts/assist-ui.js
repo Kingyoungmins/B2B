@@ -740,9 +740,30 @@ function assistHandleBridgeMessage(m) {
 // [실패 진단 연동] 오류 카드의 'AI 도움에게 진단 요청' 버튼이 부른다 — AI 도움을 열고 질문을 자동 전송.
 // DOM/네이티브 팝업 모두 대응. 네이티브는 창이 뜬 뒤('ready') 전송하도록 질문을 잠깐 보관한다.
 let _assistPendingAsk = null;
+/* [생뚱맞은 진단 2026-08-18] AI 도움 대화는 앱 세션 내내 이어진다(state.assist.history 는 '비우기'
+   말고는 안 지워짐). 그래서 아침에 피벗 스킬을 다루고 오후에 다른 스킬의 오류 진단을 요청하면,
+   모델 문맥에 옛 피벗 대화가 그대로 실려 "갑자기 VBA 피벗 이야기"가 나온다(실측 제보).
+   오류 진단은 언제나 '방금 난 새 오류'에 대한 새 주제다 — 자동 진단 요청이 들어오면 모델 문맥을
+   새로 시작한다. 화면의 옛 메시지는 지우지 않고 구분선만 남긴다(사용자는 위로 스크롤해 볼 수 있음). */
+function assistStartFreshTopicForDiagnosis() {
+  try {
+    const had = !!(state.assist && Array.isArray(state.assist.history) && state.assist.history.length);
+    if (!had) return;
+    if (typeof assistIsBusy === "function" && assistIsBusy() && typeof assistAbortCurrent === "function") {
+      assistAbortCurrent();
+    }
+    state.assist = { history: [] };
+    assistAddMsg("system", "── 새 오류 진단 시작(위 대화와 별개) ──");
+    try {
+      if (typeof traceClientUiEvent === "function") traceClientUiEvent("assist.topic.reset", { reason: "error-diagnose" });
+    } catch (_) {}
+  } catch (_) {}
+}
+
 function assistOpenAndAsk(question) {
   const q = String(question || "").trim();
   if (!q) return;
+  assistStartFreshTopicForDiagnosis();   // 오류 진단 버튼 전용 진입로 — 항상 새 주제로
   try {
     if (assistNativeShellAvailable()) {
       assistEnsureNativeBridge();

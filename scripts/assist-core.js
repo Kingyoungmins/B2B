@@ -179,6 +179,11 @@ args: {"summary":"증상 한 줄","reason":"해결 불가 판단 근거","tried"
     (예: "시트 보호가 해제된 상태에서 실행되도록 해주세요. 보호가 걸려 있으면 오류가 납니다")은
     설계 채팅에 넣어도 아무 단계도 만들지 못한다 — 무엇을 하라는 지시가 없기 때문이다(실측 제보).
     request 에 '오류/실패/에러가 납니다' 같은 서술이 들어가려 하면 그건 handoff 감이 아니다.
+  · **고친 요청문은 말로만 제시하지 말고 handoff 로 내라.** "이렇게 요청해 보세요: '…'" 처럼
+    따옴표 문장만 쓰면 버튼(카드)이 생기지 않아 사용자가 손으로 옮겨 적어야 한다(실측 제보 —
+    카드가 잘 안 뜬다는 불만). 설계 채팅에 넣을 작업 지시문이라면 반드시 action="handoff"
+    args.request 에 그 문장을 담아라. 단 '오류 창 메모칸'에 붙여넣을 문장은 예외 — 그건 카드가
+    아니라 메모칸이 목적지이므로 말(따옴표)로 준다.
   · **결론이 "요청문을 바꿔서 될 일이 아니다"면 handoff 를 내지 마라.** 스스로 "코드 수정으로
     해결할 문제가 아니다 / 사용자 환경 문제다"라고 판단해 놓고 handoff 카드를 함께 내는 것은
     앞뒤가 안 맞는다. 그럴 땐 action="final" 로, 사용자가 **지금 화면에서 할 수 있는 행동**만
@@ -238,6 +243,25 @@ function assistLooksLikeDanglingAnnouncement(text) {
    대괄호 글자는 버튼이 되지 않는다 — final 응답이 '자기 메시지 안의 버튼'을 안내하면 가짜다.
    주의: "[에러 복구 시도] 버튼을 누르세요" 같은 실제 앱 버튼 안내는 문장 속 인라인이라 다르다 —
    ① "아래/이 버튼" 처럼 자기 응답 속 버튼을 가리키거나 ② 대괄호 라벨이 한 줄을 통째로 차지할 때만 잡는다. */
+/* [카드 미생성 2026-08-18] "이렇게 요청해 보세요: '…해줘'" 처럼 고친 요청문을 말로만 제시하고
+   handoff 블록을 안 내면 버튼이 안 생긴다 — 사용자는 문장을 손으로 옮겨 적어야 한다(실측 제보).
+   따옴표로 감싼 지시문(…해줘/해 주세요/하세요)이 '요청' 안내 문구와 함께 있으면 잡는다.
+   단 '오류 창 메모칸' 용 문장은 정당한 말-제시이므로 제외한다(재촉 문구에서도 그 선택지를 준다). */
+function assistLooksLikeProseRequestSuggestion(text) {
+  const t = String(text || "").trim();
+  if (!t) return false;
+  if (/메모칸|메모 칸/.test(t)) return false;                       // 메모칸 안내는 정당한 말-제시
+  if (!/(요청(해|을|문)|다시\s*(말|보내|요청)|이렇게\s*(말|입력|보내))/.test(t)) return false;
+  const quoted = t.match(/["“]([^"”\n]{8,220})["”]/g);
+  if (!quoted) return false;
+  return quoted.some(q => {
+    const inner = q.replace(/["“”]/g, "").trim();
+    // 지시문 어미 — "적어줘/넣어주세요/만들어 줘" 처럼 동사가 무엇이든 끝맺음으로 판정한다.
+    if (!/(줘|주세요|하세요|해라)\s*[.!?…~]*$/.test(inner)) return false;
+    return !/(오류|에러|실패)(가|는|를)?\s*(납니다|발생|났)/.test(inner);   // 오류 서술은 지시문이 아니다
+  });
+}
+
 function assistLooksLikeFakeButtonNarration(text) {
   const t = String(text || "").trim();
   if (!t) return false;
@@ -500,6 +524,18 @@ async function assistHandleUserMessage(userText, ui, attachImages) {
             "방금 응답이 '버튼'을 안내했지만 실제 버튼은 만들어지지 않았습니다 — 대괄호 글자는 버튼이 되지 않습니다. "
             + "새 단계를 설계 채팅에 넘기려던 것이면 지금 즉시 action=\"handoff\" 블록을 출력하세요(그래야 카드가 뜹니다). "
             + "아니면 버튼 안내를 빼고 완결된 답(action=\"final\")을 작성하세요." });
+          continue;
+        }
+        // [카드 미생성 2026-08-18] 고친 요청문을 말로만 제시하면 버튼이 안 생긴다 — 사용자가 손으로
+        // 옮겨 적어야 한다. 한 번 재촉해 모델 스스로 handoff/메모칸을 다시 판단하게 한다(정확도 유지).
+        if (!lastRound && danglingNudges < 2 && assistLooksLikeProseRequestSuggestion(finalText)) {
+          danglingNudges += 1;
+          tail.push({ role: "assistant", content: reply.slice(0, 1500) });
+          tail.push({ role: "user", content:
+            "방금 답변이 고친 요청문(따옴표 문장)을 말로만 제시했습니다. 그 문장이 '설계 채팅에 넣을 작업 지시문'이면 "
+            + "지금 즉시 action=\"handoff\" 블록을 출력하세요(args.request 에 그 문장을 담으면 [채팅에 넣기] 카드가 떠서 "
+            + "사용자가 바로 넣을 수 있습니다). 반대로 '오류 창 메모칸에 붙여넣을 문장'이면 handoff 를 내지 말고 "
+            + "같은 답변을 action=\"final\" 로 그대로 다시 출력하세요." });
           continue;
         }
       }
@@ -920,3 +956,4 @@ function assistCommitProposal(proposalId, accepted) {
   assistConsumeProposal(proposalId);
   return { ok: true };
 }
+

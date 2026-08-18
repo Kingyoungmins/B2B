@@ -294,6 +294,8 @@ const VBA_SYSTEM_PROMPT = `${OUTPUT_LANGUAGE_RULE}
 - **AA, BP, BQ처럼 두 글자 이상 열 문자는 특히 숫자 변환을 암산하지 마세요.** 잘못된 예: BP를 58로 쓰기(BP=68, BQ=69). 사용자가 열 문자를 줬으면 \`ws.Columns("BP")\`, \`ws.Cells(r, "BP")\`, \`ws.Range("BP" & r)\` 처럼 문자 그대로 쓰는 편이 가장 안전합니다.
 - 아래 "현재 파일 스키마"에는 각 열의 **[열문자=헤더명] 매핑**이 표시됩니다. 사용자가 준 열 문자나 헤더명을 이 매핑과 대조해 정확한 대상 열을 확정하세요(예: 사용자가 "T열 효력발생인자"라고 하면 매핑에서 T가 정말 그 헤더인지 확인). 열 문자와 헤더명이 서로 어긋나거나 어느 쪽도 확신할 수 없으면, **임의로 다른 열을 고르지 말고** \`Err.Raise vbObjectError + 513, "B2BSkill", "대상 열이 모호합니다(요청: ..., 스키마: ...)"\` 로 멈추세요.
 - 헤더가 항상 1행에 있다고 가정하지 마세요. 위 "현재 파일 스키마"에서 실제 헤더 행과 각 열 이름을 확인하세요.
+- **머리글은 2~3행에 걸치기도 합니다**(1행 제목 · 2행 대분류 · 3행 소분류). 스키마에 "데이터 시작: N행"이 있으면 **모든 행 계산을 그 N행 기준으로** 하세요 — 읽기 시작·쓰기 시작·행 삭제 전부. 머리글 행을 데이터에 넣거나(집계 오염) 첫 데이터 행을 머리글로 오인해 건너뛰면(첫 건 누락 — 실측 제보) 안 됩니다.
+- **같은 시트를 다루는 단계들은 같은 데이터 시작 행을 써야 합니다.** 단계마다 3행/4행을 오락가락하면(실측: 같은 세션에서 2·3·4행 제각각) 어떤 단계는 첫 행을 빼먹고 어떤 단계는 머리글을 덮습니다. 스키마의 "데이터 시작"과 위 "행 N:" 미리보기로 한 번 정하고 유지하세요.
 - 단, 사용자가 \`@범위[...!G:H]\` 처럼 전체 열 범위를 주고 "H열 값의 동일 값 개수/중복 개수를 G열에 적어줘"처럼 요청하면, 요청에 "2행이 헤더"라고 명시되지 않은 한 보통 **1행 헤더, 2행부터 데이터**입니다. \`hdr_row = 2\` 로 고정해 3행부터 쓰면 헤더 바로 밑 2행을 누락합니다. 실제 2행이 헤더인지 확인되지 않으면 2행부터 포함하세요.
 - **열 번호를 추측하거나 하드코딩하지 마세요**(예: "매출은 C열" 처럼 단정 금지). 표의 열 순서는 파일마다 다릅니다. 반드시 **헤더 행에서 그 헤더 텍스트를 찾아 열 번호를 구하세요.** 예: 회사별요약 헤더가 [회사명, 매출, 원가, 이익, 이익률]이면 "매출"=B, "원가"=C 입니다 — 그러나 이것도 코드에서 직접 탐색해 확인하세요:
   \`\`\`vba
@@ -649,6 +651,30 @@ const SCHEMA_LEVELS = [
   { inputRows: 1, outputRows: 2,  maxCols: 6,  maxCellLen: 16, maxSheets: 3 },
 ];
 
+/* 데이터가 실제로 시작하는 행(0-기준). 헤더 다음 1~2행이 '머리글의 연속'(텍스트 셀 둘 이상,
+   숫자 없음)이고 그 아래에 숫자 행이 있으면 여러 줄 머리글로 보고 시작을 내린다.
+   숫자가 아예 없는 전체-텍스트 표(명단류)는 확장하지 않는다 — 데이터 행을 머리글로 오인 방지. */
+function _schemaDataStartRow(aoa, headerRow) {
+  const isNum = v => typeof v === "number"
+    || (typeof v === "string" && v.trim() !== "" && !isNaN(Number(String(v).replace(/,/g, ""))));
+  const rowHasNum = r => (aoa[r] || []).some(isNum);
+  const nonEmptyCount = r => (aoa[r] || []).filter(v => v != null && String(v).trim() !== "").length;
+  let ds = headerRow + 1;
+  for (let ext = 0; ext < 2; ext++) {
+    const r = headerRow + 1 + ext;
+    if (r >= aoa.length) break;
+    if (rowHasNum(r)) break;                    // 숫자가 나오면 거기가 데이터
+    if (nonEmptyCount(r) < 2) break;            // 빈/한 칸 행은 머리글 연속으로 보지 않음
+    let numBelow = false;                       // 아래에 숫자 행이 있어야만 '머리글 연속' 인정
+    for (let k = r + 1; k < Math.min(aoa.length, r + 7); k++) {
+      if (rowHasNum(k)) { numBelow = true; break; }
+    }
+    if (!numBelow) break;
+    ds = r + 1;
+  }
+  return ds;
+}
+
 function _sheetTotalRowsForSchema(file, sheetName, aoa) {
   const dim = file && file.backendPreviewDimensions && file.backendPreviewDimensions[sheetName];
   return Math.max(Number(dim && dim.maxRow) || 0, (aoa || []).length || 0);
@@ -682,11 +708,21 @@ function _describeFile(f, opts, lines) {
     // 확인하세요"라고 시킨다 — 없는 걸 확인하라니 모델이 매번 새로 추측했고, 그래서 같은 파일·같은
     // 요청인데 판마다 답이 달라졌다(헤더를 결과에 섞거나, 반대로 1행을 헤더로 보고 빼먹거나).
     // 표가 하나여도 헤더 행을 반드시 한 줄 적는다. 못 찾았으면 '없음'이라고 적는다 — 침묵보다 낫다.
+    // [헤더 2~3행 제보 2026-08-18] 감지기는 '첫 채워진 행'을 헤더로 잡는데, 실무 파일은 1행 제목·
+    // 2행 대분류·3행 소분류처럼 머리글이 여러 행이다. '데이터는 헤더+1행부터'라고 적으면 소분류
+    // 행을 데이터로 오인해 첫 데이터 행을 덮거나(4행 소실 제보) 시작 행이 단계마다 오락가락했다
+    // (같은 세션에서 2·3·4행 제각각 — 첨부 스킬 실측). 숫자 셀이 처음 나타나는 행을 근거로
+    // 데이터 시작을 따로 계산해 단일 기준으로 못박는다.
     if (tables.length === 1 && tables[0]) {
       const hr = Number(tables[0].headerRow);
-      lines.push(Number.isFinite(hr) && hr >= 0
-        ? `  헤더 행: ${hr + 1}행 (데이터는 ${hr + 2}행부터)`
-        : "  헤더 행: 감지 못 함 — 1행부터 데이터로 보세요");
+      if (Number.isFinite(hr) && hr >= 0) {
+        const ds = _schemaDataStartRow(aoa, hr);   // 0-기준 첫 데이터 행
+        lines.push(ds > hr + 1
+          ? `  머리글: ${hr + 1}~${ds}행(여러 줄) · 데이터 시작: ${ds + 1}행 — 행 번호가 필요한 코드는 반드시 ${ds + 1}행부터`
+          : `  헤더 행: ${hr + 1}행 · 데이터 시작: ${ds + 1}행`);
+      } else {
+        lines.push("  헤더 행: 감지 못 함 — 1행부터 데이터로 보세요");
+      }
     } else if (tables.length > 1) {
       lines.push(`  감지된 표 후보 ${tables.length}개`);
       tables.slice(0, 5).forEach((t, i) => {

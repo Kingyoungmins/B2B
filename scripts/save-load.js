@@ -179,7 +179,42 @@ function timestampedLogicArchiveName(baseName) {
 function pipelineForSave() {
   try {
     if (state.runnerMappingRunActive && Array.isArray(state.pipelineOriginalDuringRun)) {
-      return state.pipelineOriginalDuringRun;
+      // [수정 유실 2026-08-18] 예전엔 여기서 원본 배열을 '통째로' 돌려줬다. 그래서 실행 상태가
+      // 살아 있는 동안 저장하면 — 실행이 길거나(단일 적용도 30~70초), 복원이 어떤 이유로든
+      // 안 돌아 상태가 남아 있으면 — 그 사이의 스킬 수정이 저장에서 조용히 빠졌다.
+      // 사용자는 수정해서 저장했는데 zip 에는 수정 전 코드가 들어가고, 실행기에서 돌리면
+      // 수정 전 스킬이 실행된다(치명 제보). 이제 restore() 와 같은 병합을 쓴다:
+      //   · 손 안 댄 스텝 = 코드가 매핑본 그대로 → 원본(제네릭 이름)으로 저장(치환본 유출 방지 유지)
+      //   · 실행 중/후 수정된 스텝 = 코드가 매핑본과 다름 → 그 수정을 저장에 반영
+      const original = state.pipelineOriginalDuringRun;
+      const mapped = Array.isArray(state.pipelineMappedDuringRun) ? state.pipelineMappedDuringRun : [];
+      const current = Array.isArray(state.pipeline) ? state.pipeline : original;
+      const mappedById = new Map(mapped.map(st => [st && st.id, st]));
+      const originalById = new Map(original.map(st => [st && st.id, st]));
+      let fromOriginal = 0, keptEdits = 0;
+      const merged = current.map(cur => {
+        if (!cur || !cur.id) return cur;
+        const m = mappedById.get(cur.id);
+        const o = originalById.get(cur.id);
+        if (!o) return cur;                          // 실행 중 새로 생긴 스텝 → 그대로 저장
+        if (m && cur.code === m.code) {
+          fromOriginal += 1;
+          return { ...cur, code: o.code, targetFileId: o.targetFileId, targetSheetName: o.targetSheetName };
+        }
+        keptEdits += 1;
+        return cur;                                  // 수정된 스텝 — 수정 유지
+      });
+      // 어느 쪽 코드가 저장됐는지 로그에 남긴다 — '수정했는데 옛 코드가 저장됐다' 제보가 오면
+      // 이 한 줄이 원인(실행 상태 잔존 여부)을 바로 가른다.
+      try {
+        if (typeof traceClientUiEvent === "function") {
+          traceClientUiEvent("save.pipeline.source", {
+            mappedRunActive: "true", fromOriginal: String(fromOriginal), keptEdits: String(keptEdits),
+            steps: String(merged.length),
+          });
+        }
+      } catch (_) {}
+      return merged;
     }
   } catch (_) {}
   return state.pipeline;
@@ -1043,6 +1078,20 @@ function loadLogic(data, filename, meta) {
   if (typeof clearPipelineResumeFromIndex === "function") {
     try { clearPipelineResumeFromIndex(); } catch (_) {}
   }
+  // [실행 상태 잔존 위생 2026-08-18] 매핑 실행 상태(runnerMappingRunActive)가 어떤 이유로든
+  // 남아 있으면 이후 '스킬 저장'이 실행 시작 시점의 옛 배열을 참조한다(위 pipelineForSave).
+  // 새 스킬을 불러오는 시점엔 정당한 실행이 있을 수 없으므로 강제로 걷어내고, 있었다는 사실을
+  // 로그로 남긴다(치명 제보 '수정 전 스킬이 저장·실행됨'의 원인 추적용).
+  try {
+    if (state.runnerMappingRunActive || state.pipelineOriginalDuringRun) {
+      if (typeof traceClientUiEvent === "function") {
+        traceClientUiEvent("load.mapped_run_state.leak", { cleared: "true" });
+      }
+      state.runnerMappingRunActive = false;
+      state.pipelineOriginalDuringRun = null;
+      state.pipelineMappedDuringRun = null;
+    }
+  } catch (_) {}
   renderPipeline();
   renderChatFromHistory();
   refreshChatState();

@@ -2152,6 +2152,25 @@ function applyVbaStepToLiveExcel(step, excelId, options = {}) {
       noteLivePipelineApplied(state.pipeline); // [0.5.2.2] 추가 적용 완료 상태 기억(no-op 편집 생략용)
       if (typeof endExcelMirrorApplyLoading === "function") endExcelMirrorApplyLoading();
       if (typeof releaseExcelMirrorPipelineMute === "function") releaseExcelMirrorPipelineMute(excelId);
+      // [뷰 미반영 제보 2026-08-18] 새 단계가 '지금 보고 있는 파일'이 아닌 세션에 적용될 수 있다
+      // (대상 추론·교차파일). 그러면 "적용됨"이라는데 눈앞의 화면은 그대로다 — 사용자는 미적용으로
+      // 겪는다. 결과가 들어간 파일로 탭을 착지시킨다(0.7.3 토글 착지와 같은 규칙, 사람이 그 사이
+      // 탭을 옮겼으면 덮지 않는 것도 landAppTabOnExcelSession 이 보장).
+      try {
+        const _appliedFid = typeof fileIdForExcelMirrorId === "function" ? fileIdForExcelMirrorId(excelId) : null;
+        if (typeof traceClientUiEvent === "function") {
+          traceClientUiEvent("pipeline.apply_live.landed", {
+            stepId: step.id || "", appliedExcelId: String(excelId || ""),
+            appliedFileId: String(_appliedFid || ""), viewFileId: String(state.currentFileId || ""),
+            viewMismatch: String(!!(_appliedFid && _appliedFid !== state.currentFileId)),
+            backendApplied: String((data && data.applied) != null ? data.applied : ""),
+          });
+        }
+        if (appendToPipeline && _appliedFid && _appliedFid !== state.currentFileId
+            && typeof landAppTabOnExcelSession === "function") {
+          landAppTabOnExcelSession(excelId);
+        }
+      } catch (_) {}
       if (typeof scheduleRestoreActiveExcelMirror === "function") {
         scheduleRestoreActiveExcelMirror(180, {
           restoreExcelId: excelId,
@@ -7580,7 +7599,9 @@ async function explainPipelineErrorForUser(info) {
     "엑셀/코드 지식이 없는 사용자에게, 근거를 가지고 '무엇이 어긋났는지' 콕 집어 설명하세요.",
     "반드시 이 흐름을 지키세요:",
     "(1) 무엇이 막혔는지 한 문장으로 — 잘못은 사용자가 아니라 내가 못한 것으로 말할 것",
-    "    (예: \"피벗을 만드는 명령에 제가 알지 못하는 설정이 하나 있었어요(…를 지정하는 부분)\")",
+    "    (형식 예: \"〈이번 작업 이름〉을 하는 명령에 제가 알지 못하는 부분이 하나 있었어요\" — 〈…〉 자리는",
+    "    반드시 아래 자료에 나온 '이번' 작업으로 채우세요. 예시 문구를 그대로 베끼거나, 이번 오류에",
+    "    나오지도 않은 작업 이름(피벗 등)을 지어내면 안 됩니다.)",
     "(2) 사용자가 무엇을 하려 했는지는 이해했다고 짚어 주기(안심시키기)",
     "(3) 아래 자료(실패한 코드·시트 구조·오류 원문)에서 찾은 '구체적인 지점'을 쉬운 말로 한 줄",
     "    — 코드 줄·스택트레이스·영문 예외 문구를 그대로 붙여넣지 말 것",
