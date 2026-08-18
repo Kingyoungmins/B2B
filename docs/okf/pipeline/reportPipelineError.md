@@ -48,6 +48,7 @@ calls_external:
   - "querySelector"
   - "replace"
   - "setTimeout"
+  - "slice"
   - "test"
   - "then"
   - "trim"
