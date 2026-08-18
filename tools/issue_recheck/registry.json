@@ -3448,6 +3448,17 @@
         ]
       ],
       "fix": "새 단계가 보고 있는 탭이 아닌 파일 세션에 적용될 수 있다(대상 추론·교차파일) — 적용된 파일로 탭을 착지시킨다(0.7.3 토글 착지와 같은 규칙, 사용자가 그 사이 탭을 옮겼으면 덮지 않음). 적용 세션·보던 탭·백엔드 applied 수를 pipeline.apply_live.landed 로 남겨 재발 시 원인을 즉시 가른다."
+    },
+    {
+      "id": "STEP-ERROR-MISSING-FAILED-CODE",
+      "title": "[지라] 스킬 생성 실패 후 AI 도움이 '해당 스킬을 읽어 오지 못함' — 실패 기록에 코드가 없었음.",
+      "checks": [
+        [
+          "node",
+          "test_runs/_test_jira_0819_step_error_code.js"
+        ]
+      ],
+      "fix": "만들다가 실패한 단계는 스킬 목록에 없어 step.error 가 유일한 근거인데, __lastPipelineErrorInfo 에 실패한 코드가 안 담겼다 — AI 도움이 메시지만 보고 코드를 못 봐 진단이 헛돌았다. code(4000자)를 기록에 담고 step.error 가 failedCode(2500자)로 노출, note 도 failedCode 기준 진단 안내."
     }
   ]
 }

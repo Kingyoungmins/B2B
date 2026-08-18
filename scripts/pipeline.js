@@ -7739,6 +7739,10 @@ function reportPipelineError(err, options) {
       description: info.description || "", language: info.language || "",
       message: info.message || "", cause: info.cause || "",
       rawError: info.rawError || "", at: Date.now(),
+      // [지라 2026-08-19] 실패한 코드 원문. 만들다가 실패한 단계는 스킬 목록에 없어서,
+      // 이게 없으면 AI 도움이 "해당 스킬을 읽어 오지 못했다"로 끝난다(교육 실측 —
+      // 오류 카드에서 AI 도움을 눌렀는데 진단 근거가 없어 도움이 안 됨).
+      code: String(info.code || "").slice(0, 4000),
     };
   } catch (_) {}
   const stepLabel = Number(info.stepIdx) >= 0 ? `Step ${info.stepIdx + 1}` : "\uC2A4\uD0AC";

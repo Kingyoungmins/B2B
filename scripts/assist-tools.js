@@ -403,12 +403,16 @@ assistDefineTool("step.error", { desc: "직전 실행에서 실패한 스텝의 
       message: String(e.message || "").slice(0, 600),
       cause: String(e.cause || "").slice(0, 600),
       rawError: String(e.rawError || "").slice(0, 800),
+      // [지라 2026-08-19] 실패한 코드 원문 — 만들다가 실패한 단계는 스킬 목록에 없어 이게 유일한
+      // 코드 근거다. 없으면 AI 도움이 "스킬을 읽어 오지 못했다"로 끝났다(교육 실측).
+      failedCode: String(e.code || "").slice(0, 2500),
       ageMinutes: ageMin,
       inSkill,
       note: inSkill
         ? "이 오류는 마지막 실패 시점의 기록이다. 지금 스킬이 그 사이 수정됐으면 최신 상태와 다를 수 있다."
         : "이 단계는 스킬 목록에 없다 — 없어진 게 아니라 '만들다가 실패해 등록되지 못한' 단계다. "
-          + "pipeline.step 으로 찾으려 하지 말고(없는 게 정상), 위 message/rawError 와 chat.history(사용자가 뭘 요청했는지)로 진단하라.",
+          + "pipeline.step 으로 찾으려 하지 말고(없는 게 정상), 위 failedCode(실패한 코드 원문)와 "
+          + "message/rawError, chat.history(사용자가 뭘 요청했는지)로 진단하라.",
     };
   });
 
