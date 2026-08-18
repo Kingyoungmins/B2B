@@ -5,10 +5,10 @@ module: assist-core.js
 lang: js
 extraction: regex   # 정규식 근사
 signature: "(text)"
-role: "(긴 답변 끝의 \"언제든 도와드리겠습니다\" 같은 맺음 인사는 길이 조건에서 걸러진다)"
+role: "\"언제든 도와드리겠습니다\")이 아니면 → 예고. 길이와 무관하게 잡는다."
 role_source: banner
 version: "0.7.4"
-loc: "assist-core.js:234-234"
+loc: "assist-core.js:235-235"
 
 # ── 입출력 ──
 inputs:
@@ -24,6 +24,10 @@ raises: []
 calls: []
 calls_external:
   - "String"
+  - "filter"
+  - "map"
+  - "pop"
+  - "split"
   - "test"
   - "trim"
 called_by:
@@ -35,7 +39,7 @@ timestamp: "0.7.4-gen"
 ---
 
 ## 역할
-(긴 답변 끝의 "언제든 도와드리겠습니다" 같은 맺음 인사는 길이 조건에서 걸러진다)
+"언제든 도와드리겠습니다")이 아니면 → 예고. 길이와 무관하게 잡는다.
 
 ## 사이드이펙트 & 주의
 - 없음(정적 분석 기준)

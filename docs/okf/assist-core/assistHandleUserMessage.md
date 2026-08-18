@@ -8,7 +8,7 @@ signature: "(userText, ui, attachImages)"
 role: "사용자 발화 1건 처리. UI 콜백으로 진행 상황을 알린다."
 role_source: banner
 version: "0.7.4"
-loc: "assist-core.js:285-285"
+loc: "assist-core.js:293-293"
 
 # ── 입출력 ──
 inputs:
