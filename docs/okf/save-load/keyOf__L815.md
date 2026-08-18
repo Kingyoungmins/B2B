@@ -1,19 +1,18 @@
 ---
 type: endpoint
-title: downloadJSON
+title: keyOf
 module: save-load.js
 lang: js
 extraction: regex   # 정규식 근사
-signature: "(obj, filename)"
+signature: "(v)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
 version: "0.7.4"
-loc: "save-load.js:513-513"
+loc: "save-load.js:815-815"
 
 # ── 입출력 ──
 inputs:
-  - "obj"
-  - "filename"
+  - "v"
 returns: "(추정)"
 
 # ── 사이드이펙트 (정적 추정) ──
@@ -23,11 +22,12 @@ raises: []
 
 # ── 유기적 관계 ──
 calls:
-  - "downloadBlob"
-calls_external:
-  - "Blob"
-  - "stringify"
-called_by: []
+  - "pipelineStableWorkbookKey"
+calls_external: []
+called_by:
+  - "repairStalePromptBookNames"
+  - "repairStaleTargetFileIds"
+  - "resolveName"
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
@@ -41,8 +41,8 @@ timestamp: "0.7.4-gen"
 - 없음(정적 분석 기준)
 
 ## 관계
-- 호출: `downloadBlob`
-- 피호출(영향 전파 경로): 없음
+- 호출: `pipelineStableWorkbookKey`
+- 피호출(영향 전파 경로): `repairStalePromptBookNames`, `repairStaleTargetFileIds`, `resolveName`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

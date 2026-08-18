@@ -1,17 +1,19 @@
 ---
 type: endpoint
 title: run
-module: pipeline.js
+module: assist-core.js
 lang: js
 extraction: regex   # 정규식 근사
-signature: "()"
+signature: "(fn, ...a)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
 version: "0.7.4"
-loc: "pipeline.js:5004-5004"
+loc: "assist-core.js:676-676"
 
 # ── 입출력 ──
-inputs: []
+inputs:
+  - "fn"
+  - "...a"
 returns: "(추정)"
 
 # ── 사이드이펙트 (정적 추정) ──
@@ -21,8 +23,9 @@ raises: []
 
 # ── 유기적 관계 ──
 calls:
-  - "_runHeldStepsBatchImpl"
-calls_external: []
+  - "push"
+calls_external:
+  - "fn"
 called_by:
   - "_assistGateReplacementCode"
   - "assistBuildProposal"
@@ -39,7 +42,7 @@ timestamp: "0.7.4-gen"
 - 없음(정적 분석 기준)
 
 ## 관계
-- 호출: `_runHeldStepsBatchImpl`
+- 호출: `push`
 - 피호출(영향 전파 경로): `_assistGateReplacementCode`, `assistBuildProposal`
 
 ## 실패/예외

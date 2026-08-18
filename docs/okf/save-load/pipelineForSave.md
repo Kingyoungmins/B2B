@@ -20,13 +20,20 @@ side_effects:
 raises: []
 
 # ── 유기적 관계 ──
-calls: []
+calls:
+  - "restore"
+  - "traceClientUiEvent"
 calls_external:
+  - "Map"
+  - "String"
+  - "get"
   - "isArray"
+  - "map"
 called_by:
   - "buildLogicZipEntries"
 reads:
   - "state.pipeline"
+  - "state.pipelineMappedDuringRun"
   - "state.pipelineOriginalDuringRun"
   - "state.runnerMappingRunActive"
 writes: []
@@ -41,7 +48,7 @@ timestamp: "0.7.4-gen"
 - 없음(정적 분석 기준)
 
 ## 관계
-- 호출: 없음
+- 호출: `restore`, `traceClientUiEvent`
 - 피호출(영향 전파 경로): `buildLogicZipEntries`
 
 ## 실패/예외

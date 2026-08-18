@@ -8,7 +8,7 @@ signature: "(steps)"
 role: "[SBAGENT-209] 복붙 캡처가 코드에 박아 저장한 '내부 작업본 이름' 수리(구버전 저장 스킬 하위호환)."
 role_source: banner
 version: "0.7.4"
-loc: "save-load.js:652-652"
+loc: "save-load.js:687-687"
 
 # ── 입출력 ──
 inputs:

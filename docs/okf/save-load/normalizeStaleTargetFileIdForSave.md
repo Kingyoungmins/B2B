@@ -8,7 +8,7 @@ signature: "(targetFileId)"
 role: "[저장 시] 현재 업로드에 없는(stale) targetFileId 만, 기존 4단계 유일 매칭(안정키 포함)으로"
 role_source: banner
 version: "0.7.4"
-loc: "save-load.js:697-697"
+loc: "save-load.js:732-732"
 
 # ── 입출력 ──
 inputs:

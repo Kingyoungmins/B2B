@@ -8,7 +8,7 @@ signature: "(steps, envConfig)"
 role: "[로드 시] 이미 저장된 zip 의 혼재도 수리한다. envConfig.inputs(저장 시점 업로드 '정본')에 없는"
 role_source: banner
 version: "0.7.4"
-loc: "save-load.js:715-715"
+loc: "save-load.js:750-750"
 
 # ── 입출력 ──
 inputs:

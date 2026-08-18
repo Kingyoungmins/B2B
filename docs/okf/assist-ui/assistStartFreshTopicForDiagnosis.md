@@ -1,19 +1,17 @@
 ---
 type: endpoint
-title: assistPushAssistant
-module: assist-core.js
+title: assistStartFreshTopicForDiagnosis
+module: assist-ui.js
 lang: js
 extraction: regex   # 정규식 근사
-signature: "(text, ui)"
-role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
-role_source: none
+signature: "()"
+role: "새로 시작한다. 화면의 옛 메시지는 지우지 않고 구분선만 남긴다(사용자는 위로 스크롤해 볼 수 있음)."
+role_source: banner
 version: "0.7.4"
-loc: "assist-core.js:559-559"
+loc: "assist-ui.js:748-748"
 
 # ── 입출력 ──
-inputs:
-  - "text"
-  - "ui"
+inputs: []
 returns: "(추정)"
 
 # ── 사이드이펙트 (정적 추정) ──
@@ -23,12 +21,14 @@ raises: []
 
 # ── 유기적 관계 ──
 calls:
-  - "push"
+  - "assistAbortCurrent"
+  - "assistAddMsg"
+  - "assistIsBusy"
+  - "traceClientUiEvent"
 calls_external:
-  - "String"
-  - "onAssistantText"
+  - "isArray"
 called_by:
-  - "assistHandleUserMessage"
+  - "assistOpenAndAsk"
 reads:
   - "state.assist"
 writes:
@@ -38,15 +38,15 @@ timestamp: "0.7.4-gen"
 ---
 
 ## 역할
-(추정) 역할 주석 없음 — 담당자 1줄 보완 필요  _(자동 추정 — 확인 필요)_
+새로 시작한다. 화면의 옛 메시지는 지우지 않고 구분선만 남긴다(사용자는 위로 스크롤해 볼 수 있음).
 
 ## 사이드이펙트 & 주의
 - 상태 변경: assist
 - 변경 상태 `assist` — 수정 시 이 상태를 읽는 곳 동반 점검.
 
 ## 관계
-- 호출: `push`
-- 피호출(영향 전파 경로): `assistHandleUserMessage`
+- 호출: `assistAbortCurrent`, `assistAddMsg`, `assistIsBusy`, `traceClientUiEvent`
+- 피호출(영향 전파 경로): `assistOpenAndAsk`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

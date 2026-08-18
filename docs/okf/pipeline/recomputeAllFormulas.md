@@ -8,7 +8,7 @@ signature: "()"
 role: "모든 파일/시트의 수식을 현재 데이터로 재평가해 state.formulaResults 에 저장."
 role_source: banner
 version: "0.7.4"
-loc: "pipeline.js:3501-3501"
+loc: "pipeline.js:3520-3520"
 
 # ── 입출력 ──
 inputs: []

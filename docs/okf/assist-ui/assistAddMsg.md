@@ -34,6 +34,7 @@ called_by:
   - "assistRenderHandoffCard"
   - "assistRenderProposalCard"
   - "assistRenderReportCard"
+  - "assistStartFreshTopicForDiagnosis"
   - "assistSubmit"
   - "assistToggleDrawer"
   - "send"
@@ -51,7 +52,7 @@ timestamp: "0.7.4-gen"
 
 ## 관계
 - 호출: `assistRenderPlainText`
-- 피호출(영향 전파 경로): `assistEnsureDom`, `assistRenderHandoffCard`, `assistRenderProposalCard`, `assistRenderReportCard`, `assistSubmit`, `assistToggleDrawer`, `send`
+- 피호출(영향 전파 경로): `assistEnsureDom`, `assistRenderHandoffCard`, `assistRenderProposalCard`, `assistRenderReportCard`, `assistStartFreshTopicForDiagnosis`, `assistSubmit`, `assistToggleDrawer`, `send`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

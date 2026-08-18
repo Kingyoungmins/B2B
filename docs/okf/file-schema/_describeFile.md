@@ -8,7 +8,7 @@ signature: "(f, opts, lines)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
 version: "0.7.4"
-loc: "file-schema.js:665-665"
+loc: "file-schema.js:691-691"
 
 # ── 입출력 ──
 inputs:
@@ -25,6 +25,7 @@ raises: []
 # ── 유기적 관계 ──
 calls:
   - "_colLetter"
+  - "_schemaDataStartRow"
   - "_sheetTotalRowsForSchema"
   - "_truncSchemaCell"
   - "push"
@@ -51,7 +52,7 @@ timestamp: "0.7.4-gen"
 - 없음(정적 분석 기준)
 
 ## 관계
-- 호출: `_colLetter`, `_sheetTotalRowsForSchema`, `_truncSchemaCell`, `push`
+- 호출: `_colLetter`, `_schemaDataStartRow`, `_sheetTotalRowsForSchema`, `_truncSchemaCell`, `push`
 - 피호출(영향 전파 경로): `_buildSchemaSummaryAtLevel`
 
 ## 실패/예외

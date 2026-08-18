@@ -8,7 +8,7 @@ signature: "(data, filename, meta)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
 version: "0.7.4"
-loc: "save-load.js:985-985"
+loc: "save-load.js:1020-1020"
 
 # ── 입출력 ──
 inputs:
@@ -20,7 +20,7 @@ returns: "(추정)"
 # ── 사이드이펙트 (정적 추정) ──
 side_effects:
   - "DOM/브라우저 전역 조작"
-  - "상태 변경: chatHistory, editingStepId, pipeline, skillEnvConfig"
+  - "상태 변경: chatHistory, editingStepId, pipeline, pipelineMappedDuringRun, pipelineOriginalDuringRun, runnerMappingRunActive, skillEnvConfig"
 raises: []
 
 # ── 유기적 관계 ──
@@ -40,6 +40,7 @@ calls:
   - "repairStaleTargetFileIds"
   - "runnerReplaceLiteral"
   - "toast"
+  - "traceClientUiEvent"
 calls_external:
   - "String"
   - "X"
@@ -57,11 +58,17 @@ reads:
   - "state.chatHistory"
   - "state.editingStepId"
   - "state.pipeline"
+  - "state.pipelineMappedDuringRun"
+  - "state.pipelineOriginalDuringRun"
+  - "state.runnerMappingRunActive"
   - "state.skillEnvConfig"
 writes:
   - "chatHistory"
   - "editingStepId"
   - "pipeline"
+  - "pipelineMappedDuringRun"
+  - "pipelineOriginalDuringRun"
+  - "runnerMappingRunActive"
   - "skillEnvConfig"
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
 timestamp: "0.7.4-gen"
@@ -72,11 +79,11 @@ timestamp: "0.7.4-gen"
 
 ## 사이드이펙트 & 주의
 - DOM/브라우저 전역 조작
-- 상태 변경: chatHistory, editingStepId, pipeline, skillEnvConfig
-- 변경 상태 `chatHistory, editingStepId, pipeline, skillEnvConfig` — 수정 시 이 상태를 읽는 곳 동반 점검.
+- 상태 변경: chatHistory, editingStepId, pipeline, pipelineMappedDuringRun, pipelineOriginalDuringRun, runnerMappingRunActive, skillEnvConfig
+- 변경 상태 `chatHistory, editingStepId, pipeline, pipelineMappedDuringRun, pipelineOriginalDuringRun, runnerMappingRunActive, skillEnvConfig` — 수정 시 이 상태를 읽는 곳 동반 점검.
 
 ## 관계
-- 호출: `clearPipelineResumeFromIndex`, `deepClone`, `ensurePipelineStepIds`, `invalidateLivePipelineApplied`, `openRunnerLogicEditor`, `promoteStepChatOrigins`, `refreshChatState`, `refreshRunButton`, `rememberLogicSaveBaseName`, `renderChatFromHistory`, `renderPipeline`, `repairStalePromptBookNames`, `repairStaleTargetFileIds`, `runnerReplaceLiteral`, `toast`
+- 호출: `clearPipelineResumeFromIndex`, `deepClone`, `ensurePipelineStepIds`, `invalidateLivePipelineApplied`, `openRunnerLogicEditor`, `promoteStepChatOrigins`, `refreshChatState`, `refreshRunButton`, `rememberLogicSaveBaseName`, `renderChatFromHistory`, `renderPipeline`, `repairStalePromptBookNames`, `repairStaleTargetFileIds`, `runnerReplaceLiteral`, `toast`, `traceClientUiEvent`
 - 피호출(영향 전파 경로): `loadLogicFiles`, `restoreSoftRefreshSnapshot`
 
 ## 실패/예외

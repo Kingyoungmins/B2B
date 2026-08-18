@@ -8,7 +8,7 @@ signature: "(step, idx, beforeSteps)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
 version: "0.7.4"
-loc: "pipeline.js:4432-4432"
+loc: "pipeline.js:4451-4451"
 
 # ── 입출력 ──
 inputs:

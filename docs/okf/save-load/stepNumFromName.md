@@ -8,7 +8,7 @@ signature: "(name)"
 role: "보조: 파일명에서 step 번호 힌트 추출. \"foo_step_3.js\" 또는 \"step3.js\" 모두 OK."
 role_source: banner
 version: "0.7.4"
-loc: "save-load.js:854-854"
+loc: "save-load.js:889-889"
 
 # ── 입출력 ──
 inputs:

@@ -8,7 +8,7 @@ signature: "(file)"
 role: "(envConfig 필터가 length 로 게이트한다) 스킬에 적힌 진짜 시트명이 그대로 쓰인다."
 role_source: banner
 version: "0.7.4"
-loc: "save-load.js:208-208"
+loc: "save-load.js:243-243"
 
 # ── 입출력 ──
 inputs:

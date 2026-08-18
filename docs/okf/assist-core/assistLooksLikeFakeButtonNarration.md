@@ -5,10 +5,10 @@ module: assist-core.js
 lang: js
 extraction: regex   # 정규식 근사
 signature: "(text)"
-role: "① \"아래/이 버튼\" 처럼 자기 응답 속 버튼을 가리키거나 ② 대괄호 라벨이 한 줄을 통째로 차지할 때만 잡는다."
-role_source: banner
+role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
+role_source: none
 version: "0.7.4"
-loc: "assist-core.js:241-241"
+loc: "assist-core.js:265-265"
 
 # ── 입출력 ──
 inputs:
@@ -35,7 +35,7 @@ timestamp: "0.7.4-gen"
 ---
 
 ## 역할
-① "아래/이 버튼" 처럼 자기 응답 속 버튼을 가리키거나 ② 대괄호 라벨이 한 줄을 통째로 차지할 때만 잡는다.
+(추정) 역할 주석 없음 — 담당자 1줄 보완 필요  _(자동 추정 — 확인 필요)_
 
 ## 사이드이펙트 & 주의
 - 없음(정적 분석 기준)

@@ -8,7 +8,7 @@ signature: "(text)"
 role: "(긴 답변 끝의 \"언제든 도와드리겠습니다\" 같은 맺음 인사는 길이 조건에서 걸러진다)"
 role_source: banner
 version: "0.7.4"
-loc: "assist-core.js:229-229"
+loc: "assist-core.js:234-234"
 
 # ── 입출력 ──
 inputs:

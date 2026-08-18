@@ -8,7 +8,7 @@ signature: "(question)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
 version: "0.7.4"
-loc: "assist-ui.js:743-743"
+loc: "assist-ui.js:763-763"
 
 # ── 입출력 ──
 inputs:
@@ -26,6 +26,7 @@ calls:
   - "assistNativeShellAvailable"
   - "assistPostToHost"
   - "assistSendToPopup"
+  - "assistStartFreshTopicForDiagnosis"
   - "assistSubmit"
   - "assistToggleDrawer"
 calls_external:
@@ -49,7 +50,7 @@ timestamp: "0.7.4-gen"
 - 타이머
 
 ## 관계
-- 호출: `assistEnsureNativeBridge`, `assistNativeShellAvailable`, `assistPostToHost`, `assistSendToPopup`, `assistSubmit`, `assistToggleDrawer`
+- 호출: `assistEnsureNativeBridge`, `assistNativeShellAvailable`, `assistPostToHost`, `assistSendToPopup`, `assistStartFreshTopicForDiagnosis`, `assistSubmit`, `assistToggleDrawer`
 - 피호출(영향 전파 경로): `reportPipelineError`, `showRunnerPipelineError`
 
 ## 실패/예외

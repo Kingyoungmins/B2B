@@ -8,7 +8,7 @@ signature: "(checkedIds, fingerprint)"
 role: "토글과 같은 큐에 '단일 태스크'로 등록 — 배치 도중 다른 토글 클릭은 배치가 끝난 뒤 실행되고,"
 role_source: banner
 version: "0.7.4"
-loc: "pipeline.js:5003-5003"
+loc: "pipeline.js:5022-5022"
 
 # ── 입출력 ──
 inputs:

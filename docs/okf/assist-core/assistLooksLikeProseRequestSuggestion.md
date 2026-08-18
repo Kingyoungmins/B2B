@@ -1,19 +1,18 @@
 ---
 type: endpoint
-title: run
+title: assistLooksLikeProseRequestSuggestion
 module: assist-core.js
 lang: js
 extraction: regex   # 정규식 근사
-signature: "(fn, ...a)"
-role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
-role_source: none
+signature: "(text)"
+role: "단 '오류 창 메모칸' 용 문장은 정당한 말-제시이므로 제외한다(재촉 문구에서도 그 선택지를 준다)."
+role_source: banner
 version: "0.7.4"
-loc: "assist-core.js:640-640"
+loc: "assist-core.js:250-250"
 
 # ── 입출력 ──
 inputs:
-  - "fn"
-  - "...a"
+  - "text"
 returns: "(추정)"
 
 # ── 사이드이펙트 (정적 추정) ──
@@ -22,13 +21,16 @@ side_effects:
 raises: []
 
 # ── 유기적 관계 ──
-calls:
-  - "push"
+calls: []
 calls_external:
-  - "fn"
+  - "String"
+  - "match"
+  - "replace"
+  - "some"
+  - "test"
+  - "trim"
 called_by:
-  - "_assistGateReplacementCode"
-  - "assistBuildProposal"
+  - "assistHandleUserMessage"
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
@@ -36,14 +38,14 @@ timestamp: "0.7.4-gen"
 ---
 
 ## 역할
-(추정) 역할 주석 없음 — 담당자 1줄 보완 필요  _(자동 추정 — 확인 필요)_
+단 '오류 창 메모칸' 용 문장은 정당한 말-제시이므로 제외한다(재촉 문구에서도 그 선택지를 준다).
 
 ## 사이드이펙트 & 주의
 - 없음(정적 분석 기준)
 
 ## 관계
-- 호출: `push`
-- 피호출(영향 전파 경로): `_assistGateReplacementCode`, `assistBuildProposal`
+- 호출: 없음
+- 피호출(영향 전파 경로): `assistHandleUserMessage`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

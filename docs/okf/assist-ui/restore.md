@@ -26,6 +26,7 @@ called_by:
   - "applyMappedSingleStep"
   - "attemptRunnerAutoRecovery"
   - "beginMappedPipelineRun"
+  - "pipelineForSave"
   - "reapplyVbaPipelineToLive"
   - "reconcilePipelineSimulationAfterEdit"
   - "replaceLogicAt"
@@ -45,7 +46,7 @@ timestamp: "0.7.4-gen"
 
 ## 관계
 - 호출: 없음
-- 피호출(영향 전파 경로): `applyMappedSingleStep`, `attemptRunnerAutoRecovery`, `beginMappedPipelineRun`, `reapplyVbaPipelineToLive`, `reconcilePipelineSimulationAfterEdit`, `replaceLogicAt`, `restoreSoftRefreshSnapshot`, `runPipelineSuffixFromCheckpoint`
+- 피호출(영향 전파 경로): `applyMappedSingleStep`, `attemptRunnerAutoRecovery`, `beginMappedPipelineRun`, `pipelineForSave`, `reapplyVbaPipelineToLive`, `reconcilePipelineSimulationAfterEdit`, `replaceLogicAt`, `restoreSoftRefreshSnapshot`, `runPipelineSuffixFromCheckpoint`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`
