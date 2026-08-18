@@ -2919,14 +2919,14 @@
     },
     {
       "id": "ASSIST-DANGLING-ANNOUNCE",
-      "title": "AI 도움이 'A를 ~하기 위해 ~를 찾아보겠습니다' 예고만 하고 멈춤(사용자 제보 2026-08-10, ?? 라고 재촉해야 이어짐). 루프가 액션 블록 없는 응답을 final 로 강등해 그대로 종료하므로, 모델이 도구 블록 없이 예고문만 내면 그 예고문이 마지막 답이 됐다.",
+      "title": "[제보 2회] AI 도움이 '~하겠습니다' 예고만 하고 멈춤 — 사용자가 oo/? 를 쳐야 이어짐(2026-08-10 최초, 2026-08-18 재발).",
       "checks": [
         [
           "node",
           "test_runs/_test_assist_dangling_announce.js"
         ]
       ],
-      "fix": "assist-core.js: ① 응답 규약에 '예고로 끝내기 금지' 규칙(예고 대신 즉시 action=tool 출력) ② assistLooksLikeDanglingAnnouncement — 짧고(≤240자) '~하겠습니다'류로 끝나며 조회/작업 동사가 있으면 예고로 판정, final 경로에서 감지 시 종료하지 않고 같은 턴에서 즉시 실행을 재촉(상한 2회, lastRound 제외)."
+      "fix": "assist-core.js: ① 응답 규약에 '예고로 끝내기 금지' 규칙(예고 대신 즉시 action=tool 출력) ② assistLooksLikeDanglingAnnouncement — 짧고(≤240자) '~하겠습니다'류로 끝나며 조회/작업 동사가 있으면 예고로 판정, final 경로에서 감지 시 종료하지 않고 같은 턴에서 즉시 실행을 재촉(상한 2회, lastRound 제외). [2026-08-18 확장] 최초 수정은 전체 240자 이하만 잡아, 실제 재발 대부분(긴 분석 + 마지막 한 문장이 예고)이 감지망 밖이었다. 마지막 문장 기준으로 바꿔 길이와 무관하게 잡고, 맺음 인사·조건부 표현(필요하면/언제든/말씀해 주 등)은 제외해 오탐을 막았다."
     },
     {
       "id": "ASSIST-POPUP-TOPMOST-SIZE",
