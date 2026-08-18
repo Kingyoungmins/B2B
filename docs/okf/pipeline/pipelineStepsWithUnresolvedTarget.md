@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(steps)"
 role: "대상을 못 찾은 스텝들 — 파일이 둘 이상일 때만 문제다(하나뿐이면 고를 여지가 없다)."
 role_source: banner
-version: "0.7.3"
+version: "0.7.4"
 loc: "pipeline.js:588-588"
 
 # ── 입출력 ──
@@ -32,7 +32,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.3-gen"
+timestamp: "0.7.4-gen"
 ---
 
 ## 역할

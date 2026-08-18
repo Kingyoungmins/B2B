@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(code)"
 role: "[클립보드 원자성] 조각이 붙여넣기(Paste/PasteSpecial)로 시작하는데 같은 조각 안에 선행"
 role_source: banner
-version: "0.7.3"
+version: "0.7.4"
 loc: "record-review.js:557-557"
 
 # ── 입출력 ──
@@ -31,7 +31,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.3-gen"
+timestamp: "0.7.4-gen"
 ---
 
 ## 역할

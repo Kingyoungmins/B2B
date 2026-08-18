@@ -7,7 +7,7 @@ extraction: ast
 signature: "(v)"
 role: "셀 값을 숫자로. bool·라벨·빈칸은 None. 콤마·통화·괄호(음수) 표기 허용."
 role_source: docstring
-version: "0.7.3"
+version: "0.7.4"
 loc: "serve_b2b.py:14664-14680"
 
 # ── 입출력 ──
@@ -41,7 +41,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.3-gen"
+timestamp: "0.7.4-gen"
 ---
 
 ## 역할

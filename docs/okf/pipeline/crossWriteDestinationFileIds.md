@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(code, options = {})"
 role: "확정된 목적지만 — 리셋 집합·스냅샷 대상처럼 '실제로 파일을 집어야 하는' 곳이 쓴다."
 role_source: banner
-version: "0.7.3"
+version: "0.7.4"
 loc: "pipeline.js:1058-1058"
 
 # ── 입출력 ──
@@ -33,7 +33,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.3-gen"
+timestamp: "0.7.4-gen"
 ---
 
 ## 역할

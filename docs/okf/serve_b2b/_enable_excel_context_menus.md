@@ -7,7 +7,7 @@ extraction: ast
 signature: "(app)"
 role: "녹화 편집 모드: 우클릭(컨텍스트) 메뉴 복원 — 병합/셀 서식 진입 경로."
 role_source: docstring
-version: "0.7.3"
+version: "0.7.4"
 loc: "serve_b2b.py:3301-3314"
 
 # ── 입출력 ──
@@ -32,7 +32,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.3-gen"
+timestamp: "0.7.4-gen"
 ---
 
 ## 역할

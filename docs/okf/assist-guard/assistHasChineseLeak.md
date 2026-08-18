@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(text)"
 role: "한자(중국어) 혼입 검사 — Qwen 실측 대응. 한글 대비 한자 비율이 높으면 재생성 신호."
 role_source: banner
-version: "0.7.3"
+version: "0.7.4"
 loc: "assist-guard.js:122-122"
 
 # ── 입출력 ──
@@ -30,7 +30,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.3-gen"
+timestamp: "0.7.4-gen"
 ---
 
 ## 역할

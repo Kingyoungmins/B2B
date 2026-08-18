@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(text)"
 role: "[0.5.18] 한 열을 다른 열로 (서식째) 복사 → ctx.copy_col(병합 안전, 원본 유지). ctx.copy 로 1행부터 통복사하면"
 role_source: banner
-version: "0.7.3"
+version: "0.7.4"
 loc: "chat-ui.js:862-862"
 
 # ── 입출력 ──
@@ -37,7 +37,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.3-gen"
+timestamp: "0.7.4-gen"
 ---
 
 ## 역할

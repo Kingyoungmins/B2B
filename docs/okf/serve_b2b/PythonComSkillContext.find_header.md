@@ -8,7 +8,7 @@ class: PythonComSkillContext
 signature: "(self, sheet, header_text, header_row=1)"
 role: "헤더 행에서 헤더 텍스트로 열 번호(1-based)를 찾는다. 없으면 오류."
 role_source: docstring
-version: "0.7.3"
+version: "0.7.4"
 loc: "serve_b2b.py:11551-11606"
 
 # ── 입출력 ──
@@ -73,7 +73,7 @@ reads:
   - "self.used_last_col"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.3-gen"
+timestamp: "0.7.4-gen"
 ---
 
 ## 역할

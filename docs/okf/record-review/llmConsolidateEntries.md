@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(entries)"
 role: "결과가 완전히 같을 때만 통합본을 돌려주므로(다르면 원본), 순서·값이 꼬이지 않는다."
 role_source: banner
-version: "0.7.3"
+version: "0.7.4"
 loc: "record-review.js:337-337"
 
 # ── 입출력 ──
@@ -33,7 +33,7 @@ called_by: []
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.3-gen"
+timestamp: "0.7.4-gen"
 ---
 
 ## 역할

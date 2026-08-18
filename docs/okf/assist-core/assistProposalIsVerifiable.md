@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(p)"
 role: "[Tier2] 격리 검증이 가능한 제안인가 — 단일 코드 수정(replaceLiteral/replaceStepCode)이고, 대상 스텝이"
 role_source: banner
-version: "0.7.3"
+version: "0.7.4"
 loc: "assist-core.js:746-746"
 
 # ── 입출력 ──
@@ -34,7 +34,7 @@ reads:
   - "state.pipeline"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.3-gen"
+timestamp: "0.7.4-gen"
 ---
 
 ## 역할

@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(steps)"
 role: "켜짐/꺼짐은 실행 시점 값을 그대로 쓴다(무엇이 적용됐는지는 실행 시점이 진실)."
 role_source: banner
-version: "0.7.3"
+version: "0.7.4"
 loc: "pipeline.js:4144-4144"
 
 # ── 입출력 ──
@@ -36,7 +36,7 @@ reads:
   - "state.runnerMappingRunActive"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.3-gen"
+timestamp: "0.7.4-gen"
 ---
 
 ## 역할

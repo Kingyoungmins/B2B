@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(steps, sentIdxList)"
 role: "보낸 스텝 중 '지금 꺼져 있는' 스텝이 있으면 그 자리에서 잡아낸다 — 이게 제보의 핵심 증거다."
 role_source: banner
-version: "0.7.3"
+version: "0.7.4"
 loc: "pipeline.js:4232-4232"
 
 # ── 입출력 ──
@@ -34,7 +34,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.3-gen"
+timestamp: "0.7.4-gen"
 ---
 
 ## 역할

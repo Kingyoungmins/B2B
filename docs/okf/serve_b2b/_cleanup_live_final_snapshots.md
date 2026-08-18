@@ -7,7 +7,7 @@ extraction: ast
 signature: "()"
 role: "오래된 것부터 정리(개수·용량 한도는 스텝 스냅샷과 공유). 지워졌으면 조회가 실패하고"
 role_source: docstring
-version: "0.7.3"
+version: "0.7.4"
 loc: "serve_b2b.py:18116-18136"
 
 # ── 입출력 ──
@@ -42,7 +42,7 @@ reads:
   - "MAX_PIPELINE_STEP_SNAPSHOTS"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.3-gen"
+timestamp: "0.7.4-gen"
 ---
 
 ## 역할

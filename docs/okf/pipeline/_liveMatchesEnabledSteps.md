@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(steps)"
 role: "적용 서명이 비어 있으면(불러오기·무효화) 모른다 = false."
 role_source: banner
-version: "0.7.3"
+version: "0.7.4"
 loc: "pipeline.js:4799-4799"
 
 # ── 입출력 ──
@@ -29,7 +29,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.3-gen"
+timestamp: "0.7.4-gen"
 ---
 
 ## 역할

@@ -8,7 +8,7 @@ class: PythonComSkillContext
 signature: "(self, sheet, value_col, conditions, header_row=None)"
 role: "조건(AND 전부 만족)에 맞는 행의 value_col 숫자를 합산해 값을 반환한다(쓰기 X → 반환값을"
 role_source: docstring
-version: "0.7.3"
+version: "0.7.4"
 loc: "serve_b2b.py:12977-13020"
 
 # ── 입출력 ──
@@ -66,7 +66,7 @@ reads:
   - "self.read"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.3-gen"
+timestamp: "0.7.4-gen"
 ---
 
 ## 역할

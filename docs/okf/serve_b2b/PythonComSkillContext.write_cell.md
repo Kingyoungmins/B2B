@@ -8,7 +8,7 @@ class: PythonComSkillContext
 signature: "(self, sheet, a1, value, overwrite_formulas=True)"
 role: "단일 셀 쓰기(소량 전용 — 루프에서 반복 호출하면 예산 초과로 차단됨)."
 role_source: docstring
-version: "0.7.3"
+version: "0.7.4"
 loc: "serve_b2b.py:11730-11732"
 
 # ── 입출력 ──
@@ -37,7 +37,7 @@ reads:
   - "self.write"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.3-gen"
+timestamp: "0.7.4-gen"
 ---
 
 ## 역할

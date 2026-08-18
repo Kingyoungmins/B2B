@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(start, restoredExcelIds)"
 role: "[적용됨-미반영 수정] prefix(0..start-1) 스텝들이 변형하는 파일의 라이브 세션이 전부"
 role_source: banner
-version: "0.7.3"
+version: "0.7.4"
 loc: "pipeline.js:4577-4577"
 
 # ── 입출력 ──
@@ -40,7 +40,7 @@ reads:
   - "state.pipeline"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.3-gen"
+timestamp: "0.7.4-gen"
 ---
 
 ## 역할

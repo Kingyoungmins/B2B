@@ -7,7 +7,7 @@ extraction: ast
 signature: "(wb_record, state_sig)"
 role: "키 = 원본 파일 지문 + 클라가 계산한 파이프라인 상태 서명."
 role_source: docstring
-version: "0.7.3"
+version: "0.7.4"
 loc: "serve_b2b.py:18082-18093"
 
 # ── 입출력 ──
@@ -39,7 +39,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.3-gen"
+timestamp: "0.7.4-gen"
 ---
 
 ## 역할

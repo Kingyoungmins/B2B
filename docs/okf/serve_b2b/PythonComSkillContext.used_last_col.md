@@ -8,7 +8,7 @@ class: PythonComSkillContext
 signature: "(self, sheet)"
 role: "시트 '사용 범위' 마지막 열(1-based). 특정 행 기준 last_col 이 그 행 병합/빈칸으로 과소산정하는 것 방지."
 role_source: docstring
-version: "0.7.3"
+version: "0.7.4"
 loc: "serve_b2b.py:11498-11505"
 
 # ── 입출력 ──
@@ -43,7 +43,7 @@ reads:
   - "self._ws"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.3-gen"
+timestamp: "0.7.4-gen"
 ---
 
 ## 역할

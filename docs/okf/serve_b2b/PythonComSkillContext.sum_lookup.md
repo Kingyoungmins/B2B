@@ -8,7 +8,7 @@ class: PythonComSkillContext
 signature: "(self, src_sheet, src_key_col, src_val_col, dst_sheet, dst_key_col, dst_out_col, header_row=None, dst_start_row=None)"
 role: "키 매칭 합산(교차/동일 파일): src 의 (키→값)을 모은 뒤, dst 각 행의 키에 해당하는 값을 합산해"
 role_source: docstring
-version: "0.7.3"
+version: "0.7.4"
 loc: "serve_b2b.py:13022-13074"
 
 # ── 입출력 ──
@@ -80,7 +80,7 @@ reads:
   - "self._tick"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.3-gen"
+timestamp: "0.7.4-gen"
 ---
 
 ## 역할

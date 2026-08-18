@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(text)"
 role: "대량 스텝에서 충돌 확률이 무시 못 할 수준이고, 충돌은 '엉뚱한 상태로 복원'이라 위험하다)."
 role_source: banner
-version: "0.7.3"
+version: "0.7.4"
 loc: "pipeline.js:137-137"
 
 # ── 입출력 ──
@@ -33,7 +33,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.3-gen"
+timestamp: "0.7.4-gen"
 ---
 
 ## 역할

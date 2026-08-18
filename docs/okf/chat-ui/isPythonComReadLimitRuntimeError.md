@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(message)"
 role: "Python COM 의 읽기 셀 한도(PY_READ_MAX_CELLS) 초과 런타임 오류인지 판별한다."
 role_source: banner
-version: "0.7.3"
+version: "0.7.4"
 loc: "chat-ui.js:2878-2878"
 
 # ── 입출력 ──
@@ -32,7 +32,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.3-gen"
+timestamp: "0.7.4-gen"
 ---
 
 ## 역할

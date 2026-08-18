@@ -8,7 +8,7 @@ class: PythonComSkillContext
 signature: "(self, src_sheet, dst_sheet, key_col, first_col, last_col, src_scan=None, dst_scan=None, on_mismatch='skip')"
 role: "'가입번호'처럼 키가 여러 행 세로병합 블록을 이루는 표에서, 대상의 각 키 블록에 소스의"
 role_source: docstring
-version: "0.7.3"
+version: "0.7.4"
 loc: "serve_b2b.py:12890-12975"
 
 # ── 입출력 ──
@@ -91,7 +91,7 @@ reads:
   - "self._tick"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.3-gen"
+timestamp: "0.7.4-gen"
 ---
 
 ## 역할

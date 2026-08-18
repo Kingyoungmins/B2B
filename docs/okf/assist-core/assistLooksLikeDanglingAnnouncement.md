@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(text)"
 role: "(긴 답변 끝의 \"언제든 도와드리겠습니다\" 같은 맺음 인사는 길이 조건에서 걸러진다)"
 role_source: banner
-version: "0.7.3"
+version: "0.7.4"
 loc: "assist-core.js:229-229"
 
 # ── 입출력 ──
@@ -31,7 +31,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.3-gen"
+timestamp: "0.7.4-gen"
 ---
 
 ## 역할

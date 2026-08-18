@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(oldCode, newCode)"
 role: "줄 단위 diff. [검토 #10] 같은 줄번호끼리 비교하면 줄 하나만 삽입돼도 이후 전체가 어긋난 diff 로"
 role_source: banner
-version: "0.7.3"
+version: "0.7.4"
 loc: "assist-ui.js:512-512"
 
 # ── 입출력 ──
@@ -36,7 +36,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.3-gen"
+timestamp: "0.7.4-gen"
 ---
 
 ## 역할

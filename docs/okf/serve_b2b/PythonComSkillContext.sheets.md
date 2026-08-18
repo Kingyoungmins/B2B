@@ -8,7 +8,7 @@ class: PythonComSkillContext
 signature: "(self)"
 role: "시트 이름 목록."
 role_source: docstring
-version: "0.7.3"
+version: "0.7.4"
 loc: "serve_b2b.py:11444-11447"
 
 # ── 입출력 ──
@@ -35,7 +35,7 @@ reads:
   - "self._wb"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.3-gen"
+timestamp: "0.7.4-gen"
 ---
 
 ## 역할

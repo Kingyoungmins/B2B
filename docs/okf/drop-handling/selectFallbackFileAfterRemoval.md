@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "()"
 role: "현재 보던 파일을 닫은 뒤, 남은 파일로 전환해 그 미러를 즉시 표시한다."
 role_source: banner
-version: "0.7.3"
+version: "0.7.4"
 loc: "drop-handling.js:271-271"
 
 # ── 입출력 ──
@@ -41,7 +41,7 @@ writes:
   - "selectedRanges"
   - "selectionAnchor"
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.3-gen"
+timestamp: "0.7.4-gen"
 ---
 
 ## 역할

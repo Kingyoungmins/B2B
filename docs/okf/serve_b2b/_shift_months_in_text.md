@@ -7,7 +7,7 @@ extraction: ast
 signature: "(s, delta, current_year=2000)"
 role: "문자열의 모든 'N월'(앞의 'YY/YYYY년', 뒤의 'D일' 포함)을 delta 개월 이동한다."
 role_source: docstring
-version: "0.7.3"
+version: "0.7.4"
 loc: "serve_b2b.py:3068-3102"
 
 # ── 입출력 ──
@@ -53,7 +53,7 @@ reads:
   - "_MONTH_SHIFT_PAT"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.3-gen"
+timestamp: "0.7.4-gen"
 ---
 
 ## 역할

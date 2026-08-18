@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(p)"
 role: "승인 카드 — 여기 버튼을 눌러야만 스킬이 바뀐다."
 role_source: banner
-version: "0.7.3"
+version: "0.7.4"
 loc: "assist-ui.js:454-454"
 
 # ── 입출력 ──
@@ -38,7 +38,7 @@ called_by: []
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.3-gen"
+timestamp: "0.7.4-gen"
 ---
 
 ## 역할

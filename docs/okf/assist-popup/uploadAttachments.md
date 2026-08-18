@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(staged)"
 role: "[첨부] 팝업은 백엔드로 첨부를 올려 슬라이드/이미지 base64 를 받는다(팝업도 같은 서버 오리진)."
 role_source: banner
-version: "0.7.3"
+version: "0.7.4"
 loc: "assist-popup.js:225-225"
 
 # ── 입출력 ──
@@ -35,7 +35,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.3-gen"
+timestamp: "0.7.4-gen"
 ---
 
 ## 역할

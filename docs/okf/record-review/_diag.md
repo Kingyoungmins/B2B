@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(r)"
 role: "[진단] 어떤 실패에도 원본 1스텝 유지하되, '왜' 유지됐는지 전역+콘솔에 남긴다."
 role_source: banner
-version: "0.7.3"
+version: "0.7.4"
 loc: "record-review.js:603-603"
 
 # ── 입출력 ──
@@ -29,7 +29,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.3-gen"
+timestamp: "0.7.4-gen"
 ---
 
 ## 역할

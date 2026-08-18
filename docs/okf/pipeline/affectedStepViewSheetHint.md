@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(affected)"
 role: "[필드 추가#1] 토글/삭제 후 뷰 이동 대상: 스킬 코드가 다른 파일(출력)에 쓰는 교차 파일"
 role_source: banner
-version: "0.7.3"
+version: "0.7.4"
 loc: "pipeline.js:5735-5735"
 
 # ── 입출력 ──
@@ -31,7 +31,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.3-gen"
+timestamp: "0.7.4-gen"
 ---
 
 ## 역할

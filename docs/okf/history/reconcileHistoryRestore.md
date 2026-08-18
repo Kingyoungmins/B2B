@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(previousSteps)"
 role: "previousSteps = 되돌리기/다시하기 '직전'의 파이프라인. 이걸 안 넘기면 사라진 스텝의 교차파일"
 role_source: banner
-version: "0.7.3"
+version: "0.7.4"
 loc: "history.js:161-161"
 
 # ── 입출력 ──
@@ -33,7 +33,7 @@ reads:
   - "state.pipeline"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.3-gen"
+timestamp: "0.7.4-gen"
 ---
 
 ## 역할

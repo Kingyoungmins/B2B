@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(needle, candidates, threshold)"
 role: "후보 중 가장 유사한 항목과 차순위, 모호 여부를 반환"
 role_source: banner
-version: "0.7.3"
+version: "0.7.4"
 loc: "fuzzy.js:78-78"
 
 # ── 입출력 ──
@@ -39,7 +39,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.3-gen"
+timestamp: "0.7.4-gen"
 ---
 
 ## 역할

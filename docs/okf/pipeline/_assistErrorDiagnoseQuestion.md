@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(info, options)"
 role: "[실패 진단 연동] 오류 카드의 'AI 도움에게 진단 요청' 버튼이 넣을 자동 질문. 사용자가 친 것처럼"
 role_source: banner
-version: "0.7.3"
+version: "0.7.4"
 loc: "pipeline.js:7651-7651"
 
 # ── 입출력 ──
@@ -34,7 +34,7 @@ reads:
   - "state.pipeline"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.3-gen"
+timestamp: "0.7.4-gen"
 ---
 
 ## 역할

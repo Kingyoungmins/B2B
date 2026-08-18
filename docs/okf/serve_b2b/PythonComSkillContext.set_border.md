@@ -8,7 +8,7 @@ class: PythonComSkillContext
 signature: "(self, sheet, a1_range, style='thin', color=None, edges='all')"
 role: "테두리. style: thin/medium/thick/double/none(지우기). edges: all(각 셀 사방+내부)/outline(바깥 테두리만)/"
 role_source: docstring
-version: "0.7.3"
+version: "0.7.4"
 loc: "serve_b2b.py:11962-12014"
 
 # ── 입출력 ──
@@ -60,7 +60,7 @@ reads:
   - "self._ws"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.3-gen"
+timestamp: "0.7.4-gen"
 ---
 
 ## 역할

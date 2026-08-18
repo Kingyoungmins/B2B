@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "()"
 role: "[매핑 보존] 실행기에서 사용자가 확정한 파일·시트 매핑을 '생성기 재실행'에도 적용한다."
 role_source: banner
-version: "0.7.3"
+version: "0.7.4"
 loc: "pipeline.js:5346-5346"
 
 # ── 입출력 ──
@@ -48,7 +48,7 @@ writes:
   - "pipelineOriginalDuringRun"
   - "runnerMappingRunActive"
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.3-gen"
+timestamp: "0.7.4-gen"
 ---
 
 ## 역할
