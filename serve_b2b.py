@@ -2384,6 +2384,7 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
                 "pipeline.impl.start", "pipeline.isolated.target.opened",
                 "pipeline.isolated.companion.opened", "pipeline.step.start",
                 "pipeline.step.ok", "pipeline.step.error", "pipeline.step.activate_sheet.skip",
+                "step.code.full",   # [SBAGENT-271] '성공했는데 셀은 그대로' 진단에 필수
                 "vba.macro.runtime_error", "fullrun.step.start", "fullrun.step.ok",
                 "fullrun.step.error", "fullrun.file.opened", "fullrun.companion.opened",
                 "http.run_vba_pipeline.error", "http.run_full_pipeline.error",
@@ -8672,6 +8673,32 @@ def _trace_text(value, limit=500):
     return text
 
 
+_TRACED_CODE_HASHES = set()
+
+
+def _trace_step_code_once(code, **fields):
+    """스텝 코드 '전문'을 해시당 한 번만 로그에 남긴다.
+
+    [지라 SBAGENT-271] 스텝이 오류 없이 성공했는데 셀은 그대로인 제보가 왔을 때,
+    로그에 코드가 260자로 잘려 있어 원인을 끝내 못 밝혔다(설명문과 실제 코드가
+    다른 경우를 가릴 수가 없다). 실행 성공/실패는 남기면서 정작 '무엇을 실행했나'가
+    빠져 있던 셈이다.
+    같은 스킬을 반복 실행해도 코드는 안 바뀌므로 해시로 중복을 걸러 한 번만 남긴다
+    — 스텝당 1~2KB, 로그 크기 부담은 무시할 수준이다."""
+    try:
+        h = _trace_hash(code)
+        if h in _TRACED_CODE_HASHES:
+            return
+        _TRACED_CODE_HASHES.add(h)
+        if len(_TRACED_CODE_HASHES) > 500:      # 세션이 길어져도 무한정 쌓지 않는다
+            _TRACED_CODE_HASHES.clear()
+            _TRACED_CODE_HASHES.add(h)
+        _vba_trace("step.code.full", codeHash=h, codeLen=len(str(code or "")),
+                   code=_trace_text(code, 8000), **fields)
+    except Exception:
+        pass
+
+
 def _trace_hash(value):
     return hashlib.sha256(str(value or "").encode("utf-8", errors="replace")).hexdigest()[:16]
 
@@ -10076,6 +10103,12 @@ def _run_vba_pipeline_on_session_impl(excel_id, steps, reset=True, entry=None, v
                         codeHash=_trace_hash(code),
                         codeHead=_trace_text(code, 360),
                     )
+                    # [지라 SBAGENT-271] 코드 전문도 남긴다(해시당 1회) — '성공했는데 셀은 그대로'를
+                    # 나중에 진단하려면 무엇을 실행했는지가 있어야 한다.
+                    _trace_step_code_once(code, excelId=excel_id,
+                                          stepIdx=st.get("stepIdx") if isinstance(st, dict) else None,
+                                          stepId=st.get("stepId") if isinstance(st, dict) else None,
+                                          language=lang)
                     # [0.5.14 batch 빠른복구] 이 스텝 실행 '전' ftarget 상태를 영속 RESULTS(BACKEND_DIR)에
                     # SaveCopyAs 해 step._preApplySnapshot 용 downloadId 를 만든다(0.5.13 per-step 스냅샷·python
                     # 라이브 경로와 동형). 격리 batch 경로에서도 마지막 단계 OFF/삭제 빠른복구가 13처럼 되게 한다.
@@ -10549,6 +10582,9 @@ def _run_full_pipeline_single_instance_impl(groups, reset_excel_ids=None, view_s
                     _vba_trace("fullrun.step.start", anchorExcelId=anchor_excel_id, isolatedPid=fpid,
                                excelId=gid, ordinal=ordinal, total=total_steps, language=lang,
                                stepIdx=st.get("stepIdx") if isinstance(st, dict) else None, codeHash=_trace_hash(code))
+                    _trace_step_code_once(code, excelId=gid, ordinal=ordinal,
+                                          stepIdx=st.get("stepIdx") if isinstance(st, dict) else None,
+                                          language=lang)
                     try:
                         _fr_books, _fr_tracked = [], False
                         if str(lang).lower() == "python":
