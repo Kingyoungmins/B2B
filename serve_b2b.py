@@ -9654,6 +9654,16 @@ def _setup_isolated_pipeline_instance(session, excel_id, reset, work):
     _ensure_vbom_access()
     _disable_vba_break_on_all_errors()
     fapp = win32com.client.DispatchEx("Excel.Application")
+    # [회색 Excel 창 제보 2026-08-19] 숨김은 '생성 직후 첫 줄'에서 건다.
+    # 예전엔 PID 조회(COM 왕복) + 트레이스 기록(파일 쓰기) 을 먼저 하고 나서야 Visible=False 를
+    # 걸었다. 그 수십~수백 ms 동안 이 인스턴스는 숨김 보장이 없는 상태였고, 그 사이에 Excel 이
+    # 자기 프레임을 그리면 내용 없는 회색 창이 화면에 뜬다. 이 파일의 다른 인스턴스 생성부
+    # (fresh probe 등)는 이미 DispatchEx 바로 다음 줄에서 숨긴다 — 여기만 순서가 어긋나 있었다.
+    for attr, val in (("Visible", False), ("DisplayAlerts", False), ("EnableEvents", False), ("AskToUpdateLinks", False)):
+        try:
+            setattr(fapp, attr, val)
+        except Exception:
+            pass
     _track_spawned_excel_app(fapp)
     fpid = None
     try:
@@ -9672,11 +9682,6 @@ def _setup_isolated_pipeline_instance(session, excel_id, reset, work):
         liveWorkbook=_trace_workbook_info(live_wb0),
         isolatedPid=fpid,
     )
-    for attr, val in (("Visible", False), ("DisplayAlerts", False), ("EnableEvents", False), ("AskToUpdateLinks", False)):
-        try:
-            setattr(fapp, attr, val)
-        except Exception:
-            pass
     # 대상 워크북
     tdir = work / "t"
     tdir.mkdir(parents=True, exist_ok=True)
@@ -10385,16 +10390,18 @@ def _run_full_pipeline_single_instance_impl(groups, reset_excel_ids=None, view_s
         _fr_step_cross = []   # 스텝별 쓰기 증거(클라의 교차파일 되돌리기 판정 보강용)
         try:
             fapp = win32com.client.DispatchEx("Excel.Application")
-            _track_spawned_excel_app(fapp)
-            try:
-                fpid = _excel_process_id(fapp)
-            except Exception:
-                fpid = None
+            # [회색 Excel 창 2026-08-19] 숨김을 생성 직후 첫 줄로 — PID 조회(COM 왕복) 전에 건다.
+            # 격리 실행용 별도 인스턴스라 라이브(사용자가 보는 창·탭)와는 무관하다.
             for attr, val in (("Visible", False), ("DisplayAlerts", False), ("EnableEvents", False), ("AskToUpdateLinks", False)):
                 try:
                     setattr(fapp, attr, val)
                 except Exception:
                     pass
+            _track_spawned_excel_app(fapp)
+            try:
+                fpid = _excel_process_id(fapp)
+            except Exception:
+                fpid = None
             _vba_trace("fullrun.setup.start", anchorExcelId=anchor_excel_id, isolatedPid=fpid,
                        openIds=list(open_ids), groups=len(norm_groups), totalSteps=total_steps, work=str(work))
 
@@ -11232,6 +11239,7 @@ class PythonComSkillContext:
                 # '조건에 맞는 데이터 0건' 신호 — 실행은 성공이라도 응답에 경고를 실어 조용한 실패를 드러낸다.
                 "write_cells_total": 0,
                 "write_cells_nonempty": 0,
+                "blanked_cells": 0,   # 앞 단계가 채운 칸을 이번 실행이 빈칸으로 덮은 수
             }
         self._shared = _shared
 
@@ -11426,11 +11434,62 @@ class PythonComSkillContext:
             self._shared["structural"].append("mutation-track-failed")
             return ""
 
-    def _journal_save(self, ws, rng):
+    def _note_blanked_cells_from_range(self, rng, data):
+        """이번 쓰기가 '보이던 값'을 빈칸으로 덮는지 판정한다.
+
+        저널이 들고 있는 건 수식 문자열이라 그대로 비교하면 오탐이 난다: 값을 읽어
+        가공해 되쓰는 정상 패턴에서도 '수식 → 값'이라 전부 지움으로 잡힌다. 판정 기준은
+        **사용자가 화면에서 보던 값**이어야 하므로 Value 를 따로 본다.
+        비용 주의 — 새로 쓰는 데이터에 빈칸이 하나도 없으면 지울 것도 없으므로
+        COM 읽기 자체를 건너뛴다(대부분의 쓰기가 여기서 끝난다)."""
+        try:
+            has_blank = any(
+                (v is None or str(v).strip() == "")
+                for row in (data or []) for v in (row or [])
+            )
+            if not has_blank:
+                return
+            before_vals = _range_matrix(rng.Value2)
+            self._tick(1)
+            self._note_blanked_cells(before_vals, data)
+        except Exception:
+            pass
+
+    def _note_blanked_cells(self, before, data):
+        """앞 단계가 채워 둔 칸을 이번 쓰기가 '빈칸으로' 덮었는지 센다.
+
+        [지라 SBAGENT-271] 같은 열을 여러 단계가 순서대로 다듬는 스킬(예: W열에
+        13→14→15→16단계가 조건별로 값을 채움)에서, 뒤 단계가 자기 조건에 안 맞는 행을
+        보존하지 않고 ""(빈칸) 으로 통째 덮어쓰면 앞 단계 결과가 통째로 사라진다.
+        단계는 성공(적용됨)으로 끝나고 오류도 없어서 사용자는 알 수가 없었다 — 실측:
+        16단계 중 13~16단계가 전부 W열 대상이었는데 최종 W열이 전부 빈칸.
+        저널이 '쓰기 직전 상태'를 이미 갖고 있으므로 추가 COM 호출 없이 셀 수만 센다."""
+        try:
+            n = 0
+            for r_i, row in enumerate(before or []):
+                if r_i >= len(data):
+                    break
+                new_row = data[r_i] or []
+                for c_i, old in enumerate(row or []):
+                    if c_i >= len(new_row):
+                        break
+                    if old is None or str(old).strip() == "":
+                        continue                      # 원래 빈칸 → 지운 게 아니다
+                    nv = new_row[c_i]
+                    if nv is None or str(nv).strip() == "":
+                        n += 1
+            if n:
+                self._shared["blanked_cells"] = int(self._shared.get("blanked_cells") or 0) + n
+        except Exception:
+            pass
+
+    def _journal_save(self, ws, rng, new_data=None):
         book = self._mark_mutated(ws)
         try:
             address = str(rng.Address)
             formulas = _range_matrix(rng.Formula)
+            if new_data is not None:
+                self._note_blanked_cells_from_range(rng, new_data)
             # 워크북 이름까지 남긴다. 예전엔 시트명만 남겨서, 교차파일 쓰기(ctx.book / _ws 의 타 워크북
             # 폴백)로 저널된 항목을 롤백할 때 self._wb 에서 같은 이름의 시트를 찾았다 —
             # 동명 시트가 있으면 '엉뚱한 파일'에 남의 수식을 덮어썼고, 없으면 조용히 롤백을 걸렀다.
@@ -11703,7 +11762,7 @@ class PythonComSkillContext:
         anchor = self._rng(ws, a1_start)
         rng = self._resize_rng(ws, anchor, rows, cols)
         self._tick(3)
-        self._journal_save(ws, rng)
+        self._journal_save(ws, rng, new_data=data)
         try:
             _apply_com_text_format_for_long_digit_columns(ws, data, int(anchor.Row), int(anchor.Column))
         except Exception:
@@ -11738,7 +11797,7 @@ class PythonComSkillContext:
         anchor = self._rng(ws, a1_start)
         rng = self._resize_rng(ws, anchor, rows, cols)
         self._tick(3)
-        self._journal_save(ws, rng)
+        self._journal_save(ws, rng, new_data=data)
         rng.Formula = data
         self._tick(1)
         return rows * cols
@@ -14370,6 +14429,25 @@ def _exec_python_com_skill(app, wb, session, code, skip_static=False, timeout_s=
                 "0건일 수 있습니다 — 구분자·조건 표기(공백 등)가 실제 셀 값과 일치하는지 확인하세요."
             )
             _vba_trace("python_com.all_empty_writes", cells=_w_total)
+    except Exception:
+        pass
+    # [지라 SBAGENT-271] 앞 단계가 채워 둔 칸을 이번 단계가 빈칸으로 덮었으면 드러낸다.
+    # 실측: 13~16단계가 모두 같은 W열 대상이었는데, 뒤 단계가 자기 조건에 안 맞는 행을
+    # 보존하지 않고 ""로 통째 덮어써서 앞 단계 결과가 전부 사라졌다. 그런데도 모든 단계가
+    # '적용됨'으로 끝나 사용자는 알 수 없었다(파이프라인 표시·다운로드 모두 정상으로 보임).
+    # 의도적으로 지우는 스킬도 있으므로 실패로 만들지 않고 경고만 싣는다.
+    try:
+        _blanked = int(ctx._shared.get("blanked_cells") or 0)
+        if _blanked > 0:
+            summary["blankedCells"] = _blanked
+            _prev = str(summary.get("warning") or "")
+            _msg = (
+                f"이 단계가 이미 값이 있던 {_blanked:,}칸을 빈칸으로 덮었습니다. "
+                "같은 열을 앞 단계가 이미 채웠다면 그 결과가 지워진 것일 수 있습니다 — "
+                "조건에 안 맞는 행은 기존 값을 그대로 두도록 요청을 다시 적어 보세요."
+            )
+            summary["warning"] = (_prev + " / " + _msg) if _prev else _msg
+            _vba_trace("python_com.blanked_existing_cells", cells=_blanked)
     except Exception:
         pass
     return summary

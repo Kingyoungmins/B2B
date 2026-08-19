@@ -3459,6 +3459,28 @@
         ]
       ],
       "fix": "만들다가 실패한 단계는 스킬 목록에 없어 step.error 가 유일한 근거인데, __lastPipelineErrorInfo 에 실패한 코드가 안 담겼다 — AI 도움이 메시지만 보고 코드를 못 봐 진단이 헛돌았다. code(4000자)를 기록에 담고 step.error 가 failedCode(2500자)로 노출, note 도 failedCode 기준 진단 안내."
+    },
+    {
+      "id": "SBAGENT-271-LATER-STEP-BLANKS-EARLIER",
+      "title": "[지라 271] 같은 열을 다듬는 뒤 단계가 앞 단계 결과를 빈칸으로 덮는데 전부 적용됨으로 끝남(13~16단계 W열 전멸).",
+      "checks": [
+        [
+          "python",
+          "test_runs/_test_jira_271_blanked_cells_com.py"
+        ]
+      ],
+      "fix": "로그 실측: 16단계 중 13·14·15·16단계가 모두 W열 대상. 전부 fullrun.step.ok 이고 파일도 커졌는데 응답 liveSchema 의 최종 W열이 전 행 빈칸. 15단계는 \"기존 값은 건드리지 않는다\"면서 W열을 읽지도 않고(트레이스에 read 없음) 조건 밖 행에 \"\"를 써서 앞 단계 결과를 통째로 날렸다. 수정 (1) 백엔드: 쓰기 직전 값과 비교해 '앞 단계가 채운 칸을 빈칸으로 덮은 수'를 세어 blankedCells + 경고로 드러낸다(새 데이터에 빈칸이 없으면 COM 읽기 자체를 건너뛰어 비용 0). 판정은 수식 문자열이 아니라 보이던 값 기준 — 값 읽고 되쓰는 정상 패턴 오탐 방지. (2) 프롬프트: 부분 갱신은 반드시 먼저 읽고 조건 밖 행은 기존 값을 되돌려 쓰라는 규칙 + 코드 예시."
+    },
+    {
+      "id": "ISOLATED-EXCEL-GRAY-WINDOW",
+      "title": "[지라 271] 회색 Excel 창이 자꾸 등장 — 격리 인스턴스를 숨기기 전에 PID 조회·트레이스를 먼저 했다.",
+      "checks": [
+        [
+          "python",
+          "test_runs/_test_jira_271_blanked_cells_com.py"
+        ]
+      ],
+      "fix": "_setup_isolated_pipeline_instance 와 전체실행 경로 둘 다 DispatchEx 직후 PID 조회(COM 왕복)와 트레이스 기록(파일 쓰기)을 먼저 하고 나서야 Visible=False 를 걸었다. 그 사이 인스턴스는 숨김 보장이 없어 내용 없는 회색 프레임이 뜰 수 있다. 같은 파일의 다른 생성부는 이미 DispatchEx 다음 줄에서 숨긴다 — 여기만 순서가 어긋나 있었다. 숨김을 첫 줄로 옮겼다(설정 값·항목은 그대로, 격리 인스턴스 전용이라 라이브 탭/미러와 무관 — COM 21/21 로 확인)."
     }
   ]
 }

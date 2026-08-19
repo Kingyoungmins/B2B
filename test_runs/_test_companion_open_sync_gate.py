@@ -149,7 +149,8 @@ check("동기화 호출이 증거를 넘긴다",
 check("쓰기 기록은 시트의 부모 워크북으로 한다(고정 워크북 아님)",
       "ws.Parent.Name" in SRC and "def _mark_mutated(self, ws):" in SRC)
 check("저널 저장 '첫 줄'에 표시한다(저널 append 가 실패해도 변경 사실은 남게)",
-      re.search(r"def _journal_save\(self, ws, rng\):\s*\n\s*book = self\._mark_mutated\(ws\)", SRC) is not None)
+      # 시그니처에 new_data 가 붙었다(지움 감지용, SBAGENT-271) — '첫 줄이 _mark_mutated' 계약은 그대로.
+      re.search(r"def _journal_save\(self, ws, rng[^)]*\):\s*\n\s*book = self\._mark_mutated\(ws\)", SRC) is not None)
 
 print("[6] 덤 — 교차파일 쓰기의 롤백이 엉뚱한 워크북에 복원되던 문제")
 check("저널에 워크북 이름도 남긴다",
