@@ -5,17 +5,18 @@ module: serve_b2b.py
 lang: python
 extraction: ast
 class: PythonComSkillContext
-signature: "(self, ws, rng)"
+signature: "(self, ws, rng, new_data=None)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
 version: "0.7.4"
-loc: "serve_b2b.py:11429-11441"
+loc: "serve_b2b.py:11486-11500"
 
 # ── 입출력 ──
 inputs:
   - "self"
   - "ws"
   - "rng"
+  - "new_data"
 returns: "(추정)"
 
 # ── 사이드이펙트 (정적 추정) ──
@@ -26,10 +27,13 @@ raises: []
 # ── 유기적 관계 ──
 calls:
   - "_mark_mutated"
+  - "_note_blanked_cells_from_range"
   - "_range_matrix"
   - "_tick"
   - "append"
 calls_external:
+  - "new_data"
+  - "rng"
   - "str"
   - "ws"
 called_by:
@@ -45,6 +49,7 @@ called_by:
   - "PythonComSkillContext.write_formulas"
 reads:
   - "self._mark_mutated"
+  - "self._note_blanked_cells_from_range"
   - "self._shared"
   - "self._tick"
 writes: []
@@ -59,7 +64,7 @@ timestamp: "0.7.4-gen"
 - 없음(정적 분석 기준)
 
 ## 관계
-- 호출: `_mark_mutated`, `_range_matrix`, `_tick`, `append`
+- 호출: `_mark_mutated`, `_note_blanked_cells_from_range`, `_range_matrix`, `_tick`, `append`
 - 피호출(영향 전파 경로): `PythonComSkillContext.clear`, `PythonComSkillContext.copy`, `PythonComSkillContext.copy_values`, `PythonComSkillContext.merge`, `PythonComSkillContext.paste_copied`, `PythonComSkillContext.replace`, `PythonComSkillContext.shift_months`, `PythonComSkillContext.sort`, `PythonComSkillContext.write`, `PythonComSkillContext.write_formulas`
 
 ## 실패/예외

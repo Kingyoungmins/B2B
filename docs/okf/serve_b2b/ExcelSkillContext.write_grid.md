@@ -9,7 +9,7 @@ signature: "(self, ws, grid, start_row=1, start_col=1)"
 role: "2D 리스트(grid)를 start_row/start_col 부터 한 번의 COM 호출로 쓴다."
 role_source: docstring
 version: "0.7.4"
-loc: "serve_b2b.py:15897-15903"
+loc: "serve_b2b.py:15975-15981"
 
 # ── 입출력 ──
 inputs:

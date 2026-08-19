@@ -8,7 +8,7 @@ signature: "(value)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
 version: "0.7.4"
-loc: "serve_b2b.py:14618-14625"
+loc: "serve_b2b.py:14696-14703"
 
 # ── 입출력 ──
 inputs:
@@ -30,6 +30,7 @@ calls_external:
   - "tuple"
 called_by:
   - "PythonComSkillContext._journal_save"
+  - "PythonComSkillContext._note_blanked_cells_from_range"
   - "PythonComSkillContext._shaped_matrix"
   - "PythonComSkillContext.find_header"
   - "PythonComSkillContext.replace"
@@ -53,7 +54,7 @@ timestamp: "0.7.4-gen"
 
 ## 관계
 - 호출: `row`, `value`
-- 피호출(영향 전파 경로): `PythonComSkillContext._journal_save`, `PythonComSkillContext._shaped_matrix`, `PythonComSkillContext.find_header`, `PythonComSkillContext.replace`, `_excel_output_preview_sheets`, `_live_preview_schema`, `_sheet_snapshot`, `_verify_capture_sheet_aoa`, `inspect_workbook_with_excel`, `load_workbook_aoa_with_excel`
+- 피호출(영향 전파 경로): `PythonComSkillContext._journal_save`, `PythonComSkillContext._note_blanked_cells_from_range`, `PythonComSkillContext._shaped_matrix`, `PythonComSkillContext.find_header`, `PythonComSkillContext.replace`, `_excel_output_preview_sheets`, `_live_preview_schema`, `_sheet_snapshot`, `_verify_capture_sheet_aoa`, `inspect_workbook_with_excel`, `load_workbook_aoa_with_excel`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

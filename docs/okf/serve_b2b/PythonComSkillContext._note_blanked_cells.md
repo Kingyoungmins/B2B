@@ -1,20 +1,21 @@
 ---
 type: method
-title: _OpenpyxlSheetsProxy.__contains__
+title: PythonComSkillContext._note_blanked_cells
 module: serve_b2b.py
 lang: python
 extraction: ast
-class: _OpenpyxlSheetsProxy
-signature: "(self, name)"
-role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
-role_source: none
+class: PythonComSkillContext
+signature: "(self, before, data)"
+role: "앞 단계가 채워 둔 칸을 이번 쓰기가 '빈칸으로' 덮었는지 센다."
+role_source: docstring
 version: "0.7.4"
-loc: "serve_b2b.py:17042-17044"
+loc: "serve_b2b.py:11458-11484"
 
 # ── 입출력 ──
 inputs:
   - "self"
-  - "name"
+  - "before"
+  - "data"
 returns: "(추정)"
 
 # ── 사이드이펙트 (정적 추정) ──
@@ -25,25 +26,34 @@ raises: []
 # ── 유기적 관계 ──
 calls: []
 calls_external:
-  - "name"
+  - "data"
+  - "enumerate"
+  - "get"
+  - "int"
+  - "len"
+  - "new_row"
+  - "nv"
+  - "old"
   - "str"
-called_by: []
+  - "strip"
+called_by:
+  - "PythonComSkillContext._note_blanked_cells_from_range"
 reads:
-  - "self._workbook_proxy"
+  - "self._shared"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
 timestamp: "0.7.4-gen"
 ---
 
 ## 역할
-(추정) 역할 주석 없음 — 담당자 1줄 보완 필요  _(자동 추정 — 확인 필요)_
+앞 단계가 채워 둔 칸을 이번 쓰기가 '빈칸으로' 덮었는지 센다.
 
 ## 사이드이펙트 & 주의
 - 없음(정적 분석 기준)
 
 ## 관계
 - 호출: 없음
-- 피호출(영향 전파 경로): 없음
+- 피호출(영향 전파 경로): `PythonComSkillContext._note_blanked_cells_from_range`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

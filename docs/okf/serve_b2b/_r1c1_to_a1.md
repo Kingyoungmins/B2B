@@ -8,7 +8,7 @@ signature: "(r1c1)"
 role: "Excel 'Link' 포맷의 R1C1 범위 표기를 A1 로 변환. Link 포맷은 항상 R1C1 이다."
 role_source: docstring
 version: "0.7.4"
-loc: "serve_b2b.py:10761-10802"
+loc: "serve_b2b.py:10768-10809"
 
 # ── 입출력 ──
 inputs:

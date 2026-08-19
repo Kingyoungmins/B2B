@@ -8,7 +8,7 @@ signature: "(aoa, headerRow)"
 role: "숫자가 아예 없는 전체-텍스트 표(명단류)는 확장하지 않는다 — 데이터 행을 머리글로 오인 방지."
 role_source: banner
 version: "0.7.4"
-loc: "file-schema.js:657-657"
+loc: "file-schema.js:669-669"
 
 # ── 입출력 ──
 inputs:
