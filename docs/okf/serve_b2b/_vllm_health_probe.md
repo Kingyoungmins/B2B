@@ -8,7 +8,7 @@ signature: "(base='', timeout=2.0)"
 role: "vLLM 도달성 프로브 — /v1/models 를 짧은 타임아웃으로 확인(캐시 30s)."
 role_source: docstring
 version: "0.7.4"
-loc: "serve_b2b.py:6892-6914"
+loc: "serve_b2b.py:6893-6915"
 
 # ── 입출력 ──
 inputs:

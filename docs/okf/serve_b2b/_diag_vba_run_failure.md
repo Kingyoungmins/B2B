@@ -8,7 +8,7 @@ signature: "(app, host_wb, vbproj, module, module_name, safe_code, err)"
 role: "[임시 진단] 러너 매크로 실행 실패 원인 포착: 컴파일에러 vs 매크로차단 vs 기타."
 role_source: docstring
 version: "0.7.4"
-loc: "serve_b2b.py:8764-8866"
+loc: "serve_b2b.py:8791-8893"
 
 # ── 입출력 ──
 inputs:

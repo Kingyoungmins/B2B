@@ -9,7 +9,7 @@ signature: "(self, matrix)"
 role: "읽은 매트릭스에 비어있지 않은 값이 하나라도 있으면 '실데이터를 읽었다'는 증거를 남긴다."
 role_source: docstring
 version: "0.7.4"
-loc: "serve_b2b.py:11718-11728"
+loc: "serve_b2b.py:11754-11764"
 
 # ── 입출력 ──
 inputs:

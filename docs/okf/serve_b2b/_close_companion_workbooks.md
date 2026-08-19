@@ -8,7 +8,7 @@ signature: "(session, app)"
 role: "이전에 동반 오픈한 워크북을 닫고 임시본 폴더를 정리한다(다음 스냅샷 전에 호출)."
 role_source: docstring
 version: "0.7.4"
-loc: "serve_b2b.py:9332-9351"
+loc: "serve_b2b.py:9359-9378"
 
 # ── 입출력 ──
 inputs:

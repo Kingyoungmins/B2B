@@ -9,7 +9,7 @@ signature: "(self, value)"
 role: "텍스트 정규화(공백/표기 차이 제거). 값 비교 보조용."
 role_source: docstring
 version: "0.7.4"
-loc: "serve_b2b.py:12663-12665"
+loc: "serve_b2b.py:12699-12701"
 
 # ── 입출력 ──
 inputs:

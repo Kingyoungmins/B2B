@@ -8,7 +8,7 @@ signature: "(excel_id, values_only=False)"
 role: "라이브 세션에서 '방금 한 복붙'을 캡처한다."
 role_source: docstring
 version: "0.7.4"
-loc: "serve_b2b.py:10946-11091"
+loc: "serve_b2b.py:10982-11127"
 
 # ── 입출력 ──
 inputs:

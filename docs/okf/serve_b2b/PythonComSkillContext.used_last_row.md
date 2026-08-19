@@ -9,7 +9,7 @@ signature: "(self, sheet)"
 role: "시트 '사용 범위' 마지막 행(1-based). 특정 열 기준 last_row(col=N) 은 그 열이 희소/병합이면 표 하단을"
 role_source: docstring
 version: "0.7.4"
-loc: "serve_b2b.py:11535-11555"
+loc: "serve_b2b.py:11571-11591"
 
 # ── 입출력 ──
 inputs:
