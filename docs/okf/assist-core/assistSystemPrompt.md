@@ -32,6 +32,7 @@ calls_external:
   - "query"
   - "read"
 called_by:
+  - "assistCloseOut"
   - "assistHandleUserMessage"
 reads:
   - "state.inputs"
@@ -50,7 +51,7 @@ timestamp: "0.7.4-gen"
 
 ## 관계
 - 호출: `assistToolCatalog`
-- 피호출(영향 전파 경로): `assistHandleUserMessage`
+- 피호출(영향 전파 경로): `assistCloseOut`, `assistHandleUserMessage`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

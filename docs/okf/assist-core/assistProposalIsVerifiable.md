@@ -8,7 +8,7 @@ signature: "(p)"
 role: "[Tier2] 격리 검증이 가능한 제안인가 — 단일 코드 수정(replaceLiteral/replaceStepCode)이고, 대상 스텝이"
 role_source: banner
 version: "0.7.4"
-loc: "assist-core.js:790-790"
+loc: "assist-core.js:848-848"
 
 # ── 입출력 ──
 inputs:

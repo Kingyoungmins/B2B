@@ -8,7 +8,7 @@ signature: "(p, pickedIdx)"
 role: "사용자가 승인 버튼을 눌렀을 때만 호출된다. 여기가 유일한 상태 변경 지점."
 role_source: banner
 version: "0.7.4"
-loc: "assist-core.js:825-825"
+loc: "assist-core.js:883-883"
 
 # ── 입출력 ──
 inputs:

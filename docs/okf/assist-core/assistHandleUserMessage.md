@@ -8,7 +8,7 @@ signature: "(userText, ui, attachImages)"
 role: "사용자 발화 1건 처리. UI 콜백으로 진행 상황을 알린다."
 role_source: banner
 version: "0.7.4"
-loc: "assist-core.js:293-293"
+loc: "assist-core.js:308-308"
 
 # ── 입출력 ──
 inputs:
@@ -30,6 +30,7 @@ calls:
   - "armStall"
   - "assistBuildProposal"
   - "assistCallSignature"
+  - "assistCloseOut"
   - "assistHasChineseLeak"
   - "assistLooksLikeDanglingAnnouncement"
   - "assistLooksLikeFakeButtonNarration"
@@ -100,7 +101,7 @@ timestamp: "0.7.4-gen"
 - 변경 상태 `assist` — 수정 시 이 상태를 읽는 곳 동반 점검.
 
 ## 관계
-- 호출: `add`, `armStall`, `assistBuildProposal`, `assistCallSignature`, `assistHasChineseLeak`, `assistLooksLikeDanglingAnnouncement`, `assistLooksLikeFakeButtonNarration`, `assistLooksLikeProseRequestSuggestion`, `assistParseAction`, `assistProposalIsVerifiable`, `assistPushAssistant`, `assistRunTool`, `assistStripActionBlock`, `assistSystemPrompt`, `assistVerifyProposal`, `callAssistLLM`, `callLLM`, `push`, `say`
+- 호출: `add`, `armStall`, `assistBuildProposal`, `assistCallSignature`, `assistCloseOut`, `assistHasChineseLeak`, `assistLooksLikeDanglingAnnouncement`, `assistLooksLikeFakeButtonNarration`, `assistLooksLikeProseRequestSuggestion`, `assistParseAction`, `assistProposalIsVerifiable`, `assistPushAssistant`, `assistRunTool`, `assistStripActionBlock`, `assistSystemPrompt`, `assistVerifyProposal`, `callAssistLLM`, `callLLM`, `push`, `say`
 - 피호출(영향 전파 경로): `assistHandleBridgeMessage`, `assistSubmit`
 
 ## 실패/예외

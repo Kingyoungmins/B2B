@@ -1,18 +1,17 @@
 ---
 type: endpoint
-title: assistLooksLikeDanglingAnnouncement
+title: assistCloseOut
 module: assist-core.js
 lang: js
 extraction: regex   # 정규식 근사
-signature: "(text)"
-role: "\"언제든 도와드리겠습니다\")이 아니면 → 예고. 길이와 무관하게 잡는다."
+signature: "()"
+role: "반환값 true = 답을 냈다(호출자는 그대로 종료). false 면 예전 안내로 떨어진다."
 role_source: banner
 version: "0.7.4"
-loc: "assist-core.js:250-250"
+loc: "assist-core.js:369-369"
 
 # ── 입출력 ──
-inputs:
-  - "text"
+inputs: []
 returns: "(추정)"
 
 # ── 사이드이펙트 (정적 추정) ──
@@ -21,14 +20,19 @@ side_effects:
 raises: []
 
 # ── 유기적 관계 ──
-calls: []
+calls:
+  - "assistParseAction"
+  - "assistPushAssistant"
+  - "assistStripActionBlock"
+  - "assistSystemPrompt"
+  - "callLLM"
+  - "say"
 calls_external:
   - "String"
-  - "filter"
-  - "map"
-  - "pop"
+  - "join"
+  - "onHandoff"
+  - "slice"
   - "split"
-  - "test"
   - "trim"
 called_by:
   - "assistHandleUserMessage"
@@ -39,13 +43,13 @@ timestamp: "0.7.4-gen"
 ---
 
 ## 역할
-"언제든 도와드리겠습니다")이 아니면 → 예고. 길이와 무관하게 잡는다.
+반환값 true = 답을 냈다(호출자는 그대로 종료). false 면 예전 안내로 떨어진다.
 
 ## 사이드이펙트 & 주의
 - 없음(정적 분석 기준)
 
 ## 관계
-- 호출: 없음
+- 호출: `assistParseAction`, `assistPushAssistant`, `assistStripActionBlock`, `assistSystemPrompt`, `callLLM`, `say`
 - 피호출(영향 전파 경로): `assistHandleUserMessage`
 
 ## 실패/예외

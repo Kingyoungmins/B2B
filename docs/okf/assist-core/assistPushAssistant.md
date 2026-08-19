@@ -8,7 +8,7 @@ signature: "(text, ui)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
 version: "0.7.4"
-loc: "assist-core.js:567-567"
+loc: "assist-core.js:625-625"
 
 # ── 입출력 ──
 inputs:
@@ -28,6 +28,7 @@ calls_external:
   - "String"
   - "onAssistantText"
 called_by:
+  - "assistCloseOut"
   - "assistHandleUserMessage"
 reads:
   - "state.assist"
@@ -46,7 +47,7 @@ timestamp: "0.7.4-gen"
 
 ## 관계
 - 호출: `push`
-- 피호출(영향 전파 경로): `assistHandleUserMessage`
+- 피호출(영향 전파 경로): `assistCloseOut`, `assistHandleUserMessage`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

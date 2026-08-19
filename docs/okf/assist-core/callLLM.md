@@ -8,7 +8,7 @@ signature: "(sys, imgs)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
 version: "0.7.4"
-loc: "assist-core.js:341-341"
+loc: "assist-core.js:356-356"
 
 # ── 입출력 ──
 inputs:
@@ -28,6 +28,7 @@ calls:
 calls_external:
   - "clearTimeout"
 called_by:
+  - "assistCloseOut"
   - "assistHandleUserMessage"
   - "autoRegenerateAsVbaFallback"
   - "autoRegenerateForMissingCode"
@@ -50,7 +51,7 @@ timestamp: "0.7.4-gen"
 
 ## 관계
 - 호출: `armStall`, `callAssistLLM`
-- 피호출(영향 전파 경로): `assistHandleUserMessage`, `autoRegenerateAsVbaFallback`, `autoRegenerateForMissingCode`, `autoRegenerateForStaticSafety`, `autoRepairPipelineStep`, `requestErrorRecovery`, `sendChat`, `showThinkRetryPrompt`
+- 피호출(영향 전파 경로): `assistCloseOut`, `assistHandleUserMessage`, `autoRegenerateAsVbaFallback`, `autoRegenerateForMissingCode`, `autoRegenerateForStaticSafety`, `autoRepairPipelineStep`, `requestErrorRecovery`, `sendChat`, `showThinkRetryPrompt`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

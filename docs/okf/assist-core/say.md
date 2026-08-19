@@ -8,7 +8,7 @@ signature: "(s)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
 version: "0.7.4"
-loc: "assist-core.js:295-295"
+loc: "assist-core.js:310-310"
 
 # ── 입출력 ──
 inputs:
@@ -25,6 +25,7 @@ calls: []
 calls_external:
   - "onStatus"
 called_by:
+  - "assistCloseOut"
   - "assistHandleUserMessage"
   - "onBridge"
   - "onDelta"
@@ -42,7 +43,7 @@ timestamp: "0.7.4-gen"
 
 ## 관계
 - 호출: 없음
-- 피호출(영향 전파 경로): `assistHandleUserMessage`, `onBridge`, `onDelta`
+- 피호출(영향 전파 경로): `assistCloseOut`, `assistHandleUserMessage`, `onBridge`, `onDelta`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

@@ -16198,7 +16198,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "assist-core.js:235-235",
+      "loc": "assist-core.js:250-250",
       "signature": "(text)",
       "calls": [],
       "side_effects": [
@@ -16213,7 +16213,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "assist-core.js:258-258",
+      "loc": "assist-core.js:273-273",
       "signature": "(text)",
       "calls": [],
       "side_effects": [
@@ -16228,7 +16228,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "assist-core.js:273-273",
+      "loc": "assist-core.js:288-288",
       "signature": "(text)",
       "calls": [],
       "side_effects": [
@@ -16243,7 +16243,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "assist-core.js:283-283",
+      "loc": "assist-core.js:298-298",
       "signature": "()",
       "calls": [],
       "side_effects": [
@@ -16258,7 +16258,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "assist-core.js:284-284",
+      "loc": "assist-core.js:299-299",
       "signature": "()",
       "calls": [],
       "side_effects": [
@@ -16273,13 +16273,14 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "assist-core.js:293-293",
+      "loc": "assist-core.js:308-308",
       "signature": "(userText, ui, attachImages)",
       "calls": [
         "add",
         "armStall",
         "assistBuildProposal",
         "assistCallSignature",
+        "assistCloseOut",
         "assistHasChineseLeak",
         "assistLooksLikeDanglingAnnouncement",
         "assistLooksLikeFakeButtonNarration",
@@ -16314,7 +16315,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "assist-core.js:295-295",
+      "loc": "assist-core.js:310-310",
       "signature": "(s)",
       "calls": [],
       "side_effects": [
@@ -16329,7 +16330,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "assist-core.js:329-329",
+      "loc": "assist-core.js:344-344",
       "signature": "()",
       "calls": [],
       "side_effects": [
@@ -16344,7 +16345,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "assist-core.js:336-336",
+      "loc": "assist-core.js:351-351",
       "signature": "(chunk)",
       "calls": [
         "armStall",
@@ -16362,11 +16363,33 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "assist-core.js:341-341",
+      "loc": "assist-core.js:356-356",
       "signature": "(sys, imgs)",
       "calls": [
         "armStall",
         "callAssistLLM"
+      ],
+      "side_effects": [
+        "없음(정적 분석 기준)"
+      ],
+      "reads": [],
+      "writes": []
+    },
+    {
+      "id": "assistCloseOut",
+      "module": "assist-core.js",
+      "lang": "js",
+      "kind": "function",
+      "extraction": "regex",
+      "loc": "assist-core.js:369-369",
+      "signature": "()",
+      "calls": [
+        "assistParseAction",
+        "assistPushAssistant",
+        "assistStripActionBlock",
+        "assistSystemPrompt",
+        "callLLM",
+        "say"
       ],
       "side_effects": [
         "없음(정적 분석 기준)"
@@ -16380,7 +16403,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "assist-core.js:567-567",
+      "loc": "assist-core.js:625-625",
       "signature": "(text, ui)",
       "calls": [
         "push"
@@ -16401,7 +16424,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "assist-core.js:574-574",
+      "loc": "assist-core.js:632-632",
       "signature": "(newCode, step, kind)",
       "calls": [
         "push",
@@ -16419,7 +16442,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "assist-core.js:578-578",
+      "loc": "assist-core.js:636-636",
       "signature": "(fn, ...a)",
       "calls": [
         "push"
@@ -16436,7 +16459,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "assist-core.js:593-593",
+      "loc": "assist-core.js:651-651",
       "signature": "(args)",
       "calls": [
         "_assistGateReplacementCode",
@@ -16466,7 +16489,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "assist-core.js:684-684",
+      "loc": "assist-core.js:742-742",
       "signature": "(fn, ...a)",
       "calls": [
         "push"
@@ -16483,7 +16506,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "assist-core.js:717-717",
+      "loc": "assist-core.js:775-775",
       "signature": "(field, label)",
       "calls": [
         "push"
@@ -16500,7 +16523,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "assist-core.js:781-781",
+      "loc": "assist-core.js:839-839",
       "signature": "(id)",
       "calls": [],
       "side_effects": [
@@ -16517,7 +16540,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "assist-core.js:790-790",
+      "loc": "assist-core.js:848-848",
       "signature": "(p)",
       "calls": [],
       "side_effects": [
@@ -16534,7 +16557,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "assist-core.js:807-807",
+      "loc": "assist-core.js:865-865",
       "signature": "(p, signal)",
       "calls": [
         "postExcelMirror"
@@ -16553,7 +16576,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "assist-core.js:825-825",
+      "loc": "assist-core.js:883-883",
       "signature": "(p, pickedIdx)",
       "calls": [],
       "side_effects": [
@@ -16571,7 +16594,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "assist-core.js:845-845",
+      "loc": "assist-core.js:903-903",
       "signature": "(proposalId, accepted)",
       "calls": [
         "assistApplyCompanions",
@@ -51734,6 +51757,11 @@
     },
     {
       "from": "assistHandleUserMessage",
+      "to": "assistCloseOut",
+      "lang": "js"
+    },
+    {
+      "from": "assistHandleUserMessage",
       "to": "assistHasChineseLeak",
       "lang": "js"
     },
@@ -51825,6 +51853,36 @@
     {
       "from": "callLLM",
       "to": "callAssistLLM",
+      "lang": "js"
+    },
+    {
+      "from": "assistCloseOut",
+      "to": "assistParseAction",
+      "lang": "js"
+    },
+    {
+      "from": "assistCloseOut",
+      "to": "assistPushAssistant",
+      "lang": "js"
+    },
+    {
+      "from": "assistCloseOut",
+      "to": "assistStripActionBlock",
+      "lang": "js"
+    },
+    {
+      "from": "assistCloseOut",
+      "to": "assistSystemPrompt",
+      "lang": "js"
+    },
+    {
+      "from": "assistCloseOut",
+      "to": "callLLM",
+      "lang": "js"
+    },
+    {
+      "from": "assistCloseOut",
+      "to": "say",
       "lang": "js"
     },
     {
@@ -67629,11 +67687,11 @@
     }
   ],
   "stats": {
-    "functions": 1990,
-    "edges": 5553,
+    "functions": 1991,
+    "edges": 5560,
     "by_lang": {
       "python": 638,
-      "js": 1119,
+      "js": 1120,
       "csharp": 61
     }
   }
