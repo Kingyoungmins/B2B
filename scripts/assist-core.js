@@ -209,6 +209,21 @@ ${typeof assistToolCatalog === "function" ? assistToolCatalog() : ""}
 ## 사실 (지어내지 말 것)
 ${facts}
 
+## '적용됐다는데 값이 안 보인다' — 이때의 진단 순서
+오류가 안 났는데 결과가 안 보이는 게 가장 흔한 제보다. 이건 step.error 로는 절대 안 잡힌다
+(실패 기록이 없으니 "기록 없음"만 나오고, 그걸 '문제없음'으로 읽으면 진단이 통째로 헛돈다).
+추측하지 말고 이 순서로 근거를 모아라.
+ ① pipeline.list 로 **어느 단계들이 같은 열/범위를 건드리는지** 먼저 본다. 한 열을 여러 단계가
+    순서대로 다듬는 스킬이 흔하고, 뒤 단계가 앞 단계 결과를 덮어 지우는 사고가 실제로 있었다.
+ ② 의심 단계의 pipeline.step 으로 **코드 원문**을 읽는다. 설명문과 코드가 다른 경우가 많다 —
+    설명을 근거로 삼지 말고 코드를 봐라. 특히 "기존 값은 건드리지 않는다"고 써 있는데 정작
+    그 열을 읽지 않고 새로 쓰면, 조건 밖 행은 빈칸으로 덮여 앞 단계 결과가 사라진다.
+ ③ data.read 로 **그 열의 실제 값**을 본다(빈칸인지, 0인지, 수식이 있는지).
+ ④ run.trace 로 그 단계가 **읽기를 했는지** 확인한다. 부분 갱신인데 읽기가 없으면 보존이
+    불가능하므로 그것만으로 원인이 확정된다.
+결론은 "어느 단계가 무엇을 지웠는지/왜 조건에 안 맞았는지"까지 짚어야 한다.
+"다시 실행해 보세요"로 끝내지 마라.
+
 ## 태도
 - 근거 없는 단정 금지. 모르면 "확인할 수 없다"고 말하라. 특히 VBA 단계가 조용히 아무것도 안 한 경우는
   프로그램 구조상 판정할 수 없다 — 추측하지 말고 그렇게 밝혀라.
@@ -345,6 +360,38 @@ async function assistHandleUserMessage(userText, ui, attachImages) {
   };
 
   try {
+    /* [사용자 제보 2026-08-20] "결과를 끝까지 못 내고 내가 중간에 개입해야 동작함"
+       라운드/시간/도구 한도에 걸리면 예전엔 그 자리에서 "질문을 좁혀 다시 물어봐 주세요"로 끝냈다.
+       도구로 최대 7번 조사해 모아 둔 근거를 통째로 버리고 사용자에게 다시 시키는 셈이었다 —
+       제보의 '개입해야 동작함'이 정확히 이 자리다.
+       조사 결과는 tail 에 남아 있으므로 도구 없이 한 번만 더 불러 답을 맺게 한다.
+       반환값 true = 답을 냈다(호출자는 그대로 종료). false 면 예전 안내로 떨어진다. */
+    async function assistCloseOut() {
+      try {
+        say("정리 중...");
+        const closingSys = assistSystemPrompt()
+          + "\n\n## 지금 라운드 — 마무리\n"
+          + "조사 시간이 끝났다. **도구는 더 쓸 수 없다.** 지금까지 확인한 것만으로 지금 답을 맺어라.\n"
+          + "· 알아낸 사실과, 그것으로 사용자가 지금 할 수 있는 행동을 구체적으로 써라.\n"
+          + "· 확인하지 못한 부분이 있으면 '여기까지는 확인했고 이건 못 봤다'고 솔직히 밝혀라 —\n"
+          + "  '다시 물어봐 달라'로 사용자에게 떠넘기지 마라.\n"
+          + "· action=\"final\" 로 끝내라(설계 채팅에 넘길 작업이면 action=\"handoff\").";
+        const closing = await callLLM(closingSys);
+        const cp = assistParseAction(closing);
+        const cText = assistStripActionBlock(cp.block ? closing.split(cp.block).join("\n") : closing);
+        const body = String(cText || "").trim();
+        if (cp.action === "handoff") {
+          const req = String((cp.args && cp.args.request) || "").trim().slice(0, 1200);
+          const rsn = String((cp.args && cp.args.reason) || "").slice(0, 300);
+          if (body) assistPushAssistant(body, ui);
+          if (req) { try { ui.onHandoff && ui.onHandoff({ request: req, reason: rsn }); } catch (_) {} }
+          return !!(body || req);
+        }
+        if (body) { assistPushAssistant(body, ui); return true; }
+      } catch (_) { /* 마무리 실패 → 호출자가 예전 안내로 */ }
+      return false;
+    }
+
     for (let round = 1; round <= ASSIST_MAX_ROUNDS; round++) {
       if (Date.now() - t0 > ASSIST_BUDGET_MS) {
         say("시간이 오래 걸려 여기서 정리합니다.");
@@ -494,7 +541,11 @@ async function assistHandleUserMessage(userText, ui, attachImages) {
 
       if (parsed.action === "tool") {
         // [검토 #16] 한도(라운드/도구 수)에 걸렸는데 또 도구를 요청한 경우 — 원시 JSON 노출 대신 정리 안내.
-        assistPushAssistant(visible || "확인 한도에 걸려 답을 정리하지 못했습니다. 질문을 조금 좁혀 다시 물어봐 주세요.", ui);
+        // [제보 2026-08-20] 여기서 끝내면 조사해 둔 근거를 버리고 사용자에게 다시 시키게 된다.
+        // 본문이 있으면 그걸 쓰고, 없으면 도구 없이 한 번 더 불러 답을 맺는다.
+        if (visible) { assistPushAssistant(visible, ui); return; }
+        if (await assistCloseOut()) return;
+        assistPushAssistant("확인 한도에 걸려 답을 정리하지 못했습니다. 질문을 조금 좁혀 다시 물어봐 주세요.", ui);
         return;
       }
       // final (또는 파싱 실패 → final 강등). 액션 블록만 있고 본문이 없으면 JSON 원문을 보여주지 않는다.
@@ -554,6 +605,13 @@ async function assistHandleUserMessage(userText, ui, attachImages) {
       );
       return;
     }
+    // [사용자 제보 2026-08-20] "결과를 끝까지 못 내고 내가 중간에 개입해야 동작함"
+    // 여기까지 왔다는 건 라운드/시간 예산을 다 썼거나 마지막 라운드가 또 도구를 부른 경우다.
+    // 예전엔 그 자리에서 "질문을 좁혀 다시 물어봐 주세요"로 끝냈다 — 도구로 최대 7번 조사해
+    // 모아 둔 근거를 통째로 버리고 사용자에게 다시 시키는 셈이었다(제보의 '개입해야 동작함'이 이것).
+    // 조사 결과는 tail 에 그대로 남아 있으므로, 도구 없이 한 번만 더 불러 지금까지 알아낸 것으로
+    // 답을 맺게 한다. 그래도 실패할 때만 예전 안내로 떨어진다.
+    if (await assistCloseOut()) return;
     assistPushAssistant("확인을 마치지 못했습니다. 질문을 조금 더 좁혀서 다시 물어봐 주세요.", ui);
   } catch (err) {
     assistPushAssistant("오류가 났습니다: " + String((err && err.message) || err).slice(0, 200), ui);
