@@ -47,6 +47,15 @@ function renderEditingBanner() {
   banner.querySelector(".edit-cancel").onclick = () => {
     if (typeof toggleEditStep === "function") toggleEditStep(state.editingStepId);
   };
+  // [사용자 제보 2026-08-21] 한 단계 수정을 끝내고 [해제]를 깜빡한 채 다음 단계를 이어 쓰면,
+  // 그 입력이 '다음 단계 만들기'가 아니라 '방금 그 단계 또 고치기'로 들어가 버린다.
+  // 수정 적용 직후에는 배너를 눈에 띄게 만들어(해제를 강조) 실수를 줄인다.
+  if (window.__b2bEditJustApplied) {
+    banner.classList.add("just-applied");
+    const _b = banner;
+    setTimeout(() => { try { _b.classList.remove("just-applied"); } catch (_) {} }, 12000);
+    window.__b2bEditJustApplied = false;
+  }
   const ta = $("chat-text");
   if (ta) ta.classList.add("editing");
 }
@@ -2400,14 +2409,30 @@ function addAssistantReply(fullText, replyContext) {
           // 스텝도 이 순간부터 연결된 대화가 생긴다. prompt 는 건드리지 않는다(시트/대상 추론이
           // step.prompt 를 읽으므로 바꾸면 실행 대상이 흔들린다 — 연결은 번호표만 담당).
           try {
-            const oh = originHistIdForPrompt((replyContext && replyContext.sourceUserMessage) || "");
+            const _src = (replyContext && replyContext.sourceUserMessage) || "";
+            const oh = originHistIdForPrompt(_src);
             const st = (state.pipeline || []).find(x => x && x.id === editTargetId);
             if (oh && st) st.originHistId = oh;
+            // [사용자 제보 2026-08-21] ✎ 프리필이 '최초 프롬프트'로 되돌아가던 문제.
+            // step.prompt 는 위 주석대로 일부러 안 바꾼다(대상/시트 추론이 그걸 읽는다).
+            // 대신 '마지막으로 보낸 수정 요청문'을 따로 남겨 프리필만 이걸 쓰게 한다 —
+            // 말풍선은 이미 수정 후 텍스트를 보여주고 있었으니 그 둘을 일치시키는 것이다.
+            if (st && String(_src || "").trim()) st.lastEditPrompt = String(_src).trim();
           } catch (_) {}
         }
         if (result && !result.error) {
           editApplyBtn.disabled = true;
           rejectBtn.disabled = true;
+          // [제보 2026-08-21] 수정이 끝났으니 '해제'를 잊지 않게 알린다 — 안 풀고 다음 단계를
+          // 이어 쓰면 그 입력이 새 단계가 아니라 '같은 단계 재수정'으로 들어간다.
+          try {
+            window.__b2bEditJustApplied = true;
+            if (typeof renderEditingBanner === "function") renderEditingBanner();
+            if (typeof toast === "function") {
+              toast(`Step ${(state.pipeline || []).findIndex(x => x && x.id === editTargetId) + 1} 수정 완료 — `
+                + "다음 단계를 만들려면 아래 [해제]를 먼저 누르세요.", "success");
+            }
+          } catch (_) {}
           finalizeActionButtonFromResult(
             editApplyBtn,
             result,

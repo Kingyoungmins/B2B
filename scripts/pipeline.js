@@ -3011,6 +3011,12 @@ function computeStateBeforeStep(stepIdx) {
    · 수정 모드 해제/전환 시, 입력창이 '우리가 채운 그대로'면 지우거나 새 원문으로 교체한다
      (사용자가 손댔으면 보존). */
 function _editPrefillPromptOf(step) {
+  // [사용자 제보 2026-08-21] 한 번 수정한 단계를 또 수정하려 하면 '최초 프롬프트'가 채워졌다.
+  // step.prompt 는 대상/시트 추론이 읽는 값이라 수정 때 일부러 안 바꾼다(chat-ui 주석 참조) —
+  // 그래서 마지막 수정 요청문을 lastEditPrompt 에 따로 남기고, 프리필은 그걸 우선한다.
+  // 채팅으로 수정한 이상 '연결된 대화'가 생긴 것이므로 아래 녹화/캡처 제외 규칙보다 앞선다.
+  const last = String((step && step.lastEditPrompt) || "").trim();
+  if (last) return last;
   const p = String((step && step.prompt) || "").trim();
   if (!p) return "";
   // '대화 없이 태어난 스텝' 판별은 채팅 매칭(chat-ui.js stepChatOriginless)과 같은 기준을 쓴다.

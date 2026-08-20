@@ -292,6 +292,10 @@ function _buildLogicZipEntriesImpl(safeBase, name) {
       prompt: (typeof normalizeStaleBooksInSavedText === "function"
         ? normalizeStaleBooksInSavedText(s.prompt || null) : (s.prompt || null)),
       originHistId: s.originHistId || null,   // [번호표 연결] chatHistory 의 histId 와 짝 — 함께 저장돼야 왕복된다
+      // [제보 2026-08-21] ✎ 프리필용 '마지막 수정 요청문'. 저장에서 빠지면 zip 왕복 후
+      // 다시 최초 프롬프트가 채워져 같은 증상이 재발한다(prompt 와 달리 실행에는 안 쓰인다).
+      lastEditPrompt: (typeof normalizeStaleBooksInSavedText === "function"
+        ? normalizeStaleBooksInSavedText(s.lastEditPrompt || null) : (s.lastEditPrompt || null)),
       title: s.title || null,   // [사용자 편집 이름] 카드 라벨을 직접 편집한 이름 → zip 에 보존, 불러오면 그 이름으로 표시
       enabled: isStepEnabled(s),
       language: s.language || "javascript",
