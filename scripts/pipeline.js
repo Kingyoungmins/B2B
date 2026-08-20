@@ -2203,6 +2203,20 @@ function applyVbaStepToLiveExcel(step, excelId, options = {}) {
       attachPipelineStepError(err, step, failedIdx >= 0 ? failedIdx : (state.pipeline || []).length - 1);
       const mayHaveApplied = pipelineErrorMayHaveAppliedInExcel(err);
       setPipelineRuntimeStatus([step.id], mayHaveApplied ? "review" : "error", mayHaveApplied ? "확인 필요" : "오류");
+      // [SBAGENT-274 후속 제보 2026-08-20] '오류'로 끝난 VBA 스텝이 변경을 라이브에 남길 수 있다
+      // (매크로가 일을 다 하고 후처리에서 실패하는 등 — 실측: 시트 3개가 만들어진 채 오류 표시).
+      // 그 잔류물은 파이프라인에 없는 상태라, 나중에 아무 스냅샷 복원(다른 단계 OFF 등)이 일어나는
+      // 순간 소리 없이 사라진다 — 사용자에겐 "OFF 했더니 엉뚱한 시트가 증발"로 보인다. 확정 실패한
+      // VBA 스텝은 적용 직전 사본으로 라이브를 되돌려 화면과 파이프라인 상태를 즉시 일치시킨다.
+      // (Python 스텝은 서버가 저널로 정밀 롤백하므로 제외 — 큰 파일 재열기 낭비 방지. 타임아웃
+      //  (mayHaveApplied)도 제외 — 실제로 성공했을 수 있는 결과를 지우면 안 된다.)
+      const _preSnap = step && step._preApplySnapshot;
+      if (!mayHaveApplied && liveLang !== "python" && _preSnap && _preSnap.resultId
+          && typeof _restoreSnapshotByIds === "function") {
+        _restoreSnapshotByIds(_preSnap.resultId, _preSnap.excelId || excelId, {
+          message: "실패한 단계의 변경을 되돌리는 중...", landTab: false,
+        }).catch(() => {});
+      }
       restoreVbaExcelAfterError(excelId, {
         restoreFileId: typeof fileIdForExcelMirrorId === "function" ? fileIdForExcelMirrorId(excelId) : null,
       });
@@ -2278,9 +2292,30 @@ async function runLivePipelineStepSequentially(step, excelId, options = {}) {
     // 계속 '교차 아님'으로 남아 빠른 되돌리기가 목적지를 안 되돌린다.
     if (typeof wireStepCrossFromResponse === "function") wireStepCrossFromResponse(data, step);
     if (stepId) setPipelineRuntimeStatus([stepId], "applied", "적용됨");
+    // [SBAGENT-273 회색 엑셀 2026-08-20] 위 prehide(hideAll)가 모든 미러를 파킹하는데, 이 함수(단일
+    // 적용: 수정/켜기/삽입)만 재표시가 없어 적용 직후 우측이 회색(빈 패널)으로 남았다 — 탭 전환으로도
+    // 안 돌아와 사용자가 마지막 단계 OFF→ON 으로 우회해야 했다(실측 2026-08-20 10:19). 빠른 되돌리기
+    // (_restoreSnapshotByIds)·Python 전체 재적용과 같은 계약으로 재표시한다. VBA/교차파일(격리 경로)은
+    // showOnly(force)가 빈 프레임을 직접 띄울 수 있어(전체 재적용 주석과 동일 사유) 예약 복원을 쓴다.
+    if (options.prehide !== false) {
+      try {
+        if (!isVbaSeq && typeof showOnlyExcelMirrorWindow === "function") {
+          await showOnlyExcelMirrorWindow(excelId, { force: true });
+          // [탭 어긋남 방지] 보이는 창만 바꾸면 탭 기준 폴링과 어긋난다(_restoreSnapshotByIds 와 동일 계약).
+          if (typeof landAppTabOnExcelSession === "function") landAppTabOnExcelSession(excelId);
+        } else if (typeof scheduleRestoreActiveExcelMirror === "function") {
+          scheduleRestoreActiveExcelMirror(180, { restoreExcelId: excelId });
+        }
+      } catch (_) {}
+    }
     return { data, requestMs: performance.now() - requestStarted };
   } catch (err) {
     if (stepId) setPipelineRuntimeStatus([stepId], "error", "오류");
+    // [SBAGENT-273] 실패 시에도 prehide 로 숨긴 미러는 되살려 둔다(오류 화면 뒤가 회색으로 남지 않게).
+    // 동기 재표시는 오류 복구 흐름과 경합할 수 있어 예약 복원만 건다.
+    if (options.prehide !== false && typeof scheduleRestoreActiveExcelMirror === "function") {
+      try { scheduleRestoreActiveExcelMirror(300, { restoreExcelId: excelId }); } catch (_) {}
+    }
     // 실패해도 '실패 전까지 실제로 쓴 파일'은 사실이다 — 되돌리기 판정에 그대로 쓴다.
     try {
       const einfo = err && (err.errorInfo || err._stepInfo);
@@ -3735,8 +3770,15 @@ function renderPipeline() {
       const resumeBeforeDelete = getPipelineResumeFromIndex();
       // [필드] 이 스텝이 라이브에 '실제 적용된' 상태였는지 — 적용 실패(오류) 스텝은 라이브에 없으므로
       // 아래 reconcile 이 실패해도 부활시키면 안 된다(오류 스킬이 영영 안 지워지는 현상).
-      const removedWasApplied = typeof getPipelineRuntimeStatus === "function"
-        && (getPipelineRuntimeStatus(stepId) || {}).status === "applied";
+      // [제보 2026-08-20 시트 잔류] '확인 필요'(review + 켜짐)는 응답 지연으로 성공 여부를 모른 채
+      // 보존한 스텝이다 — 실제로는 뒤늦게 적용돼 시트가 생겨 있는 경우가 실측됐다. 예전엔 applied 만
+      // 되돌려서, 이런 스텝을 X 로 지우면 UI 에서만 사라지고 우측 엑셀엔 만든 시트가 그대로 남았다.
+      // 적용됐을 수 있는 스텝도 '적용 직전 사본 복원' 대상으로 본다(스텝이 실제로 안 돌았어도 직전
+      // 사본 = 그 스텝 이전 상태라 복원은 무해). 꺼진(보류) 스텝은 기존대로 UI 삭제만 한다.
+      const _removedStatus = typeof getPipelineRuntimeStatus === "function"
+        ? String((getPipelineRuntimeStatus(stepId) || {}).status || "") : "";
+      const removedWasApplied = _removedStatus === "applied"
+        || (_removedStatus === "review" && isStepEnabled(removedStep));
       state.pipeline.splice(currentIdx, 1);
       renderPipeline();
       refreshRunButton();

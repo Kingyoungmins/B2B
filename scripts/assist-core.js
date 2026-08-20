@@ -219,8 +219,10 @@ ${facts}
     설명을 근거로 삼지 말고 코드를 봐라. 특히 "기존 값은 건드리지 않는다"고 써 있는데 정작
     그 열을 읽지 않고 새로 쓰면, 조건 밖 행은 빈칸으로 덮여 앞 단계 결과가 사라진다.
  ③ data.read 로 **그 열의 실제 값**을 본다(빈칸인지, 0인지, 수식이 있는지).
- ④ run.trace 로 그 단계가 **읽기를 했는지** 확인한다. 부분 갱신인데 읽기가 없으면 보존이
-    불가능하므로 그것만으로 원인이 확정된다.
+ ④ '읽기를 했는지'는 run.trace 가 아니라 **② 의 코드 원문**으로 판단한다 — run.trace 에는 읽기
+    이벤트가 아예 안 남으므로(구조상 없음) '읽기 기록 없음'을 근거로 원인을 확정하면 오진이다.
+    부분 갱신 코드에 대상 열 read 가 없으면 보존이 불가능하므로 그때 원인으로 확정한다.
+    run.trace 는 단계 실행 순서·오류 여부 확인용으로만 쓴다.
 결론은 "어느 단계가 무엇을 지웠는지/왜 조건에 안 맞았는지"까지 짚어야 한다.
 "다시 실행해 보세요"로 끝내지 마라.
 
@@ -376,19 +378,97 @@ async function assistHandleUserMessage(userText, ui, attachImages) {
           + "· 확인하지 못한 부분이 있으면 '여기까지는 확인했고 이건 못 봤다'고 솔직히 밝혀라 —\n"
           + "  '다시 물어봐 달라'로 사용자에게 떠넘기지 마라.\n"
           + "· action=\"final\" 로 끝내라(설계 채팅에 넘길 작업이면 action=\"handoff\").";
-        const closing = await callLLM(closingSys);
-        const cp = assistParseAction(closing);
-        const cText = assistStripActionBlock(cp.block ? closing.split(cp.block).join("\n") : closing);
-        const body = String(cText || "").trim();
+        let closing = await callLLM(closingSys);
+        // [제보 2026-08-20 후속] 마무리 응답도 본 루프와 같은 가드를 태운다 — 예전엔 이 함수가
+        // 본 루프 응답 처리의 축소 복제본이라, 한도에 걸린 턴에서만 (중단 오보/답 유실/원시 JSON
+        // 노출/카드 미생성) 이 재발했다. ① 중국어 혼입 1회 재요청:
+        if (assistHasChineseLeak(closing)) {
+          tail.push({ role: "assistant", content: "(생략)" });
+          tail.push({ role: "user", content: "방금 응답에 한국어가 아닌 문장이 섞였습니다. 같은 내용을 한국어로만 다시 작성하세요." });
+          try {
+            closing = await callLLM(closingSys);
+          } catch (err) {
+            if (signal && signal.aborted) throw err;   // 중단은 아래 catch 에서 일관 처리
+            // 그 외 오류는 이전(혼입) 응답으로 계속
+          }
+        }
+        let cp = assistParseAction(closing);
+        // ② 마무리가 또 도구를 부르면(지시 위반) 1회만 교정 재요청 — "~하겠습니다" 예고문을
+        //    최종 답으로 밀어내지 않는다. 재시도 뒤에도 도구면 답으로 안 친다(무한 반복 방지).
+        if (cp.action === "tool") {
+          tail.push({ role: "assistant", content: String(closing || "").slice(0, 1500) });
+          tail.push({ role: "user", content: "도구는 더 쓸 수 없습니다. 지금까지 확인한 것만으로 완결된 답(action=\"final\")을 지금 작성하세요." });
+          closing = await callLLM(closingSys);
+          cp = assistParseAction(closing);
+          if (cp.action === "tool") return false;
+        }
+        let cText = assistStripActionBlock(cp.block ? closing.split(cp.block).join("\n") : closing);
+        if (!cp.parsed && !cp.block) {
+          // ③ [검증 항목6 대칭] 절단된(닫힘 없는) 액션 펜스는 스트리퍼가 못 걷는다 — 원시 JSON 노출 방지.
+          cText = String(cText || "").replace(new RegExp("```\\s*" + ASSIST_FENCE + "[\\s\\S]*$", "i"), "");
+        }
+        let body = String(cText || "").trim();
+        if (!body && cp.parsed && cp.args) {
+          // ④ [검증 R9 대칭] 흔한 위반: 답변을 args 안에 담아 옴 — 건져서 보여준다.
+          body = String(cp.args.text || cp.args.answer || cp.args.content || cp.args.message || "").trim();
+        }
+        if (cp.action === "report" || cp.action === "escalate") {
+          // ⑤ 해결 불가 제보 카드도 마무리에서 살린다(본 루프 report 처리와 동일).
+          if (body) assistPushAssistant(body, ui);
+          try {
+            ui.onReport && ui.onReport({
+              summary: String((cp.args && cp.args.summary) || "").slice(0, 200),
+              reason: String((cp.args && cp.args.reason) || "").slice(0, 400),
+              tried: String((cp.args && cp.args.tried) || "").slice(0, 400),
+            });
+          } catch (_) {}
+          return true;
+        }
+        if (cp.action === "propose") {
+          // ⑥ 시스템 프롬프트가 실행기 오류의 기본 마무리로 요구하는 수정 제안 카드도 살린다.
+          const p = assistBuildProposal(cp.args);
+          if (p.ok) {
+            if (body) assistPushAssistant(body, ui);
+            try {
+              if (assistProposalIsVerifiable(p.proposal)) {
+                say("격리에서 검증 중...");
+                p.proposal.verify = await assistVerifyProposal(p.proposal, signal);
+              }
+            } catch (_) { p.proposal.verify = null; }
+            try { ui.onProposal && ui.onProposal(p.proposal); } catch (_) {}
+            return true;
+          }
+          // 제안 구성이 깨졌으면 본문만이라도 아래 공통 처리로 살린다.
+        }
         if (cp.action === "handoff") {
+          // ⑦ 본 루프와 동일하게 steps(단계별) 형태도 살린다 — request 만 읽으면 다단계 인계안이 유실.
+          let steps = null;
+          if (cp.args && Array.isArray(cp.args.steps) && cp.args.steps.length) {
+            steps = cp.args.steps.map(s => ({
+              title: String((s && s.title) || "").trim().slice(0, 140),
+              request: String((s && (s.request || s.prompt)) || "").trim().slice(0, 1200),
+            })).filter(s => s.request);
+          }
           const req = String((cp.args && cp.args.request) || "").trim().slice(0, 1200);
           const rsn = String((cp.args && cp.args.reason) || "").slice(0, 300);
           if (body) assistPushAssistant(body, ui);
-          if (req) { try { ui.onHandoff && ui.onHandoff({ request: req, reason: rsn }); } catch (_) {} }
-          return !!(body || req);
+          try {
+            if (steps && steps.length) { ui.onHandoff && ui.onHandoff({ steps, reason: rsn }); }
+            else if (req) { ui.onHandoff && ui.onHandoff({ request: req, reason: rsn }); }
+          } catch (_) {}
+          return !!(body || req || (steps && steps.length));
         }
         if (body) { assistPushAssistant(body, ui); return true; }
-      } catch (_) { /* 마무리 실패 → 호출자가 예전 안내로 */ }
+      } catch (err) {
+        // ⑧ [검토 #23 대칭] 사용자 중지/워치독 중단을 삼키면 '질문을 좁혀 달라'로 오보된다.
+        if (signal && signal.aborted) {
+          assistPushAssistant(watchdogFired
+            ? "응답이 오지 않아 중단했습니다. AI 서버가 느리거나 멈췄을 수 있습니다 — 잠시 후 다시 시도해 주세요."
+            : "중단했습니다.", ui);
+          return true;   // 중단 안내를 이미 남겼다 — 호출자의 폴백 문구를 막는다
+        }
+        /* 그 외 마무리 실패 → 호출자가 예전 안내로 */
+      }
       return false;
     }
 
@@ -542,9 +622,12 @@ async function assistHandleUserMessage(userText, ui, attachImages) {
       if (parsed.action === "tool") {
         // [검토 #16] 한도(라운드/도구 수)에 걸렸는데 또 도구를 요청한 경우 — 원시 JSON 노출 대신 정리 안내.
         // [제보 2026-08-20] 여기서 끝내면 조사해 둔 근거를 버리고 사용자에게 다시 시키게 된다.
-        // 본문이 있으면 그걸 쓰고, 없으면 도구 없이 한 번 더 불러 답을 맺는다.
-        if (visible) { assistPushAssistant(visible, ui); return; }
+        // [제보 후속] 도구 요청에 딸린 본문은 대부분 "~를 확인하겠습니다" 예고문이다 — 그걸 최종 답으로
+        // 밀어내면 제보된 데드엔드가 그대로 재현된다. 완결된 본문일 때만 그대로 쓰고, 예고문이면
+        // 마무리(closeOut)로 보낸다. 마무리도 실패하면 예고문이라도 남긴다(정보 유실 방지).
+        if (visible && !assistLooksLikeDanglingAnnouncement(visible)) { assistPushAssistant(visible, ui); return; }
         if (await assistCloseOut()) return;
+        if (visible) { assistPushAssistant(visible, ui); return; }
         assistPushAssistant("확인 한도에 걸려 답을 정리하지 못했습니다. 질문을 조금 좁혀 다시 물어봐 주세요.", ui);
         return;
       }

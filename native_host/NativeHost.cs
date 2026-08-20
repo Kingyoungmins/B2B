@@ -184,6 +184,12 @@ namespace B2BNativeHost
         [DllImport("user32.dll")]
         private static extern bool AttachThreadInput(uint idAttach, uint idAttachTo, bool fAttach);
 
+        // [SBAGENT-275] 응답 없는 창(긴 COM 적용 중 메시지 펌프가 멈춘 Excel 등) 판별 —
+        // 그런 창의 스레드에 AttachThreadInput 을 걸면 입력 큐 잠금에 얽혀 우리 UI 스레드까지
+        // 함께 멈춘다(저장 대화상자가 투명(미도색)으로 뜨고 X 도 안 먹는 전면 프리즈 실측).
+        [DllImport("user32.dll")]
+        private static extern bool IsHungAppWindow(IntPtr hWnd);
+
         [DllImport("user32.dll", SetLastError = true)]
         private static extern bool RegisterHotKey(IntPtr hWnd, int id, uint fsModifiers, uint vk);
 
@@ -216,6 +222,9 @@ namespace B2BNativeHost
         {
             rootDir = FindRootDir();
             Text = "AX-Cell";
+            // [앱 아이콘 2026-08-20] exe 리소스(/win32icon: assets\axcell.ico)를 창/작업표시줄 아이콘으로.
+            // 아이콘 없이 빌드된 exe(개발 실행 등)면 기본 아이콘 그대로 — 실패해도 계속.
+            try { Icon = System.Drawing.Icon.ExtractAssociatedIcon(Application.ExecutablePath); } catch { }
             StartPosition = FormStartPosition.CenterScreen;
             KeyPreview = true;
             // [듀얼모니터] MaximizedBounds 를 '설정하지 않는다'. 값을 박아두면(캐싱) 최대화 버튼 클릭이
@@ -774,6 +783,8 @@ namespace B2BNativeHost
                 {
                     assistForm = new Form();
                     assistForm.Text = "AI 도움";
+                    // [앱 아이콘 2026-08-20] 팝업도 본창과 같은 앱 아이콘을 쓴다(없으면 기본).
+                    try { if (Icon != null) assistForm.Icon = Icon; } catch { }
                     assistForm.StartPosition = FormStartPosition.Manual;
                     // [2026-08-10] 기본 크기 2배(470x640 → 940x1280) — 화면(작업영역)보다 크면 줄인다.
                     int wantW = 940, wantH = 1280;
@@ -1024,7 +1035,10 @@ namespace B2BNativeHost
                     fgThread = GetWindowThreadProcessId(fg, out fgPid);
                 }
                 bool attached = false;
-                if (fgThread != 0 && fgThread != thisThread)
+                // [SBAGENT-275] 포그라운드 창이 '응답 없음'(긴 스킬 적용 중 Excel 등)이면 붙지 않는다 —
+                // 붙는 순간 입력 큐 잠금으로 UI 스레드째 멈춰, 저장 대화상자가 투명하게 뜨고
+                // 앱 전체가 X 도 안 먹는 프리즈가 된다. 포그라운드 전환은 실패해도 대화상자는 뜬다.
+                if (fgThread != 0 && fgThread != thisThread && !IsHungAppWindow(fg))
                 {
                     attached = AttachThreadInput(thisThread, fgThread, true);
                 }
@@ -1773,7 +1787,8 @@ namespace B2BNativeHost
             bool attached = false;
             try
             {
-                if (targetThread != 0 && targetThread != currentThread)
+                // [SBAGENT-275] 응답 없는 창(적용 중 Excel)에는 붙지 않는다 — UI 스레드 동반 프리즈 방지.
+                if (targetThread != 0 && targetThread != currentThread && !IsHungAppWindow(hwnd))
                 {
                     attached = AttachThreadInput(currentThread, targetThread, true);
                 }

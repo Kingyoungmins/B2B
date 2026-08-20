@@ -51,8 +51,12 @@ rem fixed, version-free name and copy it to the versioned distribution name belo
 rem (same convention as chrome.exe / Excel.exe).
 set "BUILD_EXE=dist\AX-Cell.exe"
 
+rem [앱 아이콘 2026-08-20] 아이콘이미지.png 에서 생성한 assets\axcell.ico — 없으면 기본 아이콘으로 진행.
+set "ICON_ARG="
+if exist "assets\axcell.ico" set "ICON_ARG=/win32icon:assets\axcell.ico"
+
 echo [INFO] Compiling single exe...
-"%CSC%" /nologo /target:winexe /platform:x64 /optimize+ /codepage:65001 ^
+"%CSC%" /nologo /target:winexe /platform:x64 /optimize+ /codepage:65001 %ICON_ARG% ^
   /reference:System.dll ^
   /reference:System.Core.dll ^
   /reference:System.Windows.Forms.dll ^

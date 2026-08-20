@@ -65,6 +65,11 @@ try {
 $asmArg = @()
 if (Test-Path $asmInfo) { $asmArg = @($asmInfo) } else { Write-Host "[warn] $asmInfo not found - version info will be empty" }
 
+# [앱 아이콘 2026-08-20] 아이콘이미지.png 에서 생성한 assets\axcell.ico — 없으면 기본 아이콘으로 진행.
+$icoPath = Join-Path $repoRoot "assets\axcell.ico"
+$icoArg = @()
+if (Test-Path $icoPath) { $icoArg = @("/win32icon:$icoPath") } else { Write-Host "[warn] $icoPath not found - default exe icon" }
+
 Write-Host "Compiling native host..."
 & $csc /nologo /target:winexe /platform:x64 /optimize+ /codepage:65001 `
   /reference:System.dll `
@@ -74,6 +79,7 @@ Write-Host "Compiling native host..."
   /reference:"$coreDll" `
   /reference:"$winFormsDll" `
   /out:"$outExe" `
+  @icoArg `
   "$src" @asmArg
 if ($LASTEXITCODE -ne 0) {
   throw "Native host compile failed with exit code $LASTEXITCODE"

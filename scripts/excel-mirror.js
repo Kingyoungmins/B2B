@@ -1928,6 +1928,9 @@ async function raiseExcelMirrorWindow(excelId = currentExcelId(), options = {}) 
   // (document.hasFocus는 웹뷰 포커스만 봐서 네이티브 탭 클릭 시 false가 됨 → 호스트 활성 플래그를 사용.)
   // 단, force=true(업로드 직후 자동 보기 등 명시적 동작)는 가드를 우회한다.
   if (!options.force && excelMirror.hostActive === false) return false;
+  // [입력 지연/IME 제보 2026-08-20] 타이핑/한글 조합 중의 백그라운드 raise(z-order 안정화 타이머,
+  // focusin 복원 등)는 조합을 깨뜨려 글자가 좌상단 IME 창으로 빠진다 — 입력이 멎을 때까지 건너뛴다.
+  if (!options.force && Date.now() < (excelMirror.typingGuardUntil || 0)) return false;
   excelMirror.lastRaiseAt = Date.now();
   await postExcelMirror("/api/excel/raise", { excelId });
   return true;
@@ -1969,6 +1972,21 @@ function scheduleExcelMirrorPosition(force = false) {
   }, 80);
 }
 
+// [입력 지연/IME 제보 2026-08-20] 채팅 등 텍스트 입력 대상인가 — 타이핑 중 Excel 창 조작 억제용.
+function isTextEditableEventTarget(t) {
+  try {
+    if (!t) return false;
+    if (t.isContentEditable) return true;
+    const tag = String(t.tagName || "").toUpperCase();
+    if (tag === "TEXTAREA") return true;
+    if (tag === "INPUT") {
+      const type = String(t.type || "text").toLowerCase();
+      return !["button", "checkbox", "radio", "range", "submit", "reset", "file", "color"].includes(type);
+    }
+    return false;
+  } catch (_) { return false; }
+}
+
 function installExcelMirrorPositionListeners() {
   if (excelMirror.positionListenersInstalled) return;
   excelMirror.positionListenersInstalled = true;
@@ -1979,6 +1997,15 @@ function installExcelMirrorPositionListeners() {
     // 이 짧은 구간에는 Excel restore/raise 를 미뤄 첫 클릭이 포커스 보정에 소비되지 않게 한다.
     excelMirror.uiClickGuardUntil = Date.now() + 450;
   }, true);
+  // [입력 지연/IME 제보 2026-08-20] 타이핑/한글 조합 중에는 백그라운드 raise/z-order 보정을 멈춘다.
+  // 조합(ㄱㄴㄷㄹ…) 도중 미러 창 조작이 끼어들면 마지막 글자가 화면 좌상단 기본 IME 조합창에 남고
+  // 다음 키를 눌러야 들어오는 '한 박자 늦는 입력'이 됐다. 입력이 멈추면 ~1초 뒤 자동 해제된다.
+  const _noteTyping = event => {
+    if (isTextEditableEventTarget(event.target)) excelMirror.typingGuardUntil = Date.now() + 1000;
+  };
+  document.addEventListener("keydown", _noteTyping, true);
+  document.addEventListener("compositionstart", _noteTyping, true);
+  document.addEventListener("compositionupdate", _noteTyping, true);
   window.addEventListener("resize", () => scheduleExcelMirrorPosition(true));
   document.addEventListener("visibilitychange", () => {
     if (!document.hidden) {
@@ -1994,6 +2021,10 @@ function installExcelMirrorPositionListeners() {
     if (!isNativeExcelOverlayShell()) return;
     const target = event.target;
     if (target && target.closest && target.closest(".excel-mirror-shell")) return;
+    // [입력 지연/IME 제보 2026-08-20] 채팅 입력 클릭(focusin)은 Excel 창 상태를 바꾸지 않는다 —
+    // 여기서 position(force)+복원을 돌리면 이어지는 타이핑과 창 조작이 겹쳐 조합이 깨진다.
+    // (Excel→UI 복귀 복원은 pointerdown 핸들러가 이미 담당하므로 기능 손실 없음.)
+    if (event.type === "focusin" && isTextEditableEventTarget(target)) return;
     if (!currentExcelId() && !excelMirror.activeExcelId) return;
     scheduleExcelMirrorPosition(true);
     scheduleRestoreActiveExcelMirror(0, { preserveFocus: true });

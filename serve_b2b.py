@@ -3997,7 +3997,9 @@ def _position_excel_window(
         if show:
             try:
                 if win32gui.IsIconic(hwnd):
-                    win32gui.ShowWindow(hwnd, getattr(win32con, "SW_RESTORE", 9))
+                    # [입력 지연/IME 제보 2026-08-20] SW_RESTORE 는 활성화를 동반해 타이핑 포커스를
+                    # 뺏는다 — 비활성 복원(_raise_excel_hwnd 와 동일 근거).
+                    win32gui.ShowWindow(hwnd, getattr(win32con, "SW_SHOWNOACTIVATE", 4))
                 if native_parent_hwnd or native_overlay:
                     win32gui.ShowWindow(hwnd, getattr(win32con, "SW_SHOWNA", 8))
                     _focus_excel_grid_child(hwnd)
@@ -4067,6 +4069,13 @@ def _focus_excel_grid_child(hwnd):
         target_thread = user32.GetWindowThreadProcessId(int(best), None)
         current_thread = kernel32.GetCurrentThreadId()
         attached = False
+        # [SBAGENT-275] 응답 없는 창(긴 적용 중 Excel)의 스레드에 AttachThreadInput 을 걸면
+        # 입력 큐 잠금에 얽혀 이 COM 작업 스레드까지 멈춘다(큐 전체 정체). 멈춘 창에는 붙지 않는다.
+        try:
+            if user32.IsHungAppWindow(int(best)):
+                target_thread = 0
+        except Exception:
+            pass
         if target_thread and target_thread != current_thread:
             attached = bool(user32.AttachThreadInput(current_thread, target_thread, True))
         try:
@@ -4273,6 +4282,14 @@ def _handoff_foreground_to_host(host_hwnd, hwnds):
         fg_thread = user32.GetWindowThreadProcessId(fg, None)
         cur_thread = kernel32.GetCurrentThreadId()
         attached = False
+        # [SBAGENT-275] 포그라운드 프레임이 '응답 없음'(긴 COM 적용 중 Excel)이면 붙지 않는다 —
+        # 붙는 순간 이 COM 큐 스레드까지 입력 큐 잠금에 얽혀 모든 Excel 요청이 정체된다(전면 프리즈).
+        # 포커스 핸드오프는 실패해도 뒤이은 파킹/숨김은 그대로 진행된다.
+        try:
+            if user32.IsHungAppWindow(fg):
+                fg_thread = 0
+        except Exception:
+            pass
         if fg_thread and fg_thread != cur_thread:
             attached = bool(user32.AttachThreadInput(cur_thread, fg_thread, True))
         try:
@@ -4324,7 +4341,11 @@ def _raise_excel_hwnd(hwnd):
         if not hwnd or not win32gui.IsWindow(hwnd):
             return
         if win32gui.IsIconic(hwnd):
-            win32gui.ShowWindow(hwnd, getattr(win32con, "SW_RESTORE", 9))
+            # [입력 지연/IME 제보 2026-08-20] SW_RESTORE 는 창을 '활성화'해 채팅 타이핑 중이던
+            # 키보드 포커스를 빼앗는다 — 조합 중이던 글자가 화면 좌상단 기본 IME 조합창으로
+            # 떨어지고 다음 키를 눌러야 들어오는 증상의 원인 경로. 비활성 복원으로 바꾼다
+            # (이 함수의 나머지가 전부 NOACTIVATE 인 것과 정합).
+            win32gui.ShowWindow(hwnd, getattr(win32con, "SW_SHOWNOACTIVATE", 4))
         flags = (
             win32con.SWP_NOMOVE |
             win32con.SWP_NOSIZE |
@@ -6081,6 +6102,15 @@ def _replace_excel_session_workbook_impl(excel_id, path, name=None, result_id=No
             except Exception:
                 pass
             _new_frame_hwnd = _workbook_window_hwnd(new_wb)
+            # [정렬 이탈 2026-08-20] 저사양에서 SDI 프레임 생성이 늦으면 여기서 hwnd 를 못 얻어
+            # 파킹이 통째로 건너뛰어졌다 — 새 프레임이 Excel 기본 위치·z순서로 그대로 떠 '우측 정렬이
+            # 아닌 멋대로 튀어나온 창'(스킬 삭제/토글 직후 실측)이 되고, 탭 클릭/크기 조정을 해야
+            # 제자리로 왔다. 짧게 재시도해 파킹을 보장한다(최대 ~1.2초, 성공 시 즉시 탈출).
+            for _ in range(6):
+                if _new_frame_hwnd:
+                    break
+                time.sleep(0.2)
+                _new_frame_hwnd = _workbook_window_hwnd(new_wb)
             if _new_frame_hwnd:
                 _move_hwnd_offscreen(_new_frame_hwnd)
         if read_only_mirror:
@@ -7010,6 +7040,11 @@ def _present_live_session_frame(
             rect_now = win32gui.GetWindowRect(target_hwnd) if win32gui is not None else None
             if rect_now and (rect_now[0] <= -30000 or rect_now[1] <= -30000):
                 do_position = True
+            elif win32gui is not None and not win32gui.IsWindowVisible(target_hwnd):
+                # [SBAGENT-273 회색 엑셀] SW_HIDE 로 숨은 프레임(hide-all 이 프레임 해석에 실패해
+                # 앱 창을 숨긴 폴백 등)은 파킹 좌표 검사에 안 걸린다 — SHOWNA 만으론 옛 자리에
+                # 뜨므로 좌표가 있으면 전체 배치(위치+표시)로 복구한다.
+                do_position = True
         except Exception:
             pass
     if do_position:
@@ -7021,6 +7056,10 @@ def _present_live_session_frame(
             viewport_width=viewport_width, viewport_height=viewport_height,
             show=True,
         )
+        # [SBAGENT-273 회색 엑셀] 파킹(_move_hwnd_offscreen)은 HWND_BOTTOM 으로 내려놓는다 —
+        # 배치가 z-순서 복구에 실패한 채 남으면 '제자리인데 호스트 패널이 덮는' 회색이 된다.
+        # 표시 경로(else)와 대칭으로 배치 후에도 비활성 raise 로 z-순서를 확실히 되돌린다.
+        _raise_excel_hwnd(target_hwnd)
     else:
         _show_window_na(target_hwnd)
         _raise_excel_hwnd(target_hwnd)
@@ -10220,6 +10259,9 @@ def _run_vba_pipeline_on_session_impl(excel_id, steps, reset=True, entry=None, v
                         except Exception:
                             pass
                         raise PipelineExecutionError(info)
+                    # [제보 2026-08-19 W열 빈칸] 라이브 적용 경로와 패리티 — 전체실행 루프와 동일한 이유로
+                    # 스텝마다 명시 재계산(수동 계산 모드에서 앞 스텝 수식이 미계산 값으로 읽히는 것 방지).
+                    _safe_excel_calculate(fapp)
                     _vba_trace(
                         "pipeline.step.ok",
                         excelId=excel_id,
@@ -10624,6 +10666,11 @@ def _run_full_pipeline_single_instance_impl(groups, reset_excel_ids=None, view_s
                         except Exception:
                             pass
                         raise PipelineExecutionError(info)
+                    # [제보 2026-08-19 W열 빈칸] 라이브 적용 경로(스텝마다 _safe_excel_calculate)와 패리티.
+                    # 격리 인스턴스의 계산 모드는 처음 연 워크북에 저장된 모드를 따라가므로, 수동이면
+                    # 앞 스텝이 쓴 수식이 미계산인 채 다음 스텝의 ctx.read(Value2)에 읽혀 '생성 당시(라이브)와
+                    # 실행 결과가 다른' 무성 분기가 난다. 스텝마다 명시 재계산으로 값 읽기를 라이브와 같게 한다.
+                    _safe_excel_calculate(fapp)
                     _vba_trace("fullrun.step.ok", anchorExcelId=anchor_excel_id, isolatedPid=fpid, excelId=gid, ordinal=ordinal)
 
             # 3) 변경된 파일만 라이브에 '파일당 1회' 반영 (읽기만 한 파일은 Saved=True → 스킵)
@@ -11247,6 +11294,30 @@ def _parse_excel_color(c):
     raise PythonComSkillError(f"색상 값을 이해하지 못했습니다: {c!r} (예: '#FFFF00' 또는 '노랑')")
 
 
+def _self_referencing_formula_cells(data, row0, col0):
+    """write_formulas 로 쓰려는 수식 중 '자기 셀'을 참조하는 것의 주소 목록(예: W3 에 =IF(W3<>"",W3,…)).
+
+    [제보 2026-08-19 W열 빈칸] LLM 이 '기존 값 보존'을 자기참조 수식으로 흉내 내면 순환참조가 되어
+    오류 없이 0/빈칸으로 끝난다 — "적용됨"인데 결과가 사라지는 무성(無聲) 사고. 쓰기 전에 걸러낸다.
+    범위를 좁게 잡는다(오탐 방지): 같은 열 다른 행 참조(누계 =W2+V3)와 시트 한정 참조(Sheet2!W3),
+    범위 참조(W1:W3, W3:W10)는 검사하지 않고, 문자열 리터럴("…") 안의 우연한 일치는 제거 후 검사한다."""
+    hits = []
+    for ri, row_vals in enumerate(data or []):
+        for ci, val in enumerate(row_vals or []):
+            if not isinstance(val, str):
+                continue
+            body = val.lstrip()
+            if not body.startswith("="):
+                continue
+            col_txt = _col_letter(col0 + ci)
+            row_txt = str(row0 + ri)
+            scan = re.sub(r'"[^"]*"', '""', body)   # 문자열 리터럴 속 우연한 주소 제거
+            pat = r"(?<![A-Za-z0-9_$!:])\$?" + re.escape(col_txt) + r"\$?" + row_txt + r"(?![0-9:])"
+            if re.search(pat, scan):
+                hits.append(col_txt + row_txt)
+    return hits
+
+
 class PythonComSkillContext:
     """생성된 Python 스킬에 노출되는 유일한 능력(capability).
 
@@ -11831,6 +11902,17 @@ class PythonComSkillContext:
         ws = self._ws(sheet)
         data, rows, cols = self._as_2d(formulas)
         anchor = self._rng(ws, a1_start)
+        # [제보 2026-08-19 W열 빈칸] 자기 셀 참조 수식은 순환참조 — 조용히 0/빈칸이 되므로 쓰기 전에 거부해
+        # 생성기 단계에서 코드를 고치게 한다(실행기에서도 무성 데이터 소실 대신 원인이 보이는 오류로 남는다).
+        _bad = _self_referencing_formula_cells(data, int(anchor.Row), int(anchor.Column))
+        if _bad:
+            _shown = ", ".join(_bad[:3]) + ("" if len(_bad) <= 3 else f" 외 {len(_bad) - 3}곳")
+            raise PythonComSkillError(
+                f"'{sheet}' 시트에 자기 자신을 참조하는 수식을 쓰려고 했습니다({_shown}) — 순환참조가 되어 "
+                "값이 0이나 빈칸으로 사라집니다. 기존 값을 보존하려면 ctx.read_formulas 로 현재 상태"
+                "(수식이면 수식, 값이면 값)를 먼저 읽고, 조건 밖 행은 읽은 것을 그대로 되돌려 쓰세요. "
+                "수식 안에서 그 수식이 들어갈 셀 자신을 참조하면 안 됩니다."
+            )
         rng = self._resize_rng(ws, anchor, rows, cols)
         self._tick(3)
         self._journal_save(ws, rng, new_data=data)
@@ -12214,6 +12296,60 @@ class PythonComSkillContext:
         self._shared["structural"].append(f"delete_rows:{sheet}:{row}+{count}")
         return True
 
+    def delete_rows_where(self, sheet, predicate, header_rows=1):
+        """조건에 맞는 행을 **제자리에서** 삭제한다 — 남는 행의 서식·표시형식·수식·병합이 그대로다.
+        predicate(row) 는 데이터 행(값 리스트, 0-based, A열=index0)을 받아 True(삭제)/False(유지) 반환.
+          ctx.delete_rows_where("무선간선망", lambda r: ctx.normalize(r[2]) != ctx.normalize("512102403338"))
+        [제보 2026-08-20] "특정 값인 행만 남기고 나머지는 삭제해줘" 요청의 기본 수단. 임시 시트에
+        값을 복사했다 다시 붙이는 재구성은 서식을 통째로 깨뜨린다(실측 제보) — 그 방식 대신 이걸 쓴다.
+        반환: 삭제한 행 수(0이면 아무것도 안 지움)."""
+        ws = self._ws(sheet)
+        self._tick(2)
+        grid = self.read(sheet)
+        # filter_to_sheet 와 동일한 A열=index0 절대 기준 보정(선두 빈 열 패딩).
+        try:
+            _lead = int(ws.UsedRange.Column) - 1
+        except Exception:
+            _lead = 0
+        if _lead > 0:
+            grid = [[None] * _lead + list(r) for r in grid]
+        try:
+            _first_row = int(ws.UsedRange.Row)   # grid[0] = 원본의 이 행(1-based)
+        except Exception:
+            _first_row = 1
+        hr = max(0, int(header_rows or 0))
+        doomed = []
+        for _i, row in enumerate(grid[hr:]):
+            r = list(row)
+            try:
+                if bool(predicate(r)):
+                    doomed.append(_first_row + hr + _i)
+            except Exception as err:
+                raise PythonComSkillError(f"삭제 조건(predicate) 실행 오류: {err}")
+        if not doomed:
+            return 0
+        runs = []
+        for n in doomed:
+            if runs and n == runs[-1][1] + 1:
+                runs[-1][1] = n
+            else:
+                runs.append([n, n])
+        # 아래→위 순서 + 다중영역(Union) 일괄 삭제 — 위부터 지우면 남은 구간의 행 번호가 밀리고,
+        # 구간마다 COM Delete 를 부르면 흩어진 매칭에서 왕복이 수천 번이 된다.
+        _CHUNK = 120
+        runs.reverse()
+        for _k in range(0, len(runs), _CHUNK):
+            chunk = runs[_k:_k + _CHUNK]
+            rng = None
+            for a, b in chunk:
+                part = ws.Range(ws.Rows(int(a)), ws.Rows(int(b)))
+                rng = part if rng is None else self._app.Union(rng, part)
+            self._tick(2)
+            rng.Delete()
+            self._tick(1)
+        self._shared["structural"].append(f"delete_rows_where:{sheet}(-{len(doomed)})")
+        return len(doomed)
+
     def delete_cols(self, sheet, col, count=1):
         """전체 열 삭제. col 은 'Q', 17, 또는 'Q:AU' 범위 모두 허용."""
         ws = self._ws(sheet)
@@ -12334,7 +12470,9 @@ class PythonComSkillContext:
         """조건에 맞는 행만 골라 **새 시트(현재 활성 파일)**에 정리한다 — 원본은 그대로 둔다.
         predicate(row) 는 데이터 행(값 리스트, 0-based 인덱스)을 받아 True/False 를 반환.
           ctx.filter_to_sheet("Sheet1", lambda r: r[2] == "안전제일", "안전제일목록")
-        "x열에서 y만 필터/추출해 새 시트에 정리" 요청의 기본 수단."""
+        "x열에서 y만 필터/추출해 새 시트에 정리/복사" 요청의 기본 수단.
+        [SBAGENT-274] 원본 행을 Excel 네이티브 복사로 옮겨 **서식(음영·테두리·표시형식·열너비)을 보존**한다
+        — 예전엔 값만 기록해 '복사해 달라'는 요청의 결과가 서식이 다 깨진 채 나왔다(제보)."""
         ws = self._ws(sheet)
         self._tick(2)
         grid = self.read(sheet)  # used range 전체(헤더+데이터)
@@ -12351,8 +12489,13 @@ class PythonComSkillContext:
             grid = [[None] * _lead + list(r) for r in grid]
         hr = max(0, int(header_rows))
         header = [list(r) for r in grid[:hr]]
+        try:
+            _first_row = int(ws.UsedRange.Row)   # grid[0] = 원본의 이 행(1-based)
+        except Exception:
+            _first_row = 1
         matched = []
-        for row in grid[hr:]:
+        matched_rows = []   # 원본 절대 행 번호(1-based) — 서식 보존 네이티브 복사용
+        for _i, row in enumerate(grid[hr:]):
             r = list(row)
             try:
                 keep = bool(predicate(r))
@@ -12360,6 +12503,7 @@ class PythonComSkillContext:
                 raise PythonComSkillError(f"필터 조건(predicate) 실행 오류: {err}")
             if keep:
                 matched.append(r)
+                matched_rows.append(_first_row + hr + _i)
         if not matched:
             # 매칭 0건이면 새 시트를 만들지 않는다 — 빈 시트만 남아 재요청 시 '이미 있음'으로
             # 반복 실패하던 문제 방지. 값의 공백/표기 차이는 ctx.normalize 로 맞춰야 한다.
@@ -12368,9 +12512,63 @@ class PythonComSkillContext:
         if str(dest_name) in _excel_collection_names(self._wb.Worksheets):
             raise PythonComSkillError(f"시트 '{dest_name}' 이 이미 있습니다. 다른 이름을 쓰거나 먼저 삭제하세요.")
         self.add_sheet(str(dest_name), after=after)
+        dest_ws = self._ws(str(dest_name))
         out = header + matched
-        if out:
-            # 새 시트라 수식 충돌 없음 → overwrite_formulas=True 로 그대로 기록.
+
+        # [SBAGENT-274 서식 보존] 헤더+매칭 행을 '연속 구간'으로 압축해 Excel 네이티브 행 복사(값+서식+
+        # 병합 보존)로 옮긴다. 정렬된 표에서는 매칭 행이 뭉쳐 있어 구간이 몇 개 안 된다. 구간이 비정상적으로
+        # 많으면(흩어진 매칭) 예전 값-기록 폴백으로 내려간다 — 다중영역 복사로 COM 예산을 태우지 않는다.
+        def _row_runs(nums):
+            runs = []
+            for n in nums:
+                if runs and n == runs[-1][1] + 1:
+                    runs[-1][1] = n
+                else:
+                    runs.append([n, n])
+            return runs
+
+        all_runs = (_row_runs(list(range(_first_row, _first_row + hr))) if hr else []) + _row_runs(matched_rows)
+        copied_native = False
+        if len(all_runs) <= 1500:
+            try:
+                out_row = 1
+                _CHUNK = 120   # 한 번에 복사할 다중영역(Union) 상한 — 영역이 너무 많으면 Copy 가 느려지거나 실패
+                for _k in range(0, len(all_runs), _CHUNK):
+                    chunk = all_runs[_k:_k + _CHUNK]
+                    rng = None
+                    for a, b in chunk:
+                        part = ws.Range(ws.Rows(int(a)), ws.Rows(int(b)))
+                        rng = part if rng is None else self._app.Union(rng, part)
+                    self._tick(2)
+                    rng.Copy(dest_ws.Cells(int(out_row), 1))
+                    self._tick(1)
+                    out_row += sum(b - a + 1 for a, b in chunk)
+                copied_native = True
+            except Exception:
+                copied_native = False   # 복사 실패(보호/병합 등) → 아래 값-기록 폴백이 결과를 보장
+            finally:
+                try:
+                    self._app.CutCopyMode = False
+                except Exception:
+                    pass
+        if copied_native:
+            # 열 너비도 원본과 동일하게(서식 보존의 일부) — 클립보드 1회 PasteSpecial(xlPasteColumnWidths).
+            try:
+                ws.Rows(int(_first_row)).Copy()
+                dest_ws.Range("A1").PasteSpecial(8)  # xlPasteColumnWidths
+                self._app.CutCopyMode = False
+                self._tick(2)
+            except Exception:
+                pass
+            # 네이티브 복사는 '상대참조 수식'을 새 위치 기준으로 틀어 놓는다(부분집합에선 엉뚱한 행 참조).
+            # 읽어 둔 계산 값으로 내용만 한 번 덮어써 값을 원본과 정확히 일치시킨다(서식은 그대로 남는다).
+            # 병합 셀 등으로 덮어쓰기가 실패하면 복사된 내용(수식 포함)을 그대로 둔다 — 값은 이미 들어가 있다.
+            try:
+                self.write(str(dest_name), "A1", out, overwrite_formulas=True)
+            except Exception:
+                pass
+        elif out:
+            # 폴백: 예전과 동일한 값 기록(서식 미보존) — 매칭 구간이 극단적으로 흩어진 경우에만.
             self.write(str(dest_name), "A1", out, overwrite_formulas=True)
         self._shared["structural"].append(f"filter_to_sheet:{sheet}->{dest_name}({len(matched)})")
         return dest_name

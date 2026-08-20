@@ -37,6 +37,9 @@ a = Analysis(
         *collect('styles'),
         *collect('scripts'),
         *collect('vendor'),
+        # [앱 아이콘 2026-08-20] 웹 favicon 용 자산(브라우저 모드) — exe 아이콘은 아래 EXE(icon=).
+        # assets/ 가 없는 체크아웃에서도 빌드가 깨지지 않게 존재할 때만 수집한다.
+        *(collect('assets') if (ROOT / 'assets').is_dir() else []),
     ],
     hiddenimports=[
         'pythoncom',
@@ -79,6 +82,10 @@ exe = EXE(
     # 없으면(생성기 미실행) 속성이 비어 있을 뿐 빌드는 그대로 진행된다.
     version=(str(ROOT / 'build_meta' / 'version_server.txt')
              if (ROOT / 'build_meta' / 'version_server.txt').exists() else None),
+    # [앱 아이콘 2026-08-20] 아이콘이미지.png 에서 생성한 다중 크기 ICO(assets/axcell.ico).
+    # 파일이 없으면 기본 아이콘으로 빌드는 그대로 진행된다.
+    icon=(str(ROOT / 'assets' / 'axcell.ico')
+          if (ROOT / 'assets' / 'axcell.ico').exists() else None),
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
