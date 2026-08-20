@@ -8,7 +8,7 @@ signature: "(code, language)"
 role: "실행 가능한 문장이 없는 주석-only 코드인지 검사(파이썬 # / VBA '·Rem)."
 role_source: banner
 version: "0.7.4"
-loc: "chat-ui.js:2279-2279"
+loc: "chat-ui.js:2288-2288"
 
 # ── 입출력 ──
 inputs:

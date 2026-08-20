@@ -8,7 +8,7 @@ signature: "(resultId, excelId, options = {})"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
 version: "0.7.4"
-loc: "pipeline.js:4483-4483"
+loc: "pipeline.js:4531-4531"
 
 # ── 입출력 ──
 inputs:
@@ -33,6 +33,7 @@ calls:
   - "showOnlyExcelMirrorWindow"
 calls_external: []
 called_by:
+  - "applyVbaStepToLiveExcel"
   - "restoreLastStepPreApplySnapshot"
   - "restoreSnapshotIntoSession"
 reads:
@@ -50,7 +51,7 @@ timestamp: "0.7.4-gen"
 
 ## 관계
 - 호출: `applyLiveSchemaToFileCache`, `beginExcelMirrorApplyLoading`, `endExcelMirrorApplyLoading`, `landAppTabOnExcelSession`, `postExcelMirror`, `scheduleRestoreActiveExcelMirror`, `showOnlyExcelMirrorWindow`
-- 피호출(영향 전파 경로): `restoreLastStepPreApplySnapshot`, `restoreSnapshotIntoSession`
+- 피호출(영향 전파 경로): `applyVbaStepToLiveExcel`, `restoreLastStepPreApplySnapshot`, `restoreSnapshotIntoSession`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

@@ -8,7 +8,7 @@ signature: "(text)"
 role: "사용자가 'python/파이썬/COM 으로 짜줘' 처럼 엔진을 명시했는지. [사용자 지시] 이 의도는"
 role_source: banner
 version: "0.7.4"
-loc: "chat-ui.js:428-428"
+loc: "chat-ui.js:437-437"
 
 # ── 입출력 ──
 inputs:

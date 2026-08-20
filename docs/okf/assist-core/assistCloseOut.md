@@ -8,7 +8,7 @@ signature: "()"
 role: "반환값 true = 답을 냈다(호출자는 그대로 종료). false 면 예전 안내로 떨어진다."
 role_source: banner
 version: "0.7.4"
-loc: "assist-core.js:369-369"
+loc: "assist-core.js:371-371"
 
 # ── 입출력 ──
 inputs: []
@@ -21,18 +21,31 @@ raises: []
 
 # ── 유기적 관계 ──
 calls:
+  - "assistBuildProposal"
+  - "assistHasChineseLeak"
   - "assistParseAction"
+  - "assistProposalIsVerifiable"
   - "assistPushAssistant"
   - "assistStripActionBlock"
   - "assistSystemPrompt"
+  - "assistVerifyProposal"
   - "callLLM"
+  - "push"
   - "say"
 calls_external:
+  - "RegExp"
   - "String"
+  - "filter"
+  - "isArray"
   - "join"
+  - "map"
   - "onHandoff"
+  - "onProposal"
+  - "onReport"
+  - "replace"
   - "slice"
   - "split"
+  - "steps"
   - "trim"
 called_by:
   - "assistHandleUserMessage"
@@ -49,7 +62,7 @@ timestamp: "0.7.4-gen"
 - 없음(정적 분석 기준)
 
 ## 관계
-- 호출: `assistParseAction`, `assistPushAssistant`, `assistStripActionBlock`, `assistSystemPrompt`, `callLLM`, `say`
+- 호출: `assistBuildProposal`, `assistHasChineseLeak`, `assistParseAction`, `assistProposalIsVerifiable`, `assistPushAssistant`, `assistStripActionBlock`, `assistSystemPrompt`, `assistVerifyProposal`, `callLLM`, `push`, `say`
 - 피호출(영향 전파 경로): `assistHandleUserMessage`
 
 ## 실패/예외

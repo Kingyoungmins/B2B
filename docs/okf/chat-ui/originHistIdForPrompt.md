@@ -8,7 +8,7 @@ signature: "(promptText)"
 role: "[번호표 연결] 스텝 생성 시점에 '그 요청 말풍선'의 histId 를 찾아 스텝에 박는다."
 role_source: banner
 version: "0.7.4"
-loc: "chat-ui.js:155-155"
+loc: "chat-ui.js:164-164"
 
 # ── 입출력 ──
 inputs:

@@ -8,7 +8,7 @@ signature: "(sheets, headRows)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
 version: "0.7.4"
-loc: "file-schema.js:1258-1258"
+loc: "file-schema.js:1263-1263"
 
 # ── 입출력 ──
 inputs:

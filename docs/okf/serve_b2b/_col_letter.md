@@ -8,7 +8,7 @@ signature: "(n)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
 version: "0.7.4"
-loc: "serve_b2b.py:14752-14759"
+loc: "serve_b2b.py:14950-14957"
 
 # ── 입출력 ──
 inputs:
@@ -48,6 +48,7 @@ called_by:
   - "PythonComSkillContext.swap_cols"
   - "_excel_output_preview_sheets"
   - "_r1c1_to_a1"
+  - "_self_referencing_formula_cells"
   - "_sheet_snapshot"
 reads: []
 writes: []
@@ -63,7 +64,7 @@ timestamp: "0.7.4-gen"
 
 ## 관계
 - 호출: 없음
-- 피호출(영향 전파 경로): `PythonComSkillContext._pivot_value_table`, `PythonComSkillContext._resize_rng`, `PythonComSkillContext.add_total_row`, `PythonComSkillContext.copy_key_blocks`, `PythonComSkillContext.dedupe`, `PythonComSkillContext.delete_cols`, `PythonComSkillContext.fill_sum_col`, `PythonComSkillContext.first_empty_col`, `PythonComSkillContext.insert_cols`, `PythonComSkillContext.lookup`, `PythonComSkillContext.match_fill`, `PythonComSkillContext.move_col_clear`, `PythonComSkillContext.move_cols`, `PythonComSkillContext.split_column`, `PythonComSkillContext.sum_column`, `PythonComSkillContext.sum_lookup`, `PythonComSkillContext.sum_where`, `PythonComSkillContext.swap_cols`, `_excel_output_preview_sheets`, `_r1c1_to_a1`, `_sheet_snapshot`
+- 피호출(영향 전파 경로): `PythonComSkillContext._pivot_value_table`, `PythonComSkillContext._resize_rng`, `PythonComSkillContext.add_total_row`, `PythonComSkillContext.copy_key_blocks`, `PythonComSkillContext.dedupe`, `PythonComSkillContext.delete_cols`, `PythonComSkillContext.fill_sum_col`, `PythonComSkillContext.first_empty_col`, `PythonComSkillContext.insert_cols`, `PythonComSkillContext.lookup`, `PythonComSkillContext.match_fill`, `PythonComSkillContext.move_col_clear`, `PythonComSkillContext.move_cols`, `PythonComSkillContext.split_column`, `PythonComSkillContext.sum_column`, `PythonComSkillContext.sum_lookup`, `PythonComSkillContext.sum_where`, `PythonComSkillContext.swap_cols`, `_excel_output_preview_sheets`, `_r1c1_to_a1`, `_self_referencing_formula_cells`, `_sheet_snapshot`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

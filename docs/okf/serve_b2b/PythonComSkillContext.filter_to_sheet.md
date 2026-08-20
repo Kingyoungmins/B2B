@@ -9,7 +9,7 @@ signature: "(self, sheet, predicate, dest_name, header_rows=1, after=None)"
 role: "조건에 맞는 행만 골라 **새 시트(현재 활성 파일)**에 정리한다 — 원본은 그대로 둔다."
 role_source: docstring
 version: "0.7.4"
-loc: "serve_b2b.py:12333-12376"
+loc: "serve_b2b.py:12469-12574"
 
 # ── 입출력 ──
 inputs:
@@ -29,32 +29,52 @@ raises:
 
 # ── 유기적 관계 ──
 calls:
+  - "Cells"
+  - "Range"
+  - "Rows"
   - "_excel_collection_names"
   - "_tick"
   - "_ws"
   - "add_sheet"
   - "append"
+  - "range"
   - "read"
   - "row"
   - "sheet"
   - "write"
 calls_external:
+  - "Copy"
+  - "PasteSpecial"
   - "PythonComSkillError"
+  - "Union"
+  - "_CHUNK"
+  - "_first_row"
+  - "_row_runs"
+  - "a"
   - "after"
+  - "all_runs"
+  - "b"
   - "bool"
   - "dest_name"
+  - "enumerate"
   - "header_rows"
   - "int"
   - "len"
   - "list"
   - "matched"
+  - "matched_rows"
   - "max"
   - "out"
+  - "out_row"
+  - "part"
   - "predicate"
   - "r"
+  - "rng"
   - "str"
+  - "sum"
 called_by: []
 reads:
+  - "self._app"
   - "self._shared"
   - "self._tick"
   - "self._wb"
@@ -74,7 +94,7 @@ timestamp: "0.7.4-gen"
 - Excel COM 조작(파괴적일 수 있음)
 
 ## 관계
-- 호출: `_excel_collection_names`, `_tick`, `_ws`, `add_sheet`, `append`, `read`, `row`, `sheet`, `write`
+- 호출: `Cells`, `Range`, `Rows`, `_excel_collection_names`, `_tick`, `_ws`, `add_sheet`, `append`, `range`, `read`, `row`, `sheet`, `write`
 - 피호출(영향 전파 경로): 없음
 
 ## 실패/예외

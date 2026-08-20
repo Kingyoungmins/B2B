@@ -8,7 +8,7 @@ signature: "(s)"
 role: "---- [스킬 수정 → 원 요청으로 스크롤] ----"
 role_source: banner
 version: "0.7.4"
-loc: "chat-ui.js:103-103"
+loc: "chat-ui.js:112-112"
 
 # ── 입출력 ──
 inputs:

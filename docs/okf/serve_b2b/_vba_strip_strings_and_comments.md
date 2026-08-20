@@ -8,7 +8,7 @@ signature: "(code)"
 role: "따옴표 문자열(\"\" 이스케이프 포함) → 빈 문자열로, 이후 ' 주석 제거 — 키워드 오탐 방지."
 role_source: docstring
 version: "0.7.4"
-loc: "serve_b2b.py:7623-7630"
+loc: "serve_b2b.py:7662-7669"
 
 # ── 입출력 ──
 inputs:

@@ -1,19 +1,18 @@
 ---
 type: endpoint
-title: run
-module: assist-core.js
+title: isTextEditableEventTarget
+module: excel-mirror.js
 lang: js
 extraction: regex   # 정규식 근사
-signature: "(fn, ...a)"
-role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
-role_source: none
+signature: "(t)"
+role: "[입력 지연/IME 제보 2026-08-20] 채팅 등 텍스트 입력 대상인가 — 타이핑 중 Excel 창 조작 억제용."
+role_source: banner
 version: "0.7.4"
-loc: "assist-core.js:742-742"
+loc: "excel-mirror.js:1976-1976"
 
 # ── 입출력 ──
 inputs:
-  - "fn"
-  - "...a"
+  - "t"
 returns: "(추정)"
 
 # ── 사이드이펙트 (정적 추정) ──
@@ -22,13 +21,14 @@ side_effects:
 raises: []
 
 # ── 유기적 관계 ──
-calls:
-  - "push"
+calls: []
 calls_external:
-  - "fn"
+  - "String"
+  - "includes"
+  - "toLowerCase"
+  - "toUpperCase"
 called_by:
-  - "_assistGateReplacementCode"
-  - "assistBuildProposal"
+  - "installExcelMirrorPositionListeners"
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
@@ -36,14 +36,14 @@ timestamp: "0.7.4-gen"
 ---
 
 ## 역할
-(추정) 역할 주석 없음 — 담당자 1줄 보완 필요  _(자동 추정 — 확인 필요)_
+[입력 지연/IME 제보 2026-08-20] 채팅 등 텍스트 입력 대상인가 — 타이핑 중 Excel 창 조작 억제용.
 
 ## 사이드이펙트 & 주의
 - 없음(정적 분석 기준)
 
 ## 관계
-- 호출: `push`
-- 피호출(영향 전파 경로): `_assistGateReplacementCode`, `assistBuildProposal`
+- 호출: 없음
+- 피호출(영향 전파 경로): `installExcelMirrorPositionListeners`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

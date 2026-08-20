@@ -8,7 +8,7 @@ signature: "(info)"
 role: "[#2] 실행 오류를 코드 지식이 없는 사용자에게 풀어 설명한다(단발 LLM 호출, 대화 기록 무관)."
 role_source: banner
 version: "0.7.4"
-loc: "pipeline.js:7573-7573"
+loc: "pipeline.js:7621-7621"
 
 # ── 입출력 ──
 inputs:

@@ -25,6 +25,7 @@ raises: []
 
 # ── 유기적 관계 ──
 calls:
+  - "_restoreSnapshotByIds"
   - "applyLiveSchemaToFileCache"
   - "attachPipelineStepError"
   - "beginExcelMirrorApplyLoading"
@@ -89,7 +90,7 @@ timestamp: "0.7.4-gen"
 - 네트워크/서버 호출
 
 ## 관계
-- 호출: `applyLiveSchemaToFileCache`, `attachPipelineStepError`, `beginExcelMirrorApplyLoading`, `captureStepPreApplySnapshot`, `endExcelMirrorApplyLoading`, `fileIdForExcelMirrorId`, `hideAllExcelMirrorWindows`, `inferPipelineStepLanguage`, `isolatedPipelineStepPayload`, `landAppTabOnExcelSession`, `muteExcelMirrorForPipeline`, `noteLivePipelineApplied`, `pipelineErrorMayHaveAppliedInExcel`, `postExcelMirror`, `push`, `pushHistory`, `recordVbaDebugTiming`, `refreshRunButton`, `releaseExcelMirrorPipelineMute`, `renderPipeline`, `reportPipelineError`, `requestExcelApplyCancel`, `restoreVbaExcelAfterError`, `rollbackAddedPipelineStep`, `scheduleLogicAutoBackup`, `scheduleRestoreActiveExcelMirror`, `setPipelineRuntimeStatus`, `toast`, `traceClientUiEvent`, `wireStepCrossFromResponse`
+- 호출: `_restoreSnapshotByIds`, `applyLiveSchemaToFileCache`, `attachPipelineStepError`, `beginExcelMirrorApplyLoading`, `captureStepPreApplySnapshot`, `endExcelMirrorApplyLoading`, `fileIdForExcelMirrorId`, `hideAllExcelMirrorWindows`, `inferPipelineStepLanguage`, `isolatedPipelineStepPayload`, `landAppTabOnExcelSession`, `muteExcelMirrorForPipeline`, `noteLivePipelineApplied`, `pipelineErrorMayHaveAppliedInExcel`, `postExcelMirror`, `push`, `pushHistory`, `recordVbaDebugTiming`, `refreshRunButton`, `releaseExcelMirrorPipelineMute`, `renderPipeline`, `reportPipelineError`, `requestExcelApplyCancel`, `restoreVbaExcelAfterError`, `rollbackAddedPipelineStep`, `scheduleLogicAutoBackup`, `scheduleRestoreActiveExcelMirror`, `setPipelineRuntimeStatus`, `toast`, `traceClientUiEvent`, `wireStepCrossFromResponse`
 - 피호출(영향 전파 경로): `applyLogic`, `runVbaPipelinePreferLive`
 
 ## 실패/예외

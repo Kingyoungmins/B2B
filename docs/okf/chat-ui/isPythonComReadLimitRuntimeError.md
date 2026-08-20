@@ -8,7 +8,7 @@ signature: "(message)"
 role: "Python COM 의 읽기 셀 한도(PY_READ_MAX_CELLS) 초과 런타임 오류인지 판별한다."
 role_source: banner
 version: "0.7.4"
-loc: "chat-ui.js:2878-2878"
+loc: "chat-ui.js:2903-2903"
 
 # ── 입출력 ──
 inputs:

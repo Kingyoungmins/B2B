@@ -8,7 +8,7 @@ signature: "(text)"
 role: "[순수 코어] 스텝을 채팅 엔트리(display 순서 [{role, text, code}])에 매칭 → 스크롤할 엔트리 인덱스."
 role_source: banner
 version: "0.7.4"
-loc: "chat-ui.js:149-149"
+loc: "chat-ui.js:158-158"
 
 # ── 입출력 ──
 inputs:

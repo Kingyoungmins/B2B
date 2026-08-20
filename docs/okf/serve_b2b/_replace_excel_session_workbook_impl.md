@@ -8,7 +8,7 @@ signature: "(excel_id, path, name=None, result_id=None, read_only_mirror=None)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
 version: "0.7.4"
-loc: "serve_b2b.py:5975-6261"
+loc: "serve_b2b.py:5996-6291"
 
 # ── 입출력 ──
 inputs:
@@ -49,6 +49,7 @@ calls:
   - "_workbook_window_hwnd"
   - "excel_workbooks_open"
   - "get_excel_session"
+  - "range"
   - "session_workbook"
 calls_external:
   - "Activate"
@@ -87,10 +88,10 @@ calls_external:
   - "rmtree"
   - "round"
   - "session"
+  - "sleep"
   - "split"
   - "str"
   - "top"
-  - "unlink"
 called_by:
   - "replace_excel_session_workbook"
 reads:
@@ -111,7 +112,7 @@ timestamp: "0.7.4-gen"
 - 파일시스템 변경/IO
 
 ## 관계
-- 호출: `Worksheets`, `_configure_excel_grid_window`, `_ensure_excel_workbook_view`, `_excel_collection_names`, `_file_label_kind`, `_file_size_mb`, `_hide_excel_app_window`, `_hide_excel_hwnd`, `_move_hwnd_offscreen`, `_park_excel_app_offscreen`, `_position_excel_window`, `_present_live_session_frame`, `_protect_workbook_for_read_only_mirror`, `_resolve_live_identity_name`, `_safe_activate_excel_app`, `_set_excel_window_owner`, `_vba_trace`, `_workbook_window_hwnd`, `excel_workbooks_open`, `get_excel_session`, `session_workbook`
+- 호출: `Worksheets`, `_configure_excel_grid_window`, `_ensure_excel_workbook_view`, `_excel_collection_names`, `_file_label_kind`, `_file_size_mb`, `_hide_excel_app_window`, `_hide_excel_hwnd`, `_move_hwnd_offscreen`, `_park_excel_app_offscreen`, `_position_excel_window`, `_present_live_session_frame`, `_protect_workbook_for_read_only_mirror`, `_resolve_live_identity_name`, `_safe_activate_excel_app`, `_set_excel_window_owner`, `_vba_trace`, `_workbook_window_hwnd`, `excel_workbooks_open`, `get_excel_session`, `range`, `session_workbook`
 - 피호출(영향 전파 경로): `replace_excel_session_workbook`
 
 ## 실패/예외

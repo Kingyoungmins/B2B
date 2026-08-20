@@ -8,7 +8,7 @@ signature: "(string name)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
 version: "0.7.4"
-loc: "NativeHost.cs:1109-1109"
+loc: "NativeHost.cs:1123-1123"
 
 # ── 입출력 ──
 inputs:

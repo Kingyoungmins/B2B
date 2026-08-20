@@ -8,7 +8,7 @@ signature: "(hwnd)"
 role: "라이브 프레임을 작업표시줄/Alt+Tab 목록에서 제외(WS_EX_TOOLWINDOW, WS_EX_APPWINDOW 제거)."
 role_source: docstring
 version: "0.7.4"
-loc: "serve_b2b.py:4126-4147"
+loc: "serve_b2b.py:4135-4156"
 
 # ── 입출력 ──
 inputs:

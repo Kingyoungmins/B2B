@@ -43,6 +43,7 @@ called_by:
   - "openBatchResumeModal"
   - "restoreVbaExcelAfterError"
   - "runIsolatedLivePipelineSteps"
+  - "runLivePipelineStepSequentially"
   - "setPage"
   - "softRefreshApp"
 reads: []
@@ -62,7 +63,7 @@ timestamp: "0.7.4-gen"
 
 ## 관계
 - 호출: `isMissingExcelSessionError`, `restoreActiveExcelMirrorWindow`
-- 피호출(영향 전파 경로): `_reapplyVbaPipelineToLiveImpl`, `_restoreSnapshotByIds`, `applyVbaStepToLiveExcel`, `assistEnsureDom`, `assistToggleDrawer`, `installExcelMirrorPositionListeners`, `openBatchResumeModal`, `restoreVbaExcelAfterError`, `runIsolatedLivePipelineSteps`, `setPage`, `softRefreshApp`
+- 피호출(영향 전파 경로): `_reapplyVbaPipelineToLiveImpl`, `_restoreSnapshotByIds`, `applyVbaStepToLiveExcel`, `assistEnsureDom`, `assistToggleDrawer`, `installExcelMirrorPositionListeners`, `openBatchResumeModal`, `restoreVbaExcelAfterError`, `runIsolatedLivePipelineSteps`, `runLivePipelineStepSequentially`, `setPage`, `softRefreshApp`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

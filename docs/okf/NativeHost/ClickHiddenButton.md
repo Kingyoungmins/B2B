@@ -8,7 +8,7 @@ signature: "(string id)"
 role: "[0.7.1] UI 에서 숨긴 버튼(녹화/AI 도움)의 기존 onclick 을 그대로 실행 — 로직 재사용(분기 없음)."
 role_source: xmldoc/banner
 version: "0.7.4"
-loc: "NativeHost.cs:405-405"
+loc: "NativeHost.cs:414-414"
 
 # ── 입출력 ──
 inputs:

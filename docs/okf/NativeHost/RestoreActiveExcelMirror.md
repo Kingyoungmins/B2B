@@ -8,7 +8,7 @@ signature: "(bool raiseWindow = false)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
 version: "0.7.4"
-loc: "NativeHost.cs:1662-1662"
+loc: "NativeHost.cs:1676-1676"
 
 # ── 입출력 ──
 inputs:

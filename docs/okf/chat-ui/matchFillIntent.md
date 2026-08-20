@@ -8,7 +8,7 @@ signature: "(text)"
 role: "[0.7.1] 피벗/요약 값을 다른 시트의 '구분명(이름)'에 맞춰 '여러 값 열'을 채우는 붙여넣기 = ctx.match_fill."
 role_source: banner
 version: "0.7.4"
-loc: "chat-ui.js:779-779"
+loc: "chat-ui.js:788-788"
 
 # ── 입출력 ──
 inputs:

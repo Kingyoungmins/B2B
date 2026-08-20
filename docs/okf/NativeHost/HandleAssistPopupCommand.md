@@ -8,7 +8,7 @@ signature: "(string action)"
 role: "── [AI 도움 팝업] ─────────────────────────────────────────────────────────"
 role_source: xmldoc/banner
 version: "0.7.4"
-loc: "NativeHost.cs:757-757"
+loc: "NativeHost.cs:766-766"
 
 # ── 입출력 ──
 inputs:

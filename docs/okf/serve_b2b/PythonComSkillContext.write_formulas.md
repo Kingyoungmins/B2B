@@ -9,7 +9,7 @@ signature: "(self, sheet, a1_start, formulas)"
 role: "수식 문자열 2차원 리스트를 한 번에 기록(예: [[\"=B2-C2\"],[\"=B3-C3\"]])."
 role_source: docstring
 version: "0.7.4"
-loc: "serve_b2b.py:11829-11839"
+loc: "serve_b2b.py:11900-11921"
 
 # ── 입출력 ──
 inputs:
@@ -22,7 +22,8 @@ returns: "(추정)"
 # ── 사이드이펙트 (정적 추정) ──
 side_effects:
   - "없음(정적 분석 기준)"
-raises: []
+raises:
+  - "PythonComSkillError"
 
 # ── 유기적 관계 ──
 calls:
@@ -30,16 +31,22 @@ calls:
   - "_journal_save"
   - "_resize_rng"
   - "_rng"
+  - "_self_referencing_formula_cells"
   - "_tick"
   - "_ws"
   - "rows"
   - "sheet"
 calls_external:
+  - "PythonComSkillError"
+  - "_bad"
   - "a1_start"
   - "anchor"
   - "cols"
   - "data"
   - "formulas"
+  - "int"
+  - "join"
+  - "len"
   - "rng"
   - "ws"
 called_by:
@@ -63,8 +70,8 @@ timestamp: "0.7.4-gen"
 - 없음(정적 분석 기준)
 
 ## 관계
-- 호출: `_as_2d`, `_journal_save`, `_resize_rng`, `_rng`, `_tick`, `_ws`, `rows`, `sheet`
+- 호출: `_as_2d`, `_journal_save`, `_resize_rng`, `_rng`, `_self_referencing_formula_cells`, `_tick`, `_ws`, `rows`, `sheet`
 - 피호출(영향 전파 경로): `PythonComSkillContext.add_total_row`
 
 ## 실패/예외
-- `(명시적 raise 없음/미탐지)`
+- `PythonComSkillError`

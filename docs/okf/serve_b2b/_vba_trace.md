@@ -8,7 +8,7 @@ signature: "(event, **fields)"
 role: "Structured VBA/pipeline trace for field failures."
 role_source: docstring
 version: "0.7.4"
-loc: "serve_b2b.py:8722-8738"
+loc: "serve_b2b.py:8761-8777"
 
 # ── 입출력 ──
 inputs:

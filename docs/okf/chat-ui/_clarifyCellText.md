@@ -8,7 +8,7 @@ signature: "(v)"
 role: "── [데이터 구조 다이제스트] 검증의 근거를 '요청 단어'가 아니라 '실제 시트 구조'에서 뽑는다."
 role_source: banner
 version: "0.7.4"
-loc: "chat-ui.js:3325-3325"
+loc: "chat-ui.js:3350-3350"
 
 # ── 입출력 ──
 inputs:

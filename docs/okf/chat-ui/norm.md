@@ -8,7 +8,7 @@ signature: "(v)"
 role: "공백/_/- 만 다른 경우(모델이 한글 식별자에 공백을 끼우는 흔한 케이스, 예: \"2026년\"→\"2026 년\")는 통과."
 role_source: banner
 version: "0.7.4"
-loc: "chat-ui.js:477-477"
+loc: "chat-ui.js:486-486"
 
 # ── 입출력 ──
 inputs:

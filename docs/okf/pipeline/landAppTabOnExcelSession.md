@@ -8,7 +8,7 @@ signature: "(excelId)"
 role: "창을 도로 어긋나게 만들었다. 동기로 즉시 맞춘다."
 role_source: banner
 version: "0.7.4"
-loc: "pipeline.js:4527-4527"
+loc: "pipeline.js:4575-4575"
 
 # ── 입출력 ──
 inputs:
@@ -29,6 +29,7 @@ calls_external:
 called_by:
   - "_restoreSnapshotByIds"
   - "applyVbaStepToLiveExcel"
+  - "runLivePipelineStepSequentially"
 reads:
   - "state.currentFileId"
 writes: []
@@ -44,7 +45,7 @@ timestamp: "0.7.4-gen"
 
 ## 관계
 - 호출: `fileIdForExcelMirrorId`, `setCurrentView`
-- 피호출(영향 전파 경로): `_restoreSnapshotByIds`, `applyVbaStepToLiveExcel`
+- 피호출(영향 전파 경로): `_restoreSnapshotByIds`, `applyVbaStepToLiveExcel`, `runLivePipelineStepSequentially`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

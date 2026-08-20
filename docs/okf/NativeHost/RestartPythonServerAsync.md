@@ -8,7 +8,7 @@ signature: "(bool fromCrash)"
 role: "죽었거나 멈춘 서버를 강제 종료 후 같은 포트로 다시 띄운다. 웹 페이지는 그대로 유지."
 role_source: xmldoc/banner
 version: "0.7.4"
-loc: "NativeHost.cs:1390-1390"
+loc: "NativeHost.cs:1404-1404"
 
 # ── 입출력 ──
 inputs:

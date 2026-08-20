@@ -8,7 +8,7 @@ signature: "(text)"
 role: "[저장 시] 위와 같은 교정을 '현재 업로드' 기준으로 — stale 파일명이 유일 재해석될 때만."
 role_source: banner
 version: "0.7.4"
-loc: "save-load.js:840-840"
+loc: "save-load.js:844-844"
 
 # ── 입출력 ──
 inputs:

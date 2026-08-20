@@ -8,7 +8,7 @@ signature: "(string json)"
 role: "메인/팝업 페이지는 {\"__b2bAssist\": ...} 봉투로 받는다(다른 message 리스너와 충돌 방지)."
 role_source: xmldoc/banner
 version: "0.7.4"
-loc: "NativeHost.cs:857-857"
+loc: "NativeHost.cs:868-868"
 
 # ── 입출력 ──
 inputs:

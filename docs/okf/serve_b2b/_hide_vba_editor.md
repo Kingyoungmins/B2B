@@ -8,7 +8,7 @@ signature: "(app)"
 role: "VBE/디버거 창이 사용자 화면으로 올라오지 않게 숨긴다."
 role_source: docstring
 version: "0.7.4"
-loc: "serve_b2b.py:8488-8506"
+loc: "serve_b2b.py:8527-8545"
 
 # ── 입출력 ──
 inputs:

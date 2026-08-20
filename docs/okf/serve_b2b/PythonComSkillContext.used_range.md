@@ -9,7 +9,7 @@ signature: "(self, sheet)"
 role: "(행수, 열수) — 시트의 사용 범위 크기."
 role_source: docstring
 version: "0.7.4"
-loc: "serve_b2b.py:11544-11549"
+loc: "serve_b2b.py:11615-11620"
 
 # ── 입출력 ──
 inputs:

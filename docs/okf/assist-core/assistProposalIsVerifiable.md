@@ -8,7 +8,7 @@ signature: "(p)"
 role: "[Tier2] 격리 검증이 가능한 제안인가 — 단일 코드 수정(replaceLiteral/replaceStepCode)이고, 대상 스텝이"
 role_source: banner
 version: "0.7.4"
-loc: "assist-core.js:848-848"
+loc: "assist-core.js:931-931"
 
 # ── 입출력 ──
 inputs:
@@ -29,6 +29,7 @@ calls_external:
   - "test"
   - "toLowerCase"
 called_by:
+  - "assistCloseOut"
   - "assistHandleUserMessage"
 reads:
   - "state.pipeline"
@@ -45,7 +46,7 @@ timestamp: "0.7.4-gen"
 
 ## 관계
 - 호출: 없음
-- 피호출(영향 전파 경로): `assistHandleUserMessage`
+- 피호출(영향 전파 경로): `assistCloseOut`, `assistHandleUserMessage`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

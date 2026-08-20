@@ -8,7 +8,7 @@ signature: "(c)"
 role: "색 입력을 Excel .Color 롱값으로 변환. '#RRGGBB'/'RRGGBB'/색이름(노랑·red 등)/정수 지원."
 role_source: docstring
 version: "0.7.4"
-loc: "serve_b2b.py:11226-11247"
+loc: "serve_b2b.py:11273-11294"
 
 # ── 입출력 ──
 inputs:

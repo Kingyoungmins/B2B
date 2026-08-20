@@ -8,7 +8,7 @@ signature: "()"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
 version: "0.7.4"
-loc: "NativeHost.cs:214-214"
+loc: "NativeHost.cs:220-220"
 
 # ── 입출력 ──
 inputs: []
@@ -39,6 +39,7 @@ calls_external:
   - "BringToFront"
   - "ColumnStyle"
   - "Event"
+  - "ExtractAssociatedIcon"
   - "FlowLayoutPanel"
   - "Focus"
   - "Font"
@@ -53,6 +54,7 @@ calls_external:
   - "WebView2"
   - "async"
   - "dispatchEvent"
+  - "exe"
   - "python"
 called_by:
   - "Main"

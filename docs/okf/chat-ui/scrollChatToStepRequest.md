@@ -8,7 +8,7 @@ signature: "(step)"
 role: "스텝의 원 요청 말풍선을 찾아 스크롤+강조. 못 찾으면 false."
 role_source: banner
 version: "0.7.4"
-loc: "chat-ui.js:242-242"
+loc: "chat-ui.js:251-251"
 
 # ── 입출력 ──
 inputs:

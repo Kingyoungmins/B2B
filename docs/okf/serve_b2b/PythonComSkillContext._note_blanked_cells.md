@@ -9,7 +9,7 @@ signature: "(self, before, data)"
 role: "앞 단계가 채워 둔 칸을 이번 쓰기가 '빈칸으로' 덮었는지 센다."
 role_source: docstring
 version: "0.7.4"
-loc: "serve_b2b.py:11494-11520"
+loc: "serve_b2b.py:11565-11591"
 
 # ── 입출력 ──
 inputs:

@@ -8,7 +8,7 @@ signature: "(text)"
 role: "[0.5.18] '열/데이터만 비우기(수식 유지)' → ctx.clear(범위, keep_formulas=?). write+formula_mask 로 배열을 짜다"
 role_source: banner
 version: "0.7.4"
-loc: "chat-ui.js:886-886"
+loc: "chat-ui.js:895-895"
 
 # ── 입출력 ──
 inputs:

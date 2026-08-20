@@ -8,7 +8,7 @@ signature: "(step)"
 role: "(사용자가 손댔으면 보존)."
 role_source: banner
 version: "0.7.4"
-loc: "pipeline.js:2978-2978"
+loc: "pipeline.js:3013-3013"
 
 # ── 입출력 ──
 inputs:

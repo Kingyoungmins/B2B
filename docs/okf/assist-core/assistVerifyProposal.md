@@ -8,7 +8,7 @@ signature: "(p, signal)"
 role: "[Tier2] 후보 코드를 격리 인스턴스에서 실행해 diff 를 받는다. 실패/불가는 예외가 아니라 결과로."
 role_source: banner
 version: "0.7.4"
-loc: "assist-core.js:865-865"
+loc: "assist-core.js:948-948"
 
 # ── 입출력 ──
 inputs:
@@ -30,6 +30,7 @@ calls_external:
   - "isArray"
   - "slice"
 called_by:
+  - "assistCloseOut"
   - "assistHandleUserMessage"
 reads:
   - "state.pipeline"
@@ -46,7 +47,7 @@ timestamp: "0.7.4-gen"
 
 ## 관계
 - 호출: `postExcelMirror`
-- 피호출(영향 전파 경로): `assistHandleUserMessage`
+- 피호출(영향 전파 경로): `assistCloseOut`, `assistHandleUserMessage`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

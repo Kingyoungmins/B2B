@@ -8,7 +8,7 @@ signature: "(step, excelId, options = {})"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
 version: "0.7.4"
-loc: "pipeline.js:2234-2234"
+loc: "pipeline.js:2248-2248"
 
 # ── 입출력 ──
 inputs:
@@ -30,10 +30,13 @@ calls:
   - "hideAllExcelMirrorWindows"
   - "inferPipelineStepLanguage"
   - "isolatedPipelineStepPayload"
+  - "landAppTabOnExcelSession"
   - "pipelineStepLiveLanguage"
   - "pipelineStepWritesCrossFile"
   - "postExcelMirror"
+  - "scheduleRestoreActiveExcelMirror"
   - "setPipelineRuntimeStatus"
+  - "showOnlyExcelMirrorWindow"
   - "wirePipelineStepCrossEvidence"
   - "wireStepCrossFromResponse"
 calls_external:
@@ -45,6 +48,8 @@ calls_external:
   - "isArray"
   - "isInteger"
   - "now"
+  - "prehide"
+  - "showOnly"
 called_by:
   - "applyLastEnabledStepFast"
 reads:
@@ -61,7 +66,7 @@ timestamp: "0.7.4-gen"
 - 네트워크/서버 호출
 
 ## 관계
-- 호출: `applyLiveSchemaToFileCache`, `attachPipelineStepError`, `captureStepPreApplySnapshot`, `hideAllExcelMirrorWindows`, `inferPipelineStepLanguage`, `isolatedPipelineStepPayload`, `pipelineStepLiveLanguage`, `pipelineStepWritesCrossFile`, `postExcelMirror`, `setPipelineRuntimeStatus`, `wirePipelineStepCrossEvidence`, `wireStepCrossFromResponse`
+- 호출: `applyLiveSchemaToFileCache`, `attachPipelineStepError`, `captureStepPreApplySnapshot`, `hideAllExcelMirrorWindows`, `inferPipelineStepLanguage`, `isolatedPipelineStepPayload`, `landAppTabOnExcelSession`, `pipelineStepLiveLanguage`, `pipelineStepWritesCrossFile`, `postExcelMirror`, `scheduleRestoreActiveExcelMirror`, `setPipelineRuntimeStatus`, `showOnlyExcelMirrorWindow`, `wirePipelineStepCrossEvidence`, `wireStepCrossFromResponse`
 - 피호출(영향 전파 경로): `applyLastEnabledStepFast`
 
 ## 실패/예외

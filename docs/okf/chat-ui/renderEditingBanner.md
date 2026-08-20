@@ -17,6 +17,7 @@ returns: "(추정)"
 # ── 사이드이펙트 (정적 추정) ──
 side_effects:
   - "DOM/브라우저 전역 조작"
+  - "타이머"
 raises: []
 
 # ── 유기적 관계 ──
@@ -32,9 +33,12 @@ calls_external:
   - "insertBefore"
   - "querySelector"
   - "remove"
+  - "setTimeout"
 called_by:
+  - "addAssistantReply"
   - "refreshChatState"
   - "renderPipeline"
+  - "runEditApply"
   - "toggleEditStep"
 reads:
   - "state.editingStepId"
@@ -49,10 +53,11 @@ timestamp: "0.7.4-gen"
 
 ## 사이드이펙트 & 주의
 - DOM/브라우저 전역 조작
+- 타이머
 
 ## 관계
 - 호출: `$`, `add`, `escapeHtml`, `toggleEditStep`
-- 피호출(영향 전파 경로): `refreshChatState`, `renderPipeline`, `toggleEditStep`
+- 피호출(영향 전파 경로): `addAssistantReply`, `refreshChatState`, `renderPipeline`, `runEditApply`, `toggleEditStep`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

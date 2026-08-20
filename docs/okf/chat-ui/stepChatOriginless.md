@@ -8,7 +8,7 @@ signature: "(step)"
 role: "대화 없이 태어난 스텝(복붙 캡처·수동 셀편집)인가 — 이런 스텝은 텍스트 매칭을 시도하는 것"
 role_source: banner
 version: "0.7.4"
-loc: "chat-ui.js:168-168"
+loc: "chat-ui.js:177-177"
 
 # ── 입출력 ──
 inputs:

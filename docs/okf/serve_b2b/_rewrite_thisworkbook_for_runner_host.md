@@ -8,7 +8,7 @@ signature: "(code, context_wb)"
 role: "임시 .xlsm 러너에서 실행할 때 ThisWorkbook 은 러너 자신을 가리킨다."
 role_source: docstring
 version: "0.7.4"
-loc: "serve_b2b.py:8520-8532"
+loc: "serve_b2b.py:8559-8571"
 
 # ── 입출력 ──
 inputs:
