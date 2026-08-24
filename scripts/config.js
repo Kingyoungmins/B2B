@@ -127,6 +127,20 @@ function versionCheckUpstreamEndpoint(raw) {
   return base ? base + "/v1/version" : "";
 }
 
+/* [로그 자동 전송 2026-08-24] 백엔드가 로그·스킬을 이 주소의 수집 서버로 알아서 올린다.
+   주소와 키는 여기(버전 확인 설정) 것을 그대로 쓴다 — 사용자가 두 곳에 따로 적지 않게 하려는 것.
+   화면이 뜰 때 한 번, 설정을 저장할 때마다 백엔드에 알려 준다. 실패는 무시한다(부가 기능). */
+function pushLogSyncConfig(conf) {
+  const c = conf || loadVersionCheckSettings();
+  try {
+    fetch("/api/log-sync/config", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ upstreamUrl: c.upstreamUrl, apiKey: c.apiKey }),
+    }).catch(() => {});
+  } catch {}
+}
+
 function saveVersionCheckSettings(next) {
   // 저장은 '기본 주소' 형태로 통일한다(끝의 /v1, /version 은 떼어낸다) — 화면에 다시 채울 때도 깔끔하고,
   // 호출 직전에 /v1/version 을 붙이므로 중복될 일이 없다.
@@ -135,8 +149,12 @@ function saveVersionCheckSettings(next) {
     apiKey: String((next && next.apiKey) || "").trim(),
   };
   try { localStorage.setItem(VERSION_CHECK_KEY, JSON.stringify(clean)); } catch {}
+  pushLogSyncConfig(clean);       // 바뀐 주소로 로그도 따라가게
   return clean;
 }
+
+// 화면이 뜨면 저장된 값(없으면 기본값)으로 백엔드 전송 설정을 한 번 맞춰 준다.
+try { pushLogSyncConfig(); } catch {}
 
 /* '0.7.2' 와 '0.7.2.0' 은 같은 버전이다. 문자열 그대로 비교하면 다르다고 나와서
    멀쩡한 사용자에게 업데이트 안내가 뜬다. 서버(serve_b2b._normalize_version_text /

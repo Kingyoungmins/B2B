@@ -34,6 +34,8 @@ a = Analysis(
         # [사용 가이드 제거] 메뉴에서 뺐으므로 exe 에도 넣지 않는다(파일은 저장소에 남겨 둠).
         ('serve_b2b.py', '.'),
         ('record_service.py', '.'),
+        # [로그 자동 전송] 수집 서버로 로그/스킬을 올리는 모듈. 빠지면 배포본에서만 전송이 조용히 꺼진다.
+        ('log_sync.py', '.'),
         *collect('styles'),
         *collect('scripts'),
         *collect('vendor'),
@@ -60,6 +62,8 @@ a = Analysis(
         # 녹화 서비스 + 벤더링된 ixi-Cell-R 레코더(지연 import 라 명시)
         'record_service',
         'native_macro_recorder',
+        # serve_b2b 가 지연 import 하므로 명시한다(없으면 프로즌에서 import 실패 → 전송 꺼짐).
+        'log_sync',
         *collect_submodules('ixicellr'),
     ],
     hookspath=[],
