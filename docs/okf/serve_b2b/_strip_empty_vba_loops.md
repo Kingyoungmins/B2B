@@ -8,7 +8,7 @@ signature: "(code)"
 role: "본문이 비어 있는 `For Each <var> In <expr> … Next` 루프를 제거한다."
 role_source: docstring
 version: "0.7.5"
-loc: "serve_b2b.py:8662-8676"
+loc: "serve_b2b.py:8714-8728"
 
 # ── 입출력 ──
 inputs:

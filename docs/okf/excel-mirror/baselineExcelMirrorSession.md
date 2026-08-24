@@ -8,7 +8,7 @@ signature: "(excelId, options = {}, attempts = 8)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
 version: "0.7.5"
-loc: "excel-mirror.js:902-902"
+loc: "excel-mirror.js:906-906"
 
 # ── 입출력 ──
 inputs:

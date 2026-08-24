@@ -8,7 +8,7 @@ signature: "()"
 role: "Windows 클립보드의 Excel 'Link' 포맷에서 복사 소스(워크북/시트/범위)를 역추적한다."
 role_source: docstring
 version: "0.7.5"
-loc: "serve_b2b.py:11145-11213"
+loc: "serve_b2b.py:11197-11265"
 
 # ── 입출력 ──
 inputs: []

@@ -8,7 +8,7 @@ signature: "(timeout_s=None)"
 role: "Python 스킬 실행 데드라인(monotonic). 유효 타임아웃이 0/음수면 무제한(inf)."
 role_source: docstring
 version: "0.7.5"
-loc: "serve_b2b.py:11457-11460"
+loc: "serve_b2b.py:11509-11512"
 
 # ── 입출력 ──
 inputs:

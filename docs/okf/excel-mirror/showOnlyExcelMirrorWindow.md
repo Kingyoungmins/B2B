@@ -8,7 +8,7 @@ signature: "(excelId = currentExcelId()"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
 version: "0.7.5"
-loc: "excel-mirror.js:1932-1932"
+loc: "excel-mirror.js:2013-2013"
 
 # ── 입출력 ──
 inputs:
@@ -32,6 +32,7 @@ called_by:
   - "preopenAllExcelMirrors"
   - "restoreVbaExcelAfterError"
   - "runLivePipelineStepSequentially"
+  - "scheduleExcelMirrorReshowAfterReplace"
   - "switchVisibleExcelMirrorToFileId"
 reads: []
 writes: []
@@ -47,7 +48,7 @@ timestamp: "0.7.5-gen"
 
 ## 관계
 - 호출: 없음
-- 피호출(영향 전파 경로): `_reapplyVbaPipelineToLiveImpl`, `_restoreSnapshotByIds`, `ensureExcelMirrorSession`, `openCurrentWorkbookInExcel`, `openExcelMirrorResultForFileId`, `preopenAllExcelMirrors`, `restoreVbaExcelAfterError`, `runLivePipelineStepSequentially`, `switchVisibleExcelMirrorToFileId`
+- 피호출(영향 전파 경로): `_reapplyVbaPipelineToLiveImpl`, `_restoreSnapshotByIds`, `ensureExcelMirrorSession`, `openCurrentWorkbookInExcel`, `openExcelMirrorResultForFileId`, `preopenAllExcelMirrors`, `restoreVbaExcelAfterError`, `runLivePipelineStepSequentially`, `scheduleExcelMirrorReshowAfterReplace`, `switchVisibleExcelMirrorToFileId`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

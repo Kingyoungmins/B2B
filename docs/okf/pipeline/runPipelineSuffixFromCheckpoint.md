@@ -8,7 +8,7 @@ signature: "(startIdx, options = {})"
 role: "[매핑 보존] '수정 이후 부분만 이어실행'도 매핑본으로 돈다 — 안 그러면 수정 스텝은 새 코드로,"
 role_source: banner
 version: "0.7.5"
-loc: "pipeline.js:4800-4800"
+loc: "pipeline.js:4804-4804"
 
 # ── 입출력 ──
 inputs:

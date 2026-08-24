@@ -8,7 +8,7 @@ signature: "()"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
 version: "0.7.5"
-loc: "excel-mirror.js:920-920"
+loc: "excel-mirror.js:924-924"
 
 # ── 입출력 ──
 inputs: []
@@ -35,6 +35,7 @@ called_by:
   - "runVbaPipelinePreferLive"
   - "saveCurrentExcelMirror"
   - "scheduleExcelMirrorPosition"
+  - "scheduleExcelMirrorReshowAfterReplace"
   - "startExcelMirrorPolling"
   - "updateMirrorShellStatus"
   - "vbaTargetExcelId"
@@ -53,7 +54,7 @@ timestamp: "0.7.5-gen"
 
 ## 관계
 - 호출: `currentExcelMirrorTarget`
-- 피호출(영향 전파 경로): `_reapplyVbaPipelineToLiveImpl`, `_runHeldStepsBatchImpl`, `_runPipelineSuffixFromCheckpointImpl`, `activateCurrentSelectionInExcel`, `closeCurrentExcelMirror`, `forceRestartExcelMirrors`, `installExcelMirrorPositionListeners`, `runFromCheckpointAfterEdit`, `runVbaPipelinePreferLive`, `saveCurrentExcelMirror`, `scheduleExcelMirrorPosition`, `startExcelMirrorPolling`, `updateMirrorShellStatus`, `vbaTargetExcelId`
+- 피호출(영향 전파 경로): `_reapplyVbaPipelineToLiveImpl`, `_runHeldStepsBatchImpl`, `_runPipelineSuffixFromCheckpointImpl`, `activateCurrentSelectionInExcel`, `closeCurrentExcelMirror`, `forceRestartExcelMirrors`, `installExcelMirrorPositionListeners`, `runFromCheckpointAfterEdit`, `runVbaPipelinePreferLive`, `saveCurrentExcelMirror`, `scheduleExcelMirrorPosition`, `scheduleExcelMirrorReshowAfterReplace`, `startExcelMirrorPolling`, `updateMirrorShellStatus`, `vbaTargetExcelId`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

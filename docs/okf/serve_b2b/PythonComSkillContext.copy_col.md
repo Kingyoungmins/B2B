@@ -9,7 +9,7 @@ signature: "(self, sheet, src, dst, header_row=None)"
 role: "열 → 열 '복사'(원본 유지). 값+수식+서식+세로병합 보존, 상단 제목의 가로 병합은 자동 회피,"
 role_source: docstring
 version: "0.7.5"
-loc: "serve_b2b.py:13487-13491"
+loc: "serve_b2b.py:13539-13543"
 
 # ── 입출력 ──
 inputs:

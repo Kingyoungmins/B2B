@@ -9,7 +9,7 @@ signature: "(self, sheet, a1_range)"
 role: "셀별 수식 여부를 2차원 리스트(True/False)로 반환(COM 1회)."
 role_source: docstring
 version: "0.7.5"
-loc: "serve_b2b.py:12164-12171"
+loc: "serve_b2b.py:12216-12223"
 
 # ── 입출력 ──
 inputs:

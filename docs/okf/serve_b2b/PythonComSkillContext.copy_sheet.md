@@ -9,7 +9,7 @@ signature: "(self, src_sheet, dst_book=None, new_name=None, before=None, after=N
 role: "시트 1장을 통째로 복사한다(서식·수식·값 보존). dst_book 을 주면 다른 파일로 복사(교차 파일)."
 role_source: docstring
 version: "0.7.5"
-loc: "serve_b2b.py:13877-14026"
+loc: "serve_b2b.py:13929-14078"
 
 # ── 입출력 ──
 inputs:

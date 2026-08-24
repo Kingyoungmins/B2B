@@ -5,10 +5,10 @@ module: excel-mirror.js
 lang: js
 extraction: regex   # 정규식 근사
 signature: "(excelId)"
-role: "[0.5.17] 현재 탭의 Selection 만 가볍게 읽어 선택→채팅 반영을 빠르게 한다. active-sync(탭 따라가기)는"
-role_source: banner
+role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
+role_source: none
 version: "0.7.5"
-loc: "excel-mirror.js:1648-1648"
+loc: "excel-mirror.js:1718-1718"
 
 # ── 입출력 ──
 inputs:
@@ -23,6 +23,7 @@ raises: []
 
 # ── 유기적 관계 ──
 calls:
+  - "_traceSelectionPollGate"
   - "fileIdForExcelMirrorId"
   - "forgetExcelMirrorSession"
   - "isMissingExcelSessionError"
@@ -30,7 +31,9 @@ calls:
   - "shouldAppendExcelSelectionFromPoll"
   - "syncSelectionFromExcel"
 calls_external:
+  - "String"
   - "now"
+  - "slice"
 called_by:
   - "startExcelMirrorPolling"
 reads:
@@ -42,7 +45,7 @@ timestamp: "0.7.5-gen"
 ---
 
 ## 역할
-[0.5.17] 현재 탭의 Selection 만 가볍게 읽어 선택→채팅 반영을 빠르게 한다. active-sync(탭 따라가기)는
+(추정) 역할 주석 없음 — 담당자 1줄 보완 필요  _(자동 추정 — 확인 필요)_
 
 ## 사이드이펙트 & 주의
 - 네트워크/서버 호출
@@ -50,7 +53,7 @@ timestamp: "0.7.5-gen"
 - 변경 상태 `excelMirror.selectionPolling` — 수정 시 이 상태를 읽는 곳 동반 점검.
 
 ## 관계
-- 호출: `fileIdForExcelMirrorId`, `forgetExcelMirrorSession`, `isMissingExcelSessionError`, `postExcelMirror`, `shouldAppendExcelSelectionFromPoll`, `syncSelectionFromExcel`
+- 호출: `_traceSelectionPollGate`, `fileIdForExcelMirrorId`, `forgetExcelMirrorSession`, `isMissingExcelSessionError`, `postExcelMirror`, `shouldAppendExcelSelectionFromPoll`, `syncSelectionFromExcel`
 - 피호출(영향 전파 경로): `startExcelMirrorPolling`
 
 ## 실패/예외

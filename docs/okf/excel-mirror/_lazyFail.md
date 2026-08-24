@@ -8,7 +8,7 @@ signature: "(kind, err)"
 role: "[전환 침묵 실패 금지] 세션이 죽어 매핑이 forget 된 파일 탭을 클릭하면 재오픈(ensure)로"
 role_source: banner
 version: "0.7.5"
-loc: "excel-mirror.js:2161-2161"
+loc: "excel-mirror.js:2242-2242"
 
 # ── 입출력 ──
 inputs:

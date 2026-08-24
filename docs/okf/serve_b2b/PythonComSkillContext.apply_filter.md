@@ -9,7 +9,7 @@ signature: "(self, sheet, column, values, header_row=1)"
 role: "'눈으로만' 특정 값만 보이게 필터를 건다 — 데이터를 지우지 않고, 조건에 안 맞는 행을 화면에서 '숨김'"
 role_source: docstring
 version: "0.7.5"
-loc: "serve_b2b.py:12744-12786"
+loc: "serve_b2b.py:12796-12838"
 
 # ── 입출력 ──
 inputs:

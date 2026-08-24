@@ -8,7 +8,7 @@ signature: "(text)"
 role: "ctx 헬퍼가 결정적으로 처리하는(=Python 우선) 작업 묶음. 필요 시 안전한 헬퍼 작업을 여기에 더한다."
 role_source: banner
 version: "0.7.5"
-loc: "chat-ui.js:777-777"
+loc: "chat-ui.js:781-781"
 
 # ── 입출력 ──
 inputs:

@@ -9,7 +9,7 @@ signature: "(self, sheet, predicate, header_rows=1)"
 role: "조건에 맞는 행을 **제자리에서** 삭제한다 — 남는 행의 서식·표시형식·수식·병합이 그대로다."
 role_source: docstring
 version: "0.7.5"
-loc: "serve_b2b.py:12618-12670"
+loc: "serve_b2b.py:12670-12722"
 
 # ── 입출력 ──
 inputs:

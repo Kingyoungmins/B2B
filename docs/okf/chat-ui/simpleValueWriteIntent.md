@@ -8,7 +8,7 @@ signature: "(text)"
 role: "[0.5.17] 단순 '값 채우기/쓰기' — 특정 셀/열/범위에 값을 입력(계산·매칭·조건 없음)은 ctx.write 로"
 role_source: banner
 version: "0.7.5"
-loc: "chat-ui.js:846-846"
+loc: "chat-ui.js:850-850"
 
 # ── 입출력 ──
 inputs:

@@ -8,7 +8,7 @@ signature: "(text)"
 role: "[0.5.18] 범위/셀을 '값으로/원문 텍스트 그대로' 복사 → ctx.copy_values(서식 보존, 수식 시프트 없음). ctx.copy 는"
 role_source: banner
 version: "0.7.5"
-loc: "chat-ui.js:887-887"
+loc: "chat-ui.js:891-891"
 
 # ── 입출력 ──
 inputs:

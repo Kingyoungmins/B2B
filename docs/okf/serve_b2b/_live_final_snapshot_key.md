@@ -8,7 +8,7 @@ signature: "(wb_record, state_sig)"
 role: "키 = 원본 파일 지문 + 클라가 계산한 파이프라인 상태 서명."
 role_source: docstring
 version: "0.7.5"
-loc: "serve_b2b.py:18863-18874"
+loc: "serve_b2b.py:18915-18926"
 
 # ── 입출력 ──
 inputs:

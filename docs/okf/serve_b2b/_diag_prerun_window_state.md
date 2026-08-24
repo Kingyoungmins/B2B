@@ -8,7 +8,7 @@ signature: "(app, context_wb)"
 role: "[임시 진단] VBA Application.Run 직전, Excel 앱 프레임 + 대상 워크북 창의"
 role_source: docstring
 version: "0.7.5"
-loc: "serve_b2b.py:9050-9077"
+loc: "serve_b2b.py:9102-9129"
 
 # ── 입출력 ──
 inputs:

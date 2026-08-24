@@ -8,7 +8,7 @@ signature: "(text)"
 role: "[0.5.17] 열(컬럼) 이동/재배치/맞바꾸기 → ctx.move_cols 로 결정적 처리(Python). VBA 로 보내면 모델이 병합"
 role_source: banner
 version: "0.7.5"
-loc: "chat-ui.js:866-866"
+loc: "chat-ui.js:870-870"
 
 # ── 입출력 ──
 inputs:

@@ -8,7 +8,7 @@ signature: "()"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
 version: "0.7.5"
-loc: "excel-mirror.js:1593-1593"
+loc: "excel-mirror.js:1641-1641"
 
 # ── 입출력 ──
 inputs: []
@@ -23,12 +23,14 @@ raises: []
 
 # ── 유기적 관계 ──
 calls:
+  - "_traceSelectionPollGate"
   - "currentExcelId"
   - "isNativeExcelShell"
   - "pollExcelFormulaInfo"
   - "pollExcelMirrorChanges"
   - "pollExcelSelection"
 calls_external:
+  - "String"
   - "info"
   - "now"
   - "setInterval"
@@ -40,7 +42,8 @@ called_by:
   - "preopenAllExcelMirrors"
   - "refreshExcelMirrorForFileId"
   - "switchVisibleExcelMirrorToFileId"
-reads: []
+reads:
+  - "state.currentFileId"
 writes:
   - "excelMirror.formulaInfoTimer"
   - "excelMirror.hostActive"
@@ -60,7 +63,7 @@ timestamp: "0.7.5-gen"
 - 변경 상태 `excelMirror.formulaInfoTimer, excelMirror.hostActive, excelMirror.pollTimer, excelMirror.selectionTimer` — 수정 시 이 상태를 읽는 곳 동반 점검.
 
 ## 관계
-- 호출: `currentExcelId`, `isNativeExcelShell`, `pollExcelFormulaInfo`, `pollExcelMirrorChanges`, `pollExcelSelection`
+- 호출: `_traceSelectionPollGate`, `currentExcelId`, `isNativeExcelShell`, `pollExcelFormulaInfo`, `pollExcelMirrorChanges`, `pollExcelSelection`
 - 피호출(영향 전파 경로): `acknowledgeExcelMirrorApplied`, `openCurrentWorkbookInExcel`, `openExcelMirrorResultForFileId`, `preopenAllExcelMirrors`, `refreshExcelMirrorForFileId`, `switchVisibleExcelMirrorToFileId`
 
 ## 실패/예외

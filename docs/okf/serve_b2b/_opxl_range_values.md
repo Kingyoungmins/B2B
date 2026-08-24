@@ -8,7 +8,7 @@ signature: "(ws, token, cached_ws=None, seen=None)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
 version: "0.7.5"
-loc: "serve_b2b.py:17107-17135"
+loc: "serve_b2b.py:17159-17187"
 
 # ── 입출력 ──
 inputs:

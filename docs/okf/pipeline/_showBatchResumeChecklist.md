@@ -8,7 +8,7 @@ signature: "(info)"
 role: "체크박스 모달. resolve: 체크된 stepId 배열 | null(취소)."
 role_source: banner
 version: "0.7.5"
-loc: "pipeline.js:5019-5019"
+loc: "pipeline.js:5023-5023"
 
 # ── 입출력 ──
 inputs:

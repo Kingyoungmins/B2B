@@ -8,7 +8,7 @@ signature: "(expected)"
 role: "Excel 워커 — 녹화 정지 시점 기대 상태(expected)와 현재 라이브 시트를 대조."
 role_source: docstring
 version: "0.7.5"
-loc: "serve_b2b.py:7095-7157"
+loc: "serve_b2b.py:7147-7209"
 
 # ── 입출력 ──
 inputs:
