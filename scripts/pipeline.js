@@ -2905,6 +2905,53 @@ function replaceLogicAt(stepId, newCode, newDescription, language, opts) {
     renderPipeline();
     refreshRunButton();
     if (typeof scheduleLogicAutoBackup === "function") scheduleLogicAutoBackup("step-updated");
+    // [SBAGENT-289] 마지막 단계 '수정'의 빠른 경로 — 삭제(fastLast)·토글에는 이미 있는데
+    // 수정에만 없어서, 결과편집 후 마지막 스텝을 고치면 전체 reconcile(파일별 리셋 + 1단계부터
+    // 스텝별 격리 재구축)을 탔다. 실측(VM 16:17~16:23): 리셋 3회 + 4스텝 순차 = 5분 5초 —
+    // 사용자가 "아예 다시 전체실행 한 느낌"이라 제보한 그것.
+    // 같은 부품을 재사용한다: 직전 사본 복원(restoreLastStepPreApplySnapshot, 삭제 경로와 동일)
+    // 후 새 코드 한 스텝만 단일 적용(applyMappedSingleStep, 토글 ON 경로와 동일).
+    // 어느 하나라도 안 되면 기존 전체 reconcile 로 폴백 — 결과는 항상 보장된다.
+    const _fastEditLast = canFastEditLastPipelineStep(originalStep, idx, beforeReplaceSnapshot)
+      && !!(originalStep && originalStep._preApplySnapshot && originalStep._preApplySnapshot.resultId)
+      && !(typeof pipelineStepWritesCrossFile === "function" && pipelineStepWritesCrossFile(next[idx]));
+    if (_fastEditLast) {
+      const promise = (async () => {
+        try {
+          const restored = await restoreLastStepPreApplySnapshot(originalStep, { message: "마지막 단계 수정 반영 중..." });
+          if (restored) {
+            const applied = await applyMappedSingleStep(stepId);
+            if (applied) {
+              setPipelineRuntimeStatus([stepId], "applied", "적용됨");
+              noteLivePipelineApplied(state.pipeline);
+              try {
+                if (typeof traceClientUiEvent === "function") traceClientUiEvent("edit.lastStep.fast", { stepId, ok: true });
+              } catch (_) {}
+              return true;
+            }
+          }
+        } catch (err) {
+          console.warn("[pipeline] fast last-step edit failed; falling back to full reconcile", err);
+        }
+        try {
+          if (typeof traceClientUiEvent === "function") traceClientUiEvent("edit.lastStep.fast", { stepId, ok: false, fallback: "reconcile" });
+        } catch (_) {}
+        const st = await reconcilePipelineSimulationAfterEdit({ forceBackend: true, affectedStep: state.pipeline.find(s => s.id === stepId) || null });
+        if (st && st.cancelled) {
+          setPipelineRuntimeStatus([stepId], "review", "중단됨 · 미적용");
+          return { cancelled: true };
+        }
+        setPipelineRuntimeStatus([stepId], "applied", "적용됨");
+        return true;
+      })().catch(err => {
+        setPipelineRuntimeStatus([stepId], "error", "오류");
+        restorePipelineStep(stepId, originalStep);
+        reportPipelineError(err);
+        throw err;
+      });
+      toast(`Step ${idx + 1} 코드가 수정되었습니다. 마지막 단계만 빠르게 반영합니다.`, "success");
+      return { pending: true, promise, cancel: () => (typeof requestExcelApplyCancel === "function" ? requestExcelApplyCancel() : false) };
+    }
     const promise = reconcilePipelineSimulationAfterEdit({ forceBackend: true, affectedStep: state.pipeline.find(s => s.id === stepId) || null })
       .then((st) => {
         if (st && st.cancelled) {
@@ -3065,6 +3112,17 @@ function _applyEditPrefill(step) {
   const cur = String(ta.value || "");
   const mine = prev && cur === prev.text;          // 입력창이 아직 '우리가 채운 그대로'인가
   const next = step ? _editPrefillPromptOf(step) : "";
+  // [SBAGENT-289 계측] "수정 버튼 눌렀는데 프롬프트가 안 찍힌다" 제보 — 어느 갈래로 빠졌는지
+  // 로그가 말하게 한다. 지금은 원인을 로그로 특정할 수 없다(계측 부재).
+  try {
+    if (step && typeof traceClientUiEvent === "function") {
+      traceClientUiEvent("edit.prefill", {
+        stepId: step.id || "",
+        source: !next ? "none(originless/빈값)" : (step.lastEditPrompt ? "lastEdit" : "prompt"),
+        skippedDraft: !!(next && cur.trim() && !mine),
+      });
+    }
+  } catch (_) {}
   if (step && next) {
     if (cur.trim() && !mine) return;               // 사용자 초안 보존 — 덮어쓰지 않는다
     ta.value = next;

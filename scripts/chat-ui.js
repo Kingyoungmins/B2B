@@ -172,6 +172,32 @@ function originHistIdForPrompt(promptText) {
   return null;
 }
 
+/* [SBAGENT-289] 수정 요청의 말풍선 찾기 — 완전 일치만으로는 실패한다.
+   실측: step4 를 두 번 수정("*10", "*100")했는데 originHistId 가 최초 "*5" 그대로였다.
+   chatHistory 의 content 에는 [정확 참조] 블록이 붙고 sourceUserMessage 와 어긋날 수 있어
+   완전 일치(originHistIdForPrompt)가 조용히 null 을 돌려주고 갱신이 빠진 것.
+   → 최신 것부터 ① 완전 일치 ② 접두 일치(블록 부착/제거 차이 흡수) ③ 마지막 user 항목
+   (수정 적용 버튼은 '방금 보낸 요청'의 응답에 붙으므로 마지막 user 가 곧 그 요청이다). */
+function originHistIdForPromptLoose(promptText) {
+  const want = String(promptText || "").trim();
+  const hist = state.chatHistory || [];
+  if (want) {
+    const exact = originHistIdForPrompt(promptText);
+    if (exact) return { histId: exact, via: "exact" };
+    for (let i = hist.length - 1; i >= 0; i--) {
+      const e = hist[i];
+      if (!e || e.role !== "user" || !e.histId) continue;
+      const c = String(e.content || "").trim();
+      if (c && (c.startsWith(want) || want.startsWith(c))) return { histId: e.histId, via: "prefix" };
+    }
+  }
+  for (let i = hist.length - 1; i >= 0; i--) {
+    const e = hist[i];
+    if (e && e.role === "user" && e.histId) return { histId: e.histId, via: "last" };
+  }
+  return { histId: null, via: "none" };
+}
+
 // 대화 없이 태어난 스텝(복붙 캡처·수동 셀편집)인가 — 이런 스텝은 텍스트 매칭을 시도하는 것
 // 자체가 오매핑의 원인이다(빈 prompt 가 순서 폴백까지 흘러 남의 말풍선을 잡았다 — 실측).
 function stepChatOriginless(step) {
@@ -2410,9 +2436,14 @@ function addAssistantReply(fullText, replyContext) {
           // step.prompt 를 읽으므로 바꾸면 실행 대상이 흔들린다 — 연결은 번호표만 담당).
           try {
             const _src = (replyContext && replyContext.sourceUserMessage) || "";
-            const oh = originHistIdForPrompt(_src);
+            const _m = originHistIdForPromptLoose(_src);
             const st = (state.pipeline || []).find(x => x && x.id === editTargetId);
-            if (oh && st) st.originHistId = oh;
+            if (_m.histId && st) st.originHistId = _m.histId;
+            try {
+              if (typeof traceClientUiEvent === "function") {
+                traceClientUiEvent("edit.histid.update", { stepId: editTargetId, via: _m.via });
+              }
+            } catch (_) {}
             // [사용자 제보 2026-08-21] ✎ 프리필이 '최초 프롬프트'로 되돌아가던 문제.
             // step.prompt 는 위 주석대로 일부러 안 바꾼다(대상/시트 추론이 그걸 읽는다).
             // 대신 '마지막으로 보낸 수정 요청문'을 따로 남겨 프리필만 이걸 쓰게 한다 —

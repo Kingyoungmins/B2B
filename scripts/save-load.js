@@ -950,6 +950,9 @@ async function loadLogicFiles(files) {
       id: s.id || uid(),
       description: s.description || `Step ${idx + 1}`,
       prompt: s.prompt || null,   // [설명 유실 수정] 저장된 사용자 요청을 복원 → 카드 라벨 폴백/에러복구가 live 와 동일하게 동작
+      // [SBAGENT-289] 저장(297행)만 하고 여기서 떨어뜨렸다 — zip 왕복(실행기 로드→결과편집) 후
+      // ✎ 프리필이 최초 프롬프트로 되돌아간 원인. 실측: 저장본 step4 에 "*100" 이 있는데 로드가 버렸다.
+      lastEditPrompt: s.lastEditPrompt || null,
       originHistId: s.originHistId || null,   // [번호표 연결] 수정 버튼 → 원 요청 말풍선 정확 연결(텍스트 매칭 아님)
       title: s.title || null,     // [사용자 편집 이름] 저장된 편집 이름 복원 → 불러오면 편집한 이름으로 표시
       enabled: s.enabled !== false,
