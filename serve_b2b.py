@@ -11301,8 +11301,16 @@ def _self_referencing_formula_cells(data, row0, col0):
     오류 없이 0/빈칸으로 끝난다 — "적용됨"인데 결과가 사라지는 무성(無聲) 사고. 쓰기 전에 걸러낸다.
     범위를 좁게 잡는다(오탐 방지): 같은 열 다른 행 참조(누계 =W2+V3)와 시트 한정 참조(Sheet2!W3),
     범위 참조(W1:W3, W3:W10)는 검사하지 않고, 문자열 리터럴("…") 안의 우연한 일치는 제거 후 검사한다."""
+    # [속도 2026-08-24] 예전엔 셀마다 행 번호를 박아 정규식을 새로 만들어 검사했다. 행 번호가 매번
+    # 달라 파이썬 정규식 캐시(512개)가 계속 무너져 3만 셀이면 3만 번 컴파일한다 — 실측 32,603개
+    # 수식에 1.57초. 스텝마다 붙으니 스킬 전체로는 수십 초가 된다(사용자 제보 '적용이 압도적으로
+    # 느려짐'). 열마다 패턴 하나만 컴파일해 두고 '참조된 행 번호'를 뽑아 비교하는 방식으로 바꾼다.
+    # 판정 기준(같은 열 다른 행·시트 한정·범위 참조 제외, 문자열 리터럴 제거)은 그대로다.
     hits = []
+    _pat_cache = {}
+    _lit = re.compile(r'"[^"]*"')
     for ri, row_vals in enumerate(data or []):
+        row_txt = str(row0 + ri)
         for ci, val in enumerate(row_vals or []):
             if not isinstance(val, str):
                 continue
@@ -11310,11 +11318,16 @@ def _self_referencing_formula_cells(data, row0, col0):
             if not body.startswith("="):
                 continue
             col_txt = _col_letter(col0 + ci)
-            row_txt = str(row0 + ri)
-            scan = re.sub(r'"[^"]*"', '""', body)   # 문자열 리터럴 속 우연한 주소 제거
-            pat = r"(?<![A-Za-z0-9_$!:])\$?" + re.escape(col_txt) + r"\$?" + row_txt + r"(?![0-9:])"
-            if re.search(pat, scan):
-                hits.append(col_txt + row_txt)
+            rx = _pat_cache.get(col_txt)
+            if rx is None:
+                # 열은 고정, 행 번호만 캡처 — 열마다 딱 한 번 컴파일된다.
+                rx = re.compile(r"(?<![A-Za-z0-9_$!:])\$?" + re.escape(col_txt) + r"\$?(\d+)(?![0-9:])")
+                _pat_cache[col_txt] = rx
+            scan = _lit.sub('""', body)   # 문자열 리터럴 속 우연한 주소 제거
+            for m in rx.finditer(scan):
+                if m.group(1) == row_txt:
+                    hits.append(col_txt + row_txt)
+                    break
     return hits
 
 

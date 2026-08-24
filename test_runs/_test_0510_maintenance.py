@@ -93,7 +93,9 @@ s._runtime_sampler_once()
 after = os.path.getsize(tp) if os.path.exists(tp) else 0
 last = ""
 if os.path.exists(tp):
-    with open(tp, "r", encoding="utf-8") as f:
+    # [2026-08-24] 앱이 멈춰 강제 종료되면 트레이스 마지막 줄이 잘려 깨진 바이트가 남는다.
+    # 실제 그런 로그가 나왔다 — 검사 도구가 그걸로 죽으면 안 된다(진단 자체가 막힌다).
+    with open(tp, "r", encoding="utf-8", errors="replace") as f:
         lines = f.read().strip().splitlines()
         last = lines[-1] if lines else ""
 ev_ok = False
