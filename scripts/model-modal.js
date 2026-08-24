@@ -234,8 +234,9 @@ function openSettingsModal(devMode) {
         게이트웨이가 Api-Key 헤더를 요구합니다. 기본값이 채워져 있으니 그대로 두시면 되고,
         키가 바뀌면 여기서 고치면 됩니다(바꾼 값은 이 PC 에만 저장됩니다).
       </div>
-      <div class="row" style="margin-top:6px">
+      <div class="row" style="margin-top:6px; gap:8px">
         <button class="btn-secondary" id="btn-version-check">버전 확인</button>
+        <button class="btn-secondary" id="btn-log-dashboard" title="수집 서버에 쌓인 사용 기록(누가·언제·체류·스킬·오류)을 봅니다">📊 관리 대시보드</button>
       </div>
       <div id="version-result" style="margin-top:8px; font-size:11.5px"></div>
     </div>
@@ -339,6 +340,14 @@ function openSettingsModal(devMode) {
     }
   };
 
+  // [관리 대시보드 2026-08-24] 수집 서버(보안망) 데이터를 로컬 프록시(/api/logdash)로 보는 페이지.
+  // 페이지 자체는 이 백엔드가 서빙하므로 same-origin — 게이트웨이 헤더 문제가 없다.
+  // 위 '버전 서버 주소'(= log_sync 가 쓰는 그 주소)가 데이터 원천이라 이 자리에 둔다.
+  if (devMode && $("btn-log-dashboard")) {
+    $("btn-log-dashboard").onclick = () => {
+      window.open("dashboard.html", "_blank", "noopener");
+    };
+  }
   // [버전 확인] 지금 AX-Cell 파일 버전 vs 버전 서버의 최신 버전. 확인만 하고 아무것도 강제하지 않는다.
   if (devMode && $("btn-version-check")) {
     $("btn-version-check").onclick = async () => {

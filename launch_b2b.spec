@@ -34,6 +34,10 @@ a = Analysis(
         # [사용 가이드 제거] 메뉴에서 뺐으므로 exe 에도 넣지 않는다(파일은 저장소에 남겨 둠).
         ('serve_b2b.py', '.'),
         ('record_service.py', '.'),
+        # [관리 대시보드 0.7.5] F9 대시보드 페이지 + 수집서버 프록시. 빠지면 배포본에서만
+        # /dashboard.html 404 · /api/logdash 500 이 난다(assist.html 포장 누락과 같은 부류).
+        ('dashboard.html', '.'),
+        ('log_dash.py', '.'),
         # [로그 자동 전송] 수집 서버로 로그/스킬을 올리는 모듈. 빠지면 배포본에서만 전송이 조용히 꺼진다.
         ('log_sync.py', '.'),
         *collect('styles'),
@@ -65,6 +69,7 @@ a = Analysis(
         # serve_b2b 가 지연 import 하므로 명시한다(없으면 프로즌에서 import 실패 → 전송 꺼짐).
         'log_sync',
         *collect_submodules('ixicellr'),
+        'log_dash',      # [관리 대시보드] datas 만으로는 frozen import 가 안 된다(log_sync 와 동일)
     ],
     hookspath=[],
     hooksconfig={},

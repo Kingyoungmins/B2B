@@ -1277,6 +1277,39 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
         if self.path.split("?")[0] == "/api/logic/backup-dir":
             self.send_json(logic_backup_dir_info())
             return
+        if self.path.startswith("/api/logdash/"):
+            # [F9 관리 대시보드 2026-08-24] 수집 서버(보안망) admin API 프록시.
+            # 브라우저는 게이트웨이 Api-Key 헤더를 못 붙이므로 여기서 서버측으로 부착한다.
+            # 로직 전부는 log_dash.py — 여기는 라우팅 한 덩어리만(동시 작업 충돌 최소화).
+            _origin = str(self.headers.get("Origin") or "").strip()
+            if _origin and not _is_own_origin(_origin):
+                # 수집된 '모든 사용자의 로그/스킬'이 나가는 문이다 — log-sync config 와 같은 가드.
+                self.send_json({"ok": False, "error": "cross-origin request rejected"}, status=403)
+                return
+            try:
+                import log_dash
+                sub = self.path[len("/api/logdash/"):]
+                _sent = {"done": False}
+
+                def _send_headers(status, ctype, clen, disp):
+                    self.send_response(int(status))
+                    self.send_header("Content-Type", ctype)
+                    if clen is not None:
+                        self.send_header("Content-Length", str(clen))
+                    if disp:
+                        self.send_header("Content-Disposition", disp)
+                    self.end_headers()
+                    _sent["done"] = True
+
+                ok, err = log_dash.stream(sub, self.wfile.write, _send_headers)
+                if not ok and not _sent["done"]:
+                    self.send_json({"ok": False, "error": err}, status=502)
+            except Exception as err:
+                try:
+                    self.send_json({"ok": False, "error": str(err)}, status=500)
+                except Exception:
+                    pass
+            return
         if self.path.startswith("/api/workbooks/download/"):
             self.handle_backend_download()
             return

@@ -1,0 +1,238 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AX-Cell 관리 대시보드</title>
+<!--
+  [F9 관리 대시보드 2026-08-24]
+  이 페이지는 AX-Cell 로컬 백엔드가 서빙하고, 데이터는 same-origin /api/logdash/* 로 받는다.
+  백엔드가 게이트웨이 인증(Api-Key)을 붙여 수집 서버(보안망 /data/public/versionTest/logs)의
+  /v1/admin/* 를 중계한다 — VM(사내망)에서 보안망 폴더를 직접 못 보는 구조를 프록시로 푼 것.
+  서버 주소는 F9 의 '버전 서버 주소'를 그대로 따른다(log_sync 와 같은 설정).
+-->
+<style>
+  :root {
+    --ink: #1f2430; --ink-2: #5a6272; --line: #e4e7ee; --bg: #f7f8fb; --card: #ffffff;
+    --accent: #c0007a; --accent-2: #ff0080; --ok: #0a7d40; --warn: #b85c00; --bad: #c22525;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+         font-family: "Malgun Gothic", "Segoe UI", sans-serif; font-size: 13px; }
+  header { background: var(--card); border-bottom: 1px solid var(--line);
+           padding: 14px 22px; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+  header h1 { font-size: 17px; margin: 0; }
+  header h1 b { color: var(--accent); }
+  #server-line { color: var(--ink-2); font-size: 12px; }
+  main { padding: 18px 22px 40px; max-width: 1280px; margin: 0 auto; }
+
+  .filters { display: flex; gap: 10px; align-items: end; flex-wrap: wrap; margin-bottom: 16px; }
+  .filters label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--ink-2); }
+  .filters input, .filters select { padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px;
+                                    font: inherit; background: var(--card); min-width: 130px; }
+  .filters button { padding: 7px 18px; border: 0; border-radius: 6px; background: var(--accent-2);
+                    color: #fff; font-weight: 700; cursor: pointer; }
+  .filters button.ghost { background: var(--card); color: var(--ink-2); border: 1px solid var(--line); }
+  #status-line { font-size: 12px; color: var(--ink-2); margin-left: auto; }
+  #status-line.err { color: var(--bad); font-weight: 700; }
+
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 20px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
+  .card .k { font-size: 12px; color: var(--ink-2); }
+  .card .v { font-size: 22px; font-weight: 800; margin-top: 4px; font-variant-numeric: tabular-nums; }
+  .card .v small { font-size: 12px; font-weight: 600; color: var(--ink-2); }
+
+  section { margin-bottom: 26px; }
+  section h2 { font-size: 14px; margin: 0 0 8px; }
+  section h2 span { color: var(--ink-2); font-weight: 400; font-size: 12px; }
+  .tbl-wrap { background: var(--card); border: 1px solid var(--line); border-radius: 10px; overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; font-size: 12.5px; }
+  th, td { padding: 7px 10px; border-bottom: 1px solid var(--line); text-align: left; white-space: nowrap; }
+  th { background: #fafbfd; color: var(--ink-2); font-weight: 700; position: sticky; top: 0; }
+  tr:last-child td { border-bottom: 0; }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  td .zip { color: var(--accent); font-weight: 700; text-decoration: none; }
+  td .zip:hover { text-decoration: underline; }
+  .state-open { color: var(--ok); font-weight: 700; }
+  .state-closed { color: var(--ink-2); }
+  .ev { font-family: Consolas, monospace; font-size: 11.5px; color: var(--bad); }
+  .empty { padding: 18px; color: var(--ink-2); text-align: center; }
+  .summary-cell { max-width: 420px; overflow: hidden; text-overflow: ellipsis; }
+</style>
+</head>
+<body>
+<header>
+  <h1><b>AX-Cell</b> 관리 대시보드</h1>
+  <span id="server-line">수집 서버 확인 중…</span>
+</header>
+<main>
+  <div class="filters">
+    <label>시작일 <input type="date" id="f-from"></label>
+    <label>종료일 <input type="date" id="f-to"></label>
+    <label>사용자 <select id="f-user"><option value="">전체</option></select></label>
+    <button id="btn-load">조회</button>
+    <button id="btn-week" class="ghost">최근 7일</button>
+    <button id="btn-all" class="ghost">전체</button>
+    <span id="status-line"></span>
+  </div>
+
+  <div class="cards" id="cards"></div>
+
+  <section>
+    <h2>사용자별 <span>— 누가 얼마나 썼나</span></h2>
+    <div class="tbl-wrap"><table id="tbl-users">
+      <thead><tr><th>사용자</th><th>실행 횟수</th><th>총 체류</th><th>스킬 저장</th><th>로그 파일</th><th>용량</th><th>마지막 사용</th></tr></thead>
+      <tbody></tbody></table></div>
+  </section>
+
+  <section>
+    <h2>일별 <span>— 기간 추이</span></h2>
+    <div class="tbl-wrap"><table id="tbl-dates">
+      <thead><tr><th>날짜</th><th>실행 횟수</th><th>사용자 수</th><th>총 체류</th><th>스킬</th><th>용량</th></tr></thead>
+      <tbody></tbody></table></div>
+  </section>
+
+  <section>
+    <h2>실행(세션) 목록 <span>— 실행 1회 = 한 줄. zip 으로 그 실행의 로그·스킬을 통째로 받는다</span></h2>
+    <div class="tbl-wrap"><table id="tbl-sessions">
+      <thead><tr><th>날짜</th><th>사용자</th><th>시작</th><th>체류</th><th>버전</th><th>PC</th><th>상태</th><th>로그/스킬</th><th>용량</th><th>받기</th></tr></thead>
+      <tbody></tbody></table></div>
+  </section>
+
+  <section>
+    <h2>오류 목록 <span>— 수집된 실행 기록에서 실패 이벤트만 추림(파일당 최근 구간)</span></h2>
+    <div class="tbl-wrap"><table id="tbl-errors">
+      <thead><tr><th>시각</th><th>사용자</th><th>단계</th><th>이벤트</th><th>내용</th><th>세션</th></tr></thead>
+      <tbody></tbody></table></div>
+  </section>
+</main>
+
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+const esc = s => String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+
+function fmtBytes(n) {
+  n = Number(n || 0);
+  if (n >= 1024 * 1024 * 1024) return (n / 1024 / 1024 / 1024).toFixed(2) + " GB";
+  if (n >= 1024 * 1024) return (n / 1024 / 1024).toFixed(1) + " MB";
+  if (n >= 1024) return (n / 1024).toFixed(0) + " KB";
+  return n + " B";
+}
+function fmtMinutes(m) {
+  m = Number(m || 0);
+  if (m >= 60) return Math.floor(m / 60) + "시간 " + Math.round(m % 60) + "분";
+  return Math.round(m) + "분";
+}
+function fmtTs(s) { return s ? String(s).replace("T", " ").slice(0, 19) : "-"; }
+function dwellOf(s) {
+  // 서버 stats 와 같은 규칙 — endedAt 없으면 lastSeenAt(마지막 업로드)로 물러난다.
+  const a = Date.parse(s.startedAt || ""), b = Date.parse(s.endedAt || s.lastSeenAt || "");
+  if (!a || !b || b < a) return 0;
+  return (b - a) / 60000;
+}
+
+async function api(path) {
+  const r = await fetch("/api/logdash/" + path);
+  const d = await r.json().catch(() => null);
+  if (!r.ok || !d || d.ok === false) {
+    throw new Error((d && (d.error || d.detail)) || ("HTTP " + r.status));
+  }
+  return d;
+}
+
+function q() {
+  const p = new URLSearchParams();
+  if ($("f-from").value) p.set("from", $("f-from").value);
+  if ($("f-to").value) p.set("to", $("f-to").value);
+  if ($("f-user").value) p.set("user", $("f-user").value);
+  const s = p.toString();
+  return s ? "?" + s : "";
+}
+
+function renderCards(t, errCount) {
+  $("cards").innerHTML = [
+    ["총 실행", (t.sessions || 0).toLocaleString() + " <small>회</small>"],
+    ["사용자", (t.userCount || 0) + " <small>명</small>"],
+    ["총 체류", esc(fmtMinutes(t.dwellMinutes))],
+    ["스킬 저장", (t.skills || 0).toLocaleString() + " <small>개</small>"],
+    ["수집 용량", esc(fmtBytes(t.bytes))],
+    ["오류", '<span style="color:var(--bad)">' + (errCount || 0).toLocaleString() + "</span> <small>건</small>"],
+    ["수집 중", (t.openSessions || 0) + " <small>세션</small>"],
+  ].map(([k, v]) => `<div class="card"><div class="k">${k}</div><div class="v">${v}</div></div>`).join("");
+}
+
+function fillUsers(rows, keepSelection) {
+  const sel = $("f-user"), cur = sel.value;
+  sel.innerHTML = '<option value="">전체</option>'
+    + rows.map(r => `<option value="${esc(r.user)}">${esc(r.user)}</option>`).join("");
+  if (keepSelection) sel.value = cur;
+}
+
+async function load() {
+  const st = $("status-line");
+  st.classList.remove("err");
+  st.textContent = "불러오는 중…";
+  try {
+    const [stats, errors] = await Promise.all([api("stats" + q()), api("errors" + q())]);
+    // 세션 목록 — 서버 필터는 단일 date 만 받으므로 넉넉히 받아 기간은 여기서 거른다.
+    const sess = await api("sessions?limit=500" + ($("f-user").value ? "&user=" + encodeURIComponent($("f-user").value) : ""));
+    const from = $("f-from").value, to = $("f-to").value;
+    const sessions = (sess.sessions || []).filter(s => (!from || s.date >= from) && (!to || s.date <= to));
+
+    renderCards(stats.total || {}, errors.count);
+    fillUsers(stats.byUsers || [], true);
+
+    $("tbl-users").tBodies[0].innerHTML = (stats.byUsers || []).map(r =>
+      `<tr><td>${esc(r.user)}</td><td class="num">${r.sessions}</td><td class="num">${esc(fmtMinutes(r.dwellMinutes))}</td>
+       <td class="num">${r.skills}</td><td class="num">${r.logs}</td><td class="num">${esc(fmtBytes(r.bytes))}</td>
+       <td>${esc(fmtTs(r.lastSeenAt))}</td></tr>`).join("")
+      || '<tr><td colspan="7" class="empty">기간에 해당하는 기록이 없습니다.</td></tr>';
+
+    $("tbl-dates").tBodies[0].innerHTML = (stats.byDate || []).map(r =>
+      `<tr><td>${esc(r.date)}</td><td class="num">${r.sessions}</td><td class="num">${r.userCount}</td>
+       <td class="num">${esc(fmtMinutes(r.dwellMinutes))}</td><td class="num">${r.skills}</td>
+       <td class="num">${esc(fmtBytes(r.bytes))}</td></tr>`).join("")
+      || '<tr><td colspan="6" class="empty">기간에 해당하는 기록이 없습니다.</td></tr>';
+
+    $("tbl-sessions").tBodies[0].innerHTML = sessions.map(s => {
+      const zip = "/api/logdash/session.zip?date=" + encodeURIComponent(s.date)
+        + "&user=" + encodeURIComponent(s.user) + "&session=" + encodeURIComponent(s.sessionId);
+      const state = s.closed ? '<span class="state-closed">종료</span>' : '<span class="state-open">수집 중</span>';
+      return `<tr><td>${esc(s.date)}</td><td>${esc(s.user)}</td><td>${esc(fmtTs(s.startedAt).slice(11) || "-")}</td>
+        <td class="num">${esc(fmtMinutes(dwellOf(s)))}</td><td>${esc(s.appVersion || "-")}</td><td>${esc(s.host || "-")}</td>
+        <td>${state}</td><td class="num">${(s.logFiles || []).length} / ${(s.skillFiles || []).length}</td>
+        <td class="num">${esc(fmtBytes(s.sizeBytes))}</td><td><a class="zip" href="${zip}">zip</a></td></tr>`;
+    }).join("") || '<tr><td colspan="10" class="empty">기간에 해당하는 실행이 없습니다.</td></tr>';
+
+    $("tbl-errors").tBodies[0].innerHTML = (errors.errors || []).map(e =>
+      `<tr><td>${esc(fmtTs(e.ts))}</td><td>${esc(e.user)}</td>
+       <td class="num">${e.stepIdx != null ? (Number(e.stepIdx) + 1) + "단계" : "-"}</td>
+       <td class="ev">${esc(e.event)}</td><td class="summary-cell" title="${esc(e.summary)}">${esc(e.summary || "-")}</td>
+       <td>${esc(e.sessionId)}</td></tr>`).join("")
+      || '<tr><td colspan="6" class="empty">기간에 오류가 없습니다. 👍</td></tr>';
+
+    $("server-line").textContent = "수집 위치: " + (stats.root || "?");
+    st.textContent = "갱신 " + new Date().toLocaleTimeString();
+  } catch (err) {
+    st.classList.add("err");
+    st.textContent = "불러오지 못했습니다 — " + (err && err.message ? err.message : err);
+  }
+}
+
+function setRange(days) {
+  const to = new Date(), from = new Date();
+  from.setDate(to.getDate() - (days - 1));
+  const iso = d => d.toISOString().slice(0, 10);
+  $("f-from").value = days ? iso(from) : "";
+  $("f-to").value = days ? iso(to) : "";
+}
+
+$("btn-load").onclick = load;
+$("btn-week").onclick = () => { setRange(7); load(); };
+$("btn-all").onclick = () => { setRange(0); load(); };
+setRange(7);
+load();
+</script>
+</body>
+</html>
