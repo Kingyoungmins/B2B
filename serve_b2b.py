@@ -156,6 +156,13 @@ _COM_REF_GRAVEYARD = []
 PIPELINE_JOBS_LOCK = threading.Lock()
 WORKBOOK_CACHE_LOCK = threading.Lock()
 NODE_WORKER_LOCK = threading.Lock()
+# [로그 유실/손상 2026-08-24] 트레이스는 HTTP 스레드와 COM 작업 스레드에서 동시에 append 된다.
+# 락이 없어 같은 순간의 두 줄이 서로를 덮거나 섞였다. 실측으로 둘 다 확인했다 —
+#   (a) apply_loading.end 한 줄이 사라져 '잠금 누수'로 오진했다(실제로는 정상 해제됐고,
+#       같은 밀리초의 landed 스냅샷이 hasApplyBusyToken=False 로 그걸 증명한다)
+#   (b) 깨진 바이트(0x90)가 남아 유지보수 점검이 UnicodeDecodeError 로 죽었다
+# 모든 진단이 이 로그에 걸려 있으므로 쓰기를 직렬화한다.
+_TRACE_WRITE_LOCK = threading.Lock()
 NODE_WORKER = None
 NODE_WORKER_SCRIPT_MTIME = None
 NODE_WORKER_READY = set()
@@ -1285,6 +1292,15 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
         if self.path.startswith("/api/diff/"):
             self.handle_cached_diff()
             return
+        if self.path == "/api/log-sync/status":
+            # [로그 자동 전송] 지금 어디로, 얼마나 보냈는지. 현장 확인/진단용.
+            try:
+                mod = sys.modules.get("log_sync")
+                self.send_json(mod.status() if mod else
+                               {"ok": True, "enabled": False, "error": "log_sync 가 시작되지 않았습니다."})
+            except Exception as err:
+                self.send_json({"ok": False, "error": str(err)}, status=500)
+            return
         if self.path == "/api/app/version":
             # [버전 확인] 지금 AX-Cell 의 버전(exe 파일 버전). 최신 버전은 클라가 기존 /v1 프록시로
             # 버전 서버에 물어본다 — 여기서 외부로 나가지 않는다.
@@ -1334,6 +1350,16 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
             return
         if self.path == "/api/client/trace":
             self.handle_client_trace()
+            return
+        if self.path == "/api/log-sync/config":
+            # 화면(F9)에 저장된 버전 서버 주소/키를 그대로 물려받는다 — 사용자가 주소를 바꾸면
+            # 로그도 그 서버로 간다(두 곳에 따로 적게 하지 않는다).
+            payload = self.read_json_body() or {}
+            try:
+                import log_sync
+                self.send_json(log_sync.update_config(payload))
+            except Exception as err:
+                self.send_json({"ok": False, "error": str(err)}, status=500)
             return
         if self.path == "/api/excel/open":
             self.handle_excel_open()
@@ -1487,6 +1513,9 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
                             _force_kill_pid(pid)
                 except Exception:
                     pass
+                # 남은 로그를 서버로 마저 보낸 뒤 내려간다(최대 4초). 실패해도 그냥 종료한다 —
+                # 주기 전송분까지는 이미 서버에 남아 있다.
+                _log_sync_stop("app.shutdown", timeout=4.0)
                 os._exit(0)
 
             threading.Thread(target=_exit_soon, name="b2b-app-shutdown-exit", daemon=True).start()
@@ -4522,8 +4551,10 @@ def _perf_trace(event, **fields):
             "event": event,
         }
         payload.update(fields)
-        with _perf_trace_path().open("a", encoding="utf-8") as f:
-            f.write(json.dumps(payload, ensure_ascii=False, default=str) + "\n")
+        line = json.dumps(payload, ensure_ascii=False, default=str) + "\n"
+        with _TRACE_WRITE_LOCK:          # 동시 append 로 줄이 사라지거나 섞이는 것을 막는다
+            with _perf_trace_path().open("a", encoding="utf-8") as f:
+                f.write(line)
     except Exception:
         pass
 
@@ -4860,7 +4891,45 @@ def _native_parent_watch_once(now):
         cleanup_node_worker()
     except Exception:
         pass
+    _log_sync_stop("parent.missing", timeout=4.0)
     os._exit(0)
+
+
+def _start_log_sync():
+    """로그/스킬을 수집 서버(versionTest)로 자동 전송 시작.
+
+    [관리자 디버깅 2026-08-24] 로그는 켤 때 비우는 구조라(사용자 PC 부하 방지) 제보를 받고
+    나서 로그를 요청하면 이미 없는 경우가 많았다. 실행 중에 조금씩 서버로 올려 두면 서버에는
+    날짜/사용자/실행(세션) 단위로 계속 쌓인다 — 로그와 그 실행에서 만든 스킬이 한 폴더에
+    짝으로 남아 그대로 내려받아 재현할 수 있다.
+    반드시 _reset_trace_logs() 다음에 부른다 — 먼저 부르면 곧 지워질 예전 실행 내용을
+    이번 세션 것으로 올려 버린다."""
+    try:
+        import log_sync
+    except Exception:
+        return
+    try:
+        info = _current_app_version() or {}
+        log_sync.start(
+            app_version=info.get("normalized") or info.get("version") or "",
+            log_dirs=[b2b_logs_dir()],
+            skill_dirs=[logic_backup_dir()],
+            # VBA 러너 실패 로그만 앱 폴더에 따로 쓴다(작성 경로와 같은 __file__ 기준).
+            extra_files=[Path(__file__).resolve().parent / "vba_runner_fail.log"],
+            app_dir=str(writable_app_dir()),
+        )
+    except Exception:
+        pass
+
+
+def _log_sync_stop(reason="shutdown", timeout=4.0):
+    """종료 직전 남은 로그를 마저 보내고 '이 세션 끝'을 알린다. 시작 안 했으면 아무것도 안 한다."""
+    try:
+        mod = sys.modules.get("log_sync")
+        if mod is not None:
+            mod.stop(reason, timeout=timeout)
+    except Exception:
+        pass
 
 
 def start_runtime_maintenance_threads():
@@ -4875,6 +4944,11 @@ def start_runtime_maintenance_threads():
     # 호출하는 이 함수(멱등)로 옮겨 진입점이 갈려도 한 번은 반드시 실행되게 한다.
     try:
         _reset_trace_logs()
+    except Exception:
+        pass
+    # 트레이스를 비운 '뒤'에 전송을 시작한다(순서가 뒤집히면 지워질 내용을 올린다).
+    try:
+        _start_log_sync()
     except Exception:
         pass
     try:
@@ -8771,8 +8845,10 @@ def _vba_trace(event, **fields):
             "event": event,
         }
         payload.update(fields)
-        with _vba_trace_path().open("a", encoding="utf-8") as f:
-            f.write(json.dumps(payload, ensure_ascii=False, default=str) + "\n")
+        line = json.dumps(payload, ensure_ascii=False, default=str) + "\n"
+        with _TRACE_WRITE_LOCK:          # perf 트레이스와 같은 이유(동시 append 유실/손상)
+            with _vba_trace_path().open("a", encoding="utf-8") as f:
+                f.write(line)
     except Exception:
         pass
 

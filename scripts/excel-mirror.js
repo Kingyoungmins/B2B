@@ -1310,12 +1310,22 @@ function showExcelApplyCancelButton(show) {
 // 적용 시작: 모든 미러 창을 숨기고(park) 네이티브 패널의 로딩 애니메이션을 돌린다.
 // (미러를 숨겨야 적용 중 여러 Excel 창이 앞으로 튀어나오지 않고, 패널의 로딩 표시가 보인다.)
 function beginExcelMirrorApplyLoading(message, options = {}) {
+  // [계측 보강 2026-08-24] 예전엔 강제 해제(3분) 때만 누수 라벨을 찍어서, 뒤따르는 end 하나에
+  // 상쇄돼 버리는 누수는 흔적조차 안 남았다(실측 10:34 — begin 뒤 end 가 통째로 빠졌는데도
+  // 다음 end 가 상쇄해 로그엔 개수 불일치만 남았다). 깊이를 매번 찍고, 이미 열려 있는 채로
+  // 또 들어오면 '무엇이 안 닫혔는지'를 그 자리에서 남긴다 — 정상 중첩과 누수를 라벨로 가른다.
   traceClientUiEvent("excel.apply_loading.begin", {
     message: message || "적용 반영 중...",
     requestedFailsafeMs: options.failsafeMs || "",
     existingToken: !!excelMirror.applyBusyToken,
     forceHideWindows: options.forceHideWindows === true,
     hideWindowsOption: options.hideWindows,
+    depthBefore: Number(excelMirror.applyDepth || 0),
+    stillOpen: Number(excelMirror.applyDepth || 0) > 0
+      ? (excelMirror.applyOpenLabels || []).map(o => o && o.label).filter(Boolean).join(" | ").slice(0, 200)
+      : "",
+    // 깊이는 남아 있는데 토큰이 없다 = end 를 건너뛴 누수의 확정 증거(정상 중첩이면 토큰이 산다).
+    leaked: Number(excelMirror.applyDepth || 0) > 0 && !excelMirror.applyBusyToken,
   });
   excelMirror.applying = true;
   // [적대 검증 2026-08-13] 중첩 카운트. 예전엔 begin 이 토큰만 안 만들고 end 는 무조건 닫아서,
@@ -1380,6 +1390,9 @@ function endExcelMirrorApplyLoading(options) {
     hadToken: !!excelMirror.applyBusyToken,
     hadTimer: !!excelMirror.applyLoadingTimer,
     applying: !!excelMirror.applying,
+    depthBefore: Number(excelMirror.applyDepth || 0),
+    // begin 없이 들어온 end — 짝이 깨진 반대 방향이다(개수만 세면 상쇄돼 안 보인다).
+    unmatched: Number(excelMirror.applyDepth || 0) <= 0,
   });
   // 중첩됐으면 가장 바깥 end 에서만 실제로 푼다(내부 경로가 바깥 잠금을 먼저 열지 않게).
   excelMirror.applyDepth = Math.max(0, (excelMirror.applyDepth || 0) - 1);
