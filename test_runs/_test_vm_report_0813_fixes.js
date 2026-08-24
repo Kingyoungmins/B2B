@@ -84,7 +84,12 @@ check("C 대신 최소화 알림에 순서 보장(세대 번호)을 넣었다", 
 check("E1 failsafe 를 네이티브에 함께 보낸다", /publishNativeUiBusy\(true, label, options\.failsafeMs\)/.test(em));
 check("E1 네이티브가 그 값을 타이머 간격으로 쓴다", /uiBusyFailsafeTimer\.Interval = uiBusyFailsafeMs;/.test(cs));
 check("E2 적용 잠금이 중첩 카운트로 보호된다(내부 end 가 바깥을 안 닫는다)",
-  /applyDepth/.test(em) && /if \(excelMirror\.applyDepth > 0\) return;/.test(em));
+  /applyDepth/.test(em) && /if \(excelMirror\.applyDepth > 0\) \{[\s\S]{0,400}return;/.test(em));
+// [2026-08-24] 카운트만으로는 부족했다 — begin/end 짝이 깨지면(실측 12/10) 깊이가 0 이 안 돼
+// 오버레이가 영구히 남아 화면이 회색으로 굳었다. 중첩 보호는 유지하되 자가 회복을 넣었다.
+check("E2b 짝이 깨져도 회복된다(회색 화면 영구 잔류 방지)",
+  /applyDepthTouchedAt/.test(em) && /excel\.apply_loading\.depth_forced/.test(em)
+  && /excelMirror\.applyDepth = 0;/.test(em));
 check("F2 출력 슬롯 미해결은 '파일 확인' 대신 할 수 있는 안내를 준다",
   /출력 파일을 올린 뒤 다시 실행하세요/.test(pj));
 

@@ -1322,6 +1322,7 @@ function beginExcelMirrorApplyLoading(message, options = {}) {
   // 바깥 잠금 구간(예: '결과를 라이브에 반영 중') 안에서 도는 내부 경로가 자기 end 로 바깥
   // 잠금을 먼저 열어 버렸다 — 작업이 한창인데 화면이 풀린다.
   excelMirror.applyDepth = (excelMirror.applyDepth || 0) + 1;
+  excelMirror.applyDepthTouchedAt = Date.now();   // 짝이 깨졌을 때의 강제 해제 판정용(아래 end 참조)
   if (!excelMirror.applyBusyToken && typeof beginUiBusy === "function") {
     excelMirror.applyBusyToken = beginUiBusy(message || "적용 반영 중...", {
       showDelayMs: 120,
@@ -1366,7 +1367,7 @@ function beginExcelMirrorApplyLoading(message, options = {}) {
   excelMirror.applyLoadingTimer = setInterval(tick, 320);
 }
 
-function endExcelMirrorApplyLoading() {
+function endExcelMirrorApplyLoading(options) {
   traceClientUiEvent("excel.apply_loading.end", {
     hadToken: !!excelMirror.applyBusyToken,
     hadTimer: !!excelMirror.applyLoadingTimer,
@@ -1374,7 +1375,20 @@ function endExcelMirrorApplyLoading() {
   });
   // 중첩됐으면 가장 바깥 end 에서만 실제로 푼다(내부 경로가 바깥 잠금을 먼저 열지 않게).
   excelMirror.applyDepth = Math.max(0, (excelMirror.applyDepth || 0) - 1);
-  if (excelMirror.applyDepth > 0) return;
+  // [제보 2026-08-24 회색 화면이 안 꺼짐] 중첩 카운트는 begin 과 end 가 정확히 짝을 이룰 때만
+  // 성립한다. 실측 로그에서 begin 12 / end 10 으로 2개가 비었고(예외로 빠져나가 end 를 못 부른
+  // 경로가 있다), 그러면 깊이가 0 으로 안 내려가 오버레이가 영구히 남는다 — 화면이 회색으로
+  // 굳고 분할선도 안 먹는다. 카운트 도입 전에는 아무 end 나 닫아 줘서 이 사고가 없었다.
+  // 대칭이 깨져도 회복되게 한다: 깊이가 남아 있어도 마지막 begin 이후 오래 지났으면 강제로 푼다.
+  if (excelMirror.applyDepth > 0) {
+    const startedAt = Number(excelMirror.applyDepthTouchedAt || 0);
+    const stale = startedAt && (Date.now() - startedAt) > 180000;   // 3분 — 정상 적용의 상한 밖
+    if (!stale && !(options && options.force)) return;
+    traceClientUiEvent("excel.apply_loading.depth_forced", {
+      depth: excelMirror.applyDepth, stale: !!stale, forced: !!(options && options.force),
+    });
+    excelMirror.applyDepth = 0;   // 짝이 깨진 것 — 여기서 정상화한다
+  }
   if (excelMirror.applyBusyToken && typeof endUiBusy === "function") {
     endUiBusy(excelMirror.applyBusyToken, { silentComplete: true });
     excelMirror.applyBusyToken = null;

@@ -2857,12 +2857,24 @@ function replaceLogicAt(stepId, newCode, newDescription, language, opts) {
       const cancelToken = { cancelled: false };
       window.__activeVbaApply = { token: cancelToken, excelId: liveExcelId, stepId, restoreStep: originalStep };
       const promise = reapplyVbaPipelineToLive(liveExcelId)
-        .then(() => {
+        .then((_res) => {
           if (cancelToken.cancelled) {
             if (window.__activeVbaApply && window.__activeVbaApply.token === cancelToken) window.__activeVbaApply = null;
             return { cancelled: true };
           }
           if (window.__activeVbaApply && window.__activeVbaApply.token === cancelToken) window.__activeVbaApply = null;
+          // [제보 2026-08-24 '수정 후 적용됨인데 반영 안 됨'] 예전엔 재적용의 반환값을 보지 않고
+          // 무조건 '적용됨'을 칠했다. 재적용이 예외 없이 '아무것도 안 하고' 끝나는 경로(세션 없음·
+          // 대상 미해결 등)가 있으면 그대로 거짓 '적용됨'이 된다 — 사용자는 반영된 줄 알고 다음
+          // 단계를 그 위에 얹는다. 증거(참 반환)가 있을 때만 적용됨으로 치고, 아니면 '확인 필요'로
+          // 남긴다(이 상태는 삭제 시 라이브 되돌리기 대상에도 포함된다 — SBAGENT-273 수정과 짝).
+          if (!_res) {
+            setPipelineRuntimeStatus([stepId], "review", "확인 필요 · 반영 확인 안 됨");
+            if (typeof toast === "function") {
+              toast("수정은 저장했지만 라이브 반영을 확인하지 못했습니다 — 파일 탭을 확인한 뒤 스위치를 껐다 켜 주세요.", "error");
+            }
+            return { unverified: true };
+          }
           setPipelineRuntimeStatus([stepId], "applied", "적용됨");
           return true;
         })
@@ -2898,6 +2910,17 @@ function replaceLogicAt(stepId, newCode, newDescription, language, opts) {
         if (st && st.cancelled) {
           setPipelineRuntimeStatus([stepId], "review", "중단됨 · 미적용");
           return { cancelled: true };
+        }
+        // [제보 2026-08-24] 재조정은 '켜진 라이브 스텝 집합'이 그대로면 아무것도 안 하고 끝난다
+        // (no-op 생략 — 서명 일치). 그 서명에는 꺼진 스텝과 라이브 대상이 아닌 스텝이 애초에
+        // 안 들어가므로, 그런 스텝을 수정하면 실제로는 아무 일도 안 일어났는데 '적용됨'이 찍혔다.
+        // 라이브에 실제로 반영될 수 있는 스텝일 때만 적용됨으로 친다.
+        const _edited = (state.pipeline || []).find(s => s && s.id === stepId);
+        const _liveable = !!(_edited && isStepEnabled(_edited)
+          && typeof pipelineStepLiveLanguage === "function" && pipelineStepLiveLanguage(_edited));
+        if (!_liveable) {
+          setPipelineRuntimeStatus([stepId], "review", "수정됨 · 미적용(보류)");
+          return { unapplied: true };
         }
         setPipelineRuntimeStatus([stepId], "applied", "\uC801\uC6A9\uB428");
         return true;
