@@ -9,7 +9,7 @@ signature: "(self, rng, data)"
 role: "이번 쓰기가 '보이던 값'을 빈칸으로 덮는지 판정한다."
 role_source: docstring
 version: "0.7.4"
-loc: "serve_b2b.py:11544-11563"
+loc: "serve_b2b.py:11557-11576"
 
 # ── 입출력 ──
 inputs:

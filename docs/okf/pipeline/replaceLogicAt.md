@@ -36,6 +36,7 @@ calls:
   - "getPipelineRuntimeStatus"
   - "getSkillEngine"
   - "hasBackendOnlyWorkbooks"
+  - "isStepEnabled"
   - "markPipelinePendingFromIndex"
   - "normalizeStep"
   - "noteLivePipelineApplied"
@@ -107,7 +108,7 @@ timestamp: "0.7.4-gen"
 - 변경 상태 `pipeline` — 수정 시 이 상태를 읽는 곳 동반 점검.
 
 ## 관계
-- 호출: `applyMappedSingleStep`, `canUsePipelineCheckpointFromIndex`, `cancelActiveBackendPipeline`, `dropStepCrossEvidence`, `getFile`, `getPipelineResumeFromIndex`, `getPipelineRuntimeStatus`, `getSkillEngine`, `hasBackendOnlyWorkbooks`, `markPipelinePendingFromIndex`, `normalizeStep`, `noteLivePipelineApplied`, `pipelineEditBusyReason`, `pipelineHasBackendOnlyStep`, `pipelineResolveSavedTargetFileId`, `pipelineStepLiveLanguage`, `pipelineStepWritesCrossFile`, `pipelineSuffixWritesCrossFile`, `pipelineUsesPython`, `pipelineUsesVba`, `pushHistory`, `reapplyVbaPipelineToLive`, `reconcilePipelineSimulationAfterEdit`, `refreshRunButton`, `renderPipeline`, `reportPipelineError`, `requestExcelApplyCancel`, `restore`, `restorePipelineStep`, `restorePipelineToCheckpointAndHold`, `runFromCheckpointAfterEdit`, `runPipeline`, `scheduleLogicAutoBackup`, `setPipelineRuntimeStatus`, `shouldDeferImmediatePipelineRun`, `toast`, `vbaTargetExcelId`
+- 호출: `applyMappedSingleStep`, `canUsePipelineCheckpointFromIndex`, `cancelActiveBackendPipeline`, `dropStepCrossEvidence`, `getFile`, `getPipelineResumeFromIndex`, `getPipelineRuntimeStatus`, `getSkillEngine`, `hasBackendOnlyWorkbooks`, `isStepEnabled`, `markPipelinePendingFromIndex`, `normalizeStep`, `noteLivePipelineApplied`, `pipelineEditBusyReason`, `pipelineHasBackendOnlyStep`, `pipelineResolveSavedTargetFileId`, `pipelineStepLiveLanguage`, `pipelineStepWritesCrossFile`, `pipelineSuffixWritesCrossFile`, `pipelineUsesPython`, `pipelineUsesVba`, `pushHistory`, `reapplyVbaPipelineToLive`, `reconcilePipelineSimulationAfterEdit`, `refreshRunButton`, `renderPipeline`, `reportPipelineError`, `requestExcelApplyCancel`, `restore`, `restorePipelineStep`, `restorePipelineToCheckpointAndHold`, `runFromCheckpointAfterEdit`, `runPipeline`, `scheduleLogicAutoBackup`, `setPipelineRuntimeStatus`, `shouldDeferImmediatePipelineRun`, `toast`, `vbaTargetExcelId`
 - 피호출(영향 전파 경로): `addAssistantReply`, `assistCommitProposal`, `runEditApply`
 
 ## 실패/예외

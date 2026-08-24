@@ -8,7 +8,7 @@ signature: "(excelId)"
 role: "[0.5.17] 현재 탭의 Selection 만 가볍게 읽어 선택→채팅 반영을 빠르게 한다. active-sync(탭 따라가기)는"
 role_source: banner
 version: "0.7.4"
-loc: "excel-mirror.js:1591-1591"
+loc: "excel-mirror.js:1605-1605"
 
 # ── 입출력 ──
 inputs:

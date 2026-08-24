@@ -4,14 +4,15 @@ title: endExcelMirrorApplyLoading
 module: excel-mirror.js
 lang: js
 extraction: regex   # 정규식 근사
-signature: "()"
+signature: "(options)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
 version: "0.7.4"
-loc: "excel-mirror.js:1369-1369"
+loc: "excel-mirror.js:1370-1370"
 
 # ── 입출력 ──
-inputs: []
+inputs:
+  - "options"
 returns: "(추정)"
 
 # ── 사이드이펙트 (정적 추정) ──
@@ -27,6 +28,7 @@ calls:
   - "showExcelApplyCancelButton"
   - "traceClientUiEvent"
 calls_external:
+  - "Number"
   - "clearInterval"
   - "max"
   - "now"

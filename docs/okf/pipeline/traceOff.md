@@ -8,7 +8,7 @@ signature: "(route, ok, extra)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
 version: "0.7.4"
-loc: "pipeline.js:3996-3996"
+loc: "pipeline.js:4019-4019"
 
 # ── 입출력 ──
 inputs:

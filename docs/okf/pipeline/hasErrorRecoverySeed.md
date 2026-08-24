@@ -8,7 +8,7 @@ signature: "(info)"
 role: "item 9: 어느 단계에서 어떤 사유로 실패했는지 토스트 + 채팅 panel 에 모두 노출."
 role_source: banner
 version: "0.7.4"
-loc: "pipeline.js:7612-7612"
+loc: "pipeline.js:7635-7635"
 
 # ── 입출력 ──
 inputs:

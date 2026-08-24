@@ -8,7 +8,7 @@ signature: "(token)"
 role: "====================================================================="
 role_source: banner
 version: "0.7.4"
-loc: "serve_b2b.py:16502-16505"
+loc: "serve_b2b.py:16515-16518"
 
 # ── 입출력 ──
 inputs:

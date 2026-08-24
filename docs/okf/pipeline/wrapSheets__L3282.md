@@ -8,7 +8,7 @@ signature: "(sheetsObj)"
 role: "유사도 매칭 Proxy로 감싸기 (item 1)."
 role_source: banner
 version: "0.7.4"
-loc: "pipeline.js:3259-3259"
+loc: "pipeline.js:3282-3282"
 
 # ── 입출력 ──
 inputs:

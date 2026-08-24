@@ -8,7 +8,7 @@ signature: "(dstExcelId, fid)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
 version: "0.7.4"
-loc: "pipeline.js:4407-4407"
+loc: "pipeline.js:4430-4430"
 
 # ── 입출력 ──
 inputs:

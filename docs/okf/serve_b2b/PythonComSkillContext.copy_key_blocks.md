@@ -9,7 +9,7 @@ signature: "(self, src_sheet, dst_sheet, key_col, first_col, last_col, src_scan=
 role: "'가입번호'처럼 키가 여러 행 세로병합 블록을 이루는 표에서, 대상의 각 키 블록에 소스의"
 role_source: docstring
 version: "0.7.4"
-loc: "serve_b2b.py:13183-13268"
+loc: "serve_b2b.py:13196-13281"
 
 # ── 입출력 ──
 inputs:

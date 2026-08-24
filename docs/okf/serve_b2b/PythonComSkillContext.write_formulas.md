@@ -9,7 +9,7 @@ signature: "(self, sheet, a1_start, formulas)"
 role: "수식 문자열 2차원 리스트를 한 번에 기록(예: [[\"=B2-C2\"],[\"=B3-C3\"]])."
 role_source: docstring
 version: "0.7.4"
-loc: "serve_b2b.py:11900-11921"
+loc: "serve_b2b.py:11913-11934"
 
 # ── 입출력 ──
 inputs:

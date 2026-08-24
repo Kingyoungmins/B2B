@@ -9,7 +9,7 @@ signature: "(self, src_sheet, src_range, dst_sheet, dst_cell)"
 role: "'값으로 복사'(계산 결과값 + 서식/숫자서식/테두리/병합 보존, 수식은 넣지 않음)."
 role_source: docstring
 version: "0.7.4"
-loc: "serve_b2b.py:13024-13052"
+loc: "serve_b2b.py:13037-13065"
 
 # ── 입출력 ──
 inputs:

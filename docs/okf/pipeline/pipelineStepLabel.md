@@ -8,7 +8,7 @@ signature: "(step, idx)"
 role: "스킬 카드 라벨: 제목(description)이 비었거나 제네릭(\"스킬 생성\")이거나 코드 첫 줄이면"
 role_source: banner
 version: "0.7.4"
-loc: "pipeline.js:3623-3623"
+loc: "pipeline.js:3646-3646"
 
 # ── 입출력 ──
 inputs:

@@ -8,7 +8,7 @@ signature: "(payload)"
 role: "openpyxl 엔진이 안전하지 않으면 사유 문자열을 반환(없으면 \"\")."
 role_source: docstring
 version: "0.7.4"
-loc: "serve_b2b.py:20947-20994"
+loc: "serve_b2b.py:20960-21007"
 
 # ── 입출력 ──
 inputs:

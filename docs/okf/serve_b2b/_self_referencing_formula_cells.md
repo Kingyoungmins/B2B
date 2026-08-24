@@ -8,7 +8,7 @@ signature: "(data, row0, col0)"
 role: "write_formulas 로 쓰려는 수식 중 '자기 셀'을 참조하는 것의 주소 목록(예: W3 에 =IF(W3<>\"\",W3,…))."
 role_source: docstring
 version: "0.7.4"
-loc: "serve_b2b.py:11297-11318"
+loc: "serve_b2b.py:11297-11331"
 
 # ── 입출력 ──
 inputs:
@@ -29,13 +29,15 @@ calls:
 calls_external:
   - "body"
   - "col_txt"
+  - "compile"
   - "enumerate"
   - "escape"
+  - "finditer"
+  - "get"
+  - "group"
   - "isinstance"
   - "lstrip"
-  - "pat"
   - "scan"
-  - "search"
   - "startswith"
   - "str"
   - "sub"

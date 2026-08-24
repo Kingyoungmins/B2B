@@ -9,7 +9,7 @@ signature: "(self, sheet=None)"
 role: "시트에 걸린 자동필터(AutoFilter)를 해제한다 — 필터 조건을 모두 지워 숨은 행을 복원하고, 헤더의 필터"
 role_source: docstring
 version: "0.7.4"
-loc: "serve_b2b.py:12370-12404"
+loc: "serve_b2b.py:12383-12417"
 
 # ── 입출력 ──
 inputs:
