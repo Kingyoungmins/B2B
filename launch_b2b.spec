@@ -40,6 +40,8 @@ a = Analysis(
         ('log_dash.py', '.'),
         # [로그 자동 전송] 수집 서버로 로그/스킬을 올리는 모듈. 빠지면 배포본에서만 전송이 조용히 꺼진다.
         ('log_sync.py', '.'),
+        # [문서보안 0.7.5] 보안문서 해제/재적용 릴레이 클라이언트. 빠지면 배포본에서만 기능이 꺼진다.
+        ('secure_doc.py', '.'),
         *collect('styles'),
         *collect('scripts'),
         *collect('vendor'),
@@ -68,6 +70,7 @@ a = Analysis(
         'native_macro_recorder',
         # serve_b2b 가 지연 import 하므로 명시한다(없으면 프로즌에서 import 실패 → 전송 꺼짐).
         'log_sync',
+        'secure_doc',
         *collect_submodules('ixicellr'),
         'log_dash',      # [관리 대시보드] datas 만으로는 frozen import 가 안 된다(log_sync 와 동일)
     ],

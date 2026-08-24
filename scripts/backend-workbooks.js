@@ -3,6 +3,12 @@
    =================================================================== */
 async function registerWorkbookBackend(file) {
   if (!file || !window.fetch || location.protocol === "file:") return null;
+  // [문서보안 0.7.5] 앞 8바이트만 보고 보안문서로 보이면, 업로드(그 안에서 백엔드가 보안 해제)
+  // 동안 "문서를 보안해제 중입니다" 안내를 띄운다. 판정은 서버가 다시 한다 — 이건 안내용이다.
+  let secureLikely = false;
+  try { secureLikely = typeof secureDocSniff === "function" && await secureDocSniff(file); } catch (_) {}
+  if (secureLikely && typeof secureDocNotice === "function")
+    secureDocNotice(`"${file.name}" 문서를 보안해제 중입니다…`);
   try {
     const resp = await fetch(`/api/workbooks/upload?name=${encodeURIComponent(file.name)}`, {
       method: "POST",
@@ -21,10 +27,16 @@ async function registerWorkbookBackend(file) {
       }
       throw err;
     }
+    if (data.secure && typeof toast === "function") {
+      if (data.secure.released) toast(`"${file.name}" 보안 문서를 해제해 업로드했습니다.`, "success");
+      else if (data.secure.error) toast(`"${file.name}" 보안 해제 실패: ${data.secure.error}`, "error");
+    }
     return data;
   } catch (err) {
     console.warn("Backend workbook registration failed:", err);
     return null;
+  } finally {
+    if (secureLikely && typeof secureDocNoticeHide === "function") secureDocNoticeHide();
   }
 }
 

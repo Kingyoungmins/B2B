@@ -1325,6 +1325,14 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
         if self.path.startswith("/api/diff/"):
             self.handle_cached_diff()
             return
+        if self.path.split("?")[0] == "/api/secure-doc/status":
+            # [문서보안 0.7.5] 화면이 '보안적용 안내'와 blob 경유 암호화 필요 여부를 판단하는 근거.
+            try:
+                import secure_doc
+                self.send_json(secure_doc.status(BACKEND_DIR))
+            except Exception as err:
+                self.send_json({"ok": False, "enabled": False, "error": str(err)})
+            return
         if self.path == "/api/log-sync/status":
             # [로그 자동 전송] 지금 어디로, 얼마나 보냈는지. 현장 확인/진단용.
             try:
@@ -1383,6 +1391,28 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
             return
         if self.path == "/api/client/trace":
             self.handle_client_trace()
+            return
+        if self.path.split("?")[0] == "/api/secure-doc/encrypt":
+            # [문서보안 0.7.5] 화면이 브라우저에서 조립한 파일(blob)을 저장하기 직전 보안을 다시 건다.
+            qs = parse_qs(urlparse(self.path).query)
+            dl_name = Path(unquote(qs.get("name", ["download.xlsx"])[0])).name or "download.xlsx"
+            length = int(self.headers.get("content-length") or 0)
+            raw = self.rfile.read(length) if length else b""
+            if not raw:
+                self.send_json({"ok": False, "error": "빈 파일입니다."}, status=400)
+                return
+            try:
+                import secure_doc
+                out = secure_doc.encrypt_for_download(raw, dl_name)
+            except Exception as err:
+                self.send_json({"ok": False, "error": "문서를 보안적용하지 못했습니다: %s" % err}, status=502)
+                return
+            self.send_response(200)
+            self.send_header("content-type", "application/octet-stream")
+            self.send_header("content-disposition", content_disposition_attachment(dl_name))
+            self.send_header("content-length", str(len(out)))
+            self.end_headers()
+            self.wfile.write(out)
             return
         if self.path == "/api/log-sync/config":
             # 화면(F9)에 저장된 버전 서버 주소/키를 그대로 물려받는다 — 사용자가 주소를 바꾸면
@@ -1700,6 +1730,19 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
                 f.write(chunk)
                 remaining -= len(chunk)
         _t_write = (time.perf_counter() - _t_write0) * 1000
+        # [문서보안 0.7.5] 보안문서(AIP/DRM)면 versionTest 서버 릴레이로 풀어 '작업본'을 평문으로
+        # 바꾼 뒤 검사한다(사용자 원본 파일은 그대로). 해제 실패는 업로드를 막지 않는다 —
+        # Excel COM 이 사용자 라이선스로 열 수 있는 경우가 있어서다(응답 secure.error 로만 알린다).
+        _t_secure0 = time.perf_counter()
+        secure_info = None
+        try:
+            import secure_doc
+            secure_info = secure_doc.maybe_decrypt_upload(path, name, encrypted_checker=is_encrypted_ooxml)
+            if secure_info and secure_info.get("released"):
+                secure_doc.mark_released(workbook_id)
+        except Exception as _sec_err:
+            secure_info = {"checked": True, "released": False, "error": str(_sec_err)}
+        _t_secure = (time.perf_counter() - _t_secure0) * 1000
         _t_inspect0 = time.perf_counter()
         meta = inspect_workbook(path)
         _t_inspect = (time.perf_counter() - _t_inspect0) * 1000
@@ -1712,6 +1755,8 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
                 writeMs=round(_t_write),
                 inspectMs=round(_t_inspect),
                 totalMs=round(_t_write + _t_inspect),
+                secureMs=round(_t_secure),
+                secureReleased=bool(secure_info and secure_info.get("released")),
                 sheets=len(_sheets),
                 formulaCells=sum(len((s or {}).get("formulas") or {}) for s in _sheets.values()),
                 # [보안 라벨 진단] 업로드된 '원본'에 이미 라벨이 있었는지. 이 값이 none 인데
@@ -1732,8 +1777,11 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
             "current_aoa_cache": None,
             "aoa_cache_created": None,
             "aoa_cache_hits": 0,
+            # [문서보안 0.7.5] 이 작업본이 보안문서를 해제한 것인가 — 다운로드 때 재적용 판단 근거.
+            "securedSource": bool(secure_info and secure_info.get("released")),
         }
-        self.send_json({"ok": True, "workbookId": workbook_id, "name": name, "meta": meta})
+        self.send_json({"ok": True, "workbookId": workbook_id, "name": name, "meta": meta,
+                        "secure": secure_info})
 
     def handle_assist_attachment(self):
         """[AI 도움 첨부] 첨부 파일을 슬라이드/이미지 base64 로 돌려준다.
@@ -1907,12 +1955,18 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
         self.send_json(job)
 
     def handle_backend_download(self):
-        result_id = self.path.rsplit("/", 1)[-1]
+        parsed = urlparse(self.path)
+        result_id = parsed.path.rstrip("/").rsplit("/", 1)[-1]
         path = ensure_result_file(result_id)
         if not path:
             self.send_error(404)
             return
         data = path.read_bytes()
+        # [문서보안 0.7.5] 보안문서를 해제해 쓰는 중이면, 사용자에게 나가는 문서에 보안을 다시 건다.
+        data, sec_err = _secure_outgoing_data(data, path.name, parsed.query)
+        if sec_err:
+            self.send_json({"ok": False, "error": sec_err}, status=502)
+            return
         self.send_response(200)
         if path.suffix.lower() == ".csv":
             self.send_header("content-type", "text/csv; charset=utf-8")
@@ -1924,7 +1978,8 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
         self.wfile.write(data)
 
     def handle_workbook_source_download(self):
-        workbook_id = self.path.rsplit("/", 1)[-1]
+        parsed = urlparse(self.path)
+        workbook_id = parsed.path.rstrip("/").rsplit("/", 1)[-1]
         wb = recover_workbook_record(workbook_id)
         if not wb:
             self.send_error(404)
@@ -1934,6 +1989,11 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
             self.send_error(404)
             return
         data = path.read_bytes()
+        # [문서보안 0.7.5] 원본도 '해제된 작업본'을 주는 것이므로 보안을 다시 건다(내부 읽기는 plain=1).
+        data, sec_err = _secure_outgoing_data(data, wb.get("name") or path.name, parsed.query)
+        if sec_err:
+            self.send_json({"ok": False, "error": sec_err}, status=502)
+            return
         self.send_response(200)
         if path.suffix.lower() == ".csv":
             self.send_header("content-type", "text/csv; charset=utf-8")
@@ -3086,7 +3146,11 @@ def build_workbook_archive(payload):
             role = str((item or {}).get("role") or "").lower()
             folder = "inputs" if role == "input" else "outputs" if role == "output" else "files"
             arcname = unique_archive_name(used_names, folder, display_name)
-            zf.write(src_path, arcname)
+            # [문서보안 0.7.5] zip 안의 문서들도 낱개 다운로드와 같은 규칙으로 보안을 다시 건다.
+            member, sec_err = _secure_outgoing_data(Path(src_path).read_bytes(), display_name)
+            if sec_err:
+                raise ValueError(sec_err)
+            zf.writestr(arcname, member)
     return archive_path, filename
 
 
@@ -4962,6 +5026,29 @@ def _native_parent_watch_once(now):
         pass
     _log_sync_stop("parent.missing", timeout=4.0)
     os._exit(0)
+
+
+def _secure_outgoing_data(data, filename, query=""):
+    """[문서보안 0.7.5] 사용자에게 나가는 문서 다운로드 직전 훅.
+
+    이번 실행에서 보안문서를 해제해 쓰고 있으면(secure_doc.any_secured) 릴레이 서버로 보안을
+    다시 걸어 돌려준다. 실패하면 (None, 오류문) — 부르는 쪽은 반드시 다운로드를 중단한다
+    (해제된 내용이 평문으로 나가면 안 된다). 내부 소비자(제보 첨부 등 '사람에게 저장'이 아닌
+    fetch)는 ?plain=1 로 건너뛴다.
+    반환: (내보낼 bytes, None) 또는 (None, 오류 메시지)."""
+    try:
+        if "plain=1" in str(query or ""):
+            return data, None
+        import secure_doc
+        if not secure_doc.any_secured(BACKEND_DIR):
+            return data, None
+        out = secure_doc.encrypt_for_download(data, filename)
+        _vba_trace("download.secure_applied", name=str(filename or ""),
+                   inBytes=len(data), outBytes=len(out))
+        return out, None
+    except Exception as err:
+        _vba_trace("download.secure_failed", name=str(filename or ""), error=str(err))
+        return None, "문서를 보안적용하지 못해 다운로드를 중단했습니다: %s" % err
 
 
 def _start_log_sync():

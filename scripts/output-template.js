@@ -132,11 +132,19 @@ async function downloadAllFilesZip(buttonEl) {
   const btn = buttonEl || $("btn-download");
   const originalText = btn ? btn.textContent : "";
   const filename = archiveFilename();
+  // [문서보안 0.7.5] 보안문서가 열려 있으면 서버가 zip 안의 문서마다 보안을 다시 건다
+  // (파일 수 × 왕복이라 가장 오래 걸리는 다운로드 경로) — 진행 안내를 띄운다.
+  let secNotice = false;
+  try {
+    const st = typeof secureDocStatus === "function" ? await secureDocStatus() : null;
+    secNotice = !!(st && st.active && st.anySecured);
+  } catch (_) {}
   try {
     if (btn) {
       btn.disabled = true;
       btn.textContent = "ZIP 생성 중...";
     }
+    if (secNotice && typeof secureDocNotice === "function") secureDocNotice("문서를 보안적용 중입니다…");
     const resp = await fetch("/api/workbooks/archive", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -157,6 +165,7 @@ async function downloadAllFilesZip(buttonEl) {
     toast("전체 파일 다운로드 오류: " + err.message, "error");
     console.error(err);
   } finally {
+    if (secNotice && typeof secureDocNoticeHide === "function") secureDocNoticeHide();
     if (btn) {
       btn.textContent = originalText || "📥 전체 파일 다운로드";
       if (typeof refreshRunButton === "function") refreshRunButton();
@@ -238,6 +247,9 @@ function getDownloadOutputTarget() {
 }
 
 function downloadBackendOutput(url, filename) {
+  // [문서보안 0.7.5] 보안문서가 열려 있으면 서버가 내보내기 직전 암호화한다 — fetch 로 받아야
+  // '문서를 보안적용 중입니다' 안내와 실패 처리(평문 저장 차단)가 가능하다. 평소엔 기존 a.href.
+  if (typeof secureDownloadUrl === "function") { secureDownloadUrl(url, filename); return; }
   const a = document.createElement("a");
   a.href = url;
   a.download = filename;
@@ -256,6 +268,8 @@ function exportOutputCsv(filename, fileArg) {
     return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
   }).join(",")).join("\r\n");
   const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" });
+  // [문서보안 0.7.5] 보안문서가 열려 있으면 저장 직전 백엔드를 경유해 보안을 다시 건다.
+  if (typeof secureDocSaveBlob === "function") { secureDocSaveBlob(blob, filename); return; }
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
@@ -297,6 +311,13 @@ function exportOutputXlsx(filename, fileArg, originalArg) {
     }
   });
 
+  // [문서보안 0.7.5] writeFile 은 곧장 저장돼 보안 재적용을 끼울 수 없다 — blob 으로 만들어
+  // 저장 직전 훅(secureDocSaveBlob)을 태운다(훅이 없으면 기존 동작 그대로).
+  if (typeof secureDocSaveBlob === "function") {
+    const out = XLSX.write(wb, { bookType: "xlsx", type: "array" });
+    secureDocSaveBlob(new Blob([out], { type: "application/octet-stream" }), filename);
+    return;
+  }
   XLSX.writeFile(wb, filename);
 }
 

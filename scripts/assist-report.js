@@ -151,8 +151,11 @@ async function assistPrepareReportBundle(meta) {
     if (f && f.name) pulls.push({ role: "출력템플릿", f });
   });
   for (const { role, f } of pulls) {
-    const url = f.backendDownloadUrl
+    // [문서보안 0.7.5] 이 fetch 는 '사람에게 저장'이 아니라 제보 첨부용 내부 읽기 — 보안 재적용을
+    // 건너뛴다(plain=1). 재적용하면 첨부를 열어 볼 수 없다.
+    const rawUrl = f.backendDownloadUrl
       || (f.backendWorkbookId ? `/api/workbooks/source/${encodeURIComponent(f.backendWorkbookId)}` : null);
+    const url = rawUrl ? rawUrl + (rawUrl.includes("?") ? "&" : "?") + "plain=1" : null;
     if (!url) {
       missing.push(`${role} ${f.name} (원본 미보관 — 제보 시 직접 첨부 필요)`);
       continue;

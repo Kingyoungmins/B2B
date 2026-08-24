@@ -3591,6 +3591,17 @@
         ]
       ],
       "fix": "사용자 PC 로그는 켤 때 비워지고 스킬은 실행파일 옆에만 쌓여, 제보를 받고 로그를 요청하면 이미 없는 경우가 많았다. 실행 중 30초마다 늘어난 로그만 이어서(바이트 오프셋) 수집 서버(versionTest)로 보내고, 그 실행에서 만들어진 스킬 zip 도 함께 보낸다. 서버는 <root>/날짜/사용자(whoami)/세션 폴더에 logs·skills 를 짝으로 쌓고 관리자는 세션 zip 을 그대로 내려받는다. 전송 실패는 오프셋을 안 옮겨 다음 주기에 재시도하고, 서버는 이미 받은 만큼을 잘라내 중복을 막는다. 실행 중 로그가 비워지면 서버에는 .r1 이름으로 이어 써 유실을 막는다. 서버 계약 테스트는 versionTest/test_log_collector.py."
+    },
+    {
+      "id": "SECURE-DOC-DRM-RELAY",
+      "title": "[기능] 보안문서(AIP/DRM) 자동 해제 업로드 + 다운로드 시 보안 재적용 (0.7.5)",
+      "checks": [
+        [
+          "python",
+          "test_runs/_test_secure_doc.py"
+        ]
+      ],
+      "fix": "사용자 PC 는 MIP Gateway 를 직접 못 불러(허용 IP) versionTest 서버가 /v1/drm/* 로 릴레이한다. 업로드: 작업본 머리가 OLE(EncryptedPackage)거나 정체불명 바이너리면 서버로 보내 해제하고 작업본을 평문으로 교체(+.secured 마커, 사용자 원본은 안 건드림). 해제 실패는 업로드를 막지 않는다(Excel COM 라이선스 열람 대비). 다운로드: 해제 이력이 있으면(any_secured=메모리+마커) 모든 문서 다운로드(결과/원본/전체zip/브라우저 blob)에 보안을 재적용하고, 실패 시 다운로드를 중단한다(평문 유출 방지). 제보 첨부 같은 내부 읽기는 ?plain=1 로 건너뛴다. 안내: 업로드 '문서를 보안해제 중입니다', 다운로드 '문서를 보안적용 중입니다' 배너(scripts/secure-doc.js, excel-mirror 잠금과 독립). Gateway -200 '대상 아님'은 원본 그대로 진행(오류 아님). 서버 계약 테스트는 versionTest/test_drm_service.py."
     }
   ]
 }

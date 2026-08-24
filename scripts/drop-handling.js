@@ -2134,6 +2134,8 @@ window.runnerShowRunSummary = function(info) {
       const out = outs[Number(btn.dataset.idx)];
       const url = out && (out.downloadUrl || (out.downloadId ? "/api/workbooks/download/" + out.downloadId : ""));
       if (!url) { if (typeof toast === "function") toast("이 파일은 내려받을 수 없습니다.", "error"); return; }
+      // [문서보안 0.7.5] 보안 재적용 안내/실패 처리가 있는 공용 다운로드 경로로 보낸다.
+      if (typeof secureDownloadUrl === "function") { secureDownloadUrl(url, out.name || ""); return; }
       try {
         const a = document.createElement("a");
         a.href = url;
