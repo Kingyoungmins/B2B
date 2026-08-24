@@ -8,8 +8,8 @@ class: PythonComSkillContext
 signature: "(self, sheet, predicate, dest_name, header_rows=1, after=None)"
 role: "조건에 맞는 행만 골라 **새 시트(현재 활성 파일)**에 정리한다 — 원본은 그대로 둔다."
 role_source: docstring
-version: "0.7.4"
-loc: "serve_b2b.py:12482-12587"
+version: "0.7.5"
+loc: "serve_b2b.py:12876-12992"
 
 # ── 입출력 ──
 inputs:
@@ -32,7 +32,10 @@ calls:
   - "Cells"
   - "Range"
   - "Rows"
+  - "_as_declarative_filter"
   - "_excel_collection_names"
+  - "_filter_native_worth_it"
+  - "_filter_to_sheet_native"
   - "_tick"
   - "_ws"
   - "add_sheet"
@@ -48,6 +51,7 @@ calls_external:
   - "PythonComSkillError"
   - "Union"
   - "_CHUNK"
+  - "_decl"
   - "_first_row"
   - "_row_runs"
   - "a"
@@ -72,9 +76,12 @@ calls_external:
   - "rng"
   - "str"
   - "sum"
+  - "ws"
 called_by: []
 reads:
   - "self._app"
+  - "self._filter_native_worth_it"
+  - "self._filter_to_sheet_native"
   - "self._shared"
   - "self._tick"
   - "self._wb"
@@ -84,7 +91,7 @@ reads:
   - "self.write"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.4-gen"
+timestamp: "0.7.5-gen"
 ---
 
 ## 역할
@@ -94,7 +101,7 @@ timestamp: "0.7.4-gen"
 - Excel COM 조작(파괴적일 수 있음)
 
 ## 관계
-- 호출: `Cells`, `Range`, `Rows`, `_excel_collection_names`, `_tick`, `_ws`, `add_sheet`, `append`, `range`, `read`, `row`, `sheet`, `write`
+- 호출: `Cells`, `Range`, `Rows`, `_as_declarative_filter`, `_excel_collection_names`, `_filter_native_worth_it`, `_filter_to_sheet_native`, `_tick`, `_ws`, `add_sheet`, `append`, `range`, `read`, `row`, `sheet`, `write`
 - 피호출(영향 전파 경로): 없음
 
 ## 실패/예외

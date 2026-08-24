@@ -8,8 +8,8 @@ class: B2BHandler
 signature: "(self)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
-version: "0.7.4"
-loc: "serve_b2b.py:1228-1296"
+version: "0.7.5"
+loc: "serve_b2b.py:1235-1320"
 
 # ── 입출력 ──
 inputs:
@@ -42,12 +42,15 @@ calls:
   - "proxy"
   - "send_json"
 calls_external:
+  - "BACKEND_DIR"
   - "Path"
   - "__file__"
   - "app_dir"
   - "bool"
+  - "err"
   - "exists"
   - "file_info"
+  - "get"
   - "getcwd"
   - "getpid"
   - "openpyxl"
@@ -56,11 +59,13 @@ calls_external:
   - "split"
   - "startswith"
   - "stat"
+  - "status"
   - "str"
   - "super"
 called_by: []
 reads:
   - "APP_BUILD_STAMP"
+  - "BACKEND_DIR"
   - "self.handle_backend_download"
   - "self.handle_cached_diff"
   - "self.handle_pipeline_progress"
@@ -71,7 +76,7 @@ reads:
   - "self.send_json"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.4-gen"
+timestamp: "0.7.5-gen"
 ---
 
 ## 역할

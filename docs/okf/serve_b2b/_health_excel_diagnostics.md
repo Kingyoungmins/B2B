@@ -7,8 +7,8 @@ extraction: ast
 signature: "()"
 role: "Health polling should be cheap. Excel process diagnostics are cached and"
 role_source: docstring
-version: "0.7.4"
-loc: "serve_b2b.py:4471-4482"
+version: "0.7.5"
+loc: "serve_b2b.py:4575-4586"
 
 # ── 입출력 ──
 inputs: []
@@ -35,7 +35,7 @@ writes:
   - "HEALTH_CACHED_EXCEL_DIAG"
   - "HEALTH_LAST_EXCEL_DIAG_AT"
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.4-gen"
+timestamp: "0.7.5-gen"
 ---
 
 ## 역할

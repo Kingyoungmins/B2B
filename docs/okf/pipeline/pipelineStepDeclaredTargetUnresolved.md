@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(step)"
 role: "실행기에서만 터지는 이유: 생성기는 대상이 늘 실재하는 현재 파일이라 폴백이 안 일어난다."
 role_source: banner
-version: "0.7.4"
+version: "0.7.5"
 loc: "pipeline.js:576-576"
 
 # ── 입출력 ──
@@ -34,7 +34,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.4-gen"
+timestamp: "0.7.5-gen"
 ---
 
 ## 역할

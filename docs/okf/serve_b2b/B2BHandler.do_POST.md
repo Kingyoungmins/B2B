@@ -8,8 +8,8 @@ class: B2BHandler
 signature: "(self)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
-version: "0.7.4"
-loc: "serve_b2b.py:1298-1527"
+version: "0.7.5"
+loc: "serve_b2b.py:1322-1597"
 
 # ── 입출력 ──
 inputs:
@@ -27,8 +27,10 @@ calls:
   - "_excel_runtime_diagnostics"
   - "_force_kill_pid"
   - "_force_restart_excel_sessions_direct"
+  - "_is_own_origin"
   - "_is_pid_alive"
   - "_join_inflight_kills"
+  - "_log_sync_stop"
   - "_maintenance_status"
   - "_perf_trace"
   - "_pipeline_job_stats"
@@ -39,6 +41,8 @@ calls:
   - "cleanup_backend_runtime_files"
   - "cleanup_excel_sessions"
   - "cleanup_node_worker"
+  - "content_disposition_attachment"
+  - "end_headers"
   - "handle_assist_attachment"
   - "handle_backend_pipeline_run"
   - "handle_backend_pipeline_start"
@@ -81,30 +85,50 @@ calls:
   - "hide_all_excel_sessions"
   - "hide_inactive_excel_sessions"
   - "proxy"
+  - "raw"
+  - "read"
   - "read_json_body"
   - "reset_logic_backup_dir"
   - "send_json"
+  - "write"
 calls_external:
+  - "Path"
   - "SPAWNED_EXCEL_PIDS"
   - "Thread"
   - "_exit"
   - "_exit_soon"
+  - "_origin"
   - "bool"
+  - "dl_name"
+  - "encrypt_for_download"
   - "err"
   - "get"
   - "int"
+  - "len"
+  - "length"
   - "list"
+  - "out"
   - "p"
+  - "parse_qs"
+  - "payload"
   - "pid"
   - "send_error"
+  - "send_header"
+  - "send_response"
   - "sleep"
+  - "split"
   - "start"
   - "startswith"
   - "str"
+  - "strip"
+  - "unquote"
+  - "update_config"
+  - "urlparse"
 called_by: []
 reads:
   - "HOST_MINIMIZED"
   - "SPAWNED_EXCEL_PIDS"
+  - "self.end_headers"
   - "self.handle_assist_attachment"
   - "self.handle_backend_pipeline_run"
   - "self.handle_backend_pipeline_start"
@@ -144,15 +168,20 @@ reads:
   - "self.handle_workbook_archive"
   - "self.handle_workbook_reinspect"
   - "self.handle_workbook_upload"
+  - "self.headers"
   - "self.path"
   - "self.proxy"
   - "self.read_json_body"
+  - "self.rfile"
   - "self.send_error"
+  - "self.send_header"
   - "self.send_json"
+  - "self.send_response"
+  - "self.wfile"
 writes:
   - "HOST_MINIMIZED"
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.4-gen"
+timestamp: "0.7.5-gen"
 ---
 
 ## 역할
@@ -163,7 +192,7 @@ timestamp: "0.7.4-gen"
 - 변경 상태 `HOST_MINIMIZED` — 수정 시 이 상태를 읽는 곳 동반 점검.
 
 ## 관계
-- 호출: `_excel_queue_size`, `_excel_runtime_diagnostics`, `_force_kill_pid`, `_force_restart_excel_sessions_direct`, `_is_pid_alive`, `_join_inflight_kills`, `_maintenance_status`, `_perf_trace`, `_pipeline_job_stats`, `_pipeline_snapshot_stats`, `_runtime_counts_snapshot`, `_vba_trace`, `choose_logic_backup_dir_dialog`, `cleanup_backend_runtime_files`, `cleanup_excel_sessions`, `cleanup_node_worker`, `handle_assist_attachment`, `handle_backend_pipeline_run`, `handle_backend_pipeline_start`, `handle_client_trace`, `handle_current_view_diff`, `handle_diag_recent_trace`, `handle_excel_activate`, `handle_excel_capture_copypaste`, `handle_excel_changes`, `handle_excel_close`, `handle_excel_hide`, `handle_excel_hover_info`, `handle_excel_open`, `handle_excel_open_result`, `handle_excel_position`, `handle_excel_preview_schema`, `handle_excel_raise`, `handle_excel_record_start`, `handle_excel_record_status`, `handle_excel_record_stop`, `handle_excel_record_verify`, `handle_excel_recover`, `handle_excel_replace`, `handle_excel_run_full_pipeline`, `handle_excel_run_python`, `handle_excel_run_vba`, `handle_excel_run_vba_pipeline`, `handle_excel_runner_mode`, `handle_excel_save`, `handle_excel_selection`, `handle_excel_show_only`, `handle_excel_verify_step`, `handle_logic_backup`, `handle_pipeline_cancel`, `handle_pipeline_live_final_snapshot`, `handle_skill_consolidate`, `handle_workbook_archive`, `handle_workbook_reinspect`, `handle_workbook_upload`, `hide_all_excel_sessions`, `hide_inactive_excel_sessions`, `proxy`, `read_json_body`, `reset_logic_backup_dir`, `send_json`
+- 호출: `_excel_queue_size`, `_excel_runtime_diagnostics`, `_force_kill_pid`, `_force_restart_excel_sessions_direct`, `_is_own_origin`, `_is_pid_alive`, `_join_inflight_kills`, `_log_sync_stop`, `_maintenance_status`, `_perf_trace`, `_pipeline_job_stats`, `_pipeline_snapshot_stats`, `_runtime_counts_snapshot`, `_vba_trace`, `choose_logic_backup_dir_dialog`, `cleanup_backend_runtime_files`, `cleanup_excel_sessions`, `cleanup_node_worker`, `content_disposition_attachment`, `end_headers`, `handle_assist_attachment`, `handle_backend_pipeline_run`, `handle_backend_pipeline_start`, `handle_client_trace`, `handle_current_view_diff`, `handle_diag_recent_trace`, `handle_excel_activate`, `handle_excel_capture_copypaste`, `handle_excel_changes`, `handle_excel_close`, `handle_excel_hide`, `handle_excel_hover_info`, `handle_excel_open`, `handle_excel_open_result`, `handle_excel_position`, `handle_excel_preview_schema`, `handle_excel_raise`, `handle_excel_record_start`, `handle_excel_record_status`, `handle_excel_record_stop`, `handle_excel_record_verify`, `handle_excel_recover`, `handle_excel_replace`, `handle_excel_run_full_pipeline`, `handle_excel_run_python`, `handle_excel_run_vba`, `handle_excel_run_vba_pipeline`, `handle_excel_runner_mode`, `handle_excel_save`, `handle_excel_selection`, `handle_excel_show_only`, `handle_excel_verify_step`, `handle_logic_backup`, `handle_pipeline_cancel`, `handle_pipeline_live_final_snapshot`, `handle_skill_consolidate`, `handle_workbook_archive`, `handle_workbook_reinspect`, `handle_workbook_upload`, `hide_all_excel_sessions`, `hide_inactive_excel_sessions`, `proxy`, `raw`, `read`, `read_json_body`, `reset_logic_backup_dir`, `send_json`, `write`
 - 피호출(영향 전파 경로): 없음
 
 ## 실패/예외

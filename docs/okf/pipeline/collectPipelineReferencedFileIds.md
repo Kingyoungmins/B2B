@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(steps = state.pipeline)"
 role: "스킬이 참조하는 '모든' 파일의 fileId — 쓰기 대상 + 교차 출력 + '읽기 소스'(교차파일)까지."
 role_source: banner
-version: "0.7.4"
+version: "0.7.5"
 loc: "pipeline.js:1189-1189"
 
 # ── 입출력 ──
@@ -42,7 +42,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.4-gen"
+timestamp: "0.7.5-gen"
 ---
 
 ## 역할

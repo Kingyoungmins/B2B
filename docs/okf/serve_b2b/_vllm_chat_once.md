@@ -7,8 +7,8 @@ extraction: ast
 signature: "(system, user, base, timeout=30)"
 role: "서버측 vLLM 단발 호출 — 프록시와 같은 엔드포인트(enable_thinking=False)."
 role_source: docstring
-version: "0.7.4"
-loc: "serve_b2b.py:6948-6963"
+version: "0.7.5"
+loc: "serve_b2b.py:7145-7160"
 
 # ── 입출력 ──
 inputs:
@@ -45,7 +45,7 @@ reads:
   - "VLLM_BASE"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.4-gen"
+timestamp: "0.7.5-gen"
 ---
 
 ## 역할

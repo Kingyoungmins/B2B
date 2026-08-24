@@ -7,8 +7,8 @@ extraction: ast
 signature: "(c)"
 role: "색 입력을 Excel .Color 롱값으로 변환. '#RRGGBB'/'RRGGBB'/색이름(노랑·red 등)/정수 지원."
 role_source: docstring
-version: "0.7.4"
-loc: "serve_b2b.py:11273-11294"
+version: "0.7.5"
+loc: "serve_b2b.py:11472-11493"
 
 # ── 입출력 ──
 inputs:
@@ -44,7 +44,7 @@ reads:
   - "_COLOR_NAMES"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.4-gen"
+timestamp: "0.7.5-gen"
 ---
 
 ## 역할

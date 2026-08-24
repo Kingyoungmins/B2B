@@ -7,8 +7,8 @@ extraction: ast
 signature: "(app)"
 role: "사용자에게 보여줄 수 있는(=코드에 그대로 써도 되는) 열린 워크북 이름만."
 role_source: docstring
-version: "0.7.4"
-loc: "serve_b2b.py:8167-8189"
+version: "0.7.5"
+loc: "serve_b2b.py:8364-8386"
 
 # ── 입출력 ──
 inputs:
@@ -35,7 +35,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.4-gen"
+timestamp: "0.7.5-gen"
 ---
 
 ## 역할

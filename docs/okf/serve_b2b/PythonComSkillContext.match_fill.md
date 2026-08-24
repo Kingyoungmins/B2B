@@ -8,8 +8,8 @@ class: PythonComSkillContext
 signature: "(self, source, target, columns, key=None, source_header_row=1, header_row=1, rows=None, aliases=None, allow_partial=False)"
 role: "소스 표(예: 피벗)의 행을 대상 시트의 '키 열(구분명)'과 이름 매칭해서, 지정한 값 열들을 대상의"
 role_source: docstring
-version: "0.7.4"
-loc: "serve_b2b.py:13853-14172"
+version: "0.7.5"
+loc: "serve_b2b.py:14258-14577"
 
 # ── 입출력 ──
 inputs:
@@ -94,7 +94,7 @@ reads:
   - "self._shared"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.4-gen"
+timestamp: "0.7.5-gen"
 ---
 
 ## 역할

@@ -7,8 +7,8 @@ extraction: ast
 signature: "(name)"
 role: "'같은 템플릿, 다른 월/날짜/버전' 파일을 같게 보기 위한 안정 키(소문자·기호제거)."
 role_source: docstring
-version: "0.7.4"
-loc: "serve_b2b.py:8122-8164"
+version: "0.7.5"
+loc: "serve_b2b.py:8319-8361"
 
 # ── 입출력 ──
 inputs:
@@ -45,7 +45,7 @@ reads:
   - "_VOLATILE_SUFFIX_TOKENS"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.4-gen"
+timestamp: "0.7.5-gen"
 ---
 
 ## 역할

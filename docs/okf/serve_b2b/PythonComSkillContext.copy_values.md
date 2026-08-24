@@ -8,8 +8,8 @@ class: PythonComSkillContext
 signature: "(self, src_sheet, src_range, dst_sheet, dst_cell)"
 role: "'값으로 복사'(계산 결과값 + 서식/숫자서식/테두리/병합 보존, 수식은 넣지 않음)."
 role_source: docstring
-version: "0.7.4"
-loc: "serve_b2b.py:13037-13065"
+version: "0.7.5"
+loc: "serve_b2b.py:13442-13470"
 
 # ── 입출력 ──
 inputs:
@@ -58,7 +58,7 @@ reads:
   - "self._tick"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.4-gen"
+timestamp: "0.7.5-gen"
 ---
 
 ## 역할

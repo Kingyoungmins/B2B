@@ -8,8 +8,8 @@ class: PythonComSkillContext
 signature: "(self, sheet, a1_range, delta=1)"
 role: "범위 안 '문자열' 셀의 모든 'N월'(앞 'YY/YYYY년', 뒤 'D일' 포함)을 delta 개월 이동한다."
 role_source: docstring
-version: "0.7.4"
-loc: "serve_b2b.py:12226-12256"
+version: "0.7.5"
+loc: "serve_b2b.py:12481-12511"
 
 # ── 입출력 ──
 inputs:
@@ -57,7 +57,7 @@ reads:
   - "self._ws"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.4-gen"
+timestamp: "0.7.5-gen"
 ---
 
 ## 역할

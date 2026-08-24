@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(msg, type)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
-version: "0.7.4"
+version: "0.7.5"
 loc: "util.js:5-5"
 
 # ── 입출력 ──
@@ -76,6 +76,7 @@ called_by:
   - "preopenAllExcelMirrors"
   - "promise"
   - "redoHistory"
+  - "registerWorkbookBackend"
   - "renderPipeline"
   - "replaceLogicAt"
   - "reportPipelineError"
@@ -90,6 +91,8 @@ called_by:
   - "runPipelinePreferBackend"
   - "saveCurrentExcelMirror"
   - "scrollChatToStepRequest"
+  - "secureDocSaveBlob"
+  - "secureDownloadUrl"
   - "sendChat"
   - "setSkillEngine"
   - "setupThinkToggle"
@@ -104,7 +107,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.4-gen"
+timestamp: "0.7.5-gen"
 ---
 
 ## 역할
@@ -115,7 +118,7 @@ timestamp: "0.7.4-gen"
 
 ## 관계
 - 호출: `$`
-- 피호출(영향 전파 경로): `_fail`, `_handlePipelineStepToggleImpl`, `_lazyFail`, `_reconcilePipelineSimulationAfterEditImpl`, `_runHeldStepsBatchImpl`, `_runPipelineSuffixFromCheckpointImpl`, `addAssistantReply`, `applyForcedPythonFallback`, `applyLogic`, `applyVbaStepToLiveExcel`, `assistCommitProposal`, `attachChatMessageDeleteButton`, `attemptRunnerAutoRecovery`, `autoRegenerateAsVbaFallback`, `autoRegenerateForMissingCode`, `autoRegenerateForStaticSafety`, `autoRepairPipelineStep`, `beginUiBusy`, `chooseLogicAutoBackupDir`, `clearRunnerLogic`, `closeCurrentExcelMirror`, `commitCellEdit`, `confirm`, `downloadAllFilesZip`, `downloadCurrentWorkbookFile`, `downloadWorkbookFileFromList`, `endUiBusy`, `forceRestartExcelMirrors`, `forceShowBackendResultMirror`, `insertLogic`, `loadInputFiles`, `loadLogic`, `loadOutputTemplates`, `markLivePipelineOutOfSync`, `maybeAutoReapplyAfterRecover`, `onReconnected`, `openBatchResumeModal`, `openCurrentWorkbookInExcel`, `openDownloadModal`, `openInsertPositionDialog`, `openLoadDialog`, `openSaveModal`, `openSettingsModal`, `openUserSettingsModal`, `preopenAllExcelMirrors`, `promise`, `redoHistory`, `renderPipeline`, `replaceLogicAt`, `reportPipelineError`, `requestErrorRecovery`, `requestExcelApplyCancel`, `restorePipelineToCheckpointAndHold`, `restoreSoftRefreshSnapshot`, `runEditApply`, `runFromCheckpointAfterEdit`, `runIsolatedLivePipelineSteps`, `runPipelineOnBackend`, `runPipelinePreferBackend`, `saveCurrentExcelMirror`, `scrollChatToStepRequest`, `sendChat`, `setSkillEngine`, `setupThinkToggle`, `shouldSkipHeavyHistory`, `showCodeGuardBlock`, `showTopTabSwitchHint`, `softRefreshApp`, `switchVisibleExcelMirrorToFileId`, `toggleEditStep`, `undoHistory`, `warnUnresolvedPipelineTarget`
+- 피호출(영향 전파 경로): `_fail`, `_handlePipelineStepToggleImpl`, `_lazyFail`, `_reconcilePipelineSimulationAfterEditImpl`, `_runHeldStepsBatchImpl`, `_runPipelineSuffixFromCheckpointImpl`, `addAssistantReply`, `applyForcedPythonFallback`, `applyLogic`, `applyVbaStepToLiveExcel`, `assistCommitProposal`, `attachChatMessageDeleteButton`, `attemptRunnerAutoRecovery`, `autoRegenerateAsVbaFallback`, `autoRegenerateForMissingCode`, `autoRegenerateForStaticSafety`, `autoRepairPipelineStep`, `beginUiBusy`, `chooseLogicAutoBackupDir`, `clearRunnerLogic`, `closeCurrentExcelMirror`, `commitCellEdit`, `confirm`, `downloadAllFilesZip`, `downloadCurrentWorkbookFile`, `downloadWorkbookFileFromList`, `endUiBusy`, `forceRestartExcelMirrors`, `forceShowBackendResultMirror`, `insertLogic`, `loadInputFiles`, `loadLogic`, `loadOutputTemplates`, `markLivePipelineOutOfSync`, `maybeAutoReapplyAfterRecover`, `onReconnected`, `openBatchResumeModal`, `openCurrentWorkbookInExcel`, `openDownloadModal`, `openInsertPositionDialog`, `openLoadDialog`, `openSaveModal`, `openSettingsModal`, `openUserSettingsModal`, `preopenAllExcelMirrors`, `promise`, `redoHistory`, `registerWorkbookBackend`, `renderPipeline`, `replaceLogicAt`, `reportPipelineError`, `requestErrorRecovery`, `requestExcelApplyCancel`, `restorePipelineToCheckpointAndHold`, `restoreSoftRefreshSnapshot`, `runEditApply`, `runFromCheckpointAfterEdit`, `runIsolatedLivePipelineSteps`, `runPipelineOnBackend`, `runPipelinePreferBackend`, `saveCurrentExcelMirror`, `scrollChatToStepRequest`, `secureDocSaveBlob`, `secureDownloadUrl`, `sendChat`, `setSkillEngine`, `setupThinkToggle`, `shouldSkipHeavyHistory`, `showCodeGuardBlock`, `showTopTabSwitchHint`, `softRefreshApp`, `switchVisibleExcelMirrorToFileId`, `toggleEditStep`, `undoHistory`, `warnUnresolvedPipelineTarget`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

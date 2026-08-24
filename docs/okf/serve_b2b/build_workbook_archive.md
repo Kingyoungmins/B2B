@@ -7,8 +7,8 @@ extraction: ast
 signature: "(payload)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
-version: "0.7.4"
-loc: "serve_b2b.py:2997-3017"
+version: "0.7.5"
+loc: "serve_b2b.py:3097-3121"
 
 # ── 입출력 ──
 inputs:
@@ -23,11 +23,12 @@ raises:
 
 # ── 유기적 관계 ──
 calls:
+  - "_secure_outgoing_data"
   - "resolve_archive_item"
   - "safe_archive_filename"
   - "unique_archive_name"
-  - "write"
 calls_external:
+  - "Path"
   - "ValueError"
   - "ZipFile"
   - "archive_path"
@@ -42,23 +43,27 @@ calls_external:
   - "item"
   - "list"
   - "lower"
+  - "member"
   - "mkdir"
   - "now"
   - "payload"
   - "raw_filename"
+  - "read_bytes"
+  - "sec_err"
   - "set"
   - "src_path"
   - "str"
   - "strftime"
   - "used_names"
   - "uuid4"
+  - "writestr"
 called_by:
   - "B2BHandler.handle_workbook_archive"
 reads:
   - "BACKEND_DIR"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.4-gen"
+timestamp: "0.7.5-gen"
 ---
 
 ## 역할
@@ -68,7 +73,7 @@ timestamp: "0.7.4-gen"
 - 파일시스템 변경/IO
 
 ## 관계
-- 호출: `resolve_archive_item`, `safe_archive_filename`, `unique_archive_name`, `write`
+- 호출: `_secure_outgoing_data`, `resolve_archive_item`, `safe_archive_filename`, `unique_archive_name`
 - 피호출(영향 전파 경로): `B2BHandler.handle_workbook_archive`
 
 ## 실패/예외

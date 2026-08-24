@@ -7,8 +7,8 @@ extraction: ast
 signature: "(app, owner_hwnd)"
 role: "(legacy) app.Hwnd 프레임의 owner 지정. frame 모드에서는 세션 프레임 hwnd 에"
 role_source: docstring
-version: "0.7.4"
-loc: "serve_b2b.py:4125-4132"
+version: "0.7.5"
+loc: "serve_b2b.py:4229-4236"
 
 # ── 입출력 ──
 inputs:
@@ -38,7 +38,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.4-gen"
+timestamp: "0.7.5-gen"
 ---
 
 ## 역할

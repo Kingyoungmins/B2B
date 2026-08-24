@@ -8,8 +8,8 @@ class: PythonComSkillContext
 signature: "(self, sheet, columns, before, header_row=1, scan_from=None)"
 role: "여러 열을 헤더+데이터까지 통째로 before 열 앞으로 옮긴다(원본 제거). 인덱스 시프트 자동."
 role_source: docstring
-version: "0.7.4"
-loc: "serve_b2b.py:12914-12984"
+version: "0.7.5"
+loc: "serve_b2b.py:13319-13389"
 
 # ── 입출력 ──
 inputs:
@@ -87,7 +87,7 @@ reads:
   - "self.read"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.4-gen"
+timestamp: "0.7.5-gen"
 ---
 
 ## 역할

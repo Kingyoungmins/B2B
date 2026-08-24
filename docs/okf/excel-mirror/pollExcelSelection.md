@@ -7,8 +7,8 @@ extraction: regex   # 정규식 근사
 signature: "(excelId)"
 role: "[0.5.17] 현재 탭의 Selection 만 가볍게 읽어 선택→채팅 반영을 빠르게 한다. active-sync(탭 따라가기)는"
 role_source: banner
-version: "0.7.4"
-loc: "excel-mirror.js:1616-1616"
+version: "0.7.5"
+loc: "excel-mirror.js:1648-1648"
 
 # ── 입출력 ──
 inputs:
@@ -38,7 +38,7 @@ reads:
 writes:
   - "excelMirror.selectionPolling"
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.4-gen"
+timestamp: "0.7.5-gen"
 ---
 
 ## 역할

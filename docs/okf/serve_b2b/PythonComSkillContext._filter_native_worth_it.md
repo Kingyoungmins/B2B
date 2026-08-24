@@ -1,17 +1,20 @@
 ---
-type: endpoint
-title: run
-module: pipeline.js
-lang: js
-extraction: regex   # 정규식 근사
-signature: "()"
+type: method
+title: PythonComSkillContext._filter_native_worth_it
+module: serve_b2b.py
+lang: python
+extraction: ast
+class: PythonComSkillContext
+signature: "(self, ws)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
-version: "0.7.4"
-loc: "pipeline.js:5094-5094"
+version: "0.7.5"
+loc: "serve_b2b.py:12755-12764"
 
 # ── 입출력 ──
-inputs: []
+inputs:
+  - "self"
+  - "ws"
 returns: "(추정)"
 
 # ── 사이드이펙트 (정적 추정) ──
@@ -21,15 +24,20 @@ raises: []
 
 # ── 유기적 관계 ──
 calls:
-  - "_runHeldStepsBatchImpl"
-calls_external: []
+  - "_tick"
+calls_external:
+  - "get"
+  - "int"
+  - "str"
+  - "strip"
 called_by:
-  - "_assistGateReplacementCode"
-  - "assistBuildProposal"
-reads: []
+  - "PythonComSkillContext.filter_to_sheet"
+reads:
+  - "self.FILTER_NATIVE_MIN_CELLS"
+  - "self._tick"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.4-gen"
+timestamp: "0.7.5-gen"
 ---
 
 ## 역할
@@ -39,8 +47,8 @@ timestamp: "0.7.4-gen"
 - 없음(정적 분석 기준)
 
 ## 관계
-- 호출: `_runHeldStepsBatchImpl`
-- 피호출(영향 전파 경로): `_assistGateReplacementCode`, `assistBuildProposal`
+- 호출: `_tick`
+- 피호출(영향 전파 경로): `PythonComSkillContext.filter_to_sheet`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

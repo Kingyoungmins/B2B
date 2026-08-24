@@ -8,8 +8,8 @@ class: OpenpyxlSkillContext
 signature: "(self, sheet_or_name, row, col, workbook=None)"
 role: "Return the displayed/calculated value for one cell."
 role_source: docstring
-version: "0.7.4"
-loc: "serve_b2b.py:17611-17621"
+version: "0.7.5"
+loc: "serve_b2b.py:18016-18026"
 
 # ── 입출력 ──
 inputs:
@@ -100,7 +100,7 @@ reads:
   - "self._ws_of"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.4-gen"
+timestamp: "0.7.5-gen"
 ---
 
 ## 역할

@@ -7,8 +7,8 @@ extraction: ast
 signature: "(pptx_path)"
 role: "pptx(zip) 에서 슬라이드별 텍스트를 뽑는다(python-pptx 없이 XML 직접). 캡션/제목 보조용."
 role_source: docstring
-version: "0.7.4"
-loc: "serve_b2b.py:1123-1140"
+version: "0.7.5"
+loc: "serve_b2b.py:1130-1147"
 
 # ── 입출력 ──
 inputs:
@@ -45,7 +45,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.4-gen"
+timestamp: "0.7.5-gen"
 ---
 
 ## 역할

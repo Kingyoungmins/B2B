@@ -8,8 +8,8 @@ class: ExcelSkillContext
 signature: "(self, sheet_or_name, row, col, workbook=None)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
-version: "0.7.4"
-loc: "serve_b2b.py:16137-16139"
+version: "0.7.5"
+loc: "serve_b2b.py:16542-16544"
 
 # ── 입출력 ──
 inputs:
@@ -93,7 +93,7 @@ reads:
   - "self._ws_of"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.4-gen"
+timestamp: "0.7.5-gen"
 ---
 
 ## 역할

@@ -7,8 +7,8 @@ extraction: ast
 signature: "(app, wb, code, entry, attempts=2)"
 role: "임시 .xlsm 러너에서 VBA 를 실행한다. '매크로를 실행할 수 없습니다'(-2146827284)는 일부 환경에서"
 role_source: docstring
-version: "0.7.4"
-loc: "serve_b2b.py:9153-9188"
+version: "0.7.5"
+loc: "serve_b2b.py:9352-9387"
 
 # ── 입출력 ──
 inputs:
@@ -51,7 +51,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.4-gen"
+timestamp: "0.7.5-gen"
 ---
 
 ## 역할

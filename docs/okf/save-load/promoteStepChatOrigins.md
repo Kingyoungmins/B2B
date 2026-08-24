@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "()"
 role: "[구버전 승격] originHistId 없는 스텝(옛 zip): prompt 가 복원된 대화의 user 말풍선과 '정확히 1개'"
 role_source: banner
-version: "0.7.4"
+version: "0.7.5"
 loc: "save-load.js:1003-1003"
 
 # ── 입출력 ──
@@ -36,7 +36,7 @@ reads:
   - "state.pipeline"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.4-gen"
+timestamp: "0.7.5-gen"
 ---
 
 ## 역할

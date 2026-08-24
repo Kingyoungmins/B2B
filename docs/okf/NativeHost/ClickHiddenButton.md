@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(string id)"
 role: "[0.7.1] UI 에서 숨긴 버튼(녹화/AI 도움)의 기존 onclick 을 그대로 실행 — 로직 재사용(분기 없음)."
 role_source: xmldoc/banner
-version: "0.7.4"
+version: "0.7.5"
 loc: "NativeHost.cs:414-414"
 
 # ── 입출력 ──
@@ -35,7 +35,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.4-gen"
+timestamp: "0.7.5-gen"
 ---
 
 ## 역할

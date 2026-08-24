@@ -7,8 +7,8 @@ extraction: ast
 signature: "(app, context_wb)"
 role: "[임시 진단] VBA Application.Run 직전, Excel 앱 프레임 + 대상 워크북 창의"
 role_source: docstring
-version: "0.7.4"
-loc: "serve_b2b.py:8800-8827"
+version: "0.7.5"
+loc: "serve_b2b.py:8999-9026"
 
 # ── 입출력 ──
 inputs:
@@ -50,7 +50,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.4-gen"
+timestamp: "0.7.5-gen"
 ---
 
 ## 역할

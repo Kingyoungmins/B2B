@@ -7,8 +7,8 @@ extraction: ast
 signature: "(app)"
 role: "VBA 실행(성공/실패 무관) 후 Application 전역 상태를 결정적으로 정상화한다."
 role_source: docstring
-version: "0.7.4"
-loc: "serve_b2b.py:9191-9219"
+version: "0.7.5"
+loc: "serve_b2b.py:9390-9418"
 
 # ── 입출력 ──
 inputs:
@@ -33,7 +33,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.4-gen"
+timestamp: "0.7.5-gen"
 ---
 
 ## 역할

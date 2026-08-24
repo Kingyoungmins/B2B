@@ -7,8 +7,8 @@ extraction: ast
 signature: "(session, app, wb, left, top, width, height, client_left=None, client_top=None, client_width=None, client_height=None, viewport_width=None, viewport_height=None, skip_position=False)"
 role: "frame 모드 표시 경로: 대상 프레임만 배치/표시하고 나머지 라이브 프레임은 파킹."
 role_source: docstring
-version: "0.7.4"
-loc: "serve_b2b.py:6990-7096"
+version: "0.7.5"
+loc: "serve_b2b.py:7187-7293"
 
 # ── 입출력 ──
 inputs:
@@ -78,7 +78,7 @@ reads:
   - "RECORDING_EDIT_UNLOCKED"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.4-gen"
+timestamp: "0.7.5-gen"
 ---
 
 ## 역할

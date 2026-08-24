@@ -7,8 +7,8 @@ extraction: ast
 signature: "(cell, op, target)"
 role: "sum_where 조건 비교. 비교연산자는 숫자로, 그 외는 normalize 텍스트로."
 role_source: docstring
-version: "0.7.4"
-loc: "serve_b2b.py:15017-15032"
+version: "0.7.5"
+loc: "serve_b2b.py:15422-15437"
 
 # ── 입출력 ──
 inputs:
@@ -37,7 +37,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.4-gen"
+timestamp: "0.7.5-gen"
 ---
 
 ## 역할

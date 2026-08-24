@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(entry, meta)"
 role: "녹화된 단일 VBA 스텝을 업무 의도 단위 N조각으로 분할한다. 실패/검증불가 시 null(원본 유지)."
 role_source: banner
-version: "0.7.4"
+version: "0.7.5"
 loc: "record-review.js:599-599"
 
 # ── 입출력 ──
@@ -61,7 +61,7 @@ called_by: []
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.4-gen"
+timestamp: "0.7.5-gen"
 ---
 
 ## 역할

@@ -7,8 +7,8 @@ extraction: ast
 signature: "(wb, module_name, macro_name)"
 role: "Return a workbook-qualified macro reference for Application.Run."
 role_source: docstring
-version: "0.7.4"
-loc: "serve_b2b.py:7955-7969"
+version: "0.7.5"
+loc: "serve_b2b.py:8152-8166"
 
 # ── 입출력 ──
 inputs:
@@ -31,7 +31,7 @@ called_by: []
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.4-gen"
+timestamp: "0.7.5-gen"
 ---
 
 ## 역할

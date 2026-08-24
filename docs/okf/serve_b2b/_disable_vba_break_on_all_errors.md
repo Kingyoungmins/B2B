@@ -7,8 +7,8 @@ extraction: ast
 signature: "()"
 role: "VBE Error Trapping 이 Break on All Errors 면 처리된 오류도 디버거로 진입한다."
 role_source: docstring
-version: "0.7.4"
-loc: "serve_b2b.py:5062-5091"
+version: "0.7.5"
+loc: "serve_b2b.py:5259-5288"
 
 # ── 입출력 ──
 inputs: []
@@ -40,7 +40,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.4-gen"
+timestamp: "0.7.5-gen"
 ---
 
 ## 역할

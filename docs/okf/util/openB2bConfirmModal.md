@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(message, options = {})"
 role: "[필드 수정] WebView2 의 네이티브 confirm() 은 항상-위 Excel 미러 창/포커스 보정 타이머와"
 role_source: banner
-version: "0.7.4"
+version: "0.7.5"
 loc: "util.js:33-33"
 
 # ── 입출력 ──
@@ -44,7 +44,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.4-gen"
+timestamp: "0.7.5-gen"
 ---
 
 ## 역할

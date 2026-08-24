@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(step)"
 role: "이 스텝이 '다른 파일에 쓴다'고 런타임이 말해 준 세션들(없으면 빈 배열)."
 role_source: banner
-version: "0.7.4"
+version: "0.7.5"
 loc: "pipeline.js:1281-1281"
 
 # ── 입출력 ──
@@ -32,7 +32,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.4-gen"
+timestamp: "0.7.5-gen"
 ---
 
 ## 역할

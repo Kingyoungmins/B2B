@@ -8,8 +8,8 @@ class: PythonComSkillContext
 signature: "(self, sheet, col, delimiter, into=None, header_row=1)"
 role: "col 셀을 delimiter 로 나눠 col 바로 오른쪽의 새 열들에 기록한다(예: \"1001/홍길동\" → 가입번호 / 고객명)."
 role_source: docstring
-version: "0.7.4"
-loc: "serve_b2b.py:14228-14250"
+version: "0.7.5"
+loc: "serve_b2b.py:14633-14655"
 
 # ── 입출력 ──
 inputs:
@@ -60,7 +60,7 @@ reads:
   - "self.write"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.4-gen"
+timestamp: "0.7.5-gen"
 ---
 
 ## 역할

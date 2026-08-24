@@ -7,8 +7,8 @@ extraction: ast
 signature: "(v)"
 role: "---- 피벗/크로스탭 집계(순수 함수 — COM 불필요, 단위테스트 가능). ctx.pivot 2D 가 사용. ----"
 role_source: banner
-version: "0.7.4"
-loc: "serve_b2b.py:3107-3115"
+version: "0.7.5"
+loc: "serve_b2b.py:3211-3219"
 
 # ── 입출력 ──
 inputs:
@@ -35,7 +35,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.4-gen"
+timestamp: "0.7.5-gen"
 ---
 
 ## 역할

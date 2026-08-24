@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(path, preferredBase, options = {})"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
-version: "0.7.4"
+version: "0.7.5"
 loc: "llm-api.js:502-502"
 
 # ── 입출력 ──
@@ -24,17 +24,23 @@ raises: []
 
 # ── 유기적 관계 ──
 calls:
+  - "getIxiServerLabel"
   - "isLocalIxiProxyBaseUrl"
+  - "ixiFailoverUpstreams"
   - "push"
+  - "traceClientUiEvent"
 calls_external:
   - "Error"
+  - "Set"
   - "String"
   - "fetch"
   - "filter"
+  - "has"
   - "indexOf"
   - "join"
   - "map"
   - "replace"
+  - "slice"
   - "trim"
 called_by:
   - "callLLMOneShot"
@@ -43,7 +49,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.4-gen"
+timestamp: "0.7.5-gen"
 ---
 
 ## 역할
@@ -53,7 +59,7 @@ timestamp: "0.7.4-gen"
 - 네트워크/서버 호출
 
 ## 관계
-- 호출: `isLocalIxiProxyBaseUrl`, `push`
+- 호출: `getIxiServerLabel`, `isLocalIxiProxyBaseUrl`, `ixiFailoverUpstreams`, `push`, `traceClientUiEvent`
 - 피호출(영향 전파 경로): `callLLMOneShot`, `callOpenAICompatOnce`, `openSettingsModal`
 
 ## 실패/예외

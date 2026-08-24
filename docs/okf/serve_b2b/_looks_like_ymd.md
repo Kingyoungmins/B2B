@@ -7,8 +7,8 @@ extraction: ast
 signature: "(year, month, day)"
 role: "구분자 있는 날짜(2026-03-01)인지 — 연 1900~2199 / 월 1~12 / 일 1~31 만 참."
 role_source: docstring
-version: "0.7.4"
-loc: "serve_b2b.py:8093-8099"
+version: "0.7.5"
+loc: "serve_b2b.py:8290-8296"
 
 # ── 입출력 ──
 inputs:
@@ -33,7 +33,7 @@ called_by: []
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.4-gen"
+timestamp: "0.7.5-gen"
 ---
 
 ## 역할

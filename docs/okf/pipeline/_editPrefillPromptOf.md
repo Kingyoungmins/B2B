@@ -7,8 +7,8 @@ extraction: regex   # 정규식 근사
 signature: "(step)"
 role: "(사용자가 손댔으면 보존)."
 role_source: banner
-version: "0.7.4"
-loc: "pipeline.js:3036-3036"
+version: "0.7.5"
+loc: "pipeline.js:3040-3040"
 
 # ── 입출력 ──
 inputs:
@@ -32,7 +32,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.4-gen"
+timestamp: "0.7.5-gen"
 ---
 
 ## 역할

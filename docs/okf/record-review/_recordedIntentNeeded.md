@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(code)"
 role: "월/분기/연/날짜 리터럴을 값·수식에 박은 조각 감지 — LLM 이 intentNeeded 를 안 달아도"
 role_source: banner
-version: "0.7.4"
+version: "0.7.5"
 loc: "record-review.js:506-506"
 
 # ── 입출력 ──
@@ -31,7 +31,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.4-gen"
+timestamp: "0.7.5-gen"
 ---
 
 ## 역할

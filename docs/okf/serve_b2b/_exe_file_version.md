@@ -7,8 +7,8 @@ extraction: ast
 signature: "(exe_path)"
 role: "윈도우 exe 의 파일 버전 리소스를 읽는다(파일 속성 → 자세히 → 파일 버전)."
 role_source: docstring
-version: "0.7.4"
-loc: "serve_b2b.py:200-224"
+version: "0.7.5"
+loc: "serve_b2b.py:207-231"
 
 # ── 입출력 ──
 inputs:
@@ -48,7 +48,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.4-gen"
+timestamp: "0.7.5-gen"
 ---
 
 ## 역할

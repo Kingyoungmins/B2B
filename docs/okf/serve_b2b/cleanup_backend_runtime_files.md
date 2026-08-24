@@ -7,8 +7,8 @@ extraction: ast
 signature: "()"
 role: "Delete runtime-only result/snapshot files created under BACKEND_DIR."
 role_source: docstring
-version: "0.7.4"
-loc: "serve_b2b.py:474-525"
+version: "0.7.5"
+loc: "serve_b2b.py:481-532"
 
 # ── 입출력 ──
 inputs: []
@@ -52,7 +52,7 @@ reads:
   - "RESULTS"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.4-gen"
+timestamp: "0.7.5-gen"
 ---
 
 ## 역할

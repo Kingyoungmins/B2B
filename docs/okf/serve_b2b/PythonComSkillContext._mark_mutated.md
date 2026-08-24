@@ -8,8 +8,8 @@ class: PythonComSkillContext
 signature: "(self, ws)"
 role: "이 쓰기가 '어느 워크북'을 바꿨는지 기록한다. self._wb 가 아니라 시트의 부모를 본다 —"
 role_source: docstring
-version: "0.7.4"
-loc: "serve_b2b.py:11542-11555"
+version: "0.7.5"
+loc: "serve_b2b.py:11797-11810"
 
 # ── 입출력 ──
 inputs:
@@ -35,12 +35,13 @@ calls_external:
   - "setdefault"
   - "str"
 called_by:
+  - "PythonComSkillContext._filter_to_sheet_native"
   - "PythonComSkillContext._journal_save"
 reads:
   - "self._shared"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.4-gen"
+timestamp: "0.7.5-gen"
 ---
 
 ## 역할
@@ -51,7 +52,7 @@ timestamp: "0.7.4-gen"
 
 ## 관계
 - 호출: `add`, `append`, `normalize`
-- 피호출(영향 전파 경로): `PythonComSkillContext._journal_save`
+- 피호출(영향 전파 경로): `PythonComSkillContext._filter_to_sheet_native`, `PythonComSkillContext._journal_save`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

@@ -7,8 +7,8 @@ extraction: ast
 signature: "(left, top, width, height, browser_hwnd=None, client_left=None, client_top=None, client_width=None, client_height=None, viewport_width=None, viewport_height=None)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
-version: "0.7.4"
-loc: "serve_b2b.py:3815-3838"
+version: "0.7.5"
+loc: "serve_b2b.py:3919-3942"
 
 # ── 입출력 ──
 inputs:
@@ -47,7 +47,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.4-gen"
+timestamp: "0.7.5-gen"
 ---
 
 ## 역할

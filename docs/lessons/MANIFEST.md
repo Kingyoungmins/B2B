@@ -69,3 +69,4 @@ Generated from selected lesson documents in B2B_ver0.5.6 ~ B2B_ver0.5.9.
 | `50_soft_refresh_loses_runner_mapping.md` | 5320 |
 | `51_live_final_snapshot_instant_restore.md` | 5751 |
 | `52_pivot_header_row_kwarg_alias.md` | 4930 |
+| `53_trace_loss_misdiagnosis_and_defensive_overreach.md` | 6595 |

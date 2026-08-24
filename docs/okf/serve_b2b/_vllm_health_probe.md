@@ -7,8 +7,8 @@ extraction: ast
 signature: "(base='', timeout=2.0)"
 role: "vLLM 도달성 프로브 — /v1/models 를 짧은 타임아웃으로 확인(캐시 30s)."
 role_source: docstring
-version: "0.7.4"
-loc: "serve_b2b.py:6923-6945"
+version: "0.7.5"
+loc: "serve_b2b.py:7120-7142"
 
 # ── 입출력 ──
 inputs:
@@ -42,7 +42,7 @@ reads:
   - "_VLLM_PROBE_TTL"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.4-gen"
+timestamp: "0.7.5-gen"
 ---
 
 ## 역할

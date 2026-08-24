@@ -8,8 +8,8 @@ class: PythonComSkillContext
 signature: "(self, src_sheet, src_range, dst_sheet, dst_cell, src_book=None, dst_book=None, values_only=False)"
 role: "[복붙 캡처 재생] 사용자가 라이브 Excel에서 Ctrl+C/Ctrl+V 한 동작을 그대로 재현한다."
 role_source: docstring
-version: "0.7.4"
-loc: "serve_b2b.py:12004-12109"
+version: "0.7.5"
+loc: "serve_b2b.py:12259-12364"
 
 # ── 입출력 ──
 inputs:
@@ -83,7 +83,7 @@ reads:
   - "self.book"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.4-gen"
+timestamp: "0.7.5-gen"
 ---
 
 ## 역할

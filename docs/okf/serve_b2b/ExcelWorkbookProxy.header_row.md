@@ -8,8 +8,8 @@ class: ExcelWorkbookProxy
 signature: "(self, sheet_or_name=None, header_rows=20)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
-version: "0.7.4"
-loc: "serve_b2b.py:15936-15937"
+version: "0.7.5"
+loc: "serve_b2b.py:16341-16342"
 
 # ── 입출력 ──
 inputs:
@@ -34,6 +34,7 @@ called_by:
   - "ExcelSkillContext.pivot"
   - "OpenpyxlSkillContext.data_start_row"
   - "OpenpyxlSkillContext.pivot"
+  - "PythonComSkillContext._filter_to_sheet_native"
   - "PythonComSkillContext._resolve_col"
   - "PythonComSkillContext.add_total_row"
   - "PythonComSkillContext.append_same_format_sheets"
@@ -51,7 +52,7 @@ reads:
   - "self._ctx"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.4-gen"
+timestamp: "0.7.5-gen"
 ---
 
 ## 역할
@@ -62,7 +63,7 @@ timestamp: "0.7.4-gen"
 
 ## 관계
 - 호출: 없음
-- 피호출(영향 전파 경로): `ExcelSkillContext.data_start_row`, `ExcelSkillContext.pivot`, `OpenpyxlSkillContext.data_start_row`, `OpenpyxlSkillContext.pivot`, `PythonComSkillContext._resolve_col`, `PythonComSkillContext.add_total_row`, `PythonComSkillContext.append_same_format_sheets`, `PythonComSkillContext.copy_col`, `PythonComSkillContext.dedupe`, `PythonComSkillContext.fill_sum_col`, `PythonComSkillContext.find_header`, `PythonComSkillContext.lookup`, `PythonComSkillContext.move_col_clear`, `PythonComSkillContext.split_column`, `PythonComSkillContext.sum_column`, `PythonComSkillContext.sum_lookup`, `PythonComSkillContext.sum_where`
+- 피호출(영향 전파 경로): `ExcelSkillContext.data_start_row`, `ExcelSkillContext.pivot`, `OpenpyxlSkillContext.data_start_row`, `OpenpyxlSkillContext.pivot`, `PythonComSkillContext._filter_to_sheet_native`, `PythonComSkillContext._resolve_col`, `PythonComSkillContext.add_total_row`, `PythonComSkillContext.append_same_format_sheets`, `PythonComSkillContext.copy_col`, `PythonComSkillContext.dedupe`, `PythonComSkillContext.fill_sum_col`, `PythonComSkillContext.find_header`, `PythonComSkillContext.lookup`, `PythonComSkillContext.move_col_clear`, `PythonComSkillContext.split_column`, `PythonComSkillContext.sum_column`, `PythonComSkillContext.sum_lookup`, `PythonComSkillContext.sum_where`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

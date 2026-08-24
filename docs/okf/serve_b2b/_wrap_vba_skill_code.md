@@ -7,8 +7,8 @@ extraction: ast
 signature: "(code, entry)"
 role: "사용자 VBA를 내부 Sub로 바꾸고, 런타임 오류를 팝업 대신 상태값으로 전달하는 래퍼를 붙인다."
 role_source: docstring
-version: "0.7.4"
-loc: "serve_b2b.py:7842-7895"
+version: "0.7.5"
+loc: "serve_b2b.py:8039-8092"
 
 # ── 입출력 ──
 inputs:
@@ -39,7 +39,7 @@ reads:
   - "VBA_SKILL_ENTRY"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.4-gen"
+timestamp: "0.7.5-gen"
 ---
 
 ## 역할

@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(text)"
 role: "[0.5.18] 범위/셀을 '값으로/원문 텍스트 그대로' 복사 → ctx.copy_values(서식 보존, 수식 시프트 없음). ctx.copy 는"
 role_source: banner
-version: "0.7.4"
+version: "0.7.5"
 loc: "chat-ui.js:861-861"
 
 # ── 입출력 ──
@@ -34,7 +34,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.4-gen"
+timestamp: "0.7.5-gen"
 ---
 
 ## 역할

@@ -7,8 +7,8 @@ extraction: ast
 signature: "(data, row0, col0)"
 role: "write_formulas 로 쓰려는 수식 중 '자기 셀'을 참조하는 것의 주소 목록(예: W3 에 =IF(W3<>\"\",W3,…))."
 role_source: docstring
-version: "0.7.4"
-loc: "serve_b2b.py:11297-11331"
+version: "0.7.5"
+loc: "serve_b2b.py:11496-11530"
 
 # ── 입출력 ──
 inputs:
@@ -47,7 +47,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.4-gen"
+timestamp: "0.7.5-gen"
 ---
 
 ## 역할

@@ -7,8 +7,8 @@ extraction: ast
 signature: "(r1c1)"
 role: "Excel 'Link' 포맷의 R1C1 범위 표기를 A1 로 변환. Link 포맷은 항상 R1C1 이다."
 role_source: docstring
-version: "0.7.4"
-loc: "serve_b2b.py:10851-10892"
+version: "0.7.5"
+loc: "serve_b2b.py:11050-11091"
 
 # ── 입출력 ──
 inputs:
@@ -43,7 +43,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.4-gen"
+timestamp: "0.7.5-gen"
 ---
 
 ## 역할

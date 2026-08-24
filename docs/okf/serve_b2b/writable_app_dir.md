@@ -7,8 +7,8 @@ extraction: ast
 signature: "()"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
-version: "0.7.4"
-loc: "serve_b2b.py:274-280"
+version: "0.7.5"
+loc: "serve_b2b.py:281-287"
 
 # ── 입출력 ──
 inputs: []
@@ -31,12 +31,13 @@ calls_external:
   - "resolve"
   - "sys"
 called_by:
+  - "_start_log_sync"
   - "default_logic_backup_dir"
   - "default_output_dir"
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.4-gen"
+timestamp: "0.7.5-gen"
 ---
 
 ## 역할
@@ -47,7 +48,7 @@ timestamp: "0.7.4-gen"
 
 ## 관계
 - 호출: 없음
-- 피호출(영향 전파 경로): `default_logic_backup_dir`, `default_output_dir`
+- 피호출(영향 전파 경로): `_start_log_sync`, `default_logic_backup_dir`, `default_output_dir`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

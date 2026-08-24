@@ -8,8 +8,8 @@ class: PythonComSkillContext
 signature: "(self, sheet, src, dst, header_row=None, clear_source=True)"
 role: "한 열의 내용(헤더+데이터+서식+세로병합)을 다른 열로 옮기고 원래 열은 '비운다'(열 구조는 유지 —"
 role_source: docstring
-version: "0.7.4"
-loc: "serve_b2b.py:12986-13029"
+version: "0.7.5"
+loc: "serve_b2b.py:13391-13434"
 
 # ── 입출력 ──
 inputs:
@@ -67,7 +67,7 @@ reads:
   - "self.last_row"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.4-gen"
+timestamp: "0.7.5-gen"
 ---
 
 ## 역할

@@ -7,8 +7,8 @@ extraction: ast
 signature: "(code)"
 role: "녹화 VBA 에서 '절대참조 재현이 불안정한' 패턴을 감지해 사용자 경고를 만든다."
 role_source: docstring
-version: "0.7.4"
-loc: "serve_b2b.py:6684-6714"
+version: "0.7.5"
+loc: "serve_b2b.py:6881-6911"
 
 # ── 입출력 ──
 inputs:
@@ -33,7 +33,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.4-gen"
+timestamp: "0.7.5-gen"
 ---
 
 ## 역할

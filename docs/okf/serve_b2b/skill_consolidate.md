@@ -7,8 +7,8 @@ extraction: ast
 signature: "(payload, base='')"
 role: "녹화 스킬 코드를 '기존 ctx 헬퍼'로 최대한 통합(등가 게이트 통과 시에만)."
 role_source: docstring
-version: "0.7.4"
-loc: "serve_b2b.py:6966-6987"
+version: "0.7.5"
+loc: "serve_b2b.py:7163-7184"
 
 # ── 입출력 ──
 inputs:
@@ -39,7 +39,7 @@ reads:
   - "VLLM_BASE"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.4-gen"
+timestamp: "0.7.5-gen"
 ---
 
 ## 역할

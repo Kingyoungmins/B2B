@@ -7,8 +7,8 @@ extraction: ast
 signature: "()"
 role: "트레이스 로그 저장 폴더 — 프로즌/개발 무관하게 항상 %LOCALAPPDATA%\\B2B_logs 로 고정."
 role_source: docstring
-version: "0.7.4"
-loc: "serve_b2b.py:283-293"
+version: "0.7.5"
+loc: "serve_b2b.py:290-300"
 
 # ── 입출력 ──
 inputs: []
@@ -30,11 +30,12 @@ calls_external:
   - "str"
 called_by:
   - "_perf_trace_path"
+  - "_start_log_sync"
   - "_vba_trace_path"
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.4-gen"
+timestamp: "0.7.5-gen"
 ---
 
 ## 역할
@@ -45,7 +46,7 @@ timestamp: "0.7.4-gen"
 
 ## 관계
 - 호출: 없음
-- 피호출(영향 전파 경로): `_perf_trace_path`, `_vba_trace_path`
+- 피호출(영향 전파 경로): `_perf_trace_path`, `_start_log_sync`, `_vba_trace_path`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

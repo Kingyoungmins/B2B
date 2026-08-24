@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(value)"
 role: "칩에 보여줄 라벨: 10자까지는 그대로, 넘으면 10자 + …(전체 이름은 title 툴팁으로)."
 role_source: banner
-version: "0.7.4"
+version: "0.7.5"
 loc: "drop-handling.js:1595-1595"
 
 # ── 입출력 ──
@@ -30,7 +30,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.4-gen"
+timestamp: "0.7.5-gen"
 ---
 
 ## 역할

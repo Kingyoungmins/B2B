@@ -7,8 +7,8 @@ extraction: ast
 signature: "(app, wb=None)"
 role: "Close/Quit 직전에 Excel 이 빈 회색 top-level 창을 복원하지 못하게 먼저 숨긴다."
 role_source: docstring
-version: "0.7.4"
-loc: "serve_b2b.py:18741-18763"
+version: "0.7.5"
+loc: "serve_b2b.py:19146-19168"
 
 # ── 입출력 ──
 inputs:
@@ -32,7 +32,7 @@ called_by: []
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.4-gen"
+timestamp: "0.7.5-gen"
 ---
 
 ## 역할

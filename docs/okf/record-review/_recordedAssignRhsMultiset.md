@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(code)"
 role: "[데이터 보존 검증용] 코드에서 .Value/.Formula/.FormulaR1C1 대입의 우변(리터럴)을 멀티셋으로"
 role_source: banner
-version: "0.7.4"
+version: "0.7.5"
 loc: "record-review.js:513-513"
 
 # ── 입출력 ──
@@ -33,7 +33,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.4-gen"
+timestamp: "0.7.5-gen"
 ---
 
 ## 역할

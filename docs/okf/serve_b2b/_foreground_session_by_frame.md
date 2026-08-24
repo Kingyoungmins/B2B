@@ -7,8 +7,8 @@ extraction: ast
 signature: "()"
 role: "포그라운드 창이 우리 라이브 세션 프레임이면 그 세션을 반환."
 role_source: docstring
-version: "0.7.4"
-loc: "serve_b2b.py:6572-6594"
+version: "0.7.5"
+loc: "serve_b2b.py:6769-6791"
 
 # ── 입출력 ──
 inputs: []
@@ -33,7 +33,7 @@ reads:
   - "EXCEL_SESSIONS"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.4-gen"
+timestamp: "0.7.5-gen"
 ---
 
 ## 역할

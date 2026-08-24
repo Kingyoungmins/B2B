@@ -8,8 +8,8 @@ class: B2BHandler
 signature: "(self, data)"
 role: "열기(수 초 소요)가 최소화 '이후'에 끝나면 hide-all 을 이미 지나쳐 창이 화면에 남는다"
 role_source: docstring
-version: "0.7.4"
-loc: "serve_b2b.py:1962-1972"
+version: "0.7.5"
+loc: "serve_b2b.py:2062-2072"
 
 # ── 입출력 ──
 inputs:
@@ -38,7 +38,7 @@ reads:
   - "HOST_MINIMIZED"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.4-gen"
+timestamp: "0.7.5-gen"
 ---
 
 ## 역할

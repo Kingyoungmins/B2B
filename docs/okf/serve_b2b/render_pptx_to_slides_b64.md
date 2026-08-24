@@ -7,8 +7,8 @@ extraction: ast
 signature: "(pptx_path, max_slides=40)"
 role: "PowerPoint COM 으로 슬라이드를 PNG 로 렌더해 base64 로 돌려준다. Excel STA 와 섞이지 않도록"
 role_source: docstring
-version: "0.7.4"
-loc: "serve_b2b.py:1143-1208"
+version: "0.7.5"
+loc: "serve_b2b.py:1150-1215"
 
 # ── 입출력 ──
 inputs:
@@ -62,7 +62,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.4-gen"
+timestamp: "0.7.5-gen"
 ---
 
 ## 역할

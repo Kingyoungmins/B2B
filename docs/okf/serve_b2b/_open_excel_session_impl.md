@@ -7,8 +7,8 @@ extraction: ast
 signature: "(path, name=None, workbook_id=None, result_id=None, read_only_mirror=False, left=None, top=None, width=None, height=None, client_left=None, client_top=None, client_width=None, client_height=None, viewport_width=None, viewport_height=None, browser_title=None, native_parent_hwnd=None, native_host_hwnd=None, native_overlay=False, live_editable=False, defer_visible=False, from_state_sig=None)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
-version: "0.7.4"
-loc: "serve_b2b.py:5266-5683"
+version: "0.7.5"
+loc: "serve_b2b.py:5463-5880"
 
 # ── 입출력 ──
 inputs:
@@ -125,7 +125,7 @@ writes:
   - "EXCEL_SESSIONS"
   - "LIVE_RESTORE_SUPPRESSED"
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.4-gen"
+timestamp: "0.7.5-gen"
 ---
 
 ## 역할

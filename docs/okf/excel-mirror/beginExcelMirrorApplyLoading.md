@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(message, options = {})"
 role: "적용 시작: 모든 미러 창을 숨기고(park) 네이티브 패널의 로딩 애니메이션을 돌린다."
 role_source: banner
-version: "0.7.4"
+version: "0.7.5"
 loc: "excel-mirror.js:1312-1312"
 
 # ── 입출력 ──
@@ -41,11 +41,13 @@ calls_external:
   - "String"
   - "async"
   - "clearInterval"
+  - "filter"
   - "forceRestart"
+  - "join"
+  - "map"
   - "max"
   - "now"
   - "setInterval"
-  - "shift"
   - "slice"
 called_by:
   - "_reapplyVbaPipelineToLiveImpl"
@@ -63,7 +65,7 @@ writes:
   - "excelMirror.applyOpenLabels"
   - "excelMirror.applying"
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.4-gen"
+timestamp: "0.7.5-gen"
 ---
 
 ## 역할

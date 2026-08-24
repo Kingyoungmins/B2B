@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(excelId)"
 role: "[중단 자체 멈춤 수정] 협조적 복귀가 유예 내 안 끝날 때의 강제 중단 — '초기화' 버튼과 동일한"
 role_source: banner
-version: "0.7.4"
+version: "0.7.5"
 loc: "pipeline.js:1917-1917"
 
 # ── 입출력 ──
@@ -31,7 +31,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.4-gen"
+timestamp: "0.7.5-gen"
 ---
 
 ## 역할

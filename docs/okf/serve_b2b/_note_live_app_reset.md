@@ -7,7 +7,7 @@ extraction: ast
 signature: "(reason, **extra)"
 role: "[진단] 공유 라이브 Excel 인스턴스가 리셋/종료되는 순간을 남긴다. 녹화 중(NATIVE_RECORDING.active)"
 role_source: docstring
-version: "0.7.4"
+version: "0.7.5"
 loc: "serve_b2b.py:91-102"
 
 # ── 입출력 ──
@@ -41,7 +41,7 @@ reads:
   - "NATIVE_RECORDING"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.4-gen"
+timestamp: "0.7.5-gen"
 ---
 
 ## 역할

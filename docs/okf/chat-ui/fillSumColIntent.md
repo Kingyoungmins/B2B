@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(text)"
 role: "[0.5.18] '합계 열에 여러 열 합계 수식 채우기'(병합 그룹 단위) → ctx.fill_sum_col. 단순 =D+E 를 헤더/라벨행까지"
 role_source: banner
-version: "0.7.4"
+version: "0.7.5"
 loc: "chat-ui.js:906-906"
 
 # ── 입출력 ──
@@ -33,7 +33,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.4-gen"
+timestamp: "0.7.5-gen"
 ---
 
 ## 역할

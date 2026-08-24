@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(raw)"
 role: "(versionTest/main.py 는 /version 과 /v1/version 을 모두 받는다 — curl 로도 그대로 확인 가능)"
 role_source: banner
-version: "0.7.4"
+version: "0.7.5"
 loc: "config.js:115-115"
 
 # ── 입출력 ──
@@ -32,7 +32,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.4-gen"
+timestamp: "0.7.5-gen"
 ---
 
 ## 역할

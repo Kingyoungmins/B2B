@@ -7,8 +7,8 @@ extraction: ast
 signature: "(groups, reset_excel_ids=None, view_sheet=None, entry=None, output_mode='sync', state_sig=None)"
 role: "[0.5.15 백그라운드 전체실행] 격리 인스턴스 '1개'에서 관여 파일 전부를 '원본'부터 열고, 전 그룹·스텝을"
 role_source: docstring
-version: "0.7.4"
-loc: "serve_b2b.py:10411-10840"
+version: "0.7.5"
+loc: "serve_b2b.py:10610-11039"
 
 # ── 입출력 ──
 inputs:
@@ -123,7 +123,7 @@ writes:
   - "PIPELINE_PROGRESS"
   - "RESULTS"
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.4-gen"
+timestamp: "0.7.5-gen"
 ---
 
 ## 역할

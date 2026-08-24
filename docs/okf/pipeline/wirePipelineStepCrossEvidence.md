@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(stepCross, sourceSteps)"
 role: "[교차파일 런타임 증거 2026-08-12] 정적 탐지는 코드 문자열에서 파일명을 찾는다. 그래서 파일명이"
 role_source: banner
-version: "0.7.4"
+version: "0.7.5"
 loc: "pipeline.js:1252-1252"
 
 # ── 입출력 ──
@@ -38,7 +38,7 @@ reads:
   - "state.pipeline"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.4-gen"
+timestamp: "0.7.5-gen"
 ---
 
 ## 역할
