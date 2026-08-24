@@ -215,19 +215,33 @@ shutil.rmtree(work, ignore_errors=True)
 def test_review_fixes():
     import log_sync as L
     print("[리뷰] 수집 서버 전환 / 종료 플러시 / 비정상 응답")
-    L.update_config({"upstreamUrl": "http://a.example"})
-    L._STATE["sessionAcked"] = True
-    L._STATE["offsets"] = {"x.log": 800}
-    L._STATE["sentBytes"] = 800
-    L.update_config({"upstreamUrl": "http://b.example"})
+    # 판정 기준은 '실효 주소'(환경변수 > 화면설정 > 기본값)다. 이 테스트 파일은 위에서
+    # B2B_LOG_SYNC_URL 을 고정해 두므로, 그 상태로는 화면 설정을 바꿔도 실효 주소가 안 바뀐다
+    # — 그게 정상 동작이다(환경변수로 고정한 서버를 화면이 못 가로채야 한다). 먼저 그걸 확인하고,
+    # 환경변수를 잠시 걷어낸 상태에서 '진짜 주소 변경'을 검증한다.
+    _saved_env = os.environ.pop("B2B_LOG_SYNC_URL", None)
+    try:
+        L._CONFIG["upstreamUrl"] = ""
+        L.update_config({"upstreamUrl": "http://a.example"})
+        L._STATE["sessionAcked"] = True
+        L._STATE["offsets"] = {"x.log": 800}
+        L._STATE["sentBytes"] = 800
+        L.update_config({"upstreamUrl": "http://b.example"})
     # 주소가 바뀌면 새 서버에선 처음부터다. 예전엔 offset=800 부터 붙어
     # session/start 없는 세션 + 앞 800바이트가 빠진 로그가 저장됐다.
-    check("서버를 바꾸면 세션을 다시 연다", L._STATE["sessionAcked"] is False)
-    check("서버를 바꾸면 오프셋을 버린다(앞부분 유실 방지)", L._STATE["offsets"] == {})
-    check("서버를 바꾸면 누적 바이트도 초기화", L._STATE["sentBytes"] == 0)
+        check("서버를 바꾸면 세션을 다시 연다", L._STATE["sessionAcked"] is False)
+        check("서버를 바꾸면 오프셋을 버린다(앞부분 유실 방지)", L._STATE["offsets"] == {})
+        check("서버를 바꾸면 누적 바이트도 초기화", L._STATE["sentBytes"] == 0)
+        L._STATE["offsets"] = {"x.log": 800}
+        L.update_config({"upstreamUrl": "http://b.example"})
+        check("같은 주소면 이어서 보낸다(불필요한 재전송 없음)", L._STATE["offsets"] == {"x.log": 800})
+    finally:
+        if _saved_env is not None:
+            os.environ["B2B_LOG_SYNC_URL"] = _saved_env
+    # 환경변수가 주소를 고정하면 화면 설정을 바꿔도 실효 주소가 그대로 — 초기화하면 안 된다.
     L._STATE["offsets"] = {"x.log": 800}
-    L.update_config({"upstreamUrl": "http://b.example"})
-    check("같은 주소면 이어서 보낸다(불필요한 재전송 없음)", L._STATE["offsets"] == {"x.log": 800})
+    L.update_config({"upstreamUrl": "http://somewhere-else.example"})
+    check("환경변수로 고정된 주소는 화면이 못 바꾼다(오프셋 보존)", L._STATE["offsets"] == {"x.log": 800})
 
     # 주기 스레드가 tick() 안에 있으면 예전엔 종료 플러시가 조용히 건너뛰어졌다.
     import threading as _th, time as _t

@@ -122,22 +122,20 @@ def config():
 def update_config(values):
     """화면(F9 개발자 설정)의 버전 서버 주소/키를 그대로 물려받는다.
 
-    사용자가 주소를 바꾸면 로그도 그 서버로 간다 — 두 곳에 따로 적게 하지 않기 위해서다."""
+    사용자가 주소를 바꾸면 로그도 그 서버로 간다 — 두 곳에 따로 적게 하지 않기 위해서다.
+
+    [코드리뷰 2026-08-24] 주소가 '실제로' 바뀌면 세션을 새로 열어야 한다. 예전엔 sessionAcked 와
+    바이트 오프셋을 그대로 들고 가서, 새 서버에 session/start 없이 offset=800 부터 붙었다 —
+    메타데이터 없는 세션 + 앞부분이 통째로 빠진 로그가 남는다.
+    판정은 반드시 '실효 주소'(환경변수 > 화면설정 > 기본값)의 적용 전후를 비교해야 한다.
+      · _CONFIG 만 보면 부팅 직후엔 비어 있어, 같은 주소를 처음 밀어넣는 순간 오프셋을 날린다.
+      · 환경변수로 주소가 고정된 환경에서는 화면 설정을 바꿔도 실효 주소가 그대로다 —
+        그때 초기화하면 멀쩡한 세션의 앞부분을 스스로 버린다."""
     with _LOCK:
+        before_url = config().get("upstreamUrl") or ""
         if isinstance(values, dict):
             if values.get("upstreamUrl"):
-                _new_url = _normalize_base(values.get("upstreamUrl"))
-                # [코드리뷰 2026-08-24] 주소가 '바뀌면' 세션은 새 서버에서 처음부터다.
-                # 예전엔 sessionAcked 와 바이트 오프셋을 그대로 들고 가서, 새 서버에
-                # session/start 없이 offset=800 부터 붙었다 — 메타데이터 없는 세션 +
-                # 앞부분이 통째로 빠진 로그가 저장된다(리뷰어가 실측 재현).
-                if _new_url and _new_url != _CONFIG.get("upstreamUrl"):
-                    _STATE["sessionAcked"] = False
-                    _STATE["offsets"] = {}
-                    _STATE["sentSkills"] = {}
-                    _STATE["capped"] = False
-                    _STATE["sentBytes"] = 0
-                _CONFIG["upstreamUrl"] = _new_url
+                _CONFIG["upstreamUrl"] = _normalize_base(values.get("upstreamUrl"))
             if values.get("apiKey"):
                 _CONFIG["apiKey"] = str(values.get("apiKey")).strip()
             if values.get("ingestKey"):
@@ -147,6 +145,13 @@ def update_config(values):
                     _CONFIG["interval"] = int(values.get("interval"))
                 except Exception:
                     pass
+        after_url = config().get("upstreamUrl") or ""
+        if after_url and after_url != before_url:
+            _STATE["sessionAcked"] = False
+            _STATE["offsets"] = {}
+            _STATE["sentSkills"] = {}
+            _STATE["capped"] = False
+            _STATE["sentBytes"] = 0
     _WAKE.set()
     return status()
 
@@ -327,7 +332,7 @@ def _ensure_session(timeout=15.0):
         "skillDir": ";".join(str(p) for p in _CONTEXT["skillDirs"]),
     }
     try:
-        result = _post("session/start", payload, timeout=timeout)
+        result = _as_result(_post("session/start", payload, timeout=timeout))
         with _LOCK:
             _STATE["sessionAcked"] = bool(result.get("ok"))
             if result.get("date"):
@@ -430,7 +435,7 @@ def _send_skill(path, timeout=20.0):
     return len(blob)
 
 
-def tick(timeout=15.0, wait_running=0.0):
+def tick(timeout=15.0, wait_running=0.0, deadline=None):
     """한 번 전송. 스레드에서도, 종료 직전에도 같은 함수를 쓴다.
 
     [코드리뷰 2026-08-24] wait_running — 주기 스레드가 마침 tick() 안에 있으면 예전엔
@@ -450,9 +455,15 @@ def tick(timeout=15.0, wait_running=0.0):
     try:
         _ensure_session(timeout=timeout)   # 실패해도 계속 — 서버가 폴더를 알아서 만든다
         moved = 0
+        # deadline 이 있으면(종료 경로) 파일 사이마다 확인하고 넘기면 즉시 손을 뗀다.
+        # 남은 분량은 다음 실행에서 이어 보내진다 — 종료를 붙잡는 것보다 그게 낫다.
         for path in _session_files():
+            if deadline is not None and time.time() >= deadline:
+                return moved
             moved += _send_log_file(path, timeout=timeout)
         for path in _session_skills():
+            if deadline is not None and time.time() >= deadline:
+                return moved
             moved += _send_skill(path, timeout=timeout)
         return moved
     except Exception as err:
@@ -524,15 +535,25 @@ def stop(reason="normal", timeout=6.0):
     _WAKE.set()
     if not config()["enabled"]:
         return status()
+    # [코드리뷰 2026-08-24] timeout 은 'HTTP 요청 하나'의 상한이지 총량이 아니었다. 로그 파일 N개 ×
+    # 조각 4개 + 스킬 zip 을 도는 동안 매 요청이 그 상한을 다 쓸 수 있어, 종료가 70~100초씩 걸렸다.
+    # 그 사이 os._exit 가 막혀 앱이 안 죽고 Excel 도 살아남는다(부모 사망 감시 경로에서 특히 나쁘다).
+    # 로그를 남기려다 앱 종료를 붙잡는 건 본말전도라 총 예산을 걸고 넘기면 그냥 포기한다.
+    _budget = max(1.0, float(timeout or 0.0))
+    _t0 = time.time()
     try:
-        # 주기 스레드가 돌고 있으면 그게 끝날 때까지 잠깐 기다렸다가 마지막 분량을 보낸다.
-        tick(timeout=timeout, wait_running=min(3.0, max(0.5, float(timeout) / 2.0)))
+        tick(timeout=min(timeout, 3.0),
+             wait_running=min(1.0, max(0.3, float(timeout) / 4.0)),
+             deadline=_t0 + _budget)
     except Exception:
         pass
+    if time.time() - _t0 >= _budget:
+        return status()          # 예산 소진 — session/end 도 생략하고 즉시 종료를 내준다
     try:
         _post("session/end", {"sessionId": _STATE["sessionId"], "user": _STATE["user"],
                               "date": _STATE["date"], "endedAt": _now_iso(),
-                              "reason": str(reason or "")}, timeout=timeout)
+                              "reason": str(reason or "")},
+              timeout=max(0.5, min(3.0, _budget - (time.time() - _t0))))
         _note_ok()
     except Exception as err:
         _note_fail(err)

@@ -2915,9 +2915,13 @@ function replaceLogicAt(stepId, newCode, newDescription, language, opts) {
         // (no-op 생략 — 서명 일치). 그 서명에는 꺼진 스텝과 라이브 대상이 아닌 스텝이 애초에
         // 안 들어가므로, 그런 스텝을 수정하면 실제로는 아무 일도 안 일어났는데 '적용됨'이 찍혔다.
         // 라이브에 실제로 반영될 수 있는 스텝일 때만 적용됨으로 친다.
+        // [코드리뷰 2026-08-24 정정] 처음엔 pipelineStepLiveLanguage 로 판정했는데, 그건 '라이브에
+        // 직접 적용 가능한 방언인가'를 보는 함수라 레거시 python 에 null 을 준다 — 그런데 이 분기
+        // (mustUseExcelBackend)가 존재하는 이유가 바로 그 레거시 스텝을 백엔드로 돌리기 위해서다.
+        // 그대로 두면 실제로 적용된 스텝이 '미적용(보류)'으로 찍히는 반대 방향 거짓말이 된다.
+        // 여기서 걸러야 하는 건 '재조정이 애초에 건드리지 않는 스텝' 즉 꺼진 스텝뿐이다.
         const _edited = (state.pipeline || []).find(s => s && s.id === stepId);
-        const _liveable = !!(_edited && isStepEnabled(_edited)
-          && typeof pipelineStepLiveLanguage === "function" && pipelineStepLiveLanguage(_edited));
+        const _liveable = !!(_edited && _edited.code && isStepEnabled(_edited));
         if (!_liveable) {
           setPipelineRuntimeStatus([stepId], "review", "수정됨 · 미적용(보류)");
           return { unapplied: true };

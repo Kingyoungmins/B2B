@@ -1332,14 +1332,24 @@ function beginExcelMirrorApplyLoading(message, options = {}) {
   // 바깥 잠금 구간(예: '결과를 라이브에 반영 중') 안에서 도는 내부 경로가 자기 end 로 바깥
   // 잠금을 먼저 열어 버렸다 — 작업이 한창인데 화면이 풀린다.
   excelMirror.applyDepth = (excelMirror.applyDepth || 0) + 1;
-  excelMirror.applyDepthTouchedAt = Date.now();   // 짝이 깨졌을 때의 강제 해제 판정용(아래 end 참조)
+  // [코드리뷰 2026-08-24] 예전엔 begin 마다 이 시각을 갱신했다. 그러면 스테일 판정이 '가장 안쪽'
+  // 잠금을 재는 셈이라, 3분 넘는 안쪽 단계가 끝나는 순간 바깥의 10분/30분짜리 잠금까지 강제로
+  // 풀어 버린다 — 작업이 한창인데 오버레이와 '작업 중단' 버튼이 사라진다(깊이 카운트를 넣어
+  // 막으려던 바로 그 사고를 되살리는 것). 가장 바깥 잠금이 열린 시각만 기억한다.
+  if (Number(excelMirror.applyDepth || 0) <= 1) excelMirror.applyDepthTouchedAt = Date.now();
   // [제보 2026-08-24] 실측 로그가 begin 12 / end 10 이었는데, '어느 begin 이 안 닫혔는지'를
   // 알 수단이 없어 누수 지점을 못 찾았다. 열려 있는 잠금의 라벨을 들고 있다가 강제 해제 때
   // 그대로 찍는다 — 다음 로그 한 줄로 범인이 지목된다(step.code.full 과 같은 접근).
   try {
     excelMirror.applyOpenLabels = excelMirror.applyOpenLabels || [];
     excelMirror.applyOpenLabels.push({ label: String(message || "").slice(0, 60), at: Date.now() });
-    if (excelMirror.applyOpenLabels.length > 20) excelMirror.applyOpenLabels.shift();
+    // 상한은 메모리 보호용일 뿐 — 앞에서 shift 로 버리면 end 의 pop 과 어긋나(짝이 밀려)
+    // depth_forced 가 엉뚱한 잠금을 범인으로 지목한다(abdc6bf0 가 고치려던 그 오진).
+    // 정상 중첩은 한 자릿수라 200 에 닿지 않는다. 닿았다면 그 자체가 비정상이므로 표시를 남긴다.
+    if (excelMirror.applyOpenLabels.length > 200) {
+      excelMirror.applyOpenLabels.length = 0;
+      excelMirror.applyOpenLabels.push({ label: "(중첩 200 초과 — 추적 초기화)", at: Date.now() });
+    }
   } catch (_) {}
   if (!excelMirror.applyBusyToken && typeof beginUiBusy === "function") {
     excelMirror.applyBusyToken = beginUiBusy(message || "적용 반영 중...", {

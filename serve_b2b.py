@@ -1354,6 +1354,17 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
         if self.path == "/api/log-sync/config":
             # 화면(F9)에 저장된 버전 서버 주소/키를 그대로 물려받는다 — 사용자가 주소를 바꾸면
             # 로그도 그 서버로 간다(두 곳에 따로 적게 하지 않는다).
+            #
+            # [코드리뷰 2026-08-24] 이 엔드포인트는 '로그와 스킬 zip 을 어디로 보낼지'를 정한다.
+            # 응답에 Access-Control-Allow-Origin: * 가 붙으므로, 막지 않으면 사용자가 아무 웹사이트만
+            # 열어도 그 사이트가 127.0.0.1 로 POST 해 전송 대상을 자기 서버로 돌릴 수 있다
+            # (업무 파일이 통째로 나간다). 우리 화면은 이 서버가 직접 내보내므로 Origin 이 없거나
+            # 우리 자신이다 — 그 외 Origin 은 거부한다. 다른 엔드포인트는 건드리지 않는다.
+            _origin = str(self.headers.get("Origin") or "").strip()
+            if _origin and not _is_own_origin(_origin):
+                _vba_trace("log_sync.config.rejected_origin", origin=_origin[:120])
+                self.send_json({"ok": False, "error": "cross-origin request rejected"}, status=403)
+                return
             payload = self.read_json_body() or {}
             try:
                 import log_sync
@@ -4541,6 +4552,26 @@ def _process_perf_snapshot(pid):
     except Exception as err:
         info["error"] = str(err)
     return info
+
+
+def _is_own_origin(origin):
+    """Origin 이 '이 서버 자신'인가. 우리 화면은 이 서버가 내보내므로 그것만 허용한다.
+
+    포트는 실행마다 달라지므로 실제 바인딩 포트와 대조한다(하드코딩하면 다음 실행에서 막힌다)."""
+    try:
+        from urllib.parse import urlsplit
+        parts = urlsplit(str(origin or "").strip())
+        if parts.scheme not in ("http", "https"):
+            return False
+        host = (parts.hostname or "").lower()
+        if host not in ("127.0.0.1", "localhost", "::1"):
+            return False
+        port = parts.port
+        if port is None:
+            return False
+        return int(port) == int(globals().get("PORT") or 0)
+    except Exception:
+        return False
 
 
 def _perf_trace(event, **fields):
