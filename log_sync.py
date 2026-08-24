@@ -126,7 +126,18 @@ def update_config(values):
     with _LOCK:
         if isinstance(values, dict):
             if values.get("upstreamUrl"):
-                _CONFIG["upstreamUrl"] = _normalize_base(values.get("upstreamUrl"))
+                _new_url = _normalize_base(values.get("upstreamUrl"))
+                # [코드리뷰 2026-08-24] 주소가 '바뀌면' 세션은 새 서버에서 처음부터다.
+                # 예전엔 sessionAcked 와 바이트 오프셋을 그대로 들고 가서, 새 서버에
+                # session/start 없이 offset=800 부터 붙었다 — 메타데이터 없는 세션 +
+                # 앞부분이 통째로 빠진 로그가 저장된다(리뷰어가 실측 재현).
+                if _new_url and _new_url != _CONFIG.get("upstreamUrl"):
+                    _STATE["sessionAcked"] = False
+                    _STATE["offsets"] = {}
+                    _STATE["sentSkills"] = {}
+                    _STATE["capped"] = False
+                    _STATE["sentBytes"] = 0
+                _CONFIG["upstreamUrl"] = _new_url
             if values.get("apiKey"):
                 _CONFIG["apiKey"] = str(values.get("apiKey")).strip()
             if values.get("ingestKey"):
@@ -186,6 +197,15 @@ def _now_iso():
 def _endpoint(path):
     cfg = config()
     return cfg["upstreamUrl"] + "/v1/logs/" + path.lstrip("/")
+
+
+def _as_result(value):
+    """[코드리뷰 2026-08-24] 서버가 dict 가 아닌 JSON(스칼라/배열)을 돌려주면 result.get 에서
+    AttributeError 가 나 tick() 전체가 죽었다 — 그 상태가 매 주기 반복된다(전송이 영영 멈춤).
+    dict 가 아니면 '실패한 응답'으로 정규화해 그 파일만 건너뛰고 다음 주기에 다시 시도한다."""
+    if isinstance(value, dict):
+        return value
+    return {"ok": False, "error": "unexpected response: " + str(value)[:120]}
 
 
 def _post(path, payload, timeout=15.0):
@@ -368,6 +388,7 @@ def _send_log_file(path, timeout=15.0):
         except Exception as err:
             _note_fail(err)               # 오프셋을 안 옮긴다 → 다음 주기에 같은 곳부터 재시도
             return sent
+        result = _as_result(result)
         if not result.get("ok"):
             _note_fail(RuntimeError(str(result.get("error") or result)[:200]))
             return sent
@@ -398,6 +419,7 @@ def _send_skill(path, timeout=20.0):
     except Exception as err:
         _note_fail(err)
         return 0
+    result = _as_result(result)
     if not result.get("ok"):
         _note_fail(RuntimeError(str(result.get("error") or result)[:200]))
         return 0
@@ -408,14 +430,23 @@ def _send_skill(path, timeout=20.0):
     return len(blob)
 
 
-def tick(timeout=15.0):
-    """한 번 전송. 스레드에서도, 종료 직전에도 같은 함수를 쓴다."""
+def tick(timeout=15.0, wait_running=0.0):
+    """한 번 전송. 스레드에서도, 종료 직전에도 같은 함수를 쓴다.
+
+    [코드리뷰 2026-08-24] wait_running — 주기 스레드가 마침 tick() 안에 있으면 예전엔
+    그냥 0 을 돌려주고 끝났다. 종료 직전 플러시가 그 길로 조용히 건너뛰어져 '마지막 구간'이
+    통째로 유실됐다(정작 사고 직전이라 제일 중요한 구간이다). 종료 경로는 잠깐 기다린다."""
     if not config()["enabled"] or _STATE["capped"]:
         return 0
-    with _LOCK:
-        if _STATE["running"]:
+    _deadline = time.time() + max(0.0, float(wait_running or 0.0))
+    while True:
+        with _LOCK:
+            if not _STATE["running"]:
+                _STATE["running"] = True
+                break
+        if time.time() >= _deadline:
             return 0
-        _STATE["running"] = True
+        time.sleep(0.05)
     try:
         _ensure_session(timeout=timeout)   # 실패해도 계속 — 서버가 폴더를 알아서 만든다
         moved = 0
@@ -494,7 +525,8 @@ def stop(reason="normal", timeout=6.0):
     if not config()["enabled"]:
         return status()
     try:
-        tick(timeout=timeout)
+        # 주기 스레드가 돌고 있으면 그게 끝날 때까지 잠깐 기다렸다가 마지막 분량을 보낸다.
+        tick(timeout=timeout, wait_running=min(3.0, max(0.5, float(timeout) / 2.0)))
     except Exception:
         pass
     try:

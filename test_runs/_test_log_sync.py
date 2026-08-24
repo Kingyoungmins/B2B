@@ -210,5 +210,57 @@ for raw, want in [("http://a/v1", "http://a"), ("http://a/version", "http://a"),
 
 server.shutdown()
 shutil.rmtree(work, ignore_errors=True)
+
+# ── [코드리뷰 2026-08-24] 데이터 유실 3건 — 동작으로 잠근다 ──────────────────
+def test_review_fixes():
+    import log_sync as L
+    print("[리뷰] 수집 서버 전환 / 종료 플러시 / 비정상 응답")
+    L.update_config({"upstreamUrl": "http://a.example"})
+    L._STATE["sessionAcked"] = True
+    L._STATE["offsets"] = {"x.log": 800}
+    L._STATE["sentBytes"] = 800
+    L.update_config({"upstreamUrl": "http://b.example"})
+    # 주소가 바뀌면 새 서버에선 처음부터다. 예전엔 offset=800 부터 붙어
+    # session/start 없는 세션 + 앞 800바이트가 빠진 로그가 저장됐다.
+    check("서버를 바꾸면 세션을 다시 연다", L._STATE["sessionAcked"] is False)
+    check("서버를 바꾸면 오프셋을 버린다(앞부분 유실 방지)", L._STATE["offsets"] == {})
+    check("서버를 바꾸면 누적 바이트도 초기화", L._STATE["sentBytes"] == 0)
+    L._STATE["offsets"] = {"x.log": 800}
+    L.update_config({"upstreamUrl": "http://b.example"})
+    check("같은 주소면 이어서 보낸다(불필요한 재전송 없음)", L._STATE["offsets"] == {"x.log": 800})
+
+    # 주기 스레드가 tick() 안에 있으면 예전엔 종료 플러시가 조용히 건너뛰어졌다.
+    import threading as _th, time as _t
+    L._CONFIG["upstreamUrl"] = "http://b.example"
+    L._STATE["capped"] = False
+    with L._LOCK:
+        L._STATE["running"] = True
+    t0 = _t.time()
+    check("안 기다리면 즉시 반환(기존 동작 보존)",
+          L.tick(timeout=1.0, wait_running=0.0) == 0 and _t.time() - t0 < 0.3)
+
+    def _release():
+        _t.sleep(0.4)
+        with L._LOCK:
+            L._STATE["running"] = False
+    _th.Thread(target=_release, daemon=True).start()
+    t0 = _t.time()
+    try:
+        L.tick(timeout=1.0, wait_running=2.0)
+    except Exception:
+        pass
+    check("종료 경로는 스레드가 비울 때까지 기다린다", _t.time() - t0 >= 0.35)
+    with L._LOCK:
+        L._STATE["running"] = False
+
+    # 서버가 dict 아닌 JSON 을 주면 result.get 에서 죽어 tick 전체가 매 주기 실패했다.
+    check("스칼라 응답을 실패로 정규화", L._as_result(123).get("ok") is False)
+    check("dict 응답은 그대로", L._as_result({"ok": True}).get("ok") is True)
+    check("None 도 안전", L._as_result(None).get("ok") is False)
+
+
+test_review_fixes()
+
+
 print("\n" + ("RESULT: ALL PASS" if fails == 0 else f"RESULT: {fails} FAIL"))
 sys.exit(1 if fails else 0)
