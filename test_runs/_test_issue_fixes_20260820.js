@@ -40,17 +40,27 @@ check("write_formulas 가 쓰기 전에 검사한다",
   /_bad = _self_referencing_formula_cells\(data, int\(anchor\.Row\), int\(anchor\.Column\)\)/.test(py));
 check("거부 메시지가 원인과 대안(read_formulas 로 읽어 되돌려 쓰기)을 말한다",
   /자기 자신을 참조하는 수식을 쓰려고 했습니다/.test(py) && /ctx\.read_formulas 로 현재 상태/.test(py));
-check("문자열 리터럴 속 우연한 주소는 제거 후 검사", /re\.sub\(r'"\[\^"\]\*"', '""', body\)/.test(py));
+// [2026-08-24 속도 수정] 리터럴 제거는 그대로지만 미리 컴파일해 재사용한다(셀마다 재컴파일 제거).
+check("문자열 리터럴 속 우연한 주소는 제거 후 검사",
+  /_lit = re\.compile\(r'"\[\^"\]\*"'\)/.test(py) && /_lit\.sub\('""', body\)/.test(py));
+check("정규식을 열마다 한 번만 컴파일한다(3만 셀 재컴파일 → 1573ms 로 느려지던 회귀 방지)",
+  /_pat_cache/.test(py) && /_pat_cache\[col_txt\] = rx/.test(py));
 
 // [행동 검증] 소스에 배포된 '바로 그 패턴 템플릿'을 꺼내 JS 정규식으로 같은 케이스를 돌린다
 // (파이썬 lookbehind/lookahead 문법이 JS 와 동일해 1:1 로 검증 가능).
 {
-  const m = py.match(/pat = r"(\(\?<!\[[^"]+?)" \+ re\.escape\(col_txt\) \+ r"(\\\$\?)" \+ row_txt \+ r"(\(\?!\[[^"]+?\))"/);
-  check("패턴 템플릿을 소스에서 추출했다", !!m, "pat = r\"...\" 형태를 찾지 못함");
+  // 열마다 한 번 컴파일하고 '참조된 행 번호'를 캡처해 비교하는 형태(2026-08-24 속도 수정 후).
+  const m = py.match(/re\.compile\(r"(\(\?<!\[[^"]+?)" \+ re\.escape\(col_txt\) \+ r"(\\\$\?)\(\\d\+\)(\(\?!\[[^"]+?\))"\)/);
+  check("패턴 템플릿을 소스에서 추출했다", !!m, "re.compile(r\"...\") 형태를 찾지 못함");
   if (m) {
-    const mk = (col, row) => new RegExp(m[1] + col.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + m[2] + row + m[3]);
+    const mk = (col) => new RegExp(m[1] + col.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + m[2] + "(\\d+)" + m[3], "g");
     const strip = s => s.replace(/"[^"]*"/g, '""');
-    const hit = (formula, col, row) => mk(col, row).test(strip(formula));
+    // 소스와 같은 판정 — 캡처한 행 번호가 '이 셀의 행'과 같을 때만 자기참조.
+    const hit = (formula, col, row) => {
+      const rx = mk(col); const scan = strip(formula);
+      let mm; while ((mm = rx.exec(scan))) { if (mm[1] === String(row)) return true; }
+      return false;
+    };
     check("자기 셀 참조를 잡는다: W3 에 =IF(W3<>\"\",W3,…)", hit('=IF(W3<>"", W3, IF(H3="국제", V3*1.0, ""))', "W", "3"));
     check("절대참조 자기 셀도 잡는다: W3 에 =$W$3+1", hit('=$W$3+1', "W", "3"));
     check("다른 열 참조는 통과: W3 에 =IF(OR(...K3...),V3*1.2,\"\")", !hit('=IF(OR(ISNUMBER(SEARCH("1대역", K3))), V3*1.2, "")', "W", "3"));

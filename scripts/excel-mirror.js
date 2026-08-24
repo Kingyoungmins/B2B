@@ -1323,6 +1323,14 @@ function beginExcelMirrorApplyLoading(message, options = {}) {
   // 잠금을 먼저 열어 버렸다 — 작업이 한창인데 화면이 풀린다.
   excelMirror.applyDepth = (excelMirror.applyDepth || 0) + 1;
   excelMirror.applyDepthTouchedAt = Date.now();   // 짝이 깨졌을 때의 강제 해제 판정용(아래 end 참조)
+  // [제보 2026-08-24] 실측 로그가 begin 12 / end 10 이었는데, '어느 begin 이 안 닫혔는지'를
+  // 알 수단이 없어 누수 지점을 못 찾았다. 열려 있는 잠금의 라벨을 들고 있다가 강제 해제 때
+  // 그대로 찍는다 — 다음 로그 한 줄로 범인이 지목된다(step.code.full 과 같은 접근).
+  try {
+    excelMirror.applyOpenLabels = excelMirror.applyOpenLabels || [];
+    excelMirror.applyOpenLabels.push({ label: String(message || "").slice(0, 60), at: Date.now() });
+    if (excelMirror.applyOpenLabels.length > 20) excelMirror.applyOpenLabels.shift();
+  } catch (_) {}
   if (!excelMirror.applyBusyToken && typeof beginUiBusy === "function") {
     excelMirror.applyBusyToken = beginUiBusy(message || "적용 반영 중...", {
       showDelayMs: 120,
@@ -1386,9 +1394,12 @@ function endExcelMirrorApplyLoading(options) {
     if (!stale && !(options && options.force)) return;
     traceClientUiEvent("excel.apply_loading.depth_forced", {
       depth: excelMirror.applyDepth, stale: !!stale, forced: !!(options && options.force),
+      // 안 닫힌 잠금의 라벨 — 여기가 누수 지점이다.
+      open: (excelMirror.applyOpenLabels || []).map(o => o && o.label).filter(Boolean).join(" | ").slice(0, 300),
     });
     excelMirror.applyDepth = 0;   // 짝이 깨진 것 — 여기서 정상화한다
   }
+  try { excelMirror.applyOpenLabels = []; } catch (_) {}   // 정상 해제 — 추적 목록 비움
   if (excelMirror.applyBusyToken && typeof endUiBusy === "function") {
     endUiBusy(excelMirror.applyBusyToken, { silentComplete: true });
     excelMirror.applyBusyToken = null;
