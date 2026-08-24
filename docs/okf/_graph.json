@@ -26505,6 +26505,7 @@
         "hideAllExcelMirrorWindows",
         "isNativeExcelShell",
         "publishNativeExcelLoading",
+        "push",
         "requestExcelApplyCancel",
         "showExcelApplyCancelButton",
         "tick",
@@ -26513,7 +26514,7 @@
       ],
       "side_effects": [
         "DOM/브라우저 전역 조작",
-        "상태 변경: excelMirror.applyBusyToken, excelMirror.applyDepth, excelMirror.applyDepthTouchedAt, excelMirror.applyLoadingTimer, excelMirror.applying",
+        "상태 변경: excelMirror.applyBusyToken, excelMirror.applyDepth, excelMirror.applyDepthTouchedAt, excelMirror.applyLoadingTimer, excelMirror.applyOpenLabels, excelMirror.applying",
         "타이머"
       ],
       "reads": [],
@@ -26522,6 +26523,7 @@
         "excelMirror.applyDepth",
         "excelMirror.applyDepthTouchedAt",
         "excelMirror.applyLoadingTimer",
+        "excelMirror.applyOpenLabels",
         "excelMirror.applying"
       ]
     },
@@ -26531,7 +26533,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "excel-mirror.js:1358-1358",
+      "loc": "excel-mirror.js:1366-1366",
       "signature": "()",
       "calls": [
         "publishNativeExcelLoading",
@@ -26549,7 +26551,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "excel-mirror.js:1370-1370",
+      "loc": "excel-mirror.js:1378-1378",
       "signature": "(options)",
       "calls": [
         "endUiBusy",
@@ -26559,13 +26561,14 @@
         "traceClientUiEvent"
       ],
       "side_effects": [
-        "상태 변경: excelMirror.applyBusyToken, excelMirror.applyDepth, excelMirror.applyLoadingTimer, excelMirror.applying, excelMirror.quietUntil"
+        "상태 변경: excelMirror.applyBusyToken, excelMirror.applyDepth, excelMirror.applyLoadingTimer, excelMirror.applyOpenLabels, excelMirror.applying, excelMirror.quietUntil"
       ],
       "reads": [],
       "writes": [
         "excelMirror.applyBusyToken",
         "excelMirror.applyDepth",
         "excelMirror.applyLoadingTimer",
+        "excelMirror.applyOpenLabels",
         "excelMirror.applying",
         "excelMirror.quietUntil"
       ]
@@ -26576,7 +26579,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "excel-mirror.js:1407-1407",
+      "loc": "excel-mirror.js:1418-1418",
       "signature": "(delay = 120, options = {})",
       "calls": [
         "isMissingExcelSessionError",
@@ -26597,7 +26600,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "excel-mirror.js:1417-1417",
+      "loc": "excel-mirror.js:1428-1428",
       "signature": "(activeFileId)",
       "calls": [
         "postExcelMirror",
@@ -26618,7 +26621,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "excel-mirror.js:1438-1438",
+      "loc": "excel-mirror.js:1449-1449",
       "signature": "(err)",
       "calls": [],
       "side_effects": [
@@ -26633,7 +26636,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "excel-mirror.js:1442-1442",
+      "loc": "excel-mirror.js:1453-1453",
       "signature": "()",
       "calls": [
         "excelAddressForRange",
@@ -26655,7 +26658,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "excel-mirror.js:1454-1454",
+      "loc": "excel-mirror.js:1465-1465",
       "signature": "(range)",
       "calls": [
         "excelCol"
@@ -26672,7 +26675,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "excel-mirror.js:1468-1468",
+      "loc": "excel-mirror.js:1479-1479",
       "signature": "(idx)",
       "calls": [
         "_excelCol"
@@ -26689,7 +26692,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "excel-mirror.js:1480-1480",
+      "loc": "excel-mirror.js:1491-1491",
       "signature": "()",
       "calls": [
         "currentExcelAddress",
@@ -26717,7 +26720,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "excel-mirror.js:1503-1503",
+      "loc": "excel-mirror.js:1514-1514",
       "signature": "()",
       "calls": [
         "currentExcelId",
@@ -26739,7 +26742,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "excel-mirror.js:1522-1522",
+      "loc": "excel-mirror.js:1533-1533",
       "signature": "()",
       "calls": [
         "currentExcelId",
@@ -26763,7 +26766,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "excel-mirror.js:1550-1550",
+      "loc": "excel-mirror.js:1561-1561",
       "signature": "()",
       "calls": [
         "currentExcelId",
@@ -26791,7 +26794,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "excel-mirror.js:1588-1588",
+      "loc": "excel-mirror.js:1599-1599",
       "signature": "()",
       "calls": [],
       "side_effects": [
@@ -26810,7 +26813,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "excel-mirror.js:1605-1605",
+      "loc": "excel-mirror.js:1616-1616",
       "signature": "(excelId)",
       "calls": [
         "fileIdForExcelMirrorId",
@@ -26837,7 +26840,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "excel-mirror.js:1626-1626",
+      "loc": "excel-mirror.js:1637-1637",
       "signature": "(excelId)",
       "calls": [
         "postExcelMirror",
@@ -26858,7 +26861,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "excel-mirror.js:1641-1641",
+      "loc": "excel-mirror.js:1652-1652",
       "signature": "(excelId, options = {})",
       "calls": [
         "fileIdForExcelMirrorId",
@@ -26888,7 +26891,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "excel-mirror.js:1692-1692",
+      "loc": "excel-mirror.js:1703-1703",
       "signature": "(sheet, address, options = {})",
       "calls": [
         "currentExcelMirrorTarget",
@@ -26921,7 +26924,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "excel-mirror.js:1717-1717",
+      "loc": "excel-mirror.js:1728-1728",
       "signature": "(range)",
       "calls": [
         "updateChatRangeReference"
@@ -26942,7 +26945,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "excel-mirror.js:1729-1729",
+      "loc": "excel-mirror.js:1740-1740",
       "signature": "(address, fileId, sheet)",
       "calls": [
         "excelAddressForRange",
@@ -26963,7 +26966,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "excel-mirror.js:1786-1786",
+      "loc": "excel-mirror.js:1797-1797",
       "signature": "(address)",
       "calls": [
         "colNameToIndex"
@@ -26980,7 +26983,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "excel-mirror.js:1792-1792",
+      "loc": "excel-mirror.js:1803-1803",
       "signature": "(address)",
       "calls": [
         "colNameToIndex"
@@ -26997,7 +27000,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "excel-mirror.js:1797-1797",
+      "loc": "excel-mirror.js:1808-1808",
       "signature": "(address)",
       "calls": [],
       "side_effects": [
@@ -27012,7 +27015,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "excel-mirror.js:1802-1802",
+      "loc": "excel-mirror.js:1813-1813",
       "signature": "(name)",
       "calls": [],
       "side_effects": [
@@ -27027,7 +27030,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "excel-mirror.js:1810-1810",
+      "loc": "excel-mirror.js:1821-1821",
       "signature": "()",
       "calls": [
         "$"
@@ -27044,7 +27047,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "excel-mirror.js:1817-1817",
+      "loc": "excel-mirror.js:1828-1828",
       "signature": "()",
       "calls": [],
       "side_effects": [
@@ -27059,7 +27062,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "excel-mirror.js:1822-1822",
+      "loc": "excel-mirror.js:1833-1833",
       "signature": "()",
       "calls": [],
       "side_effects": [
@@ -27074,7 +27077,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "excel-mirror.js:1827-1827",
+      "loc": "excel-mirror.js:1838-1838",
       "signature": "()",
       "calls": [
         "excelMirrorHostElement"
@@ -27091,7 +27094,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "excel-mirror.js:1866-1866",
+      "loc": "excel-mirror.js:1877-1877",
       "signature": "(excelId = currentExcelId()",
       "calls": [],
       "side_effects": [
@@ -27106,7 +27109,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "excel-mirror.js:1889-1889",
+      "loc": "excel-mirror.js:1900-1900",
       "signature": "(excelId = currentExcelId()",
       "calls": [],
       "side_effects": [
@@ -27121,7 +27124,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "excel-mirror.js:1919-1919",
+      "loc": "excel-mirror.js:1930-1930",
       "signature": "(excelId = currentExcelId()",
       "calls": [],
       "side_effects": [
@@ -27136,7 +27139,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "excel-mirror.js:1931-1931",
+      "loc": "excel-mirror.js:1942-1942",
       "signature": "(excelId)",
       "calls": [],
       "side_effects": [
@@ -27153,7 +27156,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "excel-mirror.js:1937-1937",
+      "loc": "excel-mirror.js:1948-1948",
       "signature": "(excelId = currentExcelId()",
       "calls": [],
       "side_effects": [
@@ -27168,7 +27171,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "excel-mirror.js:1953-1953",
+      "loc": "excel-mirror.js:1964-1964",
       "signature": "(excelId = currentExcelId()",
       "calls": [],
       "side_effects": [
@@ -27183,7 +27186,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "excel-mirror.js:1975-1975",
+      "loc": "excel-mirror.js:1986-1986",
       "signature": "(force = false)",
       "calls": [
         "currentExcelId",
@@ -27207,7 +27210,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "excel-mirror.js:1990-1990",
+      "loc": "excel-mirror.js:2001-2001",
       "signature": "(t)",
       "calls": [],
       "side_effects": [
@@ -27222,7 +27225,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "excel-mirror.js:2004-2004",
+      "loc": "excel-mirror.js:2015-2015",
       "signature": "()",
       "calls": [
         "currentExcelId",
@@ -27248,7 +27251,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "excel-mirror.js:2056-2056",
+      "loc": "excel-mirror.js:2067-2067",
       "signature": "(path, body, attempt = 0, options = {})",
       "calls": [
         "noteExcelComTimeout"
@@ -27266,7 +27269,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "excel-mirror.js:2118-2118",
+      "loc": "excel-mirror.js:2129-2129",
       "signature": "(kind, err)",
       "calls": [
         "isMissingExcelSessionError",
@@ -27286,7 +27289,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "excel-mirror.js:2171-2171",
+      "loc": "excel-mirror.js:2182-2182",
       "signature": "()",
       "calls": [
         "clearHideTimer",
@@ -27319,7 +27322,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "excel-mirror.js:2180-2180",
+      "loc": "excel-mirror.js:2191-2191",
       "signature": "()",
       "calls": [],
       "side_effects": [
@@ -27334,7 +27337,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "excel-mirror.js:2181-2181",
+      "loc": "excel-mirror.js:2192-2192",
       "signature": "()",
       "calls": [],
       "side_effects": [
@@ -27351,7 +27354,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "excel-mirror.js:2185-2185",
+      "loc": "excel-mirror.js:2196-2196",
       "signature": "(options = {})",
       "calls": [
         "hasSessions",
@@ -27374,7 +27377,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "excel-mirror.js:2196-2196",
+      "loc": "excel-mirror.js:2207-2207",
       "signature": "(delay = 180)",
       "calls": [
         "clearHideTimer",
@@ -27396,7 +27399,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "excel-mirror.js:2204-2204",
+      "loc": "excel-mirror.js:2215-2215",
       "signature": "(options = {})",
       "calls": [
         "clearHideTimer",
@@ -58598,6 +58601,11 @@
     },
     {
       "from": "beginExcelMirrorApplyLoading",
+      "to": "push",
+      "lang": "js"
+    },
+    {
+      "from": "beginExcelMirrorApplyLoading",
       "to": "requestExcelApplyCancel",
       "lang": "js"
     },
@@ -67949,7 +67957,7 @@
   ],
   "stats": {
     "functions": 1994,
-    "edges": 5594,
+    "edges": 5595,
     "by_lang": {
       "python": 640,
       "js": 1121,
