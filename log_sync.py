@@ -81,6 +81,7 @@ _STATE = {
     "lastOkAt": "",
     "serverPath": "",
     "capped": False,
+    "configGen": 0,        # 수집 서버가 바뀔 때마다 +1 — 전송 결과를 커밋할지 가르는 기준
 }
 _CONFIG = {"upstreamUrl": "", "apiKey": "", "ingestKey": "", "interval": 0}
 _CONTEXT = {"appVersion": "", "appDir": "", "logDirs": [], "skillDirs": [], "extraFiles": []}
@@ -147,11 +148,21 @@ def update_config(values):
                     pass
         after_url = config().get("upstreamUrl") or ""
         if after_url and after_url != before_url:
+            # [코드리뷰 2026-08-24] 세대 번호를 올린다. 초기화와 전송이 겹치면, 이미 날아간
+            # 요청이 돌아와 옛 오프셋을 되살려 새 서버 로그의 앞부분이 빈다 — 이 초기화가
+            # 막으려던 유실과 똑같은 모양이다. 전송 쪽은 커밋 직전에 세대를 확인해,
+            # 그 사이 주소가 바뀌었으면 결과를 버린다.
+            _STATE["configGen"] = int(_STATE.get("configGen") or 0) + 1
             _STATE["sessionAcked"] = False
             _STATE["offsets"] = {}
             _STATE["sentSkills"] = {}
             _STATE["capped"] = False
             _STATE["sentBytes"] = 0
+            # 새 서버에서는 회전 이력과 날짜도 처음부터다. 안 지우면 첫 업로드가 .r1 이름으로
+            # 들어가거나 이전 서버의 날짜 폴더에 쌓인다.
+            _STATE["rotations"] = {}
+            _STATE["date"] = ""
+            _STATE["serverPath"] = ""
     _WAKE.set()
     return status()
 
@@ -358,10 +369,21 @@ def _remote_name(path):
     return "%s.r%d%s" % (path.stem, n, path.suffix)
 
 
-def _send_log_file(path, timeout=15.0):
+def _over_total_budget():
+    """[코드리뷰 2026-08-24] MAX_TOTAL_BYTES 가 로그에만 걸려 있었다. auto_backup 은 편집할 때마다
+    zip 을 새로 만들어서, 스킬만으로 세션 상한을 훌쩍 넘겨 계속 올라간다(서버 300MB 에서야 막힌다)."""
+    return int(_STATE.get("sentBytes") or 0) >= MAX_TOTAL_BYTES
+
+
+def _send_log_file(path, timeout=15.0, deadline=None, gen=0):
     key = str(path)
     sent = 0
     for _ in range(MAX_CHUNKS_PER_FILE_PER_TICK):
+        # [코드리뷰 2026-08-24] 예산을 파일 사이에서만 봤더니, 파일당 4조각을 다 돌아
+        # 4초 예산이 15초까지 늘어났다(부모가 사라졌을 때 os._exit 가 그만큼 늦는다).
+        # 조각 사이에서도 확인한다 — 남은 분량은 다음 실행에서 이어 보내진다.
+        if deadline is not None and time.time() >= deadline:
+            return sent
         try:
             size = path.stat().st_size
         except Exception:
@@ -401,13 +423,15 @@ def _send_log_file(path, timeout=15.0):
         if result.get("capped"):
             return sent
         with _LOCK:
+            if int(_STATE.get("configGen") or 0) != gen:
+                return sent          # 보내는 사이 수집 서버가 바뀌었다 — 옛 오프셋을 되살리지 않는다
             _STATE["offsets"][key] = offset + len(blob)
             _STATE["sentBytes"] += len(blob)
         sent += len(blob)
     return sent
 
 
-def _send_skill(path, timeout=20.0):
+def _send_skill(path, timeout=20.0, deadline=None):
     try:
         blob = path.read_bytes()
         st = path.stat()
@@ -453,18 +477,25 @@ def tick(timeout=15.0, wait_running=0.0, deadline=None):
             return 0
         time.sleep(0.05)
     try:
+        _gen = int(_STATE.get("configGen") or 0)
+        if not _ensure_user():
+            return 0                       # 사용자명을 아직 못 구했다 — 다음 주기에 다시
         _ensure_session(timeout=timeout)   # 실패해도 계속 — 서버가 폴더를 알아서 만든다
         moved = 0
+        if deadline is not None and time.time() >= deadline:
+            return 0                       # 세션 여는 데 예산을 다 썼다 — 종료를 더 붙잡지 않는다
         # deadline 이 있으면(종료 경로) 파일 사이마다 확인하고 넘기면 즉시 손을 뗀다.
         # 남은 분량은 다음 실행에서 이어 보내진다 — 종료를 붙잡는 것보다 그게 낫다.
         for path in _session_files():
             if deadline is not None and time.time() >= deadline:
                 return moved
-            moved += _send_log_file(path, timeout=timeout)
+            moved += _send_log_file(path, timeout=timeout, deadline=deadline, gen=_gen)
         for path in _session_skills():
             if deadline is not None and time.time() >= deadline:
                 return moved
-            moved += _send_skill(path, timeout=timeout)
+            if _over_total_budget():
+                break                     # 세션 총량 상한 — 스킬도 로그와 같은 예산 안에서 보낸다
+            moved += _send_skill(path, timeout=timeout, deadline=deadline)
         return moved
     except Exception as err:
         _note_fail(err)
@@ -472,6 +503,21 @@ def tick(timeout=15.0, wait_running=0.0, deadline=None):
     finally:
         with _LOCK:
             _STATE["running"] = False
+
+
+def _ensure_user():
+    """사용자명을 워커 스레드에서 뒤늦게 구한다(시작 경로를 막지 않으려고).
+    아직 못 구했으면 세션 시작을 미룬다 — 사용자 없는 폴더가 서버에 생기지 않게."""
+    if _STATE.get("user"):
+        return _STATE["user"]
+    try:
+        name = current_user()
+    except Exception:
+        name = ""
+    with _LOCK:
+        if name and not _STATE.get("user"):
+            _STATE["user"] = name
+    return _STATE.get("user") or ""
 
 
 def _loop():
@@ -510,7 +556,10 @@ def start(app_version="", log_dirs=(), skill_dirs=(), extra_files=(), app_dir=""
         _STATE.update({
             "enabled": config()["enabled"],
             "sessionId": _STATE["sessionId"] or _new_session_id(),
-            "user": _STATE["user"] or current_user(),
+            # [코드리뷰 2026-08-24] 예전엔 여기서 current_user() 를 동기로 불렀다. 그건 whoami 를
+            # 띄우는데(최대 5초), 이 자리는 서버가 포트를 열기 전의 시작 경로다 — 보통 수십 ms 라도
+            # 굳이 앱 기동을 막을 이유가 없다. 비워 두고 워커가 첫 tick 전에 채운다.
+            "user": _STATE["user"] or "",
             "startedAt": _now_iso(),
             "startTime": time.time(),
             "stopped": False,

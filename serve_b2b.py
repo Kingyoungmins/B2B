@@ -4554,6 +4554,9 @@ def _process_perf_snapshot(pid):
     return info
 
 
+BOUND_PORT = 0     # 실제 바인딩 포트(serve 시작 시 채워짐) — Origin 판정의 기준
+
+
 def _is_own_origin(origin):
     """Origin 이 '이 서버 자신'인가. 우리 화면은 이 서버가 내보내므로 그것만 허용한다.
 
@@ -4569,7 +4572,9 @@ def _is_own_origin(origin):
         port = parts.port
         if port is None:
             return False
-        return int(port) == int(globals().get("PORT") or 0)
+        # 실제 바인딩 포트가 우선. 아직 안 채워졌으면(테스트 등) 설정값으로 물러난다.
+        expected = int(globals().get("BOUND_PORT") or 0) or int(globals().get("PORT") or 0)
+        return bool(expected) and int(port) == expected
     except Exception:
         return False
 
@@ -21258,6 +21263,13 @@ if __name__ == "__main__":
     # 이 함수를 호출하므로 진입점이 갈려도 정리가 누락되지 않는다.
     start_runtime_maintenance_threads()
     with B2BThreadingTCPServer((HOST, PORT), B2BHandler) as httpd:
+        # [코드리뷰 2026-08-24] 실제로 바인딩된 포트를 기록한다. Origin 판정이 import 시점의
+        # PORT 와 비교하면, 8090 이 이미 쓰여 18090 으로 넘어간 경우 자기 화면이 보낸 요청을
+        # 자기가 403 으로 막는다 — F9 에서 바꾼 수집 서버 주소·키가 조용히 무시된다.
+        try:
+            globals()["BOUND_PORT"] = int(httpd.server_address[1])
+        except Exception:
+            globals()["BOUND_PORT"] = int(PORT)
         print(f"B2B serving on http://{HOST}:{PORT}")
         print(f"Proxying /v1/* to {VLLM_BASE}/v1/*")
         httpd.serve_forever()

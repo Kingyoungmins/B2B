@@ -1332,10 +1332,7 @@ function beginExcelMirrorApplyLoading(message, options = {}) {
   // 바깥 잠금 구간(예: '결과를 라이브에 반영 중') 안에서 도는 내부 경로가 자기 end 로 바깥
   // 잠금을 먼저 열어 버렸다 — 작업이 한창인데 화면이 풀린다.
   excelMirror.applyDepth = (excelMirror.applyDepth || 0) + 1;
-  // [코드리뷰 2026-08-24] 예전엔 begin 마다 이 시각을 갱신했다. 그러면 스테일 판정이 '가장 안쪽'
-  // 잠금을 재는 셈이라, 3분 넘는 안쪽 단계가 끝나는 순간 바깥의 10분/30분짜리 잠금까지 강제로
-  // 풀어 버린다 — 작업이 한창인데 오버레이와 '작업 중단' 버튼이 사라진다(깊이 카운트를 넣어
-  // 막으려던 바로 그 사고를 되살리는 것). 가장 바깥 잠금이 열린 시각만 기억한다.
+  // 진단용 — 이 잠금이 언제 열렸는지(시한 강제 해제는 철회했다. 아래 end 의 주석 참조)
   if (Number(excelMirror.applyDepth || 0) <= 1) excelMirror.applyDepthTouchedAt = Date.now();
   // [제보 2026-08-24] 실측 로그가 begin 12 / end 10 이었는데, '어느 begin 이 안 닫혔는지'를
   // 알 수단이 없어 누수 지점을 못 찾았다. 열려 있는 잠금의 라벨을 들고 있다가 강제 해제 때
@@ -1414,21 +1411,25 @@ function endExcelMirrorApplyLoading(options) {
       excelMirror.applyOpenLabels.pop();
     }
   } catch (_) {}
-  // [제보 2026-08-24 회색 화면이 안 꺼짐] 중첩 카운트는 begin 과 end 가 정확히 짝을 이룰 때만
-  // 성립한다. 실측 로그에서 begin 12 / end 10 으로 2개가 비었고(예외로 빠져나가 end 를 못 부른
-  // 경로가 있다), 그러면 깊이가 0 으로 안 내려가 오버레이가 영구히 남는다 — 화면이 회색으로
-  // 굳고 분할선도 안 먹는다. 카운트 도입 전에는 아무 end 나 닫아 줘서 이 사고가 없었다.
-  // 대칭이 깨져도 회복되게 한다: 깊이가 남아 있어도 마지막 begin 이후 오래 지났으면 강제로 푼다.
-  if (excelMirror.applyDepth > 0) {
-    const startedAt = Number(excelMirror.applyDepthTouchedAt || 0);
-    const stale = startedAt && (Date.now() - startedAt) > 180000;   // 3분 — 정상 적용의 상한 밖
-    if (!stale && !(options && options.force)) return;
+  // [철회 2026-08-24] 여기 있던 '3분 지나면 강제 해제'를 걷어낸다.
+  //
+  // 애초에 이걸 넣은 근거였던 'begin 12 / end 10 = 잠금 누수'가 오진이었다(e227fa81).
+  // 진짜 원인은 트레이스 동시 append 로 로그 한 줄이 유실된 것이고, 잠금은 정상 해제됐다.
+  // 즉 있지도 않은 누수를 막으려고 시한폭탄을 심어 둔 셈인데, 그 폭탄이 실제 작업을 끊었다.
+  //   · 처음(begin 마다 시각 갱신): 3분 넘는 안쪽 단계가 끝나면 바깥 잠금까지 풀림
+  //   · 고친다고 바꾼 뒤(바깥 시각만 기억): 3분 지난 뒤엔 안쪽 end 마다 바깥이 풀림 — 더 자주 터짐
+  // 10분짜리 전체실행이 3분 지점부터 오버레이와 '작업 중단' 버튼을 잃는다.
+  //
+  // 진짜 안전망은 이미 있다 — beginUiBusy 의 failsafeMs 는 작업별로 크기가 맞춰져 있고
+  // (18초/330초/30분) 토큰 자신을 푼다. 작업 길이를 모르는 여기서 일률적인 시한을 거는 건
+  // 그 장치와 싸우는 것이다. 중첩 보호(깊이)와 누수 지목 계측(라벨)은 그대로 둔다.
+  if (excelMirror.applyDepth > 0 && !(options && options.force)) return;
+  if (excelMirror.applyDepth > 0) {          // 호출자가 명시적으로 force 한 경우만
     traceClientUiEvent("excel.apply_loading.depth_forced", {
-      depth: excelMirror.applyDepth, stale: !!stale, forced: !!(options && options.force),
-      // 안 닫힌 잠금의 라벨 — 여기가 누수 지점이다.
+      depth: excelMirror.applyDepth, forced: true,
       open: (excelMirror.applyOpenLabels || []).map(o => o && o.label).filter(Boolean).join(" | ").slice(0, 300),
     });
-    excelMirror.applyDepth = 0;   // 짝이 깨진 것 — 여기서 정상화한다
+    excelMirror.applyDepth = 0;
   }
   try { excelMirror.applyOpenLabels = []; } catch (_) {}   // 정상 해제 — 추적 목록 비움
   if (excelMirror.applyBusyToken && typeof endUiBusy === "function") {

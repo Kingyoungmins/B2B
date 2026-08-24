@@ -276,5 +276,58 @@ def test_review_fixes():
 test_review_fixes()
 
 
+
+# ── [3차 리뷰 2026-08-24] 경합·상한·예산·시작지연 ──────────────────────────
+def test_review3_fixes():
+    import inspect
+    import log_sync as L
+    print("[리뷰3] 주소변경 경합 / 회전·날짜 / 스킬 상한 / 종료예산 / 시작지연")
+    _env = os.environ.pop("B2B_LOG_SYNC_URL", None)
+    try:
+        L._CONFIG["upstreamUrl"] = ""
+        L.update_config({"upstreamUrl": "http://a.example"})
+        g0 = int(L._STATE["configGen"])
+        L.update_config({"upstreamUrl": "http://b.example"})
+        # 초기화와 전송이 겹치면 이미 날아간 요청이 옛 오프셋을 되살려 새 서버 로그 앞부분이 빈다.
+        check("주소가 바뀌면 세대가 오른다(전송 결과 폐기 기준)", int(L._STATE["configGen"]) == g0 + 1)
+        L.update_config({"upstreamUrl": "http://b.example"})
+        check("같은 주소면 세대 그대로(불필요한 폐기 없음)", int(L._STATE["configGen"]) == g0 + 1)
+        # 새 서버에서는 회전 이력·날짜도 처음부터다(안 지우면 .r1 이름 / 옛 날짜 폴더로 들어간다).
+        L._STATE["rotations"] = {"x": 2}
+        L._STATE["date"] = "2026-01-01"
+        L._STATE["serverPath"] = "/old"
+        L.update_config({"upstreamUrl": "http://c.example"})
+        check("주소가 바뀌면 회전 이력도 초기화", L._STATE["rotations"] == {})
+        check("주소가 바뀌면 날짜도 초기화", L._STATE["date"] == "")
+        check("주소가 바뀌면 서버 경로도 초기화", L._STATE["serverPath"] == "")
+    finally:
+        if _env is not None:
+            os.environ["B2B_LOG_SYNC_URL"] = _env
+
+    check("오프셋 커밋 전에 세대를 확인한다",
+          'if int(_STATE.get("configGen") or 0) != gen' in inspect.getsource(L._send_log_file))
+
+    # auto_backup 은 편집할 때마다 zip 을 만든다 — 스킬만으로 세션 상한을 넘길 수 있었다.
+    L._STATE["sentBytes"] = L.MAX_TOTAL_BYTES
+    check("스킬도 세션 총량 상한에 걸린다", L._over_total_budget() is True)
+    L._STATE["sentBytes"] = 0
+    check("여유가 있으면 계속 보낸다", L._over_total_budget() is False)
+    check("스킬 루프가 상한을 본다", "_over_total_budget()" in inspect.getsource(L.tick))
+
+    # 예산을 파일 사이에서만 보면 파일당 4조각을 다 돌아 4초가 15초까지 늘어난다.
+    check("종료 예산을 조각 사이에서도 확인",
+          "if deadline is not None and time.time() >= deadline" in inspect.getsource(L._send_log_file))
+
+    # whoami(최대 5초)를 서버가 포트를 열기 전에 부르면 그만큼 앱 기동이 늦는다.
+    _start_code = chr(10).join(x.split("#")[0] for x in inspect.getsource(L.start).split(chr(10)))
+    check("시작 경로에서 whoami 를 부르지 않는다", "current_user()" not in _start_code)
+    check("워커가 뒤늦게 사용자명을 채운다", "_ensure_user()" in inspect.getsource(L.tick))
+    L._STATE["user"] = ""
+    check("_ensure_user 가 실제로 채운다", bool(L._ensure_user()))
+
+
+test_review3_fixes()
+
+
 print("\n" + ("RESULT: ALL PASS" if fails == 0 else f"RESULT: {fails} FAIL"))
 sys.exit(1 if fails else 0)
