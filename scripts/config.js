@@ -391,6 +391,24 @@ function getIxiServerPresetById(id) {
   return IXI_SERVER_PRESETS.find(p => p.id === id) || IXI_SERVER_PRESETS[0];
 }
 
+/* [사용자 요청 2026-08-24] 메인 서버가 끊기면 서브로 자동 전환.
+   지금 쓰는 서버를 맨 앞에 두고, 나머지 프리셋을 순서대로 뒤에 붙인다.
+   '지금 쓰는 것'이 프리셋에 없는 값(사용자가 직접 넣은 주소)이면 그것도 맨 앞에 살린다 —
+   사용자가 지정한 서버를 우리 목록으로 덮어쓰면 안 된다. */
+function ixiFailoverUpstreams(currentUpstream) {
+  const cur = String(currentUpstream || "").trim().replace(/\/$/, "");
+  const out = [];
+  const push = u => {
+    const v = String(u || "").trim().replace(/\/$/, "");
+    if (v && out.indexOf(v) < 0) out.push(v);
+  };
+  push(cur);
+  const curId = getIxiServerPresetId(cur);
+  IXI_SERVER_PRESETS.forEach(pr => { if (pr.id === curId) push(pr.upstream); });
+  IXI_SERVER_PRESETS.forEach(pr => push(pr.upstream));
+  return out;
+}
+
 function getIxiServerLabel(upstream) {
   return getIxiServerPresetById(getIxiServerPresetId(upstream)).label;
 }

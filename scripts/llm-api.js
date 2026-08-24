@@ -510,9 +510,6 @@ async function fetchOpenAICompat(path, preferredBase, options = {}) {
   const upstream = usingLegacyLocalProxy
     ? (settings.proxyUpstream || "")
     : "";
-  if (upstream) {
-    options = { ...options, headers: { ...(options.headers || {}), "X-B2B-Vllm-Base": upstream } };
-  }
   const networkFallbacks = settings.network === "dev-vllm"
     ? (DEFAULTS.devVllm.fallbackBaseUrls || [])
     : OPENAI_COMPAT_FALLBACK_BASE_URLS;
@@ -524,14 +521,46 @@ async function fetchOpenAICompat(path, preferredBase, options = {}) {
     .map(base => base.replace(/\/$/, ""))
     .filter((base, idx, arr) => arr.indexOf(base) === idx);
 
+  /* [사용자 요청 2026-08-24] 메인 서버가 끊기면 서브 서버로 자동 전환.
+     예전엔 두 가지가 빠져 있었다.
+       · 폴백 목록에 서브 서버(프리셋)가 아예 없었다 — 로컬 프록시 주소만 있었다.
+       · fetch 가 '예외'를 던질 때만 다음 후보로 넘어갔다. 서버가 살아는 있는데 못 받는
+         상태(502/503/504, 게이트웨이 오류)는 정상 응답으로 쳐서 그대로 실패로 끝났다.
+     upstream 주소(X-B2B-Vllm-Base)도 후보마다 바꿔 가며 시도한다 — 로컬 프록시를 쓰는
+     구성에서는 base 가 아니라 이 헤더가 실제 목적지이기 때문이다. */
+  const upstreamCandidates = upstream
+    ? (typeof ixiFailoverUpstreams === "function" ? ixiFailoverUpstreams(upstream) : [upstream])
+    : [""];
+  const RETRYABLE_STATUS = new Set([502, 503, 504, 522, 523, 524]);
+
   const errors = [];
-  for (const base of bases) {
-    const url = base + path;
-    try {
-      const resp = await fetch(url, options);
-      return { resp, url, base };
-    } catch (err) {
-      errors.push(`${url} -> ${err.message || err}`);
+  for (const up of upstreamCandidates) {
+    const attemptOptions = up
+      ? { ...options, headers: { ...(options.headers || {}), "X-B2B-Vllm-Base": up } }
+      : options;
+    for (const base of bases) {
+      const url = base + path;
+      try {
+        const resp = await fetch(url, attemptOptions);
+        if (RETRYABLE_STATUS.has(resp.status) && (upstreamCandidates.length > 1 || bases.length > 1)) {
+          errors.push(`${url}${up ? " (" + up + ")" : ""} -> HTTP ${resp.status}`);
+          continue;                      // 서버가 못 받는 상태 — 다음 후보로
+        }
+        if (up && up !== upstream) {
+          // 어느 서버로 넘어갔는지 남긴다(사용자 문의 때 '왜 다른 서버냐'를 바로 답하려고).
+          try {
+            if (typeof traceClientUiEvent === "function") {
+              traceClientUiEvent("llm.upstream.failover", {
+                from: String(upstream).slice(0, 120), to: String(up).slice(0, 120),
+                label: typeof getIxiServerLabel === "function" ? getIxiServerLabel(up) : "",
+              });
+            }
+          } catch (_) {}
+        }
+        return { resp, url, base, upstream: up };
+      } catch (err) {
+        errors.push(`${url}${up ? " (" + up + ")" : ""} -> ${err.message || err}`);
+      }
     }
   }
 
