@@ -8,7 +8,7 @@ signature: "(url, filename)"
 role: "안내와 실패 처리를 하고, 평소엔 기존처럼 a.href 로 바로 받는다."
 role_source: banner
 version: "0.7.5"
-loc: "secure-doc.js:125-125"
+loc: "secure-doc.js:144-144"
 
 # ── 입출력 ──
 inputs:

@@ -127,7 +127,10 @@ def probe(force=False):
     try:
         req = urllib.request.Request(cfg["upstreamUrl"] + "/v1/drm/health",
                                      headers=_headers(cfg), method="GET")
-        with urllib.request.urlopen(req, timeout=10) as resp:
+        # [코드리뷰 2026-08-24] 이 프로브는 모든 업로드/다운로드 '앞'에서 동기로 돈다(30초 캐시).
+        # 방화벽이 패킷을 버리는 환경에선 timeout 을 꽉 채우고서야 실패한다 — 10초면 동작마다
+        # 10초 멈춤으로 보인다. 헬스체크에 3초면 충분하고, 실패는 어차피 30초 캐시된다.
+        with urllib.request.urlopen(req, timeout=3) as resp:
             body = json.loads(resp.read().decode("utf-8", errors="replace"))
         out["ok"] = bool(body.get("ok"))
         out["configured"] = bool(body.get("configured"))
@@ -264,18 +267,29 @@ def looks_secured(head, name="", encrypted_checker=None, path=None):
     # 제어문자(탭/개행 이전 코드)가 있으면 텍스트가 아니다 — pfile 등 바이너리 컨테이너로 보고
     # 서버에 물어본다(최종 판정은 Gateway 의 -200). cp949 디코드는 판정에 못 쓴다 —
     # 거의 모든 바이트쌍이 유효해서 바이너리도 '한글 텍스트'로 통과해 버린다(테스트로 실측).
+    # [코드리뷰 2026-08-24] UTF-16 BOM(FF FE / FE FF)은 텍스트다 — Excel 이 유니코드 CSV/TSV 를
+    # 이 형식으로 내보내는데, 둘째 바이트부터 NUL 이 나와 아래 규칙이 '보안문서'로 오판했다.
+    # 외부망 PC 에선 그 오판이 업로드마다 "보안 해제 실패" 오류 토스트가 된다.
+    if head[:2] in (b"\xff\xfe", b"\xfe\xff"):
+        return False
     if any(b < 9 for b in head):
         return True
-    try:
-        head.decode("utf-8")
-        return False                     # 텍스트로 읽힌다(csv/txt) → 평문
-    except Exception:
-        pass
-    try:
-        head.decode("cp949")
-        return False
-    except Exception:
-        return True                      # 정체불명 바이너리 → 보안문서일 수 있다, 서버에 물어본다
+    # [코드리뷰 2026-08-24 덤] 8바이트 조각은 멀티바이트 글자 '중간'에서 잘릴 수 있다 —
+    # 한글 UTF-8 CSV("이름,금액…")의 첫 8바이트가 정확히 그 모양이라 decode 가 실패해
+    # 보안문서로 오판됐다(실측). 잘린 끝 최대 3바이트를 물려 가며 판정한다.
+    for _trim in (0, 1, 2, 3):
+        try:
+            head[: len(head) - _trim].decode("utf-8")
+            return False                 # 텍스트로 읽힌다(csv/txt) → 평문
+        except Exception:
+            pass
+    for _trim in (0, 1):
+        try:
+            head[: len(head) - _trim].decode("cp949")
+            return False
+        except Exception:
+            pass
+    return True                          # 정체불명 바이너리 → 보안문서일 수 있다, 서버에 물어본다
 
 
 def maybe_decrypt_upload(path, name, encrypted_checker=None):
@@ -307,8 +321,13 @@ def maybe_decrypt_upload(path, name, encrypted_checker=None):
         released, out = decrypt_bytes(data, name)
         if not released:                 # Gateway 가 '보안문서 아님' — 원본 그대로 진행
             return {"checked": True, "released": False, "notDrm": True}
-        p.write_bytes(out)
+        # [코드리뷰 2026-08-24] 마커를 '먼저' 쓴다. 예전엔 평문을 먼저 쓰고 마커를 나중에 썼는데,
+        # 마커 쓰기가 실패하면(디스크 풀/ACL/AV 잠금 — 새 파일 생성은 제자리 덮어쓰기보다 잘 막힌다)
+        # 평문 작업본만 남고 재적용 게이트(any_secured)가 영영 안 걸린다 — 이후 모든 다운로드가
+        # 평문으로 나간다. 이 모듈의 존재 이유("평문으로 새면 안 된다")가 그 한 순서에 무너진다.
+        # 마커가 실패하면 원본을 그대로 두고 released:False 로 물러난다(안전한 쪽 실패).
         Path(str(p) + MARKER_SUFFIX).write_text("secured-source", encoding="utf-8")
+        p.write_bytes(out)
         with _LOCK:
             _STATE["releasedCount"] += 1
         return {"checked": True, "released": True,

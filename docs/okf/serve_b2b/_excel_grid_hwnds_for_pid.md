@@ -8,7 +8,7 @@ signature: "(pid)"
 role: "해당 pid 의 XLMAIN 최상위 창 아래 EXCEL7(그리드) 자식 hwnd 목록 — 셀 편집 확정 키 전송 대상."
 role_source: docstring
 version: "0.7.5"
-loc: "serve_b2b.py:5356-5388"
+loc: "serve_b2b.py:5407-5439"
 
 # ── 입출력 ──
 inputs:

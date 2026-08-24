@@ -9,7 +9,7 @@ signature: "(self, sheet, predicate, dest_name, header_rows=1, after=None)"
 role: "조건에 맞는 행만 골라 **새 시트(현재 활성 파일)**에 정리한다 — 원본은 그대로 둔다."
 role_source: docstring
 version: "0.7.5"
-loc: "serve_b2b.py:12876-12992"
+loc: "serve_b2b.py:12927-13043"
 
 # ── 입출력 ──
 inputs:

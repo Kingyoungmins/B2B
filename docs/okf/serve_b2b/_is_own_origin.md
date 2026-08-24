@@ -8,7 +8,7 @@ signature: "(origin)"
 role: "Origin 이 '이 서버 자신'인가. 우리 화면은 이 서버가 내보내므로 그것만 허용한다."
 role_source: docstring
 version: "0.7.5"
-loc: "serve_b2b.py:4624-4643"
+loc: "serve_b2b.py:4675-4694"
 
 # ── 입출력 ──
 inputs:
@@ -34,6 +34,7 @@ calls_external:
   - "strip"
   - "urlsplit"
 called_by:
+  - "B2BHandler.do_GET"
   - "B2BHandler.do_POST"
 reads: []
 writes: []
@@ -49,7 +50,7 @@ Origin 이 '이 서버 자신'인가. 우리 화면은 이 서버가 내보내�
 
 ## 관계
 - 호출: 없음
-- 피호출(영향 전파 경로): `B2BHandler.do_POST`
+- 피호출(영향 전파 경로): `B2BHandler.do_GET`, `B2BHandler.do_POST`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

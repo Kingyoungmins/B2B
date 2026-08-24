@@ -26,6 +26,7 @@ raises: []
 calls: []
 calls_external:
   - "String"
+  - "includes"
 called_by:
   - "normalizeSettings"
 reads: []

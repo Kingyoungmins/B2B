@@ -5,10 +5,10 @@ module: llm-api.js
 lang: js
 extraction: regex   # 정규식 근사
 signature: "(systemPrompt, userPrompt, options)"
-role: "[#2] 대화 기록과 무관한 단발 LLM 호출(에러를 사용자 눈높이로 해설할 때 등)."
-role_source: banner
+role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
+role_source: none
 version: "0.7.5"
-loc: "llm-api.js:118-118"
+loc: "llm-api.js:147-147"
 
 # ── 입출력 ──
 inputs:
@@ -25,6 +25,7 @@ raises: []
 # ── 유기적 관계 ──
 calls:
   - "applyQwenThinkControl"
+  - "effectiveDevVllmModel"
   - "effectiveOpenAICompatBaseUrl"
   - "fetchOpenAICompat"
   - "openAICompatAuthHeaders"
@@ -53,13 +54,13 @@ timestamp: "0.7.5-gen"
 ---
 
 ## 역할
-[#2] 대화 기록과 무관한 단발 LLM 호출(에러를 사용자 눈높이로 해설할 때 등).
+(추정) 역할 주석 없음 — 담당자 1줄 보완 필요  _(자동 추정 — 확인 필요)_
 
 ## 사이드이펙트 & 주의
 - 네트워크/서버 호출
 
 ## 관계
-- 호출: `applyQwenThinkControl`, `effectiveOpenAICompatBaseUrl`, `fetchOpenAICompat`, `openAICompatAuthHeaders`, `stripThink`
+- 호출: `applyQwenThinkControl`, `effectiveDevVllmModel`, `effectiveOpenAICompatBaseUrl`, `fetchOpenAICompat`, `openAICompatAuthHeaders`, `stripThink`
 - 피호출(영향 전파 경로): `autoRepairPipelineStep`, `callAssistLLM`, `clarifyVerifierAskIfNeeded`, `explainPipelineErrorForUser`, `llmApplyIntentToStep`, `llmRegroupRecordedSteps`, `llmSplitRecordedVba`
 
 ## 실패/예외

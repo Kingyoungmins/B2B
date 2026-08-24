@@ -9,7 +9,7 @@ signature: "(self)"
 role: "---- 녹화 (기본: 네이티브 매크로 레코더/VBA · 폴백: ixi-Cell-R recorder) ----"
 role_source: banner
 version: "0.7.5"
-loc: "serve_b2b.py:2423-2429"
+loc: "serve_b2b.py:2474-2480"
 
 # ── 입출력 ──
 inputs:

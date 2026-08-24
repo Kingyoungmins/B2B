@@ -39,6 +39,7 @@ calls:
   - "toast"
 calls_external:
   - "Error"
+  - "PC"
   - "String"
   - "URL"
   - "async"
@@ -48,6 +49,7 @@ calls_external:
   - "join"
   - "json"
   - "map"
+  - "open"
   - "querySelector"
   - "querySelectorAll"
   - "remove"

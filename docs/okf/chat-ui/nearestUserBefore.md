@@ -8,7 +8,7 @@ signature: "(i)"
 role: "코드 말풍선 앞의 '진짜' 사용자 요청을 찾는다. 자동 재생성/복구 프롬프트는 건너뛰고 더 앞으로."
 role_source: banner
 version: "0.7.5"
-loc: "chat-ui.js:187-187"
+loc: "chat-ui.js:213-213"
 
 # ── 입출력 ──
 inputs:

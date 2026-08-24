@@ -8,7 +8,7 @@ signature: "(text, aoa)"
 role: "[따옴표 구분자 공백 불일치 → 되묻기] 사용자가 \"' : ' 뒤 숫자\"처럼 공백 포함 구분자를 따옴표로 지정했는데"
 role_source: banner
 version: "0.7.5"
-loc: "chat-ui.js:3416-3416"
+loc: "chat-ui.js:3447-3447"
 
 # ── 입출력 ──
 inputs:

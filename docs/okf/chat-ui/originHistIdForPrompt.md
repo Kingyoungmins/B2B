@@ -28,8 +28,8 @@ calls_external:
 called_by:
   - "addAssistantReply"
   - "applyForcedPythonFallback"
+  - "originHistIdForPromptLoose"
   - "runApply"
-  - "runEditApply"
   - "runInsert"
 reads:
   - "state.chatHistory"
@@ -46,7 +46,7 @@ timestamp: "0.7.5-gen"
 
 ## 관계
 - 호출: 없음
-- 피호출(영향 전파 경로): `addAssistantReply`, `applyForcedPythonFallback`, `runApply`, `runEditApply`, `runInsert`
+- 피호출(영향 전파 경로): `addAssistantReply`, `applyForcedPythonFallback`, `originHistIdForPromptLoose`, `runApply`, `runInsert`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

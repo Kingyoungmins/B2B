@@ -27,6 +27,7 @@ calls_external:
   - "send_header"
   - "super"
 called_by:
+  - "B2BHandler.do_GET"
   - "B2BHandler.do_OPTIONS"
   - "B2BHandler.do_POST"
   - "B2BHandler.handle_backend_download"
@@ -49,7 +50,7 @@ timestamp: "0.7.5-gen"
 
 ## 관계
 - 호출: 없음
-- 피호출(영향 전파 경로): `B2BHandler.do_OPTIONS`, `B2BHandler.do_POST`, `B2BHandler.handle_backend_download`, `B2BHandler.handle_workbook_archive`, `B2BHandler.handle_workbook_source_download`, `B2BHandler.proxy`, `B2BHandler.send_json`
+- 피호출(영향 전파 경로): `B2BHandler.do_GET`, `B2BHandler.do_OPTIONS`, `B2BHandler.do_POST`, `B2BHandler.handle_backend_download`, `B2BHandler.handle_workbook_archive`, `B2BHandler.handle_workbook_source_download`, `B2BHandler.proxy`, `B2BHandler.send_json`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

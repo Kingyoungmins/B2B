@@ -8,7 +8,7 @@ signature: "(blob, filename)"
 role: "실패하면 예외 — 평문을 그대로 저장하지 않기 위해서다(부르는 쪽이 중단 처리)."
 role_source: banner
 version: "0.7.5"
-loc: "secure-doc.js:91-91"
+loc: "secure-doc.js:103-103"
 
 # ── 입출력 ──
 inputs:

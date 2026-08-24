@@ -8,7 +8,7 @@ signature: "(step, idx, beforeSteps)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
 version: "0.7.5"
-loc: "pipeline.js:4512-4512"
+loc: "pipeline.js:4570-4570"
 
 # ── 입출력 ──
 inputs:
@@ -32,6 +32,7 @@ calls_external: []
 called_by:
   - "_handlePipelineStepToggleImpl"
   - "renderPipeline"
+  - "replaceLogicAt"
 reads:
   - "state.pipeline"
 writes: []
@@ -47,7 +48,7 @@ timestamp: "0.7.5-gen"
 
 ## 관계
 - 호출: `getPipelineRuntimeStatus`, `lastLiveStepIndex`, `pipelineStepLiveLanguage`, `pipelineStepWritesCrossFile`
-- 피호출(영향 전파 경로): `_handlePipelineStepToggleImpl`, `renderPipeline`
+- 피호출(영향 전파 경로): `_handlePipelineStepToggleImpl`, `renderPipeline`, `replaceLogicAt`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

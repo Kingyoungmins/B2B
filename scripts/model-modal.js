@@ -203,7 +203,11 @@ function openSettingsModal(devMode) {
     ${devMode ? `
     <div id="group-claude" style="${activeClaude ? "" : "display:none"}">
       <label style="font-size:11.5px; color:#666">Anthropic API Key</label>
-      <input type="password" id="set-c-key" placeholder="sk-ant-..." value="${escapeHtml(claudeKey)}" autocomplete="off" />
+      <div class="row" style="gap:6px; align-items:center">
+        <input type="password" id="set-c-key" placeholder="sk-ant-..." value="${escapeHtml(claudeKey)}" autocomplete="off" style="flex:1" />
+        <button class="btn-secondary" id="btn-load-local-key" type="button"
+          title="개발 PC 의 keys.local.json(git 제외)에서 키를 읽어 채웁니다">🔑 저장된 키</button>
+      </div>
       <label style="font-size:11.5px; color:#666">모델</label>
       <select id="set-c-model">
         ${CLAUDE_MODELS.map(m => `<option value="${escapeHtml(m)}" ${m === claudeModel ? "selected" : ""}>${escapeHtml(m)}</option>`).join("")}
@@ -340,6 +344,24 @@ function openSettingsModal(devMode) {
     }
   };
 
+  // [편의 2026-08-24] Claude 키를 매번 복붙하지 않게 — 로컬 파일(keys.local.json, git 제외)에서
+  // 버튼 한 번으로 채운다. 파일이 없는 PC(배포 VM 등)에서는 안내만 하고 아무것도 안 바꾼다.
+  if (devMode && $("btn-load-local-key")) {
+    $("btn-load-local-key").onclick = async () => {
+      try {
+        const r = await fetch("/api/local-keys");
+        const d = await r.json();
+        if (d && d.ok && d.anthropicApiKey) {
+          $("set-c-key").value = d.anthropicApiKey;
+          if (typeof toast === "function") toast("저장된 키를 채웠습니다. [저장]을 눌러야 적용됩니다.", "success");
+        } else {
+          if (typeof toast === "function") toast((d && d.error) || "저장된 키가 없습니다.", "error");
+        }
+      } catch (err) {
+        if (typeof toast === "function") toast("키를 읽지 못했습니다: " + (err && err.message ? err.message : err), "error");
+      }
+    };
+  }
   // [관리 대시보드 2026-08-24] 수집 서버(보안망) 데이터를 로컬 프록시(/api/logdash)로 보는 페이지.
   // 페이지 자체는 이 백엔드가 서빙하므로 same-origin — 게이트웨이 헤더 문제가 없다.
   // 위 '버전 서버 주소'(= log_sync 가 쓰는 그 주소)가 데이터 원천이라 이 자리에 둔다.

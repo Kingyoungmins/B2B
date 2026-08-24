@@ -9,7 +9,7 @@ signature: "(self)"
 role: "[AI 도움 라이브 직독] 열린 라이브 세션의 '현재' 시트/그리드(경량 60행 미리보기)를 돌려준다."
 role_source: docstring
 version: "0.7.5"
-loc: "serve_b2b.py:2445-2473"
+loc: "serve_b2b.py:2496-2524"
 
 # ── 입출력 ──
 inputs:

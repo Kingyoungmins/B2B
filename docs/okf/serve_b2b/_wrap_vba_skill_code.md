@@ -8,7 +8,7 @@ signature: "(code, entry)"
 role: "사용자 VBA를 내부 Sub로 바꾸고, 런타임 오류를 팝업 대신 상태값으로 전달하는 래퍼를 붙인다."
 role_source: docstring
 version: "0.7.5"
-loc: "serve_b2b.py:8039-8092"
+loc: "serve_b2b.py:8090-8143"
 
 # ── 입출력 ──
 inputs:

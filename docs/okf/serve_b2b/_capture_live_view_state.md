@@ -8,7 +8,7 @@ signature: "(app, wb, session=None)"
 role: "현재 워크북의 활성 시트/선택 주소를 보존한다."
 role_source: docstring
 version: "0.7.5"
-loc: "serve_b2b.py:9459-9514"
+loc: "serve_b2b.py:9510-9565"
 
 # ── 입출력 ──
 inputs:

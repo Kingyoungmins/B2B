@@ -8,7 +8,7 @@ signature: "(data, filename, query='')"
 role: "[문서보안 0.7.5] 사용자에게 나가는 문서 다운로드 직전 훅."
 role_source: docstring
 version: "0.7.5"
-loc: "serve_b2b.py:4998-5018"
+loc: "serve_b2b.py:5049-5069"
 
 # ── 입출력 ──
 inputs:

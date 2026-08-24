@@ -8,7 +8,7 @@ signature: "(app)"
 role: "복사(Ctrl+C)로 CutCopyMode 가 켜져 있는 동안 클립보드 소스를 전역 스냅샷에 저장한다."
 role_source: docstring
 version: "0.7.5"
-loc: "serve_b2b.py:11165-11194"
+loc: "serve_b2b.py:11216-11245"
 
 # ── 입출력 ──
 inputs:

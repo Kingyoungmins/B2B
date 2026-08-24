@@ -8,7 +8,7 @@ signature: "(text)"
 role: "[0.5.18] 인접 두 열 '맞바꿈' → ctx.swap_cols(네이티브 Cut/Insert, 수식 참조 자동보정). move_cols(copy+delete)는"
 role_source: banner
 version: "0.7.5"
-loc: "chat-ui.js:853-853"
+loc: "chat-ui.js:879-879"
 
 # ── 입출력 ──
 inputs:

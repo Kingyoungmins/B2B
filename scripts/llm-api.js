@@ -115,6 +115,35 @@ async function callAnthropic(system) {
 // [#2] 대화 기록과 무관한 단발 LLM 호출(에러를 사용자 눈높이로 해설할 때 등).
 // state.chatHistory 를 건드리지 않고, 코드 생성용 시스템 프롬프트도 쓰지 않는다.
 // 실패하면 throw — 호출자가 기존 안내로 폴백한다(에러 표시를 막지 않게).
+/* [2026-08-24] 개발망 vLLM 모델 자동 감지 — 서버 모델이 3.5→3.6→3.8 로 계속 교체되는데,
+   그때마다 헬스는 200 인데 챗만 전부 실패했다(저장된 모델명이 서버에 없어 404).
+   호출 전에 서버 /v1/models 를 대조해(5분 캐시) 없으면 서버의 첫 모델로 자동 전환한다.
+   조회가 실패하면 기존 값 그대로 — 서버가 죽었으면 어차피 챗도 실패하고, 그 오류가 원인을 말해 준다. */
+let _devVllmModelCache = { base: "", model: "", at: 0 };
+async function effectiveDevVllmModel(base, wanted, apiKey) {
+  if (settings.network !== "dev-vllm") return wanted;
+  const now = Date.now();
+  if (_devVllmModelCache.base === base && (now - _devVllmModelCache.at) < 300000 && _devVllmModelCache.model) {
+    return _devVllmModelCache.model;
+  }
+  try {
+    const resp = await fetch(base.replace(/\/$/, "") + "/models",
+      { headers: openAICompatAuthHeaders(apiKey, "dev-vllm") });
+    const data = await resp.json();
+    const ids = ((data && data.data) || []).map(m => m && m.id).filter(Boolean);
+    if (ids.length) {
+      const use = ids.includes(wanted) ? wanted : ids[0];
+      _devVllmModelCache = { base, model: use, at: now };
+      if (use !== wanted) {
+        console.warn("[dev-vllm] 서버에 없는 모델 '" + wanted + "' → '" + use + "' 로 자동 전환");
+        try { if (typeof traceClientUiEvent === "function") traceClientUiEvent("devvllm.model.autoswitch", { from: String(wanted).slice(0,60), to: String(use).slice(0,60) }); } catch (_) {}
+      }
+      return use;
+    }
+  } catch (_) {}
+  return wanted;
+}
+
 async function callLLMOneShot(systemPrompt, userPrompt, options) {
   options = options || {};
   const maxTokens = options.maxTokens || 600;
@@ -143,7 +172,8 @@ async function callLLMOneShot(systemPrompt, userPrompt, options) {
   }
   const networkDefaults = settings.network === "dev-vllm" ? DEFAULTS.devVllm : DEFAULTS["openai-compat"];
   const base = effectiveOpenAICompatBaseUrl();
-  const model = settings.model || networkDefaults.model || DEFAULTS["openai-compat"].model;
+  const model = await effectiveDevVllmModel(base,
+    settings.model || networkDefaults.model || DEFAULTS["openai-compat"].model, settings.apiKey);
   const payload = {
     model,
     messages: [
@@ -226,7 +256,8 @@ async function callOpenAICompatOnce(system, options) {
   const messages = Array.isArray(options.messagesOverride)
     ? [{ role: "system", content: system }, ...options.messagesOverride]
     : [{ role: "system", content: system }, ...getLLMChatHistory()];
-  const model = settings.model || networkDefaults.model || DEFAULTS["openai-compat"].model;
+  const model = await effectiveDevVllmModel(effectiveOpenAICompatBaseUrl(),
+    settings.model || networkDefaults.model || DEFAULTS["openai-compat"].model, settings.apiKey);
   const isQwen = /qwen/i.test(String(model || ""));
   const thinkOn = options.thinkMode === true;
   // [0.5.2 이식] Qwen3 계열은 공식 가이드가 greedy/저온 디코딩을 금지한다 — temperature 0.2 같은

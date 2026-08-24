@@ -8,7 +8,7 @@ signature: "()"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
 version: "0.7.5"
-loc: "secure-doc.js:56-56"
+loc: "secure-doc.js:63-63"
 
 # ── 입출력 ──
 inputs: []
@@ -23,7 +23,9 @@ raises: []
 calls: []
 calls_external:
   - "getElementById"
+  - "max"
 called_by:
+  - "downloadAllFilesZip"
   - "registerWorkbookBackend"
   - "secureDocMaybeEncryptBlob"
   - "secureDownloadUrl"
@@ -41,7 +43,7 @@ timestamp: "0.7.5-gen"
 
 ## 관계
 - 호출: 없음
-- 피호출(영향 전파 경로): `registerWorkbookBackend`, `secureDocMaybeEncryptBlob`, `secureDownloadUrl`
+- 피호출(영향 전파 경로): `downloadAllFilesZip`, `registerWorkbookBackend`, `secureDocMaybeEncryptBlob`, `secureDownloadUrl`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

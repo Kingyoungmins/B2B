@@ -8,7 +8,7 @@ signature: "(session, wb=None)"
 role: "세션 워크북의 프레임 핸들(캐시). recover/replace 로 워크북이 바뀌면 자동 재조회."
 role_source: docstring
 version: "0.7.5"
-loc: "serve_b2b.py:6753-6766"
+loc: "serve_b2b.py:6804-6817"
 
 # ── 입출력 ──
 inputs:

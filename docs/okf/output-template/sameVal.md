@@ -8,7 +8,7 @@ signature: "(a, b)"
 role: "원본 값과 동일한지 비교 (문자/숫자/Date 모두 안정 비교)"
 role_source: banner
 version: "0.7.5"
-loc: "output-template.js:326-326"
+loc: "output-template.js:335-335"
 
 # ── 입출력 ──
 inputs:

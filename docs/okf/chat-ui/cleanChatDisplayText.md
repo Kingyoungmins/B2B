@@ -8,7 +8,7 @@ signature: "(content)"
 role: "[말풍선 표시 정리] 저장된 대화를 다시 그릴 때, 내부 프롬프트 스캐폴딩은 감추고 '사용자가 직접 친 부분'만"
 role_source: banner
 version: "0.7.5"
-loc: "chat-ui.js:238-238"
+loc: "chat-ui.js:264-264"
 
 # ── 입출력 ──
 inputs:

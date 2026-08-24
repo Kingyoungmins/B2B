@@ -8,7 +8,7 @@ signature: "(fullText, replyContext)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
 version: "0.7.5"
-loc: "chat-ui.js:2370-2370"
+loc: "chat-ui.js:2396-2396"
 
 # ── 입출력 ──
 inputs:
@@ -38,6 +38,7 @@ calls:
   - "insertLogic"
   - "openInsertPositionDialog"
   - "originHistIdForPrompt"
+  - "originHistIdForPromptLoose"
   - "renderEditingBanner"
   - "replaceLogicAt"
   - "replyStepPrompt"
@@ -89,7 +90,7 @@ timestamp: "0.7.5-gen"
 - 타이머
 
 ## 관계
-- 호출: `$`, `applyLogic`, `assistantReplyCodeProblems`, `autoRegenerateForMissingCode`, `bindChatHistoryEntryToMessage`, `createReasoningBox`, `escapeHtml`, `extractCode`, `extractDescription`, `finalizeActionButtonFromResult`, `inferCodeLanguage`, `insertLogic`, `openInsertPositionDialog`, `originHistIdForPrompt`, `renderEditingBanner`, `replaceLogicAt`, `replyStepPrompt`, `restoreActionButtonsAfterFailure`, `runApply`, `runEditApply`, `runInsert`, `scrollChatToBottom`, `showCodeGuardBlock`, `toast`, `traceClientUiEvent`, `uid`, `validateAssistantCodeBeforeApply`
+- 호출: `$`, `applyLogic`, `assistantReplyCodeProblems`, `autoRegenerateForMissingCode`, `bindChatHistoryEntryToMessage`, `createReasoningBox`, `escapeHtml`, `extractCode`, `extractDescription`, `finalizeActionButtonFromResult`, `inferCodeLanguage`, `insertLogic`, `openInsertPositionDialog`, `originHistIdForPrompt`, `originHistIdForPromptLoose`, `renderEditingBanner`, `replaceLogicAt`, `replyStepPrompt`, `restoreActionButtonsAfterFailure`, `runApply`, `runEditApply`, `runInsert`, `scrollChatToBottom`, `showCodeGuardBlock`, `toast`, `traceClientUiEvent`, `uid`, `validateAssistantCodeBeforeApply`
 - 피호출(영향 전파 경로): `autoRegenerateAsVbaFallback`, `autoRegenerateForMissingCode`, `autoRegenerateForStaticSafety`, `offerMissingDependencySkillCandidate`, `requestErrorRecovery`, `sendChat`, `showThinkRetryPrompt`
 
 ## 실패/예외

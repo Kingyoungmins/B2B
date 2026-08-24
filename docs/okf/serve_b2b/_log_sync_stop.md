@@ -8,7 +8,7 @@ signature: "(reason='shutdown', timeout=4.0)"
 role: "종료 직전 남은 로그를 마저 보내고 '이 세션 끝'을 알린다. 시작 안 했으면 아무것도 안 한다."
 role_source: docstring
 version: "0.7.5"
-loc: "serve_b2b.py:5048-5055"
+loc: "serve_b2b.py:5099-5106"
 
 # ── 입출력 ──
 inputs:

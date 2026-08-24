@@ -27,6 +27,9 @@ calls:
   - "collectAllDownloadFiles"
   - "downloadArchiveBlob"
   - "refreshRunButton"
+  - "secureDocNotice"
+  - "secureDocNoticeHide"
+  - "secureDocStatus"
   - "toast"
 calls_external:
   - "Error"
@@ -49,7 +52,7 @@ timestamp: "0.7.5-gen"
 - 네트워크/서버 호출
 
 ## 관계
-- 호출: `$`, `archiveFilename`, `collectAllDownloadFiles`, `downloadArchiveBlob`, `refreshRunButton`, `toast`
+- 호출: `$`, `archiveFilename`, `collectAllDownloadFiles`, `downloadArchiveBlob`, `refreshRunButton`, `secureDocNotice`, `secureDocNoticeHide`, `secureDocStatus`, `toast`
 - 피호출(영향 전파 경로): 없음
 
 ## 실패/예외

@@ -9,7 +9,7 @@ signature: "(self, row)"
 role: "[중요] 값 경로에서도 그대로 쓰인다."
 role_source: docstring
 version: "0.7.5"
-loc: "serve_b2b.py:11564-11581"
+loc: "serve_b2b.py:11615-11632"
 
 # ── 입출력 ──
 inputs:

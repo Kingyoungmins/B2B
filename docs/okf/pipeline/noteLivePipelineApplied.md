@@ -8,7 +8,7 @@ signature: "(steps = state.pipeline)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
 version: "0.7.5"
-loc: "pipeline.js:4256-4256"
+loc: "pipeline.js:4314-4314"
 
 # ── 입출력 ──
 inputs:
@@ -37,6 +37,7 @@ called_by:
   - "applyLastEnabledStepFast"
   - "applyMappedSingleStep"
   - "applyVbaStepToLiveExcel"
+  - "promise"
   - "renderPipeline"
   - "replaceLogicAt"
   - "restorePipelineToCheckpointAndHold"
@@ -56,7 +57,7 @@ timestamp: "0.7.5-gen"
 
 ## 관계
 - 호출: `_signatureStepsAsRestored`, `getPipelineRuntimeStatus`, `isStepEnabled`, `liveEnabledStepsSignature`, `liveEnabledStepsSignatureParts`
-- 피호출(영향 전파 경로): `_handlePipelineStepToggleImpl`, `_reapplyVbaPipelineToLiveImpl`, `_runHeldStepsBatchImpl`, `_runPipelineSuffixFromCheckpointImpl`, `applyLastEnabledStepFast`, `applyMappedSingleStep`, `applyVbaStepToLiveExcel`, `renderPipeline`, `replaceLogicAt`, `restorePipelineToCheckpointAndHold`, `restoreSoftRefreshSnapshot`, `runIsolatedLivePipelineSteps`
+- 피호출(영향 전파 경로): `_handlePipelineStepToggleImpl`, `_reapplyVbaPipelineToLiveImpl`, `_runHeldStepsBatchImpl`, `_runPipelineSuffixFromCheckpointImpl`, `applyLastEnabledStepFast`, `applyMappedSingleStep`, `applyVbaStepToLiveExcel`, `promise`, `renderPipeline`, `replaceLogicAt`, `restorePipelineToCheckpointAndHold`, `restoreSoftRefreshSnapshot`, `runIsolatedLivePipelineSteps`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

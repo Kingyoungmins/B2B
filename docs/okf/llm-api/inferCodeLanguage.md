@@ -8,7 +8,7 @@ signature: "(code, fullText)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
 version: "0.7.5"
-loc: "llm-api.js:582-582"
+loc: "llm-api.js:613-613"
 
 # ── 입출력 ──
 inputs:

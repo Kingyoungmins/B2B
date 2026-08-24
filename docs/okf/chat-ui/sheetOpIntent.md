@@ -8,7 +8,7 @@ signature: "(text)"
 role: "[사용자 지시] 시트 복사/복사후 이름변경/추가/삭제, 단순 정렬처럼 'ctx 헬퍼가 결정적으로 처리하는' 작업은"
 role_source: banner
 version: "0.7.5"
-loc: "chat-ui.js:678-678"
+loc: "chat-ui.js:704-704"
 
 # ── 입출력 ──
 inputs:

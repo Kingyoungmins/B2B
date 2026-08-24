@@ -8,7 +8,7 @@ signature: "(code)"
 role: "조각 '안 마지막' Windows/Workbooks(...).Activate 워크북명 — 이 조각을 실행하고 나면"
 role_source: banner
 version: "0.7.5"
-loc: "pipeline.js:7361-7361"
+loc: "pipeline.js:7419-7419"
 
 # ── 입출력 ──
 inputs:

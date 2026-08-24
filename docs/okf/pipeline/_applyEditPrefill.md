@@ -8,7 +8,7 @@ signature: "(step)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
 version: "0.7.5"
-loc: "pipeline.js:3061-3061"
+loc: "pipeline.js:3108-3108"
 
 # ── 입출력 ──
 inputs:
@@ -24,12 +24,14 @@ raises: []
 calls:
   - "_editPrefillPromptOf"
   - "hideMentionMenu"
+  - "traceClientUiEvent"
 calls_external:
   - "Event"
   - "String"
   - "dispatchEvent"
   - "focus"
   - "getElementById"
+  - "none"
   - "setSelectionRange"
   - "trim"
 called_by:
@@ -47,7 +49,7 @@ timestamp: "0.7.5-gen"
 - DOM/브라우저 전역 조작
 
 ## 관계
-- 호출: `_editPrefillPromptOf`, `hideMentionMenu`
+- 호출: `_editPrefillPromptOf`, `hideMentionMenu`, `traceClientUiEvent`
 - 피호출(영향 전파 경로): `toggleEditStep`
 
 ## 실패/예외

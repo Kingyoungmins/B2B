@@ -8,7 +8,7 @@ signature: "(messages, thinkMode)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
 version: "0.7.5"
-loc: "llm-api.js:484-484"
+loc: "llm-api.js:515-515"
 
 # ── 입출력 ──
 inputs:

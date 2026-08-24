@@ -8,7 +8,7 @@ signature: "(name)"
 role: "스냅샷/결과 파일명에 붙는 우리 접두사(prestep_<32hex>_, <32hex>_)를 반복 제거해 원본 표시명을 복원한다."
 role_source: docstring
 version: "0.7.5"
-loc: "serve_b2b.py:6161-6172"
+loc: "serve_b2b.py:6212-6223"
 
 # ── 입출력 ──
 inputs:

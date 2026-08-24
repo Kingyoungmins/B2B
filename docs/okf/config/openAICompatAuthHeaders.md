@@ -29,6 +29,7 @@ calls_external:
 called_by:
   - "callLLMOneShot"
   - "callOpenAICompatOnce"
+  - "effectiveDevVllmModel"
   - "openSettingsModal"
   - "runVersionCheck"
 reads: []
@@ -45,7 +46,7 @@ openai-compat 호출 인증 헤더. ixi 게이트웨이는 Api-Key 헤더를 보
 
 ## 관계
 - 호출: 없음
-- 피호출(영향 전파 경로): `callLLMOneShot`, `callOpenAICompatOnce`, `openSettingsModal`, `runVersionCheck`
+- 피호출(영향 전파 경로): `callLLMOneShot`, `callOpenAICompatOnce`, `effectiveDevVllmModel`, `openSettingsModal`, `runVersionCheck`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

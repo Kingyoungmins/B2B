@@ -8,7 +8,7 @@ signature: "()"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
 version: "0.7.5"
-loc: "chat-ui.js:2403-2403"
+loc: "chat-ui.js:2429-2429"
 
 # ── 입출력 ──
 inputs: []
@@ -22,11 +22,12 @@ raises: []
 # ── 유기적 관계 ──
 calls:
   - "finalizeActionButtonFromResult"
-  - "originHistIdForPrompt"
+  - "originHistIdForPromptLoose"
   - "renderEditingBanner"
   - "replaceLogicAt"
   - "restoreActionButtonsAfterFailure"
   - "toast"
+  - "traceClientUiEvent"
 calls_external:
   - "String"
   - "find"
@@ -49,7 +50,7 @@ timestamp: "0.7.5-gen"
 - DOM/브라우저 전역 조작
 
 ## 관계
-- 호출: `finalizeActionButtonFromResult`, `originHistIdForPrompt`, `renderEditingBanner`, `replaceLogicAt`, `restoreActionButtonsAfterFailure`, `toast`
+- 호출: `finalizeActionButtonFromResult`, `originHistIdForPromptLoose`, `renderEditingBanner`, `replaceLogicAt`, `restoreActionButtonsAfterFailure`, `toast`, `traceClientUiEvent`
 - 피호출(영향 전파 경로): `addAssistantReply`
 
 ## 실패/예외

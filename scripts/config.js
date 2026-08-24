@@ -39,7 +39,7 @@ const DEFAULTS = {
   },
   devVllm: {
     apiKey: "khkim",
-    model: "Qwen/Qwen3.6-27B-FP8",
+    model: "Qwen/Qwen3.8-27B-FP8",
     // 개발망 vLLM — 별도 PC(LAN)의 vLLM 서버. --api-key 를 켜고 떠 있어 Authorization: Bearer 필수.
     baseUrl: "http://192.168.219.111:8000/v1",
     fallbackBaseUrls: [],
@@ -365,7 +365,10 @@ function normalizeIxiModel(network, value, parsed) {
     return DEFAULTS["openai-compat"].model;
   }
   // dev-vllm: 옛 서버 모델명은 새 서버에 없어 호출이 전부 실패하므로 무조건 승격.
-  if (network === "dev-vllm" && (!value || String(value) === "Qwen3.5-27B-FP8")) {
+  // [2026-08-24] 3.6→3.8 교체로 같은 사고 재발(헬스는 200인데 챗만 전부 실패 — 사용자 제보).
+  // 레거시 목록에 추가하고, 근본은 llm-api 의 자동 감지(서버 /v1/models 대조)가 맡는다.
+  const _DEV_VLLM_LEGACY_MODELS = ["Qwen3.5-27B-FP8", "Qwen/Qwen3.5-27B-FP8", "Qwen/Qwen3.6-27B-FP8"];
+  if (network === "dev-vllm" && (!value || _DEV_VLLM_LEGACY_MODELS.includes(String(value)))) {
     return DEFAULTS.devVllm.model;
   }
   return value;

@@ -8,7 +8,7 @@ signature: "(system, options)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
 version: "0.7.5"
-loc: "llm-api.js:220-220"
+loc: "llm-api.js:250-250"
 
 # ── 입출력 ──
 inputs:
@@ -25,6 +25,7 @@ raises: []
 calls:
   - "_pushAssistant"
   - "applyQwenThinkControl"
+  - "effectiveDevVllmModel"
   - "effectiveOpenAICompatBaseUrl"
   - "fetchOpenAICompat"
   - "getLLMChatHistory"
@@ -64,7 +65,7 @@ timestamp: "0.7.5-gen"
 - 없음(정적 분석 기준)
 
 ## 관계
-- 호출: `_pushAssistant`, `applyQwenThinkControl`, `effectiveOpenAICompatBaseUrl`, `fetchOpenAICompat`, `getLLMChatHistory`, `isRetryableOpenAICompatStatus`, `openAICompatAuthHeaders`, `push`, `readOpenAICompatStream`, `uid`
+- 호출: `_pushAssistant`, `applyQwenThinkControl`, `effectiveDevVllmModel`, `effectiveOpenAICompatBaseUrl`, `fetchOpenAICompat`, `getLLMChatHistory`, `isRetryableOpenAICompatStatus`, `openAICompatAuthHeaders`, `push`, `readOpenAICompatStream`, `uid`
 - 피호출(영향 전파 경로): `callOpenAICompat`
 
 ## 실패/예외

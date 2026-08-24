@@ -8,7 +8,7 @@ signature: "(step, options = {})"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
 version: "0.7.5"
-loc: "pipeline.js:4539-4539"
+loc: "pipeline.js:4597-4597"
 
 # ── 입출력 ──
 inputs:
@@ -31,7 +31,9 @@ calls_external:
   - "isArray"
 called_by:
   - "_handlePipelineStepToggleImpl"
+  - "promise"
   - "renderPipeline"
+  - "replaceLogicAt"
   - "restorePipelineCheckpointForSuffix"
   - "restorePipelineToCheckpointAndHold"
 reads: []
@@ -48,7 +50,7 @@ timestamp: "0.7.5-gen"
 
 ## 관계
 - 호출: `_restoreSnapshotByIds`, `inferPipelineStepTargetFileId`, `preferredVbaRunFileId`, `requirePipelineSessionExcelId`
-- 피호출(영향 전파 경로): `_handlePipelineStepToggleImpl`, `renderPipeline`, `restorePipelineCheckpointForSuffix`, `restorePipelineToCheckpointAndHold`
+- 피호출(영향 전파 경로): `_handlePipelineStepToggleImpl`, `promise`, `renderPipeline`, `replaceLogicAt`, `restorePipelineCheckpointForSuffix`, `restorePipelineToCheckpointAndHold`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

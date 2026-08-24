@@ -8,7 +8,7 @@ signature: "(text)"
 role: "[0.5.18] '합계 열에 여러 열 합계 수식 채우기'(병합 그룹 단위) → ctx.fill_sum_col. 단순 =D+E 를 헤더/라벨행까지"
 role_source: banner
 version: "0.7.5"
-loc: "chat-ui.js:906-906"
+loc: "chat-ui.js:932-932"
 
 # ── 입출력 ──
 inputs:

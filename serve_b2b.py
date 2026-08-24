@@ -1277,6 +1277,24 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
         if self.path.split("?")[0] == "/api/logic/backup-dir":
             self.send_json(logic_backup_dir_info())
             return
+        if self.path == "/api/local-keys":
+            # [편의 2026-08-24] F9 [저장된 키 불러오기] — 키를 매번 복붙하지 않게 로컬 파일에서 읽는다.
+            # keys.local.json 은 .gitignore 에 있어 push 에 안 실린다. 이 응답도 로컬 화면 전용이다
+            # (Origin 가드 — 키가 나가는 문이므로 log-sync config 와 같은 기준).
+            _origin = str(self.headers.get("Origin") or "").strip()
+            if _origin and not _is_own_origin(_origin):
+                self.send_json({"ok": False, "error": "cross-origin request rejected"}, status=403)
+                return
+            try:
+                _kp = Path(__file__).resolve().parent / "keys.local.json"
+                if not _kp.exists():
+                    self.send_json({"ok": False, "error": "keys.local.json 이 없습니다(개발 PC 전용 기능)."}, status=404)
+                    return
+                _kd = json.loads(_kp.read_text(encoding="utf-8"))
+                self.send_json({"ok": True, "anthropicApiKey": str(_kd.get("anthropicApiKey") or "")})
+            except Exception as err:
+                self.send_json({"ok": False, "error": str(err)}, status=500)
+            return
         if self.path.startswith("/api/logdash/"):
             # [F9 관리 대시보드 2026-08-24] 수집 서버(보안망) admin API 프록시.
             # 브라우저는 게이트웨이 Api-Key 헤더를 못 붙이므로 여기서 서버측으로 부착한다.

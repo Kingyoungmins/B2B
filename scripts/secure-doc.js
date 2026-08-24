@@ -77,6 +77,9 @@ async function secureDocSniff(file) {
     if (head.length < 4) return false;
     if (head[0] === 0x50 && head[1] === 0x4b) return false;                    // "PK"
     if (head[0] === 0xd0 && head[1] === 0xcf && head[2] === 0x11 && head[3] === 0xe0) return true; // OLE
+    // [코드리뷰 2026-08-24] UTF-16 BOM 은 텍스트다 — Excel 유니코드 CSV/TSV. 둘째 바이트부터
+    // NUL 이라 아래 규칙이 보안문서로 오판해 "보안 해제 중…" 배너가 떴다(서버측과 같은 예외).
+    if ((head[0] === 0xff && head[1] === 0xfe) || (head[0] === 0xfe && head[1] === 0xff)) return false;
     for (let i = 0; i < head.length; i++) if (head[i] < 9) return true;        // 제어문자=바이너리
     return false;
   } catch (_) {
@@ -99,7 +102,14 @@ function secureDocSaveBlobPlain(blob, filename) {
    실패하면 예외 — 평문을 그대로 저장하지 않기 위해서다(부르는 쪽이 중단 처리). */
 async function secureDocMaybeEncryptBlob(blob, filename) {
   const st = await secureDocStatus();
-  if (!st || !st.active || !st.anySecured) return blob;
+  if (!st || !st.anySecured) return blob;   // 보안문서를 다룬 적 없음(또는 상태 확인 불가) → 평문 허용
+  // [코드리뷰 2026-08-24] anySecured 인데 active 가 아니면(릴레이 다운 등) 예전엔 평문을 '조용히'
+  // 저장했다 — 이 함수 머리글의 약속("실패하면 예외, 평문을 그대로 저장하지 않는다")을 정확히
+  // 그 분기가 어겼다. 서버 게이트(_secure_outgoing_data)는 같은 상황에서 다운로드를 막는다(502) —
+  // 클라만 fail-open 이었다. 같은 정책으로 막는다.
+  if (!st.active) {
+    throw new Error("보안 서버에 연결할 수 없어 보안적용을 못 합니다 — 평문 저장을 중단했습니다. 잠시 후 다시 시도하세요.");
+  }
   secureDocNotice("문서를 보안적용 중입니다…");
   try {
     const resp = await fetch("/api/secure-doc/encrypt?name=" + encodeURIComponent(filename), {

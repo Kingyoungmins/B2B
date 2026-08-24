@@ -3602,6 +3602,29 @@
         ]
       ],
       "fix": "사용자 PC 는 MIP Gateway 를 직접 못 불러(허용 IP) versionTest 서버가 /v1/drm/* 로 릴레이한다. 업로드: 작업본 머리가 OLE(EncryptedPackage)거나 정체불명 바이너리면 서버로 보내 해제하고 작업본을 평문으로 교체(+.secured 마커, 사용자 원본은 안 건드림). 해제 실패는 업로드를 막지 않는다(Excel COM 라이선스 열람 대비). 다운로드: 해제 이력이 있으면(any_secured=메모리+마커) 모든 문서 다운로드(결과/원본/전체zip/브라우저 blob)에 보안을 재적용하고, 실패 시 다운로드를 중단한다(평문 유출 방지). 제보 첨부 같은 내부 읽기는 ?plain=1 로 건너뛴다. 안내: 업로드 '문서를 보안해제 중입니다', 다운로드 '문서를 보안적용 중입니다' 배너(scripts/secure-doc.js, excel-mirror 잠금과 독립). Gateway -200 '대상 아님'은 원본 그대로 진행(오류 아님). 서버 계약 테스트는 versionTest/test_drm_service.py."
+    },
+    {
+      "id": "SECURE-DOC-REVIEW-CONFIRMED-7",
+      "title": "[리뷰] secure-doc 7건 CONFIRMED — 유출2·오탐2·지연1 수정, 잔여 4건 미해결.",
+      "checks": [
+        [
+          "python",
+          "test_runs/_test_secure_doc.py"
+        ]
+      ],
+      "fix": "수정: 마커를 평문보다 먼저 씀(마커 실패=평문 미기록), 클라 encrypt 게이트 fail-closed(anySecured+비활성=예외, 서버 502 정책과 일치), UTF-16 BOM·한글 UTF-8 절단 오탐 제거(서버+클라), 헬스 프로브 10→3초. 잔여(미해결): any_secured 전역 sticky+마커 은퇴 없음+타 백엔드 세션 오염 / inactive 폴백이 서버 502 JSON 을 xlsx 로 저장(무피드백) / zip 경로 메모리 2배+부분 zip 고아+파일당 120초 직렬 암호화 / 프로브가 업·다운 앞 동기 구조 자체."
+    },
+    {
+      "id": "DEV-VLLM-MODEL-AUTODETECT",
+      "title": "[제보] 개발망 vLLM 헬스는 200인데 챗 전멸 — 서버 모델 3.6→3.8 교체.",
+      "checks": [
+        [
+          "node",
+          "-e",
+          "const s=require(\"fs\").readFileSync(\"scripts/llm-api.js\",\"utf8\");process.exit(/effectiveDevVllmModel/.test(s)&&/Qwen3\\.8-27B-FP8/.test(require(\"fs\").readFileSync(\"scripts/config.js\",\"utf8\"))?0:1)"
+        ]
+      ],
+      "fix": "실측: /v1/models=Qwen/Qwen3.8-27B-FP8, 저장값 3.6 → 404. 기본값 갱신+레거시 승격 목록화(3.5/3.6). 근본: 호출 전 서버 /v1/models 대조(5분 캐시)해 없으면 첫 모델로 자동 전환(effectiveDevVllmModel) — 다음 교체에도 안 죽는다. 전환은 devvllm.model.autoswitch 로 기록."
     }
   ]
 }

@@ -8,7 +8,7 @@ signature: "(currentUpstream)"
 role: "사용자가 지정한 서버를 우리 목록으로 덮어쓰면 안 된다."
 role_source: banner
 version: "0.7.5"
-loc: "config.js:398-398"
+loc: "config.js:401-401"
 
 # ── 입출력 ──
 inputs:
