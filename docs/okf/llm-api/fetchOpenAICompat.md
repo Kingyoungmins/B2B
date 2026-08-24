@@ -24,17 +24,23 @@ raises: []
 
 # ── 유기적 관계 ──
 calls:
+  - "getIxiServerLabel"
   - "isLocalIxiProxyBaseUrl"
+  - "ixiFailoverUpstreams"
   - "push"
+  - "traceClientUiEvent"
 calls_external:
   - "Error"
+  - "Set"
   - "String"
   - "fetch"
   - "filter"
+  - "has"
   - "indexOf"
   - "join"
   - "map"
   - "replace"
+  - "slice"
   - "trim"
 called_by:
   - "callLLMOneShot"
@@ -53,7 +59,7 @@ timestamp: "0.7.4-gen"
 - 네트워크/서버 호출
 
 ## 관계
-- 호출: `isLocalIxiProxyBaseUrl`, `push`
+- 호출: `getIxiServerLabel`, `isLocalIxiProxyBaseUrl`, `ixiFailoverUpstreams`, `push`, `traceClientUiEvent`
 - 피호출(영향 전파 경로): `callLLMOneShot`, `callOpenAICompatOnce`, `openSettingsModal`
 
 ## 실패/예외

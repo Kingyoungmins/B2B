@@ -8,7 +8,7 @@ signature: "()"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
 version: "0.7.4"
-loc: "serve_b2b.py:337-341"
+loc: "serve_b2b.py:344-348"
 
 # ── 입출력 ──
 inputs: []
@@ -25,6 +25,7 @@ calls:
 calls_external: []
 called_by:
   - "B2BHandler.handle_logic_backup"
+  - "_start_log_sync"
   - "choose_logic_backup_dir_dialog"
   - "logic_backup_dir_info"
 reads: []
@@ -41,7 +42,7 @@ timestamp: "0.7.4-gen"
 
 ## 관계
 - 호출: `default_logic_backup_dir`
-- 피호출(영향 전파 경로): `B2BHandler.handle_logic_backup`, `choose_logic_backup_dir_dialog`, `logic_backup_dir_info`
+- 피호출(영향 전파 경로): `B2BHandler.handle_logic_backup`, `_start_log_sync`, `choose_logic_backup_dir_dialog`, `logic_backup_dir_info`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

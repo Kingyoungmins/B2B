@@ -8,7 +8,7 @@ signature: "(affected)"
 role: "[필드 추가#1] 토글/삭제 후 뷰 이동 대상: 스킬 코드가 다른 파일(출력)에 쓰는 교차 파일"
 role_source: banner
 version: "0.7.4"
-loc: "pipeline.js:5825-5825"
+loc: "pipeline.js:5829-5829"
 
 # ── 입출력 ──
 inputs:

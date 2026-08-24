@@ -8,7 +8,7 @@ signature: "(cfg)"
 role: "upstreamUrl 은 버전 서버가 실제로 받은 완성 주소 — 그대로 curl 로 확인할 수 있다."
 role_source: banner
 version: "0.7.4"
-loc: "config.js:155-155"
+loc: "config.js:173-173"
 
 # ── 입출력 ──
 inputs:

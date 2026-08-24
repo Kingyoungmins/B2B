@@ -8,7 +8,7 @@ signature: "(event, **fields)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
 version: "0.7.4"
-loc: "serve_b2b.py:4517-4528"
+loc: "serve_b2b.py:4582-4595"
 
 # ── 입출력 ──
 inputs:
@@ -30,6 +30,7 @@ calls_external:
   - "fields"
   - "getpid"
   - "isoformat"
+  - "line"
   - "now"
   - "open"
   - "payload"
@@ -52,7 +53,8 @@ called_by:
   - "cleanup_backend_runtime_files"
   - "cleanup_excel_sessions"
   - "skill_consolidate"
-reads: []
+reads:
+  - "_TRACE_WRITE_LOCK"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
 timestamp: "0.7.4-gen"

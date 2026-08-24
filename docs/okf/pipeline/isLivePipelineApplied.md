@@ -8,7 +8,7 @@ signature: "()"
 role: "직전에 라이브 파이프라인이 적용돼 있었는지. 강제재시작 직전에 캡처해 '자동 1회 재적용' 여부 판단에 쓴다"
 role_source: banner
 version: "0.7.4"
-loc: "pipeline.js:4355-4355"
+loc: "pipeline.js:4359-4359"
 
 # ── 입출력 ──
 inputs: []

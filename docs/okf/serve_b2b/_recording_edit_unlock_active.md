@@ -8,7 +8,7 @@ signature: "(app=None)"
 role: "녹화 편집 모드 중이고 대상이 라이브 공유 인스턴스면 True(잠금 적용을 건너뛴다)."
 role_source: docstring
 version: "0.7.4"
-loc: "serve_b2b.py:3275-3286"
+loc: "serve_b2b.py:3315-3326"
 
 # ── 입출력 ──
 inputs:

@@ -8,7 +8,7 @@ signature: "(job_id)"
 role: "협조적 취소 체크포인트 — 스텝 경계에서 호출. 취소 요청이 있으면 cancelled 플래그가"
 role_source: docstring
 version: "0.7.4"
-loc: "serve_b2b.py:2602-2610"
+loc: "serve_b2b.py:2642-2650"
 
 # ── 입출력 ──
 inputs:

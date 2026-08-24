@@ -8,7 +8,7 @@ signature: "(event, **fields)"
 role: "Structured VBA/pipeline trace for field failures."
 role_source: docstring
 version: "0.7.4"
-loc: "serve_b2b.py:8761-8777"
+loc: "serve_b2b.py:8871-8889"
 
 # ── 입출력 ──
 inputs:
@@ -30,6 +30,7 @@ calls_external:
   - "fields"
   - "getpid"
   - "isoformat"
+  - "line"
   - "now"
   - "open"
   - "payload"
@@ -82,7 +83,8 @@ called_by:
   - "inspect_workbook"
   - "run_python_on_session"
   - "session_workbook"
-reads: []
+reads:
+  - "_TRACE_WRITE_LOCK"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
 timestamp: "0.7.4-gen"

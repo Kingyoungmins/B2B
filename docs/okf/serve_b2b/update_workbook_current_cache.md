@@ -8,7 +8,7 @@ signature: "(wb_record, sheets)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
 version: "0.7.4"
-loc: "serve_b2b.py:19978-19983"
+loc: "serve_b2b.py:20090-20095"
 
 # ── 입출력 ──
 inputs:

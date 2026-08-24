@@ -8,7 +8,7 @@ signature: "()"
 role: "매크로 주입·실행에 필요한 Trust Center 플래그를 켠다(HKCU)."
 role_source: docstring
 version: "0.7.4"
-loc: "serve_b2b.py:5029-5059"
+loc: "serve_b2b.py:5139-5169"
 
 # ── 입출력 ──
 inputs: []

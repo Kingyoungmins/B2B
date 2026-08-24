@@ -8,7 +8,7 @@ signature: "(app)"
 role: "오버레이 엑셀에서 마우스 우클릭(컨텍스트) 메뉴를 막는다."
 role_source: docstring
 version: "0.7.4"
-loc: "serve_b2b.py:3615-3632"
+loc: "serve_b2b.py:3655-3672"
 
 # ── 입출력 ──
 inputs:

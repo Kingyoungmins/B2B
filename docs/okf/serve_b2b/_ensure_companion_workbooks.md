@@ -8,7 +8,7 @@ signature: "(session, excel_id, app, current_wb)"
 role: "다른 라이브 세션들의 '현재(편집 반영된) 상태'를 스냅샷해서 이 인스턴스에 읽기전용으로 동반 오픈한다."
 role_source: docstring
 version: "0.7.4"
-loc: "serve_b2b.py:9420-9523"
+loc: "serve_b2b.py:9532-9635"
 
 # ── 입출력 ──
 inputs:

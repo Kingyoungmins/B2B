@@ -8,7 +8,7 @@ signature: "(year, month, day)"
 role: "구분자 있는 날짜(2026-03-01)인지 — 연 1900~2199 / 월 1~12 / 일 1~31 만 참."
 role_source: docstring
 version: "0.7.4"
-loc: "serve_b2b.py:8093-8099"
+loc: "serve_b2b.py:8203-8209"
 
 # ── 입출력 ──
 inputs:

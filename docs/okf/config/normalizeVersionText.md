@@ -8,7 +8,7 @@ signature: "(text)"
 role: "versionTest.normalize_version)와 같은 규칙 — 한쪽만 바꾸면 안 된다."
 role_source: banner
 version: "0.7.4"
-loc: "config.js:144-144"
+loc: "config.js:162-162"
 
 # ── 입출력 ──
 inputs:

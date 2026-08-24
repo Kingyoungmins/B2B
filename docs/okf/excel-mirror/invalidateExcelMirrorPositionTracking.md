@@ -8,7 +8,7 @@ signature: "(excelId)"
 role: "미러를 숨기면(park) 위치 추적을 무효화해, 다음 전환 시 다시 배치되도록 한다."
 role_source: banner
 version: "0.7.4"
-loc: "excel-mirror.js:1942-1942"
+loc: "excel-mirror.js:1974-1974"
 
 # ── 입출력 ──
 inputs:

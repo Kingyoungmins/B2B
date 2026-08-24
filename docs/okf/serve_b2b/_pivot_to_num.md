@@ -8,7 +8,7 @@ signature: "(v)"
 role: "---- 피벗/크로스탭 집계(순수 함수 — COM 불필요, 단위테스트 가능). ctx.pivot 2D 가 사용. ----"
 role_source: banner
 version: "0.7.4"
-loc: "serve_b2b.py:3107-3115"
+loc: "serve_b2b.py:3147-3155"
 
 # ── 입출력 ──
 inputs:

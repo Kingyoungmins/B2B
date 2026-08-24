@@ -9,7 +9,7 @@ signature: "(self, src_sheet, src_range, dst_sheet, dst_cell)"
 role: "Excel 네이티브 복사(값+수식+서식+병합 보존). '복사/복붙' 요청의 기본 수단."
 role_source: docstring
 version: "0.7.4"
-loc: "serve_b2b.py:11964-12002"
+loc: "serve_b2b.py:12076-12114"
 
 # ── 입출력 ──
 inputs:

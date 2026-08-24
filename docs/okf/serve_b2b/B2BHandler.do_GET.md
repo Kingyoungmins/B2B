@@ -9,7 +9,7 @@ signature: "(self)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
 version: "0.7.4"
-loc: "serve_b2b.py:1228-1296"
+loc: "serve_b2b.py:1235-1312"
 
 # ── 입출력 ──
 inputs:
@@ -46,8 +46,10 @@ calls_external:
   - "__file__"
   - "app_dir"
   - "bool"
+  - "err"
   - "exists"
   - "file_info"
+  - "get"
   - "getcwd"
   - "getpid"
   - "openpyxl"
@@ -56,6 +58,7 @@ calls_external:
   - "split"
   - "startswith"
   - "stat"
+  - "status"
   - "str"
   - "super"
 called_by: []

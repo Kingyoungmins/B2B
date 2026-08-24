@@ -8,7 +8,7 @@ signature: "(now)"
 role: "Native host가 사라졌는데 Python 서버만 살아남으면 Excel COM 인스턴스도 고아로 남는다."
 role_source: docstring
 version: "0.7.4"
-loc: "serve_b2b.py:4831-4863"
+loc: "serve_b2b.py:4898-4931"
 
 # ── 입출력 ──
 inputs:
@@ -23,6 +23,7 @@ raises: []
 # ── 유기적 관계 ──
 calls:
   - "_is_pid_alive"
+  - "_log_sync_stop"
   - "_perf_trace"
   - "cleanup_excel_sessions"
   - "cleanup_node_worker"
@@ -55,7 +56,7 @@ Native host가 사라졌는데 Python 서버만 살아남으면 Excel COM 인스
 - 변경 상태 `PARENT_WATCH_MISSING_SINCE` — 수정 시 이 상태를 읽는 곳 동반 점검.
 
 ## 관계
-- 호출: `_is_pid_alive`, `_perf_trace`, `cleanup_excel_sessions`, `cleanup_node_worker`
+- 호출: `_is_pid_alive`, `_log_sync_stop`, `_perf_trace`, `cleanup_excel_sessions`, `cleanup_node_worker`
 - 피호출(영향 전파 경로): `_runtime_maintenance_loop`
 
 ## 실패/예외

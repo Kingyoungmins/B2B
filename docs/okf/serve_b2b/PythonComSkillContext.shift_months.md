@@ -9,7 +9,7 @@ signature: "(self, sheet, a1_range, delta=1)"
 role: "범위 안 '문자열' 셀의 모든 'N월'(앞 'YY/YYYY년', 뒤 'D일' 포함)을 delta 개월 이동한다."
 role_source: docstring
 version: "0.7.4"
-loc: "serve_b2b.py:12226-12256"
+loc: "serve_b2b.py:12338-12368"
 
 # ── 입출력 ──
 inputs:

@@ -8,7 +8,7 @@ signature: "(min_age_seconds=300, excel_diag_max_age_seconds=86400, mei_max_age_
 role: "[디스크 누수 방지] 앱 시작 시 이전 실행(크래시/강제종료 포함)이 남긴 임시 작업물을 정리한다."
 role_source: docstring
 version: "0.7.4"
-loc: "serve_b2b.py:569-728"
+loc: "serve_b2b.py:576-735"
 
 # ── 입출력 ──
 inputs:

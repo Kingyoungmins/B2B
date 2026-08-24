@@ -8,7 +8,7 @@ signature: "(options)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
 version: "0.7.4"
-loc: "excel-mirror.js:1378-1378"
+loc: "excel-mirror.js:1395-1395"
 
 # ── 입출력 ──
 inputs:
@@ -31,10 +31,12 @@ calls_external:
   - "Number"
   - "clearInterval"
   - "filter"
+  - "isArray"
   - "join"
   - "map"
   - "max"
   - "now"
+  - "pop"
   - "slice"
 called_by:
   - "_reapplyVbaPipelineToLiveImpl"

@@ -8,7 +8,7 @@ signature: "(steps, sentIdxList)"
 role: "보낸 스텝 중 '지금 꺼져 있는' 스텝이 있으면 그 자리에서 잡아낸다 — 이게 제보의 핵심 증거다."
 role_source: banner
 version: "0.7.4"
-loc: "pipeline.js:4322-4322"
+loc: "pipeline.js:4326-4326"
 
 # ── 입출력 ──
 inputs:

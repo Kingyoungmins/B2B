@@ -45,6 +45,7 @@ called_by:
   - "beginUiBusy"
   - "endExcelMirrorApplyLoading"
   - "endUiBusy"
+  - "fetchOpenAICompat"
   - "loadLogic"
   - "markLivePipelineOutOfSync"
   - "pipelineForSave"
@@ -70,7 +71,7 @@ timestamp: "0.7.4-gen"
 
 ## 관계
 - 호출: `isNativeExcelShell`
-- 피호출(영향 전파 경로): `_fail`, `_installUiBusyInputGuard`, `_lazyFail`, `_traceMap`, `addAssistantReply`, `applyVbaStepToLiveExcel`, `assistStartFreshTopicForDiagnosis`, `beginExcelMirrorApplyLoading`, `beginUiBusy`, `endExcelMirrorApplyLoading`, `endUiBusy`, `loadLogic`, `markLivePipelineOutOfSync`, `pipelineForSave`, `reportPipelineError`, `requestErrorRecovery`, `runnerExtractMappingRequirements`, `switchVisibleExcelMirrorToFileId`, `tracePipelineRun`, `traceToggleOnRoute`, `traceValidationStage`, `validateAssistantCodeBeforeApply`
+- 피호출(영향 전파 경로): `_fail`, `_installUiBusyInputGuard`, `_lazyFail`, `_traceMap`, `addAssistantReply`, `applyVbaStepToLiveExcel`, `assistStartFreshTopicForDiagnosis`, `beginExcelMirrorApplyLoading`, `beginUiBusy`, `endExcelMirrorApplyLoading`, `endUiBusy`, `fetchOpenAICompat`, `loadLogic`, `markLivePipelineOutOfSync`, `pipelineForSave`, `reportPipelineError`, `requestErrorRecovery`, `runnerExtractMappingRequirements`, `switchVisibleExcelMirrorToFileId`, `tracePipelineRun`, `traceToggleOnRoute`, `traceValidationStage`, `validateAssistantCodeBeforeApply`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

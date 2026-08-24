@@ -8,7 +8,7 @@ signature: "(steps)"
 role: "적용 서명이 비어 있으면(불러오기·무효화) 모른다 = false."
 role_source: banner
 version: "0.7.4"
-loc: "pipeline.js:4889-4889"
+loc: "pipeline.js:4893-4893"
 
 # ── 입출력 ──
 inputs:

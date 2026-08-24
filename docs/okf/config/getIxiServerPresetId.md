@@ -8,7 +8,7 @@ signature: "(upstream)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
 version: "0.7.4"
-loc: "config.js:366-366"
+loc: "config.js:384-384"
 
 # ── 입출력 ──
 inputs:
@@ -29,6 +29,7 @@ calls_external:
   - "trim"
 called_by:
   - "getIxiServerLabel"
+  - "ixiFailoverUpstreams"
   - "openUserSettingsModal"
 reads: []
 writes: []
@@ -44,7 +45,7 @@ timestamp: "0.7.4-gen"
 
 ## 관계
 - 호출: 없음
-- 피호출(영향 전파 경로): `getIxiServerLabel`, `openUserSettingsModal`
+- 피호출(영향 전파 경로): `getIxiServerLabel`, `ixiFailoverUpstreams`, `openUserSettingsModal`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

@@ -8,7 +8,7 @@ signature: "()"
 role: "Delete runtime-only result/snapshot files created under BACKEND_DIR."
 role_source: docstring
 version: "0.7.4"
-loc: "serve_b2b.py:474-525"
+loc: "serve_b2b.py:481-532"
 
 # ── 입출력 ──
 inputs: []

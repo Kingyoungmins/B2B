@@ -8,7 +8,7 @@ signature: "(app, fallback_session=None, fallback_wb=None)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
 version: "0.7.4"
-loc: "serve_b2b.py:6467-6477"
+loc: "serve_b2b.py:6577-6587"
 
 # ── 입출력 ──
 inputs:

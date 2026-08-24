@@ -9,7 +9,7 @@ signature: "(self, sheet, sum_cols, label_col=None, label='합계', header_row=1
 role: "표 끝(마지막 데이터행 바로 아래)에 합계 행을 만든다. sum_cols(열 리스트/단일)에 =SUM(데이터범위) 수식을"
 role_source: docstring
 version: "0.7.4"
-loc: "serve_b2b.py:14174-14193"
+loc: "serve_b2b.py:14286-14305"
 
 # ── 입출력 ──
 inputs:

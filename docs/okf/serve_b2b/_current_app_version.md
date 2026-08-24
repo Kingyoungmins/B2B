@@ -8,7 +8,7 @@ signature: "()"
 role: "지금 돌고 있는 AX-Cell 의 버전. 반환 {version, normalized, source}."
 role_source: docstring
 version: "0.7.4"
-loc: "serve_b2b.py:227-271"
+loc: "serve_b2b.py:234-278"
 
 # ── 입출력 ──
 inputs: []
@@ -43,6 +43,7 @@ calls_external:
   - "sys"
 called_by:
   - "B2BHandler.do_GET"
+  - "_start_log_sync"
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
@@ -57,7 +58,7 @@ timestamp: "0.7.4-gen"
 
 ## 관계
 - 호출: `_exe_file_version`, `_normalize_version_text`, `add`, `app_base_dir`, `append`, `raw`
-- 피호출(영향 전파 경로): `B2BHandler.do_GET`
+- 피호출(영향 전파 경로): `B2BHandler.do_GET`, `_start_log_sync`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`
