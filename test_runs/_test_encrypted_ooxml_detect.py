@@ -22,11 +22,13 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 _src = (ROOT / "serve_b2b.py").read_text(encoding="utf-8-sig")
-_i = _src.index("def is_encrypted_ooxml(")
+# [2026-08-24] 판정이 3상(_ole_office_verdict)으로 일반화되며 함수가 셋이 됐다 — 묶어서 추출.
+_i = _src.index("def _ole_office_verdict(")
 _j = _src.index("\ndef sniff_text_excel_suffix(")
 _ns = {}
 exec("from pathlib import Path\n" + _src[_i:_j], _ns)
 is_encrypted_ooxml = _ns["is_encrypted_ooxml"]
+_ole_office_verdict = _ns["_ole_office_verdict"]
 
 fails = 0
 
@@ -94,6 +96,14 @@ _p2 = Path(tempfile.mkdtemp()) / "tiny.xlsx"
 _p2.write_bytes(b"\xD0\xCF\x11\xE0")
 check("잘린 OLE 도 False", not is_encrypted_ooxml(str(_p2)))
 check("없는 파일도 False", not is_encrypted_ooxml(str(Path(tempfile.mkdtemp()) / "nope.xlsx")))
+
+print("[5] 3상 판정(_ole_office_verdict) — 사내 DRM 래퍼(자체 스트림)를 '구형 평문'과 가른다")
+check("MIP 배치=encrypted", _ole_office_verdict(build_cfb(MIP, 512)) == "encrypted")
+check("구형 .xls(Workbook)=plain", _ole_office_verdict(build_cfb(XLS, 512)) == "plain")
+DRM_WRAP = ["Root Entry", "\x05VendorInfo", "EncryptedContent", "VendorPolicy"]
+check("정체불명 스트림(사내 DRM 래퍼)=unknown ← 예전 bool 이 '구형 평문'으로 오인하던 자리",
+      _ole_office_verdict(build_cfb(DRM_WRAP, 512)) == "unknown")
+check("zip/깨진 파일=unknown(구조 못 읽음)", _ole_office_verdict(str(_p)) == "unknown")
 
 print("")
 print("RESULT: ALL PASS" if fails == 0 else "RESULT: %d FAIL" % fails)

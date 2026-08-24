@@ -3619,12 +3619,57 @@
       "title": "[제보] 개발망 vLLM 헬스는 200인데 챗 전멸 — 서버 모델 3.6→3.8 교체.",
       "checks": [
         [
-          "node",
-          "-e",
-          "const s=require(\"fs\").readFileSync(\"scripts/llm-api.js\",\"utf8\");process.exit(/effectiveDevVllmModel/.test(s)&&/Qwen3\\.8-27B-FP8/.test(require(\"fs\").readFileSync(\"scripts/config.js\",\"utf8\"))?0:1)"
+          "marker",
+          "scripts/llm-api.js::effectiveDevVllmModel"
+        ],
+        [
+          "marker",
+          "scripts/config.js::Qwen3.8-27B-FP8"
         ]
       ],
       "fix": "실측: /v1/models=Qwen/Qwen3.8-27B-FP8, 저장값 3.6 → 404. 기본값 갱신+레거시 승격 목록화(3.5/3.6). 근본: 호출 전 서버 /v1/models 대조(5분 캐시)해 없으면 첫 모델로 자동 전환(effectiveDevVllmModel) — 다음 교체에도 안 죽는다. 전환은 devvllm.model.autoswitch 로 기록."
+    },
+    {
+      "id": "FAST-DELETE-GRAY-SCREEN-RESHOW",
+      "title": "[제보 2026-08-24] 마지막 단계 빠른 삭제 후 회색 화면 — 탭을 눌러야 Excel 이 보임.",
+      "checks": [
+        [
+          "marker",
+          "scripts/excel-mirror.js::function scheduleExcelMirrorReshowAfterReplace"
+        ],
+        [
+          "marker",
+          "scripts/pipeline.js::scheduleExcelMirrorReshowAfterReplace(excelId)"
+        ],
+        [
+          "marker",
+          "scripts/excel-mirror.js::mirror.replace.reshow"
+        ]
+      ],
+      "fix": "replace 로 워크북 재오픈 직후의 show-only 가 새 SDI 프레임 준비 전이라 조용히 무산(반환·예외 삼킴) → excelPanel 회색 바탕만 남음. 실측: 17:39:18 무산 → 17:39:24 탭 클릭의 show-only 재전송으로 즉시 복구. 적용 잠금 해제 뒤 같은 show-only 를 1회 재전송(applying 중이면 뒤 적용 흐름에 위임, 탭 이동 시 존중). 결과는 mirror.replace.reshow 로 기록. (리뷰 반영: uiClickGuard 승계, applying 은 취소 대신 최대 2회 연기, shown=false 1.2초 재시도, 세션 정리 시 타이머 해제.)"
+    },
+    {
+      "id": "SECURE-DOC-CORP-DRM-OLE-MISS",
+      "title": "[제보 2026-08-24] 사내 DRM 문서 미인식(AIP 는 인식) + 서버 로그 무음.",
+      "checks": [
+        [
+          "python",
+          "test_runs/_test_secure_doc.py"
+        ],
+        [
+          "python",
+          "test_runs/_test_encrypted_ooxml_detect.py"
+        ],
+        [
+          "marker",
+          "serve_b2b.py::secure.upload"
+        ],
+        [
+          "marker",
+          "serve_b2b.py::def _ole_office_verdict"
+        ]
+      ],
+      "fix": "예전 bool checker(EncryptedPackage 유무)는 표준 OOXML 암호화(AIP)만 잡아 사내 DRM 의 OLE 래퍼(자체 스트림)가 '구형 xls 평문'으로 무음 통과 — 게이트 미작동, 산출물 평문 유출. 확장자 보정은 DRM 이 원본 이름(.xls)을 보존하면 도로 뚫림(리뷰 지적)이라 폐기하고, OLE 디렉터리 스트림 '내용' 3상 판정(_ole_office_verdict: encrypted/plain/unknown)으로 교체 — 구형 본문 스트림(Workbook 등)이 실재하는 파일만 평문, 정체불명 구성은 Gateway 문의(-200이 최종). 업로드 판정은 secure.upload(sniff=해제 前 _file_label_kind, released/skipped=plain·disabled) 트레이스로 전부 기록."
     }
   ]
 }

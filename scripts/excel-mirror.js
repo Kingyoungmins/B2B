@@ -44,6 +44,10 @@ const excelMirror = {
   applying: false,
   applyLoadingTimer: null,
   quietUntil: 0,
+  // [2026-08-24 회색화면] replace 재오픈 후 show-only 재전송 타이머(excelId 별) — 아래 정리 블록과 짝.
+  replaceReshowTimers: {},
+  // [2026-08-24 선택 미기록 계측] 선택 폴 게이트의 '마지막 사유'(excelId 별) — 사유 전환 때만 트레이스.
+  selPollLastReasonByExcelId: {},
   // owner 모드: 라이브 Excel 을 호스트의 owner 로 띄움(프레임은 유지, frameless 와 조합만 피하면 선택 정상).
   // z-order/최소화를 OS가 처리하므로 주기 raise/hide-inactive/포커스 재배치는 끈다(드래그 선택 보호).
   ownerMode: true,
@@ -941,6 +945,11 @@ function forgetExcelMirrorSession(excelId) {
     }
   });
   delete excelMirror.hiddenByExcelId[excelId];
+  if (excelMirror.replaceReshowTimers && excelMirror.replaceReshowTimers[excelId]) {
+    clearTimeout(excelMirror.replaceReshowTimers[excelId]);
+    delete excelMirror.replaceReshowTimers[excelId];
+  }
+  if (excelMirror.selPollLastReasonByExcelId) delete excelMirror.selPollLastReasonByExcelId[excelId];
   if (excelMirror.activeExcelId === excelId) excelMirror.activeExcelId = null;
   if (!Object.keys(excelMirror.sessionsByFileId).length) stopExcelMirrorPolling();
   updateMirrorShellStatus();
@@ -1457,6 +1466,45 @@ function scheduleRestoreActiveExcelMirror(delay = 120, options = {}) {
   }, guardedDelay);
 }
 
+// [제보 2026-08-24 회색 화면] /api/excel/replace 는 워크북을 닫고 다시 열어 SDI 프레임이 새로
+// 생긴다. 복원 직후의 show-only 가 그 프레임이 준비되기 전에 도착하면 조용히 무산되는데
+// (호출부가 반환값을 버리고 예외도 삼킨다), 그 뒤엔 재시도가 없어 excelPanel 회색 바탕만
+// 남았다 — 사용자가 탭을 다시 눌러야(=show-only 재전송) 보였다. 실측(17:39): 복원 직후
+// show-only 무산 → 회색 화면 → 17:39:24 탭 클릭의 show-only(재배치 없이 show 만)로 즉시 복구.
+// 적용 잠금이 풀리고 프레임이 자리잡을 시간 뒤, 탭 클릭과 같은 show-only 를 한 번 더 보낸다.
+// 뒤이어 적용이 도는 경로(마지막 단계 '수정', 체크포인트 이어실행)는 적용 흐름이 표시를
+// 담당하므로 건너뛰고(applying), 사용자가 다른 탭으로 갔으면 그 탭을 존중한다.
+function scheduleExcelMirrorReshowAfterReplace(excelId, delay = 700, attempt = 0) {
+  if (!excelId) return;
+  const trace = extra => {
+    try { traceClientUiEvent("mirror.replace.reshow", { excelId: String(excelId), attempt, ...extra }); } catch (_) {}
+  };
+  excelMirror.replaceReshowTimers = excelMirror.replaceReshowTimers || {};
+  clearTimeout(excelMirror.replaceReshowTimers[excelId]);
+  // 사용자 첫 클릭 보호 구간(uiClickGuardUntil)을 형제(scheduleRestore)와 동일하게 승계한다.
+  const guardedDelay = Math.max(Math.max(0, Number(delay) || 0),
+    Math.max(0, (excelMirror.uiClickGuardUntil || 0) - Date.now()));
+  excelMirror.replaceReshowTimers[excelId] = setTimeout(() => {
+    delete excelMirror.replaceReshowTimers[excelId];
+    if (currentExcelId() !== excelId) { trace({ skip: "tab-moved" }); return; }
+    // 적용 중이면 취소가 아니라 '연기'한다(최대 2회) — 수정 경로에서 뒤이은 적용이 초반에
+    // 실패하면(정적검사 거부 등) 표시 담당이 사라져 회색이 남는다(코드리뷰 지적).
+    if (excelMirror.applying) {
+      if (attempt < 2) { trace({ skip: "applying-deferred" }); scheduleExcelMirrorReshowAfterReplace(excelId, 700, attempt + 1); }
+      else trace({ skip: "applying-giveup" });
+      return;
+    }
+    showOnlyExcelMirrorWindow(excelId)
+      .then(shown => {
+        trace({ shown: !!shown });
+        // shown=false(호스트 최소화/프레임 미준비 skipped)는 한 번 더 — 저사양에서 프레임
+        // 생성이 700ms 를 넘는 실측이 있다(replace 파킹 재시도 1.2초와 같은 근거).
+        if (!shown && attempt < 2) scheduleExcelMirrorReshowAfterReplace(excelId, 1200, attempt + 1);
+      })
+      .catch(err => trace({ error: String((err && err.message) || err || "").slice(0, 200) }));
+  }, guardedDelay);
+}
+
 async function trimExcelMirrorSessionCache(activeFileId) {
   const entries = Object.entries(excelMirror.sessionsByFileId);
   if (entries.length <= EXCEL_MIRROR_MAX_CACHED_SESSIONS) return;
@@ -1607,9 +1655,15 @@ function startExcelMirrorPolling() {
     // Selection.Address 읽기는 hover-info(수식표시줄)처럼 포커스를 끊지 않는다.
     excelMirror.selectionTimer = setInterval(() => {
       if (document.hidden || excelMirror.hostActive === false) return;
-      if (isNativeExcelShell() && Date.now() < (excelMirror.quietUntil || 0)) return;
+      if (isNativeExcelShell() && Date.now() < (excelMirror.quietUntil || 0)) {
+        // [제보 2026-08-24 계측 사각] 폴 함수에 못 들어가고 여기서 죽는 경우(적용 직후 quiet,
+        // 세션 매핑 미확립)가 정확히 '업로드 직후 선택 안 됨' 재현 구간이다 — 전환 시 1줄만 남긴다.
+        _traceSelectionPollGate(currentExcelId(), "quiet");
+        return;
+      }
       const excelId = currentExcelId();
-      if (excelId) pollExcelSelection(excelId).catch(() => {});
+      if (!excelId) { _traceSelectionPollGate(null, "no-session", { currentFileId: String(state.currentFileId || "") }); return; }
+      pollExcelSelection(excelId).catch(() => {});
     }, isNativeExcelShell() ? 550 : 400);
   }
   if (!excelMirror.formulaInfoTimer) {
@@ -1645,22 +1699,49 @@ function stopExcelMirrorPolling() {
 
 // [0.5.17] 현재 탭의 Selection 만 가볍게 읽어 선택→채팅 반영을 빠르게 한다. active-sync(탭 따라가기)는
 // 하지 않으므로(무거운 changes 폴이 담당) 탭 회귀 등 회귀 위험이 없다. 선택이 '바뀐 경우에만' 채팅에 반영.
+// [제보 2026-08-24 "업로드 후 탭을 눌러야 선택이 됨"] 선택 폴이 어디서 버려지는지 전부
+// 무음이라 로그로 특정이 안 됐다. 550ms 폴마다 찍으면 로그가 잠기므로(트레이스 락 경합),
+// '사유가 바뀌는 순간'만 한 줄 남긴다 — 다음 재현에서 empty-address(백엔드 읽기 실패)인지
+// tab-mismatch(탭·세션 어긋남)인지 ok(폴은 정상=다른 문제)인지 바로 갈린다.
+function _traceSelectionPollGate(excelId, reason, extra) {
+  // excelId 별 전환 감지 — 전역 키면 탭 A 가 empty-address 로 잠긴 뒤 탭 B 의 같은 사유가
+  // 통째로 삼켜져, 정작 제보된 탭의 로그가 비는 오진을 만든다(코드리뷰 지적).
+  const key = String(excelId || "(none)");
+  const last = excelMirror.selPollLastReasonByExcelId || (excelMirror.selPollLastReasonByExcelId = {});
+  if (last[key] === reason) return;
+  last[key] = reason;
+  try {
+    traceClientUiEvent("mirror.selection.gate", { excelId: key, reason, ...(extra || {}) });
+  } catch (_) {}
+}
+
 async function pollExcelSelection(excelId) {
   if (!excelId || excelMirror.selectionPolling) return;
   if (excelMirror.runnerHeadless) return;  // 실행기 헤드리스: 미러 없음
-  if (Date.now() < excelMirror.mutedUntil) return;  // 적용/전환 중 억제
+  if (Date.now() < excelMirror.mutedUntil) {  // 적용/전환 중 억제
+    _traceSelectionPollGate(excelId, "muted");
+    return;
+  }
   excelMirror.selectionPolling = true;
   try {
     const data = await postExcelMirror("/api/excel/selection", { excelId });
-    if (!data || !data.address) return;
+    if (!data || !data.address) {
+      _traceSelectionPollGate(excelId, "empty-address", { sheet: (data && data.sheet) || "" });
+      return;
+    }
     const fileId = fileIdForExcelMirrorId(excelId);
     // 현재 탭의 선택만 반영(다른 탭/스테일 방지). syncSelectionFromExcel 도 동일 가드가 있다.
-    if (!fileId || fileId !== state.currentFileId) return;
+    if (!fileId || fileId !== state.currentFileId) {
+      _traceSelectionPollGate(excelId, "tab-mismatch", { fileId: String(fileId || ""), currentFileId: String(state.currentFileId || "") });
+      return;
+    }
+    _traceSelectionPollGate(excelId, "ok");
     const appendToChat = shouldAppendExcelSelectionFromPoll(excelId, data.sheet, data.address, {});
     syncSelectionFromExcel(data.sheet, data.address, { appendToChat, fileId, excelId });
   } catch (err) {
     if (isMissingExcelSessionError(err)) forgetExcelMirrorSession(excelId);
-    // 그 외 오류는 조용히(폴 실패는 다음 틱에서 회복)
+    // 그 외 오류는 조용히(폴 실패는 다음 틱에서 회복) — 단 사유 전환 계측은 남긴다.
+    _traceSelectionPollGate(excelId, "error", { error: String((err && err.message) || err || "").slice(0, 120) });
   } finally {
     excelMirror.selectionPolling = false;
   }

@@ -77,8 +77,12 @@ ck("(13) 기존 번호표는 덮지 않음", sb.state.pipeline[4].originHistId =
 // ── 4. 배선(정적) ───────────────────────────────────────────────────────────
 ck("(14) 스텝 생성 3경로에 번호표 부여",
    (chatSrc.match(/originHistId: originHistIdForPrompt\(/g) || []).length >= 3);
+// [SBAGENT-289 ①b] 완전 일치 매칭(oh)이 [정확 참조] 블록 차이로 조용히 실패해 번호표가
+// 최초 말풍선에 남았다 — 느슨한 매칭(loose: exact→prefix→last)으로 교체됐다. 갱신 '존재'는
+// 그대로 검증하되, 구현 모양은 새 코드(_m.histId 대입)로 본다.
 ck("(15) 채팅 수정 성공 시 번호표 갱신(시나리오②)",
-   /st\.originHistId = oh/.test(chatSrc));
+   /originHistIdForPromptLoose\(_src\)/.test(chatSrc)
+   && /st\.originHistId = _m\.histId/.test(chatSrc));
 ck("(16) 수정 갱신이 prompt 는 건드리지 않음(대상 추론 보호)",
    /prompt 는 건드리지 않는다/.test(chatSrc));
 ck("(17) 스크롤 0단: 번호표로 DOM 조회",

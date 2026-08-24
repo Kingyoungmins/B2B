@@ -181,7 +181,11 @@ function originHistIdForPrompt(promptText) {
 function originHistIdForPromptLoose(promptText) {
   const want = String(promptText || "").trim();
   const hist = state.chatHistory || [];
-  if (want) {
+  // [코드리뷰 2026-08-24] 빈 프롬프트(replyContext 유실)는 매칭하지 않는다 — '마지막 user'
+  // 폴백까지 흘러가면 근거 없이 최신 말풍선을 스탬프해, 이 기능이 없애려던 '남의 말풍선
+  // 잡기'가 방향만 바뀌어 재현된다. 근거가 없으면 갱신 안 함(기존 번호표 유지)이 정직하다.
+  if (!want) return { histId: null, via: "none" };
+  {
     const exact = originHistIdForPrompt(promptText);
     if (exact) return { histId: exact, via: "exact" };
     for (let i = hist.length - 1; i >= 0; i--) {

@@ -126,8 +126,20 @@ print("[1] 보안문서로 보이는가(looks_secured) — 확장자가 아니�
 check("PK(평문 xlsx)=아니오", secure_doc.looks_secured(PLAIN_XLSX[:8]) is False)
 check("OLE+EncryptedPackage=예",
       secure_doc.looks_secured(b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1", path="x", encrypted_checker=lambda p: True) is True)
-check("OLE 구형 xls=아니오",
-      secure_doc.looks_secured(b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1", path="x", encrypted_checker=lambda p: False) is False)
+check("OLE 구형 xls(bool checker False=평문 확인)=아니오",
+      secure_doc.looks_secured(b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1", name="구형.xls", path="x", encrypted_checker=lambda p: False) is False)
+# [제보 2026-08-24 사내 DRM 미인식] 예전 bool checker(EncryptedPackage 유무)는 AIP 만 잡았다 —
+# 사내 DRM 의 OLE 래퍼(자체 스트림)는 '구형 xls 평문' 취급으로 조용히 통과해 산출물이 평문으로
+# 샜다. 확장자 보정은 안 된다(DRM 이 원본 이름 .xls 를 보존하면 도로 뚫림 — 코드리뷰 지적).
+# checker 를 3상(encrypted/plain/unknown)으로: '구형 본문 스트림이 실제로 있는' 파일만 평문,
+# 정체불명 구성은 이름과 무관하게 서버에 문의(-200이 최종 판정).
+OLE8 = b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"
+check("3상 encrypted=예", secure_doc.looks_secured(OLE8, name="a.xlsx", path="x", encrypted_checker=lambda p: "encrypted") is True)
+check("3상 plain(본문 스트림 확인)=아니오 — 위장 .xlsx 라도", secure_doc.looks_secured(OLE8, name="위장.xlsx", path="x", encrypted_checker=lambda p: "plain") is False)
+check("3상 unknown(래퍼 의심)=예 — 이름이 구형 .xls 여도", secure_doc.looks_secured(OLE8, name="문서.xls", path="x", encrypted_checker=lambda p: "unknown") is True)
+check("checker 예외=예(못 읽으면 서버에 묻는다)",
+      secure_doc.looks_secured(OLE8, name="문서.xls", path="x",
+                               encrypted_checker=lambda p: (_ for _ in ()).throw(OSError("잠김"))) is True)
 check("텍스트(csv)=아니오", secure_doc.looks_secured(b"a,b,c,d,e") is False)
 check("한글 텍스트=아니오", secure_doc.looks_secured("이름,금액".encode("cp949")) is False)
 check("정체불명 바이너리=예", secure_doc.looks_secured(b"\x8bMIP\x00\x01\x02\x03") is True)

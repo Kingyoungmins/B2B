@@ -1751,16 +1751,41 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
         # [문서보안 0.7.5] 보안문서(AIP/DRM)면 versionTest 서버 릴레이로 풀어 '작업본'을 평문으로
         # 바꾼 뒤 검사한다(사용자 원본 파일은 그대로). 해제 실패는 업로드를 막지 않는다 —
         # Excel COM 이 사용자 라이선스로 열 수 있는 경우가 있어서다(응답 secure.error 로만 알린다).
+        # [제보 2026-08-24 "서버 로그에 아무것도 안 뜸"] 판정 결과가 업로드 응답에만 실리고
+        # 서버 로그엔 흔적이 없어, DRM 문서가 미인식으로 통과해도 진단할 수 없었다.
+        # 컨테이너 정체는 반드시 해제 '전'에 읽는다(코드리뷰 지적 — 해제가 작업본을 평문으로
+        # 교체한 뒤 읽으면 released 건이 전부 zip 으로 찍혀 도착 형태를 알 수 없다). 분류는
+        # 손수 만들지 않고 기존 _file_label_kind(none/label/encrypted/legacy-ole)를 재사용.
+        # _file_label_kind 는 office 컨테이너가 아니면(csv 등 텍스트 포함) "" 를 준다 —
+        # "unreadable" 로 찍으면 디스크 장애로 오독하므로 "other" 로 남긴다(리뷰 지적).
+        _sniff = _file_label_kind(path) or "other"
         _t_secure0 = time.perf_counter()
         secure_info = None
         try:
             import secure_doc
-            secure_info = secure_doc.maybe_decrypt_upload(path, name, encrypted_checker=is_encrypted_ooxml)
+            secure_info = secure_doc.maybe_decrypt_upload(path, name, encrypted_checker=_ole_office_verdict)
             if secure_info and secure_info.get("released"):
                 secure_doc.mark_released(workbook_id)
         except Exception as _sec_err:
             secure_info = {"checked": True, "released": False, "error": str(_sec_err)}
         _t_secure = (time.perf_counter() - _t_secure0) * 1000
+        # 검사한 건(성공/실패/notDrm)은 물론 '건너뛴' 것도 사유를 갈라 남긴다 — 기능이 꺼진
+        # 환경(disabled)과 평문 판정(plain)이 같은 무음이면 미인식 제보 때 헛다리를 짚는다.
+        try:
+            _sec_payload = {"name": name, "sniff": _sniff}
+            if secure_info:
+                _sec_payload.update(
+                    released=bool(secure_info.get("released")),
+                    notDrm=bool(secure_info.get("notDrm")),
+                    error=str(secure_info.get("error") or "")[:200],
+                    elapsedMs=secure_info.get("elapsedMs") or round(_t_secure),
+                )
+            else:
+                import secure_doc as _sd
+                _sec_payload["skipped"] = "plain" if _sd.config().get("enabled") else "disabled"
+            _vba_trace("secure.upload", **_sec_payload)
+        except Exception:
+            pass
         _t_inspect0 = time.perf_counter()
         meta = inspect_workbook(path)
         _t_inspect = (time.perf_counter() - _t_inspect0) * 1000
@@ -2884,6 +2909,27 @@ def is_ole_excel_file(path):
     return office_file_signature(path).startswith(b"\xD0\xCF\x11\xE0")
 
 
+def _ole_office_verdict(path):
+    """[코드리뷰 2026-08-24] OLE 복합문서의 정체를 스트림 '내용'으로 3상 판정한다.
+
+    반환: "encrypted"(EncryptedPackage — 표준 OOXML 암호화/AIP) /
+          "plain"(Workbook·Book·WordDocument 등 구형 Office 본문 스트림 — 진짜 구형 문서) /
+          "unknown"(둘 다 아님 — 사내 DRM 래퍼(자체 스트림) 의심, 구조 파싱 실패 포함).
+
+    왜 3상인가: 사내 DRM 은 OLE 래퍼에 자체 스트림을 쓴다. 예전 bool 판정(EncryptedPackage
+    유무)만으로는 그 래퍼가 '구형 xls 평문'으로 오인돼 조용히 통과했고, 확장자 보정은 DRM 이
+    원본 이름(.xls)을 보존하면 다시 뚫린다 — 이름이 아니라 내용이 판정해야 한다.
+    같은 디렉터리 워크에서 스트림 이름만 더 보므로 추가 I/O 는 0이다."""
+    names = _ole_directory_stream_names(path)
+    if names is None:
+        return "unknown"
+    if "EncryptedPackage" in names:
+        return "encrypted"
+    if names & {"Workbook", "Book", "WordDocument", "PowerPoint Document"}:
+        return "plain"
+    return "unknown"
+
+
 def is_encrypted_ooxml(path):
     """[사내 MIP 라벨 2026-08-12] 암호화된 xlsx 인가 — 구형 .xls 와 구분한다.
 
@@ -2893,23 +2939,29 @@ def is_encrypted_ooxml(path):
     Excel 은 MIP 로 복호화해 열어 주지만, 그 뒤로는 '이 문서는 구형 xls'라는 잘못된 전제가 붙는다.
     OLE 안에 'EncryptedPackage' 스트림이 있으면 암호화된 OOXML 이다(구형 .xls 엔 'Workbook' 이 있다).
     헤더 512바이트 + 디렉터리 1섹터만 읽는다."""
+    return _ole_office_verdict(path) == "encrypted"
+
+
+def _ole_directory_stream_names(path):
+    """OLE 복합문서 디렉터리의 스트림 이름 집합. OLE 아니거나 구조를 못 읽으면 None."""
     # [적대 검증에서 잡은 결함] 디렉터리를 1섹터만 읽으면 512바이트 섹터에서 엔트리 4개까지만 본다.
     # MIP/IRM 암호화본의 실제 배치는 Root / \x06DataSpaces / DataSpaceMap / DataSpaceInfo /
     # TransformInfo / DRMEncryptedTransform / EncryptedPackage / EncryptionInfo 순이라 7번째에 있다
     # → 못 찾고 예전 동작(.xls 로 복사해 열기)으로 조용히 되돌아갔다.
     # 그래서 FAT 를 따라 디렉터리 체인을 이어 읽는다(상한 32섹터 — 무한 체인 방어).
     MAX_DIR_SECTORS = 32
+    names = set()
     try:
         with Path(path).open("rb") as f:
             hdr = f.read(512)
             if hdr[:8] != b"\xD0\xCF\x11\xE0\xA1\xB1\x1A\xE1":
-                return False
+                return None
             sect_size = 1 << int.from_bytes(hdr[30:32], "little")
             if not (64 <= sect_size <= 65536):
-                return False
+                return None
             dir_sect = int.from_bytes(hdr[48:52], "little")
             if dir_sect >= 0xFFFFFFFA:
-                return False
+                return None
 
             fat_cache = {}
 
@@ -2951,12 +3003,12 @@ def is_encrypted_ooxml(path):
                         nm = ent[:n_len - 2].decode("utf-16-le", "ignore")
                     except Exception:
                         continue
-                    if nm == "EncryptedPackage":
-                        return True
+                    # \x05SummaryInformation 류 제어문자 접두는 판정에 안 쓰므로 그대로 담는다.
+                    names.add(nm)
                 cur = _fat_next(cur)
     except Exception:
-        return False
-    return False
+        return None
+    return names
 
 
 def sniff_text_excel_suffix(path):

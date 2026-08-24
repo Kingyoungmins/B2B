@@ -4644,6 +4644,10 @@ async function _restoreSnapshotByIds(resultId, excelId, options = {}) {
     // 고치려던 증상이 방향만 바뀌어 재현된다.
     if (options.landTab !== false) landAppTabOnExcelSession(excelId);
     if (typeof scheduleRestoreActiveExcelMirror === "function") scheduleRestoreActiveExcelMirror(120);
+    // [제보 2026-08-24 회색 화면] 위 showOnly 가 replace 직후(새 프레임 준비 전)라 무산되면
+    // scheduleRestore 는 위치캐시 short-circuit + raise 뿐이라 못 살린다(show 가 아니다).
+    // 잠금 해제 뒤 탭 클릭과 동일한 show-only 를 한 번 재전송한다(함수 주석에 실측 근거).
+    if (typeof scheduleExcelMirrorReshowAfterReplace === "function") scheduleExcelMirrorReshowAfterReplace(excelId);
     return true;
   } finally {
     if (typeof endExcelMirrorApplyLoading === "function") endExcelMirrorApplyLoading();

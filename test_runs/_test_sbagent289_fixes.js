@@ -68,6 +68,10 @@ console.log("[1b] originHistId 갱신 — 완전 일치 실패 시에도 갱신�
   check("최신 것을 우선한다(h1 이 아니라 h2)", loose("R열 데이터를").histId === "h2");
   const r3 = mk({ chatHistory: [] })("아무거나");
   check("히스토리가 비면 null(엉뚱한 갱신 금지)", r3.histId === null && r3.via === "none");
+  // [코드리뷰 2026-08-24] 빈 프롬프트(replyContext 유실)가 '마지막 user' 폴백까지 흘러가면
+  // 근거 없이 최신 말풍선을 스탬프한다 — 갱신 안 함이 정답.
+  const r4 = loose("");
+  check("빈 프롬프트면 null(최신 말풍선 오스탬프 금지)", r4.histId === null && r4.via === "none");
 }
 check("수정 적용부가 loose 매칭을 쓰고 어느 단계로 잡혔는지 남긴다",
   /originHistIdForPromptLoose\(_src\)/.test(cu) && /edit\.histid\.update/.test(cu));

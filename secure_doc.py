@@ -249,18 +249,33 @@ def encrypt_bytes(data, filename):
 def looks_secured(head, name="", encrypted_checker=None, path=None):
     """작업본이 보안문서로 '보이는가' — 최종 판정은 Gateway(-200)가 한다.
       · PK(zip)      → 평문 xlsx(라벨만 붙은 것 포함) → 아니다
-      · OLE 복합문서 → EncryptedPackage 가 있으면 그렇다(구형 .xls 는 아니다)
+      · OLE 복합문서 → checker 가 스트림 내용으로 3상 판정: 암호화(encrypted)면 그렇다,
+                       구형 Office 본문 스트림 확인(plain)이면 아니다, 정체불명(unknown —
+                       사내 DRM 래퍼의 자체 스트림)이면 그렇다고 보고 서버에 물어본다
       · 그 외        → 텍스트(csv 등)면 아니다, 알 수 없는 바이너리(pfile 등)면 그렇다고 보고 시도
     확장자 규칙은 쓰지 않는다(연동규격에 없음 — 내용으로만 본다)."""
     head = bytes(head or b"")
     if head[:4] == b"PK\x03\x04":
         return False
     if head[:4] == b"\xd0\xcf\x11\xe0":
+        # [제보 2026-08-24 사내 DRM 미인식] 예전 bool checker(EncryptedPackage 유무)는 '표준'
+        # OOXML 암호화(AIP)만 잡았다 — 사내 DRM 이 OLE 래퍼에 자체 스트림을 쓰면 '구형 .xls
+        # 평문' 취급으로 로그 한 줄 없이 통과했고, 마커/재암호화 게이트가 안 걸려 산출물이
+        # 평문으로 나갔다(실측: AIP 는 인식, 사내 DRM 미인식). 확장자 보정은 안 된다 — DRM 이
+        # 원본 이름(.xls)을 보존하면 도로 뚫린다(코드리뷰 지적). 그래서 checker 를 3상으로:
+        # 구형 Office 본문 스트림(Workbook 등)이 '실제로 있는' 파일만 평문으로 인정하고,
+        # 정체불명 스트림 구성(=래퍼 의심)·판독 실패는 서버에 물어본다(-200이 최종 판정,
+        # 오판 비용 = 왕복 1회). bool checker(True/False)도 같은 규칙으로 해석된다.
+        verdict = None
         if encrypted_checker is not None and path is not None:
             try:
-                return bool(encrypted_checker(path))
+                verdict = encrypted_checker(path)
             except Exception:
-                return False
+                verdict = None               # 못 읽었다 — 서버에 물어본다
+        if verdict in (True, "encrypted"):
+            return True
+        if verdict in (False, "plain"):
+            return False
         return True
     if not head:
         return False
