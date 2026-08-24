@@ -11443,6 +11443,62 @@ def _self_referencing_formula_cells(data, row0, col0):
     return hits
 
 
+def _col_letter_to_index(letter):
+    """"H" → 8. ColumnIs 가 값 경로에서 쓸 때 필요(클래스 밖이라 컨텍스트 메서드를 못 쓴다)."""
+    n = 0
+    for ch in str(letter or "").strip().upper():
+        if not ("A" <= ch <= "Z"):
+            raise ValueError("열 문자가 아닙니다: %r" % (letter,))
+        n = n * 26 + (ord(ch) - 64)
+    if n <= 0:
+        raise ValueError("열 문자가 비었습니다")
+    return n
+
+
+class ColumnIs:
+    """[0.7.5] 선언적 필터 조건 — "이 열이 이 값들 중 하나".
+
+    ctx.filter_to_sheet(시트, ctx.column_is("H", "안전제일"), "새시트")
+    조건을 이 형태로 주면 값을 파이썬으로 끌어올리지 않고 Excel 자동필터로 거른다.
+    실측 기준(326,114행·21열) 44초 → 몇 초. 람다도 그대로 받으므로 기존 스킬은 영향 없다.
+
+    values 는 문자열 비교다(엑셀 자동필터의 의미론과 같게). 대소문자·앞뒤 공백은
+    ctx.normalize 와 같은 기준으로 맞춘다 — 람다 경로와 결과가 갈리면 안 되기 때문."""
+
+    __slots__ = ("column", "values")
+
+    def __init__(self, column, values):
+        self.column = column
+        if isinstance(values, (list, tuple, set)):
+            self.values = [str(v) for v in values]
+        else:
+            self.values = [str(values)]
+
+    def __call__(self, row):
+        """[중요] 값 경로에서도 그대로 쓰인다.
+
+        자동필터 경로는 표/데이터에 따라 안 탈 수 있고(기본 꺼짐, 병합·보호·0건 등에서도 폴백),
+        그때 이 조건은 평범한 predicate 로 평가돼야 한다. 이게 없으면 'ColumnIs is not callable'
+        로 스킬이 통째로 죽는다 — 실제로 그렇게 터졌다. 두 경로의 판정 기준도 여기서 하나로 맞춘다."""
+        try:
+            idx = self.column
+            if isinstance(idx, str):
+                idx = _col_letter_to_index(idx)
+            i = int(idx) - 1
+            if i < 0 or i >= len(row):
+                return False
+            cur = row[i]
+            cur = "" if cur is None else str(cur).strip()
+            return any(cur == str(v).strip() for v in self.values)
+        except Exception:
+            return False
+
+
+def _as_declarative_filter(predicate):
+    """predicate 가 선언적 조건이면 그대로, 아니면 None(=람다 경로로)."""
+    return predicate if isinstance(predicate, ColumnIs) else None
+
+
 class PythonComSkillContext:
     """생성된 Python 스킬에 노출되는 유일한 능력(capability).
 
@@ -12591,6 +12647,145 @@ class PythonComSkillContext:
         self._shared["structural"].append("apply_filter:%s[%s]=%s" % (ws.Name, column, ",".join(vals)[:60]))
         return ws.Name
 
+    def column_is(self, column, values):
+        """선언적 필터 조건을 만든다(자동필터 경로용). column 은 "H" 같은 열 문자 또는 1-based 번호."""
+        return ColumnIs(column, values)
+
+    # [0.7.5 실험 결과 — 기본 꺼짐] 자동필터 + SpecialCells 복사가 값 읽고쓰기보다 느렸다.
+    #   4열 × 4만행  (16만 칸):  자동필터 1.92초 vs 값 0.34초   → 값이 5.6배 빠름
+    #   21열 × 12만행(252만 칸): 자동필터 14.76초 vs 값 5.00초  → 값이 3.0배 빠름
+    # 정확성과 서식(음영·표시형식·열너비)은 두 경로가 동일했다. 오직 속도만 뒤집혔다.
+    #
+    # 이유: 병목이 '값을 COM 으로 옮기는 것'이 아니라 '흩어진 행을 복사하는 것'이었다.
+    # 매칭이 한 행 건너 하나면 SpecialCells 가 영역 수만 개짜리 다중영역이 되고, Excel 은
+    # 그걸 영역마다 처리한다. 값 경로는 매칭이 아무리 흩어져도 읽기 1회 + 쓰기 1회다.
+    # 정렬돼 뭉쳐 있는 표라면 반대일 수 있으나, 그건 데이터에 달린 것이라 기본값으로 삼을 수 없다.
+    #
+    # 그래서 켜지 않는다. 코드와 실측은 남겨 둔다 — 나중에 '연속 구간 비율'을 먼저 재서
+    # 뭉쳐 있을 때만 타는 식으로 다시 볼 수 있다. B2B_FILTER_NATIVE=1 로 실험만 가능하게 둔다.
+    FILTER_NATIVE_MIN_CELLS = 1000000
+
+    def _filter_native_worth_it(self, ws):
+        if str(os.environ.get("B2B_FILTER_NATIVE") or "").strip() not in ("1", "on", "true"):
+            return False
+        try:
+            used = ws.UsedRange
+            cells = int(used.Rows.Count) * int(used.Columns.Count)
+            self._tick(1)
+            return cells >= self.FILTER_NATIVE_MIN_CELLS
+        except Exception:
+            return False
+
+    def _filter_to_sheet_native(self, ws, sheet, decl, dest_name, header_rows, after):
+        """[0.7.5] 자동필터 + 보이는 행 한 번 복사. 성공하면 시트명, 안 되면 None(호출자가 폴백).
+
+        왜 이 순서인가
+          · 자동필터는 Excel 이 자체 인덱스로 거른다 — 326,114행이어도 값이 COM 을 건너오지 않는다.
+          · SpecialCells(visible).Copy 는 흩어진 행이어도 Excel 이 한 번에 옮긴다. 값-기록 폴백이
+            구간 1500 개에서 포기하던 그 지점이 여기서는 문제가 안 된다.
+          · 행 복사라 음영·표시형식·선행 0·병합이 그대로 따라온다(값 기록은 전부 잃는다).
+        실패하면 반드시 None 을 돌려 기존 경로가 결과를 보장하게 한다 — 여기서 예외를 올리면
+        멀쩡히 되던 스킬이 죽는다."""
+        if str(dest_name) in _excel_collection_names(self._wb.Worksheets):
+            raise PythonComSkillError(f"시트 '{dest_name}' 이 이미 있습니다. 다른 이름을 쓰거나 먼저 삭제하세요.")
+        hr = max(1, int(header_rows))   # 자동필터는 머리글 행이 있어야 성립한다
+        dest_created = False
+        try:
+            used = ws.UsedRange
+            first_row = int(used.Row)
+            first_col = int(used.Column)
+            last_row = first_row + int(used.Rows.Count) - 1
+            last_col = first_col + int(used.Columns.Count) - 1
+            self._tick(3)
+            if last_row <= first_row + hr - 1:
+                return None                        # 데이터 행이 없다 — 기존 경로가 판단하게
+            col_idx = decl.column
+            if isinstance(col_idx, str):
+                col_idx = self._col_index(col_idx)
+            col_idx = int(col_idx)
+            field = col_idx - first_col + 1         # 자동필터 Field 는 범위 안에서의 1-based 위치
+            if field < 1 or field > (last_col - first_col + 1):
+                return None                        # 범위 밖 열 — 조용히 기존 경로로
+            header_row = first_row + hr - 1        # 머리글 마지막 행이 자동필터 기준행
+            data_range = ws.Range(ws.Cells(header_row, first_col), ws.Cells(last_row, last_col))
+            try:
+                if ws.AutoFilterMode:
+                    ws.AutoFilterMode = False
+            except Exception:
+                pass
+            self._tick(2)
+            if len(decl.values) == 1:
+                data_range.AutoFilter(Field=field, Criteria1=decl.values[0])
+            else:
+                data_range.AutoFilter(Field=field, Criteria1=decl.values, Operator=7)   # xlFilterValues
+            self._tick(2)
+            try:
+                visible = data_range.SpecialCells(12)      # xlCellTypeVisible
+            except Exception:
+                return None                        # 매칭 0건이면 Excel 이 예외 — 기존 경로가 안내문을 낸다
+            # 머리글 위쪽 행(제목 등)까지 있으면 그것도 함께 옮긴다 — 기존 경로와 결과를 맞춘다.
+            self.add_sheet(str(dest_name), after=after)
+            dest_created = True
+            dest_ws = self._ws(str(dest_name))
+            out_row = 1
+            if hr > 1:
+                ws.Range(ws.Rows(first_row), ws.Rows(header_row - 1)).Copy(dest_ws.Cells(out_row, 1))
+                out_row += (header_row - first_row)
+                self._tick(2)
+            visible.EntireRow.Copy(dest_ws.Cells(out_row, 1))   # 머리글 + 매칭 행이 한 번에
+            self._tick(2)
+            try:
+                self._app.CutCopyMode = False
+            except Exception:
+                pass
+            # 행 복사는 열 너비를 안 가져온다(값·서식만) — 기존 람다 경로와 같게 한 번 더 붙인다.
+            # 실측에서 이것만 빠져 원본 22.0 이 기본값 8.4 로 나왔다.
+            try:
+                ws.Rows(int(first_row)).Copy()
+                dest_ws.Range("A1").PasteSpecial(8)            # xlPasteColumnWidths
+                self._app.CutCopyMode = False
+                self._tick(2)
+            except Exception:
+                pass
+            # 매칭 행 수는 '복사된 결과'에서 센다. SpecialCells 는 흩어지면 다중영역이 되는데
+            # 그때 Rows.Count 는 첫 영역만 센다 — 그걸 믿으면 2만 행을 1행으로 오판해 폴백한다
+            # (실측으로 걸린 자리다). 결과 시트의 사용 범위가 정확하고 COM 왕복도 한 번뿐이다.
+            matched_n = 0
+            try:
+                matched_n = int(dest_ws.UsedRange.Rows.Count) - hr
+            except Exception:
+                matched_n = 0
+            self._tick(1)
+            if matched_n <= 0:
+                if dest_created:
+                    try:
+                        self.delete_sheet(str(dest_name))      # 반쯤 만든 시트를 남기지 않는다
+                    except Exception:
+                        pass
+                return None                        # 0건 — 기존 경로의 안내문이 더 친절하다
+            self._mark_mutated(dest_ws)
+            self._shared["structural"].append(
+                f"filter_to_sheet_native:{sheet}->{dest_name}({matched_n})")
+            _vba_trace("python_com.filter_native", sheet=str(sheet), dest=str(dest_name),
+                       rows=matched_n, field=field)
+            return dest_name
+        except PythonComSkillError:
+            raise
+        except Exception as err:
+            _vba_trace("python_com.filter_native.fallback", sheet=str(sheet), error=str(err)[:160])
+            if dest_created:
+                try:
+                    self.delete_sheet(str(dest_name))          # 반쯤 만든 시트를 남기지 않는다
+                except Exception:
+                    pass
+            return None
+        finally:
+            try:
+                if ws.AutoFilterMode:
+                    ws.AutoFilterMode = False                  # 원본에 필터를 남기지 않는다
+            except Exception:
+                pass
+
     def filter_to_sheet(self, sheet, predicate, dest_name, header_rows=1, after=None):
         """조건에 맞는 행만 골라 **새 시트(현재 활성 파일)**에 정리한다 — 원본은 그대로 둔다.
         predicate(row) 는 데이터 행(값 리스트, 0-based 인덱스)을 받아 True/False 를 반환.
@@ -12600,6 +12795,17 @@ class PythonComSkillContext:
         — 예전엔 값만 기록해 '복사해 달라'는 요청의 결과가 서식이 다 깨진 채 나왔다(제보)."""
         ws = self._ws(sheet)
         self._tick(2)
+        # [0.7.5 속도] 선언적 조건이면 Excel 자동필터로 넘긴다 — 값을 파이썬으로 끌어올리지 않는다.
+        # 실측(29.8MB·326,114행·21열): 람다 경로는 read 15.9초 + write 24.8초 = 44초.
+        # 같은 파일에서 네이티브 피벗은 2~3초다. 차이는 '전 칸을 COM 으로 왕복시키느냐'뿐이라,
+        # 흔한 요청(한 열의 값으로 거르기)만이라도 왕복을 없애면 그만큼이 통째로 빠진다.
+        # 조건이 임의의 파이썬 람다면 자동필터로 옮길 수 없으므로 아래 기존 경로를 그대로 탄다.
+        _decl = _as_declarative_filter(predicate)
+        if _decl is not None and self._filter_native_worth_it(ws):
+            _fast = self._filter_to_sheet_native(ws, sheet, _decl, dest_name, header_rows, after)
+            if _fast is not None:
+                return _fast
+            # 자동필터가 안 먹는 표(병합/보호/자동필터 불가)면 조용히 기존 경로로 내려간다.
         grid = self.read(sheet)  # used range 전체(헤더+데이터)
         # [0.5.15] UsedRange 는 '첫 사용열'부터 시작한다 → A열이 비면 행 배열 인덱스가 그만큼 밀려서
         # predicate 의 절대 열 인덱스(예: "E열"=r[4])가 한 칸씩 어긋난다(빈 A → r[4]가 F를 가리켜 0건 실패).
