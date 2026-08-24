@@ -1396,6 +1396,14 @@ function endExcelMirrorApplyLoading(options) {
   });
   // 중첩됐으면 가장 바깥 end 에서만 실제로 푼다(내부 경로가 바깥 잠금을 먼저 열지 않게).
   excelMirror.applyDepth = Math.max(0, (excelMirror.applyDepth || 0) - 1);
+  // [코드리뷰 지적 2026-08-24] 라벨을 '가장 바깥 end'에서만 비우면, 이미 닫힌 안쪽 라벨이
+  // stillOpen 에 남아 엉뚱한 잠금을 범인으로 지목한다 — 누수를 정확히 짚으려고 넣은 계측이
+  // 되레 오진을 만든다. 깊이와 같이 움직이도록 end 마다 하나씩 걷어낸다.
+  try {
+    if (Array.isArray(excelMirror.applyOpenLabels) && excelMirror.applyOpenLabels.length) {
+      excelMirror.applyOpenLabels.pop();
+    }
+  } catch (_) {}
   // [제보 2026-08-24 회색 화면이 안 꺼짐] 중첩 카운트는 begin 과 end 가 정확히 짝을 이룰 때만
   // 성립한다. 실측 로그에서 begin 12 / end 10 으로 2개가 비었고(예외로 빠져나가 end 를 못 부른
   // 경로가 있다), 그러면 깊이가 0 으로 안 내려가 오버레이가 영구히 남는다 — 화면이 회색으로
