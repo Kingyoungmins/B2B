@@ -116,3 +116,21 @@ COM 작업 스레드에서 **동시에 같은 파일에 append** 하는데 직�
 
 → 기본 꺼짐(`B2B_FILTER_NATIVE=1`로만 실험). 다음에 다시 볼 때는
 **'연속 구간 비율'을 먼저 재서 뭉쳐 있을 때만** 타는 식으로 접근할 것.
+
+## 7. 덤 2 — Git Bash `sed -i` 가 .bat 을 LF 로 바꿔 빌드를 깨뜨린다
+
+버전 분기 때마다 `sed -i 's/APP_VERSION=…/…/' build_*.bat` 로 표기를 올리는데,
+GNU sed 가 **파일 전체를 LF 로 다시 쓴다.** cmd.exe 는 LF-only 배치에서 캐럿(^) 연속과
+한글 rem 을 잘못 파싱한다 — 0.7.5 첫 싱글빌드가 `'…서' is not recognized` 로 죽었다
+(포터블은 우연히 통과해서 더 헷갈렸다).
+
+증상 판별: `python -c "b=open('build_single_exe.bat','rb').read(); print(b.count(b'
+'), b.count(b'
+'))"`
+— CRLF 0 이면 이것이다. 복구는 바이트 치환(`
+`→`
+`) 한 줄.
+
+규칙: **.bat 을 sed/셸로 고치지 말 것.** 파이썬으로 바이트 단위 치환하거나, 고친 뒤
+CRLF 를 확인할 것. (저장소는 autocrlf 로 정규화되므로 남의 체크아웃은 안전하다 —
+깨지는 건 sed 를 돌린 그 작업본뿐이라 원인 추적이 더 어렵다.)
