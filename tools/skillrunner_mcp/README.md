@@ -89,6 +89,19 @@ tools/skillrunner_mcp/
 ```
 빌드가 BOM 검사 + 런타임 self-check(pywin32/엔진 로드)까지 수행한다.
 
+## 미리 빌드된 번들 (브랜치에 포함)
+
+빌드 PC 가 없어도 되도록 Windows(x64)에서 빌드한 번들을 브랜치에 함께 넣어 둔다.
+
+```
+tools/skillrunner_mcp/dist/skillrunner-deploy-0.1.0-win64.tar.gz
+```
+
+체크아웃하면 바로 아래 설치 명령에 쓸 수 있다. 번들에는 self-contained Python
+(CPython 3.12 + pywin32 + openpyxl) 과 엔진(serve_b2b.py) 이 들어 있어 배포 PC 에
+Python/b2b 설치가 필요 없다. 소스를 고쳤으면 `build_bundle.ps1` 로 다시 만들어
+이 파일을 교체한다(`dist/` 는 .gitignore 예외로 tar.gz 만 추적한다).
+
 ## 설치 (배포 PC, 폐쇄망 OK)
 
 ```
