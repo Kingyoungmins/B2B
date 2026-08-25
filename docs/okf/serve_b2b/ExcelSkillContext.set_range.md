@@ -9,7 +9,7 @@ signature: "(self, sheet_or_name, address, grid, workbook=None)"
 role: "주소(예 'A2' 또는 'A2:F100')의 좌상단부터 2D 리스트를 한 번에 쓴다(1회 COM 호출)."
 role_source: docstring
 version: "0.8.0"
-loc: "serve_b2b.py:16759-16776"
+loc: "serve_b2b.py:16840-16857"
 
 # ── 입출력 ──
 inputs:

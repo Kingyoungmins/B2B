@@ -9,7 +9,7 @@ signature: "(self, sheet)"
 role: "시트 '사용 범위' 마지막 열(1-based). 특정 행 기준 last_col 이 그 행 병합/빈칸으로 과소산정하는 것 방지."
 role_source: docstring
 version: "0.8.0"
-loc: "serve_b2b.py:12056-12063"
+loc: "serve_b2b.py:12072-12079"
 
 # ── 입출력 ──
 inputs:

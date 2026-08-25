@@ -9,7 +9,7 @@ signature: "(self, sheet, col, count=1)"
 role: "전체 열 삽입(병합셀 안전). col 은 'B', 2, 또는 'B:D' 범위 모두 허용."
 role_source: docstring
 version: "0.8.0"
-loc: "serve_b2b.py:12652-12666"
+loc: "serve_b2b.py:12668-12682"
 
 # ── 입출력 ──
 inputs:

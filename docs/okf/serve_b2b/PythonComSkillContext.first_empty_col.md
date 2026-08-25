@@ -9,7 +9,7 @@ signature: "(self, sheet, after=None, header_row=1)"
 role: "'빈 보조열'을 찾아 그 열 '문자'(예 \"N\")를 돌려준다. after(마지막 데이터 열, 예 \"L\")를 주면 그 다음"
 role_source: docstring
 version: "0.8.0"
-loc: "serve_b2b.py:12065-12107"
+loc: "serve_b2b.py:12081-12123"
 
 # ── 입출력 ──
 inputs:

@@ -9,7 +9,7 @@ signature: "(self, sheet, col_a, col_b, header_row=None)"
 role: "인접한 두 열의 위치를 서로 맞바꾼다. Excel 네이티브 Cut/Insert 로 옮겨 **수식 참조가 자동 보정**된다"
 role_source: docstring
 version: "0.8.0"
-loc: "serve_b2b.py:13596-13640"
+loc: "serve_b2b.py:13612-13656"
 
 # ── 입출력 ──
 inputs:

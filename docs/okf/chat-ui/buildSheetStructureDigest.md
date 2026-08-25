@@ -8,7 +8,7 @@ signature: "(aoa, sheetName)"
 role: "aoa → { text, hasLandmarks, totalRows[] }. 순수 함수(테스트 가능)."
 role_source: banner
 version: "0.8.0"
-loc: "chat-ui.js:3422-3422"
+loc: "chat-ui.js:3437-3437"
 
 # ── 입출력 ──
 inputs:

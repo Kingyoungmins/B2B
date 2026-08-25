@@ -8,7 +8,7 @@ signature: "(code)"
 role: "실행 전 AST 정적 게이트. 위반은 사람이 읽을 수 있는 한국어 사유로 모아 한 번에 반환."
 role_source: docstring
 version: "0.8.0"
-loc: "serve_b2b.py:14990-15113"
+loc: "serve_b2b.py:15062-15194"
 
 # ── 입출력 ──
 inputs:
@@ -30,6 +30,7 @@ calls_external:
   - "PythonComSkillError"
   - "_Checker"
   - "_is_ctx_receiver"
+  - "all"
   - "code"
   - "f"
   - "failures"
