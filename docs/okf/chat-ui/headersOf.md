@@ -1,18 +1,19 @@
 ---
 type: endpoint
-title: _stripVbaCommentsForGate
+title: headersOf
 module: chat-ui.js
 lang: js
 extraction: regex   # 정규식 근사
-signature: "(code)"
-role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
-role_source: none
+signature: "(f, sheetName)"
+role: "그 시트의 헤더 후보(상단 3행에서 글자가 있는 셀들)"
+role_source: banner
 version: "0.8.0"
-loc: "chat-ui.js:1676-1676"
+loc: "chat-ui.js:525-525"
 
 # ── 입출력 ──
 inputs:
-  - "code"
+  - "f"
+  - "sheetName"
 returns: "(추정)"
 
 # ── 사이드이펙트 (정적 추정) ──
@@ -21,18 +22,16 @@ side_effects:
 raises: []
 
 # ── 유기적 관계 ──
-calls: []
+calls:
+  - "push"
 calls_external:
   - "String"
-  - "join"
-  - "map"
-  - "slice"
-  - "split"
+  - "isArray"
+  - "min"
   - "test"
+  - "trim"
 called_by:
-  - "vbaSheetReferenceLiterals"
-  - "vbaStaticSafetyFailures"
-  - "wholeColumnCountRowTwoFailures"
+  - "headerNameMismatchFailures"
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
@@ -40,14 +39,14 @@ timestamp: "0.8.0-gen"
 ---
 
 ## 역할
-(추정) 역할 주석 없음 — 담당자 1줄 보완 필요  _(자동 추정 — 확인 필요)_
+그 시트의 헤더 후보(상단 3행에서 글자가 있는 셀들)
 
 ## 사이드이펙트 & 주의
 - 없음(정적 분석 기준)
 
 ## 관계
-- 호출: 없음
-- 피호출(영향 전파 경로): `vbaSheetReferenceLiterals`, `vbaStaticSafetyFailures`, `wholeColumnCountRowTwoFailures`
+- 호출: `push`
+- 피호출(영향 전파 경로): `headerNameMismatchFailures`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

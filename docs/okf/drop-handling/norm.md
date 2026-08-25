@@ -27,6 +27,7 @@ called_by:
   - "assistBuildProposal"
   - "colIdx"
   - "exactReferenceFailures"
+  - "headerNameMismatchFailures"
   - "promoteStepChatOrigins"
   - "runnerApplyEnvConfigFilter"
   - "runnerSameBookName"
@@ -44,7 +45,7 @@ timestamp: "0.8.0-gen"
 
 ## 관계
 - 호출: 없음
-- 피호출(영향 전파 경로): `assistBuildProposal`, `colIdx`, `exactReferenceFailures`, `promoteStepChatOrigins`, `runnerApplyEnvConfigFilter`, `runnerSameBookName`
+- 피호출(영향 전파 경로): `assistBuildProposal`, `colIdx`, `exactReferenceFailures`, `headerNameMismatchFailures`, `promoteStepChatOrigins`, `runnerApplyEnvConfigFilter`, `runnerSameBookName`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

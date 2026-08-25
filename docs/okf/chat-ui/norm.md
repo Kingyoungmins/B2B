@@ -8,7 +8,7 @@ signature: "(v)"
 role: "공백/_/- 만 다른 경우(모델이 한글 식별자에 공백을 끼우는 흔한 케이스, 예: \"2026년\"→\"2026 년\")는 통과."
 role_source: banner
 version: "0.8.0"
-loc: "chat-ui.js:566-566"
+loc: "chat-ui.js:631-631"
 
 # ── 입출력 ──
 inputs:
@@ -27,6 +27,7 @@ called_by:
   - "assistBuildProposal"
   - "colIdx"
   - "exactReferenceFailures"
+  - "headerNameMismatchFailures"
   - "promoteStepChatOrigins"
   - "runnerApplyEnvConfigFilter"
   - "runnerSameBookName"
@@ -44,7 +45,7 @@ timestamp: "0.8.0-gen"
 
 ## 관계
 - 호출: 없음
-- 피호출(영향 전파 경로): `assistBuildProposal`, `colIdx`, `exactReferenceFailures`, `promoteStepChatOrigins`, `runnerApplyEnvConfigFilter`, `runnerSameBookName`
+- 피호출(영향 전파 경로): `assistBuildProposal`, `colIdx`, `exactReferenceFailures`, `headerNameMismatchFailures`, `promoteStepChatOrigins`, `runnerApplyEnvConfigFilter`, `runnerSameBookName`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

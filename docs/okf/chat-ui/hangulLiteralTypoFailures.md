@@ -8,7 +8,7 @@ signature: "(code, sourceUserMessage)"
 role: "언급) 통과 ③ 토큰 길이 4자 이상만."
 role_source: banner
 version: "0.8.0"
-loc: "chat-ui.js:514-514"
+loc: "chat-ui.js:579-579"
 
 # ── 입출력 ──
 inputs:

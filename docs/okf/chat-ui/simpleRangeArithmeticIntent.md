@@ -8,7 +8,7 @@ signature: "(text)"
 role: "\"E6:E16 값을 1000000으로 나눈 값을 D6:D16에 입력\" 같은 단순 범위 산술은 ctx.read/write가"
 role_source: banner
 version: "0.8.0"
-loc: "chat-ui.js:814-814"
+loc: "chat-ui.js:879-879"
 
 # ── 입출력 ──
 inputs:

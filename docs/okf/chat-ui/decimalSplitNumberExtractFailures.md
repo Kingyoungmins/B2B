@@ -8,7 +8,7 @@ signature: "(code)"
 role: "[소수점 쪼개기 차단] re.findall(r'\\d+') 류 '연속 숫자만' 패턴 + 콤마 join 조합은 '20.0' 을"
 role_source: banner
 version: "0.8.0"
-loc: "chat-ui.js:704-704"
+loc: "chat-ui.js:769-769"
 
 # ── 입출력 ──
 inputs:

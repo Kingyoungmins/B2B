@@ -8,7 +8,7 @@ signature: "(code)"
 role: "[0.5.2 이식·하이브리드] degenerate 출력 감지 — 준-greedy 디코딩의 Qwen 이 같은 줄을 끝없이"
 role_source: banner
 version: "0.8.0"
-loc: "chat-ui.js:1223-1223"
+loc: "chat-ui.js:1288-1288"
 
 # ── 입출력 ──
 inputs:

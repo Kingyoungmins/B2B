@@ -8,7 +8,7 @@ signature: "(code, sourceUserMessage, languageLabel)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
 version: "0.8.0"
-loc: "chat-ui.js:1175-1175"
+loc: "chat-ui.js:1240-1240"
 
 # ── 입출력 ──
 inputs:

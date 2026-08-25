@@ -8,7 +8,7 @@ signature: "(code, context)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
 version: "0.8.0"
-loc: "chat-ui.js:2176-2176"
+loc: "chat-ui.js:2241-2241"
 
 # ── 입출력 ──
 inputs:
@@ -30,6 +30,7 @@ calls:
   - "decimalSplitNumberExtractFailures"
   - "exactReferenceFailures"
   - "hangulLiteralTypoFailures"
+  - "headerNameMismatchFailures"
   - "isHardPythonComVbaReason"
   - "pythonComMustUseVbaReason"
   - "pythonComStaticSafetyFailures"
@@ -68,7 +69,7 @@ timestamp: "0.8.0-gen"
 - 없음(정적 분석 기준)
 
 ## 관계
-- 호출: `applyForcedPythonFallback`, `autoRegenerateAsVbaFallback`, `autoRegenerateForStaticSafety`, `codeHasBroadValueRewrite`, `decimalSplitNumberExtractFailures`, `exactReferenceFailures`, `hangulLiteralTypoFailures`, `isHardPythonComVbaReason`, `pythonComMustUseVbaReason`, `pythonComStaticSafetyFailures`, `pythonDegenerateOutputFailure`, `showCodeGuardBlock`, `traceClientUiEvent`, `traceValidationStage`, `userExplicitlyRequestsForceProceed`, `userExplicitlyRequestsPython`, `userExplicitlyRequestsVba`, `vbaExactSheetReferenceFailures`, `vbaStaticSafetyFailures`, `wholeColumnCountRowTwoFailures`
+- 호출: `applyForcedPythonFallback`, `autoRegenerateAsVbaFallback`, `autoRegenerateForStaticSafety`, `codeHasBroadValueRewrite`, `decimalSplitNumberExtractFailures`, `exactReferenceFailures`, `hangulLiteralTypoFailures`, `headerNameMismatchFailures`, `isHardPythonComVbaReason`, `pythonComMustUseVbaReason`, `pythonComStaticSafetyFailures`, `pythonDegenerateOutputFailure`, `showCodeGuardBlock`, `traceClientUiEvent`, `traceValidationStage`, `userExplicitlyRequestsForceProceed`, `userExplicitlyRequestsPython`, `userExplicitlyRequestsVba`, `vbaExactSheetReferenceFailures`, `vbaStaticSafetyFailures`, `wholeColumnCountRowTwoFailures`
 - 피호출(영향 전파 경로): `addAssistantReply`
 
 ## 실패/예외

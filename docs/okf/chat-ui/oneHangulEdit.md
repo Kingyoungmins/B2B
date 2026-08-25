@@ -8,7 +8,7 @@ signature: "(a, b)"
 role: "한 글자 차이(같은 길이 치환 1 / 길이±1 삽입·삭제 1)인지 + 그 차이가 한글인지."
 role_source: banner
 version: "0.8.0"
-loc: "chat-ui.js:521-521"
+loc: "chat-ui.js:586-586"
 
 # ── 입출력 ──
 inputs:

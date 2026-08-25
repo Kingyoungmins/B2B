@@ -8,7 +8,7 @@ signature: "(text)"
 role: "[0.5.18] 한 열을 다른 열로 (서식째) 복사 → ctx.copy_col(병합 안전, 원본 유지). ctx.copy 로 1행부터 통복사하면"
 role_source: banner
 version: "0.8.0"
-loc: "chat-ui.js:951-951"
+loc: "chat-ui.js:1016-1016"
 
 # ── 입출력 ──
 inputs:

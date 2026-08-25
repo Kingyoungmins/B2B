@@ -8,7 +8,7 @@ signature: "(text)"
 role: "라우팅 '의도' 판정용: @범위/@컬럼/@시트[...] 안의 파일명·시트명·범위를 제거한다."
 role_source: banner
 version: "0.8.0"
-loc: "chat-ui.js:719-719"
+loc: "chat-ui.js:784-784"
 
 # ── 입출력 ──
 inputs:
