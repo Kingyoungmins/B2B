@@ -505,6 +505,71 @@ function exactSheetNameReminder(text) {
   ].join(" ");
 }
 
+/* [SBAGENT-293 30단계 실측 2026-08-25] 코드가 찾는 헤더가 '실제 파일에 없는 이름'인 채로
+   저장돼, 전체실행 때 그 단계에서 죽었다(요청문 "기본요금", 실제 헤더 "기본료").
+   만들 때 실제 헤더와 대조하는 검사가 없어 그대로 통과한 게 화근 — 같은 스킬의 27단계는
+   "기본료"를 쓰고 있어 스킬 안에서도 이름이 갈렸다.
+   → find_header(시트, "이름") 의 이름이 업로드된 그 시트의 실제 헤더에 없고, 비슷한 이름이
+     실재하면 적용 전에 잡아 재생성으로 보낸다(실제 헤더 목록과 후보를 메시지에 담는다).
+   오탐 가드: ① 파일/시트를 못 찾거나 헤더를 못 읽으면 통과 ② '비슷한 후보'가 있을 때만
+   차단(앞 단계가 헤더를 새로 써 넣는 스킬을 막지 않기 위해) ③ 이름이 실제로 있으면 통과. */
+function headerNameMismatchFailures(code, sourceUserMessage) {
+  const failures = [];
+  const text = String(code || "");
+  if (!/find_header\s*\(/.test(text)) return failures;
+  const files = [...(state.inputs || []), ...((state.outputTemplates || []).map(t => t && (t.file || t.original)))]
+    .filter(f => f && f.name);
+  if (!files.length) return failures;
+  const norm = v => String(v == null ? "" : v).trim().toLowerCase().replace(/[\s_\-()]+/g, "");
+  // 그 시트의 헤더 후보(상단 3행에서 글자가 있는 셀들)
+  const headersOf = (f, sheetName) => {
+    const rows = f && f.sheets && f.sheets[sheetName];
+    if (!Array.isArray(rows) || !rows.length) return null;
+    const out = [];
+    for (let r = 0; r < Math.min(3, rows.length); r++) {
+      for (const v of (rows[r] || [])) {
+        const s = String(v == null ? "" : v).trim();
+        if (s && !/^\d+(\.\d+)?$/.test(s)) out.push(s);
+      }
+    }
+    return out.length ? out : null;
+  };
+  // 코드가 쓰는 (시트, 헤더) 쌍. 시트 인자가 변수면 sheet = "..." 대입을 따라간다.
+  const sheetVars = {};
+  for (const m of text.matchAll(/(\w+)\s*=\s*["']([^"'\n]{1,64})["']/g)) sheetVars[m[1]] = m[2];
+  const pairs = [];
+  for (const m of text.matchAll(/find_header\s*\(\s*([^,]+?)\s*,\s*["']([^"'\n]{1,64})["']/g)) {
+    const rawSheet = String(m[1] || "").trim().replace(/^["']|["']$/g, "");
+    const sheet = sheetVars[rawSheet] || rawSheet;
+    if (sheet && m[2]) pairs.push({ sheet, header: m[2] });
+  }
+  for (const { sheet, header } of pairs) {
+    for (const f of files) {
+      const heads = headersOf(f, sheet);
+      if (!heads) continue;                                   // 그 파일엔 없는 시트/못 읽음 → 통과
+      if (heads.some(h => norm(h) === norm(header))) return failures;   // 어딘가에 실재 → 통과
+      // 비슷한 후보: 한쪽이 다른 쪽의 접두이거나 2글자 이상 겹치는 접두 공유
+      const cand = heads.filter(h => {
+        const a = norm(h), b = norm(header);
+        if (!a || !b) return false;
+        if (a.startsWith(b) || b.startsWith(a)) return true;
+        let i = 0;
+        while (i < a.length && i < b.length && a[i] === b[i]) i++;
+        return i >= 2;
+      });
+      if (cand.length) {
+        const uniq = Array.from(new Set(cand)).slice(0, 4);
+        failures.push(
+          `'${sheet}' 시트에 '${header}' 열이 없습니다. 실제로 있는 비슷한 이름: ${uniq.map(x => `'${x}'`).join(", ")}. `
+          + `사용자 문장의 표현이 아니라 파일의 실제 헤더 이름을 쓰세요(그 단계가 하려던 일은 그대로 두고 이름만 맞출 것).`,
+        );
+        return failures;
+      }
+    }
+  }
+  return failures;
+}
+
 /* [제보 2026-08-25] "j1 셀은 전산화번호, k1셀은 전주번호 입력" → 모델이 자꾸 '전자화번호'로
    코딩(한 글자 오타 복사). 사용자가 문장에 쓴 한글 토큰과 '한 글자만 다른' 리터럴이 코드에
    있으면 적용 전에 잡아 자동 재생성으로 보낸다.
@@ -2238,6 +2303,7 @@ function validateAssistantCodeBeforeApply(code, context) {
     ...traceValidationStage("wholeColumnCountRowTwoFailures", () => wholeColumnCountRowTwoFailures(code, sourceUserMessage)),
     ...traceValidationStage("decimalSplitNumberExtractFailures", () => decimalSplitNumberExtractFailures(code)),
     ...traceValidationStage("hangulLiteralTypoFailures", () => hangulLiteralTypoFailures(code, sourceUserMessage)),
+    ...traceValidationStage("headerNameMismatchFailures", () => headerNameMismatchFailures(code, sourceUserMessage)),
   ];
   if (commonFailures.length) {
     const attemptsSoFar = Number(context.staticRegenAttempt || 0);
