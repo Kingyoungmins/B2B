@@ -172,8 +172,10 @@ check("ctx.delete_rows_where 가 있다(조건 행 제자리 삭제)", /def dele
 check("아래→위 + 다중영역 일괄 삭제(행번호 밀림·COM 왕복 폭주 방지)",
   /runs\.reverse\(\)[\s\S]{0,600}?rng\.Delete\(\)/.test(py.replace(/\r/g, "")));
 check("구조 변경 마커를 남긴다", /delete_rows_where:\{sheet\}\(-\{len\(doomed\)\}\)/.test(py));
+// [2026-08-25] '조건 행 삭제' 문구가 규칙에 합류하며 문장이 확장됨("…지워줘"뿐 아니라 …도) —
+// 잠그려는 계약(둘 다 delete_rows_where + 재구성 금지)은 그대로, 고정 문구만 새 문장에 맞춘다.
 check("코드젠 가이드: 특정 값만 남기기는 delete_rows_where, 임시시트 재구성 금지",
-  /특정 값인 행만 남기고 나머지 삭제해줘 \/ X 아닌 행은 지워줘"는 반드시 이걸 쓰세요/.test(fsch)
+  /특정 값인 행만 남기고 나머지 삭제해줘 \/ X 아닌 행은 지워줘"[\s\S]{0,120}반드시 이걸 쓰세요/.test(fsch)
   && /임시 시트에 복사했다가 다시 붙이는 재구성은 음영·표시형식\(선행 0 포함\)이 통째로 깨집니다/.test(fsch));
 check("도구 선택표에도 매핑이 있다", /특정 값 행만 남기고 나머지 삭제\(제자리, 서식 보존\) \| ctx\.delete_rows_where/.test(fsch));
 
