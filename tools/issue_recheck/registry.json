@@ -3692,6 +3692,17 @@
         ]
       ],
       "fix": "감사 결과 AI 도움 도구가 전부 '스킬 실행' 도메인에 몰려 있어, 저장 실패·보안문서·회색화면·LLM 폴오버 질문은 읽을 데이터가 없어 제보로 낙하했다. 수리: ①toast() 래핑으로 최근 알림 50건 링버퍼 + app.notices 도구(휘발성 토스트 95곳 재구성 가능) ②__lastPipelineErrorInfo 를 setter 후킹으로 최근 5건 히스토리화(pipeline.js 는 안 건드림 — 동시 세션 충돌 회피) + step.error 에 recentErrors ③자동백업 실패를 기록+트레이스+세션당 1회 토스트, 수동 저장 try/catch, backup.status 도구 ④secure.status 도구 + 프롬프트에 보안문서 배너/실패 사전 ⑤run.trace 가 perf 트레이스(client.*)까지 합산해 읽음 — depth_forced(회색화면)·replace.reshow·selection.gate·llm.upstream.failover·secure.upload 가 이제 보임 ⑥파일 목록에 unreliableSheets/inspectError/backendOnly ⑦프롬프트에 F9 항목·다운로드 버튼 구분·STORED zip 규칙 사전. 남긴 것: 라운드/절단 상한(기존 안내문 유지), server-monitor 직접 상태 도구(폴오버 트레이스로 대체)."
+    },
+    {
+      "id": "EDIT-PREFILL-AUTOSEL-DRAFT-FALSEPOS",
+      "title": "[실측 2026-08-25] ✎ 수정 눌러도 입력창에 프롬프트가 안 채워짐 — 자동 '선택 범위' 줄을 초안으로 오인.",
+      "checks": [
+        [
+          "node",
+          "test_runs/_test_sbagent289_fixes.js"
+        ]
+      ],
+      "fix": "엑셀 셀 클릭 시 선택 폴이 입력창에 '선택 범위: @범위[...]' 줄을 자동 삽입하는데, 프리필의 초안 보호가 이를 사용자 초안으로 오인해 skippedDraft 로 삼킴(세션 09:40 실측, 2회 재현). 자동 선택 줄만 있는 입력창은 초안이 아닌 것으로 보고 덮어쓴다(타이핑 혼합 시 기존대로 보호). 판정은 edit.prefill 트레이스의 autoSelOnly 로 기록."
     }
   ]
 }

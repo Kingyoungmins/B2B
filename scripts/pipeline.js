@@ -3112,19 +3112,27 @@ function _applyEditPrefill(step) {
   const cur = String(ta.value || "");
   const mine = prev && cur === prev.text;          // 입력창이 아직 '우리가 채운 그대로'인가
   const next = step ? _editPrefillPromptOf(step) : "";
+  // [실측 2026-08-25 skippedDraft:true 2회] 엑셀 셀을 클릭하면 선택 폴이 입력창에
+  // "선택 범위: @범위[...]" 줄을 자동으로 붙인다(updateChatRangeReference). 사용자 눈에는
+  // 빈 입력창인데 초안 보호가 이걸 '쓰던 글'로 오인해 프리필을 삼켰다 — "수정 눌러도
+  // 프롬프트가 안 나온다"의 실체. 자동 선택 줄'만' 있으면 초안이 아니다(타이핑이 섞여
+  // 있으면 기존대로 보호).
+  const _autoSelOnly = !!cur.trim()
+    && !cur.replace(/(^|\n)\s*선택 범위: @범위\[[^\]]*\]\s*(?=\n|$)/g, "").trim();
   // [SBAGENT-289 계측] "수정 버튼 눌렀는데 프롬프트가 안 찍힌다" 제보 — 어느 갈래로 빠졌는지
-  // 로그가 말하게 한다. 지금은 원인을 로그로 특정할 수 없다(계측 부재).
+  // 로그가 말하게 한다.
   try {
     if (step && typeof traceClientUiEvent === "function") {
       traceClientUiEvent("edit.prefill", {
         stepId: step.id || "",
         source: !next ? "none(originless/빈값)" : (step.lastEditPrompt ? "lastEdit" : "prompt"),
-        skippedDraft: !!(next && cur.trim() && !mine),
+        skippedDraft: !!(next && cur.trim() && !mine && !_autoSelOnly),
+        autoSelOnly: _autoSelOnly,
       });
     }
   } catch (_) {}
   if (step && next) {
-    if (cur.trim() && !mine) return;               // 사용자 초안 보존 — 덮어쓰지 않는다
+    if (cur.trim() && !mine && !_autoSelOnly) return;   // 사용자 초안 보존 — 덮어쓰지 않는다
     ta.value = next;
     window.__b2bEditPrefill = { stepId: step.id, text: next };
   } else if (!step && mine) {

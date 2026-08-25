@@ -80,6 +80,40 @@ console.log("[2] 프리필 계측 — '안 찍힘'을 다음 로그가 특정하
 check("프리필 결정 지점에 트레이스", /edit\.prefill/.test(pj)
   && /skippedDraft/.test(pj) && /lastEdit/.test(pj));
 
+console.log("[2b] 자동 선택 줄은 초안이 아니다(실측 2026-08-25 skippedDraft 오인) — 동작 검증");
+{
+  // _applyEditPrefill 을 최소 스텁으로 실행한다(컬럼 0 'function ' 경계로 추출 — 중괄호
+  // 카운팅은 함수 안 정규식의 '}' 에 속는다, _test_delete_rows_inplace_gate 와 동일 방식).
+  const at = pj.indexOf("function _applyEditPrefill");
+  const nx = pj.indexOf("\nfunction ", at + 1);
+  let fsrcBody = pj.slice(at, nx < 0 ? pj.length : nx);
+  fsrcBody = fsrcBody.slice(0, fsrcBody.lastIndexOf("\n}") + 2);
+  const run = (taValue, step) => {
+    const ta = {
+      value: taValue,
+      dispatchEvent() {}, focus() {}, setSelectionRange() {},
+    };
+    const fn = new Function("document", "window", "Event", "_editPrefillPromptOf", "traceClientUiEvent",
+      fsrcBody + "\nreturn _applyEditPrefill;");
+    const traced = [];
+    fn({ getElementById: () => ta }, {}, function Event() {},
+      s => (s && (s.lastEditPrompt || s.prompt)) || "",
+      (ev, data) => traced.push({ ev, ...data }))(step);
+    return { ta, traced };
+  };
+  const step = { id: "s1", prompt: "R열 데이터를 *100 해서 s열에 써줘" };
+  const auto = "선택 범위: @범위[VIEW!A1:B2]";
+  const r1 = run(auto, step);
+  check("자동 선택 줄만 있으면 덮어쓴다  ← 실측 실패 케이스", r1.ta.value === step.prompt, r1.ta.value);
+  check("트레이스에 autoSelOnly 가 남는다", r1.traced.some(t => t.ev === "edit.prefill" && t.autoSelOnly === true));
+  const r2 = run("내가 쓰다 만 문장", step);
+  check("진짜 초안은 기존대로 보호", r2.ta.value === "내가 쓰다 만 문장");
+  const r3 = run(auto + "\n덧붙인 메모", step);
+  check("자동 줄+타이핑 혼합도 보호", r3.ta.value === auto + "\n덧붙인 메모");
+  const r4 = run("", step);
+  check("빈 입력창은 채운다", r4.ta.value === step.prompt);
+}
+
 console.log("[3] 마지막 단계 '수정' 빠른 경로 — 삭제·토글과 같은 부품 재사용");
 check("수정 경로에 빠른 판정이 생겼다",
   /_fastEditLast = canFastEditLastPipelineStep\(originalStep, idx, beforeReplaceSnapshot\)/.test(pj));
