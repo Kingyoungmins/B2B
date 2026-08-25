@@ -8,7 +8,7 @@ signature: "()"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
 version: "0.7.5"
-loc: "NativeHost.cs:1017-1017"
+loc: "NativeHost.cs:1055-1055"
 
 # ── 입출력 ──
 inputs: []
@@ -32,6 +32,7 @@ calls_external:
   - "IsHungAppWindow"
   - "SetForegroundWindow"
 called_by:
+  - "ForegroundHostIfExcelActive"
   - "HandleDownloadStarting"
 reads: []
 writes: []
@@ -47,7 +48,7 @@ timestamp: "0.7.5-gen"
 
 ## 관계
 - 호출: `Log`
-- 피호출(영향 전파 경로): `HandleDownloadStarting`
+- 피호출(영향 전파 경로): `ForegroundHostIfExcelActive`, `HandleDownloadStarting`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

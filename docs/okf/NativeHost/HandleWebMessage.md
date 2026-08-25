@@ -22,6 +22,7 @@ raises: []
 
 # ── 유기적 관계 ──
 calls:
+  - "ForegroundHostIfExcelActive"
   - "HandleAssistPopupCommand"
   - "RelayToAssistPopup"
   - "RestartPythonServerAsync"
@@ -49,7 +50,7 @@ timestamp: "0.7.5-gen"
 - 없음(정적 분석 기준)
 
 ## 관계
-- 호출: `HandleAssistPopupCommand`, `RelayToAssistPopup`, `RestartPythonServerAsync`, `SetRunnerMode`, `UpdateExcelLoading`, `UpdateNativeFileTabs`, `UpdateUiBusyLock`
+- 호출: `ForegroundHostIfExcelActive`, `HandleAssistPopupCommand`, `RelayToAssistPopup`, `RestartPythonServerAsync`, `SetRunnerMode`, `UpdateExcelLoading`, `UpdateNativeFileTabs`, `UpdateUiBusyLock`
 - 피호출(영향 전파 경로): `InitializeAsync`
 
 ## 실패/예외

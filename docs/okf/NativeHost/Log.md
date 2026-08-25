@@ -31,6 +31,7 @@ called_by:
   - "ClickHiddenButton"
   - "EnsureAssistPopupAsync"
   - "ForceHostForeground"
+  - "ForegroundHostIfExcelActive"
   - "HandleDownloadStarting"
   - "HandleHostResize"
   - "HandleServerCrash"
@@ -61,7 +62,7 @@ timestamp: "0.7.5-gen"
 
 ## 관계
 - 호출: 없음
-- 피호출(영향 전파 경로): `AttachDownloadCompletionToast`, `Cleanup`, `ClickHiddenButton`, `EnsureAssistPopupAsync`, `ForceHostForeground`, `HandleDownloadStarting`, `HandleHostResize`, `HandleServerCrash`, `HideAllExcelMirrors`, `InitializeAsync`, `Main`, `NotifyMainAssist`, `NotifyWebToast`, `PostHostMinimizedState`, `RegisterDebugHotkey`, `RelayToAssistPopup`, `RestartPythonServerAsync`, `ShowFatal`, `StartPythonServer`, `TryPostShutdownJson`, `WndProc`
+- 피호출(영향 전파 경로): `AttachDownloadCompletionToast`, `Cleanup`, `ClickHiddenButton`, `EnsureAssistPopupAsync`, `ForceHostForeground`, `ForegroundHostIfExcelActive`, `HandleDownloadStarting`, `HandleHostResize`, `HandleServerCrash`, `HideAllExcelMirrors`, `InitializeAsync`, `Main`, `NotifyMainAssist`, `NotifyWebToast`, `PostHostMinimizedState`, `RegisterDebugHotkey`, `RelayToAssistPopup`, `RestartPythonServerAsync`, `ShowFatal`, `StartPythonServer`, `TryPostShutdownJson`, `WndProc`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

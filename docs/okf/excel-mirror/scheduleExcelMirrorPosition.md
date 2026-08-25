@@ -8,7 +8,7 @@ signature: "(force = false)"
 role: "A방식: 단일 Excel 앱 창만 관리하므로 활성 세션 기준으로 한 번만 위치를 보정한다."
 role_source: banner
 version: "0.7.5"
-loc: "excel-mirror.js:2099-2099"
+loc: "excel-mirror.js:2108-2108"
 
 # ── 입출력 ──
 inputs:

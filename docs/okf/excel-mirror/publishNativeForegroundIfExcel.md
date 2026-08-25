@@ -1,14 +1,14 @@
 ---
 type: endpoint
-title: saveCurrentExcelMirror
+title: publishNativeForegroundIfExcel
 module: excel-mirror.js
 lang: js
 extraction: regex   # 정규식 근사
 signature: "()"
-role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
-role_source: none
+role: "[제보 2026-08-25] 실행기 전체실행이 끝나도 포그라운드가 Excel 작업 창에 남아 있으면,"
+role_source: banner
 version: "0.7.5"
-loc: "excel-mirror.js:1603-1603"
+loc: "excel-mirror.js:81-81"
 
 # ── 입출력 ──
 inputs: []
@@ -16,19 +16,13 @@ returns: "(추정)"
 
 # ── 사이드이펙트 (정적 추정) ──
 side_effects:
-  - "네트워크/서버 호출"
+  - "DOM/브라우저 전역 조작"
 raises: []
 
 # ── 유기적 관계 ──
-calls:
-  - "currentExcelId"
-  - "currentExcelMirrorTarget"
-  - "postExcelMirror"
-  - "renderRunnerWorkflow"
-  - "toast"
-  - "updateMirrorShellStatus"
+calls: []
 calls_external:
-  - "error"
+  - "postMessage"
 called_by: []
 reads: []
 writes: []
@@ -37,13 +31,13 @@ timestamp: "0.7.5-gen"
 ---
 
 ## 역할
-(추정) 역할 주석 없음 — 담당자 1줄 보완 필요  _(자동 추정 — 확인 필요)_
+[제보 2026-08-25] 실행기 전체실행이 끝나도 포그라운드가 Excel 작업 창에 남아 있으면,
 
 ## 사이드이펙트 & 주의
-- 네트워크/서버 호출
+- DOM/브라우저 전역 조작
 
 ## 관계
-- 호출: `currentExcelId`, `currentExcelMirrorTarget`, `postExcelMirror`, `renderRunnerWorkflow`, `toast`, `updateMirrorShellStatus`
+- 호출: 없음
 - 피호출(영향 전파 경로): 없음
 
 ## 실패/예외

@@ -8,7 +8,7 @@ signature: "(excelId, delay = 700, attempt = 0)"
 role: "[제보 2026-08-24 회색 화면] /api/excel/replace 는 워크북을 닫고 다시 열어 SDI 프레임이 새로"
 role_source: banner
 version: "0.7.5"
-loc: "excel-mirror.js:1477-1477"
+loc: "excel-mirror.js:1486-1486"
 
 # ── 입출력 ──
 inputs:

@@ -8,7 +8,7 @@ signature: "(err)"
 role: "---- COM 응답불능(행) 자동 복구: 단일 Excel 인스턴스의 유일한 약점 보호 ----"
 role_source: banner
 version: "0.7.5"
-loc: "excel-mirror.js:1207-1207"
+loc: "excel-mirror.js:1216-1216"
 
 # ── 입출력 ──
 inputs:
