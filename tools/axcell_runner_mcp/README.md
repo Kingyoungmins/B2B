@@ -108,12 +108,24 @@ tar.gz 만 추적한다).
 
 ## 설치 (배포 PC, 폐쇄망 OK)
 
+> ⚠️ 현재 ixi-flow 의 `integrations install` 은 **gca 전용**(`src/integrations/mod.rs`
+> 하드코딩)이라 `install axcell_runner` 는 "does not bundle an installer" 로 거부된다.
+> 범용 설치기가 생길 때까지 **수동 설치기**를 쓴다 — gca 설치기와 동일하게
+> config 관리 블록(마커) 렌더링 + workspace/skills 배포 + self-check 를 수행하고 멱등이다.
+
+```powershell
+.\install_manual.ps1 -Bundle .\dist\axcell_runner-deploy-0.1.0-win64.tar.gz
+# 기본 설치 위치: %USERPROFILE%\.ixi-flow\integrations\axcell_runner
+# config: %USERPROFILE%\.ixi-flow\config.toml 에 관리 블록 추가(기존 블록은 교체, 백업 생성)
 ```
-ixi-flow integrations install axcell_runner --bundle axcell_runner-deploy-0.1.0-win64.tar.gz
-```
-설치되면 도구는 `axcell_runner__check_inputs` 등으로 노출되고, `axcell-runner-guide`
-스킬이 배포되어 에이전트가 절차(검사→실행→압축)를 안다. run_start 는 ixi-flow 의
-런 레지스트리/bg_wait/체크리스트 진행표시("Step 4/32")에 자동 편입된다(L2 선언).
+
+설치 후 ixi-flow 를 재시작하면 도구가 `axcell_runner__check_inputs` 등으로 노출되고,
+`axcell-runner-guide` 스킬이 배포되어 에이전트가 절차(검사→실행→압축)를 안다.
+run_start 는 ixi-flow 의 런 레지스트리/bg_wait/체크리스트 진행표시("Step 4/32")에
+자동 편입된다(L2 선언).
+
+(ixi-flow 에 범용 매니페스트 설치기가 구현되면 아래 원커맨드로 대체:
+`ixi-flow integrations install axcell_runner --bundle ...`)
 
 ## 실행 PC 요구사항
 

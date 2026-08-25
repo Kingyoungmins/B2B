@@ -42,6 +42,7 @@ New-Item -ItemType Directory -Force -Path (Join-Path $staging "axcell_runner\eng
 Copy-Item (Join-Path $repo "serve_b2b.py") (Join-Path $staging "axcell_runner\engine\serve_b2b.py")
 Copy-Item -Recurse (Join-Path $here "ixi-flow") (Join-Path $staging "ixi-flow")
 Copy-Item -Recurse (Join-Path $here "skills")  (Join-Path $staging "skills")
+Copy-Item (Join-Path $here "install_manual.ps1") (Join-Path $staging "install_manual.ps1")
 Get-ChildItem -Recurse (Join-Path $staging "axcell_runner") -Filter "__pycache__" -Directory |
     Remove-Item -Recurse -Force
 
