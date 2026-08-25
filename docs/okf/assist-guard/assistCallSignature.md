@@ -8,7 +8,7 @@ signature: "(action, args)"
 role: "같은 (도구,인자) 반복 호출 감지 — 압축으로 앞 라운드를 잊고 같은 조회를 되풀이하는 것 방지"
 role_source: banner
 version: "0.8.0"
-loc: "assist-guard.js:131-131"
+loc: "assist-guard.js:236-236"
 
 # ── 입출력 ──
 inputs:

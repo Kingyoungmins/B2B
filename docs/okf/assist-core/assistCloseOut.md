@@ -27,6 +27,7 @@ calls:
   - "assistProposalIsVerifiable"
   - "assistPushAssistant"
   - "assistStripActionBlock"
+  - "assistStripPromptEcho"
   - "assistSystemPrompt"
   - "assistVerifyProposal"
   - "callLLM"
@@ -62,7 +63,7 @@ timestamp: "0.8.0-gen"
 - 없음(정적 분석 기준)
 
 ## 관계
-- 호출: `assistBuildProposal`, `assistHasChineseLeak`, `assistParseAction`, `assistProposalIsVerifiable`, `assistPushAssistant`, `assistStripActionBlock`, `assistSystemPrompt`, `assistVerifyProposal`, `callLLM`, `push`, `say`
+- 호출: `assistBuildProposal`, `assistHasChineseLeak`, `assistParseAction`, `assistProposalIsVerifiable`, `assistPushAssistant`, `assistStripActionBlock`, `assistStripPromptEcho`, `assistSystemPrompt`, `assistVerifyProposal`, `callLLM`, `push`, `say`
 - 피호출(영향 전파 경로): `assistHandleUserMessage`
 
 ## 실패/예외

@@ -1,19 +1,18 @@
 ---
 type: endpoint
-title: run
-module: assist-core.js
+title: splitSentences
+module: assist-guard.js
 lang: js
 extraction: regex   # 정규식 근사
-signature: "(fn, ...a)"
+signature: "(s)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
 version: "0.8.0"
-loc: "assist-core.js:754-754"
+loc: "assist-guard.js:205-205"
 
 # ── 입출력 ──
 inputs:
-  - "fn"
-  - "...a"
+  - "s"
 returns: "(추정)"
 
 # ── 사이드이펙트 (정적 추정) ──
@@ -22,13 +21,10 @@ side_effects:
 raises: []
 
 # ── 유기적 관계 ──
-calls:
-  - "push"
-calls_external:
-  - "fn"
+calls: []
+calls_external: []
 called_by:
-  - "_assistGateReplacementCode"
-  - "assistBuildProposal"
+  - "assistStripPromptEcho"
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
@@ -42,8 +38,8 @@ timestamp: "0.8.0-gen"
 - 없음(정적 분석 기준)
 
 ## 관계
-- 호출: `push`
-- 피호출(영향 전파 경로): `_assistGateReplacementCode`, `assistBuildProposal`
+- 호출: 없음
+- 피호출(영향 전파 경로): `assistStripPromptEcho`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

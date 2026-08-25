@@ -16642,6 +16642,7 @@
         "assistPushAssistant",
         "assistRunTool",
         "assistStripActionBlock",
+        "assistStripPromptEcho",
         "assistSystemPrompt",
         "assistVerifyProposal",
         "callAssistLLM",
@@ -16742,6 +16743,7 @@
         "assistProposalIsVerifiable",
         "assistPushAssistant",
         "assistStripActionBlock",
+        "assistStripPromptEcho",
         "assistSystemPrompt",
         "assistVerifyProposal",
         "callLLM",
@@ -16760,7 +16762,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "assist-core.js:735-735",
+      "loc": "assist-core.js:743-743",
       "signature": "(text, ui)",
       "calls": [
         "push"
@@ -16781,7 +16783,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "assist-core.js:742-742",
+      "loc": "assist-core.js:750-750",
       "signature": "(newCode, step, kind)",
       "calls": [
         "push",
@@ -16799,7 +16801,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "assist-core.js:746-746",
+      "loc": "assist-core.js:754-754",
       "signature": "(fn, ...a)",
       "calls": [
         "push"
@@ -16816,7 +16818,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "assist-core.js:761-761",
+      "loc": "assist-core.js:769-769",
       "signature": "(args)",
       "calls": [
         "_assistGateReplacementCode",
@@ -16846,7 +16848,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "assist-core.js:852-852",
+      "loc": "assist-core.js:860-860",
       "signature": "(fn, ...a)",
       "calls": [
         "push"
@@ -16863,7 +16865,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "assist-core.js:885-885",
+      "loc": "assist-core.js:893-893",
       "signature": "(field, label)",
       "calls": [
         "push"
@@ -16880,7 +16882,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "assist-core.js:949-949",
+      "loc": "assist-core.js:957-957",
       "signature": "(id)",
       "calls": [],
       "side_effects": [
@@ -16897,7 +16899,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "assist-core.js:958-958",
+      "loc": "assist-core.js:966-966",
       "signature": "(p)",
       "calls": [],
       "side_effects": [
@@ -16914,7 +16916,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "assist-core.js:975-975",
+      "loc": "assist-core.js:983-983",
       "signature": "(p, signal)",
       "calls": [
         "postExcelMirror"
@@ -16933,7 +16935,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "assist-core.js:993-993",
+      "loc": "assist-core.js:1001-1001",
       "signature": "(p, pickedIdx)",
       "calls": [],
       "side_effects": [
@@ -16951,7 +16953,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "assist-core.js:1013-1013",
+      "loc": "assist-core.js:1021-1021",
       "signature": "(proposalId, accepted)",
       "calls": [
         "assistApplyCompanions",
@@ -17007,13 +17009,78 @@
       "writes": []
     },
     {
+      "id": "_assistParseYamlAction",
+      "module": "assist-guard.js",
+      "lang": "js",
+      "kind": "function",
+      "extraction": "regex",
+      "loc": "assist-guard.js:131-131",
+      "signature": "(text)",
+      "calls": [
+        "eat"
+      ],
+      "side_effects": [
+        "없음(정적 분석 기준)"
+      ],
+      "reads": [],
+      "writes": []
+    },
+    {
+      "id": "eat",
+      "module": "assist-guard.js",
+      "lang": "js",
+      "kind": "function",
+      "extraction": "regex",
+      "loc": "assist-guard.js:142-142",
+      "signature": "(re, apply)",
+      "calls": [],
+      "side_effects": [
+        "없음(정적 분석 기준)"
+      ],
+      "reads": [],
+      "writes": []
+    },
+    {
       "id": "assistStripActionBlock",
       "module": "assist-guard.js",
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "assist-guard.js:114-114",
+      "loc": "assist-guard.js:183-183",
       "signature": "(reply)",
+      "calls": [],
+      "side_effects": [
+        "없음(정적 분석 기준)"
+      ],
+      "reads": [],
+      "writes": []
+    },
+    {
+      "id": "assistStripPromptEcho",
+      "module": "assist-guard.js",
+      "lang": "js",
+      "kind": "function",
+      "extraction": "regex",
+      "loc": "assist-guard.js:200-200",
+      "signature": "(visible, sources)",
+      "calls": [
+        "add",
+        "splitSentences"
+      ],
+      "side_effects": [
+        "없음(정적 분석 기준)"
+      ],
+      "reads": [],
+      "writes": []
+    },
+    {
+      "id": "splitSentences",
+      "module": "assist-guard.js",
+      "lang": "js",
+      "kind": "function",
+      "extraction": "regex",
+      "loc": "assist-guard.js:205-205",
+      "signature": "(s)",
       "calls": [],
       "side_effects": [
         "없음(정적 분석 기준)"
@@ -17027,7 +17094,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "assist-guard.js:122-122",
+      "loc": "assist-guard.js:227-227",
       "signature": "(text)",
       "calls": [],
       "side_effects": [
@@ -17042,7 +17109,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "assist-guard.js:131-131",
+      "loc": "assist-guard.js:236-236",
       "signature": "(action, args)",
       "calls": [],
       "side_effects": [
@@ -17057,7 +17124,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "assist-guard.js:141-141",
+      "loc": "assist-guard.js:246-246",
       "signature": "(s)",
       "calls": [],
       "side_effects": [
@@ -17072,7 +17139,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "assist-guard.js:148-148",
+      "loc": "assist-guard.js:253-253",
       "signature": "(p)",
       "calls": [],
       "side_effects": [
@@ -17087,7 +17154,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "assist-guard.js:158-158",
+      "loc": "assist-guard.js:263-263",
       "signature": "(id)",
       "calls": [
         "assistHashCode"
@@ -17106,7 +17173,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "assist-guard.js:192-192",
+      "loc": "assist-guard.js:297-297",
       "signature": "(id)",
       "calls": [],
       "side_effects": [
@@ -52925,6 +52992,11 @@
     },
     {
       "from": "assistHandleUserMessage",
+      "to": "assistStripPromptEcho",
+      "lang": "js"
+    },
+    {
+      "from": "assistHandleUserMessage",
       "to": "assistSystemPrompt",
       "lang": "js"
     },
@@ -53001,6 +53073,11 @@
     {
       "from": "assistCloseOut",
       "to": "assistStripActionBlock",
+      "lang": "js"
+    },
+    {
+      "from": "assistCloseOut",
+      "to": "assistStripPromptEcho",
       "lang": "js"
     },
     {
@@ -53171,6 +53248,21 @@
     {
       "from": "assistCommitProposal",
       "to": "toast",
+      "lang": "js"
+    },
+    {
+      "from": "_assistParseYamlAction",
+      "to": "eat",
+      "lang": "js"
+    },
+    {
+      "from": "assistStripPromptEcho",
+      "to": "add",
+      "lang": "js"
+    },
+    {
+      "from": "assistStripPromptEcho",
+      "to": "splitSentences",
       "lang": "js"
     },
     {
@@ -69185,11 +69277,11 @@
     }
   ],
   "stats": {
-    "functions": 2027,
-    "edges": 5704,
+    "functions": 2031,
+    "edges": 5709,
     "by_lang": {
       "python": 651,
-      "js": 1138,
+      "js": 1141,
       "csharp": 62
     }
   }

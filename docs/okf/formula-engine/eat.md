@@ -26,6 +26,7 @@ calls: []
 calls_external:
   - "Error"
 called_by:
+  - "_assistParseYamlAction"
   - "_parser"
   - "parseAddSub"
   - "parseCompare"
@@ -49,7 +50,7 @@ timestamp: "0.8.0-gen"
 
 ## 관계
 - 호출: 없음
-- 피호출(영향 전파 경로): `_parser`, `parseAddSub`, `parseCompare`, `parseConcat`, `parseMulDiv`, `parsePostfix`, `parsePower`, `parsePrimary`, `parseUnary`
+- 피호출(영향 전파 경로): `_assistParseYamlAction`, `_parser`, `parseAddSub`, `parseCompare`, `parseConcat`, `parseMulDiv`, `parsePostfix`, `parsePower`, `parsePrimary`, `parseUnary`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`
