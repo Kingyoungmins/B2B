@@ -3950,6 +3950,17 @@
         ]
       ],
       "fix": "사용자에게 안내하는 문장이므로 실증이 필요: 30단계만 고치면 1~29 접두 스냅샷 키가 동일해 resume_from=29 로 잡히고, 앞 단계를 고치거나 스냅샷 파일이 사라지면 재사용하지 않는다. 백엔드 _pipeline_snapshot_key/_find_best_pipeline_snapshot 를 직접 호출해 4케이스 검증(Excel 불필요)."
+    },
+    {
+      "id": "INSERT-BETWEEN-ROUTED-AS-MOVE",
+      "title": "[제보] 'Q열과 R열 사이에 열 1개 추가'가 Q열 앞에 삽입됨 + 다시 요청해도 계속 같은 오답",
+      "checks": [
+        [
+          "node",
+          "test_runs/_test_insert_between_and_repeat.js"
+        ]
+      ],
+      "fix": "두 결함이 곱해진 건. (1) 라우팅: columnMoveIntent 가 '사이에|앞으로|뒤로|맨 앞' 같은 위치 표현만으로 열 이동으로 판정해, 삽입 요청이 이동으로 라우팅되고 file-schema 의 삽입 규칙('A와 B 사이 = 뒤쪽 B 자리', S·T 사고 후 명문화됨)이 실리지 않았다 → 위치 표현은 동작이 아니므로 '출발 열'(/[A-Z]열(을|를)/)이 함께 있을 때만 이동으로 본다. 제외목록에 '추가|삽입|넣어'를 더하는 방식은 금지 — 'D열을 Q열과 R열 사이에 넣어줘'(진짜 이동)까지 뺏긴다(실측). (2) 고착: getLLMChatHistory 가 직전 assistant 턴 코드를 원문 그대로 재주입(KEEP_CODE_TURNS=1)하는데, 방어막 _looksLikeCorrection 은 정정 단어가 있을 때만 발동해 '같은 문장 재전송'에는 안 걸렸다(사용자가 [비우기]를 눌러야 고쳐지던 이유) → _looksLikeRepeatedRequest 추가, 반복이면 '직전 코드 복사 말고 처음부터 재해석' 지시. push 여부는 추측하지 말고 호출부에서 인자로 전달(skipHistoryPush 경로에서 반복을 놓치던 것 테스트로 확인)."
     }
   ]
 }

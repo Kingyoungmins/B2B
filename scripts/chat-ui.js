@@ -1028,7 +1028,17 @@ function columnMoveIntent(text) {
   if (!hasColumn) return false;
   // 원본비우기(copy+clear)·맞바꿈(swap)·단순복사(copy_col)는 move(원본삭제) 아님 → 각자 경로로.
   if (columnCopyClearIntent(text) || columnSwapIntent(text) || columnCopyIntent(text)) return false;
-  const moveVerb = /(이동|옮기|옮겨|reorder|재배치|(?:순서|위치|자리)\s*(?:를)?\s*(?:변경|바꾸|바꿔|조정)|앞으로|뒤로|맨\s*(?:앞|뒤)|사이에|맞바꾸|맞바꿔|바꿔\s*치|swap)/i.test(intent);
+  // [재발 2회 수정 2026-08-25] 예전엔 '사이에|앞으로|뒤로|맨 앞' 같은 **위치 표현만으로** 이동으로
+  // 판정했다. 그래서 "Q열과 R열 사이에 열 1개 추가"(삽입)가 열 이동으로 라우팅되고, file-schema 의
+  // 삽입 규칙("A와 B 사이 = 뒤쪽 B 자리")이 실리지 않아 Q 앞에 삽입됐다(S·T 로 한 번, Q·R 로 또).
+  // 위치 표현은 동작이 아니다 — **무엇을 옮기는지(출발 열)가 있어야** 이동이다.
+  //   "Q열과 R열 사이에 추가"        → 출발 열 없음 → 삽입
+  //   "D열을 Q열과 R열 사이에 넣어"  → 출발 열 있음 → 이동
+  // (제외목록에 '추가|삽입|넣어' 를 더하는 방식은 쓰지 말 것 — 위 두 번째 문장까지 삽입으로 뺏긴다)
+  const explicitMoveVerb = /(이동|옮기|옮겨|reorder|재배치|(?:순서|위치|자리)\s*(?:를)?\s*(?:변경|바꾸|바꿔|조정)|맞바꾸|맞바꿔|바꿔\s*치|swap)/i.test(intent);
+  const positionalPhrase = /(사이에|사이로|앞으로|뒤로|맨\s*(?:앞|뒤)|다음\s*으로)/i.test(intent);
+  const hasSourceColumn = /[A-Z]{1,3}\s*열\s*(?:을|를)/i.test(intent);   // "D열을 …"
+  const moveVerb = explicitMoveVerb || (positionalPhrase && hasSourceColumn);
   if (!moveVerb) return false;
   // 매칭/집계/피벗/조건/삭제는 열이동이 아님 → 기존 경로 유지(회귀 방지).
   if (/(일치|매칭|찾아서|찾아|기준으로|피벗|pivot|그룹\s*별|그룹별|집계|합산|조건|이면|일\s*때|삭제|제거)/i.test(intent)) return false;

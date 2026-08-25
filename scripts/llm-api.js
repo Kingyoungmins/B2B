@@ -17,6 +17,31 @@ function _looksLikeCorrection(text) {
   return /(아니[야라다]?|아닌데|틀렸|틀림|잘못|말고|대신에?|가 아니라|이 아니라|왜.{0,20}했|했잖아|하라고|다시 ?(?:해|작성|생성|만들)|보고 ?작업)/.test(t);
 }
 
+/* [사용자 실측 2026-08-25] "한 번 잘못 만들면 다시 요청해도 계속 똑같이 틀리게 만든다.
+   [비우기] 를 누르면 잘 된다."
+   원인: getLLMChatHistory 는 **직전 assistant 턴의 코드를 원문 그대로** 다시 보낸다
+   (LLM_HISTORY_KEEP_CODE_TURNS=1). 모델이 그 오답을 베낀다. 방어막인 _looksLikeCorrection 은
+   '아니야/틀렸/말고' 같은 정정 단어가 있을 때만 발동해서, 사용자가 **같은 문장을 그대로 다시
+   보내는** 가장 흔한 재시도에는 안 걸렸다. [비우기](chatHistory=[])가 듣던 이유가 이것.
+   → 같은 요청의 반복 자체를 '직전 결과가 기대와 달랐다'는 신호로 본다. */
+function _looksLikeRepeatedRequest(text, selfPushed) {
+  const norm = (s) => String(s || "").replace(/\s+/g, "").toLowerCase();
+  const t = norm(text);
+  if (t.length < 6) return false;                    // "ㅇㅇ", "다시" 같은 짧은 말은 제외
+  const users = (Array.isArray(state.chatHistory) ? state.chatHistory : [])
+    .filter(m => m && m.role === "user").map(m => String(m.content || ""));
+  // callLLM 은 보통 이 검사 전에 이번 메시지를 push 한다 → 마지막 항목이 '나 자신'이라 빼야 한다.
+  // 단 '마지막이 나와 같으면 뺀다'로 추측하면 안 된다 — skipHistoryPush 로 안 밀어넣었는데
+  // 직전 요청이 똑같은 경우(=바로 그 재시도 상황)를 자기 자신으로 오인해 반복을 놓친다.
+  // 밀어넣었는지는 호출부만 아는 사실이므로 인자로 받는다.
+  if (selfPushed && users.length) users.pop();
+  return users.slice(-5).some(prev => {
+    const u = norm(prev);
+    if (!u) return false;
+    return u === t || (u.length > 10 && (u.includes(t) || t.includes(u)));
+  });
+}
+
 async function callLLM(userMessage, options) {
   options = options || {};
   const thinkMode = settings.provider === "openai-compat"
@@ -55,6 +80,9 @@ async function callLLM(userMessage, options) {
   // [#3/#12] 최신 메시지가 정정이면 이전 코드/해석을 고집하지 말고 정정을 최우선 반영하도록 강조.
   if (_looksLikeCorrection(userMessage)) {
     fullSystem += "\n\n## 사용자 정정 (최우선)\n사용자의 최신 메시지는 직전 작업/해석이 틀렸다는 정정입니다. 이전 단계 코드나 직전 해석(특히 잘못 고른 열·조건)을 그대로 반복하지 말고, 이 정정을 최우선으로 반영해 새로 작성하세요. 사용자가 지목한 열/항목/기준(열 문자나 헤더명)을 정확히 사용하세요.";
+  } else if (_looksLikeRepeatedRequest(userMessage, !options.skipHistoryPush)) {
+    // 정정 단어는 없지만 같은 요청을 다시 보냈다 = 앞 결과가 기대와 달랐다는 뜻(사용자 실측).
+    fullSystem += "\n\n## 같은 요청 반복 (최우선)\n사용자가 **직전과 같은 요청을 다시** 보냈습니다. 앞서 만든 결과가 사용자의 뜻과 달랐다는 뜻입니다. 대화 기록에 남아 있는 직전 코드를 복사하거나 조금만 손보지 말고, 요청 문장을 **처음부터 다시 해석해서** 작성하세요. 특히 위치·대상 지정(어느 열 '앞/뒤/사이', 어느 헤더/조건인지)을 문장 그대로 다시 따져 보세요 — 직전 해석이 바로 그 부분에서 틀렸을 가능성이 높습니다.";
   }
   if (options.routingHint) {
     fullSystem += "\n\n## 실행 라우팅\n" + String(options.routingHint);
