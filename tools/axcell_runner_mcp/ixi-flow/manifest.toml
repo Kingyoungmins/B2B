@@ -11,14 +11,15 @@ windows = "ixi-flow/install.ps1"
 [skills]
 sources = ["skills/axcell-runner-guide"]
 
+# $IXI_PY / $IXI_VENDOR 는 설치기가 install 훅 stdout(IXI_PY=/IXI_VENDOR=)으로 해석해 치환한다.
+# ({bundle_root} 치환은 실제 설치기에 없음 — 가이드 문서와 달리 $IXI_* 어휘가 실계약.)
 [mcp_servers.axcell_runner]
-command = "python-standalone/python.exe"
+command = "$IXI_PY"
 args = ["-m", "axcell_runner.mcp_server"]
-tool_timeout_secs = 120
 
 [mcp_servers.axcell_runner.env]
-PYTHONPATH = "{bundle_root}"
-AXCELL_RUNNER_ENGINE_DIR = "{bundle_root}\\axcell_runner\\engine"
+PYTHONPATH = "$IXI_VENDOR"
+AXCELL_RUNNER_ENGINE_DIR = "$IXI_VENDOR\\axcell_runner\\engine"
 PYTHONUTF8 = "1"
 
 [mcp_servers.axcell_runner.background_runs]

@@ -1,35 +1,42 @@
-# AXCell Runner 설치 훅 — ixi-flow 설치기가 압축 해제된 번들 루트를 인자로 호출한다.
-# 멱등: 검증만 하고 아무것도 변경하지 않는다(부분 설치 상태를 만들지 않음).
-# 폐쇄망 전제: 네트워크 접근 금지.
-param(
-    [Parameter(Mandatory = $true)][string]$BundleRoot
-)
+# AXCell Runner install hook — invoked by ixi-flow integrations installer.
+#
+# Actual contract (per ixi-flow gca/mod.rs run_install_hook):
+#   - Called with NO arguments; current dir = bundle root. We derive the root
+#     from this script's location instead (more robust than cwd).
+#   - stdout's trailing KEY=VALUE block is parsed by the installer; it expects
+#     IXI_PY (python path). IXI_VENDOR defaults to bundle root if omitted, but
+#     we emit it explicitly. Diagnostics must go to stderr, not stdout.
+#   - Idempotent, verification-only, no network (closed-network premise).
+# NOTE: ASCII-only on purpose — Windows PowerShell 5.1 reads BOM-less UTF-8
+#       as ANSI and garbles non-ASCII text (observed in the field).
 $ErrorActionPreference = "Stop"
 
-function Fail([string]$msg) { Write-Error "[axcell_runner-install] $msg"; exit 1 }
+function Diag([string]$msg) { [Console]::Error.WriteLine("[axcell_runner-hook] $msg") }
+function Fail([string]$msg) { Diag $msg; exit 1 }
 
-$py = Join-Path $BundleRoot "python-standalone\python.exe"
-if (-not (Test-Path -LiteralPath $py)) { Fail "python-standalone\python.exe 가 없습니다: $py" }
+$root = Split-Path -Parent $PSScriptRoot   # <bundle_root>/ixi-flow/install.ps1 -> <bundle_root>
+$py = Join-Path $root "python-standalone\python.exe"
+if (-not (Test-Path -LiteralPath $py)) { Fail "python-standalone\python.exe not found: $py" }
 
-$engine = Join-Path $BundleRoot "axcell_runner\engine\serve_b2b.py"
-if (-not (Test-Path -LiteralPath $engine)) { Fail "엔진(serve_b2b.py)이 없습니다: $engine" }
+$engine = Join-Path $root "axcell_runner\engine\serve_b2b.py"
+if (-not (Test-Path -LiteralPath $engine)) { Fail "engine (serve_b2b.py) not found: $engine" }
 
-# 런타임 self-check: 표준 import + 엔진 로드 + pywin32
-$env:PYTHONPATH = $BundleRoot
-$env:AXCELL_RUNNER_ENGINE_DIR = Join-Path $BundleRoot "axcell_runner\engine"
+# Runtime self-check: pywin32 + engine load
+$env:PYTHONPATH = $root
+$env:AXCELL_RUNNER_ENGINE_DIR = Join-Path $root "axcell_runner\engine"
 $env:PYTHONUTF8 = "1"
 $check = & $py -c "import win32com.client, axcell_runner.runner_core as c; c._engine(); print('OK')" 2>&1
-if ($LASTEXITCODE -ne 0 -or ($check -notmatch "OK")) {
-    Fail "런타임 self-check 실패 (pywin32/엔진 로드): $check"
-}
+if ($LASTEXITCODE -ne 0 -or ($check -notmatch "OK")) { Fail "runtime self-check failed: $check" }
+Diag "self-check OK"
 
-# Excel 은 실행 시점 요구사항 — 설치는 막지 않고 경고만
+# Excel is a runtime requirement, not an install requirement — warn only.
 try {
-    $excel = Get-ItemProperty -Path "HKLM:\SOFTWARE\Classes\Excel.Application\CurVer" -ErrorAction Stop
-    Write-Host "[axcell_runner-install] Excel 감지: $($excel.'(default)')"
+    $null = Get-ItemProperty -Path "HKLM:\SOFTWARE\Classes\Excel.Application\CurVer" -ErrorAction Stop
 } catch {
-    Write-Warning "[axcell_runner-install] Excel 이 감지되지 않습니다. 스킬 실행(run_start)에는 Excel 설치가 필요합니다."
+    Diag "WARNING: Excel not detected. run_start requires Excel on this PC."
 }
 
-Write-Host "[axcell_runner-install] OK"
+# Trailing KEY=VALUE block consumed by the installer (keep last, keep clean).
+Write-Output "IXI_PY=$py"
+Write-Output "IXI_VENDOR=$root"
 exit 0
