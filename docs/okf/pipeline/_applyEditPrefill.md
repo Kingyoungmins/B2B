@@ -32,6 +32,7 @@ calls_external:
   - "focus"
   - "getElementById"
   - "none"
+  - "replace"
   - "setSelectionRange"
   - "trim"
 called_by:

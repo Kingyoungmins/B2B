@@ -8,7 +8,7 @@ signature: "(sheetsObj, fileId)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
 version: "0.7.5"
-loc: "pipeline.js:3311-3311"
+loc: "pipeline.js:3319-3319"
 
 # ── 입출력 ──
 inputs:

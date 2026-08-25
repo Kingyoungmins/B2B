@@ -8,7 +8,7 @@ signature: "(step, selfExcelId)"
 role: "'화면은 OFF 인데 다른 파일엔 값이 있는' 유령 상태가 된다(반쪽 복원 금지)."
 role_source: banner
 version: "0.7.5"
-loc: "pipeline.js:4463-4463"
+loc: "pipeline.js:4471-4471"
 
 # ── 입출력 ──
 inputs:

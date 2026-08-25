@@ -8,7 +8,7 @@ signature: "(excelId)"
 role: "창을 도로 어긋나게 만들었다. 동기로 즉시 맞춘다."
 role_source: banner
 version: "0.7.5"
-loc: "pipeline.js:4664-4664"
+loc: "pipeline.js:4672-4672"
 
 # ── 입출력 ──
 inputs:

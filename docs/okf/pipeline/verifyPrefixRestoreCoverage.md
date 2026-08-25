@@ -8,7 +8,7 @@ signature: "(start, restoredExcelIds)"
 role: "[적용됨-미반영 수정] prefix(0..start-1) 스텝들이 변형하는 파일의 라이브 세션이 전부"
 role_source: banner
 version: "0.7.5"
-loc: "pipeline.js:4733-4733"
+loc: "pipeline.js:4741-4741"
 
 # ── 입출력 ──
 inputs:
