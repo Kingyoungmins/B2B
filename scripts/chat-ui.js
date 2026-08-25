@@ -505,6 +505,56 @@ function exactSheetNameReminder(text) {
   ].join(" ");
 }
 
+/* [제보 2026-08-25] "j1 셀은 전산화번호, k1셀은 전주번호 입력" → 모델이 자꾸 '전자화번호'로
+   코딩(한 글자 오타 복사). 사용자가 문장에 쓴 한글 토큰과 '한 글자만 다른' 리터럴이 코드에
+   있으면 적용 전에 잡아 자동 재생성으로 보낸다.
+   오탐 가드: ① 다른 글자가 '한글'일 때만(숫자/영문 차이는 연도·월·코드값처럼 정상 변형이
+   흔하다 — 26년7월_raw vs 26년8월_raw) ② 사용자 문장에 코드 리터럴 자체도 있으면(둘 다
+   언급) 통과 ③ 토큰 길이 4자 이상만. */
+function hangulLiteralTypoFailures(code, sourceUserMessage) {
+  const failures = [];
+  const source = String(sourceUserMessage || "");
+  const text = String(code || "");
+  if (!source || !text) return failures;
+  const isHangul = (ch) => /[가-힣]/.test(ch || "");
+  // 한 글자 차이(같은 길이 치환 1 / 길이±1 삽입·삭제 1)인지 + 그 차이가 한글인지.
+  const oneHangulEdit = (a, b) => {
+    if (a === b) return false;
+    const la = a.length, lb = b.length;
+    if (Math.abs(la - lb) > 1) return false;
+    if (la === lb) {
+      let diff = 0, at = -1;
+      for (let i = 0; i < la; i++) if (a[i] !== b[i]) { diff++; at = i; if (diff > 1) return false; }
+      return diff === 1 && isHangul(a[at]) && isHangul(b[at]);
+    }
+    const [s, l] = la < lb ? [a, b] : [b, a];   // s=짧은 쪽
+    let i = 0;
+    while (i < s.length && s[i] === l[i]) i++;
+    if (s.slice(i) !== l.slice(i + 1)) return false;
+    return isHangul(l[i]);
+  };
+  const userTokens = Array.from(new Set((source.match(/[가-힣0-9A-Za-z_]{4,}/g) || [])));
+  const codeLiterals = Array.from(new Set(
+    Array.from(text.matchAll(/["']([^"'\n]{4,60})["']/g)).map(m => m[1]),
+  ));
+  for (const lit of codeLiterals) {
+    if (source.includes(lit)) continue;         // 사용자도 쓴 표현 — 정상
+    for (const tok of userTokens) {
+      // 올바른 토큰이 코드에 '함께' 있으면 lit 는 실제 파일의 다른(비슷한) 열일 수 있다
+      // (예: 전산화번호·전자화번호 열이 둘 다 실재) — 오타 확정은 '올바른 표기가 코드에 없을 때'만.
+      if (text.includes(tok)) continue;
+      if (oneHangulEdit(lit, tok)) {
+        failures.push(
+          `사용자가 쓴 '${tok}' 와 한 글자 다른 '${lit}' 가 코드에 있습니다 — 오타 복사로 보입니다. `
+          + `사용자 문장의 표기('${tok}')를 글자 그대로 쓰세요(임의 교정 금지).`,
+        );
+        break;
+      }
+    }
+  }
+  return failures;
+}
+
 function exactReferenceFailures(code, sourceUserMessage) {
   const failures = [];
   const source = String(sourceUserMessage || "");
@@ -2183,6 +2233,7 @@ function validateAssistantCodeBeforeApply(code, context) {
     ...traceValidationStage("exactReferenceFailures", () => exactReferenceFailures(code, sourceUserMessage)),
     ...traceValidationStage("wholeColumnCountRowTwoFailures", () => wholeColumnCountRowTwoFailures(code, sourceUserMessage)),
     ...traceValidationStage("decimalSplitNumberExtractFailures", () => decimalSplitNumberExtractFailures(code)),
+    ...traceValidationStage("hangulLiteralTypoFailures", () => hangulLiteralTypoFailures(code, sourceUserMessage)),
   ];
   if (commonFailures.length) {
     const attemptsSoFar = Number(context.staticRegenAttempt || 0);

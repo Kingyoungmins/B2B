@@ -3794,6 +3794,17 @@
         ]
       ],
       "fix": "한 사건의 연쇄(실측 14:03~14:21): ① copy_sheet 의 before/after 가 문서에 없어 add_sheet+copy 합성으로 우회 ② '옮겨줘' 재요청에 헬퍼가 없어 ctx.Sheets 원시 COM(AttributeError 원문 노출)·import datetime(정적검사 전체 실패)·교체 흉내 반복 ③ 수정 실패가 전 단계 OFF 연쇄. 수정: copy_sheet 위치 문서+예시, add_sheet before 대칭, move_sheet 신설(별도 등록), ctx.__getattr__ 안내형 오류, 제공 모듈 단순 import 허용(정적 게이트+샌드박스 __import__ 동일 정책). 남김: 자동복구발 수정 실패의 전단계 OFF 완화는 수정 모델 계약(2026-07-29 사용자 확정)과 얽혀 보류."
+    },
+    {
+      "id": "HANGUL-LITERAL-TYPO-GATE",
+      "title": "[제보 2026-08-25] 사용자가 쓴 '전산화번호'를 모델이 자꾸 '전자화번호'로 코딩(한 글자 오타 복사).",
+      "checks": [
+        [
+          "node",
+          "test_runs/_test_hangul_literal_typo_gate.js"
+        ]
+      ],
+      "fix": "사용자 문장 토큰(≥4자)과 한 글자(한글) 차이 나는 코드 리터럴을 적용 전 정적검사로 차단→자동 재생성. 오탐 가드: 숫자/영문 차이(연도·월·코드값) 통과, 사용자가 두 표기 다 썼거나 올바른 표기가 코드에 함께 있으면(실재 유사 열) 통과."
     }
   ]
 }
