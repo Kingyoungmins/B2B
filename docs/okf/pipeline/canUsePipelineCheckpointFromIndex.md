@@ -24,14 +24,15 @@ raises: []
 
 # ── 유기적 관계 ──
 calls:
+  - "_deny"
   - "getPipelineResumeFromIndex"
   - "isStepEnabled"
   - "pipelineHasBackendOnlyStep"
   - "pipelineSuffixWritesCrossFile"
   - "pipelineUsesLiveSkill"
+  - "traceClientUiEvent"
 calls_external:
   - "Number"
-  - "every"
   - "filter"
   - "isInteger"
   - "max"
@@ -57,7 +58,7 @@ timestamp: "0.8.0-gen"
 - 없음(정적 분석 기준)
 
 ## 관계
-- 호출: `getPipelineResumeFromIndex`, `isStepEnabled`, `pipelineHasBackendOnlyStep`, `pipelineSuffixWritesCrossFile`, `pipelineUsesLiveSkill`
+- 호출: `_deny`, `getPipelineResumeFromIndex`, `isStepEnabled`, `pipelineHasBackendOnlyStep`, `pipelineSuffixWritesCrossFile`, `pipelineUsesLiveSkill`, `traceClientUiEvent`
 - 피호출(영향 전파 경로): `_reapplyVbaPipelineToLiveImpl`, `applyLogic`, `insertLogic`, `replaceLogicAt`
 
 ## 실패/예외
