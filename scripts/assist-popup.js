@@ -184,8 +184,12 @@
       cards.delete(String(m.pid));   // 성공했을 때만 소거 — 실패는 재시도 가능해야 한다
       const c = m.companions || { step: 0, chat: 0 };
       const extra = (c.step || c.chat) ? ` · 이름/설명 ${c.step}곳, 대화 ${c.chat}곳 함께 수정` : "";
+      // [SBAGENT-293] 실행기에선 스위치 ON 이 리셋+전체 재적용(실측 8분 22초)으로 떨어진다 —
+      // [전체실행]이 정답이라 화면에 맞춰 안내한다(inRunner 는 메인 창이 실어 보낸다).
       const msg = m.heldForToggle
-        ? ('✓ 코드를 교체했습니다. ' + (m.stepNo ? 'Step ' + m.stepNo + ' ' : '해당 단계 ') + '스위치를 켜(ON) 주시면 새 코드로 적용됩니다')
+        ? (m.inRunner
+          ? ('✓ 코드를 교체했습니다. ' + (m.stepNo ? 'Step ' + m.stepNo + ' ' : '해당 단계 ') + '— [전체실행]을 다시 누르면 반영됩니다(앞 단계는 건너뜁니다)')
+          : ('✓ 코드를 교체했습니다. ' + (m.stepNo ? 'Step ' + m.stepNo + ' ' : '해당 단계 ') + '스위치를 켜(ON) 주시면 새 코드로 적용됩니다'))
         : m.toggled
           ? (m.enabled
             ? ('✓ Step ' + (m.stepNo || '?') + ' 스위치를 켰습니다 — 지금 적용됩니다')

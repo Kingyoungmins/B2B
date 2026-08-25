@@ -206,6 +206,16 @@ assistDefineTool("preflight.check", { desc: "지금 전체실행하면 걸릴 �
         problems.push({ kind: "missing_file", step: i + 1, detail: `대상 파일 '${tid.slice(6)}' 이 현재 업로드 목록에 없습니다.` });
       }
     });
+    // [SBAGENT-293 실측] '코드가 찾는 열 이름이 실제 파일에 없음'이 이 점검에 빠져 있었다 —
+    // 30단계를 고쳐 8분을 다시 돌린 뒤 34단계가 같은 이유로 죽었다. 실행 전 게이트와 같은
+    // 판정(pipelineHeaderMismatchReport)을 여기서도 돌려, AI 가 한 번에 전부 찾아 고치게 한다.
+    try {
+      if (typeof pipelineHeaderMismatchReport === "function") {
+        pipelineHeaderMismatchReport(steps).forEach(r => {
+          problems.push({ kind: "header_not_found", step: r.stepNo, detail: String(r.message).slice(0, 300) });
+        });
+      }
+    } catch (_) {}
     return { ok: true, stepCount: steps.length, problemCount: problems.length, problems };
   });
 

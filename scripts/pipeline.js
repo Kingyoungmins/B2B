@@ -8318,6 +8318,63 @@ function showRunnerPipelineError(err, options) {
   if (openBtn) openBtn.onclick = () => { if (typeof setPage === "function") setPage("generator"); };
 }
 
+/* [SBAGENT-293 실측 2026-08-25] 전체실행을 눌러 8분을 기다린 끝에 '그 열이 없다'로 죽었다.
+   같은 실수가 30단계·34단계 두 곳에 있었는데(요청문 표현 '기본요금' vs 실제 헤더 '기본료'),
+   30단계만 고치고 다시 돌리면 34단계에서 또 8분을 버린다 — 실물 실험으로 확인.
+   → 실행 '전에' 모든 단계의 find_header 대상을 업로드된 실제 헤더와 대조해 한 번에 알려준다.
+   판정 기준은 적용 게이트(headerNameMismatchFailures)와 같다: 시트를 못 읽거나 앞 단계가
+   만드는 중간 시트, 비슷한 후보가 없는 경우는 통과(오탐 방지). 실행기 매핑이 확정돼 있으면
+   매핑본(실제 파일명 치환본)으로 검사한다. */
+function pipelineHeaderMismatchReport(steps) {
+  const out = [];
+  const list = Array.isArray(steps) ? steps : (state.pipeline || []);
+  if (typeof headerNameMismatchFailures !== "function") return out;
+  list.forEach((step, i) => {
+    if (!step || !step.code) return;
+    // 꺼진(보류) 단계는 이번 실행에서 돌지 않으므로 검사 대상이 아니다.
+    // isStepEnabled 가 없는 환경(테스트 하네스 등)에서도 판정이 살아 있게 폴백을 둔다 —
+    // 가드가 조용히 무력화되면 OFF 단계 때문에 실행이 막힌다.
+    const _on = (typeof isStepEnabled === "function") ? isStepEnabled(step) : (step.enabled !== false);
+    if (!_on) return;
+    let msgs = [];
+    try { msgs = headerNameMismatchFailures(step.code, "") || []; } catch (_) { msgs = []; }
+    if (msgs.length) out.push({ stepNo: i + 1, stepId: step.id || "", message: String(msgs[0]) });
+  });
+  return out;
+}
+
+/* 실행 전 검사 결과를 사용자 문장으로. 여러 건이면 전부 나열한다 — 하나씩 고치고 다시 돌리는
+   8분×N 을 없애는 게 이 검사의 목적이다. */
+/* 실행기 오류 패널에 '실행 전 확인'을 띄운다. showRunnerPipelineError 는 실행 '실패' 객체를
+   받는 함수라 재사용하면 "스킬을 적용하지 못했습니다"로 잘못 보인다 — 실행 전 경고는 따로. */
+function showRunnerPreflightNotice(report) {
+  const panel = document.getElementById("runner-error-panel");
+  const lines = (report || []).map(r => `<div class="runner-error-step">${escapeHtml(r.stepNo + "단계")} · ${escapeHtml(r.message)}</div>`).join("");
+  if (!panel) {
+    if (typeof toast === "function") toast(formatHeaderMismatchNotice(report), "error");
+    return;
+  }
+  panel.hidden = false;
+  panel.innerHTML = `
+    <div class="runner-error-title">
+      <span>실행 전 확인 — 지금 실행하면 그 단계에서 실패합니다</span>
+      <span>수정 필요</span>
+    </div>
+    ${lines}
+    <div class="runner-error-help">코드가 찾는 열 이름이 실제 파일에 없습니다. [✦ AI 도움]에 <b>"위 단계들의 열 이름을 실제 이름으로 고쳐줘"</b>라고 하면 한 번에 고칠 수 있습니다. 고친 뒤 [전체실행]을 다시 누르세요.</div>
+  `;
+}
+
+function formatHeaderMismatchNotice(report) {
+  const lines = (report || []).map(r => `· ${r.stepNo}단계: ${r.message}`);
+  return [
+    "실행 전 확인 — 아래 단계는 지금 실행하면 그 자리에서 실패합니다.",
+    ...lines,
+    "",
+    "[✦ AI 도움]에 \"위 단계들의 열 이름을 실제 이름으로 고쳐줘\"라고 하면 한 번에 고칠 수 있습니다.",
+  ].join("\n");
+}
+
 $("runner-run-btn").onclick = () => {
   if ($("runner-run-btn").disabled) return;
   clearRunnerPipelineError();
@@ -8333,6 +8390,21 @@ $("runner-run-btn").onclick = () => {
     toast("선택 필요 항목을 먼저 매핑해 주세요.", "error");
     return;
   }
+  // [실행 전 헤더 검증] 매핑본 기준으로 검사한다(실제 파일명·시트명이 치환된 코드).
+  try {
+    const _mapped = (typeof window !== "undefined" && typeof window.buildRunnerMappedPipeline === "function")
+      ? (window.buildRunnerMappedPipeline(state.pipeline) || state.pipeline) : state.pipeline;
+    const _report = pipelineHeaderMismatchReport(_mapped);
+    if (_report.length) {
+      const _notice = formatHeaderMismatchNotice(_report);
+      traceClientUiEvent("runner.preflight.header_mismatch", {
+        count: _report.length, steps: _report.map(r => r.stepNo).join(","),
+      });
+      showRunnerPreflightNotice(_report);
+      if (typeof toast === "function") toast("실행 전 확인: " + _report.length + "개 단계의 열 이름이 실제 파일과 다릅니다.", "error");
+      return;
+    }
+  } catch (_) {}
   // [생성기 전체실행과 로직 일치] 실행 전 '실행 중' / 성공 후 '적용됨' 으로 스텝 상태를 동일하게 갱신한다.
   // (실행 자체는 양쪽 다 runPipelineWithAutoRepair 로 동일. 실행기는 이 상태 표시만 빠져 있었다.)
   // [전체실행 = 항상 원본부터] 보류 체크포인트를 무시·초기화해 reset(원본복원)을 건너뛰지 않게 한다(생성기와 동일).

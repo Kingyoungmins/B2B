@@ -487,8 +487,14 @@ function assistRenderProposalCard(p) {
         const extra = (c.step || c.chat)
           ? ` · 이름/설명 ${c.step}곳, 대화 ${c.chat}곳 함께 수정`
           : "";
+        // [SBAGENT-293 실측 2026-08-25] 실행기에서 이 안내대로 스위치를 켜면 라이브 적용 서명이
+        // 없어(파일출력 모드) 리셋+전체 재적용으로 떨어진다 — 30단계 하나 고치고 8분 22초를 썼다.
+        // 실행기에서는 [전체실행]이 정답이다(백엔드가 앞 단계 스냅샷을 재사용해 건너뛴다).
+        const _inRunner = (typeof state !== "undefined" && state && state.currentPage === "runner");
         const msg = r.heldForToggle
-          ? `✓ 코드를 교체했습니다. ${r.stepNo ? "Step " + r.stepNo + " " : "해당 단계 "}스위치를 켜(ON) 주시면 새 코드로 적용됩니다`
+          ? (_inRunner
+            ? `✓ 코드를 교체했습니다. ${r.stepNo ? "Step " + r.stepNo + " " : "해당 단계 "}— [전체실행]을 다시 누르면 반영됩니다(앞 단계는 건너뜁니다)`
+            : `✓ 코드를 교체했습니다. ${r.stepNo ? "Step " + r.stepNo + " " : "해당 단계 "}스위치를 켜(ON) 주시면 새 코드로 적용됩니다`)
           : r.toggled
             ? (r.enabled
               ? `✓ Step ${r.stepNo || "?"} 스위치를 켰습니다 — 지금 적용됩니다`
@@ -710,6 +716,9 @@ function assistHandleBridgeMessage(m) {
         enabled: (r && typeof r.enabled === "boolean") ? r.enabled : null,
         stepNo: (r && r.stepNo) || null,
         batch: (r && r.batch) || 0,
+        // [SBAGENT-293] 팝업은 별도 창이라 state 를 못 본다 — 안내 문구를 화면에 맞추려면
+        // 지금이 실행기인지 여기서 실어 보내야 한다(실행기에선 '스위치 ON'이 8분 함정).
+        inRunner: (typeof state !== "undefined" && !!state && state.currentPage === "runner"),
       });
       break;
     }

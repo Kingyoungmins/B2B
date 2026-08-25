@@ -3917,6 +3917,39 @@
         ]
       ],
       "fix": "이어실행 부품(체크포인트/보류 일괄실행/실패 시 스냅샷 wiring)은 이미 다 있는데, canUsePipelineCheckpointFromIndex 가 false 면 pristine 전체 재적용으로 조용히 떨어졌다. 거절 사유(no-live-skill/backend-only-step/cross-file-write/no-suffix/no-snapshot)를 pipeline.checkpoint.deny 로 남겨, 실행기 케이스에서 어느 가드가 막는지 실측으로 특정한다. 교차파일 가드를 무근거로 넓히면 목적지 파일이 안 되돌려져 데이터가 틀어지므로, 사유 확인 후 정밀 확장할 것."
+    },
+    {
+      "id": "SBAGENT-293-PREFLIGHT-HEADER",
+      "title": "[SBAGENT-293] 전체실행 8분 뒤 '그 열이 없다'로 실패 — 같은 실수가 30·34단계 두 곳.",
+      "checks": [
+        [
+          "node",
+          "test_runs/_test_runner_preflight_header.js"
+        ]
+      ],
+      "fix": "실물 실험(주신 매핑으로 36단계 실행): 매핑을 바로잡으면 33/36까지 가고 34단계에서 '기본요금'(실제 '기본료')으로 실패 — 30단계만 고치면 8분을 또 버린다. 전체실행 버튼에 사전 검증을 넣어 매핑본 기준으로 모든 활성 단계의 find_header 를 실제 헤더와 대조, 문제를 전부 모아 실행 전에 보여주고 실행을 막는다(runner.preflight.header_mismatch). AI 의 preflight.check 도 같은 판정(header_not_found)을 보게 연결. 오탐 가드: OFF 단계·앞 단계가 만드는 시트·비슷한 후보 없음·시트 못 읽음은 통과."
+    },
+    {
+      "id": "SBAGENT-293-RUNNER-GUIDANCE",
+      "title": "[SBAGENT-293] AI 안내 '스위치를 켜세요'가 실행기에선 8분 함정 + 같은 실수 다른 단계 누락.",
+      "checks": [
+        [
+          "node",
+          "test_runs/_test_assist_runner_guidance.js"
+        ]
+      ],
+      "fix": "실행기는 파일출력 모드라 라이브 적용 서명이 없어(_sigNull) 스위치 ON 이 리셋+전체 재적용으로 떨어진다(실측 8분 22초). 실행기에서는 [전체실행] 안내로 바꿈 — 그 경로엔 스냅샷 이어실행이 있고 실증 완료(_test_pipeline_resume_snapshot.py). 메인 창·팝업(별도 창이라 inRunner 를 실어 보냄)·시스템 지시문 3곳 일치. 지시문에 '같은 값을 쓰는 다른 단계를 전부 찾아 replaceLiteralAll 로 일괄 수정' 규칙 추가(실재 도구만 지시)."
+    },
+    {
+      "id": "SBAGENT-293-RESUME-PROOF",
+      "title": "[SBAGENT-293] '전체실행을 다시 누르면 앞 단계를 건너뛴다'는 안내의 근거.",
+      "checks": [
+        [
+          "python",
+          "test_runs/_test_pipeline_resume_snapshot.py"
+        ]
+      ],
+      "fix": "사용자에게 안내하는 문장이므로 실증이 필요: 30단계만 고치면 1~29 접두 스냅샷 키가 동일해 resume_from=29 로 잡히고, 앞 단계를 고치거나 스냅샷 파일이 사라지면 재사용하지 않는다. 백엔드 _pipeline_snapshot_key/_find_best_pipeline_snapshot 를 직접 호출해 4케이스 검증(Excel 불필요)."
     }
   ]
 }
