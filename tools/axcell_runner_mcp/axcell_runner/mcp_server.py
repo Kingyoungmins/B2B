@@ -60,12 +60,30 @@ def _trim_finished():
             RUNS.pop(old["run_id"], None)
 
 
+def _event_summary(e):
+    """ixi-flow 채팅 카드/로그가 뽑아 쓰는 사람용 한 줄(summary 키 우선 — DelegatedRunLog.tsx)."""
+    t = e.get("type")
+    if t == "step":
+        label = e.get("step_label") or e.get("language") or ""
+        return f"[{e.get('step')}/{e.get('total_steps')}] {label}".strip()
+    if t == "open":
+        return f"열기: {e.get('file')}"
+    if t == "warning":
+        return f"경고: {e.get('message')}"
+    if t == "saved":
+        return "저장 완료: " + ", ".join(e.get("files") or [])
+    return t or "event"
+
+
 def _run_worker(run):
     def on_event(e):
         with RUNS_LOCK:
             run["cursor"] += 1
             e = dict(e)
-            e["cursor"] = run["cursor"]
+            # seq: ixi-flow event_batch 가 '숫자 seq 없는 이벤트는 버림'(background_runs.rs) — 필수.
+            e["seq"] = run["cursor"]
+            e["cursor"] = run["cursor"]   # 하위호환(우리 CLI/테스트용)
+            e["summary"] = _event_summary(e)
             e["ts"] = time.time()
             run["events"].append(e)
             if e.get("type") == "step":
@@ -151,16 +169,19 @@ def tool_run_report(args):
     include = bool(args.get("include_events", after is not None))
     with RUNS_LOCK:
         events = []
+        start = int(after or 0)          # 하네스는 next_cursor 문자열을 그대로 되돌려줌
         if include or after is not None:
-            start = int(after or 0)
-            events = [e for e in run["events"] if e["cursor"] > start][:limit]
+            events = [e for e in run["events"] if e["seq"] > start][:limit]
+        latest = events[-1]["seq"] if events else start
         rep = {
             "ok": True, "run_id": run_id, "status": run["status"],
             "skill": run["skill"],
             "step": run["step"], "total_steps": run["total_steps"],
             "step_label": run["step_label"],
-            "cursor": (events[-1]["cursor"] if events else (after or run["cursor"])),
-            "events": events,
+            # ixi-flow event_batch 계약: {items, next_cursor(문자열)} — next_cursor 가 다음 폴의
+            # after_cursor 로 돌아온다(plain 배열이면 커서가 안 이어져 매 폴 첫 페이지 재전송).
+            "cursor": latest,
+            "events": {"items": events, "next_cursor": str(latest)},
         }
         if run["status"] == "completed" and run["result"]:
             rep.update({"out_dir": run["result"]["out_dir"], "files": run["result"]["files"]})

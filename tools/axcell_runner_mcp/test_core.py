@@ -145,6 +145,12 @@ def test_mcp_protocol_and_lifecycle():
         for _ in range(50):
             rep, _ = c.tool("run_report", {"run_id": run_id, "include_events": True})
             status = rep["status"]
+            # ixi-flow event_batch 계약: events = {items:[{seq:int,...}], next_cursor:str}
+            ev = rep["events"]
+            assert isinstance(ev, dict) and isinstance(ev["items"], list), ev
+            assert isinstance(ev["next_cursor"], str), ev
+            for item in ev["items"]:
+                assert isinstance(item.get("seq"), int) and item.get("summary"), item
             if status in ("completed", "failed", "cancelled"):
                 break
             time.sleep(0.2)
