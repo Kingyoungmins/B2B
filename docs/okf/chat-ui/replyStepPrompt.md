@@ -8,7 +8,7 @@ signature: "(replyContext)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
 version: "0.7.5"
-loc: "chat-ui.js:2303-2303"
+loc: "chat-ui.js:2320-2320"
 
 # ── 입출력 ──
 inputs:

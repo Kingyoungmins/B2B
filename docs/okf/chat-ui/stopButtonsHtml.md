@@ -8,7 +8,7 @@ signature: "()"
 role: "#10: think 모드면 '생각 중단'(thinking 만 끊고 답변 받기) + '요청 중단'(전체 종료) 두 버튼,"
 role_source: banner
 version: "0.7.5"
-loc: "chat-ui.js:2687-2687"
+loc: "chat-ui.js:2704-2704"
 
 # ── 입출력 ──
 inputs: []

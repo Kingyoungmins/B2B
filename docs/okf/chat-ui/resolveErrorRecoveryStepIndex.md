@@ -8,7 +8,7 @@ signature: "(stepIdx, errorInfo)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
 version: "0.7.5"
-loc: "chat-ui.js:2911-2911"
+loc: "chat-ui.js:2928-2928"
 
 # ── 입출력 ──
 inputs:

@@ -21736,7 +21736,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "chat-ui.js:1627-1627",
+      "loc": "chat-ui.js:1644-1644",
       "signature": "(s)",
       "calls": [],
       "side_effects": [
@@ -21751,7 +21751,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "chat-ui.js:1686-1686",
+      "loc": "chat-ui.js:1703-1703",
       "signature": "(col)",
       "calls": [],
       "side_effects": [
@@ -21766,7 +21766,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "chat-ui.js:1690-1690",
+      "loc": "chat-ui.js:1707-1707",
       "signature": "(rangeText)",
       "calls": [
         "colIndex"
@@ -21783,7 +21783,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "chat-ui.js:1703-1703",
+      "loc": "chat-ui.js:1720-1720",
       "signature": "(rangeText)",
       "calls": [],
       "side_effects": [
@@ -21798,7 +21798,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "chat-ui.js:1757-1757",
+      "loc": "chat-ui.js:1774-1774",
       "signature": "(code)",
       "calls": [],
       "side_effects": [
@@ -21813,7 +21813,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "chat-ui.js:1761-1761",
+      "loc": "chat-ui.js:1778-1778",
       "signature": "(code, sourceUserMessage)",
       "calls": [
         "appendSameFormatSheetsIntent",
@@ -21836,7 +21836,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "chat-ui.js:1811-1811",
+      "loc": "chat-ui.js:1828-1828",
       "signature": "(reason)",
       "calls": [],
       "side_effects": [
@@ -21851,7 +21851,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "chat-ui.js:1815-1815",
+      "loc": "chat-ui.js:1832-1832",
       "signature": "(code, failures, sourceUserMessage)",
       "calls": [
         "exactSheetNameReminder"
@@ -21868,7 +21868,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "chat-ui.js:1841-1841",
+      "loc": "chat-ui.js:1858-1858",
       "signature": "(sourceUserMessage)",
       "calls": [
         "duplicateRowDeleteIntent"
@@ -21885,7 +21885,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "chat-ui.js:1860-1860",
+      "loc": "chat-ui.js:1877-1877",
       "signature": "(sourceUserMessage)",
       "calls": [
         "conditionalRowDeleteIntent"
@@ -21902,7 +21902,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "chat-ui.js:1876-1876",
+      "loc": "chat-ui.js:1893-1893",
       "signature": "(sourceUserMessage)",
       "calls": [
         "filterToNewSheetIntent"
@@ -21919,7 +21919,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "chat-ui.js:1895-1895",
+      "loc": "chat-ui.js:1912-1912",
       "signature": "(code, failures, sourceUserMessage)",
       "calls": [
         "conditionalRowDeleteVbaHint",
@@ -21939,7 +21939,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "chat-ui.js:1924-1924",
+      "loc": "chat-ui.js:1941-1941",
       "signature": "(message, context)",
       "calls": [
         "addMessage",
@@ -21959,7 +21959,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "chat-ui.js:1958-1958",
+      "loc": "chat-ui.js:1975-1975",
       "signature": "(pythonCode, context)",
       "calls": [
         "applyLogic",
@@ -21980,7 +21980,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "chat-ui.js:1982-1982",
+      "loc": "chat-ui.js:1999-1999",
       "signature": "(code, failures, context)",
       "calls": [
         "$",
@@ -22008,7 +22008,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "chat-ui.js:2034-2034",
+      "loc": "chat-ui.js:2051-2051",
       "signature": "(code, failures, context)",
       "calls": [
         "$",
@@ -22037,7 +22037,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "chat-ui.js:2090-2090",
+      "loc": "chat-ui.js:2107-2107",
       "signature": "(code, context)",
       "calls": [
         "applyForcedPythonFallback",
@@ -22072,7 +22072,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "chat-ui.js:2128-2128",
+      "loc": "chat-ui.js:2145-2145",
       "signature": "(name, fn)",
       "calls": [
         "traceClientUiEvent"
@@ -22089,7 +22089,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "chat-ui.js:2289-2289",
+      "loc": "chat-ui.js:2306-2306",
       "signature": "()",
       "calls": [],
       "side_effects": [
@@ -22106,7 +22106,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "chat-ui.js:2303-2303",
+      "loc": "chat-ui.js:2320-2320",
       "signature": "(replyContext)",
       "calls": [
         "latestUserRequestForSafety"
@@ -22123,7 +22123,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "chat-ui.js:2311-2311",
+      "loc": "chat-ui.js:2328-2328",
       "signature": "(text)",
       "calls": [],
       "side_effects": [
@@ -22138,7 +22138,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "chat-ui.js:2318-2318",
+      "loc": "chat-ui.js:2335-2335",
       "signature": "(code, language)",
       "calls": [
         "isComment"
@@ -22155,7 +22155,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "chat-ui.js:2321-2321",
+      "loc": "chat-ui.js:2338-2338",
       "signature": "(l)",
       "calls": [],
       "side_effects": [
@@ -22170,7 +22170,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "chat-ui.js:2330-2330",
+      "loc": "chat-ui.js:2347-2347",
       "signature": "(fullText, code)",
       "calls": [
         "_isCommentOnlyCode",
@@ -22189,7 +22189,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "chat-ui.js:2353-2353",
+      "loc": "chat-ui.js:2370-2370",
       "signature": "(fullText, problems, context)",
       "calls": [
         "$",
@@ -22216,7 +22216,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "chat-ui.js:2400-2400",
+      "loc": "chat-ui.js:2417-2417",
       "signature": "(fullText, replyContext)",
       "calls": [
         "$",
@@ -22263,7 +22263,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "chat-ui.js:2433-2433",
+      "loc": "chat-ui.js:2450-2450",
       "signature": "()",
       "calls": [
         "finalizeActionButtonFromResult",
@@ -22288,7 +22288,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "chat-ui.js:2517-2517",
+      "loc": "chat-ui.js:2534-2534",
       "signature": "()",
       "calls": [
         "applyLogic",
@@ -22310,7 +22310,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "chat-ui.js:2535-2535",
+      "loc": "chat-ui.js:2552-2552",
       "signature": "()",
       "calls": [
         "finalizeActionButtonFromResult",
@@ -22335,7 +22335,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "chat-ui.js:2611-2611",
+      "loc": "chat-ui.js:2628-2628",
       "signature": "(text)",
       "calls": [
         "scrollChatToBottom",
@@ -22353,7 +22353,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "chat-ui.js:2634-2634",
+      "loc": "chat-ui.js:2651-2651",
       "signature": "(currentCount, onConfirm, preferredPosition)",
       "calls": [
         "$",
@@ -22375,7 +22375,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "chat-ui.js:2655-2655",
+      "loc": "chat-ui.js:2672-2672",
       "signature": "()",
       "calls": [],
       "side_effects": [
@@ -22390,7 +22390,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "chat-ui.js:2657-2657",
+      "loc": "chat-ui.js:2674-2674",
       "signature": "()",
       "calls": [
         "$",
@@ -22409,7 +22409,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "chat-ui.js:2672-2672",
+      "loc": "chat-ui.js:2689-2689",
       "signature": "(container, modeLabel, aiName, onStop, onStopThinking)",
       "calls": [
         "add",
@@ -22435,7 +22435,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "chat-ui.js:2687-2687",
+      "loc": "chat-ui.js:2704-2704",
       "signature": "()",
       "calls": [],
       "side_effects": [
@@ -22450,7 +22450,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "chat-ui.js:2696-2696",
+      "loc": "chat-ui.js:2713-2713",
       "signature": "()",
       "calls": [],
       "side_effects": [
@@ -22465,7 +22465,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "chat-ui.js:2726-2726",
+      "loc": "chat-ui.js:2743-2743",
       "signature": "()",
       "calls": [
         "createSmoothStructuredRenderer",
@@ -22487,7 +22487,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "chat-ui.js:2809-2809",
+      "loc": "chat-ui.js:2826-2826",
       "signature": "(container, context)",
       "calls": [
         "$",
@@ -22511,7 +22511,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "chat-ui.js:2868-2868",
+      "loc": "chat-ui.js:2885-2885",
       "signature": "(textEl, codeEl, emptyText)",
       "calls": [
         "createSmoothTextRenderer",
@@ -22530,7 +22530,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "chat-ui.js:2894-2894",
+      "loc": "chat-ui.js:2911-2911",
       "signature": "(step)",
       "calls": [],
       "side_effects": [
@@ -22545,7 +22545,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "chat-ui.js:2899-2899",
+      "loc": "chat-ui.js:2916-2916",
       "signature": "(step)",
       "calls": [
         "_pythonRuntimeFailKey"
@@ -22562,7 +22562,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "chat-ui.js:2907-2907",
+      "loc": "chat-ui.js:2924-2924",
       "signature": "()",
       "calls": [],
       "side_effects": [
@@ -22577,7 +22577,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "chat-ui.js:2911-2911",
+      "loc": "chat-ui.js:2928-2928",
       "signature": "(stepIdx, errorInfo)",
       "calls": [],
       "side_effects": [
@@ -22594,7 +22594,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "chat-ui.js:2938-2938",
+      "loc": "chat-ui.js:2955-2955",
       "signature": "(message)",
       "calls": [],
       "side_effects": [
@@ -22609,7 +22609,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "chat-ui.js:2947-2947",
+      "loc": "chat-ui.js:2964-2964",
       "signature": "(stepIdx, errorInfo, userNote)",
       "calls": [
         "$",
@@ -22652,7 +22652,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "chat-ui.js:3028-3028",
+      "loc": "chat-ui.js:3045-3045",
       "signature": "(function ()",
       "calls": [
         "userExplicitlyRequestsPython",
@@ -22670,7 +22670,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "chat-ui.js:3034-3034",
+      "loc": "chat-ui.js:3051-3051",
       "signature": "(function ()",
       "calls": [
         "userExplicitlyRequestsPython",
@@ -22688,7 +22688,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "chat-ui.js:3261-3261",
+      "loc": "chat-ui.js:3278-3278",
       "signature": "(text)",
       "calls": [],
       "side_effects": [
@@ -22703,7 +22703,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "chat-ui.js:3281-3281",
+      "loc": "chat-ui.js:3298-3298",
       "signature": "(el, emptyText, onRender)",
       "calls": [
         "getSmoothCharsPerFrame",
@@ -22722,7 +22722,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "chat-ui.js:3287-3287",
+      "loc": "chat-ui.js:3304-3304",
       "signature": "(ts)",
       "calls": [
         "getSmoothCharsPerFrame",
@@ -22740,7 +22740,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "chat-ui.js:3312-3312",
+      "loc": "chat-ui.js:3329-3329",
       "signature": "()",
       "calls": [],
       "side_effects": [
@@ -22755,7 +22755,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "chat-ui.js:3340-3340",
+      "loc": "chat-ui.js:3357-3357",
       "signature": "(remaining, elapsed)",
       "calls": [],
       "side_effects": [
@@ -22770,7 +22770,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "chat-ui.js:3353-3353",
+      "loc": "chat-ui.js:3370-3370",
       "signature": "(text)",
       "calls": [],
       "side_effects": [
@@ -22785,7 +22785,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "chat-ui.js:3370-3370",
+      "loc": "chat-ui.js:3387-3387",
       "signature": "(text)",
       "calls": [
         "clarifyVerifierDeterministicQuestion"
@@ -22802,7 +22802,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "chat-ui.js:3385-3385",
+      "loc": "chat-ui.js:3402-3402",
       "signature": "(v)",
       "calls": [],
       "side_effects": [
@@ -22817,7 +22817,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "chat-ui.js:3386-3386",
+      "loc": "chat-ui.js:3403-3403",
       "signature": "(row)",
       "calls": [],
       "side_effects": [
@@ -22832,7 +22832,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "chat-ui.js:3397-3397",
+      "loc": "chat-ui.js:3414-3414",
       "signature": "(row)",
       "calls": [
         "_clarifyCellText"
@@ -22849,7 +22849,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "chat-ui.js:3405-3405",
+      "loc": "chat-ui.js:3422-3422",
       "signature": "(aoa, sheetName)",
       "calls": [
         "_clarifyCellText",
@@ -22869,7 +22869,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "chat-ui.js:3451-3451",
+      "loc": "chat-ui.js:3468-3468",
       "signature": "(text, aoa)",
       "calls": [
         "push"
@@ -22886,7 +22886,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "chat-ui.js:3486-3486",
+      "loc": "chat-ui.js:3503-3503",
       "signature": "(text)",
       "calls": [],
       "side_effects": [
@@ -22903,7 +22903,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "chat-ui.js:3498-3498",
+      "loc": "chat-ui.js:3515-3515",
       "signature": "(sheet)",
       "calls": [
         "getFile"
@@ -22923,7 +22923,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "chat-ui.js:3505-3505",
+      "loc": "chat-ui.js:3522-3522",
       "signature": "(userMessage, options)",
       "calls": [
         "_clarifySeparatorWhitespaceQuestion",
@@ -22945,7 +22945,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "chat-ui.js:3560-3560",
+      "loc": "chat-ui.js:3577-3577",
       "signature": "()",
       "calls": [
         "$",

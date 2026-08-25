@@ -116,8 +116,8 @@ calls_external:
   - "copy_values"
   - "dataArr"
   - "del"
-  - "exec"
-  - "f"
+  - "delete_rows_where"
+  - "delete_sheet"
 called_by:
   - "validateAssistantCodeBeforeApply"
 reads: []
