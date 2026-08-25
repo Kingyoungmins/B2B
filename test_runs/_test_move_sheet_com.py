@@ -64,6 +64,17 @@ try:
         check("before+after 동시 지정 거부", "하나만" in str(e), e)
 
     check("structural 기록", any(s.startswith("move_sheet:") for s in ctx._shared["structural"]), ctx._shared["structural"])
+
+    # [SBAGENT-294] add_sheet before/after 대칭 — Add(Before=)/Add(After=) 키워드 실측.
+    ctx.add_sheet("맨앞시트", before="요약")
+    check("add_sheet before", names(wb)[0] == "맨앞시트", names(wb))
+    ctx.add_sheet("중간시트", after="5월raw")
+    check("add_sheet after", names(wb)[names(wb).index("5월raw") + 1] == "중간시트", names(wb))
+    try:
+        ctx.add_sheet("동시지정", before="요약", after="요약")
+        check("add_sheet before+after 거부", False)
+    except Exception as e:
+        check("add_sheet before+after 거부", "하나만" in str(e), e)
 except Exception:
     traceback.print_exc()
     fails += 1

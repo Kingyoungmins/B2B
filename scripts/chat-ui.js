@@ -1583,7 +1583,11 @@ function pythonComStaticSafetyFailures(code, sourceUserMessage) {
     failures.push("def transform(ctx): 진입 함수가 필요합니다.");
   }
   const blocked = [
-    [/^\s*(?:import|from)\s+\w+/m, "import 는 사용할 수 없습니다(re/datetime/math 는 이미 주어져 있음)."],
+    // [SBAGENT-296] 제공 모듈(re/datetime/math)의 '단순' import 는 무해한데 일률 차단 탓에
+    // import datetime 한 줄이 재생성 1회를 태우고 VBA 폴백까지 밀었다(서버 게이트·샌드박스
+    // __import__ 와 같은 정책: 단순형만 허용, as 별칭/from/미제공 모듈은 차단).
+    [/^\s*from\s+\w+/m, "from-import 는 사용할 수 없습니다(re/datetime/math 는 이미 주어져 있음 — datetime.date 처럼 모듈 경로로 쓰세요)."],
+    [/^\s*import\s+(?!(?:re|datetime|math)(?:\s*,\s*(?:re|datetime|math))*\s*(?:$|#))/m, "import 는 제공 모듈(re/datetime/math)의 단순 import 만 가능합니다(as 별칭 불가 — 이미 주어져 있으니 지워도 됩니다)."],
     // (?<![\w.]) — re.compile()/ctx.input() 같은 '제공 모듈/ctx 의 메서드 호출'은 빌트인이 아니다.
     // 서버 AST 게이트도 bare 이름 호출만 차단한다(속성 호출은 허용).
     [/(?<![\w.])(?:open|eval|exec|__import__|input|compile)\s*\(/, "open/eval/exec/__import__ 등 빌트인은 사용할 수 없습니다."],

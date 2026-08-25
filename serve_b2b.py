@@ -11565,6 +11565,22 @@ _PY_SAFE_BUILTINS = {
     "True": True, "False": False, "None": None,
 }
 
+
+def _py_safe_import(name, globals=None, locals=None, fromlist=(), level=0):
+    """[SBAGENT-296] 제공 모듈(re/datetime/math)의 단순 import 만 통과시키는 __import__.
+
+    정적 게이트가 'import datetime' 을 통과시켜도, 샌드박스 builtins 에 __import__ 가 없으면
+    런타임 ImportError 로 더 나쁘게 죽는다 — 같은 모듈 객체를 돌려줘 실제로 무해하게 만든다.
+    from-import/미제공 모듈은 게이트가 먼저 막지만, 여기서도 이중으로 막는다."""
+    _given = {"re": re, "datetime": datetime, "math": math}
+    if level == 0 and name in _given and not fromlist:
+        return _given[name]
+    raise PythonComSkillError(
+        f"import '{name}' 은 사용할 수 없습니다 — re/datetime/math 만 제공되며 이미 주어져 있습니다.")
+
+
+_PY_SAFE_BUILTINS["__import__"] = _py_safe_import
+
 _XL_UP = -4162
 _XL_TO_LEFT = -4159
 
@@ -13908,16 +13924,43 @@ class PythonComSkillContext:
             pass
         return {"filled": filled, "src_keys": len(kmap)}
 
-    def add_sheet(self, name, after=None):
+    def add_sheet(self, name, after=None, before=None):
         self._tick(3)
         names = _excel_collection_names(self._wb.Worksheets)
         if str(name) in names:
             raise PythonComSkillError(f"시트 '{name}' 이 이미 있습니다. 다른 이름을 쓰거나 먼저 삭제하세요.")
-        anchor = self._wb.Worksheets(str(after)) if after else self._wb.Worksheets(self._wb.Worksheets.Count)
-        ws = self._wb.Worksheets.Add(After=anchor)
+        # [SBAGENT-294] copy_sheet/move_sheet 와 시그니처 대칭 — before 지원.
+        if before is not None and after is not None:
+            raise PythonComSkillError("add_sheet 는 before/after 중 하나만 지정하세요.")
+        if before is not None:
+            ws = self._wb.Worksheets.Add(Before=self._ws(str(before)))
+        else:
+            anchor = self._ws(str(after)) if after else self._wb.Worksheets(self._wb.Worksheets.Count)
+            ws = self._wb.Worksheets.Add(After=anchor)
         ws.Name = str(name)
         self._shared["structural"].append(f"add_sheet:{name}")
         return True
+
+    def __getattr__(self, name):
+        # [SBAGENT-296] 모델이 VBA/COM 식 접근(ctx.Sheets(...), ctx.Range(...))을 지어내면
+        # "'PythonComSkillContext' object has no attribute 'Sheets'" 원문이 그대로 사용자에게
+        # 노출됐다(실측 — "ctx에서 시트를 찾을 수 없다"로 제보됨). 무엇을 써야 하는지 알려주는
+        # 문구로 바꾼다. hasattr/getattr(default) 의미가 깨지지 않게 AttributeError 를 유지한다.
+        if name.startswith("_"):
+            raise AttributeError(name)
+        _hints = {
+            "Sheets": "시트 작업은 ctx.add_sheet/move_sheet/copy_sheet/rename_sheet/delete_sheet",
+            "Worksheets": "시트 작업은 ctx.add_sheet/move_sheet/copy_sheet 등 시트 헬퍼",
+            "Range": "셀 읽기/쓰기는 ctx.read/ctx.write/ctx.set_range",
+            "Cells": "셀 읽기/쓰기는 ctx.read/ctx.write",
+            "ActiveSheet": "활성 시트에 의존하지 말고 시트 이름을 명시",
+            "ActiveWorkbook": "다른 파일은 ctx.book(파일명)",
+            "Workbooks": "다른 파일은 ctx.book(파일명)",
+            "Application": "원시 COM 접근은 지원되지 않습니다(ctx 헬퍼만 사용)",
+        }
+        hint = _hints.get(name, "ctx 가 제공하는 헬퍼만 사용할 수 있습니다")
+        raise AttributeError(
+            f"ctx.{name} 는 없습니다 — {hint} 를 사용하세요(VBA/COM 식 접근 금지).")
 
     def move_sheet(self, name, before=None, after=None):
         """[SBAGENT-295] 같은 파일 안에서 기존 시트의 '위치'를 바꾼다(내용·이름 유지).
@@ -15079,10 +15122,19 @@ def _python_com_static_check(code):
             self.generic_visit(node)
 
         def visit_Import(self, node):
+            # [SBAGENT-296] 어차피 주어져 있는 모듈의 단순 import(별칭 없음)는 무해한데,
+            # 일률 차단 탓에 'import datetime' 한 줄이 95초짜리 리셋-재적용 사이클을 통째로
+            # 실패시키고 전 단계 OFF 연쇄까지 갔다(실측 14:19). 단순형만 통과시킨다
+            # (import X as Y / 미제공 모듈은 기존대로 차단 — 실행 환경에 이름이 없다).
+            _GIVEN = {"re", "datetime", "math"}
+            if all((a.name in _GIVEN and not a.asname) for a in node.names):
+                return
             failures.append("import 는 사용할 수 없습니다(re/datetime/math 는 이미 주어져 있음).")
 
         def visit_ImportFrom(self, node):
-            failures.append("import 는 사용할 수 없습니다(re/datetime/math 는 이미 주어져 있음).")
+            failures.append(
+                "from-import 는 사용할 수 없습니다(re/datetime/math 는 이미 주어져 있음 — "
+                "datetime.date 처럼 모듈 경로로 쓰세요).")
 
         def visit_FunctionDef(self, node):
             nonlocal has_entry

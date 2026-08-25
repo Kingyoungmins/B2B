@@ -3771,6 +3771,29 @@
         ]
       ],
       "fix": "시트 위치 변경 헬퍼가 없어 모델이 ctx.Sheets(...).Move 원시 COM(AttributeError 즉사)이나 임시시트 복사→원본삭제→rename 교체(금지 패턴)로 흉내냄(실측 로그). ctx.move_sheet(before/after, positional Move — Copy(After=) 무동작 전례와 정책 일치) 추가 + 생성 규칙(표·헬퍼 문서·흉내 금지) + 정적 게이트(delete_sheet(X)+rename(→X) 조합 차단→move_sheet 안내). COM 실측 8케이스."
+    },
+    {
+      "id": "SBAGENT-294-296-SHEET-PLACEMENT-CHAIN",
+      "title": "[SBAGENT-294/296] 시트 위치 지정 요청의 실패 연쇄 — copy_sheet 위치 문서 부재, COM식 접근 원문 노출, import 한 줄 전체 실패.",
+      "checks": [
+        [
+          "python",
+          "test_runs/_test_ctx_import_and_attr_hints.py"
+        ],
+        [
+          "com",
+          "test_runs/_test_move_sheet_com.py"
+        ],
+        [
+          "marker",
+          "scripts/file-schema.js::copy_sheet(\"sheet\", dst_book=\"(작업용)청구내역.xlsx\", new_name=\"26년8월_raw\", after=\"요약\")"
+        ],
+        [
+          "marker",
+          "serve_b2b.py::def _py_safe_import"
+        ]
+      ],
+      "fix": "한 사건의 연쇄(실측 14:03~14:21): ① copy_sheet 의 before/after 가 문서에 없어 add_sheet+copy 합성으로 우회 ② '옮겨줘' 재요청에 헬퍼가 없어 ctx.Sheets 원시 COM(AttributeError 원문 노출)·import datetime(정적검사 전체 실패)·교체 흉내 반복 ③ 수정 실패가 전 단계 OFF 연쇄. 수정: copy_sheet 위치 문서+예시, add_sheet before 대칭, move_sheet 신설(별도 등록), ctx.__getattr__ 안내형 오류, 제공 모듈 단순 import 허용(정적 게이트+샌드박스 __import__ 동일 정책). 남김: 자동복구발 수정 실패의 전단계 OFF 완화는 수정 모델 계약(2026-07-29 사용자 확정)과 얽혀 보류."
     }
   ]
 }
