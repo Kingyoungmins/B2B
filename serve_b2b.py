@@ -14987,6 +14987,38 @@ class PythonComSkillContext:
             except Exception:
                 pass
         if target is None:
+            # [SBAGENT-293 24단계] 사용자가 "매달 파일명이 바뀌니 yyyymmdd 로" 식으로 만든 스킬은
+            # 코드에 '한국전력공사_yyyymmdd.xlsx' 같은 날짜 플레이스홀더 리터럴이 남는다. 실행기
+            # 매핑을 거치면 치환되지만, 생성기 전체실행(매핑 없음)에서는 안정키·조회키 매칭이
+            # 원천 불가(플레이스홀더는 날짜 숫자가 아님)라 "워크북이 열려 있지 않습니다"로 죽었다
+            # (실측: 엔진 재현 시 매핑만 되면 24단계 정상 — 27만 행 필터 성공). 플레이스홀더
+            # 자리를 와일드카드로 바꿔 열린 파일과 대조하고, '정확히 하나'일 때만 바인딩한다
+            # (월 재바인딩과 동일한 단일 명확 매칭 원칙 — 모호하면 기존 오류로 떨어진다).
+            try:
+                _ph = re.compile(r"(?i)y{2,4}[\-_.]?m{2}(?:[\-_.]?d{2})?")
+                _req = str(Path(str(key)).name)
+                _parts = _ph.split(_req)
+                if len(_parts) > 1:
+                    _rx = re.compile(".+".join(re.escape(p) for p in _parts), re.IGNORECASE)
+                    _open = _user_facing_workbook_names(self._app)
+                    _hits = [n for n in _open
+                             if _rx.fullmatch(n) or _rx.fullmatch(str(Path(n).stem))]
+                    if len(_hits) == 1:
+                        for wb in self._app.Workbooks:
+                            try:
+                                if str(wb.Name) == _hits[0]:
+                                    target = wb
+                                    _vba_trace("python_com.book.placeholder_match",
+                                               requested=str(key), matched=str(_hits[0]))
+                                    break
+                            except Exception:
+                                continue
+                    elif len(_hits) > 1:
+                        _vba_trace("python_com.book.placeholder_ambiguous",
+                                   requested=str(key), hits=", ".join(_hits[:4]))
+            except Exception:
+                pass
+        if target is None:
             # [지원성] 어떤 파일이 열려 있는지 함께 알려줘야 이름 불일치(중복다운로드 접미사·본부별
             # 파일명 차이 등)를 사용자가/지원팀이 바로 식별할 수 있다.
             # 단, 내부 작업본 이름(excel_open_<uuid>, <hash>_원본명, PERSONAL.XLSB 등)은 보여주면 안 된다 —
