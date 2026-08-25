@@ -1597,6 +1597,23 @@ function pythonComStaticSafetyFailures(code, sourceUserMessage) {
   for (const [re, msg] of blocked) {
     if (re.test(scanText)) failures.push(msg);
   }
+  // [제보 2026-08-25 "0인 행 삭제" 스킬] '행 삭제' 요청에 filter_to_sheet 로 추출한 뒤 원본
+  // 시트를 delete_sheet(+rename)로 '교체'하는 재구성이 생성됨 — 라이브 미러가 그 시트를 보고
+  // 있어 적용 직후 화면이 깨졌다(정상 엑셀 화면 아님). 추출원본을 지우는 조합만 좁게 잡는다
+  // (단순 시트 삭제·이동(copy_sheet 후 delete_sheet)은 정상 패턴이라 건드리지 않는다).
+  {
+    const ftsSrcs = Array.from(scanText.matchAll(/filter_to_sheet\s*\(\s*["']([^"']+)["']/g)).map(m => m[1]);
+    const delSheets = Array.from(scanText.matchAll(/delete_sheet\s*\(\s*["']([^"']+)["']/g)).map(m => m[1]);
+    const replaced = delSheets.find(n => ftsSrcs.includes(n));
+    if (replaced) {
+      failures.push(
+        `filter_to_sheet 로 추출한 원본 시트('${replaced}')를 delete_sheet 로 지워 '교체'하는 방식은 금지입니다 — `
+        + "라이브 화면이 그 시트를 보고 있어 적용 직후 화면이 깨지고, 시트 순서·틀고정이 사라집니다. "
+        + "조건에 맞는 행 삭제는 ctx.delete_rows_where(시트, predicate, header_rows=헤더행수) 로 '제자리에서' 삭제하세요"
+        + "(predicate 는 데이터 행을 받아 True=삭제, 서식·수식·병합 보존).",
+      );
+    }
+  }
   failures.push(...negativeSignLossFailures(scanText, sourceUserMessage, "Python 코드"));
   // 루프 내부의 ctx 쓰기 반복(셀 단위 COM 폭주) 휴리스틱 — 서버 AST 게이트와 동일 규칙.
   // 수신자는 ctx 와 ctx.book(...) 별칭만 본다 — (?:\w+)\. 로 아무 변수나 매칭하면
