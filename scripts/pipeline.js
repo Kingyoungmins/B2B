@@ -1307,6 +1307,14 @@ function dropStepCrossEvidence(step) {
   delete step._crossSnapshotFor;
 }
 
+// [제보 2026-08-25] 오래 도는 재적용/전체실행에서 오버레이 문구가 고정이라 '멈춘 것 같다'는
+// 제보가 나왔다(실측 8분 22초 동안 '스킬 재적용 중...'만). 진행률을 오버레이에도 덧붙인다.
+function _setOverlayProgress(text) {
+  try {
+    if (typeof setExcelMirrorApplyLoadingProgress === "function") setExcelMirrorApplyLoadingProgress(text);
+  } catch (_) {}
+}
+
 async function runIsolatedLivePipelineSteps(sourceSteps, initialExcelId, options = {}) {
   const _runPerfT0 = performance.now();  // [F8] 전체실행 소요 측정(디버그 패널 기록용)
   const startIndex = Number.isInteger(Number(options.startIndex)) ? Math.max(0, Number(options.startIndex)) : 0;
@@ -1461,8 +1469,11 @@ async function runIsolatedLivePipelineSteps(sourceSteps, initialExcelId, options
                       // 최종 동기화(통째 시트 교체) 단계 — 저사양에선 수 분 걸린다. 'N/N'에서 멈춘 듯 안 보이게.
                       const st = pj.syncTotal ? (" (" + Math.min(pj.syncTotal, pj.syncCurrent || 0) + "/" + pj.syncTotal + ")") : "";
                       window.runnerSetProgress("결과 반영 중" + st + "...");
+                      _setOverlayProgress("결과 반영 중" + st);
                     } else if (pj.total) {
-                      window.runnerSetProgress(Math.min(pj.total, pj.current || 0) + "/" + pj.total + " 단계 실행 중...");
+                      const _cur = Math.min(pj.total, pj.current || 0);
+                      window.runnerSetProgress(_cur + "/" + pj.total + " 단계 실행 중...");
+                      _setOverlayProgress(_cur + "/" + pj.total + "단계");
                     }
                   }
                 }).catch(() => {});
@@ -1601,9 +1612,12 @@ async function runIsolatedLivePipelineSteps(sourceSteps, initialExcelId, options
               fetch("/api/excel/pipeline-progress?excelId=" + encodeURIComponent(excelId))
                 .then(r => r.json())
                 .then(pj => {
-                  if (pj && pj.total && typeof window !== "undefined" && typeof window.runnerSetProgress === "function") {
+                  if (pj && pj.total) {
                     const cur = Math.min(_progressTotal, _progressBase + (pj.current || 0));
-                    window.runnerSetProgress(cur + "/" + _progressTotal + " 단계 실행 중...");
+                    if (typeof window !== "undefined" && typeof window.runnerSetProgress === "function") {
+                      window.runnerSetProgress(cur + "/" + _progressTotal + " 단계 실행 중...");
+                    }
+                    _setOverlayProgress(cur + "/" + _progressTotal + "단계");
                   }
                 })
                 .catch(() => {});

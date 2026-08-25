@@ -1388,7 +1388,6 @@ function beginExcelMirrorApplyLoading(message, options = {}) {
     });
   }
   if (typeof showExcelApplyCancelButton === "function") showExcelApplyCancelButton(true);
-  const label = message || "적용 반영 중...";
   const hideWindows = options.forceHideWindows === true || (!isNativeExcelShell() && options.hideWindows !== false);
   traceClientUiEvent("excel.apply_loading.hide_decision", {
     hideWindows,
@@ -1397,10 +1396,17 @@ function beginExcelMirrorApplyLoading(message, options = {}) {
   if (hideWindows && typeof hideAllExcelMirrorWindows === "function") {
     hideAllExcelMirrorWindows().catch(() => {});
   }
+  // [제보 2026-08-25] 오버레이 문구가 시작할 때 정한 한 줄로 고정이라, 36단계를 8분 넘게 도는
+  // 동안 화면엔 '스킬 재적용 중...'만 떠 있었다 — 사용자는 무엇이 얼마나 남았는지 알 수 없어
+  // "그냥 멈춘 것 같다"고 겪는다(실측 17:03~17:11). 진행률을 덧붙일 수 있게 라벨을 밖으로 뺀다.
+  excelMirror.applyLoadingBaseLabel = message || "적용 반영 중...";
+  excelMirror.applyLoadingProgress = "";
   let i = 0;
   const tick = () => {
     const frame = EXCEL_MIRROR_SPINNER_FRAMES[i % EXCEL_MIRROR_SPINNER_FRAMES.length];
     i += 1;
+    const label = String(excelMirror.applyLoadingBaseLabel || message || "적용 반영 중...")
+      + (excelMirror.applyLoadingProgress ? "  " + excelMirror.applyLoadingProgress : "");
     const text = `${frame}  ${label}`;
     if (typeof publishNativeExcelLoading === "function") publishNativeExcelLoading(true, text);
     if (typeof updateMirrorShellStatus === "function") updateMirrorShellStatus(text);
@@ -1408,6 +1414,13 @@ function beginExcelMirrorApplyLoading(message, options = {}) {
   tick();
   clearInterval(excelMirror.applyLoadingTimer);
   excelMirror.applyLoadingTimer = setInterval(tick, 320);
+}
+
+/* [제보 2026-08-25] 오래 도는 재적용/전체실행 동안 오버레이에 진행 상황을 덧붙인다.
+   예: "스킬 재적용 중...  12/36단계". 백엔드 진행률 폴링(pipeline-progress)이 부른다.
+   기본 문구는 그대로 두고 접미만 바꾸므로 중첩 잠금에서도 바깥 문구가 사라지지 않는다. */
+function setExcelMirrorApplyLoadingProgress(text) {
+  excelMirror.applyLoadingProgress = String(text || "");
 }
 
 function endExcelMirrorApplyLoading(options) {
@@ -1450,6 +1463,7 @@ function endExcelMirrorApplyLoading(options) {
     excelMirror.applyDepth = 0;
   }
   try { excelMirror.applyOpenLabels = []; } catch (_) {}   // 정상 해제 — 추적 목록 비움
+  excelMirror.applyLoadingProgress = "";                   // 다음 작업에 옛 진행률이 새지 않게
   if (excelMirror.applyBusyToken && typeof endUiBusy === "function") {
     endUiBusy(excelMirror.applyBusyToken, { silentComplete: true });
     excelMirror.applyBusyToken = null;
