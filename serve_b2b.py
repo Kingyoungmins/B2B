@@ -2565,23 +2565,42 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
                 "fullrun.step.error", "fullrun.file.opened", "fullrun.companion.opened",
                 "http.run_vba_pipeline.error", "http.run_full_pipeline.error",
                 "excel.open.reattach", "excel.open.orphan_close",
+                # [AI 도움 가시성 2026-08-25] 실행 '밖' 사건 — 업로드/보안문서/다운로드.
+                # 서버에 이미 남는데 필터에 막혀 AI 만 못 봤다(가시성 감사 구멍 ②).
+                "upload.done", "secure.upload",
+                "download.secure_applied", "download.secure_failed",
+            )
+            # 클라 UI 이벤트는 vba 가 아니라 perf 트레이스에 client.* 로 남는다(_perf_trace).
+            # 회색화면 강제해제(depth_forced)·재전송(replace.reshow)·LLM 폴오버가 전부 여기에만
+            # 있어서, vba 트레이스만 읽던 이 도구로는 그 층의 진단이 원천 불가였다(구멍 ④⑥⑧).
+            keep_client = (
+                "client.excel.apply_loading.depth_forced", "client.excel.apply_loading.begin",
+                "client.excel.apply_loading.end", "client.mirror.replace.reshow",
+                "client.mirror.lazyopen.fail", "client.mirror.selection.gate",
+                "client.llm.upstream.failover", "client.devvllm.model.autoswitch",
+                "client.save.backup.failed", "client.apply.validate.block",
             )
             events = []
-            try:
-                lines = _vba_trace_path().read_text(encoding="utf-8", errors="replace").splitlines()
-            except Exception:
-                lines = []
-            for line in lines[-4000:]:
+            lines = []
+            for _trace_src in (_vba_trace_path(), _perf_trace_path()):
+                try:
+                    lines.extend(_trace_src.read_text(encoding="utf-8", errors="replace").splitlines()[-4000:])
+                except Exception:
+                    pass
+            for line in lines:
                 try:
                     d = json.loads(line)
                 except Exception:
                     continue
                 ev = str(d.get("event") or "")
-                if ev not in keep:
+                if ev not in keep and ev not in keep_client:
                     continue
                 item = {"ts": d.get("ts"), "event": ev}
                 for k in ("description", "errDescription", "errNumber", "error",
                           "targetName", "companionName", "name", "reason", "ordinal", "stepId",
+                          # client.*/보안 이벤트의 진단 필드(잠금 라벨·게이트 사유·폴오버 방향 등)
+                          "label", "open", "stale", "gate", "excelId", "upstream", "from", "to",
+                          "message", "sniff", "released", "notDrm", "skipped", "inBytes", "outBytes",
                           # 동반본 여는 비용 분해(사본 뜨기 vs 열기) — 캐시로 줄일 수 있는 몫을 가른다
                           "copySec", "openSec", "sizeMb"):
                     v = d.get(k)
@@ -2593,6 +2612,8 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
                     if isinstance(v, dict) and v.get("Name"):
                         item[k] = str(v.get("Name"))[:120]
                 events.append(item)
+            # 두 트레이스를 합쳤으므로 시간순으로 정렬해 돌려준다(ts 는 ISO 문자열 — 사전순=시간순).
+            events.sort(key=lambda e: str(e.get("ts") or ""))
             self.send_json({"ok": True, "events": events[-limit:], "totalMatched": len(events)})
         except Exception as err:
             self.send_json({"ok": False, "error": str(err)}, status=500)

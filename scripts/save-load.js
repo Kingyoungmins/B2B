@@ -446,10 +446,23 @@ async function saveLogicAutoBackup(reason, seq) {
     });
     const data = await resp.json().catch(() => ({}));
     if (!resp.ok || !data.ok) throw new Error(data.error || `HTTP ${resp.status}`);
-    window.lastLogicAutoBackup = data;
+    window.lastLogicAutoBackup = { ...data, at: Date.now() };
     console.info("Logic auto-backup saved:", data.path || data.name);
   } catch (err) {
     console.warn("Logic auto-backup failed:", err);
+    // [AI 도움 가시성 2026-08-25] 실패가 console 에만 남아 사용자도 AI 도 몰랐다(감사 구멍 ③)
+    // — auto_backup 폴더에 zip 이 안 생겨도 아무 표시가 없었다. 기록(backup.status 가 읽음) +
+    // 서버 트레이스 + 세션당 1회 토스트(매번 띄우면 저장 주기마다 도배가 된다).
+    window.__lastLogicBackupError = { at: Date.now(), reason: String(reason || ""),
+                                      message: String((err && err.message) || err).slice(0, 300) };
+    if (typeof traceClientUiEvent === "function") {
+      traceClientUiEvent("save.backup.failed", { reason: String(reason || ""),
+        message: String((err && err.message) || err).slice(0, 200) });
+    }
+    if (!window.__logicBackupFailToasted) {
+      window.__logicBackupFailToasted = true;
+      toast("스킬 자동저장에 실패했습니다(작업은 계속됩니다). 원인은 AI 도움(F11)에게 물어보세요.", "error");
+    }
   }
 }
 
@@ -492,7 +505,15 @@ function openSaveModal() {
     const baseName = rememberLogicSaveBaseName($("save-name").value.trim());
     if (!baseName) return;
     const name = timestampedLogicArchiveName(baseName);
-    downloadZip(buildLogicZipEntries(name), name + ".zip");
+    // [AI 도움 가시성 2026-08-25] zip 조립이 던지면 조용히 끝나고 성공 토스트만 안 떴다(감사
+    // 구멍 ③) — 실패를 말하고 모달은 열어 둔다(재시도 자리).
+    try {
+      downloadZip(buildLogicZipEntries(name), name + ".zip");
+    } catch (err) {
+      console.error("skill save failed:", err);
+      toast("스킬 저장(zip 만들기)에 실패했습니다: " + ((err && err.message) || err), "error");
+      return;
+    }
     $("modal-bg").classList.remove("show");
     toast(`"${name}.zip" 다운로드 시작`, "success");
   };

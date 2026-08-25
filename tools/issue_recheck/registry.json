@@ -3681,6 +3681,17 @@
         ]
       ],
       "fix": "'조건 행 삭제' 요청에 filter_to_sheet 추출 후 원본 delete_sheet(+rename) 교체가 생성됨 — 라이브 미러가 그 시트를 보고 있어 화면 붕괴, 시트순서·틀고정 소실. 생성 규칙에 문구 매핑(조건 행 삭제=ctx.delete_rows_where, Ctrl+- 대응)과 교체 재구성 금지를 명시하고, 정적 게이트가 추출원본 delete_sheet 조합을 적용 전에 차단해 자동 재생성으로 보낸다(시트 이동 등 정상 delete_sheet 는 오탐 없음)."
+    },
+    {
+      "id": "AI-HELP-VISIBILITY-GAPS",
+      "title": "[감사] AI 도움이 실행 '밖' 문제(저장·보안문서·화면·연결)에 무력하던 구멍 14개 수리",
+      "checks": [
+        [
+          "node",
+          "test_runs/_test_assist_gap_fixes.js"
+        ]
+      ],
+      "fix": "감사 결과 AI 도움 도구가 전부 '스킬 실행' 도메인에 몰려 있어, 저장 실패·보안문서·회색화면·LLM 폴오버 질문은 읽을 데이터가 없어 제보로 낙하했다. 수리: ①toast() 래핑으로 최근 알림 50건 링버퍼 + app.notices 도구(휘발성 토스트 95곳 재구성 가능) ②__lastPipelineErrorInfo 를 setter 후킹으로 최근 5건 히스토리화(pipeline.js 는 안 건드림 — 동시 세션 충돌 회피) + step.error 에 recentErrors ③자동백업 실패를 기록+트레이스+세션당 1회 토스트, 수동 저장 try/catch, backup.status 도구 ④secure.status 도구 + 프롬프트에 보안문서 배너/실패 사전 ⑤run.trace 가 perf 트레이스(client.*)까지 합산해 읽음 — depth_forced(회색화면)·replace.reshow·selection.gate·llm.upstream.failover·secure.upload 가 이제 보임 ⑥파일 목록에 unreliableSheets/inspectError/backendOnly ⑦프롬프트에 F9 항목·다운로드 버튼 구분·STORED zip 규칙 사전. 남긴 것: 라운드/절단 상한(기존 안내문 유지), server-monitor 직접 상태 도구(폴오버 트레이스로 대체)."
     }
   ]
 }

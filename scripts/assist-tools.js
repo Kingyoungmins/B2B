@@ -99,11 +99,19 @@ function _assistColLetter(idx) {   // 0→A, 25→Z, 26→AA
 }
 function _assistFileList() {
   const out = [];
-  (state.inputs || []).forEach(f => { if (f && f.name) out.push({ role: "input", name: f.name, sheets: f.sheetNames || [] }); });
-  (state.outputTemplates || []).forEach((t, i) => {
-    const f = t && (t.file || t.original);
-    if (f && f.name) out.push({ role: "output", index: i, name: f.name, sheets: f.sheetNames || [] });
-  });
+  // [가시성 감사 ⑦] 이름·시트만 주면 '어떻게 올라갔는지'를 AI 가 모른다 — 가짜 시트명
+  // (sheetNamesUnreliable: 백엔드가 못 읽어 파일명으로 지어낸 상태)과 검사 오류를 함께 싣는다.
+  const push = (role, f, index) => {
+    if (!f || !f.name) return;
+    const item = { role, name: f.name, sheets: f.sheetNames || [] };
+    if (index !== undefined) item.index = index;
+    if (f.backendOnly) item.backendOnly = true;
+    if (f.sheetNamesUnreliable) item.unreliableSheets = true;   // 이 시트명 목록을 근거로 쓰지 말 것
+    if (f.inspectError) item.inspectError = String(f.inspectError).slice(0, 160);
+    out.push(item);
+  };
+  (state.inputs || []).forEach(f => push("input", f));
+  (state.outputTemplates || []).forEach((t, i) => push("output", t && (t.file || t.original), i));
   return out;
 }
 
@@ -403,6 +411,9 @@ assistDefineTool("step.error", { desc: "직전 실행에서 실패한 스텝의 
       message: String(e.message || "").slice(0, 600),
       cause: String(e.cause || "").slice(0, 600),
       rawError: String(e.rawError || "").slice(0, 800),
+      // [가시성 감사 ⑤] 단일 슬롯이라 연속 실패가 덮였다 — util.js 후킹이 쌓은 최근 5건(최신이 뒤).
+      recentErrors: (typeof window !== "undefined" && Array.isArray(window.__pipelineErrorHistory))
+        ? window.__pipelineErrorHistory.slice() : [],
       // [지라 2026-08-19] 실패한 코드 원문 — 만들다가 실패한 단계는 스킬 목록에 없어 이게 유일한
       // 코드 근거다. 없으면 AI 도움이 "스킬을 읽어 오지 못했다"로 끝났다(교육 실측).
       failedCode: String(e.code || "").slice(0, 2500),
@@ -578,3 +589,65 @@ assistDefineTool("app.state", { desc: "현재 앱 상태 스냅샷 — 보고 �
       note: "상태 '읽기'만 한 결과다(아무것도 바꾸지 않음). API 키 등 비밀값은 마스킹돼 있다.",
     };
   });
+
+
+// ── [가시성 감사 2026-08-25] 실행 '밖' 문제용 도구 3종 ───────────────────────
+// 저장·보안문서·화면·연결 질문은 그동안 읽을 데이터가 없어 제보(report)로 낙하했다.
+
+assistDefineTool("app.notices", {
+  desc: "최근 화면 알림(토스트) 기록 — '방금 뜬 빨간 메시지 뭐였어?'에 답할 근거. 업로드/저장/다운로드 오류 대부분이 여기 남는다(최신이 뒤, 최대 50건).",
+  args: "limit?(기본 20)",
+}, (a) => {
+  const buf = (typeof window !== "undefined" && Array.isArray(window.__recentNotices))
+    ? window.__recentNotices : [];
+  const limit = Math.max(1, Math.min(50, Number(a && a.limit) || 20));
+  const items = buf.slice(-limit).map(n => ({
+    agoSec: Math.round((Date.now() - (n.at || 0)) / 1000), type: n.type || "info", msg: n.msg || "",
+  }));
+  return { ok: true, count: items.length, notices: items,
+           note: items.length ? "agoSec 는 '몇 초 전'이다. type=error 가 실패 알림." :
+                 "기록된 알림이 없습니다(앱 시작 후 아직 토스트가 없었음)." };
+});
+
+assistDefineTool("backup.status", {
+  desc: "스킬 저장/자동저장(자동백업) 상태 — 마지막 자동백업 성공·실패와 저장 폴더. '스킬이 저장 안 돼요/폴더에 zip 이 없어요' 진단 근거.",
+}, async () => {
+  let dir = null;
+  try {
+    const r = await fetch("/api/logic/backup-dir");
+    dir = await r.json();
+  } catch (_) {}
+  const okInfo = (typeof window !== "undefined" && window.lastLogicAutoBackup) || null;
+  const errInfo = (typeof window !== "undefined" && window.__lastLogicBackupError) || null;
+  return {
+    ok: true,
+    autoBackupDir: dir ? { path: dir.path || null, exists: dir.exists !== false, custom: !!dir.custom } : null,
+    lastSuccess: okInfo ? { agoSec: okInfo.at ? Math.round((Date.now() - okInfo.at) / 1000) : null,
+                           name: okInfo.name || null, path: okInfo.path || null } : null,
+    lastFailure: errInfo ? { agoSec: Math.round((Date.now() - (errInfo.at || 0)) / 1000),
+                             message: errInfo.message || "", reason: errInfo.reason || "" } : null,
+    stepCount: _assistSteps().length,
+    note: "자동백업은 단계가 바뀔 때마다 autoBackupDir 에 zip 으로 쌓인다(단계 0개면 저장할 게 없어 안 만든다). "
+        + "수동 [스킬 저장]은 서버 폴더가 아니라 '브라우저 다운로드'다. 불러오기는 프로그램이 만든 "
+        + "무압축(STORED) zip 만 받는다 — 다른 도구로 재압축한 zip 은 'Compressed ZIP entries' 오류로 거부된다.",
+  };
+});
+
+assistDefineTool("secure.status", {
+  desc: "보안문서(AIP/DRM) 해제/재적용 상태 — '보안 해제 실패/다운로드 중단(보안적용 실패)' 진단 근거. 서버 연결·해제/적용 횟수·마지막 오류.",
+}, async () => {
+  try {
+    const r = await fetch("/api/secure-doc/status");
+    const s = await r.json();
+    return { ok: true, enabled: !!s.enabled, serverOk: !!s.serverOk, configured: !!s.configured,
+             active: !!s.active, anySecured: !!s.anySecured,
+             releasedCount: s.releasedCount || 0, appliedCount: s.appliedCount || 0,
+             lastError: s.lastError || "",
+             note: "released=업로드 때 보안 해제한 횟수, applied=다운로드 때 보안을 다시 건 횟수. "
+                 + "anySecured=true 면 이후 모든 문서 다운로드에 보안이 다시 걸린다(실패 시 다운로드가 "
+                 + "일부러 중단된다 — 평문 유출 방지). serverOk=false 면 보안 서버(수집 서버)에 못 간 것." };
+  } catch (err) {
+    return { ok: false, error: String((err && err.message) || err),
+             note: "상태 조회 실패 — 백엔드가 꺼져 있거나 이 버전에 보안문서 기능이 없다." };
+  }
+});
