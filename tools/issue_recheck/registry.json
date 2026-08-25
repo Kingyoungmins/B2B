@@ -3726,6 +3726,17 @@
         ]
       ],
       "fix": "전체실행 중 Excel COM 창이 포그라운드를 가져가 호스트가 비활성 → WebView2 는 비활성 창의 첫 클릭을 '활성화'로만 소비(알려진 동작). 실행 완료(성공/실패) 시 웹이 B2B_FOREGROUND_IF_EXCEL 을 보내고, C# 이 포그라운드 프로세스가 EXCEL/자기 자신일 때만 ForceHostForeground(입력 스레드 부착, SBAGENT-275 hung 가드 재사용) — 다른 업무 앱이면 안 뺏음. 먹힌 클릭은 JS 에 도달 자체를 안 해 계측 불가라, 메커니즘을 제거하는 방식."
+    },
+    {
+      "id": "BAT-CRLF-BUILD-BREAK",
+      "title": "[재발 2회] .bat 이 LF 로 저장돼 싱글빌드가 '\"\" is not recognized' 로 실패.",
+      "checks": [
+        [
+          "python",
+          "test_runs/_test_bat_crlf.py"
+        ]
+      ],
+      "fix": "cmd.exe 는 LF 전용 .bat 의 줄을 못 끊어 인용부호가 이어붙은 채 실행된다. 원인은 파이썬 read_text/write_text(newline='') 조합이 CRLF→LF 로 바꾸는 것(0.7.5 sed -i, 0.8.0 버전 bump 두 번 모두). .bat 은 반드시 read_bytes/write_bytes 로 다루고, 이 테스트가 배포 전에 잡는다."
     }
   ]
 }
