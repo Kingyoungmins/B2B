@@ -1,9 +1,9 @@
 ﻿  /* ============================================================
-     AX-Cell Blue — 회사 규정 톤앤매너 (0.8.0, 피그마 팔레트 기준)
-     Primary: #2684FF · Gradient: #2684FF → #1559B8
+     AX-Cell Mono — 회사 규정 톤앤매너 (0.8.0, 피그마 팔레트 기준)
+     브랜드 = 블랙 #1A1A1A. 블루/마젠타 포인트 없음(사용자 확정 2026-08-25).
      (변수명 --m-*/--p-* 는 0.7.x 마젠타 시절 이름 유지 — 전 파일이 참조하므로
-      이름 변경은 diff 만 키운다. 값만 블루 스케일로 리맵. 시맨틱 색(amber 경고·
-      green 성공·red 오류·Excel green)은 규정 팔레트 밖이라 보존.)
+      이름 변경은 diff 만 키운다. 값만 블랙~그레이 스케일로 리맵.
+      시맨틱 색(amber 경고·green 성공·red 오류·Excel green)은 팔레트 밖이라 보존.)
      ============================================================ */
   /*
 Copyright (c) 2021 Kil Hyung-jin, with Reserved Font Name Pretendard.
@@ -24,21 +24,22 @@ http://scripts.sil.org/OFL
 
 
   :root {
-    --m-50:  #EEF5FD;
-    --m-100: #DCEBFD;
-    --m-200: #B8D6FF;
-    --m-300: #80B6FF;
-    --m-400: #4D9AFF;
-    --m-500: #2684FF;   /* primary blue (회사 팔레트 accent-blue) */
-    --m-600: #1B6FE0;
-    --m-700: #1559B8;
+    /* 브랜드(블랙) 스케일 — 밝음(50)→어두움(700). 호버/눌림 단차가 살도록 계단 유지 */
+    --m-50:  #F2F2F2;
+    --m-100: #EBEBEB;
+    --m-200: #D6D6D6;
+    --m-300: #A8A8A8;
+    --m-400: #747474;
+    --m-500: #1A1A1A;   /* primary black (피그마 text-primary/강조 보더와 동일) */
+    --m-600: #111111;   /* hover */
+    --m-700: #000000;   /* pressed/최강조 */
 
-    --p-500: #1559B8;   /* gradient 끝(딥블루) */
-    --p-600: #0F4693;
+    --p-500: #3D3D3D;   /* 구 퍼플 자리 — 다크그레이 보조 */
+    --p-600: #1A1A1A;
 
-    --grad: linear-gradient(135deg, #2684FF 0%, #1559B8 100%);
-    --grad-soft: linear-gradient(135deg, #DCEBFD 0%, #CFE3FC 100%);
-    --grad-text: linear-gradient(135deg, #2684FF 0%, #1559B8 100%);
+    --grad: linear-gradient(135deg, #3D3D3D 0%, #111111 100%);
+    --grad-soft: linear-gradient(135deg, #FCFCFC 0%, #EBEBEB 100%);
+    --grad-text: linear-gradient(135deg, #3D3D3D 0%, #000000 100%);
 
     --ink-900: #1A1A1A;
     --ink-700: #3D3D3D;
@@ -52,12 +53,12 @@ http://scripts.sil.org/OFL
     --bg: #FFFFFF;
     --card: #FCFCFC;
     --border: #E0E0E0;
-    --border-strong: #D6D6D6;
+    --border-strong: #A8A8A8;
 
     --shadow-sm: 0 1px 2px rgba(26,26,26,0.04), 0 1px 3px rgba(26,26,26,0.05);
     --shadow-md: 0 4px 12px rgba(26,26,26,0.05), 0 2px 4px rgba(26,26,26,0.04);
-    --shadow-lg: 0 12px 32px rgba(38,132,255,0.10), 0 4px 12px rgba(26,26,26,0.06);
-    --shadow-mag: 0 8px 24px rgba(38,132,255,0.22);
+    --shadow-lg: 0 12px 32px rgba(26,26,26,0.10), 0 4px 12px rgba(26,26,26,0.06);
+    --shadow-mag: 0 8px 24px rgba(26,26,26,0.18);
 
     --r-sm: 8px;
     --r-md: 12px;
@@ -72,8 +73,8 @@ http://scripts.sil.org/OFL
     font-family: 'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont,
                  'Malgun Gothic', 'Noto Sans KR', sans-serif;
     background:
-      radial-gradient(1200px 600px at 85% -10%, rgba(38,132,255,0.08), transparent 60%),
-      radial-gradient(900px 500px at -10% 110%, rgba(38,132,255,0.08), transparent 60%),
+      radial-gradient(1200px 600px at 85% -10%, rgba(26,26,26,0.08), transparent 60%),
+      radial-gradient(900px 500px at -10% 110%, rgba(26,26,26,0.08), transparent 60%),
       var(--bg);
     color: var(--ink-900);
     font-size: 13px;

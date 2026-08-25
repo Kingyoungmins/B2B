@@ -21,7 +21,7 @@
   }
   .pipeline-item:hover {
     border-color: var(--m-300);
-    box-shadow: 0 0 0 3px rgba(38,132,255,0.06);
+    box-shadow: 0 0 0 3px rgba(26,26,26,0.06);
     transform: translateX(2px);
   }
   .pipeline-item .step-n {
@@ -153,7 +153,7 @@
   .pipeline-item.editing {
     border-color: var(--m-400);
     background: var(--m-50);
-    box-shadow: 0 0 0 3px rgba(38,132,255,0.12);
+    box-shadow: 0 0 0 3px rgba(26,26,26,0.12);
   }
   .pipeline-empty {
     color: var(--ink-400);

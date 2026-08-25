@@ -156,7 +156,7 @@ function openSettingsModal(devMode) {
     ? loadVersionCheckSettings() : { baseUrl: "", upstreamUrl: "" };
 
   modal.innerHTML = `
-    <h3>AI 연결 설정${devMode ? ' <span style="font-size:11px;color:#2684FF;background:#DCEBFD;padding:2px 8px;border-radius:8px;font-weight:600;margin-left:6px;">DEV</span>' : ''}</h3>
+    <h3>AI 연결 설정${devMode ? ' <span style="font-size:11px;color:#1A1A1A;background:#EBEBEB;padding:2px 8px;border-radius:8px;font-weight:600;margin-left:6px;">DEV</span>' : ''}</h3>
     <div style="font-size:12px; color:#666; margin-bottom:12px">
       ${devMode ? '개발자 옵션입니다. 기본 연결은 내부망 ixi이며, 필요할 때 개발망 vLLM 또는 Claude Opus 4.8로 전환할 수 있습니다.' : '내부망 ixi 호환 서버와 연결합니다.'}
     </div>
