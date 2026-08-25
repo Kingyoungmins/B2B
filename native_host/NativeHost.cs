@@ -746,6 +746,11 @@ namespace B2BNativeHost
                 Task ignore = RestartPythonServerAsync(false);
                 return;
             }
+            if (message == "B2B_FOREGROUND_IF_EXCEL")
+            {
+                ForegroundHostIfExcelActive();
+                return;
+            }
             if (message.StartsWith("B2B_ASSIST_POPUP	", StringComparison.Ordinal))
             {
                 HandleAssistPopupCommand(message.Substring("B2B_ASSIST_POPUP	".Length));
@@ -1012,6 +1017,39 @@ namespace B2BNativeHost
             {
                 Program.Log("Download dialog dispatch failed: " + ex.Message);
                 try { showDialog(); } catch { }
+            }
+        }
+
+        // [제보 2026-08-25 결과편집 첫 클릭 먹힘] 실행기 전체실행 중 Excel 작업 창이 포그라운드를
+        // 가져가면 호스트가 비활성이 되고, WebView2 는 비활성 창에 들어온 첫 클릭을 '창 활성화'로만
+        // 소비하고 버린다 — 완료 직후 [결과 편집하기] 첫 클릭이 사라져 "한 번 더 눌러야 간다"가 된다.
+        // 완료 시점에 웹이 이 메시지를 보내면, 포그라운드가 Excel 이나 우리 프로세스일 때만 호스트를
+        // 앞으로 되가져온다. 사용자가 다른 업무 앱(메모장 등)을 보고 있으면 절대 뺏지 않는다.
+        private void ForegroundHostIfExcelActive()
+        {
+            try
+            {
+                IntPtr fg = GetForegroundWindow();
+                if (fg == IntPtr.Zero || fg == this.Handle) return;
+                uint fgPid;
+                GetWindowThreadProcessId(fg, out fgPid);
+                if (fgPid == 0) return;
+                if (fgPid == (uint)Process.GetCurrentProcess().Id)
+                {
+                    // 우리 프로세스의 다른 창(오버레이 등)이면 호스트만 올리면 된다.
+                    ForceHostForeground();
+                    return;
+                }
+                string fgName = "";
+                try { using (Process p = Process.GetProcessById((int)fgPid)) fgName = p.ProcessName ?? ""; }
+                catch { return; }
+                if (!fgName.Equals("EXCEL", StringComparison.OrdinalIgnoreCase)) return;
+                ForceHostForeground();
+                Program.Log("ForegroundHostIfExcelActive: reclaimed from " + fgName);
+            }
+            catch (Exception ex)
+            {
+                Program.Log("ForegroundHostIfExcelActive failed: " + ex.Message);
             }
         }
 

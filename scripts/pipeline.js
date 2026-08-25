@@ -8338,6 +8338,11 @@ $("runner-run-btn").onclick = () => {
       if (window.runnerSetRunning) window.runnerSetRunning(false);
     } finally {
       __mapRun.restore();
+      // [제보 2026-08-25 결과편집 첫 클릭 먹힘] 전체실행 중 Excel COM 작업 창이 포그라운드를
+      // 가져가면 호스트가 비활성 → WebView2 가 첫 클릭을 활성화로만 소비해 [결과 편집하기]
+      // 첫 클릭이 사라진다. 완료(성공/실패 공통) 시점에 포그라운드가 Excel/우리 창일 때만
+      // 호스트를 되찾는다(다른 업무 앱을 보고 있으면 C# 판별이 건너뜀 — 포커스 강탈 아님).
+      if (typeof publishNativeForegroundIfExcel === "function") publishNativeForegroundIfExcel();
     }
   }, 650);
 };

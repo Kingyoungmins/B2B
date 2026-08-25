@@ -3703,6 +3703,29 @@
         ]
       ],
       "fix": "엑셀 셀 클릭 시 선택 폴이 입력창에 '선택 범위: @범위[...]' 줄을 자동 삽입하는데, 프리필의 초안 보호가 이를 사용자 초안으로 오인해 skippedDraft 로 삼킴(세션 09:40 실측, 2회 재현). 자동 선택 줄만 있는 입력창은 초안이 아닌 것으로 보고 덮어쓴다(타이핑 혼합 시 기존대로 보호). 판정은 edit.prefill 트레이스의 autoSelOnly 로 기록."
+    },
+    {
+      "id": "RUNNER-EDITRESULT-FIRSTCLICK-EATEN",
+      "title": "[제보 2026-08-25] 결과편집하기 첫 클릭이 안 먹혀 '한 번 더 클릭해야' 생성기로 감.",
+      "checks": [
+        [
+          "marker",
+          "native_host/NativeHost.cs::B2B_FOREGROUND_IF_EXCEL"
+        ],
+        [
+          "marker",
+          "native_host/NativeHost.cs::ForegroundHostIfExcelActive"
+        ],
+        [
+          "marker",
+          "scripts/excel-mirror.js::function publishNativeForegroundIfExcel"
+        ],
+        [
+          "marker",
+          "scripts/pipeline.js::publishNativeForegroundIfExcel()"
+        ]
+      ],
+      "fix": "전체실행 중 Excel COM 창이 포그라운드를 가져가 호스트가 비활성 → WebView2 는 비활성 창의 첫 클릭을 '활성화'로만 소비(알려진 동작). 실행 완료(성공/실패) 시 웹이 B2B_FOREGROUND_IF_EXCEL 을 보내고, C# 이 포그라운드 프로세스가 EXCEL/자기 자신일 때만 ForceHostForeground(입력 스레드 부착, SBAGENT-275 hung 가드 재사용) — 다른 업무 앱이면 안 뺏음. 먹힌 클릭은 JS 에 도달 자체를 안 해 계측 불가라, 메커니즘을 제거하는 방식."
     }
   ]
 }

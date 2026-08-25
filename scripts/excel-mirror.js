@@ -75,6 +75,15 @@ function publishNativeRunnerMode(isRunner) {
   try { bridge.postMessage(["B2B_RUNNER_MODE", isRunner ? "1" : "0"].join("\t")); } catch (_) {}
 }
 
+// [제보 2026-08-25] 실행기 전체실행이 끝나도 포그라운드가 Excel 작업 창에 남아 있으면,
+// WebView2 가 비활성 창의 첫 클릭을 '활성화'로만 소비해 [결과 편집하기] 첫 클릭이 사라진다.
+// 완료 시점에 호스트에게 "포그라운드가 Excel/우리 창이면 되찾아라"를 요청한다(판별은 C#).
+function publishNativeForegroundIfExcel() {
+  const bridge = window.chrome && window.chrome.webview;
+  if (!bridge || typeof bridge.postMessage !== "function") return;
+  try { bridge.postMessage("B2B_FOREGROUND_IF_EXCEL"); } catch (_) {}
+}
+
 // ---- 전역 작업 잠금(busy gate) ----
 // Excel 창 로딩/스킬 적용/전환/복구 같은 COM 직렬 작업이 도는 동안 다른 클릭이 끼어들면
 // 큐가 꼬여 탭/창 상태가 어긋난다 → 작업 중에는 포인터 입력을 즉시 차단하고,
