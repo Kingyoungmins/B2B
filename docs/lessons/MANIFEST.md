@@ -71,3 +71,4 @@ Generated from selected lesson documents in B2B_ver0.5.6 ~ B2B_ver0.5.9.
 | `52_pivot_header_row_kwarg_alias.md` | 4930 |
 | `53_trace_loss_misdiagnosis_and_defensive_overreach.md` | 6595 |
 | `54_content_not_extension_and_silent_fizzle.md` | 3594 |
+| `55_sbagent_293_297_generation_layer_chain.md` | 3654 |
