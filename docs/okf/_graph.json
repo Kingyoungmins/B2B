@@ -25517,6 +25517,8 @@
       "loc": "drop-handling.js:1508-1508",
       "signature": "()",
       "calls": [
+        "add",
+        "push",
         "runnerExtractMappingRequirements",
         "runnerFindAutoFile",
         "runnerFindSheet",
@@ -25539,7 +25541,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "drop-handling.js:1559-1559",
+      "loc": "drop-handling.js:1604-1604",
       "signature": "(rows)",
       "calls": [
         "push",
@@ -25557,7 +25559,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "drop-handling.js:1589-1589",
+      "loc": "drop-handling.js:1654-1654",
       "signature": "()",
       "calls": [
         "runnerBuildMappingRows",
@@ -25577,7 +25579,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "drop-handling.js:1595-1595",
+      "loc": "drop-handling.js:1660-1660",
       "signature": "(value)",
       "calls": [],
       "side_effects": [
@@ -25592,7 +25594,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "drop-handling.js:1604-1604",
+      "loc": "drop-handling.js:1669-1669",
       "signature": "(name)",
       "calls": [],
       "side_effects": [
@@ -25607,7 +25609,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "drop-handling.js:1610-1610",
+      "loc": "drop-handling.js:1675-1675",
       "signature": "()",
       "calls": [
         "$",
@@ -25637,7 +25639,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "drop-handling.js:1734-1734",
+      "loc": "drop-handling.js:1799-1799",
       "signature": "()",
       "calls": [],
       "side_effects": [
@@ -25657,7 +25659,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "drop-handling.js:1786-1786",
+      "loc": "drop-handling.js:1851-1851",
       "signature": "(text, from, to)",
       "calls": [],
       "side_effects": [
@@ -25672,7 +25674,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "drop-handling.js:1797-1797",
+      "loc": "drop-handling.js:1862-1862",
       "signature": "(step)",
       "calls": [],
       "side_effects": [
@@ -25687,7 +25689,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "drop-handling.js:1804-1804",
+      "loc": "drop-handling.js:1869-1869",
       "signature": "(a, b)",
       "calls": [
         "norm"
@@ -25704,7 +25706,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "drop-handling.js:1815-1815",
+      "loc": "drop-handling.js:1880-1880",
       "signature": "(reason, extra)",
       "calls": [
         "runnerMappingKnownFiles",
@@ -25726,7 +25728,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "drop-handling.js:1904-1904",
+      "loc": "drop-handling.js:1969-1969",
       "signature": "()",
       "calls": [
         "$",
@@ -25763,7 +25765,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "drop-handling.js:1917-1917",
+      "loc": "drop-handling.js:1982-1982",
       "signature": "(node, filled, label, onClick)",
       "calls": [],
       "side_effects": [
@@ -25778,7 +25780,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "drop-handling.js:1961-1961",
+      "loc": "drop-handling.js:2026-2026",
       "signature": "(id, val)",
       "calls": [
         "$"
@@ -25795,7 +25797,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "drop-handling.js:2067-2067",
+      "loc": "drop-handling.js:2132-2132",
       "signature": "(s)",
       "calls": [],
       "side_effects": [
@@ -25810,7 +25812,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "drop-handling.js:2103-2103",
+      "loc": "drop-handling.js:2168-2168",
       "signature": "()",
       "calls": [],
       "side_effects": [
@@ -25825,7 +25827,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "drop-handling.js:2107-2107",
+      "loc": "drop-handling.js:2172-2172",
       "signature": "(e)",
       "calls": [
         "close"
@@ -25842,7 +25844,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "drop-handling.js:2178-2178",
+      "loc": "drop-handling.js:2243-2243",
       "signature": "()",
       "calls": [
         "toast"
@@ -25859,7 +25861,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "drop-handling.js:2184-2184",
+      "loc": "drop-handling.js:2249-2249",
       "signature": "(fileId)",
       "calls": [
         "switchWorkbookFileFromUserTab"
@@ -25876,7 +25878,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "drop-handling.js:2188-2188",
+      "loc": "drop-handling.js:2253-2253",
       "signature": "(fileId)",
       "calls": [
         "downloadCurrentWorkbookFile",
@@ -25894,7 +25896,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "drop-handling.js:2196-2196",
+      "loc": "drop-handling.js:2261-2261",
       "signature": "()",
       "calls": [
         "publishNativeFileTabs",
@@ -58737,6 +58739,16 @@
     },
     {
       "from": "runnerBuildMappingRows",
+      "to": "add",
+      "lang": "js"
+    },
+    {
+      "from": "runnerBuildMappingRows",
+      "to": "push",
+      "lang": "js"
+    },
+    {
+      "from": "runnerBuildMappingRows",
       "to": "runnerExtractMappingRequirements",
       "lang": "js"
     },
@@ -69523,7 +69535,7 @@
   ],
   "stats": {
     "functions": 2038,
-    "edges": 5730,
+    "edges": 5732,
     "by_lang": {
       "python": 654,
       "js": 1144,

@@ -21,6 +21,8 @@ raises: []
 
 # ── 유기적 관계 ──
 calls:
+  - "add"
+  - "push"
   - "runnerExtractMappingRequirements"
   - "runnerFindAutoFile"
   - "runnerFindSheet"
@@ -29,8 +31,16 @@ calls:
   - "runnerMappingKnownFiles"
   - "runnerMappingNorm"
 calls_external:
+  - "Map"
+  - "Set"
+  - "filter"
   - "find"
+  - "forEach"
+  - "get"
+  - "has"
   - "map"
+  - "set"
+  - "sort"
 called_by:
   - "runnerMappingHasBlockingMissing"
   - "runnerRenderMappingPanel"
@@ -48,7 +58,7 @@ timestamp: "0.8.0-gen"
 - 없음(정적 분석 기준)
 
 ## 관계
-- 호출: `runnerExtractMappingRequirements`, `runnerFindAutoFile`, `runnerFindSheet`, `runnerGeneratedSheetNameSet`, `runnerIsSkillDefaultSheet`, `runnerMappingKnownFiles`, `runnerMappingNorm`
+- 호출: `add`, `push`, `runnerExtractMappingRequirements`, `runnerFindAutoFile`, `runnerFindSheet`, `runnerGeneratedSheetNameSet`, `runnerIsSkillDefaultSheet`, `runnerMappingKnownFiles`, `runnerMappingNorm`
 - 피호출(영향 전파 경로): `runnerMappingHasBlockingMissing`, `runnerRenderMappingPanel`
 
 ## 실패/예외
