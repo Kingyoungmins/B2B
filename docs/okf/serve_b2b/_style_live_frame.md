@@ -7,7 +7,7 @@ extraction: ast
 signature: "(hwnd)"
 role: "라이브 프레임을 작업표시줄/Alt+Tab 목록에서 제외(WS_EX_TOOLWINDOW, WS_EX_APPWINDOW 제거)."
 role_source: docstring
-version: "0.7.5"
+version: "0.8.0"
 loc: "serve_b2b.py:4363-4384"
 
 # ── 입출력 ──
@@ -39,7 +39,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.5-gen"
+timestamp: "0.8.0-gen"
 ---
 
 ## 역할

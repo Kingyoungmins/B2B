@@ -7,7 +7,7 @@ extraction: ast
 signature: "(state)"
 role: "_detach_live_excel_window 로 분리한 창을 원래 부모/owner/스타일로 되돌린다."
 role_source: docstring
-version: "0.7.5"
+version: "0.8.0"
 loc: "serve_b2b.py:9994-10017"
 
 # ── 입출력 ──
@@ -36,7 +36,7 @@ called_by: []
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.5-gen"
+timestamp: "0.8.0-gen"
 ---
 
 ## 역할

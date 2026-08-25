@@ -8,7 +8,7 @@ class: PythonComSkillContext
 signature: "(self, sheet, a1_range)"
 role: "범위에 수식이 하나라도 있으면 True."
 role_source: docstring
-version: "0.7.5"
+version: "0.8.0"
 loc: "serve_b2b.py:12229-12235"
 
 # ── 입출력 ──
@@ -39,7 +39,7 @@ reads:
   - "self._ws"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.5-gen"
+timestamp: "0.8.0-gen"
 ---
 
 ## 역할

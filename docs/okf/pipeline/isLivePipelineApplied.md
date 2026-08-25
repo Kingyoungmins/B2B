@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "()"
 role: "직전에 라이브 파이프라인이 적용돼 있었는지. 강제재시작 직전에 캡처해 '자동 1회 재적용' 여부 판단에 쓴다"
 role_source: banner
-version: "0.7.5"
+version: "0.8.0"
 loc: "pipeline.js:4425-4425"
 
 # ── 입출력 ──
@@ -26,7 +26,7 @@ called_by: []
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.5-gen"
+timestamp: "0.8.0-gen"
 ---
 
 ## 역할

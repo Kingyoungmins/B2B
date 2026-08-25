@@ -7,7 +7,7 @@ extraction: ast
 signature: "(app, wb, session, code, skip_static=False, timeout_s=None)"
 role: "샌드박스 exec + 데드라인 트레이서로 생성 Python 스킬을 실행한다."
 role_source: docstring
-version: "0.7.5"
+version: "0.8.0"
 loc: "serve_b2b.py:15127-15229"
 
 # ── 입출력 ──
@@ -72,7 +72,7 @@ reads:
   - "_PY_SAFE_BUILTINS"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.5-gen"
+timestamp: "0.8.0-gen"
 ---
 
 ## 역할

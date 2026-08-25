@@ -7,7 +7,7 @@ extraction: ast
 signature: "(code)"
 role: "따옴표 문자열(\"\" 이스케이프 포함) → 빈 문자열로, 이후 ' 주석 제거 — 키워드 오탐 방지."
 role_source: docstring
-version: "0.7.5"
+version: "0.8.0"
 loc: "serve_b2b.py:7983-7990"
 
 # ── 입출력 ──
@@ -36,7 +36,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.5-gen"
+timestamp: "0.8.0-gen"
 ---
 
 ## 역할

@@ -41,7 +41,7 @@
   }
   .menu-scrim {
     position: fixed; inset: 0;
-    background: rgba(15,10,30,0.35);
+    background: rgba(26,26,26,0.35);
     backdrop-filter: blur(2px);
     z-index: 2400;
     display: none;

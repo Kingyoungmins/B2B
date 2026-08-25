@@ -8,7 +8,7 @@ class: PythonComSkillContext
 signature: "(self, sheet, row, count=1)"
 role: "---- 구조 변경(저널 롤백 불가 → structural 표시) ----"
 role_source: banner
-version: "0.7.5"
+version: "0.8.0"
 loc: "serve_b2b.py:12638-12650"
 
 # ── 입출력 ──
@@ -47,7 +47,7 @@ reads:
   - "self._ws"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.5-gen"
+timestamp: "0.8.0-gen"
 ---
 
 ## 역할

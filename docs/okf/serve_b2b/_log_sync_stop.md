@@ -7,7 +7,7 @@ extraction: ast
 signature: "(reason='shutdown', timeout=4.0)"
 role: "종료 직전 남은 로그를 마저 보내고 '이 세션 끝'을 알린다. 시작 안 했으면 아무것도 안 한다."
 role_source: docstring
-version: "0.7.5"
+version: "0.8.0"
 loc: "serve_b2b.py:5172-5179"
 
 # ── 입출력 ──
@@ -34,7 +34,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.5-gen"
+timestamp: "0.8.0-gen"
 ---
 
 ## 역할

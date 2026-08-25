@@ -7,7 +7,7 @@ extraction: ast
 signature: "(expected)"
 role: "Excel 워커 — 녹화 정지 시점 기대 상태(expected)와 현재 라이브 시트를 대조."
 role_source: docstring
-version: "0.7.5"
+version: "0.8.0"
 loc: "serve_b2b.py:7168-7230"
 
 # ── 입출력 ──
@@ -54,7 +54,7 @@ reads:
   - "EXCEL_SESSIONS"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.5-gen"
+timestamp: "0.8.0-gen"
 ---
 
 ## 역할

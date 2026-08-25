@@ -1208,8 +1208,8 @@ namespace B2BNativeHost
                 Label hint = new Label();
                 hint.Text = "📑 더블클릭으로 전환";
                 hint.AutoSize = true;
-                hint.ForeColor = Color.FromArgb(209, 0, 160);
-                hint.BackColor = Color.FromArgb(255, 241, 250);
+                hint.ForeColor = Color.FromArgb(38, 132, 255);
+                hint.BackColor = Color.FromArgb(238, 245, 253);
                 hint.BorderStyle = BorderStyle.FixedSingle;
                 hint.Padding = new Padding(6, 4, 6, 4);
                 hint.Margin = new Padding(0, 1, 8, 0);
@@ -1237,10 +1237,10 @@ namespace B2BNativeHost
                     btn.FlatStyle = FlatStyle.Flat;
                     btn.FlatAppearance.BorderSize = 1;
                     btn.FlatAppearance.BorderColor = String.Equals(fileId, currentId, StringComparison.Ordinal)
-                        ? Color.FromArgb(209, 0, 160)
+                        ? Color.FromArgb(38, 132, 255)
                         : Color.FromArgb(225, 228, 235);
                     btn.BackColor = String.Equals(fileId, currentId, StringComparison.Ordinal)
-                        ? Color.FromArgb(255, 241, 250)
+                        ? Color.FromArgb(238, 245, 253)
                         : Color.FromArgb(248, 249, 252);
                     btn.ForeColor = Color.FromArgb(32, 36, 48);
                     btn.TextAlign = ContentAlignment.MiddleLeft;

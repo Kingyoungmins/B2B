@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(stepId, options = {})"
 role: "[실행기 매핑 · 단일 적용] 단일 스텝 즉시 적용(토글 ON / 중간 삽입 / 수정 적용)도 반드시 '실행기"
 role_source: banner
-version: "0.7.5"
+version: "0.8.0"
 loc: "pipeline.js:5360-5360"
 
 # ── 입출력 ──
@@ -41,7 +41,7 @@ reads:
   - "state.pipeline"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.5-gen"
+timestamp: "0.8.0-gen"
 ---
 
 ## 역할

@@ -8,7 +8,7 @@ class: PythonComSkillContext
 signature: "(self)"
 role: "실패 시 저널 역순 복원(쓰기 범위만 정밀 원복). 구조 변경은 롤백 불가."
 role_source: docstring
-version: "0.7.5"
+version: "0.8.0"
 loc: "serve_b2b.py:14960-14974"
 
 # ── 입출력 ──
@@ -42,7 +42,7 @@ reads:
   - "self._shared"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.5-gen"
+timestamp: "0.8.0-gen"
 ---
 
 ## 역할

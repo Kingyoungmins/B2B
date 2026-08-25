@@ -2,7 +2,7 @@
   .runner-hero {
     display: flex; align-items: center; gap: 14px;
     padding: 16px; border-radius: var(--r-md);
-    background: linear-gradient(135deg, rgba(255,0,128,0.08), rgba(121,40,202,0.08)), white;
+    background: linear-gradient(135deg, rgba(38,132,255,0.08), rgba(38,132,255,0.08)), white;
     border: 1px solid var(--border);
     position: relative; overflow: hidden;
   }
@@ -233,17 +233,17 @@
     justify-content: center;
     gap: 2px;
     padding: 0;
-    box-shadow: 0 10px 30px rgba(255,0,128,0.4), inset 0 1px 0 rgba(255,255,255,0.2);
+    box-shadow: 0 10px 30px rgba(38,132,255,0.4), inset 0 1px 0 rgba(255,255,255,0.2);
     font-family: inherit;
     transition: all 0.2s;
     letter-spacing: -0.01em;
   }
   .runner-center-btn:hover:not(:disabled) {
     transform: scale(1.04);
-    box-shadow: 0 14px 36px rgba(255,0,128,0.5), inset 0 1px 0 rgba(255,255,255,0.25);
+    box-shadow: 0 14px 36px rgba(38,132,255,0.5), inset 0 1px 0 rgba(255,255,255,0.25);
   }
   .runner-center-btn:disabled {
-    background: linear-gradient(135deg, #D5D1DF, #B8B2C8);
+    background: linear-gradient(135deg, #D6D6D6, #B8B2C8);
     box-shadow: none;
     cursor: not-allowed;
   }
@@ -288,7 +288,7 @@
     gap: 12px;
     padding: 14px 16px;
     border-bottom: 1px solid var(--border);
-    background: linear-gradient(135deg, rgba(255,0,128,0.07), rgba(121,40,202,0.06));
+    background: linear-gradient(135deg, rgba(38,132,255,0.07), rgba(38,132,255,0.06));
   }
   .runner-mapping-title {
     font-size: 13px;
@@ -449,7 +449,7 @@
   }
   .runner-mapping-select:focus {
     border-color: var(--m-400);
-    box-shadow: 0 0 0 3px rgba(255,0,128,0.08);
+    box-shadow: 0 0 0 3px rgba(38,132,255,0.08);
   }
   .runner-mapping-status {
     justify-self: end;
@@ -508,7 +508,7 @@
   #runner-summary.logic-summary {
     display: flex; align-items: flex-start; gap: 10px;
     padding: 14px 16px;
-    background: linear-gradient(135deg, #FFF9FD, #F7F2FE);
+    background: linear-gradient(135deg, #FCFCFC, #F7F2FE);
     border: 1px solid var(--m-100);
     border-radius: var(--r-md);
   }
@@ -642,7 +642,7 @@
     border-color: var(--m-300); background: #fff; color: var(--m-700);
   }
   .runner-summary-actions .runner-summary-close {
-    border-color: var(--m-600, #DB2777); background: var(--m-600, #DB2777); color: #fff;
+    border-color: var(--m-600, #1B6FE0); background: var(--m-600, #1B6FE0); color: #fff;
   }
   .runner-summary-actions button:hover { filter: brightness(0.97); }
   @keyframes runnerSummaryFade { from { opacity: 0; } to { opacity: 1; } }

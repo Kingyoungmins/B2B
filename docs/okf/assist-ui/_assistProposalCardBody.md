@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(p)"
 role: "[Tier1] 카드 본문을 kind 별로 구성(공통 헤더/액션은 아래에서 공유). 반환: {headLabel, body}."
 role_source: banner
-version: "0.7.5"
+version: "0.8.0"
 loc: "assist-ui.js:397-397"
 
 # ── 입출력 ──
@@ -37,7 +37,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.5-gen"
+timestamp: "0.8.0-gen"
 ---
 
 ## 역할

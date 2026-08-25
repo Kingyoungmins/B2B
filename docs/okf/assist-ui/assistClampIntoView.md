@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(el)"
 role: "화면 밖으로 나가 못 잡는 일이 없도록 항상 보이는 영역으로 되돌린다."
 role_source: banner
-version: "0.7.5"
+version: "0.8.0"
 loc: "assist-ui.js:34-34"
 
 # ── 입출력 ──
@@ -31,7 +31,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.5-gen"
+timestamp: "0.8.0-gen"
 ---
 
 ## 역할

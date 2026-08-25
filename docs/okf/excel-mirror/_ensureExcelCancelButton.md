@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "()"
 role: "[#19] 작업 중단 버튼은 작업 중인 채팅 말풍선의 액션 버튼 옆에 붙인다."
 role_source: banner
-version: "0.7.5"
+version: "0.8.0"
 loc: "excel-mirror.js:1284-1284"
 
 # ── 입출력 ──
@@ -34,7 +34,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.5-gen"
+timestamp: "0.8.0-gen"
 ---
 
 ## 역할

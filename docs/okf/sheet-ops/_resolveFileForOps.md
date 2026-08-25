@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(fileRef)"
 role: "파일 레퍼런스 (\"output\" / \"input:파일명\" / 파일명 / 파일 record) 를 실제 파일 객체로 해석"
 role_source: banner
-version: "0.7.5"
+version: "0.8.0"
 loc: "sheet-ops.js:36-36"
 
 # ── 입출력 ──
@@ -42,7 +42,7 @@ reads:
   - "state.outputTemplates"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.5-gen"
+timestamp: "0.8.0-gen"
 ---
 
 ## 역할

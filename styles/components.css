@@ -45,7 +45,7 @@
     background: var(--m-50);
     color: var(--m-700);
     transform: scale(1.005);
-    box-shadow: 0 0 0 4px rgba(255,0,128,0.08);
+    box-shadow: 0 0 0 4px rgba(38,132,255,0.08);
   }
   .dropzone .ico { font-size: 26px; display: block; margin-bottom: 8px; filter: grayscale(0.2); }
   .dropzone small {
@@ -73,7 +73,7 @@
   .file-chip.active {
     border-color: var(--m-400);
     background: var(--m-50);
-    box-shadow: 0 0 0 3px rgba(255,0,128,0.08);
+    box-shadow: 0 0 0 3px rgba(38,132,255,0.08);
   }
   .file-chip .chip-icon {
     width: 28px; height: 32px;
@@ -155,7 +155,7 @@
   }
   .btn-primary:hover:not(:disabled) {
     transform: translateY(-1px);
-    box-shadow: 0 12px 28px rgba(255,0,128,0.28);
+    box-shadow: 0 12px 28px rgba(38,132,255,0.28);
   }
   .btn-primary:active:not(:disabled) { transform: translateY(0); }
   .btn-primary:disabled {
@@ -182,7 +182,7 @@
     box-shadow: var(--shadow-mag);
     border-radius: var(--r-sm);
   }
-  .btn-send:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 12px 28px rgba(255,0,128,0.28); }
+  .btn-send:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 12px 28px rgba(38,132,255,0.28); }
   .btn-send:disabled { background: var(--ink-200); box-shadow: none; cursor: not-allowed; }
 
   .action-row { display: flex; gap: 8px; flex-wrap: wrap; }
@@ -242,7 +242,7 @@
     display: none;
     position: fixed;
     top: 0; left: 0; right: 0; bottom: 0;
-    background: rgba(15,10,30,0.45);
+    background: rgba(26,26,26,0.45);
     backdrop-filter: blur(4px);
     z-index: 3000;
     align-items: center;
@@ -292,7 +292,7 @@
   .modal input:focus, .modal select:focus {
     outline: none;
     border-color: var(--m-400);
-    box-shadow: 0 0 0 3px rgba(255,0,128,0.1);
+    box-shadow: 0 0 0 3px rgba(38,132,255,0.1);
   }
   .modal input[type="radio"]:focus, .modal input[type="checkbox"]:focus {
     outline: auto;
@@ -357,7 +357,7 @@
   .find-bar input:focus {
     outline: none;
     border-color: var(--m-400);
-    box-shadow: 0 0 0 3px rgba(255,0,128,0.12);
+    box-shadow: 0 0 0 3px rgba(38,132,255,0.12);
   }
   .find-bar .find-count {
     font-size: 11px;

@@ -39,7 +39,7 @@ function _secureDocBannerShow(msg) {
     el.id = "secure-doc-banner";
     el.style.cssText =
       "position:fixed;top:14px;left:50%;transform:translateX(-50%);z-index:99999;" +
-      "background:#0f0a1e;color:#fff;padding:10px 18px;border-radius:8px;font-size:13px;" +
+      "background:#1a1a1a;color:#fff;padding:10px 18px;border-radius:8px;font-size:13px;" +
       "box-shadow:0 4px 16px rgba(0,0,0,.35);display:flex;align-items:center;gap:8px;" +
       "max-width:80vw;white-space:nowrap;overflow:hidden;text-overflow:ellipsis";
     const spin = document.createElement("span");

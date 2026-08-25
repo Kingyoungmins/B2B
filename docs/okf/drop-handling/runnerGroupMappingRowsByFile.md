@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(rows)"
 role: "per-(book,sheet) 행들을 '파일별 1행'으로 접는다. 한 파일이 여러 시트를 쓰면 그 파일 한 줄에"
 role_source: banner
-version: "0.7.5"
+version: "0.8.0"
 loc: "drop-handling.js:1559-1559"
 
 # ── 입출력 ──
@@ -38,7 +38,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.5-gen"
+timestamp: "0.8.0-gen"
 ---
 
 ## 역할

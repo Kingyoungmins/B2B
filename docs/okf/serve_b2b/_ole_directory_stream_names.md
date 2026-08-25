@@ -7,7 +7,7 @@ extraction: ast
 signature: "(path)"
 role: "OLE 복합문서 디렉터리의 스트림 이름 집합. OLE 아니거나 구조를 못 읽으면 None."
 role_source: docstring
-version: "0.7.5"
+version: "0.8.0"
 loc: "serve_b2b.py:2966-3032"
 
 # ── 입출력 ──
@@ -49,7 +49,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.5-gen"
+timestamp: "0.8.0-gen"
 ---
 
 ## 역할

@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(idx)"
 role: "[중복 헤더 개선] 같은 이름 헤더가 여러 열이면(예: 템플릿의 빈 '회사' A열 + 붙여넣은 '회사' D열)"
 role_source: banner
-version: "0.7.5"
+version: "0.8.0"
 loc: "assist-tools.js:260-260"
 
 # ── 입출력 ──
@@ -28,7 +28,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.5-gen"
+timestamp: "0.8.0-gen"
 ---
 
 ## 역할

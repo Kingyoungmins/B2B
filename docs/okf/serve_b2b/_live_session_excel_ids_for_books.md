@@ -7,7 +7,7 @@ extraction: ast
 signature: "(books, self_excel_id)"
 role: "바뀐 워크북 이름 → 그게 어느 라이브 세션인지. 라이브(공유 앱) 경로용 —"
 role_source: docstring
-version: "0.7.5"
+version: "0.8.0"
 loc: "serve_b2b.py:10194-10213"
 
 # ── 입출력 ──
@@ -41,7 +41,7 @@ reads:
   - "EXCEL_SESSIONS"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.5-gen"
+timestamp: "0.8.0-gen"
 ---
 
 ## 역할

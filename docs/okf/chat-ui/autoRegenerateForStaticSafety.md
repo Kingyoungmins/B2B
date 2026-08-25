@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(code, failures, context)"
 role: "정적 안전 위반 시 Qwen 을 자동 재호출해 고친 코드를 받아 다시 검사 흐름에 태운다."
 role_source: banner
-version: "0.7.5"
+version: "0.8.0"
 loc: "chat-ui.js:1999-1999"
 
 # ── 입출력 ──
@@ -51,7 +51,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.5-gen"
+timestamp: "0.8.0-gen"
 ---
 
 ## 역할

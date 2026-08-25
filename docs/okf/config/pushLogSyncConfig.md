@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(conf)"
 role: "화면이 뜰 때 한 번, 설정을 저장할 때마다 백엔드에 알려 준다. 실패는 무시한다(부가 기능)."
 role_source: banner
-version: "0.7.5"
+version: "0.8.0"
 loc: "config.js:133-133"
 
 # ── 입출력 ──
@@ -31,7 +31,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.5-gen"
+timestamp: "0.8.0-gen"
 ---
 
 ## 역할

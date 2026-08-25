@@ -7,7 +7,7 @@ extraction: ast
 signature: "(st)"
 role: "스텝 dict 이 extendedTimeout=True(VBA→Python 복구/강제 대용량)면 확장 데드라인(초)을, 아니면 None 을"
 role_source: docstring
-version: "0.7.5"
+version: "0.8.0"
 loc: "serve_b2b.py:15116-15124"
 
 # ── 입출력 ──
@@ -35,7 +35,7 @@ reads:
   - "PY_SKILL_RECOVERY_TIMEOUT_S"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.5-gen"
+timestamp: "0.8.0-gen"
 ---
 
 ## 역할

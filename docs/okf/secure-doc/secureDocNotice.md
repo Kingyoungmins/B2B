@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(msg)"
 role: "업로드 중 다운로드같이 겹쳐도 먼저 끝난 쪽이 배너를 꺼버리지 않게 카운터로 센다."
 role_source: banner
-version: "0.7.5"
+version: "0.8.0"
 loc: "secure-doc.js:29-29"
 
 # ── 입출력 ──
@@ -32,7 +32,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.5-gen"
+timestamp: "0.8.0-gen"
 ---
 
 ## 역할

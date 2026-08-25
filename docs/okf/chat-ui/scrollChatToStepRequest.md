@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(step)"
 role: "스텝의 원 요청 말풍선을 찾아 스크롤+강조. 못 찾으면 false."
 role_source: banner
-version: "0.7.5"
+version: "0.8.0"
 loc: "chat-ui.js:281-281"
 
 # ── 입출력 ──
@@ -43,7 +43,7 @@ reads:
   - "state.pipeline"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.5-gen"
+timestamp: "0.8.0-gen"
 ---
 
 ## 역할

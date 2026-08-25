@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(text)"
 role: "[0.5.17] 단순 '값 채우기/쓰기' — 특정 셀/열/범위에 값을 입력(계산·매칭·조건 없음)은 ctx.write 로"
 role_source: banner
-version: "0.7.5"
+version: "0.8.0"
 loc: "chat-ui.js:850-850"
 
 # ── 입출력 ──
@@ -33,7 +33,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.5-gen"
+timestamp: "0.8.0-gen"
 ---
 
 ## 역할

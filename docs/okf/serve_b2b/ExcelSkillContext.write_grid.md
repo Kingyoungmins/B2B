@@ -8,7 +8,7 @@ class: ExcelSkillContext
 signature: "(self, ws, grid, start_row=1, start_col=1)"
 role: "2D 리스트(grid)를 start_row/start_col 부터 한 번의 COM 호출로 쓴다."
 role_source: docstring
-version: "0.7.5"
+version: "0.8.0"
 loc: "serve_b2b.py:16751-16757"
 
 # ── 입출력 ──
@@ -43,7 +43,7 @@ reads:
 writes:
   - "self.last_output_sheet"
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.5-gen"
+timestamp: "0.8.0-gen"
 ---
 
 ## 역할

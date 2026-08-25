@@ -8,7 +8,7 @@ class: PythonComSkillContext
 signature: "(self, value)"
 role: "텍스트 정규화(공백/표기 차이 제거). 값 비교 보조용."
 role_source: docstring
-version: "0.7.5"
+version: "0.8.0"
 loc: "serve_b2b.py:13439-13441"
 
 # ── 입출력 ──
@@ -51,7 +51,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.5-gen"
+timestamp: "0.8.0-gen"
 ---
 
 ## 역할

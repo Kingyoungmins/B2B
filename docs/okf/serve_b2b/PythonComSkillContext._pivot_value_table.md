@@ -8,7 +8,7 @@ class: PythonComSkillContext
 signature: "(self, sheet, group_by, value=None, agg='sum', dest_name=None, header_rows=1, after=None, column=None)"
 role: "[내부/폴백] 그룹별 집계 '값 표'를 새 시트에 만든다(Python 집계 — 안정적). ctx.pivot 이 진짜"
 role_source: docstring
-version: "0.7.5"
+version: "0.8.0"
 loc: "serve_b2b.py:13118-13269"
 
 # ── 입출력 ──
@@ -102,7 +102,7 @@ reads:
   - "self.write"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.5-gen"
+timestamp: "0.8.0-gen"
 ---
 
 ## 역할

@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(s)"
 role: "---- [스킬 수정 → 원 요청으로 스크롤] ----"
 role_source: banner
-version: "0.7.5"
+version: "0.8.0"
 loc: "chat-ui.js:112-112"
 
 # ── 입출력 ──
@@ -33,7 +33,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.5-gen"
+timestamp: "0.8.0-gen"
 ---
 
 ## 역할

@@ -8,7 +8,7 @@ class: PythonComSkillContext
 signature: "(self, sheet)"
 role: "시트 '사용 범위' 마지막 행(1-based). 특정 열 기준 last_row(col=N) 은 그 열이 희소/병합이면 표 하단을"
 role_source: docstring
-version: "0.7.5"
+version: "0.8.0"
 loc: "serve_b2b.py:12034-12054"
 
 # ── 입출력 ──
@@ -54,7 +54,7 @@ reads:
   - "self.used_last_col"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.5-gen"
+timestamp: "0.8.0-gen"
 ---
 
 ## 역할

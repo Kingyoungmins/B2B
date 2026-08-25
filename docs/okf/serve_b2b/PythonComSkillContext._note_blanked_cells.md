@@ -8,7 +8,7 @@ class: PythonComSkillContext
 signature: "(self, before, data)"
 role: "앞 단계가 채워 둔 칸을 이번 쓰기가 '빈칸으로' 덮었는지 센다."
 role_source: docstring
-version: "0.7.5"
+version: "0.8.0"
 loc: "serve_b2b.py:11957-11983"
 
 # ── 입출력 ──
@@ -42,7 +42,7 @@ reads:
   - "self._shared"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.5-gen"
+timestamp: "0.8.0-gen"
 ---
 
 ## 역할

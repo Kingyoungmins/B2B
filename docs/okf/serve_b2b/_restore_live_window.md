@@ -7,7 +7,7 @@ extraction: ast
 signature: "(session, app, wb)"
 role: "리셋(_copy_source_workbook_into_target)으로 offscreen park 된 라이브 창을 owner 모드 방식으로"
 role_source: docstring
-version: "0.7.5"
+version: "0.8.0"
 loc: "serve_b2b.py:9676-9718"
 
 # ── 입출력 ──
@@ -50,7 +50,7 @@ reads:
   - "LIVE_FRAME_MODE"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.5-gen"
+timestamp: "0.8.0-gen"
 ---
 
 ## 역할

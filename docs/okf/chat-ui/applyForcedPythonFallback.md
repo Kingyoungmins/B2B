@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(pythonCode, context)"
 role: "[사용자 지시] VBA 전환 재생성까지 실패(\"뻑나면\")하면, 게이트를 우회해 '원본 Python 코드'를 그대로"
 role_source: banner
-version: "0.7.5"
+version: "0.8.0"
 loc: "chat-ui.js:1975-1975"
 
 # ── 입출력 ──
@@ -35,7 +35,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.5-gen"
+timestamp: "0.8.0-gen"
 ---
 
 ## 역할

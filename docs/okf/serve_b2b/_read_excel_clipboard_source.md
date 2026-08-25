@@ -7,7 +7,7 @@ extraction: ast
 signature: "()"
 role: "Windows 클립보드의 Excel 'Link' 포맷에서 복사 소스(워크북/시트/범위)를 역추적한다."
 role_source: docstring
-version: "0.7.5"
+version: "0.8.0"
 loc: "serve_b2b.py:11218-11286"
 
 # ── 입출력 ──
@@ -49,7 +49,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.5-gen"
+timestamp: "0.8.0-gen"
 ---
 
 ## 역할

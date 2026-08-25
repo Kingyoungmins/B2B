@@ -8,7 +8,7 @@ class: ExcelSkillContext
 signature: "(self, sheet_or_name, address, grid, workbook=None)"
 role: "주소(예 'A2' 또는 'A2:F100')의 좌상단부터 2D 리스트를 한 번에 쓴다(1회 COM 호출)."
 role_source: docstring
-version: "0.7.5"
+version: "0.8.0"
 loc: "serve_b2b.py:16759-16776"
 
 # ── 입출력 ──
@@ -54,7 +54,7 @@ writes:
   - "self.last_output_address"
   - "self.last_output_sheet"
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.5-gen"
+timestamp: "0.8.0-gen"
 ---
 
 ## 역할

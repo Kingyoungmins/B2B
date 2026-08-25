@@ -8,7 +8,7 @@ class: PythonComSkillContext
 signature: "(self, sheet, col, count=1)"
 role: "전체 열 삭제. col 은 'Q', 17, 또는 'Q:AU' 범위 모두 허용."
 role_source: docstring
-version: "0.7.5"
+version: "0.8.0"
 loc: "serve_b2b.py:12745-12760"
 
 # ── 입출력 ──
@@ -52,7 +52,7 @@ reads:
   - "self._ws"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.5-gen"
+timestamp: "0.8.0-gen"
 ---
 
 ## 역할

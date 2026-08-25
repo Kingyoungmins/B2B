@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "()"
 role: "사본이 없는 경우(엔진이 안 남겼거나·정리로 지워졌거나·스킬/파일이 달라짐)는 전부 여기서 \"\"가 된다."
 role_source: banner
-version: "0.7.5"
+version: "0.8.0"
 loc: "soft-refresh.js:128-128"
 
 # ── 입출력 ──
@@ -40,7 +40,7 @@ reads:
   - "state.pipeline"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.5-gen"
+timestamp: "0.8.0-gen"
 ---
 
 ## 역할

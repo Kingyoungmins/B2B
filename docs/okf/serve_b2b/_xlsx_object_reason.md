@@ -7,7 +7,7 @@ extraction: ast
 signature: "(path)"
 role: "openpyxl 로 다시 저장하면 유실되는 '객체'가 있으면 사유, 없으면 빈 문자열."
 role_source: docstring
-version: "0.7.5"
+version: "0.8.0"
 loc: "serve_b2b.py:21375-21392"
 
 # ── 입출력 ──
@@ -38,7 +38,7 @@ reads:
   - "_OPXL_UNSAFE_OBJECT_LABELS"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.5-gen"
+timestamp: "0.8.0-gen"
 ---
 
 ## 역할

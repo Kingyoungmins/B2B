@@ -7,7 +7,7 @@ extraction: ast
 signature: "(wb, max_rows=60, max_cols=_SNAPSHOT_MAX_COLS, only_sheet=None)"
 role: "라이브 적용 후 클라 스키마 캐시 갱신용 경량 미리보기(시트명 + 상위 N행 AoA + 차원)."
 role_source: docstring
-version: "0.7.5"
+version: "0.8.0"
 loc: "serve_b2b.py:15584-15624"
 
 # ── 입출력 ──
@@ -56,7 +56,7 @@ reads:
   - "_SNAPSHOT_MAX_COLS"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.5-gen"
+timestamp: "0.8.0-gen"
 ---
 
 ## 역할

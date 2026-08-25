@@ -8,7 +8,7 @@ class: PythonComSkillContext
 signature: "(self, sheet, row=1)"
 role: "해당 행 기준 마지막 데이터 열(1-based)."
 role_source: docstring
-version: "0.7.5"
+version: "0.8.0"
 loc: "serve_b2b.py:12028-12032"
 
 # ── 입출력 ──
@@ -47,7 +47,7 @@ reads:
   - "self._ws"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.5-gen"
+timestamp: "0.8.0-gen"
 ---
 
 ## 역할

@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(promptText)"
 role: "(수정 적용 버튼은 '방금 보낸 요청'의 응답에 붙으므로 마지막 user 가 곧 그 요청이다)."
 role_source: banner
-version: "0.7.5"
+version: "0.8.0"
 loc: "chat-ui.js:181-181"
 
 # ── 입출력 ──
@@ -34,7 +34,7 @@ reads:
   - "state.chatHistory"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.5-gen"
+timestamp: "0.8.0-gen"
 ---
 
 ## 역할

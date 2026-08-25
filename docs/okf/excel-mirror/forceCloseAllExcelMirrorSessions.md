@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "()"
 role: "초기화(전부 폐기)용 강제 정리: graceful 닫기(워크북별 wb.Close, 대형 파일은 건당 수 초 +"
 role_source: banner
-version: "0.7.5"
+version: "0.8.0"
 loc: "excel-mirror.js:1076-1076"
 
 # ── 입출력 ──
@@ -31,7 +31,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.5-gen"
+timestamp: "0.8.0-gen"
 ---
 
 ## 역할

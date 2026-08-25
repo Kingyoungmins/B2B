@@ -8,7 +8,7 @@ class: PythonComSkillContext
 signature: "(self, sheet, a1_range, find, repl, match_entire=False)"
 role: "범위 안 셀에서 find 를 repl 로 바꾼다(부분 치환, match_entire=True면 셀 전체 일치만). 수식 셀은 보존."
 role_source: docstring
-version: "0.7.5"
+version: "0.8.0"
 loc: "serve_b2b.py:14781-14819"
 
 # ── 입출력 ──
@@ -91,7 +91,7 @@ reads:
   - "self._ws"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.5-gen"
+timestamp: "0.8.0-gen"
 ---
 
 ## 역할

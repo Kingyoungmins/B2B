@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(reason, err)"
 role: "[전환 침묵 실패 금지] 실측(12:52): 재현 실패 직후 탭 클릭 15회가 전부 40ms 만에 조용히"
 role_source: banner
-version: "0.7.5"
+version: "0.8.0"
 loc: "excel-mirror.js:736-736"
 
 # ── 입출력 ──
@@ -34,7 +34,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.5-gen"
+timestamp: "0.8.0-gen"
 ---
 
 ## 역할

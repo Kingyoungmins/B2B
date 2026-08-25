@@ -7,7 +7,7 @@ extraction: ast
 signature: "(v)"
 role: "한 셀 안 다중 키(가입번호 등)를 분리 — 줄바꿈/공백/콤마/세미콜론/슬래시 구분. 각 토큰은 _norm_key."
 role_source: docstring
-version: "0.7.5"
+version: "0.8.0"
 loc: "serve_b2b.py:15564-15576"
 
 # ── 입출력 ──
@@ -36,7 +36,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.5-gen"
+timestamp: "0.8.0-gen"
 ---
 
 ## 역할

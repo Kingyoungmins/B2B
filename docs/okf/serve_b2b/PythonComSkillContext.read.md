@@ -8,7 +8,7 @@ class: PythonComSkillContext
 signature: "(self, sheet, a1_range=None)"
 role: "범위를 2차원 리스트로 한 번에 읽는다(COM 1회). a1_range 생략 시 used range."
 role_source: docstring
-version: "0.7.5"
+version: "0.8.0"
 loc: "serve_b2b.py:12166-12194"
 
 # ── 입출력 ──
@@ -82,7 +82,7 @@ reads:
   - "self._ws"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.5-gen"
+timestamp: "0.8.0-gen"
 ---
 
 ## 역할

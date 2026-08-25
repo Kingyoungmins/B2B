@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(info)"
 role: "item 9: 어느 단계에서 어떤 사유로 실패했는지 토스트 + 채팅 panel 에 모두 노출."
 role_source: banner
-version: "0.7.5"
+version: "0.8.0"
 loc: "pipeline.js:7709-7709"
 
 # ── 입출력 ──
@@ -31,7 +31,7 @@ reads:
   - "state.pipeline"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.5-gen"
+timestamp: "0.8.0-gen"
 ---
 
 ## 역할

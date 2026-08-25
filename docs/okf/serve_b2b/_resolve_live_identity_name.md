@@ -7,7 +7,7 @@ extraction: ast
 signature: "(session_name, incoming_name, path_name)"
 role: "결과/스냅샷을 '같은 라이브 세션'에 교체-로드(result-edit / 스냅샷 복원)할 때, 라이브 워크북이"
 role_source: docstring
-version: "0.7.5"
+version: "0.8.0"
 loc: "serve_b2b.py:6299-6314"
 
 # ── 입출력 ──
@@ -31,7 +31,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.7.5-gen"
+timestamp: "0.8.0-gen"
 ---
 
 ## 역할
