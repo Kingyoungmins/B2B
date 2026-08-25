@@ -3843,6 +3843,36 @@
         ]
       ],
       "fix": "스킬 코드의 ctx.book('한국전력공사_yyyymmdd.xlsx')(사용자가 월별 재사용을 위해 시킨 플레이스홀더)이 원인. 실행기 매핑을 거치면 치환돼 성공(실기 재현: 27만행→1,514행 필터 정상 — 엔진 무죄), 매핑 없는 경로(생성기 전체실행)에선 안정키·조회키 매칭 원천 불가로 '워크북이 열려 있지 않습니다'. ctx.book 해석 실패 직전에 플레이스홀더(yy·yyyy+mm(+dd))를 와일드카드로 바꿔 열린 파일과 대조, '정확히 하나'일 때만 바인딩(모호하면 기존 오류 — 단일 명확 매칭 원칙). COM 실측 3케이스."
+    },
+    {
+      "id": "SBAGENT-293-STEP29-FIXED-ROW-DELETE",
+      "title": "[293 후속] 29단계 정렬 실패 — 고정 '1:9행 삭제'가 가변 안내 줄수(9→10줄)에 깨짐.",
+      "checks": [
+        [
+          "com",
+          "test_runs/_test_find_header_row_com.py"
+        ],
+        [
+          "marker",
+          "serve_b2b.py::def find_header_row"
+        ],
+        [
+          "marker",
+          "scripts/file-schema.js::맨 위 안내/설명 N줄 삭제"
+        ]
+      ],
+      "fix": "시스템 추출 보고서의 안내 줄수는 추출 조건 따라 달마다 변함(실측: 도서 파일 — 실행에 쓰인 파일이 첨부본과 다른 새 추출본, 오류 행 데이터가 첨부본에 없음). 고정 delete_rows('1:9')가 헤더를 어긋나게 해 뒤 정렬이 '헤더 못 찾음'으로 전멸. ctx.find_header_row(헤더 행 탐지, 정규화 매칭) 신설 + 생성 규칙 '고정 N 금지, 헤더 위 삭제' 명문화. COM 실측 7케이스(9줄/10줄 동일 결과)."
+    },
+    {
+      "id": "ASSIST-NESTED-TOOLARGS-FLATTEN",
+      "title": "[실측 15:50] AI 도움 도구 인자가 빈 값으로 전달 — {tool_name, tool_args:{...}} 겹싸기 미평탄화.",
+      "checks": [
+        [
+          "node",
+          "test_runs/_test_assist_yaml_action_rescue.js"
+        ]
+      ],
+      "fix": "모델이 인자를 tool_args/parameters 로 겹싸면 JSON 경로에 평탄화가 없어 도구명만 잡히고 인자가 빈 채 전달(data.read given:'' / pipeline.step unknown_step) — 실패 호출이 도구 라운드를 태워 AI 가 '코드를 못 읽었다'로 마무리에 몰림. 평탄화+tool_name 별칭(YAML 구제와 동일 정책) + assist.tool 트레이스(도구명·인자 키·성공/오류 — 이전엔 0건이라 재구성 불가)."
     }
   ]
 }

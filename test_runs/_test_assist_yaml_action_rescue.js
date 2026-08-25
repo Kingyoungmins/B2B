@@ -46,6 +46,16 @@ console.log("[3] 노출 차단 — 액션 잔해·프롬프트 에코가 화면�
   check("정상 답변은 그대로", api.echo(normal, [sys]) === normal);
 }
 
+
+console.log("[4] 겹싸인 인자 평탄화(JSON 경로) — data.read given:'' 재발 방지(실측 세션 15:50)");
+{
+  const r = api.parse('{"action":"tool","args":{"tool_name":"step.error","tool_args":{"file":"도서.xlsx","range":"A1:C3"}}}');
+  check("tool_name 별칭 흡수", r.action === "tool" && r.args.tool === "step.error", JSON.stringify(r.args));
+  check("tool_args 안 인자가 평탄화된다", r.args.file === "도서.xlsx" && r.args.range === "A1:C3", JSON.stringify(r.args));
+  const r2 = api.parse('{"action":"tool","args":{"tool":"run.trace","parameters":{"step_id":"s28"}}}');
+  check("parameters 겹싸기도 평탄화", r2.args.tool === "run.trace" && r2.args.step_id === "s28", JSON.stringify(r2.args));
+}
+
 console.log("");
 console.log(fails === 0 ? "RESULT: ALL PASS" : `RESULT: ${fails} FAIL`);
 process.exit(fails === 0 ? 0 : 1);

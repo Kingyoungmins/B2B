@@ -570,6 +570,16 @@ async function assistHandleUserMessage(userText, ui, attachImages) {
         say(`${toolName} 확인 중...`);
         const result = await assistRunTool(toolName, toolArgs);
         try { ui.onToolTrace && ui.onToolTrace(toolName, result); } catch (_) {}
+        // [가시성 2026-08-25] AI 도움의 도구 활동이 트레이스에 전혀 안 남아, "코드를 못 읽었다"
+        // 제보에서 어떤 호출이 어떤 인자로 왜 실패했는지 재구성이 불가능했다(세션 15:50 실측 —
+        // assist 이벤트 0건). 호출당 1줄: 도구명·인자 키·성공/오류만(값 내용은 남기지 않는다).
+        try {
+          if (typeof traceClientUiEvent === "function") traceClientUiEvent("assist.tool", {
+            tool: String(toolName), argKeys: Object.keys(toolArgs || {}).join(","),
+            ok: !(result && result.ok === false),
+            error: String((result && result.error) || "").slice(0, 120),
+          });
+        } catch (_) {}
         const rawJson = JSON.stringify(result);
         const clipped = rawJson.length > 16000;
         tail.push({ role: "assistant", content: reply.slice(0, 1500) });

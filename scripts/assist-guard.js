@@ -97,6 +97,18 @@ function assistParseAction(reply) {
   let action = String(obj.action || obj.tool || obj.name || obj.function || "final").trim();
   let args = obj.args || obj.arguments || obj.parameters || obj.input || {};
   args = (args && typeof args === "object") ? args : {};
+  // [실측 2026-08-25 세션 15:50] 모델이 인자를 {tool_name, tool_args:{...}} 로 '겹싸는' 변형.
+  // JSON 경로에 평탄화가 없어 도구명은 잡히는데 인자만 빈 채 전달됐다 — data.read 가
+  // unknown_file(given:"") , pipeline.step 이 unknown_step 으로 도구 라운드만 태우고,
+  // AI 도움이 "코드를 못 읽었다"로 마무리 라운드에 몰렸다. YAML 구제와 같은 정책으로 편다.
+  for (const k of ["tool_args", "arguments", "parameters", "input"]) {
+    const inner = args[k];
+    if (inner && typeof inner === "object" && !Array.isArray(inner)) {
+      delete args[k];
+      args = { ...inner, ...args };    // 바깥 키(tool 등) 우선, 안쪽은 실제 인자
+    }
+  }
+  if (!args.tool && args.tool_name) args.tool = String(args.tool_name);
   // [단계별 핸드오프] 실측: 모델이 action="steps" 로 내거나 steps/request/reason 을 args 밖(최상위)에
   // 두는 변형이 흔하다. handoff 로 정규화하고 최상위 필드를 args 로 흡수한다.
   if (action === "steps" || action === "handoff" || action === "handoffsteps"

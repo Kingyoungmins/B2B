@@ -12126,6 +12126,31 @@ class PythonComSkillContext:
             c += 1
         return _col_letter(last_c + 1)
 
+    def find_header_row(self, sheet, header_text, max_scan=30):
+        """[SBAGENT-293 후속] 헤더 텍스트가 있는 '행 번호'(1-based)를 위에서부터 찾는다.
+
+        왜: 시스템 추출 보고서는 표 위 '안내 줄 수'가 추출 조건에 따라 달마다 변한다(실측 —
+        도서 파일이 9줄→10줄로 늘며 고정 delete_rows("1:9") 가 헤더를 어긋나게 만들어 뒤
+        단계 정렬이 전멸). '맨 위 안내 줄 삭제'는 고정 N 이 아니라 이 함수로 헤더 행을 찾아
+        그 위를 지워야 재발이 없다: hdr = ctx.find_header_row(시트, "헤더명");
+        (hdr > 1 이면) ctx.delete_rows(시트, f"1:{hdr-1}")."""
+        ws = self._ws(sheet)
+        scan = max(1, min(int(max_scan or 30), 200))
+        wcols = max(1, min(int(self.used_last_col(sheet)), 256))
+        self._tick(2)
+        rng = ws.Range(ws.Cells(1, 1), ws.Cells(scan, wcols))
+        values = _range_matrix(rng.Value2)
+        target = str(header_text).strip()
+        ntarget = normalize_text(target)
+        for r_idx, row_vals in enumerate(values, start=1):
+            for v in (row_vals or []):
+                text = str(v).strip() if v is not None else ""
+                if text == target or (ntarget and normalize_text(text) == ntarget):
+                    return r_idx
+        raise PythonComSkillError(
+            f"'{sheet}' 시트 상단 {scan}행에서 헤더 '{header_text}' 가 있는 행을 찾지 못했습니다. "
+            f"헤더 이름이 실제 표와 같은지 확인하세요.")
+
     def find_header(self, sheet, header_text, header_row=1):
         """헤더 행에서 헤더 텍스트로 열 번호(1-based)를 찾는다. 없으면 오류.
         열 번호를 추측/하드코딩하지 말고 반드시 이 함수를 쓸 것.
