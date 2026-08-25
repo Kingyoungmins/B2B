@@ -9,7 +9,7 @@ signature: "(self)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
 version: "0.8.0"
-loc: "serve_b2b.py:2231-2259"
+loc: "serve_b2b.py:2231-2263"
 
 # ── 입출력 ──
 inputs:
@@ -24,6 +24,7 @@ raises: []
 # ── 유기적 관계 ──
 calls:
   - "_trace_hash"
+  - "_trace_step_code_once"
   - "_trace_text"
   - "_vba_trace"
   - "read_json_body"
@@ -56,7 +57,7 @@ timestamp: "0.8.0-gen"
 - 없음(정적 분석 기준)
 
 ## 관계
-- 호출: `_trace_hash`, `_trace_text`, `_vba_trace`, `read_json_body`, `run_vba_on_session`, `send_json`
+- 호출: `_trace_hash`, `_trace_step_code_once`, `_trace_text`, `_vba_trace`, `read_json_body`, `run_vba_on_session`, `send_json`
 - 피호출(영향 전파 경로): `B2BHandler.do_POST`
 
 ## 실패/예외

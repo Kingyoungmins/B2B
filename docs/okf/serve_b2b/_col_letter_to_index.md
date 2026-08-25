@@ -8,7 +8,7 @@ signature: "(letter)"
 role: "\"H\" → 8. ColumnIs 가 값 경로에서 쓸 때 필요(클래스 밖이라 컨텍스트 메서드를 못 쓴다)."
 role_source: docstring
 version: "0.8.0"
-loc: "serve_b2b.py:11673-11682"
+loc: "serve_b2b.py:11677-11686"
 
 # ── 입출력 ──
 inputs:

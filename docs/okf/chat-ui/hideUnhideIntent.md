@@ -8,7 +8,7 @@ signature: "(text)"
 role: "[0.5.16] ctx 헬퍼가 결정적으로 처리하는 추가 작업들 — Python 우선 라우팅(헬퍼가 있는데 기본엔진 VBA 로"
 role_source: banner
 version: "0.8.0"
-loc: "chat-ui.js:804-804"
+loc: "chat-ui.js:854-854"
 
 # ── 입출력 ──
 inputs:

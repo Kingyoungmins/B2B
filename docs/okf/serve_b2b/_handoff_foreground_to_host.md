@@ -8,7 +8,7 @@ signature: "(host_hwnd, hwnds)"
 role: "숨기거나 파킹하려는 프레임이 현재 포그라운드면, OS 가 다음 활성 창을 임의로 고르기 전에"
 role_source: docstring
 version: "0.8.0"
-loc: "serve_b2b.py:4485-4530"
+loc: "serve_b2b.py:4489-4534"
 
 # ── 입출력 ──
 inputs:

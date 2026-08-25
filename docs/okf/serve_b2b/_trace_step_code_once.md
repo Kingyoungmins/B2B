@@ -8,7 +8,7 @@ signature: "(code, **fields)"
 role: "스텝 코드 '전문'을 해시당 한 번만 로그에 남긴다."
 role_source: docstring
 version: "0.8.0"
-loc: "serve_b2b.py:9039-9059"
+loc: "serve_b2b.py:9043-9063"
 
 # ── 입출력 ──
 inputs:
@@ -36,6 +36,7 @@ calls_external:
   - "len"
   - "str"
 called_by:
+  - "B2BHandler.handle_excel_run_vba"
   - "_run_full_pipeline_single_instance_impl"
   - "_run_vba_pipeline_on_session_impl"
 reads:
@@ -53,7 +54,7 @@ timestamp: "0.8.0-gen"
 
 ## 관계
 - 호출: `_trace_hash`, `_trace_text`, `_vba_trace`, `add`, `clear`
-- 피호출(영향 전파 경로): `_run_full_pipeline_single_instance_impl`, `_run_vba_pipeline_on_session_impl`
+- 피호출(영향 전파 경로): `B2BHandler.handle_excel_run_vba`, `_run_full_pipeline_single_instance_impl`, `_run_vba_pipeline_on_session_impl`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

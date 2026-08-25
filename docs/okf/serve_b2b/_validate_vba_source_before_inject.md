@@ -8,7 +8,7 @@ signature: "(code)"
 role: "VBE 디버거를 띄우는 명백한 컴파일 오류는 Excel에 주입하기 전에 차단한다."
 role_source: docstring
 version: "0.8.0"
-loc: "serve_b2b.py:8006-8124"
+loc: "serve_b2b.py:8010-8128"
 
 # ── 입출력 ──
 inputs:

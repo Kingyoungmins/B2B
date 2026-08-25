@@ -8,7 +8,7 @@ signature: "(code)"
 role: "게이트 검사용 주석 제거 — 모델이 프롬프트의 금지 규칙을 주석으로 메아리치는 일이 흔한데"
 role_source: banner
 version: "0.8.0"
-loc: "chat-ui.js:1543-1543"
+loc: "chat-ui.js:1593-1593"
 
 # ── 입출력 ──
 inputs:

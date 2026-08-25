@@ -8,7 +8,7 @@ signature: "(text)"
 role: "\"월 정보 +1 / 월 +1 / 다음달로 변경 / N개월 이동\" 류 — ctx.shift_months 로 결정적 처리(모델이 VBA 정규식·"
 role_source: banner
 version: "0.8.0"
-loc: "chat-ui.js:753-753"
+loc: "chat-ui.js:803-803"
 
 # ── 입출력 ──
 inputs:

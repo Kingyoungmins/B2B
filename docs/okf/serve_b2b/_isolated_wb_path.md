@@ -8,7 +8,7 @@ signature: "(wb)"
 role: "열려 있는 워크북의 실제 파일 경로(라벨 판별용). 못 구하면 빈 문자열."
 role_source: docstring
 version: "0.8.0"
-loc: "serve_b2b.py:3738-3743"
+loc: "serve_b2b.py:3742-3747"
 
 # ── 입출력 ──
 inputs:

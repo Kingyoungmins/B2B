@@ -8,7 +8,7 @@ signature: "(code, sourceUserMessage)"
 role: "ver0.5.2 4단계: Python COM 스킬용 클라이언트 정적 안전 검사(적용 직전 1차 게이트)."
 role_source: banner
 version: "0.8.0"
-loc: "chat-ui.js:1577-1577"
+loc: "chat-ui.js:1627-1627"
 
 # ── 입출력 ──
 inputs:
@@ -38,6 +38,7 @@ calls_external:
   - "O"
   - "RegExp"
   - "Set"
+  - "Sheets"
   - "String"
   - "True"
   - "abs"
@@ -73,7 +74,6 @@ calls_external:
   - "toUpperCase"
   - "transform"
   - "trim"
-  - "write"
 called_by:
   - "pipelineStaticFailuresForCode"
   - "validateAssistantCodeBeforeApply"

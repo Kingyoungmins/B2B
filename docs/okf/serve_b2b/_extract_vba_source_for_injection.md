@@ -8,7 +8,7 @@ signature: "(code, entry=None)"
 role: "Saved skills can contain the assistant reply text around the VBA block."
 role_source: docstring
 version: "0.8.0"
-loc: "serve_b2b.py:8219-8273"
+loc: "serve_b2b.py:8223-8277"
 
 # ── 입출력 ──
 inputs:

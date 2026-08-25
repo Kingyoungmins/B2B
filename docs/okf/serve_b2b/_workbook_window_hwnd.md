@@ -8,7 +8,7 @@ signature: "(wb)"
 role: "SDI 프레임(이 워크북의 최상위 창) 핸들. 공유 인스턴스에서 app.Hwnd 는"
 role_source: docstring
 version: "0.8.0"
-loc: "serve_b2b.py:6865-6874"
+loc: "serve_b2b.py:6869-6878"
 
 # ── 입출력 ──
 inputs:

@@ -9,7 +9,7 @@ signature: "(self, ws)"
 role: "이 쓰기가 '어느 워크북'을 바꿨는지 기록한다. self._wb 가 아니라 시트의 부모를 본다 —"
 role_source: docstring
 version: "0.8.0"
-loc: "serve_b2b.py:11937-11950"
+loc: "serve_b2b.py:11941-11954"
 
 # ── 입출력 ──
 inputs:

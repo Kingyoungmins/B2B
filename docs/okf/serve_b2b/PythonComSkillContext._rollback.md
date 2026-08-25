@@ -9,7 +9,7 @@ signature: "(self)"
 role: "실패 시 저널 역순 복원(쓰기 범위만 정밀 원복). 구조 변경은 롤백 불가."
 role_source: docstring
 version: "0.8.0"
-loc: "serve_b2b.py:15032-15046"
+loc: "serve_b2b.py:15036-15050"
 
 # ── 입출력 ──
 inputs:

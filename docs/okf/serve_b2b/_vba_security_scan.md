@@ -8,7 +8,7 @@ signature: "(code)"
 role: "금지 구문 발견 시 사용자 안내 문자열 반환, 없으면 None."
 role_source: docstring
 version: "0.8.0"
-loc: "serve_b2b.py:7993-8003"
+loc: "serve_b2b.py:7997-8007"
 
 # ── 입출력 ──
 inputs:
