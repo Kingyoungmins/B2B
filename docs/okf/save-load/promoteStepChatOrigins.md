@@ -8,7 +8,7 @@ signature: "()"
 role: "[구버전 승격] originHistId 없는 스텝(옛 zip): prompt 가 복원된 대화의 user 말풍선과 '정확히 1개'"
 role_source: banner
 version: "0.7.5"
-loc: "save-load.js:1006-1006"
+loc: "save-load.js:1027-1027"
 
 # ── 입출력 ──
 inputs: []

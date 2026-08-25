@@ -8,7 +8,7 @@ signature: "(path)"
 role: "[사내 MIP 라벨 2026-08-12] 암호화된 xlsx 인가 — 구형 .xls 와 구분한다."
 role_source: docstring
 version: "0.7.5"
-loc: "serve_b2b.py:2933-2942"
+loc: "serve_b2b.py:2954-2963"
 
 # ── 입출력 ──
 inputs:

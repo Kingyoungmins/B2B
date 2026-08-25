@@ -1,19 +1,19 @@
 ---
 type: endpoint
-title: run
-module: assist-core.js
+title: installAssistVisibilityHooks
+module: util.js
 lang: js
 extraction: regex   # 정규식 근사
-signature: "(fn, ...a)"
-role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
-role_source: none
+signature: "(g, wrapToast)"
+role: "고치는 파일과의 충돌 면적을 없애기 위한 선택)."
+role_source: banner
 version: "0.7.5"
-loc: "assist-core.js:825-825"
+loc: "util.js:35-35"
 
 # ── 입출력 ──
 inputs:
-  - "fn"
-  - "...a"
+  - "g"
+  - "wrapToast"
 returns: "(추정)"
 
 # ── 사이드이펙트 (정적 추정) ──
@@ -25,10 +25,17 @@ raises: []
 calls:
   - "push"
 calls_external:
-  - "fn"
-called_by:
-  - "_assistGateReplacementCode"
-  - "assistBuildProposal"
+  - "Number"
+  - "String"
+  - "defineProperty"
+  - "get"
+  - "now"
+  - "orig"
+  - "recordAppNotice"
+  - "set"
+  - "shift"
+  - "slice"
+called_by: []
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
@@ -36,14 +43,14 @@ timestamp: "0.7.5-gen"
 ---
 
 ## 역할
-(추정) 역할 주석 없음 — 담당자 1줄 보완 필요  _(자동 추정 — 확인 필요)_
+고치는 파일과의 충돌 면적을 없애기 위한 선택).
 
 ## 사이드이펙트 & 주의
 - 없음(정적 분석 기준)
 
 ## 관계
 - 호출: `push`
-- 피호출(영향 전파 경로): `_assistGateReplacementCode`, `assistBuildProposal`
+- 피호출(영향 전파 경로): 없음
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

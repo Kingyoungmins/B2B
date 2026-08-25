@@ -8,7 +8,7 @@ signature: "(()"
 role: "[감사 G1] 실행기 '파일확인' 매핑(스킬 요구파일 → 실제 업로드 파일/시트) — 이전엔 어떤 도구도"
 role_source: banner
 version: "0.7.5"
-loc: "assist-tools.js:546-546"
+loc: "assist-tools.js:557-557"
 
 # ── 입출력 ──
 inputs:

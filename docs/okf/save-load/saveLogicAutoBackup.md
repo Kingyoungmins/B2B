@@ -28,6 +28,8 @@ calls:
   - "createZipBlob"
   - "defaultLogicBaseNameFromInputs"
   - "timestampedLogicArchiveName"
+  - "toast"
+  - "traceClientUiEvent"
 calls_external:
   - "Error"
   - "String"
@@ -36,6 +38,7 @@ calls_external:
   - "info"
   - "json"
   - "now"
+  - "slice"
   - "warn"
 called_by:
   - "scheduleLogicAutoBackup"
@@ -53,7 +56,7 @@ timestamp: "0.7.5-gen"
 - 네트워크/서버 호출
 
 ## 관계
-- 호출: `buildLogicZipEntries`, `createZipBlob`, `defaultLogicBaseNameFromInputs`, `timestampedLogicArchiveName`
+- 호출: `buildLogicZipEntries`, `createZipBlob`, `defaultLogicBaseNameFromInputs`, `timestampedLogicArchiveName`, `toast`, `traceClientUiEvent`
 - 피호출(영향 전파 경로): `scheduleLogicAutoBackup`
 
 ## 실패/예외

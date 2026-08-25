@@ -9,7 +9,7 @@ signature: "(self, sheet, dest_col, src_cols, header_row=None)"
 role: "합계 열(dest_col)을 원본 열들(src_cols)의 합계 '수식'으로 채운다. dest_col 이 2행 등으로 '세로 병합'된"
 role_source: docstring
 version: "0.7.5"
-loc: "serve_b2b.py:13621-13657"
+loc: "serve_b2b.py:13642-13678"
 
 # ── 입출력 ──
 inputs:

@@ -9,7 +9,7 @@ signature: "(self, sheet, key_col, into_col, table_sheet, table_key_col, table_v
 role: "VLOOKUP/조인: sheet 의 key_col 값을 table_sheet 의 table_key_col 에서 찾아 그 행의 table_val_col 값을"
 role_source: docstring
 version: "0.7.5"
-loc: "serve_b2b.py:14327-14359"
+loc: "serve_b2b.py:14348-14380"
 
 # ── 입출력 ──
 inputs:

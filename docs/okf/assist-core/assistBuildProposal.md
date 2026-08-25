@@ -8,7 +8,7 @@ signature: "(args)"
 role: "LLM 이 낸 제안을 검증해 보관한다. 여기서 통과한 것만 카드로 뜬다."
 role_source: banner
 version: "0.7.5"
-loc: "assist-core.js:734-734"
+loc: "assist-core.js:761-761"
 
 # ── 입출력 ──
 inputs:

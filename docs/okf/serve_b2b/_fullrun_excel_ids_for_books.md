@@ -8,7 +8,7 @@ signature: "(by_excel, books, self_excel_id)"
 role: "전체실행(한 인스턴스에 관여 파일 전부 오픈)에서 바뀐 워크북 이름 → excelId."
 role_source: docstring
 version: "0.7.5"
-loc: "serve_b2b.py:10154-10170"
+loc: "serve_b2b.py:10175-10191"
 
 # ── 입출력 ──
 inputs:

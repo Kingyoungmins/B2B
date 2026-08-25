@@ -8,7 +8,7 @@ signature: "(s, delta, current_year=2000)"
 role: "문자열의 모든 'N월'(앞의 'YY/YYYY년', 뒤의 'D일' 포함)을 delta 개월 이동한다."
 role_source: docstring
 version: "0.7.5"
-loc: "serve_b2b.py:3276-3310"
+loc: "serve_b2b.py:3297-3331"
 
 # ── 입출력 ──
 inputs:

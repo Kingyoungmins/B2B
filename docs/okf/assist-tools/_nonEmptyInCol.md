@@ -8,7 +8,7 @@ signature: "(idx)"
 role: "[중복 헤더 개선] 같은 이름 헤더가 여러 열이면(예: 템플릿의 빈 '회사' A열 + 붙여넣은 '회사' D열)"
 role_source: banner
 version: "0.7.5"
-loc: "assist-tools.js:252-252"
+loc: "assist-tools.js:260-260"
 
 # ── 입출력 ──
 inputs:

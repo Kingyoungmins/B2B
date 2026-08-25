@@ -8,7 +8,7 @@ signature: "(cells)"
 role: "행의 라벨 셀들(보통 A~C) 중 하나라도 '합계/총계/소계/누계/계' 면 True."
 role_source: docstring
 version: "0.7.5"
-loc: "serve_b2b.py:15486-15494"
+loc: "serve_b2b.py:15507-15515"
 
 # ── 입출력 ──
 inputs:

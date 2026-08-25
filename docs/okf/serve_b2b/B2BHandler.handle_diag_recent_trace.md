@@ -9,7 +9,7 @@ signature: "(self)"
 role: "[AI 도움 run.trace] 직전 실행의 서버 트레이스 타임라인 — 스텝이 '실제로 어느 워크북에서"
 role_source: docstring
 version: "0.7.5"
-loc: "serve_b2b.py:2551-2598"
+loc: "serve_b2b.py:2551-2619"
 
 # ── 입출력 ──
 inputs:
@@ -23,14 +23,17 @@ raises: []
 
 # ── 유기적 관계 ──
 calls:
+  - "_perf_trace_path"
   - "_vba_trace_path"
   - "append"
   - "read_json_body"
   - "send_json"
+  - "sort"
 calls_external:
   - "dict"
   - "err"
   - "events"
+  - "extend"
   - "get"
   - "int"
   - "isinstance"
@@ -62,7 +65,7 @@ timestamp: "0.7.5-gen"
 - 파일시스템 변경/IO
 
 ## 관계
-- 호출: `_vba_trace_path`, `append`, `read_json_body`, `send_json`
+- 호출: `_perf_trace_path`, `_vba_trace_path`, `append`, `read_json_body`, `send_json`, `sort`
 - 피호출(영향 전파 경로): `B2BHandler.do_POST`
 
 ## 실패/예외

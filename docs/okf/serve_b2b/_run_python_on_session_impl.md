@@ -8,7 +8,7 @@ signature: "(excel_id, code, skip_static=False, timeout_s=None)"
 role: "라이브 세션에 떠 있는 실제 워크북에 Python COM 스킬을 실행한다(VBA 경로와 동일한 외피:"
 role_source: docstring
 version: "0.7.5"
-loc: "serve_b2b.py:15211-15272"
+loc: "serve_b2b.py:15232-15293"
 
 # ── 입출력 ──
 inputs:

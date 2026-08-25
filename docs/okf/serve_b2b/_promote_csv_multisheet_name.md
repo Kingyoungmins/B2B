@@ -8,7 +8,7 @@ signature: "(name, wb)"
 role: "파일명이 .csv/.tsv 인데 워크북에 시트가 2개 이상이면 .xlsx 로 바꾼다."
 role_source: docstring
 version: "0.7.5"
-loc: "serve_b2b.py:11515-11530"
+loc: "serve_b2b.py:11536-11551"
 
 # ── 입출력 ──
 inputs:

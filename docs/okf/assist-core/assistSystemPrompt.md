@@ -23,7 +23,10 @@ raises: []
 calls:
   - "assistToolCatalog"
 calls_external:
+  - "F5"
+  - "F9"
   - "N건"
+  - "depth_forced"
   - "error"
   - "filter"
   - "isArray"
@@ -31,6 +34,9 @@ calls_external:
   - "map"
   - "query"
   - "read"
+  - "step"
+  - "trace"
+  - "zip"
 called_by:
   - "assistCloseOut"
   - "assistHandleUserMessage"

@@ -8,7 +8,7 @@ signature: "(text, resolveName)"
 role: "[프롬프트/설명 속 옛 달 파일명 교정] 파일확인 요구 추출은 꼬리표만이 아니라 스텝 prompt 의"
 role_source: banner
 version: "0.7.5"
-loc: "save-load.js:792-792"
+loc: "save-load.js:813-813"
 
 # ── 입출력 ──
 inputs:

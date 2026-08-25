@@ -8,7 +8,7 @@ signature: "(v)"
 role: "셀 값을 숫자로. bool·라벨·빈칸은 None. 콤마·통화·괄호(음수) 표기 허용."
 role_source: docstring
 version: "0.7.5"
-loc: "serve_b2b.py:15497-15513"
+loc: "serve_b2b.py:15518-15534"
 
 # ── 입출력 ──
 inputs:

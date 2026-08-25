@@ -8,7 +8,7 @@ signature: "()"
 role: "러너 .xlsm 를 만들 고정 폴더(Excel 신뢰 위치로 등록되는 곳)."
 role_source: docstring
 version: "0.7.5"
-loc: "serve_b2b.py:5280-5287"
+loc: "serve_b2b.py:5301-5308"
 
 # ── 입출력 ──
 inputs: []

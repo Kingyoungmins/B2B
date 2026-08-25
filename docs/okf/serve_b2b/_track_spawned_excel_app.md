@@ -8,7 +8,7 @@ signature: "(app)"
 role: "이 앱이 띄운 Excel 인스턴스의 pid 를 기록한다(고아 정리용)."
 role_source: docstring
 version: "0.7.5"
-loc: "serve_b2b.py:4590-4599"
+loc: "serve_b2b.py:4611-4620"
 
 # ── 입출력 ──
 inputs:

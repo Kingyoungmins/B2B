@@ -8,7 +8,7 @@ signature: "(col)"
 role: "── 13. [범용 읽기] 아무 파일/시트의 원시 범위 읽기 ──────────────────────────"
 role_source: banner
 version: "0.7.5"
-loc: "assist-tools.js:488-488"
+loc: "assist-tools.js:499-499"
 
 # ── 입출력 ──
 inputs:

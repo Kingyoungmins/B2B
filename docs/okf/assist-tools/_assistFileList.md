@@ -23,7 +23,9 @@ raises: []
 calls:
   - "push"
 calls_external:
+  - "String"
   - "forEach"
+  - "slice"
 called_by: []
 reads:
   - "state.inputs"

@@ -8,7 +8,7 @@ signature: "(message, options = {})"
 role: "[필드 수정] WebView2 의 네이티브 confirm() 은 항상-위 Excel 미러 창/포커스 보정 타이머와"
 role_source: banner
 version: "0.7.5"
-loc: "util.js:33-33"
+loc: "util.js:81-81"
 
 # ── 입출력 ──
 inputs:

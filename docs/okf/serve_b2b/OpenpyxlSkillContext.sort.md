@@ -9,7 +9,7 @@ signature: "(self, sheet_or_name, by, ascending=True, header=True, workbook=None
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
 version: "0.7.5"
-loc: "serve_b2b.py:18263-18308"
+loc: "serve_b2b.py:18284-18329"
 
 # ── 입출력 ──
 inputs:
@@ -68,6 +68,7 @@ calls_external:
   - "workbook"
   - "ws"
 called_by:
+  - "B2BHandler.handle_diag_recent_trace"
   - "PythonComSkillContext.match_fill"
   - "_browser_content_target"
 reads:
@@ -93,7 +94,7 @@ timestamp: "0.7.5-gen"
 
 ## 관계
 - 호출: `_col0`, `_is_output_workbook`, `_num`, `_write_grid`, `_ws_of`, `append`, `cell`, `normalize`, `range`, `rows`
-- 피호출(영향 전파 경로): `PythonComSkillContext.match_fill`, `_browser_content_target`
+- 피호출(영향 전파 경로): `B2BHandler.handle_diag_recent_trace`, `PythonComSkillContext.match_fill`, `_browser_content_target`
 
 ## 실패/예외
 - `RuntimeError`

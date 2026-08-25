@@ -8,7 +8,7 @@ signature: "(pid=None)"
 role: "VBE/디버그 다이얼로그가 떠도 사용자에게 보이지 않도록 즉시 닫거나 숨긴다."
 role_source: docstring
 version: "0.7.5"
-loc: "serve_b2b.py:8774-8811"
+loc: "serve_b2b.py:8795-8832"
 
 # ── 입출력 ──
 inputs:

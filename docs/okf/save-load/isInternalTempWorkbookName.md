@@ -8,7 +8,7 @@ signature: "(name)"
 role: "[SBAGENT-209] 순수 내부 작업본 이름인지 — excel_open_<hash>.xls 처럼 원본명이 전혀 안 남은 형태만."
 role_source: banner
 version: "0.7.5"
-loc: "save-load.js:679-679"
+loc: "save-load.js:700-700"
 
 # ── 입출력 ──
 inputs:

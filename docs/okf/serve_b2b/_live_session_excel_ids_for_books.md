@@ -8,7 +8,7 @@ signature: "(books, self_excel_id)"
 role: "바뀐 워크북 이름 → 그게 어느 라이브 세션인지. 라이브(공유 앱) 경로용 —"
 role_source: docstring
 version: "0.7.5"
-loc: "serve_b2b.py:10173-10192"
+loc: "serve_b2b.py:10194-10213"
 
 # ── 입출력 ──
 inputs:

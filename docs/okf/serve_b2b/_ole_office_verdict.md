@@ -8,7 +8,7 @@ signature: "(path)"
 role: "[코드리뷰 2026-08-24] OLE 복합문서의 정체를 스트림 '내용'으로 3상 판정한다."
 role_source: docstring
 version: "0.7.5"
-loc: "serve_b2b.py:2912-2930"
+loc: "serve_b2b.py:2933-2951"
 
 # ── 입출력 ──
 inputs:

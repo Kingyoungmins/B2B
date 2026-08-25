@@ -8,7 +8,7 @@ signature: "()"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
 version: "0.7.5"
-loc: "serve_b2b.py:4692-4693"
+loc: "serve_b2b.py:4713-4714"
 
 # ── 입출력 ──
 inputs: []
@@ -24,6 +24,7 @@ calls:
   - "b2b_logs_dir"
 calls_external: []
 called_by:
+  - "B2BHandler.handle_diag_recent_trace"
   - "_perf_trace"
   - "_reset_trace_logs"
 reads: []
@@ -40,7 +41,7 @@ timestamp: "0.7.5-gen"
 
 ## 관계
 - 호출: `b2b_logs_dir`
-- 피호출(영향 전파 경로): `_perf_trace`, `_reset_trace_logs`
+- 피호출(영향 전파 경로): `B2BHandler.handle_diag_recent_trace`, `_perf_trace`, `_reset_trace_logs`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`
