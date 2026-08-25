@@ -429,7 +429,10 @@ async function assistHandleUserMessage(userText, ui, attachImages) {
           cp = assistParseAction(closing);
           if (cp.action === "tool") return false;
         }
-        let cText = assistStripActionBlock(cp.block ? closing.split(cp.block).join("\n") : closing);
+        let cText = assistStripPromptEcho(
+          assistStripActionBlock(cp.block ? closing.split(cp.block).join("\n") : closing),
+          [closingSys, ...tail.map(m => m && m.content)],
+        );
         if (!cp.parsed && !cp.block) {
           // ③ [검증 항목6 대칭] 절단된(닫힘 없는) 액션 펜스는 스트리퍼가 못 걷는다 — 원시 JSON 노출 방지.
           cText = String(cText || "").replace(new RegExp("```\\s*" + ASSIST_FENCE + "[\\s\\S]*$", "i"), "");
@@ -545,7 +548,12 @@ async function assistHandleUserMessage(userText, ui, attachImages) {
       // [검토 #6] 액션으로 채택된 원문 조각(parsed.block)을 정확히 걷어낸다 — 펜스 없는 bare JSON 은
       // 정규식 스트립만으로 못 걷어내 사용자에게 그대로 노출됐다.
       const withoutBlock = parsed.block ? reply.split(parsed.block).join("\n") : reply;
-      const visible = assistStripActionBlock(withoutBlock);
+      // [SBAGENT-293] 액션 잔해 + 프롬프트 에코를 함께 걷어낸다. 실측에서 모델이 시스템 지시문과
+      // 사용자 질문 원문을 통째로 되풀이해 그대로 화면에 찍혔다(내부 지시문 노출).
+      const visible = assistStripPromptEcho(
+        assistStripActionBlock(withoutBlock),
+        [sys, ...tail.map(m => m && m.content)],
+      );
 
       if (parsed.action === "tool" && !lastRound) {
         const toolName = String(parsed.args.tool || parsed.args.name || "").trim();

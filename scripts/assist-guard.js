@@ -53,6 +53,21 @@ function assistParseAction(reply) {
       }
     }
   }
+  // [SBAGENT-293 실측 2026-08-25] 모델이 규약(JSON) 대신 **YAML** 로 액션을 냈다:
+  //     action: "tool"
+  //     args:
+  //       tool_name: "step.error"
+  //       tool_args: {}
+  // JSON 파서에 안 걸리고, 아래 '코드 호출' 구제(name() 형태)에도 안 걸려 parsed:false 로 떨어졌다.
+  // 그러면 block 이 null 이라 오케스트레이터가 걷어낼 게 없어 **응답 원문이 통째로 노출**된다 —
+  // 사용자 화면에 시스템 프롬프트 에코 + 이 YAML 이 그대로 찍히고 도구는 실행되지 않았다
+  // ("AI 도움에 물어도 step.error 만 뜬다"의 정체). 빈 객체 `{}`(tool_args) 가 균형 스캔에
+  // 먼저 걸려 obj={} 가 되는 바람에 코드 호출 구제까지 건너뛰는 것도 같은 사고의 일부다.
+  // → 액션 키가 없는 빈 껍데기면 YAML 구제를 시도한다(오탐 방지: 알려진 action 값 + 도구는 등록된 이름일 때만).
+  if (!obj || typeof obj !== "object" || !(obj.action || obj.tool || obj.name || obj.function)) {
+    const y = _assistParseYamlAction(text);
+    if (y) return y;
+  }
   if (!obj || typeof obj !== "object") {
     // [실측 사고] 모델이 액션 블록 대신 ```python\nstep.error()\n``` 처럼 '코드'로 도구를 부르는
     // 경우가 있다 — 실행은 안 되고 코드 원문만 사용자에게 노출됐다("??"). 응답이 사실상 인자 없는
@@ -110,12 +125,102 @@ function assistParseAction(reply) {
   return { action, args, raw: text, parsed: true, block };
 }
 
+/* [SBAGENT-293] YAML 로 낸 액션 블록 구제. 전체 YAML 파서가 아니라 우리 규약에 필요한
+   최소 서브셋만 본다: action 한 줄 + (있으면) 도구 이름 + 스칼라 인자 / tool_args JSON.
+   반환 형식은 JSON 경로와 동일하며, block 에 '걷어낼 원문 조각'을 정확히 담는다. */
+function _assistParseYamlAction(text) {
+  const s = String(text || "");
+  const KNOWN = ["tool", "propose", "final", "report", "handoff", "escalate", "steps"];
+  // action 은 줄 시작이거나 문장 중간(줄바꿈이 뭉개진 렌더링)일 수 있다.
+  const am = /(^|[\n\s])action\s*:\s*["']?([a-z_]+)["']?/i.exec(s);
+  if (!am) return null;
+  let action = String(am[2] || "").toLowerCase();
+  if (!KNOWN.includes(action)) return null;
+  const rest = s.slice(am.index + am[0].length);
+  const args = {};
+  let consumedEnd = am.index + am[0].length;
+  const eat = (re, apply) => {
+    const m = re.exec(rest);
+    if (!m) return;
+    apply(m);
+    consumedEnd = Math.max(consumedEnd, am.index + am[0].length + m.index + m[0].length);
+  };
+  // 도구 이름: tool_name / tool / name (규약은 tool 이지만 실측은 tool_name)
+  eat(/(?:^|[\n\s])(?:tool_name|tool|name)\s*:\s*["']?([a-z][a-z0-9_]*\.[a-z][a-z0-9_.]*)["']?/i,
+      m => { args.tool = m[1]; });
+  // 인자 묶음: tool_args / args / arguments 뒤의 JSON 객체(빈 {} 포함)
+  eat(/(?:^|[\n\s])(?:tool_args|arguments|args|parameters|input)\s*:\s*(\{[\s\S]{0,4000}?\})/i, m => {
+    try {
+      const o = JSON.parse(m[1]);
+      if (o && typeof o === "object") Object.assign(args, o);
+    } catch (_) {}
+  });
+  // 스칼라 인자(step_id: "s1" 등) — 예약 키는 제외
+  const RESERVED = /^(action|args|arguments|parameters|input|tool|tool_name|tool_args|name|function)$/i;
+  const scalar = /(?:^|\n)\s{0,8}([a-z][a-z0-9_]*)\s*:\s*["']?([^"'\n{}[\]]{0,300}?)["']?\s*(?=\n|$)/gi;
+  let sm;
+  while ((sm = scalar.exec(rest)) !== null) {
+    const k = sm[1];
+    if (RESERVED.test(k)) continue;
+    const v = String(sm[2] || "").trim();
+    if (!v) continue;
+    if (!(k in args)) args[k] = v;
+    consumedEnd = Math.max(consumedEnd, am.index + am[0].length + sm.index + sm[0].length);
+  }
+  // action="tool" 은 '등록된 도구'일 때만 채택한다 — 설명문 속 우연한 문구를 액션으로
+  // 오인하면 정상 답변에서 엉뚱한 조각이 잘려 나간다(코드 호출 구제와 같은 정책).
+  if (action === "tool") {
+    let known = false;
+    try { known = !!(args.tool && typeof ASSIST_TOOLS === "object" && ASSIST_TOOLS
+      && Object.prototype.hasOwnProperty.call(ASSIST_TOOLS, args.tool)); } catch (_) {}
+    if (!known) return null;
+  }
+  const block = s.slice(am.index + (am[1] ? am[1].length : 0), consumedEnd);
+  return { action, args, raw: s, parsed: true, block };
+}
+
 // 응답 본문에서 액션 블록을 걷어낸 '사람이 읽을 부분'
 function assistStripActionBlock(reply) {
   return String(reply || "")
     .replace(new RegExp("```\\s*" + ASSIST_FENCE + "[\\s\\S]{0," + ASSIST_ACTION_SCAN_MAX + "}?```", "gi"), "")
     .replace(new RegExp("```[a-z-]{0,16}\\s*\\n\\{[\\s\\S]{0," + ASSIST_ACTION_SCAN_MAX + "}?\\}\\s*```", "gi"), "")
+    // [SBAGENT-293] 채택되지 못한 액션 잔해(YAML/JSON 부스러기)도 걷어낸다. 파서가 구제하지
+    // 못한 변형이 나와도 규약 텍스트가 사용자 화면에 찍히는 일은 없어야 한다 — 실측에서
+    // `action: "tool" / tool_name: ...` 이 그대로 노출됐다.
+    .replace(/(^|\n)\s*(?:action|tool_name|tool_args|arguments|parameters)\s*:\s*[^\n]*/gi, "$1")
+    .replace(/(^|\n)\s*args\s*:\s*$/gi, "$1")
     .trim();
+}
+
+/* [SBAGENT-293] 프롬프트 에코 제거.
+   실측 화면에는 액션 잔해뿐 아니라 **우리가 모델에게 보낸 지시문 전체**가 그대로 찍혔다
+   (모델이 프롬프트를 되풀이하는 흔한 실패). 파싱이 성공해도 본문에 남을 수 있으므로,
+   보낸 메시지들의 긴 문장이 응답에 그대로 있으면 그 조각을 지운다.
+   sources = 이번 요청에 보낸 system/user 텍스트 배열. */
+function assistStripPromptEcho(visible, sources) {
+  let out = String(visible || "");
+  if (!out) return out;
+  const list = (Array.isArray(sources) ? sources : [sources]).map(s => String(s || "")).filter(Boolean);
+  if (!list.length) return out;
+  const splitSentences = (s) => String(s || "").split(/(?:\n|(?<=[.!?。])\s)/);
+  // 1) 긴 조각(≥30자)은 본문 어디에 박혀 있어도 통째로 제거 — 지시문 문단 에코.
+  const srcSentences = new Set();
+  for (const src of list) {
+    for (const raw of splitSentences(src)) {
+      const frag = raw.trim();
+      if (frag.length >= 10) srcSentences.add(frag);
+      if (frag.length < 30) continue;
+      if (out.includes(frag)) out = out.split(frag).join(" ");
+    }
+  }
+  // 2) 짧은 문장은 우연히 겹칠 수 있어 substring 제거는 위험하지만, '문장 전체'가
+  //    프롬프트의 문장과 글자까지 같으면(≥12자) 에코다 — 그 조각만 제자리에서 지운다
+  //    (split/join 재조립은 정상 답변의 서식까지 바꿔 버린다 — 원문 보존이 원칙).
+  for (const frag of srcSentences) {
+    if (frag.length < 12) continue;
+    if (out.includes(frag)) out = out.split(frag).join(" ");
+  }
+  return out.replace(/[ \t]{2,}/g, " ").replace(/\n{3,}/g, "\n\n").trim();
 }
 
 // 한자(중국어) 혼입 검사 — Qwen 실측 대응. 한글 대비 한자 비율이 높으면 재생성 신호.

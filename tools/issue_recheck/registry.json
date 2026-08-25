@@ -3737,6 +3737,17 @@
         ]
       ],
       "fix": "cmd.exe 는 LF 전용 .bat 의 줄을 못 끊어 인용부호가 이어붙은 채 실행된다. 원인은 파이썬 read_text/write_text(newline='') 조합이 CRLF→LF 로 바꾸는 것(0.7.5 sed -i, 0.8.0 버전 bump 두 번 모두). .bat 은 반드시 read_bytes/write_bytes 로 다루고, 이 테스트가 배포 전에 잡는다."
+    },
+    {
+      "id": "SBAGENT-293-ASSIST-YAML-ACTION",
+      "title": "[SBAGENT-293] AI 도움이 SET.ERROR(규약 원문)만 노출 — YAML 액션 미파싱 + 프롬프트 에코.",
+      "checks": [
+        [
+          "node",
+          "test_runs/_test_assist_yaml_action_rescue.js"
+        ]
+      ],
+      "fix": "모델이 액션을 JSON 대신 YAML(action:/tool_name:/tool_args:)로 내면 파싱 실패 → 도구 미실행 + block=null 이라 응답 원문(시스템 지시문 에코 포함)이 통째로 노출. YAML 최소 서브셋 구제(등록 도구만, 오탐 가드) + 액션 잔해 스트립 + 프롬프트 에코 제거(≥30자 조각 substring, ≥12자 문장 일치). 0.7.4 실측 재현 → 케이스 고정."
     }
   ]
 }
