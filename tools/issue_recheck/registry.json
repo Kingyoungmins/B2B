@@ -3805,6 +3805,29 @@
         ]
       ],
       "fix": "사용자 문장 토큰(≥4자)과 한 글자(한글) 차이 나는 코드 리터럴을 적용 전 정적검사로 차단→자동 재생성. 오탐 가드: 숫자/영문 차이(연도·월·코드값) 통과, 사용자가 두 표기 다 썼거나 올바른 표기가 코드에 함께 있으면(실재 유사 열) 통과."
+    },
+    {
+      "id": "SBAGENT-297-FORMULA-COPY",
+      "title": "[SBAGENT-297] '수식 복사' 요청이 값으로 굳음 제보 — 헬퍼는 무죄(실기 검증), 규칙·차단·로깅 보강.",
+      "checks": [
+        [
+          "marker",
+          "scripts/file-schema.js::수식(을) 복사해줘 / 수식 유지해서 붙여넣어줘"
+        ],
+        [
+          "marker",
+          "scripts/chat-ui.js::원시 COM 접근은 없습니다"
+        ],
+        [
+          "marker",
+          "serve_b2b.py::source=\"live-run\""
+        ],
+        [
+          "node",
+          "test_runs/_test_explicit_python_apply_gate.js"
+        ]
+      ],
+      "fix": "ctx.copy 는 수식·서식 보존을 실기 COM 재현으로 확인 — 백엔드 무죄. 사용자가 겪은 실체는 ① 적용 60초 뒤 replace 로 라이브가 덮여 적용분 소실(오인 유발, 별도 조사 항목) ② 라이브 런이 codeHash 만 남아 확정 불가. 보강: '수식 복사 명시 → ctx.copy, read→write·copy_values 금지' 규칙, ctx.Sheets/Range 원시 COM 정적 차단(런타임 __getattr__ 안내와 짝), 라이브 런도 step.code.full 급 코드 전문 로깅(해시당 1회). 남김: 적용 직후 replace 가 라이브를 덮는 흐름의 사유 로깅/조사."
     }
   ]
 }

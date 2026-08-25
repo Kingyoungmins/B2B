@@ -1645,6 +1645,10 @@ function pythonComStaticSafetyFailures(code, sourceUserMessage) {
     [/\bload_workbook\s*\(|\bws\s*\[\s*["']/, 'openpyxl 관용구(ws["A1"], load_workbook)는 지원되지 않습니다. ctx.read()/ctx.write() 를 사용하세요.'],
     [/\.(?:Select|Activate)\s*\(/, ".Select/.Activate 는 사용할 수 없습니다."],
     [/\bActiveWorkbook\b|\bActiveSheet\b/, "ActiveWorkbook/ActiveSheet 에 의존하지 마세요(ctx 가 대상 파일에 고정되어 있음)."],
+    // [SBAGENT-294/296/297 실측] 모델이 VBA 식 원시 COM 접근(ctx.Sheets(...).Move 등)을 지어내
+    // 런타임 AttributeError 로 죽었다 — 적용 전에 잡아 재생성으로 보낸다(런타임 __getattr__ 안내와 짝).
+    [/\.\s*(?:Sheets|Worksheets|Workbooks)\s*\(/, "ctx.Sheets/Worksheets 같은 원시 COM 접근은 없습니다 — 시트 작업은 ctx.add_sheet/move_sheet/copy_sheet/rename_sheet/delete_sheet, 다른 파일은 ctx.book(파일명)."],
+    [/\.\s*(?:Range|Cells)\s*\(\s*["'A-Z0-9$]/, "ctx.Range/Cells 원시 COM 접근은 없습니다 — 셀 읽기/쓰기는 ctx.read/ctx.write/ctx.set_range, 네이티브 복사는 ctx.copy."],
     [/while\s+(?:True|1)\s*:/, "while True 무한 루프는 금지입니다."],
     [/\.(?:Save|SaveAs|SaveCopyAs|Close|Quit)\s*\(/, "저장/닫기/종료 호출은 금지입니다."],
   ];

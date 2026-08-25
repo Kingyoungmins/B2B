@@ -45,9 +45,11 @@ showCodeGuardBlock = function () {
   guardCalls += 1;
 };
 
+// [SBAGENT-296] 제공 모듈(re/datetime/math)의 단순 import 는 이제 '허용'이 정책이라
+// 정적 실패 픽스처로 못 쓴다 — 여전히 차단되는 미제공 모듈(os)로 바꿔 의도를 보존한다.
 const pythonWithStaticFailure = `
 def transform(ctx):
-    import re
+    import os
     rows = ctx.read("2026년", "B336:D336")
     ctx.write("2026년", "B336", rows)
 `;

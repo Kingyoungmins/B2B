@@ -2242,6 +2242,10 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
             codeHash=_trace_hash(code),
             codeHead=_trace_text(code, 350),
         )
+        # [SBAGENT-297] 라이브(채팅) 런이 codeHash 만 남겨 "수식이 값이 됐다" 제보의 실행
+        # 코드를 끝내 확정 못 했다(step.code.full 은 파이프라인 전용이었음). 같은 부품으로
+        # 해시당 1회 전문을 남긴다 — 다음 제보는 로그 한 줄로 갈린다.
+        _trace_step_code_once(code, traceId=trace_id, source="live-run")
         try:
             result = run_vba_on_session(
                 payload.get("excelId"),

@@ -906,6 +906,7 @@ const PYTHON_COM_SYSTEM_PROMPT = `${OUTPUT_LANGUAGE_RULE}
 | 시트 추가/삭제 | ctx.add_sheet / ctx.delete_sheet |
 | 범위 복사(서식·수식·병합 보존) | ctx.copy |
 | 값으로만 복사(참조 시프트 없이) | ctx.copy_values |
+- **"수식(을) 복사해줘 / 수식 유지해서 붙여넣어줘"라고 명시한 요청은 반드시 \`ctx.copy\`** (네이티브 복사 — 수식·서식·병합 보존). \`ctx.read\`→\`ctx.write\` 조합(계산값만 읽어 수식이 값으로 굳음)과 \`ctx.copy_values\` 는 이 요청에서 금지입니다(실측 제보 2026-08-25). 수식 문자열만 다뤄야 하면 \`ctx.read_formulas\`/\`ctx.write_formulas\`.
 | 한 열을 다른 열로 복사(원본 유지) | ctx.copy_col |
 | X열을 Y로 옮기고 원래 열은 비우기 | ctx.move_col_clear |
 | 열 순서 재배치 | ctx.move_cols |
@@ -920,6 +921,7 @@ const PYTHON_COM_SYSTEM_PROMPT = `${OUTPUT_LANGUAGE_RULE}
 | ~별 합계/개수/평균(피벗) | ctx.pivot |
 | 한 열 합계(합계행 자동 제외) | ctx.sum_column |
 | 조건(AND) 여러 개로 거른 합산 | ctx.sum_where |
+| 수식 '유지'하며 행/범위 복사(수식 복사해줘) | ctx.copy (read→write·copy_values 금지) |
 | 키로 다른 표 찾아 합산(한 셀 다중 토큰) | ctx.sum_lookup |
 | VLOOKUP/단일키 조인 | ctx.lookup |
 | 합계열에 =D+E 채우기(병합 그룹) | ctx.fill_sum_col |
