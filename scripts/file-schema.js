@@ -900,7 +900,8 @@ const PYTHON_COM_SYSTEM_PROMPT = `${OUTPUT_LANGUAGE_RULE}
 ## 요청 → 헬퍼 빠른 선택 (먼저 여기서 고르고, 아래 ctx API 에서 시그니처 확인. 손코딩으로 헬퍼 동작을 흉내내지 말 것)
 | 요청 유형 | 헬퍼 |
 |---|---|
-| 시트 복사/이동 | ctx.copy_sheet (+ delete_sheet 로 이동) |
+| 시트 복사/파일 간 이동 | ctx.copy_sheet (+ delete_sheet 로 이동) |
+| 같은 파일 안 시트 위치(순서) 변경 | ctx.move_sheet |
 | 시트 이름만 변경 | ctx.rename_sheet |
 | 시트 추가/삭제 | ctx.add_sheet / ctx.delete_sheet |
 | 범위 복사(서식·수식·병합 보존) | ctx.copy |
@@ -998,6 +999,7 @@ const PYTHON_COM_SYSTEM_PROMPT = `${OUTPUT_LANGUAGE_RULE}
   - **확실히 못 맞춘 대상 이름이 있으면 후보와 함께 오류로 알립니다**(기본은 아무것도 안 씀). 그 목록을 사용자에게 보여주고, 확정되면 \`aliases={"대상이름":"소스이름"}\` 로 **한 번에** 다시 실행하세요. 맞춘 것만 우선 채우려면 \`allow_partial=True\`. 표 끝 합계/소계/부가세 행은 자동 제외. 반환 \`{matched, unmatched:[...], rows}\`.
   - 예(피벗 요약 → 대상 4행 헤더 표에 값만): \`ctx.match_fill("input_202602_SS001643_ENTR_BY_STACC_001.xlsx!MVNO상품명별요약", "올인원_중고차_CCU중복건 제거_토레스무상제공 등 요약", {"MVNO상품명_count":"건수", "수납금액_sum":"고객납부금액", "가입자당단가_도매대가_sum":"청구금액"}, header_row=4)\`. 교차파일은 소스에 "파일.xlsx!시트" 스펙(ctx 는 대상 파일 바인딩).
 - \`ctx.add_sheet("이름", after="기준시트")\` / \`ctx.delete_sheet("이름")\` / \`ctx.rename_sheet("기존이름", "새이름")\`
+- \`ctx.move_sheet("시트", before="기준시트")\` 또는 \`after="기준시트"\` → **같은 파일 안에서 기존 시트의 '위치(순서)'만 바꿉니다**(내용·이름 유지). "x시트를 y시트 앞/뒤로 옮겨줘", "시트 순서 바꿔줘"는 반드시 이걸 쓰세요. **임시 시트를 만들어 복사→원본 삭제→이름변경으로 이동을 흉내내는 것 금지**(화면 깨짐·틀고정 소실·수식 참조 파손 — 실측 제보 2026-08-25). ctx.Sheets/ws.Move 같은 원시 COM 접근도 금지(ctx 에 없음 — 오류로 죽습니다).
   - **"시트 이름만 바꿔줘"**는 반드시 \`ctx.rename_sheet\` 를 쓰세요(위치·내용 유지). copy_sheet+delete 로 흉내내면 위치가 바뀌거나 내용이 사라질 수 있습니다.
 - \`ctx.shift_months("시트", "B336:D336", 1)\` → 범위 안 '문자열' 셀의 모든 'N월'(앞 'YY/YYYY년', 뒤 'D일' 포함)을 N개월 이동. 12월 넘김 시 연도 +, 말일 보정, 0패딩 보존.
   - **"월 정보 +1 / 월 +1 / 다음달로 / N개월 뒤"** 류는 반드시 이걸 쓰세요(직접 정규식/루프 금지). "다음달"=+1, "지난달"=-1, "N달 뒤"=+N. 같은 셀의 06월·05월처럼 여러 월이 있어도 전부 이동됩니다.

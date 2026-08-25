@@ -3748,6 +3748,29 @@
         ]
       ],
       "fix": "모델이 액션을 JSON 대신 YAML(action:/tool_name:/tool_args:)로 내면 파싱 실패 → 도구 미실행 + block=null 이라 응답 원문(시스템 지시문 에코 포함)이 통째로 노출. YAML 최소 서브셋 구제(등록 도구만, 오탐 가드) + 액션 잔해 스트립 + 프롬프트 에코 제거(≥30자 조각 substring, ≥12자 문장 일치). 0.7.4 실측 재현 → 케이스 고정."
+    },
+    {
+      "id": "SBAGENT-295-MOVE-SHEET",
+      "title": "[SBAGENT-295] 같은 파일 안 시트 위치 변경이 안 됨 — ctx 헬퍼 부재로 원시 COM 환각/교체 흉내.",
+      "checks": [
+        [
+          "com",
+          "test_runs/_test_move_sheet_com.py"
+        ],
+        [
+          "marker",
+          "serve_b2b.py::def move_sheet"
+        ],
+        [
+          "marker",
+          "scripts/file-schema.js::ctx.move_sheet"
+        ],
+        [
+          "marker",
+          "scripts/chat-ui.js::move_sheet(시트, before=기준 또는 after=기준)"
+        ]
+      ],
+      "fix": "시트 위치 변경 헬퍼가 없어 모델이 ctx.Sheets(...).Move 원시 COM(AttributeError 즉사)이나 임시시트 복사→원본삭제→rename 교체(금지 패턴)로 흉내냄(실측 로그). ctx.move_sheet(before/after, positional Move — Copy(After=) 무동작 전례와 정책 일치) 추가 + 생성 규칙(표·헬퍼 문서·흉내 금지) + 정적 게이트(delete_sheet(X)+rename(→X) 조합 차단→move_sheet 안내). COM 실측 8케이스."
     }
   ]
 }

@@ -13919,6 +13919,35 @@ class PythonComSkillContext:
         self._shared["structural"].append(f"add_sheet:{name}")
         return True
 
+    def move_sheet(self, name, before=None, after=None):
+        """[SBAGENT-295] 같은 파일 안에서 기존 시트의 '위치'를 바꾼다(내용·이름 유지).
+
+        이 헬퍼가 없어서 모델이 원시 COM(ctx.Sheets(...).Move)을 지어내다 AttributeError 로
+        죽거나, 임시시트 복사+원본삭제+rename '교체'로 이동을 흉내냈다(금지 패턴 — 라이브
+        화면 깨짐·틀고정 소실·수식 참조 위험, 실측 2026-08-25 IPT_가입자별청구내역).
+        Worksheet.Move 는 Copy 와 달리 키워드/positional 모두 정상 동작함을 실제 Excel 로
+        실측했지만, Copy(After=) 무동작 전례(아래 copy_sheet 주석)와 정책을 맞춰 positional 로 호출한다."""
+        ws = self._ws(name)
+        self._tick(1)
+        if before is not None and after is not None:
+            raise PythonComSkillError("move_sheet 는 before/after 중 하나만 지정하세요.")
+        try:
+            # 기준 시트 조회는 _ws 로 — 없을 때 COM 에러 대신 '시트를 찾을 수 없습니다' 계열
+            # 안내(유사명 폴백 포함)가 나간다.
+            if before is not None:
+                ws.Move(self._ws(str(before)))
+            elif after is not None:
+                ws.Move(pythoncom.Empty, self._ws(str(after)))
+            else:
+                # 기준이 없으면 맨 뒤로.
+                ws.Move(pythoncom.Empty, self._wb.Worksheets(int(self._wb.Worksheets.Count)))
+        except PythonComSkillError:
+            raise
+        except Exception as e:
+            raise PythonComSkillError(f"시트 이동 실패: {e}")
+        self._shared["structural"].append(f"move_sheet:{name}")
+        return True
+
     def rename_sheet(self, old_name, new_name):
         """시트 이름만 변경한다(위치·내용 유지). '복사/이동'이 아니라 순수 이름 변경 전용."""
         ws = self._ws(old_name)

@@ -1604,6 +1604,17 @@ function pythonComStaticSafetyFailures(code, sourceUserMessage) {
   {
     const ftsSrcs = Array.from(scanText.matchAll(/filter_to_sheet\s*\(\s*["']([^"']+)["']/g)).map(m => m[1]);
     const delSheets = Array.from(scanText.matchAll(/delete_sheet\s*\(\s*["']([^"']+)["']/g)).map(m => m[1]);
+    // [SBAGENT-295] 시트 '이동' 흉내(임시시트 복사→원본 delete_sheet→같은 이름으로 rename)도
+    // 같은 교체 재구성이다 — delete_sheet(X) 와 rename(→X) 조합이면 move_sheet 로 보낸다.
+    const renameTargets = Array.from(scanText.matchAll(/rename_sheet\s*\(\s*["'][^"']+["']\s*,\s*["']([^"']+)["']/g)).map(m => m[1]);
+    const moveMimic = delSheets.find(n => renameTargets.includes(n));
+    if (moveMimic) {
+      failures.push(
+        `시트 '${moveMimic}' 를 지우고 다른 시트 이름을 그 이름으로 바꾸는 '교체' 방식은 금지입니다 — `
+        + "화면이 깨지고 틀고정·수식 참조가 사라집니다. 같은 파일 안 시트 위치 변경은 "
+        + "ctx.move_sheet(시트, before=기준 또는 after=기준) 한 줄로 하세요(내용·이름 유지).",
+      );
+    }
     const replaced = delSheets.find(n => ftsSrcs.includes(n));
     if (replaced) {
       failures.push(
