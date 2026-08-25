@@ -8,7 +8,7 @@ signature: "(text)"
 role: "\"언제든 도와드리겠습니다\")이 아니면 → 예고. 길이와 무관하게 잡는다."
 role_source: banner
 version: "0.8.0"
-loc: "assist-core.js:279-279"
+loc: "assist-core.js:291-291"
 
 # ── 입출력 ──
 inputs:

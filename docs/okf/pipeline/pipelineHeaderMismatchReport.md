@@ -1,18 +1,18 @@
 ---
 type: endpoint
-title: assistLooksLikeFakeButtonNarration
-module: assist-core.js
+title: pipelineHeaderMismatchReport
+module: pipeline.js
 lang: js
 extraction: regex   # 정규식 근사
-signature: "(text)"
-role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
-role_source: none
+signature: "(steps)"
+role: "매핑본(실제 파일명 치환본)으로 검사한다."
+role_source: banner
 version: "0.8.0"
-loc: "assist-core.js:329-329"
+loc: "pipeline.js:8328-8328"
 
 # ── 입출력 ──
 inputs:
-  - "text"
+  - "steps"
 returns: "(추정)"
 
 # ── 사이드이펙트 (정적 추정) ──
@@ -21,28 +21,31 @@ side_effects:
 raises: []
 
 # ── 유기적 관계 ──
-calls: []
+calls:
+  - "headerNameMismatchFailures"
+  - "isStepEnabled"
+  - "push"
 calls_external:
   - "String"
-  - "test"
-  - "trim"
-called_by:
-  - "assistHandleUserMessage"
-reads: []
+  - "forEach"
+  - "isArray"
+called_by: []
+reads:
+  - "state.pipeline"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
 timestamp: "0.8.0-gen"
 ---
 
 ## 역할
-(추정) 역할 주석 없음 — 담당자 1줄 보완 필요  _(자동 추정 — 확인 필요)_
+매핑본(실제 파일명 치환본)으로 검사한다.
 
 ## 사이드이펙트 & 주의
 - 없음(정적 분석 기준)
 
 ## 관계
-- 호출: 없음
-- 피호출(영향 전파 경로): `assistHandleUserMessage`
+- 호출: `headerNameMismatchFailures`, `isStepEnabled`, `push`
+- 피호출(영향 전파 경로): 없음
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

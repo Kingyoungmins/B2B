@@ -8,7 +8,7 @@ signature: "(el)"
 role: "제목줄 드래그로 이동, 우하단 손잡이로 크기 조절. pointer 이벤트로 마우스/터치 동시 지원."
 role_source: banner
 version: "0.8.0"
-loc: "assist-ui.js:533-533"
+loc: "assist-ui.js:539-539"
 
 # ── 입출력 ──
 inputs:

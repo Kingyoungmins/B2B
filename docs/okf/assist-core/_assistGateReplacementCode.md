@@ -8,7 +8,7 @@ signature: "(newCode, step, kind)"
 role: "[Tier1] 교체 코드 정적 게이트 — 여러 곳에서 재사용(단일/일괄 치환). 통과 실패 사유 배열 반환."
 role_source: banner
 version: "0.8.0"
-loc: "assist-core.js:760-760"
+loc: "assist-core.js:772-772"
 
 # ── 입출력 ──
 inputs:

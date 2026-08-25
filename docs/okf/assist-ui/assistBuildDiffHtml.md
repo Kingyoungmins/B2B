@@ -8,7 +8,7 @@ signature: "(oldCode, newCode)"
 role: "줄 단위 diff. [검토 #10] 같은 줄번호끼리 비교하면 줄 하나만 삽입돼도 이후 전체가 어긋난 diff 로"
 role_source: banner
 version: "0.8.0"
-loc: "assist-ui.js:512-512"
+loc: "assist-ui.js:518-518"
 
 # ── 입출력 ──
 inputs:

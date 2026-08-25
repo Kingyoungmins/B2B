@@ -65,6 +65,7 @@ called_by:
   - "showCodeGuardBlock"
   - "showRecordReviewDialog"
   - "showRunnerPipelineError"
+  - "showRunnerPreflightNotice"
   - "showThinkRetryPrompt"
 reads: []
 writes: []
@@ -80,7 +81,7 @@ timestamp: "0.8.0-gen"
 
 ## 관계
 - 호출: 없음
-- 피호출(영향 전파 경로): `_appendRows`, `_assistProposalCardBody`, `_formatCellDisplay`, `addAssistantReply`, `addHistoricAssistant`, `askUserChoice`, `assistBuildDiffHtml`, `assistRenderAttachments`, `assistRenderChips`, `assistRenderHandoffCard`, `assistRenderProposalCard`, `assistRenderReportCard`, `assistReportResultHtml`, `assistVerifyBadgeHtml`, `autoRegenerateAsVbaFallback`, `autoRegenerateForMissingCode`, `autoRegenerateForStaticSafety`, `bindActions`, `drawMentionMenu`, `openDownloadModal`, `openRunnerFileEditor`, `openRunnerLogicEditor`, `openSaveModal`, `openSettingsModal`, `openUserSettingsModal`, `refreshTabs`, `renderEditingBanner`, `renderInputList`, `renderOutputChip`, `renderPipeline`, `renderRunnerWorkflow`, `reportPipelineError`, `requestErrorRecovery`, `runnerRenderMappingPanel`, `sendChat`, `setupStreamingAssistantMessage`, `showCodeGuardBlock`, `showRecordReviewDialog`, `showRunnerPipelineError`, `showThinkRetryPrompt`
+- 피호출(영향 전파 경로): `_appendRows`, `_assistProposalCardBody`, `_formatCellDisplay`, `addAssistantReply`, `addHistoricAssistant`, `askUserChoice`, `assistBuildDiffHtml`, `assistRenderAttachments`, `assistRenderChips`, `assistRenderHandoffCard`, `assistRenderProposalCard`, `assistRenderReportCard`, `assistReportResultHtml`, `assistVerifyBadgeHtml`, `autoRegenerateAsVbaFallback`, `autoRegenerateForMissingCode`, `autoRegenerateForStaticSafety`, `bindActions`, `drawMentionMenu`, `openDownloadModal`, `openRunnerFileEditor`, `openRunnerLogicEditor`, `openSaveModal`, `openSettingsModal`, `openUserSettingsModal`, `refreshTabs`, `renderEditingBanner`, `renderInputList`, `renderOutputChip`, `renderPipeline`, `renderRunnerWorkflow`, `reportPipelineError`, `requestErrorRecovery`, `runnerRenderMappingPanel`, `sendChat`, `setupStreamingAssistantMessage`, `showCodeGuardBlock`, `showRecordReviewDialog`, `showRunnerPipelineError`, `showRunnerPreflightNotice`, `showThinkRetryPrompt`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

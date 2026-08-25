@@ -44,6 +44,7 @@ calls_external:
   - "toLowerCase"
   - "trim"
 called_by:
+  - "pipelineHeaderMismatchReport"
   - "validateAssistantCodeBeforeApply"
 reads:
   - "state.inputs"
@@ -61,7 +62,7 @@ timestamp: "0.8.0-gen"
 
 ## 관계
 - 호출: `headersOf`, `norm`, `push`
-- 피호출(영향 전파 경로): `validateAssistantCodeBeforeApply`
+- 피호출(영향 전파 경로): `pipelineHeaderMismatchReport`, `validateAssistantCodeBeforeApply`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

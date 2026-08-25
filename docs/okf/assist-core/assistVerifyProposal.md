@@ -8,7 +8,7 @@ signature: "(p, signal)"
 role: "[Tier2] 후보 코드를 격리 인스턴스에서 실행해 diff 를 받는다. 실패/불가는 예외가 아니라 결과로."
 role_source: banner
 version: "0.8.0"
-loc: "assist-core.js:993-993"
+loc: "assist-core.js:1005-1005"
 
 # ── 입출력 ──
 inputs:
