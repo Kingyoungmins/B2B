@@ -42,6 +42,7 @@ called_by:
   - "_traceSelectionPollGate"
   - "addAssistantReply"
   - "applyVbaStepToLiveExcel"
+  - "assistHandleUserMessage"
   - "assistStartFreshTopicForDiagnosis"
   - "beginExcelMirrorApplyLoading"
   - "beginUiBusy"
@@ -79,7 +80,7 @@ timestamp: "0.8.0-gen"
 
 ## 관계
 - 호출: `isNativeExcelShell`
-- 피호출(영향 전파 경로): `_applyEditPrefill`, `_fail`, `_installUiBusyInputGuard`, `_lazyFail`, `_traceMap`, `_traceSelectionPollGate`, `addAssistantReply`, `applyVbaStepToLiveExcel`, `assistStartFreshTopicForDiagnosis`, `beginExcelMirrorApplyLoading`, `beginUiBusy`, `effectiveDevVllmModel`, `endExcelMirrorApplyLoading`, `endUiBusy`, `fetchOpenAICompat`, `loadLogic`, `markLivePipelineOutOfSync`, `pipelineForSave`, `promise`, `replaceLogicAt`, `reportPipelineError`, `requestErrorRecovery`, `runEditApply`, `runnerExtractMappingRequirements`, `saveLogicAutoBackup`, `scheduleExcelMirrorReshowAfterReplace`, `switchVisibleExcelMirrorToFileId`, `tracePipelineRun`, `traceToggleOnRoute`, `traceValidationStage`, `validateAssistantCodeBeforeApply`
+- 피호출(영향 전파 경로): `_applyEditPrefill`, `_fail`, `_installUiBusyInputGuard`, `_lazyFail`, `_traceMap`, `_traceSelectionPollGate`, `addAssistantReply`, `applyVbaStepToLiveExcel`, `assistHandleUserMessage`, `assistStartFreshTopicForDiagnosis`, `beginExcelMirrorApplyLoading`, `beginUiBusy`, `effectiveDevVllmModel`, `endExcelMirrorApplyLoading`, `endUiBusy`, `fetchOpenAICompat`, `loadLogic`, `markLivePipelineOutOfSync`, `pipelineForSave`, `promise`, `replaceLogicAt`, `reportPipelineError`, `requestErrorRecovery`, `runEditApply`, `runnerExtractMappingRequirements`, `saveLogicAutoBackup`, `scheduleExcelMirrorReshowAfterReplace`, `switchVisibleExcelMirrorToFileId`, `tracePipelineRun`, `traceToggleOnRoute`, `traceValidationStage`, `validateAssistantCodeBeforeApply`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

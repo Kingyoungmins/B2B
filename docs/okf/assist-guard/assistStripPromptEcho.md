@@ -8,7 +8,7 @@ signature: "(visible, sources)"
 role: "sources = 이번 요청에 보낸 system/user 텍스트 배열."
 role_source: banner
 version: "0.8.0"
-loc: "assist-guard.js:200-200"
+loc: "assist-guard.js:212-212"
 
 # ── 입출력 ──
 inputs:

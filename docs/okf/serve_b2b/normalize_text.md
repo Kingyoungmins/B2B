@@ -31,6 +31,7 @@ called_by:
   - "ExcelSkillContext.normalize"
   - "OpenpyxlSkillContext.normalize"
   - "PythonComSkillContext.find_header"
+  - "PythonComSkillContext.find_header_row"
   - "PythonComSkillContext.match_fill"
   - "PythonComSkillContext.normalize"
   - "_activate_excel_session_impl"
@@ -51,7 +52,7 @@ timestamp: "0.8.0-gen"
 
 ## 관계
 - 호출: 없음
-- 피호출(영향 전파 경로): `ExcelSkillContext.normalize`, `OpenpyxlSkillContext.normalize`, `PythonComSkillContext.find_header`, `PythonComSkillContext.match_fill`, `PythonComSkillContext.normalize`, `_activate_excel_session_impl`, `_capture_browser_hwnd`, `_cond_match`, `_restore_live_view_state`
+- 피호출(영향 전파 경로): `ExcelSkillContext.normalize`, `OpenpyxlSkillContext.normalize`, `PythonComSkillContext.find_header`, `PythonComSkillContext.find_header_row`, `PythonComSkillContext.match_fill`, `PythonComSkillContext.normalize`, `_activate_excel_session_impl`, `_capture_browser_hwnd`, `_cond_match`, `_restore_live_view_state`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

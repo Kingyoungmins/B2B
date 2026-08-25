@@ -8,7 +8,7 @@ signature: "(text)"
 role: "한자(중국어) 혼입 검사 — Qwen 실측 대응. 한글 대비 한자 비율이 높으면 재생성 신호."
 role_source: banner
 version: "0.8.0"
-loc: "assist-guard.js:227-227"
+loc: "assist-guard.js:239-239"
 
 # ── 입출력 ──
 inputs:

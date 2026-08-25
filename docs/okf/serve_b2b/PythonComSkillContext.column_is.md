@@ -9,7 +9,7 @@ signature: "(self, column, values)"
 role: "선언적 필터 조건을 만든다(자동필터 경로용). column 은 \"H\" 같은 열 문자 또는 1-based 번호."
 role_source: docstring
 version: "0.8.0"
-loc: "serve_b2b.py:12881-12883"
+loc: "serve_b2b.py:12906-12908"
 
 # ── 입출력 ──
 inputs:

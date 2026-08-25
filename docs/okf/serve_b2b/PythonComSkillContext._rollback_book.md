@@ -9,7 +9,7 @@ signature: "(self, book_name)"
 role: "저널에 적힌 워크북을 같은 인스턴스에서 찾는다. 못 찾으면 고정 워크북(예전 동작)."
 role_source: docstring
 version: "0.8.0"
-loc: "serve_b2b.py:15048-15066"
+loc: "serve_b2b.py:15073-15091"
 
 # ── 입출력 ──
 inputs:

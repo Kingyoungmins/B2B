@@ -35,6 +35,7 @@ called_by:
   - "PythonComSkillContext.apply_filter"
   - "PythonComSkillContext.enable_filter"
   - "PythonComSkillContext.find_header"
+  - "PythonComSkillContext.find_header_row"
   - "PythonComSkillContext.first_empty_col"
   - "PythonComSkillContext.native_pivot"
   - "PythonComSkillContext.used_last_row"
@@ -54,7 +55,7 @@ timestamp: "0.8.0-gen"
 
 ## 관계
 - 호출: `_tick`, `_ws`, `sheet`
-- 피호출(영향 전파 경로): `PythonComSkillContext.append_same_format_sheets`, `PythonComSkillContext.apply_filter`, `PythonComSkillContext.enable_filter`, `PythonComSkillContext.find_header`, `PythonComSkillContext.first_empty_col`, `PythonComSkillContext.native_pivot`, `PythonComSkillContext.used_last_row`
+- 피호출(영향 전파 경로): `PythonComSkillContext.append_same_format_sheets`, `PythonComSkillContext.apply_filter`, `PythonComSkillContext.enable_filter`, `PythonComSkillContext.find_header`, `PythonComSkillContext.find_header_row`, `PythonComSkillContext.first_empty_col`, `PythonComSkillContext.native_pivot`, `PythonComSkillContext.used_last_row`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

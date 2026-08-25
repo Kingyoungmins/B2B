@@ -8,7 +8,7 @@ signature: "(wb, max_rows=60, max_cols=_SNAPSHOT_MAX_COLS, only_sheet=None)"
 role: "라이브 적용 후 클라 스키마 캐시 갱신용 경량 미리보기(시트명 + 상위 N행 AoA + 차원)."
 role_source: docstring
 version: "0.8.0"
-loc: "serve_b2b.py:15701-15741"
+loc: "serve_b2b.py:15726-15766"
 
 # ── 입출력 ──
 inputs:

@@ -47,6 +47,7 @@ calls:
   - "callLLM"
   - "push"
   - "say"
+  - "traceClientUiEvent"
 calls_external:
   - "AbortController"
   - "RegExp"
@@ -63,6 +64,7 @@ calls_external:
   - "has"
   - "isArray"
   - "join"
+  - "keys"
   - "map"
   - "now"
   - "onHandoff"
@@ -103,7 +105,7 @@ timestamp: "0.8.0-gen"
 - 변경 상태 `assist` — 수정 시 이 상태를 읽는 곳 동반 점검.
 
 ## 관계
-- 호출: `add`, `armStall`, `assistBuildProposal`, `assistCallSignature`, `assistCloseOut`, `assistHasChineseLeak`, `assistLooksLikeDanglingAnnouncement`, `assistLooksLikeFakeButtonNarration`, `assistLooksLikeProseRequestSuggestion`, `assistParseAction`, `assistProposalIsVerifiable`, `assistPushAssistant`, `assistRunTool`, `assistStripActionBlock`, `assistStripPromptEcho`, `assistSystemPrompt`, `assistVerifyProposal`, `callAssistLLM`, `callLLM`, `push`, `say`
+- 호출: `add`, `armStall`, `assistBuildProposal`, `assistCallSignature`, `assistCloseOut`, `assistHasChineseLeak`, `assistLooksLikeDanglingAnnouncement`, `assistLooksLikeFakeButtonNarration`, `assistLooksLikeProseRequestSuggestion`, `assistParseAction`, `assistProposalIsVerifiable`, `assistPushAssistant`, `assistRunTool`, `assistStripActionBlock`, `assistStripPromptEcho`, `assistSystemPrompt`, `assistVerifyProposal`, `callAssistLLM`, `callLLM`, `push`, `say`, `traceClientUiEvent`
 - 피호출(영향 전파 경로): `assistHandleBridgeMessage`, `assistSubmit`
 
 ## 실패/예외
