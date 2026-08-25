@@ -1509,15 +1509,60 @@ function runnerBuildMappingRows() {
   const reqs = runnerExtractMappingRequirements();
   const files = runnerMappingKnownFiles();
   const generatedNames = runnerGeneratedSheetNameSet();   // 행마다 재계산하지 않도록 1회
+  // [SBAGENT-293 29단계 실측 2026-08-25] 자동매칭이 슬롯마다 '독립'으로 돌아, 이름이 비슷한
+  // 파일이 여러 개면(도서/시내/전력회선 '01. 한전_DAS_배전자동화_…') 서로 다른 두 슬롯이 같은
+  // 파일을 집을 수 있었다. 실제로 슬롯 '01. 한전_DAS_배전자동화_…' 와 '01. 한전_DAS도서_…' 가
+  // 둘 다 도서 파일에 붙어, 1단계와 28단계의 '맨 위 9행 삭제'가 같은 파일에 두 번 적용됐고
+  // (헤더까지 삭제) 29단계 정렬이 '효력발생일자 못 찾음'으로 죽었다. 시내 파일은 아무 슬롯도
+  // 안 가리켜 companion 으로만 열렸다.
+  // → 사용자가 직접 고른 파일을 먼저 확정하고, 자동매칭은 '아직 안 쓰인 파일'을 우선한다
+  //   (같은 파일을 여러 슬롯이 읽기만 하는 정당한 경우도 있으므로 금지가 아니라 '선호').
+  const takenIds = new Set();
+  const userTakenIds = new Set();   // 사람이 직접 고른 파일 — 자동매칭이 넘볼 수 없다
+  reqs.forEach(req => {
+    const stored = state.runnerMappings && state.runnerMappings[req.key];
+    const item = stored && files.find(f => f.id === stored.fileId);
+    if (item) { takenIds.add(item.id); userTakenIds.add(item.id); }
+  });
+  // 자동 후보를 '점수 높은 순'으로 확정한다 — 슬롯 순서대로 집으면 확신이 낮은 매칭(80점)이
+  // 확신 높은 매칭(100점)보다 먼저 파일을 선점해 뒤 슬롯이 밀린다(실측 재현: 일반 슬롯이
+  // 도서 파일을 80점에 선점 → 도서 슬롯이 갈 곳을 잃고 같은 파일로 겹침).
+  const autoPick = new Map();   // req.key → {item, score, rebound}
+  const pending = reqs.filter(req => {
+    const stored = state.runnerMappings && state.runnerMappings[req.key];
+    return !(stored && files.find(f => f.id === stored.fileId));
+  });
+  const firstPass = pending
+    .map(req => ({ req, auto: runnerFindAutoFile(req, files) }))
+    .filter(x => x.auto && x.auto.item)
+    .sort((a, b) => (b.auto.score || 0) - (a.auto.score || 0));
+  const leftovers = [];
+  firstPass.forEach(({ req, auto }) => {
+    if (takenIds.has(auto.item.id)) { leftovers.push(req); return; }   // 더 확신 있는 슬롯이 가져감
+    autoPick.set(req.key, auto);
+    takenIds.add(auto.item.id);
+  });
+  // 밀린 슬롯은 '아직 안 쓰인 파일'로 다시 찾고, 그래도 없으면 기존대로 전체에서(같은 파일을
+  // 여러 슬롯이 읽기만 하는 정당한 경우를 막지 않는다 — 겹치면 아래 그룹 단계가 경고한다).
+  leftovers.forEach(req => {
+    const free = files.filter(f => !takenIds.has(f.id));
+    // 폴백 후보에서도 '사용자가 직접 고른 파일'은 뺀다 — 자동이 사람의 지정을 덮어 같은 파일에
+    //  파괴적 작업을 두 번 돌리는 게 최악이다. 못 정하면 '파일 선택 필요'로 남겨 사용자가 고르게
+    //  한다(조용한 오작동보다 낫다). 진짜로 공유하려면 그 슬롯도 직접 지정하면 된다.
+    const fallbackPool = files.filter(f => !userTakenIds.has(f.id));
+    const auto = (free.length ? runnerFindAutoFile(req, free) : null)
+      || (fallbackPool.length ? runnerFindAutoFile(req, fallbackPool) : null);
+    if (auto && auto.item) { autoPick.set(req.key, auto); takenIds.add(auto.item.id); }
+  });
   return reqs.map(req => {
     const stored = state.runnerMappings && state.runnerMappings[req.key];
     let fileItem = stored && files.find(item => item.id === stored.fileId);
     let score = stored && fileItem ? 100 : 0;
     let rebound = false;   // 월·날짜 무시 안정키로 '다른 달 파일'에 이어붙인 근사 매칭인가
     if (!fileItem) {
-      const auto = runnerFindAutoFile(req, files);
+      const auto = autoPick.get(req.key);
       fileItem = auto && auto.item;
-      score = auto && auto.score || 0;
+      score = (auto && auto.score) || 0;
       rebound = !!(auto && auto.rebound);
     }
     // [스킬 기본값] 사용자가 '치환하지 말라'고 명시한 시트 — sheet 를 비워 두면
@@ -1582,6 +1627,26 @@ function runnerGroupMappingRowsByFile(rows) {
     else if (g.members.some(m => m.autoSkillDefault)) { g.status = "ok"; g.statusText = "스킬 기본값 포함"; }  // 자동 안전판 — 정확 매칭으로 과장하지 않음
     else if (g.members.every(m => m.status === "ok")) { g.status = "ok"; g.statusText = "정확 매칭"; }  // 정확 자동
     else { g.status = "ok"; g.statusText = "AI 자동매칭"; }                                     // 유사도 자동(예전 '확인 필요')
+  });
+  // [SBAGENT-293 29단계] 서로 다른 슬롯이 같은 파일을 가리키면 그 파일에 같은 작업이 두 번
+  // 적용된다('맨 위 9행 삭제'가 두 번 돌아 헤더까지 사라진 실측). 자동 회피를 넣었어도 사용자가
+  // 수동으로 겹치게 고를 수 있으므로, 겹친 사실을 화면에 반드시 노출한다(경고 — 읽기만 하는
+  // 정당한 공유도 있어 차단은 하지 않는다).
+  const byFile = new Map();
+  groups.forEach(g => {
+    if (!g.fileItem) return;
+    const list = byFile.get(g.fileItem.id) || [];
+    list.push(g);
+    byFile.set(g.fileItem.id, list);
+  });
+  byFile.forEach(list => {
+    if (list.length < 2) return;
+    const others = list.map(x => x.book || "(이름없음)");
+    list.forEach(g => {
+      g.duplicateWith = others.filter(b => b !== (g.book || "(이름없음)"));
+      if (g.status !== "bad") { g.status = "warn"; }
+      g.statusText = "같은 파일 중복 배정 — 확인";
+    });
   });
   return groups;
 }
