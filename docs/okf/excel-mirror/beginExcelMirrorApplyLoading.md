@@ -19,7 +19,7 @@ returns: "(추정)"
 # ── 사이드이펙트 (정적 추정) ──
 side_effects:
   - "DOM/브라우저 전역 조작"
-  - "상태 변경: excelMirror.applyBusyToken, excelMirror.applyDepth, excelMirror.applyDepthTouchedAt, excelMirror.applyLoadingTimer, excelMirror.applyOpenLabels, excelMirror.applying"
+  - "상태 변경: excelMirror.applyBusyToken, excelMirror.applyDepth, excelMirror.applyDepthTouchedAt, excelMirror.applyLoadingBaseLabel, excelMirror.applyLoadingProgress, excelMirror.applyLoadingTimer, excelMirror.applyOpenLabels, excelMirror.applying"
   - "타이머"
 raises: []
 
@@ -61,6 +61,8 @@ writes:
   - "excelMirror.applyBusyToken"
   - "excelMirror.applyDepth"
   - "excelMirror.applyDepthTouchedAt"
+  - "excelMirror.applyLoadingBaseLabel"
+  - "excelMirror.applyLoadingProgress"
   - "excelMirror.applyLoadingTimer"
   - "excelMirror.applyOpenLabels"
   - "excelMirror.applying"
@@ -73,9 +75,9 @@ timestamp: "0.8.0-gen"
 
 ## 사이드이펙트 & 주의
 - DOM/브라우저 전역 조작
-- 상태 변경: excelMirror.applyBusyToken, excelMirror.applyDepth, excelMirror.applyDepthTouchedAt, excelMirror.applyLoadingTimer, excelMirror.applyOpenLabels, excelMirror.applying
+- 상태 변경: excelMirror.applyBusyToken, excelMirror.applyDepth, excelMirror.applyDepthTouchedAt, excelMirror.applyLoadingBaseLabel, excelMirror.applyLoadingProgress, excelMirror.applyLoadingTimer, excelMirror.applyOpenLabels, excelMirror.applying
 - 타이머
-- 변경 상태 `excelMirror.applyBusyToken, excelMirror.applyDepth, excelMirror.applyDepthTouchedAt, excelMirror.applyLoadingTimer, excelMirror.applyOpenLabels, excelMirror.applying` — 수정 시 이 상태를 읽는 곳 동반 점검.
+- 변경 상태 `excelMirror.applyBusyToken, excelMirror.applyDepth, excelMirror.applyDepthTouchedAt, excelMirror.applyLoadingBaseLabel, excelMirror.applyLoadingProgress, excelMirror.applyLoadingTimer, excelMirror.applyOpenLabels, excelMirror.applying` — 수정 시 이 상태를 읽는 곳 동반 점검.
 
 ## 관계
 - 호출: `beginUiBusy`, `cancelActiveBackendPipeline`, `hideAllExcelMirrorWindows`, `isNativeExcelShell`, `publishNativeExcelLoading`, `push`, `requestExcelApplyCancel`, `showExcelApplyCancelButton`, `tick`, `traceClientUiEvent`, `updateMirrorShellStatus`

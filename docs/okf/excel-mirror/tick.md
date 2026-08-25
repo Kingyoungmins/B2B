@@ -8,7 +8,7 @@ signature: "()"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
 version: "0.8.0"
-loc: "excel-mirror.js:1401-1401"
+loc: "excel-mirror.js:1405-1405"
 
 # ── 입출력 ──
 inputs: []
@@ -23,7 +23,8 @@ raises: []
 calls:
   - "publishNativeExcelLoading"
   - "updateMirrorShellStatus"
-calls_external: []
+calls_external:
+  - "String"
 called_by:
   - "beginExcelMirrorApplyLoading"
 reads: []

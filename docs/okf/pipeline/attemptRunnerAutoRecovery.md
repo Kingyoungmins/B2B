@@ -8,7 +8,7 @@ signature: "(errorInfo)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
 version: "0.8.0"
-loc: "pipeline.js:8134-8134"
+loc: "pipeline.js:8148-8148"
 
 # ── 입출력 ──
 inputs:

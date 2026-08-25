@@ -8,7 +8,7 @@ signature: "(step, excelId, options = {})"
 role: "0.4.9 리모콘 모델: 생성된 VBA를 라이브 워크북에 즉시 주입 실행한다."
 role_source: banner
 version: "0.8.0"
-loc: "pipeline.js:2049-2049"
+loc: "pipeline.js:2063-2063"
 
 # ── 입출력 ──
 inputs:
