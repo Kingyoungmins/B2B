@@ -8,7 +8,7 @@ signature: "(fn, primary, other, has_varkw, allowed)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
 version: "0.8.0"
-loc: "serve_b2b.py:18601-18618"
+loc: "serve_b2b.py:18633-18650"
 
 # ── 입출력 ──
 inputs:

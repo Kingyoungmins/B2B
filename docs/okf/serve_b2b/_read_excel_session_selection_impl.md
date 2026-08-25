@@ -8,7 +8,7 @@ signature: "(excel_id)"
 role: "[0.5.17] 현재 탭의 선택(Selection)만 가볍게 읽는다 — active-sync(포그라운드/탭 따라가기)·복사소스"
 role_source: docstring
 version: "0.8.0"
-loc: "serve_b2b.py:16031-16052"
+loc: "serve_b2b.py:16063-16084"
 
 # ── 입출력 ──
 inputs:

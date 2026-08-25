@@ -9,7 +9,7 @@ signature: "(self, sheet_or_name, workbook=None)"
 role: "---- 정렬 / 필터 / 피벗 헬퍼 (자주 쓰는 작업을 안정적으로) ----"
 role_source: banner
 version: "0.8.0"
-loc: "serve_b2b.py:16788-16789"
+loc: "serve_b2b.py:16820-16821"
 
 # ── 입출력 ──
 inputs:

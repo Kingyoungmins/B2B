@@ -9,7 +9,7 @@ signature: "(self, workbook_name)"
 role: "같은 Excel 인스턴스에 열린 다른 업로드 파일을 대상으로 하는 ctx."
 role_source: docstring
 version: "0.8.0"
-loc: "serve_b2b.py:14898-15010"
+loc: "serve_b2b.py:14898-15042"
 
 # ── 입출력 ──
 inputs:
@@ -38,8 +38,14 @@ calls_external:
   - "Path"
   - "PythonComSkillContext"
   - "PythonComSkillError"
+  - "_hits"
+  - "_parts"
   - "_pick"
+  - "_req"
   - "bool"
+  - "compile"
+  - "escape"
+  - "fullmatch"
   - "join"
   - "key"
   - "len"
@@ -47,7 +53,9 @@ calls_external:
   - "n"
   - "nm"
   - "open_names"
+  - "p"
   - "pred"
+  - "split"
   - "stable"
   - "stem_hits"
   - "str"
