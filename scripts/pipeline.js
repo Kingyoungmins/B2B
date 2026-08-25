@@ -5343,7 +5343,19 @@ async function _runHeldStepsBatchImpl(checkedIds, fingerprint) {
 function canUsePipelineCheckpointFromIndex(startIdx, beforeSteps, nextSteps) {
   const start = Math.max(0, Number(startIdx) | 0);
   const steps = nextSteps || state.pipeline || [];
-  if (!pipelineUsesLiveSkill(steps) || pipelineHasBackendOnlyStep(steps)) return false;
+  // [제보 2026-08-25] '수정했는데 왜 1단계부터 다시 도나' — 이 판정이 false 면 pristine 전체
+  // 재적용으로 떨어지는데, 어느 조건에서 막혔는지 로그가 전혀 없어 실측 진단이 불가능했다
+  // (실행기에서 30단계만 고쳤는데 8분 22초 전체 재실행). 거절 사유를 한 줄 남긴다.
+  const _deny = (reason, extra) => {
+    try {
+      if (typeof traceClientUiEvent === "function") traceClientUiEvent("pipeline.checkpoint.deny", {
+        reason, startIdx: start, steps: (steps || []).length, ...(extra || {}),
+      });
+    } catch (_) {}
+    return false;
+  };
+  if (!pipelineUsesLiveSkill(steps)) return _deny("no-live-skill");
+  if (pipelineHasBackendOnlyStep(steps)) return _deny("backend-only-step");
   // [교차파일 목적지 누락] 이 빠른경로는 '대상 세션' 스냅샷만 되돌리므로 교차 목적지가 더러운 채
   // 남는다. 토글/삭제엔 가드가 있었지만 스킬 '수정'·'삽입' 경로는 여기로 선점돼 가드가 없었다.
   // '수정 전' 코드(beforeSteps)와 '수정 후' 코드(steps) 양쪽을 봐야 한다 — 수정으로 dst_book 호출
@@ -5352,7 +5364,9 @@ function canUsePipelineCheckpointFromIndex(startIdx, beforeSteps, nextSteps) {
   // 교차파일 검사도 그 지점부터 해야 AI 수정으로 당겨진 resume 구간의 교차 스텝을 놓치지 않는다.
   const existingResume = getPipelineResumeFromIndex();
   const effStart = Number.isInteger(existingResume) ? Math.min(existingResume, start) : start;
-  if (pipelineSuffixWritesCrossFile(beforeSteps, effStart) || pipelineSuffixWritesCrossFile(steps, effStart)) return false;
+  if (pipelineSuffixWritesCrossFile(beforeSteps, effStart) || pipelineSuffixWritesCrossFile(steps, effStart)) {
+    return _deny("cross-file-write", { effStart });
+  }
   if (Number.isInteger(existingResume) && existingResume <= start) return true;
   // [수정 미반영 수정] 예전 .some(뒤쪽 '아무' 스텝이나 스냅샷 보유)의 결함: 시작 스텝 스냅샷이
   // 없고 뒤 스텝 것만 있으면, 복원이 '뒤 스텝 직전'(=시작 스텝이 이미 반영된 상태)으로 되돌아가
@@ -5360,7 +5374,12 @@ function canUsePipelineCheckpointFromIndex(startIdx, beforeSteps, nextSteps) {
   // 옛 값이 남는다(판교테크윈 실측). 이어실행 대상(활성+코드) 전부가 자기 직전 스냅샷을 가질 때만
   // 빠른경로를 탄다(아니면 pristine 전체 재적용 경로로 — 느리지만 항상 옳다).
   const suffix = (beforeSteps || []).slice(start).filter(s => s && s.code && isStepEnabled(s));
-  return suffix.length > 0 && suffix.every(s => s._preApplySnapshot && s._preApplySnapshot.resultId);
+  if (!suffix.length) return _deny("no-suffix");
+  const _missing = suffix.filter(s => !(s._preApplySnapshot && s._preApplySnapshot.resultId));
+  if (_missing.length) {
+    return _deny("no-snapshot", { missing: _missing.length, of: suffix.length });
+  }
+  return true;
 }
 
 // [실행기 매핑 · 단일 적용] 단일 스텝 즉시 적용(토글 ON / 중간 삽입 / 수정 적용)도 반드시 '실행기

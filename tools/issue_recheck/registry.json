@@ -3906,6 +3906,17 @@
         ]
       ],
       "fix": "오버레이 문구가 begin 시점 한 줄로 고정(클로저 label)이라 진행 상황이 안 보였다(실측 17:03:01~17:11:24, 36단계). 라벨을 excelMirror.applyLoadingBaseLabel/applyLoadingProgress 로 분리해 tick 이 합쳐 쓰게 하고, 기존 진행률 폴링 2곳(전체실행 anchor·그룹 배치)에서 오버레이도 갱신('12/36단계', '결과 반영 중'). 기본 문구는 그대로라 중첩 잠금에서 바깥 문구가 사라지지 않고, 해제 시 진행률을 비워 다음 작업에 안 샌다."
+    },
+    {
+      "id": "CHECKPOINT-DENY-REASON-TRACE",
+      "title": "[제보 2026-08-25] 30단계만 고쳤는데 1단계부터 8분 재실행 — 체크포인트 이어실행 거절 사유가 로그에 없었다.",
+      "checks": [
+        [
+          "marker",
+          "scripts/pipeline.js::pipeline.checkpoint.deny"
+        ]
+      ],
+      "fix": "이어실행 부품(체크포인트/보류 일괄실행/실패 시 스냅샷 wiring)은 이미 다 있는데, canUsePipelineCheckpointFromIndex 가 false 면 pristine 전체 재적용으로 조용히 떨어졌다. 거절 사유(no-live-skill/backend-only-step/cross-file-write/no-suffix/no-snapshot)를 pipeline.checkpoint.deny 로 남겨, 실행기 케이스에서 어느 가드가 막는지 실측으로 특정한다. 교차파일 가드를 무근거로 넓히면 목적지 파일이 안 되돌려져 데이터가 틀어지므로, 사유 확인 후 정밀 확장할 것."
     }
   ]
 }
