@@ -3961,6 +3961,17 @@
         ]
       ],
       "fix": "두 결함이 곱해진 건. (1) 라우팅: columnMoveIntent 가 '사이에|앞으로|뒤로|맨 앞' 같은 위치 표현만으로 열 이동으로 판정해, 삽입 요청이 이동으로 라우팅되고 file-schema 의 삽입 규칙('A와 B 사이 = 뒤쪽 B 자리', S·T 사고 후 명문화됨)이 실리지 않았다 → 위치 표현은 동작이 아니므로 '출발 열'(/[A-Z]열(을|를)/)이 함께 있을 때만 이동으로 본다. 제외목록에 '추가|삽입|넣어'를 더하는 방식은 금지 — 'D열을 Q열과 R열 사이에 넣어줘'(진짜 이동)까지 뺏긴다(실측). (2) 고착: getLLMChatHistory 가 직전 assistant 턴 코드를 원문 그대로 재주입(KEEP_CODE_TURNS=1)하는데, 방어막 _looksLikeCorrection 은 정정 단어가 있을 때만 발동해 '같은 문장 재전송'에는 안 걸렸다(사용자가 [비우기]를 눌러야 고쳐지던 이유) → _looksLikeRepeatedRequest 추가, 반복이면 '직전 코드 복사 말고 처음부터 재해석' 지시. push 여부는 추측하지 말고 호출부에서 인자로 전달(skipHistoryPush 경로에서 반복을 놓치던 것 테스트로 확인)."
+    },
+    {
+      "id": "SBAGENT-293-COMMENT-BREAKS-RESUME",
+      "title": "[SBAGENT-293 실측 08-26] 주석만 바뀐 단계 때문에 이어실행이 무효화 — 처음부터 전체 재실행.",
+      "checks": [
+        [
+          "python",
+          "test_runs/_test_pipeline_resume_snapshot.py"
+        ]
+      ],
+      "fix": "AI 가 '기본요금'→'기본료' 일괄 치환을 하며 3단계의 주석·설명만 바꿨는데(그 단계는 find_header 대신 R열을 직접 지정해 동작 무변), 스냅샷 서명이 코드 전문+description 이라 3단계 이후 접두가 통째로 무효화됐다. 남은 1~2단계 스냅샷은 용량 한도(256MB, 55MB 파일 앞에서 4개면 초과)로 이미 삭제돼 재사용 0 → 09:00 실행이 stepIdx 0 부터 다시 돌았다(실측). 서명에서 '실행에 영향 없는' 주석(tokenize 로 문자열 속 # 오인 방지)과 description 을 제외하고, B2B_ 지시성 주석은 보존. 이어실행 판정은 fullrun.resume.decision 으로 관측(스냅샷 개수·용량·한도 포함)."
     }
   ]
 }

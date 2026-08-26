@@ -22,6 +22,7 @@ import shutil
 import socket
 import socketserver
 import subprocess
+import tokenize   # [SBAGENT-293] 스냅샷 서명에서 주석만 정확히 걷어내기(문자열 속 '#' 오인 방지)
 import unicodedata
 import sys
 import tempfile
@@ -19009,6 +19010,43 @@ def _workbook_fingerprint(wb_record):
     }
 
 
+def _signature_code_for_snapshot(code):
+    """[SBAGENT-293 실측 2026-08-26] 스냅샷 서명용 코드 정규화 — '실행 결과에 영향 없는' 부분 제거.
+
+    왜: AI 가 '기본요금'→'기본료' 일괄 치환을 하면서 3단계의 **주석과 설명만** 바꿨다
+    (3단계는 find_header 를 안 쓰고 R열을 직접 지정해 동작은 전혀 안 바뀜). 그런데 서명이
+    달라지는 바람에 3단계 이후 접두 스냅샷이 통째로 무효화됐고, 남은 1~2단계 스냅샷은 이미
+    용량 한도로 지워진 뒤라 **재사용 0 → 처음부터 전체 재실행**이 됐다(실측 09:00 실행).
+    주석 한 줄이 8분을 만든 셈이다.
+
+    다만 `# B2B_ENGINE_FALLBACK: excel-com` 처럼 **실행 방식을 지시하는 주석**은 결과를 바꾸므로
+    반드시 보존한다.
+
+    주석 판별은 tokenize 로 한다 — 문자열 리터럴 안의 '#'(예: ctx.write(..., "#FFFF00"))을
+    주석으로 오인하면 서명이 엉뚱해진다. 파싱이 안 되는 코드는 원본을 그대로 쓴다(안전 우선)."""
+    text = str(code or "")
+    try:
+        comments = []   # (행, 시작열, 원문)
+        for tok in tokenize.generate_tokens(io.StringIO(text).readline):
+            if tok.type == tokenize.COMMENT:
+                comments.append((tok.start[0], tok.start[1], tok.string))
+    except Exception:
+        comments = None
+    if comments is None:
+        lines = text.split("\n")          # 파싱 실패 — 주석 제거를 포기하고 원본 기준
+    else:
+        lines = text.split("\n")
+        # 뒤에서부터 잘라야 같은 줄의 앞 열 위치가 밀리지 않는다.
+        for row, col, raw in sorted(comments, key=lambda c: (-c[0], -c[1])):
+            if re.match(r"^#\s*B2B_[A-Z_]+\s*:", raw.strip()):
+                continue                  # 지시성 주석은 남긴다(실행 경로를 바꾼다)
+            i = row - 1
+            if 0 <= i < len(lines):
+                lines[i] = lines[i][:col]
+    out = [ln.rstrip() for ln in lines if ln.strip()]
+    return "\n".join(out)
+
+
 def _step_signature(step):
     language = step.get("language") or ("python" if is_python_pipeline_step(step) else "javascript")
     code = step.get("code") or ""
@@ -19018,8 +19056,10 @@ def _step_signature(step):
         "id": step.get("id"),
         "language": language,
         "enabled": step.get("enabled") is not False,
-        "code": code,
-        "description": step.get("description") or "",
+        # 주석/설명 변경으로 이어실행이 깨지지 않게, 서명에는 '실행에 영향 있는 코드'만 넣는다.
+        "code": _signature_code_for_snapshot(code),
+        # description 도 같은 이유로 뺀다 — 단계 이름/설명은 실행 결과를 바꾸지 않는데,
+        # AI 가 이름까지 함께 고치는 것이 정상 동작이라(사용자 확인용) 서명에 넣으면 매번 깨진다.
     }
 
 
@@ -19714,6 +19754,19 @@ def _run_excel_python_pipeline_impl(payload, job_id=None):
     cached_prefix = _find_best_pipeline_snapshot(input_items, input_wb_records, output_item, output_wb_record, python_steps)
     resume_from = cached_prefix[0] if cached_prefix else 0
     resume_snapshot = cached_prefix[2] if cached_prefix else None
+    # [SBAGENT-293 실측 2026-08-26] "한 단계만 고쳤는데 왜 처음부터 도나"를 로그로 답할 수 있게
+    # 이어실행 판정을 남긴다. 실측에서는 AI 가 주석만 바꾼 단계 때문에 접두가 무효화됐고,
+    # 남은 앞쪽 스냅샷은 용량 한도(기본 256MB)로 이미 삭제된 뒤라 재사용이 0이었다.
+    try:
+        _snap_stats = _pipeline_snapshot_stats()
+        _vba_trace("fullrun.resume.decision",
+                   resumeFrom=resume_from, totalSteps=len(python_steps),
+                   snapshotCount=_snap_stats.get("count"),
+                   snapshotMB=round((_snap_stats.get("bytes") or 0) / (1024 * 1024), 1),
+                   limitMB=round(HOUSEKEEPING_SNAPSHOT_MAX_BYTES / (1024 * 1024)),
+                   hit=bool(cached_prefix))
+    except Exception:
+        pass
 
     # 빠른 경로: 실행할 단계가 없으면(전부 캐시됨 또는 전부 OFF) Excel을 돌리지 않고
     # 저장된 스냅샷(없으면 원본) 파일로 결과를 즉시 만들어 반환한다(토글 ON/OFF 속도 개선).

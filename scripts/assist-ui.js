@@ -411,7 +411,7 @@ function _assistProposalCardBody(p) {
       body: `<div class="assist-card-reason">'${escapeHtml(String(p.from))}' → '${escapeHtml(String(p.to))}' · ${targets.length}개 단계 ${totalOcc}곳</div>
         <div class="assist-warn">⚠ 여러 단계를 한 번에 바꿉니다. 아래 각 단계 diff 를 확인하세요.</div>
         ${rows}
-        <div class="assist-card-note">적용하지 않고 스킬만 바꿉니다. 반영하려면 바뀐 단계 스위치를 한 번 껐다 켜 주세요(끄면 보류됐다가, 켜면 새 코드로 적용).</div>` };
+        <div class="assist-card-note">적용하지 않고 스킬만 바꿉니다. 반영하려면 [전체실행] 버튼을 누르거나, 바뀐 단계 스위치를 한 번 껐다 켜 주세요.</div>` };
   }
   // 기본: 단일 코드 수정(replaceLiteral / replaceStepCode)
   const warn = (p.touchesNames
@@ -502,7 +502,9 @@ function assistRenderProposalCard(p) {
             : (r.stepNo && typeof r.enabled === "boolean")
               ? `✓ Step ${r.stepNo}은(는) 이미 ${r.enabled ? "켜져" : "꺼져"} 있었습니다 (변경 없음)`
               : r.batch
-                ? `✓ ${r.batch}개 단계의 값을 바꿨습니다 — 반영하려면 바뀐 단계 스위치를 껐다 켜 주세요`
+                // [사용자 지시 2026-08-26] 반영 방법이 두 가지인데 한 가지만 안내해 헤맸다.
+                // 실행기에서는 [전체실행]이 정답이고, 생성기에서는 스위치 껐다 켜기다 — 둘 다 알려준다.
+                ? `✓ ${r.batch}개 단계의 값을 바꿨습니다 — 반영하려면 [전체실행] 버튼을 누르거나, 바뀐 단계 스위치를 껐다 켜 주세요`
                 : "✓ 수정했습니다 (라이브 미적용)";
         box.innerHTML = `<span class="assist-done">${escapeHtml(msg)}${escapeHtml(extra)}</span>`;
       } else {

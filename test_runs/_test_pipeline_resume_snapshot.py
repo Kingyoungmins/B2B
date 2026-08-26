@@ -22,7 +22,9 @@ def check(name, cond, detail=""):
 def mk_steps(step30_header="기본요금"):
     steps = []
     for i in range(1, 37):
-        code = f"def transform(ctx):\n    pass  # step{i}"
+        # 스텝 구분은 '실제 코드'로 해야 한다 — 주석으로만 구분하면 서명에서 주석을 뺀 뒤
+        # 모든 스텝이 같아져 테스트가 거짓 통과/실패한다(픽스처 결함으로 한 번 겪음).
+        code = f"def transform(ctx):\n    ctx.write('S', 'A{i}', [[{i}]])"
         desc = f"Step {i}"
         if i == 30:
             code = f'def transform(ctx):\n    c = ctx.find_header("Sheet1", "{step30_header}")'
@@ -62,7 +64,7 @@ if best:
 
 print("[3] 앞 단계를 고치면 재사용하지 않는다(정합성)")
 c = mk_steps("기본료")
-c[10]["code"] = "def transform(ctx):\n    pass  # step11 수정됨"
+c[10]["code"] = "def transform(ctx):\n    ctx.write('S', 'A11', [[999]])"   # 실제 동작 변경
 best_c = S._find_best_pipeline_snapshot(IN_ITEMS, IN_WBS, OUT_ITEM, WB, c)
 check("11단계를 고치면 29단계 스냅샷은 안 잡힌다", best_c is None, best_c)
 
@@ -70,6 +72,27 @@ print("[4] 스냅샷 파일이 사라지면 재사용하지 않는다")
 S.PIPELINE_STEP_SNAPSHOTS[key_a29]["files"]["output:output"] = r"C:\없는경로\없는파일.xlsx"
 best_d = S._find_best_pipeline_snapshot(IN_ITEMS, IN_WBS, OUT_ITEM, WB, b)
 check("파일 없으면 처음부터", best_d is None, best_d)
+
+print("[5] 주석/설명만 바뀐 단계는 이어실행을 깨지 않는다(실측 2026-08-26)")
+# AI 가 '기본요금'→'기본료' 일괄 치환을 하면서 3단계는 주석·설명만 바뀌었다(그 단계는 R열을
+# 직접 지정해 동작 무변). 그 탓에 접두가 무효화돼 재사용 0 → 처음부터 전체 재실행이 됐다.
+c1 = mk_steps("기본료")
+c2 = mk_steps("기본료")
+c2[2]["code"] = c2[2]["code"] + "  # 기본료 열 합계"   # 주석만 추가
+c2[2]["description"] = "[DAS] 기본료 열 합계"                                   # 설명만
+k1 = S._pipeline_snapshot_key(IN_ITEMS, IN_WBS, OUT_ITEM, WB, c1[:29])
+k2 = S._pipeline_snapshot_key(IN_ITEMS, IN_WBS, OUT_ITEM, WB, c2[:29])
+check("주석만 바뀌면 접두 키 동일", k1 == k2, f"{k1[:12]} vs {k2[:12]}")
+check("설명(단계 이름)만 바뀌어도 동일", k1 == k2)
+# 지시성 주석은 실행 경로를 바꾸므로 반드시 서명에 남아야 한다
+c3 = mk_steps("기본료")
+c3[2]["code"] = "# B2B_ENGINE_FALLBACK: excel-com" + chr(10) + c3[2]["code"]
+k3 = S._pipeline_snapshot_key(IN_ITEMS, IN_WBS, OUT_ITEM, WB, c3[:29])
+check("B2B_ 지시성 주석은 서명에 반영(엔진이 바뀜)", k1 != k3)
+# 실제 코드가 바뀌면 당연히 달라야 한다
+c4 = mk_steps("기본료")
+c4[2]["code"] = c4[2]["code"] + chr(10) + "    x = 1"
+check("코드가 바뀌면 키도 바뀐다", k1 != S._pipeline_snapshot_key(IN_ITEMS, IN_WBS, OUT_ITEM, WB, c4[:29]))
 
 print("")
 print("RESULT: ALL PASS" if fails == 0 else "RESULT: %d FAIL" % fails)

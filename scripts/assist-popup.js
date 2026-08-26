@@ -107,7 +107,7 @@
       return { headScope: "스킬 전체", headLabel: "일괄 값 치환",
         body: '<div class="assist-card-reason">\'' + esc(String(p.from)) + '\' → \'' + esc(String(p.to)) + '\' · ' + targets.length + '개 단계 ' + totalOcc + '곳</div>'
           + '<div class="assist-warn">⚠ 여러 단계를 한 번에 바꿉니다. 아래 각 단계 diff 를 확인하세요.</div>' + rows
-          + '<div class="assist-card-note">적용하지 않고 스킬만 바꿉니다. 반영하려면 바뀐 단계 스위치를 한 번 껐다 켜 주세요(끄면 보류됐다가, 켜면 새 코드로 적용).</div>' };
+          + '<div class="assist-card-note">적용하지 않고 스킬만 바꿉니다. 반영하려면 [전체실행] 버튼을 누르거나, 바뀐 단계 스위치를 한 번 껐다 켜 주세요.</div>' };
     }
     const comps = Array.isArray(p.companions) ? p.companions : [];
     const companionHtml = comps.length ? '<div class="assist-comp"><div class="assist-comp-head">같이 고칠 곳 (옛 값이 남아 헷갈리는 것 방지)</div>'
@@ -197,7 +197,8 @@
           : (m.stepNo && typeof m.enabled === 'boolean')
             ? ('✓ Step ' + m.stepNo + '은(는) 이미 ' + (m.enabled ? '켜져' : '꺼져') + ' 있었습니다 (변경 없음)')
             : m.batch
-              ? ('✓ ' + m.batch + '개 단계의 값을 바꿨습니다 — 반영하려면 바뀐 단계 스위치를 껐다 켜 주세요')
+              // [사용자 지시 2026-08-26] 반영 방법 두 가지를 모두 안내한다(실행기=전체실행, 생성기=스위치).
+              ? ('✓ ' + m.batch + '개 단계의 값을 바꿨습니다 — 반영하려면 [전체실행] 버튼을 누르거나, 바뀐 단계 스위치를 껐다 켜 주세요')
               : '✓ 수정했습니다 (라이브 미적용)';
       box.innerHTML = '<span class="assist-done">' + esc(msg) + esc(extra) + "</span>";
     } else {
