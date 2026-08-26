@@ -8,7 +8,7 @@ signature: "()"
 role: "반환값 true = 답을 냈다(호출자는 그대로 종료). false 면 예전 안내로 떨어진다."
 role_source: banner
 version: "0.8.0"
-loc: "assist-core.js:410-410"
+loc: "assist-core.js:412-412"
 
 # ── 입출력 ──
 inputs: []
