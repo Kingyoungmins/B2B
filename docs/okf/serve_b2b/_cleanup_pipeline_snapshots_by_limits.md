@@ -5,10 +5,10 @@ module: serve_b2b.py
 lang: python
 extraction: ast
 signature: "()"
-role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
-role_source: none
+role: "[SBAGENT-293 / 사용자 확정 2026-08-26] 실행 중 스냅샷 삭제는 '디스크가 정말 위험할 때'만."
+role_source: docstring
 version: "0.8.0"
-loc: "serve_b2b.py:4890-4904"
+loc: "serve_b2b.py:4911-4966"
 
 # ── 입출력 ──
 inputs: []
@@ -22,12 +22,19 @@ raises: []
 # ── 유기적 관계 ──
 calls:
   - "_delete_pipeline_snapshot_entry"
+  - "_perf_trace"
   - "_pipeline_snapshot_stats"
 calls_external:
+  - "PIPELINE_STEP_SNAPSHOTS"
+  - "disk_usage"
   - "get"
+  - "gettempdir"
   - "items"
   - "key"
+  - "len"
   - "pop"
+  - "removed"
+  - "round"
   - "snapshot"
   - "sorted"
 called_by:
@@ -43,13 +50,13 @@ timestamp: "0.8.0-gen"
 ---
 
 ## 역할
-(추정) 역할 주석 없음 — 담당자 1줄 보완 필요  _(자동 추정 — 확인 필요)_
+[SBAGENT-293 / 사용자 확정 2026-08-26] 실행 중 스냅샷 삭제는 '디스크가 정말 위험할 때'만.
 
 ## 사이드이펙트 & 주의
 - 없음(정적 분석 기준)
 
 ## 관계
-- 호출: `_delete_pipeline_snapshot_entry`, `_pipeline_snapshot_stats`
+- 호출: `_delete_pipeline_snapshot_entry`, `_perf_trace`, `_pipeline_snapshot_stats`
 - 피호출(영향 전파 경로): `_cleanup_pipeline_step_snapshots`, `_run_low_risk_housekeeping`
 
 ## 실패/예외

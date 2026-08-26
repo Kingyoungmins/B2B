@@ -9,7 +9,7 @@ signature: "(self, sheet, row=1)"
 role: "해당 행 기준 마지막 데이터 열(1-based)."
 role_source: docstring
 version: "0.8.0"
-loc: "serve_b2b.py:12049-12053"
+loc: "serve_b2b.py:12111-12115"
 
 # ── 입출력 ──
 inputs:

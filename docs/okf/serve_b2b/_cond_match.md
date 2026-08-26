@@ -8,7 +8,7 @@ signature: "(cell, op, target)"
 role: "sum_where 조건 비교. 비교연산자는 숫자로, 그 외는 normalize 텍스트로."
 role_source: docstring
 version: "0.8.0"
-loc: "serve_b2b.py:15689-15704"
+loc: "serve_b2b.py:15751-15766"
 
 # ── 입출력 ──
 inputs:

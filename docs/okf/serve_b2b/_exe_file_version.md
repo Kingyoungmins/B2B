@@ -8,7 +8,7 @@ signature: "(exe_path)"
 role: "윈도우 exe 의 파일 버전 리소스를 읽는다(파일 속성 → 자세히 → 파일 버전)."
 role_source: docstring
 version: "0.8.0"
-loc: "serve_b2b.py:208-232"
+loc: "serve_b2b.py:229-253"
 
 # ── 입출력 ──
 inputs:

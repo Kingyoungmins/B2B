@@ -8,7 +8,7 @@ signature: "(text)"
 role: "'0.7.2' / 'v0.7.2' / '0.7.2.0' 을 모두 '0.7.2.0' 으로 맞춘다."
 role_source: docstring
 version: "0.8.0"
-loc: "serve_b2b.py:191-205"
+loc: "serve_b2b.py:212-226"
 
 # ── 입출력 ──
 inputs:

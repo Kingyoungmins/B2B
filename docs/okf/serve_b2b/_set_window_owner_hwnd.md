@@ -8,7 +8,7 @@ signature: "(hwnd, owner_hwnd)"
 role: "지정한 최상위 창의 소유자(owner)를 지정/해제한다."
 role_source: docstring
 version: "0.8.0"
-loc: "serve_b2b.py:4326-4355"
+loc: "serve_b2b.py:4347-4376"
 
 # ── 입출력 ──
 inputs:

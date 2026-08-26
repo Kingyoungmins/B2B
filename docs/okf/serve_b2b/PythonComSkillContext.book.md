@@ -9,7 +9,7 @@ signature: "(self, workbook_name)"
 role: "같은 Excel 인스턴스에 열린 다른 업로드 파일을 대상으로 하는 ctx."
 role_source: docstring
 version: "0.8.0"
-loc: "serve_b2b.py:14924-15068"
+loc: "serve_b2b.py:14986-15130"
 
 # ── 입출력 ──
 inputs:

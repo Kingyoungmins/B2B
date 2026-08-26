@@ -8,7 +8,7 @@ signature: "(message, code='')"
 role: "난해한 엔진 예외를 (원인, 프롬프트 작성 가이드) 한국어 쌍으로 변환한다."
 role_source: docstring
 version: "0.8.0"
-loc: "serve_b2b.py:1060-1128"
+loc: "serve_b2b.py:1081-1149"
 
 # ── 입출력 ──
 inputs:

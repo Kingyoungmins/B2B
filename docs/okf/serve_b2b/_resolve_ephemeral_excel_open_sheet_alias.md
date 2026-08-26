@@ -8,7 +8,7 @@ signature: "(requested, names)"
 role: "Map stale excel_open_<uuid> sheet names from HTML/CSV-compatible opens."
 role_source: docstring
 version: "0.8.0"
-loc: "serve_b2b.py:3274-3289"
+loc: "serve_b2b.py:3295-3310"
 
 # ── 입출력 ──
 inputs:

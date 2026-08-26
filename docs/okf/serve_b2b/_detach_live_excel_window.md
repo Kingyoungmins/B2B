@@ -8,7 +8,7 @@ signature: "(app)"
 role: "라이브 Excel 창이 WebView 에 임베드(WS_CHILD/owner)돼 있으면 독립 top-level 로 분리한다."
 role_source: docstring
 version: "0.8.0"
-loc: "serve_b2b.py:9962-9996"
+loc: "serve_b2b.py:10024-10058"
 
 # ── 입출력 ──
 inputs:

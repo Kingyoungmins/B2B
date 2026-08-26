@@ -8,7 +8,7 @@ signature: "()"
 role: "VBE Error Trapping 이 Break on All Errors 면 처리된 오류도 디버거로 진입한다."
 role_source: docstring
 version: "0.8.0"
-loc: "serve_b2b.py:5388-5417"
+loc: "serve_b2b.py:5450-5479"
 
 # ── 입출력 ──
 inputs: []

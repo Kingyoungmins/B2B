@@ -8,7 +8,7 @@ signature: "(app, wb, session, code, skip_static=False, timeout_s=None)"
 role: "샌드박스 exec + 데드라인 트레이서로 생성 Python 스킬을 실행한다."
 role_source: docstring
 version: "0.8.0"
-loc: "serve_b2b.py:15270-15372"
+loc: "serve_b2b.py:15332-15434"
 
 # ── 입출력 ──
 inputs:

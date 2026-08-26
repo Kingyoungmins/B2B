@@ -9,7 +9,7 @@ signature: "(self, sheet, col=1)"
 role: "해당 열 기준 마지막 데이터 행(1-based). 표 끝 합계행 포함 여부는 호출자가 판단."
 role_source: docstring
 version: "0.8.0"
-loc: "serve_b2b.py:12035-12047"
+loc: "serve_b2b.py:12097-12109"
 
 # ── 입출력 ──
 inputs:

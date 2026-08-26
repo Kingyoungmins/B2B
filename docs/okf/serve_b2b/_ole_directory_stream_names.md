@@ -8,7 +8,7 @@ signature: "(path)"
 role: "OLE 복합문서 디렉터리의 스트림 이름 집합. OLE 아니거나 구조를 못 읽으면 None."
 role_source: docstring
 version: "0.8.0"
-loc: "serve_b2b.py:2971-3037"
+loc: "serve_b2b.py:2992-3058"
 
 # ── 입출력 ──
 inputs:

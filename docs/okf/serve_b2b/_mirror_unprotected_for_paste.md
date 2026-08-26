@@ -8,7 +8,7 @@ signature: "(ws)"
 role: "[붙여넣기 1004 수정 2026-08-12] 잠긴 시트에 '네이티브 복사'가 안 되는 문제."
 role_source: docstring
 version: "0.8.0"
-loc: "serve_b2b.py:3759-3790"
+loc: "serve_b2b.py:3780-3811"
 
 # ── 입출력 ──
 inputs:
