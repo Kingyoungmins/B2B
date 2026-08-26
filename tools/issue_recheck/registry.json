@@ -3983,6 +3983,17 @@
         ]
       ],
       "fix": "0.7.4→0.8.0 의 톤앤매너 차이는 사실상 styles/*.css 의 색·그림자뿐이라(구조/스크립트 무관) html[data-ui-theme=\"classic\"] 한 속성으로 전환한다. styles/theme-classic.css 는 손으로 옮기지 않고 0.7.4 와 0.8.0 CSS 를 실제 비교해 '0.7.4 쪽 선언'만 기계 추출해 생성했다(35규칙; 변수로 도는 색은 :root 재정의로 따라오고, rgba 가 박힌 그림자/글로우는 규칙 단위로 복원). 저장은 localStorage(axcell_ui_theme_v1), 기본값 mono(0.8.0). 깜빡임 방지로 <head> 인라인이 CSS 앞에서 선적용하고, scripts/ui-theme.js 는 버튼 배선만 한다(화면 재렌더 없음 → 작업 중 눌러도 안전). 한계: 네이티브 셸의 우측 파일 탭은 NativeHost.cs 가 직접 그려(Color.FromArgb 하드코딩) 테마를 안 따른다 — 바꾸려면 .cs 수정+재컴파일 필요."
+    },
+    {
+      "id": "SNAPSHOT-RETENTION-KEEP-IN-SESSION",
+      "title": "[사용자 확정 2026-08-26] 실행 중 스냅샷 삭제가 이어실행을 깨뜨림 — 세션 안에서는 보관.",
+      "checks": [
+        [
+          "python",
+          "test_runs/_test_snapshot_retention.py"
+        ]
+      ],
+      "fix": "옛 정책은 용량 한도(256MB)에 걸리면 방금 만든 앞 단계 스냅샷부터 즉시 삭제 — 입력 하나가 55MB 인 실사용에서 5개면 초과라 '한 단계 고치고 재실행'이 이어실행을 못 타고 처음부터 8분(실측). 저장 비용(전체 34%)은 치르고 결과만 버린 셈. 스냅샷은 세션 밖에서 어차피 정리되므로(정상 종료 cleanup_backend_runtime_files / 크래시 후 다음 시작 cleanup_stale_temp_artifacts 가 BACKEND_DIR 통째 비움) 세션 안에서는 보관한다. 삭제는 ①개수 상한(80) ②디스크 여유 2GB 미만 + 예산 초과 일 때만, 그때도 오래된 것부터(최신=긴 접두 보존). 예산 기본값도 고정 256MB → 디스크 여유 5%(256MB~4GB). 성능: 지울 필요가 없으면 파일 stat 전수 계산 자체를 건너뛴다."
     }
   ]
 }

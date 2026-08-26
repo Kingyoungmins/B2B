@@ -151,7 +151,28 @@ HOUSEKEEPING_LAST_SKIPPED_REASON = ""
 HOUSEKEEPING_RUN_COUNT = 0
 HOUSEKEEPING_ERROR = ""
 HOUSEKEEPING_GC_LAST_AT = 0.0
-HOUSEKEEPING_SNAPSHOT_MAX_BYTES = int(os.environ.get("B2B_PIPELINE_SNAPSHOT_MAX_BYTES", str(256 * 1024 * 1024)))
+def _default_snapshot_budget_bytes():
+    """[SBAGENT-293 실측 2026-08-26] 스냅샷 보관 예산.
+
+    고정 256MB 는 큰 청구 파일 앞에서 무의미했다 — 입력 하나가 55MB 라 스냅샷 5개면 한도를
+    넘겨 **앞 단계부터 즉시 삭제**됐고, 그래서 '한 단계만 고치고 다시 실행'이 이어실행을 못 타고
+    처음부터 8분을 돌았다(실측). 저장 비용(전체의 34%)은 이미 치르고 있는데 결과를 버린 셈이다.
+    디스크 여유에 비례해 잡되(5%), 좁은 디스크에서도 안전하도록 256MB~4GB 로 묶는다.
+    B2B_PIPELINE_SNAPSHOT_MAX_BYTES 로 명시 지정하면 그 값이 이긴다."""
+    env = os.environ.get("B2B_PIPELINE_SNAPSHOT_MAX_BYTES")
+    if env:
+        try:
+            return int(env)
+        except ValueError:
+            pass
+    try:
+        free = shutil.disk_usage(tempfile.gettempdir()).free
+        return max(256 * 1024 * 1024, min(4 * 1024 * 1024 * 1024, int(free * 0.05)))
+    except Exception:
+        return 256 * 1024 * 1024
+
+
+HOUSEKEEPING_SNAPSHOT_MAX_BYTES = _default_snapshot_budget_bytes()
 # [0.5.2 이식] 강제 정리 시 끊어낼 COM 프록시 보관소 — 행 상태 STA 워커로의 Release 마샬링 교착 방지.
 _COM_REF_GRAVEYARD = []
 PIPELINE_JOBS_LOCK = threading.Lock()
@@ -4888,12 +4909,45 @@ def _delete_pipeline_snapshot_entry(key, snapshot):
 
 
 def _cleanup_pipeline_snapshots_by_limits():
-    before = _pipeline_snapshot_stats()
-    ordered = sorted(PIPELINE_STEP_SNAPSHOTS.items(), key=lambda item: item[1].get("created", 0))
+    """[SBAGENT-293 / 사용자 확정 2026-08-26] 실행 중 스냅샷 삭제는 '디스크가 정말 위험할 때'만.
+
+    왜 바꿨나: 이 정리가 용량 한도(옛 256MB)에 걸려 **방금 만든 앞 단계 스냅샷부터** 지웠다.
+    입력 하나가 55MB 라 5개면 한도를 넘겨, 한 단계만 고치고 다시 실행해도 이어실행이 못 걸리고
+    처음부터 8분을 돌았다(실측). 저장 비용(전체의 34%)은 이미 치르고 결과만 버린 셈이다.
+
+    스냅샷은 세션 밖에서 어차피 지워진다 — 정상 종료는 cleanup_backend_runtime_files(),
+    크래시/강제종료는 다음 시작의 cleanup_stale_temp_artifacts() 가 BACKEND_DIR 를 통째로
+    비운다(양쪽 다 pipeline_step_snapshots 포함). 그래서 누적 한계는 '한 실행분'이다.
+    실사용은 한 세션에 스킬 하나 정도라, 세션 안에서 굳이 지워 이어실행을 깨뜨릴 이유가 없다
+    (사용자 확정 2026-08-26).
+
+    다만 디스크가 바닥나면 실행 자체가 실패하므로 '진짜 위험'일 때만 최소한으로 회수한다:
+    예산(디스크 여유 5%, 256MB~4GB)을 넘고 **동시에** 남은 여유가 2GB 미만일 때만."""
     removed = 0
+    try:
+        free = shutil.disk_usage(tempfile.gettempdir()).free
+    except Exception:
+        free = None
+    DISK_DANGER_BYTES = 2 * 1024 * 1024 * 1024
+    disk_tight = (free is not None and free < DISK_DANGER_BYTES)
+    over_count = len(PIPELINE_STEP_SNAPSHOTS) > MAX_PIPELINE_STEP_SNAPSHOTS
+    # [성능] _pipeline_snapshot_stats() 는 스냅샷의 '모든 파일'을 resolve/exists/stat 한다.
+    # 이 함수는 스텝마다 불리므로, 보관량이 늘어난 지금은 그 계산 자체가 부담이다.
+    # 디스크가 넉넉하고 개수도 한도 안이면 — 즉 어차피 아무것도 안 지울 상황이면 — 계산하지 않는다.
+    if not disk_tight and not over_count:
+        light = {"count": len(PIPELINE_STEP_SNAPSHOTS), "bytes": None, "skipped": "not-needed"}
+        return {"removed": 0, "before": light, "after": light, "kept": True}
+    before = _pipeline_snapshot_stats()
+    over_budget = before["bytes"] > HOUSEKEEPING_SNAPSHOT_MAX_BYTES
+    if not ((over_budget and disk_tight) or over_count):
+        return {"removed": 0, "before": before, "after": before, "kept": True}
+    # 회수할 때도 '오래된 것부터' — 이어실행이 쓰는 건 가장 긴(=가장 최근) 접두다.
+    ordered = sorted(PIPELINE_STEP_SNAPSHOTS.items(), key=lambda item: item[1].get("created", 0))
     while ordered:
         stats = _pipeline_snapshot_stats()
-        if stats["count"] <= MAX_PIPELINE_STEP_SNAPSHOTS and stats["bytes"] <= HOUSEKEEPING_SNAPSHOT_MAX_BYTES:
+        if stats["count"] <= MAX_PIPELINE_STEP_SNAPSHOTS and not (
+            stats["bytes"] > HOUSEKEEPING_SNAPSHOT_MAX_BYTES and disk_tight
+        ):
             break
         key, snapshot = ordered.pop(0)
         if key in PIPELINE_STEP_SNAPSHOTS:
@@ -4901,6 +4955,14 @@ def _cleanup_pipeline_snapshots_by_limits():
             _delete_pipeline_snapshot_entry(key, snapshot)
             removed += 1
     after = _pipeline_snapshot_stats()
+    if removed:
+        try:
+            _perf_trace("pipeline.snapshot.evicted", removed=removed,
+                        beforeMB=round(before["bytes"] / (1024 * 1024), 1),
+                        afterMB=round(after["bytes"] / (1024 * 1024), 1),
+                        freeGB=(round(free / (1024 ** 3), 1) if free is not None else None))
+        except Exception:
+            pass
     return {"removed": removed, "before": before, "after": after}
 
 
