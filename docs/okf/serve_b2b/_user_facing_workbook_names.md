@@ -8,7 +8,7 @@ signature: "(app)"
 role: "사용자에게 보여줄 수 있는(=코드에 그대로 써도 되는) 열린 워크북 이름만."
 role_source: docstring
 version: "0.8.0"
-loc: "serve_b2b.py:8555-8577"
+loc: "serve_b2b.py:8578-8600"
 
 # ── 입출력 ──
 inputs:

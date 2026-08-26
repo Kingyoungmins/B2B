@@ -8,7 +8,7 @@ signature: "(reap=False, log=True)"
 role: "Return lightweight Excel process diagnostics and optionally reap app-owned orphan PIDs."
 role_source: docstring
 version: "0.8.0"
-loc: "serve_b2b.py:5276-5365"
+loc: "serve_b2b.py:5299-5388"
 
 # ── 입출력 ──
 inputs:

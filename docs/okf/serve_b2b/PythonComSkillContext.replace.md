@@ -9,7 +9,7 @@ signature: "(self, sheet, a1_range, find, repl, match_entire=False)"
 role: "범위 안 셀에서 find 를 repl 로 바꾼다(부분 치환, match_entire=True면 셀 전체 일치만). 수식 셀은 보존."
 role_source: docstring
 version: "0.8.0"
-loc: "serve_b2b.py:14945-14983"
+loc: "serve_b2b.py:14968-15006"
 
 # ── 입출력 ──
 inputs:

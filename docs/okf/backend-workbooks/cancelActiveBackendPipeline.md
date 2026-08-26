@@ -24,6 +24,7 @@ raises: []
 calls: []
 calls_external:
   - "fetch"
+  - "json"
   - "stringify"
 called_by:
   - "_ensureExcelCancelButton"

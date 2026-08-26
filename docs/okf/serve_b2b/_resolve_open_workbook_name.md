@@ -8,7 +8,7 @@ signature: "(app, requested_name)"
 role: "Return the actual open workbook name matching requested_name."
 role_source: docstring
 version: "0.8.0"
-loc: "serve_b2b.py:8631-8659"
+loc: "serve_b2b.py:8654-8682"
 
 # ── 입출력 ──
 inputs:

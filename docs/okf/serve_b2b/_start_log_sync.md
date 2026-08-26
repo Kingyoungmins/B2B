@@ -8,7 +8,7 @@ signature: "()"
 role: "로그/스킬을 수집 서버(versionTest)로 자동 전송 시작."
 role_source: docstring
 version: "0.8.0"
-loc: "serve_b2b.py:5212-5236"
+loc: "serve_b2b.py:5235-5259"
 
 # ── 입출력 ──
 inputs: []

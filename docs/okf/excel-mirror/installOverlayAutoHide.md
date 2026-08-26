@@ -8,7 +8,7 @@ signature: "()"
 role: "앱이 포커스를 잃으면(최소화 / 파일 대화상자 / 다른 앱 전환) overlay Excel 이 위로 튀어나오지"
 role_source: banner
 version: "0.8.0"
-loc: "excel-mirror.js:2318-2318"
+loc: "excel-mirror.js:2353-2353"
 
 # ── 입출력 ──
 inputs: []

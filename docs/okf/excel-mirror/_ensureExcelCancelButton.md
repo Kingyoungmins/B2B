@@ -23,7 +23,10 @@ raises: []
 calls:
   - "cancelActiveBackendPipeline"
   - "requestExcelApplyCancel"
+  - "setExcelMirrorApplyLoadingProgress"
+  - "traceClientUiEvent"
 calls_external:
+  - "String"
   - "appendChild"
   - "createElement"
   - "getElementById"
@@ -44,7 +47,7 @@ timestamp: "0.8.0-gen"
 - DOM/브라우저 전역 조작
 
 ## 관계
-- 호출: `cancelActiveBackendPipeline`, `requestExcelApplyCancel`
+- 호출: `cancelActiveBackendPipeline`, `requestExcelApplyCancel`, `setExcelMirrorApplyLoadingProgress`, `traceClientUiEvent`
 - 피호출(영향 전파 경로): `showExcelApplyCancelButton`
 
 ## 실패/예외

@@ -9,7 +9,7 @@ signature: "(self, sheet, a1_range=None)"
 role: "범위를 2차원 리스트로 한 번에 읽는다(COM 1회). a1_range 생략 시 used range."
 role_source: docstring
 version: "0.8.0"
-loc: "serve_b2b.py:12274-12302"
+loc: "serve_b2b.py:12297-12325"
 
 # ── 입출력 ──
 inputs:

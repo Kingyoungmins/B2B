@@ -8,7 +8,7 @@ signature: "(origin)"
 role: "Origin 이 '이 서버 자신'인가. 우리 화면은 이 서버가 내보내므로 그것만 허용한다."
 role_source: docstring
 version: "0.8.0"
-loc: "serve_b2b.py:4774-4793"
+loc: "serve_b2b.py:4797-4816"
 
 # ── 입출력 ──
 inputs:

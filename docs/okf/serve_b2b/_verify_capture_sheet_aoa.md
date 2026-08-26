@@ -8,7 +8,7 @@ signature: "(wb, sheet_name)"
 role: "대상 시트(없으면 전 시트)의 UsedRange 값을 {시트명: 2차원리스트} 로 캡처(diff 입력용)."
 role_source: docstring
 version: "0.8.0"
-loc: "serve_b2b.py:15507-15530"
+loc: "serve_b2b.py:15530-15553"
 
 # ── 입출력 ──
 inputs:

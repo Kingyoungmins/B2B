@@ -8,7 +8,7 @@ signature: "(message, options = {})"
 role: "적용 시작: 모든 미러 창을 숨기고(park) 네이티브 패널의 로딩 애니메이션을 돌린다."
 role_source: banner
 version: "0.8.0"
-loc: "excel-mirror.js:1330-1330"
+loc: "excel-mirror.js:1358-1358"
 
 # ── 입출력 ──
 inputs:
@@ -32,6 +32,7 @@ calls:
   - "publishNativeExcelLoading"
   - "push"
   - "requestExcelApplyCancel"
+  - "setExcelMirrorApplyLoadingProgress"
   - "showExcelApplyCancelButton"
   - "tick"
   - "traceClientUiEvent"
@@ -80,7 +81,7 @@ timestamp: "0.8.0-gen"
 - 변경 상태 `excelMirror.applyBusyToken, excelMirror.applyDepth, excelMirror.applyDepthTouchedAt, excelMirror.applyLoadingBaseLabel, excelMirror.applyLoadingProgress, excelMirror.applyLoadingTimer, excelMirror.applyOpenLabels, excelMirror.applying` — 수정 시 이 상태를 읽는 곳 동반 점검.
 
 ## 관계
-- 호출: `beginUiBusy`, `cancelActiveBackendPipeline`, `hideAllExcelMirrorWindows`, `isNativeExcelShell`, `publishNativeExcelLoading`, `push`, `requestExcelApplyCancel`, `showExcelApplyCancelButton`, `tick`, `traceClientUiEvent`, `updateMirrorShellStatus`
+- 호출: `beginUiBusy`, `cancelActiveBackendPipeline`, `hideAllExcelMirrorWindows`, `isNativeExcelShell`, `publishNativeExcelLoading`, `push`, `requestExcelApplyCancel`, `setExcelMirrorApplyLoadingProgress`, `showExcelApplyCancelButton`, `tick`, `traceClientUiEvent`, `updateMirrorShellStatus`
 - 피호출(영향 전파 경로): `_reapplyVbaPipelineToLiveImpl`, `_restoreSnapshotByIds`, `applyMappedSingleStep`, `applyVbaStepToLiveExcel`, `runIsolatedLivePipelineSteps`, `runPipelineOnBackend`
 
 ## 실패/예외

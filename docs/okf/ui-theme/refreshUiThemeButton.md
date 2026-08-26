@@ -24,7 +24,6 @@ calls:
   - "currentUiTheme"
 calls_external:
   - "getElementById"
-  - "querySelector"
   - "setAttribute"
 called_by:
   - "applyUiTheme"

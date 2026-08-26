@@ -8,7 +8,7 @@ signature: "()"
 role: "Health polling should be cheap. Excel process diagnostics are cached and"
 role_source: docstring
 version: "0.8.0"
-loc: "serve_b2b.py:4725-4736"
+loc: "serve_b2b.py:4748-4759"
 
 # ── 입출력 ──
 inputs: []
