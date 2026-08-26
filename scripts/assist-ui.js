@@ -493,7 +493,7 @@ function assistRenderProposalCard(p) {
         const _inRunner = (typeof state !== "undefined" && state && state.currentPage === "runner");
         const msg = r.heldForToggle
           ? (_inRunner
-            ? `✓ 코드를 교체했습니다. ${r.stepNo ? "Step " + r.stepNo + " " : "해당 단계 "}— [전체실행]을 다시 누르면 반영됩니다(앞 단계는 건너뜁니다)`
+            ? `✓ 코드를 교체했습니다. ${r.stepNo ? "Step " + r.stepNo + " " : "해당 단계 "}— [전체실행]을 다시 누르면 반영됩니다`
             : `✓ 코드를 교체했습니다. ${r.stepNo ? "Step " + r.stepNo + " " : "해당 단계 "}스위치를 켜(ON) 주시면 새 코드로 적용됩니다`)
           : r.toggled
             ? (r.enabled

@@ -67,7 +67,8 @@ check("누르면 클래식으로", env.attrs["data-ui-theme"] === "classic" && a
 check("저장된다", env.store["axcell_ui_theme_v1"] === "classic", env.store["axcell_ui_theme_v1"]);
 check("눌린 상태(aria-pressed)로 현재 테마를 알린다", env.btn._attrs["aria-pressed"] === "true",
   env.btn._attrs["aria-pressed"]);
-check("툴팁에 현재 테마 표시", /지금은 이전 버전/.test(env.btn.title), env.btn.title);
+// 툴팁 문구 자체는 자유(사용자가 다듬음) — '현재 테마를 알려주고, 두 상태가 다르다'만 고정한다.
+check("툴팁이 현재 테마를 알린다", /테마/.test(env.btn.title) && env.btn.title.trim().length > 2, env.btn.title);
 check("안내 토스트는 '테마를 변경했습니다.' 한 줄(사용자 지시)",
   env.toasts.length === 1 && env.toasts[0] === "테마를 변경했습니다.", JSON.stringify(env.toasts));
 

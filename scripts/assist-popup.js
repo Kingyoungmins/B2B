@@ -188,7 +188,7 @@
       // [전체실행]이 정답이라 화면에 맞춰 안내한다(inRunner 는 메인 창이 실어 보낸다).
       const msg = m.heldForToggle
         ? (m.inRunner
-          ? ('✓ 코드를 교체했습니다. ' + (m.stepNo ? 'Step ' + m.stepNo + ' ' : '해당 단계 ') + '— [전체실행]을 다시 누르면 반영됩니다(앞 단계는 건너뜁니다)')
+          ? ('✓ 코드를 교체했습니다. ' + (m.stepNo ? 'Step ' + m.stepNo + ' ' : '해당 단계 ') + '— [전체실행]을 다시 누르면 반영됩니다')
           : ('✓ 코드를 교체했습니다. ' + (m.stepNo ? 'Step ' + m.stepNo + ' ' : '해당 단계 ') + '스위치를 켜(ON) 주시면 새 코드로 적용됩니다'))
         : m.toggled
           ? (m.enabled

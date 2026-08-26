@@ -1,8 +1,15 @@
 # -*- coding: utf-8 -*-
-"""[SBAGENT-293 D] '전체실행을 다시 누르면 앞 단계를 건너뛴다'가 사실인지 실증한다.
+"""[SBAGENT-293 D] 스냅샷 접두 재사용(resume) 로직의 계약 — _run_excel_python_pipeline_impl 경로.
 
-AI 카드/지시문에 그렇게 안내하기로 했으므로, 근거 없이 쓰면 안 된다.
-백엔드의 스냅샷 키·resume 판정 함수를 실제로 호출해 확인한다(Excel 불필요 — 순수 로직).
+⚠ 적용 범위 주의(2026-08-26 확인, 내 오진 정정):
+  이 resume 로직을 쓰는 것은 **/api/pipeline/start(백그라운드 파이프라인)** 경로뿐이다.
+  **실행기 [전체실행]** 은 /api/excel/run-full-pipeline → _run_full_pipeline_single_instance_impl
+  로 가는데, 그 함수에는 resume/스냅샷 키 재사용이 **아예 없다**(항상 1단계부터).
+  실측(08-26 10:23·10:29 두 실행) 모두 stepIdx 0 부터 돈 것이 그 증거다.
+  → 사용자에게 "전체실행을 다시 누르면 앞 단계를 건너뜁니다"라고 안내하면 안 된다.
+     함수 단위 검증만 하고 '실제 호출 경로'를 확인하지 않아 생긴 오진이었다.
+
+이 파일은 그 resume 로직 자체(키 구성·접두 매칭·주석 무시)를 잠근다.
 """
 import sys
 
@@ -93,6 +100,18 @@ check("B2B_ 지시성 주석은 서명에 반영(엔진이 바뀜)", k1 != k3)
 c4 = mk_steps("기본료")
 c4[2]["code"] = c4[2]["code"] + chr(10) + "    x = 1"
 check("코드가 바뀌면 키도 바뀐다", k1 != S._pipeline_snapshot_key(IN_ITEMS, IN_WBS, OUT_ITEM, WB, c4[:29]))
+
+print("[6] 적용 범위 — 실행기 전체실행 경로에는 resume 이 없다(오진 재발 방지)")
+src = open(r"serve_b2b.py", encoding="utf-8-sig").read()
+i = src.find("def _run_full_pipeline_single_instance_impl")
+j = src.find(chr(10) + "def ", i + 10)
+runner_fn = src[i:j if j > 0 else len(src)]
+check("실행기 경로에 _find_best_pipeline_snapshot 호출 없음", "_find_best_pipeline_snapshot" not in runner_fn)
+check("실행기 경로에 resume_from 없음", "resume_from" not in runner_fn)
+k = src.find("def _run_excel_python_pipeline_impl")
+l = src.find(chr(10) + "def ", k + 10)
+bg_fn = src[k:l if l > 0 else len(src)]
+check("bg 파이프라인 경로에는 resume 이 있다", "_find_best_pipeline_snapshot" in bg_fn and "resume_from" in bg_fn)
 
 print("")
 print("RESULT: ALL PASS" if fails == 0 else "RESULT: %d FAIL" % fails)
