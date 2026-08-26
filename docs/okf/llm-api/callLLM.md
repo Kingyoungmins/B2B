@@ -8,7 +8,7 @@ signature: "(userMessage, options)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
 version: "0.8.0"
-loc: "llm-api.js:20-20"
+loc: "llm-api.js:45-45"
 
 # ── 입출력 ──
 inputs:
@@ -24,6 +24,7 @@ raises: []
 # ── 유기적 관계 ──
 calls:
   - "_looksLikeCorrection"
+  - "_looksLikeRepeatedRequest"
   - "buildEditingContext"
   - "buildSchemaSummary"
   - "callAnthropic"
@@ -65,7 +66,7 @@ timestamp: "0.8.0-gen"
 - DOM/브라우저 전역 조작
 
 ## 관계
-- 호출: `_looksLikeCorrection`, `buildEditingContext`, `buildSchemaSummary`, `callAnthropic`, `callOpenAICompat`, `getSkillEngine`, `isThinkModeEnabled`, `push`, `skillEnginePromptNote`, `uid`
+- 호출: `_looksLikeCorrection`, `_looksLikeRepeatedRequest`, `buildEditingContext`, `buildSchemaSummary`, `callAnthropic`, `callOpenAICompat`, `getSkillEngine`, `isThinkModeEnabled`, `push`, `skillEnginePromptNote`, `uid`
 - 피호출(영향 전파 경로): `assistCloseOut`, `assistHandleUserMessage`, `autoRegenerateAsVbaFallback`, `autoRegenerateForMissingCode`, `autoRegenerateForStaticSafety`, `autoRepairPipelineStep`, `requestErrorRecovery`, `sendChat`, `showThinkRetryPrompt`
 
 ## 실패/예외

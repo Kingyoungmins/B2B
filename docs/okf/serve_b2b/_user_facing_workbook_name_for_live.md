@@ -8,7 +8,7 @@ signature: "(app, live_name)"
 role: "라이브 wb.Name → 사용자 파일명(코드에 그대로 저장해도 되는 이름)."
 role_source: docstring
 version: "0.8.0"
-loc: "serve_b2b.py:8641-8668"
+loc: "serve_b2b.py:8642-8669"
 
 # ── 입출력 ──
 inputs:

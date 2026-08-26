@@ -8,7 +8,7 @@ signature: "(staged)"
 role: "[첨부] 팝업은 백엔드로 첨부를 올려 슬라이드/이미지 base64 를 받는다(팝업도 같은 서버 오리진)."
 role_source: banner
 version: "0.8.0"
-loc: "assist-popup.js:229-229"
+loc: "assist-popup.js:230-230"
 
 # ── 입출력 ──
 inputs:

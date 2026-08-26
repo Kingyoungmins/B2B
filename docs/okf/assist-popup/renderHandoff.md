@@ -8,7 +8,7 @@ signature: "(meta)"
 role: "[Tier1] 핸드오프 카드 — 버튼은 메인 창에 요청문 이관을 부탁한다(팝업은 메인 DOM 을 못 만짐)."
 role_source: banner
 version: "0.8.0"
-loc: "assist-popup.js:285-285"
+loc: "assist-popup.js:286-286"
 
 # ── 입출력 ──
 inputs:

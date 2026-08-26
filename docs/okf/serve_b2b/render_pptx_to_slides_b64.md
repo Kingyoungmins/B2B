@@ -8,7 +8,7 @@ signature: "(pptx_path, max_slides=40)"
 role: "PowerPoint COM 으로 슬라이드를 PNG 로 렌더해 base64 로 돌려준다. Excel STA 와 섞이지 않도록"
 role_source: docstring
 version: "0.8.0"
-loc: "serve_b2b.py:1150-1215"
+loc: "serve_b2b.py:1151-1216"
 
 # ── 입출력 ──
 inputs:

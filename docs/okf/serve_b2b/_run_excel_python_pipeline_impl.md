@@ -8,7 +8,7 @@ signature: "(payload, job_id=None)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
 version: "0.8.0"
-loc: "serve_b2b.py:19697-20148"
+loc: "serve_b2b.py:19737-20201"
 
 # ── 입출력 ──
 inputs:
@@ -38,6 +38,7 @@ calls:
   - "_open_excel_workbook_for_skill"
   - "_pipeline_error_guide"
   - "_pipeline_snapshot_key"
+  - "_pipeline_snapshot_stats"
   - "_protect_workbook_for_read_only_mirror"
   - "_python_step_sig"
   - "_result_from_workbook_files"
@@ -48,6 +49,7 @@ calls:
   - "_snapshot_path"
   - "_start_excel_hide_guard"
   - "_step_extended_timeout_s"
+  - "_vba_trace"
   - "_warn_excel_nonfatal"
   - "_worker_step_target_wb"
   - "append"
@@ -83,6 +85,7 @@ calls_external:
   - "app"
   - "applied_sigs"
   - "bool"
+  - "cached_prefix"
   - "callable"
   - "code"
   - "compile"
@@ -106,11 +109,11 @@ calls_external:
   - "input_wb_records"
   - "input_wbs"
   - "items"
-  - "job_id"
 called_by:
   - "run_excel_python_pipeline_payload"
 reads:
   - "BACKEND_DIR"
+  - "HOUSEKEEPING_SNAPSHOT_MAX_BYTES"
   - "PIPELINE_STEP_SNAPSHOTS"
   - "RESULTS"
   - "SNAPSHOT_INTERMEDIATE_MAX_BYTES"
@@ -131,7 +134,7 @@ timestamp: "0.8.0-gen"
 - 변경 상태 `RESULTS` — 수정 시 이 상태를 읽는 곳 동반 점검.
 
 ## 관계
-- 호출: `_configure_excel_grid_window`, `_copy_source_workbook_into_target`, `_excel_output_preview_sheets`, `_exec_python_com_skill`, `_find_best_pipeline_snapshot`, `_get_python_skill_app`, `_hide_excel_app_window`, `_inject_and_run_vba`, `_open_excel_workbook_for_skill`, `_pipeline_error_guide`, `_pipeline_snapshot_key`, `_protect_workbook_for_read_only_mirror`, `_python_step_sig`, `_result_from_workbook_files`, `_safe_excel_calculate`, `_safe_python_globals`, `_save_live_final_snapshot`, `_save_pipeline_step_snapshot`, `_snapshot_path`, `_start_excel_hide_guard`, `_step_extended_timeout_s`, `_warn_excel_nonfatal`, `_worker_step_target_wb`, `append`, `build_result_previews`, `excel_available`, `get_excel_session`, `get_workbook_or_raise`, `inspect_workbook`, `is_python_pipeline_step`, `is_vba_pipeline_step`, `normalize_python_pipeline_code`, `python_step_uses_legacy_dialect`, `raise_if_pipeline_cancelled`, `refresh_excel_session_snapshots`, `rows_only_sheets`, `session_workbook`, `update_pipeline_job`, `update_workbook_current_cache`
+- 호출: `_configure_excel_grid_window`, `_copy_source_workbook_into_target`, `_excel_output_preview_sheets`, `_exec_python_com_skill`, `_find_best_pipeline_snapshot`, `_get_python_skill_app`, `_hide_excel_app_window`, `_inject_and_run_vba`, `_open_excel_workbook_for_skill`, `_pipeline_error_guide`, `_pipeline_snapshot_key`, `_pipeline_snapshot_stats`, `_protect_workbook_for_read_only_mirror`, `_python_step_sig`, `_result_from_workbook_files`, `_safe_excel_calculate`, `_safe_python_globals`, `_save_live_final_snapshot`, `_save_pipeline_step_snapshot`, `_snapshot_path`, `_start_excel_hide_guard`, `_step_extended_timeout_s`, `_vba_trace`, `_warn_excel_nonfatal`, `_worker_step_target_wb`, `append`, `build_result_previews`, `excel_available`, `get_excel_session`, `get_workbook_or_raise`, `inspect_workbook`, `is_python_pipeline_step`, `is_vba_pipeline_step`, `normalize_python_pipeline_code`, `python_step_uses_legacy_dialect`, `raise_if_pipeline_cancelled`, `refresh_excel_session_snapshots`, `rows_only_sheets`, `session_workbook`, `update_pipeline_job`, `update_workbook_current_cache`
 - 피호출(영향 전파 경로): `run_excel_python_pipeline_payload`
 
 ## 실패/예외

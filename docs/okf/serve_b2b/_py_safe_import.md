@@ -8,7 +8,7 @@ signature: "(name, globals=None, locals=None, fromlist=(), level=0)"
 role: "[SBAGENT-296] 제공 모듈(re/datetime/math)의 단순 import 만 통과시키는 __import__."
 role_source: docstring
 version: "0.8.0"
-loc: "serve_b2b.py:11573-11583"
+loc: "serve_b2b.py:11574-11584"
 
 # ── 입출력 ──
 inputs:

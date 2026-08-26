@@ -24,6 +24,7 @@ raises: []
 calls: []
 calls_external: []
 called_by:
+  - "_looksLikeRepeatedRequest"
   - "assistBuildProposal"
   - "colIdx"
   - "exactReferenceFailures"
@@ -45,7 +46,7 @@ timestamp: "0.8.0-gen"
 
 ## 관계
 - 호출: 없음
-- 피호출(영향 전파 경로): `assistBuildProposal`, `colIdx`, `exactReferenceFailures`, `headerNameMismatchFailures`, `promoteStepChatOrigins`, `runnerApplyEnvConfigFilter`, `runnerSameBookName`
+- 피호출(영향 전파 경로): `_looksLikeRepeatedRequest`, `assistBuildProposal`, `colIdx`, `exactReferenceFailures`, `headerNameMismatchFailures`, `promoteStepChatOrigins`, `runnerApplyEnvConfigFilter`, `runnerSameBookName`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

@@ -8,7 +8,7 @@ signature: "()"
 role: "새로 시작한다. 화면의 옛 메시지는 지우지 않고 구분선만 남긴다(사용자는 위로 스크롤해 볼 수 있음)."
 role_source: banner
 version: "0.8.0"
-loc: "assist-ui.js:757-757"
+loc: "assist-ui.js:759-759"
 
 # ── 입출력 ──
 inputs: []

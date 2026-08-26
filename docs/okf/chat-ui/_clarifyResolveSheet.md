@@ -8,7 +8,7 @@ signature: "(text)"
 role: "되물음 대상 시트 추정: @범위[파일/시트!범위] / @시트[..] / \"○○ 시트\" / 현재 활성 시트."
 role_source: banner
 version: "0.8.0"
-loc: "chat-ui.js:3639-3639"
+loc: "chat-ui.js:3649-3649"
 
 # ── 입출력 ──
 inputs:

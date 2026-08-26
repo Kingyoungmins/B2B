@@ -8,7 +8,7 @@ signature: "(code, failures, context)"
 role: "Python COM 정적 게이트를 (최초 생성 + 자동 재생성 PYTHON_STATIC_MAX_REGEN 회) 연속으로 통과하지"
 role_source: banner
 version: "0.8.0"
-loc: "chat-ui.js:2185-2185"
+loc: "chat-ui.js:2195-2195"
 
 # ── 입출력 ──
 inputs:

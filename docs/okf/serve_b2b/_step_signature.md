@@ -8,7 +8,7 @@ signature: "(step)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
 version: "0.8.0"
-loc: "serve_b2b.py:19012-19023"
+loc: "serve_b2b.py:19050-19063"
 
 # ── 입출력 ──
 inputs:
@@ -22,6 +22,7 @@ raises: []
 
 # ── 유기적 관계 ──
 calls:
+  - "_signature_code_for_snapshot"
   - "is_python_pipeline_step"
   - "normalize_python_pipeline_code"
 calls_external:
@@ -46,7 +47,7 @@ timestamp: "0.8.0-gen"
 - 없음(정적 분석 기준)
 
 ## 관계
-- 호출: `is_python_pipeline_step`, `normalize_python_pipeline_code`
+- 호출: `_signature_code_for_snapshot`, `is_python_pipeline_step`, `normalize_python_pipeline_code`
 - 피호출(영향 전파 경로): `_pipeline_snapshot_key`
 
 ## 실패/예외

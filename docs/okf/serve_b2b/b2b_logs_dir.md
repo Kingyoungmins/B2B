@@ -8,7 +8,7 @@ signature: "()"
 role: "트레이스 로그 저장 폴더 — 프로즌/개발 무관하게 항상 %LOCALAPPDATA%\\B2B_logs 로 고정."
 role_source: docstring
 version: "0.8.0"
-loc: "serve_b2b.py:290-300"
+loc: "serve_b2b.py:291-301"
 
 # ── 입출력 ──
 inputs: []

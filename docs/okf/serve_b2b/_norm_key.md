@@ -8,7 +8,7 @@ signature: "(v)"
 role: "블록 키(가입번호 등) 정규화 — 숫자로 저장돼 있어도 텍스트 키와 매칭되도록 정수문자열로."
 role_source: docstring
 version: "0.8.0"
-loc: "serve_b2b.py:15679-15685"
+loc: "serve_b2b.py:15680-15686"
 
 # ── 입출력 ──
 inputs:

@@ -8,7 +8,7 @@ signature: "()"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
 version: "0.8.0"
-loc: "serve_b2b.py:4843-4867"
+loc: "serve_b2b.py:4844-4868"
 
 # ── 입출력 ──
 inputs: []
@@ -37,6 +37,7 @@ called_by:
   - "B2BHandler.do_GET"
   - "B2BHandler.do_POST"
   - "_cleanup_pipeline_snapshots_by_limits"
+  - "_run_excel_python_pipeline_impl"
   - "_runtime_sampler_once"
 reads:
   - "BACKEND_DIR"
@@ -54,7 +55,7 @@ timestamp: "0.8.0-gen"
 
 ## 관계
 - 호출: `values`
-- 피호출(영향 전파 경로): `B2BHandler.do_GET`, `B2BHandler.do_POST`, `_cleanup_pipeline_snapshots_by_limits`, `_runtime_sampler_once`
+- 피호출(영향 전파 경로): `B2BHandler.do_GET`, `B2BHandler.do_POST`, `_cleanup_pipeline_snapshots_by_limits`, `_run_excel_python_pipeline_impl`, `_runtime_sampler_once`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

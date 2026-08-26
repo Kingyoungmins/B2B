@@ -9,7 +9,7 @@ signature: "(self)"
 role: "[AI 도움 run.trace] 직전 실행의 서버 트레이스 타임라인 — 스텝이 '실제로 어느 워크북에서"
 role_source: docstring
 version: "0.8.0"
-loc: "serve_b2b.py:2555-2623"
+loc: "serve_b2b.py:2556-2624"
 
 # ── 입출력 ──
 inputs:

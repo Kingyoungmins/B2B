@@ -9,7 +9,7 @@ signature: "(self, sheet, a1_range, color=None)"
 role: "셀 음영/배경색 설정. color 는 '#RRGGBB'/'노랑'·'red' 같은 색이름/정수. None 이면 '채우기 없음'."
 role_source: docstring
 version: "0.8.0"
-loc: "serve_b2b.py:12535-12550"
+loc: "serve_b2b.py:12536-12551"
 
 # ── 입출력 ──
 inputs:

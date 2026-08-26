@@ -8,7 +8,7 @@ signature: "(app, host_wb, context_wb, code, entry)"
 role: "Inject/run VBA in host_wb while keeping context_wb as ActiveWorkbook."
 role_source: docstring
 version: "0.8.0"
-loc: "serve_b2b.py:9262-9414"
+loc: "serve_b2b.py:9263-9415"
 
 # ── 입출력 ──
 inputs:

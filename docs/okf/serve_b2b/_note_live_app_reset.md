@@ -8,7 +8,7 @@ signature: "(reason, **extra)"
 role: "[진단] 공유 라이브 Excel 인스턴스가 리셋/종료되는 순간을 남긴다. 녹화 중(NATIVE_RECORDING.active)"
 role_source: docstring
 version: "0.8.0"
-loc: "serve_b2b.py:91-102"
+loc: "serve_b2b.py:92-103"
 
 # ── 입출력 ──
 inputs:

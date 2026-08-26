@@ -9,7 +9,7 @@ signature: "(self, data)"
 role: "열기(수 초 소요)가 최소화 '이후'에 끝나면 hide-all 을 이미 지나쳐 창이 화면에 남는다"
 role_source: docstring
 version: "0.8.0"
-loc: "serve_b2b.py:2138-2148"
+loc: "serve_b2b.py:2139-2149"
 
 # ── 입출력 ──
 inputs:

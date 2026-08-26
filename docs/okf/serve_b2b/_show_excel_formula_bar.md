@@ -8,7 +8,7 @@ signature: "(app)"
 role: "읽기 전용 미러에서도 실제 Excel처럼 수식 입력줄은 보이게 둔다."
 role_source: docstring
 version: "0.8.0"
-loc: "serve_b2b.py:3841-3844"
+loc: "serve_b2b.py:3842-3845"
 
 # ── 입출력 ──
 inputs:
