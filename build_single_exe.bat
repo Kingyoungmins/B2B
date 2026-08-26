@@ -23,6 +23,15 @@ if not exist "%PACKAGE_DIR%\B2B_Server.exe" (
     echo Run build_exe.bat first.
     exit /b 1
 )
+rem [실측 2026-08-26] 이 스크립트는 dist 패키지를 "감싸기만" 한다. 소스를 고치고 build_exe.bat 없이
+rem 돌리면 어제 빌드된 백엔드를 그대로 감싼 채 "Build complete" 로 성공한다 — 그날 수정이 하나도
+rem 없는 exe 가 나오고 실행해 보기 전엔 모른다. 패키지가 소스보다 오래됐으면 여기서 멈춘다.
+python "%~dp0tools\check_payload_fresh.py" "%PACKAGE_DIR%"
+if errorlevel 1 (
+    echo [ERROR] 오래된 패키지입니다. build_exe.bat 을 먼저 실행하세요.
+    exit /b 1
+)
+
 if not exist "%CSC%" (
     echo [ERROR] C# compiler not found: %CSC%
     exit /b 1
