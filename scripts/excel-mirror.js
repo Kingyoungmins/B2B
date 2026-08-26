@@ -213,6 +213,51 @@ function isUiBusy() {
   return uiBusy.count > 0;
 }
 
+/* [사용자 지시 2026-08-26] 진행 상황 알림을 '화면 잠금' 한 곳으로 모은다.
+   예전엔 업로드가 잠금 오버레이("입력 파일 업로드 중...")와 별도 상태 박스("… 3/6 - 파일명")를
+   동시에 띄워 같은 말을 두 군데서 했다. 잠금 오버레이가 메인이고, 진행률은 그 문구에 싣는다.
+   (토스트는 별개 — 완료/실패 알림은 그대로 둔다.)
+   반환: 실제로 잠금 문구에 반영했는지(false 면 호출자가 자기 UI 로 폴백해야 한다 —
+   진행률이 아무 데도 안 보이는 회귀를 막는 안전망). */
+function _uiBusyRender() {
+  const busy = (typeof uiBusy !== "undefined" && uiBusy) ? uiBusy : null;
+  if (!busy || !(busy.count > 0)) return false;
+  const base = String(busy.mainLabel || "");
+  const suffix = String(busy.suffixLabel || "");
+  const s = base + (suffix ? " · " + suffix : "");
+  if (!s) return false;
+  let shown = false;
+  try {
+    const el = busy.el || document.getElementById("b2b-busy-overlay");
+    const labelEl = el && el.querySelector(".busy-label");
+    if (labelEl) { labelEl.textContent = s; shown = true; }
+  } catch (_) {}
+  // 네이티브 셸(별도 창)에도 같은 문구를 보낸다 — 웹 오버레이가 안 보이는 화면 구성이 있다.
+  if (shown) {
+    try { publishNativeUiBusy(true, s); } catch (_) {}
+  }
+  return shown;
+}
+
+function updateUiBusyLabel(text) {
+  const s = String(text || "");
+  if (!s) return false;
+  const busy = (typeof uiBusy !== "undefined" && uiBusy) ? uiBusy : null;
+  if (!busy || !(busy.count > 0)) return false;   // 잠금이 없으면 호출자가 자기 UI 로 폴백
+  busy.mainLabel = s;
+  return _uiBusyRender();
+}
+
+/* 잠금 문구의 '보조 상태'(예: 보안 해제 중)를 덧붙인다. 본문구(진행률)를 덮지 않고 옆에
+   붙이므로 "입력 파일 업로드 중... (3/6) · 문서 보안 해제 중" 처럼 한 줄로 보인다.
+   빈 값이면 보조 상태만 지운다. */
+function setUiBusySuffix(text) {
+  const busy = (typeof uiBusy !== "undefined" && uiBusy) ? uiBusy : null;
+  if (!busy || !(busy.count > 0)) return false;
+  busy.suffixLabel = String(text || "");
+  return _uiBusyRender();
+}
+
 function beginUiBusy(label = "작업 중...", options = {}) {
   uiBusy.count += 1;
   if (uiBusy.count === 1) uiBusy.since = Date.now();
@@ -223,6 +268,11 @@ function beginUiBusy(label = "작업 중...", options = {}) {
     hasStop: typeof options.onStop === "function",
   });
   const showDelayMs = Math.max(0, Number(options.showDelayMs ?? 120));
+  // [알림 일원화 2026-08-26] 이 잠금이 '메인 알림 창구'다. 본문구는 여기서 정해지고,
+  // 진행률(updateUiBusyLabel)·보조 상태(setUiBusySuffix)가 그 위에 얹힌다.
+  // 새 잠금이 시작되면 이전 작업의 보조 상태가 남지 않게 초기화한다.
+  uiBusy.mainLabel = label;
+  uiBusy.suffixLabel = "";
   try {
     const el = _ensureUiBusyOverlay();
     const labelEl = el.querySelector(".busy-label");
@@ -287,6 +337,9 @@ function endUiBusy(token, opts = {}) {
   clearTimeout(token.timer);
   uiBusy.count = Math.max(0, uiBusy.count - 1);
   if (uiBusy.count === 0) {
+    // 다음 작업에 옛 문구/보조 상태가 새지 않게 비운다(알림 일원화 2026-08-26).
+    uiBusy.mainLabel = "";
+    uiBusy.suffixLabel = "";
     if (uiBusy.el) uiBusy.el.classList.remove("show");
     const stopBtn = uiBusy.el && uiBusy.el.querySelector(".busy-stop");
     if (stopBtn) {
@@ -658,6 +711,9 @@ async function preopenAllExcelMirrors(selectedFileId, options = {}) {
   // 자동숨김(periodic)이 방금 연 미러들을 park(숨김) 하지 못하게 한다.
   excelMirror.hostActive = true;
   publishNativeExcelLoading(true, `Excel 창 준비 중... (1/${total})\n컴퓨터 성능에 따라 다소 지연될 수 있습니다`);
+  // [알림 일원화 2026-08-26] 업로드 잠금이 아직 떠 있는 구간이다 — 같은 진행 상황을 잠금
+  // 문구에도 보조 상태로 실어, 사용자가 한 곳만 보면 되게 한다.
+  if (typeof setUiBusySuffix === "function") setUiBusySuffix(`Excel 창 준비 중 (1/${total})`);
   try {
     // 1) 선택 파일 먼저: 열자마자 표시해 업로드 직후 빈 화면 시간을 최소화.
     try {
@@ -693,6 +749,7 @@ async function preopenAllExcelMirrors(selectedFileId, options = {}) {
     for (const fid of rest) {
       if (excelMirror.preopenSeq !== seq) return; // 새 preopen/리셋이 시작됨 → 이 루프 중단
       updateMirrorShellStatus(`다른 파일 Excel 준비 중... (${done}/${total})`);
+      if (typeof setUiBusySuffix === "function") setUiBusySuffix(`Excel 창 준비 중 (${done}/${total})`);
       try {
         await ensureExcelMirrorSession(fid, { makeActive: false, deferVisible: true });
       } catch (err) {

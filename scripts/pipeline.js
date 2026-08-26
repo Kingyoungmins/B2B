@@ -1313,6 +1313,12 @@ function _setOverlayProgress(text) {
   try {
     if (typeof setExcelMirrorApplyLoadingProgress === "function") setExcelMirrorApplyLoadingProgress(text);
   } catch (_) {}
+  // [알림 일원화 2026-08-26] '화면 잠금'이 메인 창구다 — 같은 진행률을 잠금 문구에도 싣는다.
+  // (네이티브 잠금은 입력 차단만 하고 시각 표시가 없어서 Excel 패널 표시는 그대로 둔다.
+  //  두 곳이 같은 문구를 쓰므로 서로 다른 말을 해서 헷갈리는 일은 없다.)
+  try {
+    if (typeof setUiBusySuffix === "function") setUiBusySuffix(text);
+  } catch (_) {}
 }
 
 async function runIsolatedLivePipelineSteps(sourceSteps, initialExcelId, options = {}) {

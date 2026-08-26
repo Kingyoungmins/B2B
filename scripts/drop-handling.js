@@ -38,13 +38,28 @@ function setupNodeDrop(zone, input, handler) {
   });
 }
 
+// [사용자 지시 2026-08-26] 진행 알림은 '화면 잠금' 한 곳으로. 예전엔 잠금 오버레이
+// ("입력 파일 업로드 중...")와 이 상태 박스("… 3/6 - 파일명")가 같은 말을 두 군데서 해
+// 헷갈렸다. 박스는 띄우지 않고, 진행률(3/6)을 잠금 문구에 실어 보낸다.
+// (토스트는 별개 — 완료/실패 알림은 그대로.)
+function _uploadBusyText(job, done, name) {
+  const total = Number(job && job.total) || 0;
+  const cur = Math.min(total || 0, Math.max(0, Number(done) || 0));
+  const head = `${(job && job.label) || "파일 업로드"} 중...`;
+  const count = total ? ` (${cur}/${total})` : "";
+  return head + count + (name ? ` · ${name}` : "");
+}
+
 function beginUpload(label, total) {
   const job = { id: uid(), cancelled: false, total: total || 0, done: 0, label: label || "파일 업로드" };
   state.uploadJob = job;
   const box = $("upload-status");
   const text = $("upload-status-text");
-  if (text) text.textContent = `${job.label} 중... 0/${job.total}`;
-  if (box) box.hidden = false;
+  if (text) text.textContent = _uploadBusyText(job, 0);   // 접근성/폴백용 텍스트는 유지
+  // 잠금 오버레이에 실었으면 박스는 숨긴다. 못 실었으면(잠금이 없는 경로) 박스를 폴백으로
+  // 보여준다 — 진행률이 아무 데도 안 보이는 상태를 만들지 않는다.
+  const onBusy = (typeof updateUiBusyLabel === "function") && updateUiBusyLabel(_uploadBusyText(job, 0));
+  if (box) box.hidden = !!onBusy;
   const cancel = $("upload-cancel");
   if (cancel) cancel.onclick = () => {
     job.cancelled = true;
@@ -56,8 +71,12 @@ function beginUpload(label, total) {
 function updateUpload(job, done, name) {
   if (!job || state.uploadJob !== job) return;
   job.done = done;
+  const msg = _uploadBusyText(job, done, name);
   const text = $("upload-status-text");
-  if (text) text.textContent = `${job.label} 중... ${done}/${job.total}${name ? " - " + name : ""}`;
+  if (text) text.textContent = msg;
+  const onBusy = (typeof updateUiBusyLabel === "function") && updateUiBusyLabel(msg);   // 잠금이 메인
+  const box = $("upload-status");
+  if (box) box.hidden = !!onBusy;                                        // 실었으면 박스는 숨김
 }
 
 function finishUpload(job) {

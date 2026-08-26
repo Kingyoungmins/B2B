@@ -29,6 +29,15 @@ async function secureDocStatus(force) {
 function secureDocNotice(msg) {
   secureDocState.noticeCount = (secureDocState.noticeCount || 0) + 1;
   if (secureDocState.noticeCount > 1) msg = msg + " (" + secureDocState.noticeCount + "건 진행 중)";
+  // [사용자 지시 2026-08-26] 알림은 '화면 잠금' 한 곳으로. 업로드/적용처럼 잠금이 이미 떠 있으면
+  // 그 문구 옆에 보조 상태로 붙인다("입력 파일 업로드 중... (3/6) · 문서 보안 해제 중") —
+  // 별도 배너까지 뜨면 같은 말이 두 군데라 헷갈린다. 잠금이 없을 때(다운로드 등)만 배너를 쓴다.
+  const short = /보안적용/.test(msg) ? "문서 보안 적용 중" : "문서 보안 해제 중";
+  if (typeof setUiBusySuffix === "function" && setUiBusySuffix(short)) {
+    secureDocState.onBusyLabel = true;
+    return;
+  }
+  secureDocState.onBusyLabel = false;
   _secureDocBannerShow(msg);
 }
 
@@ -63,6 +72,11 @@ function _secureDocBannerShow(msg) {
 function secureDocNoticeHide() {
   secureDocState.noticeCount = Math.max(0, (secureDocState.noticeCount || 0) - 1);
   if (secureDocState.noticeCount > 0) return;   // 아직 진행 중인 건이 있다
+  // 잠금 문구에 실었으면 그 보조 상태를 걷어낸다(본문구·진행률은 그대로 둔다).
+  if (secureDocState.onBusyLabel && typeof setUiBusySuffix === "function") {
+    setUiBusySuffix("");
+    secureDocState.onBusyLabel = false;
+  }
   const el = document.getElementById("secure-doc-banner");
   if (el) el.style.display = "none";
 }
