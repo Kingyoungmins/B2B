@@ -59,14 +59,17 @@ function makeEnv(saved) {
 let { env, api } = makeEnv(null);
 check("첫 실행 기본값은 0.8.0(mono)", api.currentUiTheme() === "mono" && env.attrs["data-ui-theme"] === undefined,
   JSON.stringify(env.attrs));
-check("기본일 때 버튼 라벨 '기본 디자인'", env.btn._label.textContent === "기본 디자인", env.btn._label.textContent);
+check("라벨은 상태와 무관하게 '테마' 하나(사용자 지시) — 토글이 라벨을 안 건드린다",
+  env.btn._label.textContent === "", env.btn._label.textContent);
 
 api.toggleUiTheme();
 check("누르면 클래식으로", env.attrs["data-ui-theme"] === "classic" && api.currentUiTheme() === "classic");
 check("저장된다", env.store["axcell_ui_theme_v1"] === "classic", env.store["axcell_ui_theme_v1"]);
-check("버튼 라벨/aria 갱신", env.btn._label.textContent === "이전 디자인" && env.btn._attrs["aria-pressed"] === "true",
-  env.btn._label.textContent + "/" + env.btn._attrs["aria-pressed"]);
-check("안내 토스트", env.toasts.length === 1 && /이전 디자인/.test(env.toasts[0]), JSON.stringify(env.toasts));
+check("눌린 상태(aria-pressed)로 현재 테마를 알린다", env.btn._attrs["aria-pressed"] === "true",
+  env.btn._attrs["aria-pressed"]);
+check("툴팁에 현재 테마 표시", /지금은 이전 버전/.test(env.btn.title), env.btn.title);
+check("안내 토스트는 '테마를 변경했습니다.' 한 줄(사용자 지시)",
+  env.toasts.length === 1 && env.toasts[0] === "테마를 변경했습니다.", JSON.stringify(env.toasts));
 
 api.toggleUiTheme();
 check("다시 누르면 기본으로(속성 제거)", env.attrs["data-ui-theme"] === undefined && api.currentUiTheme() === "mono");
@@ -75,7 +78,7 @@ check("기본도 저장된다(다음 실행에 유지)", env.store["axcell_ui_th
 ({ env, api } = makeEnv("classic"));
 check("저장값이 classic 이면 재시작 후에도 클래식", api.currentUiTheme() === "classic"
   && env.attrs["data-ui-theme"] === "classic");
-check("클래식 상태로 시작해도 버튼 라벨이 맞다", env.btn._label.textContent === "이전 디자인");
+check("클래식으로 시작하면 버튼이 눌린 상태로 표시", env.btn._attrs["aria-pressed"] === "true");
 
 /* ── 2. CSS 스코프 ────────────────────────────────────────────────────── */
 console.log("[2] 클래식 CSS 는 스코프 밖으로 새지 않는다");
@@ -97,6 +100,7 @@ check("깜빡임 방지 — head 인라인에서 저장값 선적용",
   /localStorage\.getItem\("axcell_ui_theme_v1"\) === "classic"/.test(html)
   && html.indexOf('axcell_ui_theme_v1') < html.indexOf('styles/base.css'));
 check("상단에 전환 버튼", /id="btn-ui-theme"/.test(html));
+check("버튼 라벨이 '테마'", /<span class="ai-help-text">테마<\/span>/.test(html));
 check("ui-theme.js 로드", /scripts\/ui-theme\.js/.test(html));
 check("util.js(toast) 뒤에 로드", html.indexOf("scripts/ui-theme.js") > html.indexOf("scripts/util.js"));
 

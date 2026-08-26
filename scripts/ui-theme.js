@@ -27,7 +27,7 @@ function applyUiTheme(theme, options) {
   try { localStorage.setItem(UI_THEME_KEY, classic ? "classic" : UI_THEME_DEFAULT); } catch (_) {}
   refreshUiThemeButton();
   if (options && options.announce && typeof toast === "function") {
-    toast(classic ? "이전 디자인(0.7.4)으로 바꿨습니다." : "기본 디자인(0.8.0)으로 되돌렸습니다.", "success");
+    toast("테마를 변경했습니다.", "success");
   }
   // 화면 밖(별도 창)인 AI 도움 팝업에도 같은 테마를 알린다 — 있으면 따라오고, 없으면 무시된다.
   try {
@@ -43,12 +43,10 @@ function refreshUiThemeButton() {
   const btn = document.getElementById("btn-ui-theme");
   if (!btn) return;
   const classic = currentUiTheme() === "classic";
-  const label = btn.querySelector(".ai-help-text");
-  if (label) label.textContent = classic ? "이전 디자인" : "기본 디자인";
+  // [사용자 지시 2026-08-26] 라벨은 상태와 무관하게 '테마' 하나로 통일한다.
+  // 지금 어느 테마인지는 눌린 상태(aria-pressed)와 툴팁으로만 알린다.
   btn.setAttribute("aria-pressed", classic ? "true" : "false");
-  btn.title = classic
-    ? "디자인: 이전(0.7.4 마젠타) — 누르면 기본(0.8.0)으로"
-    : "디자인: 기본(0.8.0) — 누르면 이전 버전(0.7.4 마젠타)으로";
+  btn.title = classic ? "테마 — 지금은 이전 버전(0.7.4)" : "테마 — 지금은 기본(0.8.0)";
 }
 
 function initUiTheme() {
