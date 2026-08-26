@@ -72,4 +72,4 @@ Generated from selected lesson documents in B2B_ver0.5.6 ~ B2B_ver0.5.9.
 | `53_trace_loss_misdiagnosis_and_defensive_overreach.md` | 6595 |
 | `54_content_not_extension_and_silent_fizzle.md` | 3594 |
 | `55_sbagent_293_297_generation_layer_chain.md` | 3654 |
-| `56_runner_8min_waste_chain.md` | 3698 |
+| `56_runner_8min_waste_chain.md` | 5081 |
