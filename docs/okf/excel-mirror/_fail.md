@@ -8,7 +8,7 @@ signature: "(reason, err)"
 role: "[전환 침묵 실패 금지] 실측(12:52): 재현 실패 직후 탭 클릭 15회가 전부 40ms 만에 조용히"
 role_source: banner
 version: "0.8.0"
-loc: "excel-mirror.js:736-736"
+loc: "excel-mirror.js:793-793"
 
 # ── 입출력 ──
 inputs:

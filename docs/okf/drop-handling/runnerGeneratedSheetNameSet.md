@@ -8,7 +8,7 @@ signature: "(steps)"
 role: "[생성시트 오매칭 방어] 이 스킬이 실행 중 만드는 시트 이름 전부(책 구분 없이 이름만)."
 role_source: banner
 version: "0.8.0"
-loc: "drop-handling.js:1430-1430"
+loc: "drop-handling.js:1449-1449"
 
 # ── 입출력 ──
 inputs:

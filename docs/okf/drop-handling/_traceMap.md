@@ -8,7 +8,7 @@ signature: "(reason, extra)"
 role: "[진단] '실행기 매핑이 생성기 재실행에 안 실려 옛 파일명으로 실패'(실측 2026-07-29 test_mapping)의"
 role_source: banner
 version: "0.8.0"
-loc: "drop-handling.js:1880-1880"
+loc: "drop-handling.js:1899-1899"
 
 # ── 입출력 ──
 inputs:

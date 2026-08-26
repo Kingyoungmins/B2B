@@ -8,7 +8,7 @@ signature: "(excelId, options = {})"
 role: "[매핑 보존] 수정 후 적용 / ON·OFF / 삽입 등 편집발 재적용의 최종 관문. 호출자가 steps 를 명시하지"
 role_source: banner
 version: "0.8.0"
-loc: "pipeline.js:5604-5604"
+loc: "pipeline.js:5610-5610"
 
 # ── 입출력 ──
 inputs:

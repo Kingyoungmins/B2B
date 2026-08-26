@@ -8,7 +8,7 @@ signature: "()"
 role: "올린 스킬을 비운다(파이프라인 + 매핑 + 대화). 파일은 건드리지 않는다 — 스킬만 교체하는 흐름."
 role_source: banner
 version: "0.8.0"
-loc: "drop-handling.js:509-509"
+loc: "drop-handling.js:528-528"
 
 # ── 입출력 ──
 inputs: []

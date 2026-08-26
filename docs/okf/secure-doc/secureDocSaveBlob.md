@@ -8,7 +8,7 @@ signature: "(blob, filename)"
 role: "저장 직전 훅 — 실패 시 평문 저장은 하지 않는다(토스트로 알리고 중단)."
 role_source: banner
 version: "0.8.0"
-loc: "secure-doc.js:132-132"
+loc: "secure-doc.js:146-146"
 
 # ── 입출력 ──
 inputs:

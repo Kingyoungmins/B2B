@@ -8,7 +8,7 @@ signature: "(file)"
 role: "PK(zip)=평문 xlsx, OLE 복합문서=보안 가능성, 그 외 이진(0x00 포함)=보안 가능성."
 role_source: banner
 version: "0.8.0"
-loc: "secure-doc.js:72-72"
+loc: "secure-doc.js:86-86"
 
 # ── 입출력 ──
 inputs:

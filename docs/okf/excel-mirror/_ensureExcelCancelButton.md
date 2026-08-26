@@ -8,7 +8,7 @@ signature: "()"
 role: "[#19] 작업 중단 버튼은 작업 중인 채팅 말풍선의 액션 버튼 옆에 붙인다."
 role_source: banner
 version: "0.8.0"
-loc: "excel-mirror.js:1284-1284"
+loc: "excel-mirror.js:1341-1341"
 
 # ── 입출력 ──
 inputs: []

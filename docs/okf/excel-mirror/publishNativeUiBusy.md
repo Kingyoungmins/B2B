@@ -34,6 +34,7 @@ calls_external:
   - "max"
   - "postMessage"
 called_by:
+  - "_uiBusyRender"
   - "beginUiBusy"
   - "endUiBusy"
 reads: []
@@ -50,7 +51,7 @@ timestamp: "0.8.0-gen"
 
 ## 관계
 - 호출: 없음
-- 피호출(영향 전파 경로): `beginUiBusy`, `endUiBusy`
+- 피호출(영향 전파 경로): `_uiBusyRender`, `beginUiBusy`, `endUiBusy`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

@@ -8,7 +8,7 @@ signature: "(cfgFile, sheet)"
 role: "[시트도 동일 원칙] 시트명에 월이 박힌 경우(\"원가_4월\", \"202605_..._P\")도 정본 시트로 정규화."
 role_source: banner
 version: "0.8.0"
-loc: "drop-handling.js:639-639"
+loc: "drop-handling.js:658-658"
 
 # ── 입출력 ──
 inputs:

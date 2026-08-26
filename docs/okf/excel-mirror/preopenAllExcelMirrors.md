@@ -8,7 +8,7 @@ signature: "(selectedFileId, options = {})"
 role: "업로드 직후: 모든 파일의 미러를 미리 열어 같은 위치에 스택해 둔다."
 role_source: banner
 version: "0.8.0"
-loc: "excel-mirror.js:647-647"
+loc: "excel-mirror.js:700-700"
 
 # ── 입출력 ──
 inputs:
@@ -31,6 +31,7 @@ calls:
   - "push"
   - "scheduleExcelMirrorBaselinePoll"
   - "setCurrentView"
+  - "setUiBusySuffix"
   - "showOnlyExcelMirrorWindow"
   - "startExcelMirrorPolling"
   - "toast"
@@ -63,7 +64,7 @@ timestamp: "0.8.0-gen"
 - 변경 상태 `excelMirror.hostActive, excelMirror.preopenSeq, excelMirror.preopening` — 수정 시 이 상태를 읽는 곳 동반 점검.
 
 ## 관계
-- 호출: `ensureExcelMirrorSession`, `excelMirrorAllowsViewSwitch`, `isMissingExcelSessionError`, `listAllWorkbookFileIds`, `publishNativeExcelLoading`, `push`, `scheduleExcelMirrorBaselinePoll`, `setCurrentView`, `showOnlyExcelMirrorWindow`, `startExcelMirrorPolling`, `toast`, `updateMirrorShellStatus`
+- 호출: `ensureExcelMirrorSession`, `excelMirrorAllowsViewSwitch`, `isMissingExcelSessionError`, `listAllWorkbookFileIds`, `publishNativeExcelLoading`, `push`, `scheduleExcelMirrorBaselinePoll`, `setCurrentView`, `setUiBusySuffix`, `showOnlyExcelMirrorWindow`, `startExcelMirrorPolling`, `toast`, `updateMirrorShellStatus`
 - 피호출(영향 전파 경로): `autoOpenMirrorAfterUpload`, `forceRestartExcelMirrors`, `loadInputFiles`, `loadOutputTemplates`, `restoreSoftRefreshSnapshot`
 
 ## 실패/예외

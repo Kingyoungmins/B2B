@@ -23,6 +23,7 @@ raises: []
 # ── 유기적 관계 ──
 calls:
   - "setExcelMirrorApplyLoadingProgress"
+  - "setUiBusySuffix"
 calls_external: []
 called_by:
   - "runIsolatedLivePipelineSteps"
@@ -39,7 +40,7 @@ timestamp: "0.8.0-gen"
 - 없음(정적 분석 기준)
 
 ## 관계
-- 호출: `setExcelMirrorApplyLoadingProgress`
+- 호출: `setExcelMirrorApplyLoadingProgress`, `setUiBusySuffix`
 - 피호출(영향 전파 경로): `runIsolatedLivePipelineSteps`
 
 ## 실패/예외

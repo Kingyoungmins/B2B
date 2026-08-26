@@ -8,7 +8,7 @@ signature: "()"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
 version: "0.8.0"
-loc: "secure-doc.js:63-63"
+loc: "secure-doc.js:72-72"
 
 # ── 입출력 ──
 inputs: []
@@ -20,7 +20,8 @@ side_effects:
 raises: []
 
 # ── 유기적 관계 ──
-calls: []
+calls:
+  - "setUiBusySuffix"
 calls_external:
   - "getElementById"
   - "max"
@@ -42,7 +43,7 @@ timestamp: "0.8.0-gen"
 - DOM/브라우저 전역 조작
 
 ## 관계
-- 호출: 없음
+- 호출: `setUiBusySuffix`
 - 피호출(영향 전파 경로): `downloadAllFilesZip`, `registerWorkbookBackend`, `secureDocMaybeEncryptBlob`, `secureDownloadUrl`
 
 ## 실패/예외

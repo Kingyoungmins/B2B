@@ -46,7 +46,7 @@ function refreshUiThemeButton() {
   // [사용자 지시 2026-08-26] 라벨은 상태와 무관하게 '테마' 하나로 통일한다.
   // 지금 어느 테마인지는 눌린 상태(aria-pressed)와 툴팁으로만 알린다.
   btn.setAttribute("aria-pressed", classic ? "true" : "false");
-  btn.title = classic ? "테마 — 지금은 이전 버전(0.7.4)" : "테마 — 지금은 기본(0.8.0)";
+  btn.title = classic ? "테마 — 마젠타" : "테마 — 블랙";
 }
 
 function initUiTheme() {

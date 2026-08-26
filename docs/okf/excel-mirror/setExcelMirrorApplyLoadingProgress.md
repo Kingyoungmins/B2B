@@ -8,7 +8,7 @@ signature: "(text)"
 role: "기본 문구는 그대로 두고 접미만 바꾸므로 중첩 잠금에서도 바깥 문구가 사라지지 않는다."
 role_source: banner
 version: "0.8.0"
-loc: "excel-mirror.js:1457-1457"
+loc: "excel-mirror.js:1514-1514"
 
 # ── 입출력 ──
 inputs:

@@ -8,7 +8,7 @@ signature: "(info)"
 role: "runPipeline 에서 발생한 step 오류를 풍부한 메시지로 감싸 던진다 (item 9)."
 role_source: banner
 version: "0.8.0"
-loc: "pipeline.js:3636-3636"
+loc: "pipeline.js:3642-3642"
 
 # ── 입출력 ──
 inputs:

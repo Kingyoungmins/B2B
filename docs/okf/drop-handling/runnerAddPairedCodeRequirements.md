@@ -8,7 +8,7 @@ signature: "(map, code, shouldSkip)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
 version: "0.8.0"
-loc: "drop-handling.js:1089-1089"
+loc: "drop-handling.js:1108-1108"
 
 # ── 입출력 ──
 inputs:

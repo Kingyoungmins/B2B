@@ -8,7 +8,7 @@ signature: "(callText)"
 role: "여는 괄호 위치(openIdx)에서 짝이 맞는 닫는 괄호까지 = '그 호출의 인자 목록'만 반환."
 role_source: banner
 version: "0.8.0"
-loc: "drop-handling.js:825-825"
+loc: "drop-handling.js:844-844"
 
 # ── 입출력 ──
 inputs:

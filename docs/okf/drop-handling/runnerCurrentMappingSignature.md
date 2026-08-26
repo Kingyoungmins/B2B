@@ -8,7 +8,7 @@ signature: "()"
 role: "[매핑 보존] 시그니처는 '어떤 파일이 올라와 있나 + 어떤 스킬이 로드돼 있나'만 본다."
 role_source: banner
 version: "0.8.0"
-loc: "drop-handling.js:1490-1490"
+loc: "drop-handling.js:1509-1509"
 
 # ── 입출력 ──
 inputs: []

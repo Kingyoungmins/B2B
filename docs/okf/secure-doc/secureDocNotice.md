@@ -23,7 +23,9 @@ raises: []
 # ── 유기적 관계 ──
 calls:
   - "_secureDocBannerShow"
-calls_external: []
+  - "setUiBusySuffix"
+calls_external:
+  - "test"
 called_by:
   - "downloadAllFilesZip"
   - "registerWorkbookBackend"
@@ -42,7 +44,7 @@ timestamp: "0.8.0-gen"
 - 없음(정적 분석 기준)
 
 ## 관계
-- 호출: `_secureDocBannerShow`
+- 호출: `_secureDocBannerShow`, `setUiBusySuffix`
 - 피호출(영향 전파 경로): `downloadAllFilesZip`, `registerWorkbookBackend`, `secureDocMaybeEncryptBlob`, `secureDownloadUrl`
 
 ## 실패/예외

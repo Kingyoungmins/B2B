@@ -8,7 +8,7 @@ signature: "(f)"
 role: "name(실제 업로드명)과 displayName(사용자 편집 표시명) 둘 다 매칭 허용 — 표시명 편집된"
 role_source: banner
 version: "0.8.0"
-loc: "drop-handling.js:697-697"
+loc: "drop-handling.js:716-716"
 
 # ── 입출력 ──
 inputs:

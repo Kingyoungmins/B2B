@@ -8,7 +8,7 @@ signature: "()"
 role: "현재 보던 파일을 닫은 뒤, 남은 파일로 전환해 그 미러를 즉시 표시한다."
 role_source: banner
 version: "0.8.0"
-loc: "drop-handling.js:271-271"
+loc: "drop-handling.js:290-290"
 
 # ── 입출력 ──
 inputs: []

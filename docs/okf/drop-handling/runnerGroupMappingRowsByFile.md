@@ -8,7 +8,7 @@ signature: "(rows)"
 role: "per-(book,sheet) 행들을 '파일별 1행'으로 접는다. 한 파일이 여러 시트를 쓰면 그 파일 한 줄에"
 role_source: banner
 version: "0.8.0"
-loc: "drop-handling.js:1604-1604"
+loc: "drop-handling.js:1623-1623"
 
 # ── 입출력 ──
 inputs:

@@ -8,7 +8,7 @@ signature: "(job, done, name)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
 version: "0.8.0"
-loc: "drop-handling.js:56-56"
+loc: "drop-handling.js:71-71"
 
 # ── 입출력 ──
 inputs:
@@ -25,6 +25,8 @@ raises: []
 # ── 유기적 관계 ──
 calls:
   - "$"
+  - "_uploadBusyText"
+  - "updateUiBusyLabel"
 calls_external: []
 called_by:
   - "loadInputFiles"
@@ -43,7 +45,7 @@ timestamp: "0.8.0-gen"
 - 없음(정적 분석 기준)
 
 ## 관계
-- 호출: `$`
+- 호출: `$`, `_uploadBusyText`, `updateUiBusyLabel`
 - 피호출(영향 전파 경로): `loadInputFiles`, `loadOutputTemplates`
 
 ## 실패/예외

@@ -8,7 +8,7 @@ signature: "(name)"
 role: "[표시명 정리] 확장자와 실제 내용이 다른 위장 파일(예: .xlsx 인데 내용은 구형 .xls/HTML — 한전"
 role_source: banner
 version: "0.8.0"
-loc: "drop-handling.js:1669-1669"
+loc: "drop-handling.js:1688-1688"
 
 # ── 입출력 ──
 inputs:

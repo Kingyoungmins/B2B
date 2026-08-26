@@ -8,7 +8,7 @@ signature: "(selectedFileId)"
 role: "호환용 진입점: 업로드 직후에는 현재 파일만 열어 화면 순회/깜빡임을 막는다."
 role_source: banner
 version: "0.8.0"
-loc: "excel-mirror.js:727-727"
+loc: "excel-mirror.js:784-784"
 
 # ── 입출력 ──
 inputs:

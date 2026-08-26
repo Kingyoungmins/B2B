@@ -8,7 +8,7 @@ signature: "()"
 role: "[진짜 시트명 재확보] 업로드 순간 Excel 이 바빠서 검사에 실패한 워크북은 시트 목록이 '파일명'"
 role_source: banner
 version: "0.8.0"
-loc: "drop-handling.js:1799-1799"
+loc: "drop-handling.js:1818-1818"
 
 # ── 입출력 ──
 inputs: []

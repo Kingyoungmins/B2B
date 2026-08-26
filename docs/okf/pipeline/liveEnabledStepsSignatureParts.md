@@ -8,7 +8,7 @@ signature: "(steps = state.pipeline)"
 role: "코드 전문은 남기지 않는다(해시 앞 8자리만). 판정에는 절대 쓰지 않는 순수 기록용."
 role_source: banner
 version: "0.8.0"
-loc: "pipeline.js:4296-4296"
+loc: "pipeline.js:4302-4302"
 
 # ── 입출력 ──
 inputs:
