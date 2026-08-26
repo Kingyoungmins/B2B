@@ -1989,7 +1989,16 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
             job = PIPELINE_JOBS.get(job_id)
             if job is not None:
                 job["cancelRequested"] = True
+                job["cancelRequestedAt"] = time.time()
                 job["stage"] = "중단 요청됨"
+        # [제보 2026-08-26] 중단이 안 먹는다는 제보에 로그가 전혀 없어(요청이 왔는지조차 몰라)
+        # 원인을 못 좁혔다. 접수 여부와 그때 돌던 단계를 남긴다 — 발효는 pipeline.cancel.applied.
+        try:
+            _vba_trace("pipeline.cancel.request", jobId=job_id, accepted=bool(job),
+                       stage=str((job or {}).get("stage") or ""),
+                       currentStep=(job or {}).get("currentStep"))
+        except Exception:
+            pass
         self.send_json({"ok": True, "jobId": job_id, "cancelRequested": job is not None})
 
     def handle_pipeline_progress(self):
@@ -2826,6 +2835,20 @@ def raise_if_pipeline_cancelled(job_id):
     """협조적 취소 체크포인트 — 스텝 경계에서 호출. 취소 요청이 있으면 cancelled 플래그가
     달린 PipelineExecutionError 를 던져 잡을 '사용자 중단'으로 끝낸다(프론트는 조용히 복귀)."""
     if pipeline_job_cancel_requested(job_id):
+        # [제보 2026-08-26] 요청 후 '실제로 멈춘 시점'을 남긴다 — 요청~발효 간격이 곧 사용자가
+        # "안 먹는다"고 느끼는 시간이다(협조적 취소라 도는 단계가 끝나야 멈춘다).
+        try:
+            waited = None
+            with PIPELINE_JOBS_LOCK:
+                job = PIPELINE_JOBS.get(job_id) or {}
+                req_at = job.get("cancelRequestedAt")
+                cur = job.get("currentStep")
+            if req_at:
+                waited = round(time.time() - float(req_at), 1)
+            _vba_trace("pipeline.cancel.applied", jobId=str(job_id or ""),
+                       waitedSec=waited, atStep=cur)
+        except Exception:
+            pass
         raise PipelineExecutionError({
             "cancelled": True,
             "stepIdx": -1,
@@ -20062,6 +20085,12 @@ def _run_excel_python_pipeline_impl(payload, job_id=None):
             if not live_session:
                 _hide_excel_app_window(app)
             is_last_step = (idx == len(python_steps))
+            # [제보 2026-08-26 "중단을 눌러도 안 멈춤"] 취소 확인이 '스텝 시작' 한 곳뿐이라,
+            # 스텝 실행이 끝나도 스냅샷 저장(실측 4~9초, 큰 입력은 더)을 마친 뒤에야 멈췄다.
+            # 스텝은 이미 끝났으니 여기서 멈추면 결과 정합성은 그대로이고 대기만 줄어든다.
+            # (마지막 스텝은 예외 — 그 스냅샷이 곧 최종 결과라 저장하고 정상 종료시킨다.)
+            if not is_last_step:
+                raise_if_pipeline_cancelled(job_id)
             if is_last_step or snapshot_intermediate:
                 try:
                     snapshot_key = _pipeline_snapshot_key(

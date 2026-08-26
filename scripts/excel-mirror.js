@@ -1293,8 +1293,31 @@ function _ensureExcelCancelButton() {
   btn.onclick = () => {
     const vbaActive = window.__activeVbaApply && window.__activeVbaApply.token && !window.__activeVbaApply.token.cancelled;
     if (!vbaActive && window.__activeBackendPipelineJobId && typeof cancelActiveBackendPipeline === "function") {
+      // [제보 2026-08-26 "중단을 눌러도 안 멈춤"] 백엔드 취소는 '협조적'이라 지금 도는 단계가
+      // 끝나야 멈춘다(실측: 단계 최대 23초 + 스냅샷 4~9초). 그런데 예전엔 HTTP 응답을 받은
+      // 0.3초 뒤 버튼이 '■ 작업 중단'으로 되돌아가서, 실제로는 접수됐는데도 사용자는 안 먹은
+      // 줄 알고 다시 눌렀다. 요청이 접수되면 실행이 끝날 때까지 상태를 유지한다.
       btn.disabled = true; btn.textContent = "중단 중...";
-      Promise.resolve(cancelActiveBackendPipeline()).catch(() => {}).then(() => { btn.disabled = false; btn.textContent = "■ 작업 중단"; });
+      try {
+        traceClientUiEvent("apply.cancel.request", {
+          route: "backend-job", jobId: String(window.__activeBackendPipelineJobId || ""),
+        });
+      } catch (_) {}
+      Promise.resolve(cancelActiveBackendPipeline())
+        .catch(() => false)
+        .then(ok => {
+          if (ok) {
+            // 되돌리지 않는다 — 실제로 멈출 때까지 '요청됨' 상태를 보여준다.
+            btn.textContent = "중단 요청됨 · 현재 단계 끝나면 멈춤";
+            if (typeof setExcelMirrorApplyLoadingProgress === "function") {
+              setExcelMirrorApplyLoadingProgress("중단 요청됨 — 현재 단계가 끝나면 멈춥니다");
+            }
+            try { traceClientUiEvent("apply.cancel.accepted", { route: "backend-job" }); } catch (_) {}
+          } else {
+            btn.disabled = false; btn.textContent = "■ 작업 중단";
+            try { traceClientUiEvent("apply.cancel.failed", { route: "backend-job" }); } catch (_) {}
+          }
+        });
       return;
     }
     if (typeof requestExcelApplyCancel !== "function") return;
@@ -1315,6 +1338,11 @@ function showExcelApplyCancelButton(show) {
   const btn = _ensureExcelCancelButton();
   if (!btn) return;
   if (!show) { btn.style.display = "none"; return; }
+  // [사이드이펙트 방지 2026-08-26] 이 버튼은 한 번 만들어 재사용한다. 중단 요청 상태('중단
+  // 요청됨 · …', disabled)를 그대로 두면 다음 작업에서 처음부터 눌리지 않는 버튼이 보인다
+  // — 새 작업을 표시할 때마다 초기 상태로 되돌린다.
+  btn.disabled = false;
+  btn.textContent = "■ 작업 중단";
   const sync = () => {
     const a = window.__activeVbaApply;
     const hasVba = !!(a && a.token && !a.token.cancelled);
@@ -1371,7 +1399,9 @@ function beginExcelMirrorApplyLoading(message, options = {}) {
       showDelayMs: 120,
       failsafeMs: Math.max(90000, Number(options.failsafeMs || 130000)),
       stopLabel: "작업 중단",
-      stoppingLabel: "중단 중...",
+      // [제보 2026-08-26] '중단 중...'은 즉시 멈춘다는 기대를 준다. 백엔드 취소는 협조적이라
+      // 지금 도는 단계가 끝나야 멈춘다(실측 단계 최대 23초) — 문구로 그 사실을 알린다.
+      stoppingLabel: "중단 요청됨 · 현재 단계 끝나면 멈춤",
       // [검증패치#1] 말풍선 '작업 중단' 버튼과 완전히 같은 로직을 쓴다(버튼 복사).
       // 이전 버전은 토큰이 아직 등록되지 않은 찰나에 누르면 forceRestart(Excel 강제 재시작)로
       // 빠져 '중단'이 세션 전체 재시작처럼 동작했다 — 협조 취소만 수행하고 강제 재시작은 하지 않는다.
@@ -1379,8 +1409,13 @@ function beginExcelMirrorApplyLoading(message, options = {}) {
       onStop: async () => {
         const vbaActive = window.__activeVbaApply && window.__activeVbaApply.token && !window.__activeVbaApply.token.cancelled;
         if (!vbaActive && window.__activeBackendPipelineJobId && typeof cancelActiveBackendPipeline === "function") {
-          await cancelActiveBackendPipeline();
-          return true;
+          try { traceClientUiEvent("apply.cancel.request", { route: "ui-busy", jobId: String(window.__activeBackendPipelineJobId || "") }); } catch (_) {}
+          // [제보 2026-08-26] 예전엔 결과를 버리고 무조건 true 를 돌려줬다 — 잡을 못 찾아
+          // 취소가 실제로 안 걸린 경우에도 '중단 중'인 채로 굳어 사용자는 영영 기다렸다.
+          const ok = await cancelActiveBackendPipeline();
+          if (ok) setExcelMirrorApplyLoadingProgress("중단 요청됨 — 현재 단계가 끝나면 멈춥니다");
+          try { traceClientUiEvent(ok ? "apply.cancel.accepted" : "apply.cancel.failed", { route: "ui-busy" }); } catch (_) {}
+          return ok;
         }
         if (typeof requestExcelApplyCancel === "function") return await requestExcelApplyCancel();
         return false;

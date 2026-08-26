@@ -785,11 +785,14 @@ async function cancelActiveBackendPipeline() {
   const jobId = window.__activeBackendPipelineJobId;
   if (!jobId) return false;
   try {
-    await fetch("/api/pipeline/cancel", {
+    // [제보 2026-08-26] 예전엔 응답 내용을 보지 않고 무조건 true 를 돌려줘, 잡을 못 찾은
+    // 경우(이미 끝났거나 id 불일치)에도 '접수됨'으로 보였다. 서버가 실제로 표시했는지 본다.
+    const resp = await fetch("/api/pipeline/cancel", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ jobId }),
     });
-    return true;
+    const data = await resp.json().catch(() => null);
+    return !!(data && data.ok && data.cancelRequested !== false);
   } catch (_) { return false; }
 }
