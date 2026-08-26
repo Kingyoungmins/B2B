@@ -117,3 +117,32 @@ sed -n '<runner 함수 범위>' serve_b2b.py | grep -c "resume_from|_find_best_p
 `_test_fullrun_single_instance_live.py` 등 3개가 `sys.path.insert(0, ...B2B_ver0.6.1)` 로
 **옛 버전을 import** 하고 있었다. 지금 트리를 고쳐도 통과/실패가 안 바뀌는 테스트였다.
 `Path(__file__).resolve().parent.parent` 로 바꿨다. 고정 경로는 이렇게 조용히 죽는다.
+
+## 재발 방지 — 사람 기억이 아니라 명령 한 줄로
+
+`tools/callpath/trace.py` 를 만들었다. 버튼 → 엔드포인트 → 실제 실행 함수를 기계가 따라간다.
+
+```
+python tools/callpath/trace.py --assert "runner-run-btn -> _run_full_pipeline_single_instance_impl"
+  OK  runner-run-btn → /api/excel/run-full-pipeline → handle_excel_run_full_pipeline
+      → run_full_pipeline_single_instance → _run_full_pipeline_single_instance_impl
+
+python tools/callpath/trace.py --assert "runner-run-btn -> _find_best_pipeline_snapshot"
+  실패  경로가 없다.        ← 내가 했던 거짓 주장. 이제 exit 1 로 걸린다.
+```
+
+만들면서 두 함정을 실제로 밟았다. 둘 다 "도구가 조용히 틀리는" 종류다.
+
+1. **함수를 '넘기는' 것도 실행이다.** `run_full_pipeline_single_instance()` 는
+   `excel_call(_run_..._impl, ...)` 로 실행한다. Call 노드만 보면 이 간선이 통째로 빠져
+   "어디서도 안 닿는다"는 **거짓 음성**이 난다 → Name 참조도 간선으로 센다.
+
+2. **이름으로 노드를 합치면 안 된다.** `worker` 는 4곳(Excel 큐 펌프 / PPTX 렌더러 /
+   백엔드 파이프라인 핸들러 / VBA 디버그 억제기)에서 정의되고,
+   `run_backend_pipeline_payload` 는 모듈에 두 번 정의된다(뒤엣것이 이긴다).
+   이름으로 합치자 `전체실행 버튼 → capture-copypaste → excel_call → worker → (아무 함수)
+   → 백그라운드 resume` 이라는 없는 경로가 생겼고, **도구가 내 거짓 주장을 OK 라고 했다.**
+   도구가 거짓을 세탁하면 없느니만 못하다 → 이름이 아니라 **정의 위치(스코프)** 로 해석하게
+   다시 썼다(가장 가까운 조상 스코프 → 없으면 모듈 최상위의 마지막 정의).
+
+그 "OK 라고 했던" 케이스 자체를 `test_runs/_test_callpath_trace.py` [2] 에 회귀로 박았다.
