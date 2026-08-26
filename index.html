@@ -10,6 +10,13 @@
     if (new URLSearchParams(location.search).get("nativeShell") === "1") {
       document.documentElement.classList.add("native-shell");
     }
+    /* [디자인 전환 0.8.0] 저장된 테마를 CSS 가 붙기 전에 적용한다 — 여기서 안 하면
+       기본(블랙) 화면이 한 번 그려진 뒤 클래식으로 바뀌어 깜빡인다. 기본값은 0.8.0. */
+    try {
+      if (localStorage.getItem("axcell_ui_theme_v1") === "classic") {
+        document.documentElement.setAttribute("data-ui-theme", "classic");
+      }
+    } catch (e) {}
   </script>
   <script src="vendor/xlsx.full.js"></script>
   <link rel="stylesheet" href="styles/base.css">
@@ -20,6 +27,9 @@
   <link rel="stylesheet" href="styles/pipeline.css">
   <link rel="stylesheet" href="styles/workflow.css">
   <link rel="stylesheet" href="styles/runner.css">
+  <!-- [디자인 전환] 0.7.4 클래식 색상. html[data-ui-theme="classic"] 일 때만 적용되므로
+       기본(0.8.0) 화면에는 아무 영향이 없다. 반드시 다른 스타일보다 뒤에 둘 것. -->
+  <link rel="stylesheet" href="styles/theme-classic.css">
 </head>
 <body>
 <body>
@@ -63,6 +73,12 @@
               title="새로고침 (단축키 F5) — 프로그램/Excel이 먹통일 때. 업로드한 파일과 스킬·대화를 유지한 채 새로 시작하고, 스킬을 자동으로 다시 적용합니다">
         <span class="ai-help-spark">🔄</span>
         <span class="ai-help-text">새로고침</span>
+      </button>
+      <!-- [디자인 전환] 0.8.0 기본 ↔ 0.7.4 클래식. 색만 바뀌고 화면은 다시 그리지 않는다. -->
+      <button class="ai-help-btn" id="btn-ui-theme" type="button" aria-pressed="false"
+              title="디자인: 기본(0.8.0) — 누르면 이전 버전(0.7.4 마젠타)으로">
+        <span class="ai-help-spark">🎨</span>
+        <span class="ai-help-text">기본 디자인</span>
       </button>
       <button class="think-toggle" id="btn-think-toggle" type="button" aria-pressed="false" title="Think 모드 켜기">
         <span class="think-toggle-knob"></span>
@@ -353,6 +369,7 @@
   <script src="scripts/click-recovery.js"></script>
   <script src="scripts/state.js"></script>
   <script src="scripts/util.js"></script>
+  <script src="scripts/ui-theme.js"></script>
   <script src="scripts/secure-doc.js"></script>
   <script src="scripts/history.js"></script>
   <script src="scripts/fuzzy.js"></script>

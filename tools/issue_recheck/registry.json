@@ -3972,6 +3972,17 @@
         ]
       ],
       "fix": "AI 가 '기본요금'→'기본료' 일괄 치환을 하며 3단계의 주석·설명만 바꿨는데(그 단계는 find_header 대신 R열을 직접 지정해 동작 무변), 스냅샷 서명이 코드 전문+description 이라 3단계 이후 접두가 통째로 무효화됐다. 남은 1~2단계 스냅샷은 용량 한도(256MB, 55MB 파일 앞에서 4개면 초과)로 이미 삭제돼 재사용 0 → 09:00 실행이 stepIdx 0 부터 다시 돌았다(실측). 서명에서 '실행에 영향 없는' 주석(tokenize 로 문자열 속 # 오인 방지)과 description 을 제외하고, B2B_ 지시성 주석은 보존. 이어실행 판정은 fullrun.resume.decision 으로 관측(스냅샷 개수·용량·한도 포함)."
+    },
+    {
+      "id": "UI-THEME-CLASSIC-TOGGLE",
+      "title": "[요청] 상단 버튼으로 0.7.4 디자인 ↔ 0.8.0 디자인 전환(테마 선택처럼, 기본 0.8.0)",
+      "checks": [
+        [
+          "node",
+          "test_runs/_test_ui_theme_toggle.js"
+        ]
+      ],
+      "fix": "0.7.4→0.8.0 의 톤앤매너 차이는 사실상 styles/*.css 의 색·그림자뿐이라(구조/스크립트 무관) html[data-ui-theme=\"classic\"] 한 속성으로 전환한다. styles/theme-classic.css 는 손으로 옮기지 않고 0.7.4 와 0.8.0 CSS 를 실제 비교해 '0.7.4 쪽 선언'만 기계 추출해 생성했다(35규칙; 변수로 도는 색은 :root 재정의로 따라오고, rgba 가 박힌 그림자/글로우는 규칙 단위로 복원). 저장은 localStorage(axcell_ui_theme_v1), 기본값 mono(0.8.0). 깜빡임 방지로 <head> 인라인이 CSS 앞에서 선적용하고, scripts/ui-theme.js 는 버튼 배선만 한다(화면 재렌더 없음 → 작업 중 눌러도 안전). 한계: 네이티브 셸의 우측 파일 탭은 NativeHost.cs 가 직접 그려(Color.FromArgb 하드코딩) 테마를 안 따른다 — 바꾸려면 .cs 수정+재컴파일 필요."
     }
   ]
 }
