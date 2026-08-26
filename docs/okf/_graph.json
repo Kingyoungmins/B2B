@@ -6855,11 +6855,12 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:10824-11253",
+      "loc": "serve_b2b.py:10824-11427",
       "signature": "(groups, reset_excel_ids=None, view_sheet=None, entry=None, output_mode='sync', state_sig=None)",
       "calls": [
         "Worksheets",
         "_capture_live_view_state",
+        "_cleanup_fullrun_snapshots",
         "_clear_workbook_name_aliases",
         "_copy_source_workbook_into_target",
         "_disable_vba_break_on_all_errors",
@@ -6868,7 +6869,10 @@
         "_exec_python_com_skill",
         "_file_label_kind",
         "_file_size_mb",
+        "_find_best_fullrun_snapshot",
         "_fullrun_excel_ids_for_books",
+        "_fullrun_snapshot_key",
+        "_fullrun_source_stamp",
         "_inject_and_run_vba",
         "_isolated_wb_path",
         "_kill_pid_quiet",
@@ -6898,19 +6902,21 @@
       "side_effects": [
         "EXCEL_LOCK 직렬화",
         "Excel COM 조작(파괴적일 수 있음)",
-        "상태 변경(전역/세션): PIPELINE_PROGRESS, RESULTS",
+        "상태 변경(전역/세션): FULLRUN_STEP_SNAPSHOTS, PIPELINE_PROGRESS, RESULTS",
         "파일시스템 변경/IO"
       ],
       "reads": [
         "BACKEND_DIR",
         "EXCEL_LOCK",
         "EXCEL_SESSIONS",
+        "FULLRUN_STEP_SNAPSHOTS",
         "PIPELINE_PROGRESS",
         "RESULTS",
         "VBA_SKILL_ENTRY",
         "WORKBOOKS"
       ],
       "writes": [
+        "FULLRUN_STEP_SNAPSHOTS",
         "PIPELINE_PROGRESS",
         "RESULTS"
       ]
@@ -6921,7 +6927,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:11256-11259",
+      "loc": "serve_b2b.py:11430-11433",
       "signature": "(groups, reset_excel_ids=None, view_sheet=None, entry=None, output_mode='sync', state_sig=None)",
       "calls": [
         "_run_full_pipeline_single_instance_impl",
@@ -6941,7 +6947,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:11264-11305",
+      "loc": "serve_b2b.py:11438-11479",
       "signature": "(r1c1)",
       "calls": [
         "_col_letter"
@@ -6958,7 +6964,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:11308-11376",
+      "loc": "serve_b2b.py:11482-11550",
       "signature": "()",
       "calls": [
         "_r1c1_to_a1",
@@ -6976,7 +6982,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:11379-11408",
+      "loc": "serve_b2b.py:11553-11582",
       "signature": "(app)",
       "calls": [
         "_read_excel_clipboard_source"
@@ -6998,7 +7004,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:11411-11439",
+      "loc": "serve_b2b.py:11585-11613",
       "signature": "(name)",
       "calls": [
         "_workbook_name_lookup_key",
@@ -7019,7 +7025,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:11442-11587",
+      "loc": "serve_b2b.py:11616-11761",
       "signature": "(excel_id, values_only=False)",
       "calls": [
         "Cells",
@@ -7049,7 +7055,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:11590-11591",
+      "loc": "serve_b2b.py:11764-11765",
       "signature": "(excel_id, values_only=False)",
       "calls": [
         "_capture_copypaste_on_session_impl",
@@ -7067,7 +7073,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:11620-11623",
+      "loc": "serve_b2b.py:11794-11797",
       "signature": "(timeout_s=None)",
       "calls": [],
       "side_effects": [
@@ -7084,7 +7090,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:11626-11641",
+      "loc": "serve_b2b.py:11800-11815",
       "signature": "(name, wb)",
       "calls": [],
       "side_effects": [
@@ -7099,7 +7105,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:11659-11669",
+      "loc": "serve_b2b.py:11833-11843",
       "signature": "(name, globals=None, locals=None, fromlist=(), level=0)",
       "calls": [],
       "side_effects": [
@@ -7114,7 +7120,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:11702-11723",
+      "loc": "serve_b2b.py:11876-11897",
       "signature": "(c)",
       "calls": [],
       "side_effects": [
@@ -7131,7 +7137,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:11726-11760",
+      "loc": "serve_b2b.py:11900-11934",
       "signature": "(data, row0, col0)",
       "calls": [
         "_col_letter",
@@ -7149,7 +7155,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:11763-11772",
+      "loc": "serve_b2b.py:11937-11946",
       "signature": "(letter)",
       "calls": [],
       "side_effects": [
@@ -7164,7 +7170,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:11787-11792",
+      "loc": "serve_b2b.py:11961-11966",
       "signature": "(self, column, values)",
       "calls": [
         "values"
@@ -7184,7 +7190,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:11794-11811",
+      "loc": "serve_b2b.py:11968-11985",
       "signature": "(self, row)",
       "calls": [
         "_col_letter_to_index",
@@ -7205,7 +7211,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:11814-11816",
+      "loc": "serve_b2b.py:11988-11990",
       "signature": "(predicate)",
       "calls": [],
       "side_effects": [
@@ -7220,7 +7226,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:11828-11849",
+      "loc": "serve_b2b.py:12002-12023",
       "signature": "(self, app, wb, session, _shared=None, timeout_s=None)",
       "calls": [
         "_py_skill_deadline"
@@ -7242,7 +7248,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:11852-11860",
+      "loc": "serve_b2b.py:12026-12034",
       "signature": "(self, n=1)",
       "calls": [],
       "side_effects": [
@@ -7260,7 +7266,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:11862-11959",
+      "loc": "serve_b2b.py:12036-12133",
       "signature": "(self, sheet)",
       "calls": [
         "Worksheets",
@@ -7290,7 +7296,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:11962-11966",
+      "loc": "serve_b2b.py:12136-12140",
       "signature": "(letters)",
       "calls": [],
       "side_effects": [
@@ -7305,7 +7311,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:11968-11975",
+      "loc": "serve_b2b.py:12142-12149",
       "signature": "(self, ws, anchor, rows, cols)",
       "calls": [
         "Range",
@@ -7324,7 +7330,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:11978-11990",
+      "loc": "serve_b2b.py:12152-12164",
       "signature": "(rng, value)",
       "calls": [
         "_range_matrix",
@@ -7344,7 +7350,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:11992-12007",
+      "loc": "serve_b2b.py:12166-12181",
       "signature": "(self, ws, a1)",
       "calls": [
         "Range",
@@ -7364,7 +7370,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:12010-12025",
+      "loc": "serve_b2b.py:12184-12199",
       "signature": "(values)",
       "calls": [
         "append",
@@ -7384,7 +7390,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:12027-12040",
+      "loc": "serve_b2b.py:12201-12214",
       "signature": "(self, ws)",
       "calls": [
         "add",
@@ -7405,7 +7411,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:12042-12061",
+      "loc": "serve_b2b.py:12216-12235",
       "signature": "(self, rng, data)",
       "calls": [
         "_note_blanked_cells",
@@ -7427,7 +7433,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:12063-12089",
+      "loc": "serve_b2b.py:12237-12263",
       "signature": "(self, before, data)",
       "calls": [],
       "side_effects": [
@@ -7444,7 +7450,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:12091-12105",
+      "loc": "serve_b2b.py:12265-12279",
       "signature": "(self, ws, rng, new_data=None)",
       "calls": [
         "_mark_mutated",
@@ -7470,7 +7476,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:12108-12111",
+      "loc": "serve_b2b.py:12282-12285",
       "signature": "(self)",
       "calls": [
         "_excel_collection_names",
@@ -7491,7 +7497,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:12113-12118",
+      "loc": "serve_b2b.py:12287-12292",
       "signature": "(self, sheet)",
       "calls": [
         "_tick",
@@ -7513,7 +7519,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:12120-12132",
+      "loc": "serve_b2b.py:12294-12306",
       "signature": "(self, sheet, col=1)",
       "calls": [
         "Cells",
@@ -7540,7 +7546,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:12134-12138",
+      "loc": "serve_b2b.py:12308-12312",
       "signature": "(self, sheet, row=1)",
       "calls": [
         "Cells",
@@ -7565,7 +7571,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:12140-12160",
+      "loc": "serve_b2b.py:12314-12334",
       "signature": "(self, sheet)",
       "calls": [
         "Cells",
@@ -7592,7 +7598,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:12162-12169",
+      "loc": "serve_b2b.py:12336-12343",
       "signature": "(self, sheet)",
       "calls": [
         "_tick",
@@ -7614,7 +7620,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:12171-12213",
+      "loc": "serve_b2b.py:12345-12387",
       "signature": "(self, sheet, after=None, header_row=1)",
       "calls": [
         "Cells",
@@ -7646,7 +7652,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:12215-12238",
+      "loc": "serve_b2b.py:12389-12412",
       "signature": "(self, sheet, header_text, max_scan=30)",
       "calls": [
         "Cells",
@@ -7675,7 +7681,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:12240-12295",
+      "loc": "serve_b2b.py:12414-12469",
       "signature": "(self, sheet, header_text, header_row=1)",
       "calls": [
         "Cells",
@@ -7708,7 +7714,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:12297-12325",
+      "loc": "serve_b2b.py:12471-12499",
       "signature": "(self, sheet, a1_range=None)",
       "calls": [
         "_note_read_evidence",
@@ -7738,7 +7744,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:12327-12331",
+      "loc": "serve_b2b.py:12501-12505",
       "signature": "(self, sheet, a1)",
       "calls": [
         "read",
@@ -7758,7 +7764,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:12333-12346",
+      "loc": "serve_b2b.py:12507-12520",
       "signature": "(self, sheet, a1_range)",
       "calls": [
         "_note_read_evidence",
@@ -7787,7 +7793,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:12348-12358",
+      "loc": "serve_b2b.py:12522-12532",
       "signature": "(self, matrix)",
       "calls": [],
       "side_effects": [
@@ -7804,7 +7810,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:12360-12366",
+      "loc": "serve_b2b.py:12534-12540",
       "signature": "(self, sheet, a1_range)",
       "calls": [
         "_rng",
@@ -7828,7 +7834,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:12368-12375",
+      "loc": "serve_b2b.py:12542-12549",
       "signature": "(self, sheet, a1_range)",
       "calls": [
         "_rng",
@@ -7854,7 +7860,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:12378-12417",
+      "loc": "serve_b2b.py:12552-12591",
       "signature": "(self, sheet, a1_start, values, overwrite_formulas=True)",
       "calls": [
         "_apply_com_text_format_for_long_digit_columns",
@@ -7889,7 +7895,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:12419-12421",
+      "loc": "serve_b2b.py:12593-12595",
       "signature": "(self, sheet, a1, value, overwrite_formulas=True)",
       "calls": [
         "sheet",
@@ -7909,7 +7915,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:12423-12444",
+      "loc": "serve_b2b.py:12597-12618",
       "signature": "(self, sheet, a1_start, formulas)",
       "calls": [
         "_as_2d",
@@ -7941,7 +7947,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:12446-12472",
+      "loc": "serve_b2b.py:12620-12646",
       "signature": "(self, sheet_spec)",
       "calls": [
         "book"
@@ -7960,7 +7966,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:12474-12512",
+      "loc": "serve_b2b.py:12648-12686",
       "signature": "(self, src_sheet, src_range, dst_sheet, dst_cell)",
       "calls": [
         "_ctx_and_sheet_from_spec",
@@ -7991,7 +7997,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:12514-12619",
+      "loc": "serve_b2b.py:12688-12793",
       "signature": "(self, src_sheet, src_range, dst_sheet, dst_cell, src_book=None, dst_book=None, values_only=False)",
       "calls": [
         "Cells",
@@ -8027,7 +8033,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:12621-12636",
+      "loc": "serve_b2b.py:12795-12810",
       "signature": "(self, sheet, a1_range, color=None)",
       "calls": [
         "_parse_excel_color",
@@ -8055,7 +8061,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:12638-12660",
+      "loc": "serve_b2b.py:12812-12834",
       "signature": "(self, sheet, a1_range, size=None, bold=None, italic=None, color=None, name=None)",
       "calls": [
         "_parse_excel_color",
@@ -8082,7 +8088,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:12662-12714",
+      "loc": "serve_b2b.py:12836-12888",
       "signature": "(self, sheet, a1_range, style='thin', color=None, edges='all')",
       "calls": [
         "_parse_excel_color",
@@ -8110,7 +8116,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:12716-12734",
+      "loc": "serve_b2b.py:12890-12908",
       "signature": "(self, sheet, a1_range, keep_formulas=False)",
       "calls": [
         "_journal_save",
@@ -8136,7 +8142,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:12736-12766",
+      "loc": "serve_b2b.py:12910-12940",
       "signature": "(self, sheet, a1_range, delta=1)",
       "calls": [
         "Cells",
@@ -8166,7 +8172,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:12769-12781",
+      "loc": "serve_b2b.py:12943-12955",
       "signature": "(self, sheet, row, count=1)",
       "calls": [
         "Rows",
@@ -8192,7 +8198,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:12783-12797",
+      "loc": "serve_b2b.py:12957-12971",
       "signature": "(self, sheet, col, count=1)",
       "calls": [
         "Columns",
@@ -8221,7 +8227,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:12800-12806",
+      "loc": "serve_b2b.py:12974-12980",
       "signature": "(letter)",
       "calls": [],
       "side_effects": [
@@ -8236,7 +8242,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:12808-12820",
+      "loc": "serve_b2b.py:12982-12994",
       "signature": "(self, sheet, row, count=1)",
       "calls": [
         "Rows",
@@ -8262,7 +8268,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:12822-12874",
+      "loc": "serve_b2b.py:12996-13048",
       "signature": "(self, sheet, predicate, header_rows=1)",
       "calls": [
         "Range",
@@ -8293,7 +8299,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:12876-12891",
+      "loc": "serve_b2b.py:13050-13065",
       "signature": "(self, sheet, col, count=1)",
       "calls": [
         "Columns",
@@ -8322,7 +8328,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:12893-12927",
+      "loc": "serve_b2b.py:13067-13101",
       "signature": "(self, sheet=None)",
       "calls": [
         "_tick",
@@ -8347,7 +8353,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:12929-12946",
+      "loc": "serve_b2b.py:13103-13120",
       "signature": "(self, sheet=None, header_row=1)",
       "calls": [
         "Cells",
@@ -8378,7 +8384,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:12948-12990",
+      "loc": "serve_b2b.py:13122-13164",
       "signature": "(self, sheet, column, values, header_row=1)",
       "calls": [
         "Cells",
@@ -8413,7 +8419,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:12992-12994",
+      "loc": "serve_b2b.py:13166-13168",
       "signature": "(self, column, values)",
       "calls": [
         "values"
@@ -8430,7 +8436,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:13010-13019",
+      "loc": "serve_b2b.py:13184-13193",
       "signature": "(self, ws)",
       "calls": [
         "_tick"
@@ -8450,7 +8456,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:13021-13129",
+      "loc": "serve_b2b.py:13195-13303",
       "signature": "(self, ws, sheet, decl, dest_name, header_rows, after)",
       "calls": [
         "Cells",
@@ -8492,7 +8498,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:13131-13247",
+      "loc": "serve_b2b.py:13305-13421",
       "signature": "(self, sheet, predicate, dest_name, header_rows=1, after=None)",
       "calls": [
         "Cells",
@@ -8535,7 +8541,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:13249-13400",
+      "loc": "serve_b2b.py:13423-13574",
       "signature": "(self, sheet, group_by, value=None, agg='sum', dest_name=None, header_rows=1, after=None, column=None)",
       "calls": [
         "Range",
@@ -8577,7 +8583,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:13402-13537",
+      "loc": "serve_b2b.py:13576-13711",
       "signature": "(self, sheet, group_by, value=None, agg='sum', dest_name=None, column=None, header_rows=1)",
       "calls": [
         "Cells",
@@ -8618,7 +8624,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:13539-13568",
+      "loc": "serve_b2b.py:13713-13742",
       "signature": "(self, sheet, group_by, value=None, agg='sum', dest_name=None, header_rows=1, after=None, column=None)",
       "calls": [
         "Worksheets",
@@ -8643,7 +8649,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:13570-13572",
+      "loc": "serve_b2b.py:13744-13746",
       "signature": "(self, value)",
       "calls": [
         "normalize_text",
@@ -8661,7 +8667,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:13574-13644",
+      "loc": "serve_b2b.py:13748-13818",
       "signature": "(self, sheet, columns, before, header_row=1, scan_from=None)",
       "calls": [
         "_col_index",
@@ -8700,7 +8706,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:13646-13689",
+      "loc": "serve_b2b.py:13820-13863",
       "signature": "(self, sheet, src, dst, header_row=None, clear_source=True)",
       "calls": [
         "Cells",
@@ -8737,7 +8743,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:13691-13695",
+      "loc": "serve_b2b.py:13865-13869",
       "signature": "(self, sheet, src, dst, header_row=None)",
       "calls": [
         "header_row",
@@ -8758,7 +8764,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:13697-13725",
+      "loc": "serve_b2b.py:13871-13899",
       "signature": "(self, src_sheet, src_range, dst_sheet, dst_cell)",
       "calls": [
         "_ctx_and_sheet_from_spec",
@@ -8788,7 +8794,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:13727-13771",
+      "loc": "serve_b2b.py:13901-13945",
       "signature": "(self, sheet, col_a, col_b, header_row=None)",
       "calls": [
         "Cells",
@@ -8822,7 +8828,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:13773-13809",
+      "loc": "serve_b2b.py:13947-13983",
       "signature": "(self, sheet, dest_col, src_cols, header_row=None)",
       "calls": [
         "Cells",
@@ -8854,7 +8860,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:13811-13854",
+      "loc": "serve_b2b.py:13985-14028",
       "signature": "(self, sheet, col, header_row=None, exclude_total_rows=True)",
       "calls": [
         "Cells",
@@ -8890,7 +8896,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:13856-13941",
+      "loc": "serve_b2b.py:14030-14115",
       "signature": "(self, src_sheet, dst_sheet, key_col, first_col, last_col, src_scan=None, dst_scan=None, on_mismatch='skip')",
       "calls": [
         "Cells",
@@ -8923,7 +8929,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:13943-13986",
+      "loc": "serve_b2b.py:14117-14160",
       "signature": "(self, sheet, value_col, conditions, header_row=None)",
       "calls": [
         "_coerce_number",
@@ -8960,7 +8966,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:13988-14040",
+      "loc": "serve_b2b.py:14162-14214",
       "signature": "(self, src_sheet, src_key_col, src_val_col, dst_sheet, dst_key_col, dst_out_col, header_row=None, dst_start_row=None)",
       "calls": [
         "Cells",
@@ -8995,7 +9001,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:14042-14057",
+      "loc": "serve_b2b.py:14216-14231",
       "signature": "(self, name, after=None, before=None)",
       "calls": [
         "Worksheets",
@@ -9021,7 +9027,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:14059-14078",
+      "loc": "serve_b2b.py:14233-14252",
       "signature": "(self, name)",
       "calls": [],
       "side_effects": [
@@ -9036,7 +9042,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:14080-14107",
+      "loc": "serve_b2b.py:14254-14281",
       "signature": "(self, name, before=None, after=None)",
       "calls": [
         "Worksheets",
@@ -9061,7 +9067,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:14109-14128",
+      "loc": "serve_b2b.py:14283-14302",
       "signature": "(self, old_name, new_name)",
       "calls": [
         "_excel_collection_names",
@@ -9086,7 +9092,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:14130-14135",
+      "loc": "serve_b2b.py:14304-14309",
       "signature": "(self, name)",
       "calls": [
         "_tick",
@@ -9109,7 +9115,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:14137-14286",
+      "loc": "serve_b2b.py:14311-14460",
       "signature": "(self, src_sheet, dst_book=None, new_name=None, before=None, after=None)",
       "calls": [
         "Worksheets",
@@ -9145,7 +9151,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:14288-14416",
+      "loc": "serve_b2b.py:14462-14590",
       "signature": "(self, src_books, dest_sheet='통합', src_sheet=None, header_row=None, scan_rows=30)",
       "calls": [
         "Cells",
@@ -9184,7 +9190,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:14418-14480",
+      "loc": "serve_b2b.py:14592-14654",
       "signature": "(self, sheet, a1_range, key_col, ascending=True, has_header=True)",
       "calls": [
         "Columns",
@@ -9216,7 +9222,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:14483-14489",
+      "loc": "serve_b2b.py:14657-14663",
       "signature": "(self, sheet, col_range, hidden=True)",
       "calls": [
         "Columns",
@@ -9241,7 +9247,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:14491-14496",
+      "loc": "serve_b2b.py:14665-14670",
       "signature": "(self, sheet, row_range, hidden=True)",
       "calls": [
         "Rows",
@@ -9266,7 +9272,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:14498-14505",
+      "loc": "serve_b2b.py:14672-14679",
       "signature": "(self, sheet, a1_range)",
       "calls": [
         "_journal_save",
@@ -9294,7 +9300,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:14507-14513",
+      "loc": "serve_b2b.py:14681-14687",
       "signature": "(self, sheet, a1_range)",
       "calls": [
         "_rng",
@@ -9320,7 +9326,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:14515-14521",
+      "loc": "serve_b2b.py:14689-14695",
       "signature": "(self, sheet, a1_range, fmt)",
       "calls": [
         "_rng",
@@ -9346,7 +9352,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:14524-14533",
+      "loc": "serve_b2b.py:14698-14707",
       "signature": "(self, sheet, col, header_row=1)",
       "calls": [
         "_col_index",
@@ -9370,7 +9376,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:14535-14567",
+      "loc": "serve_b2b.py:14709-14741",
       "signature": "(self, sheet, key_col, into_col, table_sheet, table_key_col, table_val_col, header_row=1, default=None)",
       "calls": [
         "_col_letter",
@@ -9401,7 +9407,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:14569-14888",
+      "loc": "serve_b2b.py:14743-15062",
       "signature": "(self, source, target, columns, key=None, source_header_row=1, header_row=1, rows=None, aliases=None, allow_partial=False)",
       "calls": [
         "_col_index",
@@ -9434,7 +9440,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:14890-14909",
+      "loc": "serve_b2b.py:15064-15083",
       "signature": "(self, sheet, sum_cols, label_col=None, label='합계', header_row=1)",
       "calls": [
         "_col_letter",
@@ -9462,7 +9468,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:14911-14942",
+      "loc": "serve_b2b.py:15085-15116",
       "signature": "(self, sheet, key_cols, header_row=1, keep='first')",
       "calls": [
         "_col_letter",
@@ -9495,7 +9501,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:14944-14966",
+      "loc": "serve_b2b.py:15118-15140",
       "signature": "(self, sheet, col, delimiter, into=None, header_row=1)",
       "calls": [
         "_col_letter",
@@ -9527,7 +9533,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:14968-15006",
+      "loc": "serve_b2b.py:15142-15180",
       "signature": "(self, sheet, a1_range, find, repl, match_entire=False)",
       "calls": [
         "_journal_save",
@@ -9556,7 +9562,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:15009-15153",
+      "loc": "serve_b2b.py:15183-15327",
       "signature": "(self, workbook_name)",
       "calls": [
         "_alias_open_workbook_name",
@@ -9586,7 +9592,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:15156-15157",
+      "loc": "serve_b2b.py:15330-15331",
       "signature": "(self)",
       "calls": [],
       "side_effects": [
@@ -9603,7 +9609,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:15159-15177",
+      "loc": "serve_b2b.py:15333-15351",
       "signature": "(self, book_name)",
       "calls": [],
       "side_effects": [
@@ -9621,7 +9627,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:15179-15193",
+      "loc": "serve_b2b.py:15353-15367",
       "signature": "(self)",
       "calls": [
         "Range",
@@ -9643,7 +9649,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:15195-15206",
+      "loc": "serve_b2b.py:15369-15380",
       "signature": "(self)",
       "calls": [],
       "side_effects": [
@@ -9660,7 +9666,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:15209-15341",
+      "loc": "serve_b2b.py:15383-15515",
       "signature": "(code)",
       "calls": [
         "add",
@@ -9682,7 +9688,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:15344-15352",
+      "loc": "serve_b2b.py:15518-15526",
       "signature": "(st)",
       "calls": [],
       "side_effects": [
@@ -9699,7 +9705,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:15355-15457",
+      "loc": "serve_b2b.py:15529-15631",
       "signature": "(app, wb, session, code, skip_static=False, timeout_s=None)",
       "calls": [
         "_changed",
@@ -9724,7 +9730,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:15460-15521",
+      "loc": "serve_b2b.py:15634-15695",
       "signature": "(excel_id, code, skip_static=False, timeout_s=None)",
       "calls": [
         "_ensure_companion_workbooks",
@@ -9753,7 +9759,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:15530-15553",
+      "loc": "serve_b2b.py:15704-15727",
       "signature": "(wb, sheet_name)",
       "calls": [
         "Worksheets",
@@ -9773,7 +9779,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:15556-15645",
+      "loc": "serve_b2b.py:15730-15819",
       "signature": "(result_id, code, sheet_name=None)",
       "calls": [
         "_excel_process_id",
@@ -9805,7 +9811,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:15648-15656",
+      "loc": "serve_b2b.py:15822-15830",
       "signature": "(result_id, code, sheet=None)",
       "calls": [
         "_verify_step_isolated_impl",
@@ -9826,7 +9832,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:15659-15685",
+      "loc": "serve_b2b.py:15833-15859",
       "signature": "(excel_id, code, extended=False)",
       "calls": [
         "_force_restart_excel_sessions_direct",
@@ -9850,7 +9856,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:15690-15697",
+      "loc": "serve_b2b.py:15864-15871",
       "signature": "(value)",
       "calls": [
         "value"
@@ -9867,7 +9873,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:15700-15707",
+      "loc": "serve_b2b.py:15874-15881",
       "signature": "(value)",
       "calls": [
         "row",
@@ -9885,7 +9891,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:15710-15717",
+      "loc": "serve_b2b.py:15884-15891",
       "signature": "(obj)",
       "calls": [],
       "side_effects": [
@@ -9900,7 +9906,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:15720-15727",
+      "loc": "serve_b2b.py:15894-15901",
       "signature": "(n)",
       "calls": [],
       "side_effects": [
@@ -9915,7 +9921,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:15735-15743",
+      "loc": "serve_b2b.py:15909-15917",
       "signature": "(cells)",
       "calls": [],
       "side_effects": [
@@ -9932,7 +9938,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:15746-15762",
+      "loc": "serve_b2b.py:15920-15936",
       "signature": "(v)",
       "calls": [
         "replace"
@@ -9949,7 +9955,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:15765-15771",
+      "loc": "serve_b2b.py:15939-15945",
       "signature": "(v)",
       "calls": [],
       "side_effects": [
@@ -9964,7 +9970,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:15774-15789",
+      "loc": "serve_b2b.py:15948-15963",
       "signature": "(cell, op, target)",
       "calls": [
         "_coerce_number",
@@ -9983,7 +9989,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:15792-15804",
+      "loc": "serve_b2b.py:15966-15978",
       "signature": "(v)",
       "calls": [
         "_norm_key",
@@ -10001,7 +10007,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:15812-15852",
+      "loc": "serve_b2b.py:15986-16026",
       "signature": "(wb, max_rows=60, max_cols=_SNAPSHOT_MAX_COLS, only_sheet=None)",
       "calls": [
         "Cells",
@@ -10024,7 +10030,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:15855-15886",
+      "loc": "serve_b2b.py:16029-16060",
       "signature": "(ws)",
       "calls": [
         "Cells",
@@ -10051,7 +10057,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:15889-15911",
+      "loc": "serve_b2b.py:16063-16085",
       "signature": "(wb, prefer_workbook=False)",
       "calls": [
         "Worksheets",
@@ -10071,7 +10077,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:15914-15920",
+      "loc": "serve_b2b.py:16088-16094",
       "signature": "()",
       "calls": [],
       "side_effects": [
@@ -10086,7 +10092,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:15923-15944",
+      "loc": "serve_b2b.py:16097-16118",
       "signature": "(wb, prefer_workbook=False)",
       "calls": [
         "_excel_collection_names",
@@ -10104,7 +10110,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:15947-15954",
+      "loc": "serve_b2b.py:16121-16128",
       "signature": "(session, wb)",
       "calls": [
         "Worksheets",
@@ -10123,7 +10129,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:15957-16093",
+      "loc": "serve_b2b.py:16131-16267",
       "signature": "(excel_id)",
       "calls": [
         "Worksheets",
@@ -10156,7 +10162,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:16096-16126",
+      "loc": "serve_b2b.py:16270-16300",
       "signature": "(rng)",
       "calls": [
         "Cells",
@@ -10177,7 +10183,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:16129-16139",
+      "loc": "serve_b2b.py:16303-16313",
       "signature": "(app)",
       "calls": [],
       "side_effects": [
@@ -10192,7 +10198,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:16142-16167",
+      "loc": "serve_b2b.py:16316-16341",
       "signature": "(excel_id)",
       "calls": [
         "_excel_range_from_cursor",
@@ -10216,7 +10222,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:16170-16171",
+      "loc": "serve_b2b.py:16344-16345",
       "signature": "(excel_id)",
       "calls": [
         "_poll_excel_session_changes_impl",
@@ -10234,7 +10240,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:16174-16195",
+      "loc": "serve_b2b.py:16348-16369",
       "signature": "(excel_id)",
       "calls": [
         "_active_sheet_name",
@@ -10259,7 +10265,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:16198-16199",
+      "loc": "serve_b2b.py:16372-16373",
       "signature": "(excel_id)",
       "calls": [
         "_read_excel_session_selection_impl",
@@ -10277,7 +10283,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:16202-16203",
+      "loc": "serve_b2b.py:16376-16377",
       "signature": "(excel_id)",
       "calls": [
         "_get_excel_hover_info_impl",
@@ -10295,7 +10301,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:16206-16255",
+      "loc": "serve_b2b.py:16380-16429",
       "signature": "(path, name=None, workbook_id=None, result_id=None, read_only_mirror=False, left=None, top=None, width=None, height=None, client_left=None, client_top=None, client_width=None, client_height=None, viewport_width=None, viewport_height=None, browser_title=None, native_parent_hwnd=None, native_host_hwnd=None, native_overlay=False, live_editable=False, defer_visible=False, from_state_sig=None)",
       "calls": [
         "_open_excel_session_impl",
@@ -10313,7 +10319,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:16258-16259",
+      "loc": "serve_b2b.py:16432-16433",
       "signature": "(excel_id, sheet=None, address=None)",
       "calls": [
         "_activate_excel_session_impl",
@@ -10332,7 +10338,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:16262-16263",
+      "loc": "serve_b2b.py:16436-16437",
       "signature": "(excel_id, name=None, internal=False)",
       "calls": [
         "_save_excel_session_impl",
@@ -10350,7 +10356,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:16266-16267",
+      "loc": "serve_b2b.py:16440-16441",
       "signature": "(excel_id)",
       "calls": [
         "_close_excel_session_impl",
@@ -10368,7 +10374,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:16270-16271",
+      "loc": "serve_b2b.py:16444-16445",
       "signature": "(excel_id, path, name=None, result_id=None, read_only_mirror=None)",
       "calls": [
         "_replace_excel_session_workbook_impl",
@@ -10386,7 +10392,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:16274-16311",
+      "loc": "serve_b2b.py:16448-16485",
       "signature": "(excel_id, left, top, width, height, client_left=None, client_top=None, client_width=None, client_height=None, viewport_width=None, viewport_height=None, browser_title=None, native_parent_hwnd=None, native_host_hwnd=None, native_overlay=False, keep_zorder=False)",
       "calls": [
         "_position_excel_session_impl",
@@ -10404,7 +10410,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:16314-16315",
+      "loc": "serve_b2b.py:16488-16489",
       "signature": "(excel_id)",
       "calls": [
         "_raise_excel_session_impl",
@@ -10422,7 +10428,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:16318-16355",
+      "loc": "serve_b2b.py:16492-16529",
       "signature": "(excel_id, left, top, width, height, client_left=None, client_top=None, client_width=None, client_height=None, viewport_width=None, viewport_height=None, browser_title=None, native_parent_hwnd=None, native_host_hwnd=None, native_overlay=False, skip_position=False)",
       "calls": [
         "_show_only_excel_session_impl",
@@ -10440,7 +10446,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:16358-16393",
+      "loc": "serve_b2b.py:16532-16567",
       "signature": "(excel_id, left, top, width, height, client_left=None, client_top=None, client_width=None, client_height=None, viewport_width=None, viewport_height=None, browser_title=None, native_parent_hwnd=None, native_host_hwnd=None, native_overlay=False)",
       "calls": [
         "_recover_excel_session_impl",
@@ -10458,7 +10464,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:16396-16397",
+      "loc": "serve_b2b.py:16570-16571",
       "signature": "(excel_id)",
       "calls": [
         "_hide_excel_session_impl",
@@ -10476,7 +10482,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:16400-16401",
+      "loc": "serve_b2b.py:16574-16575",
       "signature": "()",
       "calls": [
         "_hide_all_excel_sessions_impl",
@@ -10494,7 +10500,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:16404-16405",
+      "loc": "serve_b2b.py:16578-16579",
       "signature": "()",
       "calls": [
         "_hide_inactive_excel_sessions_impl",
@@ -10512,7 +10518,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:16408-16416",
+      "loc": "serve_b2b.py:16582-16590",
       "signature": "(step)",
       "calls": [
         "normalize_python_pipeline_code"
@@ -10529,7 +10535,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:16428-16431",
+      "loc": "serve_b2b.py:16602-16605",
       "signature": "(code)",
       "calls": [],
       "side_effects": [
@@ -10546,7 +10552,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:16434-16443",
+      "loc": "serve_b2b.py:16608-16617",
       "signature": "(step)",
       "calls": [
         "is_python_pipeline_step"
@@ -10563,7 +10569,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:16446-16448",
+      "loc": "serve_b2b.py:16620-16622",
       "signature": "(payload)",
       "calls": [
         "is_vba_pipeline_step"
@@ -10580,7 +10586,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:16451-16480",
+      "loc": "serve_b2b.py:16625-16654",
       "signature": "(code)",
       "calls": [
         "append",
@@ -10598,7 +10604,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:16483-16488",
+      "loc": "serve_b2b.py:16657-16662",
       "signature": "(payload)",
       "calls": [
         "is_python_pipeline_step"
@@ -10615,7 +10621,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:16491-16492",
+      "loc": "serve_b2b.py:16665-16666",
       "signature": "(collection)",
       "calls": [
         "_excel_collection_names"
@@ -10632,7 +10638,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:16499-16500",
+      "loc": "serve_b2b.py:16673-16674",
       "signature": "(self, cell)",
       "calls": [
         "__setattr__",
@@ -10650,7 +10656,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:16502-16503",
+      "loc": "serve_b2b.py:16676-16677",
       "signature": "(self, name)",
       "calls": [],
       "side_effects": [
@@ -10665,7 +10671,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:16506-16507",
+      "loc": "serve_b2b.py:16680-16681",
       "signature": "(self)",
       "calls": [],
       "side_effects": [
@@ -10682,7 +10688,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:16510-16511",
+      "loc": "serve_b2b.py:16684-16685",
       "signature": "(self, v)",
       "calls": [],
       "side_effects": [
@@ -10699,7 +10705,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:16516-16517",
+      "loc": "serve_b2b.py:16690-16691",
       "signature": "(self, worksheet)",
       "calls": [
         "__setattr__"
@@ -10716,7 +10722,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:16519-16520",
+      "loc": "serve_b2b.py:16693-16694",
       "signature": "(self, name)",
       "calls": [],
       "side_effects": [
@@ -10731,7 +10737,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:16522-16528",
+      "loc": "serve_b2b.py:16696-16702",
       "signature": "(self, key, value)",
       "calls": [
         "value"
@@ -10750,7 +10756,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:16531-16532",
+      "loc": "serve_b2b.py:16705-16706",
       "signature": "(self)",
       "calls": [],
       "side_effects": [
@@ -10767,7 +10773,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:16535-16536",
+      "loc": "serve_b2b.py:16709-16710",
       "signature": "(self)",
       "calls": [],
       "side_effects": [
@@ -10784,7 +10790,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:16539-16540",
+      "loc": "serve_b2b.py:16713-16714",
       "signature": "(self)",
       "calls": [],
       "side_effects": [
@@ -10801,7 +10807,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:16543-16547",
+      "loc": "serve_b2b.py:16717-16721",
       "signature": "(self)",
       "calls": [],
       "side_effects": [
@@ -10818,7 +10824,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:16550-16554",
+      "loc": "serve_b2b.py:16724-16728",
       "signature": "(self)",
       "calls": [],
       "side_effects": [
@@ -10835,7 +10841,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:16556-16560",
+      "loc": "serve_b2b.py:16730-16734",
       "signature": "(self, row=None, column=None, value=_EXCEL_NO_CELL_VALUE)",
       "calls": [
         "Cells",
@@ -10856,7 +10862,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:16562-16566",
+      "loc": "serve_b2b.py:16736-16740",
       "signature": "(self, idx, amount=1)",
       "calls": [
         "Columns",
@@ -10876,7 +10882,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:16568-16572",
+      "loc": "serve_b2b.py:16742-16746",
       "signature": "(self, idx, amount=1)",
       "calls": [
         "Range",
@@ -10896,7 +10902,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:16574-16578",
+      "loc": "serve_b2b.py:16748-16752",
       "signature": "(self, idx, amount=1)",
       "calls": [
         "Columns",
@@ -10916,7 +10922,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:16580-16584",
+      "loc": "serve_b2b.py:16754-16758",
       "signature": "(self, idx, amount=1)",
       "calls": [
         "Range",
@@ -10936,7 +10942,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:16586-16595",
+      "loc": "serve_b2b.py:16760-16769",
       "signature": "(self, values)",
       "calls": [
         "Cells",
@@ -10959,7 +10965,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:16597-16599",
+      "loc": "serve_b2b.py:16771-16773",
       "signature": "(self)",
       "calls": [],
       "side_effects": [
@@ -10976,7 +10982,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:16603-16606",
+      "loc": "serve_b2b.py:16777-16780",
       "signature": "(self, ctx, workbook, collection)",
       "calls": [],
       "side_effects": [
@@ -10995,7 +11001,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:16608-16613",
+      "loc": "serve_b2b.py:16782-16787",
       "signature": "(self, key)",
       "calls": [
         "_find_sheet_name",
@@ -11017,7 +11023,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:16615-16616",
+      "loc": "serve_b2b.py:16789-16790",
       "signature": "(self, key)",
       "calls": [
         "__call__"
@@ -11036,7 +11042,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:16618-16619",
+      "loc": "serve_b2b.py:16792-16793",
       "signature": "(self, key)",
       "calls": [
         "__call__"
@@ -11055,7 +11061,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:16621-16623",
+      "loc": "serve_b2b.py:16795-16797",
       "signature": "(self)",
       "calls": [
         "Item",
@@ -11075,7 +11081,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:16625-16626",
+      "loc": "serve_b2b.py:16799-16800",
       "signature": "(self)",
       "calls": [],
       "side_effects": [
@@ -11092,7 +11098,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:16629-16630",
+      "loc": "serve_b2b.py:16803-16804",
       "signature": "(self)",
       "calls": [
         "_excel_collection_names"
@@ -11111,7 +11117,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:16632-16636",
+      "loc": "serve_b2b.py:16806-16810",
       "signature": "(self, name=None)",
       "calls": [],
       "side_effects": [
@@ -11128,7 +11134,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:16638-16639",
+      "loc": "serve_b2b.py:16812-16813",
       "signature": "(self, name)",
       "calls": [],
       "side_effects": [
@@ -11145,7 +11151,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:16643-16646",
+      "loc": "serve_b2b.py:16817-16820",
       "signature": "(self, ctx, workbook, name=None)",
       "calls": [],
       "side_effects": [
@@ -11164,7 +11170,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:16649-16650",
+      "loc": "serve_b2b.py:16823-16824",
       "signature": "(self)",
       "calls": [],
       "side_effects": [
@@ -11181,7 +11187,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:16653-16654",
+      "loc": "serve_b2b.py:16827-16828",
       "signature": "(self)",
       "calls": [],
       "side_effects": [
@@ -11199,7 +11205,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:16656-16657",
+      "loc": "serve_b2b.py:16830-16831",
       "signature": "(self, name)",
       "calls": [],
       "side_effects": [
@@ -11216,7 +11222,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:16659-16660",
+      "loc": "serve_b2b.py:16833-16834",
       "signature": "(self, name=None)",
       "calls": [],
       "side_effects": [
@@ -11233,7 +11239,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:16663-16664",
+      "loc": "serve_b2b.py:16837-16838",
       "signature": "(self)",
       "calls": [],
       "side_effects": [
@@ -11248,7 +11254,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:16666-16667",
+      "loc": "serve_b2b.py:16840-16841",
       "signature": "(self, name=None)",
       "calls": [],
       "side_effects": [
@@ -11265,7 +11271,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:16669-16670",
+      "loc": "serve_b2b.py:16843-16844",
       "signature": "(self, sheet_or_name, address)",
       "calls": [],
       "side_effects": [
@@ -11282,7 +11288,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:16672-16673",
+      "loc": "serve_b2b.py:16846-16847",
       "signature": "(self, sheet_or_name=None)",
       "calls": [],
       "side_effects": [
@@ -11299,7 +11305,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:16675-16676",
+      "loc": "serve_b2b.py:16849-16850",
       "signature": "(self, sheet_or_name=None, start_row=1)",
       "calls": [],
       "side_effects": [
@@ -11316,7 +11322,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:16678-16679",
+      "loc": "serve_b2b.py:16852-16853",
       "signature": "(self, sheet_or_name=None, start_row=1)",
       "calls": [
         "iter_rows"
@@ -11335,7 +11341,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:16681-16682",
+      "loc": "serve_b2b.py:16855-16856",
       "signature": "(self, sheet_or_name=None)",
       "calls": [],
       "side_effects": [
@@ -11352,7 +11358,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:16684-16685",
+      "loc": "serve_b2b.py:16858-16859",
       "signature": "(self, sheet_or_name, row, col)",
       "calls": [
         "col",
@@ -11372,7 +11378,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:16687-16688",
+      "loc": "serve_b2b.py:16861-16862",
       "signature": "(self, sheet_or_name, row, col)",
       "calls": [
         "col",
@@ -11392,7 +11398,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:16690-16691",
+      "loc": "serve_b2b.py:16864-16865",
       "signature": "(self, sheet_or_name, header, header_rows=20)",
       "calls": [],
       "side_effects": [
@@ -11409,7 +11415,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:16693-16694",
+      "loc": "serve_b2b.py:16867-16868",
       "signature": "(self, sheet_or_name=None, header_rows=20)",
       "calls": [],
       "side_effects": [
@@ -11426,7 +11432,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:16698-16712",
+      "loc": "serve_b2b.py:16872-16886",
       "signature": "(self, app, output_wb, input_wbs, output_name=None, active_file_id=None, active_sheet=None)",
       "calls": [
         "_workbook_for_file_id"
@@ -11460,7 +11466,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:16714-16715",
+      "loc": "serve_b2b.py:16888-16889",
       "signature": "(self, wb)",
       "calls": [],
       "side_effects": [
@@ -11475,7 +11481,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:16717-16729",
+      "loc": "serve_b2b.py:16891-16903",
       "signature": "(self, file_id)",
       "calls": [
         "workbook_like"
@@ -11496,7 +11502,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:16731-16732",
+      "loc": "serve_b2b.py:16905-16906",
       "signature": "(self)",
       "calls": [],
       "side_effects": [
@@ -11514,7 +11520,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:16734-16739",
+      "loc": "serve_b2b.py:16908-16913",
       "signature": "(self, wb)",
       "calls": [
         "_unwrap_workbook"
@@ -11534,7 +11540,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:16741-16742",
+      "loc": "serve_b2b.py:16915-16916",
       "signature": "(self, value)",
       "calls": [
         "normalize_text",
@@ -11552,7 +11558,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:16744-16762",
+      "loc": "serve_b2b.py:16918-16936",
       "signature": "(self, hint=None)",
       "calls": [
         "_find_sheet_name",
@@ -11578,7 +11584,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:16764-16769",
+      "loc": "serve_b2b.py:16938-16943",
       "signature": "(self, hint=None)",
       "calls": [
         "values",
@@ -11599,7 +11605,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:16771-16799",
+      "loc": "serve_b2b.py:16945-16973",
       "signature": "(self, wb, name=None, allow_single=True)",
       "calls": [
         "_excel_names",
@@ -11624,7 +11630,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:16801-16840",
+      "loc": "serve_b2b.py:16975-17014",
       "signature": "(self, name=None, workbook=None)",
       "calls": [
         "Worksheets",
@@ -11659,7 +11665,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:16842-16843",
+      "loc": "serve_b2b.py:17016-17017",
       "signature": "(self, name=None, workbook=None)",
       "calls": [
         "sheet"
@@ -11678,7 +11684,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:16845-16855",
+      "loc": "serve_b2b.py:17019-17029",
       "signature": "(self, sheet_hint=None, file_hint=None)",
       "calls": [
         "Worksheets",
@@ -11703,7 +11709,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:16857-16865",
+      "loc": "serve_b2b.py:17031-17039",
       "signature": "(self, sheet_or_name, address, workbook=None)",
       "calls": [
         "Range",
@@ -11729,7 +11735,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:16867-16876",
+      "loc": "serve_b2b.py:17041-17050",
       "signature": "(self, sheet_or_name, workbook=None)",
       "calls": [
         "row",
@@ -11750,7 +11756,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:16878-16889",
+      "loc": "serve_b2b.py:17052-17063",
       "signature": "(self, sheet_or_name, workbook=None, start_row=1)",
       "calls": [
         "_ws_of",
@@ -11771,7 +11777,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:16891-16892",
+      "loc": "serve_b2b.py:17065-17066",
       "signature": "(self, sheet_or_name, workbook=None, start_row=1)",
       "calls": [
         "iter_rows"
@@ -11790,7 +11796,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:16894-16896",
+      "loc": "serve_b2b.py:17068-17070",
       "signature": "(self, sheet_or_name, row, col, workbook=None)",
       "calls": [
         "Cells",
@@ -11812,7 +11818,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:16898-16899",
+      "loc": "serve_b2b.py:17072-17073",
       "signature": "(self, sheet_or_name, row, col, workbook=None)",
       "calls": [
         "col",
@@ -11833,7 +11839,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:16901-16902",
+      "loc": "serve_b2b.py:17075-17076",
       "signature": "(self, sheet_or_name, workbook=None)",
       "calls": [
         "rows"
@@ -11852,7 +11858,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:16904-16915",
+      "loc": "serve_b2b.py:17078-17089",
       "signature": "(self, sheet_or_name, header, workbook=None, header_rows=20)",
       "calls": [
         "normalize",
@@ -11875,7 +11881,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:16917-16925",
+      "loc": "serve_b2b.py:17091-17099",
       "signature": "(self, sheet_or_name, workbook=None, header_rows=20)",
       "calls": [
         "rows"
@@ -11894,7 +11900,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:16927-16928",
+      "loc": "serve_b2b.py:17101-17102",
       "signature": "(self, sheet_or_name, workbook=None, header_rows=20)",
       "calls": [
         "header_row"
@@ -11913,7 +11919,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:16931-16932",
+      "loc": "serve_b2b.py:17105-17106",
       "signature": "(self, sheet_or_name, workbook=None)",
       "calls": [
         "sheet"
@@ -11932,7 +11938,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:16934-16948",
+      "loc": "serve_b2b.py:17108-17122",
       "signature": "(self, rows, name_or_idx, header_rows=20)",
       "calls": [
         "normalize"
@@ -11951,7 +11957,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:16950-16964",
+      "loc": "serve_b2b.py:17124-17138",
       "signature": "(self, name, workbook=None)",
       "calls": [
         "Worksheets",
@@ -11981,7 +11987,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:16966-16976",
+      "loc": "serve_b2b.py:17140-17150",
       "signature": "(self, ws, grid, start_row=1, start_col=1)",
       "calls": [
         "Cells",
@@ -12000,7 +12006,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:16979-16985",
+      "loc": "serve_b2b.py:17153-17159",
       "signature": "(self, ws, grid, start_row=1, start_col=1)",
       "calls": [
         "_is_output_workbook",
@@ -12025,7 +12031,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:16987-17004",
+      "loc": "serve_b2b.py:17161-17178",
       "signature": "(self, sheet_or_name, address, grid, workbook=None)",
       "calls": [
         "Cells",
@@ -12053,7 +12059,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:17007-17018",
+      "loc": "serve_b2b.py:17181-17192",
       "signature": "(v)",
       "calls": [
         "replace"
@@ -12070,7 +12076,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:17020-17057",
+      "loc": "serve_b2b.py:17194-17231",
       "signature": "(self, sheet_or_name, by, ascending=True, header=True, workbook=None)",
       "calls": [
         "Columns",
@@ -12100,7 +12106,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:17059-17096",
+      "loc": "serve_b2b.py:17233-17270",
       "signature": "(self, sheet_or_name, predicate, dest_name, header_rows=1, workbook=None)",
       "calls": [
         "_default_workbook",
@@ -12128,7 +12134,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:17098-17149",
+      "loc": "serve_b2b.py:17272-17323",
       "signature": "(self, workbook, dest_name, grid)",
       "calls": [
         "_write_grid",
@@ -12155,7 +12161,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:17151-17217",
+      "loc": "serve_b2b.py:17325-17391",
       "signature": "(self, sheet_or_name, group_by=None, value=None, agg='sum', dest_name=None, header_rows=1, workbook=None, **kwargs)",
       "calls": [
         "_col0",
@@ -12193,7 +12199,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:17229-17239",
+      "loc": "serve_b2b.py:17403-17413",
       "signature": "(name, globals=None, locals=None, fromlist=(), level=0)",
       "calls": [],
       "side_effects": [
@@ -12210,7 +12216,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:17242-17262",
+      "loc": "serve_b2b.py:17416-17436",
       "signature": "()",
       "calls": [],
       "side_effects": [
@@ -12225,7 +12231,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:17272-17275",
+      "loc": "serve_b2b.py:17446-17449",
       "signature": "(token)",
       "calls": [
         "col",
@@ -12244,7 +12250,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:17281-17288",
+      "loc": "serve_b2b.py:17455-17462",
       "signature": "(ws, row, col)",
       "calls": [
         "col",
@@ -12262,7 +12268,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:17291-17296",
+      "loc": "serve_b2b.py:17465-17470",
       "signature": "(ws, row, col, value, redirect_merged=False)",
       "calls": [
         "_opxl_merged_anchor",
@@ -12283,7 +12289,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:17302-17307",
+      "loc": "serve_b2b.py:17476-17481",
       "signature": "(col)",
       "calls": [],
       "side_effects": [
@@ -12298,7 +12304,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:17310-17319",
+      "loc": "serve_b2b.py:17484-17493",
       "signature": "(cached_ws, row, col)",
       "calls": [
         "cell",
@@ -12318,7 +12324,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:17322-17371",
+      "loc": "serve_b2b.py:17496-17545",
       "signature": "(expr)",
       "calls": [],
       "side_effects": [
@@ -12333,7 +12339,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:17374-17405",
+      "loc": "serve_b2b.py:17548-17579",
       "signature": "(text)",
       "calls": [
         "append"
@@ -12350,7 +12356,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:17408-17436",
+      "loc": "serve_b2b.py:17582-17610",
       "signature": "(ws, token, cached_ws=None, seen=None)",
       "calls": [
         "_opxl_col_to_index",
@@ -12373,7 +12379,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:17439-17451",
+      "loc": "serve_b2b.py:17613-17625",
       "signature": "(values)",
       "calls": [
         "append",
@@ -12392,7 +12398,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:17454-17505",
+      "loc": "serve_b2b.py:17628-17679",
       "signature": "(ws, formula, cached_ws=None, seen=None)",
       "calls": [
         "_opxl_col_to_index",
@@ -12421,7 +12427,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:17508-17527",
+      "loc": "serve_b2b.py:17682-17701",
       "signature": "(ws, row, col, cached_ws=None, seen=None)",
       "calls": [
         "_opxl_eval_formula",
@@ -12444,7 +12450,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:17531-17532",
+      "loc": "serve_b2b.py:17705-17706",
       "signature": "(self, count)",
       "calls": [],
       "side_effects": [
@@ -12461,7 +12467,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:17537-17540",
+      "loc": "serve_b2b.py:17711-17714",
       "signature": "(self, ws, r1, c1, r2, c2)",
       "calls": [],
       "side_effects": [
@@ -12478,7 +12484,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:17543-17544",
+      "loc": "serve_b2b.py:17717-17718",
       "signature": "(self)",
       "calls": [],
       "side_effects": [
@@ -12498,7 +12504,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:17546-17552",
+      "loc": "serve_b2b.py:17720-17726",
       "signature": "(self)",
       "calls": [
         "append",
@@ -12524,7 +12530,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:17554-17571",
+      "loc": "serve_b2b.py:17728-17745",
       "signature": "(self, value)",
       "calls": [
         "_opxl_write_cell",
@@ -12553,7 +12559,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:17577-17578",
+      "loc": "serve_b2b.py:17751-17752",
       "signature": "(self)",
       "calls": [],
       "side_effects": [
@@ -12570,7 +12576,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:17581-17582",
+      "loc": "serve_b2b.py:17755-17756",
       "signature": "(self)",
       "calls": [],
       "side_effects": [
@@ -12587,7 +12593,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:17585-17586",
+      "loc": "serve_b2b.py:17759-17760",
       "signature": "(self)",
       "calls": [],
       "side_effects": [
@@ -12605,7 +12611,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:17589-17590",
+      "loc": "serve_b2b.py:17763-17764",
       "signature": "(self)",
       "calls": [],
       "side_effects": [
@@ -12623,7 +12629,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:17592-17593",
+      "loc": "serve_b2b.py:17766-17767",
       "signature": "(self)",
       "calls": [],
       "side_effects": [
@@ -12638,7 +12644,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:17597-17600",
+      "loc": "serve_b2b.py:17771-17774",
       "signature": "(self, sheet_proxy, row_idx)",
       "calls": [],
       "side_effects": [
@@ -12657,7 +12663,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:17603-17606",
+      "loc": "serve_b2b.py:17777-17780",
       "signature": "(self)",
       "calls": [
         "cell",
@@ -12680,7 +12686,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:17609-17610",
+      "loc": "serve_b2b.py:17783-17784",
       "signature": "(self, row_values)",
       "calls": [
         "_set_pending_row_values"
@@ -12700,7 +12706,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:17612-17614",
+      "loc": "serve_b2b.py:17786-17788",
       "signature": "(self)",
       "calls": [
         "_set_pending_row_clear"
@@ -12720,7 +12726,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:17618-17623",
+      "loc": "serve_b2b.py:17792-17797",
       "signature": "(cls, value, row, col, ws=None)",
       "calls": [
         "col",
@@ -12739,7 +12745,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:17625-17635",
+      "loc": "serve_b2b.py:17799-17809",
       "signature": "(self, old, new, count=-1)",
       "calls": [
         "value"
@@ -12759,7 +12765,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:17639-17644",
+      "loc": "serve_b2b.py:17813-17818",
       "signature": "(cls, value, row, col, ws=None)",
       "calls": [
         "col",
@@ -12778,7 +12784,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:17648-17653",
+      "loc": "serve_b2b.py:17822-17827",
       "signature": "(cls, value, row, col, ws=None)",
       "calls": [
         "col",
@@ -12797,7 +12803,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:17656-17658",
+      "loc": "serve_b2b.py:17830-17832",
       "signature": "(row, col)",
       "calls": [
         "col",
@@ -12815,7 +12821,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:17661-17672",
+      "loc": "serve_b2b.py:17835-17846",
       "signature": "(value, dest_row, dest_col)",
       "calls": [
         "_opxl_coord_from_row_col",
@@ -12833,7 +12839,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:17675-17682",
+      "loc": "serve_b2b.py:17849-17856",
       "signature": "(value)",
       "calls": [
         "value"
@@ -12850,7 +12856,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:17685-17692",
+      "loc": "serve_b2b.py:17859-17866",
       "signature": "(value)",
       "calls": [
         "value"
@@ -12867,7 +12873,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:17695-17696",
+      "loc": "serve_b2b.py:17869-17870",
       "signature": "(a, b)",
       "calls": [],
       "side_effects": [
@@ -12882,7 +12888,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:17699-17705",
+      "loc": "serve_b2b.py:17873-17879",
       "signature": "(ws, target_range)",
       "calls": [
         "_opxl_ranges_overlap"
@@ -12899,7 +12905,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:17708-17756",
+      "loc": "serve_b2b.py:17882-17930",
       "signature": "(src_ws, src_row, src_col, dst_ws, dst_row, dst_col)",
       "calls": [
         "_opxl_unmerge_overlapping",
@@ -12918,7 +12924,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:17760-17763",
+      "loc": "serve_b2b.py:17934-17937",
       "signature": "(self, ws, row, col)",
       "calls": [
         "__setattr__",
@@ -12937,7 +12943,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:17766-17767",
+      "loc": "serve_b2b.py:17940-17941",
       "signature": "(self)",
       "calls": [
         "cell"
@@ -12958,7 +12964,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:17769-17770",
+      "loc": "serve_b2b.py:17943-17944",
       "signature": "(self, name)",
       "calls": [],
       "side_effects": [
@@ -12975,7 +12981,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:17772-17778",
+      "loc": "serve_b2b.py:17946-17952",
       "signature": "(self, key, value)",
       "calls": [
         "value"
@@ -12994,7 +13000,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:17781-17791",
+      "loc": "serve_b2b.py:17955-17965",
       "signature": "(self)",
       "calls": [],
       "side_effects": [
@@ -13014,7 +13020,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:17794-17802",
+      "loc": "serve_b2b.py:17968-17976",
       "signature": "(self, value)",
       "calls": [
         "_opxl_copied_source",
@@ -13040,7 +13046,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:17808-17809",
+      "loc": "serve_b2b.py:17982-17983",
       "signature": "(self, ws)",
       "calls": [
         "__setattr__"
@@ -13057,7 +13063,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:17811-17812",
+      "loc": "serve_b2b.py:17985-17986",
       "signature": "(self, name)",
       "calls": [],
       "side_effects": [
@@ -13072,7 +13078,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:17814-17820",
+      "loc": "serve_b2b.py:17988-17994",
       "signature": "(self, key, value)",
       "calls": [
         "value"
@@ -13091,7 +13097,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:17823-17824",
+      "loc": "serve_b2b.py:17997-17998",
       "signature": "(self)",
       "calls": [],
       "side_effects": [
@@ -13108,7 +13114,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:17827-17828",
+      "loc": "serve_b2b.py:18001-18002",
       "signature": "(self)",
       "calls": [],
       "side_effects": [
@@ -13125,7 +13131,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:17830-17835",
+      "loc": "serve_b2b.py:18004-18009",
       "signature": "(self)",
       "calls": [],
       "side_effects": [
@@ -13142,7 +13148,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:17837-17838",
+      "loc": "serve_b2b.py:18011-18012",
       "signature": "(self, row_idx, values)",
       "calls": [
         "_pending_rows"
@@ -13161,7 +13167,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:17840-17841",
+      "loc": "serve_b2b.py:18014-18015",
       "signature": "(self, row_idx)",
       "calls": [
         "_pending_rows"
@@ -13180,7 +13186,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:17843-17896",
+      "loc": "serve_b2b.py:18017-18070",
       "signature": "(self)",
       "calls": [
         "_opxl_write_cell",
@@ -13204,7 +13210,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:17898-17900",
+      "loc": "serve_b2b.py:18072-18074",
       "signature": "(self, r, c)",
       "calls": [
         "flush_pending_rows"
@@ -13224,7 +13230,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:17902-17903",
+      "loc": "serve_b2b.py:18076-18077",
       "signature": "(self, row_idx)",
       "calls": [],
       "side_effects": [
@@ -13239,7 +13245,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:17905-17914",
+      "loc": "serve_b2b.py:18079-18088",
       "signature": "(self)",
       "calls": [
         "delete_rows",
@@ -13261,7 +13267,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:17916-17940",
+      "loc": "serve_b2b.py:18090-18114",
       "signature": "(self, values)",
       "calls": [
         "cell",
@@ -13283,7 +13289,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:17942-17950",
+      "loc": "serve_b2b.py:18116-18124",
       "signature": "(self)",
       "calls": [
         "append",
@@ -13306,7 +13312,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:17952-17957",
+      "loc": "serve_b2b.py:18126-18131",
       "signature": "(self, old_row, old_col, new_row, new_col, formula)",
       "calls": [
         "_opxl_translate_formula",
@@ -13326,7 +13332,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:17959-17968",
+      "loc": "serve_b2b.py:18133-18142",
       "signature": "(self, idx, amount=1)",
       "calls": [
         "_formula_cells",
@@ -13352,7 +13358,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:17970-17979",
+      "loc": "serve_b2b.py:18144-18153",
       "signature": "(self, idx, amount=1)",
       "calls": [
         "_formula_cells",
@@ -13378,7 +13384,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:17981-17991",
+      "loc": "serve_b2b.py:18155-18165",
       "signature": "(self, idx, amount=1)",
       "calls": [
         "_formula_cells",
@@ -13404,7 +13410,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:17993-18003",
+      "loc": "serve_b2b.py:18167-18177",
       "signature": "(self, idx, amount=1)",
       "calls": [
         "_formula_cells",
@@ -13430,7 +13436,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:18006-18010",
+      "loc": "serve_b2b.py:18180-18184",
       "signature": "(self)",
       "calls": [
         "flush_pending_rows"
@@ -13450,7 +13456,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:18012-18018",
+      "loc": "serve_b2b.py:18186-18192",
       "signature": "(self, row=None, column=None, value=_OPXL_NO_VALUE)",
       "calls": [
         "_opxl_merged_anchor",
@@ -13473,7 +13479,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:18020-18033",
+      "loc": "serve_b2b.py:18194-18207",
       "signature": "(self, a1, a2=None)",
       "calls": [
         "_opxl_coord",
@@ -13495,7 +13501,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:18037-18038",
+      "loc": "serve_b2b.py:18211-18212",
       "signature": "(self, workbook_proxy)",
       "calls": [],
       "side_effects": [
@@ -13512,7 +13518,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:18040-18041",
+      "loc": "serve_b2b.py:18214-18215",
       "signature": "(self, name=None)",
       "calls": [
         "sheet"
@@ -13531,7 +13537,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:18043-18044",
+      "loc": "serve_b2b.py:18217-18218",
       "signature": "(self, name)",
       "calls": [
         "sheet"
@@ -13550,7 +13556,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:18046-18048",
+      "loc": "serve_b2b.py:18220-18222",
       "signature": "(self, name)",
       "calls": [],
       "side_effects": [
@@ -13567,7 +13573,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:18050-18053",
+      "loc": "serve_b2b.py:18224-18227",
       "signature": "(self)",
       "calls": [],
       "side_effects": [
@@ -13584,7 +13590,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:18055-18056",
+      "loc": "serve_b2b.py:18229-18230",
       "signature": "(self)",
       "calls": [],
       "side_effects": [
@@ -13601,7 +13607,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:18058-18062",
+      "loc": "serve_b2b.py:18232-18236",
       "signature": "(self, name=None)",
       "calls": [
         "_sheet_add_target",
@@ -13621,7 +13627,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:18065-18066",
+      "loc": "serve_b2b.py:18239-18240",
       "signature": "(self)",
       "calls": [],
       "side_effects": [
@@ -13638,7 +13644,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:18070-18074",
+      "loc": "serve_b2b.py:18244-18248",
       "signature": "(self, ctx, workbook, name=None)",
       "calls": [],
       "side_effects": [
@@ -13658,7 +13664,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:18077-18078",
+      "loc": "serve_b2b.py:18251-18252",
       "signature": "(self)",
       "calls": [],
       "side_effects": [
@@ -13675,7 +13681,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:18080-18081",
+      "loc": "serve_b2b.py:18254-18255",
       "signature": "(self, name)",
       "calls": [],
       "side_effects": [
@@ -13692,7 +13698,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:18083-18084",
+      "loc": "serve_b2b.py:18257-18258",
       "signature": "(self, name)",
       "calls": [
         "sheet"
@@ -13711,7 +13717,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:18086-18087",
+      "loc": "serve_b2b.py:18260-18261",
       "signature": "(self, name)",
       "calls": [],
       "side_effects": [
@@ -13728,7 +13734,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:18089-18090",
+      "loc": "serve_b2b.py:18263-18264",
       "signature": "(self, name=None)",
       "calls": [],
       "side_effects": [
@@ -13745,7 +13751,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:18093-18094",
+      "loc": "serve_b2b.py:18267-18268",
       "signature": "(self, name=None)",
       "calls": [],
       "side_effects": [
@@ -13762,7 +13768,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:18096-18097",
+      "loc": "serve_b2b.py:18270-18271",
       "signature": "(self, name)",
       "calls": [],
       "side_effects": [
@@ -13779,7 +13785,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:18099-18100",
+      "loc": "serve_b2b.py:18273-18274",
       "signature": "(self, name=None)",
       "calls": [],
       "side_effects": [
@@ -13796,7 +13802,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:18102-18103",
+      "loc": "serve_b2b.py:18276-18277",
       "signature": "(self, sheet_or_name, address)",
       "calls": [],
       "side_effects": [
@@ -13813,7 +13819,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:18105-18106",
+      "loc": "serve_b2b.py:18279-18280",
       "signature": "(self, sheet_or_name=None)",
       "calls": [],
       "side_effects": [
@@ -13830,7 +13836,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:18108-18109",
+      "loc": "serve_b2b.py:18282-18283",
       "signature": "(self, sheet_or_name=None, start_row=1)",
       "calls": [],
       "side_effects": [
@@ -13847,7 +13853,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:18111-18112",
+      "loc": "serve_b2b.py:18285-18286",
       "signature": "(self, sheet_or_name=None, start_row=1)",
       "calls": [
         "iter_rows"
@@ -13866,7 +13872,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:18114-18115",
+      "loc": "serve_b2b.py:18288-18289",
       "signature": "(self, sheet_or_name=None)",
       "calls": [],
       "side_effects": [
@@ -13883,7 +13889,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:18117-18118",
+      "loc": "serve_b2b.py:18291-18292",
       "signature": "(self, sheet_or_name, row, col)",
       "calls": [
         "col",
@@ -13903,7 +13909,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:18120-18121",
+      "loc": "serve_b2b.py:18294-18295",
       "signature": "(self, sheet_or_name, row, col)",
       "calls": [
         "col",
@@ -13923,7 +13929,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:18123-18124",
+      "loc": "serve_b2b.py:18297-18298",
       "signature": "(self, sheet_or_name, header, header_rows=20)",
       "calls": [],
       "side_effects": [
@@ -13940,7 +13946,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:18126-18127",
+      "loc": "serve_b2b.py:18300-18301",
       "signature": "(self, sheet_or_name=None, header_rows=20)",
       "calls": [],
       "side_effects": [
@@ -13957,7 +13963,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:18132-18152",
+      "loc": "serve_b2b.py:18306-18326",
       "signature": "(self, output_wb, input_wbs, output_cached_wb=None, output_name=None, active_file_id=None, active_sheet=None, output_cached_path=None)",
       "calls": [
         "_unwrap_workbook",
@@ -14000,7 +14006,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:18154-18155",
+      "loc": "serve_b2b.py:18328-18329",
       "signature": "(self, wb)",
       "calls": [],
       "side_effects": [
@@ -14015,7 +14021,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:18157-18162",
+      "loc": "serve_b2b.py:18331-18336",
       "signature": "(self, owner)",
       "calls": [
         "_unwrap_workbook"
@@ -14035,7 +14041,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:18164-18176",
+      "loc": "serve_b2b.py:18338-18350",
       "signature": "(self, file_id)",
       "calls": [
         "workbook_like"
@@ -14056,7 +14062,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:18178-18179",
+      "loc": "serve_b2b.py:18352-18353",
       "signature": "(self)",
       "calls": [],
       "side_effects": [
@@ -14074,7 +14080,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:18181-18182",
+      "loc": "serve_b2b.py:18355-18356",
       "signature": "(self, wb)",
       "calls": [
         "_unwrap_workbook"
@@ -14094,7 +14100,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:18184-18192",
+      "loc": "serve_b2b.py:18358-18366",
       "signature": "(self)",
       "calls": [
         "openpyxl_load_workbook_compatible"
@@ -14118,7 +14124,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:18194-18202",
+      "loc": "serve_b2b.py:18368-18376",
       "signature": "(self, ws)",
       "calls": [
         "_get_output_cached_wb"
@@ -14138,7 +14144,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:18204-18205",
+      "loc": "serve_b2b.py:18378-18379",
       "signature": "(self, value)",
       "calls": [
         "normalize_text",
@@ -14156,7 +14162,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:18207-18208",
+      "loc": "serve_b2b.py:18381-18382",
       "signature": "(self, wb)",
       "calls": [
         "_unwrap_workbook"
@@ -14175,7 +14181,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:18210-18228",
+      "loc": "serve_b2b.py:18384-18402",
       "signature": "(self, hint=None)",
       "calls": [
         "_find_sheet_name",
@@ -14201,7 +14207,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:18230-18235",
+      "loc": "serve_b2b.py:18404-18409",
       "signature": "(self, hint=None)",
       "calls": [
         "values",
@@ -14222,7 +14228,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:18237-18265",
+      "loc": "serve_b2b.py:18411-18439",
       "signature": "(self, wb, name=None, allow_single=True)",
       "calls": [
         "_resolve_ephemeral_excel_open_sheet_alias",
@@ -14246,7 +14252,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:18267-18305",
+      "loc": "serve_b2b.py:18441-18479",
       "signature": "(self, name=None, workbook=None)",
       "calls": [
         "_default_workbook",
@@ -14281,7 +14287,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:18307-18308",
+      "loc": "serve_b2b.py:18481-18482",
       "signature": "(self, name=None, workbook=None)",
       "calls": [
         "sheet"
@@ -14300,7 +14306,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:18310-18320",
+      "loc": "serve_b2b.py:18484-18494",
       "signature": "(self, sheet_hint=None, file_hint=None)",
       "calls": [
         "_find_sheet_name",
@@ -14326,7 +14332,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:18322-18330",
+      "loc": "serve_b2b.py:18496-18504",
       "signature": "(self, sheet_or_name, address, workbook=None)",
       "calls": [
         "Range",
@@ -14352,7 +14358,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:18332-18333",
+      "loc": "serve_b2b.py:18506-18507",
       "signature": "(self, sheet_or_name, workbook=None)",
       "calls": [
         "sheet"
@@ -14371,7 +14377,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:18335-18343",
+      "loc": "serve_b2b.py:18509-18517",
       "signature": "(self)",
       "calls": [
         "_unwrap_workbook",
@@ -14395,7 +14401,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:18345-18356",
+      "loc": "serve_b2b.py:18519-18530",
       "signature": "(self, sheet_or_name, workbook=None)",
       "calls": [
         "_ws_of",
@@ -14418,7 +14424,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:18358-18363",
+      "loc": "serve_b2b.py:18532-18537",
       "signature": "(self, sheet_or_name, workbook=None, start_row=1)",
       "calls": [
         "rows"
@@ -14437,7 +14443,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:18365-18366",
+      "loc": "serve_b2b.py:18539-18540",
       "signature": "(self, sheet_or_name, workbook=None, start_row=1)",
       "calls": [
         "iter_rows"
@@ -14456,7 +14462,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:18368-18378",
+      "loc": "serve_b2b.py:18542-18552",
       "signature": "(self, sheet_or_name, row, col, workbook=None)",
       "calls": [
         "_cached_ws_for",
@@ -14482,7 +14488,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:18380-18381",
+      "loc": "serve_b2b.py:18554-18555",
       "signature": "(self, sheet_or_name, row, col, workbook=None)",
       "calls": [
         "col",
@@ -14503,7 +14509,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:18383-18397",
+      "loc": "serve_b2b.py:18557-18571",
       "signature": "(self, sheet_or_name, workbook=None)",
       "calls": [
         "_cached_ws_for",
@@ -14530,7 +14536,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:18399-18410",
+      "loc": "serve_b2b.py:18573-18584",
       "signature": "(self, sheet_or_name, header, workbook=None, header_rows=20)",
       "calls": [
         "normalize",
@@ -14553,7 +14559,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:18412-18420",
+      "loc": "serve_b2b.py:18586-18594",
       "signature": "(self, sheet_or_name=None, workbook=None, header_rows=20)",
       "calls": [
         "rows"
@@ -14572,7 +14578,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:18422-18423",
+      "loc": "serve_b2b.py:18596-18597",
       "signature": "(self, sheet_or_name=None, workbook=None, header_rows=20)",
       "calls": [
         "header_row"
@@ -14591,7 +14597,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:18425-18438",
+      "loc": "serve_b2b.py:18599-18612",
       "signature": "(self, rows, name_or_idx, header_rows=20)",
       "calls": [
         "normalize"
@@ -14610,7 +14616,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:18440-18458",
+      "loc": "serve_b2b.py:18614-18632",
       "signature": "(self, name, workbook=None)",
       "calls": [
         "_default_workbook",
@@ -14639,7 +14645,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:18460-18492",
+      "loc": "serve_b2b.py:18634-18666",
       "signature": "(self, ws, grid, start_row=1, start_col=1)",
       "calls": [
         "_apply_openpyxl_text_format_for_long_digit_columns",
@@ -14664,7 +14670,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:18494-18499",
+      "loc": "serve_b2b.py:18668-18673",
       "signature": "(self, ws, grid, start_row=1, start_col=1)",
       "calls": [
         "_is_output_workbook",
@@ -14689,7 +14695,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:18501-18510",
+      "loc": "serve_b2b.py:18675-18684",
       "signature": "(self, sheet_or_name, address, grid, workbook=None)",
       "calls": [
         "_is_output_workbook",
@@ -14716,7 +14722,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:18512-18557",
+      "loc": "serve_b2b.py:18686-18731",
       "signature": "(self, sheet_or_name, by, ascending=True, header=True, workbook=None)",
       "calls": [
         "_col0",
@@ -14752,7 +14758,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:18559-18595",
+      "loc": "serve_b2b.py:18733-18769",
       "signature": "(self, sheet_or_name, predicate, dest_name, header_rows=1, workbook=None)",
       "calls": [
         "_default_workbook",
@@ -14780,7 +14786,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:18597-18644",
+      "loc": "serve_b2b.py:18771-18818",
       "signature": "(self, workbook, dest_name, grid)",
       "calls": [
         "_write_grid",
@@ -14807,7 +14813,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:18647-18658",
+      "loc": "serve_b2b.py:18821-18832",
       "signature": "(v)",
       "calls": [
         "replace"
@@ -14824,7 +14830,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "serve_b2b.py:18660-18725",
+      "loc": "serve_b2b.py:18834-18899",
       "signature": "(self, sheet_or_name, group_by=None, value=None, agg='sum', dest_name=None, header_rows=1, workbook=None, **kwargs)",
       "calls": [
         "_col0",
@@ -14862,7 +14868,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:18744-18761",
+      "loc": "serve_b2b.py:18918-18935",
       "signature": "(fn, primary, other, has_varkw, allowed)",
       "calls": [
         "value"
@@ -14879,7 +14885,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:18764-18793",
+      "loc": "serve_b2b.py:18938-18967",
       "signature": "(*classes)",
       "calls": [
         "_wrap_ctx_helper_kwargs",
@@ -14900,7 +14906,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:18799-18992",
+      "loc": "serve_b2b.py:18973-19166",
       "signature": "(payload, job_id=None)",
       "calls": [
         "_pipeline_error_guide",
@@ -14935,7 +14941,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:18995-18997",
+      "loc": "serve_b2b.py:19169-19171",
       "signature": "(payload, job_id=None)",
       "calls": [
         "_run_openpyxl_python_pipeline_impl"
@@ -14952,7 +14958,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:19000-19005",
+      "loc": "serve_b2b.py:19174-19179",
       "signature": "(app, path, read_only=False, intended_name=None)",
       "calls": [
         "_hide_excel_app_window",
@@ -14971,7 +14977,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:19008-19037",
+      "loc": "serve_b2b.py:19182-19211",
       "signature": "()",
       "calls": [
         "_excel_process_id",
@@ -15000,7 +15006,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:19040-19059",
+      "loc": "serve_b2b.py:19214-19233",
       "signature": "()",
       "calls": [
         "_force_kill_pid",
@@ -15026,7 +15032,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:19062-19081",
+      "loc": "serve_b2b.py:19236-19255",
       "signature": "()",
       "calls": [
         "_perf_trace",
@@ -15052,7 +15058,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:19084-19095",
+      "loc": "serve_b2b.py:19258-19269",
       "signature": "(wb_record)",
       "calls": [],
       "side_effects": [
@@ -15067,7 +15073,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:19098-19132",
+      "loc": "serve_b2b.py:19272-19306",
       "signature": "(code)",
       "calls": [
         "append"
@@ -15084,7 +15090,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:19135-19148",
+      "loc": "serve_b2b.py:19309-19322",
       "signature": "(step)",
       "calls": [
         "_signature_code_for_snapshot",
@@ -15103,7 +15109,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:19151-19168",
+      "loc": "serve_b2b.py:19325-19342",
       "signature": "(input_items, input_wbs, output_item, output_wb_record, steps_prefix)",
       "calls": [
         "_step_signature",
@@ -15122,7 +15128,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:19171-19174",
+      "loc": "serve_b2b.py:19345-19348",
       "signature": "(snapshot, role, name)",
       "calls": [],
       "side_effects": [
@@ -15137,7 +15143,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:19177-19180",
+      "loc": "serve_b2b.py:19351-19354",
       "signature": "(snapshot)",
       "calls": [
         "values"
@@ -15154,7 +15160,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:19183-19191",
+      "loc": "serve_b2b.py:19357-19365",
       "signature": "(input_items, input_wbs, output_item, output_wb_record, active_steps)",
       "calls": [
         "_pipeline_snapshot_key",
@@ -15170,12 +15176,124 @@
       "writes": []
     },
     {
+      "id": "_fullrun_source_stamp",
+      "module": "serve_b2b.py",
+      "lang": "python",
+      "kind": "function",
+      "extraction": "ast",
+      "loc": "serve_b2b.py:19385-19392",
+      "signature": "(path)",
+      "calls": [],
+      "side_effects": [
+        "없음(정적 분석 기준)"
+      ],
+      "reads": [],
+      "writes": []
+    },
+    {
+      "id": "_fullrun_step_signature",
+      "module": "serve_b2b.py",
+      "lang": "python",
+      "kind": "function",
+      "extraction": "ast",
+      "loc": "serve_b2b.py:19395-19412",
+      "signature": "(excel_id, step)",
+      "calls": [
+        "_signature_code_for_snapshot",
+        "is_python_pipeline_step",
+        "normalize_python_pipeline_code"
+      ],
+      "side_effects": [
+        "없음(정적 분석 기준)"
+      ],
+      "reads": [],
+      "writes": []
+    },
+    {
+      "id": "_fullrun_snapshot_key",
+      "module": "serve_b2b.py",
+      "lang": "python",
+      "kind": "function",
+      "extraction": "ast",
+      "loc": "serve_b2b.py:19415-19423",
+      "signature": "(source_specs, entry, flat_prefix)",
+      "calls": [
+        "_fullrun_step_signature",
+        "raw"
+      ],
+      "side_effects": [
+        "없음(정적 분석 기준)"
+      ],
+      "reads": [],
+      "writes": []
+    },
+    {
+      "id": "_fullrun_snapshot_files_exist",
+      "module": "serve_b2b.py",
+      "lang": "python",
+      "kind": "function",
+      "extraction": "ast",
+      "loc": "serve_b2b.py:19426-19432",
+      "signature": "(snap)",
+      "calls": [
+        "values"
+      ],
+      "side_effects": [
+        "없음(정적 분석 기준)"
+      ],
+      "reads": [],
+      "writes": []
+    },
+    {
+      "id": "_find_best_fullrun_snapshot",
+      "module": "serve_b2b.py",
+      "lang": "python",
+      "kind": "function",
+      "extraction": "ast",
+      "loc": "serve_b2b.py:19435-19443",
+      "signature": "(source_specs, entry, flat_steps)",
+      "calls": [
+        "_fullrun_snapshot_files_exist",
+        "_fullrun_snapshot_key",
+        "range"
+      ],
+      "side_effects": [
+        "없음(정적 분석 기준)"
+      ],
+      "reads": [
+        "FULLRUN_STEP_SNAPSHOTS"
+      ],
+      "writes": []
+    },
+    {
+      "id": "_cleanup_fullrun_snapshots",
+      "module": "serve_b2b.py",
+      "lang": "python",
+      "kind": "function",
+      "extraction": "ast",
+      "loc": "serve_b2b.py:19446-19472",
+      "signature": "()",
+      "calls": [
+        "add",
+        "values"
+      ],
+      "side_effects": [
+        "파일시스템 변경/IO"
+      ],
+      "reads": [
+        "FULLRUN_SNAPSHOT_MAX_RECORDS",
+        "FULLRUN_STEP_SNAPSHOTS",
+        "RESULTS"
+      ],
+      "writes": []
+    },
+    {
       "id": "_cleanup_pipeline_step_snapshots",
       "module": "serve_b2b.py",
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:19194-19195",
+      "loc": "serve_b2b.py:19475-19476",
       "signature": "()",
       "calls": [
         "_cleanup_pipeline_snapshots_by_limits"
@@ -15192,7 +15310,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:19203-19214",
+      "loc": "serve_b2b.py:19484-19495",
       "signature": "(wb_record, state_sig)",
       "calls": [
         "_workbook_fingerprint",
@@ -15210,7 +15328,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:19217-19234",
+      "loc": "serve_b2b.py:19498-19515",
       "signature": "()",
       "calls": [
         "values"
@@ -15231,7 +15349,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:19237-19257",
+      "loc": "serve_b2b.py:19518-19538",
       "signature": "()",
       "calls": [
         "_live_final_snapshot_stats"
@@ -15254,7 +15372,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:19260-19298",
+      "loc": "serve_b2b.py:19541-19579",
       "signature": "(wb_record, state_sig, src_path, move=False, link=False)",
       "calls": [
         "_cleanup_live_final_snapshots",
@@ -15280,7 +15398,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:19301-19313",
+      "loc": "serve_b2b.py:19582-19594",
       "signature": "(wb_record, state_sig)",
       "calls": [
         "_live_final_snapshot_key"
@@ -15299,7 +15417,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:19316-19346",
+      "loc": "serve_b2b.py:19597-19627",
       "signature": "(key, step_idx, app, output_wb, input_wb_by_name, input_stable_src=None)",
       "calls": [
         "_cleanup_pipeline_step_snapshots"
@@ -15322,7 +15440,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:19349-19350",
+      "loc": "serve_b2b.py:19630-19631",
       "signature": "(stage, err)",
       "calls": [],
       "side_effects": [
@@ -15337,7 +15455,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:19353-19371",
+      "loc": "serve_b2b.py:19634-19652",
       "signature": "(app)",
       "calls": [],
       "side_effects": [
@@ -15352,7 +15470,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:19374-19400",
+      "loc": "serve_b2b.py:19655-19681",
       "signature": "(hwnd)",
       "calls": [],
       "side_effects": [
@@ -15367,7 +15485,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:19403-19425",
+      "loc": "serve_b2b.py:19684-19706",
       "signature": "(pid)",
       "calls": [
         "_hide_excel_hwnd"
@@ -15384,7 +15502,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:19428-19438",
+      "loc": "serve_b2b.py:19709-19719",
       "signature": "(wb)",
       "calls": [],
       "side_effects": [
@@ -15399,7 +15517,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:19441-19458",
+      "loc": "serve_b2b.py:19722-19739",
       "signature": "(wb)",
       "calls": [
         "_hide_excel_hwnd",
@@ -15417,7 +15535,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:19461-19470",
+      "loc": "serve_b2b.py:19742-19751",
       "signature": "(app, target_wb)",
       "calls": [
         "_hide_workbook_windows",
@@ -15435,7 +15553,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:19473-19492",
+      "loc": "serve_b2b.py:19754-19773",
       "signature": "(app)",
       "calls": [
         "_hide_excel_hwnd",
@@ -15454,7 +15572,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:19495-19504",
+      "loc": "serve_b2b.py:19776-19785",
       "signature": "(app)",
       "calls": [
         "_hide_excel_hwnd",
@@ -15472,7 +15590,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:19507-19534",
+      "loc": "serve_b2b.py:19788-19815",
       "signature": "(session, app, wb)",
       "calls": [
         "_excel_process_id",
@@ -15492,7 +15610,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:19537-19559",
+      "loc": "serve_b2b.py:19818-19840",
       "signature": "(app, wb=None)",
       "calls": [
         "_hide_excel_app_window",
@@ -15510,7 +15628,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:19562-19579",
+      "loc": "serve_b2b.py:19843-19860",
       "signature": "(app, enabled=True)",
       "calls": [
         "_hide_excel_hwnd"
@@ -15527,7 +15645,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:19582-19591",
+      "loc": "serve_b2b.py:19863-19872",
       "signature": "(app)",
       "calls": [
         "_warn_excel_nonfatal"
@@ -15544,7 +15662,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:19594-19662",
+      "loc": "serve_b2b.py:19875-19943",
       "signature": "(app, target_wb, source_path)",
       "calls": [
         "Worksheets",
@@ -15569,7 +15687,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:19665-19671",
+      "loc": "serve_b2b.py:19946-19952",
       "signature": "(step)",
       "calls": [
         "normalize_python_pipeline_code",
@@ -15587,7 +15705,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:19674-19751",
+      "loc": "serve_b2b.py:19955-20032",
       "signature": "(wb)",
       "calls": [
         "Cells",
@@ -15620,7 +15738,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:19754-19805",
+      "loc": "serve_b2b.py:20035-20086",
       "signature": "(output_path, input_paths_by_name, output_item, output_wb_record, input_wb_records, payload, resume_from)",
       "calls": [
         "build_result_previews",
@@ -15644,7 +15762,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:19808-19819",
+      "loc": "serve_b2b.py:20089-20100",
       "signature": "(step, input_wb_by_name, output_wb)",
       "calls": [],
       "side_effects": [
@@ -15659,7 +15777,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:19822-20292",
+      "loc": "serve_b2b.py:20103-20573",
       "signature": "(payload, job_id=None)",
       "calls": [
         "_configure_excel_grid_window",
@@ -15727,7 +15845,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:20295-20296",
+      "loc": "serve_b2b.py:20576-20577",
       "signature": "(payload, job_id=None)",
       "calls": [
         "_run_excel_python_pipeline_impl",
@@ -15745,7 +15863,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:20299-20382",
+      "loc": "serve_b2b.py:20580-20663",
       "signature": "(payload, job_id=None)",
       "calls": [
         "build_pipeline_diffs",
@@ -15773,7 +15891,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:20385-20499",
+      "loc": "serve_b2b.py:20666-20780",
       "signature": "(path)",
       "calls": [
         "_vba_trace",
@@ -15809,7 +15927,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:20502-20522",
+      "loc": "serve_b2b.py:20783-20803",
       "signature": "(path, err=None)",
       "calls": [
         "csv_sheet_name"
@@ -15826,7 +15944,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:20525-20611",
+      "loc": "serve_b2b.py:20806-20892",
       "signature": "(path, source_error=None)",
       "calls": [
         "Cells",
@@ -15861,7 +15979,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:20614-20635",
+      "loc": "serve_b2b.py:20895-20916",
       "signature": "(path)",
       "calls": [
         "append",
@@ -15886,7 +16004,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:20638-20684",
+      "loc": "serve_b2b.py:20919-20965",
       "signature": "(path)",
       "calls": [
         "Cells",
@@ -15914,7 +16032,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:20687-20688",
+      "loc": "serve_b2b.py:20968-20969",
       "signature": "(path)",
       "calls": [],
       "side_effects": [
@@ -15929,7 +16047,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:20691-20697",
+      "loc": "serve_b2b.py:20972-20978",
       "signature": "(path)",
       "calls": [],
       "side_effects": [
@@ -15944,7 +16062,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:20700-20707",
+      "loc": "serve_b2b.py:20981-20988",
       "signature": "(path)",
       "calls": [],
       "side_effects": [
@@ -15959,7 +16077,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:20710-20723",
+      "loc": "serve_b2b.py:20991-21004",
       "signature": "(path, max_rows=None)",
       "calls": [
         "append",
@@ -15977,7 +16095,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:20726-20749",
+      "loc": "serve_b2b.py:21007-21030",
       "signature": "(path)",
       "calls": [
         "csv_sheet_name",
@@ -15998,7 +16116,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:20752-20753",
+      "loc": "serve_b2b.py:21033-21034",
       "signature": "(path)",
       "calls": [
         "csv_sheet_name",
@@ -16016,7 +16134,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:20756-20762",
+      "loc": "serve_b2b.py:21037-21043",
       "signature": "(result_path, sheets)",
       "calls": [
         "csv_sheet_name"
@@ -16033,7 +16151,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:20765-20790",
+      "loc": "serve_b2b.py:21046-21071",
       "signature": "(wb_record, base_mode='original')",
       "calls": [
         "export_node_worker_workbook",
@@ -16053,7 +16171,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:20793-20798",
+      "loc": "serve_b2b.py:21074-21079",
       "signature": "(wb_record, sheets)",
       "calls": [],
       "side_effects": [
@@ -16070,7 +16188,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:20801-20804",
+      "loc": "serve_b2b.py:21082-21085",
       "signature": "(sheet_payload)",
       "calls": [],
       "side_effects": [
@@ -16085,7 +16203,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:20807-20811",
+      "loc": "serve_b2b.py:21088-21092",
       "signature": "(sheets)",
       "calls": [
         "_sheet_payload_rows"
@@ -16102,7 +16220,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:20814-20821",
+      "loc": "serve_b2b.py:21095-21102",
       "signature": "(sheets, key)",
       "calls": [],
       "side_effects": [
@@ -16117,7 +16235,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:20824-20831",
+      "loc": "serve_b2b.py:21105-21112",
       "signature": "(sheets)",
       "calls": [],
       "side_effects": [
@@ -16132,7 +16250,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:20834-20856",
+      "loc": "serve_b2b.py:21115-21137",
       "signature": "(template_path, result_path, sheets, forced_value_cells=None)",
       "calls": [
         "cell",
@@ -16153,7 +16271,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:20859-20864",
+      "loc": "serve_b2b.py:21140-21145",
       "signature": "(value)",
       "calls": [
         "value"
@@ -16170,7 +16288,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:20867-20898",
+      "loc": "serve_b2b.py:21148-21179",
       "signature": "(workbook_id)",
       "calls": [],
       "side_effects": [
@@ -16190,7 +16308,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:20901-20905",
+      "loc": "serve_b2b.py:21182-21186",
       "signature": "(workbook_id)",
       "calls": [
         "recover_workbook_record"
@@ -16207,7 +16325,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:20908-21298",
+      "loc": "serve_b2b.py:21189-21579",
       "signature": "(payload, job_id=None)",
       "calls": [
         "hidden_subprocess_kwargs",
@@ -16229,7 +16347,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:21301-21323",
+      "loc": "serve_b2b.py:21582-21604",
       "signature": "(sheets)",
       "calls": [
         "_sheet_payload_rows"
@@ -16248,7 +16366,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:21326-21358",
+      "loc": "serve_b2b.py:21607-21639",
       "signature": "(inputs, output, current, diffs=None, forced_value_cells=None)",
       "calls": [
         "append",
@@ -16270,7 +16388,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:21361-21368",
+      "loc": "serve_b2b.py:21642-21649",
       "signature": "(sheets)",
       "calls": [
         "_sheet_payload_rows",
@@ -16291,7 +16409,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:21371-21376",
+      "loc": "serve_b2b.py:21652-21657",
       "signature": "(value)",
       "calls": [
         "value"
@@ -16308,7 +16426,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:21379-21403",
+      "loc": "serve_b2b.py:21660-21684",
       "signature": "(before_rows, after_rows, max_cells=MAX_DIFF_CELLS_PER_SHEET)",
       "calls": [
         "append",
@@ -16329,7 +16447,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:21406-21418",
+      "loc": "serve_b2b.py:21687-21699",
       "signature": "(before_sheets, after_sheets)",
       "calls": [
         "compute_sheet_diff"
@@ -16346,7 +16464,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:21421-21429",
+      "loc": "serve_b2b.py:21702-21710",
       "signature": "(before_inputs, before_output, after_inputs, after_output, current)",
       "calls": [
         "compute_workbook_diff"
@@ -16363,7 +16481,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:21432-21463",
+      "loc": "serve_b2b.py:21713-21744",
       "signature": "()",
       "calls": [
         "app_base_dir",
@@ -16391,7 +16509,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:21466-21490",
+      "loc": "serve_b2b.py:21747-21771",
       "signature": "(command)",
       "calls": [
         "ensure_node_worker",
@@ -16411,7 +16529,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:21493-21507",
+      "loc": "serve_b2b.py:21774-21788",
       "signature": "(wb_record)",
       "calls": [
         "add",
@@ -16432,7 +16550,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:21510-21515",
+      "loc": "serve_b2b.py:21791-21796",
       "signature": "(workbook_id)",
       "calls": [
         "node_worker_command"
@@ -16449,7 +16567,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:21518-21647",
+      "loc": "serve_b2b.py:21799-21928",
       "signature": "(payload, job_id=None)",
       "calls": [
         "append",
@@ -16476,7 +16594,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:21661-21678",
+      "loc": "serve_b2b.py:21942-21959",
       "signature": "(path)",
       "calls": [],
       "side_effects": [
@@ -16493,7 +16611,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:21681-21698",
+      "loc": "serve_b2b.py:21962-21979",
       "signature": "(path)",
       "calls": [
         "read"
@@ -16510,7 +16628,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:21701-21718",
+      "loc": "serve_b2b.py:21982-21999",
       "signature": "(path)",
       "calls": [
         "read"
@@ -16527,7 +16645,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:21721-21725",
+      "loc": "serve_b2b.py:22002-22006",
       "signature": "(step)",
       "calls": [
         "normalize_python_pipeline_code"
@@ -16544,7 +16662,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:21728-21753",
+      "loc": "serve_b2b.py:22009-22034",
       "signature": "(step)",
       "calls": [
         "normalize_python_pipeline_code"
@@ -16561,7 +16679,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:21756-21772",
+      "loc": "serve_b2b.py:22037-22053",
       "signature": "(step)",
       "calls": [
         "normalize_python_pipeline_code"
@@ -16578,7 +16696,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:21775-21822",
+      "loc": "serve_b2b.py:22056-22103",
       "signature": "(payload)",
       "calls": [
         "_python_step_has_structural_or_format_operation",
@@ -16605,7 +16723,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "serve_b2b.py:21825-21960",
+      "loc": "serve_b2b.py:22106-22241",
       "signature": "(payload, job_id=None)",
       "calls": [
         "_pipeline_payload_has_vba",
@@ -16679,7 +16797,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "assist-core.js:293-293",
+      "loc": "assist-core.js:297-297",
       "signature": "(text)",
       "calls": [],
       "side_effects": [
@@ -16694,7 +16812,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "assist-core.js:316-316",
+      "loc": "assist-core.js:320-320",
       "signature": "(text)",
       "calls": [],
       "side_effects": [
@@ -16709,7 +16827,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "assist-core.js:331-331",
+      "loc": "assist-core.js:335-335",
       "signature": "(text)",
       "calls": [],
       "side_effects": [
@@ -16724,7 +16842,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "assist-core.js:341-341",
+      "loc": "assist-core.js:345-345",
       "signature": "()",
       "calls": [],
       "side_effects": [
@@ -16739,7 +16857,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "assist-core.js:342-342",
+      "loc": "assist-core.js:346-346",
       "signature": "()",
       "calls": [],
       "side_effects": [
@@ -16754,7 +16872,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "assist-core.js:351-351",
+      "loc": "assist-core.js:355-355",
       "signature": "(userText, ui, attachImages)",
       "calls": [
         "add",
@@ -16798,7 +16916,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "assist-core.js:353-353",
+      "loc": "assist-core.js:357-357",
       "signature": "(s)",
       "calls": [],
       "side_effects": [
@@ -16813,7 +16931,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "assist-core.js:387-387",
+      "loc": "assist-core.js:391-391",
       "signature": "()",
       "calls": [],
       "side_effects": [
@@ -16828,7 +16946,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "assist-core.js:394-394",
+      "loc": "assist-core.js:398-398",
       "signature": "(chunk)",
       "calls": [
         "armStall",
@@ -16846,7 +16964,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "assist-core.js:399-399",
+      "loc": "assist-core.js:403-403",
       "signature": "(sys, imgs)",
       "calls": [
         "armStall",
@@ -16864,7 +16982,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "assist-core.js:412-412",
+      "loc": "assist-core.js:416-416",
       "signature": "()",
       "calls": [
         "assistBuildProposal",
@@ -16892,7 +17010,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "assist-core.js:767-767",
+      "loc": "assist-core.js:771-771",
       "signature": "(text, ui)",
       "calls": [
         "push"
@@ -16913,7 +17031,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "assist-core.js:774-774",
+      "loc": "assist-core.js:778-778",
       "signature": "(newCode, step, kind)",
       "calls": [
         "push",
@@ -16931,7 +17049,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "assist-core.js:778-778",
+      "loc": "assist-core.js:782-782",
       "signature": "(fn, ...a)",
       "calls": [
         "push"
@@ -16948,7 +17066,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "assist-core.js:793-793",
+      "loc": "assist-core.js:797-797",
       "signature": "(args)",
       "calls": [
         "_assistGateReplacementCode",
@@ -16978,7 +17096,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "assist-core.js:884-884",
+      "loc": "assist-core.js:888-888",
       "signature": "(fn, ...a)",
       "calls": [
         "push"
@@ -16995,7 +17113,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "assist-core.js:917-917",
+      "loc": "assist-core.js:921-921",
       "signature": "(field, label)",
       "calls": [
         "push"
@@ -17012,7 +17130,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "assist-core.js:981-981",
+      "loc": "assist-core.js:985-985",
       "signature": "(id)",
       "calls": [],
       "side_effects": [
@@ -17029,7 +17147,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "assist-core.js:990-990",
+      "loc": "assist-core.js:994-994",
       "signature": "(p)",
       "calls": [],
       "side_effects": [
@@ -17046,7 +17164,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "assist-core.js:1007-1007",
+      "loc": "assist-core.js:1011-1011",
       "signature": "(p, signal)",
       "calls": [
         "postExcelMirror"
@@ -17065,7 +17183,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "assist-core.js:1025-1025",
+      "loc": "assist-core.js:1029-1029",
       "signature": "(p, pickedIdx)",
       "calls": [],
       "side_effects": [
@@ -17083,7 +17201,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "assist-core.js:1045-1045",
+      "loc": "assist-core.js:1049-1049",
       "signature": "(proposalId, accepted)",
       "calls": [
         "assistApplyCompanions",
@@ -46159,6 +46277,11 @@
     },
     {
       "from": "_run_full_pipeline_single_instance_impl",
+      "to": "_cleanup_fullrun_snapshots",
+      "lang": "python"
+    },
+    {
+      "from": "_run_full_pipeline_single_instance_impl",
       "to": "_clear_workbook_name_aliases",
       "lang": "python"
     },
@@ -46199,7 +46322,22 @@
     },
     {
       "from": "_run_full_pipeline_single_instance_impl",
+      "to": "_find_best_fullrun_snapshot",
+      "lang": "python"
+    },
+    {
+      "from": "_run_full_pipeline_single_instance_impl",
       "to": "_fullrun_excel_ids_for_books",
+      "lang": "python"
+    },
+    {
+      "from": "_run_full_pipeline_single_instance_impl",
+      "to": "_fullrun_snapshot_key",
+      "lang": "python"
+    },
+    {
+      "from": "_run_full_pipeline_single_instance_impl",
+      "to": "_fullrun_source_stamp",
       "lang": "python"
     },
     {
@@ -52380,6 +52518,61 @@
     {
       "from": "_find_best_pipeline_snapshot",
       "to": "range",
+      "lang": "python"
+    },
+    {
+      "from": "_fullrun_step_signature",
+      "to": "_signature_code_for_snapshot",
+      "lang": "python"
+    },
+    {
+      "from": "_fullrun_step_signature",
+      "to": "is_python_pipeline_step",
+      "lang": "python"
+    },
+    {
+      "from": "_fullrun_step_signature",
+      "to": "normalize_python_pipeline_code",
+      "lang": "python"
+    },
+    {
+      "from": "_fullrun_snapshot_key",
+      "to": "_fullrun_step_signature",
+      "lang": "python"
+    },
+    {
+      "from": "_fullrun_snapshot_key",
+      "to": "raw",
+      "lang": "python"
+    },
+    {
+      "from": "_fullrun_snapshot_files_exist",
+      "to": "values",
+      "lang": "python"
+    },
+    {
+      "from": "_find_best_fullrun_snapshot",
+      "to": "_fullrun_snapshot_files_exist",
+      "lang": "python"
+    },
+    {
+      "from": "_find_best_fullrun_snapshot",
+      "to": "_fullrun_snapshot_key",
+      "lang": "python"
+    },
+    {
+      "from": "_find_best_fullrun_snapshot",
+      "to": "range",
+      "lang": "python"
+    },
+    {
+      "from": "_cleanup_fullrun_snapshots",
+      "to": "add",
+      "lang": "python"
+    },
+    {
+      "from": "_cleanup_fullrun_snapshots",
+      "to": "values",
       "lang": "python"
     },
     {
@@ -70164,10 +70357,10 @@
     }
   ],
   "stats": {
-    "functions": 2059,
-    "edges": 5777,
+    "functions": 2065,
+    "edges": 5792,
     "by_lang": {
-      "python": 656,
+      "python": 662,
       "js": 1162,
       "csharp": 62
     }

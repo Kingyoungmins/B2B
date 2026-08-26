@@ -8,7 +8,8 @@
 import sys, io, tempfile, shutil
 from pathlib import Path
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
-sys.path.insert(0, r"C:\Users\Admin\Desktop\KGM_git\B2B_ver0.6.1")
+# [고정 경로 제거 2026-08-26] 예전엔 B2B_ver0.6.1 을 import 해서, 지금 트리를 고쳐도 옛 코드를 검증했다.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import openpyxl
 import pythoncom; pythoncom.CoInitialize()
 import win32com.client as win32

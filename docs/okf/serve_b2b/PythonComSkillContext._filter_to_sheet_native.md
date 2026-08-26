@@ -9,7 +9,7 @@ signature: "(self, ws, sheet, decl, dest_name, header_rows, after)"
 role: "[0.7.5] 자동필터 + 보이는 행 한 번 복사. 성공하면 시트명, 안 되면 None(호출자가 폴백)."
 role_source: docstring
 version: "0.8.0"
-loc: "serve_b2b.py:13021-13129"
+loc: "serve_b2b.py:13195-13303"
 
 # ── 입출력 ──
 inputs:

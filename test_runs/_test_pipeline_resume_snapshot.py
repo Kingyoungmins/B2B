@@ -1,17 +1,18 @@
 # -*- coding: utf-8 -*-
 """[SBAGENT-293 D] 스냅샷 접두 재사용(resume) 로직의 계약 — _run_excel_python_pipeline_impl 경로.
 
-⚠ 적용 범위 주의(2026-08-26 확인, 내 오진 정정):
+⚠ 적용 범위 주의(2026-08-26, 내 오진 정정의 흔적):
   이 resume 로직을 쓰는 것은 **/api/pipeline/start(백그라운드 파이프라인)** 경로뿐이다.
-  **실행기 [전체실행]** 은 /api/excel/run-full-pipeline → _run_full_pipeline_single_instance_impl
-  로 가는데, 그 함수에는 resume/스냅샷 키 재사용이 **아예 없다**(항상 1단계부터).
-  실측(08-26 10:23·10:29 두 실행) 모두 stepIdx 0 부터 돈 것이 그 증거다.
-  → 사용자에게 "전체실행을 다시 누르면 앞 단계를 건너뜁니다"라고 안내하면 안 된다.
-     함수 단위 검증만 하고 '실제 호출 경로'를 확인하지 않아 생긴 오진이었다.
+  **실행기 [전체실행]**(/api/excel/run-full-pipeline → _run_full_pipeline_single_instance_impl)은
+  한동안 이어실행이 **아예 없었고**(실측 08-26 10:23·10:29 두 실행 모두 stepIdx 0 부터), 나는 이 함수만
+  보고 "있다"고 오진했다. 함수 단위 검증만 하고 '실제 호출 경로'를 확인하지 않은 탓이다.
+  지금은 실행기에도 이어실행이 있지만 **별도 구현**(경계 스냅샷: _find_best_fullrun_snapshot)이다.
+  → 실행기 쪽 계약은 _test_fullrun_resume_live.py 에서 잠근다. 여기 통과가 저기 보장이 아니다.
 
-이 파일은 그 resume 로직 자체(키 구성·접두 매칭·주석 무시)를 잠근다.
+이 파일은 백그라운드 경로의 resume 로직 자체(키 구성·접두 매칭·주석 무시)를 잠근다.
 """
 import sys
+from pathlib import Path
 
 sys.path.insert(0, r"C:\Users\Admin\Desktop\KGM_git\B2B_ver0.8.0")
 import serve_b2b as S
@@ -101,17 +102,22 @@ c4 = mk_steps("기본료")
 c4[2]["code"] = c4[2]["code"] + chr(10) + "    x = 1"
 check("코드가 바뀌면 키도 바뀐다", k1 != S._pipeline_snapshot_key(IN_ITEMS, IN_WBS, OUT_ITEM, WB, c4[:29]))
 
-print("[6] 적용 범위 — 실행기 전체실행 경로에는 resume 이 없다(오진 재발 방지)")
+print("[6] 적용 범위 — 두 경로는 '다른' 이어실행을 쓴다(오진 재발 방지)")
 src = open(r"serve_b2b.py", encoding="utf-8-sig").read()
 i = src.find("def _run_full_pipeline_single_instance_impl")
 j = src.find(chr(10) + "def ", i + 10)
 runner_fn = src[i:j if j > 0 else len(src)]
-check("실행기 경로에 _find_best_pipeline_snapshot 호출 없음", "_find_best_pipeline_snapshot" not in runner_fn)
-check("실행기 경로에 resume_from 없음", "resume_from" not in runner_fn)
 k = src.find("def _run_excel_python_pipeline_impl")
 l = src.find(chr(10) + "def ", k + 10)
 bg_fn = src[k:l if l > 0 else len(src)]
-check("bg 파이프라인 경로에는 resume 이 있다", "_find_best_pipeline_snapshot" in bg_fn and "resume_from" in bg_fn)
+check("bg 경로는 _find_best_pipeline_snapshot / resume_from 을 쓴다",
+      "_find_best_pipeline_snapshot" in bg_fn and "resume_from" in bg_fn)
+check("실행기 경로는 bg 의 resume 을 쓰지 않는다(상태 모양이 달라 그대로 못 쓴다)",
+      "_find_best_pipeline_snapshot" not in runner_fn)
+check("실행기 경로는 자기 것(_find_best_fullrun_snapshot)을 쓴다",
+      "_find_best_fullrun_snapshot" in runner_fn and "_save_fullrun_boundary" in runner_fn)
+check("실행기 이어실행의 실동작 검증은 별도 파일에 있다",
+      (Path(__file__).parent / "_test_fullrun_resume_live.py").exists())
 
 print("")
 print("RESULT: ALL PASS" if fails == 0 else "RESULT: %d FAIL" % fails)

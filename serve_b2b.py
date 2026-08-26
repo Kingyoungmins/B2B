@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 import http.server
 import ast
 import atexit
@@ -10844,6 +10844,10 @@ def _run_full_pipeline_single_instance_impl(groups, reset_excel_ids=None, view_s
     if not norm_groups:
         return {"ok": True, "applied": 0, "stepSnapshots": [], "perFileLiveSchema": {}}
 
+    # 이어실행 서명용 '평면 스텝열' — 아래 실행 루프의 ordinal 순서와 정확히 같아야 한다.
+    # (norm_groups 가 이미 빈 코드 스텝을 걸렀으므로 루프의 skip 조건과 일치한다)
+    flat_steps = [(g["excelId"], st) for g in norm_groups for st in g["steps"]]
+
     anchor_excel_id = norm_groups[0]["excelId"]
     # 열어야 할 세션 = 그룹 대상 ∪ reset 대상(교차참조 포함), 최초 등장 순서 유지
     open_ids = []
@@ -10867,15 +10871,72 @@ def _run_full_pipeline_single_instance_impl(groups, reset_excel_ids=None, view_s
             except Exception:
                 initial_views[sid] = None
 
+        # ===== 이어실행 판정 — 파일을 열기 '전에' 해야 어디서부터 열지가 정해진다 =====
+        # 동반 워크북(open_ids 밖의 라이브 세션)이 끼면 이어실행을 하지 않는다: 동반본은 원본 파일이 아니라
+        # '지금 라이브 상태'를 SaveCopyAs 한 것이라 재실행 사이에 같은 상태였는지 지문으로 확인할 방법이 없다.
+        # 확인 못 하면 조용히 틀린 결과가 나오므로, 그런 실행은 종전대로 1단계부터 돈다.
+        _fr_open_names = set()
+        for sid in open_ids:
+            try:
+                _fr_open_names.add(Path(str(sessions[sid].get("name") or "")).name.lower())
+            except Exception:
+                pass
+        _has_companion = False
+        for _oid, _other in list(EXCEL_SESSIONS.items()):
+            if _oid in sessions or not _other.get("liveEditable"):
+                continue
+            try:
+                _cn = Path(str(_other.get("name") or "")).name.lower()
+            except Exception:
+                _cn = ""
+            if _cn and _cn not in _fr_open_names:
+                _has_companion = True
+                break
+        _fr_source_specs = []
+        for sid in open_ids:
+            _s = sessions[sid]
+            _fr_source_specs.append({
+                "excelId": sid,
+                "name": Path(str(_s.get("name") or "")).name,
+                "stamp": _fullrun_source_stamp(_s.get("sourcePath") or _s.get("path") or ""),
+            })
+        _resume_enabled = not _has_companion
+        _resume_from = 0
+        _resume_files = {}
+        _resumed_dirty = set()
+        _resume_step_snapshots = []
+        _resume_step_cross = []
+        _resume_reason = "companion-open" if _has_companion else ""
+        if _resume_enabled:
+            try:
+                _best = _find_best_fullrun_snapshot(_fr_source_specs, entry, flat_steps)
+            except Exception as _rerr:
+                _best = None
+                _resume_reason = "key-error:%s" % _rerr
+            if _best:
+                _resume_from, _, _rsnap = _best
+                _resume_files = dict(_rsnap.get("files") or {})
+                _resumed_dirty = set(_rsnap.get("dirtyIds") or [])
+                # 건너뛴 구간의 '되돌리기/적용됨' 목록을 이어받는다(파일이 아직 살아있는 것만).
+                _resume_step_snapshots = [dict(x) for x in (_rsnap.get("stepSnapshots") or [])
+                                          if Path(str((RESULTS.get(x.get("downloadId")) or {}).get("path") or "")).exists()]
+                _resume_step_cross = [dict(x) for x in (_rsnap.get("stepCross") or [])]
+                _resume_reason = "hit"
+            elif not _resume_reason:
+                _resume_reason = "no-snapshot"
+        _vba_trace("fullrun.resume.decision", anchorExcelId=anchor_excel_id,
+                   resumeFrom=_resume_from, totalSteps=total_steps, reason=_resume_reason,
+                   enabled=bool(_resume_enabled), snapshotRecords=len(FULLRUN_STEP_SNAPSHOTS))
+
         _ensure_vbom_access()
         _disable_vba_break_on_all_errors()
         work = Path(tempfile.mkdtemp(prefix="b2b_fullrun_"))
         fapp = None
         fpid = None
-        step_snapshots = []
+        step_snapshots = list(_resume_step_snapshots)
         byExcel = {}   # excelId -> {"wb","name","session"}
         result = {"ok": True, "applied": 0, "stepSnapshots": step_snapshots, "perFileLiveSchema": {}, "outputFiles": []}
-        _fr_step_cross = []   # 스텝별 쓰기 증거(클라의 교차파일 되돌리기 판정 보강용)
+        _fr_step_cross = list(_resume_step_cross)   # 스텝별 쓰기 증거(클라의 교차파일 되돌리기 판정 보강용)
         try:
             fapp = win32com.client.DispatchEx("Excel.Application")
             # [회색 Excel 창 2026-08-19] 숨김을 생성 직후 첫 줄로 — PID 조회(COM 왕복) 전에 건다.
@@ -10907,7 +10968,12 @@ def _run_full_pipeline_single_instance_impl(groups, reset_excel_ids=None, view_s
                 tdir = work / ("t_" + uuid.uuid4().hex[:6])
                 tdir.mkdir(parents=True, exist_ok=True)
                 tpath = tdir / name
-                shutil.copy2(Path(src), tpath)
+                # 이어실행이면 '원본'이 아니라 그 경계까지 실행된 상태(경계 스냅샷)에서 연다.
+                # 경계 스냅샷은 열린 파일 전부를 한 시점에 담으므로 교차파일 결과도 그대로 살아있다.
+                _open_src = _resume_files.get(sid) if _resume_from else None
+                if _open_src and not Path(str(_open_src)).exists():
+                    _open_src = None
+                shutil.copy2(Path(_open_src or src), tpath)
                 fwb, _t = excel_workbooks_open(fapp, str(tpath), read_only=False, intended_name=name)
                 try:
                     _protect_workbook_for_read_only_mirror(fwb, False)
@@ -10915,7 +10981,8 @@ def _run_full_pipeline_single_instance_impl(groups, reset_excel_ids=None, view_s
                     pass
                 byExcel[sid] = {"wb": fwb, "name": name, "session": s}
                 _vba_trace("fullrun.file.opened", anchorExcelId=anchor_excel_id, isolatedPid=fpid,
-                           excelId=sid, name=name, targetPath=str(tpath))
+                           excelId=sid, name=name, targetPath=str(tpath),
+                           fromSnapshot=bool(_open_src), resumeFrom=_resume_from)
 
             # 1-b) 교차참조용 '동반 워크북': open_ids 에 없는 다른 라이브 세션도 (현재 상태로) 함께 열어 둔다.
             # VBA 의 Workbooks("다른파일.xlsx") / Python ctx.book("…") 교차참조가 격리 인스턴스 안에서 해석되게
@@ -10975,6 +11042,101 @@ def _run_full_pipeline_single_instance_impl(groups, reset_excel_ids=None, view_s
                                    excelId=_sid, error=str(_fs_err))
                 return snaps
 
+            # ===== 경계 스냅샷 저장기 =====
+            # 실측 근거(08-26): 6개 파일·36스텝·16분. 스텝마다 '열린 파일 전부'를 찍으면 +37% 라 못 쓴다.
+            # 그래서 '직전 경계 이후 실제로 바뀐 파일'만 찍는다. 판정은 Excel 이 들고 있는 Saved 플래그로 —
+            # 찍은 뒤 Saved=True 로 되돌려 놓으면 다음 경계의 Saved=False 는 정확히 '그 사이 변경'이 된다.
+            #   · 대상 파일은 스텝-전 스냅샷을 이미 찍고 있으므로 추가 비용 0.
+            #   · 다른 파일은 보통 그룹이 넘어갈 때 한 번만 찍힌다.
+            # Saved 를 건드리므로 끝의 '변경된 파일만 동기화' 판정이 깨진다 → 우리가 본 dirty 를
+            # _ever_dirty 에 모아 합집합으로 쓴다(오늘 동작과 정확히 같은 집합).
+            _bnd = {"lastAt": time.perf_counter(), "lastMs": 0.0, "on": bool(_resume_enabled)}
+            # 이어실행으로 들어왔으면 그 경계의 파일 목록을 이어받는다. 안 그러면 '이번 실행에서 안 바뀐'
+            # 파일이 새 경계에 빠져, 그 경계로 다시 이어실행할 때 그 파일만 원본에서 열려 앞 결과가 날아간다.
+            _bnd_files = dict(_resume_files)   # excelId -> 최근 경계 사본(없으면 아직 원본 그대로)
+            _ever_dirty = set(_resumed_dirty)
+
+            def _wb_is_dirty(ent):
+                try:
+                    return not bool(ent["wb"].Saved)
+                except Exception:
+                    return True   # 모르면 바뀐 것으로(안전한 쪽)
+
+            def _save_fullrun_boundary(completed, target_id, target_path):
+                """completed 개 스텝까지 끝난 시점의 상태를 기록한다.
+                target_id 파일은 방금 찍은 스텝-전 스냅샷(target_path)이 곧 이 시점 상태라 재사용한다."""
+                if not _bnd["on"] or completed <= 0:
+                    return
+                # 먼저 '이번 경계에서 새로 찍어야 할 파일'을 센다(읽기만 — 표식은 아직 안 건드린다).
+                _dirty_ids = set()
+                try:
+                    for _sid, _ent in byExcel.items():
+                        if _wb_is_dirty(_ent):
+                            _dirty_ids.add(_sid)
+                except Exception as _derr:
+                    _bnd["on"] = False
+                    _vba_trace("fullrun.boundary.skip", anchorExcelId=anchor_excel_id,
+                               completed=completed, error="dirty:%s" % _derr)
+                    return
+                _extra = _dirty_ids - {target_id}
+                # 자기조절 게이트 — 새로 찍을 파일이 있을 때만 건다. 대상 파일은 스텝-전 스냅샷을 이미
+                # 찍었으므로 추가 비용이 0이고, 그 경우는 무조건 경계를 남긴다(실패 직전 경계를 놓치지 않게).
+                # 추가 저장이 필요할 때는 직전 경계가 T ms 걸렸으면 그 9배의 '실행 시간'이 지나야 한다
+                # → 스냅샷 오버헤드가 전체의 약 10% 를 넘지 않는다.
+                if _extra and (time.perf_counter() - _bnd["lastAt"]) * 1000.0 < _bnd["lastMs"] * 9.0:
+                    return
+                _t0 = time.perf_counter()
+                _new_paths = []
+                try:
+                    _bnd_files[target_id] = str(target_path)
+                    for _sid in _extra:
+                        _ent = byExcel[_sid]
+                        _bp = BACKEND_DIR / ("prestep_%s_%s" % (uuid.uuid4().hex, _ent["name"]))
+                        _ent["wb"].SaveCopyAs(str(_bp))
+                        _bnd_files[_sid] = str(_bp)
+                        _new_paths.append(_bp)
+                    _ever_dirty.update(_dirty_ids)
+                    for _sid in _dirty_ids:
+                        # 다음 경계에서 '그 사이 변경'만 골라내기 위해 표식을 되돌린다.
+                        # (SaveCopyAs 는 Saved 를 안 건드리므로 직접 내려야 한다)
+                        try:
+                            byExcel[_sid]["wb"].Saved = True
+                        except Exception:
+                            pass
+                except Exception as _berr:
+                    # 반쪽 경계로 이어실행하면 교차파일 상태가 어긋나 조용히 틀린 결과가 난다 → 통째로 버린다.
+                    for _p in _new_paths:
+                        try:
+                            _p.unlink()
+                        except Exception:
+                            pass
+                    _bnd["on"] = False   # 이후 경계도 신뢰할 수 없다(Saved 표식이 어긋났을 수 있음)
+                    _vba_trace("fullrun.boundary.skip", anchorExcelId=anchor_excel_id,
+                               completed=completed, error=str(_berr))
+                    return
+                _ms = round((time.perf_counter() - _t0) * 1000.0, 1)
+                try:
+                    _key = _fullrun_snapshot_key(_fr_source_specs, entry, flat_steps[:completed])
+                except Exception as _kerr:
+                    _vba_trace("fullrun.boundary.skip", anchorExcelId=anchor_excel_id,
+                               completed=completed, error="key:%s" % _kerr)
+                    return
+                FULLRUN_STEP_SNAPSHOTS[_key] = {
+                    "key": _key, "ordinal": completed, "created": time.time(),
+                    # 한 번도 안 바뀐 파일은 아예 안 담는다 → 이어실행 때 그 파일만 원본에서 연다.
+                    "files": dict(_bnd_files), "dirtyIds": sorted(_ever_dirty),
+                    # 클라의 '되돌리기/적용됨' 표시는 이 목록으로 그린다 — 건너뛴 구간이 비면
+                    # 화면과 실제가 어긋나므로 경계에 함께 담아 다음 실행에서 이어 붙인다.
+                    "stepSnapshots": [dict(x) for x in step_snapshots],
+                    "stepCross": [dict(x) for x in _fr_step_cross],
+                }
+                _bnd["lastAt"] = time.perf_counter()
+                _bnd["lastMs"] = _ms
+                _cleanup_fullrun_snapshots()
+                _vba_trace("fullrun.boundary.saved", anchorExcelId=anchor_excel_id, isolatedPid=fpid,
+                           completed=completed, files=len(_bnd_files), saved=len(_new_paths),
+                           dirty=len(_ever_dirty), ms=_ms)
+
             # 2) 전 그룹·스텝 순서대로 실행 (ftarget = 그 그룹 파일의 wb)
             ordinal = 0
             for g in norm_groups:
@@ -10988,6 +11150,8 @@ def _run_full_pipeline_single_instance_impl(groups, reset_excel_ids=None, view_s
                     if not code.strip():
                         continue
                     ordinal += 1
+                    if ordinal <= _resume_from:
+                        continue   # 이어실행 — 이 단계까지는 경계 스냅샷에 이미 반영돼 있다
                     try:
                         PIPELINE_PROGRESS[anchor_excel_id] = {"current": ordinal, "total": total_steps, "ts": time.time()}
                     except Exception:
@@ -11007,6 +11171,11 @@ def _run_full_pipeline_single_instance_impl(groups, reset_excel_ids=None, view_s
                                    ms=round((time.perf_counter() - _snap_t0) * 1000, 1),
                                    label=_file_label_kind(_snap_path), sizeMB=_file_size_mb(_snap_path),
                                    srcLabel=_file_label_kind(_isolated_wb_path(ftarget)))
+                        # 방금 찍은 이 파일 상태 = '직전 스텝까지 끝난' 시점 → 경계 스냅샷으로도 쓴다(추가 저장 0회).
+                        try:
+                            _save_fullrun_boundary(ordinal - 1, gid, _snap_path)
+                        except Exception as _bnd_err:
+                            _vba_trace("fullrun.boundary.error", anchorExcelId=anchor_excel_id, error=str(_bnd_err))
                         _snap_rid = uuid.uuid4().hex
                         RESULTS[_snap_rid] = {"path": str(_snap_path), "name": Path(_snap_path).name, "created": time.time()}
                         step_snapshots.append({
@@ -11095,6 +11264,11 @@ def _run_full_pipeline_single_instance_impl(groups, reset_excel_ids=None, view_s
                 try:
                     _changed = not bool(ent["wb"].Saved)
                 except Exception:
+                    _changed = True
+                # [필수] 경계 저장기가 Saved 플래그를 표식으로 쓰느라 True 로 되돌린다 → 위의 Saved 판정만
+                # 믿으면 바뀐 파일이 동기화에서 빠져 결과가 통째로 실종된다. 우리가 관찰한 dirty 를 모아 둔
+                # _ever_dirty(이어실행으로 물려받은 것 포함)를 합집합으로 얹어야 오늘과 같은 집합이 된다.
+                if sid in _ever_dirty:
                     _changed = True
                 if _changed:
                     _to_sync.append((sid, ent))
@@ -19189,6 +19363,113 @@ def _find_best_pipeline_snapshot(input_items, input_wbs, output_item, output_wb_
             best = (prefix_len, key, snapshot)
             break
     return best
+
+
+# ===== 실행기 [전체실행] 이어실행 — '경계 스냅샷' =====
+#
+# [오진 정정 2026-08-26] 위 _find_best_pipeline_snapshot 계열은 /api/pipeline/start(백그라운드)
+# 전용이고, 실행기 [전체실행](_run_full_pipeline_single_instance_impl)에는 이어실행이 아예 없었다.
+# 실측(08-26 10:23·10:29) 두 실행 모두 stepIdx 0 부터 시작해 16분을 통째로 다시 돌았다 —
+# AI 도움으로 30단계 하나 고쳤을 뿐인데.
+#
+# 두 경로는 상태 모양이 달라 위 로직을 그대로 못 쓴다:
+#   백그라운드 = 입력 여러 개 + 출력 1개(역할이 고정)
+#   실행기     = 관여 파일 N개를 한 인스턴스에 전부 열고, 그룹 순서대로 도는 '평면 스텝열'
+# 그래서 경계(스텝과 스텝 사이) 상태를 **열린 파일 전부**로 저장한다. 대상 파일만 저장하면
+# 교차파일 쓰기를 놓쳐 조용히 틀린 결과가 나온다 — 이어실행은 틀리느니 안 하는 게 낫다.
+FULLRUN_STEP_SNAPSHOTS = {}
+# 경계는 대부분 파일을 새로 안 찍고 앞 경계의 경로를 공유한다 → 기록을 넉넉히 둬도 디스크가 안 는다.
+FULLRUN_SNAPSHOT_MAX_RECORDS = 40
+
+
+def _fullrun_source_stamp(path):
+    """원본 파일 지문(경로+크기+mtime). 재실행 사이에 원본이 바뀌면 이어실행을 하면 안 된다."""
+    try:
+        p = Path(str(path))
+        st = p.stat()
+        return [str(p.resolve()).lower(), st.st_size, int(st.st_mtime_ns)]
+    except OSError:
+        return [str(path).lower(), 0, 0]
+
+
+def _fullrun_step_signature(excel_id, step):
+    """스텝 1개의 '실행 결과에 영향 있는' 부분만. _step_signature 와 같은 철학이되
+    실행기 스텝 페이로드(stepId/targetSheetName/…)에 맞춘 별도 함수다 —
+    실행기 스텝에는 id 키가 없어 _step_signature 를 그대로 쓰면 전 스텝이 id=None 으로 뭉갠다."""
+    st = step if isinstance(step, dict) else {}
+    code = (st.get("code") if isinstance(step, dict) else str(step)) or ""
+    lang = str(st.get("language") or "").lower()
+    if lang in ("python", "py") or is_python_pipeline_step(st):
+        code = normalize_python_pipeline_code(code)
+    return {
+        "excelId": excel_id,
+        "stepId": st.get("stepId"),
+        "language": lang or "vba",
+        # 주석/설명만 바뀐 단계가 이어실행을 깨지 않게(= 백그라운드 경로와 같은 규칙)
+        "code": _signature_code_for_snapshot(code),
+        # 대상 시트는 실행 전 Activate 로 컨텍스트를 바꾸므로 결과에 영향이 있다
+        "sheet": st.get("targetSheetName") or st.get("targetSheet") or st.get("viewSheet") or "",
+    }
+
+
+def _fullrun_snapshot_key(source_specs, entry, flat_prefix):
+    payload = {
+        "version": 1,
+        "entry": str(entry or ""),
+        "files": list(source_specs or []),
+        "steps": [_fullrun_step_signature(eid, st) for eid, st in (flat_prefix or [])],
+    }
+    raw = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return hashlib.sha256(raw).hexdigest()
+
+
+def _fullrun_snapshot_files_exist(snap):
+    if not snap:
+        return False
+    files = (snap.get("files") or {})
+    if not files:
+        return False
+    return all(Path(p).exists() for p in files.values())
+
+
+def _find_best_fullrun_snapshot(source_specs, entry, flat_steps):
+    """가장 긴 접두(= 가장 많이 건너뛰는 경계)부터 찾는다. 경계는 비용 게이트 때문에 드문드문
+    있으므로, 고친 단계 직전까지가 아니라 '그 아래 가장 가까운 경계'에서 이어진다."""
+    for prefix_len in range(len(flat_steps), 0, -1):
+        key = _fullrun_snapshot_key(source_specs, entry, flat_steps[:prefix_len])
+        snap = FULLRUN_STEP_SNAPSHOTS.get(key)
+        if snap and _fullrun_snapshot_files_exist(snap):
+            return (prefix_len, key, snap)
+    return None
+
+
+def _cleanup_fullrun_snapshots():
+    """최근 N개만 남기고 오래된 경계 기록을 버린다. 파일은 '남은 기록이 참조하지 않을 때만' 지운다
+    (같은 파일을 여러 경계가 공유한다 — 안 바뀐 파일은 경계마다 다시 저장하지 않기 때문)."""
+    try:
+        records = sorted(FULLRUN_STEP_SNAPSHOTS.values(), key=lambda r: r.get("created") or 0)
+        drop = records[:-FULLRUN_SNAPSHOT_MAX_RECORDS] if len(records) > FULLRUN_SNAPSHOT_MAX_RECORDS else []
+        if not drop:
+            return
+        for rec in drop:
+            FULLRUN_STEP_SNAPSHOTS.pop(rec.get("key"), None)
+        keep_paths = set()
+        for rec in FULLRUN_STEP_SNAPSHOTS.values():
+            for p in (rec.get("files") or {}).values():
+                keep_paths.add(str(p))
+        for rec in drop:
+            for p in (rec.get("files") or {}).values():
+                if str(p) in keep_paths:
+                    continue
+                # 클라 되돌리기용으로 RESULTS 에 등록된 파일은 손대지 않는다(사용자가 아직 쓸 수 있다).
+                if any(str((v or {}).get("path")) == str(p) for v in list(RESULTS.values())):
+                    continue
+                try:
+                    Path(p).unlink()
+                except Exception:
+                    pass
+    except Exception:
+        pass
 
 
 def _cleanup_pipeline_step_snapshots():

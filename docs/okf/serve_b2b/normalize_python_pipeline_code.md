@@ -8,7 +8,7 @@ signature: "(code)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
 version: "0.8.0"
-loc: "serve_b2b.py:16451-16480"
+loc: "serve_b2b.py:16625-16654"
 
 # ── 입출력 ──
 inputs:
@@ -41,6 +41,7 @@ calls_external:
   - "sub"
   - "text"
 called_by:
+  - "_fullrun_step_signature"
   - "_python_step_has_structural_or_format_operation"
   - "_python_step_has_values_only_formula_copy_risk"
   - "_python_step_requests_excel_com"
@@ -63,7 +64,7 @@ timestamp: "0.8.0-gen"
 
 ## 관계
 - 호출: `append`, `replace`
-- 피호출(영향 전파 경로): `_python_step_has_structural_or_format_operation`, `_python_step_has_values_only_formula_copy_risk`, `_python_step_requests_excel_com`, `_python_step_sig`, `_run_excel_python_pipeline_impl`, `_run_openpyxl_python_pipeline_impl`, `_step_signature`, `is_python_pipeline_step`
+- 피호출(영향 전파 경로): `_fullrun_step_signature`, `_python_step_has_structural_or_format_operation`, `_python_step_has_values_only_formula_copy_risk`, `_python_step_requests_excel_com`, `_python_step_sig`, `_run_excel_python_pipeline_impl`, `_run_openpyxl_python_pipeline_impl`, `_step_signature`, `is_python_pipeline_step`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

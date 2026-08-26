@@ -9,7 +9,7 @@ signature: "(self, sheet, a1_range, size=None, bold=None, italic=None, color=Non
 role: "글꼴 서식. 지정한 항목만 바꾼다 — size(pt 숫자)/bold/italic(True·False)/color(색)/name(글꼴명)."
 role_source: docstring
 version: "0.8.0"
-loc: "serve_b2b.py:12638-12660"
+loc: "serve_b2b.py:12812-12834"
 
 # ── 입출력 ──
 inputs:

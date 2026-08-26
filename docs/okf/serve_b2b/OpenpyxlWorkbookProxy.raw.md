@@ -9,7 +9,7 @@ signature: "(self)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
 version: "0.8.0"
-loc: "serve_b2b.py:18077-18078"
+loc: "serve_b2b.py:18251-18252"
 
 # ── 입출력 ──
 inputs:
@@ -35,6 +35,7 @@ called_by:
   - "PythonComSkillContext.append_same_format_sheets"
   - "PythonComSkillContext.match_fill"
   - "_current_app_version"
+  - "_fullrun_snapshot_key"
   - "_live_final_snapshot_key"
   - "_pipeline_snapshot_key"
   - "_python_step_sig"
@@ -56,7 +57,7 @@ timestamp: "0.8.0-gen"
 
 ## 관계
 - 호출: 없음
-- 피호출(영향 전파 경로): `B2BHandler.do_POST`, `B2BHandler.handle_logic_backup`, `OpenpyxlSkillContext._write_grid`, `OpenpyxlSkillContext.display_rows`, `OpenpyxlSkillContext.flush_pending_rows`, `OpenpyxlSkillContext.sheet`, `OpenpyxlSkillContext.value`, `PythonComSkillContext.append_same_format_sheets`, `PythonComSkillContext.match_fill`, `_current_app_version`, `_live_final_snapshot_key`, `_pipeline_snapshot_key`, `_python_step_sig`, `_validate_vba_source_before_inject`, `_vba_security_scan`, `_workbook_name_lookup_keys`
+- 피호출(영향 전파 경로): `B2BHandler.do_POST`, `B2BHandler.handle_logic_backup`, `OpenpyxlSkillContext._write_grid`, `OpenpyxlSkillContext.display_rows`, `OpenpyxlSkillContext.flush_pending_rows`, `OpenpyxlSkillContext.sheet`, `OpenpyxlSkillContext.value`, `PythonComSkillContext.append_same_format_sheets`, `PythonComSkillContext.match_fill`, `_current_app_version`, `_fullrun_snapshot_key`, `_live_final_snapshot_key`, `_pipeline_snapshot_key`, `_python_step_sig`, `_validate_vba_source_before_inject`, `_vba_security_scan`, `_workbook_name_lookup_keys`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`
