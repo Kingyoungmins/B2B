@@ -4050,6 +4050,21 @@
         ]
       ],
       "fix": "tools/callpath/trace.py 신설. --reaches(역추적) / --endpoint / --button / --assert 'button -> func'(exit code). serve_b2b.py 를 AST 로 파고 `if self.path == \"/api/x\": self.handle_y()` 라우팅을 뽑아 클라(scripts/*.js)의 onclick 바인딩부터 백엔드 impl 까지 잇는다. 두 가지 함정을 실제로 밟고 고쳤다: ①함수를 '넘기는' 형태(excel_call(_run_..._impl, ...))를 Call 노드만 보면 놓쳐 '어디서도 안 닿는다'는 거짓 음성이 났다 → Name 참조도 간선으로. ②이름으로 노드를 합치면 worker(4곳 정의)·run_backend_pipeline_payload(모듈에 2번 정의, 뒤엣것이 이김) 때문에 상관없는 코드가 붙어 '전체실행 버튼 → capture-copypaste → excel_call → worker → 백그라운드 resume' 이라는 없는 경로가 생겼고, 도구가 내 거짓 주장을 OK 라고 판정했다 → 이름이 아니라 '정의 위치(스코프)'로 해석하도록 재작성(가장 가까운 조상 스코프 → 모듈 최상위 마지막 정의). 도구가 거짓을 세탁하면 없느니만 못하므로 그 케이스 자체를 회귀 테스트로 박았다."
+    },
+    {
+      "id": "CTX-MANUAL-FOR-BIZ",
+      "title": "[요청 2026-08-26] 사업팀용 ctx 명령 설명서(66개, 용도·예시) — 문서가 코드와 어긋나지 않게 잠근다.",
+      "checks": [
+        [
+          "python",
+          "test_runs/_test_ctx_manual_sync.py"
+        ],
+        [
+          "com",
+          "test_runs/_test_ctx_manual_examples_com.py"
+        ]
+      ],
+      "fix": "docs/user-guide/AX-Cell_스킬_함수_설명서_v0.8.0.txt 신설. 비개발자 기준 평문(.txt — 메모장에서 마크다운 기호 안 깨지게), 분류 11개로 나눠 명령마다 '무엇을 하나/언제 쓰나/쓰는 법/예시'. 검증 둘: sync(Excel 불필요, 수 초)는 빠진 명령·유령 명령·표제부 인자명·개수 표기를 대조하고, com(실측)은 설명서에 적은 예시를 진짜 Excel 에 그대로 실행해 52건 확인한다. 한글 자리표시자에 '=None' 을 붙였던 3곳은 그대로 복사하면 실패하므로(실제 인자명은 sheet) '※ 생략 가능' 문구로 바꿨고 그 패턴 자체를 검사로 막았다. COM 예산(400회)은 스킬 한 단계 단위라 실측 테스트도 구획마다 ctx 를 새로 만든다."
     }
   ]
 }
