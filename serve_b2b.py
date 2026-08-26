@@ -10927,6 +10927,14 @@ def _run_full_pipeline_single_instance_impl(groups, reset_excel_ids=None, view_s
         _vba_trace("fullrun.resume.decision", anchorExcelId=anchor_excel_id,
                    resumeFrom=_resume_from, totalSteps=total_steps, reason=_resume_reason,
                    enabled=bool(_resume_enabled), snapshotRecords=len(FULLRUN_STEP_SNAPSHOTS))
+        # 이어실행이면 진행률을 '건너뛴 지점'부터 바로 띄운다. 안 그러면 파일 6개를 여는 동안
+        # 화면에 아무 숫자도 없어 '실행 중'만 뜨고, 사용자는 또 1단계부터 도는 줄 안다.
+        if _resume_from:
+            try:
+                PIPELINE_PROGRESS[anchor_excel_id] = {"current": _resume_from, "total": total_steps,
+                                                      "phase": "resuming", "ts": time.time()}
+            except Exception:
+                pass
 
         _ensure_vbom_access()
         _disable_vba_break_on_all_errors()

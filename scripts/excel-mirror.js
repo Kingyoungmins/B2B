@@ -1247,6 +1247,11 @@ function markLivePipelineOutOfSync(reason) {
 function maybeAutoReapplyAfterRecover(excelId) {
   try {
     if (!excelId) return;
+    // [제보 2026-08-26] 실행기에서 "갑자기 알아서 실행"되는 게 사용자에게 가장 불쾌한 동작이다.
+    // 실행기의 결과물은 라이브 화면이 아니라 출력 파일이고, 반영 수단은 [전체실행] 하나뿐이다
+    // — 여기서 라이브에 스킬을 통째로 다시 얹어 봐야 사용자가 보는 결과는 안 바뀌고, 시간만 쓰고,
+    // [전체실행]의 경계 스냅샷 이어실행까지 버린다. 실행기에서는 하지 않는다.
+    if (typeof state !== "undefined" && state && state.currentPage === "runner") return;
     const steps = (state.pipeline || []).filter(s => s && s.enabled !== false && s.code);
     if (!steps.length) return;
     if (typeof pipelineUsesLiveSkill === "function") {

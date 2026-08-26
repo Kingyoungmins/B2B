@@ -8,7 +8,7 @@ signature: "(report)"
 role: "받는 함수라 재사용하면 \"스킬을 적용하지 못했습니다\"로 잘못 보인다 — 실행 전 경고는 따로."
 role_source: banner
 version: "0.8.0"
-loc: "pipeline.js:8356-8356"
+loc: "pipeline.js:8407-8407"
 
 # ── 입출력 ──
 inputs:

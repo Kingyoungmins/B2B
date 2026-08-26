@@ -17,7 +17,7 @@ returns: "(추정)"
 
 # ── 사이드이펙트 (정적 추정) ──
 side_effects:
-  - "상태 변경: excelMirror.autoReapplyBlockedUntil"
+  - "상태 변경: currentPage, excelMirror.autoReapplyBlockedUntil"
 raises: []
 
 # ── 유기적 관계 ──
@@ -34,8 +34,10 @@ calls_external:
 called_by:
   - "forceRestartExcelMirrors"
 reads:
+  - "state.currentPage"
   - "state.pipeline"
 writes:
+  - "currentPage"
   - "excelMirror.autoReapplyBlockedUntil"
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
 timestamp: "0.8.0-gen"
@@ -45,8 +47,8 @@ timestamp: "0.8.0-gen"
 (추정) 역할 주석 없음 — 담당자 1줄 보완 필요  _(자동 추정 — 확인 필요)_
 
 ## 사이드이펙트 & 주의
-- 상태 변경: excelMirror.autoReapplyBlockedUntil
-- 변경 상태 `excelMirror.autoReapplyBlockedUntil` — 수정 시 이 상태를 읽는 곳 동반 점검.
+- 상태 변경: currentPage, excelMirror.autoReapplyBlockedUntil
+- 변경 상태 `currentPage, excelMirror.autoReapplyBlockedUntil` — 수정 시 이 상태를 읽는 곳 동반 점검.
 
 ## 관계
 - 호출: `markLivePipelineOutOfSync`, `pipelineUsesLiveSkill`, `pipelineUsesVba`, `reapplyVbaPipelineToLive`, `toast`

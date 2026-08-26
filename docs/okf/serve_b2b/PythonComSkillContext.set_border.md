@@ -9,7 +9,7 @@ signature: "(self, sheet, a1_range, style='thin', color=None, edges='all')"
 role: "테두리. style: thin/medium/thick/double/none(지우기). edges: all(각 셀 사방+내부)/outline(바깥 테두리만)/"
 role_source: docstring
 version: "0.8.0"
-loc: "serve_b2b.py:12836-12888"
+loc: "serve_b2b.py:12844-12896"
 
 # ── 입출력 ──
 inputs:

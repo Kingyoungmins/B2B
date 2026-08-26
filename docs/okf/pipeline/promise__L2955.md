@@ -8,7 +8,7 @@ signature: "(async ()"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
 version: "0.8.0"
-loc: "pipeline.js:2792-2792"
+loc: "pipeline.js:2955-2955"
 
 # ── 입출력 ──
 inputs:
@@ -23,16 +23,13 @@ raises: []
 # ── 유기적 관계 ──
 calls:
   - "applyMappedSingleStep"
-  - "markPipelinePendingFromIndex"
-  - "pipelineSuffixWritesCrossFile"
+  - "noteLivePipelineApplied"
   - "reconcilePipelineSimulationAfterEdit"
-  - "refreshRunButton"
-  - "renderPipeline"
-  - "restorePipelineToCheckpointAndHold"
+  - "restoreLastStepPreApplySnapshot"
   - "setPipelineRuntimeStatus"
-  - "toast"
+  - "traceClientUiEvent"
 calls_external:
-  - "enabled"
+  - "find"
   - "warn"
 called_by: []
 reads:
@@ -49,7 +46,7 @@ timestamp: "0.8.0-gen"
 - 없음(정적 분석 기준)
 
 ## 관계
-- 호출: `applyMappedSingleStep`, `markPipelinePendingFromIndex`, `pipelineSuffixWritesCrossFile`, `reconcilePipelineSimulationAfterEdit`, `refreshRunButton`, `renderPipeline`, `restorePipelineToCheckpointAndHold`, `setPipelineRuntimeStatus`, `toast`
+- 호출: `applyMappedSingleStep`, `noteLivePipelineApplied`, `reconcilePipelineSimulationAfterEdit`, `restoreLastStepPreApplySnapshot`, `setPipelineRuntimeStatus`, `traceClientUiEvent`
 - 피호출(영향 전파 경로): 없음
 
 ## 실패/예외

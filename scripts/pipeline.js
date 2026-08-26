@@ -2708,7 +2708,15 @@ function replaceLogicAt(stepId, newCode, newDescription, language, opts) {
   //  · noteLivePipelineApplied 는 prefix 만 — 전체로 부르면 라이브에 없는 코드가 '적용됨'으로 고착돼
   //    이후 reconcile 이 no-op 으로 건너뛰며 진짜 적용을 영구히 삼킨다(최악의 실패 모드).
   //  · trustedStatic/extendedTimeout 해제 — 미검증 코드가 '작성자 확인본'으로 zip 에 굳으면 안 된다.
-  if (opts && opts.applyMode === "none") {
+  // [제보 2026-08-26] 실행기에서 '✓ 수정 적용'을 누르면 라이브 재적용 경로로 빠졌다 — 관여 파일 6개를
+  // 전부 리셋하고 1단계부터 순차 재적용(실측 12:57 로그). 30단계에서 멈춰 고쳤는데 처음부터 다시 돌고,
+  // 진행 표시도 '실행 중'뿐이라 몇 단계인지 안 보였다.
+  // 실행기의 결과물은 라이브 화면이 아니라 '출력 파일'이고, 반영 수단은 [전체실행]이다. 게다가 지금은
+  // 그 경로에 경계 스냅샷 이어실행이 있어 저장된 지점(실측 27단계)부터 이어 돈다 — 라이브 재적용은
+  // 느리기만 한 게 아니라 이어실행을 통째로 버리는 선택이다.
+  // 그래서 실행기에서는 '적용 없이 코드만 교체'와 똑같이 처리하고, 반영은 [전체실행]에 맡긴다.
+  const _editInRunner = (typeof state !== "undefined" && !!state && state.currentPage === "runner");
+  if ((opts && opts.applyMode === "none") || _editInRunner) {
     const busy = (typeof pipelineEditBusyReason === "function") ? pipelineEditBusyReason() : "";
     if (busy) { toast(busy, "error"); return false; }
     if (state.runnerMappingRunActive) { toast("실행 중에는 스킬을 수정할 수 없습니다.", "error"); return false; }
@@ -2716,8 +2724,14 @@ function replaceLogicAt(stepId, newCode, newDescription, language, opts) {
       toast("구버전 백엔드 전용 스텝이 있어 '적용 없이 수정'을 지원하지 않습니다.", "error");
       return false;
     }
-    next[idx].trustedStatic = false;
-    next[idx].extendedTimeout = false;
+    // [실행기 이관 부작용 방어] VBA 실패→Python 에러복구 코드(recoveredFromVba)는 '정적검사 우회 +
+    // 데드라인 확장'이 있어야 완주한다(그래서 위에서 켠다). 실행기 수정을 여기로 보내면서 이 둘을
+    // 무조건 꺼 버리면, 복구 코드가 [전체실행]에서 정적 게이트에 걸리거나 75초에 잘린다 —
+    // 에러복구 자체가 죽는다. 복구본일 때만 유지한다(그 밖엔 종전대로 끈다).
+    if (!recoveredFromVba) {
+      next[idx].trustedStatic = false;
+      next[idx].extendedTimeout = false;
+    }
     next[idx]._unappliedEdit = true;      // 저장 시 trustedStatic 승격 차단용 표식
     // 스냅샷 폐기 범위: 기본 idx+1.., 교차파일 쓰기면 idx 자신부터(교차 목적지는 어떤 스냅샷에도 없다)
     let dropFrom = idx + 1;
@@ -2754,8 +2768,10 @@ function replaceLogicAt(stepId, newCode, newDescription, language, opts) {
     renderPipeline();
     refreshRunButton();
     if (typeof scheduleLogicAutoBackup === "function") scheduleLogicAutoBackup("step-updated-unapplied");
-    toast(`Step ${idx + 1} 코드를 수정했습니다(라이브 미적용). 저장하거나 전체실행하면 반영됩니다.`, "success");
-    return { applied: false, unapplied: true, startIndex: start };
+    toast(_editInRunner
+      ? `Step ${idx + 1} 을 수정했습니다 — [전체실행]을 누르면 반영됩니다.`
+      : `Step ${idx + 1} 코드를 수정했습니다(라이브 미적용). 저장하거나 전체실행하면 반영됩니다.`, "success");
+    return { applied: false, unapplied: true, startIndex: start, runnerDeferred: _editInRunner };
   }
   // ── [모델: 수정 적용 = 그 스텝 즉시 ON+적용, 뒤 스텝만 OFF+보류] (사용자 확정 2026-07-29) ──
   // 예전엔 수정 지점부터 뒤 전부(스냅샷 없거나 교차파일이면 '처음부터 전체')를 재실행했다.
@@ -5608,6 +5624,20 @@ function beginMappedPipelineRun() {
 // 않은 경우(replaceLogicAt·insertLogic 의 직접 호출 등) 여기서 매핑본으로 교체한다. 명시한 경우는
 // 상위(reconcile)가 이미 교체했으므로 건드리지 않는다.
 async function reapplyVbaPipelineToLive(excelId, options = {}) {
+  // [진단 2026-08-26] 이 경로가 '갑자기 알아서' 도는 제보를 받았을 때, 호출자가 로그에 없어서
+  // 후보를 하나씩 눈으로 뒤져야 했다(요청 이벤트는 임플 안쪽에서만 찍혔다). 부르는 쪽을 남긴다.
+  try {
+    if (typeof traceClientUiEvent === "function") {
+      traceClientUiEvent("pipeline.reapply.enter", {
+        reason: String(options.reason || "unknown"),
+        inRunner: String(typeof state !== "undefined" && !!state && state.currentPage === "runner"),
+        steps: String(((options.steps || (typeof state !== "undefined" && state && state.pipeline) || [])).length),
+        cap: String(options.capIndexExclusive != null ? options.capIndexExclusive : ""),
+        via: (String((new Error()).stack || "").split(/\r?\n/).slice(2, 5)
+          .map(s => (s.match(/at\s+([\w$.]+)/) || [])[1] || "?").join("<")),
+      });
+    }
+  } catch (_) {}
   const __mapRun = options.steps ? null : beginMappedPipelineRun();
   try {
     const res = await _reapplyVbaPipelineToLiveImpl(excelId, options);
@@ -5821,6 +5851,25 @@ async function _reapplyVbaPipelineToLiveImpl(excelId, options = {}) {
           if (last && last.fileId === fid) last.steps.push(st);
           else groups.push({ fileId: fid, steps: [st] });
         }
+        // [제보 2026-08-26] 이 경로엔 진행률 보고가 아예 없어 화면이 '실행 중'에서 멈춘 것처럼 보였다
+        // (전체실행 경로는 N/36 을 띄운다). 파일 묶음 단위라 입도는 거칠지만, 사실대로 보여 준다.
+        const _progTotal = enabledSteps.length;
+        let _progDone = 0;
+        const _reportProgress = () => {
+          const text = _progDone + "/" + _progTotal + " 단계";
+          try {
+            if (typeof window !== "undefined" && typeof window.runnerSetProgress === "function") {
+              window.runnerSetProgress(text + " 실행 중...");
+            }
+          } catch (_) {}
+          try {
+            if (typeof setExcelMirrorApplyLoadingProgress === "function") setExcelMirrorApplyLoadingProgress(text);
+          } catch (_) {}
+          try {
+            if (typeof setUiBusySuffix === "function") setUiBusySuffix(text);
+          } catch (_) {}
+        };
+        _reportProgress();
         for (const group of groups) {
           failingStep = group.steps[0];
           const sessionExcelId = await requirePipelineSessionExcelId(group.fileId, "스킬 적용");
@@ -5838,6 +5887,8 @@ async function _reapplyVbaPipelineToLiveImpl(excelId, options = {}) {
           if (data && Array.isArray(data.stepCross) && typeof wirePipelineStepCrossEvidence === "function") {
             wirePipelineStepCrossEvidence(data.stepCross, group.steps);
           }
+          _progDone += group.steps.length;
+          _reportProgress();
         }
       }
     }

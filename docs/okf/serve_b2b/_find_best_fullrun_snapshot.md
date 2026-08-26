@@ -8,7 +8,7 @@ signature: "(source_specs, entry, flat_steps)"
 role: "가장 긴 접두(= 가장 많이 건너뛰는 경계)부터 찾는다. 경계는 비용 게이트 때문에 드문드문"
 role_source: docstring
 version: "0.8.0"
-loc: "serve_b2b.py:19435-19443"
+loc: "serve_b2b.py:19443-19451"
 
 # ── 입출력 ──
 inputs:

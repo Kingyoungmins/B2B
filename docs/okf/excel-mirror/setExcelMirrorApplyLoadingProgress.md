@@ -8,7 +8,7 @@ signature: "(text)"
 role: "기본 문구는 그대로 두고 접미만 바꾸므로 중첩 잠금에서도 바깥 문구가 사라지지 않는다."
 role_source: banner
 version: "0.8.0"
-loc: "excel-mirror.js:1514-1514"
+loc: "excel-mirror.js:1519-1519"
 
 # ── 입출력 ──
 inputs:
@@ -26,6 +26,8 @@ calls_external:
   - "String"
 called_by:
   - "_ensureExcelCancelButton"
+  - "_reapplyVbaPipelineToLiveImpl"
+  - "_reportProgress"
   - "_setOverlayProgress"
   - "beginExcelMirrorApplyLoading"
 reads: []
@@ -44,7 +46,7 @@ timestamp: "0.8.0-gen"
 
 ## 관계
 - 호출: 없음
-- 피호출(영향 전파 경로): `_ensureExcelCancelButton`, `_setOverlayProgress`, `beginExcelMirrorApplyLoading`
+- 피호출(영향 전파 경로): `_ensureExcelCancelButton`, `_reapplyVbaPipelineToLiveImpl`, `_reportProgress`, `_setOverlayProgress`, `beginExcelMirrorApplyLoading`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

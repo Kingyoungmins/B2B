@@ -8,7 +8,7 @@ signature: "(excelId, options = {})"
 role: "[매핑 보존] 수정 후 적용 / ON·OFF / 삽입 등 편집발 재적용의 최종 관문. 호출자가 steps 를 명시하지"
 role_source: banner
 version: "0.8.0"
-loc: "pipeline.js:5610-5610"
+loc: "pipeline.js:5626-5626"
 
 # ── 입출력 ──
 inputs:
@@ -18,7 +18,7 @@ returns: "(추정)"
 
 # ── 사이드이펙트 (정적 추정) ──
 side_effects:
-  - "없음(정적 분석 기준)"
+  - "상태 변경: currentPage"
 raises: []
 
 # ── 유기적 관계 ──
@@ -27,8 +27,16 @@ calls:
   - "beginMappedPipelineRun"
   - "markPipelinePendingFromIndex"
   - "restore"
+  - "traceClientUiEvent"
 calls_external:
+  - "Error"
+  - "String"
   - "isInteger"
+  - "join"
+  - "map"
+  - "match"
+  - "slice"
+  - "split"
 called_by:
   - "_reconcilePipelineSimulationAfterEditImpl"
   - "_runHeldStepsBatchImpl"
@@ -39,8 +47,10 @@ called_by:
   - "requestExcelApplyCancel"
   - "runFromCheckpointAfterEdit"
 reads:
+  - "state.currentPage"
   - "state.pipeline"
-writes: []
+writes:
+  - "currentPage"
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
 timestamp: "0.8.0-gen"
 ---
@@ -49,10 +59,11 @@ timestamp: "0.8.0-gen"
 [매핑 보존] 수정 후 적용 / ON·OFF / 삽입 등 편집발 재적용의 최종 관문. 호출자가 steps 를 명시하지
 
 ## 사이드이펙트 & 주의
-- 없음(정적 분석 기준)
+- 상태 변경: currentPage
+- 변경 상태 `currentPage` — 수정 시 이 상태를 읽는 곳 동반 점검.
 
 ## 관계
-- 호출: `_reapplyVbaPipelineToLiveImpl`, `beginMappedPipelineRun`, `markPipelinePendingFromIndex`, `restore`
+- 호출: `_reapplyVbaPipelineToLiveImpl`, `beginMappedPipelineRun`, `markPipelinePendingFromIndex`, `restore`, `traceClientUiEvent`
 - 피호출(영향 전파 경로): `_reconcilePipelineSimulationAfterEditImpl`, `_runHeldStepsBatchImpl`, `_runPipelineSuffixFromCheckpointImpl`, `insertLogic`, `maybeAutoReapplyAfterRecover`, `replaceLogicAt`, `requestExcelApplyCancel`, `runFromCheckpointAfterEdit`
 
 ## 실패/예외

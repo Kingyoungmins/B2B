@@ -8,7 +8,7 @@ signature: "(message, options = {})"
 role: "적용 시작: 모든 미러 창을 숨기고(park) 네이티브 패널의 로딩 애니메이션을 돌린다."
 role_source: banner
 version: "0.8.0"
-loc: "excel-mirror.js:1415-1415"
+loc: "excel-mirror.js:1420-1420"
 
 # ── 입출력 ──
 inputs:

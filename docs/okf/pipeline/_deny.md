@@ -8,7 +8,7 @@ signature: "(reason, extra)"
 role: "[제보 2026-08-25] '수정했는데 왜 1단계부터 다시 도나' — 이 판정이 false 면 pristine 전체"
 role_source: banner
 version: "0.8.0"
-loc: "pipeline.js:5355-5355"
+loc: "pipeline.js:5371-5371"
 
 # ── 입출력 ──
 inputs:

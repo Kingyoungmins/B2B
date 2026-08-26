@@ -4065,6 +4065,29 @@
         ]
       ],
       "fix": "docs/user-guide/AX-Cell_스킬_함수_설명서_v0.8.0.txt 신설. 비개발자 기준 평문(.txt — 메모장에서 마크다운 기호 안 깨지게), 분류 11개로 나눠 명령마다 '무엇을 하나/언제 쓰나/쓰는 법/예시'. 검증 둘: sync(Excel 불필요, 수 초)는 빠진 명령·유령 명령·표제부 인자명·개수 표기를 대조하고, com(실측)은 설명서에 적은 예시를 진짜 Excel 에 그대로 실행해 52건 확인한다. 한글 자리표시자에 '=None' 을 붙였던 3곳은 그대로 복사하면 실패하므로(실제 인자명은 sheet) '※ 생략 가능' 문구로 바꿨고 그 패턴 자체를 검사로 막았다. COM 예산(400회)은 스킬 한 단계 단위라 실측 테스트도 구획마다 ctx 를 새로 만든다."
+    },
+    {
+      "id": "RUNNER-EDIT-AUTORUNS-FROM-STEP1",
+      "title": "[제보 2026-08-26] 실행기에서 30단계 실패 후 '수정 적용'을 눌렀더니 갑자기 알아서 1단계부터 재적용 + 진행률은 '실행 중'만.",
+      "checks": [
+        [
+          "node",
+          "test_runs/_test_runner_edit_defers_to_fullrun.js"
+        ],
+        [
+          "node",
+          "test_runs/_test_auto_reapply_after_restart.js"
+        ],
+        [
+          "node",
+          "test_runs/_test_replace_last_step_suffix_resume.js"
+        ],
+        [
+          "com",
+          "test_runs/_test_fullrun_resume_live.py"
+        ]
+      ],
+      "fix": "실측 로그(12:57:22~): run-vba-pipeline reset=True 를 관여 파일 6개에 모두 보낸 뒤 steps=4/6/7 로 순차 재적용 — 즉 1단계부터 전부 다시. 원인은 replaceLogicAt 이 화면(실행기/생성기)과 무관하게 라이브 적용 경로로 간 것. 실행기의 결과물은 라이브 화면이 아니라 출력 파일이고 반영 수단은 [전체실행]이며, 그 경로엔 경계 스냅샷 이어실행이 있어 저장된 지점(그날 27단계)부터 이어 돈다 — 라이브 재적용은 느리기만 한 게 아니라 이어실행을 통째로 버린다. 수정 셋: ①replaceLogicAt 이 실행기면 '적용 없이 코드만 교체'로 가고 안내를 '[전체실행]을 누르면 반영됩니다'로. 단 VBA→Python 에러복구본(recoveredFromVba)은 trustedStatic/extendedTimeout 을 유지한다(무조건 끄면 복구 코드가 정적 게이트에 걸리거나 75초에 잘려 에러복구가 죽는다). ②maybeAutoReapplyAfterRecover(Excel 창 복구 후 자동 재적용)도 실행기에서는 하지 않는다 — '갑자기 알아서 실행'의 다른 출처. ③재적용 경로에 진행률이 아예 없어 화면이 '실행 중'에서 멈춘 듯 보였다 → 파일 묶음 단위로 N/총 단계를 실행기 상태줄·오버레이·화면잠금에 싣고, 백엔드는 이어실행 판정 직후 진행률을 '건너뛴 지점'부터 즉시 게시(파일 6개 여는 동안 숫자가 없어 또 1단계부터 도는 줄 알던 문제). 진단용으로 reapply 진입 로그(pipeline.reapply.enter: reason/inRunner/호출자)를 남긴다 — 이번에 호출자가 로그에 없어 후보를 눈으로 뒤졌다. 덤: 이 영역 테스트 하네스 3개가 소스 이동/함수 개명으로 ReferenceError·exit2 로 죽어 있었다(계약이 두 번 바뀌는 동안 아무도 몰랐다) → 살리고 현재 계약으로 갱신."
     }
   ]
 }

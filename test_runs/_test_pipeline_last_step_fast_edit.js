@@ -24,6 +24,12 @@ const runtime = new Map([
 ]);
 
 globalThis.getPipelineRuntimeStatus = id => runtime.get(id);
+// [하네스 복구 2026-08-26] 소스가 옮겨 가며 아래 헬퍼들이 슬라이스 밖으로 나가
+// ReferenceError 로 이 테스트가 통째로 죽어 있었다(실패인지도 모른 채 몇 달).
+// 이 테스트의 관심사가 아니므로 보수적인 스텁을 준다.
+globalThis.pipelineStepWritesCrossFile = () => false;
+globalThis.pipelineSuffixWritesCrossFile = () => false;
+globalThis.pipelineStepLiveLanguage = s => (s && s.language) || "python";
 
 eval(
   src.slice(langStart, langEnd) +

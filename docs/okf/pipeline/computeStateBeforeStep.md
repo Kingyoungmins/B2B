@@ -8,7 +8,7 @@ signature: "(stepIdx)"
 role: "특정 step 직전(=steps[0..stepIdx-1] 이 적용된) 입력/출력 상태를 계산해서 반환."
 role_source: banner
 version: "0.8.0"
-loc: "pipeline.js:3029-3029"
+loc: "pipeline.js:3045-3045"
 
 # ── 입출력 ──
 inputs:

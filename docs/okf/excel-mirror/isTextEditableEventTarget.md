@@ -8,7 +8,7 @@ signature: "(t)"
 role: "[입력 지연/IME 제보 2026-08-20] 채팅 등 텍스트 입력 대상인가 — 타이핑 중 Excel 창 조작 억제용."
 role_source: banner
 version: "0.8.0"
-loc: "excel-mirror.js:2229-2229"
+loc: "excel-mirror.js:2234-2234"
 
 # ── 입출력 ──
 inputs:
