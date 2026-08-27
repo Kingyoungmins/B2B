@@ -6,10 +6,10 @@ lang: python
 extraction: ast
 class: PythonComSkillContext
 signature: "(self, value)"
-role: "텍스트 정규화(공백/표기 차이 제거). 값 비교 보조용."
+role: "값 비교용 정규화. 공백/대소문자 차이와 함께 **숫자/글자 저장 차이도 흡수**한다"
 role_source: docstring
 version: "0.8.0"
-loc: "serve_b2b.py:13752-13754"
+loc: "serve_b2b.py:13781-13784"
 
 # ── 입출력 ──
 inputs:
@@ -24,7 +24,7 @@ raises: []
 
 # ── 유기적 관계 ──
 calls:
-  - "normalize_text"
+  - "normalize_value_key"
   - "value"
 calls_external: []
 called_by:
@@ -55,13 +55,13 @@ timestamp: "0.8.0-gen"
 ---
 
 ## 역할
-텍스트 정규화(공백/표기 차이 제거). 값 비교 보조용.
+값 비교용 정규화. 공백/대소문자 차이와 함께 **숫자/글자 저장 차이도 흡수**한다
 
 ## 사이드이펙트 & 주의
 - 없음(정적 분석 기준)
 
 ## 관계
-- 호출: `normalize_text`, `value`
+- 호출: `normalize_value_key`, `value`
 - 피호출(영향 전파 경로): `ExcelSkillContext._col0`, `ExcelSkillContext._find_sheet_name`, `ExcelSkillContext._merge_pivot_grid_into_base`, `ExcelSkillContext.add_sheet`, `ExcelSkillContext.col`, `ExcelSkillContext.workbook_like`, `OpenpyxlSkillContext._col0`, `OpenpyxlSkillContext._find_sheet_name`, `OpenpyxlSkillContext._merge_pivot_grid_into_base`, `OpenpyxlSkillContext.add_sheet`, `OpenpyxlSkillContext.col`, `OpenpyxlSkillContext.sort`, `OpenpyxlSkillContext.workbook_like`, `PythonComSkillContext._mark_mutated`, `PythonComSkillContext.dedupe`, `PythonComSkillContext.lookup`, `_companion_excel_ids_for_books`, `_fullrun_excel_ids_for_books`, `_live_session_excel_ids_for_books`, `_sync_modified_companions_into_live`
 
 ## 실패/예외

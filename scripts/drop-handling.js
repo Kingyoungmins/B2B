@@ -184,7 +184,12 @@ async function loadInputFiles(files) {
       const lastInput = state.inputs[state.inputs.length - 1];
       const selected = lastInput ? "input:" + lastInput.name : null;
       if (selected) {
-        updateUpload(job, files.length, "실제 Excel 창 여는 중...");
+        // [제보 2026-08-27] 여기서 '실제 Excel 창 여는 중...'을 업로드 문구 뒤에 붙이고,
+        // 곧바로 미러 준비기가 'Excel 창 준비 중 (1/4)'를 또 덧붙여 한 줄에 같은 말이 두 번
+        // 나왔다("입력 파일 업로드 중...(1/1) 실제 Excel 창 여는중 ... Excel 창 준비중(1/4)").
+        // 게다가 (1/1)은 올린 파일 수, (1/4)는 준비할 Excel 창 수라 뜻이 다른 숫자가 나란히 떴다.
+        // 이 구간의 문구는 실제 개수를 아는 미러 준비기가 통째로 맡는다 — 여기선 아무 말도 얹지 않는다.
+        updateUpload(job, files.length);
         if (typeof preopenAllExcelMirrors === "function") {
           await preopenAllExcelMirrors(selected, { source: "upload" });
         } else if (typeof openExcelMirrorForFileId === "function") {
@@ -248,7 +253,9 @@ async function loadOutputTemplates(files) {
       refreshTabs();
       refreshChatState();
       const lastOutputFileId = "output:" + (state.outputTemplates.length - 1);
-      updateUpload(job, files.length, "실제 Excel 창 여는 중...");
+      // 입력 파일 쪽과 같은 이유로 여기서도 다음 구간의 말을 얹지 않는다(위 주석 참고) —
+      // 'Excel 창 준비 중 (n/총)'은 실제 개수를 아는 미러 준비기가 통째로 맡는다.
+      updateUpload(job, files.length);
       if (typeof preopenAllExcelMirrors === "function") {
         await preopenAllExcelMirrors(lastOutputFileId, { source: "upload" });
       } else if (typeof openExcelMirrorForFileId === "function") {

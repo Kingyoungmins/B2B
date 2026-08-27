@@ -711,9 +711,15 @@ async function preopenAllExcelMirrors(selectedFileId, options = {}) {
   // 자동숨김(periodic)이 방금 연 미러들을 park(숨김) 하지 못하게 한다.
   excelMirror.hostActive = true;
   publishNativeExcelLoading(true, `Excel 창 준비 중... (1/${total})\n컴퓨터 성능에 따라 다소 지연될 수 있습니다`);
-  // [알림 일원화 2026-08-26] 업로드 잠금이 아직 떠 있는 구간이다 — 같은 진행 상황을 잠금
-  // 문구에도 보조 상태로 실어, 사용자가 한 곳만 보면 되게 한다.
-  if (typeof setUiBusySuffix === "function") setUiBusySuffix(`Excel 창 준비 중 (1/${total})`);
+  // [알림 일원화 2026-08-26 / 제보 정정 2026-08-27] 업로드 잠금이 아직 떠 있는 구간이다.
+  // 처음엔 보조 상태로 '덧붙였는데', 업로드 문구가 이미 같은 말을 담고 있어 한 줄에 두 번 나왔다.
+  // 이 구간의 주인은 여기다 — 본문구를 통째로 갈아 끼우고 남아 있던 보조 상태는 걷는다.
+  if (typeof setUiBusySuffix === "function") setUiBusySuffix("");
+  // 이 구간이 끝나면 원래 문구로 돌려놓는다 — 준비가 끝났는데 'Excel 창 준비 중... (4/4)'가
+  // 그대로 남으면(예: 새로고침 복원처럼 뒤에 할 일이 더 있는 경우) 멈춘 것처럼 보인다.
+  const _busyLabelBefore = (typeof uiBusy === "object" && uiBusy && uiBusy.count > 0)
+    ? String(uiBusy.mainLabel || "") : "";
+  if (typeof updateUiBusyLabel === "function") updateUiBusyLabel(`Excel 창 준비 중... (1/${total})`);
   try {
     // 1) 선택 파일 먼저: 열자마자 표시해 업로드 직후 빈 화면 시간을 최소화.
     try {
@@ -749,7 +755,7 @@ async function preopenAllExcelMirrors(selectedFileId, options = {}) {
     for (const fid of rest) {
       if (excelMirror.preopenSeq !== seq) return; // 새 preopen/리셋이 시작됨 → 이 루프 중단
       updateMirrorShellStatus(`다른 파일 Excel 준비 중... (${done}/${total})`);
-      if (typeof setUiBusySuffix === "function") setUiBusySuffix(`Excel 창 준비 중 (${done}/${total})`);
+      if (typeof updateUiBusyLabel === "function") updateUiBusyLabel(`Excel 창 준비 중... (${done}/${total})`);
       try {
         await ensureExcelMirrorSession(fid, { makeActive: false, deferVisible: true });
       } catch (err) {
@@ -777,6 +783,7 @@ async function preopenAllExcelMirrors(selectedFileId, options = {}) {
     return { opened: total - failures.length, failed: failures.length, failures };
   } finally {
     if (excelMirror.preopenSeq === seq) excelMirror.preopening = false;
+    if (_busyLabelBefore && typeof updateUiBusyLabel === "function") updateUiBusyLabel(_busyLabelBefore);
   }
 }
 

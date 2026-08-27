@@ -8,7 +8,7 @@ signature: "()"
 role: "[실행기 스킬 편집기] '스킬 수정'은 입력/출력의 '파일 수정/다운'과 같은 자리·같은 방식이어야 한다 —"
 role_source: banner
 version: "0.8.0"
-loc: "drop-handling.js:485-485"
+loc: "drop-handling.js:492-492"
 
 # ── 입출력 ──
 inputs: []

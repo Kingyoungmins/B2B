@@ -9,7 +9,7 @@ signature: "(self, value)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
 version: "0.8.0"
-loc: "serve_b2b.py:16923-16924"
+loc: "serve_b2b.py:16955-16957"
 
 # ── 입출력 ──
 inputs:
@@ -24,7 +24,7 @@ raises: []
 
 # ── 유기적 관계 ──
 calls:
-  - "normalize_text"
+  - "normalize_value_key"
   - "value"
 calls_external: []
 called_by:
@@ -61,7 +61,7 @@ timestamp: "0.8.0-gen"
 - 없음(정적 분석 기준)
 
 ## 관계
-- 호출: `normalize_text`, `value`
+- 호출: `normalize_value_key`, `value`
 - 피호출(영향 전파 경로): `ExcelSkillContext._col0`, `ExcelSkillContext._find_sheet_name`, `ExcelSkillContext._merge_pivot_grid_into_base`, `ExcelSkillContext.add_sheet`, `ExcelSkillContext.col`, `ExcelSkillContext.workbook_like`, `OpenpyxlSkillContext._col0`, `OpenpyxlSkillContext._find_sheet_name`, `OpenpyxlSkillContext._merge_pivot_grid_into_base`, `OpenpyxlSkillContext.add_sheet`, `OpenpyxlSkillContext.col`, `OpenpyxlSkillContext.sort`, `OpenpyxlSkillContext.workbook_like`, `PythonComSkillContext._mark_mutated`, `PythonComSkillContext.dedupe`, `PythonComSkillContext.lookup`, `_companion_excel_ids_for_books`, `_fullrun_excel_ids_for_books`, `_live_session_excel_ids_for_books`, `_sync_modified_companions_into_live`
 
 ## 실패/예외

@@ -8,7 +8,7 @@ signature: "(cell, op, target)"
 role: "sum_where 조건 비교. 비교연산자는 숫자로, 그 외는 normalize 텍스트로."
 role_source: docstring
 version: "0.8.0"
-loc: "serve_b2b.py:15956-15971"
+loc: "serve_b2b.py:15986-16003"
 
 # ── 입출력 ──
 inputs:
@@ -26,7 +26,7 @@ raises: []
 calls:
   - "_coerce_number"
   - "cell"
-  - "normalize_text"
+  - "normalize_value_key"
 calls_external:
   - "bool"
   - "str"
@@ -47,7 +47,7 @@ sum_where 조건 비교. 비교연산자는 숫자로, 그 외는 normalize 텍�
 - 없음(정적 분석 기준)
 
 ## 관계
-- 호출: `_coerce_number`, `cell`, `normalize_text`
+- 호출: `_coerce_number`, `cell`, `normalize_value_key`
 - 피호출(영향 전파 경로): `PythonComSkillContext.sum_where`
 
 ## 실패/예외

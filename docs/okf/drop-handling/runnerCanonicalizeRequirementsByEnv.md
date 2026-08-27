@@ -8,7 +8,7 @@ signature: "(map, cfg)"
 role: "[역할(안정키) 정규화 — 같은 파일의 다른 달 이름 통합] 스킬 안에는 같은 파일이 시기마다 다른"
 role_source: banner
 version: "0.8.0"
-loc: "drop-handling.js:626-626"
+loc: "drop-handling.js:633-633"
 
 # ── 입출력 ──
 inputs:

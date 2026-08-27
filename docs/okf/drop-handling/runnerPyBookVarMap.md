@@ -8,7 +8,7 @@ signature: "(src)"
 role: "`VAR = ctx.book(<리터럴 또는 변수>)` 를 { VAR: \"실제 파일명\" } 으로 푼다."
 role_source: banner
 version: "0.8.0"
-loc: "drop-handling.js:812-812"
+loc: "drop-handling.js:819-819"
 
 # ── 입출력 ──
 inputs:

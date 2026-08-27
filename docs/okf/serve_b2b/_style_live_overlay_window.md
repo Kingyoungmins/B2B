@@ -8,7 +8,7 @@ signature: "(app)"
 role: "라이브 창을 프레임리스(제목줄/테두리/최소·최대화 버튼 제거)로 만든다."
 role_source: docstring
 version: "0.8.0"
-loc: "serve_b2b.py:4582-4610"
+loc: "serve_b2b.py:4611-4639"
 
 # ── 입출력 ──
 inputs:

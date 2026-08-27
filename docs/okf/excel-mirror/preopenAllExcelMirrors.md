@@ -36,7 +36,9 @@ calls:
   - "startExcelMirrorPolling"
   - "toast"
   - "updateMirrorShellStatus"
+  - "updateUiBusyLabel"
 calls_external:
+  - "String"
   - "filter"
   - "park"
   - "warn"
@@ -64,7 +66,7 @@ timestamp: "0.8.0-gen"
 - 변경 상태 `excelMirror.hostActive, excelMirror.preopenSeq, excelMirror.preopening` — 수정 시 이 상태를 읽는 곳 동반 점검.
 
 ## 관계
-- 호출: `ensureExcelMirrorSession`, `excelMirrorAllowsViewSwitch`, `isMissingExcelSessionError`, `listAllWorkbookFileIds`, `publishNativeExcelLoading`, `push`, `scheduleExcelMirrorBaselinePoll`, `setCurrentView`, `setUiBusySuffix`, `showOnlyExcelMirrorWindow`, `startExcelMirrorPolling`, `toast`, `updateMirrorShellStatus`
+- 호출: `ensureExcelMirrorSession`, `excelMirrorAllowsViewSwitch`, `isMissingExcelSessionError`, `listAllWorkbookFileIds`, `publishNativeExcelLoading`, `push`, `scheduleExcelMirrorBaselinePoll`, `setCurrentView`, `setUiBusySuffix`, `showOnlyExcelMirrorWindow`, `startExcelMirrorPolling`, `toast`, `updateMirrorShellStatus`, `updateUiBusyLabel`
 - 피호출(영향 전파 경로): `autoOpenMirrorAfterUpload`, `forceRestartExcelMirrors`, `loadInputFiles`, `loadOutputTemplates`, `restoreSoftRefreshSnapshot`
 
 ## 실패/예외

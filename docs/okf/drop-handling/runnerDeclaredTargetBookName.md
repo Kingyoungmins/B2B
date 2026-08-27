@@ -8,7 +8,7 @@ signature: "(step)"
 role: "스텝이 스스로 밝힌 '쓰기 대상' 파일 이름. 저장 스킬의 targetFileId 는 \"input:파일명.xlsx\" 꼴이다."
 role_source: banner
 version: "0.8.0"
-loc: "drop-handling.js:1881-1881"
+loc: "drop-handling.js:1888-1888"
 
 # ── 입출력 ──
 inputs:

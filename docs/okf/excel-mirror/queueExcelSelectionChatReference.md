@@ -8,7 +8,7 @@ signature: "(range)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
 version: "0.8.0"
-loc: "excel-mirror.js:1961-1961"
+loc: "excel-mirror.js:1968-1968"
 
 # ── 입출력 ──
 inputs:

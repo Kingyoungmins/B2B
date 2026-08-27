@@ -8,7 +8,7 @@ signature: "(code)"
 role: "코드에서 '어떤 시트가 어떤 워크북 소유인지' (book,sheet) 쌍을 뽑는다(교차파일 오귀속 방지 + 자기 시트 회수)."
 role_source: banner
 version: "0.8.0"
-loc: "drop-handling.js:1173-1173"
+loc: "drop-handling.js:1180-1180"
 
 # ── 입출력 ──
 inputs:

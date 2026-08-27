@@ -4095,10 +4095,21 @@
       "checks": [
         [
           "python",
-          "tools/check_payload_fresh.py|dist/B2B_ver0.8.0"
+          "test_runs/_test_payload_fresh_guard.py"
         ]
       ],
-      "fix": "build_single_exe.bat 은 dist\\B2B_ver<버전>\\ 결과물을 zip 으로 묶어 C# 래퍼에 심기만 한다. 존재 여부만 확인하므로 소스를 고친 뒤 build_exe.bat 없이 돌리면 옛 B2B_Server.exe(그날은 8/25 12:50자)를 그대로 감싼 채 성공으로 끝난다 — 실행해 보기 전엔 모른다(배포 직전 사고 유형). tools/check_payload_fresh.py 신설: 패키지 B2B_Server.exe 의 mtime 과 실행에 들어가는 소스(serve_b2b.py/launch_b2b.py/*.html/scripts/*.js/native/*.cs)의 최신 mtime 을 비교해 소스가 더 새로우면 exit 1. build_single_exe.bat 이 CSC 확인 전에 호출한다(.bat 은 CRLF 유지 필수). 검증은 양방향으로 했다 — 정상 패키지 exit 0, 이틀 묵은 더미 패키지 exit 1. 빌드 후 확인법: 단일 exe 에서 payload.zip 리소스를 꺼내 B2B_Server.exe 를 PyInstaller CArchiveReader 로 열면 serve_b2b.py/scripts/*.js 원문이 들어 있어 신규 코드 문자열로 대조할 수 있다(그냥 grep 하면 압축돼 안 보인다)."
+      "fix": "build_single_exe.bat 은 dist\\B2B_ver<버전>\\ 결과물을 zip 으로 묶어 C# 래퍼에 심기만 한다. 존재 여부만 확인하므로 소스를 고친 뒤 build_exe.bat 없이 돌리면 옛 B2B_Server.exe(그날은 8/25 12:50자)를 그대로 감싼 채 성공으로 끝난다 — 실행해 보기 전엔 모른다(배포 직전 사고 유형). tools/check_payload_fresh.py 신설: 패키지 B2B_Server.exe 의 mtime 과 실행에 들어가는 소스(serve_b2b.py/launch_b2b.py/*.html/scripts/*.js/native/*.cs)의 최신 mtime 을 비교해 소스가 더 새로우면 exit 1. build_single_exe.bat 이 CSC 확인 전에 호출한다(.bat 은 CRLF 유지 필수). 검증은 양방향으로 했다 — 정상 패키지 exit 0, 이틀 묵은 더미 패키지 exit 1. 빌드 후 확인법: 단일 exe 에서 payload.zip 리소스를 꺼내 B2B_Server.exe 를 PyInstaller CArchiveReader 로 열면 serve_b2b.py/scripts/*.js 원문이 들어 있어 신규 코드 문자열로 대조할 수 있다(그냥 grep 하면 압축돼 안 보인다). ※ [정정 2026-08-27] 회귀 러너는 스크립트에 인자를 넘기지 않는다 — 처음엔 'tools/check_payload_fresh.py|dist/...' 로 등록해 '파일 없음'으로 죽어 있었다(기존 SINGLE-EXE-STALE-ENTRY 항목도 같은 이유로 죽어 있음). 가드는 인자 없이도 dist 에서 패키지를 스스로 찾게 하고, 레지스트리에는 '지금 빌드가 최신인가'가 아니라 '가드가 동작하는가'(_test_payload_fresh_guard.py)를 등록한다."
+    },
+    {
+      "id": "NUMBER-TEXT-KEY-MISMATCH",
+      "title": "[제보 2026-08-27] C열·V열의 같은 12자리 가입번호를 '못 찾음' — 숫자 셀과 글자 셀을 다른 값으로 봤다.",
+      "checks": [
+        [
+          "com",
+          "test_runs/_test_number_text_key_match_com.py"
+        ]
+      ],
+      "fix": "제보 5단계(같은 번호 대조 3회 실패 + 번호 직접 지정 시 '하나만 찾음')가 전부 한 원인이었다. Excel 은 같은 '512102403338' 을 셀마다 숫자로도 글자로도 담는다(복붙한 열은 글자, 원래 열은 숫자). ctx.read 는 숫자 셀을 float 로 주므로 파이썬에선 512102403338.0 이 되고, 공백/대소문자만 지우던 ctx.normalize(normalize_text)로는 '512102403338.0' != '512102403338' 로 갈렸다 — 오류 없이 결과만 틀리는 조용한 오답. 실 Excel 재현: C열(숫자)·V열(글자)에 같은 번호 3개를 두고 대조하니 1/3 만 일치, 번호를 직접 줘도 3개 중 1개만 찾음(제보와 동일). 같은 목적의 _norm_key 가 이미 있었으나 copy_key_blocks/sum_lookup 만 쓰고 있었다 → 값 비교용 normalize_value_key 를 만들어 ctx.normalize(3개 컨텍스트 전부)와 _cond_match(sum_where 조건)에 연결, lookup/dedupe 는 self.normalize 를 쓰므로 함께 해결. 곁다리로 잡은 것: normalize_text 는 str(value or \"\") 라 숫자 0·False 를 빈 문자열로 만든다 — 그대로 값 비교에 쓰면 '0 이 든 셀'과 '빈 셀'이 같은 값이 돼 조건 집계·중복 판정이 조용히 틀린다. normalize_value_key 는 normalize_text 에 기대지 않고 따로 구현했고, bool 은 종전대로 true/false 로 남겨 TRUE/FALSE 필터 회귀를 막았다."
     }
   ]
 }

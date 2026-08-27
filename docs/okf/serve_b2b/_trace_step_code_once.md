@@ -8,7 +8,7 @@ signature: "(code, **fields)"
 role: "스텝 코드 '전문'을 해시당 한 번만 로그에 남긴다."
 role_source: docstring
 version: "0.8.0"
-loc: "serve_b2b.py:9129-9149"
+loc: "serve_b2b.py:9158-9178"
 
 # ── 입출력 ──
 inputs:

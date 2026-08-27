@@ -39,10 +39,19 @@ def newest_source():
 
 
 def main():
+    # [정정 2026-08-27] 회귀 러너(tools/issue_recheck)는 스크립트에 인자를 넘기지 않는다
+    # — 인자를 요구하면 '파일 없음'으로 조용히 실패해 검사가 죽어 있는 것과 같아진다.
+    # 인자가 없으면 dist 에서 패키지 폴더를 스스로 찾는다.
     if len(sys.argv) < 2:
-        print("[ERROR] 사용법: check_payload_fresh.py <패키지폴더>")
-        return 2
-    pkg = Path(sys.argv[1])
+        cands = sorted((d for d in (ROOT / "dist").glob("B2B_ver*")
+                        if d.is_dir() and (d / "B2B_Server.exe").exists()),
+                       key=lambda d: (d / "B2B_Server.exe").stat().st_mtime)
+        if not cands:
+            print("[SKIP] dist 에 빌드된 패키지가 없습니다 — 검사 생략.")
+            return 0
+        pkg = cands[-1]
+    else:
+        pkg = Path(sys.argv[1])
     if not pkg.is_absolute():
         pkg = ROOT / pkg
     server = pkg / "B2B_Server.exe"

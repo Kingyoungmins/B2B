@@ -8,7 +8,7 @@ signature: "(map, cfg)"
 role: "[환경 config 교집합 — 0.6.2 아이디어] 저장 시점의 실제 파일·시트 정본(envConfig)으로 요구를"
 role_source: banner
 version: "0.8.0"
-loc: "drop-handling.js:704-704"
+loc: "drop-handling.js:711-711"
 
 # ── 입출력 ──
 inputs:

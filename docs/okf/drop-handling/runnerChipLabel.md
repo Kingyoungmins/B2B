@@ -8,7 +8,7 @@ signature: "(value)"
 role: "칩에 보여줄 라벨: 10자까지는 그대로, 넘으면 10자 + …(전체 이름은 title 툴팁으로)."
 role_source: banner
 version: "0.8.0"
-loc: "drop-handling.js:1679-1679"
+loc: "drop-handling.js:1686-1686"
 
 # ── 입출력 ──
 inputs:

@@ -27,6 +27,7 @@ calls_external:
   - "String"
 called_by:
   - "beginUpload"
+  - "preopenAllExcelMirrors"
   - "updateUpload"
 reads: []
 writes: []
@@ -42,7 +43,7 @@ timestamp: "0.8.0-gen"
 
 ## 관계
 - 호출: `_uiBusyRender`
-- 피호출(영향 전파 경로): `beginUpload`, `updateUpload`
+- 피호출(영향 전파 경로): `beginUpload`, `preopenAllExcelMirrors`, `updateUpload`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

@@ -25,6 +25,11 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 SRC = ROOT / "docs" / "user-guide" / "AX-Cell_스킬_함수_설명서_v0.8.0.txt"
 DEST = SRC.with_suffix(".html")
+# [프롬프트 예시] 사용자는 명령 이름을 치지 않고 우리말로 요청한다 — "이렇게 말하면 이 명령이
+# 쓰인다" 를 카드마다 붙여 준다. 설명서(.txt)와 파일을 나눈 이유: 그쪽은 코드-문서 동기화
+# 검사(test_runs/_test_ctx_manual_sync.py)가 형식을 지키는 원본이라, 성격이 다른 내용을
+# 섞지 않는다. 이 파일이 없어도 HTML 은 그대로 만들어진다(프롬프트 줄만 빠짐).
+PROMPTS = ROOT / "docs" / "user-guide" / "AX-Cell_프롬프트_예시_v0.8.0.txt"
 
 BANNER = re.compile(r"^={20,}\s*$")
 RULE = re.compile(r"^-{20,}\s*$")
@@ -115,6 +120,24 @@ def parse(text):
     return doc
 
 
+def load_prompts():
+    """'# 명령이름' 다음 줄들을 그 명령의 요청문으로 읽는다. 파일이 없으면 빈 표."""
+    out = {}
+    if not PROMPTS.exists():
+        return out
+    cur = None
+    for line in PROMPTS.read_text("utf-8").replace("\r\n", "\n").split("\n"):
+        m = re.match(r"^#\s+([a-z_][a-z0-9_]*)\s*$", line)
+        if m:
+            cur = m.group(1)
+            out[cur] = []
+        elif cur and line.strip() and not line.startswith(("=", "-", "[")):
+            out[cur].append(line.strip())
+        elif not line.strip():
+            cur = None if cur and out.get(cur) else cur
+    return {k: v for k, v in out.items() if v}
+
+
 def esc(s):
     return html.escape(str(s), quote=True)
 
@@ -165,7 +188,8 @@ def render_field(f):
             '<div class="fbody">%s</div></div>' % (kind, esc(label), inner))
 
 
-def build(doc):
+def build(doc, prompts=None):
+    prompts = prompts or {}
     # 사이드바: 섹션 + 그 안의 명령
     nav = []
     for si, sec in enumerate(doc["sections"]):
@@ -199,10 +223,20 @@ def build(doc):
             sig_html = '<span class="sigsep">/</span>'.join(
                 '<span class="one"><span class="dot">ctx.</span>%s</span>'
                 % esc(p[4:] if p.startswith("ctx.") else p) for p in parts)
+            # 이 카드가 담당하는 이름들의 요청문을 모은다(짝 명령은 각자 것을 함께)
+            says = []
+            for nm in f["names"]:
+                says.extend(prompts.get(nm, []))
+            say_html = ""
+            if says:
+                say_html = ('<div class="field say"><div class="flabel">이렇게 말하면</div>'
+                            '<div class="fbody">%s</div></div>'
+                            % "".join('<div class="bubble">%s</div>' % esc(x) for x in says))
+                hay += " " + " ".join(says).lower()
             body.append(
                 '<article class="fn" id="fn-%s" data-hay="%s">'
-                '<h3 class="sig">%s</h3>%s</article>'
-                % (esc(f["name"]), esc(hay), sig_html,
+                '<h3 class="sig">%s</h3>%s%s</article>'
+                % (esc(f["name"]), esc(hay), sig_html, say_html,
                    "".join(render_field(x) for x in f["fields"])))
         body.append("</section>")
 
@@ -222,13 +256,13 @@ PAGE = """<!DOCTYPE html>
 :root {{
   --bg:#FAFAFA; --card:#FFFFFF; --ink:#1A1A1A; --ink2:#4A4A4A; --ink3:#767676;
   --line:#E4E4E4; --accent:#1A1A1A; --code-bg:#F5F5F5; --tip:#FFF8E1; --tip-line:#E0C97A;
-  --warn:#FFF3F3; --warn-line:#E9A8A8; --ex:#F3F8F4; --ex-line:#A9CDB4;
+  --warn:#FFF3F3; --warn-line:#E9A8A8; --ex:#F3F8F4; --ex-line:#A9CDB4; --say:#EEF3FB; --say-line:#C3D3E8;
 }}
 @media (prefers-color-scheme: dark) {{
   :root {{
     --bg:#161616; --card:#1E1E1E; --ink:#EDEDED; --ink2:#C3C3C3; --ink3:#8E8E8E;
     --line:#333; --accent:#FFFFFF; --code-bg:#252525; --tip:#332D18; --tip-line:#7A6A33;
-    --warn:#3A2323; --warn-line:#8A5252; --ex:#1F2C22; --ex-line:#4E7259;
+    --warn:#3A2323; --warn-line:#8A5252; --ex:#1F2C22; --ex-line:#4E7259; --say:#1E2733; --say-line:#3C4E63;
   }}
 }}
 * {{ box-sizing:border-box; }}
@@ -314,6 +348,16 @@ pre.code {{
   padding:7px 11px; border-radius:0 7px 7px 0;
 }}
 .field.ex .fbody pre.code {{ background:var(--ex); border-color:var(--ex-line); margin:0; }}
+/* 이렇게 말하면 — 사용자가 채팅창에 칠 문장. 눈에 먼저 들어와야 해서 카드 맨 위·말풍선으로 */
+.field.say {{ margin-bottom:9px; }}
+.field.say .flabel {{ color:var(--accent); font-weight:700; }}
+.bubble {{
+  background:var(--say); border:1px solid var(--say-line); border-radius:13px;
+  padding:6px 12px; margin:0 0 5px; display:inline-block; max-width:100%;
+  color:var(--ink); font-size:14px;
+}}
+.bubble::before {{ content:"“"; color:var(--ink3); margin-right:2px; }}
+.bubble::after {{ content:"”"; color:var(--ink3); margin-left:2px; }}
 .hidden {{ display:none !important; }}
 mark {{ background:#FFE9A8; color:#1A1A1A; border-radius:3px; padding:0 2px; }}
 
@@ -414,12 +458,21 @@ def main():
         print("원본을 찾지 못했습니다:", SRC)
         return 1
     doc = parse(SRC.read_text("utf-8"))
-    DEST.write_text(build(doc), encoding="utf-8", newline="")
+    prompts = load_prompts()
+    DEST.write_text(build(doc, prompts), encoding="utf-8", newline="")
     fns = sum(len(f["names"]) for s in doc["sections"] for f in s["funcs"])
     print("만들었습니다:", DEST)
     print("  제목:", doc["title"])
+    covered = sum(1 for sec in doc["sections"] for f in sec["funcs"]
+                  for nm in f["names"] if prompts.get(nm))
     print("  섹션:", len(doc["sections"]), "개 / 명령:", fns, "개 / 크기:",
           "%.1fKB" % (DEST.stat().st_size / 1024))
+    print("  프롬프트 예시:", covered, "/", fns, "개 명령에 붙음",
+          "" if covered == fns else "  ← 빠진 명령이 있습니다")
+    if covered != fns:
+        missing = [nm for sec in doc["sections"] for f in sec["funcs"]
+                   for nm in f["names"] if not prompts.get(nm)]
+        print("   빠짐:", ", ".join(missing))
     return 0
 
 

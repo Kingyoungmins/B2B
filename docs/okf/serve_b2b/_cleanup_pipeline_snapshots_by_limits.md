@@ -8,7 +8,7 @@ signature: "()"
 role: "[SBAGENT-293 / 사용자 확정 2026-08-26] 실행 중 스냅샷 삭제는 '디스크가 정말 위험할 때'만."
 role_source: docstring
 version: "0.8.0"
-loc: "serve_b2b.py:4934-4989"
+loc: "serve_b2b.py:4963-5018"
 
 # ── 입출력 ──
 inputs: []

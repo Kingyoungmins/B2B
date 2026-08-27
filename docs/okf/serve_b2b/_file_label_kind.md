@@ -8,7 +8,7 @@ signature: "(path)"
 role: "[진단 계측 2026-08-12] 이 파일에 사내 보안 라벨(MIP)이 붙었는지 한 줄로 판별한다."
 role_source: docstring
 version: "0.8.0"
-loc: "serve_b2b.py:3753-3784"
+loc: "serve_b2b.py:3782-3813"
 
 # ── 입출력 ──
 inputs:

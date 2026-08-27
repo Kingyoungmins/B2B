@@ -8,7 +8,7 @@ signature: "(book, sheet)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
 version: "0.8.0"
-loc: "drop-handling.js:1177-1177"
+loc: "drop-handling.js:1184-1184"
 
 # ── 입출력 ──
 inputs:
