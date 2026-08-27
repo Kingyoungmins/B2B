@@ -9,7 +9,7 @@ signature: "(self)"
 role: "호스트 최소화 중엔 표시 계열 요청을 조용히 스킵(True 반환 시 호출측은 응답 완료)."
 role_source: docstring
 version: "0.8.0"
-loc: "serve_b2b.py:2421-2427"
+loc: "serve_b2b.py:2424-2430"
 
 # ── 입출력 ──
 inputs:

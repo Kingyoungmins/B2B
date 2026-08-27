@@ -8,7 +8,7 @@ signature: "(path)"
 role: "Return the Excel extension implied by an OPC/ZIP workbook package."
 role_source: docstring
 version: "0.8.0"
-loc: "serve_b2b.py:2946-2972"
+loc: "serve_b2b.py:2949-2975"
 
 # ── 입출력 ──
 inputs:

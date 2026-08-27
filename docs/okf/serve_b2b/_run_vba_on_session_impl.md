@@ -8,7 +8,7 @@ signature: "(excel_id, code, entry=None, restore_window=True)"
 role: "라이브 세션에 떠 있는 실제 워크북에 VBA 매크로를 주입해 즉시 실행한다(저지연 리모콘, 단일 단계 append)."
 role_source: docstring
 version: "0.8.0"
-loc: "serve_b2b.py:10080-10185"
+loc: "serve_b2b.py:10083-10188"
 
 # ── 입출력 ──
 inputs:

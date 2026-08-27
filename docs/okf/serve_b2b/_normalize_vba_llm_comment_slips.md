@@ -8,7 +8,7 @@ signature: "(code)"
 role: "LLM 이 VBA 에 C 계열 주석(//)을 섞는 사고 교정 — 줄머리 // 는 ' 주석으로 변환."
 role_source: docstring
 version: "0.8.0"
-loc: "serve_b2b.py:8195-8211"
+loc: "serve_b2b.py:8198-8214"
 
 # ── 입출력 ──
 inputs:

@@ -1790,6 +1790,9 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
             secure_info = secure_doc.maybe_decrypt_upload(path, name, encrypted_checker=_ole_office_verdict)
             if secure_info and secure_info.get("released"):
                 secure_doc.mark_released(workbook_id)
+                # [보안 2026-08-27] 되돌릴 때 **원본과 같은 라벨**로 복원하려고 기억해 둔다.
+                # 기본 라벨로 재암호화하면 원본과 다른 보호가 걸린다.
+                secure_doc.remember_label(workbook_id, secure_info.get("labelId") or "")
         except Exception as _sec_err:
             secure_info = {"checked": True, "released": False, "error": str(_sec_err)}
         _t_secure = (time.perf_counter() - _t_secure0) * 1000

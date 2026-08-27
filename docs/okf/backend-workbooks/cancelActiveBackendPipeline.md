@@ -8,7 +8,7 @@ signature: "()"
 role: "[중단] 협조적 python 잡 취소 — 실행 중 스텝은 끝까지 돌고, 다음 스텝 경계에서 멈춘다."
 role_source: banner
 version: "0.8.0"
-loc: "backend-workbooks.js:784-784"
+loc: "backend-workbooks.js:797-797"
 
 # ── 입출력 ──
 inputs: []

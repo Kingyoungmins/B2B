@@ -8,7 +8,7 @@ signature: "(wb, module_name, macro_name)"
 role: "Return a workbook-qualified macro reference for Application.Run."
 role_source: docstring
 version: "0.8.0"
-loc: "serve_b2b.py:8507-8521"
+loc: "serve_b2b.py:8510-8524"
 
 # ── 입출력 ──
 inputs:

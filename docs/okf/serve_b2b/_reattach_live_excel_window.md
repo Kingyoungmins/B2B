@@ -8,7 +8,7 @@ signature: "(state)"
 role: "_detach_live_excel_window 로 분리한 창을 원래 부모/owner/스타일로 되돌린다."
 role_source: docstring
 version: "0.8.0"
-loc: "serve_b2b.py:10225-10248"
+loc: "serve_b2b.py:10228-10251"
 
 # ── 입출력 ──
 inputs:

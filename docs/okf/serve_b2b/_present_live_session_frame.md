@@ -8,7 +8,7 @@ signature: "(session, app, wb, left, top, width, height, client_left=None, clien
 role: "frame 모드 표시 경로: 대상 프레임만 배치/표시하고 나머지 라이브 프레임은 파킹."
 role_source: docstring
 version: "0.8.0"
-loc: "serve_b2b.py:7542-7648"
+loc: "serve_b2b.py:7545-7651"
 
 # ── 입출력 ──
 inputs:

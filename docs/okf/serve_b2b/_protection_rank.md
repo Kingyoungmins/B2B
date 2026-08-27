@@ -8,7 +8,7 @@ signature: "(kind)"
 role: "보호 강도 순위. 낮아지면 보호가 약해진 것이다."
 role_source: docstring
 version: "0.8.0"
-loc: "serve_b2b.py:3797-3799"
+loc: "serve_b2b.py:3800-3802"
 
 # ── 입출력 ──
 inputs:

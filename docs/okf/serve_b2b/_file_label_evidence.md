@@ -8,7 +8,7 @@ signature: "(path, tries=3, wait=0.15)"
 role: "이 파일이 '그때 어떤 모양이었는지'를 증거로 남긴다 — 원본을 못 꺼내는 환경을 위해."
 role_source: docstring
 version: "0.8.0"
-loc: "serve_b2b.py:3830-3883"
+loc: "serve_b2b.py:3833-3886"
 
 # ── 입출력 ──
 inputs:

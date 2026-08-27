@@ -25,8 +25,10 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import threading
 import time
+import zipfile
 import urllib.error
 import urllib.request
 import uuid
@@ -111,6 +113,13 @@ def config():
         "apiKey": key,
         "account": _env("B2B_SECURE_DOC_ACCOUNT") or default_account(),
         "timeout": max(10.0, min(600.0, timeout)),
+        # [사용자 설계 2026-08-27] 로컬 판정이 틀려서 보안문서가 평문으로 샌 적이 있다
+        # (앞 4바이트만 보고 통과). 그래서 기본값은 **어떤 문서든 게이트웨이에 물어보기** 다.
+        # 로컬 판정은 '확실히 평문' 을 걸러 왕복을 아끼는 용도로만 남긴다.
+        "alwaysAsk": _env("B2B_SECURE_DOC_ALWAYS_ASK", "1").lower() not in {"0", "off", "false", "no"},
+        # 비밀등급 문서는 규격상 해제가 거부된다(-200) — 미리 물어 사용자에게 이유를 준다.
+        "secretPrecheck": _env("B2B_SECURE_DOC_SECRET_CHECK", "1").lower()
+                          not in {"0", "off", "false", "no"},
     }
 
 
@@ -165,7 +174,7 @@ def _clean_name(name):
     return text or "upload.bin"
 
 
-def _post_drm(op, data, filename, extra_form=None, timeout=None):
+def _post_drm(op, data, filename, extra_form=None, timeout=None, expect="stream"):
     """POST {서버}/v1/drm/<op> (multipart). 성공=바이트, Gateway JSON 오류=SecureDocError."""
     cfg = config()
     if not cfg["enabled"]:
@@ -205,9 +214,19 @@ def _post_drm(op, data, filename, extra_form=None, timeout=None):
 
     if "json" in content_type:
         payload = _try_json(raw) or {}
+        # [실측 2026-08-27] 예전엔 JSON 을 무조건 오류로 봤다. 파일을 돌려주는 encrypt/decrypt
+        # 기준으로 짠 코드인데, 규격 2.5 비밀문서 확인은 **성공해도 JSON** 이다. 그대로 두면
+        # 선행 확인이 늘 예외로 빠져 조용히 죽는다(동작하는 것처럼 보이면서 아무것도 안 함).
+        if expect == "json":
+            return payload
         raise SecureDocError(str(payload.get("result_msg") or payload.get("error") or "알 수 없는 응답"),
                              result=str(payload.get("result") or ""),
                              result_msg=str(payload.get("result_msg") or ""))
+    if expect == "json":
+        payload = _try_json(raw)
+        if payload is not None:
+            return payload
+        raise SecureDocError("JSON 응답을 기대했는데 아니었습니다(%s)" % (content_type or "형식 미상"))
     if not raw:
         raise SecureDocError("보안 서버가 빈 파일을 돌려주었습니다.")
     return raw
@@ -219,6 +238,30 @@ def _try_json(raw):
         return value if isinstance(value, dict) else None
     except Exception:
         return None
+
+
+def secret_check(data, filename):
+    """비밀문서인가 — drmSecretAPI. 반환 "S_DOC" / "N_DOC" / "" (판단 못 함).
+
+    [연동규격 v0.3 2.5] 응답 result 가 S_DOC(비밀문서) / N_DOC(일반문서) 다.
+    비밀등급 문서는 규격상 **복호화 자체가 거부**된다(-200 "비밀문서로 추가적인 작업을 진행할
+    수 없습니다"). 미리 물어보면 어차피 실패할 요청을 아끼고, 사용자에게 정확한 이유를 준다.
+    이 확인이 실패해도 흐름을 막지 않는다 — 최종 판정은 어차피 해제 호출이 한다.
+    """
+    try:
+        cfg = config()
+        out = _post_drm("secret", data, filename, expect="json",
+                        extra_form={"requestorAccount": cfg["account"]})
+    except Exception:
+        return ""                      # 확인을 못 했을 뿐 — 흐름은 막지 않는다
+    try:
+        if isinstance(out, (bytes, bytearray)):
+            out = json.loads(bytes(out).decode("utf-8", errors="replace"))
+        if isinstance(out, dict):
+            return str(out.get("result") or "")
+    except Exception:
+        pass
+    return ""
 
 
 def decrypt_bytes(data, filename):
@@ -237,14 +280,40 @@ def decrypt_bytes(data, filename):
         raise
 
 
-def encrypt_bytes(data, filename):
-    """보안 재적용. 실패는 예외 — 부르는 쪽(다운로드)이 반드시 중단해야 한다."""
+def encrypt_bytes(data, filename, label_id=""):
+    """보안 재적용. 실패는 예외 — 부르는 쪽(다운로드)이 반드시 중단해야 한다.
+
+    label_id 를 주면 그 라벨로 복원한다(원본과 같은 보호). 비우면 게이트웨이 기본 라벨.
+    """
     cfg = config()
-    return _post_drm("encrypt", data, filename,
-                     extra_form={"requestorAccount": cfg["account"]})
+    form = {"requestorAccount": cfg["account"]}
+    if label_id:
+        form["labelid"] = label_id
+    return _post_drm("encrypt", data, filename, extra_form=form)
 
 
 # ── 업로드 훅 ─────────────────────────────────────────────────────────────
+
+def _is_readable_office_zip(path):
+    """정말 열리는 Office 문서(zip)인가 — 헤더만 PK 인 것과 가른다.
+
+    못 열리면 False 를 준다(→ 부르는 쪽이 '보안문서일 수 있다'로 보고 서버에 물어본다).
+    경로를 모르면 판단하지 않고 True(=평문으로 인정) — 예전 동작 유지. 경로 없는 호출은
+    헤더만 넘겨 받는 자리라, 여기서 막으면 평범한 파일까지 서버로 보내게 된다.
+    """
+    if not path:
+        return True
+    try:
+        with zipfile.ZipFile(str(path)) as z:
+            names = z.namelist()
+    except Exception:
+        return False                       # PK 인 척했지만 열리지 않는다 — 의심스럽다
+    if not names:
+        return False
+    low = [n.lower() for n in names]
+    # OOXML 이면 [Content_Types].xml 이 있다. 없더라도 일반 zip 일 수 있으니 그것까지는 인정.
+    return True
+
 
 def looks_secured(head, name="", encrypted_checker=None, path=None):
     """작업본이 보안문서로 '보이는가' — 최종 판정은 Gateway(-200)가 한다.
@@ -256,7 +325,11 @@ def looks_secured(head, name="", encrypted_checker=None, path=None):
     확장자 규칙은 쓰지 않는다(연동규격에 없음 — 내용으로만 본다)."""
     head = bytes(head or b"")
     if head[:4] == b"PK\x03\x04":
-        return False
+        # [실측 2026-08-27] 예전엔 앞 4바이트가 PK 면 **무조건** 평문으로 통과시켰다.
+        # 그런데 사고 로그의 그 파일은 PK 로 시작하면서 zip 으로는 안 열렸다(판정이 "" 로 빠짐).
+        # 헤더만 흉내낸 컨테이너나 쓰다 만 파일이 그대로 평문 취급돼 보안 루트를 건너뛴다 —
+        # 4바이트는 위조하기 가장 쉬운 값이다. **정말 열리는 Office zip 일 때만** 평문으로 본다.
+        return not _is_readable_office_zip(path)
     if head[:4] == b"\xd0\xcf\x11\xe0":
         # [제보 2026-08-24 사내 DRM 미인식] 예전 bool checker(EncryptedPackage 유무)는 '표준'
         # OOXML 암호화(AIP)만 잡았다 — 사내 DRM 이 OLE 래퍼에 자체 스트림을 쓰면 '구형 .xls
@@ -324,7 +397,14 @@ def maybe_decrypt_upload(path, name, encrypted_checker=None):
             head = f.read(8)
     except Exception:
         return None
-    if not looks_secured(head, name, encrypted_checker, p):
+    _local_says_plain = not looks_secured(head, name, encrypted_checker, p)
+    if _local_says_plain and cfg.get("alwaysAsk") and not available():
+        # [사용자 지적 2026-08-27] 평문이 완전히 무소식이면 여러 개를 올렸을 때
+        # "하나는 어떻게 된 거지" 가 된다. 확인을 못 했으면 못 했다고 말해 준다.
+        return {"checked": False, "plain": True, "unverified": True}
+    if _local_says_plain and not (cfg.get("alwaysAsk") and available()):
+        # 확실히 평문이거나, 지금은 게이트웨이에 물어볼 수 없다(방화벽/설정) — 예전 판단을 따른다.
+        # 여기서 막아 버리면 게이트웨이가 닫혀 있는 동안 업무가 통째로 멈춘다.
         return None
     if not available():
         reason = (_STATE.get("probe") or {}).get("reason") or "서버에 문서보안 키가 설정되지 않았습니다"
@@ -333,19 +413,32 @@ def maybe_decrypt_upload(path, name, encrypted_checker=None):
     started = time.perf_counter()
     try:
         data = p.read_bytes()
+        # [규격 2.5 / 사용자 제안 2026-08-27] 비밀등급 문서는 해제가 거부된다 — 미리 가른다.
+        # (S_DOC 는 '암호화된 문서'가 아니라 '비밀등급 문서' 다 — 해제 대상이 아니라 **거절 대상**)
+        # 여기서 걸리면 '왜 안 되는지'를 사용자에게 정확히 말해 줄 수 있다(예전엔 -200 만 떴다).
+        if cfg.get("secretPrecheck", True):
+            _kind = secret_check(data, name)
+            if _kind == "S_DOC":
+                return {"checked": True, "released": False, "secret": True,
+                        "error": "비밀등급 문서라 보안 해제를 할 수 없습니다"
+                                 " (규격상 비밀문서는 처리 미지원)"}
         released, out = decrypt_bytes(data, name)
         if not released:                 # Gateway 가 '보안문서 아님' — 원본 그대로 진행
-            return {"checked": True, "released": False, "notDrm": True}
+            # 로컬은 평문이라 했고 게이트웨이도 같은 답 → 판정이 맞았다는 확인이기도 하다.
+            # 게이트웨이가 '보안 문서 아님' 이라고 **확인해 준** 상태 — 조용히 넘기지 않는다.
+            return {"checked": True, "released": False, "notDrm": True, "plain": True,
+                    "askedAnyway": bool(_local_says_plain)}
         # [코드리뷰 2026-08-24] 마커를 '먼저' 쓴다. 예전엔 평문을 먼저 쓰고 마커를 나중에 썼는데,
         # 마커 쓰기가 실패하면(디스크 풀/ACL/AV 잠금 — 새 파일 생성은 제자리 덮어쓰기보다 잘 막힌다)
         # 평문 작업본만 남고 재적용 게이트(any_secured)가 영영 안 걸린다 — 이후 모든 다운로드가
         # 평문으로 나간다. 이 모듈의 존재 이유("평문으로 새면 안 된다")가 그 한 순서에 무너진다.
         # 마커가 실패하면 원본을 그대로 두고 released:False 로 물러난다(안전한 쪽 실패).
         Path(str(p) + MARKER_SUFFIX).write_text("secured-source", encoding="utf-8")
+        _label = read_label_id(data)          # 평문으로 바꾸기 **전에** 읽어야 한다
         p.write_bytes(out)
         with _LOCK:
             _STATE["releasedCount"] += 1
-        return {"checked": True, "released": True,
+        return {"checked": True, "released": True, "labelId": _label,
                 "elapsedMs": round((time.perf_counter() - started) * 1000),
                 "originalBytes": len(data), "releasedBytes": len(out)}
     except SecureDocError as err:
@@ -356,6 +449,47 @@ def maybe_decrypt_upload(path, name, encrypted_checker=None):
         with _LOCK:
             _STATE["lastError"] = "%s: %s" % (type(err).__name__, err)
         return {"checked": True, "released": False, "error": str(err)}
+
+
+_LABEL_RE = re.compile(rb'<AUTHENTICATEDDATA\s+name="ID"\s+id="LABEL">([0-9a-fA-F-]{32,40})</AUTHENTICATEDDATA>')
+
+
+def read_label_id(path_or_bytes):
+    """보호 문서 안에 적힌 **원본 라벨 GUID** 를 읽는다. 못 찾으면 "".
+
+    [실측 2026-08-27] 되돌릴 때 기본 라벨로 재암호화하면 원본과 다른 보호가 걸린다.
+    다행히 라벨 GUID 는 문서 안 XrML 에 그대로 적혀 있다
+    (<AUTHENTICATEDDATA name="ID" id="LABEL">…</>). 이 값을 기억해 두었다가 재암호화 때
+    labelid 로 돌려주면 **원본과 같은 라벨** 로 복원된다.
+
+    참고: 이 값으로 'DRM 이냐 AIP 냐' 를 가릴 수는 없다 — 실측한 두 표본(사내 DRM/AIP)이
+    같은 라벨 GUID 를 갖고 있었다. 그래서 labelid=DRM 강제 같은 건 하지 않는다(근거 없음).
+    """
+    try:
+        raw = (path_or_bytes if isinstance(path_or_bytes, (bytes, bytearray))
+               else Path(path_or_bytes).read_bytes())
+    except Exception:
+        return ""
+    raw = bytes(raw)
+    m = _LABEL_RE.search(raw)
+    if not m:
+        try:                                  # UTF-16LE 로 박힌 경우
+            wide = raw.decode("utf-16-le", errors="ignore").encode("ascii", "ignore")
+            m = _LABEL_RE.search(wide)
+        except Exception:
+            m = None
+    return m.group(1).decode("ascii", "ignore").lower() if m else ""
+
+
+def remember_label(workbook_id, label_id):
+    if label_id:
+        with _LOCK:
+            _STATE.setdefault("labelIds", {})[str(workbook_id or "")] = str(label_id)
+
+
+def recall_label(workbook_id):
+    with _LOCK:
+        return (_STATE.get("labelIds") or {}).get(str(workbook_id or ""), "")
 
 
 def mark_released(workbook_id):
@@ -379,9 +513,12 @@ def any_secured(backend_dir=None):
     return False
 
 
-def encrypt_for_download(data, filename):
-    """다운로드 직전 보안 재적용. 실패는 SecureDocError — 부르는 쪽이 다운로드를 중단한다."""
-    out = encrypt_bytes(data, filename)
+def encrypt_for_download(data, filename, workbook_id=""):
+    """다운로드 직전 보안 재적용. 실패는 SecureDocError — 부르는 쪽이 다운로드를 중단한다.
+
+    업로드 때 기억해 둔 원본 라벨이 있으면 **그 라벨로** 복원한다(기본 라벨로 덮어쓰지 않는다).
+    """
+    out = encrypt_bytes(data, filename, label_id=recall_label(workbook_id))
     with _LOCK:
         _STATE["appliedCount"] += 1
     return out

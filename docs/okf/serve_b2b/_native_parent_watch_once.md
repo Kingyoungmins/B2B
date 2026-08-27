@@ -8,7 +8,7 @@ signature: "(now)"
 role: "Native host가 사라졌는데 Python 서버만 살아남으면 Excel COM 인스턴스도 고아로 남는다."
 role_source: docstring
 version: "0.8.0"
-loc: "serve_b2b.py:5309-5342"
+loc: "serve_b2b.py:5312-5345"
 
 # ── 입출력 ──
 inputs:

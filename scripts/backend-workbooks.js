@@ -28,8 +28,21 @@ async function registerWorkbookBackend(file) {
       throw err;
     }
     if (data.secure && typeof toast === "function") {
-      if (data.secure.released) toast(`"${file.name}" 보안 문서를 해제해 업로드했습니다.`, "success");
-      else if (data.secure.error) toast(`"${file.name}" 보안 해제 실패: ${data.secure.error}`, "error");
+      // [사용자 지적 2026-08-27] 예전 문구 두 가지 문제:
+      //  · 평문은 아무 말이 없어서, 여러 개를 올리면 "하나는 어떻게 된 거지"가 됐다.
+      //  · 실패 문구가 서버 오류 원문을 그대로 던져서 사용자가 할 수 있는 게 없었다.
+      // 결과를 셋으로 갈라, 각각 '무슨 일이 있었고 지금 어떤 상태인지'를 말해 준다.
+      const s = data.secure;
+      if (s.released) {
+        toast(`"${file.name}" 보안 문서를 해제해 열었습니다.`, "success");
+      } else if (s.secret) {
+        toast(`"${file.name}"은 비밀등급 문서라 처리할 수 없습니다. 등급을 낮춘 사본으로 다시 시도해 주세요.`, "error");
+      } else if (s.error) {
+        // 대개 게이트웨이에 못 닿는 상황이다 — 파일은 원본 그대로 열려 있으니 그렇게 말해 준다.
+        toast(`"${file.name}"은 보안 문서입니다. 지금은 보안 서버에 연결할 수 없어 원본 그대로 열었습니다.`, "error");
+      } else if (s.plain && s.checked) {
+        toast(`"${file.name}"은 보안 문서가 아니어서 그대로 열었습니다.`, "");
+      }
     }
     return data;
   } catch (err) {

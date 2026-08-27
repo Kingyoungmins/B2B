@@ -8,7 +8,7 @@ signature: "()"
 role: "최근 N개만 남기고 오래된 경계 기록을 버린다. 파일은 '남은 기록이 참조하지 않을 때만' 지운다"
 role_source: docstring
 version: "0.8.0"
-loc: "serve_b2b.py:19760-19786"
+loc: "serve_b2b.py:19763-19789"
 
 # ── 입출력 ──
 inputs: []

@@ -8,7 +8,7 @@ signature: "(active_excel_id, host_hwnd=None)"
 role: "frame 모드: 활성 세션 외 라이브 프레임을 전부 화면 밖으로 파킹."
 role_source: docstring
 version: "0.8.0"
-loc: "serve_b2b.py:7149-7170"
+loc: "serve_b2b.py:7152-7173"
 
 # ── 입출력 ──
 inputs:

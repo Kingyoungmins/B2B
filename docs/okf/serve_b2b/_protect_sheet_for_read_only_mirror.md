@@ -8,7 +8,7 @@ signature: "(ws)"
 role: "시트 하나에 라이브 미러 편집 잠금을 건다(워크북 일괄 보호와 같은 옵션)."
 role_source: docstring
 version: "0.8.0"
-loc: "serve_b2b.py:3760-3794"
+loc: "serve_b2b.py:3763-3797"
 
 # ── 입출력 ──
 inputs:

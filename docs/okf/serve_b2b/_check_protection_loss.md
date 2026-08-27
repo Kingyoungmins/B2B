@@ -8,7 +8,7 @@ signature: "(where, src_path, out_path, **extra)"
 role: "원본은 보호돼 있었는데 결과물이 아니면 **그 자리에서** 크게 남긴다."
 role_source: docstring
 version: "0.8.0"
-loc: "serve_b2b.py:3802-3827"
+loc: "serve_b2b.py:3805-3830"
 
 # ── 입출력 ──
 inputs:
