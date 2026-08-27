@@ -8,7 +8,7 @@ signature: "(name)"
 role: "'같은 템플릿, 다른 월/날짜/버전' 파일을 같게 보기 위한 안정 키(소문자·기호제거)."
 role_source: docstring
 version: "0.8.0"
-loc: "serve_b2b.py:8562-8604"
+loc: "serve_b2b.py:8674-8716"
 
 # ── 입출력 ──
 inputs:

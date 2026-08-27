@@ -9,7 +9,7 @@ signature: "(self, source, target, columns, key=None, source_header_row=1, heade
 role: "소스 표(예: 피벗)의 행을 대상 시트의 '키 열(구분명)'과 이름 매칭해서, 지정한 값 열들을 대상의"
 role_source: docstring
 version: "0.8.0"
-loc: "serve_b2b.py:14941-15260"
+loc: "serve_b2b.py:15053-15372"
 
 # ── 입출력 ──
 inputs:

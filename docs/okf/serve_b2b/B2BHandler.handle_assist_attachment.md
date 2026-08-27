@@ -9,7 +9,7 @@ signature: "(self)"
 role: "[AI 도움 첨부] 첨부 파일을 슬라이드/이미지 base64 로 돌려준다."
 role_source: docstring
 version: "0.8.0"
-loc: "serve_b2b.py:1851-1900"
+loc: "serve_b2b.py:1866-1915"
 
 # ── 입출력 ──
 inputs:

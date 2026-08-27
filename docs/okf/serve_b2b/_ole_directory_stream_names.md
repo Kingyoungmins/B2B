@@ -8,7 +8,7 @@ signature: "(path)"
 role: "OLE 복합문서 디렉터리의 스트림 이름 집합. OLE 아니거나 구조를 못 읽으면 None."
 role_source: docstring
 version: "0.8.0"
-loc: "serve_b2b.py:3015-3081"
+loc: "serve_b2b.py:3030-3096"
 
 # ── 입출력 ──
 inputs:
@@ -45,6 +45,7 @@ calls_external:
   - "seek"
   - "set"
 called_by:
+  - "_file_label_evidence"
   - "_ole_office_verdict"
 reads: []
 writes: []
@@ -60,7 +61,7 @@ OLE 복합문서 디렉터리의 스트림 이름 집합. OLE 아니거나 구�
 
 ## 관계
 - 호출: `add`, `range`, `read`
-- 피호출(영향 전파 경로): `_ole_office_verdict`
+- 피호출(영향 전파 경로): `_file_label_evidence`, `_ole_office_verdict`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

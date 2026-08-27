@@ -8,7 +8,7 @@ signature: "(data, g_i, c_i, v_i, agg, row_label='행')"
 role: "2D 크로스탭 grid 생성. 반환: [[row_label, col1, col2, ...], [행키, agg, agg, ...], ...]."
 role_source: docstring
 version: "0.8.0"
-loc: "serve_b2b.py:3446-3469"
+loc: "serve_b2b.py:3461-3484"
 
 # ── 입출력 ──
 inputs:

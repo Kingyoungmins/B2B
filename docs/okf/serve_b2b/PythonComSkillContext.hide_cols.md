@@ -9,7 +9,7 @@ signature: "(self, sheet, col_range, hidden=True)"
 role: "예: ctx.hide_cols(\"매출\", \"B:D\")"
 role_source: docstring
 version: "0.8.0"
-loc: "serve_b2b.py:14855-14861"
+loc: "serve_b2b.py:14967-14973"
 
 # ── 입출력 ──
 inputs:

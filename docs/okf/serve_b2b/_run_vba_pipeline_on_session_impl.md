@@ -8,7 +8,7 @@ signature: "(excel_id, steps, reset=True, entry=None, view_sheet=None)"
 role: "VBA/Python 스킬 파이프라인을 적용한다."
 role_source: docstring
 version: "0.8.0"
-loc: "serve_b2b.py:10424-10842"
+loc: "serve_b2b.py:10536-10954"
 
 # ── 입출력 ──
 inputs:

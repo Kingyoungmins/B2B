@@ -1780,7 +1780,9 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
         # 손수 만들지 않고 기존 _file_label_kind(none/label/encrypted/legacy-ole)를 재사용.
         # _file_label_kind 는 office 컨테이너가 아니면(csv 등 텍스트 포함) "" 를 준다 —
         # "unreadable" 로 찍으면 디스크 장애로 오독하므로 "other" 로 남긴다(리뷰 지적).
-        _sniff = _file_label_kind(path) or "other"
+        # [보안 2026-08-27] 판정 결과만 남기면 사고 조사 때 아무것도 못 한다 — 증거를 함께 남긴다.
+        _ev = _file_label_evidence(path)
+        _sniff = _ev.get("kind") or "other"
         _t_secure0 = time.perf_counter()
         secure_info = None
         try:
@@ -1794,7 +1796,12 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
         # 검사한 건(성공/실패/notDrm)은 물론 '건너뛴' 것도 사유를 갈라 남긴다 — 기능이 꺼진
         # 환경(disabled)과 평문 판정(plain)이 같은 무음이면 미인식 제보 때 헛다리를 짚는다.
         try:
-            _sec_payload = {"name": name, "sniff": _sniff}
+            _sec_payload = {"name": name, "sniff": _sniff,
+                            # 원본을 못 꺼내는 환경이라, 이 다섯 값이 유일한 증거다.
+                            "bytes": _ev.get("bytes"), "magic": _ev.get("magic"),
+                            "sha12": _ev.get("sha"), "inside": _ev.get("inside")}
+            if _sniff == "other":
+                _sec_payload["sniffWhy"] = _ev.get("why") or "사유 미상"
             if secure_info:
                 _sec_payload.update(
                     released=bool(secure_info.get("released")),
@@ -1804,7 +1811,15 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
                 )
             else:
                 import secure_doc as _sd
-                _sec_payload["skipped"] = "plain" if _sd.config().get("enabled") else "disabled"
+                # [보안 2026-08-27] 예전엔 판정 실패도 "plain" 으로 적었다. 못 알아본 것과 평문인
+                # 것이 로그에서 같아 보여, 보안 문서가 통과해도 눈치챌 수 없었다(실측 사고).
+                if not _sd.config().get("enabled"):
+                    _sec_payload["skipped"] = "disabled"
+                elif _sniff == "other":
+                    _sec_payload["skipped"] = "unknown-treated-as-plain"
+                    _sec_payload["warn"] = "판정 실패 — 보호 문서일 수 있는데 보안 루트를 건너뛰었습니다"
+                else:
+                    _sec_payload["skipped"] = "plain"
             _vba_trace("secure.upload", **_sec_payload)
         except Exception:
             pass
@@ -3777,6 +3792,95 @@ def _protect_sheet_for_read_only_mirror(ws):
         _allow_read_only_mirror_selection(ws)
     except Exception:
         pass
+
+
+def _protection_rank(kind):
+    """보호 강도 순위. 낮아지면 보호가 약해진 것이다."""
+    return {"encrypted": 3, "label": 2, "none": 1, "legacy-ole": 1}.get(kind or "", 0)
+
+
+def _check_protection_loss(where, src_path, out_path, **extra):
+    """원본은 보호돼 있었는데 결과물이 아니면 **그 자리에서** 크게 남긴다.
+
+    [실측 2026-08-27] 보호 문서가 평문으로 다운로드된 사고가 있었는데, 로그에는 라벨 값만
+    조용히 찍혀 있어 아무도 눈치채지 못했다. 사고를 사후에 파일로 확인하려 했으나 보안망
+    밖으로 원본을 꺼낼 수 없어(반출하면 내용이 바뀐다) 확인 자체가 불가능했다.
+    그러니 **벗겨지는 순간에** 증거와 함께 남겨야 한다 — 나중에는 확인할 방법이 없다.
+    """
+    try:
+        if not src_path or not out_path:
+            return
+        src = _file_label_evidence(src_path, tries=1)
+        out = _file_label_evidence(out_path, tries=1)
+        if _protection_rank(src.get("kind")) <= _protection_rank(out.get("kind")):
+            return                                  # 약해지지 않았다
+        _vba_trace("secure.protection.lost",
+                   where=where,
+                   srcLabel=src.get("kind") or "", outLabel=out.get("kind") or "",
+                   srcBytes=src.get("bytes"), outBytes=out.get("bytes"),
+                   srcMagic=src.get("magic"), outMagic=out.get("magic"),
+                   srcSha12=src.get("sha"), outSha12=out.get("sha"),
+                   srcInside=src.get("inside"), outInside=out.get("inside"),
+                   warn="원본은 보호돼 있었는데 결과물에는 보호가 없습니다",
+                   **extra)
+    except Exception:
+        pass                                        # 감지기가 파이프라인을 막으면 안 된다
+
+
+def _file_label_evidence(path, tries=3, wait=0.15):
+    """이 파일이 '그때 어떤 모양이었는지'를 증거로 남긴다 — 원본을 못 꺼내는 환경을 위해.
+
+    [실측 2026-08-27] 보안 문서가 보안 루트를 건너뛴 사고를 조사하는데, 로그엔 sniff="other"
+    한 단어뿐이라 **업로드 당시 그 파일이 보호돼 있었는지조차 알 수 없었다.** 파일을 밖으로
+    꺼내 확인하려 했으나, 반출 과정에서 내용이 바뀌어 원본 확인이 불가능했다.
+    그래서 파일 대신 증거를 남긴다(크기·앞바이트·해시·내부 이름·실패 사유).
+
+    또 하나: 판정은 파일을 쓴 직후에 도는데, 그 순간 Excel 이 아직 파일을 잡고 있으면 열기가
+    실패해 판정이 "" 로 빠진다. 그 "" 가 평문으로 취급돼 보안 루트를 건너뛰었다.
+    짧게 몇 번 다시 시도한다 — 잠금은 대개 수백 ms 안에 풀린다.
+    """
+    import hashlib
+
+    out = {"kind": "", "why": "", "bytes": -1, "magic": "", "sha": "", "inside": ""}
+    for attempt in range(max(1, tries)):
+        try:
+            p = Path(path)
+            raw = p.open("rb")
+            try:
+                head = raw.read(8)
+            finally:
+                raw.close()
+            out["bytes"] = p.stat().st_size
+            out["magic"] = head.hex().upper()
+            try:
+                h = hashlib.sha256()
+                with p.open("rb") as f:
+                    for chunk in iter(lambda: f.read(1 << 20), b""):
+                        h.update(chunk)
+                out["sha"] = h.hexdigest()[:12]
+            except Exception:
+                pass
+            if head[:4] == b"\xd0\xcf\x11\xe0":
+                names = _ole_directory_stream_names(path)
+                out["inside"] = ",".join(sorted(n.strip("\x00\x01\x02\x03\x04\x05\x06")
+                                                for n in (names or []))[:10])[:200]
+            elif head[:4] == b"PK\x03\x04":
+                try:
+                    with zipfile.ZipFile(str(p)) as z:
+                        out["inside"] = ",".join(z.namelist()[:8])[:200]
+                except Exception as err:
+                    out["why"] = "zip 열기 실패: %s: %s" % (type(err).__name__, err)
+            out["kind"] = _file_label_kind(path) or ""
+            if out["kind"]:
+                out["why"] = ""
+                return out
+            if not out["why"]:
+                out["why"] = "컨테이너로 인식되지 않음(앞 8바이트 %s)" % (out["magic"] or "읽기실패")
+        except Exception as err:
+            out["why"] = "%s: %s" % (type(err).__name__, err)
+        if attempt + 1 < tries:
+            time.sleep(wait)                 # 쓰기 직후 잠금은 대개 곧 풀린다
+    return out
 
 
 def _file_label_kind(path):
@@ -6370,6 +6474,7 @@ def _save_excel_session_impl(excel_id, name=None, internal=False):
         # 화면 설정 복구)이 로그에 안 잡혔다 — VM 로그에서 서버 1.2초 vs 클라 3.8초로 벌어진 원인.
         # 이제 핸들러 전 구간을 쪼개서 남긴다.
         try:
+            _src_ev = _file_label_evidence(session.get("path") or "", tries=1)
             _vba_trace("excel.save.snapshot", excelId=excel_id, name=safe_name,
                        ms=round(_t_core, 1), linkCount=_save_link_n,
                        internal=bool(internal),
@@ -6382,8 +6487,15 @@ def _save_excel_session_impl(excel_id, name=None, internal=False):
                        #                                       (파이썬으로 저장해도 그대로 — 떼면 보안 우회)
                        label=_file_label_kind(result_path),
                        srcLabel=_file_label_kind(session.get("path") or ""),
+                       # [보안 2026-08-27] 라벨 값만으로는 '왜 못 물려받았는지' 를 못 본다 —
+                       # 원본이 어떤 모양이었는지(크기/앞바이트/내부 이름)를 같이 남긴다.
+                       srcBytes=_src_ev.get("bytes"), srcMagic=_src_ev.get("magic"),
+                       srcSha12=_src_ev.get("sha"), srcInside=_src_ev.get("inside"),
+                       srcWhy=_src_ev.get("why") or "",
                        sizeMB=_file_size_mb(result_path),
                        totalMs=round((time.perf_counter() - _t_all0) * 1000, 1))
+            _check_protection_loss("excel.save.snapshot", session.get("path") or "",
+                                   result_path, excelId=excel_id, name=safe_name)
         except Exception:
             pass
         result_id = uuid.uuid4().hex

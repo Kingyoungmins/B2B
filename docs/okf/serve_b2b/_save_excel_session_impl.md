@@ -8,7 +8,7 @@ signature: "(excel_id, name=None, internal=False)"
 role: "워크북을 파일로 저장한다."
 role_source: docstring
 version: "0.8.0"
-loc: "serve_b2b.py:6264-6401"
+loc: "serve_b2b.py:6368-6513"
 
 # ── 입출력 ──
 inputs:
@@ -26,9 +26,11 @@ raises: []
 
 # ── 유기적 관계 ──
 calls:
+  - "_check_protection_loss"
   - "_configure_excel_grid_window"
   - "_configure_read_only_mirror_input_block"
   - "_disable_excel_context_menus"
+  - "_file_label_evidence"
   - "_file_label_kind"
   - "_file_size_mb"
   - "_promote_csv_multisheet_name"
@@ -89,7 +91,7 @@ timestamp: "0.8.0-gen"
 - 변경 상태 `RESULTS` — 수정 시 이 상태를 읽는 곳 동반 점검.
 
 ## 관계
-- 호출: `_configure_excel_grid_window`, `_configure_read_only_mirror_input_block`, `_disable_excel_context_menus`, `_file_label_kind`, `_file_size_mb`, `_promote_csv_multisheet_name`, `_protect_workbook_for_read_only_mirror`, `_vba_trace`, `get_excel_session`, `session_workbook`
+- 호출: `_check_protection_loss`, `_configure_excel_grid_window`, `_configure_read_only_mirror_input_block`, `_disable_excel_context_menus`, `_file_label_evidence`, `_file_label_kind`, `_file_size_mb`, `_promote_csv_multisheet_name`, `_protect_workbook_for_read_only_mirror`, `_vba_trace`, `get_excel_session`, `session_workbook`
 - 피호출(영향 전파 경로): `save_excel_session`
 
 ## 실패/예외

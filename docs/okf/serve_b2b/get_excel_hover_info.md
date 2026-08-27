@@ -8,7 +8,7 @@ signature: "(excel_id)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
 version: "0.8.0"
-loc: "serve_b2b.py:16576-16577"
+loc: "serve_b2b.py:16688-16689"
 
 # ── 입출력 ──
 inputs:

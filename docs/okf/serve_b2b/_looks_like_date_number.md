@@ -8,7 +8,7 @@ signature: "(digits)"
 role: "YYMMDD(260607) / YYYYMM(202606) / YYYYMMDD(20260607) 처럼 날짜로 읽히는 숫자만 True."
 role_source: docstring
 version: "0.8.0"
-loc: "serve_b2b.py:8542-8559"
+loc: "serve_b2b.py:8654-8671"
 
 # ── 입출력 ──
 inputs:

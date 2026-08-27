@@ -8,7 +8,7 @@ signature: "(excel_id, step)"
 role: "스텝 1개의 '실행 결과에 영향 있는' 부분만. _step_signature 와 같은 철학이되"
 role_source: docstring
 version: "0.8.0"
-loc: "serve_b2b.py:19597-19614"
+loc: "serve_b2b.py:19709-19726"
 
 # ── 입출력 ──
 inputs:
