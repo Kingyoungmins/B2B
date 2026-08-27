@@ -4131,6 +4131,18 @@
           "test_runs/_test_filter_to_range_com.py"
         ],
         [
+          "com",
+          "test_runs/_test_filter_to_range_deep_com.py"
+        ],
+        [
+          "com",
+          "test_runs/_test_legacy_skill_replay_com.py"
+        ],
+        [
+          "node",
+          "test_runs/_test_filter_to_range_no_regression.js"
+        ],
+        [
           "node",
           "diagnostics/_test_creator_sheets.js"
         ],
@@ -4139,7 +4151,7 @@
           "test_runs/_test_ctx_manual_sync.py"
         ]
       ],
-      "fix": "확인: 복붙 캡처가 만드는 코드는 ctx.paste_copied('시트','A2:N57',...) 로 그 순간 좌표를 박는다 — 문의 지적이 맞다. 기존 ctx.filter_to_sheet 는 UsedRange 로 매번 다시 잡아 행이 늘어도 따라오지만 '새 시트'에만 만든다(add_sheet 가 이미 있으면 오류). 그래서 ctx.filter_to_range(시트, 조건, 대상시트, 시작칸, header_rows=1, include_header=False, clear_existing=False) 를 새로 추가했다 — 기존 filter_to_sheet 는 한 줄도 안 건드려 예전 스킬 호환. 선언적 조건(ctx.column_is)이면 Excel 자동필터+SpecialCells(visible) 네이티브 복사, 임의 lambda 면 값 판정 후 연속 구간 Union 복사. 둘 다 원본 표의 열 범위만 복사해 양식의 다른 열을 침범하지 않는다(EntireRow 를 쓰지 않는 이유). clear_existing 은 붙일 열 범위만 지워 지난달 값이 남는 것을 막고, 0건이면 오류 없이 0 반환(그 달에 해당 건이 없을 수 있다). 호환 검증: 생성시트 탐지기(runnerCollectGeneratedSheets)가 filter_to_range 의 대상(양식)을 '산출물'로 오등록하면 실행기 파일확인 매핑이 꼬이므로 접두를 공유하지 않는 별도 이름을 쓰고 그 사실을 diagnostics/_test_creator_sheets.js 에 못박았다. codeUsesSafeCtxHelper 목록에도 추가(빠지면 의도 기반 VBA 강제 전환에 잘못 걸린다). 프롬프트(file-schema.js) 3곳과 사업팀 설명서에 사용법을 넣었고, '범위를 좌표로 박지 말라'는 이유를 실제 제보와 함께 적었다. 실측: 같은 코드로 원본 10행→5건, 30행→15건, 앞에 열 추가돼도 15건."
+      "fix": "확인: 복붙 캡처가 만드는 코드는 ctx.paste_copied('시트','A2:N57',...) 로 그 순간 좌표를 박는다 — 문의 지적이 맞다. 기존 ctx.filter_to_sheet 는 UsedRange 로 매번 다시 잡아 행이 늘어도 따라오지만 '새 시트'에만 만든다(add_sheet 가 이미 있으면 오류). 그래서 ctx.filter_to_range(시트, 조건, 대상시트, 시작칸, header_rows=1, include_header=False, clear_existing=False) 를 새로 추가했다 — 기존 filter_to_sheet 는 한 줄도 안 건드려 예전 스킬 호환. 선언적 조건(ctx.column_is)이면 Excel 자동필터+SpecialCells(visible) 네이티브 복사, 임의 lambda 면 값 판정 후 연속 구간 Union 복사. 둘 다 원본 표의 열 범위만 복사해 양식의 다른 열을 침범하지 않는다(EntireRow 를 쓰지 않는 이유). clear_existing 은 붙일 열 범위만 지워 지난달 값이 남는 것을 막고, 0건이면 오류 없이 0 반환(그 달에 해당 건이 없을 수 있다). 호환 검증: 생성시트 탐지기(runnerCollectGeneratedSheets)가 filter_to_range 의 대상(양식)을 '산출물'로 오등록하면 실행기 파일확인 매핑이 꼬이므로 접두를 공유하지 않는 별도 이름을 쓰고 그 사실을 diagnostics/_test_creator_sheets.js 에 못박았다. codeUsesSafeCtxHelper 목록에도 추가(빠지면 의도 기반 VBA 강제 전환에 잘못 걸린다). 프롬프트(file-schema.js) 3곳과 사업팀 설명서에 사용법을 넣었고, '범위를 좌표로 박지 말라'는 이유를 실제 제보와 함께 적었다. 실측: 같은 코드로 원본 10행→5건, 30행→15건, 앞에 열 추가돼도 15건. ※ [적대 검증 추가 2026-08-27] 1차 테스트가 조건을 전부 ctx.column_is 로만 줘서 **lambda 경로를 한 번도 안 탔고**, 행 '개수'만 보고 어떤 행이 붙었는지는 안 봤다. deep 테스트로 26건을 더 확인: lambda 경로 값 일치, 값 여러 개 필터(Operator=7), 머리글 2줄, include_header, A열 아닌 시작칸(왼쪽 열·윗칸 무침범), 실행 후 원본에 자동필터·숨은 행 잔존 없음, 흩어진 매칭의 순서 보존(두 경로 모두), 교차파일(ctx.book), 3000행에서 1000건을 COM 19회로 처리, 잘못 쓴 경우 사유 있는 오류. 무회귀 증명은 추론이 아니라 대조로 했다: serve_b2b.py 는 삭제 0줄·추가 160줄(git diff), codeUsesSafeCtxHelper 는 정규식에서 filter_to_range 만 뺀 '변경 전 판정기'를 만들어 예전 스킬 코드 16종의 판정이 전부 동일함을 직접 비교, 저장 스킬 zip 은 변경 전/후 백엔드에서 각각 재생해 단계별 성공·실패와 결과 시트 값이 같은지 확인(매핑 적용판·미적용판 둘 다)."
     }
   ]
 }
