@@ -42,6 +42,7 @@ calls_external:
 called_by:
   - "autoRepairPipelineStep"
   - "callAssistLLM"
+  - "chatClassifyQuestionVsSkill"
   - "clarifyVerifierAskIfNeeded"
   - "explainPipelineErrorForUser"
   - "llmApplyIntentToStep"
@@ -61,7 +62,7 @@ timestamp: "0.8.0-gen"
 
 ## 관계
 - 호출: `applyQwenThinkControl`, `effectiveDevVllmModel`, `effectiveOpenAICompatBaseUrl`, `fetchOpenAICompat`, `openAICompatAuthHeaders`, `stripThink`
-- 피호출(영향 전파 경로): `autoRepairPipelineStep`, `callAssistLLM`, `clarifyVerifierAskIfNeeded`, `explainPipelineErrorForUser`, `llmApplyIntentToStep`, `llmRegroupRecordedSteps`, `llmSplitRecordedVba`
+- 피호출(영향 전파 경로): `autoRepairPipelineStep`, `callAssistLLM`, `chatClassifyQuestionVsSkill`, `clarifyVerifierAskIfNeeded`, `explainPipelineErrorForUser`, `llmApplyIntentToStep`, `llmRegroupRecordedSteps`, `llmSplitRecordedVba`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

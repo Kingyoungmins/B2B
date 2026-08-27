@@ -8,7 +8,7 @@ signature: "()"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
 version: "0.8.0"
-loc: "chat-ui.js:3723-3723"
+loc: "chat-ui.js:3779-3779"
 
 # ── 입출력 ──
 inputs: []
@@ -27,9 +27,12 @@ calls:
   - "addMessage"
   - "appendSameFormatSheetsIntent"
   - "assistIsBusy"
+  - "assistOpenAndAsk"
   - "augmentUserPromptWithMentions"
   - "bindChatHistoryEntryToMessage"
   - "callLLM"
+  - "chatClassifyQuestionVsSkill"
+  - "chatMaybeQuestionNotSkill"
   - "clarifyVerifierAskIfNeeded"
   - "clearDataIntent"
   - "clearViewerDragSelection"
@@ -82,12 +85,14 @@ calls_external:
   - "VBA"
   - "abort"
   - "add_total_row"
+  - "appendChild"
   - "append_same_format_sheets"
   - "book"
   - "clear"
   - "copy_col"
   - "copy_sheet"
   - "copy_values"
+  - "createElement"
   - "debug"
   - "dedupe"
   - "fill_sum_col"
@@ -106,8 +111,6 @@ calls_external:
   - "read"
   - "remove"
   - "rename_sheet"
-  - "setAnswer"
-  - "setReasoning"
 called_by: []
 reads:
   - "state.editingStepId"
@@ -125,7 +128,7 @@ timestamp: "0.8.0-gen"
 - DOM/브라우저 전역 조작
 
 ## 관계
-- 호출: `$`, `add`, `addAssistantReply`, `addMessage`, `appendSameFormatSheetsIntent`, `assistIsBusy`, `augmentUserPromptWithMentions`, `bindChatHistoryEntryToMessage`, `callLLM`, `clarifyVerifierAskIfNeeded`, `clearDataIntent`, `clearViewerDragSelection`, `columnCopyClearIntent`, `columnCopyIntent`, `columnMoveIntent`, `columnSwapIntent`, `conditionalRowDeleteIntent`, `copyValuesIntent`, `ctxHelperPreferredIntent`, `dedupeIntent`, `duplicateRowDeleteIntent`, `escapeHtml`, `exactSheetNameReminder`, `fillSumColIntent`, `filterToNewSheetIntent`, `hideUnhideIntent`, `isThinkModeEnabled`, `lookupJoinIntent`, `matchFillIntent`, `monthShiftIntent`, `multiValueLookupIntent`, `pivotIntent`, `scrollChatToBottom`, `setStatus`, `setupStreamingAssistantMessage`, `shouldRouteRequestToPython`, `shouldRouteRequestToVba`, `shouldRouteSimpleStructureEditToPython`, `showThinkRetryPrompt`, `simpleRangeArithmeticIntent`, `splitColumnIntent`, `toast`, `totalRowIntent`, `userExplicitlyRequestsForceProceed`, `userExplicitlyRequestsPython`, `userExplicitlyRequestsVba`
+- 호출: `$`, `add`, `addAssistantReply`, `addMessage`, `appendSameFormatSheetsIntent`, `assistIsBusy`, `assistOpenAndAsk`, `augmentUserPromptWithMentions`, `bindChatHistoryEntryToMessage`, `callLLM`, `chatClassifyQuestionVsSkill`, `chatMaybeQuestionNotSkill`, `clarifyVerifierAskIfNeeded`, `clearDataIntent`, `clearViewerDragSelection`, `columnCopyClearIntent`, `columnCopyIntent`, `columnMoveIntent`, `columnSwapIntent`, `conditionalRowDeleteIntent`, `copyValuesIntent`, `ctxHelperPreferredIntent`, `dedupeIntent`, `duplicateRowDeleteIntent`, `escapeHtml`, `exactSheetNameReminder`, `fillSumColIntent`, `filterToNewSheetIntent`, `hideUnhideIntent`, `isThinkModeEnabled`, `lookupJoinIntent`, `matchFillIntent`, `monthShiftIntent`, `multiValueLookupIntent`, `pivotIntent`, `scrollChatToBottom`, `setStatus`, `setupStreamingAssistantMessage`, `shouldRouteRequestToPython`, `shouldRouteRequestToVba`, `shouldRouteSimpleStructureEditToPython`, `showThinkRetryPrompt`, `simpleRangeArithmeticIntent`, `splitColumnIntent`, `toast`, `totalRowIntent`, `userExplicitlyRequestsForceProceed`, `userExplicitlyRequestsPython`, `userExplicitlyRequestsVba`
 - 피호출(영향 전파 경로): 없음
 
 ## 실패/예외

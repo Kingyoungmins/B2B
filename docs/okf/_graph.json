@@ -23393,12 +23393,45 @@
       "writes": []
     },
     {
+      "id": "chatMaybeQuestionNotSkill",
+      "module": "chat-ui.js",
+      "lang": "js",
+      "kind": "function",
+      "extraction": "regex",
+      "loc": "chat-ui.js:3736-3736",
+      "signature": "(text)",
+      "calls": [],
+      "side_effects": [
+        "없음(정적 분석 기준)"
+      ],
+      "reads": [],
+      "writes": []
+    },
+    {
+      "id": "chatClassifyQuestionVsSkill",
+      "module": "chat-ui.js",
+      "lang": "js",
+      "kind": "function",
+      "extraction": "regex",
+      "loc": "chat-ui.js:3748-3748",
+      "signature": "(userMessage, options)",
+      "calls": [
+        "buildSheetStructureDigest",
+        "callLLMOneShot"
+      ],
+      "side_effects": [
+        "없음(정적 분석 기준)"
+      ],
+      "reads": [],
+      "writes": []
+    },
+    {
       "id": "sendChat",
       "module": "chat-ui.js",
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "chat-ui.js:3723-3723",
+      "loc": "chat-ui.js:3779-3779",
       "signature": "()",
       "calls": [
         "$",
@@ -23407,9 +23440,12 @@
         "addMessage",
         "appendSameFormatSheetsIntent",
         "assistIsBusy",
+        "assistOpenAndAsk",
         "augmentUserPromptWithMentions",
         "bindChatHistoryEntryToMessage",
         "callLLM",
+        "chatClassifyQuestionVsSkill",
+        "chatMaybeQuestionNotSkill",
         "clarifyVerifierAskIfNeeded",
         "clearDataIntent",
         "clearViewerDragSelection",
@@ -57933,6 +57969,16 @@
       "lang": "js"
     },
     {
+      "from": "chatClassifyQuestionVsSkill",
+      "to": "buildSheetStructureDigest",
+      "lang": "js"
+    },
+    {
+      "from": "chatClassifyQuestionVsSkill",
+      "to": "callLLMOneShot",
+      "lang": "js"
+    },
+    {
       "from": "sendChat",
       "to": "$",
       "lang": "js"
@@ -57964,6 +58010,11 @@
     },
     {
       "from": "sendChat",
+      "to": "assistOpenAndAsk",
+      "lang": "js"
+    },
+    {
+      "from": "sendChat",
       "to": "augmentUserPromptWithMentions",
       "lang": "js"
     },
@@ -57975,6 +58026,16 @@
     {
       "from": "sendChat",
       "to": "callLLM",
+      "lang": "js"
+    },
+    {
+      "from": "sendChat",
+      "to": "chatClassifyQuestionVsSkill",
+      "lang": "js"
+    },
+    {
+      "from": "sendChat",
+      "to": "chatMaybeQuestionNotSkill",
       "lang": "js"
     },
     {
@@ -70444,11 +70505,11 @@
     }
   ],
   "stats": {
-    "functions": 2067,
-    "edges": 5800,
+    "functions": 2069,
+    "edges": 5805,
     "by_lang": {
       "python": 663,
-      "js": 1163,
+      "js": 1165,
       "csharp": 62
     }
   }

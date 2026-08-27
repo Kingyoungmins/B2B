@@ -3720,6 +3720,62 @@ async function clarifyVerifierAskIfNeeded(userMessage, options) {
   return q || null;
 }
 
+// ── [사용자 지시 2026-08-27] "스킬을 만들어 달라"가 아니라 "파일을 봐 달라"는 요청은 AI 도움으로 ──
+//
+// 배경: 사용자가 "C열과 V열에 같은 번호가 있는지 확인해주세요" 처럼 **묻는데**, 생성기 채팅은 그걸
+// 스킬(파일을 고치는 작업)으로 만들려 한다. 사용자가 원한 건 답이지 작업이 아니다.
+// AI 도움은 파일을 직접 열어 보고 답할 수 있으므로, 그런 요청은 그쪽으로 연결한다.
+//
+// 판정 원칙(오탐이 더 나쁘다):
+//   · 실수로 '질문'이라 판단해 스킬 생성을 막으면 → 사용자가 일을 못 한다(나쁨)
+//   · 실수로 '작업'이라 판단하면 → 지금까지의 동작 그대로(견딜 만함)
+//   그래서 값싼 사전검사는 **넉넉하게** 걸러 두고(놓쳐도 종전 동작), 최종 판단만 LLM 이 한다.
+//   LLM 이 실패하거나 애매하면 무조건 '작업'으로 본다.
+
+/* 사전검사 — 결정자가 아니라 'LLM 에게 물어볼 값어치가 있나'만 본다(재현율 위주, 정밀도 아님). */
+function chatMaybeQuestionNotSkill(text) {
+  const s = String(text || "").trim();
+  if (!s || s.length > 400) return false;                 // 긴 사양서는 작업 요청으로 본다
+  if (/@(범위|시트|파일|컬럼)\[/.test(s)) return false;     // 대상을 콕 집었으면 작업
+  // 파일을 '바꾸는' 말이 있으면 작업 — 여기에 걸리면 LLM 을 부르지 않는다(지연 0)
+  if (/(삭제|지워|제거|추가|생성|삽입|만들어|채워|입력|기입|반영|덮어|바꿔|변경|정렬|복사|붙여|이동|옮겨|합쳐|나눠|숨겨|서식|색칠|저장|출력)/.test(s)) return false;
+  // 묻는 꼴 — 물음표, 또는 '있는지/알려/확인/몇/무엇/어떤/왜/뭐' 류
+  return /[?？]\s*$/.test(s)
+    || /(있는지|있나|없는지|없나|맞는지|알려|확인해|확인 좀|보여줘|찾아줘|몇\s*(개|건|명|줄)|무엇|뭐(가|를|야)?|어떤|어디|왜|차이)/.test(s);
+}
+
+/* 최종 판단 — 파일 구조를 근거로 LLM 이 고른다. 실패/애매 = 작업(종전 동작). */
+async function chatClassifyQuestionVsSkill(userMessage, options) {
+  options = options || {};
+  if (typeof callLLMOneShot !== "function") return "skill";
+  let digest = { text: "" };
+  try {
+    const resolveSheet = options.resolveSheet || (typeof _clarifyResolveSheet === "function" ? _clarifyResolveSheet : null);
+    const getAoa = options.getAoa || (typeof _clarifyGetAoa === "function" ? _clarifyGetAoa : null);
+    if (resolveSheet && getAoa && typeof buildSheetStructureDigest === "function") {
+      const sheet = resolveSheet(String(userMessage || ""));
+      digest = buildSheetStructureDigest(options.aoa || getAoa(sheet), sheet) || digest;
+    }
+  } catch (_) {}
+  const sys = [
+    typeof OUTPUT_LANGUAGE_RULE === "string" ? OUTPUT_LANGUAGE_RULE : "",
+    "당신은 사용자의 한 문장이 둘 중 무엇인지만 고르는 분류기입니다. 설명 없이 한 단어만 출력하세요.",
+    "- QUESTION : 파일 내용을 확인·조회·설명해 달라는 것. 파일을 바꿀 필요가 없다.",
+    "             (예: 'C열과 V열에 같은 번호 있나요?', '중복 있는지 봐주세요', '몇 건이에요?')",
+    "- SKILL    : 파일을 바꾸거나 결과물을 만들어 달라는 것.",
+    "             (예: '중복 지워줘', '합계 넣어줘', '정렬해줘', '새 시트로 뽑아줘')",
+    "애매하면 SKILL 을 고르세요. 확인만 하면 되는 게 확실할 때만 QUESTION 입니다.",
+    digest.text ? ("### 대상 시트 구조(참고)\n" + digest.text) : "",
+  ].filter(Boolean).join("\n");
+  let reply = "";
+  try {
+    reply = await callLLMOneShot(sys, String(userMessage || ""), { maxTokens: 8, signal: options.signal });
+  } catch (_) {
+    return "skill";
+  }
+  return /^\s*QUESTION\b/i.test(String(reply || "")) ? "question" : "skill";
+}
+
 async function sendChat() {
   const input = $("chat-text");
   const rawMsg = input.value.trim();
@@ -3750,6 +3806,43 @@ async function sendChat() {
   const userMsgDiv = addMessage("user", rawMsg);
   scrollChatToBottom(true); // 전송 직후에는 위로 스크롤돼 있었어도 바닥으로
   clearViewerDragSelection();
+
+  // [사용자 지시 2026-08-27] 스킬을 만들어 달라는 게 아니라 '파일을 봐 달라'는 질문이면 AI 도움으로 넘긴다.
+  // AI 도움은 파일을 직접 열어 확인하고 답할 수 있다 — 여기서 스킬로 만들면 사용자가 원한 답이 안 나온다.
+  // 수정 모드/보충 답변 중에는 하지 않는다(그 흐름을 끊으면 안 된다).
+  if (!editTargetId && !clarifyPending && !window.__b2bForceSkillOnce
+      && typeof chatMaybeQuestionNotSkill === "function" && chatMaybeQuestionNotSkill(rawMsg)) {
+    const thinking = addMessage("assistant", "🔎 확인만 하면 되는 질문인지 보는 중…", {});
+    thinking.classList.add("streaming");
+    scrollChatToBottom();
+    let kind = "skill";
+    try { kind = await chatClassifyQuestionVsSkill(msg); } catch (_) { kind = "skill"; }
+    thinking.remove();
+    if (kind === "question") {
+      const div = addMessage("assistant", "", {});
+      div.innerHTML = '<div>파일을 직접 열어 확인해야 하는 질문이라, <b>AI 도움</b>으로 넘겼습니다. '
+        + '거기서 답을 드립니다.</div>'
+        + '<div style="font-size:11px;color:#888;margin-top:6px">파일을 바꾸는 작업을 원하신 거라면 아래 버튼을 눌러 주세요.</div>';
+      const actions = document.createElement("div");
+      actions.className = "action-btns";
+      const again = document.createElement("button");
+      again.className = "action-btn";
+      again.textContent = "그래도 스킬로 만들기";
+      again.onclick = () => {
+        again.disabled = true;
+        window.__b2bForceSkillOnce = true;        // 이번 한 번만 판정을 건너뛴다
+        const box = $("chat-text");
+        if (box) { box.value = rawMsg; sendChat(); }
+      };
+      actions.appendChild(again);
+      div.appendChild(actions);
+      scrollChatToBottom();
+      try { if (typeof assistOpenAndAsk === "function") assistOpenAndAsk(rawMsg); } catch (_) {}
+      window.__b2bChatInFlight = false;
+      return;
+    }
+  }
+  window.__b2bForceSkillOnce = false;   // 한 번 쓰고 반드시 되돌린다(다음 질문은 다시 판정)
 
   // [검증 에이전트] 수정 모드/보충 답변/강제 진행이 아니고, 질의가 모호해 보이면 한 번만 정확히 되묻는다.
   {

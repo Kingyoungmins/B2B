@@ -36,6 +36,7 @@ calls_external:
   - "startsWith"
   - "test"
 called_by:
+  - "chatClassifyQuestionVsSkill"
   - "clarifyVerifierAskIfNeeded"
   - "explainPipelineErrorForUser"
 reads: []
@@ -52,7 +53,7 @@ aoa → { text, hasLandmarks, totalRows[] }. 순수 함수(테스트 가능).
 
 ## 관계
 - 호출: `_clarifyCellText`, `_clarifyRowHasNumber`, `_clarifyRowLeftLabel`, `push`
-- 피호출(영향 전파 경로): `clarifyVerifierAskIfNeeded`, `explainPipelineErrorForUser`
+- 피호출(영향 전파 경로): `chatClassifyQuestionVsSkill`, `clarifyVerifierAskIfNeeded`, `explainPipelineErrorForUser`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

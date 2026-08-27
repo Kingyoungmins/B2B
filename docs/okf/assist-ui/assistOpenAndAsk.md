@@ -36,6 +36,7 @@ calls_external:
   - "trim"
 called_by:
   - "reportPipelineError"
+  - "sendChat"
   - "showRunnerPipelineError"
 reads: []
 writes: []
@@ -51,7 +52,7 @@ timestamp: "0.8.0-gen"
 
 ## 관계
 - 호출: `assistEnsureNativeBridge`, `assistNativeShellAvailable`, `assistPostToHost`, `assistSendToPopup`, `assistStartFreshTopicForDiagnosis`, `assistSubmit`, `assistToggleDrawer`
-- 피호출(영향 전파 경로): `reportPipelineError`, `showRunnerPipelineError`
+- 피호출(영향 전파 경로): `reportPipelineError`, `sendChat`, `showRunnerPipelineError`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`
