@@ -8,7 +8,7 @@ signature: "(app, context_wb)"
 role: "Create a local temporary .xlsm workbook used only to host injected VBA."
 role_source: docstring
 version: "0.8.0"
-loc: "serve_b2b.py:9158-9219"
+loc: "serve_b2b.py:9206-9267"
 
 # ── 입출력 ──
 inputs:

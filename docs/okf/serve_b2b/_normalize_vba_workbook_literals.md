@@ -8,7 +8,7 @@ signature: "(app, code)"
 role: "Patch workbook filename string literals to the actual open workbook name."
 role_source: docstring
 version: "0.8.0"
-loc: "serve_b2b.py:8986-9026"
+loc: "serve_b2b.py:9034-9074"
 
 # ── 입출력 ──
 inputs:

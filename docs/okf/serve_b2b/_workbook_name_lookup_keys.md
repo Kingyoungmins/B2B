@@ -8,7 +8,7 @@ signature: "(value)"
 role: "Return conservative lookup keys for workbook-name resolution."
 role_source: docstring
 version: "0.8.0"
-loc: "serve_b2b.py:8757-8795"
+loc: "serve_b2b.py:8805-8843"
 
 # ── 입출력 ──
 inputs:

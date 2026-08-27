@@ -8,7 +8,7 @@ signature: "(wb)"
 role: "Return True when the target workbook is not a reliable VBA host."
 role_source: docstring
 version: "0.8.0"
-loc: "serve_b2b.py:9129-9144"
+loc: "serve_b2b.py:9177-9192"
 
 # ── 입출력 ──
 inputs:

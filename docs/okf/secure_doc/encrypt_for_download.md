@@ -8,7 +8,7 @@ signature: "(data, filename, workbook_id='')"
 role: "다운로드 직전 보안 재적용. 실패는 SecureDocError — 부르는 쪽이 다운로드를 중단한다."
 role_source: docstring
 version: "0.8.0"
-loc: "secure_doc.py:516-524"
+loc: "secure_doc.py:550-558"
 
 # ── 입출력 ──
 inputs:

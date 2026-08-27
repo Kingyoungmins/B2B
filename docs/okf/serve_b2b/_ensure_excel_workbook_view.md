@@ -8,7 +8,7 @@ signature: "(app, wb=None, make_visible=True, activate=True, maximize_workbook=T
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
 version: "0.8.0"
-loc: "serve_b2b.py:4081-4130"
+loc: "serve_b2b.py:4129-4178"
 
 # ── 입출력 ──
 inputs:

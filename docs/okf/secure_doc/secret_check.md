@@ -8,7 +8,7 @@ signature: "(data, filename)"
 role: "비밀문서인가 — drmSecretAPI. 반환 \"S_DOC\" / \"N_DOC\" / \"\" (판단 못 함)."
 role_source: docstring
 version: "0.8.0"
-loc: "secure_doc.py:243-264"
+loc: "secure_doc.py:246-267"
 
 # ── 입출력 ──
 inputs:

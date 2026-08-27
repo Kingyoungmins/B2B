@@ -8,7 +8,7 @@ signature: "(app, path, read_only=False, intended_name=None)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
 version: "0.8.0"
-loc: "serve_b2b.py:3176-3236"
+loc: "serve_b2b.py:3201-3274"
 
 # ── 입출력 ──
 inputs:
@@ -23,6 +23,7 @@ side_effects:
   - "Excel COM 조작(파괴적일 수 있음)"
   - "파일시스템 변경/IO"
 raises:
+  - "ProtectedDocumentError"
   - "RuntimeError"
 
 # ── 유기적 관계 ──
@@ -30,9 +31,11 @@ calls:
   - "_stash_workbook_name_alias"
   - "append"
   - "excel_compatible_open_path"
+  - "protected_open_reason"
 calls_external:
   - "Open"
   - "Path"
+  - "ProtectedDocumentError"
   - "RuntimeError"
   - "app"
   - "bool"
@@ -71,8 +74,9 @@ timestamp: "0.8.0-gen"
 - 파일시스템 변경/IO
 
 ## 관계
-- 호출: `_stash_workbook_name_alias`, `append`, `excel_compatible_open_path`
+- 호출: `_stash_workbook_name_alias`, `append`, `excel_compatible_open_path`, `protected_open_reason`
 - 피호출(영향 전파 경로): `PythonComSkillContext.copy_sheet`, `PythonComSkillContext.paste_copied`, `_copy_source_workbook_into_target`, `_ensure_companion_workbooks`, `_open_excel_session_impl`, `_open_excel_workbook_for_skill`, `_reopen_excel_session_workbook`, `_replace_excel_session_workbook_impl`, `_run_full_pipeline_single_instance_impl`, `_setup_isolated_pipeline_instance`, `inspect_workbook_with_excel`, `load_workbook_aoa_with_excel`
 
 ## 실패/예외
+- `ProtectedDocumentError`
 - `RuntimeError`

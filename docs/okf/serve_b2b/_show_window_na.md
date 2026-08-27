@@ -8,7 +8,7 @@ signature: "(hwnd)"
 role: "창을 활성화 없이 표시(SW_SHOWNA). 포커스는 현재 창(호스트)에 그대로 남는다."
 role_source: docstring
 version: "0.8.0"
-loc: "serve_b2b.py:4572-4582"
+loc: "serve_b2b.py:4620-4630"
 
 # ── 입출력 ──
 inputs:

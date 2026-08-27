@@ -8,7 +8,7 @@ signature: "(force=False)"
 role: "릴레이 서버의 DRM 설정 상태(/v1/drm/health). 실패/미설정이면 기능이 조용히 꺼진 것처럼 동작."
 role_source: docstring
 version: "0.8.0"
-loc: "secure_doc.py:126-150"
+loc: "secure_doc.py:129-153"
 
 # ── 입출력 ──
 inputs:

@@ -3125,6 +3125,31 @@ def sniff_text_excel_suffix(path):
     return None
 
 
+class ProtectedDocumentError(RuntimeError):
+    """아직 보안이 걸려 있는 문서 — Excel 에 넘기면 안 된다."""
+
+
+def protected_open_reason(path):
+    """Excel 이 못 열었을 때, 그 원인이 '보안 문서라서' 인지 알려 준다. 아니면 "".
+
+    **여는 것을 막지 않는다.** 한때 미리 막았다가 되돌렸다 — 사내 PC 에는 DRM 에이전트가 있어
+    Excel 이 열려는 순간 에이전트가 대신 풀어 준다. 우리가 앞에서 막으면 **원래 잘 되던 것까지
+    못 하게 된다**(사용자 지적 2026-08-27). 그러니 일단 열어 보고, 정말 실패했을 때만 쓴다.
+
+    왜 필요한가: 해제 실패한 사내 DRM 문서를 Excel 이 못 열면
+    "파일 형식 또는 파일 확장명이 잘못되어 … 파일이 손상되지 않았는지 확인하십시오" 가 뜬다.
+    파일은 멀쩡한데 **사용자는 파일이 깨진 줄 안다** — 원인과 한참 먼 메시지다.
+    """
+    kind = _file_label_kind(path)
+    if kind == "vendor-drm":
+        return ("이 파일은 사내 DRM 으로 보호돼 있습니다. 보안 해제 서버에 연결되면 열 수 있습니다."
+                " (파일이 손상된 것이 아닙니다)")
+    if kind == "encrypted":
+        return ("이 파일은 보안(암호화)이 걸려 있습니다. 보안 해제 서버에 연결되면 열 수 있습니다."
+                " (파일이 손상된 것이 아닙니다)")
+    return ""
+
+
 def excel_compatible_open_path(path):
     path = Path(path)
     suffix = path.suffix.lower()
@@ -3205,6 +3230,13 @@ def excel_workbooks_open(app, path, read_only=False, intended_name=None):
         {"UpdateLinks": 0, "ReadOnly": bool(read_only), "IgnoreReadOnlyRecommended": True},
     ]
     errors = []
+    # 보안 문서라서 못 여는 경우 Excel 은 '파일이 손상됐다' 고 말한다 — 그 오해를 바로잡으려고
+    # 미리 이유를 준비해 둔다(막지는 않는다 — DRM 에이전트가 열어 줄 수 있다).
+    _protected_why = ""
+    try:
+        _protected_why = protected_open_reason(path)
+    except Exception:
+        pass
     for kwargs in attempts:
         try:
             wb = app.Workbooks.Open(str(open_path), **kwargs)
@@ -3233,6 +3265,12 @@ def excel_workbooks_open(app, path, read_only=False, intended_name=None):
             Path(temp_path).unlink(missing_ok=True)
         except Exception:
             pass
+    # [사용자 지시 2026-08-27] 막지 말고 일단 열어 본다 — 사내 PC 는 DRM 에이전트가 대신
+    # 풀어 주므로 대개 열린다. 여기까지 왔다는 건 **정말 못 열었다**는 뜻이고, 그때 Excel 은
+    # "파일이 손상되지 않았는지 확인하십시오" 라고 한다. 파일은 멀쩡한데 사용자는 깨진 줄 안다.
+    if _protected_why:
+        raise ProtectedDocumentError(
+            "%s (Excel 원문: %s)" % (_protected_why, str(errors[-1])[:160] if errors else "없음"))
     raise errors[-1] if errors else RuntimeError(f"failed to open workbook: {path}")
 
 
@@ -3799,7 +3837,7 @@ def _protect_sheet_for_read_only_mirror(ws):
 
 def _protection_rank(kind):
     """보호 강도 순위. 낮아지면 보호가 약해진 것이다."""
-    return {"encrypted": 3, "label": 2, "none": 1, "legacy-ole": 1}.get(kind or "", 0)
+    return {"encrypted": 3, "vendor-drm": 3, "label": 2, "none": 1, "legacy-ole": 1}.get(kind or "", 0)
 
 
 def _check_protection_loss(where, src_path, out_path, **extra):
@@ -3863,7 +3901,9 @@ def _file_label_evidence(path, tries=3, wait=0.15):
                 out["sha"] = h.hexdigest()[:12]
             except Exception:
                 pass
-            if head[:4] == b"\xd0\xcf\x11\xe0":
+            if head[:5] == VENDOR_DRM_MAGIC:
+                out["inside"] = "사내 DRM 컨테이너(%s)" % head[:8].decode("ascii", "replace")
+            elif head[:4] == b"\xd0\xcf\x11\xe0":
                 names = _ole_directory_stream_names(path)
                 out["inside"] = ",".join(sorted(n.strip("\x00\x01\x02\x03\x04\x05\x06")
                                                 for n in (names or []))[:10])[:200]
@@ -3884,6 +3924,9 @@ def _file_label_evidence(path, tries=3, wait=0.15):
         if attempt + 1 < tries:
             time.sleep(wait)                 # 쓰기 직후 잠금은 대개 곧 풀린다
     return out
+
+
+VENDOR_DRM_MAGIC = b"SCDSA"          # 사내 DRM 컨테이너 서명(실측: "SCDSA004")
 
 
 def _file_label_kind(path):
@@ -3911,6 +3954,11 @@ def _file_label_kind(path):
             except Exception:
                 return ""
             return "none"
+        if head[:5] == VENDOR_DRM_MAGIC:
+            # [실측 2026-08-27] 사내 DRM 컨테이너. 업로드 증거 로그의 magic 에서 확인했다
+            # (5343445341303034 = "SCDSA004"). OLE 도 zip 도 아니라 예전엔 ""(모름)이 됐고,
+            # ""는 보호 등급 0 이라 **보호 소실 감지기가 이 종류에는 안 걸렸다** — 정작 샜던 그 종류다.
+            return "vendor-drm"
         if head[:4] == b"\xd0\xcf\x11\xe0":
             # OLE 복합문서 — 구형 .xls 이거나, 암호화된 OOXML(라벨이 암호화를 걸면 이 모양이 된다).
             # 확장자로 찍으면 틀린다(암호화본을 .xls 로 복사해 여는 경로가 있었다) → 내용으로 본다.

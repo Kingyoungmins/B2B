@@ -8,7 +8,7 @@ signature: "(path)"
 role: "[진단 계측 2026-08-12] 이 파일에 사내 보안 라벨(MIP)이 붙었는지 한 줄로 판별한다."
 role_source: docstring
 version: "0.8.0"
-loc: "serve_b2b.py:3889-3920"
+loc: "serve_b2b.py:3932-3968"
 
 # ── 입출력 ──
 inputs:
@@ -41,7 +41,9 @@ called_by:
   - "_run_full_pipeline_single_instance_impl"
   - "_run_vba_pipeline_on_session_impl"
   - "_save_excel_session_impl"
-reads: []
+  - "protected_open_reason"
+reads:
+  - "VENDOR_DRM_MAGIC"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
 timestamp: "0.8.0-gen"
@@ -55,7 +57,7 @@ timestamp: "0.8.0-gen"
 
 ## 관계
 - 호출: `is_encrypted_ooxml`, `read`
-- 피호출(영향 전파 경로): `B2BHandler.handle_workbook_upload`, `_file_label_evidence`, `_replace_excel_session_workbook_impl`, `_run_full_pipeline_single_instance_impl`, `_run_vba_pipeline_on_session_impl`, `_save_excel_session_impl`
+- 피호출(영향 전파 경로): `B2BHandler.handle_workbook_upload`, `_file_label_evidence`, `_replace_excel_session_workbook_impl`, `_run_full_pipeline_single_instance_impl`, `_run_vba_pipeline_on_session_impl`, `_save_excel_session_impl`, `protected_open_reason`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

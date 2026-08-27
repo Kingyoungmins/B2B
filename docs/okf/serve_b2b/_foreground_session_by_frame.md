@@ -8,7 +8,7 @@ signature: "()"
 role: "포그라운드 창이 우리 라이브 세션 프레임이면 그 세션을 반환."
 role_source: docstring
 version: "0.8.0"
-loc: "serve_b2b.py:7127-7149"
+loc: "serve_b2b.py:7175-7197"
 
 # ── 입출력 ──
 inputs: []

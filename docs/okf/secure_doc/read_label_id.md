@@ -8,7 +8,7 @@ signature: "(path_or_bytes)"
 role: "보호 문서 안에 적힌 **원본 라벨 GUID** 를 읽는다. 못 찾으면 \"\"."
 role_source: docstring
 version: "0.8.0"
-loc: "secure_doc.py:457-481"
+loc: "secure_doc.py:476-500"
 
 # ── 입출력 ──
 inputs:
@@ -36,7 +36,7 @@ calls_external:
   - "search"
   - "wide"
 called_by:
-  - "maybe_decrypt_upload"
+  - "source_label_for_restore"
 reads:
   - "_LABEL_RE"
 writes: []
@@ -52,7 +52,7 @@ timestamp: "0.8.0-gen"
 
 ## 관계
 - 호출: `raw`
-- 피호출(영향 전파 경로): `maybe_decrypt_upload`
+- 피호출(영향 전파 경로): `source_label_for_restore`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

@@ -8,7 +8,7 @@ signature: "()"
 role: "지금 보안 해제/적용을 시도할 수 있는 상태인가(기능 켜짐 + 서버에 키 설정됨)."
 role_source: docstring
 version: "0.8.0"
-loc: "secure_doc.py:153-159"
+loc: "secure_doc.py:156-162"
 
 # ── 입출력 ──
 inputs: []

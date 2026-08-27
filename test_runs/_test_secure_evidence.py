@@ -29,12 +29,12 @@ def check(name, cond, detail=""):
 # serve_b2b 전체 import 는 무겁다 — 필요한 함수만 떼어 실행한다.
 text = io.open(ROOT / "serve_b2b.py", encoding="utf-8-sig").read()
 traced = []
-ns = {"Path": Path, "zipfile": zipfile, "time": time,
+ns = {"Path": Path, "zipfile": zipfile, "time": time, "VENDOR_DRM_MAGIC": b"SCDSA",
       "_vba_trace": lambda ev, **kw: traced.append((ev, kw))}
 for fn in ("_ole_directory_stream_names", "_ole_office_verdict", "is_encrypted_ooxml",
            "_protection_rank", "_check_protection_loss", "_file_label_evidence",
-           "_file_label_kind"):
-    m = re.search(r"^def %s\(.*?(?=^def |\Z)" % re.escape(fn), text, re.S | re.M)
+           "_file_label_kind", "protected_open_reason"):
+    m = re.search(r"^def %s\(.*?(?=^def |^class |\Z)" % re.escape(fn), text, re.S | re.M)
     if not m:
         print("  FAIL  함수를 찾지 못함: " + fn)
         sys.exit(1)
@@ -112,6 +112,46 @@ up = re.search(r'_sec_payload\["skipped"\].{0,400}', text, re.S).group(0)
 check("unknown 과 plain 을 가른다", "unknown-treated-as-plain" in text, up[:200])
 check("경고 문구를 함께 남긴다", "보안 루트를 건너뛰었습니다" in text)
 check("업로드 증거를 실어 보낸다", '"sha12": _ev.get("sha")' in text or "sha12" in text)
+
+print("")
+print("[6] 사내 DRM(SCDSA)을 이름 붙여 인식한다 — 등급 0 이면 감지기가 안 걸린다")
+# [실측 2026-08-27] 예전엔 이 컨테이너가 ""(모름)이었다. ""는 보호 등급 0 이라
+# **보호 소실 감지기가 이 종류에는 아예 안 걸렸다** — 정작 샜던 그 종류다.
+vendor = work / "vendor.xlsx"
+vendor.write_bytes(b"SCDSA004" + b"\x00" * 200)
+ev = ns["_file_label_evidence"](str(vendor))
+check("vendor-drm 으로 판정", ev["kind"] == "vendor-drm", ev)
+check("무슨 컨테이너인지 남긴다", "사내 DRM" in (ev["inside"] or ""), ev)
+check("보호 등급이 암호화와 같다", ns["_protection_rank"]("vendor-drm") == ns["_protection_rank"]("encrypted"))
+check("모름(\"\")보다 높다", ns["_protection_rank"]("vendor-drm") > ns["_protection_rank"](""))
+
+traced.clear()
+ns["_check_protection_loss"]("테스트", str(vendor), str(plain), name="v.xlsx")
+lost2 = [kw for ev_, kw in traced if ev_ == "secure.protection.lost"]
+check("사내 DRM → 평문 이면 잡아낸다(원래 사고 재현)", len(lost2) == 1, traced)
+if lost2:
+    check("원본을 vendor-drm 으로 적는다", lost2[0]["srcLabel"] == "vendor-drm", lost2[0])
+
+print("")
+print("[7] 일단 열어 본다 — 못 열렸을 때만 이유를 사람 말로")
+# [실측 2026-08-27] 해제에 실패한 사내 DRM 문서를 그대로 Excel 에 넘겼더니
+# "파일 형식 또는 파일 확장명이 잘못되어 … 손상되지 않았는지 확인하십시오" 가 떴다.
+# 파일은 멀쩡한데 사용자는 파일이 깨진 줄 안다 — 원인과 한참 먼 메시지다.
+# (DRM 에이전트가 깔린 PC 에서는 열리므로 환경에 따라 되기도 안 되기도 해서 더 헷갈린다)
+why = ns["protected_open_reason"](str(vendor))
+check("사내 DRM 이면 이유를 알려 준다", bool(why), why)
+check("무엇 때문인지 말한다", "사내 DRM" in why, why)
+check("손상이 아니라고 못 박는다", "손상된 것이 아닙니다" in why, why)
+check("언제 열리는지도 말한다", "연결되면 열 수 있습니다" in why, why)
+check("평문은 막지 않는다", ns["protected_open_reason"](str(plain)) == "")
+check("라벨만 붙은 파일도 막지 않는다(열 수 있다)", ns["protected_open_reason"](str(labeled)) == "")
+# [사용자 지시 2026-08-27] 미리 막지 않는다 — 사내 PC 는 DRM 에이전트가 대신 풀어 주므로
+# 앞에서 막으면 **원래 잘 되던 것까지 못 하게 된다**. 일단 열어 보고 실패했을 때만 쓴다.
+check("여는 것을 미리 막지 않는다",
+      "raise ProtectedDocumentError(_blocked)" not in text, "가드가 다시 들어왔다")
+check("정말 실패했을 때만 메시지를 바꾼다",
+      "if _protected_why:" in text and "Excel 원문" in text)
+check("Excel 원문도 함께 남긴다(진단용)", "str(errors[-1])" in text)
 
 import shutil
 shutil.rmtree(work, ignore_errors=True)

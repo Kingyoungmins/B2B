@@ -8,7 +8,7 @@ signature: "(value)"
 role: "[제보 2026-08-27] '셀 값'을 비교할 때 쓰는 정규화."
 role_source: docstring
 version: "0.8.0"
-loc: "serve_b2b.py:3319-3345"
+loc: "serve_b2b.py:3357-3383"
 
 # ── 입출력 ──
 inputs:

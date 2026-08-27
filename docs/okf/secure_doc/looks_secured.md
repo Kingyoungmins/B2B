@@ -8,7 +8,7 @@ signature: "(head, name='', encrypted_checker=None, path=None)"
 role: "작업본이 보안문서로 '보이는가' — 최종 판정은 Gateway(-200)가 한다."
 role_source: docstring
 version: "0.8.0"
-loc: "secure_doc.py:318-380"
+loc: "secure_doc.py:328-395"
 
 # ── 입출력 ──
 inputs:
@@ -36,7 +36,8 @@ calls_external:
   - "path"
 called_by:
   - "maybe_decrypt_upload"
-reads: []
+reads:
+  - "VENDOR_DRM_MAGIC"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
 timestamp: "0.8.0-gen"

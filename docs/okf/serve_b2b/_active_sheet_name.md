@@ -8,7 +8,7 @@ signature: "(wb, prefer_workbook=False)"
 role: "활성 시트 '이름만' — 풀스냅샷 없이. 라이브 폴링 경량 경로용."
 role_source: docstring
 version: "0.8.0"
-loc: "serve_b2b.py:16412-16433"
+loc: "serve_b2b.py:16460-16481"
 
 # ── 입출력 ──
 inputs:

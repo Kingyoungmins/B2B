@@ -113,13 +113,16 @@ def config():
         "apiKey": key,
         "account": _env("B2B_SECURE_DOC_ACCOUNT") or default_account(),
         "timeout": max(10.0, min(600.0, timeout)),
-        # [사용자 설계 2026-08-27] 로컬 판정이 틀려서 보안문서가 평문으로 샌 적이 있다
-        # (앞 4바이트만 보고 통과). 그래서 기본값은 **어떤 문서든 게이트웨이에 물어보기** 다.
-        # 로컬 판정은 '확실히 평문' 을 걸러 왕복을 아끼는 용도로만 남긴다.
-        "alwaysAsk": _env("B2B_SECURE_DOC_ALWAYS_ASK", "1").lower() not in {"0", "off", "false", "no"},
-        # 비밀등급 문서는 규격상 해제가 거부된다(-200) — 미리 물어 사용자에게 이유를 준다.
-        "secretPrecheck": _env("B2B_SECURE_DOC_SECRET_CHECK", "1").lower()
-                          not in {"0", "off", "false", "no"},
+        # [실측 2026-08-27] 한때 기본값을 '어떤 문서든 게이트웨이에 물어보기' 로 뒀다가,
+        # **이미 보안 해제된 평문 파일까지 drmSecretAPI/drmDecryptAPI 를 찔렀다**(사용자 확인).
+        # 평문에 대고 해제를 부르는 건 확인이 아니라 그냥 시도다 — 게이트웨이도, 사용자도
+        # 헷갈린다. 로컬 판정의 구멍(앞 4바이트만 보던 것)은 별도로 막았으므로, 기본은 끈다.
+        # 켜야 할 상황(로컬 판정을 못 믿는 환경)에서는 환경변수로 올린다.
+        "alwaysAsk": _env("B2B_SECURE_DOC_ALWAYS_ASK", "0").lower() in {"1", "on", "true", "yes"},
+        # 비밀등급은 해제 응답의 -200 메시지로도 알 수 있다(규격 3장) — 왕복을 두 번 하지 않는다.
+        # 파일을 두 번 올리는 비용이 크고, 얻는 정보는 같다.
+        "secretPrecheck": _env("B2B_SECURE_DOC_SECRET_CHECK", "0").lower()
+                          in {"1", "on", "true", "yes"},
     }
 
 
@@ -273,10 +276,14 @@ def decrypt_bytes(data, filename):
                         extra_form={"requestorAccount": cfg["account"]})
         return True, out
     except SecureDocError as err:
-        # [-200 분기] 규격상 '대상 아님'도 '등록 안 된 사용자'도 같은 -200 이라 메시지로 가른다.
-        # TODO: 규격 확인 필요 — 세부 코드가 생기면 문자열 매칭을 걷어낸다.
+        # [-200 분기] 규격상 '대상 아님'도 '비밀문서'도 '등록 안 된 사용자'도 같은 -200 이라
+        # 메시지로 가른다. TODO: 세부 코드가 생기면 문자열 매칭을 걷어낸다.
         if err.result == "-200" and ("대상" in err.result_msg):
             return False, bytes(data)
+        if err.result == "-200" and ("비밀문서" in err.result_msg):
+            # [규격 3장] 비밀등급은 해제가 거부된다. 이 한 줄이면 알 수 있으므로 선행 확인을
+            # 위해 파일을 한 번 더 올리지 않는다(왕복 1회로 같은 정보).
+            err.secret = True
         raise
 
 
@@ -293,6 +300,9 @@ def encrypt_bytes(data, filename, label_id=""):
 
 
 # ── 업로드 훅 ─────────────────────────────────────────────────────────────
+
+VENDOR_DRM_MAGIC = b"SCDSA"          # 사내 DRM 컨테이너 서명(실측: "SCDSA004")
+
 
 def _is_readable_office_zip(path):
     """정말 열리는 Office 문서(zip)인가 — 헤더만 PK 인 것과 가른다.
@@ -324,6 +334,11 @@ def looks_secured(head, name="", encrypted_checker=None, path=None):
       · 그 외        → 텍스트(csv 등)면 아니다, 알 수 없는 바이너리(pfile 등)면 그렇다고 보고 시도
     확장자 규칙은 쓰지 않는다(연동규격에 없음 — 내용으로만 본다)."""
     head = bytes(head or b"")
+    if head[:5] == VENDOR_DRM_MAGIC:
+        # [실측 2026-08-27] 사내 DRM 컨테이너("SCDSA004"). 전부 인쇄 가능한 ASCII 라 아래
+        # '제어문자가 있으면 바이너리' 규칙에 안 걸려 **텍스트로 오인돼 그냥 통과**했다.
+        # 이게 보안 문서가 평문으로 샌 원래 원인이다 — 서명으로 못 박는다.
+        return True
     if head[:4] == b"PK\x03\x04":
         # [실측 2026-08-27] 예전엔 앞 4바이트가 PK 면 **무조건** 평문으로 통과시켰다.
         # 그런데 사고 로그의 그 파일은 PK 로 시작하면서 zip 으로는 안 열렸다(판정이 "" 로 빠짐).
@@ -434,7 +449,7 @@ def maybe_decrypt_upload(path, name, encrypted_checker=None):
         # 평문으로 나간다. 이 모듈의 존재 이유("평문으로 새면 안 된다")가 그 한 순서에 무너진다.
         # 마커가 실패하면 원본을 그대로 두고 released:False 로 물러난다(안전한 쪽 실패).
         Path(str(p) + MARKER_SUFFIX).write_text("secured-source", encoding="utf-8")
-        _label = read_label_id(data)          # 평문으로 바꾸기 **전에** 읽어야 한다
+        _label = source_label_for_restore(data)   # 평문으로 바꾸기 **전에** 읽어야 한다
         p.write_bytes(out)
         with _LOCK:
             _STATE["releasedCount"] += 1
@@ -444,6 +459,10 @@ def maybe_decrypt_upload(path, name, encrypted_checker=None):
     except SecureDocError as err:
         with _LOCK:
             _STATE["lastError"] = str(err)
+        if getattr(err, "secret", False):
+            return {"checked": True, "released": False, "secret": True,
+                    "error": "비밀등급 문서라 보안 해제를 할 수 없습니다"
+                             " (규격상 비밀문서는 처리 미지원)"}
         return {"checked": True, "released": False, "error": str(err)}
     except Exception as err:
         with _LOCK:
@@ -479,6 +498,21 @@ def read_label_id(path_or_bytes):
         except Exception:
             m = None
     return m.group(1).decode("ascii", "ignore").lower() if m else ""
+
+
+def source_label_for_restore(data):
+    """이 원본을 되돌릴 때 쓸 라벨 값. 못 정하면 "" (게이트웨이 기본값).
+
+    [실측 2026-08-27] 사내 DRM 컨테이너(SCDSA…)는 MS RMS 가 아니라 자체 포맷이라
+    XrML 라벨 GUID 가 없다. 그대로 두면 되돌릴 때 게이트웨이 기본 라벨(AIP)이 붙어
+    **사내 DRM 이던 문서가 AIP 로 바뀐다** — 보호 방식이 조용히 달라지는 셈이다.
+    규격 2.3 의 labelid=DRM(강제 DRM 암호화)이 정확히 이 경우를 위한 값이다.
+    서명으로 원본이 사내 DRM 이었음을 확실히 아는 경우에만 쓴다(추측하지 않는다).
+    """
+    raw = bytes(data or b"")
+    if raw[:5] == VENDOR_DRM_MAGIC:
+        return "DRM"                       # 규격 2.3: labelid=DRM → 강제 DRM 암호화
+    return read_label_id(raw)              # AIP/RMS 는 문서 안의 라벨 GUID 그대로
 
 
 def remember_label(workbook_id, label_id):

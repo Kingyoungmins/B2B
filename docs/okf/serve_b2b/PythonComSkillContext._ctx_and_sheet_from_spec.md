@@ -9,7 +9,7 @@ signature: "(self, sheet_spec)"
 role: "Resolve \"workbook.xlsx!Sheet1\" into a context + sheet name."
 role_source: docstring
 version: "0.8.0"
-loc: "serve_b2b.py:12772-12798"
+loc: "serve_b2b.py:12820-12846"
 
 # ── 입출력 ──
 inputs:

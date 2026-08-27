@@ -9,7 +9,7 @@ signature: "(self, src_sheet, src_key_col, src_val_col, dst_sheet, dst_key_col, 
 role: "키 매칭 합산(교차/동일 파일): src 의 (키→값)을 모은 뒤, dst 각 행의 키에 해당하는 값을 합산해"
 role_source: docstring
 version: "0.8.0"
-loc: "serve_b2b.py:14475-14527"
+loc: "serve_b2b.py:14523-14575"
 
 # ── 입출력 ──
 inputs:

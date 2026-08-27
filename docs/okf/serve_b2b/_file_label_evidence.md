@@ -8,7 +8,7 @@ signature: "(path, tries=3, wait=0.15)"
 role: "이 파일이 '그때 어떤 모양이었는지'를 증거로 남긴다 — 원본을 못 꺼내는 환경을 위해."
 role_source: docstring
 version: "0.8.0"
-loc: "serve_b2b.py:3833-3886"
+loc: "serve_b2b.py:3871-3926"
 
 # ── 입출력 ──
 inputs:
@@ -33,6 +33,7 @@ calls_external:
   - "Path"
   - "ZipFile"
   - "chunk"
+  - "decode"
   - "err"
   - "hex"
   - "hexdigest"
@@ -58,7 +59,8 @@ called_by:
   - "B2BHandler.handle_workbook_upload"
   - "_check_protection_loss"
   - "_save_excel_session_impl"
-reads: []
+reads:
+  - "VENDOR_DRM_MAGIC"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
 timestamp: "0.8.0-gen"

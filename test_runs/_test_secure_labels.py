@@ -71,13 +71,28 @@ check("모르면 labelid 를 안 넘긴다(게이트웨이 기본값)", "labelid
 sd._post_drm = _saved
 
 print("")
+print("[2-2] 사내 DRM 원본은 사내 DRM 으로 되돌린다(AIP 로 바뀌지 않게)")
+# [실측 2026-08-27] SCDSA 컨테이너는 MS RMS 가 아니라 라벨 GUID 가 없다. 그대로 두면
+# 되돌릴 때 게이트웨이 기본 라벨(AIP)이 붙어 **보호 방식이 조용히 바뀐다**.
+# 규격 2.3 의 labelid=DRM 이 이 경우를 위한 값이고, 서명으로 확실히 아는 경우에만 쓴다.
+NUL = b"\x00"
+check("SCDSA 원본이면 DRM 으로",
+      sd.source_label_for_restore(b"SCDSA004" + NUL * 100) == "DRM")
+check("RMS 원본이면 문서의 라벨 GUID 그대로",
+      sd.source_label_for_restore(b"\xd0\xcf\x11\xe0" + XRML.encode("ascii")) == LABEL)
+check("아무것도 못 읽으면 빈 값(게이트웨이 기본값)",
+      sd.source_label_for_restore(b"PK\x03\x04" + NUL * 40) == "")
+check("추측하지 않는다 — 서명이 있을 때만 DRM",
+      sd.source_label_for_restore(b"SCDX0000" + NUL * 40) != "DRM")
+
+print("")
 print("[3] DRM/AIP 를 추측하지 않는다")
 src = io.open(ROOT / "secure_doc.py", encoding="utf-8-sig").read()
 # 주석에는 "labelid=DRM 은 하지 않는다" 라고 적혀 있으므로, **코드에서 쓰는지**만 본다.
 code_only = re.sub(r'"""[\s\S]*?"""|#.*', "", src)
-check("labelid 를 DRM 으로 강제하는 코드가 없다",
-      '"DRM"' not in code_only and "'DRM'" not in code_only, code_only[:0])
-check("왜 못 가리는지 근거를 남긴다", "같은 라벨 GUID 를 갖고 있었다" in src)
+check("서명 확인 없이 DRM 을 강제하지 않는다",
+      code_only.count('"DRM"') <= 1 and "VENDOR_DRM_MAGIC" in code_only, code_only[:0])
+check("왜 그렇게 판단하는지 근거를 남긴다", "서명으로 원본이 사내 DRM 이었음을 확실히 아는" in src)
 
 print("")
 print("[4] 세 파일을 같이 올렸을 때 — 각각 무엇이 보이나")

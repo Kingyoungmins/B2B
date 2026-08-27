@@ -8,7 +8,7 @@ signature: "(app, owner_hwnd)"
 role: "(legacy) app.Hwnd 프레임의 owner 지정. frame 모드에서는 세션 프레임 hwnd 에"
 role_source: docstring
 version: "0.8.0"
-loc: "serve_b2b.py:4538-4545"
+loc: "serve_b2b.py:4586-4593"
 
 # ── 입출력 ──
 inputs:

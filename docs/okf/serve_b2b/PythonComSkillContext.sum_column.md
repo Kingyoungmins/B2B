@@ -9,7 +9,7 @@ signature: "(self, sheet, col, header_row=None, exclude_total_rows=True)"
 role: "열(col: 열문자 'F' / 헤더명 '합계' / 열번호 6)의 숫자 값을 더해 **합계 값을 반환**한다."
 role_source: docstring
 version: "0.8.0"
-loc: "serve_b2b.py:14298-14341"
+loc: "serve_b2b.py:14346-14389"
 
 # ── 입출력 ──
 inputs:

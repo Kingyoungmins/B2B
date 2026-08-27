@@ -8,7 +8,7 @@ signature: "(path, name, encrypted_checker=None)"
 role: "업로드 직후 훅. 보안문서면 서버로 풀어 '작업본을 제자리에서' 교체한다."
 role_source: docstring
 version: "0.8.0"
-loc: "secure_doc.py:383-451"
+loc: "secure_doc.py:398-470"
 
 # ── 입출력 ──
 inputs:
@@ -30,8 +30,8 @@ calls:
   - "decrypt_bytes"
   - "looks_secured"
   - "read"
-  - "read_label_id"
   - "secret_check"
+  - "source_label_for_restore"
 calls_external:
   - "Path"
   - "_local_says_plain"
@@ -40,6 +40,7 @@ calls_external:
   - "encrypted_checker"
   - "err"
   - "get"
+  - "getattr"
   - "head"
   - "len"
   - "name"
@@ -75,7 +76,7 @@ timestamp: "0.8.0-gen"
 - 변경 상태 `_STATE` — 수정 시 이 상태를 읽는 곳 동반 점검.
 
 ## 관계
-- 호출: `available`, `config`, `decrypt_bytes`, `looks_secured`, `read`, `read_label_id`, `secret_check`
+- 호출: `available`, `config`, `decrypt_bytes`, `looks_secured`, `read`, `secret_check`, `source_label_for_restore`
 - 피호출(영향 전파 경로): `B2BHandler.handle_workbook_upload`
 
 ## 실패/예외

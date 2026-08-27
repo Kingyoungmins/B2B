@@ -8,7 +8,7 @@ signature: "(op, data, filename, extra_form=None, timeout=None, expect='stream')
 role: "POST {서버}/v1/drm/<op> (multipart). 성공=바이트, Gateway JSON 오류=SecureDocError."
 role_source: docstring
 version: "0.8.0"
-loc: "secure_doc.py:177-232"
+loc: "secure_doc.py:180-235"
 
 # ── 입출력 ──
 inputs:

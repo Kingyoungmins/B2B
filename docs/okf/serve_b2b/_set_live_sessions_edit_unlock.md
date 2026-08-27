@@ -8,7 +8,7 @@ signature: "(unlocked)"
 role: "녹화 동안 라이브 엑셀뷰의 편집 잠금을 해제/원복한다(Excel 워커에서 실행)."
 role_source: docstring
 version: "0.8.0"
-loc: "serve_b2b.py:3679-3740"
+loc: "serve_b2b.py:3717-3778"
 
 # ── 입출력 ──
 inputs:

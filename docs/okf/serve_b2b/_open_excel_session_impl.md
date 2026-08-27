@@ -8,7 +8,7 @@ signature: "(path, name=None, workbook_id=None, result_id=None, read_only_mirror
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
 version: "0.8.0"
-loc: "serve_b2b.py:5813-6230"
+loc: "serve_b2b.py:5861-6278"
 
 # ── 입출력 ──
 inputs:
