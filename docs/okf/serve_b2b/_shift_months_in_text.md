@@ -26,6 +26,7 @@ raises: []
 calls:
   - "_days_in_month"
   - "append"
+  - "start"
 calls_external:
   - "cy"
   - "delta"
@@ -44,7 +45,6 @@ calls_external:
   - "out"
   - "piece"
   - "s"
-  - "start"
   - "str"
   - "yr"
 called_by:
@@ -63,7 +63,7 @@ timestamp: "0.8.0-gen"
 - 없음(정적 분석 기준)
 
 ## 관계
-- 호출: `_days_in_month`, `append`
+- 호출: `_days_in_month`, `append`, `start`
 - 피호출(영향 전파 경로): `PythonComSkillContext.shift_months`
 
 ## 실패/예외

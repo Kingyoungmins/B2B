@@ -38,10 +38,14 @@ called_by:
   - "_fullrun_snapshot_key"
   - "_live_final_snapshot_key"
   - "_pipeline_snapshot_key"
+  - "_post_drm"
   - "_python_step_sig"
+  - "_try_json"
   - "_validate_vba_source_before_inject"
   - "_vba_security_scan"
   - "_workbook_name_lookup_keys"
+  - "read_label_id"
+  - "stop_native_recording_impl"
 reads:
   - "self._worksheet"
 writes: []
@@ -57,7 +61,7 @@ timestamp: "0.8.0-gen"
 
 ## 관계
 - 호출: 없음
-- 피호출(영향 전파 경로): `B2BHandler.do_POST`, `B2BHandler.handle_logic_backup`, `OpenpyxlSkillContext._write_grid`, `OpenpyxlSkillContext.display_rows`, `OpenpyxlSkillContext.flush_pending_rows`, `OpenpyxlSkillContext.sheet`, `OpenpyxlSkillContext.value`, `PythonComSkillContext.append_same_format_sheets`, `PythonComSkillContext.match_fill`, `_current_app_version`, `_fullrun_snapshot_key`, `_live_final_snapshot_key`, `_pipeline_snapshot_key`, `_python_step_sig`, `_validate_vba_source_before_inject`, `_vba_security_scan`, `_workbook_name_lookup_keys`
+- 피호출(영향 전파 경로): `B2BHandler.do_POST`, `B2BHandler.handle_logic_backup`, `OpenpyxlSkillContext._write_grid`, `OpenpyxlSkillContext.display_rows`, `OpenpyxlSkillContext.flush_pending_rows`, `OpenpyxlSkillContext.sheet`, `OpenpyxlSkillContext.value`, `PythonComSkillContext.append_same_format_sheets`, `PythonComSkillContext.match_fill`, `_current_app_version`, `_fullrun_snapshot_key`, `_live_final_snapshot_key`, `_pipeline_snapshot_key`, `_post_drm`, `_python_step_sig`, `_try_json`, `_validate_vba_source_before_inject`, `_vba_security_scan`, `_workbook_name_lookup_keys`, `read_label_id`, `stop_native_recording_impl`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

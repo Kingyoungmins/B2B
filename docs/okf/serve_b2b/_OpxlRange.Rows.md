@@ -34,6 +34,7 @@ called_by:
   - "PythonComSkillContext.filter_to_sheet"
   - "PythonComSkillContext.hide_rows"
   - "PythonComSkillContext.insert_rows"
+  - "sheet_merge_areas"
 reads:
   - "self._r1"
   - "self._r2"
@@ -50,7 +51,7 @@ timestamp: "0.8.0-gen"
 
 ## 관계
 - 호출: 없음
-- 피호출(영향 전파 경로): `ExcelWorksheetProxy.delete_rows`, `ExcelWorksheetProxy.insert_rows`, `PythonComSkillContext._filter_to_sheet_native`, `PythonComSkillContext.delete_rows`, `PythonComSkillContext.delete_rows_where`, `PythonComSkillContext.filter_to_sheet`, `PythonComSkillContext.hide_rows`, `PythonComSkillContext.insert_rows`
+- 피호출(영향 전파 경로): `ExcelWorksheetProxy.delete_rows`, `ExcelWorksheetProxy.insert_rows`, `PythonComSkillContext._filter_to_sheet_native`, `PythonComSkillContext.delete_rows`, `PythonComSkillContext.delete_rows_where`, `PythonComSkillContext.filter_to_sheet`, `PythonComSkillContext.hide_rows`, `PythonComSkillContext.insert_rows`, `sheet_merge_areas`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

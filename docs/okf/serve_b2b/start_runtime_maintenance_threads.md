@@ -25,10 +25,11 @@ calls:
   - "_runtime_maintenance_loop"
   - "_start_log_sync"
   - "cleanup_stale_temp_artifacts"
+  - "start"
 calls_external:
   - "Thread"
-  - "start"
-called_by: []
+called_by:
+  - "main"
 reads:
   - "RUNTIME_SAMPLER_STARTED"
 writes:
@@ -45,8 +46,8 @@ timestamp: "0.8.0-gen"
 - 변경 상태 `RUNTIME_SAMPLER_STARTED` — 수정 시 이 상태를 읽는 곳 동반 점검.
 
 ## 관계
-- 호출: `_reset_trace_logs`, `_runtime_maintenance_loop`, `_start_log_sync`, `cleanup_stale_temp_artifacts`
-- 피호출(영향 전파 경로): 없음
+- 호출: `_reset_trace_logs`, `_runtime_maintenance_loop`, `_start_log_sync`, `cleanup_stale_temp_artifacts`, `start`
+- 피호출(영향 전파 경로): `main`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

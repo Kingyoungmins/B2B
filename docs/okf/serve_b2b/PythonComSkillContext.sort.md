@@ -69,6 +69,7 @@ called_by:
   - "B2BHandler.handle_diag_recent_trace"
   - "PythonComSkillContext.match_fill"
   - "_browser_content_target"
+  - "_spawn_dialog_confirmer"
 reads:
   - "self._col_index"
   - "self._journal_save"
@@ -89,7 +90,7 @@ timestamp: "0.8.0-gen"
 
 ## 관계
 - 호출: `Columns`, `_col_index`, `_journal_save`, `_rng`, `_tick`, `_ws`, `append`, `find_header`, `sheet`
-- 피호출(영향 전파 경로): `B2BHandler.handle_diag_recent_trace`, `PythonComSkillContext.match_fill`, `_browser_content_target`
+- 피호출(영향 전파 경로): `B2BHandler.handle_diag_recent_trace`, `PythonComSkillContext.match_fill`, `_browser_content_target`, `_spawn_dialog_confirmer`
 
 ## 실패/예외
 - `PythonComSkillError`

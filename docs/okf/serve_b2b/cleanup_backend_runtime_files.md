@@ -46,6 +46,7 @@ calls_external:
   - "unlink"
 called_by:
   - "B2BHandler.do_POST"
+  - "main"
 reads:
   - "BACKEND_DIR"
   - "PIPELINE_STEP_SNAPSHOTS"
@@ -63,7 +64,7 @@ Delete runtime-only result/snapshot files created under BACKEND_DIR.
 
 ## 관계
 - 호출: `_delete_pipeline_snapshot_entry`, `_perf_trace`, `clear`, `values`
-- 피호출(영향 전파 경로): `B2BHandler.do_POST`
+- 피호출(영향 전파 경로): `B2BHandler.do_POST`, `main`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

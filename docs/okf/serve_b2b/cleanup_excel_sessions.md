@@ -42,6 +42,8 @@ calls_external:
 called_by:
   - "B2BHandler.do_POST"
   - "_native_parent_watch_once"
+  - "main"
+  - "make_handler"
 reads:
   - "EXCEL_SESSIONS"
   - "SPAWNED_EXCEL_PIDS"
@@ -58,7 +60,7 @@ timestamp: "0.8.0-gen"
 
 ## 관계
 - 호출: `_cleanup_excel_sessions_impl`, `_force_kill_pid`, `_is_pid_alive`, `_perf_trace`, `clear`, `excel_available`, `excel_call`, `values`
-- 피호출(영향 전파 경로): `B2BHandler.do_POST`, `_native_parent_watch_once`
+- 피호출(영향 전파 경로): `B2BHandler.do_POST`, `_native_parent_watch_once`, `main`, `make_handler`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

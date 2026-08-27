@@ -27,6 +27,7 @@ calls:
   - "_tick"
 calls_external: []
 called_by:
+  - "_group_title"
   - "build_result_previews"
   - "inspect_workbook"
   - "write_result_workbook"
@@ -46,7 +47,7 @@ timestamp: "0.8.0-gen"
 
 ## 관계
 - 호출: `_excel_collection_names`, `_tick`
-- 피호출(영향 전파 경로): `build_result_previews`, `inspect_workbook`, `write_result_workbook`
+- 피호출(영향 전파 경로): `_group_title`, `build_result_previews`, `inspect_workbook`, `write_result_workbook`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

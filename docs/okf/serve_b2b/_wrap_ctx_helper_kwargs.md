@@ -27,10 +27,10 @@ raises:
 
 # ── 유기적 관계 ──
 calls:
+  - "allowed"
   - "value"
 calls_external:
   - "PythonComSkillError"
-  - "allowed"
   - "fn"
   - "join"
   - "kwargs"
@@ -56,7 +56,7 @@ timestamp: "0.8.0-gen"
 - 없음(정적 분석 기준)
 
 ## 관계
-- 호출: `value`
+- 호출: `allowed`, `value`
 - 피호출(영향 전파 경로): `_install_ctx_kwarg_tolerance`
 
 ## 실패/예외

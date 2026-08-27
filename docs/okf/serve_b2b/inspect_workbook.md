@@ -25,6 +25,7 @@ calls:
   - "_vba_trace"
   - "append"
   - "cell_to_json"
+  - "close"
   - "excel_available"
   - "excel_call"
   - "inspect_csv_workbook"
@@ -46,7 +47,6 @@ calls_external:
   - "_inspect_via_com"
   - "cached_row"
   - "cached_value"
-  - "close"
   - "current_thread"
   - "enumerate"
   - "err"
@@ -86,7 +86,7 @@ timestamp: "0.8.0-gen"
 - 없음(정적 분석 기준)
 
 ## 관계
-- 호출: `_vba_trace`, `append`, `cell_to_json`, `excel_available`, `excel_call`, `inspect_csv_workbook`, `inspect_workbook_fallback`, `inspect_workbook_with_excel`, `is_csv_path`, `iter_rows`, `openpyxl_load_workbook_compatible`, `range`, `row`, `rows`, `sheets`, `values`
+- 호출: `_vba_trace`, `append`, `cell_to_json`, `close`, `excel_available`, `excel_call`, `inspect_csv_workbook`, `inspect_workbook_fallback`, `inspect_workbook_with_excel`, `is_csv_path`, `iter_rows`, `openpyxl_load_workbook_compatible`, `range`, `row`, `rows`, `sheets`, `values`
 - 피호출(영향 전파 경로): `B2BHandler.handle_workbook_reinspect`, `B2BHandler.handle_workbook_upload`, `_result_from_workbook_files`, `_run_excel_python_pipeline_impl`, `_run_openpyxl_python_pipeline_impl`
 
 ## 실패/예외

@@ -28,10 +28,14 @@ calls:
   - "_file_label_kind"
   - "_ole_office_verdict"
   - "_vba_trace"
+  - "config"
   - "excel_available"
   - "inspect_workbook"
   - "is_csv_path"
+  - "mark_released"
+  - "maybe_decrypt_upload"
   - "read"
+  - "remember_label"
   - "send_json"
   - "values"
   - "write"
@@ -45,12 +49,9 @@ calls_external:
   - "_t_write"
   - "bool"
   - "chunk"
-  - "config"
   - "get"
   - "int"
   - "len"
-  - "mark_released"
-  - "maybe_decrypt_upload"
   - "min"
   - "mkdir"
   - "name"
@@ -60,7 +61,6 @@ calls_external:
   - "perf_counter"
   - "raw_name"
   - "remaining"
-  - "remember_label"
   - "round"
   - "str"
   - "sum"
@@ -94,7 +94,7 @@ timestamp: "0.8.0-gen"
 - 변경 상태 `WORKBOOKS` — 수정 시 이 상태를 읽는 곳 동반 점검.
 
 ## 관계
-- 호출: `_file_label_evidence`, `_file_label_kind`, `_ole_office_verdict`, `_vba_trace`, `excel_available`, `inspect_workbook`, `is_csv_path`, `read`, `send_json`, `values`, `write`
+- 호출: `_file_label_evidence`, `_file_label_kind`, `_ole_office_verdict`, `_vba_trace`, `config`, `excel_available`, `inspect_workbook`, `is_csv_path`, `mark_released`, `maybe_decrypt_upload`, `read`, `remember_label`, `send_json`, `values`, `write`
 - 피호출(영향 전파 경로): `B2BHandler.do_POST`
 
 ## 실패/예외

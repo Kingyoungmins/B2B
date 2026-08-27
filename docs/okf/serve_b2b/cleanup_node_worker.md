@@ -30,6 +30,7 @@ calls_external:
 called_by:
   - "B2BHandler.do_POST"
   - "_native_parent_watch_once"
+  - "main"
 reads:
   - "NODE_WORKER"
   - "NODE_WORKER_READY"
@@ -48,7 +49,7 @@ timestamp: "0.8.0-gen"
 
 ## 관계
 - 호출: `clear`
-- 피호출(영향 전파 경로): `B2BHandler.do_POST`, `_native_parent_watch_once`
+- 피호출(영향 전파 경로): `B2BHandler.do_POST`, `_native_parent_watch_once`, `main`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

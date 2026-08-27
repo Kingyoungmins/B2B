@@ -28,6 +28,10 @@ calls:
   - "_vba_trace"
   - "clear"
   - "excel_call"
+  - "marshal_app_stream"
+  - "start"
+  - "start_native_recording_impl"
+  - "stream"
 calls_external:
   - "RECORDING_EDIT_UNLOCKED"
   - "_marshal_live_app"
@@ -35,10 +39,6 @@ calls_external:
   - "_start_native"
   - "bool"
   - "dict"
-  - "marshal_app_stream"
-  - "start"
-  - "start_native_recording_impl"
-  - "stream"
 called_by:
   - "B2BHandler.handle_excel_record_start"
 reads:
@@ -59,7 +59,7 @@ timestamp: "0.8.0-gen"
 - 변경 상태 `NATIVE_RECORDING` — 수정 시 이 상태를 읽는 곳 동반 점검.
 
 ## 관계
-- 호출: `_commit_pending_excel_cell_edit`, `_get_live_excel_app`, `_set_live_sessions_edit_unlock`, `_vba_trace`, `clear`, `excel_call`
+- 호출: `_commit_pending_excel_cell_edit`, `_get_live_excel_app`, `_set_live_sessions_edit_unlock`, `_vba_trace`, `clear`, `excel_call`, `marshal_app_stream`, `start`, `start_native_recording_impl`, `stream`
 - 피호출(영향 전파 경로): `B2BHandler.handle_excel_record_start`
 
 ## 실패/예외

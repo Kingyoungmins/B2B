@@ -43,6 +43,8 @@ calls:
   - "node_executable"
   - "proxy"
   - "send_json"
+  - "status"
+  - "stream"
 calls_external:
   - "BACKEND_DIR"
   - "Path"
@@ -72,9 +74,7 @@ calls_external:
   - "split"
   - "startswith"
   - "stat"
-  - "status"
   - "str"
-  - "stream"
   - "strip"
   - "sub"
   - "super"
@@ -107,7 +107,7 @@ timestamp: "0.8.0-gen"
 - 파일시스템 변경/IO
 
 ## 관계
-- 호출: `_current_app_version`, `_excel_queue_size`, `_health_excel_diagnostics`, `_is_own_origin`, `_maintenance_status`, `_pipeline_job_stats`, `_pipeline_snapshot_stats`, `_runtime_counts_snapshot`, `app_base_dir`, `end_headers`, `excel_available`, `handle_backend_download`, `handle_cached_diff`, `handle_pipeline_progress`, `handle_pipeline_status`, `handle_workbook_source_download`, `logic_backup_dir_info`, `node_executable`, `proxy`, `send_json`
+- 호출: `_current_app_version`, `_excel_queue_size`, `_health_excel_diagnostics`, `_is_own_origin`, `_maintenance_status`, `_pipeline_job_stats`, `_pipeline_snapshot_stats`, `_runtime_counts_snapshot`, `app_base_dir`, `end_headers`, `excel_available`, `handle_backend_download`, `handle_cached_diff`, `handle_pipeline_progress`, `handle_pipeline_status`, `handle_workbook_source_download`, `logic_backup_dir_info`, `node_executable`, `proxy`, `send_json`, `status`, `stream`
 - 피호출(영향 전파 경로): 없음
 
 ## 실패/예외

@@ -71,6 +71,7 @@ called_by:
   - "B2BHandler.handle_diag_recent_trace"
   - "PythonComSkillContext.match_fill"
   - "_browser_content_target"
+  - "_spawn_dialog_confirmer"
 reads:
   - "self._col0"
   - "self._is_output_workbook"
@@ -94,7 +95,7 @@ timestamp: "0.8.0-gen"
 
 ## 관계
 - 호출: `_col0`, `_is_output_workbook`, `_num`, `_write_grid`, `_ws_of`, `append`, `cell`, `normalize`, `range`, `rows`
-- 피호출(영향 전파 경로): `B2BHandler.handle_diag_recent_trace`, `PythonComSkillContext.match_fill`, `_browser_content_target`
+- 피호출(영향 전파 경로): `B2BHandler.handle_diag_recent_trace`, `PythonComSkillContext.match_fill`, `_browser_content_target`, `_spawn_dialog_confirmer`
 
 ## 실패/예외
 - `RuntimeError`

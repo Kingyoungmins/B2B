@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """OKF 전체 재생성 드라이버 — 레포의 모든 소스(py/js/cs) → docs/okf/.
 
@@ -24,9 +24,17 @@ def app_version():
 
 
 def sources():
+    """명세 대상 소스. 루트의 파이썬 모듈 전체 + scripts/*.js + native_host/*.cs.
+
+    [실측 2026-08-27] 예전엔 파이썬을 serve_b2b.py 하나만 넣었다. 그래서 **secure_doc.py
+    (문서보안 전체)가 OKF 에 아예 없었다** — 보안 판정·해제·재적용이 명세에 없는 상태로
+    한참을 갔다. 없는 줄도 몰랐던 게 문제라, 이제 루트의 .py 를 통째로 훑는다.
+    """
     src = []
     if (ROOT / "serve_b2b.py").exists():
-        src.append(ROOT / "serve_b2b.py")
+        src.append(ROOT / "serve_b2b.py")          # 가장 큰 모듈은 앞에
+    src += [p for p in sorted(ROOT.glob("*.py"))
+            if p.name != "serve_b2b.py" and not p.name.startswith(("test_", "_"))]
     src += sorted((ROOT / "scripts").glob("*.js"))
     nh = ROOT / "native_host"
     if nh.exists():

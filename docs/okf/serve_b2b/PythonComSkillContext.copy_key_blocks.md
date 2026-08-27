@@ -42,6 +42,7 @@ calls:
   - "_ws"
   - "append"
   - "last_col"
+  - "stop"
 calls_external:
   - "Copy"
   - "End"
@@ -77,7 +78,6 @@ calls_external:
   - "src_name"
   - "src_scan"
   - "src_sheet"
-  - "stop"
   - "str"
   - "top"
   - "ws_d"
@@ -101,7 +101,7 @@ timestamp: "0.8.0-gen"
 - Excel COM 조작(파괴적일 수 있음)
 
 ## 관계
-- 호출: `Cells`, `Range`, `_col_letter`, `_ctx_and_sheet_from_spec`, `_norm_key`, `_resolve_col`, `_tick`, `_vba_trace`, `_ws`, `append`, `last_col`
+- 호출: `Cells`, `Range`, `_col_letter`, `_ctx_and_sheet_from_spec`, `_norm_key`, `_resolve_col`, `_tick`, `_vba_trace`, `_ws`, `append`, `last_col`, `stop`
 - 피호출(영향 전파 경로): 없음
 
 ## 실패/예외

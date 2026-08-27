@@ -29,6 +29,8 @@ calls:
   - "append"
   - "clear"
   - "excel_call"
+  - "stop"
+  - "stop_native_recording_impl"
 calls_external:
   - "Path"
   - "RECORDING_EDIT_UNLOCKED"
@@ -51,8 +53,6 @@ calls_external:
   - "rec_full"
   - "resolve"
   - "steps"
-  - "stop"
-  - "stop_native_recording_impl"
   - "str"
   - "time"
 called_by:
@@ -74,7 +74,7 @@ timestamp: "0.8.0-gen"
 - EXCEL_LOCK 직렬화
 
 ## 관계
-- 호출: `_commit_pending_excel_cell_edit`, `_get_live_excel_app`, `_recorded_vba_hazards`, `_set_live_sessions_edit_unlock`, `_vba_trace`, `append`, `clear`, `excel_call`
+- 호출: `_commit_pending_excel_cell_edit`, `_get_live_excel_app`, `_recorded_vba_hazards`, `_set_live_sessions_edit_unlock`, `_vba_trace`, `append`, `clear`, `excel_call`, `stop`, `stop_native_recording_impl`
 - 피호출(영향 전파 경로): `B2BHandler.handle_excel_record_stop`
 
 ## 실패/예외

@@ -34,6 +34,7 @@ calls:
   - "_ws"
   - "row"
   - "sheet"
+  - "start"
   - "used_last_col"
   - "used_last_row"
 calls_external:
@@ -47,7 +48,6 @@ calls_external:
   - "last_r"
   - "max"
   - "s"
-  - "start"
   - "str"
   - "strip"
   - "vals"
@@ -70,7 +70,7 @@ timestamp: "0.8.0-gen"
 - Excel COM 조작(파괴적일 수 있음)
 
 ## 관계
-- 호출: `Cells`, `Range`, `_col_index`, `_col_letter`, `_tick`, `_ws`, `row`, `sheet`, `used_last_col`, `used_last_row`
+- 호출: `Cells`, `Range`, `_col_index`, `_col_letter`, `_tick`, `_ws`, `row`, `sheet`, `start`, `used_last_col`, `used_last_row`
 - 피호출(영향 전파 경로): 없음
 
 ## 실패/예외

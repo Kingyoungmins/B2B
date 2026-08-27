@@ -1,0 +1,61 @@
+---
+type: method
+title: BrowserLifecycle.close
+module: launch_b2b.py
+lang: python
+extraction: ast
+class: BrowserLifecycle
+signature: "(self, session_id: str) -> None"
+role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
+role_source: none
+version: "0.8.0"
+loc: "launch_b2b.py:169-174"
+
+# ── 입출력 ──
+inputs:
+  - "self"
+  - "session_id: str"
+returns: "None"
+
+# ── 사이드이펙트 (정적 추정) ──
+side_effects:
+  - "상태 변경(전역/세션): self.empty_since"
+raises: []
+
+# ── 유기적 관계 ──
+calls: []
+calls_external:
+  - "pop"
+  - "session_id"
+  - "time"
+called_by:
+  - "_file_label_evidence"
+  - "inspect_workbook"
+  - "load_workbook_aoa"
+  - "make_handler"
+  - "run_js_pipeline_with_node"
+  - "write_result_workbook"
+reads:
+  - "self.empty_since"
+  - "self.had_client"
+  - "self.lock"
+  - "self.sessions"
+writes:
+  - "self.empty_since"
+affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
+timestamp: "0.8.0-gen"
+---
+
+## 역할
+(추정) 역할 주석 없음 — 담당자 1줄 보완 필요  _(자동 추정 — 확인 필요)_
+
+## 사이드이펙트 & 주의
+- 상태 변경(전역/세션): self.empty_since
+- 변경 상태 `self.empty_since` — 수정 시 이 상태를 읽는 곳 동반 점검.
+
+## 관계
+- 호출: 없음
+- 피호출(영향 전파 경로): `_file_label_evidence`, `inspect_workbook`, `load_workbook_aoa`, `make_handler`, `run_js_pipeline_with_node`, `write_result_workbook`
+
+## 실패/예외
+- `(명시적 raise 없음/미탐지)`

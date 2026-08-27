@@ -44,10 +44,13 @@ called_by:
   - "_capture_browser_hwnd"
   - "_capture_copypaste_on_session_impl"
   - "_capture_live_view_state"
+  - "_clean_name"
   - "_coerce_number"
   - "_diag_vba_run_failure"
+  - "_drop_dead_typing_lines"
   - "_extract_vba_source_for_injection"
   - "_inject_and_run_vba_in_host"
+  - "_normalize_base"
   - "_normalize_vba_workbook_literals"
   - "_opxl_coord"
   - "_opxl_eval_formula"
@@ -63,8 +66,11 @@ called_by:
   - "_vba_macro_refs"
   - "_vba_string_literal"
   - "_workbook_name_lookup_key"
+  - "default_account"
   - "normalize_python_pipeline_code"
   - "safe_archive_filename"
+  - "sheet_merge_areas"
+  - "stop_native_recording_impl"
 reads:
   - "self._b2b_origin_col"
   - "self._b2b_origin_row"
@@ -81,7 +87,7 @@ timestamp: "0.8.0-gen"
 
 ## 관계
 - 호출: `value`
-- 피호출(영향 전파 경로): `ExcelSkillContext._num`, `OpenpyxlSkillContext._num`, `OpenpyxlWorksheetProxy.Range`, `PythonComSkillContext._pivot_value_table`, `PythonComSkillContext.set_border`, `_capture_browser_hwnd`, `_capture_copypaste_on_session_impl`, `_capture_live_view_state`, `_coerce_number`, `_diag_vba_run_failure`, `_extract_vba_source_for_injection`, `_inject_and_run_vba_in_host`, `_normalize_vba_workbook_literals`, `_opxl_coord`, `_opxl_eval_formula`, `_opxl_numeric_values`, `_opxl_range_values`, `_pivot_to_num`, `_poll_excel_session_changes_impl`, `_range_formula_info`, `_read_excel_session_selection_impl`, `_recover_excel_session_impl`, `_trace_text`, `_vba_macro_ref`, `_vba_macro_refs`, `_vba_string_literal`, `_workbook_name_lookup_key`, `normalize_python_pipeline_code`, `safe_archive_filename`
+- 피호출(영향 전파 경로): `ExcelSkillContext._num`, `OpenpyxlSkillContext._num`, `OpenpyxlWorksheetProxy.Range`, `PythonComSkillContext._pivot_value_table`, `PythonComSkillContext.set_border`, `_capture_browser_hwnd`, `_capture_copypaste_on_session_impl`, `_capture_live_view_state`, `_clean_name`, `_coerce_number`, `_diag_vba_run_failure`, `_drop_dead_typing_lines`, `_extract_vba_source_for_injection`, `_inject_and_run_vba_in_host`, `_normalize_base`, `_normalize_vba_workbook_literals`, `_opxl_coord`, `_opxl_eval_formula`, `_opxl_numeric_values`, `_opxl_range_values`, `_pivot_to_num`, `_poll_excel_session_changes_impl`, `_range_formula_info`, `_read_excel_session_selection_impl`, `_recover_excel_session_impl`, `_trace_text`, `_vba_macro_ref`, `_vba_macro_refs`, `_vba_string_literal`, `_workbook_name_lookup_key`, `default_account`, `normalize_python_pipeline_code`, `safe_archive_filename`, `sheet_merge_areas`, `stop_native_recording_impl`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

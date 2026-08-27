@@ -27,6 +27,7 @@ calls:
   - "append"
   - "range"
   - "read"
+  - "start"
 calls_external:
   - "Close"
   - "CoInitialize"
@@ -52,7 +53,6 @@ calls_external:
   - "png"
   - "pptx_path"
   - "rmtree"
-  - "start"
   - "str"
   - "tmpdir"
   - "total"
@@ -72,7 +72,7 @@ PowerPoint COM 으로 슬라이드를 PNG 로 렌더해 base64 로 돌려준다.
 - 파일시스템 변경/IO
 
 ## 관계
-- 호출: `_extract_pptx_slide_texts`, `append`, `range`, `read`
+- 호출: `_extract_pptx_slide_texts`, `append`, `range`, `read`, `start`
 - 피호출(영향 전파 경로): `B2BHandler.handle_assist_attachment`
 
 ## 실패/예외

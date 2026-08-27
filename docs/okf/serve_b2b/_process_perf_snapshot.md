@@ -21,7 +21,8 @@ side_effects:
 raises: []
 
 # ── 유기적 관계 ──
-calls: []
+calls:
+  - "status"
 calls_external:
   - "Process"
   - "cpu"
@@ -36,7 +37,6 @@ calls_external:
   - "num_threads"
   - "pid"
   - "round"
-  - "status"
   - "str"
   - "update"
 called_by:
@@ -55,7 +55,7 @@ timestamp: "0.8.0-gen"
 - 없음(정적 분석 기준)
 
 ## 관계
-- 호출: 없음
+- 호출: `status`
 - 피호출(영향 전파 경로): `_maybe_perf_trace_runtime`, `_runtime_sampler_once`
 
 ## 실패/예외

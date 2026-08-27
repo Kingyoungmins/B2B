@@ -26,6 +26,7 @@ calls:
   - "append"
   - "book"
   - "sheet"
+  - "sheet_expected_state"
   - "values"
 calls_external:
   - "all"
@@ -43,7 +44,6 @@ calls_external:
   - "res"
   - "set"
   - "setdefault"
-  - "sheet_expected_state"
   - "sorted"
   - "str"
   - "wb"
@@ -64,7 +64,7 @@ Excel 워커 — 녹화 정지 시점 기대 상태(expected)와 현재 라이�
 - Excel COM 조작(파괴적일 수 있음)
 
 ## 관계
-- 호출: `Worksheets`, `append`, `book`, `sheet`, `values`
+- 호출: `Worksheets`, `append`, `book`, `sheet`, `sheet_expected_state`, `values`
 - 피호출(영향 전파 경로): `excel_record_verify`
 
 ## 실패/예외

@@ -42,6 +42,7 @@ calls:
   - "range"
   - "read"
   - "sheet"
+  - "start"
 calls_external:
   - "all"
   - "c"
@@ -51,7 +52,6 @@ calls_external:
   - "len"
   - "norm_conds"
   - "op"
-  - "start"
   - "str"
   - "total"
   - "val"
@@ -76,7 +76,7 @@ timestamp: "0.8.0-gen"
 - 없음(정적 분석 기준)
 
 ## 관계
-- 호출: `_coerce_number`, `_col_letter`, `_cond_match`, `_resolve_col`, `_tick`, `_vba_trace`, `_ws`, `append`, `cell`, `col`, `header_row`, `last_row`, `range`, `read`, `sheet`
+- 호출: `_coerce_number`, `_col_letter`, `_cond_match`, `_resolve_col`, `_tick`, `_vba_trace`, `_ws`, `append`, `cell`, `col`, `header_row`, `last_row`, `range`, `read`, `sheet`, `start`
 - 피호출(영향 전파 경로): 없음
 
 ## 실패/예외

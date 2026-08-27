@@ -24,13 +24,13 @@ raises: []
 # ── 유기적 관계 ──
 calls:
   - "_hide_excel_hwnd"
+  - "start"
 calls_external:
   - "Event"
   - "Thread"
   - "guard"
   - "hwnd"
   - "int"
-  - "start"
   - "wait"
 called_by:
   - "_run_excel_python_pipeline_impl"
@@ -47,7 +47,7 @@ timestamp: "0.8.0-gen"
 - 없음(정적 분석 기준)
 
 ## 관계
-- 호출: `_hide_excel_hwnd`
+- 호출: `_hide_excel_hwnd`, `start`
 - 피호출(영향 전파 경로): `_run_excel_python_pipeline_impl`
 
 ## 실패/예외

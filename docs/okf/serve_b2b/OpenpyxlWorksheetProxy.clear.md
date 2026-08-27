@@ -30,9 +30,11 @@ calls_external:
   - "int"
 called_by:
   - "PythonComSkillContext.move_col_clear"
+  - "RecordService.start"
   - "_cleanup_excel_sessions_impl"
   - "_cleanup_stale_copy_source"
   - "_force_restart_excel_sessions_direct"
+  - "_loop"
   - "_trace_step_code_once"
   - "cleanup_backend_runtime_files"
   - "cleanup_excel_sessions"
@@ -41,6 +43,8 @@ called_by:
   - "excel_record_start"
   - "excel_record_stop"
   - "run_backend_pipeline_payload"
+  - "start_native_recording_impl"
+  - "stop_native_recording_impl"
 reads:
   - "self._ws"
   - "self.flush_pending_rows"
@@ -57,7 +61,7 @@ timestamp: "0.8.0-gen"
 
 ## 관계
 - 호출: `delete_rows`, `flush_pending_rows`, `max_row`
-- 피호출(영향 전파 경로): `PythonComSkillContext.move_col_clear`, `_cleanup_excel_sessions_impl`, `_cleanup_stale_copy_source`, `_force_restart_excel_sessions_direct`, `_trace_step_code_once`, `cleanup_backend_runtime_files`, `cleanup_excel_sessions`, `cleanup_node_worker`, `ensure_node_worker`, `excel_record_start`, `excel_record_stop`, `run_backend_pipeline_payload`
+- 피호출(영향 전파 경로): `PythonComSkillContext.move_col_clear`, `RecordService.start`, `_cleanup_excel_sessions_impl`, `_cleanup_stale_copy_source`, `_force_restart_excel_sessions_direct`, `_loop`, `_trace_step_code_once`, `cleanup_backend_runtime_files`, `cleanup_excel_sessions`, `cleanup_node_worker`, `ensure_node_worker`, `excel_record_start`, `excel_record_stop`, `run_backend_pipeline_payload`, `start_native_recording_impl`, `stop_native_recording_impl`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

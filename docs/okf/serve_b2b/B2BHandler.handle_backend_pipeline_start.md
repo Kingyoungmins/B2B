@@ -26,6 +26,7 @@ calls:
   - "read_json_body"
   - "run_backend_pipeline_payload"
   - "send_json"
+  - "start"
   - "update_pipeline_job"
 calls_external:
   - "Thread"
@@ -35,7 +36,6 @@ calls_external:
   - "len"
   - "payload"
   - "result"
-  - "start"
   - "str"
   - "time"
   - "update"
@@ -58,7 +58,7 @@ timestamp: "0.8.0-gen"
 - 없음(정적 분석 기준)
 
 ## 관계
-- 호출: `read_json_body`, `run_backend_pipeline_payload`, `send_json`, `update_pipeline_job`
+- 호출: `read_json_body`, `run_backend_pipeline_payload`, `send_json`, `start`, `update_pipeline_job`
 - 피호출(영향 전파 경로): `B2BHandler.do_POST`
 
 ## 실패/예외

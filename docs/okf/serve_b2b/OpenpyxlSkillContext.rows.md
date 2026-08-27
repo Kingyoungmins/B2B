@@ -66,6 +66,7 @@ called_by:
   - "inspect_csv_workbook"
   - "inspect_workbook"
   - "load_workbook_aoa_with_excel"
+  - "sheet_merge_areas"
 reads:
   - "self._ws_of"
 writes: []
@@ -81,7 +82,7 @@ timestamp: "0.8.0-gen"
 
 ## 관계
 - 호출: `_ws_of`, `append`, `flush_pending_rows`, `iter_rows`, `row`
-- 피호출(영향 전파 경로): `ExcelSkillContext._merge_pivot_grid_into_base`, `ExcelSkillContext.col`, `ExcelSkillContext.display_rows`, `ExcelSkillContext.filter_to_sheet`, `ExcelSkillContext.header_row`, `ExcelSkillContext.iter_rows`, `ExcelSkillContext.pivot`, `ExcelSkillContext.sort`, `OpenpyxlSkillContext._merge_pivot_grid_into_base`, `OpenpyxlSkillContext.col`, `OpenpyxlSkillContext.filter_to_sheet`, `OpenpyxlSkillContext.header_row`, `OpenpyxlSkillContext.iter_rows`, `OpenpyxlSkillContext.pivot`, `OpenpyxlSkillContext.sort`, `PythonComSkillContext._as_2d`, `PythonComSkillContext._resize_rng`, `PythonComSkillContext._shaped_matrix`, `PythonComSkillContext.match_fill`, `PythonComSkillContext.write`, `PythonComSkillContext.write_formulas`, `_OpxlRange._set_value`, `_excel_output_preview_sheets`, `inspect_csv_workbook`, `inspect_workbook`, `load_workbook_aoa_with_excel`
+- 피호출(영향 전파 경로): `ExcelSkillContext._merge_pivot_grid_into_base`, `ExcelSkillContext.col`, `ExcelSkillContext.display_rows`, `ExcelSkillContext.filter_to_sheet`, `ExcelSkillContext.header_row`, `ExcelSkillContext.iter_rows`, `ExcelSkillContext.pivot`, `ExcelSkillContext.sort`, `OpenpyxlSkillContext._merge_pivot_grid_into_base`, `OpenpyxlSkillContext.col`, `OpenpyxlSkillContext.filter_to_sheet`, `OpenpyxlSkillContext.header_row`, `OpenpyxlSkillContext.iter_rows`, `OpenpyxlSkillContext.pivot`, `OpenpyxlSkillContext.sort`, `PythonComSkillContext._as_2d`, `PythonComSkillContext._resize_rng`, `PythonComSkillContext._shaped_matrix`, `PythonComSkillContext.match_fill`, `PythonComSkillContext.write`, `PythonComSkillContext.write_formulas`, `_OpxlRange._set_value`, `_excel_output_preview_sheets`, `inspect_csv_workbook`, `inspect_workbook`, `load_workbook_aoa_with_excel`, `sheet_merge_areas`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

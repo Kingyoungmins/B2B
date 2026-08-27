@@ -24,6 +24,7 @@ raises: []
 # ── 유기적 관계 ──
 calls:
   - "replace"
+  - "start"
 calls_external:
   - "compile"
   - "end"
@@ -40,7 +41,6 @@ calls_external:
   - "prefix"
   - "search"
   - "split"
-  - "start"
   - "startswith"
   - "str"
   - "strip"
@@ -63,7 +63,7 @@ Saved skills can contain the assistant reply text around the VBA block.
 - 없음(정적 분석 기준)
 
 ## 관계
-- 호출: `replace`
+- 호출: `replace`, `start`
 - 피호출(영향 전파 경로): `_inject_and_run_vba`
 
 ## 실패/예외

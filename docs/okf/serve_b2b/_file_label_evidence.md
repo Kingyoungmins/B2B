@@ -26,13 +26,13 @@ raises: []
 calls:
   - "_file_label_kind"
   - "_ole_directory_stream_names"
+  - "close"
   - "range"
   - "read"
 calls_external:
   - "Path"
   - "ZipFile"
   - "chunk"
-  - "close"
   - "err"
   - "hex"
   - "hexdigest"
@@ -71,7 +71,7 @@ timestamp: "0.8.0-gen"
 - 파일시스템 변경/IO
 
 ## 관계
-- 호출: `_file_label_kind`, `_ole_directory_stream_names`, `range`, `read`
+- 호출: `_file_label_kind`, `_ole_directory_stream_names`, `close`, `range`, `read`
 - 피호출(영향 전파 경로): `B2BHandler.handle_workbook_upload`, `_check_protection_loss`, `_save_excel_session_impl`
 
 ## 실패/예외

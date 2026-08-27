@@ -41,6 +41,7 @@ calls:
   - "range"
   - "read"
   - "sheet"
+  - "start"
 calls_external:
   - "L"
   - "bool"
@@ -52,7 +53,6 @@ calls_external:
   - "last"
   - "len"
   - "row_labels"
-  - "start"
   - "str"
   - "tcol"
   - "total"
@@ -76,7 +76,7 @@ timestamp: "0.8.0-gen"
 - Excel COM 조작(파괴적일 수 있음)
 
 ## 관계
-- 호출: `Cells`, `_coerce_number`, `_col_letter`, `_is_total_label`, `_resolve_col`, `_tick`, `_vba_trace`, `_ws`, `col`, `header_row`, `last_row`, `range`, `read`, `sheet`
+- 호출: `Cells`, `_coerce_number`, `_col_letter`, `_is_total_label`, `_resolve_col`, `_tick`, `_vba_trace`, `_ws`, `col`, `header_row`, `last_row`, `range`, `read`, `sheet`, `start`
 - 피호출(영향 전파 경로): 없음
 
 ## 실패/예외

@@ -20,10 +20,10 @@ side_effects:
 raises: []
 
 # ── 유기적 관계 ──
-calls: []
+calls:
+  - "status"
 calls_external:
   - "get"
-  - "status"
 called_by:
   - "B2BHandler.handle_excel_capture_copypaste"
   - "B2BHandler.handle_excel_record_status"
@@ -41,7 +41,7 @@ timestamp: "0.8.0-gen"
 - 없음(정적 분석 기준)
 
 ## 관계
-- 호출: 없음
+- 호출: `status`
 - 피호출(영향 전파 경로): `B2BHandler.handle_excel_capture_copypaste`, `B2BHandler.handle_excel_record_status`
 
 ## 실패/예외

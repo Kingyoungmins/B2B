@@ -23,6 +23,7 @@ raises: []
 calls:
   - "_cleanup_excel_sessions_impl"
   - "_maybe_quit_idle_python_skill_app"
+  - "start"
 calls_external:
   - "CoInitializeEx"
   - "CoUninitialize"
@@ -35,7 +36,6 @@ calls_external:
   - "is_alive"
   - "kwargs"
   - "put"
-  - "start"
   - "worker"
 called_by:
   - "excel_call"
@@ -57,7 +57,7 @@ timestamp: "0.8.0-gen"
 - 변경 상태 `EXCEL_QUEUE, EXCEL_THREAD` — 수정 시 이 상태를 읽는 곳 동반 점검.
 
 ## 관계
-- 호출: `_cleanup_excel_sessions_impl`, `_maybe_quit_idle_python_skill_app`
+- 호출: `_cleanup_excel_sessions_impl`, `_maybe_quit_idle_python_skill_app`, `start`
 - 피호출(영향 전파 경로): `excel_call`
 
 ## 실패/예외

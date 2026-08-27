@@ -76,6 +76,7 @@ called_by:
   - "_vba_trace"
   - "node_worker_command"
   - "run_js_pipeline_with_node"
+  - "stream"
 reads:
   - "self._as_2d"
   - "self._journal_save"
@@ -97,7 +98,7 @@ timestamp: "0.8.0-gen"
 
 ## 관계
 - 호출: `_apply_com_text_format_for_long_digit_columns`, `_as_2d`, `_journal_save`, `_resize_rng`, `_rng`, `_tick`, `_vba_trace`, `_ws`, `rows`, `sheet`, `values`
-- 피호출(영향 전파 경로): `B2BHandler.do_POST`, `B2BHandler.handle_assist_attachment`, `B2BHandler.handle_backend_download`, `B2BHandler.handle_workbook_source_download`, `B2BHandler.handle_workbook_upload`, `B2BHandler.proxy`, `B2BHandler.send_json`, `PythonComSkillContext._pivot_value_table`, `PythonComSkillContext.add_total_row`, `PythonComSkillContext.filter_to_sheet`, `PythonComSkillContext.lookup`, `PythonComSkillContext.match_fill`, `PythonComSkillContext.split_column`, `PythonComSkillContext.write_cell`, `_diag_prerun_window_state`, `_diag_vba_log_line`, `_diag_vba_run_failure`, `_perf_trace`, `_vba_trace`, `node_worker_command`, `run_js_pipeline_with_node`
+- 피호출(영향 전파 경로): `B2BHandler.do_POST`, `B2BHandler.handle_assist_attachment`, `B2BHandler.handle_backend_download`, `B2BHandler.handle_workbook_source_download`, `B2BHandler.handle_workbook_upload`, `B2BHandler.proxy`, `B2BHandler.send_json`, `PythonComSkillContext._pivot_value_table`, `PythonComSkillContext.add_total_row`, `PythonComSkillContext.filter_to_sheet`, `PythonComSkillContext.lookup`, `PythonComSkillContext.match_fill`, `PythonComSkillContext.split_column`, `PythonComSkillContext.write_cell`, `_diag_prerun_window_state`, `_diag_vba_log_line`, `_diag_vba_run_failure`, `_perf_trace`, `_vba_trace`, `node_worker_command`, `run_js_pipeline_with_node`, `stream`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

@@ -68,7 +68,12 @@ called_by:
   - "PythonComSkillContext.append_same_format_sheets"
   - "PythonComSkillContext.copy_sheet"
   - "PythonComSkillContext.paste_copied"
+  - "_fill_step"
+  - "_row_run_steps"
+  - "_touched_sheet_pairs"
   - "_verify_recorded_expected_live"
+  - "consolidate_format_runs"
+  - "consolidate_literal_runs"
 reads:
   - "self._app"
   - "self._session"
@@ -87,7 +92,7 @@ timestamp: "0.8.0-gen"
 
 ## 관계
 - 호출: `_alias_open_workbook_name`, `_match_workbook_by_stable_key`, `_tick`, `_user_facing_workbook_names`, `_vba_trace`, `_workbook_name_lookup_keys`, `append`, `names`, `normalize_sheet_lookup`
-- 피호출(영향 전파 경로): `PythonComSkillContext._ctx_and_sheet_from_spec`, `PythonComSkillContext.append_same_format_sheets`, `PythonComSkillContext.copy_sheet`, `PythonComSkillContext.paste_copied`, `_verify_recorded_expected_live`
+- 피호출(영향 전파 경로): `PythonComSkillContext._ctx_and_sheet_from_spec`, `PythonComSkillContext.append_same_format_sheets`, `PythonComSkillContext.copy_sheet`, `PythonComSkillContext.paste_copied`, `_fill_step`, `_row_run_steps`, `_touched_sheet_pairs`, `_verify_recorded_expected_live`, `consolidate_format_runs`, `consolidate_literal_runs`
 
 ## 실패/예외
 - `PythonComSkillError`

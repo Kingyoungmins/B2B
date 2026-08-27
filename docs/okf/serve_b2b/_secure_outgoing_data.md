@@ -25,11 +25,11 @@ raises: []
 # ── 유기적 관계 ──
 calls:
   - "_vba_trace"
+  - "any_secured"
+  - "encrypt_for_download"
 calls_external:
   - "BACKEND_DIR"
-  - "any_secured"
   - "data"
-  - "encrypt_for_download"
   - "err"
   - "filename"
   - "len"
@@ -53,7 +53,7 @@ timestamp: "0.8.0-gen"
 - 없음(정적 분석 기준)
 
 ## 관계
-- 호출: `_vba_trace`
+- 호출: `_vba_trace`, `any_secured`, `encrypt_for_download`
 - 피호출(영향 전파 경로): `B2BHandler.handle_backend_download`, `B2BHandler.handle_workbook_source_download`, `build_workbook_archive`
 
 ## 실패/예외

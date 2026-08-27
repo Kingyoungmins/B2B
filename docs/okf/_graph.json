@@ -511,7 +511,8 @@
       "signature": "()",
       "calls": [
         "_cleanup_excel_sessions_impl",
-        "_maybe_quit_idle_python_skill_app"
+        "_maybe_quit_idle_python_skill_app",
+        "start"
       ],
       "side_effects": [
         "상태 변경(전역/세션): EXCEL_QUEUE, EXCEL_THREAD"
@@ -592,6 +593,7 @@
         "add",
         "append",
         "clear",
+        "start",
         "values"
       ],
       "side_effects": [
@@ -701,7 +703,8 @@
         "_extract_pptx_slide_texts",
         "append",
         "range",
-        "read"
+        "read",
+        "start"
       ],
       "side_effects": [
         "파일시스템 변경/IO"
@@ -789,7 +792,9 @@
         "logic_backup_dir_info",
         "node_executable",
         "proxy",
-        "send_json"
+        "send_json",
+        "status",
+        "stream"
       ],
       "side_effects": [
         "파일시스템 변경/IO"
@@ -841,6 +846,7 @@
         "cleanup_excel_sessions",
         "cleanup_node_worker",
         "content_disposition_attachment",
+        "encrypt_for_download",
         "end_headers",
         "handle_assist_attachment",
         "handle_backend_pipeline_run",
@@ -889,6 +895,8 @@
         "read_json_body",
         "reset_logic_backup_dir",
         "send_json",
+        "start",
+        "update_config",
         "write"
       ],
       "side_effects": [
@@ -982,6 +990,7 @@
       "signature": "(self, payload, status=200)",
       "calls": [
         "end_headers",
+        "status",
         "write"
       ],
       "side_effects": [
@@ -1074,10 +1083,14 @@
         "_file_label_kind",
         "_ole_office_verdict",
         "_vba_trace",
+        "config",
         "excel_available",
         "inspect_workbook",
         "is_csv_path",
+        "mark_released",
+        "maybe_decrypt_upload",
         "read",
+        "remember_label",
         "send_json",
         "values",
         "write"
@@ -1182,6 +1195,7 @@
         "read_json_body",
         "run_backend_pipeline_payload",
         "send_json",
+        "start",
         "update_pipeline_job"
       ],
       "side_effects": [
@@ -2664,7 +2678,8 @@
       "signature": "(s, delta, current_year=2000)",
       "calls": [
         "_days_in_month",
-        "append"
+        "append",
+        "start"
       ],
       "side_effects": [
         "없음(정적 분석 기준)"
@@ -3206,6 +3221,7 @@
       "calls": [
         "_file_label_kind",
         "_ole_directory_stream_names",
+        "close",
         "range",
         "read"
       ],
@@ -3808,7 +3824,9 @@
       "extraction": "ast",
       "loc": "serve_b2b.py:4902-4927",
       "signature": "(pid)",
-      "calls": [],
+      "calls": [
+        "status"
+      ],
       "side_effects": [
         "없음(정적 분석 기준)"
       ],
@@ -4210,7 +4228,9 @@
       "loc": "serve_b2b.py:5348-5368",
       "signature": "(data, filename, query='')",
       "calls": [
-        "_vba_trace"
+        "_vba_trace",
+        "any_secured",
+        "encrypt_for_download"
       ],
       "side_effects": [
         "없음(정적 분석 기준)"
@@ -4232,6 +4252,7 @@
         "_current_app_version",
         "b2b_logs_dir",
         "logic_backup_dir",
+        "start",
         "writable_app_dir"
       ],
       "side_effects": [
@@ -4248,7 +4269,9 @@
       "extraction": "ast",
       "loc": "serve_b2b.py:5398-5405",
       "signature": "(reason='shutdown', timeout=4.0)",
-      "calls": [],
+      "calls": [
+        "stop"
+      ],
       "side_effects": [
         "없음(정적 분석 기준)"
       ],
@@ -4267,7 +4290,8 @@
         "_reset_trace_logs",
         "_runtime_maintenance_loop",
         "_start_log_sync",
-        "cleanup_stale_temp_artifacts"
+        "cleanup_stale_temp_artifacts",
+        "start"
       ],
       "side_effects": [
         "상태 변경(전역/세션): RUNTIME_SAMPLER_STARTED"
@@ -5018,7 +5042,11 @@
         "_set_live_sessions_edit_unlock",
         "_vba_trace",
         "clear",
-        "excel_call"
+        "excel_call",
+        "marshal_app_stream",
+        "start",
+        "start_native_recording_impl",
+        "stream"
       ],
       "side_effects": [
         "상태 변경(전역/세션): NATIVE_RECORDING"
@@ -5066,7 +5094,9 @@
         "_vba_trace",
         "append",
         "clear",
-        "excel_call"
+        "excel_call",
+        "stop",
+        "stop_native_recording_impl"
       ],
       "side_effects": [
         "EXCEL_LOCK 직렬화"
@@ -5087,7 +5117,9 @@
       "extraction": "ast",
       "loc": "serve_b2b.py:7395-7399",
       "signature": "()",
-      "calls": [],
+      "calls": [
+        "status"
+      ],
       "side_effects": [
         "없음(정적 분석 기준)"
       ],
@@ -5109,6 +5141,7 @@
         "append",
         "book",
         "sheet",
+        "sheet_expected_state",
         "values"
       ],
       "side_effects": [
@@ -5653,7 +5686,8 @@
       "loc": "serve_b2b.py:8453-8507",
       "signature": "(code, entry=None)",
       "calls": [
-        "replace"
+        "replace",
+        "start"
       ],
       "side_effects": [
         "없음(정적 분석 기준)"
@@ -6059,7 +6093,8 @@
       "loc": "serve_b2b.py:9069-9079",
       "signature": "(pid=None)",
       "calls": [
-        "_suppress_vba_debug_windows"
+        "_suppress_vba_debug_windows",
+        "start"
       ],
       "side_effects": [
         "없음(정적 분석 기준)"
@@ -7705,6 +7740,7 @@
         "_ws",
         "row",
         "sheet",
+        "start",
         "used_last_col",
         "used_last_row"
       ],
@@ -8993,7 +9029,8 @@
         "last_row",
         "range",
         "read",
-        "sheet"
+        "sheet",
+        "start"
       ],
       "side_effects": [
         "Excel COM 조작(파괴적일 수 있음)"
@@ -9026,7 +9063,8 @@
         "_vba_trace",
         "_ws",
         "append",
-        "last_col"
+        "last_col",
+        "stop"
       ],
       "side_effects": [
         "Excel COM 조작(파괴적일 수 있음)"
@@ -9063,7 +9101,8 @@
         "last_row",
         "range",
         "read",
-        "sheet"
+        "sheet",
+        "start"
       ],
       "side_effects": [
         "없음(정적 분석 기준)"
@@ -14988,6 +15027,7 @@
       "loc": "serve_b2b.py:19235-19252",
       "signature": "(fn, primary, other, has_varkw, allowed)",
       "calls": [
+        "allowed",
         "value"
       ],
       "side_effects": [
@@ -15007,6 +15047,7 @@
       "calls": [
         "_wrap_ctx_helper_kwargs",
         "add",
+        "allowed",
         "values"
       ],
       "side_effects": [
@@ -15748,7 +15789,8 @@
       "loc": "serve_b2b.py:20160-20177",
       "signature": "(app, enabled=True)",
       "calls": [
-        "_hide_excel_hwnd"
+        "_hide_excel_hwnd",
+        "start"
       ],
       "side_effects": [
         "없음(정적 분석 기준)"
@@ -16014,6 +16056,7 @@
         "_vba_trace",
         "append",
         "cell_to_json",
+        "close",
         "excel_available",
         "excel_call",
         "inspect_csv_workbook",
@@ -16101,6 +16144,7 @@
       "calls": [
         "append",
         "cell_to_json",
+        "close",
         "excel_available",
         "is_csv_path",
         "iter_rows",
@@ -16371,6 +16415,7 @@
       "signature": "(template_path, result_path, sheets, forced_value_cells=None)",
       "calls": [
         "cell",
+        "close",
         "is_csv_path",
         "openpyxl_load_workbook_compatible",
         "sheets",
@@ -16445,6 +16490,7 @@
       "loc": "serve_b2b.py:21506-21896",
       "signature": "(payload, job_id=None)",
       "calls": [
+        "close",
         "hidden_subprocess_kwargs",
         "node_executable",
         "read",
@@ -16870,6 +16916,2323 @@
         "DIFFS",
         "RESULTS"
       ]
+    },
+    {
+      "id": "check_for_update",
+      "module": "launch_b2b.py",
+      "lang": "python",
+      "kind": "function",
+      "extraction": "ast",
+      "loc": "launch_b2b.py:39-113",
+      "signature": "() -> None",
+      "calls": [
+        "read"
+      ],
+      "side_effects": [
+        "네트워크 호출",
+        "파일시스템 변경/IO"
+      ],
+      "reads": [
+        "CURRENT_VERSION",
+        "FONT",
+        "VERSION_CHECK_URL"
+      ],
+      "writes": []
+    },
+    {
+      "id": "candidate_ports",
+      "module": "launch_b2b.py",
+      "lang": "python",
+      "kind": "function",
+      "extraction": "ast",
+      "loc": "launch_b2b.py:117-124",
+      "signature": "() -> list[int]",
+      "calls": [
+        "append"
+      ],
+      "side_effects": [
+        "없음(정적 분석 기준)"
+      ],
+      "reads": [],
+      "writes": []
+    },
+    {
+      "id": "wait_for_server",
+      "module": "launch_b2b.py",
+      "lang": "python",
+      "kind": "function",
+      "extraction": "ast",
+      "loc": "launch_b2b.py:127-136",
+      "signature": "(url: str, timeout: float=15.0) -> bool",
+      "calls": [],
+      "side_effects": [
+        "네트워크 호출"
+      ],
+      "reads": [],
+      "writes": []
+    },
+    {
+      "id": "is_port_available",
+      "module": "launch_b2b.py",
+      "lang": "python",
+      "kind": "function",
+      "extraction": "ast",
+      "loc": "launch_b2b.py:139-147",
+      "signature": "(host: str, port: int) -> bool",
+      "calls": [],
+      "side_effects": [
+        "네트워크 호출"
+      ],
+      "reads": [],
+      "writes": []
+    },
+    {
+      "id": "BrowserLifecycle.__init__",
+      "module": "launch_b2b.py",
+      "lang": "python",
+      "kind": "method",
+      "extraction": "ast",
+      "loc": "launch_b2b.py:156-160",
+      "signature": "(self) -> None",
+      "calls": [],
+      "side_effects": [
+        "상태 변경(전역/세션): self.empty_since, self.had_client, self.lock, self.sessions"
+      ],
+      "reads": [],
+      "writes": [
+        "self.empty_since",
+        "self.had_client",
+        "self.lock",
+        "self.sessions"
+      ]
+    },
+    {
+      "id": "BrowserLifecycle.ping",
+      "module": "launch_b2b.py",
+      "lang": "python",
+      "kind": "method",
+      "extraction": "ast",
+      "loc": "launch_b2b.py:162-167",
+      "signature": "(self, session_id: str) -> None",
+      "calls": [],
+      "side_effects": [
+        "상태 변경(전역/세션): self.empty_since, self.had_client"
+      ],
+      "reads": [
+        "self.lock",
+        "self.sessions"
+      ],
+      "writes": [
+        "self.empty_since",
+        "self.had_client"
+      ]
+    },
+    {
+      "id": "BrowserLifecycle.close",
+      "module": "launch_b2b.py",
+      "lang": "python",
+      "kind": "method",
+      "extraction": "ast",
+      "loc": "launch_b2b.py:169-174",
+      "signature": "(self, session_id: str) -> None",
+      "calls": [],
+      "side_effects": [
+        "상태 변경(전역/세션): self.empty_since"
+      ],
+      "reads": [
+        "self.empty_since",
+        "self.had_client",
+        "self.lock",
+        "self.sessions"
+      ],
+      "writes": [
+        "self.empty_since"
+      ]
+    },
+    {
+      "id": "BrowserLifecycle.has_active_sessions",
+      "module": "launch_b2b.py",
+      "lang": "python",
+      "kind": "method",
+      "extraction": "ast",
+      "loc": "launch_b2b.py:176-185",
+      "signature": "(self) -> bool",
+      "calls": [],
+      "side_effects": [
+        "없음(정적 분석 기준)"
+      ],
+      "reads": [
+        "HEARTBEAT_TIMEOUT_SECONDS",
+        "self.lock",
+        "self.sessions"
+      ],
+      "writes": []
+    },
+    {
+      "id": "BrowserLifecycle.should_stop",
+      "module": "launch_b2b.py",
+      "lang": "python",
+      "kind": "method",
+      "extraction": "ast",
+      "loc": "launch_b2b.py:187-200",
+      "signature": "(self) -> bool",
+      "calls": [],
+      "side_effects": [
+        "상태 변경(전역/세션): self.empty_since"
+      ],
+      "reads": [
+        "EMPTY_CLIENT_GRACE_SECONDS",
+        "HEARTBEAT_TIMEOUT_SECONDS",
+        "self.empty_since",
+        "self.had_client",
+        "self.lock",
+        "self.sessions"
+      ],
+      "writes": [
+        "self.empty_since"
+      ]
+    },
+    {
+      "id": "app_url",
+      "module": "launch_b2b.py",
+      "lang": "python",
+      "kind": "function",
+      "extraction": "ast",
+      "loc": "launch_b2b.py:203-204",
+      "signature": "(port: int) -> str",
+      "calls": [],
+      "side_effects": [
+        "없음(정적 분석 기준)"
+      ],
+      "reads": [
+        "LAUNCH_HOST"
+      ],
+      "writes": []
+    },
+    {
+      "id": "read_session_id",
+      "module": "launch_b2b.py",
+      "lang": "python",
+      "kind": "function",
+      "extraction": "ast",
+      "loc": "launch_b2b.py:207-211",
+      "signature": "(handler) -> str",
+      "calls": [
+        "read"
+      ],
+      "side_effects": [
+        "없음(정적 분석 기준)"
+      ],
+      "reads": [],
+      "writes": []
+    },
+    {
+      "id": "make_handler",
+      "module": "launch_b2b.py",
+      "lang": "python",
+      "kind": "function",
+      "extraction": "ast",
+      "loc": "launch_b2b.py:214-231",
+      "signature": "(lifecycle: BrowserLifecycle)",
+      "calls": [
+        "cleanup_excel_sessions",
+        "close",
+        "do_POST",
+        "end_headers",
+        "has_active_sessions",
+        "ping",
+        "read_session_id"
+      ],
+      "side_effects": [
+        "없음(정적 분석 기준)"
+      ],
+      "reads": [
+        "BASE_DIR",
+        "self.end_headers",
+        "self.path",
+        "self.send_response"
+      ],
+      "writes": []
+    },
+    {
+      "id": "start_server",
+      "module": "launch_b2b.py",
+      "lang": "python",
+      "kind": "function",
+      "extraction": "ast",
+      "loc": "launch_b2b.py:234-239",
+      "signature": "(port: int, lifecycle: BrowserLifecycle) -> ReusableThreadingTCPServer",
+      "calls": [
+        "make_handler",
+        "start"
+      ],
+      "side_effects": [
+        "없음(정적 분석 기준)"
+      ],
+      "reads": [
+        "SERVER_HOST"
+      ],
+      "writes": []
+    },
+    {
+      "id": "start_lifecycle_monitor",
+      "module": "launch_b2b.py",
+      "lang": "python",
+      "kind": "function",
+      "extraction": "ast",
+      "loc": "launch_b2b.py:242-250",
+      "signature": "(lifecycle: BrowserLifecycle, shutdown_event: threading.Event) -> None",
+      "calls": [
+        "should_stop",
+        "start"
+      ],
+      "side_effects": [
+        "없음(정적 분석 기준)"
+      ],
+      "reads": [],
+      "writes": []
+    },
+    {
+      "id": "show_control_window",
+      "module": "launch_b2b.py",
+      "lang": "python",
+      "kind": "function",
+      "extraction": "ast",
+      "loc": "launch_b2b.py:253-288",
+      "signature": "(url: str, on_close) -> None",
+      "calls": [],
+      "side_effects": [
+        "파일시스템 변경/IO"
+      ],
+      "reads": [
+        "FONT"
+      ],
+      "writes": []
+    },
+    {
+      "id": "main",
+      "module": "launch_b2b.py",
+      "lang": "python",
+      "kind": "function",
+      "extraction": "ast",
+      "loc": "launch_b2b.py:291-347",
+      "signature": "() -> int",
+      "calls": [
+        "app_url",
+        "append",
+        "candidate_ports",
+        "check_for_update",
+        "cleanup_backend_runtime_files",
+        "cleanup_excel_sessions",
+        "cleanup_node_worker",
+        "is_port_available",
+        "show_control_window",
+        "start_lifecycle_monitor",
+        "start_runtime_maintenance_threads",
+        "start_server",
+        "wait_for_server"
+      ],
+      "side_effects": [
+        "파일시스템 변경/IO"
+      ],
+      "reads": [
+        "BASE_DIR",
+        "SERVER_HOST"
+      ],
+      "writes": []
+    },
+    {
+      "id": "_upstream_config",
+      "module": "log_dash.py",
+      "lang": "python",
+      "kind": "function",
+      "extraction": "ast",
+      "loc": "log_dash.py:34-41",
+      "signature": "()",
+      "calls": [
+        "config"
+      ],
+      "side_effects": [
+        "없음(정적 분석 기준)"
+      ],
+      "reads": [],
+      "writes": []
+    },
+    {
+      "id": "allowed",
+      "module": "log_dash.py",
+      "lang": "python",
+      "kind": "function",
+      "extraction": "ast",
+      "loc": "log_dash.py:44-47",
+      "signature": "(sub_path)",
+      "calls": [],
+      "side_effects": [
+        "없음(정적 분석 기준)"
+      ],
+      "reads": [
+        "ALLOWED_PATHS"
+      ],
+      "writes": []
+    },
+    {
+      "id": "build_request",
+      "module": "log_dash.py",
+      "lang": "python",
+      "kind": "function",
+      "extraction": "ast",
+      "loc": "log_dash.py:50-68",
+      "signature": "(sub_path)",
+      "calls": [
+        "_upstream_config",
+        "allowed"
+      ],
+      "side_effects": [
+        "네트워크 호출"
+      ],
+      "reads": [],
+      "writes": []
+    },
+    {
+      "id": "stream",
+      "module": "log_dash.py",
+      "lang": "python",
+      "kind": "function",
+      "extraction": "ast",
+      "loc": "log_dash.py:71-106",
+      "signature": "(sub_path, write, send_headers, timeout=60.0)",
+      "calls": [
+        "build_request",
+        "read",
+        "write"
+      ],
+      "side_effects": [
+        "네트워크 호출"
+      ],
+      "reads": [
+        "CHUNK"
+      ],
+      "writes": []
+    },
+    {
+      "id": "_env",
+      "module": "log_sync.py",
+      "lang": "python",
+      "kind": "function",
+      "extraction": "ast",
+      "loc": "log_sync.py:94-95",
+      "signature": "(name, default='')",
+      "calls": [],
+      "side_effects": [
+        "없음(정적 분석 기준)"
+      ],
+      "reads": [],
+      "writes": []
+    },
+    {
+      "id": "_normalize_base",
+      "module": "log_sync.py",
+      "lang": "python",
+      "kind": "function",
+      "extraction": "ast",
+      "loc": "log_sync.py:98-106",
+      "signature": "(raw)",
+      "calls": [
+        "replace"
+      ],
+      "side_effects": [
+        "없음(정적 분석 기준)"
+      ],
+      "reads": [],
+      "writes": []
+    },
+    {
+      "id": "config",
+      "module": "log_sync.py",
+      "lang": "python",
+      "kind": "function",
+      "extraction": "ast",
+      "loc": "log_sync.py:109-120",
+      "signature": "()",
+      "calls": [
+        "_env",
+        "_normalize_base"
+      ],
+      "side_effects": [
+        "없음(정적 분석 기준)"
+      ],
+      "reads": [
+        "DEFAULT_API_KEY",
+        "DEFAULT_INTERVAL_SECONDS",
+        "DEFAULT_UPSTREAM_URL",
+        "_CONFIG"
+      ],
+      "writes": []
+    },
+    {
+      "id": "update_config",
+      "module": "log_sync.py",
+      "lang": "python",
+      "kind": "function",
+      "extraction": "ast",
+      "loc": "log_sync.py:123-167",
+      "signature": "(values)",
+      "calls": [
+        "_normalize_base",
+        "config",
+        "status",
+        "values"
+      ],
+      "side_effects": [
+        "상태 변경(전역/세션): _CONFIG, _STATE"
+      ],
+      "reads": [
+        "_CONFIG",
+        "_LOCK",
+        "_STATE",
+        "_WAKE"
+      ],
+      "writes": [
+        "_CONFIG",
+        "_STATE"
+      ]
+    },
+    {
+      "id": "current_user",
+      "module": "log_sync.py",
+      "lang": "python",
+      "kind": "function",
+      "extraction": "ast",
+      "loc": "log_sync.py:172-200",
+      "signature": "()",
+      "calls": [],
+      "side_effects": [
+        "서브프로세스/OS 호출"
+      ],
+      "reads": [],
+      "writes": []
+    },
+    {
+      "id": "_new_session_id",
+      "module": "log_sync.py",
+      "lang": "python",
+      "kind": "function",
+      "extraction": "ast",
+      "loc": "log_sync.py:203-204",
+      "signature": "()",
+      "calls": [],
+      "side_effects": [
+        "없음(정적 분석 기준)"
+      ],
+      "reads": [],
+      "writes": []
+    },
+    {
+      "id": "_now_iso",
+      "module": "log_sync.py",
+      "lang": "python",
+      "kind": "function",
+      "extraction": "ast",
+      "loc": "log_sync.py:207-208",
+      "signature": "()",
+      "calls": [],
+      "side_effects": [
+        "없음(정적 분석 기준)"
+      ],
+      "reads": [],
+      "writes": []
+    },
+    {
+      "id": "_endpoint",
+      "module": "log_sync.py",
+      "lang": "python",
+      "kind": "function",
+      "extraction": "ast",
+      "loc": "log_sync.py:213-215",
+      "signature": "(path)",
+      "calls": [
+        "config"
+      ],
+      "side_effects": [
+        "없음(정적 분석 기준)"
+      ],
+      "reads": [],
+      "writes": []
+    },
+    {
+      "id": "_as_result",
+      "module": "log_sync.py",
+      "lang": "python",
+      "kind": "function",
+      "extraction": "ast",
+      "loc": "log_sync.py:218-224",
+      "signature": "(value)",
+      "calls": [
+        "value"
+      ],
+      "side_effects": [
+        "없음(정적 분석 기준)"
+      ],
+      "reads": [],
+      "writes": []
+    },
+    {
+      "id": "_post",
+      "module": "log_sync.py",
+      "lang": "python",
+      "kind": "function",
+      "extraction": "ast",
+      "loc": "log_sync.py:227-241",
+      "signature": "(path, payload, timeout=15.0)",
+      "calls": [
+        "_endpoint",
+        "config",
+        "read"
+      ],
+      "side_effects": [
+        "네트워크 호출"
+      ],
+      "reads": [],
+      "writes": []
+    },
+    {
+      "id": "_encode",
+      "module": "log_sync.py",
+      "lang": "python",
+      "kind": "function",
+      "extraction": "ast",
+      "loc": "log_sync.py:244-245",
+      "signature": "(blob)",
+      "calls": [],
+      "side_effects": [
+        "없음(정적 분석 기준)"
+      ],
+      "reads": [],
+      "writes": []
+    },
+    {
+      "id": "_note_ok",
+      "module": "log_sync.py",
+      "lang": "python",
+      "kind": "function",
+      "extraction": "ast",
+      "loc": "log_sync.py:248-255",
+      "signature": "(result=None)",
+      "calls": [
+        "_now_iso"
+      ],
+      "side_effects": [
+        "상태 변경(전역/세션): _STATE"
+      ],
+      "reads": [
+        "_LOCK",
+        "_STATE"
+      ],
+      "writes": [
+        "_STATE"
+      ]
+    },
+    {
+      "id": "_note_fail",
+      "module": "log_sync.py",
+      "lang": "python",
+      "kind": "function",
+      "extraction": "ast",
+      "loc": "log_sync.py:258-262",
+      "signature": "(err)",
+      "calls": [],
+      "side_effects": [
+        "상태 변경(전역/세션): _STATE"
+      ],
+      "reads": [
+        "_LOCK",
+        "_STATE"
+      ],
+      "writes": [
+        "_STATE"
+      ]
+    },
+    {
+      "id": "_session_files",
+      "module": "log_sync.py",
+      "lang": "python",
+      "kind": "function",
+      "extraction": "ast",
+      "loc": "log_sync.py:267-298",
+      "signature": "()",
+      "calls": [
+        "add",
+        "append"
+      ],
+      "side_effects": [
+        "없음(정적 분석 기준)"
+      ],
+      "reads": [
+        "LOG_PATTERNS",
+        "MTIME_SLACK_SECONDS",
+        "_CONTEXT",
+        "_STATE"
+      ],
+      "writes": []
+    },
+    {
+      "id": "_session_skills",
+      "module": "log_sync.py",
+      "lang": "python",
+      "kind": "function",
+      "extraction": "ast",
+      "loc": "log_sync.py:301-325",
+      "signature": "()",
+      "calls": [
+        "append"
+      ],
+      "side_effects": [
+        "없음(정적 분석 기준)"
+      ],
+      "reads": [
+        "MAX_SKILL_BYTES",
+        "MTIME_SLACK_SECONDS",
+        "SKILL_SETTLE_SECONDS",
+        "_CONTEXT",
+        "_STATE"
+      ],
+      "writes": []
+    },
+    {
+      "id": "_ensure_session",
+      "module": "log_sync.py",
+      "lang": "python",
+      "kind": "function",
+      "extraction": "ast",
+      "loc": "log_sync.py:330-358",
+      "signature": "(timeout=15.0)",
+      "calls": [
+        "_as_result",
+        "_note_fail",
+        "_note_ok",
+        "_post"
+      ],
+      "side_effects": [
+        "상태 변경(전역/세션): _STATE"
+      ],
+      "reads": [
+        "_CONTEXT",
+        "_LOCK",
+        "_STATE"
+      ],
+      "writes": [
+        "_STATE"
+      ]
+    },
+    {
+      "id": "_remote_name",
+      "module": "log_sync.py",
+      "lang": "python",
+      "kind": "function",
+      "extraction": "ast",
+      "loc": "log_sync.py:361-369",
+      "signature": "(path)",
+      "calls": [],
+      "side_effects": [
+        "없음(정적 분석 기준)"
+      ],
+      "reads": [
+        "_STATE"
+      ],
+      "writes": []
+    },
+    {
+      "id": "_over_total_budget",
+      "module": "log_sync.py",
+      "lang": "python",
+      "kind": "function",
+      "extraction": "ast",
+      "loc": "log_sync.py:372-375",
+      "signature": "()",
+      "calls": [],
+      "side_effects": [
+        "없음(정적 분석 기준)"
+      ],
+      "reads": [
+        "MAX_TOTAL_BYTES",
+        "_STATE"
+      ],
+      "writes": []
+    },
+    {
+      "id": "_send_log_file",
+      "module": "log_sync.py",
+      "lang": "python",
+      "kind": "function",
+      "extraction": "ast",
+      "loc": "log_sync.py:378-431",
+      "signature": "(path, timeout=15.0, deadline=None, gen=0)",
+      "calls": [
+        "_as_result",
+        "_encode",
+        "_note_fail",
+        "_note_ok",
+        "_post",
+        "_remote_name",
+        "range",
+        "read"
+      ],
+      "side_effects": [
+        "상태 변경(전역/세션): _STATE",
+        "파일시스템 변경/IO"
+      ],
+      "reads": [
+        "CHUNK_BYTES",
+        "MAX_CHUNKS_PER_FILE_PER_TICK",
+        "MAX_FILE_BYTES",
+        "MAX_TOTAL_BYTES",
+        "_LOCK",
+        "_STATE"
+      ],
+      "writes": [
+        "_STATE"
+      ]
+    },
+    {
+      "id": "_send_skill",
+      "module": "log_sync.py",
+      "lang": "python",
+      "kind": "function",
+      "extraction": "ast",
+      "loc": "log_sync.py:434-459",
+      "signature": "(path, timeout=20.0, deadline=None)",
+      "calls": [
+        "_as_result",
+        "_encode",
+        "_note_fail",
+        "_note_ok",
+        "_post"
+      ],
+      "side_effects": [
+        "상태 변경(전역/세션): _STATE",
+        "파일시스템 변경/IO"
+      ],
+      "reads": [
+        "_LOCK",
+        "_STATE"
+      ],
+      "writes": [
+        "_STATE"
+      ]
+    },
+    {
+      "id": "tick",
+      "module": "log_sync.py",
+      "lang": "python",
+      "kind": "function",
+      "extraction": "ast",
+      "loc": "log_sync.py:462-505",
+      "signature": "(timeout=15.0, wait_running=0.0, deadline=None)",
+      "calls": [
+        "_ensure_session",
+        "_ensure_user",
+        "_note_fail",
+        "_over_total_budget",
+        "_send_log_file",
+        "_send_skill",
+        "_session_files",
+        "_session_skills",
+        "config"
+      ],
+      "side_effects": [
+        "상태 변경(전역/세션): _STATE"
+      ],
+      "reads": [
+        "_LOCK",
+        "_STATE"
+      ],
+      "writes": [
+        "_STATE"
+      ]
+    },
+    {
+      "id": "_ensure_user",
+      "module": "log_sync.py",
+      "lang": "python",
+      "kind": "function",
+      "extraction": "ast",
+      "loc": "log_sync.py:508-520",
+      "signature": "()",
+      "calls": [
+        "current_user"
+      ],
+      "side_effects": [
+        "상태 변경(전역/세션): _STATE"
+      ],
+      "reads": [
+        "_LOCK",
+        "_STATE"
+      ],
+      "writes": [
+        "_STATE"
+      ]
+    },
+    {
+      "id": "_loop",
+      "module": "log_sync.py",
+      "lang": "python",
+      "kind": "function",
+      "extraction": "ast",
+      "loc": "log_sync.py:523-537",
+      "signature": "()",
+      "calls": [
+        "clear",
+        "config",
+        "tick"
+      ],
+      "side_effects": [
+        "없음(정적 분석 기준)"
+      ],
+      "reads": [
+        "_STATE",
+        "_WAKE"
+      ],
+      "writes": []
+    },
+    {
+      "id": "start",
+      "module": "log_sync.py",
+      "lang": "python",
+      "kind": "function",
+      "extraction": "ast",
+      "loc": "log_sync.py:540-573",
+      "signature": "(app_version='', log_dirs=(), skill_dirs=(), extra_files=(), app_dir='', config_values=None)",
+      "calls": [
+        "_atexit_stop",
+        "_loop",
+        "_new_session_id",
+        "_now_iso",
+        "config",
+        "status",
+        "update_config"
+      ],
+      "side_effects": [
+        "상태 변경(전역/세션): _CONTEXT, _THREAD"
+      ],
+      "reads": [
+        "_CONTEXT",
+        "_LOCK",
+        "_STATE",
+        "_THREAD"
+      ],
+      "writes": [
+        "_CONTEXT",
+        "_THREAD"
+      ]
+    },
+    {
+      "id": "stop",
+      "module": "log_sync.py",
+      "lang": "python",
+      "kind": "function",
+      "extraction": "ast",
+      "loc": "log_sync.py:576-609",
+      "signature": "(reason='normal', timeout=6.0)",
+      "calls": [
+        "_note_fail",
+        "_note_ok",
+        "_now_iso",
+        "_post",
+        "config",
+        "status",
+        "tick"
+      ],
+      "side_effects": [
+        "상태 변경(전역/세션): _STATE"
+      ],
+      "reads": [
+        "_LOCK",
+        "_STATE",
+        "_WAKE"
+      ],
+      "writes": [
+        "_STATE"
+      ]
+    },
+    {
+      "id": "_atexit_stop",
+      "module": "log_sync.py",
+      "lang": "python",
+      "kind": "function",
+      "extraction": "ast",
+      "loc": "log_sync.py:612-616",
+      "signature": "()",
+      "calls": [
+        "stop"
+      ],
+      "side_effects": [
+        "없음(정적 분석 기준)"
+      ],
+      "reads": [],
+      "writes": []
+    },
+    {
+      "id": "status",
+      "module": "log_sync.py",
+      "lang": "python",
+      "kind": "function",
+      "extraction": "ast",
+      "loc": "log_sync.py:619-644",
+      "signature": "()",
+      "calls": [
+        "config"
+      ],
+      "side_effects": [
+        "없음(정적 분석 기준)"
+      ],
+      "reads": [
+        "_LOCK",
+        "_STATE"
+      ],
+      "writes": []
+    },
+    {
+      "id": "extract_macro_body",
+      "module": "native_macro_recorder.py",
+      "lang": "python",
+      "kind": "function",
+      "extraction": "ast",
+      "loc": "native_macro_recorder.py:51-64",
+      "signature": "(module_code: str) -> str",
+      "calls": [
+        "append"
+      ],
+      "side_effects": [
+        "없음(정적 분석 기준)"
+      ],
+      "reads": [
+        "_COMMENT_ONLY",
+        "_SUB_END",
+        "_SUB_HEADER"
+      ],
+      "writes": []
+    },
+    {
+      "id": "_drop_dead_typing_lines",
+      "module": "native_macro_recorder.py",
+      "lang": "python",
+      "kind": "function",
+      "extraction": "ast",
+      "loc": "native_macro_recorder.py:76-105",
+      "signature": "(lines)",
+      "calls": [
+        "append",
+        "replace"
+      ],
+      "side_effects": [
+        "없음(정적 분석 기준)"
+      ],
+      "reads": [
+        "_ACTIVECELL_ASSIGN",
+        "_CUTCOPY_OFF",
+        "_SELECT_LINE",
+        "_SINGLE_CELL_SELECT"
+      ],
+      "writes": []
+    },
+    {
+      "id": "sanitize_recorded_vba",
+      "module": "native_macro_recorder.py",
+      "lang": "python",
+      "kind": "function",
+      "extraction": "ast",
+      "loc": "native_macro_recorder.py:108-147",
+      "signature": "(body: str) -> str",
+      "calls": [
+        "_drop_dead_typing_lines",
+        "append"
+      ],
+      "side_effects": [
+        "없음(정적 분석 기준)"
+      ],
+      "reads": [
+        "_NOISE_LINE",
+        "_SELECTION_LINE",
+        "_SELECT_LINE",
+        "_SHEETY"
+      ],
+      "writes": []
+    },
+    {
+      "id": "rewrite_new_sheet_refs",
+      "module": "native_macro_recorder.py",
+      "lang": "python",
+      "kind": "function",
+      "extraction": "ast",
+      "loc": "native_macro_recorder.py:159-208",
+      "signature": "(body)",
+      "calls": [
+        "range"
+      ],
+      "side_effects": [
+        "없음(정적 분석 기준)"
+      ],
+      "reads": [
+        "_SHEET_ADD_RE",
+        "_SHEET_LIT_RE"
+      ],
+      "writes": []
+    },
+    {
+      "id": "wrap_as_b2b_skill",
+      "module": "native_macro_recorder.py",
+      "lang": "python",
+      "kind": "function",
+      "extraction": "ast",
+      "loc": "native_macro_recorder.py:211-217",
+      "signature": "(body: str) -> str",
+      "calls": [],
+      "side_effects": [
+        "없음(정적 분석 기준)"
+      ],
+      "reads": [],
+      "writes": []
+    },
+    {
+      "id": "summarize_vba_actions",
+      "module": "native_macro_recorder.py",
+      "lang": "python",
+      "kind": "function",
+      "extraction": "ast",
+      "loc": "native_macro_recorder.py:220-238",
+      "signature": "(body: str, limit: int=3) -> str",
+      "calls": [
+        "append"
+      ],
+      "side_effects": [
+        "없음(정적 분석 기준)"
+      ],
+      "reads": [],
+      "writes": []
+    },
+    {
+      "id": "_existing_macro_modules",
+      "module": "native_macro_recorder.py",
+      "lang": "python",
+      "kind": "function",
+      "extraction": "ast",
+      "loc": "native_macro_recorder.py:243-253",
+      "signature": "(app)",
+      "calls": [
+        "add"
+      ],
+      "side_effects": [
+        "Excel COM 조작(파괴적일 수 있음)"
+      ],
+      "reads": [
+        "VBEXT_CT_STDMODULE"
+      ],
+      "writes": []
+    },
+    {
+      "id": "_record_button_label",
+      "module": "native_macro_recorder.py",
+      "lang": "python",
+      "kind": "function",
+      "extraction": "ast",
+      "loc": "native_macro_recorder.py:256-261",
+      "signature": "(app)",
+      "calls": [],
+      "side_effects": [
+        "없음(정적 분석 기준)"
+      ],
+      "reads": [
+        "_MACRO_RECORD_IDMSO"
+      ],
+      "writes": []
+    },
+    {
+      "id": "_macro_recording_active",
+      "module": "native_macro_recorder.py",
+      "lang": "python",
+      "kind": "function",
+      "extraction": "ast",
+      "loc": "native_macro_recorder.py:264-272",
+      "signature": "(app)",
+      "calls": [
+        "_record_button_label"
+      ],
+      "side_effects": [
+        "없음(정적 분석 기준)"
+      ],
+      "reads": [
+        "_RECORDING_LABEL_HINTS"
+      ],
+      "writes": []
+    },
+    {
+      "id": "_spawn_dialog_confirmer",
+      "module": "native_macro_recorder.py",
+      "lang": "python",
+      "kind": "function",
+      "extraction": "ast",
+      "loc": "native_macro_recorder.py:275-347",
+      "signature": "(app, timeout=8.0)",
+      "calls": [
+        "append",
+        "range",
+        "sort",
+        "start"
+      ],
+      "side_effects": [
+        "없음(정적 분석 기준)"
+      ],
+      "reads": [],
+      "writes": []
+    },
+    {
+      "id": "_read_numlock_state",
+      "module": "native_macro_recorder.py",
+      "lang": "python",
+      "kind": "function",
+      "extraction": "ast",
+      "loc": "native_macro_recorder.py:353-358",
+      "signature": "()",
+      "calls": [],
+      "side_effects": [
+        "없음(정적 분석 기준)"
+      ],
+      "reads": [],
+      "writes": []
+    },
+    {
+      "id": "_restore_numlock_state",
+      "module": "native_macro_recorder.py",
+      "lang": "python",
+      "kind": "function",
+      "extraction": "ast",
+      "loc": "native_macro_recorder.py:361-373",
+      "signature": "(prev)",
+      "calls": [],
+      "side_effects": [
+        "없음(정적 분석 기준)"
+      ],
+      "reads": [],
+      "writes": []
+    },
+    {
+      "id": "start_native_recording_impl",
+      "module": "native_macro_recorder.py",
+      "lang": "python",
+      "kind": "function",
+      "extraction": "ast",
+      "loc": "native_macro_recorder.py:381-424",
+      "signature": "(app)",
+      "calls": [
+        "_existing_macro_modules",
+        "_macro_recording_active",
+        "_read_numlock_state",
+        "_restore_numlock_state",
+        "_spawn_dialog_confirmer",
+        "clear"
+      ],
+      "side_effects": [
+        "상태 변경(전역/세션): RECORD_DIAG"
+      ],
+      "reads": [
+        "RECORD_DIAG",
+        "_MACRO_RECORD_IDMSO",
+        "_MACRO_RELATIVE_IDMSO"
+      ],
+      "writes": [
+        "RECORD_DIAG"
+      ]
+    },
+    {
+      "id": "_touched_sheet_pairs",
+      "module": "native_macro_recorder.py",
+      "lang": "python",
+      "kind": "function",
+      "extraction": "ast",
+      "loc": "native_macro_recorder.py:427-455",
+      "signature": "(harvested, harvested_sheets)",
+      "calls": [
+        "add",
+        "append",
+        "book"
+      ],
+      "side_effects": [
+        "없음(정적 분석 기준)"
+      ],
+      "reads": [],
+      "writes": []
+    },
+    {
+      "id": "stop_native_recording_impl",
+      "module": "native_macro_recorder.py",
+      "lang": "python",
+      "kind": "function",
+      "extraction": "ast",
+      "loc": "native_macro_recorder.py:458-581",
+      "signature": "(app, baseline)",
+      "calls": [
+        "_macro_recording_active",
+        "_touched_sheet_pairs",
+        "append",
+        "capture_expected_states",
+        "clear",
+        "extract_macro_body",
+        "raw",
+        "replace",
+        "rewrite_new_sheet_refs",
+        "sanitize_recorded_vba",
+        "summarize_vba_actions",
+        "wrap_as_b2b_skill"
+      ],
+      "side_effects": [
+        "Excel COM 조작(파괴적일 수 있음)",
+        "상태 변경(전역/세션): RECORD_DIAG"
+      ],
+      "reads": [
+        "RECORD_DIAG",
+        "VBEXT_CT_STDMODULE",
+        "_MACRO_RECORD_IDMSO"
+      ],
+      "writes": [
+        "RECORD_DIAG"
+      ]
+    },
+    {
+      "id": "_norm_cell",
+      "module": "record_service.py",
+      "lang": "python",
+      "kind": "function",
+      "extraction": "ast",
+      "loc": "record_service.py:52-60",
+      "signature": "(v)",
+      "calls": [],
+      "side_effects": [
+        "없음(정적 분석 기준)"
+      ],
+      "reads": [],
+      "writes": []
+    },
+    {
+      "id": "digest_grid",
+      "module": "record_service.py",
+      "lang": "python",
+      "kind": "function",
+      "extraction": "ast",
+      "loc": "record_service.py:63-76",
+      "signature": "(values)",
+      "calls": [
+        "_norm_cell",
+        "values"
+      ],
+      "side_effects": [
+        "없음(정적 분석 기준)"
+      ],
+      "reads": [],
+      "writes": []
+    },
+    {
+      "id": "sheet_merge_areas",
+      "module": "record_service.py",
+      "lang": "python",
+      "kind": "function",
+      "extraction": "ast",
+      "loc": "record_service.py:83-128",
+      "signature": "(ws, max_rows=MERGE_SCAN_MAX_ROWS, max_cells=MERGE_SCAN_MAX_CELLS)",
+      "calls": [
+        "Cells",
+        "Rows",
+        "add",
+        "append",
+        "range",
+        "replace",
+        "rows"
+      ],
+      "side_effects": [
+        "Excel COM 조작(파괴적일 수 있음)"
+      ],
+      "reads": [
+        "MERGE_SCAN_MAX_CELLS",
+        "MERGE_SCAN_MAX_ROWS"
+      ],
+      "writes": []
+    },
+    {
+      "id": "sheet_expected_state",
+      "module": "record_service.py",
+      "lang": "python",
+      "kind": "function",
+      "extraction": "ast",
+      "loc": "record_service.py:131-149",
+      "signature": "(ws, max_cells=DIGEST_MAX_CELLS)",
+      "calls": [
+        "digest_grid",
+        "sheet_merge_areas",
+        "values"
+      ],
+      "side_effects": [
+        "없음(정적 분석 기준)"
+      ],
+      "reads": [
+        "DIGEST_MAX_CELLS"
+      ],
+      "writes": []
+    },
+    {
+      "id": "capture_expected_states",
+      "module": "record_service.py",
+      "lang": "python",
+      "kind": "function",
+      "extraction": "ast",
+      "loc": "record_service.py:152-178",
+      "signature": "(app, touched)",
+      "calls": [
+        "add",
+        "append",
+        "sheet_expected_state"
+      ],
+      "side_effects": [
+        "Excel COM 조작(파괴적일 수 있음)"
+      ],
+      "reads": [],
+      "writes": []
+    },
+    {
+      "id": "marshal_app_stream",
+      "module": "record_service.py",
+      "lang": "python",
+      "kind": "function",
+      "extraction": "ast",
+      "loc": "record_service.py:181-185",
+      "signature": "(app)",
+      "calls": [],
+      "side_effects": [
+        "없음(정적 분석 기준)"
+      ],
+      "reads": [],
+      "writes": []
+    },
+    {
+      "id": "_unmarshal_app",
+      "module": "record_service.py",
+      "lang": "python",
+      "kind": "function",
+      "extraction": "ast",
+      "loc": "record_service.py:188-192",
+      "signature": "(stream)",
+      "calls": [
+        "stream"
+      ],
+      "side_effects": [
+        "없음(정적 분석 기준)"
+      ],
+      "reads": [],
+      "writes": []
+    },
+    {
+      "id": "_group_sheets",
+      "module": "record_service.py",
+      "lang": "python",
+      "kind": "function",
+      "extraction": "ast",
+      "loc": "record_service.py:195-202",
+      "signature": "(g)",
+      "calls": [
+        "append"
+      ],
+      "side_effects": [
+        "없음(정적 분석 기준)"
+      ],
+      "reads": [],
+      "writes": []
+    },
+    {
+      "id": "_group_title",
+      "module": "record_service.py",
+      "lang": "python",
+      "kind": "function",
+      "extraction": "ast",
+      "loc": "record_service.py:205-214",
+      "signature": "(g)",
+      "calls": [
+        "_group_sheets",
+        "sheets"
+      ],
+      "side_effects": [
+        "없음(정적 분석 기준)"
+      ],
+      "reads": [
+        "ROLE_TITLES"
+      ],
+      "writes": []
+    },
+    {
+      "id": "_literal_cells",
+      "module": "record_service.py",
+      "lang": "python",
+      "kind": "function",
+      "extraction": "ast",
+      "loc": "record_service.py:229-248",
+      "signature": "(step)",
+      "calls": [
+        "row"
+      ],
+      "side_effects": [
+        "없음(정적 분석 기준)"
+      ],
+      "reads": [],
+      "writes": []
+    },
+    {
+      "id": "_fill_step",
+      "module": "record_service.py",
+      "lang": "python",
+      "kind": "function",
+      "extraction": "ast",
+      "loc": "record_service.py:251-257",
+      "signature": "(merged, book, sheet, r1, c1, r2, c2, step_id, desc)",
+      "calls": [
+        "book",
+        "range",
+        "sheet"
+      ],
+      "side_effects": [
+        "없음(정적 분석 기준)"
+      ],
+      "reads": [],
+      "writes": []
+    },
+    {
+      "id": "_row_run_steps",
+      "module": "record_service.py",
+      "lang": "python",
+      "kind": "function",
+      "extraction": "ast",
+      "loc": "record_service.py:260-285",
+      "signature": "(merged, book, sheet, base_id)",
+      "calls": [
+        "_fill_step",
+        "append",
+        "book",
+        "sheet"
+      ],
+      "side_effects": [
+        "없음(정적 분석 기준)"
+      ],
+      "reads": [],
+      "writes": []
+    },
+    {
+      "id": "_steps_to_transform",
+      "module": "record_service.py",
+      "lang": "python",
+      "kind": "function",
+      "extraction": "ast",
+      "loc": "record_service.py:288-293",
+      "signature": "(steps)",
+      "calls": [],
+      "side_effects": [
+        "없음(정적 분석 기준)"
+      ],
+      "reads": [],
+      "writes": []
+    },
+    {
+      "id": "consolidate_literal_runs",
+      "module": "record_service.py",
+      "lang": "python",
+      "kind": "function",
+      "extraction": "ast",
+      "loc": "record_service.py:296-358",
+      "signature": "(steps, min_run=PASTE_MERGE_MIN_RUN, max_cells=PASTE_MERGE_MAX_CELLS)",
+      "calls": [
+        "_fill_step",
+        "_literal_cells",
+        "_row_run_steps",
+        "_steps_to_transform",
+        "append",
+        "book",
+        "sheet"
+      ],
+      "side_effects": [
+        "없음(정적 분석 기준)"
+      ],
+      "reads": [
+        "PASTE_MERGE_MAX_CELLS",
+        "PASTE_MERGE_MIN_RUN"
+      ],
+      "writes": []
+    },
+    {
+      "id": "_format_payload",
+      "module": "record_service.py",
+      "lang": "python",
+      "kind": "function",
+      "extraction": "ast",
+      "loc": "record_service.py:361-367",
+      "signature": "(step)",
+      "calls": [],
+      "side_effects": [
+        "없음(정적 분석 기준)"
+      ],
+      "reads": [],
+      "writes": []
+    },
+    {
+      "id": "_format_unionable",
+      "module": "record_service.py",
+      "lang": "python",
+      "kind": "function",
+      "extraction": "ast",
+      "loc": "record_service.py:370-375",
+      "signature": "(fmt)",
+      "calls": [],
+      "side_effects": [
+        "없음(정적 분석 기준)"
+      ],
+      "reads": [],
+      "writes": []
+    },
+    {
+      "id": "consolidate_format_runs",
+      "module": "record_service.py",
+      "lang": "python",
+      "kind": "function",
+      "extraction": "ast",
+      "loc": "record_service.py:378-420",
+      "signature": "(steps)",
+      "calls": [
+        "_format_payload",
+        "_format_unionable",
+        "_freeze_fmt",
+        "_union_addr_chunks",
+        "append",
+        "book",
+        "sheet"
+      ],
+      "side_effects": [
+        "없음(정적 분석 기준)"
+      ],
+      "reads": [],
+      "writes": []
+    },
+    {
+      "id": "_freeze_fmt",
+      "module": "record_service.py",
+      "lang": "python",
+      "kind": "function",
+      "extraction": "ast",
+      "loc": "record_service.py:423-429",
+      "signature": "(fmt)",
+      "calls": [],
+      "side_effects": [
+        "없음(정적 분석 기준)"
+      ],
+      "reads": [],
+      "writes": []
+    },
+    {
+      "id": "_union_addr_chunks",
+      "module": "record_service.py",
+      "lang": "python",
+      "kind": "function",
+      "extraction": "ast",
+      "loc": "record_service.py:432-444",
+      "signature": "(ranges, max_chars=200)",
+      "calls": [
+        "append"
+      ],
+      "side_effects": [
+        "없음(정적 분석 기준)"
+      ],
+      "reads": [],
+      "writes": []
+    },
+    {
+      "id": "group_steps",
+      "module": "record_service.py",
+      "lang": "python",
+      "kind": "function",
+      "extraction": "ast",
+      "loc": "record_service.py:447-470",
+      "signature": "(steps)",
+      "calls": [
+        "_group_title",
+        "append"
+      ],
+      "side_effects": [
+        "없음(정적 분석 기준)"
+      ],
+      "reads": [],
+      "writes": []
+    },
+    {
+      "id": "merge_small_adjacent_groups",
+      "module": "record_service.py",
+      "lang": "python",
+      "kind": "function",
+      "extraction": "ast",
+      "loc": "record_service.py:473-503",
+      "signature": "(groups, small=2, limit=40)",
+      "calls": [
+        "_group_title",
+        "append"
+      ],
+      "side_effects": [
+        "없음(정적 분석 기준)"
+      ],
+      "reads": [],
+      "writes": []
+    },
+    {
+      "id": "chunk_groups",
+      "module": "record_service.py",
+      "lang": "python",
+      "kind": "function",
+      "extraction": "ast",
+      "loc": "record_service.py:506-532",
+      "signature": "(groups, limit=40)",
+      "calls": [
+        "append",
+        "range"
+      ],
+      "side_effects": [
+        "없음(정적 분석 기준)"
+      ],
+      "reads": [
+        "ROLE_TITLES"
+      ],
+      "writes": []
+    },
+    {
+      "id": "_body_has_statement",
+      "module": "record_service.py",
+      "lang": "python",
+      "kind": "function",
+      "extraction": "ast",
+      "loc": "record_service.py:535-545",
+      "signature": "(body)",
+      "calls": [],
+      "side_effects": [
+        "없음(정적 분석 기준)"
+      ],
+      "reads": [],
+      "writes": []
+    },
+    {
+      "id": "group_to_pipeline_entry",
+      "module": "record_service.py",
+      "lang": "python",
+      "kind": "function",
+      "extraction": "ast",
+      "loc": "record_service.py:548-591",
+      "signature": "(group, index)",
+      "calls": [
+        "_body_has_statement",
+        "_group_sheets",
+        "append"
+      ],
+      "side_effects": [
+        "없음(정적 분석 기준)"
+      ],
+      "reads": [],
+      "writes": []
+    },
+    {
+      "id": "RecordService.__init__",
+      "module": "record_service.py",
+      "lang": "python",
+      "kind": "method",
+      "extraction": "ast",
+      "loc": "record_service.py:597-605",
+      "signature": "(self)",
+      "calls": [],
+      "side_effects": [
+        "상태 변경(전역/세션): self._error, self._handler, self._lock, self._recording, self._result, self._sink, self._stop_evt, self._thread"
+      ],
+      "reads": [],
+      "writes": [
+        "self._error",
+        "self._handler",
+        "self._lock",
+        "self._recording",
+        "self._result",
+        "self._sink",
+        "self._stop_evt",
+        "self._thread"
+      ]
+    },
+    {
+      "id": "RecordService.set_replaying",
+      "module": "record_service.py",
+      "lang": "python",
+      "kind": "method",
+      "extraction": "ast",
+      "loc": "record_service.py:607-618",
+      "signature": "(self, value)",
+      "calls": [
+        "value"
+      ],
+      "side_effects": [
+        "없음(정적 분석 기준)"
+      ],
+      "reads": [
+        "self._handler",
+        "self._lock",
+        "self._recording",
+        "self._stop_evt"
+      ],
+      "writes": []
+    },
+    {
+      "id": "RecordService.status",
+      "module": "record_service.py",
+      "lang": "python",
+      "kind": "method",
+      "extraction": "ast",
+      "loc": "record_service.py:621-626",
+      "signature": "(self)",
+      "calls": [],
+      "side_effects": [
+        "없음(정적 분석 기준)"
+      ],
+      "reads": [
+        "self._error",
+        "self._lock",
+        "self._recording",
+        "self._sink"
+      ],
+      "writes": []
+    },
+    {
+      "id": "RecordService.start",
+      "module": "record_service.py",
+      "lang": "python",
+      "kind": "method",
+      "extraction": "ast",
+      "loc": "record_service.py:629-640",
+      "signature": "(self, app_stream=None)",
+      "calls": [
+        "clear"
+      ],
+      "side_effects": [
+        "상태 변경(전역/세션): self._error, self._recording, self._result, self._thread"
+      ],
+      "reads": [
+        "self._lock",
+        "self._recording",
+        "self._run",
+        "self._stop_evt",
+        "self._thread"
+      ],
+      "writes": [
+        "self._error",
+        "self._recording",
+        "self._result",
+        "self._thread"
+      ]
+    },
+    {
+      "id": "RecordService.stop",
+      "module": "record_service.py",
+      "lang": "python",
+      "kind": "method",
+      "extraction": "ast",
+      "loc": "record_service.py:643-656",
+      "signature": "(self, timeout=120.0)",
+      "calls": [],
+      "side_effects": [
+        "없음(정적 분석 기준)"
+      ],
+      "reads": [
+        "self._error",
+        "self._lock",
+        "self._recording",
+        "self._result",
+        "self._stop_evt",
+        "self._thread"
+      ],
+      "writes": []
+    },
+    {
+      "id": "RecordService._run",
+      "module": "record_service.py",
+      "lang": "python",
+      "kind": "method",
+      "extraction": "ast",
+      "loc": "record_service.py:659-760",
+      "signature": "(self, app_stream)",
+      "calls": [
+        "_unmarshal_app",
+        "capture_expected_states",
+        "chunk_groups",
+        "consolidate_format_runs",
+        "consolidate_literal_runs",
+        "group_steps",
+        "group_to_pipeline_entry",
+        "merge_small_adjacent_groups"
+      ],
+      "side_effects": [
+        "Excel COM 조작(파괴적일 수 있음)",
+        "상태 변경(전역/세션): self._error, self._handler, self._recording, self._result, self._sink"
+      ],
+      "reads": [
+        "self._lock",
+        "self._stop_evt"
+      ],
+      "writes": [
+        "self._error",
+        "self._handler",
+        "self._recording",
+        "self._result",
+        "self._sink"
+      ]
+    },
+    {
+      "id": "SecureDocError.__init__",
+      "module": "secure_doc.py",
+      "lang": "python",
+      "kind": "method",
+      "extraction": "ast",
+      "loc": "secure_doc.py:54-57",
+      "signature": "(self, message, result='', result_msg='')",
+      "calls": [],
+      "side_effects": [
+        "상태 변경(전역/세션): self.result, self.result_msg"
+      ],
+      "reads": [],
+      "writes": [
+        "self.result",
+        "self.result_msg"
+      ]
+    },
+    {
+      "id": "_env",
+      "module": "secure_doc.py",
+      "lang": "python",
+      "kind": "function",
+      "extraction": "ast",
+      "loc": "secure_doc.py:62-63",
+      "signature": "(name, default='')",
+      "calls": [],
+      "side_effects": [
+        "없음(정적 분석 기준)"
+      ],
+      "reads": [],
+      "writes": []
+    },
+    {
+      "id": "default_account",
+      "module": "secure_doc.py",
+      "lang": "python",
+      "kind": "function",
+      "extraction": "ast",
+      "loc": "secure_doc.py:69-92",
+      "signature": "()",
+      "calls": [
+        "current_user",
+        "replace"
+      ],
+      "side_effects": [
+        "상태 변경(전역/세션): _ACCOUNT_CACHE"
+      ],
+      "reads": [
+        "_ACCOUNT_CACHE"
+      ],
+      "writes": [
+        "_ACCOUNT_CACHE"
+      ]
+    },
+    {
+      "id": "config",
+      "module": "secure_doc.py",
+      "lang": "python",
+      "kind": "function",
+      "extraction": "ast",
+      "loc": "secure_doc.py:95-123",
+      "signature": "()",
+      "calls": [
+        "_env",
+        "default_account"
+      ],
+      "side_effects": [
+        "없음(정적 분석 기준)"
+      ],
+      "reads": [
+        "DEFAULT_TIMEOUT_SECONDS"
+      ],
+      "writes": []
+    },
+    {
+      "id": "probe",
+      "module": "secure_doc.py",
+      "lang": "python",
+      "kind": "function",
+      "extraction": "ast",
+      "loc": "secure_doc.py:126-150",
+      "signature": "(force=False)",
+      "calls": [
+        "_headers",
+        "config",
+        "read"
+      ],
+      "side_effects": [
+        "네트워크 호출",
+        "상태 변경(전역/세션): _STATE"
+      ],
+      "reads": [
+        "PROBE_CACHE_SECONDS",
+        "_LOCK",
+        "_STATE"
+      ],
+      "writes": [
+        "_STATE"
+      ]
+    },
+    {
+      "id": "available",
+      "module": "secure_doc.py",
+      "lang": "python",
+      "kind": "function",
+      "extraction": "ast",
+      "loc": "secure_doc.py:153-159",
+      "signature": "()",
+      "calls": [
+        "config",
+        "probe"
+      ],
+      "side_effects": [
+        "없음(정적 분석 기준)"
+      ],
+      "reads": [],
+      "writes": []
+    },
+    {
+      "id": "_headers",
+      "module": "secure_doc.py",
+      "lang": "python",
+      "kind": "function",
+      "extraction": "ast",
+      "loc": "secure_doc.py:162-166",
+      "signature": "(cfg)",
+      "calls": [],
+      "side_effects": [
+        "없음(정적 분석 기준)"
+      ],
+      "reads": [],
+      "writes": []
+    },
+    {
+      "id": "_clean_name",
+      "module": "secure_doc.py",
+      "lang": "python",
+      "kind": "function",
+      "extraction": "ast",
+      "loc": "secure_doc.py:171-174",
+      "signature": "(name)",
+      "calls": [
+        "replace"
+      ],
+      "side_effects": [
+        "없음(정적 분석 기준)"
+      ],
+      "reads": [],
+      "writes": []
+    },
+    {
+      "id": "_post_drm",
+      "module": "secure_doc.py",
+      "lang": "python",
+      "kind": "function",
+      "extraction": "ast",
+      "loc": "secure_doc.py:177-232",
+      "signature": "(op, data, filename, extra_form=None, timeout=None, expect='stream')",
+      "calls": [
+        "_clean_name",
+        "_headers",
+        "_try_json",
+        "append",
+        "config",
+        "raw",
+        "read"
+      ],
+      "side_effects": [
+        "네트워크 호출"
+      ],
+      "reads": [],
+      "writes": []
+    },
+    {
+      "id": "_try_json",
+      "module": "secure_doc.py",
+      "lang": "python",
+      "kind": "function",
+      "extraction": "ast",
+      "loc": "secure_doc.py:235-240",
+      "signature": "(raw)",
+      "calls": [
+        "raw",
+        "value"
+      ],
+      "side_effects": [
+        "없음(정적 분석 기준)"
+      ],
+      "reads": [],
+      "writes": []
+    },
+    {
+      "id": "secret_check",
+      "module": "secure_doc.py",
+      "lang": "python",
+      "kind": "function",
+      "extraction": "ast",
+      "loc": "secure_doc.py:243-264",
+      "signature": "(data, filename)",
+      "calls": [
+        "_post_drm",
+        "config"
+      ],
+      "side_effects": [
+        "없음(정적 분석 기준)"
+      ],
+      "reads": [],
+      "writes": []
+    },
+    {
+      "id": "decrypt_bytes",
+      "module": "secure_doc.py",
+      "lang": "python",
+      "kind": "function",
+      "extraction": "ast",
+      "loc": "secure_doc.py:267-280",
+      "signature": "(data, filename)",
+      "calls": [
+        "_post_drm",
+        "config"
+      ],
+      "side_effects": [
+        "없음(정적 분석 기준)"
+      ],
+      "reads": [],
+      "writes": []
+    },
+    {
+      "id": "encrypt_bytes",
+      "module": "secure_doc.py",
+      "lang": "python",
+      "kind": "function",
+      "extraction": "ast",
+      "loc": "secure_doc.py:283-292",
+      "signature": "(data, filename, label_id='')",
+      "calls": [
+        "_post_drm",
+        "config"
+      ],
+      "side_effects": [
+        "없음(정적 분석 기준)"
+      ],
+      "reads": [],
+      "writes": []
+    },
+    {
+      "id": "_is_readable_office_zip",
+      "module": "secure_doc.py",
+      "lang": "python",
+      "kind": "function",
+      "extraction": "ast",
+      "loc": "secure_doc.py:297-315",
+      "signature": "(path)",
+      "calls": [],
+      "side_effects": [
+        "없음(정적 분석 기준)"
+      ],
+      "reads": [],
+      "writes": []
+    },
+    {
+      "id": "looks_secured",
+      "module": "secure_doc.py",
+      "lang": "python",
+      "kind": "function",
+      "extraction": "ast",
+      "loc": "secure_doc.py:318-380",
+      "signature": "(head, name='', encrypted_checker=None, path=None)",
+      "calls": [
+        "_is_readable_office_zip"
+      ],
+      "side_effects": [
+        "없음(정적 분석 기준)"
+      ],
+      "reads": [],
+      "writes": []
+    },
+    {
+      "id": "maybe_decrypt_upload",
+      "module": "secure_doc.py",
+      "lang": "python",
+      "kind": "function",
+      "extraction": "ast",
+      "loc": "secure_doc.py:383-451",
+      "signature": "(path, name, encrypted_checker=None)",
+      "calls": [
+        "available",
+        "config",
+        "decrypt_bytes",
+        "looks_secured",
+        "read",
+        "read_label_id",
+        "secret_check"
+      ],
+      "side_effects": [
+        "상태 변경(전역/세션): _STATE",
+        "파일시스템 변경/IO"
+      ],
+      "reads": [
+        "MARKER_SUFFIX",
+        "_LOCK",
+        "_STATE"
+      ],
+      "writes": [
+        "_STATE"
+      ]
+    },
+    {
+      "id": "read_label_id",
+      "module": "secure_doc.py",
+      "lang": "python",
+      "kind": "function",
+      "extraction": "ast",
+      "loc": "secure_doc.py:457-481",
+      "signature": "(path_or_bytes)",
+      "calls": [
+        "raw"
+      ],
+      "side_effects": [
+        "파일시스템 변경/IO"
+      ],
+      "reads": [
+        "_LABEL_RE"
+      ],
+      "writes": []
+    },
+    {
+      "id": "remember_label",
+      "module": "secure_doc.py",
+      "lang": "python",
+      "kind": "function",
+      "extraction": "ast",
+      "loc": "secure_doc.py:484-487",
+      "signature": "(workbook_id, label_id)",
+      "calls": [],
+      "side_effects": [
+        "없음(정적 분석 기준)"
+      ],
+      "reads": [
+        "_LOCK",
+        "_STATE"
+      ],
+      "writes": []
+    },
+    {
+      "id": "recall_label",
+      "module": "secure_doc.py",
+      "lang": "python",
+      "kind": "function",
+      "extraction": "ast",
+      "loc": "secure_doc.py:490-492",
+      "signature": "(workbook_id)",
+      "calls": [],
+      "side_effects": [
+        "없음(정적 분석 기준)"
+      ],
+      "reads": [
+        "_LOCK",
+        "_STATE"
+      ],
+      "writes": []
+    },
+    {
+      "id": "mark_released",
+      "module": "secure_doc.py",
+      "lang": "python",
+      "kind": "function",
+      "extraction": "ast",
+      "loc": "secure_doc.py:495-497",
+      "signature": "(workbook_id)",
+      "calls": [
+        "add"
+      ],
+      "side_effects": [
+        "없음(정적 분석 기준)"
+      ],
+      "reads": [
+        "_LOCK",
+        "_STATE"
+      ],
+      "writes": []
+    },
+    {
+      "id": "any_secured",
+      "module": "secure_doc.py",
+      "lang": "python",
+      "kind": "function",
+      "extraction": "ast",
+      "loc": "secure_doc.py:502-513",
+      "signature": "(backend_dir=None)",
+      "calls": [],
+      "side_effects": [
+        "없음(정적 분석 기준)"
+      ],
+      "reads": [
+        "MARKER_SUFFIX",
+        "_LOCK",
+        "_STATE"
+      ],
+      "writes": []
+    },
+    {
+      "id": "encrypt_for_download",
+      "module": "secure_doc.py",
+      "lang": "python",
+      "kind": "function",
+      "extraction": "ast",
+      "loc": "secure_doc.py:516-524",
+      "signature": "(data, filename, workbook_id='')",
+      "calls": [
+        "encrypt_bytes",
+        "recall_label"
+      ],
+      "side_effects": [
+        "상태 변경(전역/세션): _STATE"
+      ],
+      "reads": [
+        "_LOCK",
+        "_STATE"
+      ],
+      "writes": [
+        "_STATE"
+      ]
+    },
+    {
+      "id": "status",
+      "module": "secure_doc.py",
+      "lang": "python",
+      "kind": "function",
+      "extraction": "ast",
+      "loc": "secure_doc.py:527-543",
+      "signature": "(backend_dir=None)",
+      "calls": [
+        "any_secured",
+        "config",
+        "probe"
+      ],
+      "side_effects": [
+        "없음(정적 분석 기준)"
+      ],
+      "reads": [
+        "_LOCK",
+        "_STATE"
+      ],
+      "writes": []
     },
     {
       "id": "initAppVersionLabel",
@@ -41814,6 +44177,11 @@
       "lang": "python"
     },
     {
+      "from": "ensure_excel_worker",
+      "to": "start",
+      "lang": "python"
+    },
+    {
       "from": "excel_call",
       "to": "ensure_excel_worker",
       "lang": "python"
@@ -41910,6 +44278,11 @@
     },
     {
       "from": "_force_restart_excel_sessions_direct",
+      "to": "start",
+      "lang": "python"
+    },
+    {
+      "from": "_force_restart_excel_sessions_direct",
       "to": "values",
       "lang": "python"
     },
@@ -41936,6 +44309,11 @@
     {
       "from": "render_pptx_to_slides_b64",
       "to": "read",
+      "lang": "python"
+    },
+    {
+      "from": "render_pptx_to_slides_b64",
+      "to": "start",
       "lang": "python"
     },
     {
@@ -42044,6 +44422,16 @@
       "lang": "python"
     },
     {
+      "from": "B2BHandler.do_GET",
+      "to": "status",
+      "lang": "python"
+    },
+    {
+      "from": "B2BHandler.do_GET",
+      "to": "stream",
+      "lang": "python"
+    },
+    {
       "from": "B2BHandler.do_POST",
       "to": "_excel_queue_size",
       "lang": "python"
@@ -42136,6 +44524,11 @@
     {
       "from": "B2BHandler.do_POST",
       "to": "content_disposition_attachment",
+      "lang": "python"
+    },
+    {
+      "from": "B2BHandler.do_POST",
+      "to": "encrypt_for_download",
       "lang": "python"
     },
     {
@@ -42380,6 +44773,16 @@
     },
     {
       "from": "B2BHandler.do_POST",
+      "to": "start",
+      "lang": "python"
+    },
+    {
+      "from": "B2BHandler.do_POST",
+      "to": "update_config",
+      "lang": "python"
+    },
+    {
+      "from": "B2BHandler.do_POST",
       "to": "write",
       "lang": "python"
     },
@@ -42391,6 +44794,11 @@
     {
       "from": "B2BHandler.send_json",
       "to": "end_headers",
+      "lang": "python"
+    },
+    {
+      "from": "B2BHandler.send_json",
+      "to": "status",
       "lang": "python"
     },
     {
@@ -42460,6 +44868,11 @@
     },
     {
       "from": "B2BHandler.handle_workbook_upload",
+      "to": "config",
+      "lang": "python"
+    },
+    {
+      "from": "B2BHandler.handle_workbook_upload",
       "to": "excel_available",
       "lang": "python"
     },
@@ -42475,7 +44888,22 @@
     },
     {
       "from": "B2BHandler.handle_workbook_upload",
+      "to": "mark_released",
+      "lang": "python"
+    },
+    {
+      "from": "B2BHandler.handle_workbook_upload",
+      "to": "maybe_decrypt_upload",
+      "lang": "python"
+    },
+    {
+      "from": "B2BHandler.handle_workbook_upload",
       "to": "read",
+      "lang": "python"
+    },
+    {
+      "from": "B2BHandler.handle_workbook_upload",
+      "to": "remember_label",
       "lang": "python"
     },
     {
@@ -42561,6 +44989,11 @@
     {
       "from": "B2BHandler.handle_backend_pipeline_start",
       "to": "send_json",
+      "lang": "python"
+    },
+    {
+      "from": "B2BHandler.handle_backend_pipeline_start",
+      "to": "start",
       "lang": "python"
     },
     {
@@ -43514,6 +45947,11 @@
       "lang": "python"
     },
     {
+      "from": "_shift_months_in_text",
+      "to": "start",
+      "lang": "python"
+    },
+    {
       "from": "_pivot_to_num",
       "to": "replace",
       "lang": "python"
@@ -43716,6 +46154,11 @@
     {
       "from": "_file_label_evidence",
       "to": "_ole_directory_stream_names",
+      "lang": "python"
+    },
+    {
+      "from": "_file_label_evidence",
+      "to": "close",
       "lang": "python"
     },
     {
@@ -43939,6 +46382,11 @@
       "lang": "python"
     },
     {
+      "from": "_process_perf_snapshot",
+      "to": "status",
+      "lang": "python"
+    },
+    {
       "from": "_perf_trace",
       "to": "_perf_trace_path",
       "lang": "python"
@@ -44159,6 +46607,16 @@
       "lang": "python"
     },
     {
+      "from": "_secure_outgoing_data",
+      "to": "any_secured",
+      "lang": "python"
+    },
+    {
+      "from": "_secure_outgoing_data",
+      "to": "encrypt_for_download",
+      "lang": "python"
+    },
+    {
       "from": "_start_log_sync",
       "to": "_current_app_version",
       "lang": "python"
@@ -44175,7 +46633,17 @@
     },
     {
       "from": "_start_log_sync",
+      "to": "start",
+      "lang": "python"
+    },
+    {
+      "from": "_start_log_sync",
       "to": "writable_app_dir",
+      "lang": "python"
+    },
+    {
+      "from": "_log_sync_stop",
+      "to": "stop",
       "lang": "python"
     },
     {
@@ -44196,6 +46664,11 @@
     {
       "from": "start_runtime_maintenance_threads",
       "to": "cleanup_stale_temp_artifacts",
+      "lang": "python"
+    },
+    {
+      "from": "start_runtime_maintenance_threads",
+      "to": "start",
       "lang": "python"
     },
     {
@@ -44859,6 +47332,26 @@
       "lang": "python"
     },
     {
+      "from": "excel_record_start",
+      "to": "marshal_app_stream",
+      "lang": "python"
+    },
+    {
+      "from": "excel_record_start",
+      "to": "start",
+      "lang": "python"
+    },
+    {
+      "from": "excel_record_start",
+      "to": "start_native_recording_impl",
+      "lang": "python"
+    },
+    {
+      "from": "excel_record_start",
+      "to": "stream",
+      "lang": "python"
+    },
+    {
       "from": "_recorded_vba_hazards",
       "to": "_vba_security_scan",
       "lang": "python"
@@ -44909,6 +47402,21 @@
       "lang": "python"
     },
     {
+      "from": "excel_record_stop",
+      "to": "stop",
+      "lang": "python"
+    },
+    {
+      "from": "excel_record_stop",
+      "to": "stop_native_recording_impl",
+      "lang": "python"
+    },
+    {
+      "from": "excel_record_status",
+      "to": "status",
+      "lang": "python"
+    },
+    {
       "from": "_verify_recorded_expected_live",
       "to": "Worksheets",
       "lang": "python"
@@ -44926,6 +47434,11 @@
     {
       "from": "_verify_recorded_expected_live",
       "to": "sheet",
+      "lang": "python"
+    },
+    {
+      "from": "_verify_recorded_expected_live",
+      "to": "sheet_expected_state",
       "lang": "python"
     },
     {
@@ -45444,6 +47957,11 @@
       "lang": "python"
     },
     {
+      "from": "_extract_vba_source_for_injection",
+      "to": "start",
+      "lang": "python"
+    },
+    {
       "from": "_vba_macro_ref",
       "to": "replace",
       "lang": "python"
@@ -45651,6 +48169,11 @@
     {
       "from": "_start_vba_debug_suppressor",
       "to": "_suppress_vba_debug_windows",
+      "lang": "python"
+    },
+    {
+      "from": "_start_vba_debug_suppressor",
+      "to": "start",
       "lang": "python"
     },
     {
@@ -47171,6 +49694,11 @@
     {
       "from": "PythonComSkillContext.first_empty_col",
       "to": "sheet",
+      "lang": "python"
+    },
+    {
+      "from": "PythonComSkillContext.first_empty_col",
+      "to": "start",
       "lang": "python"
     },
     {
@@ -48919,6 +51447,11 @@
       "lang": "python"
     },
     {
+      "from": "PythonComSkillContext.sum_column",
+      "to": "start",
+      "lang": "python"
+    },
+    {
       "from": "PythonComSkillContext.copy_key_blocks",
       "to": "Cells",
       "lang": "python"
@@ -48971,6 +51504,11 @@
     {
       "from": "PythonComSkillContext.copy_key_blocks",
       "to": "last_col",
+      "lang": "python"
+    },
+    {
+      "from": "PythonComSkillContext.copy_key_blocks",
+      "to": "stop",
       "lang": "python"
     },
     {
@@ -49046,6 +51584,11 @@
     {
       "from": "PythonComSkillContext.sum_where",
       "to": "sheet",
+      "lang": "python"
+    },
+    {
+      "from": "PythonComSkillContext.sum_where",
+      "to": "start",
       "lang": "python"
     },
     {
@@ -52635,6 +55178,11 @@
     },
     {
       "from": "_wrap_ctx_helper_kwargs",
+      "to": "allowed",
+      "lang": "python"
+    },
+    {
+      "from": "_wrap_ctx_helper_kwargs",
       "to": "value",
       "lang": "python"
     },
@@ -52646,6 +55194,11 @@
     {
       "from": "_install_ctx_kwarg_tolerance",
       "to": "add",
+      "lang": "python"
+    },
+    {
+      "from": "_install_ctx_kwarg_tolerance",
+      "to": "allowed",
       "lang": "python"
     },
     {
@@ -53031,6 +55584,11 @@
     {
       "from": "_start_excel_hide_guard",
       "to": "_hide_excel_hwnd",
+      "lang": "python"
+    },
+    {
+      "from": "_start_excel_hide_guard",
+      "to": "start",
       "lang": "python"
     },
     {
@@ -53430,6 +55988,11 @@
     },
     {
       "from": "inspect_workbook",
+      "to": "close",
+      "lang": "python"
+    },
+    {
+      "from": "inspect_workbook",
       "to": "excel_available",
       "lang": "python"
     },
@@ -53585,6 +56148,11 @@
     },
     {
       "from": "load_workbook_aoa",
+      "to": "close",
+      "lang": "python"
+    },
+    {
+      "from": "load_workbook_aoa",
       "to": "excel_available",
       "lang": "python"
     },
@@ -53735,6 +56303,11 @@
     },
     {
       "from": "write_result_workbook",
+      "to": "close",
+      "lang": "python"
+    },
+    {
+      "from": "write_result_workbook",
       "to": "is_csv_path",
       "lang": "python"
     },
@@ -53761,6 +56334,11 @@
     {
       "from": "get_workbook_or_raise",
       "to": "recover_workbook_record",
+      "lang": "python"
+    },
+    {
+      "from": "run_js_pipeline_with_node",
+      "to": "close",
       "lang": "python"
     },
     {
@@ -54086,6 +56664,1156 @@
     {
       "from": "run_backend_pipeline_payload",
       "to": "update_workbook_current_cache",
+      "lang": "python"
+    },
+    {
+      "from": "check_for_update",
+      "to": "read",
+      "lang": "python"
+    },
+    {
+      "from": "candidate_ports",
+      "to": "append",
+      "lang": "python"
+    },
+    {
+      "from": "read_session_id",
+      "to": "read",
+      "lang": "python"
+    },
+    {
+      "from": "make_handler",
+      "to": "cleanup_excel_sessions",
+      "lang": "python"
+    },
+    {
+      "from": "make_handler",
+      "to": "close",
+      "lang": "python"
+    },
+    {
+      "from": "make_handler",
+      "to": "do_POST",
+      "lang": "python"
+    },
+    {
+      "from": "make_handler",
+      "to": "end_headers",
+      "lang": "python"
+    },
+    {
+      "from": "make_handler",
+      "to": "has_active_sessions",
+      "lang": "python"
+    },
+    {
+      "from": "make_handler",
+      "to": "ping",
+      "lang": "python"
+    },
+    {
+      "from": "make_handler",
+      "to": "read_session_id",
+      "lang": "python"
+    },
+    {
+      "from": "start_server",
+      "to": "make_handler",
+      "lang": "python"
+    },
+    {
+      "from": "start_server",
+      "to": "start",
+      "lang": "python"
+    },
+    {
+      "from": "start_lifecycle_monitor",
+      "to": "should_stop",
+      "lang": "python"
+    },
+    {
+      "from": "start_lifecycle_monitor",
+      "to": "start",
+      "lang": "python"
+    },
+    {
+      "from": "main",
+      "to": "app_url",
+      "lang": "python"
+    },
+    {
+      "from": "main",
+      "to": "append",
+      "lang": "python"
+    },
+    {
+      "from": "main",
+      "to": "candidate_ports",
+      "lang": "python"
+    },
+    {
+      "from": "main",
+      "to": "check_for_update",
+      "lang": "python"
+    },
+    {
+      "from": "main",
+      "to": "cleanup_backend_runtime_files",
+      "lang": "python"
+    },
+    {
+      "from": "main",
+      "to": "cleanup_excel_sessions",
+      "lang": "python"
+    },
+    {
+      "from": "main",
+      "to": "cleanup_node_worker",
+      "lang": "python"
+    },
+    {
+      "from": "main",
+      "to": "is_port_available",
+      "lang": "python"
+    },
+    {
+      "from": "main",
+      "to": "show_control_window",
+      "lang": "python"
+    },
+    {
+      "from": "main",
+      "to": "start_lifecycle_monitor",
+      "lang": "python"
+    },
+    {
+      "from": "main",
+      "to": "start_runtime_maintenance_threads",
+      "lang": "python"
+    },
+    {
+      "from": "main",
+      "to": "start_server",
+      "lang": "python"
+    },
+    {
+      "from": "main",
+      "to": "wait_for_server",
+      "lang": "python"
+    },
+    {
+      "from": "_upstream_config",
+      "to": "config",
+      "lang": "python"
+    },
+    {
+      "from": "build_request",
+      "to": "_upstream_config",
+      "lang": "python"
+    },
+    {
+      "from": "build_request",
+      "to": "allowed",
+      "lang": "python"
+    },
+    {
+      "from": "stream",
+      "to": "build_request",
+      "lang": "python"
+    },
+    {
+      "from": "stream",
+      "to": "read",
+      "lang": "python"
+    },
+    {
+      "from": "stream",
+      "to": "write",
+      "lang": "python"
+    },
+    {
+      "from": "_normalize_base",
+      "to": "replace",
+      "lang": "python"
+    },
+    {
+      "from": "config",
+      "to": "_env",
+      "lang": "python"
+    },
+    {
+      "from": "config",
+      "to": "_normalize_base",
+      "lang": "python"
+    },
+    {
+      "from": "update_config",
+      "to": "_normalize_base",
+      "lang": "python"
+    },
+    {
+      "from": "update_config",
+      "to": "config",
+      "lang": "python"
+    },
+    {
+      "from": "update_config",
+      "to": "status",
+      "lang": "python"
+    },
+    {
+      "from": "update_config",
+      "to": "values",
+      "lang": "python"
+    },
+    {
+      "from": "_endpoint",
+      "to": "config",
+      "lang": "python"
+    },
+    {
+      "from": "_as_result",
+      "to": "value",
+      "lang": "python"
+    },
+    {
+      "from": "_post",
+      "to": "_endpoint",
+      "lang": "python"
+    },
+    {
+      "from": "_post",
+      "to": "config",
+      "lang": "python"
+    },
+    {
+      "from": "_post",
+      "to": "read",
+      "lang": "python"
+    },
+    {
+      "from": "_note_ok",
+      "to": "_now_iso",
+      "lang": "python"
+    },
+    {
+      "from": "_session_files",
+      "to": "add",
+      "lang": "python"
+    },
+    {
+      "from": "_session_files",
+      "to": "append",
+      "lang": "python"
+    },
+    {
+      "from": "_session_skills",
+      "to": "append",
+      "lang": "python"
+    },
+    {
+      "from": "_ensure_session",
+      "to": "_as_result",
+      "lang": "python"
+    },
+    {
+      "from": "_ensure_session",
+      "to": "_note_fail",
+      "lang": "python"
+    },
+    {
+      "from": "_ensure_session",
+      "to": "_note_ok",
+      "lang": "python"
+    },
+    {
+      "from": "_ensure_session",
+      "to": "_post",
+      "lang": "python"
+    },
+    {
+      "from": "_send_log_file",
+      "to": "_as_result",
+      "lang": "python"
+    },
+    {
+      "from": "_send_log_file",
+      "to": "_encode",
+      "lang": "python"
+    },
+    {
+      "from": "_send_log_file",
+      "to": "_note_fail",
+      "lang": "python"
+    },
+    {
+      "from": "_send_log_file",
+      "to": "_note_ok",
+      "lang": "python"
+    },
+    {
+      "from": "_send_log_file",
+      "to": "_post",
+      "lang": "python"
+    },
+    {
+      "from": "_send_log_file",
+      "to": "_remote_name",
+      "lang": "python"
+    },
+    {
+      "from": "_send_log_file",
+      "to": "range",
+      "lang": "python"
+    },
+    {
+      "from": "_send_log_file",
+      "to": "read",
+      "lang": "python"
+    },
+    {
+      "from": "_send_skill",
+      "to": "_as_result",
+      "lang": "python"
+    },
+    {
+      "from": "_send_skill",
+      "to": "_encode",
+      "lang": "python"
+    },
+    {
+      "from": "_send_skill",
+      "to": "_note_fail",
+      "lang": "python"
+    },
+    {
+      "from": "_send_skill",
+      "to": "_note_ok",
+      "lang": "python"
+    },
+    {
+      "from": "_send_skill",
+      "to": "_post",
+      "lang": "python"
+    },
+    {
+      "from": "tick",
+      "to": "_ensure_session",
+      "lang": "python"
+    },
+    {
+      "from": "tick",
+      "to": "_ensure_user",
+      "lang": "python"
+    },
+    {
+      "from": "tick",
+      "to": "_note_fail",
+      "lang": "python"
+    },
+    {
+      "from": "tick",
+      "to": "_over_total_budget",
+      "lang": "python"
+    },
+    {
+      "from": "tick",
+      "to": "_send_log_file",
+      "lang": "python"
+    },
+    {
+      "from": "tick",
+      "to": "_send_skill",
+      "lang": "python"
+    },
+    {
+      "from": "tick",
+      "to": "_session_files",
+      "lang": "python"
+    },
+    {
+      "from": "tick",
+      "to": "_session_skills",
+      "lang": "python"
+    },
+    {
+      "from": "tick",
+      "to": "config",
+      "lang": "python"
+    },
+    {
+      "from": "_ensure_user",
+      "to": "current_user",
+      "lang": "python"
+    },
+    {
+      "from": "_loop",
+      "to": "clear",
+      "lang": "python"
+    },
+    {
+      "from": "_loop",
+      "to": "config",
+      "lang": "python"
+    },
+    {
+      "from": "_loop",
+      "to": "tick",
+      "lang": "python"
+    },
+    {
+      "from": "start",
+      "to": "_atexit_stop",
+      "lang": "python"
+    },
+    {
+      "from": "start",
+      "to": "_loop",
+      "lang": "python"
+    },
+    {
+      "from": "start",
+      "to": "_new_session_id",
+      "lang": "python"
+    },
+    {
+      "from": "start",
+      "to": "_now_iso",
+      "lang": "python"
+    },
+    {
+      "from": "start",
+      "to": "config",
+      "lang": "python"
+    },
+    {
+      "from": "start",
+      "to": "status",
+      "lang": "python"
+    },
+    {
+      "from": "start",
+      "to": "update_config",
+      "lang": "python"
+    },
+    {
+      "from": "stop",
+      "to": "_note_fail",
+      "lang": "python"
+    },
+    {
+      "from": "stop",
+      "to": "_note_ok",
+      "lang": "python"
+    },
+    {
+      "from": "stop",
+      "to": "_now_iso",
+      "lang": "python"
+    },
+    {
+      "from": "stop",
+      "to": "_post",
+      "lang": "python"
+    },
+    {
+      "from": "stop",
+      "to": "config",
+      "lang": "python"
+    },
+    {
+      "from": "stop",
+      "to": "status",
+      "lang": "python"
+    },
+    {
+      "from": "stop",
+      "to": "tick",
+      "lang": "python"
+    },
+    {
+      "from": "_atexit_stop",
+      "to": "stop",
+      "lang": "python"
+    },
+    {
+      "from": "status",
+      "to": "config",
+      "lang": "python"
+    },
+    {
+      "from": "extract_macro_body",
+      "to": "append",
+      "lang": "python"
+    },
+    {
+      "from": "_drop_dead_typing_lines",
+      "to": "append",
+      "lang": "python"
+    },
+    {
+      "from": "_drop_dead_typing_lines",
+      "to": "replace",
+      "lang": "python"
+    },
+    {
+      "from": "sanitize_recorded_vba",
+      "to": "_drop_dead_typing_lines",
+      "lang": "python"
+    },
+    {
+      "from": "sanitize_recorded_vba",
+      "to": "append",
+      "lang": "python"
+    },
+    {
+      "from": "rewrite_new_sheet_refs",
+      "to": "range",
+      "lang": "python"
+    },
+    {
+      "from": "summarize_vba_actions",
+      "to": "append",
+      "lang": "python"
+    },
+    {
+      "from": "_existing_macro_modules",
+      "to": "add",
+      "lang": "python"
+    },
+    {
+      "from": "_macro_recording_active",
+      "to": "_record_button_label",
+      "lang": "python"
+    },
+    {
+      "from": "_spawn_dialog_confirmer",
+      "to": "append",
+      "lang": "python"
+    },
+    {
+      "from": "_spawn_dialog_confirmer",
+      "to": "range",
+      "lang": "python"
+    },
+    {
+      "from": "_spawn_dialog_confirmer",
+      "to": "sort",
+      "lang": "python"
+    },
+    {
+      "from": "_spawn_dialog_confirmer",
+      "to": "start",
+      "lang": "python"
+    },
+    {
+      "from": "start_native_recording_impl",
+      "to": "_existing_macro_modules",
+      "lang": "python"
+    },
+    {
+      "from": "start_native_recording_impl",
+      "to": "_macro_recording_active",
+      "lang": "python"
+    },
+    {
+      "from": "start_native_recording_impl",
+      "to": "_read_numlock_state",
+      "lang": "python"
+    },
+    {
+      "from": "start_native_recording_impl",
+      "to": "_restore_numlock_state",
+      "lang": "python"
+    },
+    {
+      "from": "start_native_recording_impl",
+      "to": "_spawn_dialog_confirmer",
+      "lang": "python"
+    },
+    {
+      "from": "start_native_recording_impl",
+      "to": "clear",
+      "lang": "python"
+    },
+    {
+      "from": "_touched_sheet_pairs",
+      "to": "add",
+      "lang": "python"
+    },
+    {
+      "from": "_touched_sheet_pairs",
+      "to": "append",
+      "lang": "python"
+    },
+    {
+      "from": "_touched_sheet_pairs",
+      "to": "book",
+      "lang": "python"
+    },
+    {
+      "from": "stop_native_recording_impl",
+      "to": "_macro_recording_active",
+      "lang": "python"
+    },
+    {
+      "from": "stop_native_recording_impl",
+      "to": "_touched_sheet_pairs",
+      "lang": "python"
+    },
+    {
+      "from": "stop_native_recording_impl",
+      "to": "append",
+      "lang": "python"
+    },
+    {
+      "from": "stop_native_recording_impl",
+      "to": "capture_expected_states",
+      "lang": "python"
+    },
+    {
+      "from": "stop_native_recording_impl",
+      "to": "clear",
+      "lang": "python"
+    },
+    {
+      "from": "stop_native_recording_impl",
+      "to": "extract_macro_body",
+      "lang": "python"
+    },
+    {
+      "from": "stop_native_recording_impl",
+      "to": "raw",
+      "lang": "python"
+    },
+    {
+      "from": "stop_native_recording_impl",
+      "to": "replace",
+      "lang": "python"
+    },
+    {
+      "from": "stop_native_recording_impl",
+      "to": "rewrite_new_sheet_refs",
+      "lang": "python"
+    },
+    {
+      "from": "stop_native_recording_impl",
+      "to": "sanitize_recorded_vba",
+      "lang": "python"
+    },
+    {
+      "from": "stop_native_recording_impl",
+      "to": "summarize_vba_actions",
+      "lang": "python"
+    },
+    {
+      "from": "stop_native_recording_impl",
+      "to": "wrap_as_b2b_skill",
+      "lang": "python"
+    },
+    {
+      "from": "digest_grid",
+      "to": "_norm_cell",
+      "lang": "python"
+    },
+    {
+      "from": "digest_grid",
+      "to": "values",
+      "lang": "python"
+    },
+    {
+      "from": "sheet_merge_areas",
+      "to": "Cells",
+      "lang": "python"
+    },
+    {
+      "from": "sheet_merge_areas",
+      "to": "Rows",
+      "lang": "python"
+    },
+    {
+      "from": "sheet_merge_areas",
+      "to": "add",
+      "lang": "python"
+    },
+    {
+      "from": "sheet_merge_areas",
+      "to": "append",
+      "lang": "python"
+    },
+    {
+      "from": "sheet_merge_areas",
+      "to": "range",
+      "lang": "python"
+    },
+    {
+      "from": "sheet_merge_areas",
+      "to": "replace",
+      "lang": "python"
+    },
+    {
+      "from": "sheet_merge_areas",
+      "to": "rows",
+      "lang": "python"
+    },
+    {
+      "from": "sheet_expected_state",
+      "to": "digest_grid",
+      "lang": "python"
+    },
+    {
+      "from": "sheet_expected_state",
+      "to": "sheet_merge_areas",
+      "lang": "python"
+    },
+    {
+      "from": "sheet_expected_state",
+      "to": "values",
+      "lang": "python"
+    },
+    {
+      "from": "capture_expected_states",
+      "to": "add",
+      "lang": "python"
+    },
+    {
+      "from": "capture_expected_states",
+      "to": "append",
+      "lang": "python"
+    },
+    {
+      "from": "capture_expected_states",
+      "to": "sheet_expected_state",
+      "lang": "python"
+    },
+    {
+      "from": "_unmarshal_app",
+      "to": "stream",
+      "lang": "python"
+    },
+    {
+      "from": "_group_sheets",
+      "to": "append",
+      "lang": "python"
+    },
+    {
+      "from": "_group_title",
+      "to": "_group_sheets",
+      "lang": "python"
+    },
+    {
+      "from": "_group_title",
+      "to": "sheets",
+      "lang": "python"
+    },
+    {
+      "from": "_literal_cells",
+      "to": "row",
+      "lang": "python"
+    },
+    {
+      "from": "_fill_step",
+      "to": "book",
+      "lang": "python"
+    },
+    {
+      "from": "_fill_step",
+      "to": "range",
+      "lang": "python"
+    },
+    {
+      "from": "_fill_step",
+      "to": "sheet",
+      "lang": "python"
+    },
+    {
+      "from": "_row_run_steps",
+      "to": "_fill_step",
+      "lang": "python"
+    },
+    {
+      "from": "_row_run_steps",
+      "to": "append",
+      "lang": "python"
+    },
+    {
+      "from": "_row_run_steps",
+      "to": "book",
+      "lang": "python"
+    },
+    {
+      "from": "_row_run_steps",
+      "to": "sheet",
+      "lang": "python"
+    },
+    {
+      "from": "consolidate_literal_runs",
+      "to": "_fill_step",
+      "lang": "python"
+    },
+    {
+      "from": "consolidate_literal_runs",
+      "to": "_literal_cells",
+      "lang": "python"
+    },
+    {
+      "from": "consolidate_literal_runs",
+      "to": "_row_run_steps",
+      "lang": "python"
+    },
+    {
+      "from": "consolidate_literal_runs",
+      "to": "_steps_to_transform",
+      "lang": "python"
+    },
+    {
+      "from": "consolidate_literal_runs",
+      "to": "append",
+      "lang": "python"
+    },
+    {
+      "from": "consolidate_literal_runs",
+      "to": "book",
+      "lang": "python"
+    },
+    {
+      "from": "consolidate_literal_runs",
+      "to": "sheet",
+      "lang": "python"
+    },
+    {
+      "from": "consolidate_format_runs",
+      "to": "_format_payload",
+      "lang": "python"
+    },
+    {
+      "from": "consolidate_format_runs",
+      "to": "_format_unionable",
+      "lang": "python"
+    },
+    {
+      "from": "consolidate_format_runs",
+      "to": "_freeze_fmt",
+      "lang": "python"
+    },
+    {
+      "from": "consolidate_format_runs",
+      "to": "_union_addr_chunks",
+      "lang": "python"
+    },
+    {
+      "from": "consolidate_format_runs",
+      "to": "append",
+      "lang": "python"
+    },
+    {
+      "from": "consolidate_format_runs",
+      "to": "book",
+      "lang": "python"
+    },
+    {
+      "from": "consolidate_format_runs",
+      "to": "sheet",
+      "lang": "python"
+    },
+    {
+      "from": "_union_addr_chunks",
+      "to": "append",
+      "lang": "python"
+    },
+    {
+      "from": "group_steps",
+      "to": "_group_title",
+      "lang": "python"
+    },
+    {
+      "from": "group_steps",
+      "to": "append",
+      "lang": "python"
+    },
+    {
+      "from": "merge_small_adjacent_groups",
+      "to": "_group_title",
+      "lang": "python"
+    },
+    {
+      "from": "merge_small_adjacent_groups",
+      "to": "append",
+      "lang": "python"
+    },
+    {
+      "from": "chunk_groups",
+      "to": "append",
+      "lang": "python"
+    },
+    {
+      "from": "chunk_groups",
+      "to": "range",
+      "lang": "python"
+    },
+    {
+      "from": "group_to_pipeline_entry",
+      "to": "_body_has_statement",
+      "lang": "python"
+    },
+    {
+      "from": "group_to_pipeline_entry",
+      "to": "_group_sheets",
+      "lang": "python"
+    },
+    {
+      "from": "group_to_pipeline_entry",
+      "to": "append",
+      "lang": "python"
+    },
+    {
+      "from": "RecordService.set_replaying",
+      "to": "value",
+      "lang": "python"
+    },
+    {
+      "from": "RecordService.start",
+      "to": "clear",
+      "lang": "python"
+    },
+    {
+      "from": "RecordService._run",
+      "to": "_unmarshal_app",
+      "lang": "python"
+    },
+    {
+      "from": "RecordService._run",
+      "to": "capture_expected_states",
+      "lang": "python"
+    },
+    {
+      "from": "RecordService._run",
+      "to": "chunk_groups",
+      "lang": "python"
+    },
+    {
+      "from": "RecordService._run",
+      "to": "consolidate_format_runs",
+      "lang": "python"
+    },
+    {
+      "from": "RecordService._run",
+      "to": "consolidate_literal_runs",
+      "lang": "python"
+    },
+    {
+      "from": "RecordService._run",
+      "to": "group_steps",
+      "lang": "python"
+    },
+    {
+      "from": "RecordService._run",
+      "to": "group_to_pipeline_entry",
+      "lang": "python"
+    },
+    {
+      "from": "RecordService._run",
+      "to": "merge_small_adjacent_groups",
+      "lang": "python"
+    },
+    {
+      "from": "default_account",
+      "to": "current_user",
+      "lang": "python"
+    },
+    {
+      "from": "default_account",
+      "to": "replace",
+      "lang": "python"
+    },
+    {
+      "from": "config",
+      "to": "_env",
+      "lang": "python"
+    },
+    {
+      "from": "config",
+      "to": "default_account",
+      "lang": "python"
+    },
+    {
+      "from": "probe",
+      "to": "_headers",
+      "lang": "python"
+    },
+    {
+      "from": "probe",
+      "to": "config",
+      "lang": "python"
+    },
+    {
+      "from": "probe",
+      "to": "read",
+      "lang": "python"
+    },
+    {
+      "from": "available",
+      "to": "config",
+      "lang": "python"
+    },
+    {
+      "from": "available",
+      "to": "probe",
+      "lang": "python"
+    },
+    {
+      "from": "_clean_name",
+      "to": "replace",
+      "lang": "python"
+    },
+    {
+      "from": "_post_drm",
+      "to": "_clean_name",
+      "lang": "python"
+    },
+    {
+      "from": "_post_drm",
+      "to": "_headers",
+      "lang": "python"
+    },
+    {
+      "from": "_post_drm",
+      "to": "_try_json",
+      "lang": "python"
+    },
+    {
+      "from": "_post_drm",
+      "to": "append",
+      "lang": "python"
+    },
+    {
+      "from": "_post_drm",
+      "to": "config",
+      "lang": "python"
+    },
+    {
+      "from": "_post_drm",
+      "to": "raw",
+      "lang": "python"
+    },
+    {
+      "from": "_post_drm",
+      "to": "read",
+      "lang": "python"
+    },
+    {
+      "from": "_try_json",
+      "to": "raw",
+      "lang": "python"
+    },
+    {
+      "from": "_try_json",
+      "to": "value",
+      "lang": "python"
+    },
+    {
+      "from": "secret_check",
+      "to": "_post_drm",
+      "lang": "python"
+    },
+    {
+      "from": "secret_check",
+      "to": "config",
+      "lang": "python"
+    },
+    {
+      "from": "decrypt_bytes",
+      "to": "_post_drm",
+      "lang": "python"
+    },
+    {
+      "from": "decrypt_bytes",
+      "to": "config",
+      "lang": "python"
+    },
+    {
+      "from": "encrypt_bytes",
+      "to": "_post_drm",
+      "lang": "python"
+    },
+    {
+      "from": "encrypt_bytes",
+      "to": "config",
+      "lang": "python"
+    },
+    {
+      "from": "looks_secured",
+      "to": "_is_readable_office_zip",
+      "lang": "python"
+    },
+    {
+      "from": "maybe_decrypt_upload",
+      "to": "available",
+      "lang": "python"
+    },
+    {
+      "from": "maybe_decrypt_upload",
+      "to": "config",
+      "lang": "python"
+    },
+    {
+      "from": "maybe_decrypt_upload",
+      "to": "decrypt_bytes",
+      "lang": "python"
+    },
+    {
+      "from": "maybe_decrypt_upload",
+      "to": "looks_secured",
+      "lang": "python"
+    },
+    {
+      "from": "maybe_decrypt_upload",
+      "to": "read",
+      "lang": "python"
+    },
+    {
+      "from": "maybe_decrypt_upload",
+      "to": "read_label_id",
+      "lang": "python"
+    },
+    {
+      "from": "maybe_decrypt_upload",
+      "to": "secret_check",
+      "lang": "python"
+    },
+    {
+      "from": "read_label_id",
+      "to": "raw",
+      "lang": "python"
+    },
+    {
+      "from": "mark_released",
+      "to": "add",
+      "lang": "python"
+    },
+    {
+      "from": "encrypt_for_download",
+      "to": "encrypt_bytes",
+      "lang": "python"
+    },
+    {
+      "from": "encrypt_for_download",
+      "to": "recall_label",
+      "lang": "python"
+    },
+    {
+      "from": "status",
+      "to": "any_secured",
+      "lang": "python"
+    },
+    {
+      "from": "status",
+      "to": "config",
+      "lang": "python"
+    },
+    {
+      "from": "status",
+      "to": "probe",
       "lang": "python"
     },
     {
@@ -70740,10 +74468,10 @@
     }
   ],
   "stats": {
-    "functions": 2073,
-    "edges": 5832,
+    "functions": 2188,
+    "edges": 6105,
     "by_lang": {
-      "python": 667,
+      "python": 773,
       "js": 1165,
       "csharp": 62
     }

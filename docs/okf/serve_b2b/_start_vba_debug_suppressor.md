@@ -23,12 +23,12 @@ raises: []
 # ── 유기적 관계 ──
 calls:
   - "_suppress_vba_debug_windows"
+  - "start"
 calls_external:
   - "Event"
   - "Thread"
   - "is_set"
   - "pid"
-  - "start"
   - "wait"
   - "worker"
 called_by:
@@ -46,7 +46,7 @@ timestamp: "0.8.0-gen"
 - 없음(정적 분석 기준)
 
 ## 관계
-- 호출: `_suppress_vba_debug_windows`
+- 호출: `_suppress_vba_debug_windows`, `start`
 - 피호출(영향 전파 경로): `_inject_and_run_vba`
 
 ## 실패/예외

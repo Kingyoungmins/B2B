@@ -27,6 +27,7 @@ raises:
 
 # ── 유기적 관계 ──
 calls:
+  - "close"
   - "hidden_subprocess_kwargs"
   - "node_executable"
   - "read"
@@ -38,7 +39,6 @@ calls_external:
   - "Popen"
   - "RuntimeError"
   - "TimeoutError"
-  - "close"
   - "dict"
   - "dumps"
   - "exists"
@@ -83,7 +83,7 @@ timestamp: "0.8.0-gen"
 - 파일시스템 변경/IO
 
 ## 관계
-- 호출: `hidden_subprocess_kwargs`, `node_executable`, `read`, `update_pipeline_job`, `write`
+- 호출: `close`, `hidden_subprocess_kwargs`, `node_executable`, `read`, `update_pipeline_job`, `write`
 - 피호출(영향 전파 경로): `run_backend_pipeline_payload`
 
 ## 실패/예외

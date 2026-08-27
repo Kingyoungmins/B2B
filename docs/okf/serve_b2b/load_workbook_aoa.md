@@ -24,6 +24,7 @@ raises: []
 calls:
   - "append"
   - "cell_to_json"
+  - "close"
   - "excel_available"
   - "is_csv_path"
   - "iter_rows"
@@ -32,7 +33,6 @@ calls:
   - "openpyxl_load_workbook_compatible"
   - "values"
 calls_external:
-  - "close"
   - "path"
   - "pop"
 called_by:
@@ -50,7 +50,7 @@ timestamp: "0.8.0-gen"
 - 없음(정적 분석 기준)
 
 ## 관계
-- 호출: `append`, `cell_to_json`, `excel_available`, `is_csv_path`, `iter_rows`, `load_csv_aoa`, `load_workbook_aoa_with_excel`, `openpyxl_load_workbook_compatible`, `values`
+- 호출: `append`, `cell_to_json`, `close`, `excel_available`, `is_csv_path`, `iter_rows`, `load_csv_aoa`, `load_workbook_aoa_with_excel`, `openpyxl_load_workbook_compatible`, `values`
 - 피호출(영향 전파 경로): `get_workbook_aoa_for_run`
 
 ## 실패/예외

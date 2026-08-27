@@ -75,9 +75,12 @@ called_by:
   - "_workbook_name_lookup_keys"
   - "cleanup_backend_runtime_files"
   - "cleanup_excel_sessions"
+  - "digest_grid"
   - "inspect_workbook"
   - "inspect_workbook_with_excel"
   - "load_workbook_aoa"
+  - "sheet_expected_state"
+  - "update_config"
 reads:
   - "self._row_idx"
   - "self._sheet_proxy"
@@ -94,7 +97,7 @@ timestamp: "0.8.0-gen"
 
 ## 관계
 - 호출: `_set_pending_row_values`
-- 피호출(영향 전파 경로): `B2BHandler.handle_workbook_upload`, `ColumnIs.__init__`, `ExcelSkillContext.input`, `ExcelSkillContext.input_sheet`, `ExcelSkillContext.pivot`, `ExcelSkillContext.rows`, `ExcelSkillContext.sheet`, `ExcelSkillContext.workbook_like`, `ExcelWorksheetProxy.append`, `OpenpyxlSkillContext.flush_pending_rows`, `OpenpyxlSkillContext.input`, `OpenpyxlSkillContext.input_sheet`, `OpenpyxlSkillContext.pivot`, `OpenpyxlSkillContext.sheet`, `OpenpyxlSkillContext.workbook_like`, `OpenpyxlWorksheetProxy.append`, `OpenpyxlWorksheetProxy.flush_pending_rows`, `PythonComSkillContext._as_2d`, `PythonComSkillContext._pivot_value_table`, `PythonComSkillContext.apply_filter`, `PythonComSkillContext.column_is`, `PythonComSkillContext.find_header_row`, `PythonComSkillContext.native_pivot`, `PythonComSkillContext.write`, `_cleanup_excel_sessions_impl`, `_cleanup_fullrun_snapshots`, `_delete_pipeline_snapshot_entry`, `_excel_output_preview_sheets`, `_excel_runtime_diagnostics`, `_force_restart_excel_sessions_direct`, `_fullrun_snapshot_files_exist`, `_hide_all_excel_sessions_impl`, `_install_ctx_kwarg_tolerance`, `_live_final_snapshot_stats`, `_opxl_eval_formula`, `_pipeline_job_stats`, `_pipeline_snapshot_stats`, `_registered_path_for_name`, `_remaining_sessions_for_pid`, `_run_full_pipeline_single_instance_impl`, `_set_live_sessions_edit_unlock`, `_sheet_snapshot`, `_snapshot_files_exist`, `_verify_recorded_expected_live`, `_workbook_name_lookup_keys`, `cleanup_backend_runtime_files`, `cleanup_excel_sessions`, `inspect_workbook`, `inspect_workbook_with_excel`, `load_workbook_aoa`
+- 피호출(영향 전파 경로): `B2BHandler.handle_workbook_upload`, `ColumnIs.__init__`, `ExcelSkillContext.input`, `ExcelSkillContext.input_sheet`, `ExcelSkillContext.pivot`, `ExcelSkillContext.rows`, `ExcelSkillContext.sheet`, `ExcelSkillContext.workbook_like`, `ExcelWorksheetProxy.append`, `OpenpyxlSkillContext.flush_pending_rows`, `OpenpyxlSkillContext.input`, `OpenpyxlSkillContext.input_sheet`, `OpenpyxlSkillContext.pivot`, `OpenpyxlSkillContext.sheet`, `OpenpyxlSkillContext.workbook_like`, `OpenpyxlWorksheetProxy.append`, `OpenpyxlWorksheetProxy.flush_pending_rows`, `PythonComSkillContext._as_2d`, `PythonComSkillContext._pivot_value_table`, `PythonComSkillContext.apply_filter`, `PythonComSkillContext.column_is`, `PythonComSkillContext.find_header_row`, `PythonComSkillContext.native_pivot`, `PythonComSkillContext.write`, `_cleanup_excel_sessions_impl`, `_cleanup_fullrun_snapshots`, `_delete_pipeline_snapshot_entry`, `_excel_output_preview_sheets`, `_excel_runtime_diagnostics`, `_force_restart_excel_sessions_direct`, `_fullrun_snapshot_files_exist`, `_hide_all_excel_sessions_impl`, `_install_ctx_kwarg_tolerance`, `_live_final_snapshot_stats`, `_opxl_eval_formula`, `_pipeline_job_stats`, `_pipeline_snapshot_stats`, `_registered_path_for_name`, `_remaining_sessions_for_pid`, `_run_full_pipeline_single_instance_impl`, `_set_live_sessions_edit_unlock`, `_sheet_snapshot`, `_snapshot_files_exist`, `_verify_recorded_expected_live`, `_workbook_name_lookup_keys`, `cleanup_backend_runtime_files`, `cleanup_excel_sessions`, `digest_grid`, `inspect_workbook`, `inspect_workbook_with_excel`, `load_workbook_aoa`, `sheet_expected_state`, `update_config`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

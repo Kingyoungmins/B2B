@@ -26,13 +26,13 @@ raises: []
 # ── 유기적 관계 ──
 calls:
   - "cell"
+  - "close"
   - "is_csv_path"
   - "openpyxl_load_workbook_compatible"
   - "sheets"
   - "write_result_csv"
 calls_external:
   - "c_idx"
-  - "close"
   - "create_sheet"
   - "dict"
   - "enumerate"
@@ -61,7 +61,7 @@ timestamp: "0.8.0-gen"
 - 없음(정적 분석 기준)
 
 ## 관계
-- 호출: `cell`, `is_csv_path`, `openpyxl_load_workbook_compatible`, `sheets`, `write_result_csv`
+- 호출: `cell`, `close`, `is_csv_path`, `openpyxl_load_workbook_compatible`, `sheets`, `write_result_csv`
 - 피호출(영향 전파 경로): `ensure_result_file`
 
 ## 실패/예외

@@ -65,6 +65,7 @@ called_by:
   - "_sheet_snapshot"
   - "inspect_workbook_with_excel"
   - "load_workbook_aoa_with_excel"
+  - "sheet_merge_areas"
 reads:
   - "self._ws"
   - "self.flush_pending_rows"
@@ -81,7 +82,7 @@ timestamp: "0.8.0-gen"
 
 ## 관계
 - 호출: `flush_pending_rows`
-- 피호출(영향 전파 경로): `ExcelSkillContext._write_grid`, `ExcelSkillContext.set_range`, `ExcelSkillContext.value`, `ExcelWorksheetProxy.append`, `ExcelWorksheetProxy.cell`, `PythonComSkillContext._filter_to_sheet_native`, `PythonComSkillContext.append_same_format_sheets`, `PythonComSkillContext.apply_filter`, `PythonComSkillContext.copy_key_blocks`, `PythonComSkillContext.enable_filter`, `PythonComSkillContext.fill_sum_col`, `PythonComSkillContext.filter_to_range`, `PythonComSkillContext.filter_to_sheet`, `PythonComSkillContext.find_header`, `PythonComSkillContext.find_header_row`, `PythonComSkillContext.first_empty_col`, `PythonComSkillContext.last_col`, `PythonComSkillContext.last_row`, `PythonComSkillContext.move_col_clear`, `PythonComSkillContext.native_pivot`, `PythonComSkillContext.paste_copied`, `PythonComSkillContext.shift_months`, `PythonComSkillContext.sum_column`, `PythonComSkillContext.sum_lookup`, `PythonComSkillContext.swap_cols`, `PythonComSkillContext.used_last_row`, `_apply_com_text_format_for_long_digit_columns`, `_capture_copypaste_on_session_impl`, `_excel_output_preview_sheets`, `_live_preview_schema`, `_range_formula_info`, `_sheet_snapshot`, `inspect_workbook_with_excel`, `load_workbook_aoa_with_excel`
+- 피호출(영향 전파 경로): `ExcelSkillContext._write_grid`, `ExcelSkillContext.set_range`, `ExcelSkillContext.value`, `ExcelWorksheetProxy.append`, `ExcelWorksheetProxy.cell`, `PythonComSkillContext._filter_to_sheet_native`, `PythonComSkillContext.append_same_format_sheets`, `PythonComSkillContext.apply_filter`, `PythonComSkillContext.copy_key_blocks`, `PythonComSkillContext.enable_filter`, `PythonComSkillContext.fill_sum_col`, `PythonComSkillContext.filter_to_range`, `PythonComSkillContext.filter_to_sheet`, `PythonComSkillContext.find_header`, `PythonComSkillContext.find_header_row`, `PythonComSkillContext.first_empty_col`, `PythonComSkillContext.last_col`, `PythonComSkillContext.last_row`, `PythonComSkillContext.move_col_clear`, `PythonComSkillContext.native_pivot`, `PythonComSkillContext.paste_copied`, `PythonComSkillContext.shift_months`, `PythonComSkillContext.sum_column`, `PythonComSkillContext.sum_lookup`, `PythonComSkillContext.swap_cols`, `PythonComSkillContext.used_last_row`, `_apply_com_text_format_for_long_digit_columns`, `_capture_copypaste_on_session_impl`, `_excel_output_preview_sheets`, `_live_preview_schema`, `_range_formula_info`, `_sheet_snapshot`, `inspect_workbook_with_excel`, `load_workbook_aoa_with_excel`, `sheet_merge_areas`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

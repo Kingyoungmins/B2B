@@ -24,13 +24,13 @@ calls:
   - "_current_app_version"
   - "b2b_logs_dir"
   - "logic_backup_dir"
+  - "start"
   - "writable_app_dir"
 calls_external:
   - "Path"
   - "__file__"
   - "get"
   - "resolve"
-  - "start"
   - "str"
 called_by:
   - "start_runtime_maintenance_threads"
@@ -47,7 +47,7 @@ timestamp: "0.8.0-gen"
 - 없음(정적 분석 기준)
 
 ## 관계
-- 호출: `_current_app_version`, `b2b_logs_dir`, `logic_backup_dir`, `writable_app_dir`
+- 호출: `_current_app_version`, `b2b_logs_dir`, `logic_backup_dir`, `start`, `writable_app_dir`
 - 피호출(영향 전파 경로): `start_runtime_maintenance_threads`
 
 ## 실패/예외

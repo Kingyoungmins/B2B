@@ -22,11 +22,11 @@ side_effects:
 raises: []
 
 # ── 유기적 관계 ──
-calls: []
+calls:
+  - "stop"
 calls_external:
   - "get"
   - "reason"
-  - "stop"
   - "timeout"
 called_by:
   - "B2BHandler.do_POST"
@@ -44,7 +44,7 @@ timestamp: "0.8.0-gen"
 - 없음(정적 분석 기준)
 
 ## 관계
-- 호출: 없음
+- 호출: `stop`
 - 피호출(영향 전파 경로): `B2BHandler.do_POST`, `_native_parent_watch_once`
 
 ## 실패/예외

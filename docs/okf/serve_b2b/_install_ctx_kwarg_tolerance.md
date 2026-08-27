@@ -24,9 +24,9 @@ raises: []
 calls:
   - "_wrap_ctx_helper_kwargs"
   - "add"
+  - "allowed"
   - "values"
 calls_external:
-  - "allowed"
   - "any"
   - "cls"
   - "has_varkw"
@@ -56,7 +56,7 @@ ctx 클래스의 공개 메서드를 훑어 header_row/header_rows 를 서로 �
 - 없음(정적 분석 기준)
 
 ## 관계
-- 호출: `_wrap_ctx_helper_kwargs`, `add`, `values`
+- 호출: `_wrap_ctx_helper_kwargs`, `add`, `allowed`, `values`
 - 피호출(영향 전파 경로): 없음
 
 ## 실패/예외

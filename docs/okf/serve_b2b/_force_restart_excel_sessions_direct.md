@@ -31,6 +31,7 @@ calls:
   - "add"
   - "append"
   - "clear"
+  - "start"
   - "values"
 calls_external:
   - "LIVE_EXCEL_APP"
@@ -57,7 +58,6 @@ calls_external:
   - "set"
   - "sleep"
   - "sorted"
-  - "start"
   - "t"
   - "temp_path"
   - "time"
@@ -98,7 +98,7 @@ COM 큐를 '우회'하는 응급 복구. 공유 EXCEL.EXE 가 모달/행으로 �
 - 변경 상태 `LIVE_EXCEL_APP, PYTHON_SKILL_APP, PYTHON_SKILL_APP_LAST_USED, PYTHON_SKILL_APP_PID` — 수정 시 이 상태를 읽는 곳 동반 점검.
 
 ## 관계
-- 호출: `_force_kill_pid`, `_is_pid_alive`, `_note_live_app_reset`, `_perf_trace`, `add`, `append`, `clear`, `values`
+- 호출: `_force_kill_pid`, `_is_pid_alive`, `_note_live_app_reset`, `_perf_trace`, `add`, `append`, `clear`, `start`, `values`
 - 피호출(영향 전파 경로): `B2BHandler.do_POST`, `run_python_on_session`
 
 ## 실패/예외
