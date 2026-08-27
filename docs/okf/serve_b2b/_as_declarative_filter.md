@@ -27,6 +27,7 @@ calls_external:
   - "isinstance"
   - "predicate"
 called_by:
+  - "PythonComSkillContext.filter_to_range"
   - "PythonComSkillContext.filter_to_sheet"
 reads: []
 writes: []
@@ -42,7 +43,7 @@ predicate 가 선언적 조건이면 그대로, 아니면 None(=람다 경로로
 
 ## 관계
 - 호출: 없음
-- 피호출(영향 전파 경로): `PythonComSkillContext.filter_to_sheet`
+- 피호출(영향 전파 경로): `PythonComSkillContext.filter_to_range`, `PythonComSkillContext.filter_to_sheet`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

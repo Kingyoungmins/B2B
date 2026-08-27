@@ -13457,6 +13457,166 @@ class PythonComSkillContext:
         self._shared["structural"].append(f"filter_to_sheet:{sheet}->{dest_name}({len(matched)})")
         return dest_name
 
+    def filter_to_range(self, sheet, predicate, dest_sheet, dest_cell, header_rows=1,
+                        include_header=False, clear_existing=False):
+        """조건에 맞는 행을 **이미 있는 시트의 정한 자리**에 붙인다(서식 보존, 원본은 그대로).
+
+        [문의 2026-08-27] 복붙 캡처로 '필터 → 복사 → 붙여넣기'를 녹화하면 그 순간의 범위가
+        코드에 그대로 박힌다(예: 'A2:N57'). 다음 달 가입번호가 늘면 범위가 안 맞아 못 쓴다.
+        이 헬퍼는 범위를 좌표로 굳히지 않고 **실행할 때마다 조건에 맞는 행을 다시 찾는다** —
+        행이 늘든 줄든 같은 코드가 그대로 동작한다.
+
+        filter_to_sheet 와의 차이: 저쪽은 결과를 '새 시트'에 만든다(양식이 있으면 못 쓴다).
+        이쪽은 이미 있는 양식 시트의 지정한 칸부터 붙인다.
+
+          dest_sheet/dest_cell : 붙일 시트와 시작 칸(예: "대상양식", "A3")
+          header_rows          : 원본에서 머리글이 몇 줄인지(기본 1)
+          include_header       : 머리글도 함께 붙일지(기본 False — 양식엔 이미 머리글이 있다)
+          clear_existing       : True 면 붙이기 전에 그 자리 아래 기존 내용을 지운다
+                                 (지난달 데이터가 남아 섞이는 것 방지. 붙일 열 범위만 지운다)
+
+          예) col = ctx.find_header("회선 현황", "상태")           # 열은 이름으로 찾는다
+              ctx.filter_to_range("회선 현황", ctx.column_is(col, ["정지"]),
+                                  "대상양식", "A3", clear_existing=True)
+
+        반환: 붙인 데이터 행 수(머리글 제외). 조건에 맞는 행이 없으면 0(오류 아님 — 그 달에
+              해당 건이 없을 수 있다. 대신 clear_existing 은 그대로 수행돼 옛 값이 안 남는다).
+        """
+        ws = self._ws(sheet)
+        dws = self._ws(dest_sheet)
+        self._tick(2)
+        hr = max(0, int(header_rows))
+        anchor = self._rng(dws, str(dest_cell))
+        try:
+            out_row0 = int(anchor.Row)
+            out_col0 = int(anchor.Column)
+        except Exception:
+            raise PythonComSkillError("붙일 위치(dest_cell)를 해석하지 못했습니다: %r" % (dest_cell,))
+
+        used = ws.UsedRange
+        first_row = int(used.Row)
+        first_col = int(used.Column)
+        last_row = first_row + int(used.Rows.Count) - 1
+        last_col = first_col + int(used.Columns.Count) - 1
+        self._tick(3)
+        width = last_col - first_col + 1
+        header_row = first_row + hr - 1 if hr else first_row - 1
+
+        def _clear_block():
+            """붙일 자리 아래의 옛 내용을 지운다 — 붙일 '열 범위'만(양식의 다른 열은 안 건드린다)."""
+            if not clear_existing:
+                return
+            try:
+                dlast = int(dws.UsedRange.Row) + int(dws.UsedRange.Rows.Count) - 1
+            except Exception:
+                return
+            if dlast < out_row0:
+                return
+            self._tick(2)
+            blk = dws.Range(dws.Cells(out_row0, out_col0), dws.Cells(dlast, out_col0 + width - 1))
+            self._journal_save(dws, blk)
+            blk.ClearContents()
+
+        # ── 1) 선언적 조건(ctx.column_is)이면 Excel 자동필터로 — 값을 파이썬으로 안 끌어올린다 ──
+        decl = _as_declarative_filter(predicate)
+        if decl is not None and hr >= 1 and last_row > header_row:
+            col_idx = decl.column
+            if isinstance(col_idx, str):
+                col_idx = self._col_index(col_idx)
+            col_idx = int(col_idx)
+            field = col_idx - first_col + 1
+            if 1 <= field <= width:
+                data_range = ws.Range(ws.Cells(header_row, first_col), ws.Cells(last_row, last_col))
+                try:
+                    if ws.AutoFilterMode:
+                        ws.AutoFilterMode = False
+                    self._tick(2)
+                    if len(decl.values) == 1:
+                        data_range.AutoFilter(Field=field, Criteria1=str(decl.values[0]))
+                    else:
+                        data_range.AutoFilter(Field=field,
+                                              Criteria1=[str(v) for v in decl.values], Operator=7)  # xlFilterValues
+                    self._tick(2)
+                    body = ws.Range(ws.Cells(header_row + 1, first_col), ws.Cells(last_row, last_col))
+                    try:
+                        visible = body.SpecialCells(12)          # xlCellTypeVisible
+                    except Exception:
+                        visible = None                            # 0건 — Excel 이 예외를 낸다
+                    _clear_block()
+                    n = 0
+                    if visible is not None:
+                        n = int(visible.Rows.Count) if visible.Areas.Count == 1 else \
+                            sum(int(a.Rows.Count) for a in visible.Areas)
+                        row_at = out_row0
+                        if include_header and hr:
+                            ws.Range(ws.Cells(first_row, first_col),
+                                     ws.Cells(header_row, last_col)).Copy(dws.Cells(row_at, out_col0))
+                            row_at += hr
+                            self._tick(2)
+                        visible.Copy(dws.Cells(row_at, out_col0))
+                        self._tick(2)
+                    try:
+                        self._app.CutCopyMode = False
+                    except Exception:
+                        pass
+                    self._mark_mutated(dws)
+                    self._shared["structural"].append(
+                        "filter_to_range:%s->%s!%s(%d)" % (sheet, dest_sheet, dest_cell, n))
+                    _vba_trace("python_com.filter_to_range", sheet=str(sheet), dest=str(dest_sheet),
+                               cell=str(dest_cell), rows=n, mode="native")
+                    return n
+                finally:
+                    try:
+                        if ws.AutoFilterMode:
+                            ws.AutoFilterMode = False              # 원본에 필터를 남기지 않는다
+                    except Exception:
+                        pass
+
+        # ── 2) 임의의 파이썬 조건(lambda)이면 값을 읽어 판정하고, 맞는 행만 네이티브 복사 ──
+        grid = self.read(sheet)
+        try:
+            lead = int(ws.UsedRange.Column) - 1
+        except Exception:
+            lead = 0
+        if lead > 0:
+            grid = [[None] * lead + list(r) for r in grid]        # 'A열=index0' 절대 기준(filter_to_sheet 와 동일)
+        matched_rows = []
+        for i, row in enumerate(grid[hr:]):
+            try:
+                keep = bool(predicate(list(row)))
+            except Exception as err:
+                raise PythonComSkillError("필터 조건(predicate) 실행 오류: %s" % err)
+            if keep:
+                matched_rows.append(first_row + hr + i)
+        _clear_block()
+        row_at = out_row0
+        if include_header and hr:
+            ws.Range(ws.Cells(first_row, first_col), ws.Cells(header_row, last_col)) \
+              .Copy(dws.Cells(row_at, out_col0))
+            row_at += hr
+            self._tick(2)
+        runs = []
+        for n_ in matched_rows:
+            if runs and n_ == runs[-1][1] + 1:
+                runs[-1][1] = n_
+            else:
+                runs.append([n_, n_])
+        for a, b in runs:
+            self._tick(2)
+            ws.Range(ws.Cells(int(a), first_col), ws.Cells(int(b), last_col)) \
+              .Copy(dws.Cells(int(row_at), out_col0))
+            row_at += (b - a + 1)
+        try:
+            self._app.CutCopyMode = False
+        except Exception:
+            pass
+        self._mark_mutated(dws)
+        self._shared["structural"].append(
+            "filter_to_range:%s->%s!%s(%d)" % (sheet, dest_sheet, dest_cell, len(matched_rows)))
+        _vba_trace("python_com.filter_to_range", sheet=str(sheet), dest=str(dest_sheet),
+                   cell=str(dest_cell), rows=len(matched_rows), mode="lambda")
+        return len(matched_rows)
+
     def _pivot_value_table(self, sheet, group_by, value=None, agg="sum", dest_name=None, header_rows=1, after=None, column=None):
         """[내부/폴백] 그룹별 집계 '값 표'를 새 시트에 만든다(Python 집계 — 안정적). ctx.pivot 이 진짜
         피벗테이블(native_pivot) 생성에 실패했을 때 이 값-표로 폴백한다. 직접 호출도 가능(값-표 강제).

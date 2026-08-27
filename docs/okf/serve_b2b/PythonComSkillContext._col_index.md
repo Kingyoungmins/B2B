@@ -38,6 +38,7 @@ called_by:
   - "PythonComSkillContext._resolve_col"
   - "PythonComSkillContext.apply_filter"
   - "PythonComSkillContext.delete_cols"
+  - "PythonComSkillContext.filter_to_range"
   - "PythonComSkillContext.first_empty_col"
   - "PythonComSkillContext.insert_cols"
   - "PythonComSkillContext.match_fill"
@@ -58,7 +59,7 @@ timestamp: "0.8.0-gen"
 
 ## 관계
 - 호출: 없음
-- 피호출(영향 전파 경로): `PythonComSkillContext._filter_to_sheet_native`, `PythonComSkillContext._pivot_value_table`, `PythonComSkillContext._resolve_col`, `PythonComSkillContext.apply_filter`, `PythonComSkillContext.delete_cols`, `PythonComSkillContext.first_empty_col`, `PythonComSkillContext.insert_cols`, `PythonComSkillContext.match_fill`, `PythonComSkillContext.move_cols`, `PythonComSkillContext.native_pivot`, `PythonComSkillContext.sort`
+- 피호출(영향 전파 경로): `PythonComSkillContext._filter_to_sheet_native`, `PythonComSkillContext._pivot_value_table`, `PythonComSkillContext._resolve_col`, `PythonComSkillContext.apply_filter`, `PythonComSkillContext.delete_cols`, `PythonComSkillContext.filter_to_range`, `PythonComSkillContext.first_empty_col`, `PythonComSkillContext.insert_cols`, `PythonComSkillContext.match_fill`, `PythonComSkillContext.move_cols`, `PythonComSkillContext.native_pivot`, `PythonComSkillContext.sort`
 
 ## 실패/예외
 - `PythonComSkillError`

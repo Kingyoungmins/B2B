@@ -46,6 +46,7 @@ called_by:
   - "PythonComSkillContext.append_same_format_sheets"
   - "PythonComSkillContext.dedupe"
   - "PythonComSkillContext.fill_sum_col"
+  - "PythonComSkillContext.filter_to_range"
   - "PythonComSkillContext.lookup"
   - "PythonComSkillContext.match_fill"
   - "PythonComSkillContext.move_col_clear"
@@ -70,7 +71,7 @@ timestamp: "0.8.0-gen"
 
 ## 관계
 - 호출: `Cells`, `_tick`, `_vba_trace`, `_ws`, `col`, `row`, `sheet`
-- 피호출(영향 전파 경로): `PythonComSkillContext._filter_to_sheet_native`, `PythonComSkillContext.add_total_row`, `PythonComSkillContext.append_same_format_sheets`, `PythonComSkillContext.dedupe`, `PythonComSkillContext.fill_sum_col`, `PythonComSkillContext.lookup`, `PythonComSkillContext.match_fill`, `PythonComSkillContext.move_col_clear`, `PythonComSkillContext.split_column`, `PythonComSkillContext.sum_column`, `PythonComSkillContext.sum_lookup`, `PythonComSkillContext.sum_where`
+- 피호출(영향 전파 경로): `PythonComSkillContext._filter_to_sheet_native`, `PythonComSkillContext.add_total_row`, `PythonComSkillContext.append_same_format_sheets`, `PythonComSkillContext.dedupe`, `PythonComSkillContext.fill_sum_col`, `PythonComSkillContext.filter_to_range`, `PythonComSkillContext.lookup`, `PythonComSkillContext.match_fill`, `PythonComSkillContext.move_col_clear`, `PythonComSkillContext.split_column`, `PythonComSkillContext.sum_column`, `PythonComSkillContext.sum_lookup`, `PythonComSkillContext.sum_where`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

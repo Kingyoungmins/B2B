@@ -88,5 +88,17 @@ ck("(C2) b = ctx.book(변수); b.rename_sheet", isG(gen(TF + `b = ctx.book(targe
   ck("(AMP-대조) 순수 변수는 정상 등록", isG(gen(plain), "", "C_611") === true, gen(plain));
 }
 
+// [호환 2026-08-27] 새로 만든 ctx.filter_to_range 는 "이미 있는 시트"에 붙인다 — 산출물이 아니다.
+// 탐지기가 이걸 생성 시트로 등록하면 실행기 파일확인에서 양식이 "만들어지는 시트"로 잘못 잡혀
+// 업로드 요구/매핑이 꼬인다. 접두를 공유하지 않는 별도 이름을 쓴 이유이기도 하다.
+{
+  const codeNew = `ctx.filter_to_range("회선 현황", ctx.column_is(2, ["정지"]), "대상양식", "A3")`;
+  ck("(NEW) filter_to_range 는 생성시트로 등록하지 않는다",
+    JSON.stringify(gen(codeNew)) === "[]", gen(codeNew));
+  const codeOld = `ctx.filter_to_sheet("회선 현황", lambda r: r[1]=="정지", "정지목록")`;
+  ck("(NEW-대조) filter_to_sheet 는 종전대로 등록한다",
+    isG(gen(codeOld), "", "정지목록") === true, gen(codeOld));
+}
+
 console.log("\n=== RESULT: " + (fails === 0 ? "ALL PASS" : fails + " FAIL") + " ===");
 process.exit(fails ? 1 : 0);

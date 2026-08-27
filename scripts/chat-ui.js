@@ -1916,7 +1916,7 @@ function pythonComStaticSafetyFailures(code, sourceUserMessage) {
 // (read/write/write_cell/write_formulas/book 같은 '원시' 는 제외 — 오용/루프 가능. 그건 정적 안전
 //  게이트가 별도로 계속 검사한다. 이 함수는 '의도 기반 VBA 강제'만 건너뛴다.)
 function codeUsesSafeCtxHelper(code) {
-  return /\bctx\s*\.\s*(?:copy_key_blocks|copy_values|copy_col|copy_sheet|paste_copied|copy|move_col_clear|move_cols|swap_cols|sort|pivot|filter_to_sheet|fill_sum_col|sum_column|append_same_format_sheets|shift_months|clear|delete_cols|delete_rows|insert_rows|insert_cols|merge|unmerge|add_sheet|rename_sheet|delete_sheet)\s*\(/i.test(String(code || ""));
+  return /\bctx\s*\.\s*(?:copy_key_blocks|copy_values|copy_col|copy_sheet|paste_copied|copy|move_col_clear|move_cols|swap_cols|sort|pivot|filter_to_sheet|filter_to_range|fill_sum_col|sum_column|append_same_format_sheets|shift_months|clear|delete_cols|delete_rows|insert_rows|insert_cols|merge|unmerge|add_sheet|rename_sheet|delete_sheet)\s*\(/i.test(String(code || ""));
 }
 
 function pythonComMustUseVbaReason(code, sourceUserMessage) {

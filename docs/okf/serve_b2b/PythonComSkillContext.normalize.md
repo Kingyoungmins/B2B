@@ -9,7 +9,7 @@ signature: "(self, value)"
 role: "값 비교용 정규화. 공백/대소문자 차이와 함께 **숫자/글자 저장 차이도 흡수**한다"
 role_source: docstring
 version: "0.8.0"
-loc: "serve_b2b.py:13781-13784"
+loc: "serve_b2b.py:13941-13944"
 
 # ── 입출력 ──
 inputs:

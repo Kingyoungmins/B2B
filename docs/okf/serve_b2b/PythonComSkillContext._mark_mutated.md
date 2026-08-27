@@ -37,6 +37,7 @@ calls_external:
 called_by:
   - "PythonComSkillContext._filter_to_sheet_native"
   - "PythonComSkillContext._journal_save"
+  - "PythonComSkillContext.filter_to_range"
 reads:
   - "self._shared"
 writes: []
@@ -52,7 +53,7 @@ timestamp: "0.8.0-gen"
 
 ## 관계
 - 호출: `add`, `append`, `normalize`
-- 피호출(영향 전파 경로): `PythonComSkillContext._filter_to_sheet_native`, `PythonComSkillContext._journal_save`
+- 피호출(영향 전파 경로): `PythonComSkillContext._filter_to_sheet_native`, `PythonComSkillContext._journal_save`, `PythonComSkillContext.filter_to_range`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

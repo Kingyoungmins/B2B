@@ -1,6 +1,6 @@
 ====================================================================
  AX-Cell 스킬 함수 설명서
- - 스킬 안에서 쓸 수 있는 명령(ctx) 66가지, 용도와 예시
+ - 스킬 안에서 쓸 수 있는 명령(ctx) 67가지, 용도와 예시
  - 버전 0.8.0 / 2026-08-26
 ====================================================================
 
@@ -82,8 +82,9 @@ AX-Cell 이 엑셀 작업을 자동으로 해 줄 때, 뒤에서는 "스킬"이�
      move_cols  move_col_clear  swap_cols  hide_cols  hide_rows
      merge  unmerge  split_column
 
- 마. 필터 (5개)
-     enable_filter  apply_filter  clear_filter  filter_to_sheet  column_is
+ 마. 필터 (6개)
+     enable_filter  apply_filter  clear_filter  filter_to_sheet
+     filter_to_range  column_is
 
  바. 합계·피벗 (6개)
      pivot  native_pivot  sum_column  sum_where  fill_sum_col  add_total_row
@@ -469,6 +470,30 @@ ctx.filter_to_sheet(시트, 조건, 새시트이름, header_rows=1)
  언제 쓰나   : "○○만 뽑아서 새 시트로 정리해 줘".
  예시        : ctx.filter_to_sheet("Sheet1",
                    lambda r: r[2] == "안전제일", "안전제일목록")
+
+--------------------------------------------------------------------
+ctx.filter_to_range(시트, 조건, 대상시트, 시작칸, header_rows=1,
+                    include_header=False, clear_existing=False)
+--------------------------------------------------------------------
+ 무엇을 하나 : 조건에 맞는 행을 **이미 있는 시트(양식)의 정한 자리**부터
+               붙입니다. 원본은 그대로 두고, 서식도 따라갑니다.
+ 무엇이 다른가: 바로 위 filter_to_sheet 는 결과를 '새 시트'에 만듭니다.
+               이미 쓰고 있는 양식에 채워 넣어야 하면 이걸 씁니다.
+ 왜 중요한가 : 복붙 캡처로 '필터→복사→붙여넣기'를 녹화하면 그 순간의 범위가
+               코드에 그대로 굳습니다(예: A2:N57). 다음 달 가입번호가 늘면
+               범위가 안 맞아 못 씁니다. 이 명령은 돌릴 때마다 조건에 맞는
+               행을 다시 찾으므로, 행이 늘든 줄든 같은 코드가 그대로 됩니다.
+ 옵션
+     clear_existing=True : 붙이기 전에 그 자리 아래를 지웁니다(붙일 열만).
+                           지난달 값이 남아 섞이는 걸 막습니다.
+     include_header=True : 머리글도 함께 붙입니다(기본은 안 붙임 —
+                           양식에는 보통 머리글이 이미 있습니다).
+ 결과        : 붙인 행 수. 해당하는 행이 없으면 0(오류 아님).
+ 예시        : col = ctx.find_header("회선 현황", "상태")
+               ctx.filter_to_range("회선 현황", ctx.column_is(col, ["정지"]),
+                                   "대상양식", "A3", clear_existing=True)
+ 주의        : 열은 꼭 find_header 로 이름에서 찾으세요. 열 번호를 직접 쓰면
+               열이 하나만 추가돼도 어긋납니다.
 
 --------------------------------------------------------------------
 ctx.column_is(열, 값들)

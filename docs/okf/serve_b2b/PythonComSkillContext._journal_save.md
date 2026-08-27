@@ -40,6 +40,7 @@ called_by:
   - "PythonComSkillContext.clear"
   - "PythonComSkillContext.copy"
   - "PythonComSkillContext.copy_values"
+  - "PythonComSkillContext.filter_to_range"
   - "PythonComSkillContext.merge"
   - "PythonComSkillContext.paste_copied"
   - "PythonComSkillContext.replace"
@@ -65,7 +66,7 @@ timestamp: "0.8.0-gen"
 
 ## 관계
 - 호출: `_mark_mutated`, `_note_blanked_cells_from_range`, `_range_matrix`, `_tick`, `append`
-- 피호출(영향 전파 경로): `PythonComSkillContext.clear`, `PythonComSkillContext.copy`, `PythonComSkillContext.copy_values`, `PythonComSkillContext.merge`, `PythonComSkillContext.paste_copied`, `PythonComSkillContext.replace`, `PythonComSkillContext.shift_months`, `PythonComSkillContext.sort`, `PythonComSkillContext.write`, `PythonComSkillContext.write_formulas`
+- 피호출(영향 전파 경로): `PythonComSkillContext.clear`, `PythonComSkillContext.copy`, `PythonComSkillContext.copy_values`, `PythonComSkillContext.filter_to_range`, `PythonComSkillContext.merge`, `PythonComSkillContext.paste_copied`, `PythonComSkillContext.replace`, `PythonComSkillContext.shift_months`, `PythonComSkillContext.sort`, `PythonComSkillContext.write`, `PythonComSkillContext.write_formulas`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

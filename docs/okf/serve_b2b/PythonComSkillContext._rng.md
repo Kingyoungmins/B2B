@@ -45,6 +45,7 @@ called_by:
   - "PythonComSkillContext.clear"
   - "PythonComSkillContext.copy"
   - "PythonComSkillContext.copy_values"
+  - "PythonComSkillContext.filter_to_range"
   - "PythonComSkillContext.formula_mask"
   - "PythonComSkillContext.has_formulas"
   - "PythonComSkillContext.merge"
@@ -76,7 +77,7 @@ timestamp: "0.8.0-gen"
 
 ## 관계
 - 호출: `Range`, `_col_num`
-- 피호출(영향 전파 경로): `PythonComSkillContext.clear`, `PythonComSkillContext.copy`, `PythonComSkillContext.copy_values`, `PythonComSkillContext.formula_mask`, `PythonComSkillContext.has_formulas`, `PythonComSkillContext.merge`, `PythonComSkillContext.paste_copied`, `PythonComSkillContext.read`, `PythonComSkillContext.read_formulas`, `PythonComSkillContext.replace`, `PythonComSkillContext.set_border`, `PythonComSkillContext.set_fill`, `PythonComSkillContext.set_font`, `PythonComSkillContext.set_number_format`, `PythonComSkillContext.shift_months`, `PythonComSkillContext.sort`, `PythonComSkillContext.unmerge`, `PythonComSkillContext.write`, `PythonComSkillContext.write_formulas`
+- 피호출(영향 전파 경로): `PythonComSkillContext.clear`, `PythonComSkillContext.copy`, `PythonComSkillContext.copy_values`, `PythonComSkillContext.filter_to_range`, `PythonComSkillContext.formula_mask`, `PythonComSkillContext.has_formulas`, `PythonComSkillContext.merge`, `PythonComSkillContext.paste_copied`, `PythonComSkillContext.read`, `PythonComSkillContext.read_formulas`, `PythonComSkillContext.replace`, `PythonComSkillContext.set_border`, `PythonComSkillContext.set_fill`, `PythonComSkillContext.set_font`, `PythonComSkillContext.set_number_format`, `PythonComSkillContext.shift_months`, `PythonComSkillContext.sort`, `PythonComSkillContext.unmerge`, `PythonComSkillContext.write`, `PythonComSkillContext.write_formulas`
 
 ## 실패/예외
 - `PythonComSkillError`

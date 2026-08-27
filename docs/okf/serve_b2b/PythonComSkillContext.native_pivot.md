@@ -9,7 +9,7 @@ signature: "(self, sheet, group_by, value=None, agg='sum', dest_name=None, colum
 role: "엑셀 '진짜 피벗테이블(PivotTable 개체)'을 새 시트에 만든다 — 원본 데이터와 연결돼 '새로 고침'이"
 role_source: docstring
 version: "0.8.0"
-loc: "serve_b2b.py:13613-13748"
+loc: "serve_b2b.py:13773-13908"
 
 # ── 입출력 ──
 inputs:

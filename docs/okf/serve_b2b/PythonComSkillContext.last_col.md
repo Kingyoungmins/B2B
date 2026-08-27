@@ -38,6 +38,7 @@ called_by:
   - "PythonComSkillContext._filter_to_sheet_native"
   - "PythonComSkillContext.append_same_format_sheets"
   - "PythonComSkillContext.copy_key_blocks"
+  - "PythonComSkillContext.filter_to_range"
   - "PythonComSkillContext.find_header"
   - "PythonComSkillContext.match_fill"
   - "PythonComSkillContext.move_cols"
@@ -58,7 +59,7 @@ timestamp: "0.8.0-gen"
 
 ## 관계
 - 호출: `Cells`, `_tick`, `_ws`, `row`, `sheet`
-- 피호출(영향 전파 경로): `PythonComSkillContext._filter_to_sheet_native`, `PythonComSkillContext.append_same_format_sheets`, `PythonComSkillContext.copy_key_blocks`, `PythonComSkillContext.find_header`, `PythonComSkillContext.match_fill`, `PythonComSkillContext.move_cols`
+- 피호출(영향 전파 경로): `PythonComSkillContext._filter_to_sheet_native`, `PythonComSkillContext.append_same_format_sheets`, `PythonComSkillContext.copy_key_blocks`, `PythonComSkillContext.filter_to_range`, `PythonComSkillContext.find_header`, `PythonComSkillContext.match_fill`, `PythonComSkillContext.move_cols`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`
