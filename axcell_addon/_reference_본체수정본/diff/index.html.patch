@@ -1,0 +1,122 @@
+--- index.html	2026-08-21 13:03:33.830820500 +0900
++++ "B2B_배�\217�/index.html"	2026-08-27 16:05:57.687375500 +0900
+@@ -27,26 +27,44 @@
+ <aside class="menu-drawer" id="menu-drawer">
+   <div class="menu-drawer-inner">
+     <div class="menu-head">
+-      <span>메뉴</span>
++      <span>B2B 스마트 빌링 에이전트</span>
+       <button class="brand-btn icon" id="menu-close" type="button">✕</button>
+     </div>
+     <div class="menu-list">
++      <!-- 청구서를 만드는 쪽 -->
++      <div class="menu-group">AX-Cell</div>
+       <button class="menu-item active" data-page="generator" type="button">
+-        <span>🧩</span>
+-        <span>B2B 빌링 Agent</span>
++        <span class="menu-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4.5A1.5 1.5 0 0 1 5.5 3H15l5 5v12.5a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 20.5z"/><path d="M14.5 3v4.5a1 1 0 0 0 1 1H20"/><path d="M8.5 13h7M8.5 17h4.5"/></svg></span>
++        <span>스킬 생성기</span>
+       </button>
+       <button class="menu-item" data-page="runner" type="button">
+-        <span>▶</span>
++        <span class="menu-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 5.2v13.6a.8.8 0 0 0 1.22.68l10.5-6.8a.8.8 0 0 0 0-1.36L9.22 4.52A.8.8 0 0 0 8 5.2z"/></svg></span>
+         <span>스킬 실행기</span>
+       </button>
++
++      <!-- 데이터를 가져오는 쪽 (준비 중) -->
++      <div class="menu-group">AX-Trace</div>
++      <button class="menu-item" data-page="trace-generator" type="button">
++        <span class="menu-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4.5A1.5 1.5 0 0 1 5.5 3H15l5 5v12.5a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 20.5z"/><path d="M14.5 3v4.5a1 1 0 0 0 1 1H20"/><path d="M8.5 13h7M8.5 17h4.5"/></svg></span>
++        <span>스킬 생성기</span>
++      </button>
++      <button class="menu-item" data-page="trace-runner" type="button">
++        <span class="menu-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 5.2v13.6a.8.8 0 0 0 1.22.68l10.5-6.8a.8.8 0 0 0 0-1.36L9.22 4.52A.8.8 0 0 0 8 5.2z"/></svg></span>
++        <span>스킬 실행기</span>
++      </button>
++
++      <!-- 둘을 이어 무인으로 돌리는 쪽 -->
++      <div class="menu-group">E2E 작업 등록</div>
+       <button class="menu-item" data-page="scheduler" type="button">
+-        <span>🗓</span>
+-        <span>스케줄 등록</span>
++        <span class="menu-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4.5A1.5 1.5 0 0 1 5.5 3H15l5 5v12.5a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 20.5z"/><path d="M14.5 3v4.5a1 1 0 0 0 1 1H20"/><path d="M8.5 13h7M8.5 17h4.5"/></svg></span>
++        <span>스킬 등록</span>
+       </button>
+       <button class="menu-item" data-page="schedules" type="button">
+-        <span>📋</span>
+-        <span>스케줄 목록</span>
++        <span class="menu-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 5.2v13.6a.8.8 0 0 0 1.22.68l10.5-6.8a.8.8 0 0 0 0-1.36L9.22 4.52A.8.8 0 0 0 8 5.2z"/></svg></span>
++        <span>스킬 목록</span>
+       </button>
++
++      <div class="menu-sep"></div>
+       <button class="menu-item" id="btn-open-guide" type="button">
+         <span>?</span>
+         <span>사용 가이드</span>
+@@ -310,11 +328,58 @@
+         </div>
+       </div>
+ 
++      <!-- ============ AX-Trace (준비 중) ============
++           화면 껍데기만 둔다. 규격이 정해지면 여기에 채운다. -->
++      <div class="page-panel" id="page-trace-generator">
++        <!-- 외부 웹 에이전트를 그대로 얹는다. 좌측 메뉴·상단 바만 우리 것이고
++             본문은 설정한 주소에서 서빙되는 화면을 iframe 으로 보여준다. -->
++        <div class="embed-root" id="trace-gen-root">
++          <div class="embed-bar">
++            <span class="embed-label">AX-Trace 스킬 생성기</span>
++            <input class="embed-url" id="trace-gen-url" type="text" spellcheck="false"
++                   placeholder="http://192.168.0.10:3000">
++            <button class="sx-btn ghost" type="button" data-embed="go">연결</button>
++            <button class="sx-btn ghost" type="button" data-embed="reload" title="새로고침">↻</button>
++            <button class="sx-btn ghost" type="button" data-embed="open" title="새 창으로 열기">↗</button>
++          </div>
++          <div class="embed-body">
++            <iframe class="embed-frame" id="trace-gen-frame" title="AX-Trace 스킬 생성기"
++                    referrerpolicy="no-referrer"></iframe>
++            <div class="embed-empty" id="trace-gen-empty">
++              <div class="embed-empty-mark">🛰</div>
++              <h2>연결할 주소를 입력하세요</h2>
++              <p>웹 에이전트가 서빙되는 주소를 위에 넣고 <b>연결</b>을 누르면<br>
++                 이 영역에 그대로 표시됩니다. 주소는 이 PC 에만 저장됩니다.</p>
++            </div>
++            <div class="embed-fail" id="trace-gen-fail" hidden>
++              <div class="embed-empty-mark">⚠</div>
++              <h2>화면을 불러오지 못했습니다</h2>
++              <p id="trace-gen-fail-msg"></p>
++              <button class="sx-btn ghost" type="button" data-embed="open">새 창으로 열기</button>
++            </div>
++          </div>
++        </div>
++      </div>
++
++      <div class="page-panel" id="page-trace-runner">
++        <div class="sched-root">
++          <div class="sx-wrap">
++            <div class="sx-soon">
++              <div class="sx-soon-mark">⏩</div>
++              <h2>AX-Trace 스킬 실행기</h2>
++              <p>만든 수집 스킬을 실행하는 화면입니다.<br>아직 준비 중입니다.</p>
++            </div>
++          </div>
++        </div>
++      </div>
++
+       <!-- ============ 스케줄 목록 (CRUD) ============
+            같은 독립 모듈(scripts/scheduler.js)이 그린다. -->
+       <div class="page-panel" id="page-schedules">
+         <div class="sched-root" id="schedlist-root">
+           <div id="schedlist-stage"></div>
++          <!-- 목록에서 스킬 파일을 바로 교체할 때 쓴다. 형식 제한 없음(AX-Trace 규격 미정) -->
++          <input type="file" id="schedlist-file" hidden>
+         </div>
+       </div>
+     </div>
+@@ -409,6 +474,7 @@
+   <script src="scripts/whoami.js"></script>
+   <!-- [독립 모듈] 스케줄 등록 — 본체 코드에 의존하지 않는다(scripts/scheduler.js 상단 주석 참고) -->
+   <script src="scripts/scheduler.js"></script>
++  <script src="scripts/embed.js"></script>
+   <script src="scripts/resizer.js"></script>
+   <script src="scripts/model-modal.js"></script>
+   <script src="scripts/main.js"></script>
