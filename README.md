@@ -398,21 +398,26 @@ start_b2b_native.bat
 
 최초 실행 시 WebView2 참조 DLL을 내려받아 네이티브 호스트를 빌드합니다. 데스크톱 Excel이 설치되어 있어야 합니다.
 
-### EXE 빌드 (포터블 패키지)
+### EXE 빌드
+
+**준비물과 자세한 절차는 [BUILD.md](BUILD.md) 를 보세요** — Node.js 를 설치하지 않고 빌드하는 법,
+버전 올릴 때 손대야 하는 곳, 자주 막히는 지점이 정리돼 있습니다.
+
+순서는 이렇습니다. 단일 EXE 만 필요해도 앞엣것을 먼저 돌려야 합니다.
 
 ```bat
-build_exe.bat
+build_exe.bat          :: 포터블 폴더 + zip
+build_single_exe.bat   :: 단일 EXE (위 폴더를 감싼 것)
 ```
 
-빌드 결과:
+빌드 결과 (버전은 `launch_b2b.py` 의 `CURRENT_VERSION` 을 따릅니다):
 
 ```text
-dist\B2B_ver0.5.12\B2B_ver0.5.12.exe   (네이티브 호스트)
-dist\B2B_ver0.5.12\B2B_Server.exe      (PyInstaller 서버)
-dist\B2B_ver0.5.12_portable.zip        (배포용 zip)
+dist\B2B_ver0.8.1\B2B_ver0.8.1.exe   (네이티브 호스트 — 사용자가 누르는 것)
+dist\B2B_ver0.8.1\B2B_Server.exe     (PyInstaller 서버)
+dist\B2B_ver0.8.1_portable.zip       (배포용 zip)
+dist\B2B_ver0.8.1_single.exe         (단일 EXE — 배포는 이것 하나면 됩니다)
 ```
-
-단일 self-extracting EXE가 필요하면 `build_single_exe.bat`을 추가 실행합니다 (`dist\B2B_ver0.5.12_single.exe`).
 
 `dist/`와 `build/`는 git 추적 대상이 아닙니다.
 
