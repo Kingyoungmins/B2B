@@ -1,0 +1,26 @@
+--- launch_b2b.py	2026-07-21 22:11:46.000000000 +0900
++++ "B2B_배�\217�/launch_b2b.py"	2026-08-28 10:16:25.499394500 +0900
+@@ -288,7 +288,23 @@
+     on_close()
+ 
+ 
++def _init_telemetry() -> None:
++    """[관측 로그] 기동 시 단 한 번만. 실패해도 앱은 그대로 뜬다."""
++    try:
++        import b2b_telemetry
++        from serve_b2b import APP_BUILD_STAMP, writable_app_dir
++        st = b2b_telemetry.init(app_version=APP_BUILD_STAMP,
++                                writable_dir=str(writable_app_dir()))
++        if st.get("missing_env"):
++            print("[telemetry] 파일 기록만 (미설정: %s)" % ", ".join(st["missing_env"]))
++        else:
++            print("[telemetry] 수집 서버로 전송합니다")
++    except Exception as err:
++        print("[telemetry] 초기화 건너뜀: %r" % (err,))
++
++
+ def main() -> int:
++    _init_telemetry()
+     check_for_update()
+     if not (BASE_DIR / "index.html").exists():
+         print(f"Missing app file: {BASE_DIR / 'index.html'}", file=sys.stderr)

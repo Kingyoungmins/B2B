@@ -1,0 +1,1014 @@
+/* ===================================================================
+   스케줄 등록 + 로그인 사용자 식별
+
+   [독립성] scripts/scheduler.js 와 한 짝이다. 본체 클래스를 재정의하지 않고
+   sx- / sched- / user-identity 접두사만 쓴다. 색·반경·그림자는 base.css 의
+   디자인 토큰(--m-500, --ink-500, --r-lg …)을 그대로 빌려 쓴다 —
+   토큰만 있으면 최신 코드로 옮겨도 톤이 어긋나지 않는다.
+   =================================================================== */
+
+/* ── 좌상단 로그인 계정 (cmd whoami 와 같은 값) ───────────────────── */
+.user-identity {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 2px;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--ink-400);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: default;
+}
+
+.user-identity-dot {
+  flex: 0 0 auto;
+  width: 5px;
+  height: 5px;
+  border-radius: var(--r-full);
+  background: var(--ink-300);
+}
+
+.user-identity.ok { color: var(--ink-500); }
+.user-identity.ok .user-identity-dot { background: #16a34a; }
+.user-identity.fail { color: #c2410c; }
+.user-identity.fail .user-identity-dot { background: #ea580c; }
+
+/* ── 스케줄 화면 뼈대 ──────────────────────────────────────────────── */
+.sched-root { height: 100%; overflow: auto; }
+
+.sx-wrap {
+  max-width: 880px;
+  margin: 0 auto;
+  padding: 26px 22px 60px;
+}
+
+/* ── 큰 단계 머리 (1 / 2) ──────────────────────────────────────────
+   ①② 는 '스킬 업로드' 안의 순서, 1/2 는 화면 전체의 단계다.
+   둘을 같은 모양으로 두면 위계가 안 보여서 크기·형태를 다르게 잡았다. */
+.sx-group {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  margin: 30px 2px 12px;
+}
+.sx-wrap > .sx-group:first-child { margin-top: 4px; }
+
+/* 대분류 번호 — 동그라미를 쓰지 않는다.
+   소분류(단계 행)가 채워진 원이라, 대분류까지 원이면 위계가 안 보인다.
+   여기는 제목 앞 숫자처럼 크고 납작하게 둔다. */
+.sx-group-no {
+  flex: 0 0 auto;
+  font-size: 21px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  background: var(--grad-text);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.sx-group-no::after { content: "."; }
+
+.sx-group.done .sx-group-no {
+  background: none;
+  -webkit-text-fill-color: var(--ink-700);
+  color: var(--ink-700);
+}
+
+.sx-group.muted .sx-group-no {
+  background: none;
+  -webkit-text-fill-color: var(--ink-300);
+  color: var(--ink-300);
+}
+
+.sx-group-text { display: flex; flex-direction: column; min-width: 0; }
+
+.sx-group-title {
+  font-size: 14.5px;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  color: var(--ink-900);
+}
+.sx-group.muted .sx-group-title { color: var(--ink-400); }
+
+.sx-group-sub {
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--ink-400);
+}
+
+/* ── 스케줄 등록 폼 ────────────────────────────────────────────────── */
+.sx-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.sx-card {
+  padding: 16px 17px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-sm);
+}
+
+.sx-card-title {
+  margin-bottom: 11px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--ink-700);
+}
+
+/* 세그먼트 선택 */
+.sx-seg {
+  display: flex;
+  gap: 4px;
+  padding: 3px;
+  background: var(--ink-50);
+  border-radius: var(--r-md);
+}
+.sx-seg.tight { padding: 2px; }
+
+.sx-seg-btn {
+  flex: 1 1 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 8px 6px;
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  color: var(--ink-500);
+  background: transparent;
+  border: 0;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  transition: background .14s, color .14s, box-shadow .14s;
+}
+
+.sx-seg-btn:hover { color: var(--ink-900); }
+
+.sx-seg-btn.on {
+  color: var(--ink-900);
+  background: var(--card);
+  box-shadow: var(--shadow-sm);
+}
+
+.sx-seg-ico { font-size: 12px; }
+
+/* 입력 줄 */
+.sx-field {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-top: 10px;
+}
+
+.sx-field > label {
+  flex: 0 0 62px;
+  font-size: 11.5px;
+  color: var(--ink-500);
+}
+
+.sx-field > input {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 8px 10px;
+  font: inherit;
+  font-size: 12.5px;
+  color: var(--ink-900);
+  background: var(--card);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-sm);
+}
+
+.sx-field > input[type="number"] { flex: 0 0 74px; }
+.sx-field > input[type="time"],
+.sx-field > input[type="date"] { flex: 0 0 132px; }
+
+.sx-field > input:focus {
+  outline: none;
+  border-color: var(--m-400);
+  box-shadow: 0 0 0 3px rgba(255, 0, 128, .10);
+}
+
+.sx-field > .sx-seg { flex: 1 1 auto; }
+.sx-suffix { font-size: 11.5px; color: var(--ink-400); }
+
+.sx-hint {
+  margin: 6px 0 0 71px;
+  font-size: 10.5px;
+  color: var(--ink-300);
+}
+
+/* 요약 + 등록 */
+.sx-summary {
+  margin-top: 10px;
+  padding: 15px 17px;
+  background: var(--grad-soft);
+  border-radius: var(--r-lg);
+}
+
+.sx-summary-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 9px;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--ink-900);
+}
+
+.sx-summary-arrow { color: var(--p-500); }
+.sx-summary-how { font-weight: 600; }
+
+.sx-summary-owner {
+  margin-top: 5px;
+  font-size: 11px;
+  color: var(--ink-500);
+}
+
+.sx-todo {
+  margin: 10px 0 0;
+  padding-left: 17px;
+  font-size: 11.5px;
+  line-height: 1.7;
+  color: #9a3412;
+}
+
+.sx-actions { margin-top: 12px; }
+
+.sx-btn.wide { width: 100%; padding: 13px; font-size: 13.5px; }
+.sx-btn.primary[disabled] {
+  color: var(--ink-300);
+  background: var(--ink-100);
+  box-shadow: none;
+  cursor: not-allowed;
+}
+
+/* 등록 완료 */
+.sx-done {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  padding: 16px 17px;
+  background: var(--card);
+  border: 1px solid var(--m-200);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-md);
+}
+
+.sx-done-mark {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 34px;
+  height: 34px;
+  font-size: 16px;
+  color: #fff;
+  background: var(--grad);
+  border-radius: var(--r-full);
+}
+
+.sx-done-body { flex: 1 1 auto; min-width: 0; }
+.sx-done-title { font-size: 13.5px; font-weight: 700; color: var(--ink-900); }
+.sx-done-when { margin-top: 2px; font-size: 12px; color: var(--ink-700); }
+.sx-done-meta { margin-top: 2px; font-size: 11px; color: var(--ink-400); }
+
+/* ── 단계 행 (①②) ─────────────────────────────────────────────────
+   세로로 길게 늘어뜨리지 않는다. 한 줄에 번호·아이콘·설명·동작을 담아
+   두 단계가 한눈에 같이 들어오게 한다. */
+.sx-step {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  padding: 15px 17px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-sm);
+  transition: border-color .15s, background .15s, opacity .15s;
+}
+
+.sx-step + .sx-step { margin-top: 10px; }
+
+/* 지금 할 차례 — 점선 테두리로 '여기에 놓을 수 있다'를 알린다 */
+.sx-step.live { border-style: dashed; border-color: var(--border-strong); }
+.sx-step.live.sx-dragover { border-color: var(--m-500); background: var(--m-50); }
+
+/* 끝난 단계 — 실선으로 확정된 느낌 */
+.sx-step.done { border-style: solid; }
+
+/* 아직 차례가 아닌 단계 — 회색으로 죽여둔다 */
+.sx-step.muted {
+  background: var(--ink-50);
+  border-style: dashed;
+  opacity: .65;
+}
+.sx-step.muted .sx-step-title { color: var(--ink-400); }
+
+/* 단계 표식 — 아이콘 자리를 그대로 쓰는 큰 동그라미 숫자 */
+.sx-step-badge {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 38px;
+  height: 38px;
+  font-size: 17px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  color: #fff;
+  background: var(--grad);
+  border-radius: var(--r-full);
+  box-shadow: var(--shadow-sm);
+}
+
+.sx-step.done .sx-step-badge { background: var(--ink-700); }
+
+.sx-step.muted .sx-step-badge {
+  color: var(--ink-300);
+  background: var(--ink-100);
+  box-shadow: none;
+}
+
+.sx-step-badge.icon {
+  font-size: 16px;
+  font-weight: 400;
+  color: inherit;
+  background: var(--ink-100);
+  box-shadow: none;
+}
+
+.sx-step-body { flex: 1 1 auto; min-width: 0; }
+
+.sx-step-title {
+  display: block;
+  font-size: 13.5px;
+  font-weight: 700;
+  line-height: 1.45;
+  letter-spacing: -0.01em;
+  color: var(--ink-900);
+  word-break: break-all;
+}
+
+.sx-step-sub {
+  display: block;
+  margin-top: 2px;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--ink-400);
+}
+
+.sx-lock {
+  flex: 0 0 auto;
+  padding: 4px 11px;
+  font-size: 11px;
+  color: var(--ink-400);
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--r-full);
+}
+
+/* 단계 행 안의 진행률 */
+.sx-progress { flex: 0 0 150px; text-align: right; }
+.sx-progress-num { display: block; font-size: 11px; color: var(--ink-400); }
+.sx-progress-num b { font-size: 14px; color: var(--ink-900); }
+
+.sx-progress-track {
+  display: block;
+  margin-top: 4px;
+  height: 5px;
+  background: var(--ink-100);
+  border-radius: var(--r-full);
+  overflow: hidden;
+}
+
+.sx-progress-track i {
+  display: block;
+  height: 100%;
+  background: var(--grad);
+  border-radius: var(--r-full);
+  transition: width .3s ease;
+}
+
+/* ── 알림 / 오류 ───────────────────────────────────────────────────── */
+.sx-notice,
+.sx-error {
+  margin-top: 12px;
+  padding: 10px 13px;
+  font-size: 11.5px;
+  line-height: 1.6;
+  border-radius: var(--r-sm);
+}
+
+.sx-notice {
+  color: #92400e;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+}
+
+.sx-error {
+  color: #b91c1c;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+}
+
+/* ── 문서 카드 ─────────────────────────────────────────────────────── */
+.sx-docs { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+
+.sx-doc {
+  display: flex;
+  align-items: stretch;
+  overflow: hidden;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-sm);
+  transition: border-color .15s, box-shadow .15s;
+}
+
+.sx-doc:hover { box-shadow: var(--shadow-md); }
+.sx-doc.sx-dragover { border-color: var(--m-500); background: var(--m-50); }
+
+/* 왼쪽 세로 띠 — 연결되면 그라데이션으로 채워져 한눈에 진척이 보인다 */
+.sx-doc-rail {
+  flex: 0 0 4px;
+  background: var(--ink-100);
+  transition: background .2s;
+}
+.sx-doc.linked .sx-doc-rail { background: var(--grad); }
+
+.sx-doc-main {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 15px 16px;
+}
+
+.sx-doc-idx {
+  flex: 0 0 auto;
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-300);
+  padding-top: 1px;
+}
+
+.sx-doc-info { flex: 1 1 auto; min-width: 0; }
+
+.sx-doc-name {
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.5;
+  color: var(--ink-900);
+  word-break: break-all;
+}
+
+.sx-doc-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.sx-chip {
+  padding: 2px 8px;
+  font-size: 10.5px;
+  line-height: 1.65;
+  border-radius: var(--r-full);
+}
+
+.sx-chip.sheet { color: var(--p-600); background: #F3EAFE; }
+.sx-chip.out { color: #fff; background: var(--grad); }
+.sx-chip.src { color: var(--ink-400); border: 1px solid var(--border); }
+
+/* ── 문서별 AX-Trace 슬롯 ──────────────────────────────────────────── */
+.sx-doc-slot {
+  flex: 0 0 258px;
+  display: flex;
+  align-items: center;
+  padding: 11px 12px 11px 0;
+}
+
+.sx-trace {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 10px 12px;
+  font: inherit;
+  text-align: left;
+  border-radius: var(--r-md);
+  transition: border-color .15s, background .15s, color .15s;
+}
+
+.sx-trace.empty {
+  cursor: pointer;
+  color: var(--ink-400);
+  background: transparent;
+  border: 1.5px dashed var(--border-strong);
+}
+
+.sx-trace.empty:hover {
+  color: var(--m-600);
+  background: var(--m-50);
+  border-color: var(--m-300);
+}
+
+.sx-trace-plus {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 24px;
+  height: 24px;
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 1;
+  color: inherit;
+  background: var(--ink-50);
+  border-radius: var(--r-full);
+}
+.sx-trace.empty:hover .sx-trace-plus { background: #fff; }
+
+.sx-trace-cta {
+  font-size: 12px;
+  font-weight: 600;
+  color: inherit;
+}
+
+.sx-trace-note {
+  display: block;
+  font-size: 10.5px;
+  font-weight: 400;
+  color: var(--ink-300);
+}
+
+.sx-trace.empty > .sx-trace-cta { display: flex; flex-direction: column; gap: 1px; }
+
+.sx-trace.linked {
+  background: var(--ink-50);
+  border: 1px solid var(--border);
+}
+
+.sx-trace-mark {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  font-size: 13px;
+  background: var(--grad-soft);
+  border-radius: var(--r-full);
+}
+
+.sx-trace-body { flex: 1 1 auto; min-width: 0; }
+
+.sx-trace-name {
+  display: block;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--ink-900);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sx-trace-meta {
+  display: block;
+  font-size: 10.5px;
+  color: var(--ink-400);
+}
+
+/* ── 좁은 폭 대응 ──────────────────────────────────────────────────── */
+@media (max-width: 720px) {
+  .sx-grid { grid-template-columns: 1fr; }
+  .sx-doc { flex-wrap: wrap; }
+  .sx-doc-slot { flex: 1 1 100%; padding: 0 16px 14px 32px; }
+  /* 좁아지면 단계 행도 세로로 접는다 — 진행률이 옆에 끼면 제목이 눌린다 */
+  .sx-step { flex-wrap: wrap; }
+  .sx-progress { flex: 1 1 100%; text-align: left; }
+  .sx-progress { flex: 1 1 auto; width: 100%; text-align: left; }
+}
+
+/* 스킬 명 보조 설명 */
+.sx-hint2 {
+  margin: 8px 0 0;
+  font-size: 10.5px;
+  line-height: 1.5;
+  color: var(--ink-400);
+}
+
+/* 등록 후 저장 결과 */
+.sx-saved {
+  margin-top: 10px;
+  padding: 12px 15px;
+  background: var(--ink-50);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+}
+
+.sx-saved-row {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  padding: 3px 0;
+  font-size: 11.5px;
+}
+
+.sx-saved-row > span {
+  flex: 0 0 62px;
+  color: var(--ink-400);
+}
+
+.sx-saved-row > code {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-family: Consolas, 'D2Coding', monospace;
+  font-size: 11px;
+  color: var(--ink-900);
+  word-break: break-all;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   스케줄 목록 (CRUD)
+   ═══════════════════════════════════════════════════════════════════ */
+.sl-top {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 4px 2px 14px;
+}
+
+.sl-empty {
+  padding: 54px 20px;
+  font-size: 13px;
+  line-height: 1.9;
+  text-align: center;
+  color: var(--ink-400);
+  background: var(--card);
+  border: 1.5px dashed var(--border-strong);
+  border-radius: var(--r-xl);
+}
+.sl-empty span { font-size: 11.5px; }
+
+.sl-items { display: flex; flex-direction: column; gap: 10px; }
+
+.sl-item {
+  display: flex;
+  overflow: hidden;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-sm);
+  transition: box-shadow .15s, border-color .15s;
+}
+.sl-item:hover { box-shadow: var(--shadow-md); }
+.sl-item.open { border-color: var(--m-200); box-shadow: var(--shadow-lg); }
+
+.sl-rail { flex: 0 0 4px; background: var(--grad); }
+
+.sl-body { flex: 1 1 auto; min-width: 0; padding: 15px 17px; }
+
+.sl-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.sl-title-wrap { flex: 1 1 auto; min-width: 0; }
+
+.sl-title {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--ink-900);
+  word-break: break-all;
+}
+
+.sl-when {
+  margin-top: 3px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--ink-700);
+  word-break: break-all;
+}
+
+.sl-actions { flex: 0 0 auto; display: flex; align-items: center; gap: 6px; }
+
+.sl-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+  margin-top: 9px;
+  font-size: 11px;
+  color: var(--ink-400);
+}
+
+.sl-meta code {
+  padding: 2px 7px;
+  font-family: Consolas, 'D2Coding', monospace;
+  font-size: 10.5px;
+  color: var(--p-600);
+  background: #F3EAFE;
+  border-radius: var(--r-full);
+}
+
+.sl-path {
+  margin-top: 4px;
+  font-family: Consolas, 'D2Coding', monospace;
+  font-size: 10.5px;
+  color: var(--ink-300);
+  word-break: break-all;
+}
+
+/* 인라인 편집 */
+.sl-editor {
+  margin-top: 13px;
+  padding-top: 13px;
+  border-top: 1px dashed var(--border-strong);
+}
+
+.sl-editor .sx-grid { margin-top: 10px; }
+
+.sl-editor-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.sl-preview {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-900);
+}
+
+.sl-editor-btns { flex: 0 0 auto; display: flex; gap: 6px; }
+.sl-editor-btns .sx-btn.primary { padding: 8px 20px; font-size: 12.5px; }
+
+/* 주기 수정 폼 */
+.sl-editor-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 10px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--ink-700);
+}
+.sl-editor-head span { font-size: 10.5px; font-weight: 400; color: var(--ink-400); }
+.sl-editor-head code {
+  font-family: Consolas, 'D2Coding', monospace;
+  color: var(--p-600);
+}
+
+.sl-preview code {
+  margin-left: 8px;
+  padding: 2px 8px;
+  font-family: Consolas, 'D2Coding', monospace;
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--p-600);
+  background: #F3EAFE;
+  border-radius: var(--r-full);
+}
+
+/* ── 목록 안에서 스킬 파일 수정 ─────────────────────────────────────── */
+.sl-files {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  overflow: hidden;
+}
+
+.sl-file {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 12px;
+  font-size: 11.5px;
+  background: var(--card);
+  border-top: 1px solid var(--border);
+}
+.sl-file:first-child { border-top: 0; }
+
+.sl-file-ico { flex: 0 0 auto; font-size: 12px; }
+
+.sl-file-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: var(--ink-900);
+  word-break: break-all;
+}
+
+.sl-file-size {
+  flex: 0 0 auto;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-400);
+}
+
+.sl-file-tag {
+  flex: 0 0 auto;
+  padding: 1px 7px;
+  font-size: 10px;
+  border-radius: var(--r-full);
+}
+.sl-file-tag.del { color: #9a3412; background: #ffedd5; }
+.sl-file-tag.add { color: var(--p-600); background: #F3EAFE; }
+
+/* 삭제 예정 — 지웠다는 걸 보여주되 되돌릴 수 있게 남겨둔다 */
+.sl-file.gone { background: var(--ink-50); }
+.sl-file.gone .sl-file-name {
+  color: var(--ink-300);
+  text-decoration: line-through;
+}
+.sl-file.gone .sl-file-ico { opacity: .4; }
+
+.sl-file.new { background: #FDF7FF; }
+
+.sl-addfile {
+  width: 100%;
+  margin-top: 8px;
+  padding: 9px;
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--ink-500);
+  background: transparent;
+  border: 1.5px dashed var(--border-strong);
+  border-radius: var(--r-md);
+  cursor: pointer;
+  transition: color .15s, border-color .15s, background .15s;
+}
+.sl-addfile:hover {
+  color: var(--m-600);
+  background: var(--m-50);
+  border-color: var(--m-300);
+}
+
+/* 잠김 사유 — 어느 문서가 비었는지 그대로 보여준다 */
+.sx-missing {
+  margin: 8px 0 0;
+  padding: 10px 14px 10px 30px;
+  font-size: 11.5px;
+  line-height: 1.7;
+  color: #9a3412;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: var(--r-md);
+  word-break: break-all;
+}
+
+/* AX-Cell 표식 + 교체 충돌 안내 */
+.sl-file-tag.cell { color: #fff; background: var(--grad); }
+
+.sl-conflict {
+  padding: 14px 16px;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: var(--r-md);
+}
+
+.sl-conflict-head {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #92400e;
+}
+
+.sl-conflict-sub {
+  margin: 5px 0 0;
+  font-size: 11.5px;
+  line-height: 1.65;
+  color: #9a3412;
+}
+
+.sl-diff {
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 11.5px;
+  line-height: 1.75;
+}
+
+.sl-diff li { word-break: break-all; }
+.sl-diff li b { display: inline-block; width: 14px; font-weight: 700; }
+.sl-diff .out { color: var(--ink-400); text-decoration: line-through; }
+.sl-diff .out b { color: #b91c1c; text-decoration: none; }
+.sl-diff .in { color: var(--ink-900); }
+.sl-diff .in b { color: #15803d; }
+
+/* ── 스킬 수정: 문서 단위 줄 + 유지/수정 토글 ───────────────────────── */
+.sl-rows {
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  overflow: hidden;
+}
+
+.sl-row {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 11px 13px;
+  background: var(--card);
+  border-top: 1px solid var(--border);
+}
+.sl-row:first-child { border-top: 0; }
+.sl-row.cell { background: var(--ink-50); }
+.sl-row.changed { background: #FDF7FF; }
+
+.sl-row-kind {
+  flex: 0 0 62px;
+  padding: 2px 0;
+  font-size: 10px;
+  font-weight: 700;
+  text-align: center;
+  color: #fff;
+  background: var(--grad);
+  border-radius: var(--r-full);
+}
+.sl-row-kind.doc {
+  color: var(--ink-500);
+  background: var(--ink-100);
+  font-variant-numeric: tabular-nums;
+}
+
+.sl-row-main { flex: 1 1 auto; min-width: 0; }
+
+.sl-row-doc {
+  display: block;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--ink-900);
+  word-break: break-all;
+}
+
+.sl-row-file {
+  display: block;
+  font-size: 11px;
+  color: var(--ink-500);
+  word-break: break-all;
+}
+
+.sl-row-arrow { color: var(--ink-300); }
+
+.sl-row-sub {
+  display: block;
+  margin-top: 1px;
+  font-size: 10.5px;
+  color: var(--ink-400);
+  word-break: break-all;
+}
+
+/* 유지 / 수정 토글 */
+.sl-toggle {
+  flex: 0 0 auto;
+  display: flex;
+  padding: 2px;
+  background: var(--ink-100);
+  border-radius: var(--r-full);
+}
+
+.sl-tg {
+  padding: 5px 12px;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  color: var(--ink-500);
+  background: transparent;
+  border: 0;
+  border-radius: var(--r-full);
+  cursor: pointer;
+  transition: background .14s, color .14s, box-shadow .14s;
+}
+.sl-tg:hover { color: var(--ink-900); }
+
+/* 기본값인 '그대로 유지'는 초록 — 안전한 상태임을 색으로 알린다 */
+.sl-tg.on.keep {
+  color: #fff;
+  background: #16a34a;
+  box-shadow: 0 1px 3px rgba(22, 163, 74, .35);
+}
+.sl-tg.on.edit {
+  color: #fff;
+  background: var(--grad);
+  box-shadow: var(--shadow-sm);
+}
