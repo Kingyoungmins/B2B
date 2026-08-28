@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(label = \"작업 중...\", options = {})"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
-version: "0.8.0"
+version: "0.8.1"
 loc: "excel-mirror.js:261-261"
 
 # ── 입출력 ──
@@ -30,6 +30,7 @@ calls:
   - "isUiBusy"
   - "publishNativeUiBusy"
   - "toast"
+  - "toggle"
   - "traceClientUiEvent"
 calls_external:
   - "Number"
@@ -40,7 +41,6 @@ calls_external:
   - "querySelector"
   - "setTimeout"
   - "stopPropagation"
-  - "toggle"
   - "warn"
 called_by:
   - "beginExcelMirrorApplyLoading"
@@ -52,7 +52,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.0-gen"
+timestamp: "0.8.1-gen"
 ---
 
 ## 역할
@@ -63,7 +63,7 @@ timestamp: "0.8.0-gen"
 - 타이머
 
 ## 관계
-- 호출: `_ensureUiBusyOverlay`, `add`, `endUiBusy`, `isUiBusy`, `publishNativeUiBusy`, `toast`, `traceClientUiEvent`
+- 호출: `_ensureUiBusyOverlay`, `add`, `endUiBusy`, `isUiBusy`, `publishNativeUiBusy`, `toast`, `toggle`, `traceClientUiEvent`
 - 피호출(영향 전파 경로): `beginExcelMirrorApplyLoading`, `loadInputFiles`, `loadOutputTemplates`, `restoreSoftRefreshSnapshot`, `switchVisibleExcelMirrorToFileId`, `withUiBusy`
 
 ## 실패/예외

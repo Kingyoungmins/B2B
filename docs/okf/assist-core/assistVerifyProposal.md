@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(p, signal)"
 role: "[Tier2] 후보 코드를 격리 인스턴스에서 실행해 diff 를 받는다. 실패/불가는 예외가 아니라 결과로."
 role_source: banner
-version: "0.8.0"
+version: "0.8.1"
 loc: "assist-core.js:1011-1011"
 
 # ── 입출력 ──
@@ -36,7 +36,7 @@ reads:
   - "state.pipeline"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.0-gen"
+timestamp: "0.8.1-gen"
 ---
 
 ## 역할

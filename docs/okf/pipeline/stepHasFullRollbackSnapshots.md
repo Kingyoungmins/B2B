@@ -7,8 +7,8 @@ extraction: regex   # 정규식 근사
 signature: "(step)"
 role: "이 스텝을 되돌리는 데 필요한 사본이 '전부' 있는가 — 대상 파일 + 교차 목적지 전부."
 role_source: banner
-version: "0.8.0"
-loc: "pipeline.js:4575-4575"
+version: "0.8.1"
+loc: "pipeline.js:4578-4578"
 
 # ── 입출력 ──
 inputs:
@@ -35,7 +35,7 @@ called_by: []
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.0-gen"
+timestamp: "0.8.1-gen"
 ---
 
 ## 역할

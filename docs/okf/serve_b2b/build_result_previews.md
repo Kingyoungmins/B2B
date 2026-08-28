@@ -7,8 +7,8 @@ extraction: ast
 signature: "(inputs, output, current, diffs=None, forced_value_cells=None)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
-version: "0.8.0"
-loc: "serve_b2b.py:21972-22004"
+version: "0.8.1"
+loc: "serve_b2b.py:22087-22119"
 
 # ── 입출력 ──
 inputs:
@@ -48,7 +48,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.0-gen"
+timestamp: "0.8.1-gen"
 ---
 
 ## 역할

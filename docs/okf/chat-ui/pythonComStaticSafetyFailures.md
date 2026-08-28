@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(code, sourceUserMessage)"
 role: "ver0.5.2 4단계: Python COM 스킬용 클라이언트 정적 안전 검사(적용 직전 1차 게이트)."
 role_source: banner
-version: "0.8.0"
+version: "0.8.1"
 loc: "chat-ui.js:1702-1702"
 
 # ── 입출력 ──
@@ -30,9 +30,12 @@ calls:
   - "dynamicRangeTextIsWide"
   - "estimateCells"
   - "isBenignRepeatedCodeLine"
+  - "matchAll"
   - "negativeSignLossFailures"
   - "push"
+  - "read"
   - "userRequestsSort"
+  - "write"
 calls_external:
   - "Number"
   - "O"
@@ -61,9 +64,7 @@ calls_external:
   - "join"
   - "map"
   - "match"
-  - "matchAll"
   - "move_sheet"
-  - "read"
   - "reduce"
   - "rename"
   - "replace"
@@ -81,7 +82,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.0-gen"
+timestamp: "0.8.1-gen"
 ---
 
 ## 역할
@@ -91,7 +92,7 @@ ver0.5.2 4단계: Python COM 스킬용 클라이언트 정적 안전 검사(적�
 - DOM/브라우저 전역 조작
 
 ## 관계
-- 호출: `_indentLen`, `_stripPythonCommentsForGate`, `add`, `colIndex`, `dynamicRangeTextIsWide`, `estimateCells`, `isBenignRepeatedCodeLine`, `negativeSignLossFailures`, `push`, `userRequestsSort`
+- 호출: `_indentLen`, `_stripPythonCommentsForGate`, `add`, `colIndex`, `dynamicRangeTextIsWide`, `estimateCells`, `isBenignRepeatedCodeLine`, `matchAll`, `negativeSignLossFailures`, `push`, `read`, `userRequestsSort`, `write`
 - 피호출(영향 전파 경로): `pipelineStaticFailuresForCode`, `validateAssistantCodeBeforeApply`, `wholeColumnCountRowTwoFailures`
 
 ## 실패/예외

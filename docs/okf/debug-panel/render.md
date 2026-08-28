@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "()"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
-version: "0.8.0"
+version: "0.8.1"
 loc: "debug-panel.js:74-74"
 
 # ── 입출력 ──
@@ -33,12 +33,18 @@ calls_external:
   - "replace"
   - "test"
 called_by:
+  - "bind"
+  - "bindList"
   - "createSmoothTextRenderer"
   - "ensurePanel"
+  - "loadSkill"
+  - "loadTrace"
+  - "refreshSummary"
+  - "saveSchedule"
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.0-gen"
+timestamp: "0.8.1-gen"
 ---
 
 ## 역할
@@ -49,7 +55,7 @@ timestamp: "0.8.0-gen"
 
 ## 관계
 - 호출: `formatBytes`, `ms`
-- 피호출(영향 전파 경로): `createSmoothTextRenderer`, `ensurePanel`
+- 피호출(영향 전파 경로): `bind`, `bindList`, `createSmoothTextRenderer`, `ensurePanel`, `loadSkill`, `loadTrace`, `refreshSummary`, `saveSchedule`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

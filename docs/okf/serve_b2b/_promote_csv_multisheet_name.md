@@ -7,8 +7,8 @@ extraction: ast
 signature: "(name, wb)"
 role: "파일명이 .csv/.tsv 인데 워크북에 시트가 2개 이상이면 .xlsx 로 바꾼다."
 role_source: docstring
-version: "0.8.0"
-loc: "serve_b2b.py:12000-12015"
+version: "0.8.1"
+loc: "serve_b2b.py:12115-12130"
 
 # ── 입출력 ──
 inputs:
@@ -36,7 +36,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.0-gen"
+timestamp: "0.8.1-gen"
 ---
 
 ## 역할

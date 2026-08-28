@@ -7,7 +7,7 @@ extraction: ast
 signature: "(module_code: str) -> str"
 role: "모듈 코드에서 첫 Sub 의 본문만 (헤더/End Sub/주석 제거)."
 role_source: docstring
-version: "0.8.0"
+version: "0.8.1"
 loc: "native_macro_recorder.py:51-64"
 
 # ── 입출력 ──
@@ -40,7 +40,7 @@ reads:
   - "_SUB_HEADER"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.0-gen"
+timestamp: "0.8.1-gen"
 ---
 
 ## 역할

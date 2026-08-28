@@ -1,6 +1,20 @@
 ﻿/* ===================================================================
    페이지 / 메뉴 / 접기
    =================================================================== */
+// [E2E 작업 등록 애드온] 페이지 제목.
+// [실측 회귀 2026-08-28] 제목에 그룹까지 넣었더니("AX-Cell · 스킬 생성기") 브랜드 바에서
+// 한 글자씩 세로로 쪼개졌다 — 0.8.0 은 이 줄에 버튼이 5개(AI 도움·새로고침·테마·Think·⚙)
+// 들어가고 .brand-info 가 flex:1/min-width:0 이라 남는 폭이 없으면 0 까지 줄기 때문이다.
+// 그룹은 메뉴가 이미 보여준다 → 제목은 짧게. 기존 두 페이지는 0.8.0 원문 그대로 둔다.
+const PAGE_TITLES = {
+  generator: "AX-Cell",
+  runner: "스킬 실행기",
+  "trace-generator": "AX-Trace 생성기",
+  "trace-runner": "AX-Trace 실행기",
+  scheduler: "스킬 등록",
+  schedules: "스킬 목록",
+};
+
 function setPage(page) {
   state.currentPage = page;
   document.querySelectorAll(".page-panel").forEach(el => {
@@ -17,7 +31,7 @@ function setPage(page) {
   {
     const titleEl = $("page-title");
     const verEl = titleEl ? titleEl.querySelector(".app-version") : null;
-    if (titleEl) titleEl.textContent = page === "runner" ? "스킬 실행기" : "AX-Cell";
+    if (titleEl) titleEl.textContent = PAGE_TITLES[page] || PAGE_TITLES.generator;
     if (titleEl && verEl) titleEl.appendChild(verEl);
   }
   // [0.5.16 #1] 실행기(runner)는 헤드리스 — Excel 뷰를 아예 안 보이고 한 화면을 꽉 채운다.
@@ -26,14 +40,20 @@ function setPage(page) {
   //  - Excel 오버레이(별도 top-level HWND)는 CSS/패널접기로 안 사라지므로 runnerHeadless 플래그로
   //    표시/배치를 막고(hideAll), 생성기 복귀 시 다시 띄운다. (전체실행 파일출력 기능은 그대로 — 표시만 제거)
   const isRunner = page === "runner";
-  if (typeof excelMirror !== "undefined" && excelMirror) excelMirror.runnerHeadless = isRunner;
-  document.body.classList.toggle("page-runner-active", isRunner);
+  // [애드온] 스케줄 등록/목록·AX-Trace 화면은 Excel 을 안 쓴다 → 실행기와 똑같이 헤드리스(미러 내림 + 좌측 풀폭 +
+  // 서버 라이브 복원 억제). 억제(runner-mode suppress)까지 같이 걸어야 진행 중 실행이 끝날 때 서버가 그리는
+  // 라이브 프레임이 스케줄 화면 위로 회색 Excel 을 띄우지 않는다(실행기에서 실측했던 그 증상).
+  const isScheduler = page === "scheduler" || page === "schedules"
+    || page === "trace-generator" || page === "trace-runner";
+  const noExcel = isRunner || isScheduler;
+  if (typeof excelMirror !== "undefined" && excelMirror) excelMirror.runnerHeadless = noExcel;
+  document.body.classList.toggle("page-runner-active", noExcel);
   closeMenu();
   refreshTabs();
   renderExcelViewer();
   renderRunnerWorkflow();
   try {
-    if (isRunner) {
+    if (noExcel) {
       // [깜빡임 방지] 패널을 접기 *전에* Excel 오버레이부터 숨긴다 — 반대 순서면 접힌 WebView 위로 오버레이가
       // 잠깐 떠 깜빡인다. 헤드리스에선 raise/복원이 모두 가드돼 이후 다시 안 뜬다.
       const _hide = (typeof hideAllExcelMirrorWindows === "function") ? hideAllExcelMirrorWindows() : null;

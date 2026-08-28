@@ -7,8 +7,8 @@ extraction: ast
 signature: "(app, wb, code, entry)"
 role: "VBA 모듈을 임시 추가해 entry Sub를 실행하고, 끝나면 제거한다."
 role_source: docstring
-version: "0.8.0"
-loc: "serve_b2b.py:9695-9755"
+version: "0.8.1"
+loc: "serve_b2b.py:9810-9870"
 
 # ── 입출력 ──
 inputs:
@@ -63,7 +63,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.0-gen"
+timestamp: "0.8.1-gen"
 ---
 
 ## 역할

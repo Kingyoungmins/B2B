@@ -7,8 +7,8 @@ extraction: ast
 signature: "()"
 role: "[SBAGENT-293 / 사용자 확정 2026-08-26] 실행 중 스냅샷 삭제는 '디스크가 정말 위험할 때'만."
 role_source: docstring
-version: "0.8.0"
-loc: "serve_b2b.py:5118-5173"
+version: "0.8.1"
+loc: "serve_b2b.py:5191-5246"
 
 # ── 입출력 ──
 inputs: []
@@ -46,7 +46,7 @@ reads:
   - "PIPELINE_STEP_SNAPSHOTS"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.0-gen"
+timestamp: "0.8.1-gen"
 ---
 
 ## 역할

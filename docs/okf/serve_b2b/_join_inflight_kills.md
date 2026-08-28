@@ -7,8 +7,8 @@ extraction: ast
 signature: "(timeout)"
 role: "진행 중인 비동기 force-restart kill 스레드를 기다린다(종료 경로 전용)."
 role_source: docstring
-version: "0.8.0"
-loc: "serve_b2b.py:1049-1064"
+version: "0.8.1"
+loc: "serve_b2b.py:1062-1077"
 
 # ── 입출력 ──
 inputs:
@@ -37,7 +37,7 @@ reads:
 writes:
   - "_KILL_INFLIGHT"
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.0-gen"
+timestamp: "0.8.1-gen"
 ---
 
 ## 역할

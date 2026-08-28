@@ -7,8 +7,8 @@ extraction: regex   # 정규식 근사
 signature: "(step, stepIdx, reason, targetLanguage)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
-version: "0.8.0"
-loc: "pipeline.js:6506-6506"
+version: "0.8.1"
+loc: "pipeline.js:6509-6509"
 
 # ── 입출력 ──
 inputs:
@@ -29,6 +29,7 @@ calls:
   - "filterToNewSheetVbaHint"
   - "inferPipelineStepLanguage"
   - "pipelineStepRepairSourceMessage"
+  - "write"
 calls_external:
   - "B2BSkill"
   - "String"
@@ -38,13 +39,12 @@ calls_external:
   - "map"
   - "slice"
   - "transform"
-  - "write"
 called_by:
   - "autoRepairPipelineStep"
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.0-gen"
+timestamp: "0.8.1-gen"
 ---
 
 ## 역할
@@ -54,7 +54,7 @@ timestamp: "0.8.0-gen"
 - 없음(정적 분석 기준)
 
 ## 관계
-- 호출: `duplicateRowDeleteVbaHint`, `filterToNewSheetVbaHint`, `inferPipelineStepLanguage`, `pipelineStepRepairSourceMessage`
+- 호출: `duplicateRowDeleteVbaHint`, `filterToNewSheetVbaHint`, `inferPipelineStepLanguage`, `pipelineStepRepairSourceMessage`, `write`
 - 피호출(영향 전파 경로): `autoRepairPipelineStep`
 
 ## 실패/예외

@@ -8,8 +8,8 @@ class: PythonComSkillContext
 signature: "(self, sheet, group_by, value=None, agg='sum', dest_name=None, column=None, header_rows=1)"
 role: "엑셀 '진짜 피벗테이블(PivotTable 개체)'을 새 시트에 만든다 — 원본 데이터와 연결돼 '새로 고침'이"
 role_source: docstring
-version: "0.8.0"
-loc: "serve_b2b.py:13936-14071"
+version: "0.8.1"
+loc: "serve_b2b.py:14051-14186"
 
 # ── 입출력 ──
 inputs:
@@ -101,7 +101,7 @@ reads:
   - "self.used_last_row"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.0-gen"
+timestamp: "0.8.1-gen"
 ---
 
 ## 역할

@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(n)"
 role: "1-based 열 번호 → 엑셀 열 문자(A, B, ..., AA ...). 스키마의 열문자↔헤더 매핑 출력용."
 role_source: banner
-version: "0.8.0"
+version: "0.8.1"
 loc: "file-schema.js:697-697"
 
 # ── 입출력 ──
@@ -31,7 +31,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.0-gen"
+timestamp: "0.8.1-gen"
 ---
 
 ## 역할

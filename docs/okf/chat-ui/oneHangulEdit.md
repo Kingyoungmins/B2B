@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(a, b)"
 role: "한 글자 차이(같은 길이 치환 1 / 길이±1 삽입·삭제 1)인지 + 그 차이가 한글인지."
 role_source: banner
-version: "0.8.0"
+version: "0.8.1"
 loc: "chat-ui.js:586-586"
 
 # ── 입출력 ──
@@ -32,7 +32,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.0-gen"
+timestamp: "0.8.1-gen"
 ---
 
 ## 역할

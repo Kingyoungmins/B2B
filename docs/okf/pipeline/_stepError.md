@@ -7,8 +7,8 @@ extraction: regex   # 정규식 근사
 signature: "(info)"
 role: "runPipeline 에서 발생한 step 오류를 풍부한 메시지로 감싸 던진다 (item 9)."
 role_source: banner
-version: "0.8.0"
-loc: "pipeline.js:3658-3658"
+version: "0.8.1"
+loc: "pipeline.js:3661-3661"
 
 # ── 입출력 ──
 inputs:
@@ -29,7 +29,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.0-gen"
+timestamp: "0.8.1-gen"
 ---
 
 ## 역할

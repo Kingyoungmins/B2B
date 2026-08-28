@@ -7,7 +7,7 @@ extraction: ast
 signature: "()"
 role: "환경변수 > 화면에서 넘겨준 설정 > 기본값 순으로 결정한다."
 role_source: docstring
-version: "0.8.0"
+version: "0.8.1"
 loc: "log_sync.py:109-120"
 
 # ── 입출력 ──
@@ -57,7 +57,7 @@ reads:
   - "_CONFIG"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.0-gen"
+timestamp: "0.8.1-gen"
 ---
 
 ## 역할

@@ -8,8 +8,8 @@ class: PythonComSkillContext
 signature: "(self, src_sheet, src_range, dst_sheet, dst_cell)"
 role: "Excel 네이티브 복사(값+수식+서식+병합 보존). '복사/복붙' 요청의 기본 수단."
 role_source: docstring
-version: "0.8.0"
-loc: "serve_b2b.py:12848-12886"
+version: "0.8.1"
+loc: "serve_b2b.py:12963-13001"
 
 # ── 입출력 ──
 inputs:
@@ -66,7 +66,7 @@ reads:
   - "self._tick"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.0-gen"
+timestamp: "0.8.1-gen"
 ---
 
 ## 역할

@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(id, file, fallback)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
-version: "0.8.0"
+version: "0.8.1"
 loc: "pipeline.js:484-484"
 
 # ── 입출력 ──
@@ -59,6 +59,7 @@ called_by:
   - "addCell"
   - "addField"
   - "addFileMentions"
+  - "analyze"
   - "applyLogic"
   - "applyVbaStepToLiveExcel"
   - "assistBuildDiagnosticsText"
@@ -96,6 +97,7 @@ called_by:
   - "crossWriteDestinationScan"
   - "deepClone"
   - "detectTables"
+  - "draftProblems"
   - "dump"
   - "exactReferenceFailures"
   - "explainPipelineErrorForUser"
@@ -111,6 +113,7 @@ called_by:
   - "installAssistVisibilityHooks"
   - "ixiFailoverUpstreams"
   - "listAllWorkbookFileIds"
+  - "listEntries"
   - "llmApplyIntentToStep"
   - "llmRegroupRecordedSteps"
   - "llmSplitRecordedVba"
@@ -118,6 +121,7 @@ called_by:
   - "loadOutputTemplates"
   - "looksLikeRepeatedReasoning"
   - "markPipelineRunFailureStatus"
+  - "matchAll"
   - "mergeForcedCellsIntoDiff"
   - "mergeInvariantSignature"
   - "negativeSignLossFailures"
@@ -168,18 +172,25 @@ called_by:
   - "runnerRecordedActivatePairs"
   - "runnerSheetOwnersFromCode"
   - "runnerSplitTopLevelArgs"
+  - "saveSchedule"
+  - "saveSkillFiles"
+  - "scheduleProblems"
   - "snapExcel"
   - "syncStepPreApplySnapshot"
   - "undoHistory"
   - "uploadAttachments"
   - "vbaExactSheetReferenceFailures"
   - "vbaStaticSafetyFailures"
+  - "viewDoc"
+  - "viewItem"
+  - "viewSkillEditor"
+  - "viewStep1"
   - "wholeColumnCountRowTwoFailures"
   - "wirePipelineStepCrossEvidence"
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.0-gen"
+timestamp: "0.8.1-gen"
 ---
 
 ## 역할
@@ -190,7 +201,7 @@ timestamp: "0.8.0-gen"
 
 ## 관계
 - 호출: `add`, `workbookDisplayName`
-- 피호출(영향 전파 경로): `_appendRows`, `_assistFileList`, `_assistGateReplacementCode`, `_buildDefaultTargetHint`, `_buildLogicZipEntriesImpl`, `_buildSchemaSummaryAtLevel`, `_clarifySeparatorWhitespaceQuestion`, `_describeFile`, `_diffLiveSignatureParts`, `_evalAst`, `_offStepsAmongSent`, `_parser`, `_pushAssistant`, `_reapplyVbaPipelineToLiveImpl`, `_reconcilePipelineSimulationAfterEditImpl`, `_recordedAssignRhsMultiset`, `_renderViewerInitial`, `_resolveFileForOps`, `_runHeldStepsBatchImpl`, `_showBatchResumeChecklist`, `_softRefreshResolveInstantRestore`, `_stripSynthesizedSheetSelects`, `_syncPipelineToggleStatus`, `_tokenize`, `_validRegroup`, `adaptInputSheetStringLiterals`, `add`, `addCell`, `addField`, `addFileMentions`, `applyLogic`, `applyVbaStepToLiveExcel`, `assistBuildDiagnosticsText`, `assistBuildDiffHtml`, `assistBuildProposal`, `assistCloseOut`, `assistCommitProposal`, `assistEnsureDom`, `assistHandleUserMessage`, `assistHistoryMessages`, `assistPrepareReportBundle`, `assistPushAssistant`, `assistReportResultHtml`, `assistUploadAttachments`, `augmentUserPromptWithMentions`, `beginExcelMirrorApplyLoading`, `buildDiffHtml`, `buildEditingContext`, `buildMentionHardRules`, `buildSheetStructureDigest`, `callAnthropic`, `callAssistLLM`, `callLLM`, `callOpenAICompatOnce`, `captureCrossFileDestinationSnapshots`, `captureCurrentViewSnapshot`, `clkClassify`, `colIdx`, `collectAllDownloadFiles`, `collectPipelineReferencedFileIds`, `computeSheetDiff`, `copyColumns`, `createZipBlob`, `crossOutputFileIdsReferencedInCode`, `crossWriteDestinationScan`, `deepClone`, `detectTables`, `dump`, `exactReferenceFailures`, `explainPipelineErrorForUser`, `extractCellStyle`, `fetchOpenAICompat`, `findColumnGlobal`, `findInputBySheet`, `getLLMChatHistory`, `hangulLiteralTypoFailures`, `headerNameMismatchFailures`, `headersOf`, `insertColumns`, `installAssistVisibilityHooks`, `ixiFailoverUpstreams`, `listAllWorkbookFileIds`, `llmApplyIntentToStep`, `llmRegroupRecordedSteps`, `llmSplitRecordedVba`, `loadInputFiles`, `loadOutputTemplates`, `looksLikeRepeatedReasoning`, `markPipelineRunFailureStatus`, `mergeForcedCellsIntoDiff`, `mergeInvariantSignature`, `negativeSignLossFailures`, `normalizeLoadedFiles`, `normalizeLoadedLogicCode`, `noteExcelComTimeout`, `onDown`, `onReportResult`, `parsePrimary`, `pipelineCollectWorkbookNames`, `pipelineExactSheetNamesFromText`, `pipelineHeaderMismatchReport`, `pipelineHeldBatchInfo`, `pipelineKnownFiles`, `pipelinePythonMutatedBookNames`, `pipelinePythonSourceWorkbookNames`, `pipelineRuntimeExecutionBlockersForStep`, `pipelineTargetSheetNames`, `pipelineUnique`, `pipelineVbaTargetWorkbookNames`, `preopenAllExcelMirrors`, `prepareRun`, `previewSheets`, `protectLargeGridLiterals`, `publishNativeFileTabs`, `pushHistory`, `pythonComStaticSafetyFailures`, `readStoredZip`, `recomputeAllFormulas`, `redoHistory`, `refreshTabs`, `restorePipelineCheckpointForSuffix`, `restoreSoftRefreshSnapshot`, `run`, `runIsolatedLivePipelineSteps`, `runPipeline`, `runPipelineRealtime`, `runSearch`, `runVbaPipelinePreferLive`, `runnerAddGeneratedSheet`, `runnerApplyEnvConfigFilter`, `runnerBuildMappingRows`, `runnerCanonicalizeRequirementsByEnv`, `runnerExtractGeneratedSheetsFromCode`, `runnerExtractMappingRequirements`, `runnerGroupMappingRowsByFile`, `runnerMappingKnownFiles`, `runnerRecordedActivatePairs`, `runnerSheetOwnersFromCode`, `runnerSplitTopLevelArgs`, `snapExcel`, `syncStepPreApplySnapshot`, `undoHistory`, `uploadAttachments`, `vbaExactSheetReferenceFailures`, `vbaStaticSafetyFailures`, `wholeColumnCountRowTwoFailures`, `wirePipelineStepCrossEvidence`
+- 피호출(영향 전파 경로): `_appendRows`, `_assistFileList`, `_assistGateReplacementCode`, `_buildDefaultTargetHint`, `_buildLogicZipEntriesImpl`, `_buildSchemaSummaryAtLevel`, `_clarifySeparatorWhitespaceQuestion`, `_describeFile`, `_diffLiveSignatureParts`, `_evalAst`, `_offStepsAmongSent`, `_parser`, `_pushAssistant`, `_reapplyVbaPipelineToLiveImpl`, `_reconcilePipelineSimulationAfterEditImpl`, `_recordedAssignRhsMultiset`, `_renderViewerInitial`, `_resolveFileForOps`, `_runHeldStepsBatchImpl`, `_showBatchResumeChecklist`, `_softRefreshResolveInstantRestore`, `_stripSynthesizedSheetSelects`, `_syncPipelineToggleStatus`, `_tokenize`, `_validRegroup`, `adaptInputSheetStringLiterals`, `add`, `addCell`, `addField`, `addFileMentions`, `analyze`, `applyLogic`, `applyVbaStepToLiveExcel`, `assistBuildDiagnosticsText`, `assistBuildDiffHtml`, `assistBuildProposal`, `assistCloseOut`, `assistCommitProposal`, `assistEnsureDom`, `assistHandleUserMessage`, `assistHistoryMessages`, `assistPrepareReportBundle`, `assistPushAssistant`, `assistReportResultHtml`, `assistUploadAttachments`, `augmentUserPromptWithMentions`, `beginExcelMirrorApplyLoading`, `buildDiffHtml`, `buildEditingContext`, `buildMentionHardRules`, `buildSheetStructureDigest`, `callAnthropic`, `callAssistLLM`, `callLLM`, `callOpenAICompatOnce`, `captureCrossFileDestinationSnapshots`, `captureCurrentViewSnapshot`, `clkClassify`, `colIdx`, `collectAllDownloadFiles`, `collectPipelineReferencedFileIds`, `computeSheetDiff`, `copyColumns`, `createZipBlob`, `crossOutputFileIdsReferencedInCode`, `crossWriteDestinationScan`, `deepClone`, `detectTables`, `draftProblems`, `dump`, `exactReferenceFailures`, `explainPipelineErrorForUser`, `extractCellStyle`, `fetchOpenAICompat`, `findColumnGlobal`, `findInputBySheet`, `getLLMChatHistory`, `hangulLiteralTypoFailures`, `headerNameMismatchFailures`, `headersOf`, `insertColumns`, `installAssistVisibilityHooks`, `ixiFailoverUpstreams`, `listAllWorkbookFileIds`, `listEntries`, `llmApplyIntentToStep`, `llmRegroupRecordedSteps`, `llmSplitRecordedVba`, `loadInputFiles`, `loadOutputTemplates`, `looksLikeRepeatedReasoning`, `markPipelineRunFailureStatus`, `matchAll`, `mergeForcedCellsIntoDiff`, `mergeInvariantSignature`, `negativeSignLossFailures`, `normalizeLoadedFiles`, `normalizeLoadedLogicCode`, `noteExcelComTimeout`, `onDown`, `onReportResult`, `parsePrimary`, `pipelineCollectWorkbookNames`, `pipelineExactSheetNamesFromText`, `pipelineHeaderMismatchReport`, `pipelineHeldBatchInfo`, `pipelineKnownFiles`, `pipelinePythonMutatedBookNames`, `pipelinePythonSourceWorkbookNames`, `pipelineRuntimeExecutionBlockersForStep`, `pipelineTargetSheetNames`, `pipelineUnique`, `pipelineVbaTargetWorkbookNames`, `preopenAllExcelMirrors`, `prepareRun`, `previewSheets`, `protectLargeGridLiterals`, `publishNativeFileTabs`, `pushHistory`, `pythonComStaticSafetyFailures`, `readStoredZip`, `recomputeAllFormulas`, `redoHistory`, `refreshTabs`, `restorePipelineCheckpointForSuffix`, `restoreSoftRefreshSnapshot`, `run`, `runIsolatedLivePipelineSteps`, `runPipeline`, `runPipelineRealtime`, `runSearch`, `runVbaPipelinePreferLive`, `runnerAddGeneratedSheet`, `runnerApplyEnvConfigFilter`, `runnerBuildMappingRows`, `runnerCanonicalizeRequirementsByEnv`, `runnerExtractGeneratedSheetsFromCode`, `runnerExtractMappingRequirements`, `runnerGroupMappingRowsByFile`, `runnerMappingKnownFiles`, `runnerRecordedActivatePairs`, `runnerSheetOwnersFromCode`, `runnerSplitTopLevelArgs`, `saveSchedule`, `saveSkillFiles`, `scheduleProblems`, `snapExcel`, `syncStepPreApplySnapshot`, `undoHistory`, `uploadAttachments`, `vbaExactSheetReferenceFailures`, `vbaStaticSafetyFailures`, `viewDoc`, `viewItem`, `viewSkillEditor`, `viewStep1`, `wholeColumnCountRowTwoFailures`, `wirePipelineStepCrossEvidence`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

@@ -8,8 +8,8 @@ class: PythonComSkillContext
 signature: "(self, sheet, col=1)"
 role: "해당 열 기준 마지막 데이터 행(1-based). 표 끝 합계행 포함 여부는 호출자가 판단."
 role_source: docstring
-version: "0.8.0"
-loc: "serve_b2b.py:12494-12506"
+version: "0.8.1"
+loc: "serve_b2b.py:12609-12621"
 
 # ── 입출력 ──
 inputs:
@@ -60,7 +60,7 @@ reads:
   - "self._ws"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.0-gen"
+timestamp: "0.8.1-gen"
 ---
 
 ## 역할

@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(userText, ui, attachImages)"
 role: "사용자 발화 1건 처리. UI 콜백으로 진행 상황을 알린다."
 role_source: banner
-version: "0.8.0"
+version: "0.8.1"
 loc: "assist-core.js:355-355"
 
 # ── 입출력 ──
@@ -46,6 +46,7 @@ calls:
   - "callAssistLLM"
   - "callLLM"
   - "push"
+  - "read"
   - "say"
   - "traceClientUiEvent"
 calls_external:
@@ -72,7 +73,6 @@ calls_external:
   - "onReport"
   - "onStatus"
   - "onToolTrace"
-  - "read"
   - "reduce"
   - "replace"
   - "request"
@@ -92,7 +92,7 @@ reads:
 writes:
   - "assist"
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.0-gen"
+timestamp: "0.8.1-gen"
 ---
 
 ## 역할
@@ -105,7 +105,7 @@ timestamp: "0.8.0-gen"
 - 변경 상태 `assist` — 수정 시 이 상태를 읽는 곳 동반 점검.
 
 ## 관계
-- 호출: `add`, `armStall`, `assistBuildProposal`, `assistCallSignature`, `assistCloseOut`, `assistHasChineseLeak`, `assistLooksLikeDanglingAnnouncement`, `assistLooksLikeFakeButtonNarration`, `assistLooksLikeProseRequestSuggestion`, `assistParseAction`, `assistProposalIsVerifiable`, `assistPushAssistant`, `assistRunTool`, `assistStripActionBlock`, `assistStripPromptEcho`, `assistSystemPrompt`, `assistVerifyProposal`, `callAssistLLM`, `callLLM`, `push`, `say`, `traceClientUiEvent`
+- 호출: `add`, `armStall`, `assistBuildProposal`, `assistCallSignature`, `assistCloseOut`, `assistHasChineseLeak`, `assistLooksLikeDanglingAnnouncement`, `assistLooksLikeFakeButtonNarration`, `assistLooksLikeProseRequestSuggestion`, `assistParseAction`, `assistProposalIsVerifiable`, `assistPushAssistant`, `assistRunTool`, `assistStripActionBlock`, `assistStripPromptEcho`, `assistSystemPrompt`, `assistVerifyProposal`, `callAssistLLM`, `callLLM`, `push`, `read`, `say`, `traceClientUiEvent`
 - 피호출(영향 전파 경로): `assistHandleBridgeMessage`, `assistSubmit`
 
 ## 실패/예외

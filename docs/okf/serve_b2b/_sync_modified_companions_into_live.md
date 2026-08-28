@@ -7,8 +7,8 @@ extraction: ast
 signature: "(companions, excel_id, fpid, work, mutated_books=None, mutation_tracked=False)"
 role: "격리 인스턴스에서 '대상(ftarget)'이 아닌 동반 워크북이 변형됐으면(Saved=False),"
 role_source: docstring
-version: "0.8.0"
-loc: "serve_b2b.py:10516-10584"
+version: "0.8.1"
+loc: "serve_b2b.py:10631-10699"
 
 # ── 입출력 ──
 inputs:
@@ -61,7 +61,7 @@ reads:
   - "EXCEL_SESSIONS"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.0-gen"
+timestamp: "0.8.1-gen"
 ---
 
 ## 역할

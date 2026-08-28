@@ -8,7 +8,7 @@ class: RecordService
 signature: "(self)"
 role: "---- 상태 ----"
 role_source: banner
-version: "0.8.0"
+version: "0.8.1"
 loc: "record_service.py:621-626"
 
 # ── 입출력 ──
@@ -31,6 +31,7 @@ called_by:
   - "B2BHandler.send_json"
   - "_process_perf_snapshot"
   - "excel_record_status"
+  - "log_skill_run"
   - "start"
   - "stop"
   - "update_config"
@@ -41,7 +42,7 @@ reads:
   - "self._sink"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.0-gen"
+timestamp: "0.8.1-gen"
 ---
 
 ## 역할
@@ -52,7 +53,7 @@ timestamp: "0.8.0-gen"
 
 ## 관계
 - 호출: 없음
-- 피호출(영향 전파 경로): `B2BHandler.do_GET`, `B2BHandler.send_json`, `_process_perf_snapshot`, `excel_record_status`, `start`, `stop`, `update_config`
+- 피호출(영향 전파 경로): `B2BHandler.do_GET`, `B2BHandler.send_json`, `_process_perf_snapshot`, `excel_record_status`, `log_skill_run`, `start`, `stop`, `update_config`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

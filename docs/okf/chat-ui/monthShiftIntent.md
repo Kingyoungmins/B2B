@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(text)"
 role: "\"월 정보 +1 / 월 +1 / 다음달로 변경 / N개월 이동\" 류 — ctx.shift_months 로 결정적 처리(모델이 VBA 정규식·"
 role_source: banner
-version: "0.8.0"
+version: "0.8.1"
 loc: "chat-ui.js:868-868"
 
 # ── 입출력 ──
@@ -33,7 +33,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.0-gen"
+timestamp: "0.8.1-gen"
 ---
 
 ## 역할

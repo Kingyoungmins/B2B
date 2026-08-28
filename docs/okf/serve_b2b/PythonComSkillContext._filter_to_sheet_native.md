@@ -8,8 +8,8 @@ class: PythonComSkillContext
 signature: "(self, ws, sheet, decl, dest_name, header_rows, after)"
 role: "[0.7.5] 자동필터 + 보이는 행 한 번 복사. 성공하면 시트명, 안 되면 None(호출자가 폴백)."
 role_source: docstring
-version: "0.8.0"
-loc: "serve_b2b.py:13395-13503"
+version: "0.8.1"
+loc: "serve_b2b.py:13510-13618"
 
 # ── 입출력 ──
 inputs:
@@ -82,7 +82,7 @@ reads:
   - "self.delete_sheet"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.0-gen"
+timestamp: "0.8.1-gen"
 ---
 
 ## 역할

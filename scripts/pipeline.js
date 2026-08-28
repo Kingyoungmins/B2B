@@ -1497,6 +1497,9 @@ async function runIsolatedLivePipelineSteps(sourceSteps, initialExcelId, options
           resetExcelIds,
           viewSheet: options.viewSheet || null,
           outputMode: options.outputMode || "sync",   // 실행기='file'(라이브 미반영+파일출력), 생성기='sync'
+          // [관측 로그 애드온] 서버가 '무엇을 실행했는지' 남길 수 있게 스킬명을 함께 보낸다.
+          // 실행 동작에는 쓰이지 않는다(서버는 b2b_telemetry 로깅에만 사용).
+          skillName: (typeof state !== "undefined" && state.logicSaveBaseName) || "",
           // [새로고침 즉시복원] 원본부터 전체 적용일 때만 값이 있다 → 백엔드가 최종 상태 사본을 남긴다.
           // (여기가 VBA 전체실행 경로. 이 경로엔 원래 사본이 없어 새로고침 후 항상 전 스텝 재실행이었다)
           stateSig: pipelineFullRunStateSig(sourceSteps),

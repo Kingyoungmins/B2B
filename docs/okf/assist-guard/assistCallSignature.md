@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(action, args)"
 role: "같은 (도구,인자) 반복 호출 감지 — 압축으로 앞 라운드를 잊고 같은 조회를 되풀이하는 것 방지"
 role_source: banner
-version: "0.8.0"
+version: "0.8.1"
 loc: "assist-guard.js:248-248"
 
 # ── 입출력 ──
@@ -30,7 +30,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.0-gen"
+timestamp: "0.8.1-gen"
 ---
 
 ## 역할

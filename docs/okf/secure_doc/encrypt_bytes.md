@@ -7,7 +7,7 @@ extraction: ast
 signature: "(data, filename, label_id='')"
 role: "보안 재적용. 실패는 예외 — 부르는 쪽(다운로드)이 반드시 중단해야 한다."
 role_source: docstring
-version: "0.8.0"
+version: "0.8.1"
 loc: "secure_doc.py:290-299"
 
 # ── 입출력 ──
@@ -35,7 +35,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.0-gen"
+timestamp: "0.8.1-gen"
 ---
 
 ## 역할

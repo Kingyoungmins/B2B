@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(userMessage, options)"
 role: "최종 판단 — 파일 구조를 근거로 LLM 이 고른다. 실패/애매 = 작업(종전 동작)."
 role_source: banner
-version: "0.8.0"
+version: "0.8.1"
 loc: "chat-ui.js:3748-3748"
 
 # ── 입출력 ──
@@ -37,7 +37,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.0-gen"
+timestamp: "0.8.1-gen"
 ---
 
 ## 역할

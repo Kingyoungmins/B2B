@@ -8,8 +8,8 @@ class: PythonComSkillContext
 signature: "(self, matrix)"
 role: "읽은 매트릭스에 비어있지 않은 값이 하나라도 있으면 '실데이터를 읽었다'는 증거를 남긴다."
 role_source: docstring
-version: "0.8.0"
-loc: "serve_b2b.py:12722-12732"
+version: "0.8.1"
+loc: "serve_b2b.py:12837-12847"
 
 # ── 입출력 ──
 inputs:
@@ -37,7 +37,7 @@ reads:
   - "self._shared"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.0-gen"
+timestamp: "0.8.1-gen"
 ---
 
 ## 역할

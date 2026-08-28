@@ -8,8 +8,8 @@ class: PythonComSkillContext
 signature: "(self, sheet, col, header_row=1)"
 role: "열 지정을 1-based 번호로 해석한다. 'A' 같은 열 문자 / 1 같은 번호 / 헤더명 모두 허용."
 role_source: docstring
-version: "0.8.0"
-loc: "serve_b2b.py:15059-15068"
+version: "0.8.1"
+loc: "serve_b2b.py:15174-15183"
 
 # ── 입출력 ──
 inputs:
@@ -59,7 +59,7 @@ reads:
   - "self.find_header"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.0-gen"
+timestamp: "0.8.1-gen"
 ---
 
 ## 역할

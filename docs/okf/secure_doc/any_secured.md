@@ -7,7 +7,7 @@ extraction: ast
 signature: "(backend_dir=None)"
 role: "이번 실행에 보안 해제한 문서가 하나라도 있나 — 있으면 문서 다운로드에 보안을 다시 건다."
 role_source: docstring
-version: "0.8.0"
+version: "0.8.1"
 loc: "secure_doc.py:536-547"
 
 # ── 입출력 ──
@@ -37,7 +37,7 @@ reads:
   - "_STATE"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.0-gen"
+timestamp: "0.8.1-gen"
 ---
 
 ## 역할

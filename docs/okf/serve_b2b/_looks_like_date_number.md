@@ -7,8 +7,8 @@ extraction: ast
 signature: "(digits)"
 role: "YYMMDD(260607) / YYYYMM(202606) / YYYYMMDD(20260607) 처럼 날짜로 읽히는 숫자만 True."
 role_source: docstring
-version: "0.8.0"
-loc: "serve_b2b.py:8705-8722"
+version: "0.8.1"
+loc: "serve_b2b.py:8820-8837"
 
 # ── 입출력 ──
 inputs:
@@ -31,7 +31,7 @@ called_by: []
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.0-gen"
+timestamp: "0.8.1-gen"
 ---
 
 ## 역할

@@ -7,8 +7,8 @@ extraction: regex   # 정규식 근사
 signature: "(excelId)"
 role: "창을 도로 어긋나게 만들었다. 동기로 즉시 맞춘다."
 role_source: banner
-version: "0.8.0"
-loc: "pipeline.js:4708-4708"
+version: "0.8.1"
+loc: "pipeline.js:4711-4711"
 
 # ── 입출력 ──
 inputs:
@@ -34,7 +34,7 @@ reads:
   - "state.currentFileId"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.0-gen"
+timestamp: "0.8.1-gen"
 ---
 
 ## 역할

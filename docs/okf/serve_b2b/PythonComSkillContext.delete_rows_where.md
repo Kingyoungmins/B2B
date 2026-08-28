@@ -8,8 +8,8 @@ class: PythonComSkillContext
 signature: "(self, sheet, predicate, header_rows=1)"
 role: "조건에 맞는 행을 **제자리에서** 삭제한다 — 남는 행의 서식·표시형식·수식·병합이 그대로다."
 role_source: docstring
-version: "0.8.0"
-loc: "serve_b2b.py:13196-13248"
+version: "0.8.1"
+loc: "serve_b2b.py:13311-13363"
 
 # ── 입출력 ──
 inputs:
@@ -65,7 +65,7 @@ reads:
   - "self.read"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.0-gen"
+timestamp: "0.8.1-gen"
 ---
 
 ## 역할

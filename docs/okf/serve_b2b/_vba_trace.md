@@ -7,8 +7,8 @@ extraction: ast
 signature: "(event, **fields)"
 role: "Structured VBA/pipeline trace for field failures."
 role_source: docstring
-version: "0.8.0"
-loc: "serve_b2b.py:9364-9382"
+version: "0.8.1"
+loc: "serve_b2b.py:9479-9497"
 
 # ── 입출력 ──
 inputs:
@@ -94,7 +94,7 @@ reads:
   - "_TRACE_WRITE_LOCK"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.0-gen"
+timestamp: "0.8.1-gen"
 ---
 
 ## 역할

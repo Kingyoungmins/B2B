@@ -7,7 +7,7 @@ extraction: ast
 signature: "(steps, min_run=PASTE_MERGE_MIN_RUN, max_cells=PASTE_MERGE_MAX_CELLS)"
 role: "연속된 같은 (book,sheet) 리터럴 값 스텝 런을 더 적은 range_fill 로 통합."
 role_source: docstring
-version: "0.8.0"
+version: "0.8.1"
 loc: "record_service.py:296-358"
 
 # ── 입출력 ──
@@ -62,7 +62,7 @@ reads:
   - "PASTE_MERGE_MIN_RUN"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.0-gen"
+timestamp: "0.8.1-gen"
 ---
 
 ## 역할

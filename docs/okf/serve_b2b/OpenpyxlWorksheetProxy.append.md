@@ -8,8 +8,8 @@ class: OpenpyxlWorksheetProxy
 signature: "(self, values)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
-version: "0.8.0"
-loc: "serve_b2b.py:18454-18478"
+version: "0.8.1"
+loc: "serve_b2b.py:18569-18593"
 
 # ── 입출력 ──
 inputs:
@@ -120,6 +120,7 @@ called_by:
   - "_excel_grid_hwnds_for_pid"
   - "_excel_output_preview_sheets"
   - "_excel_runtime_diagnostics"
+  - "_folder_files"
   - "_force_restart_excel_sessions_direct"
   - "_fullrun_excel_ids_for_books"
   - "_group_sheets"
@@ -160,6 +161,7 @@ called_by:
   - "_verify_recorded_expected_live"
   - "_verify_step_isolated_impl"
   - "_visible_excel_top_hwnds_for_pids"
+  - "_write_schedule_files"
   - "build_result_previews"
   - "candidate_ports"
   - "capture_expected_states"
@@ -174,24 +176,30 @@ called_by:
   - "group_to_pipeline_entry"
   - "inspect_workbook"
   - "inspect_workbook_with_excel"
+  - "list_schedules"
   - "load_workbook_aoa"
   - "load_workbook_aoa_with_excel"
   - "main"
   - "merge_small_adjacent_groups"
   - "normalize_python_pipeline_code"
+  - "read_cron_file"
   - "read_csv_rows"
+  - "register_schedule"
   - "render_pptx_to_slides_b64"
   - "run_backend_pipeline_payload_with_worker"
   - "sanitize_recorded_vba"
   - "sheet_merge_areas"
+  - "skill_docs_from_zip"
   - "stop_native_recording_impl"
   - "summarize_vba_actions"
+  - "update_files"
+  - "update_schedule"
 reads:
   - "self._ws"
   - "self.flush_pending_rows"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.0-gen"
+timestamp: "0.8.1-gen"
 ---
 
 ## 역할
@@ -202,7 +210,7 @@ timestamp: "0.8.0-gen"
 
 ## 관계
 - 호출: `cell`, `flush_pending_rows`, `values`
-- 피호출(영향 전파 경로): `B2BHandler.handle_current_view_diff`, `B2BHandler.handle_diag_recent_trace`, `B2BHandler.handle_excel_run_vba_pipeline`, `B2BHandler.handle_pipeline_live_final_snapshot`, `ExcelSkillContext._merge_pivot_grid_into_base`, `ExcelSkillContext.filter_to_sheet`, `ExcelSkillContext.input_sheet`, `ExcelSkillContext.pivot`, `ExcelSkillContext.sheet`, `ExcelSkillContext.sort`, `ExcelSkillContext.workbook_like`, `OpenpyxlSkillContext._merge_pivot_grid_into_base`, `OpenpyxlSkillContext.display_rows`, `OpenpyxlSkillContext.filter_to_sheet`, `OpenpyxlSkillContext.flush_pending_rows`, `OpenpyxlSkillContext.input_sheet`, `OpenpyxlSkillContext.pivot`, `OpenpyxlSkillContext.rows`, `OpenpyxlSkillContext.sheet`, `OpenpyxlSkillContext.sort`, `OpenpyxlSkillContext.workbook_like`, `OpenpyxlWorksheetProxy._formula_cells`, `OpenpyxlWorksheetProxy.flush_pending_rows`, `PythonComSkillContext._as_2d`, `PythonComSkillContext._filter_to_sheet_native`, `PythonComSkillContext._journal_save`, `PythonComSkillContext._mark_mutated`, `PythonComSkillContext._pivot_value_table`, `PythonComSkillContext._ws`, `PythonComSkillContext.add_sheet`, `PythonComSkillContext.append_same_format_sheets`, `PythonComSkillContext.apply_filter`, `PythonComSkillContext.book`, `PythonComSkillContext.clear_filter`, `PythonComSkillContext.copy`, `PythonComSkillContext.copy_key_blocks`, `PythonComSkillContext.copy_sheet`, `PythonComSkillContext.copy_values`, `PythonComSkillContext.dedupe`, `PythonComSkillContext.delete_cols`, `PythonComSkillContext.delete_rows`, `PythonComSkillContext.delete_rows_where`, `PythonComSkillContext.delete_sheet`, `PythonComSkillContext.enable_filter`, `PythonComSkillContext.fill_sum_col`, `PythonComSkillContext.filter_to_range`, `PythonComSkillContext.filter_to_sheet`, `PythonComSkillContext.hide_cols`, `PythonComSkillContext.hide_rows`, `PythonComSkillContext.insert_cols`, `PythonComSkillContext.insert_rows`, `PythonComSkillContext.lookup`, `PythonComSkillContext.match_fill`, `PythonComSkillContext.merge`, `PythonComSkillContext.move_col_clear`, `PythonComSkillContext.move_cols`, `PythonComSkillContext.move_sheet`, `PythonComSkillContext.native_pivot`, `PythonComSkillContext.paste_copied`, `PythonComSkillContext.rename_sheet`, `PythonComSkillContext.replace`, `PythonComSkillContext.set_border`, `PythonComSkillContext.set_fill`, `PythonComSkillContext.set_font`, `PythonComSkillContext.set_number_format`, `PythonComSkillContext.sort`, `PythonComSkillContext.sum_lookup`, `PythonComSkillContext.sum_where`, `PythonComSkillContext.swap_cols`, `PythonComSkillContext.unmerge`, `_OpxlRange._get_value`, `_alias_ephemeral_excel_open_sheet_name`, `_browser_content_target`, `_capture_browser_hwnd`, `_cleanup_excel_sessions_impl`, `_companion_excel_ids_for_books`, `_current_app_version`, `_diag_prerun_window_state`, `_diag_vba_run_failure`, `_disable_vba_break_on_all_errors`, `_drop_dead_typing_lines`, `_ensure_companion_workbooks`, `_excel_collection_names`, `_excel_grid_hwnds_for_pid`, `_excel_output_preview_sheets`, `_excel_runtime_diagnostics`, `_force_restart_excel_sessions_direct`, `_fullrun_excel_ids_for_books`, `_group_sheets`, `_hide_all_excel_sessions_impl`, `_hide_peer_session_frames`, `_hide_peer_workbook_windows`, `_live_session_excel_ids_for_books`, `_normalize_vba_llm_comment_slips`, `_opxl_numeric_values`, `_opxl_range_values`, `_opxl_split_top_level_args`, `_pivot_crosstab`, `_poll_excel_session_changes_impl`, `_post_drm`, `_python_com_static_check`, `_recorded_vba_hazards`, `_row_run_steps`, `_run_excel_python_pipeline_impl`, `_run_full_pipeline_single_instance_impl`, `_run_vba_pipeline_on_session_impl`, `_self_referencing_formula_cells`, `_session_files`, `_session_skills`, `_set_live_sessions_edit_unlock`, `_setup_isolated_pipeline_instance`, `_shift_months_in_text`, `_signature_code_for_snapshot`, `_spawn_dialog_confirmer`, `_split_key_tokens`, `_step_cross_payload`, `_strip_vba_comment`, `_touched_sheet_pairs`, `_union_addr_chunks`, `_user_facing_workbook_names`, `_validate_vba_source_before_inject`, `_vba_macro_refs`, `_vba_strip_strings_and_comments`, `_verify_recorded_expected_live`, `_verify_step_isolated_impl`, `_visible_excel_top_hwnds_for_pids`, `build_result_previews`, `candidate_ports`, `capture_expected_states`, `chunk_groups`, `compute_sheet_diff`, `consolidate_format_runs`, `consolidate_literal_runs`, `excel_record_stop`, `excel_workbooks_open`, `extract_macro_body`, `group_steps`, `group_to_pipeline_entry`, `inspect_workbook`, `inspect_workbook_with_excel`, `load_workbook_aoa`, `load_workbook_aoa_with_excel`, `main`, `merge_small_adjacent_groups`, `normalize_python_pipeline_code`, `read_csv_rows`, `render_pptx_to_slides_b64`, `run_backend_pipeline_payload_with_worker`, `sanitize_recorded_vba`, `sheet_merge_areas`, `stop_native_recording_impl`, `summarize_vba_actions`
+- 피호출(영향 전파 경로): `B2BHandler.handle_current_view_diff`, `B2BHandler.handle_diag_recent_trace`, `B2BHandler.handle_excel_run_vba_pipeline`, `B2BHandler.handle_pipeline_live_final_snapshot`, `ExcelSkillContext._merge_pivot_grid_into_base`, `ExcelSkillContext.filter_to_sheet`, `ExcelSkillContext.input_sheet`, `ExcelSkillContext.pivot`, `ExcelSkillContext.sheet`, `ExcelSkillContext.sort`, `ExcelSkillContext.workbook_like`, `OpenpyxlSkillContext._merge_pivot_grid_into_base`, `OpenpyxlSkillContext.display_rows`, `OpenpyxlSkillContext.filter_to_sheet`, `OpenpyxlSkillContext.flush_pending_rows`, `OpenpyxlSkillContext.input_sheet`, `OpenpyxlSkillContext.pivot`, `OpenpyxlSkillContext.rows`, `OpenpyxlSkillContext.sheet`, `OpenpyxlSkillContext.sort`, `OpenpyxlSkillContext.workbook_like`, `OpenpyxlWorksheetProxy._formula_cells`, `OpenpyxlWorksheetProxy.flush_pending_rows`, `PythonComSkillContext._as_2d`, `PythonComSkillContext._filter_to_sheet_native`, `PythonComSkillContext._journal_save`, `PythonComSkillContext._mark_mutated`, `PythonComSkillContext._pivot_value_table`, `PythonComSkillContext._ws`, `PythonComSkillContext.add_sheet`, `PythonComSkillContext.append_same_format_sheets`, `PythonComSkillContext.apply_filter`, `PythonComSkillContext.book`, `PythonComSkillContext.clear_filter`, `PythonComSkillContext.copy`, `PythonComSkillContext.copy_key_blocks`, `PythonComSkillContext.copy_sheet`, `PythonComSkillContext.copy_values`, `PythonComSkillContext.dedupe`, `PythonComSkillContext.delete_cols`, `PythonComSkillContext.delete_rows`, `PythonComSkillContext.delete_rows_where`, `PythonComSkillContext.delete_sheet`, `PythonComSkillContext.enable_filter`, `PythonComSkillContext.fill_sum_col`, `PythonComSkillContext.filter_to_range`, `PythonComSkillContext.filter_to_sheet`, `PythonComSkillContext.hide_cols`, `PythonComSkillContext.hide_rows`, `PythonComSkillContext.insert_cols`, `PythonComSkillContext.insert_rows`, `PythonComSkillContext.lookup`, `PythonComSkillContext.match_fill`, `PythonComSkillContext.merge`, `PythonComSkillContext.move_col_clear`, `PythonComSkillContext.move_cols`, `PythonComSkillContext.move_sheet`, `PythonComSkillContext.native_pivot`, `PythonComSkillContext.paste_copied`, `PythonComSkillContext.rename_sheet`, `PythonComSkillContext.replace`, `PythonComSkillContext.set_border`, `PythonComSkillContext.set_fill`, `PythonComSkillContext.set_font`, `PythonComSkillContext.set_number_format`, `PythonComSkillContext.sort`, `PythonComSkillContext.sum_lookup`, `PythonComSkillContext.sum_where`, `PythonComSkillContext.swap_cols`, `PythonComSkillContext.unmerge`, `_OpxlRange._get_value`, `_alias_ephemeral_excel_open_sheet_name`, `_browser_content_target`, `_capture_browser_hwnd`, `_cleanup_excel_sessions_impl`, `_companion_excel_ids_for_books`, `_current_app_version`, `_diag_prerun_window_state`, `_diag_vba_run_failure`, `_disable_vba_break_on_all_errors`, `_drop_dead_typing_lines`, `_ensure_companion_workbooks`, `_excel_collection_names`, `_excel_grid_hwnds_for_pid`, `_excel_output_preview_sheets`, `_excel_runtime_diagnostics`, `_folder_files`, `_force_restart_excel_sessions_direct`, `_fullrun_excel_ids_for_books`, `_group_sheets`, `_hide_all_excel_sessions_impl`, `_hide_peer_session_frames`, `_hide_peer_workbook_windows`, `_live_session_excel_ids_for_books`, `_normalize_vba_llm_comment_slips`, `_opxl_numeric_values`, `_opxl_range_values`, `_opxl_split_top_level_args`, `_pivot_crosstab`, `_poll_excel_session_changes_impl`, `_post_drm`, `_python_com_static_check`, `_recorded_vba_hazards`, `_row_run_steps`, `_run_excel_python_pipeline_impl`, `_run_full_pipeline_single_instance_impl`, `_run_vba_pipeline_on_session_impl`, `_self_referencing_formula_cells`, `_session_files`, `_session_skills`, `_set_live_sessions_edit_unlock`, `_setup_isolated_pipeline_instance`, `_shift_months_in_text`, `_signature_code_for_snapshot`, `_spawn_dialog_confirmer`, `_split_key_tokens`, `_step_cross_payload`, `_strip_vba_comment`, `_touched_sheet_pairs`, `_union_addr_chunks`, `_user_facing_workbook_names`, `_validate_vba_source_before_inject`, `_vba_macro_refs`, `_vba_strip_strings_and_comments`, `_verify_recorded_expected_live`, `_verify_step_isolated_impl`, `_visible_excel_top_hwnds_for_pids`, `_write_schedule_files`, `build_result_previews`, `candidate_ports`, `capture_expected_states`, `chunk_groups`, `compute_sheet_diff`, `consolidate_format_runs`, `consolidate_literal_runs`, `excel_record_stop`, `excel_workbooks_open`, `extract_macro_body`, `group_steps`, `group_to_pipeline_entry`, `inspect_workbook`, `inspect_workbook_with_excel`, `list_schedules`, `load_workbook_aoa`, `load_workbook_aoa_with_excel`, `main`, `merge_small_adjacent_groups`, `normalize_python_pipeline_code`, `read_cron_file`, `read_csv_rows`, `register_schedule`, `render_pptx_to_slides_b64`, `run_backend_pipeline_payload_with_worker`, `sanitize_recorded_vba`, `sheet_merge_areas`, `skill_docs_from_zip`, `stop_native_recording_impl`, `summarize_vba_actions`, `update_files`, `update_schedule`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

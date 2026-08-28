@@ -8,8 +8,8 @@ class: PythonComSkillContext
 signature: "(self, sheet=None, header_row=1)"
 role: "시트 헤더행에 자동필터(필터 드롭다운)를 켠다 — 조건 없이 '필터 기능만' 활성화한다(이미 켜져 있으면 유지)."
 role_source: docstring
-version: "0.8.0"
-loc: "serve_b2b.py:13303-13320"
+version: "0.8.1"
+loc: "serve_b2b.py:13418-13435"
 
 # ── 입출력 ──
 inputs:
@@ -51,7 +51,7 @@ reads:
   - "self.used_last_row"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.0-gen"
+timestamp: "0.8.1-gen"
 ---
 
 ## 역할

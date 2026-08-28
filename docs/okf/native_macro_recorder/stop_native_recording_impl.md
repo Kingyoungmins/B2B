@@ -7,7 +7,7 @@ extraction: ast
 signature: "(app, baseline)"
 role: "레코더 토글 OFF → 새로 생긴 매크로 모듈 추출·삭제 → 정제된 VBA 반환."
 role_source: docstring
-version: "0.8.0"
+version: "0.8.1"
 loc: "native_macro_recorder.py:458-581"
 
 # ── 입출력 ──
@@ -76,7 +76,7 @@ reads:
 writes:
   - "RECORD_DIAG"
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.0-gen"
+timestamp: "0.8.1-gen"
 ---
 
 ## 역할

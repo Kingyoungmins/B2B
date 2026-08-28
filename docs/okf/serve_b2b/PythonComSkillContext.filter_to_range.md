@@ -8,8 +8,8 @@ class: PythonComSkillContext
 signature: "(self, sheet, predicate, dest_sheet, dest_cell, header_rows=1, include_header=False, clear_existing=False)"
 role: "조건에 맞는 행을 **이미 있는 시트의 정한 자리**에 붙인다(서식 보존, 원본은 그대로)."
 role_source: docstring
-version: "0.8.0"
-loc: "serve_b2b.py:13623-13781"
+version: "0.8.1"
+loc: "serve_b2b.py:13738-13896"
 
 # ── 입출력 ──
 inputs:
@@ -97,7 +97,7 @@ reads:
   - "self.read"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.0-gen"
+timestamp: "0.8.1-gen"
 ---
 
 ## 역할

@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(prefixHtml)"
 role: "[검증 항목8] 실패 시 버튼을 없애면 '카드에서 다시 시도' 안내가 거짓이 된다 — 액션 영역을"
 role_source: banner
-version: "0.8.0"
+version: "0.8.1"
 loc: "assist-ui.js:472-472"
 
 # ── 입출력 ──
@@ -40,7 +40,7 @@ reads:
 writes:
   - "currentPage"
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.0-gen"
+timestamp: "0.8.1-gen"
 ---
 
 ## 역할

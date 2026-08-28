@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(selectedFileId, options = {})"
 role: "업로드 직후: 모든 파일의 미러를 미리 열어 같은 위치에 스택해 둔다."
 role_source: banner
-version: "0.8.0"
+version: "0.8.1"
 loc: "excel-mirror.js:700-700"
 
 # ── 입출력 ──
@@ -55,7 +55,7 @@ writes:
   - "excelMirror.preopenSeq"
   - "excelMirror.preopening"
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.0-gen"
+timestamp: "0.8.1-gen"
 ---
 
 ## 역할

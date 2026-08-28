@@ -7,7 +7,7 @@ extraction: ast
 signature: "(data)"
 role: "이 원본을 되돌릴 때 쓸 라벨 값. 못 정하면 \"\" (게이트웨이 기본값)."
 role_source: docstring
-version: "0.8.0"
+version: "0.8.1"
 loc: "secure_doc.py:503-515"
 
 # ── 입출력 ──
@@ -32,7 +32,7 @@ reads:
   - "VENDOR_DRM_MAGIC"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.0-gen"
+timestamp: "0.8.1-gen"
 ---
 
 ## 역할

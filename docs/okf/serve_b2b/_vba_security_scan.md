@@ -7,8 +7,8 @@ extraction: ast
 signature: "(code)"
 role: "금지 구문 발견 시 사용자 안내 문자열 반환, 없으면 None."
 role_source: docstring
-version: "0.8.0"
-loc: "serve_b2b.py:8275-8285"
+version: "0.8.1"
+loc: "serve_b2b.py:8390-8400"
 
 # ── 입출력 ──
 inputs:
@@ -37,7 +37,7 @@ reads:
   - "_VBA_FORBIDDEN_RAW"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.0-gen"
+timestamp: "0.8.1-gen"
 ---
 
 ## 역할

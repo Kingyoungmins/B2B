@@ -7,7 +7,7 @@ extraction: ast
 signature: "(timeout=15.0, wait_running=0.0, deadline=None)"
 role: "한 번 전송. 스레드에서도, 종료 직전에도 같은 함수를 쓴다."
 role_source: docstring
-version: "0.8.0"
+version: "0.8.1"
 loc: "log_sync.py:462-505"
 
 # ── 입출력 ──
@@ -54,7 +54,7 @@ reads:
 writes:
   - "_STATE"
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.0-gen"
+timestamp: "0.8.1-gen"
 ---
 
 ## 역할

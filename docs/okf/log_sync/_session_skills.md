@@ -7,7 +7,7 @@ extraction: ast
 signature: "()"
 role: "이번 실행 중에 만들어진 자동백업 스킬 zip (아직 쓰는 중인 파일은 다음 주기로 미룬다)."
 role_source: docstring
-version: "0.8.0"
+version: "0.8.1"
 loc: "log_sync.py:301-325"
 
 # ── 입출력 ──
@@ -42,7 +42,7 @@ reads:
   - "_STATE"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.0-gen"
+timestamp: "0.8.1-gen"
 ---
 
 ## 역할

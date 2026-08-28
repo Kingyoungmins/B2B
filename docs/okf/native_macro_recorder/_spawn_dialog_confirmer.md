@@ -7,7 +7,7 @@ extraction: ast
 signature: "(app, timeout=8.0)"
 role: "ExecuteMso('MacroRecord') 가 띄우는 모달 '매크로 기록' 다이얼로그를"
 role_source: docstring
-version: "0.8.0"
+version: "0.8.1"
 loc: "native_macro_recorder.py:275-347"
 
 # ── 입출력 ──
@@ -23,6 +23,7 @@ raises: []
 
 # ── 유기적 관계 ──
 calls:
+  - "_worker"
   - "append"
   - "range"
   - "sort"
@@ -36,7 +37,6 @@ calls_external:
   - "Thread"
   - "_cb"
   - "_find_dialog"
-  - "_worker"
   - "h"
   - "int"
   - "main_hwnd"
@@ -48,7 +48,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.0-gen"
+timestamp: "0.8.1-gen"
 ---
 
 ## 역할
@@ -58,7 +58,7 @@ ExecuteMso('MacroRecord') 가 띄우는 모달 '매크로 기록' 다이얼로�
 - 없음(정적 분석 기준)
 
 ## 관계
-- 호출: `append`, `range`, `sort`, `start`
+- 호출: `_worker`, `append`, `range`, `sort`, `start`
 - 피호출(영향 전파 경로): `start_native_recording_impl`
 
 ## 실패/예외

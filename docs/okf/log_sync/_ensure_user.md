@@ -7,7 +7,7 @@ extraction: ast
 signature: "()"
 role: "사용자명을 워커 스레드에서 뒤늦게 구한다(시작 경로를 막지 않으려고)."
 role_source: docstring
-version: "0.8.0"
+version: "0.8.1"
 loc: "log_sync.py:508-520"
 
 # ── 입출력 ──
@@ -32,7 +32,7 @@ reads:
 writes:
   - "_STATE"
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.0-gen"
+timestamp: "0.8.1-gen"
 ---
 
 ## 역할

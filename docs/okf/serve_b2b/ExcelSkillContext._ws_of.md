@@ -8,8 +8,8 @@ class: ExcelSkillContext
 signature: "(self, sheet_or_name, workbook=None)"
 role: "---- 정렬 / 필터 / 피벗 헬퍼 (자주 쓰는 작업을 안정적으로) ----"
 role_source: banner
-version: "0.8.0"
-loc: "serve_b2b.py:17469-17470"
+version: "0.8.1"
+loc: "serve_b2b.py:17584-17585"
 
 # ── 입출력 ──
 inputs:
@@ -50,7 +50,7 @@ reads:
   - "self.sheet"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.0-gen"
+timestamp: "0.8.1-gen"
 ---
 
 ## 역할

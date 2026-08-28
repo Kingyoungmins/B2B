@@ -7,7 +7,7 @@ extraction: ast
 signature: "() -> int"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
-version: "0.8.0"
+version: "0.8.1"
 loc: "launch_b2b.py:291-347"
 
 # ── 입출력 ──
@@ -30,6 +30,7 @@ calls:
   - "cleanup_node_worker"
   - "is_port_available"
   - "show_control_window"
+  - "shutdown"
   - "start_lifecycle_monitor"
   - "start_runtime_maintenance_threads"
   - "start_server"
@@ -50,7 +51,6 @@ calls_external:
   - "selected_port"
   - "server_close"
   - "set"
-  - "shutdown"
   - "shutdown_event"
   - "str"
   - "strip"
@@ -62,7 +62,7 @@ reads:
   - "SERVER_HOST"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.0-gen"
+timestamp: "0.8.1-gen"
 ---
 
 ## 역할
@@ -72,7 +72,7 @@ timestamp: "0.8.0-gen"
 - 파일시스템 변경/IO
 
 ## 관계
-- 호출: `app_url`, `append`, `candidate_ports`, `check_for_update`, `cleanup_backend_runtime_files`, `cleanup_excel_sessions`, `cleanup_node_worker`, `is_port_available`, `show_control_window`, `start_lifecycle_monitor`, `start_runtime_maintenance_threads`, `start_server`, `wait_for_server`
+- 호출: `app_url`, `append`, `candidate_ports`, `check_for_update`, `cleanup_backend_runtime_files`, `cleanup_excel_sessions`, `cleanup_node_worker`, `is_port_available`, `show_control_window`, `shutdown`, `start_lifecycle_monitor`, `start_runtime_maintenance_threads`, `start_server`, `wait_for_server`
 - 피호출(영향 전파 경로): 없음
 
 ## 실패/예외

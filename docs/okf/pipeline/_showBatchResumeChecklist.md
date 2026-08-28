@@ -7,8 +7,8 @@ extraction: regex   # 정규식 근사
 signature: "(info)"
 role: "체크박스 모달. resolve: 체크된 stepId 배열 | null(취소)."
 role_source: banner
-version: "0.8.0"
-loc: "pipeline.js:5067-5067"
+version: "0.8.1"
+loc: "pipeline.js:5070-5070"
 
 # ── 입출력 ──
 inputs:
@@ -54,7 +54,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.0-gen"
+timestamp: "0.8.1-gen"
 ---
 
 ## 역할

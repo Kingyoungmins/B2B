@@ -7,8 +7,8 @@ extraction: regex   # 정규식 근사
 signature: "(step, selfExcelId)"
 role: "'화면은 OFF 인데 다른 파일엔 값이 있는' 유령 상태가 된다(반쪽 복원 금지)."
 role_source: banner
-version: "0.8.0"
-loc: "pipeline.js:4507-4507"
+version: "0.8.1"
+loc: "pipeline.js:4510-4510"
 
 # ── 입출력 ──
 inputs:
@@ -44,7 +44,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.0-gen"
+timestamp: "0.8.1-gen"
 ---
 
 ## 역할

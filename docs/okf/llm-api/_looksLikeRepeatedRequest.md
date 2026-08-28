@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(text, selfPushed)"
 role: "→ 같은 요청의 반복 자체를 '직전 결과가 기대와 달랐다'는 신호로 본다."
 role_source: banner
-version: "0.8.0"
+version: "0.8.1"
 loc: "llm-api.js:27-27"
 
 # ── 입출력 ──
@@ -41,7 +41,7 @@ reads:
   - "state.chatHistory"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.0-gen"
+timestamp: "0.8.1-gen"
 ---
 
 ## 역할

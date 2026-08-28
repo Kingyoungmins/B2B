@@ -7,8 +7,8 @@ extraction: ast
 signature: "(name)"
 role: "워크북 이름 → 업로드/세션 레지스트리의 파일 경로(교차파일 재생 시 소스 자동 열기용)."
 role_source: docstring
-version: "0.8.0"
-loc: "serve_b2b.py:11785-11813"
+version: "0.8.1"
+loc: "serve_b2b.py:11900-11928"
 
 # ── 입출력 ──
 inputs:
@@ -39,7 +39,7 @@ reads:
   - "WORKBOOKS"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.0-gen"
+timestamp: "0.8.1-gen"
 ---
 
 ## 역할

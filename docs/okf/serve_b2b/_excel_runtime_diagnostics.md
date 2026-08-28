@@ -7,8 +7,8 @@ extraction: ast
 signature: "(reap=False, log=True)"
 role: "Return lightweight Excel process diagnostics and optionally reap app-owned orphan PIDs."
 role_source: docstring
-version: "0.8.0"
-loc: "serve_b2b.py:5483-5572"
+version: "0.8.1"
+loc: "serve_b2b.py:5598-5687"
 
 # ── 입출력 ──
 inputs:
@@ -68,7 +68,7 @@ reads:
 writes:
   - "EXCEL_LAST_REAP_AT"
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.0-gen"
+timestamp: "0.8.1-gen"
 ---
 
 ## 역할

@@ -7,8 +7,8 @@ extraction: ast
 signature: "(hwnd)"
 role: "창을 활성화 없이 표시(SW_SHOWNA). 포커스는 현재 창(호스트)에 그대로 남는다."
 role_source: docstring
-version: "0.8.0"
-loc: "serve_b2b.py:4620-4630"
+version: "0.8.1"
+loc: "serve_b2b.py:4693-4703"
 
 # ── 입출력 ──
 inputs:
@@ -36,7 +36,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.0-gen"
+timestamp: "0.8.1-gen"
 ---
 
 ## 역할

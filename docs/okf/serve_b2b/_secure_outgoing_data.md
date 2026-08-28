@@ -7,8 +7,8 @@ extraction: ast
 signature: "(data, filename, query='')"
 role: "[문서보안 0.7.5] 사용자에게 나가는 문서 다운로드 직전 훅."
 role_source: docstring
-version: "0.8.0"
-loc: "serve_b2b.py:5396-5416"
+version: "0.8.1"
+loc: "serve_b2b.py:5470-5490"
 
 # ── 입출력 ──
 inputs:
@@ -43,7 +43,7 @@ reads:
   - "BACKEND_DIR"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.0-gen"
+timestamp: "0.8.1-gen"
 ---
 
 ## 역할

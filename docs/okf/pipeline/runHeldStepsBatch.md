@@ -7,8 +7,8 @@ extraction: regex   # 정규식 근사
 signature: "(checkedIds, fingerprint)"
 role: "토글과 같은 큐에 '단일 태스크'로 등록 — 배치 도중 다른 토글 클릭은 배치가 끝난 뒤 실행되고,"
 role_source: banner
-version: "0.8.0"
-loc: "pipeline.js:5203-5203"
+version: "0.8.1"
+loc: "pipeline.js:5206-5206"
 
 # ── 입출력 ──
 inputs:
@@ -32,7 +32,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.0-gen"
+timestamp: "0.8.1-gen"
 ---
 
 ## 역할

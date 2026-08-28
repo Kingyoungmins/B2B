@@ -7,8 +7,8 @@ extraction: ast
 signature: "(path)"
 role: "[사내 MIP 라벨 2026-08-12] 암호화된 xlsx 인가 — 구형 .xls 와 구분한다."
 role_source: docstring
-version: "0.8.0"
-loc: "serve_b2b.py:3021-3030"
+version: "0.8.1"
+loc: "serve_b2b.py:3094-3103"
 
 # ── 입출력 ──
 inputs:
@@ -31,7 +31,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.0-gen"
+timestamp: "0.8.1-gen"
 ---
 
 ## 역할

@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "()"
 role: "진단 스냅샷 — 개발자가 zip 만 열어도 첫 단서를 얻게."
 role_source: banner
-version: "0.8.0"
+version: "0.8.1"
 loc: "assist-report.js:89-89"
 
 # ── 입출력 ──
@@ -35,7 +35,7 @@ reads:
   - "state.lastError"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.0-gen"
+timestamp: "0.8.1-gen"
 ---
 
 ## 역할

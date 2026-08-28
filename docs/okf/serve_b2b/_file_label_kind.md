@@ -7,8 +7,8 @@ extraction: ast
 signature: "(path)"
 role: "[진단 계측 2026-08-12] 이 파일에 사내 보안 라벨(MIP)이 붙었는지 한 줄로 판별한다."
 role_source: docstring
-version: "0.8.0"
-loc: "serve_b2b.py:3932-3968"
+version: "0.8.1"
+loc: "serve_b2b.py:4005-4041"
 
 # ── 입출력 ──
 inputs:
@@ -46,7 +46,7 @@ reads:
   - "VENDOR_DRM_MAGIC"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.0-gen"
+timestamp: "0.8.1-gen"
 ---
 
 ## 역할

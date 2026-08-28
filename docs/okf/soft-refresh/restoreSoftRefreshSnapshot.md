@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "()"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
-version: "0.8.0"
+version: "0.8.1"
 loc: "soft-refresh.js:157-157"
 
 # ── 입출력 ──
@@ -39,6 +39,7 @@ calls:
   - "push"
   - "refreshChatState"
   - "refreshTabs"
+  - "removeItem"
   - "renderInputList"
   - "renderOutputChip"
   - "renderRunnerWorkflow"
@@ -58,7 +59,6 @@ calls_external:
   - "max"
   - "min"
   - "parse"
-  - "removeItem"
   - "slice"
   - "some"
   - "warn"
@@ -80,7 +80,7 @@ writes:
   - "runnerMappingSignature"
   - "runnerMappings"
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.0-gen"
+timestamp: "0.8.1-gen"
 ---
 
 ## 역할
@@ -92,7 +92,7 @@ timestamp: "0.8.0-gen"
 - 변경 상태 `excelMirror.restoreFromStateSig, fuzzyResolution, runnerMappingChecked, runnerMappingSignature, runnerMappings` — 수정 시 이 상태를 읽는 곳 동반 점검.
 
 ## 관계
-- 호출: `_softRefreshRebuildFile`, `_softRefreshResolveInstantRestore`, `activateOutputTemplate`, `activePipelineSteps`, `beginMappedPipelineRun`, `beginUiBusy`, `cloneFileRecord`, `endUiBusy`, `ensureWorkbookDisplayName`, `getFile`, `loadLogic`, `makeOutputTemplate`, `noteLivePipelineApplied`, `preopenAllExcelMirrors`, `push`, `refreshChatState`, `refreshTabs`, `renderInputList`, `renderOutputChip`, `renderRunnerWorkflow`, `reportPipelineError`, `restore`, `runPipelineWithAutoRepair`, `runnerCurrentMappingSignature`, `setGeneratorRunLoading`, `setPipelineRuntimeStatus`, `toast`
+- 호출: `_softRefreshRebuildFile`, `_softRefreshResolveInstantRestore`, `activateOutputTemplate`, `activePipelineSteps`, `beginMappedPipelineRun`, `beginUiBusy`, `cloneFileRecord`, `endUiBusy`, `ensureWorkbookDisplayName`, `getFile`, `loadLogic`, `makeOutputTemplate`, `noteLivePipelineApplied`, `preopenAllExcelMirrors`, `push`, `refreshChatState`, `refreshTabs`, `removeItem`, `renderInputList`, `renderOutputChip`, `renderRunnerWorkflow`, `reportPipelineError`, `restore`, `runPipelineWithAutoRepair`, `runnerCurrentMappingSignature`, `setGeneratorRunLoading`, `setPipelineRuntimeStatus`, `toast`
 - 피호출(영향 전파 경로): `boot`
 
 ## 실패/예외

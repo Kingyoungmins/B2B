@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(code)"
 role: "[녹화 관용구 (파일,시트) 쌍] MS 매크로 레코더 출력은 Workbooks(\"X\").Worksheets(\"Y\") 대신"
 role_source: banner
-version: "0.8.0"
+version: "0.8.1"
 loc: "drop-handling.js:1103-1103"
 
 # ── 입출력 ──
@@ -33,7 +33,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.0-gen"
+timestamp: "0.8.1-gen"
 ---
 
 ## 역할

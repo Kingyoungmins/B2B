@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(text, aoa)"
 role: "[따옴표 구분자 공백 불일치 → 되묻기] 사용자가 \"' : ' 뒤 숫자\"처럼 공백 포함 구분자를 따옴표로 지정했는데"
 role_source: banner
-version: "0.8.0"
+version: "0.8.1"
 loc: "chat-ui.js:3614-3614"
 
 # ── 입출력 ──
@@ -37,7 +37,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.0-gen"
+timestamp: "0.8.1-gen"
 ---
 
 ## 역할

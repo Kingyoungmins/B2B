@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(code, sourceUserMessage)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
-version: "0.8.0"
+version: "0.8.1"
 loc: "chat-ui.js:749-749"
 
 # ── 입출력 ──
@@ -52,6 +52,7 @@ calls:
   - "isHardVbaStaticFailure"
   - "isNewSheetWriteLine"
   - "lookupJoinIntent"
+  - "matchAll"
   - "matchFillIntent"
   - "monthShiftIntent"
   - "move"
@@ -62,6 +63,7 @@ calls:
   - "push"
   - "pythonComStaticSafetyFailures"
   - "pythonDegenerateOutputFailure"
+  - "read"
   - "requestedExcelColumnLetters"
   - "routingIntentText"
   - "sheetOpIntent"
@@ -77,6 +79,7 @@ calls:
   - "userRequestsAbsoluteValue"
   - "userRequestsSort"
   - "vbaStaticSafetyFailures"
+  - "write"
 calls_external:
   - "CLng"
   - "COM"
@@ -123,7 +126,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.0-gen"
+timestamp: "0.8.1-gen"
 ---
 
 ## 역할
@@ -133,7 +136,7 @@ timestamp: "0.8.0-gen"
 - DOM/브라우저 전역 조작
 
 ## 관계
-- 호출: `_indentLen`, `_stripPythonCommentsForGate`, `_stripVbaCommentsForGate`, `add`, `appendSameFormatSheetsIntent`, `clearDataIntent`, `codeHasBroadValueRewrite`, `colIndex`, `columnCopyClearIntent`, `columnCopyIntent`, `columnMoveIntent`, `columnSwapIntent`, `conditionalRowDeleteIntent`, `copyValuesIntent`, `ctxHelperPreferredIntent`, `ctxSortIntent`, `decimalSplitNumberExtractFailures`, `dedupeIntent`, `duplicateRowDeleteIntent`, `dynamicRangeTextIsWide`, `estimateCells`, `excelColumnLetterToIndex`, `fillSumColIntent`, `filterToNewSheetIntent`, `hideUnhideIntent`, `isBenignRepeatedCodeLine`, `isHardVbaStaticFailure`, `isNewSheetWriteLine`, `lookupJoinIntent`, `matchFillIntent`, `monthShiftIntent`, `move`, `multiValueLookupIntent`, `negativeSignLossFailures`, `numericArithmeticIntent`, `pivotIntent`, `push`, `pythonComStaticSafetyFailures`, `pythonDegenerateOutputFailure`, `requestedExcelColumnLetters`, `routingIntentText`, `sheetOpIntent`, `shouldRouteRequestToPython`, `shouldRouteRequestToVba`, `shouldRouteSimpleStructureEditToPython`, `simpleRangeArithmeticIntent`, `simpleValueWriteIntent`, `splitColumnIntent`, `totalRowIntent`, `userExplicitlyRequestsForceProceed`, `userExplicitlyRequestsVba`, `userRequestsAbsoluteValue`, `userRequestsSort`, `vbaStaticSafetyFailures`
+- 호출: `_indentLen`, `_stripPythonCommentsForGate`, `_stripVbaCommentsForGate`, `add`, `appendSameFormatSheetsIntent`, `clearDataIntent`, `codeHasBroadValueRewrite`, `colIndex`, `columnCopyClearIntent`, `columnCopyIntent`, `columnMoveIntent`, `columnSwapIntent`, `conditionalRowDeleteIntent`, `copyValuesIntent`, `ctxHelperPreferredIntent`, `ctxSortIntent`, `decimalSplitNumberExtractFailures`, `dedupeIntent`, `duplicateRowDeleteIntent`, `dynamicRangeTextIsWide`, `estimateCells`, `excelColumnLetterToIndex`, `fillSumColIntent`, `filterToNewSheetIntent`, `hideUnhideIntent`, `isBenignRepeatedCodeLine`, `isHardVbaStaticFailure`, `isNewSheetWriteLine`, `lookupJoinIntent`, `matchAll`, `matchFillIntent`, `monthShiftIntent`, `move`, `multiValueLookupIntent`, `negativeSignLossFailures`, `numericArithmeticIntent`, `pivotIntent`, `push`, `pythonComStaticSafetyFailures`, `pythonDegenerateOutputFailure`, `read`, `requestedExcelColumnLetters`, `routingIntentText`, `sheetOpIntent`, `shouldRouteRequestToPython`, `shouldRouteRequestToVba`, `shouldRouteSimpleStructureEditToPython`, `simpleRangeArithmeticIntent`, `simpleValueWriteIntent`, `splitColumnIntent`, `totalRowIntent`, `userExplicitlyRequestsForceProceed`, `userExplicitlyRequestsVba`, `userRequestsAbsoluteValue`, `userRequestsSort`, `vbaStaticSafetyFailures`, `write`
 - 피호출(영향 전파 경로): `validateAssistantCodeBeforeApply`
 
 ## 실패/예외

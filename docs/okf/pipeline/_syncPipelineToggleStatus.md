@@ -7,8 +7,8 @@ extraction: regex   # 정규식 근사
 signature: "()"
 role: "[단일 축 · 상태칩 정착] 토글이 끝난 뒤 상태칩을 스위치에 맞춘다 — ON=적용됨 · OFF=보류."
 role_source: banner
-version: "0.8.0"
-loc: "pipeline.js:4039-4039"
+version: "0.8.1"
+loc: "pipeline.js:4042-4042"
 
 # ── 입출력 ──
 inputs: []
@@ -34,7 +34,7 @@ reads:
   - "state.pipeline"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.0-gen"
+timestamp: "0.8.1-gen"
 ---
 
 ## 역할

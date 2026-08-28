@@ -7,8 +7,8 @@ extraction: ast
 signature: "(unlocked)"
 role: "녹화 동안 라이브 엑셀뷰의 편집 잠금을 해제/원복한다(Excel 워커에서 실행)."
 role_source: docstring
-version: "0.8.0"
-loc: "serve_b2b.py:3717-3778"
+version: "0.8.1"
+loc: "serve_b2b.py:3790-3851"
 
 # ── 입출력 ──
 inputs:
@@ -52,7 +52,7 @@ reads:
 writes:
   - "RECORDING_EDIT_UNLOCKED"
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.0-gen"
+timestamp: "0.8.1-gen"
 ---
 
 ## 역할

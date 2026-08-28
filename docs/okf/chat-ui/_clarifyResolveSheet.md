@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(text)"
 role: "되물음 대상 시트 추정: @범위[파일/시트!범위] / @시트[..] / \"○○ 시트\" / 현재 활성 시트."
 role_source: banner
-version: "0.8.0"
+version: "0.8.1"
 loc: "chat-ui.js:3649-3649"
 
 # ── 입출력 ──
@@ -32,7 +32,7 @@ reads:
   - "state.currentSheet"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.0-gen"
+timestamp: "0.8.1-gen"
 ---
 
 ## 역할

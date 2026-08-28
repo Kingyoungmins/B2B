@@ -8,8 +8,8 @@ class: PythonComSkillContext
 signature: "(self, sheet, a1)"
 role: "단일 셀 읽기(write_cell 와 대칭). 스칼라 값 반환(빈 셀은 None)."
 role_source: docstring
-version: "0.8.0"
-loc: "serve_b2b.py:12701-12705"
+version: "0.8.1"
+loc: "serve_b2b.py:12816-12820"
 
 # ── 입출력 ──
 inputs:
@@ -34,7 +34,7 @@ reads:
   - "self.read"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.0-gen"
+timestamp: "0.8.1-gen"
 ---
 
 ## 역할

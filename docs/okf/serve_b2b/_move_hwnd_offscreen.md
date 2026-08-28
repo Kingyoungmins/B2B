@@ -7,8 +7,8 @@ extraction: ast
 signature: "(hwnd)"
 role: "프레임을 숨기지 않고 화면 밖(-32000)으로만 이동(WS_VISIBLE 유지)."
 role_source: docstring
-version: "0.8.0"
-loc: "serve_b2b.py:4658-4676"
+version: "0.8.1"
+loc: "serve_b2b.py:4731-4749"
 
 # ── 입출력 ──
 inputs:
@@ -41,7 +41,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.0-gen"
+timestamp: "0.8.1-gen"
 ---
 
 ## 역할

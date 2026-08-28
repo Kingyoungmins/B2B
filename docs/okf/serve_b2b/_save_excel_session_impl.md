@@ -7,8 +7,8 @@ extraction: ast
 signature: "(excel_id, name=None, internal=False)"
 role: "워크북을 파일로 저장한다."
 role_source: docstring
-version: "0.8.0"
-loc: "serve_b2b.py:6419-6564"
+version: "0.8.1"
+loc: "serve_b2b.py:6534-6679"
 
 # ── 입출력 ──
 inputs:
@@ -78,7 +78,7 @@ reads:
 writes:
   - "RESULTS"
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.0-gen"
+timestamp: "0.8.1-gen"
 ---
 
 ## 역할

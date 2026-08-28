@@ -7,8 +7,8 @@ extraction: ast
 signature: "()"
 role: "로그/스킬을 수집 서버(versionTest)로 자동 전송 시작."
 role_source: docstring
-version: "0.8.0"
-loc: "serve_b2b.py:5419-5443"
+version: "0.8.1"
+loc: "serve_b2b.py:5493-5517"
 
 # ── 입출력 ──
 inputs: []
@@ -37,7 +37,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.0-gen"
+timestamp: "0.8.1-gen"
 ---
 
 ## 역할

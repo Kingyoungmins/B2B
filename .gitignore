@@ -34,6 +34,8 @@ output/
 vba_pipeline_trace.jsonl
 runtime_load_trace.jsonl
 vba_runner_fail.log
+# [관측 로그 애드온] 전송 전 미리보기 — 소스 실행 시 저장소 루트에 쌓인다
+telemetry_preview.jsonl
 *_log.txt
 # 빌드 스크립트가 남기는 로그(bn_a/bn_b/bv_a/bv_b 등) — 커밋 대상 아님
 b[nv]_[ab].log

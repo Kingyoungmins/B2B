@@ -7,7 +7,7 @@ extraction: ast
 signature: "(sub_path)"
 role: "'stats?from=...' → 허용 여부. 경로 부분만 보고 쿼리는 그대로 통과시킨다."
 role_source: docstring
-version: "0.8.0"
+version: "0.8.1"
 loc: "log_dash.py:44-47"
 
 # ── 입출력 ──
@@ -34,7 +34,7 @@ reads:
   - "ALLOWED_PATHS"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.0-gen"
+timestamp: "0.8.1-gen"
 ---
 
 ## 역할

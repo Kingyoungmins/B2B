@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(name)"
 role: "[지난달 이름 갱신] 불러온 스킬에는 '그 스킬을 만들 때 쓴 파일 이름'(예: ..._2026_4월)이 저장돼"
 role_source: banner
-version: "0.8.0"
+version: "0.8.1"
 loc: "save-load.js:94-94"
 
 # ── 입출력 ──
@@ -38,7 +38,7 @@ reads:
   - "state.inputs"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.0-gen"
+timestamp: "0.8.1-gen"
 ---
 
 ## 역할

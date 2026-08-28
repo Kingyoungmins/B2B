@@ -505,6 +505,8 @@ B2B_ver0.5.12/
 ├─ index.html
 ├─ serve_b2b.py
 ├─ launch_b2b.py
+├─ b2b_scheduler.py     (E2E 작업 등록 애드온: 스케줄 등록·목록 서버측, 독립 모듈)
+├─ b2b_telemetry.py     (애드온: 스킬 실행 관측 로그 — 접속 정보 없으면 telemetry_preview.jsonl 에만 기록)
 ├─ launch_b2b.spec
 ├─ start_b2b.bat
 ├─ start_b2b_native.bat
@@ -522,7 +524,8 @@ B2B_ver0.5.12/
 │  ├─ chat.css
 │  ├─ pipeline.css
 │  ├─ workflow.css
-│  └─ runner.css
+│  ├─ runner.css
+│  └─ scheduler.css      (E2E 작업 등록 애드온)
 ├─ scripts/
 │  ├─ config.js
 │  ├─ state.js
@@ -545,6 +548,9 @@ B2B_ver0.5.12/
 │  ├─ output-template.js
 │  ├─ save-load.js
 │  ├─ menu.js
+│  ├─ whoami.js         (애드온: 좌상단 로그인 계정)
+│  ├─ scheduler.js      (애드온: 스킬 등록·목록 화면, 독립 모듈)
+│  ├─ embed.js          (애드온: AX-Trace 생성기 iframe)
 │  ├─ resizer.js
 │  ├─ model-modal.js
 │  └─ main.js

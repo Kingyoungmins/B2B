@@ -8,7 +8,7 @@ class: RecordService
 signature: "(self, app_stream=None)"
 role: "---- 시작 ----"
 role_source: banner
-version: "0.8.0"
+version: "0.8.1"
 loc: "record_service.py:629-640"
 
 # ── 입출력 ──
@@ -44,6 +44,7 @@ called_by:
   - "_start_vba_debug_suppressor"
   - "ensure_excel_worker"
   - "excel_record_start"
+  - "init"
   - "render_pptx_to_slides_b64"
   - "start_lifecycle_monitor"
   - "start_runtime_maintenance_threads"
@@ -60,7 +61,7 @@ writes:
   - "self._result"
   - "self._thread"
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.0-gen"
+timestamp: "0.8.1-gen"
 ---
 
 ## 역할
@@ -72,7 +73,7 @@ timestamp: "0.8.0-gen"
 
 ## 관계
 - 호출: `clear`
-- 피호출(영향 전파 경로): `B2BHandler.do_POST`, `B2BHandler.handle_backend_pipeline_start`, `PythonComSkillContext.first_empty_col`, `PythonComSkillContext.sum_column`, `PythonComSkillContext.sum_where`, `_extract_vba_source_for_injection`, `_force_restart_excel_sessions_direct`, `_shift_months_in_text`, `_spawn_dialog_confirmer`, `_start_excel_hide_guard`, `_start_log_sync`, `_start_vba_debug_suppressor`, `ensure_excel_worker`, `excel_record_start`, `render_pptx_to_slides_b64`, `start_lifecycle_monitor`, `start_runtime_maintenance_threads`, `start_server`
+- 피호출(영향 전파 경로): `B2BHandler.do_POST`, `B2BHandler.handle_backend_pipeline_start`, `PythonComSkillContext.first_empty_col`, `PythonComSkillContext.sum_column`, `PythonComSkillContext.sum_where`, `_extract_vba_source_for_injection`, `_force_restart_excel_sessions_direct`, `_shift_months_in_text`, `_spawn_dialog_confirmer`, `_start_excel_hide_guard`, `_start_log_sync`, `_start_vba_debug_suppressor`, `ensure_excel_worker`, `excel_record_start`, `init`, `render_pptx_to_slides_b64`, `start_lifecycle_monitor`, `start_runtime_maintenance_threads`, `start_server`
 
 ## 실패/예외
 - `RuntimeError`

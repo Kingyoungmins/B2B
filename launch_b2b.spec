@@ -42,6 +42,10 @@ a = Analysis(
         ('log_sync.py', '.'),
         # [문서보안 0.7.5] 보안문서 해제/재적용 릴레이 클라이언트. 빠지면 배포본에서만 기능이 꺼진다.
         ('secure_doc.py', '.'),
+        # [E2E 작업 등록 / 관측 로그 애드온] 스케줄 등록·목록 서버측 + 관측 로그. 빠지면 배포본에서만
+        # /api/scheduler/* 가 404 로 죽고 실행 로그가 조용히 꺼진다(log_sync 와 같은 부류).
+        ('b2b_scheduler.py', '.'),
+        ('b2b_telemetry.py', '.'),
         *collect('styles'),
         *collect('scripts'),
         *collect('vendor'),
@@ -71,6 +75,8 @@ a = Analysis(
         # serve_b2b 가 지연 import 하므로 명시한다(없으면 프로즌에서 import 실패 → 전송 꺼짐).
         'log_sync',
         'secure_doc',
+        'b2b_scheduler',   # [애드온] serve_b2b 상단에서 import — datas 만으로는 frozen import 가 안 된다
+        'b2b_telemetry',
         *collect_submodules('ixicellr'),
         'log_dash',      # [관리 대시보드] datas 만으로는 frozen import 가 안 된다(log_sync 와 동일)
     ],

@@ -8,8 +8,8 @@ class: PythonComSkillContext
 signature: "(rng, value)"
 role: "_range_matrix 가 빈/None(전부 빈 셀) 결과를 줄 때도 범위 차원을 보존해"
 role_source: docstring
-version: "0.8.0"
-loc: "serve_b2b.py:12352-12364"
+version: "0.8.1"
+loc: "serve_b2b.py:12467-12479"
 
 # ── 입출력 ──
 inputs:
@@ -40,7 +40,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.0-gen"
+timestamp: "0.8.1-gen"
 ---
 
 ## 역할

@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(code)"
 role: "교차파일 '쓰기 대상' 파일 id — ctx.copy_sheet(..., dst_book=\"X.xlsx\") / paste_copied(..., dst_book=\"X.xlsx\")."
 role_source: banner
-version: "0.8.0"
+version: "0.8.1"
 loc: "pipeline.js:981-981"
 
 # ── 입출력 ──
@@ -30,7 +30,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.0-gen"
+timestamp: "0.8.1-gen"
 ---
 
 ## 역할

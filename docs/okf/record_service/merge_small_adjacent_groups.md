@@ -7,7 +7,7 @@ extraction: ast
 signature: "(groups, small=2, limit=40)"
 role: "같은 워크북의 이웃 묶음 중 한쪽이 소묶음(≤small 스텝)이면 흡수한다(순서 불변)."
 role_source: docstring
-version: "0.8.0"
+version: "0.8.1"
 loc: "record_service.py:473-503"
 
 # ── 입출력 ──
@@ -43,7 +43,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.0-gen"
+timestamp: "0.8.1-gen"
 ---
 
 ## 역할

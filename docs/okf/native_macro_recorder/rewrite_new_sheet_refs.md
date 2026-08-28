@@ -7,7 +7,7 @@ extraction: ast
 signature: "(body)"
 role: "Sheets.Add 로 만든 새 시트를 이후 코드가 '고정 이름'(예: \"Sheet1\")으로 참조하는"
 role_source: docstring
-version: "0.8.0"
+version: "0.8.1"
 loc: "native_macro_recorder.py:159-208"
 
 # ── 입출력 ──
@@ -51,7 +51,7 @@ reads:
   - "_SHEET_LIT_RE"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.0-gen"
+timestamp: "0.8.1-gen"
 ---
 
 ## 역할

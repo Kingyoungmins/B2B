@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(data, step)"
 role: "응답 한 건에서 이 스텝의 쓰기 증거를 뽑아 붙인다. 백엔드 경로가 둘이라 모양도 둘이다."
 role_source: banner
-version: "0.8.0"
+version: "0.8.1"
 loc: "pipeline.js:1290-1290"
 
 # ── 입출력 ──
@@ -32,7 +32,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.0-gen"
+timestamp: "0.8.1-gen"
 ---
 
 ## 역할

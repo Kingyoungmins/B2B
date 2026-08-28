@@ -8,7 +8,7 @@ class: RecordService
 signature: "(self, value)"
 role: "B2B Excel 워커가 잡 실행 전/후 호출 — 녹화 중이면 B2B 자신의 변경을"
 role_source: docstring
-version: "0.8.0"
+version: "0.8.1"
 loc: "record_service.py:607-618"
 
 # ── 입출력 ──
@@ -36,7 +36,7 @@ reads:
   - "self._stop_evt"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.0-gen"
+timestamp: "0.8.1-gen"
 ---
 
 ## 역할

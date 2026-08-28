@@ -7,8 +7,8 @@ extraction: ast
 signature: "(token)"
 role: "====================================================================="
 role_source: banner
-version: "0.8.0"
-loc: "serve_b2b.py:17810-17813"
+version: "0.8.1"
+loc: "serve_b2b.py:17925-17928"
 
 # ── 입출력 ──
 inputs:
@@ -37,7 +37,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.0-gen"
+timestamp: "0.8.1-gen"
 ---
 
 ## 역할

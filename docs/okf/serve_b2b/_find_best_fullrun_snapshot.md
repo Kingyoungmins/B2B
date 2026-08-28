@@ -7,8 +7,8 @@ extraction: ast
 signature: "(source_specs, entry, flat_steps)"
 role: "가장 긴 접두(= 가장 많이 건너뛰는 경계)부터 찾는다. 경계는 비용 게이트 때문에 드문드문"
 role_source: docstring
-version: "0.8.0"
-loc: "serve_b2b.py:19800-19808"
+version: "0.8.1"
+loc: "serve_b2b.py:19915-19923"
 
 # ── 입출력 ──
 inputs:
@@ -41,7 +41,7 @@ reads:
   - "FULLRUN_STEP_SNAPSHOTS"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.0-gen"
+timestamp: "0.8.1-gen"
 ---
 
 ## 역할

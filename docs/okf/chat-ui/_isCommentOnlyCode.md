@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(code, language)"
 role: "실행 가능한 문장이 없는 주석-only 코드인지 검사(파이썬 # / VBA '·Rem)."
 role_source: banner
-version: "0.8.0"
+version: "0.8.1"
 loc: "chat-ui.js:2481-2481"
 
 # ── 입출력 ──
@@ -38,7 +38,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.0-gen"
+timestamp: "0.8.1-gen"
 ---
 
 ## 역할

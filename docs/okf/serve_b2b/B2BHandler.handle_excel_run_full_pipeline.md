@@ -8,8 +8,8 @@ class: B2BHandler
 signature: "(self)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
-version: "0.8.0"
-loc: "serve_b2b.py:2390-2422"
+version: "0.8.1"
+loc: "serve_b2b.py:2447-2495"
 
 # ── 입출력 ──
 inputs:
@@ -23,20 +23,27 @@ raises: []
 
 # ── 유기적 관계 ──
 calls:
+  - "_addon_log_skill_run"
   - "_vba_trace"
   - "read_json_body"
   - "run_full_pipeline_single_instance"
   - "send_json"
 calls_external:
+  - "_tel"
+  - "_tel_t0"
   - "err"
   - "get"
   - "groups"
+  - "join"
   - "len"
   - "list"
+  - "lower"
   - "reset_excel_ids"
   - "result"
+  - "sorted"
   - "str"
   - "sum"
+  - "time"
   - "total"
   - "trace_id"
   - "type"
@@ -48,7 +55,7 @@ reads:
   - "self.send_json"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.0-gen"
+timestamp: "0.8.1-gen"
 ---
 
 ## 역할
@@ -58,7 +65,7 @@ timestamp: "0.8.0-gen"
 - 없음(정적 분석 기준)
 
 ## 관계
-- 호출: `_vba_trace`, `read_json_body`, `run_full_pipeline_single_instance`, `send_json`
+- 호출: `_addon_log_skill_run`, `_vba_trace`, `read_json_body`, `run_full_pipeline_single_instance`, `send_json`
 - 피호출(영향 전파 경로): `B2BHandler.do_POST`
 
 ## 실패/예외

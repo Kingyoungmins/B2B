@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(reply)"
 role: "응답 본문에서 액션 블록을 걷어낸 '사람이 읽을 부분'"
 role_source: banner
-version: "0.8.0"
+version: "0.8.1"
 loc: "assist-guard.js:195-195"
 
 # ── 입출력 ──
@@ -33,7 +33,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.0-gen"
+timestamp: "0.8.1-gen"
 ---
 
 ## 역할

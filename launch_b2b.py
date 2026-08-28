@@ -28,7 +28,7 @@ HEARTBEAT_TIMEOUT_SECONDS = int(os.environ.get("B2B_HEARTBEAT_TIMEOUT_SECONDS", 
 EMPTY_CLIENT_GRACE_SECONDS = int(os.environ.get("B2B_EMPTY_CLIENT_GRACE_SECONDS", "5"))
 
 # ── 버전 체크 ──────────────────────────────────────────────────────────────
-CURRENT_VERSION  = "0.8.0"
+CURRENT_VERSION  = "0.8.1"
 VERSION_CHECK_URL = "https://lgupluscorp.sharepoint.com/sites/o365m_00058572/Shared%20Documents/AX-Cell/version.txt?web=0"
 DOWNLOAD_URL      = ""   # TODO: AXCell 랜딩 페이지 URL (다운로드 버튼 있는 페이지)
 

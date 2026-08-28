@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(code, failures, sourceUserMessage)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
-version: "0.8.0"
+version: "0.8.1"
 loc: "chat-ui.js:1976-1976"
 
 # ── 입출력 ──
@@ -25,19 +25,19 @@ raises: []
 # ── 유기적 관계 ──
 calls:
   - "exactSheetNameReminder"
+  - "read"
+  - "write"
 calls_external:
   - "String"
   - "join"
   - "map"
-  - "read"
   - "transform"
-  - "write"
 called_by:
   - "autoRegenerateForStaticSafety"
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.0-gen"
+timestamp: "0.8.1-gen"
 ---
 
 ## 역할
@@ -47,7 +47,7 @@ timestamp: "0.8.0-gen"
 - 없음(정적 분석 기준)
 
 ## 관계
-- 호출: `exactSheetNameReminder`
+- 호출: `exactSheetNameReminder`, `read`, `write`
 - 피호출(영향 전파 경로): `autoRegenerateForStaticSafety`
 
 ## 실패/예외

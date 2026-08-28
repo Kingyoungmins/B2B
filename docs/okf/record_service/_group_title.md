@@ -7,7 +7,7 @@ extraction: ast
 signature: "(g)"
 role: "카드 제목 — 역할 + 대상 시트 + 스텝 수. \"구조 변경 (5스텝)\" 같은 무정보 제목 대신"
 role_source: docstring
-version: "0.8.0"
+version: "0.8.1"
 loc: "record_service.py:205-214"
 
 # ── 입출력 ──
@@ -37,7 +37,7 @@ reads:
   - "ROLE_TITLES"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.0-gen"
+timestamp: "0.8.1-gen"
 ---
 
 ## 역할

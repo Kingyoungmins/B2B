@@ -7,7 +7,7 @@ extraction: ast
 signature: "()"
 role: "MIP requestorAccount 기본값 — whoami 로 찍힌 이름의 '사용자' 부분."
 role_source: docstring
-version: "0.8.0"
+version: "0.8.1"
 loc: "secure_doc.py:69-92"
 
 # ── 입출력 ──
@@ -36,7 +36,7 @@ reads:
 writes:
   - "_ACCOUNT_CACHE"
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.0-gen"
+timestamp: "0.8.1-gen"
 ---
 
 ## 역할

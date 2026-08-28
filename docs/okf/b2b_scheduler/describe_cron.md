@@ -1,0 +1,48 @@
+---
+type: function
+title: describe_cron
+module: b2b_scheduler.py
+lang: python
+extraction: ast
+signature: "(sched)"
+role: "파싱된 주기 → '매달 25일 09:30' 같은 문장. 화면 표기와 같은 규칙."
+role_source: docstring
+version: "0.8.1"
+loc: "b2b_scheduler.py:260-272"
+
+# ── 입출력 ──
+inputs:
+  - "sched"
+returns: "(추정)"
+
+# ── 사이드이펙트 (정적 추정) ──
+side_effects:
+  - "없음(정적 분석 기준)"
+raises: []
+
+# ── 유기적 관계 ──
+calls: []
+calls_external:
+  - "get"
+  - "int"
+called_by:
+  - "_read_schedule"
+reads:
+  - "_WEEKDAY_KO"
+writes: []
+affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
+timestamp: "0.8.1-gen"
+---
+
+## 역할
+파싱된 주기 → '매달 25일 09:30' 같은 문장. 화면 표기와 같은 규칙.
+
+## 사이드이펙트 & 주의
+- 없음(정적 분석 기준)
+
+## 관계
+- 호출: 없음
+- 피호출(영향 전파 경로): `_read_schedule`
+
+## 실패/예외
+- `(명시적 raise 없음/미탐지)`

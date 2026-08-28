@@ -7,7 +7,7 @@ extraction: ast
 signature: "(value)"
 role: "[코드리뷰 2026-08-24] 서버가 dict 가 아닌 JSON(스칼라/배열)을 돌려주면 result.get 에서"
 role_source: docstring
-version: "0.8.0"
+version: "0.8.1"
 loc: "log_sync.py:218-224"
 
 # ── 입출력 ──
@@ -34,7 +34,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.0-gen"
+timestamp: "0.8.1-gen"
 ---
 
 ## 역할

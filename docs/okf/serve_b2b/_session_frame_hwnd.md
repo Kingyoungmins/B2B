@@ -7,8 +7,8 @@ extraction: ast
 signature: "(session, wb=None)"
 role: "세션 워크북의 프레임 핸들(캐시). recover/replace 로 워크북이 바뀌면 자동 재조회."
 role_source: docstring
-version: "0.8.0"
-loc: "serve_b2b.py:7159-7172"
+version: "0.8.1"
+loc: "serve_b2b.py:7274-7287"
 
 # ── 입출력 ──
 inputs:
@@ -41,7 +41,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.0-gen"
+timestamp: "0.8.1-gen"
 ---
 
 ## 역할

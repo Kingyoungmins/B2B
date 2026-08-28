@@ -7,8 +7,8 @@ extraction: ast
 signature: "(excel_id)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
-version: "0.8.0"
-loc: "serve_b2b.py:7012-7027"
+version: "0.8.1"
+loc: "serve_b2b.py:7127-7142"
 
 # ── 입출력 ──
 inputs:
@@ -43,7 +43,7 @@ reads:
   - "LIVE_FRAME_MODE"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.0-gen"
+timestamp: "0.8.1-gen"
 ---
 
 ## 역할

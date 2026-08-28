@@ -7,8 +7,8 @@ extraction: regex   # 정규식 근사
 signature: "(code)"
 role: "[교차파일 조각 바인딩] 분할 조각이 다른 워크북을 Activate 로 열고 작업하면 '그 파일'이"
 role_source: banner
-version: "0.8.0"
-loc: "pipeline.js:7509-7509"
+version: "0.8.1"
+loc: "pipeline.js:7512-7512"
 
 # ── 입출력 ──
 inputs:
@@ -32,7 +32,7 @@ called_by: []
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.0-gen"
+timestamp: "0.8.1-gen"
 ---
 
 ## 역할

@@ -7,8 +7,8 @@ extraction: ast
 signature: "(name, globals=None, locals=None, fromlist=(), level=0)"
 role: "[SBAGENT-296] 제공 모듈(re/datetime/math)의 단순 import 만 통과시키는 __import__."
 role_source: docstring
-version: "0.8.0"
-loc: "serve_b2b.py:12033-12043"
+version: "0.8.1"
+loc: "serve_b2b.py:12148-12158"
 
 # ── 입출력 ──
 inputs:
@@ -33,7 +33,7 @@ called_by: []
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.0-gen"
+timestamp: "0.8.1-gen"
 ---
 
 ## 역할

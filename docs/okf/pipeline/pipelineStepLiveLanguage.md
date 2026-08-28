@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(s)"
 role: "[혼합 호환] 스텝의 라이브 실행 언어 — vba/python(COM bulk)이면 라이브 Excel 에서 실행 가능."
 role_source: banner
-version: "0.8.0"
+version: "0.8.1"
 loc: "pipeline.js:96-96"
 
 # ── 입출력 ──
@@ -50,7 +50,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.0-gen"
+timestamp: "0.8.1-gen"
 ---
 
 ## 역할

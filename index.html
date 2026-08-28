@@ -27,6 +27,8 @@
   <link rel="stylesheet" href="styles/pipeline.css">
   <link rel="stylesheet" href="styles/workflow.css">
   <link rel="stylesheet" href="styles/runner.css">
+  <!-- [E2E 작업 등록 애드온] 스킬 등록·목록·AX-Trace 임베드·메뉴 그룹·계정 표시 스타일(sx-/sched-/menu-group 접두) -->
+  <link rel="stylesheet" href="styles/scheduler.css">
   <!-- [디자인 전환] 0.7.4 클래식 색상. html[data-ui-theme="classic"] 일 때만 적용되므로
        기본(0.8.0) 화면에는 아무 영향이 없다. 반드시 다른 스타일보다 뒤에 둘 것. -->
   <link rel="stylesheet" href="styles/theme-classic.css">
@@ -38,17 +40,42 @@
 <aside class="menu-drawer" id="menu-drawer">
   <div class="menu-drawer-inner">
     <div class="menu-head">
-      <span>메뉴</span>
+      <span>B2B 스마트 빌링 에이전트</span>
       <button class="brand-btn icon" id="menu-close" type="button">✕</button>
     </div>
+    <!-- [E2E 작업 등록 애드온] 메뉴 3그룹 — 그룹 라벨(.menu-group)·아이콘(.menu-ico) 스타일은 styles/scheduler.css -->
     <div class="menu-list">
+      <!-- 청구서를 만드는 쪽 -->
+      <div class="menu-group">AX-Cell</div>
       <button class="menu-item active" data-page="generator" type="button">
-        <span>🧩</span>
-        <span>AX-Cell</span>
+        <span class="menu-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4.5A1.5 1.5 0 0 1 5.5 3H15l5 5v12.5a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 20.5z"/><path d="M14.5 3v4.5a1 1 0 0 0 1 1H20"/><path d="M8.5 13h7M8.5 17h4.5"/></svg></span>
+        <span>스킬 생성기</span>
       </button>
       <button class="menu-item" data-page="runner" type="button">
-        <span>▶</span>
+        <span class="menu-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 5.2v13.6a.8.8 0 0 0 1.22.68l10.5-6.8a.8.8 0 0 0 0-1.36L9.22 4.52A.8.8 0 0 0 8 5.2z"/></svg></span>
         <span>스킬 실행기</span>
+      </button>
+
+      <!-- 데이터를 가져오는 쪽 (준비 중) -->
+      <div class="menu-group">AX-Trace</div>
+      <button class="menu-item" data-page="trace-generator" type="button">
+        <span class="menu-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4.5A1.5 1.5 0 0 1 5.5 3H15l5 5v12.5a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 20.5z"/><path d="M14.5 3v4.5a1 1 0 0 0 1 1H20"/><path d="M8.5 13h7M8.5 17h4.5"/></svg></span>
+        <span>스킬 생성기</span>
+      </button>
+      <button class="menu-item" data-page="trace-runner" type="button">
+        <span class="menu-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 5.2v13.6a.8.8 0 0 0 1.22.68l10.5-6.8a.8.8 0 0 0 0-1.36L9.22 4.52A.8.8 0 0 0 8 5.2z"/></svg></span>
+        <span>스킬 실행기</span>
+      </button>
+
+      <!-- 둘을 이어 무인으로 돌리는 쪽 -->
+      <div class="menu-group">E2E 작업 등록</div>
+      <button class="menu-item" data-page="scheduler" type="button">
+        <span class="menu-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4.5A1.5 1.5 0 0 1 5.5 3H15l5 5v12.5a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 20.5z"/><path d="M14.5 3v4.5a1 1 0 0 0 1 1H20"/><path d="M8.5 13h7M8.5 17h4.5"/></svg></span>
+        <span>스킬 등록</span>
+      </button>
+      <button class="menu-item" data-page="schedules" type="button">
+        <span class="menu-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 5.2v13.6a.8.8 0 0 0 1.22.68l10.5-6.8a.8.8 0 0 0 0-1.36L9.22 4.52A.8.8 0 0 0 8 5.2z"/></svg></span>
+        <span>스킬 목록</span>
       </button>
     </div>
   </div>
@@ -63,6 +90,11 @@
       <div class="brand-info">
         <h1 id="page-title">AX-Cell<span class="app-version" id="app-version" title="실행 중인 프로그램의 파일 버전"></span></h1>
         <div class="sub" id="model-label">AI: ixi 모델</div>
+        <!-- [애드온] 로그인 계정(cmd `whoami` 와 같은 값, scripts/whoami.js) — 등록한 스케줄의 주인을 식별한다 -->
+        <div class="sub user-identity" id="user-identity" title="확인 중">
+          <span class="user-identity-dot" aria-hidden="true"></span>
+          <span id="user-identity-text">사용자 확인 중…</span>
+        </div>
       </div>
       <button class="ai-help-btn" id="btn-ai-help" type="button" aria-pressed="false"
               title="AI 도움 (단축키 F11) — 스킬 진단·수정·데이터 질의 (프로그램 안의 도우미)">
@@ -307,6 +339,71 @@
           </div>
         </div>
       </div>
+
+      <!-- ============ [E2E 작업 등록 애드온] 스킬 등록 ============
+           [독립 모듈] 화면 전체를 scripts/scheduler.js 가 그린다(본체 전역을 쓰지 않는다).
+           본체가 건드려지는 곳은 ① 메뉴 버튼 ② 이 컨테이너 ③ script 태그 세 군데뿐이며,
+           모든 id 는 sched- 접두사로 격리했다. -->
+      <div class="page-panel" id="page-scheduler">
+        <div class="sched-root" id="sched-root">
+          <div id="sched-stage"></div>
+          <input type="file" id="sched-file" accept=".zip" hidden>
+          <!-- AX-Trace 는 규격 미정 — 확장자를 제한하지 않는다 -->
+          <input type="file" id="sched-trace-file" hidden>
+        </div>
+      </div>
+
+      <!-- ============ AX-Trace (준비 중) ============
+           생성기는 외부 웹 에이전트를 iframe 으로 얹는다(scripts/embed.js). 실행기는 껍데기만 — 규격이 정해지면 채운다. -->
+      <div class="page-panel" id="page-trace-generator">
+        <div class="embed-root" id="trace-gen-root">
+          <div class="embed-bar">
+            <span class="embed-label">AX-Trace 스킬 생성기</span>
+            <input class="embed-url" id="trace-gen-url" type="text" spellcheck="false"
+                   placeholder="http://192.168.0.10:3000">
+            <button class="sx-btn ghost" type="button" data-embed="go">연결</button>
+            <button class="sx-btn ghost" type="button" data-embed="reload" title="새로고침">↻</button>
+            <button class="sx-btn ghost" type="button" data-embed="open" title="새 창으로 열기">↗</button>
+          </div>
+          <div class="embed-body">
+            <iframe class="embed-frame" id="trace-gen-frame" title="AX-Trace 스킬 생성기"
+                    referrerpolicy="no-referrer"></iframe>
+            <div class="embed-empty" id="trace-gen-empty">
+              <div class="embed-empty-mark">🛰</div>
+              <h2>연결할 주소를 입력하세요</h2>
+              <p>웹 에이전트가 서빙되는 주소를 위에 넣고 <b>연결</b>을 누르면<br>
+                 이 영역에 그대로 표시됩니다. 주소는 이 PC 에만 저장됩니다.</p>
+            </div>
+            <div class="embed-fail" id="trace-gen-fail" hidden>
+              <div class="embed-empty-mark">⚠</div>
+              <h2>화면을 불러오지 못했습니다</h2>
+              <p id="trace-gen-fail-msg"></p>
+              <button class="sx-btn ghost" type="button" data-embed="open">새 창으로 열기</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="page-panel" id="page-trace-runner">
+        <div class="sched-root">
+          <div class="sx-wrap">
+            <div class="sx-soon">
+              <div class="sx-soon-mark">⏩</div>
+              <h2>AX-Trace 스킬 실행기</h2>
+              <p>만든 수집 스킬을 실행하는 화면입니다.<br>아직 준비 중입니다.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============ 스킬 목록 (CRUD) ============ 같은 독립 모듈(scripts/scheduler.js)이 그린다. -->
+      <div class="page-panel" id="page-schedules">
+        <div class="sched-root" id="schedlist-root">
+          <div id="schedlist-stage"></div>
+          <!-- 목록에서 스킬 파일을 바로 교체할 때 쓴다. 형식 제한 없음(AX-Trace 규격 미정) -->
+          <input type="file" id="schedlist-file" hidden>
+        </div>
+      </div>
     </div>
   </aside>
 
@@ -393,6 +490,10 @@
   <script src="scripts/save-load.js"></script>
   <script src="scripts/soft-refresh.js"></script>
   <script src="scripts/menu.js"></script>
+  <!-- [E2E 작업 등록 애드온] 독립 모듈 3개 — 본체 전역을 쓰지 않는다(노출 전역: AXCellScheduler / AXEmbed) -->
+  <script src="scripts/whoami.js"></script>
+  <script src="scripts/scheduler.js"></script>
+  <script src="scripts/embed.js"></script>
   <script src="scripts/app-version.js"></script>
   <script src="scripts/resizer.js"></script>
   <script src="scripts/model-modal.js"></script>

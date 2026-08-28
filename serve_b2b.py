@@ -35,6 +35,19 @@ import urllib.request
 import uuid
 from functools import total_ordering
 
+# ── [애드온] E2E 작업 등록(스케줄 등록·목록) + 관측 로그 — wcoh 전달분(axcell_addon/) ──────────────
+# 로직은 전부 b2b_scheduler.py / b2b_telemetry.py 안에 있고 본체는 라우팅·로그 호출만 한다.
+# 모듈이 없어도 본체는 떠야 한다(부분 체크아웃·구버전 패키지) → 실패하면 None 으로 두고 그 기능만 꺼진다.
+# 프로즌 빌드: launch_b2b.spec 의 datas + hiddenimports 에 둘 다 올려 두었다(log_sync 와 같은 방식).
+try:
+    import b2b_scheduler
+except Exception:
+    b2b_scheduler = None
+try:
+    import b2b_telemetry
+except Exception:
+    b2b_telemetry = None
+
 try:
     import openpyxl
 except Exception:
@@ -1255,6 +1268,9 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
         self.end_headers()
 
     def do_GET(self):
+        # [애드온] /api/whoami · /api/scheduler/list — 자기 경로가 아니면 False 라 기존 라우팅에 영향 없음.
+        if self._addon_scheduler_dispatch("GET"):
+            return
         if self.path.split("?")[0] == "/api/backend/health":
             app_dir = app_base_dir()
             def file_info(relative_path):
@@ -1393,6 +1409,9 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
         super().do_GET()
 
     def do_POST(self):
+        # [애드온] /api/scheduler/register|update|delete|files — 본문은 자기 경로일 때만 읽는다.
+        if self._addon_scheduler_dispatch("POST"):
+            return
         if self.path.startswith("/api/workbooks/upload"):
             self.handle_workbook_upload()
             return
@@ -1630,6 +1649,7 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
                 # 남은 로그를 서버로 마저 보낸 뒤 내려간다(최대 4초). 실패해도 그냥 종료한다 —
                 # 주기 전송분까지는 이미 서버에 남아 있다.
                 _log_sync_stop("app.shutdown", timeout=4.0)
+                _addon_telemetry_stop(timeout=2.0)   # [애드온] 마지막 실행 로그가 유실되지 않게
                 os._exit(0)
 
             threading.Thread(target=_exit_soon, name="b2b-app-shutdown-exit", daemon=True).start()
@@ -1668,6 +1688,43 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
             self.proxy()
             return
         self.send_error(404)
+
+    # ── [애드온] E2E 작업 등록 라우트 ───────────────────────────────────────────────
+    def _addon_scheduler_dispatch(self, method):
+        """b2b_scheduler(애드온)가 맡는 경로면 여기서 응답까지 끝내고 True, 아니면 False.
+
+        본체에 얹으면서 두 가지를 보탠다(모듈의 API 는 그대로):
+          · Origin 가드 — 응답에 Access-Control-Allow-Origin: * 가 붙으므로, 막지 않으면 브라우저에 열린
+            아무 웹사이트가 /api/scheduler/delete(shutil.rmtree) 로 바탕화면 ESTB 의 등록 스케줄을 지우거나
+            /api/whoami 로 계정·프로필 경로를 읽을 수 있다. local-keys / log-sync config 와 같은 기준.
+          · 예외 경계 — 디스크의 깨진 schedule.json 하나로 소켓이 끊겨 '스킬 목록' 전체가 죽지 않게
+            JSON 오류로 돌려준다(BaseHTTPRequestHandler 는 예외를 소켓 종료로 흘린다).
+        """
+        if b2b_scheduler is None:
+            return False
+        route = self.path.split("?")[0]
+        try:
+            mine = (b2b_scheduler.handles_get(route) if method == "GET"
+                    else b2b_scheduler.handles_post(route))
+        except Exception:
+            mine = False
+        if not mine:
+            return False
+        _origin = str(self.headers.get("Origin") or "").strip()
+        if _origin and not _is_own_origin(_origin):
+            self.send_json({"ok": False, "error": "cross-origin request rejected"}, status=403)
+            return True
+        try:
+            if method == "GET":
+                result = b2b_scheduler.handle_get(route)
+            else:
+                result = b2b_scheduler.handle_post(route, self.read_json_body() or {})
+            if result is None:
+                result = {"ok": False, "error": "unknown scheduler route: %s" % route}
+            self.send_json(result)
+        except Exception as err:
+            self.send_json({"ok": False, "error": "%s: %s" % (type(err).__name__, err)}, status=500)
+        return True
 
     def read_json_body(self):
         length = int(self.headers.get("content-length") or 0)
@@ -2394,6 +2451,16 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
         groups = payload.get("groups") or []
         reset_excel_ids = payload.get("resetExcelIds") or []
         total = sum(len((g.get("steps") or [])) for g in groups)
+        # [관측 로그 애드온] 실행 1건 = 로그 1건. 스킬명은 클라(scripts/pipeline.js)가 skillName 으로 실어 보낸다
+        # (실행 동작에는 쓰이지 않음). 성공/스킬 실패/시스템 실패 세 갈래가 이 함수 안에서 갈리므로 여기서만 잡는다.
+        _tel_t0 = time.time()
+        _tel = {
+            "skill_name": str(payload.get("skillName") or ""),
+            "step_count": total,
+            "output_mode": str(payload.get("outputMode") or "sync"),
+            "languages": "/".join(sorted({str((st or {}).get("language") or "python").lower()
+                                          for g in groups for st in (g.get("steps") or [])})),
+        }
         _vba_trace(
             "http.run_full_pipeline.request",
             traceId=trace_id,
@@ -2413,12 +2480,18 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
                 state_sig=payload.get("stateSig"),
             )
             _vba_trace("http.run_full_pipeline.response", traceId=trace_id, ok=True, applied=result.get("applied"))
+            _addon_log_skill_run(status="success", started_at=_tel_t0,
+                                 file_count=len(result.get("outputFiles") or []), **_tel)
             self.send_json(result)
         except PipelineExecutionError as err:
             _vba_trace("http.run_full_pipeline.error", traceId=trace_id, kind="PipelineExecutionError", error=str(err), errorInfo=err.info)
+            _addon_log_skill_run(status="failed", started_at=_tel_t0,
+                                 error_code="PipelineExecutionError", error_message=str(err), **_tel)
             self.send_json({"ok": False, "error": str(err), "errorInfo": err.info}, status=400)
         except Exception as err:
             _vba_trace("http.run_full_pipeline.error", traceId=trace_id, kind=type(err).__name__, error=str(err))
+            _addon_log_skill_run(status="failed", started_at=_tel_t0,
+                                 error_code=type(err).__name__, error_message=str(err), **_tel)
             self.send_json({"ok": False, "error": str(err)}, status=500)
 
     def _reject_show_while_host_minimized(self):
@@ -5390,6 +5463,7 @@ def _native_parent_watch_once(now):
     except Exception:
         pass
     _log_sync_stop("parent.missing", timeout=4.0)
+    _addon_telemetry_stop(timeout=2.0)   # [애드온]
     os._exit(0)
 
 
@@ -5453,6 +5527,42 @@ def _log_sync_stop(reason="shutdown", timeout=4.0):
         pass
 
 
+# ── [애드온] 관측 로그(b2b_telemetry) 본체 접점 ────────────────────────────────────────────
+def _addon_telemetry_init():
+    """기동 시 1회(멱등). 두 진입점(launch_b2b.py / python serve_b2b.py)이 모두
+    start_runtime_maintenance_threads 를 거치므로 거기서 부른다 — launch_b2b 에만 두면 네이티브 호스트가
+    소스 모드로 serve_b2b.py 를 직접 띄우는 경로에서 초기화가 빠진다. 모듈이 없거나 실패해도 본체는 그대로 뜬다."""
+    if b2b_telemetry is None:
+        return
+    try:
+        ver = str((_current_app_version() or {}).get("version") or "").strip()
+    except Exception:
+        ver = ""
+    st = b2b_telemetry.init(app_version=ver, writable_dir=str(writable_app_dir()))
+    _perf_trace("addon.telemetry.init", sending=bool(st.get("sending")),
+                preview=str(st.get("preview") or ""), missingEnv=list(st.get("missing_env") or []))
+
+
+def _addon_log_skill_run(**fields):
+    """스킬 전체실행 1건 기록. 모듈이 없거나 실패해도 실행 결과에는 영향 없음(모듈도 예외를 삼키지만 한 번 더 감싼다)."""
+    if b2b_telemetry is None:
+        return
+    try:
+        b2b_telemetry.log_skill_run(**fields)
+    except Exception:
+        pass
+
+
+def _addon_telemetry_stop(timeout=2.0):
+    """os._exit 직전 남은 로그를 밀어낸다 — 그 경로에선 atexit 이 돌지 않는다(_log_sync_stop 과 같은 이유)."""
+    try:
+        mod = sys.modules.get("b2b_telemetry")
+        if mod is not None and hasattr(mod, "shutdown"):
+            mod.shutdown(timeout=timeout)
+    except Exception:
+        pass
+
+
 def start_runtime_maintenance_threads():
     global RUNTIME_SAMPLER_STARTED
     if RUNTIME_SAMPLER_STARTED:
@@ -5470,6 +5580,11 @@ def start_runtime_maintenance_threads():
     # 트레이스를 비운 '뒤'에 전송을 시작한다(순서가 뒤집히면 지워질 내용을 올린다).
     try:
         _start_log_sync()
+    except Exception:
+        pass
+    # [애드온] 관측 로그 초기화(멱등) — 위 주석의 같은 이유로 여기(두 진입점 공통)에 둔다.
+    try:
+        _addon_telemetry_init()
     except Exception:
         pass
     try:

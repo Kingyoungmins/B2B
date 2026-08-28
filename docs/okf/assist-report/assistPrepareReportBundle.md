@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(meta)"
 role: "제보 패키지를 만들어 다운로드한다. 사용자 버튼 클릭에서만 호출할 것."
 role_source: banner
-version: "0.8.0"
+version: "0.8.1"
 loc: "assist-report.js:124-124"
 
 # ── 입출력 ──
@@ -53,7 +53,7 @@ reads:
   - "state.pipeline"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.0-gen"
+timestamp: "0.8.1-gen"
 ---
 
 ## 역할

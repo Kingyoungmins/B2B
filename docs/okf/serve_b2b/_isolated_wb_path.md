@@ -7,8 +7,8 @@ extraction: ast
 signature: "(wb)"
 role: "열려 있는 워크북의 실제 파일 경로(라벨 판별용). 못 구하면 빈 문자열."
 role_source: docstring
-version: "0.8.0"
-loc: "serve_b2b.py:3971-3976"
+version: "0.8.1"
+loc: "serve_b2b.py:4044-4049"
 
 # ── 입출력 ──
 inputs:
@@ -29,7 +29,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.0-gen"
+timestamp: "0.8.1-gen"
 ---
 
 ## 역할

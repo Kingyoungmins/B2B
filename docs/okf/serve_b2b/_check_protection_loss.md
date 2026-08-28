@@ -7,8 +7,8 @@ extraction: ast
 signature: "(where, src_path, out_path, **extra)"
 role: "원본은 보호돼 있었는데 결과물이 아니면 **그 자리에서** 크게 남긴다."
 role_source: docstring
-version: "0.8.0"
-loc: "serve_b2b.py:3843-3868"
+version: "0.8.1"
+loc: "serve_b2b.py:3916-3941"
 
 # ── 입출력 ──
 inputs:
@@ -39,7 +39,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.0-gen"
+timestamp: "0.8.1-gen"
 ---
 
 ## 역할

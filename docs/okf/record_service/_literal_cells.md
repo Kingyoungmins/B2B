@@ -7,7 +7,7 @@ extraction: ast
 signature: "(step)"
 role: "리터럴 값 스텝이면 {(row,col): value} 로 펼쳐 반환, 아니면 None."
 role_source: docstring
-version: "0.8.0"
+version: "0.8.1"
 loc: "record_service.py:229-248"
 
 # ── 입출력 ──
@@ -34,7 +34,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.0-gen"
+timestamp: "0.8.1-gen"
 ---
 
 ## 역할

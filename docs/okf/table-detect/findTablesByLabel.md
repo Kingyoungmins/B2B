@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(tables, label)"
 role: "라벨이 같은 표가 여러 개일 때, 사용자가 \"첫 번째 표\" 등으로 모호하게 지칭한 경우"
 role_source: banner
-version: "0.8.0"
+version: "0.8.1"
 loc: "table-detect.js:133-133"
 
 # ── 입출력 ──
@@ -30,7 +30,7 @@ called_by: []
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.0-gen"
+timestamp: "0.8.1-gen"
 ---
 
 ## 역할

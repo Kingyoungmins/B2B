@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(el)"
 role: "제목줄 드래그로 이동, 우하단 손잡이로 크기 조절. pointer 이벤트로 마우스/터치 동시 지원."
 role_source: banner
-version: "0.8.0"
+version: "0.8.1"
 loc: "assist-ui.js:541-541"
 
 # ── 입출력 ──
@@ -37,7 +37,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.0-gen"
+timestamp: "0.8.1-gen"
 ---
 
 ## 역할

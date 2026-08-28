@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "()"
 role: "[제보 2026-08-25 결과편집 첫 클릭 먹힘] 실행기 전체실행 중 Excel 작업 창이 포그라운드를"
 role_source: xmldoc/banner
-version: "0.8.0"
+version: "0.8.1"
 loc: "NativeHost.cs:1028-1028"
 
 # ── 입출력 ──
@@ -34,7 +34,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.0-gen"
+timestamp: "0.8.1-gen"
 ---
 
 ## 역할

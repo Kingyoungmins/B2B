@@ -7,7 +7,7 @@ extraction: ast
 signature: "(sub_path, write, send_headers, timeout=60.0)"
 role: "수집 서버 응답을 그대로 흘려보낸다."
 role_source: docstring
-version: "0.8.0"
+version: "0.8.1"
 loc: "log_dash.py:71-106"
 
 # ── 입출력 ──
@@ -51,7 +51,7 @@ reads:
   - "CHUNK"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.0-gen"
+timestamp: "0.8.1-gen"
 ---
 
 ## 역할

@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(src)"
 role: "`VAR = ctx.book(<리터럴 또는 변수>)` 를 { VAR: \"실제 파일명\" } 으로 푼다."
 role_source: banner
-version: "0.8.0"
+version: "0.8.1"
 loc: "drop-handling.js:819-819"
 
 # ── 입출력 ──
@@ -40,7 +40,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.0-gen"
+timestamp: "0.8.1-gen"
 ---
 
 ## 역할

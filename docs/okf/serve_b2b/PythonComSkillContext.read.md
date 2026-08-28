@@ -8,8 +8,8 @@ class: PythonComSkillContext
 signature: "(self, sheet, a1_range=None)"
 role: "범위를 2차원 리스트로 한 번에 읽는다(COM 1회). a1_range 생략 시 used range."
 role_source: docstring
-version: "0.8.0"
-loc: "serve_b2b.py:12671-12699"
+version: "0.8.1"
+loc: "serve_b2b.py:12786-12814"
 
 # ── 입출력 ──
 inputs:
@@ -82,6 +82,7 @@ called_by:
   - "read_session_id"
   - "render_pptx_to_slides_b64"
   - "run_js_pipeline_with_node"
+  - "skill_docs_from_zip"
   - "stream"
 reads:
   - "PY_READ_MAX_CELLS"
@@ -92,7 +93,7 @@ reads:
   - "self._ws"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.0-gen"
+timestamp: "0.8.1-gen"
 ---
 
 ## 역할
@@ -103,7 +104,7 @@ timestamp: "0.8.0-gen"
 
 ## 관계
 - 호출: `_note_read_evidence`, `_rng`, `_shaped_matrix`, `_tick`, `_vba_trace`, `_ws`, `sheet`
-- 피호출(영향 전파 경로): `B2BHandler.do_POST`, `B2BHandler.handle_assist_attachment`, `B2BHandler.handle_logic_backup`, `B2BHandler.handle_workbook_upload`, `B2BHandler.proxy`, `B2BHandler.read_json_body`, `PythonComSkillContext._pivot_value_table`, `PythonComSkillContext.dedupe`, `PythonComSkillContext.delete_rows_where`, `PythonComSkillContext.filter_to_range`, `PythonComSkillContext.filter_to_sheet`, `PythonComSkillContext.lookup`, `PythonComSkillContext.match_fill`, `PythonComSkillContext.move_cols`, `PythonComSkillContext.read_cell`, `PythonComSkillContext.split_column`, `PythonComSkillContext.sum_column`, `PythonComSkillContext.sum_lookup`, `PythonComSkillContext.sum_where`, `_extract_pptx_slide_texts`, `_file_label_evidence`, `_file_label_kind`, `_ole_directory_stream_names`, `_post`, `_post_drm`, `_send_log_file`, `_vllm_chat_once`, `_xlsx_has_formulas`, `_xlsx_has_merged_cells`, `check_for_update`, `maybe_decrypt_upload`, `office_file_signature`, `probe`, `read_session_id`, `render_pptx_to_slides_b64`, `run_js_pipeline_with_node`, `stream`
+- 피호출(영향 전파 경로): `B2BHandler.do_POST`, `B2BHandler.handle_assist_attachment`, `B2BHandler.handle_logic_backup`, `B2BHandler.handle_workbook_upload`, `B2BHandler.proxy`, `B2BHandler.read_json_body`, `PythonComSkillContext._pivot_value_table`, `PythonComSkillContext.dedupe`, `PythonComSkillContext.delete_rows_where`, `PythonComSkillContext.filter_to_range`, `PythonComSkillContext.filter_to_sheet`, `PythonComSkillContext.lookup`, `PythonComSkillContext.match_fill`, `PythonComSkillContext.move_cols`, `PythonComSkillContext.read_cell`, `PythonComSkillContext.split_column`, `PythonComSkillContext.sum_column`, `PythonComSkillContext.sum_lookup`, `PythonComSkillContext.sum_where`, `_extract_pptx_slide_texts`, `_file_label_evidence`, `_file_label_kind`, `_ole_directory_stream_names`, `_post`, `_post_drm`, `_send_log_file`, `_vllm_chat_once`, `_xlsx_has_formulas`, `_xlsx_has_merged_cells`, `check_for_update`, `maybe_decrypt_upload`, `office_file_signature`, `probe`, `read_session_id`, `render_pptx_to_slides_b64`, `run_js_pipeline_with_node`, `skill_docs_from_zip`, `stream`
 
 ## 실패/예외
 - `PythonComSkillError`

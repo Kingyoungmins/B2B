@@ -7,7 +7,7 @@ extraction: ast
 signature: "(path, name, encrypted_checker=None)"
 role: "업로드 직후 훅. 보안문서면 서버로 풀어 '작업본을 제자리에서' 교체한다."
 role_source: docstring
-version: "0.8.0"
+version: "0.8.1"
 loc: "secure_doc.py:398-470"
 
 # ── 입출력 ──
@@ -64,7 +64,7 @@ reads:
 writes:
   - "_STATE"
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.0-gen"
+timestamp: "0.8.1-gen"
 ---
 
 ## 역할

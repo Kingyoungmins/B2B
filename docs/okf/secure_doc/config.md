@@ -7,7 +7,7 @@ extraction: ast
 signature: "()"
 role: "주소/키는 log_sync(로그 전송)와 같은 곳을 본다 — F9 에서 주소를 바꾸면 여기도 따라온다."
 role_source: docstring
-version: "0.8.0"
+version: "0.8.1"
 loc: "secure_doc.py:95-126"
 
 # ── 입출력 ──
@@ -54,7 +54,7 @@ reads:
   - "DEFAULT_TIMEOUT_SECONDS"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.0-gen"
+timestamp: "0.8.1-gen"
 ---
 
 ## 역할

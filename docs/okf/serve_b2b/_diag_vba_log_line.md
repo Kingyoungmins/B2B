@@ -7,8 +7,8 @@ extraction: ast
 signature: "(msg)"
 role: "[임시 진단] VBA 실행 결과 한 줄을 vba_runner_fail.log 에 남긴다(성공/런타임에러/실행예외 구분)."
 role_source: docstring
-version: "0.8.0"
-loc: "serve_b2b.py:9293-9301"
+version: "0.8.1"
+loc: "serve_b2b.py:9408-9416"
 
 # ── 입출력 ──
 inputs:
@@ -38,7 +38,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.0-gen"
+timestamp: "0.8.1-gen"
 ---
 
 ## 역할

@@ -7,8 +7,8 @@ extraction: regex   # 정규식 근사
 signature: "()"
 role: "버튼 클릭 진입점. 모달을 띄우기 전에 미러를 숨긴다(항상-위 Excel 이 모달을 가리는 문제 —"
 role_source: banner
-version: "0.8.0"
-loc: "pipeline.js:5165-5165"
+version: "0.8.1"
+loc: "pipeline.js:5168-5168"
 
 # ── 입출력 ──
 inputs: []
@@ -37,7 +37,7 @@ called_by: []
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.0-gen"
+timestamp: "0.8.1-gen"
 ---
 
 ## 역할

@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "()"
 role: "올린 스킬을 비운다(파이프라인 + 매핑 + 대화). 파일은 건드리지 않는다 — 스킬만 교체하는 흐름."
 role_source: banner
-version: "0.8.0"
+version: "0.8.1"
 loc: "drop-handling.js:535-535"
 
 # ── 입출력 ──
@@ -46,7 +46,7 @@ writes:
   - "runnerMappingSignature"
   - "runnerMappings"
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.0-gen"
+timestamp: "0.8.1-gen"
 ---
 
 ## 역할

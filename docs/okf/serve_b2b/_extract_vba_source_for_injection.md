@@ -7,8 +7,8 @@ extraction: ast
 signature: "(code, entry=None)"
 role: "Saved skills can contain the assistant reply text around the VBA block."
 role_source: docstring
-version: "0.8.0"
-loc: "serve_b2b.py:8501-8555"
+version: "0.8.1"
+loc: "serve_b2b.py:8616-8670"
 
 # ── 입출력 ──
 inputs:
@@ -53,7 +53,7 @@ reads:
   - "VBA_SKILL_ENTRY"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.0-gen"
+timestamp: "0.8.1-gen"
 ---
 
 ## 역할

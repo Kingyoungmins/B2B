@@ -7,7 +7,7 @@ extraction: ast
 signature: "(fmt)"
 role: "이 서식이 여러 영역을 union 주소 한 번에 적용해도 안전한가."
 role_source: docstring
-version: "0.8.0"
+version: "0.8.1"
 loc: "record_service.py:370-375"
 
 # ── 입출력 ──
@@ -29,7 +29,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.0-gen"
+timestamp: "0.8.1-gen"
 ---
 
 ## 역할

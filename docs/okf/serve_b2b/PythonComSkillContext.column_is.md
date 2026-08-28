@@ -8,8 +8,8 @@ class: PythonComSkillContext
 signature: "(self, column, values)"
 role: "선언적 필터 조건을 만든다(자동필터 경로용). column 은 \"H\" 같은 열 문자 또는 1-based 번호."
 role_source: docstring
-version: "0.8.0"
-loc: "serve_b2b.py:13366-13368"
+version: "0.8.1"
+loc: "serve_b2b.py:13481-13483"
 
 # ── 입출력 ──
 inputs:
@@ -33,7 +33,7 @@ called_by: []
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.0-gen"
+timestamp: "0.8.1-gen"
 ---
 
 ## 역할

@@ -7,8 +7,8 @@ extraction: regex   # 정규식 근사
 signature: "(code)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
-version: "0.8.0"
-loc: "pipeline.js:6683-6683"
+version: "0.8.1"
+loc: "pipeline.js:6686-6686"
 
 # ── 입출력 ──
 inputs:
@@ -21,7 +21,8 @@ side_effects:
 raises: []
 
 # ── 유기적 관계 ──
-calls: []
+calls:
+  - "matchAll"
 calls_external:
   - "B2BSkill"
   - "Range"
@@ -29,7 +30,6 @@ calls_external:
   - "join"
   - "map"
   - "match"
-  - "matchAll"
   - "q"
   - "replace"
   - "test"
@@ -38,7 +38,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.0-gen"
+timestamp: "0.8.1-gen"
 ---
 
 ## 역할
@@ -48,7 +48,7 @@ timestamp: "0.8.0-gen"
 - 없음(정적 분석 기준)
 
 ## 관계
-- 호출: 없음
+- 호출: `matchAll`
 - 피호출(영향 전파 경로): `localRepairPipelineStep`
 
 ## 실패/예외
