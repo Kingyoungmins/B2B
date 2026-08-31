@@ -25,6 +25,7 @@ calls:
   - "ensureExcelMirrorForFileId"
 calls_external: []
 called_by:
+  - "_handlePipelineStepToggleImpl"
   - "_reapplyVbaPipelineToLiveImpl"
   - "_reconcilePipelineSimulationAfterEditImpl"
   - "_runHeldStepsBatchImpl"
@@ -48,7 +49,7 @@ timestamp: "0.8.2-gen"
 
 ## 관계
 - 호출: `ensureExcelMirrorForFileId`
-- 피호출(영향 전파 경로): `_reapplyVbaPipelineToLiveImpl`, `_reconcilePipelineSimulationAfterEditImpl`, `_runHeldStepsBatchImpl`, `_runPipelineSuffixFromCheckpointImpl`, `captureCrossFileDestinationSnapshots`, `ensurePipelineReferencedSessionsOpen`, `requirePipelineSessionExcelId`, `runVbaPipelinePreferLive`, `verifyPrefixRestoreCoverage`
+- 피호출(영향 전파 경로): `_handlePipelineStepToggleImpl`, `_reapplyVbaPipelineToLiveImpl`, `_reconcilePipelineSimulationAfterEditImpl`, `_runHeldStepsBatchImpl`, `_runPipelineSuffixFromCheckpointImpl`, `captureCrossFileDestinationSnapshots`, `ensurePipelineReferencedSessionsOpen`, `requirePipelineSessionExcelId`, `runVbaPipelinePreferLive`, `verifyPrefixRestoreCoverage`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

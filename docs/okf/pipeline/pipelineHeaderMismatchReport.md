@@ -8,7 +8,7 @@ signature: "(steps)"
 role: "매핑본(실제 파일명 치환본)으로 검사한다."
 role_source: banner
 version: "0.8.2"
-loc: "pipeline.js:8388-8388"
+loc: "pipeline.js:8455-8455"
 
 # ── 입출력 ──
 inputs:

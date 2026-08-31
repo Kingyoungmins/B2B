@@ -8,7 +8,7 @@ signature: "(step, reason, repairCount)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
 version: "0.8.2"
-loc: "pipeline.js:6462-6462"
+loc: "pipeline.js:6501-6501"
 
 # ── 입출력 ──
 inputs:

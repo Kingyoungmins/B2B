@@ -8,7 +8,7 @@ signature: "(steps, limit)"
 role: "스텝이 많아도 로그가 터지지 않게 앞 40개까지만 남긴다."
 role_source: banner
 version: "0.8.2"
-loc: "pipeline.js:4419-4419"
+loc: "pipeline.js:4458-4458"
 
 # ── 입출력 ──
 inputs:

@@ -8,7 +8,7 @@ signature: "(step)"
 role: "이 스텝을 되돌리는 데 필요한 사본이 '전부' 있는가 — 대상 파일 + 교차 목적지 전부."
 role_source: banner
 version: "0.8.2"
-loc: "pipeline.js:4578-4578"
+loc: "pipeline.js:4617-4617"
 
 # ── 입출력 ──
 inputs:

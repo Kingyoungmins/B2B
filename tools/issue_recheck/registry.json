@@ -4219,6 +4219,28 @@
         ]
       ],
       "fix": "serve_b2b 는 record.native.start/stop 두 시점만 남겼는데, 녹화가 통째로 유실되는 자리는 그 사이다. record_service._run 의 펌프 루프가 Excel 사망을 감지해 break 하거나, 정지 시퀀스 7단계가 각각 try/except pass 로 삼켜지거나, distill→통합→그룹핑→스텝 변환에서 개수가 0으로 줄어도 로그에 아무 단서가 없었다(화면엔 '캡처 0건'만). 계측 추가(동작 불변): record.svc.begin(Excel 을 잡은 경로 marshal/getactive + 열린 책), record.svc.excel_gone(펌프 탈출 — 이 자리가 '첫 녹화부터 0건' 제보의 실제 원인이었다), record.svc.stop_phase_failed(어느 단계가 왜 죽었나), record.svc.harvest(rawActions→distilled→afterLiteralMerge→afterFormatMerge→groups→entries→droppedNoop→finalSteps 한 줄), record.svc.expected_failed(재현 자동대조가 꺼짐), record.svc.error(스레드 사망). 순환 import 를 피하려 TRACE_HOOK 을 두고 없으면 호출 시점에 늦게 import 한다. _vba_trace 는 쓰기 락을 잡으므로 녹화 전용 스레드에서 불러도 안전. native_macro_recorder 는 새 채널을 만들지 않고 기존 RECORD_DIAG 에 moduleErrors/moduleError1(모듈 순회 중 삼킨 예외 — 대개 VBProject 접근 거부)/combinedLines/emptyAfterSanitize 를 실어 record.native.stop 으로 함께 나가게 했다. 이로써 '수집 실패(raw 0)'와 '정제 과다(raw>0 인데 최종 0)'를 가를 수 있다."
+    },
+    {
+      "id": "RECORD-TOGGLE-FULL-RERUN",
+      "title": "[제보 2026-08-31] 녹화 스킬에서 on/off 를 눌렀는데 처음부터 전체실행 — 빠른 재현이 '라이브 서명'을 안 남겼다.",
+      "checks": [
+        [
+          "node",
+          "test_runs/_test_toggle_land_and_signature.js"
+        ]
+      ],
+      "fix": "실측 로그 client.pipeline.run.toggle_off route=reconcile_no_signature. OFF 에는 '그 단계 직전으로만 되돌리는' 빠른 경로가 있는데, 쓰려면 라이브에 무엇까지 들어갔는지(_lastLiveAppliedSignature)가 필요하다. 녹화 스텝 추가의 빠른 재현(fast append) 경로가 '적용됨' 상태칩만 칠하고 noteLivePipelineApplied 를 안 불러 서명이 null 이었고, 그래서 안전한 쪽(리셋 후 전체 재적용)으로 떨어졌다 — 파일 3개 리셋 + 3단계 재적용(10:47:44~10:48:07). 폴백 전체실행 경로는 runIsolatedLivePipelineSteps 안에서 이미 남기고 있어 이 경로만 빠져 있었다. 무조건 기록하면 안 되는 이유가 있어 조건을 달았다: 이 경로는 '녹화 시작 상태 + 새 스텝'을 만든 것이라, 녹화 전에 켜져 있었지만 적용된 적 없는 스텝이 있으면 라이브에 없는 것을 적용됨으로 굳혀 이후 OFF 가 틀린 빠른 롤백을 한다 → 기존 켜진 스텝이 전부 '적용됨'일 때만 기록하고, 기록 여부를 record.append_replay.signature 로 남긴다. 덤으로 toggle_off 의 sigNull 이 판정 '뒤'에 측정돼(그 사이 reconcile 이 서명을 채운다) 원인을 정반대로 읽게 만들던 것도 판정 시점 값으로 고정했다."
+    },
+    {
+      "id": "TOGGLE-ON-VIEW-NOT-FOLLOWING",
+      "title": "[제보 2026-08-31] 단계를 켜면 '적용됨'인데 엑셀엔 아무것도 없다 — 실제로는 적용됐고 화면이 다른 파일을 보고 있었다.",
+      "checks": [
+        [
+          "node",
+          "test_runs/_test_toggle_land_and_signature.js"
+        ]
+      ],
+      "fix": "실측: toggle_on.route 의 activeExcelId 는 input_원가_2026_4월.xlsx 인데 스텝 코드는 Windows(\"output_청구서_템플릿.xlsx\").Activate → Sheets(\"ㅎㅇ\") A1 에 썼다. 백엔드는 pipeline.step.ok / result.copied 로 정상 적용을 보고했다 — 사용자는 다른 파일을 보고 있어 '적용 안 됨'으로 읽었다. 녹화 종료에는 착지를 맞추는 코드가 있는데(record-land: setCurrentView + showOnlyExcelMirrorWindow) on/off 에는 없었다. 단일 스텝 켜기 성공 뒤 그 스텝의 대상 파일(inferPipelineStepTargetFileId)로 탭·미러를 옮기고, 토스트에도 어느 파일이 바뀌었는지 적는다. 이미 그 파일을 보고 있으면 화면을 흔들지 않고, 실행기 헤드리스(Excel 창을 일부러 숨기는 화면)는 건드리지 않는다. 이동 여부는 pipeline.toggle_on.land 로 남긴다."
     }
   ]
 }

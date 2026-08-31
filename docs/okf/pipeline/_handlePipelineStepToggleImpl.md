@@ -29,6 +29,9 @@ calls:
   - "applyMappedSingleStep"
   - "canFastEditLastPipelineStep"
   - "clearPipelineResumeFromIndex"
+  - "excelIdForPipelineFileId"
+  - "getFile"
+  - "inferPipelineStepTargetFileId"
   - "isStepEnabled"
   - "liveEnabledStepsSignature"
   - "liveEnabledStepsSignatureParts"
@@ -49,8 +52,11 @@ calls:
   - "revertAll"
   - "revertOn"
   - "scheduleLogicAutoBackup"
+  - "setCurrentView"
   - "setPipelineRuntimeStatus"
+  - "showOnlyExcelMirrorWindow"
   - "toast"
+  - "traceClientUiEvent"
   - "traceOff"
   - "tracePipelineRun"
   - "traceToggleOnRoute"
@@ -71,6 +77,7 @@ called_by:
   - "handlePipelineStepToggle"
   - "run"
 reads:
+  - "state.currentFileId"
   - "state.pipeline"
   - "state.runnerMappingChecked"
   - "state.runnerMappingRunActive"
@@ -88,7 +95,7 @@ timestamp: "0.8.2-gen"
 - 변경 상태 `pipeline` — 수정 시 이 상태를 읽는 곳 동반 점검.
 
 ## 관계
-- 호출: `_diffLiveSignatureParts`, `_pipelineCoreBusyReason`, `_stepsOnOffMap`, `_syncPipelineToggleStatus`, `applyMappedSingleStep`, `canFastEditLastPipelineStep`, `clearPipelineResumeFromIndex`, `isStepEnabled`, `liveEnabledStepsSignature`, `liveEnabledStepsSignatureParts`, `markHeld`, `markPipelinePendingFromIndex`, `noteLivePipelineApplied`, `pipelineStepLiveLanguage`, `pipelineStepWritesCrossFile`, `pipelineSuffixCrossUnresolvedNames`, `pipelineSuffixWritesCrossFile`, `pushHistory`, `reconcilePipelineSimulationAfterEdit`, `refreshRunButton`, `renderPipeline`, `reportPipelineError`, `restoreLastStepPreApplySnapshot`, `restorePipelineToCheckpointAndHold`, `revertAll`, `revertOn`, `scheduleLogicAutoBackup`, `setPipelineRuntimeStatus`, `toast`, `traceOff`, `tracePipelineRun`, `traceToggleOnRoute`
+- 호출: `_diffLiveSignatureParts`, `_pipelineCoreBusyReason`, `_stepsOnOffMap`, `_syncPipelineToggleStatus`, `applyMappedSingleStep`, `canFastEditLastPipelineStep`, `clearPipelineResumeFromIndex`, `excelIdForPipelineFileId`, `getFile`, `inferPipelineStepTargetFileId`, `isStepEnabled`, `liveEnabledStepsSignature`, `liveEnabledStepsSignatureParts`, `markHeld`, `markPipelinePendingFromIndex`, `noteLivePipelineApplied`, `pipelineStepLiveLanguage`, `pipelineStepWritesCrossFile`, `pipelineSuffixCrossUnresolvedNames`, `pipelineSuffixWritesCrossFile`, `pushHistory`, `reconcilePipelineSimulationAfterEdit`, `refreshRunButton`, `renderPipeline`, `reportPipelineError`, `restoreLastStepPreApplySnapshot`, `restorePipelineToCheckpointAndHold`, `revertAll`, `revertOn`, `scheduleLogicAutoBackup`, `setCurrentView`, `setPipelineRuntimeStatus`, `showOnlyExcelMirrorWindow`, `toast`, `traceClientUiEvent`, `traceOff`, `tracePipelineRun`, `traceToggleOnRoute`
 - 피호출(영향 전파 경로): `handlePipelineStepToggle`, `run`
 
 ## 실패/예외

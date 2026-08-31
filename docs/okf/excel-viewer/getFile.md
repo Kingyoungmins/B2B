@@ -32,6 +32,7 @@ called_by:
   - "_assistRefreshLiveFile"
   - "_buildDefaultTargetHint"
   - "_clarifyGetAoa"
+  - "_handlePipelineStepToggleImpl"
   - "_reapplyVbaPipelineToLiveImpl"
   - "affectedStepViewFileId"
   - "applyBackendPipelineResult"
@@ -87,7 +88,7 @@ timestamp: "0.8.2-gen"
 
 ## 관계
 - 호출: `outputTemplateIndexFromFileId`, `workbookDisplayName`
-- 피호출(영향 전파 경로): `_assistRefreshLiveFile`, `_buildDefaultTargetHint`, `_clarifyGetAoa`, `_reapplyVbaPipelineToLiveImpl`, `affectedStepViewFileId`, `applyBackendPipelineResult`, `applyLiveSchemaToFileCache`, `augmentUserPromptWithMentions`, `backendResultUrlForFile`, `captureCurrentViewSnapshot`, `chooseBackendRestoreView`, `clearFormulaCellMetadataForFileId`, `collectPipelineReferencedFileIds`, `commitCellEdit`, `currentExcelMirrorTarget`, `downloadCurrentWorkbookFile`, `ensureExcelMirrorSession`, `explainPipelineErrorForUser`, `flashBackendDiff`, `flashFilled`, `forceShowBackendResultMirror`, `formatRangeMentionBody`, `getDownloadOutputTarget`, `normalizeStaleBooksInSavedText`, `normalizeStaleTargetFileIdForSave`, `pipelineCurrentSheetNameForFileId`, `pipelineHasUnresolvedTarget`, `pipelinePinnedAnyTargetFileId`, `pipelinePinnedTargetFileId`, `pipelineResolveSavedTargetFileId`, `preferredVbaRunFileId`, `refreshTabs`, `renderExcelViewer`, `renderRunnerWorkflow`, `replaceLogicAt`, `requirePipelineSessionExcelId`, `restoreSoftRefreshSnapshot`, `runPipeline`, `runPipelineOnBackend`, `setCurrentView`, `switchVisibleExcelMirrorToFileId`
+- 피호출(영향 전파 경로): `_assistRefreshLiveFile`, `_buildDefaultTargetHint`, `_clarifyGetAoa`, `_handlePipelineStepToggleImpl`, `_reapplyVbaPipelineToLiveImpl`, `affectedStepViewFileId`, `applyBackendPipelineResult`, `applyLiveSchemaToFileCache`, `augmentUserPromptWithMentions`, `backendResultUrlForFile`, `captureCurrentViewSnapshot`, `chooseBackendRestoreView`, `clearFormulaCellMetadataForFileId`, `collectPipelineReferencedFileIds`, `commitCellEdit`, `currentExcelMirrorTarget`, `downloadCurrentWorkbookFile`, `ensureExcelMirrorSession`, `explainPipelineErrorForUser`, `flashBackendDiff`, `flashFilled`, `forceShowBackendResultMirror`, `formatRangeMentionBody`, `getDownloadOutputTarget`, `normalizeStaleBooksInSavedText`, `normalizeStaleTargetFileIdForSave`, `pipelineCurrentSheetNameForFileId`, `pipelineHasUnresolvedTarget`, `pipelinePinnedAnyTargetFileId`, `pipelinePinnedTargetFileId`, `pipelineResolveSavedTargetFileId`, `preferredVbaRunFileId`, `refreshTabs`, `renderExcelViewer`, `renderRunnerWorkflow`, `replaceLogicAt`, `requirePipelineSessionExcelId`, `restoreSoftRefreshSnapshot`, `runPipeline`, `runPipelineOnBackend`, `setCurrentView`, `switchVisibleExcelMirrorToFileId`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

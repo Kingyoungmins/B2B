@@ -36,6 +36,7 @@ calls_external:
   - "includes"
   - "startsWith"
 called_by:
+  - "_handlePipelineStepToggleImpl"
   - "landAppTabOnExcelSession"
   - "loadOutputTemplates"
   - "openExcelMirrorForFileId"
@@ -65,7 +66,7 @@ timestamp: "0.8.2-gen"
 
 ## 관계
 - 호출: `activateOutputTemplate`, `getFile`, `isExplicitViewSwitchSource`, `outputTemplateFileId`, `outputTemplateIndexFromFileId`, `refreshTabs`, `renderExcelViewer`, `renderInputList`, `renderOutputChip`
-- 피호출(영향 전파 경로): `landAppTabOnExcelSession`, `loadOutputTemplates`, `openExcelMirrorForFileId`, `openExcelMirrorResultForFileId`, `preopenAllExcelMirrors`, `switchWorkbookFileFromUserTab`
+- 피호출(영향 전파 경로): `_handlePipelineStepToggleImpl`, `landAppTabOnExcelSession`, `loadOutputTemplates`, `openExcelMirrorForFileId`, `openExcelMirrorResultForFileId`, `preopenAllExcelMirrors`, `switchWorkbookFileFromUserTab`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

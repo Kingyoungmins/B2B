@@ -4125,12 +4125,16 @@ async function _handlePipelineStepToggleImpl(stepId) {
     // 교차로 본 경우가 여기 찍힌다(값이 있으면 그 이름들이 모호했다는 뜻).
     const _crossUnresolved = (typeof pipelineSuffixCrossUnresolvedNames === "function")
       ? pipelineSuffixCrossUnresolvedNames(beforeToggleSnapshot, currentIdx) : "";
+    // [진단 정정 2026-08-31] sigNull 을 traceOff 호출 시점에 읽고 있었다. reconcile 이 그 사이
+    // 서명을 채우므로, '서명이 없어서 그 경로로 갔다'는 사실이 로그엔 sigNull=false 로 찍혀
+    // 원인을 정반대로 읽게 만들었다(실측). 판정 시점 값을 잡아 둔다.
+    const _sigNullAtDecision = _lastLiveAppliedSignature === null;
     const traceOff = (route, ok, extra) => tracePipelineRun("toggle_off", {
       route, ok: ok === true, stepIdx: currentIdx, stepId,
       fastLast: !!fastLast, crossFileSuffix: !!_crossSuffix,
       crossRollbackReady: !!_crossRollbackReady,
       crossUnresolved: _crossUnresolved,
-      sigNull: _lastLiveAppliedSignature === null,
+      sigNull: _sigNullAtDecision,
       steps: _stepsOnOffMap(state.pipeline),
       ...(extra || {}),
     });
@@ -4293,7 +4297,42 @@ async function _handlePipelineStepToggleImpl(stepId) {
     }
     _syncPipelineToggleStatus();       // 나머지 스텝 상태칩도 스위치에 맞춤(ON=적용/OFF=보류)
     refreshRunButton();
-    if (typeof toast === "function") toast(`Step ${currentIdx + 1}을(를) 적용했습니다.`, "success");
+    // [제보 2026-08-31] "켰더니 '적용됨'인데 엑셀엔 아무것도 없다" — 실제로는 적용됐고, 화면이
+    // 다른 파일을 보고 있었다(실측: 스텝은 output_청구서_템플릿 에 썼는데 탭은 input_원가).
+    // 녹화 종료에는 착지를 맞추는 코드가 있는데(record-land) on/off 에는 없었다. 같은 규칙을 쓴다.
+    // 실행기 헤드리스는 Excel 창을 일부러 숨기므로 건드리지 않는다(그 경우 결과는 파일로 나간다).
+    let _landedFileId = null;
+    if (!(typeof excelMirror === "object" && excelMirror && excelMirror.runnerHeadless)) {
+      try {
+        const _tid = (typeof inferPipelineStepTargetFileId === "function")
+          ? inferPipelineStepTargetFileId(state.pipeline[currentIdx]) : null;
+        const _fid = (_tid && typeof getFile === "function" && getFile(_tid)) ? _tid : null;
+        if (_fid && _fid !== state.currentFileId) {
+          _landedFileId = _fid;
+          if (typeof setCurrentView === "function") setCurrentView(_fid, { source: "toggle-on-land" });
+          const _xid = (typeof excelIdForPipelineFileId === "function") ? await excelIdForPipelineFileId(_fid) : null;
+          if (_xid && typeof showOnlyExcelMirrorWindow === "function") {
+            await showOnlyExcelMirrorWindow(_xid, { force: true });
+          }
+        }
+      } catch (_) {}
+    }
+    try {
+      if (typeof traceClientUiEvent === "function") {
+        traceClientUiEvent("pipeline.toggle_on.land", {
+          stepIdx: String(currentIdx), stepId: String(stepId),
+          movedTo: String(_landedFileId || ""), from: String(state.currentFileId || ""),
+        });
+      }
+    } catch (_) {}
+    if (typeof toast === "function") {
+      // 어느 파일이 바뀌었는지 문구로도 말해 준다 — 탭을 못 옮긴 경우(헤드리스 등)의 안전망.
+      const _name = _landedFileId && typeof getFile === "function"
+        ? String((getFile(_landedFileId) || {}).name || "") : "";
+      toast(_name
+        ? `Step ${currentIdx + 1}을(를) 적용했습니다 — "${_name}" 가 바뀌었습니다.`
+        : `Step ${currentIdx + 1}을(를) 적용했습니다.`, "success");
+    }
   } catch (err) {
     revertOn(err);
   }
@@ -7683,6 +7722,34 @@ $("btn-run").onclick = async () => {
               }
               // [이슈2] 재현 완료 직후 실행기 헤드리스면 즉시 재숨김 — 재현/show-only 가드를 뚫고 뜬 오버레이 잔존 방지.
               if (excelMirror && excelMirror.runnerHeadless) { try { await hideAllExcelMirrorWindows(); } catch (_) {} }
+              // [제보 2026-08-31] 이 경로가 '라이브에 무엇까지 들어갔는지'(서명)를 안 남겼다.
+              // 그래서 바로 뒤에 단계를 끄면 서명이 비어 있어 안전한 쪽(리셋 후 전체 재적용)으로
+              // 떨어졌다 — 사용자에겐 "on/off 눌렀는데 처음부터 전체실행"으로 보였다
+              // (실측 route=reconcile_no_signature, 파일 3개 리셋 + 3단계 재적용).
+              // 폴백(전체실행) 경로는 runIsolatedLivePipelineSteps 안에서 이미 남긴다 — 여기만 빠졌다.
+              //
+              // 다만 무조건 남기면 안 된다. 이 경로는 '녹화 시작 상태 + 새 스텝'을 만든 것이라,
+              // 녹화 전에 켜져 있었지만 아직 적용된 적 없는 스텝이 있으면 라이브에 없는 것을
+              // '적용됨'으로 굳혀 이후 OFF 가 틀린 빠른 롤백을 한다. 그래서 '기존 켜진 스텝이
+              // 전부 적용됨'일 때만 기록한다(대개 녹화 직전 상태가 그렇다).
+              try {
+                const _appendedSet = new Set(appendedIds);
+                const _priorEnabled = (state.pipeline || []).filter(
+                  s => s && s.id && !_appendedSet.has(s.id) && isStepEnabled(s));
+                const _allPriorApplied = _priorEnabled.every(
+                  s => (typeof getPipelineRuntimeStatus === "function")
+                    && ((getPipelineRuntimeStatus(s.id) || {}).status === "applied"));
+                if (_allPriorApplied && typeof noteLivePipelineApplied === "function") {
+                  noteLivePipelineApplied(state.pipeline);
+                }
+                if (typeof traceClientUiEvent === "function") {
+                  traceClientUiEvent("record.append_replay.signature", {
+                    recorded: String(!!_allPriorApplied),
+                    priorEnabled: String(_priorEnabled.length),
+                    appended: String(appendedIds.length),
+                  });
+                }
+              } catch (_) {}
               fastAppendDone = true;
             } catch (err) {
               console.warn("[record] 추가실행 재현 실패 — 전체실행으로 폴백:", err);

@@ -8,7 +8,7 @@ signature: "(snap, options = {})"
 role: "— 그래서 여기로 모았다(restoreLastStepPreApplySnapshot 은 스텝에서 사본을 꺼내 이걸 부른다)."
 role_source: banner
 version: "0.8.2"
-loc: "pipeline.js:4639-4639"
+loc: "pipeline.js:4678-4678"
 
 # ── 입출력 ──
 inputs:
