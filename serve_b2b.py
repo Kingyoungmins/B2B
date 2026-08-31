@@ -9263,6 +9263,48 @@ def _hide_vba_editor(app):
             pass
 
 
+def _restore_foreground_after_vba(prev_hwnd, excel_pid):
+    """VBA 편집기가 가져간 '활성 자리'를 원래 창으로 되돌린다.
+
+    [제보 2026-08-31] VBA 모듈을 추가하면(VBComponents.Add) VBA 편집기 창이 스스로 뜨면서
+    포커스를 가져간다. _hide_vba_editor 로 그 창을 숨겨도 활성 자리는 '사라진 창'을 계속
+    가리켜, 화면에 활성인 창이 하나도 없는 상태가 된다 → 사용자 눈에는 앱이 뒤로 밀린 것처럼
+    보인다. 예전에는 실행 내내 Excel 프로세스 창을 통째로 숨겨(app.Visible=False) 편집기가
+    아예 안 떴기 때문에 이 문제가 드러나지 않았다.
+
+    실측(_test_vba_hide_affects_host_window_com.py / probe): 포커스는 정확히 VBComponents.Add
+    에서 넘어가고, SetForegroundWindow 로 되돌아온다.
+
+    우리가 뺏은 경우에만 되돌린다 — 사용자가 스스로 다른 창으로 옮겼으면 손대지 않는다.
+    """
+    if win32gui is None or win32process is None or not prev_hwnd:
+        return False
+    try:
+        cur = win32gui.GetForegroundWindow()
+    except Exception:
+        return False
+    if not cur or int(cur) == int(prev_hwnd):
+        return False                       # 안 뺏겼다
+    try:
+        _tid, cur_pid = win32process.GetWindowThreadProcessId(cur)
+    except Exception:
+        return False
+    if not excel_pid or int(cur_pid or 0) != int(excel_pid):
+        return False                       # Excel 창이 아니다 = 사용자가 옮긴 것
+    try:
+        if win32gui.IsWindowVisible(cur):
+            return False                   # 보이는 Excel 창이면 정상 상태다
+    except Exception:
+        return False
+    try:
+        if not win32gui.IsWindow(prev_hwnd) or not win32gui.IsWindowVisible(prev_hwnd):
+            return False
+        win32gui.SetForegroundWindow(prev_hwnd)
+        return True
+    except Exception:
+        return False
+
+
 def _vba_workbook_name(wb):
     try:
         return str(wb.Name or "")
@@ -9668,6 +9710,12 @@ def _inject_and_run_vba_in_host(app, host_wb, context_wb, code, entry):
                 "'VBA 프로젝트 개체 모델에 대한 액세스 신뢰'를 켠 뒤 파일을 다시 여세요. (" + str(err) + ")"
             )
         module = vbproj.VBComponents.Add(1)  # 1 = vbext_ct_StdModule
+        # [제보 2026-08-31] 모듈을 추가하면 VBE(Visual Basic 편집기) 창이 스스로 올라온다.
+        # 예전엔 실행 내내 Excel PID 의 창을 통째로 숨겨(_hide_excel_windows_for_pid) 같이 가려졌지만,
+        # 이제 창을 안 내리므로 VBE 가 그대로 앞으로 튀어나와 AX-Cell 에서 포커스를 뺏는다.
+        # 실측(_test_vba_hide_affects_host_window_com.py): 포그라운드가
+        # wndclass_desked_gsk "Microsoft Visual Basic for Applications" 로 넘어갔다.
+        _hide_vba_editor(app)
         module_name = module.Name
         if host_wb is not context_wb:
             code = _rewrite_thisworkbook_for_runner_host(code, context_wb)
@@ -9697,6 +9745,7 @@ def _inject_and_run_vba_in_host(app, host_wb, context_wb, code, entry):
                 1,
             )
         module.CodeModule.AddFromString(safe_code)
+        _hide_vba_editor(app)   # 코드 창이 새로 열리며 다시 올라오는 것도 같이 내린다
         try:
             prev_display_alerts = app.DisplayAlerts
             app.DisplayAlerts = False
@@ -9846,6 +9895,11 @@ def _inject_and_run_vba(app, wb, code, entry):
         codeHead=_trace_text(code, 420),
     )
     suppressor = _start_vba_debug_suppressor(excel_pid)
+    # 주입 전 '활성 창'을 기억해 둔다 — VBA 편집기가 가져가면 끝나고 여기로 되돌린다.
+    try:
+        _fg_before = win32gui.GetForegroundWindow() if win32gui is not None else 0
+    except Exception:
+        _fg_before = 0
     runner_wb = None
     runner_temp = None
     try:
@@ -9866,6 +9920,7 @@ def _inject_and_run_vba(app, wb, code, entry):
         try:
             _hide_vba_editor(app)
             _suppress_vba_debug_windows(excel_pid)
+            _restore_foreground_after_vba(_fg_before, excel_pid)
         finally:
             suppressor.set()
 

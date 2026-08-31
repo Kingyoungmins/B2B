@@ -144,9 +144,23 @@ try:
     tgt_vis = any(bool(live.Windows(i).Visible) for i in range(1, int(live.Windows.Count) + 1))
     check("대상 파일 창은 계속 보인다(회색 빈 프레임 아님)", tgt_vis is True, tgt_vis)
     check("Excel 앱 창도 계속 보인다", bool(app.Visible) is True, app.Visible)
-    print("      포그라운드 %s → %s %s" % (fg_before, fg_after,
-                                        "(안 뺏음)" if fg_before == fg_after else "(바뀜)"))
-    check("적용이 사용자 포커스를 뺏지 않는다", fg_before == fg_after, (fg_before, fg_after))
+    def wdesc(h):
+        try:
+            return "%s cls=%s title=%r vis=%s" % (h, win32gui.GetClassName(h),
+                                                  win32gui.GetWindowText(h)[:34],
+                                                  bool(win32gui.IsWindowVisible(h)))
+        except Exception:
+            return str(h)
+
+    print("      포그라운드 %s" % wdesc(fg_before))
+    print("            →   %s" % wdesc(fg_after))
+    # 이 시나리오의 매크로는 스스로 Workbooks("옆파일.xlsx").Activate 를 한다 — Excel 이 자기
+    # 창들 사이에서 활성을 옮기는 건 매크로가 시킨 일이라 정상이다. 문제로 잡아야 하는 건
+    # '보이지 않는 창이 활성 자리를 쥔 채 남는 것'(= 앱이 뒤로 밀려 보이는 상태)이다.
+    check("활성 자리가 '보이지 않는 창'에 물려 있지 않다",
+          bool(win32gui.IsWindowVisible(fg_after)) is True, wdesc(fg_after))
+    check("VBA 편집기가 활성 자리를 가져가지 않았다",
+          win32gui.GetClassName(fg_after) != "wndclass_desked_gsk", wdesc(fg_after))
     try:
         owb.Close(SaveChanges=False)
     except Exception:
