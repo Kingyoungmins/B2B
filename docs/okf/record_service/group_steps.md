@@ -8,7 +8,7 @@ signature: "(steps)"
 role: "distill 결과를 역할(role) 경계로 묶는다(결정론 — LLM 그룹핑 전 단계)."
 role_source: docstring
 version: "0.8.2"
-loc: "record_service.py:447-470"
+loc: "record_service.py:472-495"
 
 # ── 입출력 ──
 inputs:

@@ -9,7 +9,7 @@ signature: "(self, timeout=120.0)"
 role: "정지 신호 후 결과 대기. 반환: {\"steps\": [...], \"raw_actions\": n, ...}"
 role_source: docstring
 version: "0.8.2"
-loc: "record_service.py:643-656"
+loc: "record_service.py:668-681"
 
 # ── 입출력 ──
 inputs:

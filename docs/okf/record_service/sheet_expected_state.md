@@ -8,7 +8,7 @@ signature: "(ws, max_cells=DIGEST_MAX_CELLS)"
 role: "시트 하나의 기대 상태 {sheet, rows, cols, hashRows, hash, merges}."
 role_source: docstring
 version: "0.8.2"
-loc: "record_service.py:131-149"
+loc: "record_service.py:156-174"
 
 # ── 입출력 ──
 inputs:

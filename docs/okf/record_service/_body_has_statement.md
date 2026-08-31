@@ -8,7 +8,7 @@ signature: "(body)"
 role: "body 라인 중 '실제 실행문'이 하나라도 있는지. 주석(#)·빈 줄만 있으면 False."
 role_source: docstring
 version: "0.8.2"
-loc: "record_service.py:535-545"
+loc: "record_service.py:560-570"
 
 # ── 입출력 ──
 inputs:

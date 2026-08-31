@@ -8,7 +8,7 @@ signature: "(steps)"
 role: "스텝 목록 → def transform(ctx) 코드(등가 게이트 대조용)."
 role_source: docstring
 version: "0.8.2"
-loc: "record_service.py:288-293"
+loc: "record_service.py:313-318"
 
 # ── 입출력 ──
 inputs:

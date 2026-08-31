@@ -8,7 +8,7 @@ signature: "(values)"
 role: "UsedRange.Value2 결과(스칼라/1행/2D 튜플)를 정규화해 sha1 16자리 다이제스트."
 role_source: docstring
 version: "0.8.2"
-loc: "record_service.py:63-76"
+loc: "record_service.py:88-101"
 
 # ── 입출력 ──
 inputs:

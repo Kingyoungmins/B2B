@@ -8,7 +8,7 @@ signature: "(g)"
 role: "카드 제목 — 역할 + 대상 시트 + 스텝 수. \"구조 변경 (5스텝)\" 같은 무정보 제목 대신"
 role_source: docstring
 version: "0.8.2"
-loc: "record_service.py:205-214"
+loc: "record_service.py:230-239"
 
 # ── 입출력 ──
 inputs:

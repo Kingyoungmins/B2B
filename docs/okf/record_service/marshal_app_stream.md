@@ -8,7 +8,7 @@ signature: "(app)"
 role: "Excel 워커 스레드에서 호출 — Application 프록시를 스레드 간 스트림으로 마샬링."
 role_source: docstring
 version: "0.8.2"
-loc: "record_service.py:181-185"
+loc: "record_service.py:206-210"
 
 # ── 입출력 ──
 inputs:

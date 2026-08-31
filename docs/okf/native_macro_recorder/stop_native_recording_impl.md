@@ -8,7 +8,7 @@ signature: "(app, baseline)"
 role: "레코더 토글 OFF → 새로 생긴 매크로 모듈 추출·삭제 → 정제된 VBA 반환."
 role_source: docstring
 version: "0.8.2"
-loc: "native_macro_recorder.py:458-581"
+loc: "native_macro_recorder.py:458-591"
 
 # ── 입출력 ──
 inputs:
@@ -43,6 +43,8 @@ calls_external:
   - "Remove"
   - "RuntimeError"
   - "_MACRO_RECORD_IDMSO"
+  - "_me"
+  - "_mod_errors"
   - "_q"
   - "app"
   - "b"
@@ -62,6 +64,7 @@ calls_external:
   - "n"
   - "name"
   - "set"
+  - "splitlines"
   - "str"
   - "strip"
   - "tuple"

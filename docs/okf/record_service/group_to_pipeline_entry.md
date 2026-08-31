@@ -8,7 +8,7 @@ signature: "(group, index)"
 role: "묶음 하나 → B2B 파이프라인 스텝 dict (프론트 normalizeStep 이 소화하는 형태)."
 role_source: docstring
 version: "0.8.2"
-loc: "record_service.py:548-591"
+loc: "record_service.py:573-616"
 
 # ── 입출력 ──
 inputs:

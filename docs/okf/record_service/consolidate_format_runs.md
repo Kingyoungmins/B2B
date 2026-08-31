@@ -8,7 +8,7 @@ signature: "(steps)"
 role: "연속된 같은 (book,sheet) FORMAT 스텝 중 '서식이 완전히 같은' 것을 union 주소"
 role_source: docstring
 version: "0.8.2"
-loc: "record_service.py:378-420"
+loc: "record_service.py:403-445"
 
 # ── 입출력 ──
 inputs:

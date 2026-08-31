@@ -8,7 +8,7 @@ signature: "(step)"
 role: "리터럴 값 스텝이면 {(row,col): value} 로 펼쳐 반환, 아니면 None."
 role_source: docstring
 version: "0.8.2"
-loc: "record_service.py:229-248"
+loc: "record_service.py:254-273"
 
 # ── 입출력 ──
 inputs:

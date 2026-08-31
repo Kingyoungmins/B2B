@@ -8,7 +8,7 @@ signature: "(fmt)"
 role: "서식 dict 를 비교 가능한 정렬 키로(중첩 dict/list 포함)."
 role_source: docstring
 version: "0.8.2"
-loc: "record_service.py:423-429"
+loc: "record_service.py:448-454"
 
 # ── 입출력 ──
 inputs:

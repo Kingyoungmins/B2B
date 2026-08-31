@@ -8,7 +8,7 @@ signature: "(g)"
 role: "묶음이 건드리는 시트명(등장 순서 유지, 중복 제거)."
 role_source: docstring
 version: "0.8.2"
-loc: "record_service.py:195-202"
+loc: "record_service.py:220-227"
 
 # ── 입출력 ──
 inputs:

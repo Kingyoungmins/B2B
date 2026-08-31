@@ -49,6 +49,31 @@ ROLE_TITLES = {
 DIGEST_MAX_CELLS = 200_000  # 시트당 값 판독 상한(저사양 보호) — 초과분은 상단 창만 해시
 
 
+# ── [계측 2026-08-31] 시작/정지 사이가 로그에 안 남아 있었다 ────────────────────────
+# serve_b2b 는 start/stop 두 시점만 남긴다. 그런데 정작 녹화가 통째로 유실되는 자리는
+# 그 사이다: 펌프 루프가 Excel 사망을 감지해 break 하거나, 정지 시퀀스 7단계가 각각
+# try/except pass 로 조용히 삼켜지거나, distill→그룹핑→스텝 변환에서 개수가 0으로
+# 줄어드는 경우. 그때 화면에는 "캡처 0건"만 뜨고 로그에는 아무 단서가 없었다.
+#
+# serve_b2b 를 import 하면 순환이 되므로 훅으로 받는다(없으면 호출 시점에 늦게 import).
+# _vba_trace 는 쓰기 락을 잡으므로 녹화 전용 스레드에서 불러도 안전하다.
+TRACE_HOOK = None
+
+
+def _trace(event, **fields):
+    fn = TRACE_HOOK
+    if fn is None:
+        try:
+            import serve_b2b as _s
+            fn = _s._vba_trace
+        except Exception:
+            return
+    try:
+        fn(event, **fields)
+    except Exception:
+        pass                      # 계측이 녹화를 깨뜨리면 안 된다
+
+
 def _norm_cell(v):
     """Value2 셀값 정규화 — 재현 전후 부동소수 미세오차/None 표기 차이를 흡수."""
     if v is None:
@@ -668,8 +693,15 @@ class RecordService:
 
             if app_stream is not None:
                 app = _unmarshal_app(app_stream)
+                _app_via = "marshal"
             else:
                 app = win32com.client.GetActiveObject("Excel.Application")
+                _app_via = "getactive"
+            try:
+                _books = [str(w.Name) for w in app.Workbooks]
+            except Exception:
+                _books = None
+            _trace("record.svc.begin", via=_app_via, books=_books)
 
             registry = WorkbookRegistry()
             sink = ActionSink()
@@ -705,43 +737,69 @@ class RecordService:
                         pass
                 try:
                     _ = app.Workbooks.Count  # Excel 종료 감지
-                except Exception:
+                except Exception as _dead:
+                    # 여기서 빠져나오면 그 뒤 수확은 전부 빈손이다. 예전에 '첫 녹화부터 캡처 0건'
+                    # 제보의 실제 원인이 이 자리였는데 로그가 없어 한참 헤맸다.
+                    _trace("record.svc.excel_gone", ticks=tick,
+                           actions=len(getattr(sink, "actions", []) or []), error=str(_dead)[:200])
                     break
                 time.sleep(sleep_s)
 
             # 정지 시퀀스 — ixi-Cell-R cli.py 순서 그대로
             handler.capturing = False
             handler.replaying = True
+            # 이 7단계는 각각 try/except pass 라, 하나가 죽어도 결과만 조용히 비게 된다.
+            # 어느 단계가 왜 죽었는지 남긴다(순서는 그대로 — ixi-Cell-R cli.py 검증된 순서).
+            _phase_fail = {}
             for fn in ("flush_dirty_formats", "resolve_deferred", "capture_sort_diffs",
                        "capture_filter_diffs", "capture_dimension_diffs",
                        "capture_format_diffs", "capture_object_diffs"):
                 try:
                     getattr(handler, fn)(app)
-                except Exception:
-                    pass
+                except Exception as _pe:
+                    _phase_fail[fn] = str(_pe)[:160]
             try:
                 handler.reconcile()
-            except Exception:
-                pass
+            except Exception as _re:
+                _phase_fail["reconcile"] = str(_re)[:160]
+            if _phase_fail:
+                _trace("record.svc.stop_phase_failed", phases=sorted(_phase_fail),
+                       detail=_phase_fail, actions=len(sink.actions))
 
+            _n_raw = len(sink.actions)
             steps = distill(sink.actions)
             # 조각난 붙여넣기(리터럴 값 런) 통합 + 서식 폭발 사전통합(안전 subset)
             #   → 역할 그룹핑 → 소묶음 흡수 → COM 예산 분할(40)
             # 서식 사전통합은 카드 과발생(D)의 상류 완화 — 테두리/병합은 절대 안 합침.
+            _n_distilled = len(steps)
             steps = consolidate_literal_runs(steps)
+            _n_lit = len(steps)
             steps = consolidate_format_runs(steps)
+            _n_fmt = len(steps)
             groups = chunk_groups(merge_small_adjacent_groups(group_steps(steps)))
             entries = [group_to_pipeline_entry(g, i) for i, g in enumerate(groups)]
+            _n_before_noop = len(entries)
             # [no-op 그룹 제거] 재현 효과가 없는(ctx 호출 없이 주석/pass 뿐인) 그룹은 스텝으로
             # 만들지 않는다. comment_set·hyperlink 등 미지원 액션만 모인 그룹이 그런 경우인데,
             # 실행하면 '워크북 변경 없음'으로 서버가 실패(400) 처리해 재현 전체가 깨졌다.
             entries = [e for e in entries if "ctx." in (e.get("code") or "")]
+            # 어디서 몇 개가 줄었는지 한 줄로 — '캡처 0건' 이 나왔을 때 어느 단계에서 사라졌는지
+            # 이 줄 하나로 가른다(조작은 했는데 raw 가 0 이면 수집 실패, raw 는 있는데 entries 가
+            # 0 이면 정제·그룹핑 쪽 문제).
+            _trace("record.svc.harvest",
+                   rawActions=_n_raw, distilled=_n_distilled,
+                   afterLiteralMerge=_n_lit, afterFormatMerge=_n_fmt,
+                   groups=len(groups), entries=_n_before_noop,
+                   droppedNoop=_n_before_noop - len(entries), finalSteps=len(entries))
             # [재현 검증] 정지 시점 = 사용자가 만든 '정답' 상태. 건드린 시트의 다이제스트를
             # 남겨 재현 후 자동 대조한다(실패해도 녹화 결과는 그대로 — best effort).
             try:
                 expected = capture_expected_states(app, getattr(handler, "_touched_sheets", set()))
-            except Exception:
+            except Exception as _ee:
                 expected = []
+                # 재현 후 자동 대조가 통째로 꺼진다 — 실패해도 녹화는 살리되 사실은 남긴다.
+                _trace("record.svc.expected_failed", error=str(_ee)[:200],
+                       touched=len(getattr(handler, "_touched_sheets", set()) or ()))
             with self._lock:
                 self._result = {
                     "steps": entries,
@@ -750,7 +808,10 @@ class RecordService:
                     "groups": len(groups),
                     "expected": expected,
                 }
-        except Exception:
+        except Exception as _fatal:
+            # 예전엔 self._error 에만 담겨, 사용자가 화면 문구를 옮겨 적지 않으면 원인을 몰랐다.
+            _trace("record.svc.error", error=str(_fatal)[:200],
+                   trace=traceback.format_exc(limit=4)[-500:])
             with self._lock:
                 self._error = traceback.format_exc(limit=8)
         finally:

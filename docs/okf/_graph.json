@@ -19005,7 +19005,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "native_macro_recorder.py:458-581",
+      "loc": "native_macro_recorder.py:458-591",
       "signature": "(app, baseline)",
       "calls": [
         "_macro_recording_active",
@@ -19035,12 +19035,29 @@
       ]
     },
     {
+      "id": "_trace",
+      "module": "record_service.py",
+      "lang": "python",
+      "kind": "function",
+      "extraction": "ast",
+      "loc": "record_service.py:63-74",
+      "signature": "(event, **fields)",
+      "calls": [],
+      "side_effects": [
+        "없음(정적 분석 기준)"
+      ],
+      "reads": [
+        "TRACE_HOOK"
+      ],
+      "writes": []
+    },
+    {
       "id": "_norm_cell",
       "module": "record_service.py",
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "record_service.py:52-60",
+      "loc": "record_service.py:77-85",
       "signature": "(v)",
       "calls": [],
       "side_effects": [
@@ -19055,7 +19072,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "record_service.py:63-76",
+      "loc": "record_service.py:88-101",
       "signature": "(values)",
       "calls": [
         "_norm_cell",
@@ -19073,7 +19090,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "record_service.py:83-128",
+      "loc": "record_service.py:108-153",
       "signature": "(ws, max_rows=MERGE_SCAN_MAX_ROWS, max_cells=MERGE_SCAN_MAX_CELLS)",
       "calls": [
         "Cells",
@@ -19099,7 +19116,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "record_service.py:131-149",
+      "loc": "record_service.py:156-174",
       "signature": "(ws, max_cells=DIGEST_MAX_CELLS)",
       "calls": [
         "digest_grid",
@@ -19120,7 +19137,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "record_service.py:152-178",
+      "loc": "record_service.py:177-203",
       "signature": "(app, touched)",
       "calls": [
         "add",
@@ -19139,7 +19156,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "record_service.py:181-185",
+      "loc": "record_service.py:206-210",
       "signature": "(app)",
       "calls": [],
       "side_effects": [
@@ -19154,7 +19171,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "record_service.py:188-192",
+      "loc": "record_service.py:213-217",
       "signature": "(stream)",
       "calls": [
         "stream"
@@ -19171,7 +19188,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "record_service.py:195-202",
+      "loc": "record_service.py:220-227",
       "signature": "(g)",
       "calls": [
         "append"
@@ -19188,7 +19205,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "record_service.py:205-214",
+      "loc": "record_service.py:230-239",
       "signature": "(g)",
       "calls": [
         "_group_sheets",
@@ -19208,7 +19225,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "record_service.py:229-248",
+      "loc": "record_service.py:254-273",
       "signature": "(step)",
       "calls": [
         "row"
@@ -19225,7 +19242,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "record_service.py:251-257",
+      "loc": "record_service.py:276-282",
       "signature": "(merged, book, sheet, r1, c1, r2, c2, step_id, desc)",
       "calls": [
         "book",
@@ -19244,7 +19261,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "record_service.py:260-285",
+      "loc": "record_service.py:285-310",
       "signature": "(merged, book, sheet, base_id)",
       "calls": [
         "_fill_step",
@@ -19264,7 +19281,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "record_service.py:288-293",
+      "loc": "record_service.py:313-318",
       "signature": "(steps)",
       "calls": [],
       "side_effects": [
@@ -19279,7 +19296,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "record_service.py:296-358",
+      "loc": "record_service.py:321-383",
       "signature": "(steps, min_run=PASTE_MERGE_MIN_RUN, max_cells=PASTE_MERGE_MAX_CELLS)",
       "calls": [
         "_fill_step",
@@ -19305,7 +19322,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "record_service.py:361-367",
+      "loc": "record_service.py:386-392",
       "signature": "(step)",
       "calls": [],
       "side_effects": [
@@ -19320,7 +19337,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "record_service.py:370-375",
+      "loc": "record_service.py:395-400",
       "signature": "(fmt)",
       "calls": [],
       "side_effects": [
@@ -19335,7 +19352,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "record_service.py:378-420",
+      "loc": "record_service.py:403-445",
       "signature": "(steps)",
       "calls": [
         "_format_payload",
@@ -19358,7 +19375,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "record_service.py:423-429",
+      "loc": "record_service.py:448-454",
       "signature": "(fmt)",
       "calls": [],
       "side_effects": [
@@ -19373,7 +19390,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "record_service.py:432-444",
+      "loc": "record_service.py:457-469",
       "signature": "(ranges, max_chars=200)",
       "calls": [
         "append"
@@ -19390,7 +19407,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "record_service.py:447-470",
+      "loc": "record_service.py:472-495",
       "signature": "(steps)",
       "calls": [
         "_group_title",
@@ -19408,7 +19425,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "record_service.py:473-503",
+      "loc": "record_service.py:498-528",
       "signature": "(groups, small=2, limit=40)",
       "calls": [
         "_group_title",
@@ -19426,7 +19443,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "record_service.py:506-532",
+      "loc": "record_service.py:531-557",
       "signature": "(groups, limit=40)",
       "calls": [
         "append",
@@ -19446,7 +19463,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "record_service.py:535-545",
+      "loc": "record_service.py:560-570",
       "signature": "(body)",
       "calls": [],
       "side_effects": [
@@ -19461,7 +19478,7 @@
       "lang": "python",
       "kind": "function",
       "extraction": "ast",
-      "loc": "record_service.py:548-591",
+      "loc": "record_service.py:573-616",
       "signature": "(group, index)",
       "calls": [
         "_body_has_statement",
@@ -19480,7 +19497,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "record_service.py:597-605",
+      "loc": "record_service.py:622-630",
       "signature": "(self)",
       "calls": [],
       "side_effects": [
@@ -19504,7 +19521,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "record_service.py:607-618",
+      "loc": "record_service.py:632-643",
       "signature": "(self, value)",
       "calls": [
         "value"
@@ -19526,7 +19543,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "record_service.py:621-626",
+      "loc": "record_service.py:646-651",
       "signature": "(self)",
       "calls": [],
       "side_effects": [
@@ -19546,7 +19563,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "record_service.py:629-640",
+      "loc": "record_service.py:654-665",
       "signature": "(self, app_stream=None)",
       "calls": [
         "clear"
@@ -19574,7 +19591,7 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "record_service.py:643-656",
+      "loc": "record_service.py:668-681",
       "signature": "(self, timeout=120.0)",
       "calls": [],
       "side_effects": [
@@ -19596,9 +19613,10 @@
       "lang": "python",
       "kind": "method",
       "extraction": "ast",
-      "loc": "record_service.py:659-760",
+      "loc": "record_service.py:684-821",
       "signature": "(self, app_stream)",
       "calls": [
+        "_trace",
         "_unmarshal_app",
         "capture_expected_states",
         "chunk_groups",
@@ -19606,7 +19624,8 @@
         "consolidate_literal_runs",
         "group_steps",
         "group_to_pipeline_entry",
-        "merge_small_adjacent_groups"
+        "merge_small_adjacent_groups",
+        "tick"
       ],
       "side_effects": [
         "Excel COM 조작(파괴적일 수 있음)",
@@ -60124,6 +60143,11 @@
     },
     {
       "from": "RecordService._run",
+      "to": "_trace",
+      "lang": "python"
+    },
+    {
+      "from": "RecordService._run",
       "to": "_unmarshal_app",
       "lang": "python"
     },
@@ -60160,6 +60184,11 @@
     {
       "from": "RecordService._run",
       "to": "merge_small_adjacent_groups",
+      "lang": "python"
+    },
+    {
+      "from": "RecordService._run",
+      "to": "tick",
       "lang": "python"
     },
     {
@@ -77919,10 +77948,10 @@
     }
   ],
   "stats": {
-    "functions": 2296,
-    "edges": 6369,
+    "functions": 2297,
+    "edges": 6371,
     "by_lang": {
-      "python": 817,
+      "python": 818,
       "js": 1222,
       "csharp": 62
     }

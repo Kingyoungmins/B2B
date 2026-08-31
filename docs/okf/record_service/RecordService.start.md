@@ -9,7 +9,7 @@ signature: "(self, app_stream=None)"
 role: "---- 시작 ----"
 role_source: banner
 version: "0.8.2"
-loc: "record_service.py:629-640"
+loc: "record_service.py:654-665"
 
 # ── 입출력 ──
 inputs:

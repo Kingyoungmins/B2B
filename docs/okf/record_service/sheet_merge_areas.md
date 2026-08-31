@@ -8,7 +8,7 @@ signature: "(ws, max_rows=MERGE_SCAN_MAX_ROWS, max_cells=MERGE_SCAN_MAX_CELLS)"
 role: "시트의 병합 영역 주소 목록(정렬) — 재현 검증용 병합 지문."
 role_source: docstring
 version: "0.8.2"
-loc: "record_service.py:83-128"
+loc: "record_service.py:108-153"
 
 # ── 입출력 ──
 inputs:

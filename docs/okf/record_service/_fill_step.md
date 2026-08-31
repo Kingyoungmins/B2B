@@ -8,7 +8,7 @@ signature: "(merged, book, sheet, r1, c1, r2, c2, step_id, desc)"
 role: "merged[(r,c)] 값으로 (r1,c1)-(r2,c2) 박스를 채운 단일 range_fill Step."
 role_source: docstring
 version: "0.8.2"
-loc: "record_service.py:251-257"
+loc: "record_service.py:276-282"
 
 # ── 입출력 ──
 inputs:

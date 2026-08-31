@@ -8,7 +8,7 @@ signature: "(app, touched)"
 role: "touched {(book_key, sheet)} 시트들의 정지 시점 기대 상태 목록(재현 검증용)."
 role_source: docstring
 version: "0.8.2"
-loc: "record_service.py:152-178"
+loc: "record_service.py:177-203"
 
 # ── 입출력 ──
 inputs:

@@ -8,7 +8,7 @@ signature: "(v)"
 role: "Value2 셀값 정규화 — 재현 전후 부동소수 미세오차/None 표기 차이를 흡수."
 role_source: docstring
 version: "0.8.2"
-loc: "record_service.py:52-60"
+loc: "record_service.py:77-85"
 
 # ── 입출력 ──
 inputs:

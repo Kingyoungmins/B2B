@@ -8,7 +8,7 @@ signature: "(fmt)"
 role: "이 서식이 여러 영역을 union 주소 한 번에 적용해도 안전한가."
 role_source: docstring
 version: "0.8.2"
-loc: "record_service.py:370-375"
+loc: "record_service.py:395-400"
 
 # ── 입출력 ──
 inputs:

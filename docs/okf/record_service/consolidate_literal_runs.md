@@ -8,7 +8,7 @@ signature: "(steps, min_run=PASTE_MERGE_MIN_RUN, max_cells=PASTE_MERGE_MAX_CELLS
 role: "연속된 같은 (book,sheet) 리터럴 값 스텝 런을 더 적은 range_fill 로 통합."
 role_source: docstring
 version: "0.8.2"
-loc: "record_service.py:296-358"
+loc: "record_service.py:321-383"
 
 # ── 입출력 ──
 inputs:

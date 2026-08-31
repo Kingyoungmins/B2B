@@ -4200,6 +4200,25 @@
         ]
       ],
       "fix": "0.8.2 에서 녹화 기능을 점검한 기록(결함 수정 아님 — 계약 고정). 손으로 코드를 지어내지 않고 실제로 Range.Copy→Paste 를 한 뒤 _capture_copypaste_on_session_impl 을 불러 '녹화가 실제로 뱉는 코드'로 검증했다. 확인: 캡처 코드가 정적 게이트 통과 / 그대로 실행하면 값·서식이 옮겨짐 / 전체실행(격리 경로)에서 교차파일 그대로 동작하고 원본 무손상 / 파일명·시트명이 리터럴로 남아 실행기 매핑이 치환할 수 있음 / values_only 캡처도 동일 / 수정은 보통 스텝과 같은 경로(생성기=단일 적용, 실행기=미적용 후 [전체실행]) / on·off 는 여러 단계 중 하나를 꺼도 그 단계 결과만 사라지고 나머지는 남음(원본부터 다시 도는 구조라 성립) / 녹화 스텝은 '연결된 대화 없음'으로 판정돼 남의 채팅에 오매핑되지 않고, LLM 자동복구가 좌표를 임의로 고치지 않음. 검증 중 두 번 헛짚은 것도 남긴다: ①시트 1개짜리 픽스처는 CSV 용 '단일 시트 안전망'에 걸려 시트명 검증이 통째로 무의미해진다(시트 2개 이상으로 만들어야 진짜 검증) ②모든 단계를 끈 채 전체실행을 흉내내면 norm_groups 가 비어 백엔드가 즉시 반환해 라이브가 그대로 남는데, 실제 화면은 켜진 단계가 없으면 실행 버튼이 막히므로(btn-run.disabled) 도달할 수 없는 상황이다."
+    },
+    {
+      "id": "RECORD-MIDDLE-BLIND-SPOT",
+      "title": "[계측 2026-08-31] 녹화의 '시작과 정지 사이'가 로그에 안 남아 '캡처 0건' 원인을 못 가림.",
+      "checks": [
+        [
+          "python",
+          "test_runs/_test_record_service_tracing.py"
+        ],
+        [
+          "python",
+          "diagnostics/_test_recorder_sanitize.py"
+        ],
+        [
+          "python",
+          "diagnostics/_test_record_expected_harvest.py"
+        ]
+      ],
+      "fix": "serve_b2b 는 record.native.start/stop 두 시점만 남겼는데, 녹화가 통째로 유실되는 자리는 그 사이다. record_service._run 의 펌프 루프가 Excel 사망을 감지해 break 하거나, 정지 시퀀스 7단계가 각각 try/except pass 로 삼켜지거나, distill→통합→그룹핑→스텝 변환에서 개수가 0으로 줄어도 로그에 아무 단서가 없었다(화면엔 '캡처 0건'만). 계측 추가(동작 불변): record.svc.begin(Excel 을 잡은 경로 marshal/getactive + 열린 책), record.svc.excel_gone(펌프 탈출 — 이 자리가 '첫 녹화부터 0건' 제보의 실제 원인이었다), record.svc.stop_phase_failed(어느 단계가 왜 죽었나), record.svc.harvest(rawActions→distilled→afterLiteralMerge→afterFormatMerge→groups→entries→droppedNoop→finalSteps 한 줄), record.svc.expected_failed(재현 자동대조가 꺼짐), record.svc.error(스레드 사망). 순환 import 를 피하려 TRACE_HOOK 을 두고 없으면 호출 시점에 늦게 import 한다. _vba_trace 는 쓰기 락을 잡으므로 녹화 전용 스레드에서 불러도 안전. native_macro_recorder 는 새 채널을 만들지 않고 기존 RECORD_DIAG 에 moduleErrors/moduleError1(모듈 순회 중 삼킨 예외 — 대개 VBProject 접근 거부)/combinedLines/emptyAfterSanitize 를 실어 record.native.stop 으로 함께 나가게 했다. 이로써 '수집 실패(raw 0)'와 '정제 과다(raw>0 인데 최종 0)'를 가를 수 있다."
     }
   ]
 }

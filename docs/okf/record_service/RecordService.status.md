@@ -9,7 +9,7 @@ signature: "(self)"
 role: "---- 상태 ----"
 role_source: banner
 version: "0.8.2"
-loc: "record_service.py:621-626"
+loc: "record_service.py:646-651"
 
 # ── 입출력 ──
 inputs:

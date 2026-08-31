@@ -8,7 +8,7 @@ signature: "(groups, limit=40)"
 role: "스텝이 많은 묶음을 limit 이하로 쪼갠다."
 role_source: docstring
 version: "0.8.2"
-loc: "record_service.py:506-532"
+loc: "record_service.py:531-557"
 
 # ── 입출력 ──
 inputs:

@@ -471,6 +471,7 @@ def stop_native_recording_impl(app, baseline):
         pass  # 이미 꺼져 있으면(사용자가 리본에서 껐으면) 추출만 진행
     base = {tuple(b) for b in (baseline or [])}
     RECORD_DIAG["baselineModules"] = len(base)
+    _mod_errors = []          # 모듈 순회 중 삼킨 예외(아래에서 개수·첫 사유를 진단에 싣는다)
     # [교차 워크북] 회전(탭 전환 시 stop/start — 모달 때문에 느림) 대신, 정지 시 '모든
     # 워크북'의 새 매크로 모듈을 각각 수확한다. MS 레코더가 워크북별로 모듈을 만들면
     # 워크북 경계가 그대로 잡힌다(안 만들면 한 청크 = 종전과 동일, 탭 전환 부하 0).
@@ -516,10 +517,15 @@ def stop_native_recording_impl(app, baseline):
                     harvested.append((wb_name, wb_full, code))
                     harvested_sheets.append(wb_sheet)
                     raw_total += code.count("\n") + 1
-            except Exception:
+            except Exception as _me:
+                # [계측 2026-08-31] 여기서 조용히 건너뛰면 harvested=0 인데 이유가 안 남는다.
+                # 대표 원인은 VBProject 접근 거부(매크로 보안 설정) — 사용자 PC 마다 다르다.
+                _mod_errors.append(str(_me)[:120])
                 continue
     RECORD_DIAG["harvested"] = len(harvested)
     RECORD_DIAG["rawLines"] = raw_total
+    RECORD_DIAG["moduleErrors"] = len(_mod_errors)
+    RECORD_DIAG["moduleError1"] = _mod_errors[0] if _mod_errors else ""
     if not harvested:
         return {"code": "", "rawLines": 0, "summary": "",
                 "recordedWorkbook": "", "recordedWorkbookFullName": "",
@@ -551,7 +557,11 @@ def stop_native_recording_impl(app, baseline):
     # 변수로 — 절대참조가 약한 동적 시트명에 한해 동적 참조 허용(피벗 재현 안정화).
     combined = rewrite_new_sheet_refs(combined)
 
+    RECORD_DIAG["combinedLines"] = (len(combined.splitlines()) if combined.strip() else 0)
     if not combined.strip():
+        # 수확은 됐는데(rawLines>0) 정제 후 빈손이면 sanitize/rewrite 단계에서 다 깎인 것이다.
+        # 이 두 숫자를 나란히 봐야 '수집 실패'와 '정제 과다'를 가를 수 있다.
+        RECORD_DIAG["emptyAfterSanitize"] = True
         return {"code": "", "rawLines": raw_total, "summary": "",
                 "recordedWorkbook": harvested[0][0], "recordedWorkbookFullName": harvested[0][1],
                 "recordedSheet": harvested_sheets[0] if harvested_sheets else ""}

@@ -8,7 +8,7 @@ signature: "(groups, small=2, limit=40)"
 role: "같은 워크북의 이웃 묶음 중 한쪽이 소묶음(≤small 스텝)이면 흡수한다(순서 불변)."
 role_source: docstring
 version: "0.8.2"
-loc: "record_service.py:473-503"
+loc: "record_service.py:498-528"
 
 # ── 입출력 ──
 inputs:

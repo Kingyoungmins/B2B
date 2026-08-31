@@ -9,7 +9,7 @@ signature: "(self, app_stream)"
 role: "---- 녹화 스레드 본체 ----"
 role_source: banner
 version: "0.8.2"
-loc: "record_service.py:659-760"
+loc: "record_service.py:684-821"
 
 # ── 입출력 ──
 inputs:
@@ -25,6 +25,7 @@ raises: []
 
 # ── 유기적 관계 ──
 calls:
+  - "_trace"
   - "_unmarshal_app"
   - "capture_expected_states"
   - "chunk_groups"
@@ -33,6 +34,7 @@ calls:
   - "group_steps"
   - "group_to_pipeline_entry"
   - "merge_small_adjacent_groups"
+  - "tick"
 calls_external:
   - "ActionSink"
   - "AppEvents"
@@ -43,10 +45,24 @@ calls_external:
   - "PumpWaitingMessages"
   - "WithEvents"
   - "WorkbookRegistry"
+  - "_app_via"
+  - "_books"
+  - "_dead"
+  - "_ee"
+  - "_fatal"
+  - "_n_before_noop"
+  - "_n_distilled"
+  - "_n_fmt"
+  - "_n_lit"
+  - "_n_raw"
+  - "_pe"
+  - "_phase_fail"
+  - "_re"
   - "app"
   - "app_stream"
   - "begin"
   - "distill"
+  - "entries"
   - "enumerate"
   - "flush_dirty_formats"
   - "fn"
@@ -60,15 +76,6 @@ calls_external:
   - "is_set"
   - "len"
   - "max"
-  - "poll"
-  - "reconcile"
-  - "register"
-  - "registry"
-  - "set"
-  - "sleep"
-  - "sleep_s"
-  - "steps"
-  - "wb"
 called_by: []
 reads:
   - "self._lock"
@@ -92,7 +99,7 @@ timestamp: "0.8.2-gen"
 - 변경 상태 `self._error, self._handler, self._recording, self._result, self._sink` — 수정 시 이 상태를 읽는 곳 동반 점검.
 
 ## 관계
-- 호출: `_unmarshal_app`, `capture_expected_states`, `chunk_groups`, `consolidate_format_runs`, `consolidate_literal_runs`, `group_steps`, `group_to_pipeline_entry`, `merge_small_adjacent_groups`
+- 호출: `_trace`, `_unmarshal_app`, `capture_expected_states`, `chunk_groups`, `consolidate_format_runs`, `consolidate_literal_runs`, `group_steps`, `group_to_pipeline_entry`, `merge_small_adjacent_groups`, `tick`
 - 피호출(영향 전파 경로): 없음
 
 ## 실패/예외

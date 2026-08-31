@@ -8,7 +8,7 @@ signature: "(merged, book, sheet, base_id)"
 role: "gap 이 있는 런을 '행별 연속 구간(row-run)'으로 분할한 스텝 목록."
 role_source: docstring
 version: "0.8.2"
-loc: "record_service.py:260-285"
+loc: "record_service.py:285-310"
 
 # ── 입출력 ──
 inputs:

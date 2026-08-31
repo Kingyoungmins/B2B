@@ -9,7 +9,7 @@ signature: "(self, value)"
 role: "B2B Excel 워커가 잡 실행 전/후 호출 — 녹화 중이면 B2B 자신의 변경을"
 role_source: docstring
 version: "0.8.2"
-loc: "record_service.py:607-618"
+loc: "record_service.py:632-643"
 
 # ── 입출력 ──
 inputs:

@@ -8,7 +8,7 @@ signature: "(step)"
 role: "FORMAT 스텝의 서식 dict(payload['format']) 반환, 아니면 None."
 role_source: docstring
 version: "0.8.2"
-loc: "record_service.py:361-367"
+loc: "record_service.py:386-392"
 
 # ── 입출력 ──
 inputs:

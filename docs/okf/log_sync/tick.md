@@ -46,6 +46,7 @@ calls_external:
   - "time"
   - "timeout"
 called_by:
+  - "RecordService._run"
   - "_loop"
   - "stop"
 reads:
@@ -66,7 +67,7 @@ timestamp: "0.8.2-gen"
 
 ## 관계
 - 호출: `_ensure_session`, `_ensure_user`, `_note_fail`, `_over_total_budget`, `_send_log_file`, `_send_skill`, `_session_files`, `_session_skills`, `config`
-- 피호출(영향 전파 경로): `_loop`, `stop`
+- 피호출(영향 전파 경로): `RecordService._run`, `_loop`, `stop`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`
