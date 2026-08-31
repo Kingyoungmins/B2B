@@ -4241,6 +4241,17 @@
         ]
       ],
       "fix": "실측: toggle_on.route 의 activeExcelId 는 input_원가_2026_4월.xlsx 인데 스텝 코드는 Windows(\"output_청구서_템플릿.xlsx\").Activate → Sheets(\"ㅎㅇ\") A1 에 썼다. 백엔드는 pipeline.step.ok / result.copied 로 정상 적용을 보고했다 — 사용자는 다른 파일을 보고 있어 '적용 안 됨'으로 읽었다. 녹화 종료에는 착지를 맞추는 코드가 있는데(record-land: setCurrentView + showOnlyExcelMirrorWindow) on/off 에는 없었다. 단일 스텝 켜기 성공 뒤 그 스텝의 대상 파일(inferPipelineStepTargetFileId)로 탭·미러를 옮기고, 토스트에도 어느 파일이 바뀌었는지 적는다. 이미 그 파일을 보고 있으면 화면을 흔들지 않고, 실행기 헤드리스(Excel 창을 일부러 숨기는 화면)는 건드리지 않는다. 이동 여부는 pipeline.toggle_on.land 로 남긴다."
+    },
+    {
+      "id": "VBA-APPLY-WINDOW-DROP",
+      "title": "[제보 2026-08-31] 스킬을 추가하면 Excel 창이 내려갔다 올라온다 — VBA 로 적용할 때만.",
+      "checks": [
+        [
+          "python",
+          "test_runs/_test_vba_apply_window_flicker_com.py"
+        ]
+      ],
+      "fix": "실측(_test_vba_apply_window_flicker_com.py): 단일 VBA 적용 중 app.Visible/IsWindowVisible 이 True/True -> False/False -> True/True. 원인은 _run_vba_on_session_impl 이 매크로 실행 직전 _prepare_vba_macro_run_window_state 로 창을 진짜로 숨기고(offscreen park + Visible=False + SW_HIDE) finally 의 _restore_live_window 로 다시 띄운 것. Python 단일 적용에는 이 왕복이 없어 VBA 일 때만 보였다. 이 숨김은 '창이 보이면 Application.Run 을 거부하는 일부 Office 빌드' 대비 최후 보루인데, 그 앞에 이미 우회가 두 단계 있다(직접 주입 -> 임시 .xlsm 러너 -> 격리 인스턴스). 그래서 '항상 숨김'을 '거부당했을 때만 숨김'으로 바꿨다: 먼저 창을 그대로 두고 실행하고, _is_vba_macro_run_blocked_error 가 맞으면 그때 숨기고 1회 재시도하며 _VBA_WINDOW_HIDE['required'] 에 기억해 그 뒤로는 처음부터 숨긴다(거부 환경은 종전 동작 그대로, 재시도 비용 0). 숨기지 않은 경우엔 _restore_live_window 도 건너뛰고 _hide_non_target_workbook_windows 만 해 뒷정리는 유지한다 — 창 위치/표시 상태는 안 건드린다. 사용자가 못 박은 회귀 2건을 실측으로 잠금: 교차 Activate 매크로 뒤에도 ActiveWorkbook 은 대상 파일이고 옆 파일 창은 숨겨진다(탭 어긋남), 대상 창은 계속 그려진 채다(회색 빈 프레임), 포그라운드도 안 뺏는다."
     }
   ]
 }

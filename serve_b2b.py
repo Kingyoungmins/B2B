@@ -10268,10 +10268,31 @@ def _run_vba_on_session_impl(excel_id, code, entry=None, restore_window=True):
             _protect_workbook_for_read_only_mirror(wb, False)
         except Exception:
             pass
+        _did_hide = False
         try:
             _t = time.perf_counter()
-            _prepare_vba_macro_run_window_state(session, app, wb)
-            _inject_and_run_vba(app, wb, code, entry)
+            # [제보 2026-08-31] "스킬 추가할 때 창이 내려갔다 올라온다 — VBA 일 때".
+            # 원인이 여기였다. 매크로 실행 직전 창을 '진짜로' 숨기고(offscreen park + Visible=False
+            # + SW_HIDE) finally 의 _restore_live_window 가 다시 띄운다.
+            # 실측(_test_vba_apply_window_flicker_com.py): 보임 → 숨김 → 보임. Python 적용엔 없다.
+            #
+            # 이 숨김은 '창이 보이는 상태면 Application.Run 을 거부하는 일부 Office 빌드' 대비용
+            # 최후 보루다. 그런데 그 앞에 이미 우회가 두 단계 있다(직접 주입 → 임시 .xlsm 러너 →
+            # 격리 인스턴스). 그래서 '항상 숨김'을 '거부당했을 때만 숨김'으로 바꾼다.
+            # 한 번이라도 거부당한 환경에서는 그 뒤로 처음부터 숨겨 종전 동작 그대로 간다.
+            if _VBA_WINDOW_HIDE["required"]:
+                _prepare_vba_macro_run_window_state(session, app, wb)
+                _did_hide = True
+            try:
+                _inject_and_run_vba(app, wb, code, entry)
+            except Exception as _run_err:
+                if _did_hide or not _is_vba_macro_run_blocked_error(_run_err):
+                    raise
+                _VBA_WINDOW_HIDE["required"] = True
+                _vba_trace("vba.window.hide_required", reason=str(_run_err)[:200])
+                _prepare_vba_macro_run_window_state(session, app, wb)
+                _did_hide = True
+                _inject_and_run_vba(app, wb, code, entry)
             captured = _capture_live_view_state(app, wb, session)
             if captured:
                 final_view = captured
@@ -10333,9 +10354,16 @@ def _run_vba_on_session_impl(excel_id, code, entry=None, restore_window=True):
                 pass
             # 단일 적용은 바로 결과를 보여야 하므로 복원한다. 전체실행은 step마다 복원하면
             # 빈 Excel 창이 여러 번 튀므로 클라이언트가 마지막에 한 번만 복원한다.
-            if restore_window:
+            if restore_window and _did_hide:
                 try:
                     _restore_live_window(session, app, wb)
+                except Exception:
+                    pass
+            elif restore_window:
+                # 창을 안 내렸으니 다시 띄울 것도 없다(= 깜빡임 없음). 다만 매크로가 동반 워크북
+                # 창을 띄워 놨을 수 있어 그 정리만 종전대로 한다 — 창 위치·표시 상태는 안 건드린다.
+                try:
+                    _hide_non_target_workbook_windows(app, wb)
                 except Exception:
                     pass
         # [변경없음 검증 제거] VBA 가 예외 없이 끝났으면 성공으로 본다. 예전엔 실행 전후 워크북 지문을
@@ -20263,6 +20291,12 @@ def _hide_excel_app_window(app):
         _hide_excel_hwnd(app.Hwnd)
     except Exception:
         pass
+
+
+# [제보 2026-08-31] 매크로를 돌리려면 창을 숨겨야만 하는 Office 빌드인가.
+# 기본은 False(안 숨김) — 실제로 "매크로를 실행할 수 없습니다" 를 한 번 맞으면 켜지고,
+# 그 뒤로는 처음부터 숨겨 종전 동작으로 돌아간다. 프로세스 수명 동안만 기억한다.
+_VBA_WINDOW_HIDE = {"required": False}
 
 
 def _prepare_vba_macro_run_window_state(session, app, wb):
