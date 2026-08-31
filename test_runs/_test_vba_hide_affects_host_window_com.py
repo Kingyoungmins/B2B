@@ -90,12 +90,11 @@ try:
     check("본체와 Excel 은 서로 다른 프로세스다",
           win32process.GetWindowThreadProcessId(host)[1] != win32process.GetWindowThreadProcessId(xl_hwnd)[1])
 
-    try:
-        win32gui.SetForegroundWindow(xl_hwnd)   # 사용자가 Excel 쪽을 보고 있는 상태
-    except Exception:
-        pass
+    got_fg = S._force_set_foreground(xl_hwnd)   # 사용자가 Excel 쪽을 보고 있는 상태(강제 선점)
     pump()
     fg_before = win32gui.GetForegroundWindow()
+    check("전제: 포그라운드를 Excel 로 가져올 수 있다(_force_set_foreground 교차프로세스 검증)",
+          got_fg and fg_before == xl_hwnd, (got_fg, fg_before, xl_hwnd))
     host_vis_before = bool(win32gui.IsWindowVisible(host))
     print("      [숨기기 전] 본체 보임=%s  포그라운드=%s (본체=%s, 엑셀=%s)"
           % (host_vis_before, fg_before, host, xl_hwnd))
@@ -157,10 +156,7 @@ try:
     def measure(mode, hide_required, cell):
         """같은 VBA 적용을 옛 방식/새 방식으로 한 번씩 돌리고 창·활성 상태를 잰다."""
         S._VBA_WINDOW_HIDE["required"] = hide_required
-        try:
-            win32gui.SetForegroundWindow(host)   # 사용자가 AX-Cell 을 보고 있는 상태에서 시작
-        except Exception:
-            pass
+        S._force_set_foreground(host)   # 사용자가 AX-Cell 을 보고 있는 상태에서 시작(강제 선점)
         pump()
         f0 = win32gui.GetForegroundWindow()
         seen_hidden = {"v": False}

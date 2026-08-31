@@ -10,7 +10,7 @@
               → 사용자 눈에 '내려갔다 올라옴'. Python 단일 적용에는 이 왕복이 없다.
 기대(수정 후): 창을 안 내리고 매크로가 돈다. 거부하는 Office 빌드에서만 그때 숨기고 재시도.
 """
-import sys, io, tempfile, shutil
+import sys, io, tempfile, shutil, time
 from pathlib import Path
 
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
@@ -63,6 +63,7 @@ try:
     wb = app.Workbooks.Open(str(work / NAME))
     app.Visible = True                      # 사용자가 보고 있는 라이브 창 상태
     S.EXCEL_SESSIONS["flick"] = {
+        "id": "flick",              # 실서비스 세션은 항상 id 보유 — 없으면 peer 파킹이 자신을 파킹한다(실측)
         "app": app, "workbook": wb, "path": str(work / NAME), "openPath": str(wb.FullName),
         "name": NAME, "sourcePath": str(work / NAME), "liveEditable": True,
         "pid": S._excel_process_id(app),
@@ -77,11 +78,16 @@ try:
         return orig_inject(a, w, code, entry)
 
     S._inject_and_run_vba = spy
+    orig_rlw = S._restore_live_window
+    rlw_calls = {"n": 0}
+    S._restore_live_window = lambda *a, **k: (rlw_calls.__setitem__("n", rlw_calls["n"] + 1), orig_rlw(*a, **k))[1]
     try:
         out = S._run_vba_on_session_impl("flick", VBA)
     finally:
         S._inject_and_run_vba = orig_inject
+        S._restore_live_window = orig_rlw
     sample("after", app)
+    check("창을 안 움직인 매크로에는 재배치도 안 돈다(드리프트 오발 없음)", rlw_calls["n"] == 0, rlw_calls)
 
     check("VBA 적용 자체는 성공한다", bool(out) and out.get("ok"), out)
     check("값이 실제로 써졌다",
@@ -212,6 +218,71 @@ try:
         S._VBA_WINDOW_HIDE["required"] = False
     check("한 번만 시도하고", len(seen2) == 1, seen2)
     check("그 한 번은 처음부터 숨긴 상태다", seen2[:1] == [True], seen2)
+
+    print("[6] 러너(.xlsm) 우회 경로 — 새 워크북 창이 화면에 안 뜬다 (CSV 등)")
+    # 창을 안 숨기게 되면서 드러난 구멍: 러너 생성이 Add → SaveAs → 파킹 순서라,
+    # SaveAs(디스크 쓰기) 동안 새 창이 화면 기본 위치에 떠 있었다. 파킹을 앞으로 당겼다.
+    S._VBA_WINDOW_HIDE["required"] = False
+    orig_should = S._vba_should_use_runner_host
+    orig_create = S._create_vba_runner_workbook
+    runner_state = {}
+
+    def spy_create(a, ctx_wb):
+        r, tdir = orig_create(a, ctx_wb)
+        try:
+            w = r.Windows(1)
+            runner_state["left"] = int(w.Left)
+            runner_state["visible"] = bool(w.Visible)
+        except Exception as e:
+            runner_state["err"] = str(e)[:120]
+        return r, tdir
+
+    S._vba_should_use_runner_host = lambda wb: True     # CSV 인 상황을 강제
+    S._create_vba_runner_workbook = spy_create
+    try:
+        out6 = S._run_vba_on_session_impl("flick", VBA.replace("vba-ok", "vba-runner"))
+    finally:
+        S._vba_should_use_runner_host = orig_should
+        S._create_vba_runner_workbook = orig_create
+    check("러너 경로로도 적용 성공", bool(out6) and out6.get("ok"), out6)
+    check("값이 대상 파일에 써졌다",
+          str(S.EXCEL_SESSIONS["flick"]["workbook"].Worksheets("Sheet").Range("A1").Value) == "vba-runner")
+    check("러너 창은 생성 직후부터 화면 밖이다(파킹이 SaveAs 앞)",
+          runner_state.get("left") is not None and runner_state["left"] <= -20000, runner_state)
+    check("적용 후에도 라이브 창은 그대로", bool(app.Visible) is True)
+
+    print("[7] 매크로가 창 자체를 옮기면 — 그때만 제자리로 되돌린다")
+    # 앞 단계 잔재(화면 밖 파킹·hidden 표시)를 정리: 실제 사용 때처럼 화면 안 정상 크기 + 표시 상태로 시작.
+    S.EXCEL_SESSIONS["flick"]["hidden"] = False
+    win32gui.MoveWindow(int(app.Hwnd), 220, 160, 960, 640, True)
+    time.sleep(0.2)
+    rect0 = win32gui.GetWindowRect(int(app.Hwnd))
+    S.EXCEL_SESSIONS["flick"]["liveRect"] = {"left": rect0[0], "top": rect0[1],
+                                             "width": rect0[2] - rect0[0], "height": rect0[3] - rect0[1]}
+    MOVE = ('Sub B2BSkill()\n'
+            '    Application.Left = Application.Left + 150\n'
+            '    ThisWorkbook.Worksheets(1).Range("A5").Value = "moved"\n'
+            'End Sub\n')
+    S._run_vba_on_session_impl("flick", MOVE)
+    rect1 = win32gui.GetWindowRect(int(app.Hwnd))
+    drift = max(abs(rect1[i] - rect0[i]) for i in range(4))
+    print("      원위치 %s → 적용 후 %s (오차 %spx)" % (rect0, rect1, drift))
+    check("창이 옮겨진 채 남지 않는다(제자리 복원)", drift <= 16, (rect0, rect1))
+    check("매크로 자체는 실행됐다",
+          str(S.EXCEL_SESSIONS["flick"]["workbook"].Worksheets("Sheet").Range("A5").Value) == "moved")
+
+    print("[8] 매크로가 창을 숨겨버리면 — 다시 띄운다")
+    HIDE = ('Sub B2BSkill()\n'
+            '    Application.Visible = False\n'
+            '    ThisWorkbook.Worksheets(1).Range("A6").Value = "hid"\n'
+            'End Sub\n')
+    S._run_vba_on_session_impl("flick", HIDE)
+    check("적용 후 창이 다시 보인다", bool(app.Visible) is True and
+          bool(win32gui.IsWindowVisible(int(app.Hwnd))) is True,
+          (app.Visible, win32gui.IsWindowVisible(int(app.Hwnd))))
+    check("매크로 자체는 실행됐다 ",
+          str(S.EXCEL_SESSIONS["flick"]["workbook"].Worksheets("Sheet").Range("A6").Value) == "hid")
+    S.EXCEL_SESSIONS["flick"].pop("liveRect", None)
 
     print("[3] 숨김이 '최후 보루'인지 — 그 앞에 이미 두 단계 우회가 있다")
     src = (ROOT / "serve_b2b.py").read_text(encoding="utf-8", errors="replace")

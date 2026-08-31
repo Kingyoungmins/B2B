@@ -9299,8 +9299,47 @@ def _restore_foreground_after_vba(prev_hwnd, excel_pid):
     try:
         if not win32gui.IsWindow(prev_hwnd) or not win32gui.IsWindowVisible(prev_hwnd):
             return False
-        win32gui.SetForegroundWindow(prev_hwnd)
-        return True
+    except Exception:
+        return False
+    ok = _force_set_foreground(prev_hwnd)
+    _vba_trace("vba.window.foreground_restored", ok=ok, prevHwnd=int(prev_hwnd), stolenBy=int(cur))
+    return ok
+
+
+def _force_set_foreground(hwnd):
+    """SetForegroundWindow + 실패 시 표준 우회(현재 포그라운드 스레드에 입력 큐 부착).
+
+    Windows 는 '최근 입력을 받았거나 포그라운드 프로세스가 띄운' 프로세스에만 포그라운드
+    변경을 허용한다. 백엔드(B2B_Server)는 둘 다 아닐 수 있어 단순 호출이 조용히 무시될 수
+    있다 — 그때는 포그라운드를 쥔 스레드(여기서는 Excel/VBE)에 우리 스레드의 입력 큐를
+    잠깐 붙이면 그 스레드의 권한으로 변경이 허용된다. 호출 후 실제로 바뀌었는지 확인해
+    성공 여부를 돌려준다."""
+    if win32gui is None:
+        return False
+    try:
+        win32gui.SetForegroundWindow(hwnd)
+    except Exception:
+        pass
+    try:
+        if win32gui.GetForegroundWindow() == hwnd:
+            return True
+    except Exception:
+        return False
+    try:
+        import win32api
+        cur = win32gui.GetForegroundWindow()
+        cur_tid = win32process.GetWindowThreadProcessId(cur)[0] if cur else 0
+        my_tid = win32api.GetCurrentThreadId()
+        if cur_tid and cur_tid != my_tid:
+            win32process.AttachThreadInput(my_tid, cur_tid, True)
+            try:
+                win32gui.SetForegroundWindow(hwnd)
+            finally:
+                win32process.AttachThreadInput(my_tid, cur_tid, False)
+    except Exception:
+        pass
+    try:
+        return win32gui.GetForegroundWindow() == hwnd
     except Exception:
         return False
 
@@ -9380,16 +9419,14 @@ def _create_vba_runner_workbook(app, context_wb):
             pass
         runner = app.Workbooks.Add()
         try:
-            runner.SaveAs(str(temp_path), FileFormat=52)  # xlOpenXMLWorkbookMacroEnabled
-        except Exception:
-            # Unsaved BookN can still host temporary injected modules in most installs.
-            pass
-        try:
             # 앱 전체실행 컨텍스트에서는 숨겨진 러너 통합문서를 대상으로
             # Application.Run 이 "매크로를 실행할 수 없습니다"로 거부되는 사례가 있었다.
             # 창은 visible 로 두되 화면 밖 작은 normal window 로 치워 사용자 화면에는 거의 노출하지 않는다.
+            # [제보 2026-08-31 후속] 이 파킹은 SaveAs '앞'이어야 한다. 이제 라이브 적용이 Excel 을
+            # 숨기지 않으므로, Add 직후의 새 창(통합 문서N)이 화면 기본 위치에 뜬 채 SaveAs(디스크
+            # 쓰기)가 끝나기를 기다리면 사용자 화면에 빈 워크북이 번쩍인다 — 예전엔 앱 전체가
+            # 숨겨져 있어 안 보이던 구멍.
             win = runner.Windows(1)
-            win.Visible = True
             try:
                 win.WindowState = -4143  # xlNormal
             except Exception:
@@ -9401,7 +9438,13 @@ def _create_vba_runner_workbook(app, context_wb):
                 win.Height = 80
             except Exception:
                 pass
+            win.Visible = True
         except Exception:
+            pass
+        try:
+            runner.SaveAs(str(temp_path), FileFormat=52)  # xlOpenXMLWorkbookMacroEnabled
+        except Exception:
+            # Unsaved BookN can still host temporary injected modules in most installs.
             pass
         try:
             context_wb.Activate()
@@ -10324,6 +10367,7 @@ def _run_vba_on_session_impl(excel_id, code, entry=None, restore_window=True):
         except Exception:
             pass
         _did_hide = False
+        _win_sig_before = _live_window_signature(app)
         try:
             _t = time.perf_counter()
             # [제보 2026-08-31] "스킬 추가할 때 창이 내려갔다 올라온다 — VBA 일 때".
@@ -10421,6 +10465,17 @@ def _run_vba_on_session_impl(excel_id, code, entry=None, restore_window=True):
                     _hide_non_target_workbook_windows(app, wb)
                 except Exception:
                     pass
+                # 예외: 매크로 자신이 앱 창을 옮기거나(Application.Left/WindowState) 숨긴
+                # (Visible=False) 드문 경우. 종전 경로는 매번 재배치해서 자동으로 덮였지만
+                # 이제는 실행 전후 창 서명이 달라졌을 때만 종전 복원을 태워 제자리로 돌린다.
+                _sig_now = _live_window_signature(app)
+                if _win_sig_before is not None and _sig_now != _win_sig_before:
+                    _vba_trace("vba.window.drift_restore",
+                               before=str(_win_sig_before), after=str(_sig_now))
+                    try:
+                        _restore_live_window(session, app, wb)
+                    except Exception:
+                        pass
         # [변경없음 검증 제거] VBA 가 예외 없이 끝났으면 성공으로 본다. 예전엔 실행 전후 워크북 지문을
         # 비교해 '변경 0건'이면 실패 처리했으나, 서식만 바꾸는 작업(천단위 콤마 등)·숨김 해제처럼 값 지문에
         # 안 잡히는 정상 작업까지 막아 더 불편해서 가드를 전부 들어냈다.
@@ -20352,6 +20407,24 @@ def _hide_excel_app_window(app):
 # 기본은 False(안 숨김) — 실제로 "매크로를 실행할 수 없습니다" 를 한 번 맞으면 켜지고,
 # 그 뒤로는 처음부터 숨겨 종전 동작으로 돌아간다. 프로세스 수명 동안만 기억한다.
 _VBA_WINDOW_HIDE = {"required": False}
+
+
+def _live_window_signature(app):
+    """Excel 앱 창의 (위치·크기, 표시 여부) — VBA 실행 전후 비교용.
+
+    창을 안 숨기는 새 경로에서는 종전의 무조건 재배치(_restore_live_window)가 빠지므로,
+    매크로 자신이 창을 옮기거나(Application.Left/WindowState) 숨기는(Visible=False) 드문
+    경우를 이 서명 비교로 잡아 '그때만' 종전 복원 경로를 태운다 — 안 변했으면 창을 일절
+    건드리지 않는다(깜빡임 0)."""
+    if win32gui is None:
+        return None
+    try:
+        # hwnd 도 서명에 넣는다: SDI Excel 에서 app.Hwnd 는 '활성 창'의 핸들이라,
+        # 매크로가 다른 워크북을 활성으로 남겨 두고 끝나면 hwnd 자체가 바뀐다 — 그것도 복원 사유다.
+        hwnd = int(app.Hwnd)
+        return (hwnd, tuple(win32gui.GetWindowRect(hwnd)), bool(win32gui.IsWindowVisible(hwnd)))
+    except Exception:
+        return None
 
 
 def _prepare_vba_macro_run_window_state(session, app, wb):

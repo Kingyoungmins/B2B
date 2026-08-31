@@ -154,7 +154,11 @@ t("8j 시작 실패 → 리셋(기존 동작)", stopFailDecision(false, false) =
 // ── 9. [녹화 취소 = 원상복구] 검토에서 스텝 미추가(취소) 시 녹화 전 스냅샷으로 복원 ──
 // 실측(2026-07-29): "녹화 취소하면 녹화 전으로 돌아가야 하는데 그대로 남음" — 취소가 그냥 return.
 {
-  const cancelIdx = pipeSrc.indexOf("if (!picked || !picked.length) {");
+  // [앵커 수정 2026-08-31] "if (!picked ...)" 가 소스에 2번 생겨(다른 picked 로직 추가)
+  // 첫 번째(무관한) 블록을 검사하고 있었다 — 9a~9e 가 코드는 멀쩡한데 전부 FAIL.
+  // 취소 블록 고유 식별자(_cancelOrder) 직전의 앵커를 잡는다.
+  const cancelIdx = pipeSrc.lastIndexOf("if (!picked || !picked.length) {",
+                                        pipeSrc.indexOf("_cancelOrder"));
   const cancelBlock = pipeSrc.slice(cancelIdx, cancelIdx + 2600);
   t("9a 취소 시 recPreSnapshots 로 /api/excel/replace 복원",
     /recPreSnapshots\.length/.test(cancelBlock)
