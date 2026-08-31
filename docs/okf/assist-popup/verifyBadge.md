@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(v)"
 role: "[Tier2] 격리 검증 배지(assist-ui.js 와 동형)."
 role_source: banner
-version: "0.8.1"
+version: "0.8.2"
 loc: "assist-popup.js:127-127"
 
 # ── 입출력 ──
@@ -35,7 +35,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.1-gen"
+timestamp: "0.8.2-gen"
 ---
 
 ## 역할

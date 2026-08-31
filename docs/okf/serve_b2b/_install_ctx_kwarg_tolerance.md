@@ -7,7 +7,7 @@ extraction: ast
 signature: "(*classes)"
 role: "ctx 클래스의 공개 메서드를 훑어 header_row/header_rows 를 서로 받아 주도록 감싼다."
 role_source: docstring
-version: "0.8.1"
+version: "0.8.2"
 loc: "serve_b2b.py:19418-19447"
 
 # ── 입출력 ──
@@ -46,7 +46,7 @@ reads:
   - "_HEADER_ALIAS_PAIR"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.1-gen"
+timestamp: "0.8.2-gen"
 ---
 
 ## 역할

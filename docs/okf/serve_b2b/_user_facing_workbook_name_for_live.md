@@ -7,7 +7,7 @@ extraction: ast
 signature: "(app, live_name)"
 role: "라이브 wb.Name → 사용자 파일명(코드에 그대로 저장해도 되는 이름)."
 role_source: docstring
-version: "0.8.1"
+version: "0.8.2"
 loc: "serve_b2b.py:9034-9061"
 
 # ── 입출력 ──
@@ -43,7 +43,7 @@ reads:
   - "_WB_NAME_REVERSE_ALIASES"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.1-gen"
+timestamp: "0.8.2-gen"
 ---
 
 ## 역할

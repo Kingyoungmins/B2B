@@ -7,7 +7,7 @@ extraction: ast
 signature: "(job_id)"
 role: "협조적 취소 체크포인트 — 스텝 경계에서 호출. 취소 요청이 있으면 cancelled 플래그가"
 role_source: docstring
-version: "0.8.1"
+version: "0.8.2"
 loc: "serve_b2b.py:2925-2947"
 
 # ── 입출력 ──
@@ -44,7 +44,7 @@ reads:
   - "PIPELINE_JOBS_LOCK"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.1-gen"
+timestamp: "0.8.2-gen"
 ---
 
 ## 역할

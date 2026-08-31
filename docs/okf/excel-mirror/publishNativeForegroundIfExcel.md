@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "()"
 role: "[제보 2026-08-25] 실행기 전체실행이 끝나도 포그라운드가 Excel 작업 창에 남아 있으면,"
 role_source: banner
-version: "0.8.1"
+version: "0.8.2"
 loc: "excel-mirror.js:81-81"
 
 # ── 입출력 ──
@@ -27,7 +27,7 @@ called_by: []
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.1-gen"
+timestamp: "0.8.2-gen"
 ---
 
 ## 역할

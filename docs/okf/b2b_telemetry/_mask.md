@@ -7,7 +7,7 @@ extraction: ast
 signature: "(text)"
 role: "업무 텍스트(스킬명·오류 메시지) 가리기. 기준이 정해지기 전 기본은 원문."
 role_source: docstring
-version: "0.8.1"
+version: "0.8.2"
 loc: "b2b_telemetry.py:115-120"
 
 # ── 입출력 ──
@@ -34,7 +34,7 @@ reads:
   - "MASK_BUSINESS_TEXT"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.1-gen"
+timestamp: "0.8.2-gen"
 ---
 
 ## 역할

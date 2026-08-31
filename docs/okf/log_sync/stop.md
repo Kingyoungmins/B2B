@@ -7,7 +7,7 @@ extraction: ast
 signature: "(reason='normal', timeout=6.0)"
 role: "종료 직전 마지막 한 번 더 보내고 '이 세션 끝' 을 알린다(멱등)."
 role_source: docstring
-version: "0.8.1"
+version: "0.8.2"
 loc: "log_sync.py:576-609"
 
 # ── 입출력 ──
@@ -51,7 +51,7 @@ reads:
 writes:
   - "_STATE"
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.1-gen"
+timestamp: "0.8.2-gen"
 ---
 
 ## 역할

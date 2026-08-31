@@ -7,7 +7,7 @@ extraction: ast
 signature: "(path)"
 role: "이 모듈이 맡는 GET 이면 응답 dict 를, 아니면 None 을 돌려준다."
 role_source: docstring
-version: "0.8.1"
+version: "0.8.2"
 loc: "b2b_scheduler.py:705-708"
 
 # ── 입출력 ──
@@ -34,7 +34,7 @@ reads:
   - "_GET_ROUTES"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.1-gen"
+timestamp: "0.8.2-gen"
 ---
 
 ## 역할

@@ -7,7 +7,7 @@ extraction: ast
 signature: "(excel_id, step)"
 role: "스텝 1개의 '실행 결과에 영향 있는' 부분만. _step_signature 와 같은 철학이되"
 role_source: docstring
-version: "0.8.1"
+version: "0.8.2"
 loc: "serve_b2b.py:19875-19892"
 
 # ── 입출력 ──
@@ -40,7 +40,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.1-gen"
+timestamp: "0.8.2-gen"
 ---
 
 ## 역할

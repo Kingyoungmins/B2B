@@ -7,7 +7,7 @@ extraction: ast
 signature: "(wb)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
-version: "0.8.1"
+version: "0.8.2"
 loc: "serve_b2b.py:20435-20512"
 
 # ── 입출력 ──
@@ -65,7 +65,7 @@ reads:
   - "PREVIEW_ROWS"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.1-gen"
+timestamp: "0.8.2-gen"
 ---
 
 ## 역할

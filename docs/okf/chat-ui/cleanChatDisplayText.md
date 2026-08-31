@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(content)"
 role: "[말풍선 표시 정리] 저장된 대화를 다시 그릴 때, 내부 프롬프트 스캐폴딩은 감추고 '사용자가 직접 친 부분'만"
 role_source: banner
-version: "0.8.1"
+version: "0.8.2"
 loc: "chat-ui.js:268-268"
 
 # ── 입출력 ──
@@ -34,7 +34,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.1-gen"
+timestamp: "0.8.2-gen"
 ---
 
 ## 역할

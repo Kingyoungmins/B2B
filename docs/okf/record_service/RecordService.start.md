@@ -8,7 +8,7 @@ class: RecordService
 signature: "(self, app_stream=None)"
 role: "---- 시작 ----"
 role_source: banner
-version: "0.8.1"
+version: "0.8.2"
 loc: "record_service.py:629-640"
 
 # ── 입출력 ──
@@ -61,7 +61,7 @@ writes:
   - "self._result"
   - "self._thread"
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.1-gen"
+timestamp: "0.8.2-gen"
 ---
 
 ## 역할

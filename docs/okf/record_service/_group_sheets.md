@@ -7,7 +7,7 @@ extraction: ast
 signature: "(g)"
 role: "묶음이 건드리는 시트명(등장 순서 유지, 중복 제거)."
 role_source: docstring
-version: "0.8.1"
+version: "0.8.2"
 loc: "record_service.py:195-202"
 
 # ── 입출력 ──
@@ -31,7 +31,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.1-gen"
+timestamp: "0.8.2-gen"
 ---
 
 ## 역할

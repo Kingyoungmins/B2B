@@ -7,7 +7,7 @@ extraction: ast
 signature: "(companions, books)"
 role: "바뀐 워크북 이름 집합 → 그게 어느 라이브 세션인지(excelId). 대상 세션은 동반본이 아니므로"
 role_source: docstring
-version: "0.8.1"
+version: "0.8.2"
 loc: "serve_b2b.py:10613-10628"
 
 # ── 입출력 ──
@@ -37,7 +37,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.1-gen"
+timestamp: "0.8.2-gen"
 ---
 
 ## 역할

@@ -7,7 +7,7 @@ extraction: ast
 signature: "(path_or_bytes)"
 role: "보호 문서 안에 적힌 **원본 라벨 GUID** 를 읽는다. 못 찾으면 \"\"."
 role_source: docstring
-version: "0.8.1"
+version: "0.8.2"
 loc: "secure_doc.py:476-500"
 
 # ── 입출력 ──
@@ -41,7 +41,7 @@ reads:
   - "_LABEL_RE"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.1-gen"
+timestamp: "0.8.2-gen"
 ---
 
 ## 역할

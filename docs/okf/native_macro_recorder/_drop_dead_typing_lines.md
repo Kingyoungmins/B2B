@@ -7,7 +7,7 @@ extraction: ast
 signature: "(lines)"
 role: "같은 선택 셀에 연속 대입 시(사이에 같은 셀 재선택/CutCopyMode/빈 줄만 허용) 앞 대입을 버린다."
 role_source: docstring
-version: "0.8.1"
+version: "0.8.2"
 loc: "native_macro_recorder.py:76-105"
 
 # ── 입출력 ──
@@ -42,7 +42,7 @@ reads:
   - "_SINGLE_CELL_SELECT"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.1-gen"
+timestamp: "0.8.2-gen"
 ---
 
 ## 역할

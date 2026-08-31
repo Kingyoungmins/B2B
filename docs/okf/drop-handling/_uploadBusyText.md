@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(job, done, name)"
 role: "[사용자 지시 2026-08-26] 진행 알림은 '화면 잠금' 한 곳으로. 예전엔 잠금 오버레이"
 role_source: banner
-version: "0.8.1"
+version: "0.8.2"
 loc: "drop-handling.js:45-45"
 
 # ── 입출력 ──
@@ -34,7 +34,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.1-gen"
+timestamp: "0.8.2-gen"
 ---
 
 ## 역할

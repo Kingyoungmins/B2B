@@ -7,7 +7,7 @@ extraction: ast
 signature: "(excel_id, steps, reset=True, entry=None, view_sheet=None)"
 role: "VBA/Python 스킬 파이프라인을 적용한다."
 role_source: docstring
-version: "0.8.1"
+version: "0.8.2"
 loc: "serve_b2b.py:10702-11120"
 
 # ── 입출력 ──
@@ -118,7 +118,7 @@ writes:
   - "PIPELINE_PROGRESS"
   - "RESULTS"
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.1-gen"
+timestamp: "0.8.2-gen"
 ---
 
 ## 역할

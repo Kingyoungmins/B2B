@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(a, b)"
 role: "같은 워크북 이름인가. 실행기 매핑은 확장자/공백 표기가 조금씩 다른 파일을 다루므로"
 role_source: banner
-version: "0.8.1"
+version: "0.8.2"
 loc: "drop-handling.js:1895-1895"
 
 # ── 입출력 ──
@@ -34,7 +34,7 @@ called_by: []
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.1-gen"
+timestamp: "0.8.2-gen"
 ---
 
 ## 역할

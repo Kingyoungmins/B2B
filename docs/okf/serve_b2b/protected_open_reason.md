@@ -7,7 +7,7 @@ extraction: ast
 signature: "(path)"
 role: "Excel 이 못 열었을 때, 그 원인이 '보안 문서라서' 인지 알려 준다. 아니면 \"\"."
 role_source: docstring
-version: "0.8.1"
+version: "0.8.2"
 loc: "serve_b2b.py:3205-3223"
 
 # ── 입출력 ──
@@ -30,7 +30,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.1-gen"
+timestamp: "0.8.2-gen"
 ---
 
 ## 역할

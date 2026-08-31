@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(n)"
 role: "숫자 표시 — 자릿수를 값 크기에 따라 동적으로. 0.998... 같은 비율 값이 \"1\" 로"
 role_source: banner
-version: "0.8.1"
+version: "0.8.2"
 loc: "excel-viewer.js:25-25"
 
 # ── 입출력 ──
@@ -31,7 +31,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.1-gen"
+timestamp: "0.8.2-gen"
 ---
 
 ## 역할

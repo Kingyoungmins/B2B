@@ -7,7 +7,7 @@ extraction: ast
 signature: "(sched)"
 role: "파싱된 주기 → '매달 25일 09:30' 같은 문장. 화면 표기와 같은 규칙."
 role_source: docstring
-version: "0.8.1"
+version: "0.8.2"
 loc: "b2b_scheduler.py:260-272"
 
 # ── 입출력 ──
@@ -31,7 +31,7 @@ reads:
   - "_WEEKDAY_KO"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.1-gen"
+timestamp: "0.8.2-gen"
 ---
 
 ## 역할

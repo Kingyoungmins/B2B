@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(prefixHtml)"
 role: "[검증 항목8] 실패 시 [다시 시도] 버튼을 복원할 수 있게 액션 영역을 재바인딩 함수로 만든다."
 role_source: banner
-version: "0.8.1"
+version: "0.8.2"
 loc: "assist-popup.js:157-157"
 
 # ── 입출력 ──
@@ -37,7 +37,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.1-gen"
+timestamp: "0.8.2-gen"
 ---
 
 ## 역할

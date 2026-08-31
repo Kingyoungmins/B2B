@@ -8,7 +8,7 @@ class: PythonComSkillContext
 signature: "(self, sheet=None)"
 role: "시트에 걸린 자동필터(AutoFilter)를 해제한다 — 필터 조건을 모두 지워 숨은 행을 복원하고, 헤더의 필터"
 role_source: docstring
-version: "0.8.1"
+version: "0.8.2"
 loc: "serve_b2b.py:13382-13416"
 
 # ── 입출력 ──
@@ -39,7 +39,7 @@ reads:
   - "self._ws"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.1-gen"
+timestamp: "0.8.2-gen"
 ---
 
 ## 역할

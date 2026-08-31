@@ -8,7 +8,7 @@ class: B2BHandler
 signature: "(self)"
 role: "---- 녹화 (기본: 네이티브 매크로 레코더/VBA · 폴백: ixi-Cell-R recorder) ----"
 role_source: banner
-version: "0.8.1"
+version: "0.8.2"
 loc: "serve_b2b.py:2625-2631"
 
 # ── 입출력 ──
@@ -40,7 +40,7 @@ reads:
   - "self.send_json"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.1-gen"
+timestamp: "0.8.2-gen"
 ---
 
 ## 역할

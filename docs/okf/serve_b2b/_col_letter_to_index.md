@@ -7,7 +7,7 @@ extraction: ast
 signature: "(letter)"
 role: "\"H\" → 8. ColumnIs 가 값 경로에서 쓸 때 필요(클래스 밖이라 컨텍스트 메서드를 못 쓴다)."
 role_source: docstring
-version: "0.8.1"
+version: "0.8.2"
 loc: "serve_b2b.py:12252-12261"
 
 # ── 입출력 ──
@@ -35,7 +35,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.1-gen"
+timestamp: "0.8.2-gen"
 ---
 
 ## 역할

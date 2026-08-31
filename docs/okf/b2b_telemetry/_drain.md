@@ -7,7 +7,7 @@ extraction: ast
 signature: "(timeout=3.0)"
 role: "남은 것 밀어내기 — 큐에서 꺼낸 것까지 '처리 완료'를 기다린다. 오래 잡고 있지 않는다."
 role_source: docstring
-version: "0.8.1"
+version: "0.8.2"
 loc: "b2b_telemetry.py:380-390"
 
 # ── 입출력 ──
@@ -31,7 +31,7 @@ reads:
   - "_state"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.1-gen"
+timestamp: "0.8.2-gen"
 ---
 
 ## 역할

@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(text)"
 role: "[0.7.1] 피벗/요약 값을 다른 시트의 '구분명(이름)'에 맞춰 '여러 값 열'을 채우는 붙여넣기 = ctx.match_fill."
 role_source: banner
-version: "0.8.1"
+version: "0.8.2"
 loc: "chat-ui.js:933-933"
 
 # ── 입출력 ──
@@ -32,7 +32,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.1-gen"
+timestamp: "0.8.2-gen"
 ---
 
 ## 역할

@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(extraTail)"
 role: "state.assist.history 를 LLM 메시지 배열로. 도구 왕복(JSON)은 history 에 남기지 않는다 —"
 role_source: banner
-version: "0.8.1"
+version: "0.8.2"
 loc: "assist-llm.js:23-23"
 
 # ── 입출력 ──
@@ -36,7 +36,7 @@ reads:
   - "state.assist"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.1-gen"
+timestamp: "0.8.2-gen"
 ---
 
 ## 역할

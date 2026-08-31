@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(fileId, { makeActive = false, deferVisible = false } = {})"
 role: "지정한 파일의 미러 세션을 보장(없으면 연다). 활성화/최상단 올리기는 makeActive 일 때만."
 role_source: banner
-version: "0.8.1"
+version: "0.8.2"
 loc: "excel-mirror.js:637-637"
 
 # ── 입출력 ──
@@ -46,7 +46,7 @@ reads: []
 writes:
   - "excelMirror.activeExcelId"
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.1-gen"
+timestamp: "0.8.2-gen"
 ---
 
 ## 역할

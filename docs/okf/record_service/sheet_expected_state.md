@@ -7,7 +7,7 @@ extraction: ast
 signature: "(ws, max_cells=DIGEST_MAX_CELLS)"
 role: "시트 하나의 기대 상태 {sheet, rows, cols, hashRows, hash, merges}."
 role_source: docstring
-version: "0.8.1"
+version: "0.8.2"
 loc: "record_service.py:131-149"
 
 # ── 입출력 ──
@@ -41,7 +41,7 @@ reads:
   - "DIGEST_MAX_CELLS"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.1-gen"
+timestamp: "0.8.2-gen"
 ---
 
 ## 역할

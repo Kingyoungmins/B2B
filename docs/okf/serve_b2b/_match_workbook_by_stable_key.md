@@ -7,7 +7,7 @@ extraction: ast
 signature: "(names, requested)"
 role: "열린 워크북 이름들 중 requested 와 '월/날짜 무시 안정 키'가 같은 것이 '정확히 하나'면 그 이름 반환."
 role_source: docstring
-version: "0.8.1"
+version: "0.8.2"
 loc: "serve_b2b.py:8910-8917"
 
 # ── 입출력 ──
@@ -37,7 +37,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.1-gen"
+timestamp: "0.8.2-gen"
 ---
 
 ## 역할

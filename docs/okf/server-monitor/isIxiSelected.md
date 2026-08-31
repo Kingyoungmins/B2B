@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "()"
 role: "재연결/배너는 ixi 모델이 선택됐을 때만 동작. (Claude·개발망 vLLM 선택 시엔 알림 안 띄움)"
 role_source: banner
-version: "0.8.1"
+version: "0.8.2"
 loc: "server-monitor.js:30-30"
 
 # ── 입출력 ──
@@ -29,7 +29,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.1-gen"
+timestamp: "0.8.2-gen"
 ---
 
 ## 역할

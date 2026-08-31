@@ -8,7 +8,7 @@ class: PythonComSkillContext
 signature: "(self, sheet, dest_col, src_cols, header_row=None)"
 role: "합계 열(dest_col)을 원본 열들(src_cols)의 합계 '수식'으로 채운다. dest_col 이 2행 등으로 '세로 병합'된"
 role_source: docstring
-version: "0.8.1"
+version: "0.8.2"
 loc: "serve_b2b.py:14423-14459"
 
 # ── 입출력 ──
@@ -64,7 +64,7 @@ reads:
   - "self.last_row"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.1-gen"
+timestamp: "0.8.2-gen"
 ---
 
 ## 역할

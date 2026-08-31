@@ -7,7 +7,7 @@ extraction: ast
 signature: "()"
 role: "바탕화면 실제 경로. OneDrive 리디렉션이 흔해서 셸에 물어보는 쪽이 정확하다."
 role_source: docstring
-version: "0.8.1"
+version: "0.8.2"
 loc: "b2b_scheduler.py:82-91"
 
 # ── 입출력 ──
@@ -33,7 +33,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.1-gen"
+timestamp: "0.8.2-gen"
 ---
 
 ## 역할

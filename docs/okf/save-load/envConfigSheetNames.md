@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(file)"
 role: "(envConfig 필터가 length 로 게이트한다) 스킬에 적힌 진짜 시트명이 그대로 쓰인다."
 role_source: banner
-version: "0.8.1"
+version: "0.8.2"
 loc: "save-load.js:243-243"
 
 # ── 입출력 ──
@@ -29,7 +29,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.1-gen"
+timestamp: "0.8.2-gen"
 ---
 
 ## 역할

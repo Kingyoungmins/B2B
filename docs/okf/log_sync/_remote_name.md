@@ -7,7 +7,7 @@ extraction: ast
 signature: "(path)"
 role: "서버에 쌓을 이름. 실행 중에 파일이 비워졌으면 .r1, .r2 … 로 갈아 쓴다."
 role_source: docstring
-version: "0.8.1"
+version: "0.8.2"
 loc: "log_sync.py:361-369"
 
 # ── 입출력 ──
@@ -33,7 +33,7 @@ reads:
   - "_STATE"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.1-gen"
+timestamp: "0.8.2-gen"
 ---
 
 ## 역할

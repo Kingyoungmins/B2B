@@ -7,7 +7,7 @@ extraction: ast
 signature: "()"
 role: "지금 보안 해제/적용을 시도할 수 있는 상태인가(기능 켜짐 + 서버에 키 설정됨)."
 role_source: docstring
-version: "0.8.1"
+version: "0.8.2"
 loc: "secure_doc.py:156-162"
 
 # ── 입출력 ──
@@ -31,7 +31,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.1-gen"
+timestamp: "0.8.2-gen"
 ---
 
 ## 역할

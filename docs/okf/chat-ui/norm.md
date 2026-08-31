@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(v)"
 role: "공백/_/- 만 다른 경우(모델이 한글 식별자에 공백을 끼우는 흔한 케이스, 예: \"2026년\"→\"2026 년\")는 통과."
 role_source: banner
-version: "0.8.1"
+version: "0.8.2"
 loc: "chat-ui.js:631-631"
 
 # ── 입출력 ──
@@ -35,7 +35,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.1-gen"
+timestamp: "0.8.2-gen"
 ---
 
 ## 역할

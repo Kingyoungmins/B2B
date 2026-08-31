@@ -7,7 +7,7 @@ extraction: ast
 signature: "()"
 role: "[NumLock 보존] Application.SendKeys 는 호출 자체가 NumLock 을 꺼버리는 고질 버그가 있다"
 role_source: banner
-version: "0.8.1"
+version: "0.8.2"
 loc: "native_macro_recorder.py:353-358"
 
 # ── 입출력 ──
@@ -29,7 +29,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.1-gen"
+timestamp: "0.8.2-gen"
 ---
 
 ## 역할

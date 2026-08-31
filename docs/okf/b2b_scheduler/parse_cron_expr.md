@@ -7,7 +7,7 @@ extraction: ast
 signature: "(expr)"
 role: "crontab 5필드 → 화면이 쓰는 스케줄 dict. 못 읽으면 None."
 role_source: docstring
-version: "0.8.1"
+version: "0.8.2"
 loc: "b2b_scheduler.py:333-370"
 
 # ── 입출력 ──
@@ -38,7 +38,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.1-gen"
+timestamp: "0.8.2-gen"
 ---
 
 ## 역할

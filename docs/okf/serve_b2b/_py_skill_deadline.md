@@ -7,7 +7,7 @@ extraction: ast
 signature: "(timeout_s=None)"
 role: "Python 스킬 실행 데드라인(monotonic). 유효 타임아웃이 0/음수면 무제한(inf)."
 role_source: docstring
-version: "0.8.1"
+version: "0.8.2"
 loc: "serve_b2b.py:12109-12112"
 
 # ── 입출력 ──
@@ -33,7 +33,7 @@ reads:
   - "PY_SKILL_TIMEOUT_S"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.1-gen"
+timestamp: "0.8.2-gen"
 ---
 
 ## 역할

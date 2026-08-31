@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(code)"
 role: "코드에서 '어떤 시트가 어떤 워크북 소유인지' (book,sheet) 쌍을 뽑는다(교차파일 오귀속 방지 + 자기 시트 회수)."
 role_source: banner
-version: "0.8.1"
+version: "0.8.2"
 loc: "drop-handling.js:1180-1180"
 
 # ── 입출력 ──
@@ -49,7 +49,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.1-gen"
+timestamp: "0.8.2-gen"
 ---
 
 ## 역할

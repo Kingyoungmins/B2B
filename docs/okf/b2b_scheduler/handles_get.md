@@ -7,7 +7,7 @@ extraction: ast
 signature: "(path)"
 role: "본체가 Origin 가드 등을 먼저 걸 수 있게 '내 GET 인지'만 판단한다(handles_post 와 대칭)."
 role_source: docstring
-version: "0.8.1"
+version: "0.8.2"
 loc: "b2b_scheduler.py:700-702"
 
 # ── 입출력 ──
@@ -32,7 +32,7 @@ reads:
   - "_GET_ROUTES"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.1-gen"
+timestamp: "0.8.2-gen"
 ---
 
 ## 역할

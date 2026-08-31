@@ -7,7 +7,7 @@ extraction: ast
 signature: "()"
 role: "[코드리뷰 2026-08-24] MAX_TOTAL_BYTES 가 로그에만 걸려 있었다. auto_backup 은 편집할 때마다"
 role_source: docstring
-version: "0.8.1"
+version: "0.8.2"
 loc: "log_sync.py:372-375"
 
 # ── 입출력 ──
@@ -31,7 +31,7 @@ reads:
   - "_STATE"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.1-gen"
+timestamp: "0.8.2-gen"
 ---
 
 ## 역할

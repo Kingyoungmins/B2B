@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(reason, extra)"
 role: "[진단] '실행기 매핑이 생성기 재실행에 안 실려 옛 파일명으로 실패'(실측 2026-07-29 test_mapping)의"
 role_source: banner
-version: "0.8.1"
+version: "0.8.2"
 loc: "drop-handling.js:1906-1906"
 
 # ── 입출력 ──
@@ -35,7 +35,7 @@ reads:
   - "state.runnerMappings"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.1-gen"
+timestamp: "0.8.2-gen"
 ---
 
 ## 역할

@@ -7,7 +7,7 @@ extraction: ast
 signature: "()"
 role: "사용자 구분은 whoami 결과(도메인\\사용자)를 쓴다 — 사내에서 이 값이 사람과 1:1 이다."
 role_source: docstring
-version: "0.8.1"
+version: "0.8.2"
 loc: "log_sync.py:172-200"
 
 # ── 입출력 ──
@@ -39,7 +39,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.1-gen"
+timestamp: "0.8.2-gen"
 ---
 
 ## 역할

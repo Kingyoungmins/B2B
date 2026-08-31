@@ -7,7 +7,7 @@ extraction: ast
 signature: "(steps)"
 role: "연속된 같은 (book,sheet) FORMAT 스텝 중 '서식이 완전히 같은' 것을 union 주소"
 role_source: docstring
-version: "0.8.1"
+version: "0.8.2"
 loc: "record_service.py:378-420"
 
 # ── 입출력 ──
@@ -46,7 +46,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.1-gen"
+timestamp: "0.8.2-gen"
 ---
 
 ## 역할

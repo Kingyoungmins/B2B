@@ -7,7 +7,7 @@ extraction: ast
 signature: "()"
 role: "기동 시 1회(멱등). 두 진입점(launch_b2b.py / python serve_b2b.py)이 모두"
 role_source: docstring
-version: "0.8.1"
+version: "0.8.2"
 loc: "serve_b2b.py:5531-5543"
 
 # ── 입출력 ──
@@ -37,7 +37,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.1-gen"
+timestamp: "0.8.2-gen"
 ---
 
 ## 역할

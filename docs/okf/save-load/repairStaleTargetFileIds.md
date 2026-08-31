@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(steps, envConfig)"
 role: "[로드 시] 이미 저장된 zip 의 혼재도 수리한다. envConfig.inputs(저장 시점 업로드 '정본')에 없는"
 role_source: banner
-version: "0.8.1"
+version: "0.8.2"
 loc: "save-load.js:775-775"
 
 # ── 입출력 ──
@@ -42,7 +42,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.1-gen"
+timestamp: "0.8.2-gen"
 ---
 
 ## 역할

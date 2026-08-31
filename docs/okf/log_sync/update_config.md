@@ -7,7 +7,7 @@ extraction: ast
 signature: "(values)"
 role: "화면(F9 개발자 설정)의 버전 서버 주소/키를 그대로 물려받는다."
 role_source: docstring
-version: "0.8.1"
+version: "0.8.2"
 loc: "log_sync.py:123-167"
 
 # ── 입출력 ──
@@ -46,7 +46,7 @@ writes:
   - "_CONFIG"
   - "_STATE"
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.1-gen"
+timestamp: "0.8.2-gen"
 ---
 
 ## 역할

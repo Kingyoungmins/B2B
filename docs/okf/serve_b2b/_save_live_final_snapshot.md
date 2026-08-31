@@ -7,7 +7,7 @@ extraction: ast
 signature: "(wb_record, state_sig, src_path, move=False, link=False)"
 role: "이미 디스크에 있는 결과 파일(src_path)을 최종상태 사본으로 등록한다. 모드 3가지:"
 role_source: docstring
-version: "0.8.1"
+version: "0.8.2"
 loc: "serve_b2b.py:20021-20059"
 
 # ── 입출력 ──
@@ -55,7 +55,7 @@ reads:
 writes:
   - "LIVE_FINAL_SNAPSHOTS"
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.1-gen"
+timestamp: "0.8.2-gen"
 ---
 
 ## 역할

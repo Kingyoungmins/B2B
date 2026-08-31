@@ -7,7 +7,7 @@ extraction: ast
 signature: "(pid)"
 role: "해당 pid 의 XLMAIN 최상위 창 아래 EXCEL7(그리드) 자식 hwnd 목록 — 셀 편집 확정 키 전송 대상."
 role_source: docstring
-version: "0.8.1"
+version: "0.8.2"
 loc: "serve_b2b.py:5869-5901"
 
 # ── 입출력 ──
@@ -40,7 +40,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.1-gen"
+timestamp: "0.8.2-gen"
 ---
 
 ## 역할

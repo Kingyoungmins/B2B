@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(cls, badge, title, sub, tail)"
 role: "단계 표식은 동그라미 숫자 하나로 끝낸다. 번호 글자와 이모지를 나란히 두면"
 role_source: banner
-version: "0.8.1"
+version: "0.8.2"
 loc: "scheduler.js:279-279"
 
 # ── 입출력 ──
@@ -34,7 +34,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.1-gen"
+timestamp: "0.8.2-gen"
 ---
 
 ## 역할

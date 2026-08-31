@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(reason)"
 role: "복구가 워크북을 '파일에서 다시 열었다'(reopened) = 메모리에 적용돼 있던 스킬 결과가"
 role_source: banner
-version: "0.8.1"
+version: "0.8.2"
 loc: "excel-mirror.js:1234-1234"
 
 # ── 입출력 ──
@@ -40,7 +40,7 @@ reads:
   - "state.pipeline"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.1-gen"
+timestamp: "0.8.2-gen"
 ---
 
 ## 역할

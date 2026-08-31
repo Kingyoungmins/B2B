@@ -7,7 +7,7 @@ extraction: ast
 signature: "(**fields)"
 role: "스킬 전체실행 1건 기록. 모듈이 없거나 실패해도 실행 결과에는 영향 없음(모듈도 예외를 삼키지만 한 번 더 감싼다)."
 role_source: docstring
-version: "0.8.1"
+version: "0.8.2"
 loc: "serve_b2b.py:5546-5553"
 
 # ── 입출력 ──
@@ -30,7 +30,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.1-gen"
+timestamp: "0.8.2-gen"
 ---
 
 ## 역할

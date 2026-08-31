@@ -7,7 +7,7 @@ extraction: ast
 signature: "(path)"
 role: "[코드리뷰 2026-08-24] OLE 복합문서의 정체를 스트림 '내용'으로 3상 판정한다."
 role_source: docstring
-version: "0.8.1"
+version: "0.8.2"
 loc: "serve_b2b.py:3073-3091"
 
 # ── 입출력 ──
@@ -31,7 +31,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.1-gen"
+timestamp: "0.8.2-gen"
 ---
 
 ## 역할

@@ -7,7 +7,7 @@ extraction: ast
 signature: "(body: str, limit: int=3) -> str"
 role: "카드 설명용 한 줄 요약 — 주요 동사(값입력/서식/정렬/병합 등) 등장 횟수."
 role_source: docstring
-version: "0.8.1"
+version: "0.8.2"
 loc: "native_macro_recorder.py:220-238"
 
 # ── 입출력 ──
@@ -35,7 +35,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.1-gen"
+timestamp: "0.8.2-gen"
 ---
 
 ## 역할

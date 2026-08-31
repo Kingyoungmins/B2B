@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(data, required, steps)"
 role: "②③ 덕분에 '이름만 잘못 적힌 참조'(예: 확장자 중복)는 유령으로 오해되지 않는다."
 role_source: banner
-version: "0.8.1"
+version: "0.8.2"
 loc: "scheduler.js:117-117"
 
 # ── 입출력 ──
@@ -43,7 +43,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.1-gen"
+timestamp: "0.8.2-gen"
 ---
 
 ## 역할

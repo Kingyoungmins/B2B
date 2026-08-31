@@ -8,7 +8,7 @@ class: PythonComSkillContext
 signature: "(self, sheet, a1_range, keep_formulas=False)"
 role: "범위 내용 삭제(서식 유지). keep_formulas=True 면 '수식 셀은 남기고 값(상수) 셀만' 비운다"
 role_source: docstring
-version: "0.8.1"
+version: "0.8.2"
 loc: "serve_b2b.py:13205-13223"
 
 # ── 입출력 ──
@@ -61,7 +61,7 @@ reads:
   - "self._ws"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.1-gen"
+timestamp: "0.8.2-gen"
 ---
 
 ## 역할

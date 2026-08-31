@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(text)"
 role: "사용자가 'python/파이썬/COM 으로 짜줘' 처럼 엔진을 명시했는지. [사용자 지시] 이 의도는"
 role_source: banner
-version: "0.8.1"
+version: "0.8.2"
 loc: "chat-ui.js:467-467"
 
 # ── 입출력 ──
@@ -36,7 +36,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.1-gen"
+timestamp: "0.8.2-gen"
 ---
 
 ## 역할

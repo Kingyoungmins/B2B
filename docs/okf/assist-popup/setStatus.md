@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(s)"
 role: "[사용자 요청 2026-08-11] '생각 중'을 창 맨 위 말고 채팅창 아래에 애니메이션으로."
 role_source: banner
-version: "0.8.1"
+version: "0.8.2"
 loc: "assist-popup.js:50-50"
 
 # ── 입출력 ──
@@ -42,7 +42,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.1-gen"
+timestamp: "0.8.2-gen"
 ---
 
 ## 역할

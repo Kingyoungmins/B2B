@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(text)"
 role: "[저장 시] 위와 같은 교정을 '현재 업로드' 기준으로 — stale 파일명이 유일 재해석될 때만."
 role_source: banner
-version: "0.8.1"
+version: "0.8.2"
 loc: "save-load.js:865-865"
 
 # ── 입출력 ──
@@ -35,7 +35,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.1-gen"
+timestamp: "0.8.2-gen"
 ---
 
 ## 역할

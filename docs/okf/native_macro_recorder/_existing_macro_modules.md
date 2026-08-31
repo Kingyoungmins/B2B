@@ -7,7 +7,7 @@ extraction: ast
 signature: "(app)"
 role: "모든 열린 워크북의 (wb, component_name) 표준 모듈 스냅샷(시작 전 기준선)."
 role_source: docstring
-version: "0.8.1"
+version: "0.8.2"
 loc: "native_macro_recorder.py:243-253"
 
 # ── 입출력 ──
@@ -33,7 +33,7 @@ reads:
   - "VBEXT_CT_STDMODULE"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.1-gen"
+timestamp: "0.8.2-gen"
 ---
 
 ## 역할

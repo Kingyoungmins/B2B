@@ -7,7 +7,7 @@ extraction: ast
 signature: "(data, filename, workbook_id='')"
 role: "다운로드 직전 보안 재적용. 실패는 SecureDocError — 부르는 쪽이 다운로드를 중단한다."
 role_source: docstring
-version: "0.8.1"
+version: "0.8.2"
 loc: "secure_doc.py:550-558"
 
 # ── 입출력 ──
@@ -39,7 +39,7 @@ reads:
 writes:
   - "_STATE"
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.1-gen"
+timestamp: "0.8.2-gen"
 ---
 
 ## 역할

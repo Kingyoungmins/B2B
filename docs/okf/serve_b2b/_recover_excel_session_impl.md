@@ -7,7 +7,7 @@ extraction: ast
 signature: "(excel_id, left, top, width, height, client_left=None, client_top=None, client_width=None, client_height=None, viewport_width=None, viewport_height=None, browser_title=None, native_parent_hwnd=None, native_host_hwnd=None, native_overlay=False)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
-version: "0.8.1"
+version: "0.8.2"
 loc: "serve_b2b.py:7973-8064"
 
 # ── 입출력 ──
@@ -79,7 +79,7 @@ reads:
   - "LIVE_FRAME_MODE"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.1-gen"
+timestamp: "0.8.2-gen"
 ---
 
 ## 역할

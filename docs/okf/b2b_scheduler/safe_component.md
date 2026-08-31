@@ -7,7 +7,7 @@ extraction: ast
 signature: "(name, fallback='unnamed')"
 role: "폴더/파일 이름 한 조각으로 안전하게 만든다."
 role_source: docstring
-version: "0.8.1"
+version: "0.8.2"
 loc: "b2b_scheduler.py:94-106"
 
 # ── 입출력 ──
@@ -39,7 +39,7 @@ reads:
   - "_BAD_NAME_CHARS"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.1-gen"
+timestamp: "0.8.2-gen"
 ---
 
 ## 역할

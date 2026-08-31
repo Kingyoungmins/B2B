@@ -7,7 +7,7 @@ extraction: ast
 signature: "(app, touched)"
 role: "touched {(book_key, sheet)} 시트들의 정지 시점 기대 상태 목록(재현 검증용)."
 role_source: docstring
-version: "0.8.1"
+version: "0.8.2"
 loc: "record_service.py:152-178"
 
 # ── 입출력 ──
@@ -43,7 +43,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.1-gen"
+timestamp: "0.8.2-gen"
 ---
 
 ## 역할

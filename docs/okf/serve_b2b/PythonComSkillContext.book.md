@@ -8,7 +8,7 @@ class: PythonComSkillContext
 signature: "(self, workbook_name)"
 role: "같은 Excel 인스턴스에 열린 다른 업로드 파일을 대상으로 하는 ctx."
 role_source: docstring
-version: "0.8.1"
+version: "0.8.2"
 loc: "serve_b2b.py:15659-15803"
 
 # ── 입출력 ──
@@ -81,7 +81,7 @@ reads:
   - "self._tick"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.1-gen"
+timestamp: "0.8.2-gen"
 ---
 
 ## 역할

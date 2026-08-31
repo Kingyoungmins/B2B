@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(text)"
 role: "반환 형식은 JSON 경로와 동일하며, block 에 '걷어낼 원문 조각'을 정확히 담는다."
 role_source: banner
-version: "0.8.1"
+version: "0.8.2"
 loc: "assist-guard.js:143-143"
 
 # ── 입출력 ──
@@ -41,7 +41,7 @@ called_by: []
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.1-gen"
+timestamp: "0.8.2-gen"
 ---
 
 ## 역할

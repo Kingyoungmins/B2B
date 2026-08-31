@@ -7,7 +7,7 @@ extraction: ast
 signature: "(path)"
 role: "정말 열리는 Office 문서(zip)인가 — 헤더만 PK 인 것과 가른다."
 role_source: docstring
-version: "0.8.1"
+version: "0.8.2"
 loc: "secure_doc.py:307-325"
 
 # ── 입출력 ──
@@ -33,7 +33,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.1-gen"
+timestamp: "0.8.2-gen"
 ---
 
 ## 역할

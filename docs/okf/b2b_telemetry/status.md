@@ -7,7 +7,7 @@ extraction: ast
 signature: "()"
 role: "지금 어떤 상태인지 (진단용)."
 role_source: docstring
-version: "0.8.1"
+version: "0.8.2"
 loc: "b2b_telemetry.py:168-170"
 
 # ── 입출력 ──
@@ -35,7 +35,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.1-gen"
+timestamp: "0.8.2-gen"
 ---
 
 ## 역할

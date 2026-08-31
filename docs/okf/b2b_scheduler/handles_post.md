@@ -7,7 +7,7 @@ extraction: ast
 signature: "(path)"
 role: "본체가 본문을 읽기 전에 '내 것인지'만 먼저 판단할 수 있게 한다."
 role_source: docstring
-version: "0.8.1"
+version: "0.8.2"
 loc: "b2b_scheduler.py:711-713"
 
 # ── 입출력 ──
@@ -32,7 +32,7 @@ reads:
   - "_POST_ROUTES"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.1-gen"
+timestamp: "0.8.2-gen"
 ---
 
 ## 역할

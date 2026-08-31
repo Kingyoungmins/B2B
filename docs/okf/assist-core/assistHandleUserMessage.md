@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(userText, ui, attachImages)"
 role: "사용자 발화 1건 처리. UI 콜백으로 진행 상황을 알린다."
 role_source: banner
-version: "0.8.1"
+version: "0.8.2"
 loc: "assist-core.js:355-355"
 
 # ── 입출력 ──
@@ -92,7 +92,7 @@ reads:
 writes:
   - "assist"
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.1-gen"
+timestamp: "0.8.2-gen"
 ---
 
 ## 역할

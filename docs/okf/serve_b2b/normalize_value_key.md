@@ -7,7 +7,7 @@ extraction: ast
 signature: "(value)"
 role: "[제보 2026-08-27] '셀 값'을 비교할 때 쓰는 정규화."
 role_source: docstring
-version: "0.8.1"
+version: "0.8.2"
 loc: "serve_b2b.py:3430-3456"
 
 # ── 입출력 ──
@@ -41,7 +41,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.1-gen"
+timestamp: "0.8.2-gen"
 ---
 
 ## 역할

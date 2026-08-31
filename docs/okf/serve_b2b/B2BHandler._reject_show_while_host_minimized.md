@@ -8,7 +8,7 @@ class: B2BHandler
 signature: "(self)"
 role: "호스트 최소화 중엔 표시 계열 요청을 조용히 스킵(True 반환 시 호출측은 응답 완료)."
 role_source: docstring
-version: "0.8.1"
+version: "0.8.2"
 loc: "serve_b2b.py:2497-2503"
 
 # ── 입출력 ──
@@ -36,7 +36,7 @@ reads:
   - "self.send_json"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.1-gen"
+timestamp: "0.8.2-gen"
 ---
 
 ## 역할

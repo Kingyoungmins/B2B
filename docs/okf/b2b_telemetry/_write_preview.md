@@ -7,7 +7,7 @@ extraction: ast
 signature: "(event)"
 role: "무엇이 나가는지 남긴다. 접속 정보가 없을 때 이게 유일한 산출물이다."
 role_source: docstring
-version: "0.8.1"
+version: "0.8.2"
 loc: "b2b_telemetry.py:366-377"
 
 # ── 입출력 ──
@@ -35,7 +35,7 @@ reads:
   - "_state"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.1-gen"
+timestamp: "0.8.2-gen"
 ---
 
 ## 역할

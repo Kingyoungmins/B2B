@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(newCode, step, kind)"
 role: "[Tier1] 교체 코드 정적 게이트 — 여러 곳에서 재사용(단일/일괄 치환). 통과 실패 사유 배열 반환."
 role_source: banner
-version: "0.8.1"
+version: "0.8.2"
 loc: "assist-core.js:778-778"
 
 # ── 입출력 ──
@@ -35,7 +35,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.1-gen"
+timestamp: "0.8.2-gen"
 ---
 
 ## 역할

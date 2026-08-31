@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(f)"
 role: "name(실제 업로드명)과 displayName(사용자 편집 표시명) 둘 다 매칭 허용 — 표시명 편집된"
 role_source: banner
-version: "0.8.1"
+version: "0.8.2"
 loc: "drop-handling.js:723-723"
 
 # ── 입출력 ──
@@ -28,7 +28,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.1-gen"
+timestamp: "0.8.2-gen"
 ---
 
 ## 역할

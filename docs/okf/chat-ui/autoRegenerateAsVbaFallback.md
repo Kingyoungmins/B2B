@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(code, failures, context)"
 role: "Python COM 정적 게이트를 (최초 생성 + 자동 재생성 PYTHON_STATIC_MAX_REGEN 회) 연속으로 통과하지"
 role_source: banner
-version: "0.8.1"
+version: "0.8.2"
 loc: "chat-ui.js:2195-2195"
 
 # ── 입출력 ──
@@ -50,7 +50,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.1-gen"
+timestamp: "0.8.2-gen"
 ---
 
 ## 역할

@@ -7,7 +7,7 @@ extraction: ast
 signature: "(cells)"
 role: "행의 라벨 셀들(보통 A~C) 중 하나라도 '합계/총계/소계/누계/계' 면 True."
 role_source: docstring
-version: "0.8.1"
+version: "0.8.2"
 loc: "serve_b2b.py:16385-16393"
 
 # ── 입출력 ──
@@ -34,7 +34,7 @@ reads:
   - "_TOTAL_LABEL_RE"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.1-gen"
+timestamp: "0.8.2-gen"
 ---
 
 ## 역할

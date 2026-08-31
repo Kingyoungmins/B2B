@@ -7,7 +7,7 @@ extraction: ast
 signature: "(ws, max_rows=MERGE_SCAN_MAX_ROWS, max_cells=MERGE_SCAN_MAX_CELLS)"
 role: "시트의 병합 영역 주소 목록(정렬) — 재현 검증용 병합 지문."
 role_source: docstring
-version: "0.8.1"
+version: "0.8.2"
 loc: "record_service.py:83-128"
 
 # ── 입출력 ──
@@ -48,7 +48,7 @@ reads:
   - "MERGE_SCAN_MAX_ROWS"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.1-gen"
+timestamp: "0.8.2-gen"
 ---
 
 ## 역할

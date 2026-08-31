@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "()"
 role: "[매핑 보존] 시그니처는 '어떤 파일이 올라와 있나 + 어떤 스킬이 로드돼 있나'만 본다."
 role_source: banner
-version: "0.8.1"
+version: "0.8.2"
 loc: "drop-handling.js:1516-1516"
 
 # ── 입출력 ──
@@ -34,7 +34,7 @@ reads:
   - "state.pipeline"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.1-gen"
+timestamp: "0.8.2-gen"
 ---
 
 ## 역할

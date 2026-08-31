@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "()"
 role: "주기만 검사한다 — 이 화면이 바꾸는 건 cron.txt 한 줄뿐이고,"
 role_source: banner
-version: "0.8.1"
+version: "0.8.2"
 loc: "scheduler.js:804-804"
 
 # ── 입출력 ──
@@ -30,7 +30,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.1-gen"
+timestamp: "0.8.2-gen"
 ---
 
 ## 역할

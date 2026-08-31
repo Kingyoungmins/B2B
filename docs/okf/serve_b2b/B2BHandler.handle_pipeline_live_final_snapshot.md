@@ -8,7 +8,7 @@ class: B2BHandler
 signature: "(self)"
 role: "[새로고침 즉시복원] 요청한 파일들에 '스킬 전부 적용된 최종 상태' 사본이 있는지 조회."
 role_source: docstring
-version: "0.8.1"
+version: "0.8.2"
 loc: "serve_b2b.py:2382-2401"
 
 # ── 입출력 ──
@@ -44,7 +44,7 @@ reads:
   - "self.send_json"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.1-gen"
+timestamp: "0.8.2-gen"
 ---
 
 ## 역할

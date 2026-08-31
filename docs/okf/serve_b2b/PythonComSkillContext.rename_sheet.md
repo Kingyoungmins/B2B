@@ -8,7 +8,7 @@ class: PythonComSkillContext
 signature: "(self, old_name, new_name)"
 role: "시트 이름만 변경한다(위치·내용 유지). '복사/이동'이 아니라 순수 이름 변경 전용."
 role_source: docstring
-version: "0.8.1"
+version: "0.8.2"
 loc: "serve_b2b.py:14759-14778"
 
 # ── 입출력 ──
@@ -44,7 +44,7 @@ reads:
   - "self._ws"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.1-gen"
+timestamp: "0.8.2-gen"
 ---
 
 ## 역할

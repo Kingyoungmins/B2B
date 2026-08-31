@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(text)"
 role: "[제보 2026-08-25] 오래 도는 재적용/전체실행에서 오버레이 문구가 고정이라 '멈춘 것 같다'는"
 role_source: banner
-version: "0.8.1"
+version: "0.8.2"
 loc: "pipeline.js:1312-1312"
 
 # ── 입출력 ──
@@ -30,7 +30,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.1-gen"
+timestamp: "0.8.2-gen"
 ---
 
 ## 역할

@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(currentUpstream)"
 role: "사용자가 지정한 서버를 우리 목록으로 덮어쓰면 안 된다."
 role_source: banner
-version: "0.8.1"
+version: "0.8.2"
 loc: "config.js:401-401"
 
 # ── 입출력 ──
@@ -35,7 +35,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.1-gen"
+timestamp: "0.8.2-gen"
 ---
 
 ## 역할

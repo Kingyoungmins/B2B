@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(docName, file)"
 role: "규격이 정해지면 이 함수 안에서만 해석을 붙이면 된다(화면·상태는 그대로)."
 role_source: banner
-version: "0.8.1"
+version: "0.8.2"
 loc: "scheduler.js:604-604"
 
 # ── 입출력 ──
@@ -35,7 +35,7 @@ reads:
 writes:
   - "error"
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.1-gen"
+timestamp: "0.8.2-gen"
 ---
 
 ## 역할

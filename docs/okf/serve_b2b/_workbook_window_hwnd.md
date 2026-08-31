@@ -7,7 +7,7 @@ extraction: ast
 signature: "(wb)"
 role: "SDI 프레임(이 워크북의 최상위 창) 핸들. 공유 인스턴스에서 app.Hwnd 는"
 role_source: docstring
-version: "0.8.1"
+version: "0.8.2"
 loc: "serve_b2b.py:7262-7271"
 
 # ── 입출력 ──
@@ -33,7 +33,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.1-gen"
+timestamp: "0.8.2-gen"
 ---
 
 ## 역할

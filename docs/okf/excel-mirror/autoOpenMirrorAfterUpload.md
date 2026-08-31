@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(selectedFileId)"
 role: "호환용 진입점: 업로드 직후에는 현재 파일만 열어 화면 순회/깜빡임을 막는다."
 role_source: banner
-version: "0.8.1"
+version: "0.8.2"
 loc: "excel-mirror.js:791-791"
 
 # ── 입출력 ──
@@ -28,7 +28,7 @@ called_by: []
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.1-gen"
+timestamp: "0.8.2-gen"
 ---
 
 ## 역할

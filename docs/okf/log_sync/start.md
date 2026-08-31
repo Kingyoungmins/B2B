@@ -7,7 +7,7 @@ extraction: ast
 signature: "(app_version='', log_dirs=(), skill_dirs=(), extra_files=(), app_dir='', config_values=None)"
 role: "프로그램 시작 시 한 번 호출(멱등). 로그 초기화가 끝난 뒤에 불러야 한다."
 role_source: docstring
-version: "0.8.1"
+version: "0.8.2"
 loc: "log_sync.py:540-573"
 
 # ── 입출력 ──
@@ -72,7 +72,7 @@ writes:
   - "_CONTEXT"
   - "_THREAD"
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.1-gen"
+timestamp: "0.8.2-gen"
 ---
 
 ## 역할

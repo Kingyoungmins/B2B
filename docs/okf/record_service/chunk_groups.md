@@ -7,7 +7,7 @@ extraction: ast
 signature: "(groups, limit=40)"
 role: "스텝이 많은 묶음을 limit 이하로 쪼갠다."
 role_source: docstring
-version: "0.8.1"
+version: "0.8.2"
 loc: "record_service.py:506-532"
 
 # ── 입출력 ──
@@ -39,7 +39,7 @@ reads:
   - "ROLE_TITLES"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.1-gen"
+timestamp: "0.8.2-gen"
 ---
 
 ## 역할

@@ -7,7 +7,7 @@ extraction: ast
 signature: "(app_version='', writable_dir=None)"
 role: "관측 로그 준비. 두 번 불러도 안전하다."
 role_source: docstring
-version: "0.8.1"
+version: "0.8.2"
 loc: "b2b_telemetry.py:126-155"
 
 # ── 입출력 ──
@@ -46,7 +46,7 @@ reads:
 writes:
   - "_state"
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.1-gen"
+timestamp: "0.8.2-gen"
 ---
 
 ## 역할

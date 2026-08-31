@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(sheetsObj)"
 role: "유사도 매칭 Proxy로 감싸기 (item 1)."
 role_source: banner
-version: "0.8.1"
+version: "0.8.2"
 loc: "pipeline.js:3391-3391"
 
 # ── 입출력 ──
@@ -31,7 +31,7 @@ reads:
   - "state.fuzzyResolution"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.1-gen"
+timestamp: "0.8.2-gen"
 ---
 
 ## 역할

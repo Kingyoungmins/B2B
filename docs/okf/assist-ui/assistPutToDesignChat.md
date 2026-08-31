@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(req)"
 role: "[Tier1] 핸드오프 카드 — 새 단계 생성은 ③ 설계 채팅의 일. 정리된 요청문을 넣어주고 사용자가 검토·전송."
 role_source: banner
-version: "0.8.1"
+version: "0.8.2"
 loc: "assist-ui.js:290-290"
 
 # ── 입출력 ──
@@ -32,7 +32,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.1-gen"
+timestamp: "0.8.2-gen"
 ---
 
 ## 역할

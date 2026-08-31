@@ -8,7 +8,7 @@ class: B2BHandler
 signature: "(self)"
 role: "업로드 때 시트명을 못 읽은 워크북(meta.requiresExcel)을 다시 검사한다."
 role_source: docstring
-version: "0.8.1"
+version: "0.8.2"
 loc: "serve_b2b.py:1977-2001"
 
 # ── 입출력 ──
@@ -43,7 +43,7 @@ reads:
   - "self.send_json"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.1-gen"
+timestamp: "0.8.2-gen"
 ---
 
 ## 역할

@@ -7,7 +7,7 @@ extraction: ast
 signature: "(hour, minute, second)"
 role: "파일명에 찍히는 시각(10_55_33)인지 — 00~23 / 00~59 / 00~59 만 참."
 role_source: docstring
-version: "0.8.1"
+version: "0.8.2"
 loc: "serve_b2b.py:8802-8808"
 
 # ── 입출력 ──
@@ -33,7 +33,7 @@ called_by: []
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.1-gen"
+timestamp: "0.8.2-gen"
 ---
 
 ## 역할

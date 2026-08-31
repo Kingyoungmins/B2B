@@ -7,7 +7,7 @@ extraction: ast
 signature: "(app)"
 role: "'매크로 기록' 리본 버튼의 현재 라벨. 못 읽으면 None."
 role_source: docstring
-version: "0.8.1"
+version: "0.8.2"
 loc: "native_macro_recorder.py:256-261"
 
 # ── 입출력 ──
@@ -32,7 +32,7 @@ reads:
   - "_MACRO_RECORD_IDMSO"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.1-gen"
+timestamp: "0.8.2-gen"
 ---
 
 ## 역할
