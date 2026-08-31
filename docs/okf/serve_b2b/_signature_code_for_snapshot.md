@@ -8,7 +8,7 @@ signature: "(code)"
 role: "[SBAGENT-293 실측 2026-08-26] 스냅샷 서명용 코드 정규화 — '실행 결과에 영향 없는' 부분 제거."
 role_source: docstring
 version: "0.8.2"
-loc: "serve_b2b.py:19752-19786"
+loc: "serve_b2b.py:19890-19924"
 
 # ── 입출력 ──
 inputs:

@@ -8,7 +8,7 @@ signature: "(companions, excel_id, fpid, work, mutated_books=None, mutation_trac
 role: "격리 인스턴스에서 '대상(ftarget)'이 아닌 동반 워크북이 변형됐으면(Saved=False),"
 role_source: docstring
 version: "0.8.2"
-loc: "serve_b2b.py:10631-10699"
+loc: "serve_b2b.py:10769-10837"
 
 # ── 입출력 ──
 inputs:

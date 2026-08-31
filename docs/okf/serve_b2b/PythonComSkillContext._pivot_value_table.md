@@ -9,7 +9,7 @@ signature: "(self, sheet, group_by, value=None, agg='sum', dest_name=None, heade
 role: "[내부/폴백] 그룹별 집계 '값 표'를 새 시트에 만든다(Python 집계 — 안정적). ctx.pivot 이 진짜"
 role_source: docstring
 version: "0.8.2"
-loc: "serve_b2b.py:13898-14049"
+loc: "serve_b2b.py:14036-14187"
 
 # ── 입출력 ──
 inputs:

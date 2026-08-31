@@ -8,7 +8,7 @@ signature: "(path)"
 role: "원본 파일 지문(경로+크기+mtime). 재실행 사이에 원본이 바뀌면 이어실행을 하면 안 된다."
 role_source: docstring
 version: "0.8.2"
-loc: "serve_b2b.py:19865-19872"
+loc: "serve_b2b.py:20003-20010"
 
 # ── 입출력 ──
 inputs:

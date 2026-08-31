@@ -9,7 +9,7 @@ signature: "(self, ws, anchor, rows, cols)"
 role: "anchor 셀에서 rows×cols 명시 범위를 만든다."
 role_source: docstring
 version: "0.8.2"
-loc: "serve_b2b.py:12457-12464"
+loc: "serve_b2b.py:12595-12602"
 
 # ── 입출력 ──
 inputs:

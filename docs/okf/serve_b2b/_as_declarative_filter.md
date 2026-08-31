@@ -8,7 +8,7 @@ signature: "(predicate)"
 role: "predicate 가 선언적 조건이면 그대로, 아니면 None(=람다 경로로)."
 role_source: docstring
 version: "0.8.2"
-loc: "serve_b2b.py:12303-12305"
+loc: "serve_b2b.py:12441-12443"
 
 # ── 입출력 ──
 inputs:

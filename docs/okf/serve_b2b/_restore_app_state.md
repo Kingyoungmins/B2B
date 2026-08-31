@@ -8,7 +8,7 @@ signature: "(app)"
 role: "VBA 실행(성공/실패 무관) 후 Application 전역 상태를 결정적으로 정상화한다."
 role_source: docstring
 version: "0.8.2"
-loc: "serve_b2b.py:9911-9939"
+loc: "serve_b2b.py:10009-10037"
 
 # ── 입출력 ──
 inputs:

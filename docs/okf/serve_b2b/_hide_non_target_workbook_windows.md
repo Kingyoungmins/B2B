@@ -8,7 +8,7 @@ signature: "(app, target_wb)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
 version: "0.8.2"
-loc: "serve_b2b.py:20222-20231"
+loc: "serve_b2b.py:20360-20369"
 
 # ── 입출력 ──
 inputs:
@@ -32,6 +32,7 @@ calls_external:
 called_by:
   - "_ensure_companion_workbooks"
   - "_restore_live_window"
+  - "_run_vba_on_session_impl"
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
@@ -46,7 +47,7 @@ timestamp: "0.8.2-gen"
 
 ## 관계
 - 호출: `_hide_workbook_windows`, `_workbook_identity`
-- 피호출(영향 전파 경로): `_ensure_companion_workbooks`, `_restore_live_window`
+- 피호출(영향 전파 경로): `_ensure_companion_workbooks`, `_restore_live_window`, `_run_vba_on_session_impl`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

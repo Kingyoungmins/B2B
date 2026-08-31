@@ -8,7 +8,7 @@ signature: "()"
 role: "버튼 클릭 진입점. 모달을 띄우기 전에 미러를 숨긴다(항상-위 Excel 이 모달을 가리는 문제 —"
 role_source: banner
 version: "0.8.2"
-loc: "pipeline.js:5207-5207"
+loc: "pipeline.js:5230-5230"
 
 # ── 입출력 ──
 inputs: []

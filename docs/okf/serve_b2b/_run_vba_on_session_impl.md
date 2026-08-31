@@ -8,7 +8,7 @@ signature: "(excel_id, code, entry=None, restore_window=True)"
 role: "라이브 세션에 떠 있는 실제 워크북에 VBA 매크로를 주입해 즉시 실행한다(저지연 리모콘, 단일 단계 append)."
 role_source: docstring
 version: "0.8.2"
-loc: "serve_b2b.py:10246-10351"
+loc: "serve_b2b.py:10344-10489"
 
 # ── 입출력 ──
 inputs:
@@ -21,6 +21,7 @@ returns: "(추정)"
 # ── 사이드이펙트 (정적 추정) ──
 side_effects:
   - "EXCEL_LOCK 직렬화"
+  - "상태 변경(전역/세션): _VBA_WINDOW_HIDE"
 raises:
   - "PipelineExecutionError"
   - "RuntimeError"
@@ -30,9 +31,11 @@ calls:
   - "_capture_live_view_state"
   - "_diag_vba_log_line"
   - "_ensure_companion_workbooks"
+  - "_hide_non_target_workbook_windows"
   - "_inject_and_run_vba"
   - "_is_vba_macro_run_blocked_error"
   - "_live_preview_schema"
+  - "_live_window_signature"
   - "_pipeline_error_guide"
   - "_prepare_vba_macro_run_window_state"
   - "_protect_workbook_for_read_only_mirror"
@@ -40,11 +43,15 @@ calls:
   - "_restore_live_protected_view"
   - "_restore_live_window"
   - "_run_vba_pipeline_on_session_impl"
+  - "_vba_trace"
   - "get_excel_session"
   - "session_workbook"
 calls_external:
   - "PipelineExecutionError"
   - "RuntimeError"
+  - "_run_err"
+  - "_sig_now"
+  - "_win_sig_before"
   - "app"
   - "code"
   - "entry"
@@ -63,7 +70,9 @@ called_by:
 reads:
   - "EXCEL_LOCK"
   - "VBA_SKILL_ENTRY"
-writes: []
+  - "_VBA_WINDOW_HIDE"
+writes:
+  - "_VBA_WINDOW_HIDE"
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
 timestamp: "0.8.2-gen"
 ---
@@ -73,9 +82,11 @@ timestamp: "0.8.2-gen"
 
 ## 사이드이펙트 & 주의
 - EXCEL_LOCK 직렬화
+- 상태 변경(전역/세션): _VBA_WINDOW_HIDE
+- 변경 상태 `_VBA_WINDOW_HIDE` — 수정 시 이 상태를 읽는 곳 동반 점검.
 
 ## 관계
-- 호출: `_capture_live_view_state`, `_diag_vba_log_line`, `_ensure_companion_workbooks`, `_inject_and_run_vba`, `_is_vba_macro_run_blocked_error`, `_live_preview_schema`, `_pipeline_error_guide`, `_prepare_vba_macro_run_window_state`, `_protect_workbook_for_read_only_mirror`, `_restore_app_state`, `_restore_live_protected_view`, `_restore_live_window`, `_run_vba_pipeline_on_session_impl`, `get_excel_session`, `session_workbook`
+- 호출: `_capture_live_view_state`, `_diag_vba_log_line`, `_ensure_companion_workbooks`, `_hide_non_target_workbook_windows`, `_inject_and_run_vba`, `_is_vba_macro_run_blocked_error`, `_live_preview_schema`, `_live_window_signature`, `_pipeline_error_guide`, `_prepare_vba_macro_run_window_state`, `_protect_workbook_for_read_only_mirror`, `_restore_app_state`, `_restore_live_protected_view`, `_restore_live_window`, `_run_vba_pipeline_on_session_impl`, `_vba_trace`, `get_excel_session`, `session_workbook`
 - 피호출(영향 전파 경로): `run_vba_on_session`
 
 ## 실패/예외

@@ -8,7 +8,7 @@ signature: "(app, host_wb, context_wb, code, entry)"
 role: "Inject/run VBA in host_wb while keeping context_wb as ActiveWorkbook."
 role_source: docstring
 version: "0.8.2"
-loc: "serve_b2b.py:9655-9807"
+loc: "serve_b2b.py:9740-9899"
 
 # ── 입출력 ──
 inputs:
@@ -30,6 +30,7 @@ calls:
   - "_diag_prerun_window_state"
   - "_diag_vba_log_line"
   - "_diag_vba_run_failure"
+  - "_hide_vba_editor"
   - "_rewrite_thisworkbook_for_runner_host"
   - "_run_vba_macro_any_ref"
   - "_trace_hash"
@@ -84,7 +85,7 @@ Inject/run VBA in host_wb while keeping context_wb as ActiveWorkbook.
 - Excel COM 조작(파괴적일 수 있음)
 
 ## 관계
-- 호출: `_diag_prerun_window_state`, `_diag_vba_log_line`, `_diag_vba_run_failure`, `_rewrite_thisworkbook_for_runner_host`, `_run_vba_macro_any_ref`, `_trace_hash`, `_trace_text`, `_trace_workbook_info`, `_vba_macro_refs`, `_vba_string_literal`, `_vba_trace`, `_vba_workbook_name`, `_wrap_vba_skill_code`, `replace`
+- 호출: `_diag_prerun_window_state`, `_diag_vba_log_line`, `_diag_vba_run_failure`, `_hide_vba_editor`, `_rewrite_thisworkbook_for_runner_host`, `_run_vba_macro_any_ref`, `_trace_hash`, `_trace_text`, `_trace_workbook_info`, `_vba_macro_refs`, `_vba_string_literal`, `_vba_trace`, `_vba_workbook_name`, `_wrap_vba_skill_code`, `replace`
 - 피호출(영향 전파 경로): `_inject_and_run_vba`, `_run_vba_via_runner_with_retry`
 
 ## 실패/예외

@@ -9,7 +9,7 @@ signature: "(self, sheet, header_text, max_scan=30)"
 role: "[SBAGENT-293 후속] 헤더 텍스트가 있는 '행 번호'(1-based)를 위에서부터 찾는다."
 role_source: docstring
 version: "0.8.2"
-loc: "serve_b2b.py:12704-12727"
+loc: "serve_b2b.py:12842-12865"
 
 # ── 입출력 ──
 inputs:

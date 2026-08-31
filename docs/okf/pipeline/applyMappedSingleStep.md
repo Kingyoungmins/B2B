@@ -8,7 +8,7 @@ signature: "(stepId, options = {})"
 role: "[실행기 매핑 · 단일 적용] 단일 스텝 즉시 적용(토글 ON / 중간 삽입 / 수정 적용)도 반드시 '실행기"
 role_source: banner
 version: "0.8.2"
-loc: "pipeline.js:5457-5457"
+loc: "pipeline.js:5480-5480"
 
 # ── 입출력 ──
 inputs:

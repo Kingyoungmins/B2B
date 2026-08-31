@@ -8,7 +8,7 @@ signature: "(app, wb, code, entry, attempts=2)"
 role: "임시 .xlsm 러너에서 VBA 를 실행한다. '매크로를 실행할 수 없습니다'(-2146827284)는 일부 환경에서"
 role_source: docstring
 version: "0.8.2"
-loc: "serve_b2b.py:9873-9908"
+loc: "serve_b2b.py:9971-10006"
 
 # ── 입출력 ──
 inputs:

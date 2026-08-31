@@ -9,7 +9,7 @@ signature: "(self, sheet, src, dst, header_row=None, clear_source=True)"
 role: "한 열의 내용(헤더+데이터+서식+세로병합)을 다른 열로 옮기고 원래 열은 '비운다'(열 구조는 유지 —"
 role_source: docstring
 version: "0.8.2"
-loc: "serve_b2b.py:14296-14339"
+loc: "serve_b2b.py:14434-14477"
 
 # ── 입출력 ──
 inputs:

@@ -29,6 +29,7 @@ calls_external:
   - "int"
 called_by:
   - "_inject_and_run_vba"
+  - "_inject_and_run_vba_in_host"
   - "_restore_live_protected_view"
   - "_run_vba_via_runner_with_retry"
 reads: []
@@ -45,7 +46,7 @@ VBE/디버거 창이 사용자 화면으로 올라오지 않게 숨긴다.
 
 ## 관계
 - 호출: `range`
-- 피호출(영향 전파 경로): `_inject_and_run_vba`, `_restore_live_protected_view`, `_run_vba_via_runner_with_retry`
+- 피호출(영향 전파 경로): `_inject_and_run_vba`, `_inject_and_run_vba_in_host`, `_restore_live_protected_view`, `_run_vba_via_runner_with_retry`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`
