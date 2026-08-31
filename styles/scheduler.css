@@ -1055,6 +1055,10 @@
 }
 .menu-list > .menu-group:first-child { padding-top: 2px; }
 
+/* [숨김 메뉴 2026-08-31] AX-Cell 외 그룹(AX-Trace·E2E 작업 등록)은 기본 숨김 — F6 으로 토글.
+   원래 display 값(라벨=block, 버튼=flex)이 달라 '숨김'만 규칙으로 걸고, 표시는 원복에 맡긴다. */
+body:not(.show-extra-menus) .menu-extra { display: none !important; }
+
 .menu-sep {
   height: 1px;
   margin: 10px 12px 4px;

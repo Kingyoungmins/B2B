@@ -103,3 +103,30 @@ document.addEventListener("click", e => {
   const section = document.getElementById(head.dataset.target);
   if (section) section.classList.toggle("collapsed");
 });
+
+// [숨김 메뉴 2026-08-31] AX-Cell 외 그룹(AX-Trace·E2E 작업 등록)은 준비 중이라 기본 숨김.
+// F6 으로 표시/숨김 토글(F8 디버그 패널과 같은 패턴 — localStorage 로 선택 유지).
+// 주의: F6 은 브라우저 기본이 '영역 간 포커스 이동'이라 preventDefault 필수.
+(function () {
+  const KEY = "b2bShowExtraMenus";
+  function applyExtraMenus(show) {
+    document.body.classList.toggle("show-extra-menus", !!show);
+    // 숨기는 순간 그 그룹 페이지를 보고 있었으면 생성기로 돌려보낸다
+    // (메뉴에서 사라진 페이지에 갇히지 않게 — 항목 없이는 되돌아올 길이 없다).
+    const extraPages = ["trace-generator", "trace-runner", "scheduler", "schedules"];
+    if (!show && typeof state === "object" && state && extraPages.includes(state.currentPage)) {
+      try { setPage("generator"); } catch (_) {}
+    }
+  }
+  document.addEventListener("keydown", e => {
+    if (e.key !== "F6") return;
+    e.preventDefault();
+    const show = !document.body.classList.contains("show-extra-menus");
+    localStorage.setItem(KEY, show ? "1" : "0");
+    applyExtraMenus(show);
+    if (typeof toast === "function") {
+      toast(show ? "추가 메뉴(AX-Trace·E2E)를 표시합니다." : "추가 메뉴를 숨겼습니다.", "success");
+    }
+  });
+  if (localStorage.getItem(KEY) === "1") applyExtraMenus(true);
+})();

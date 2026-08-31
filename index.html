@@ -57,23 +57,25 @@
       </button>
 
       <!-- 데이터를 가져오는 쪽 (준비 중) -->
-      <div class="menu-group">AX-Trace</div>
-      <button class="menu-item" data-page="trace-generator" type="button">
+      <!-- [숨김 메뉴 2026-08-31] AX-Cell 외 그룹(AX-Trace·E2E)은 준비 중이라 기본 숨김.
+           F6 으로 표시 토글(scripts/menu.js) — .menu-extra 가 그 표식이다. -->
+      <div class="menu-group menu-extra">AX-Trace</div>
+      <button class="menu-item menu-extra" data-page="trace-generator" type="button">
         <span class="menu-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4.5A1.5 1.5 0 0 1 5.5 3H15l5 5v12.5a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 20.5z"/><path d="M14.5 3v4.5a1 1 0 0 0 1 1H20"/><path d="M8.5 13h7M8.5 17h4.5"/></svg></span>
         <span>스킬 생성기</span>
       </button>
-      <button class="menu-item" data-page="trace-runner" type="button">
+      <button class="menu-item menu-extra" data-page="trace-runner" type="button">
         <span class="menu-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 5.2v13.6a.8.8 0 0 0 1.22.68l10.5-6.8a.8.8 0 0 0 0-1.36L9.22 4.52A.8.8 0 0 0 8 5.2z"/></svg></span>
         <span>스킬 실행기</span>
       </button>
 
       <!-- 둘을 이어 무인으로 돌리는 쪽 -->
-      <div class="menu-group">E2E 작업 등록</div>
-      <button class="menu-item" data-page="scheduler" type="button">
+      <div class="menu-group menu-extra">E2E 작업 등록</div>
+      <button class="menu-item menu-extra" data-page="scheduler" type="button">
         <span class="menu-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4.5A1.5 1.5 0 0 1 5.5 3H15l5 5v12.5a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 20.5z"/><path d="M14.5 3v4.5a1 1 0 0 0 1 1H20"/><path d="M8.5 13h7M8.5 17h4.5"/></svg></span>
         <span>스킬 등록</span>
       </button>
-      <button class="menu-item" data-page="schedules" type="button">
+      <button class="menu-item menu-extra" data-page="schedules" type="button">
         <span class="menu-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 5.2v13.6a.8.8 0 0 0 1.22.68l10.5-6.8a.8.8 0 0 0 0-1.36L9.22 4.52A.8.8 0 0 0 8 5.2z"/></svg></span>
         <span>스킬 목록</span>
       </button>
