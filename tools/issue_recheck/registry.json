@@ -4240,7 +4240,7 @@
           "test_runs/_test_toggle_land_and_signature.js"
         ]
       ],
-      "fix": "실측: toggle_on.route 의 activeExcelId 는 input_원가_2026_4월.xlsx 인데 스텝 코드는 Windows(\"output_청구서_템플릿.xlsx\").Activate → Sheets(\"ㅎㅇ\") A1 에 썼다. 백엔드는 pipeline.step.ok / result.copied 로 정상 적용을 보고했다 — 사용자는 다른 파일을 보고 있어 '적용 안 됨'으로 읽었다. 녹화 종료에는 착지를 맞추는 코드가 있는데(record-land: setCurrentView + showOnlyExcelMirrorWindow) on/off 에는 없었다. 단일 스텝 켜기 성공 뒤 그 스텝의 대상 파일(inferPipelineStepTargetFileId)로 탭·미러를 옮기고, 토스트에도 어느 파일이 바뀌었는지 적는다. 이미 그 파일을 보고 있으면 화면을 흔들지 않고, 실행기 헤드리스(Excel 창을 일부러 숨기는 화면)는 건드리지 않는다. 이동 여부는 pipeline.toggle_on.land 로 남긴다."
+      "fix": "실측: toggle_on.route 의 activeExcelId 는 input_원가_2026_4월.xlsx 인데 스텝 코드는 Windows(\"output_청구서_템플릿.xlsx\").Activate → Sheets(\"ㅎㅇ\") A1 에 썼다. 백엔드는 pipeline.step.ok / result.copied 로 정상 적용을 보고했다 — 사용자는 다른 파일을 보고 있어 '적용 안 됨'으로 읽었다. 녹화 종료에는 착지를 맞추는 코드가 있는데(record-land: setCurrentView + showOnlyExcelMirrorWindow) on/off 에는 없었다. 단일 스텝 켜기 성공 뒤 그 스텝의 대상 파일(inferPipelineStepTargetFileId)로 탭·미러를 옮기고, 토스트에도 어느 파일이 바뀌었는지 적는다. 이미 그 파일을 보고 있으면 화면을 흔들지 않고, 실행기 헤드리스(Excel 창을 일부러 숨기는 화면)는 건드리지 않는다. 이동 여부는 pipeline.toggle_on.land 로 남긴다. [후속 2026-08-31 14:06 실측] 서명 기록 후에도 녹화 추가 직후 OFF 가 전체실행으로 돌았다(fast_last_snapshot: no_snapshot_or_session → checkpoint_rollback 실패 → reconcile_fallback). 원인: 녹화 fast append 는 captureStepPreApplySnapshot 을 안 타서 새 스텝에 '적용 직전 사본'(_preApplySnapshot)이 없었다. 그런데 fast append 는 '녹화 시작 스냅샷 복원 + 새 스텝만 실행'이라 녹화 시작 스냅샷(recPreSnapshots)이 곧 그 사본이다 → stampAppendedPreApplySnapshots 로 첫 추가 스텝에 앵커+교차 세션 사본을 달아 준다(여러 스텝 추가 시 뒤 스텝은 부정확하므로 첫 스텝만). 결과 파일은 replace 가 소비하지 않음을 확인(ensure_result_file 조회만). 이제 방금 추가한 단계 OFF = 사본 복원(수 초), 전체 재적용 아님."
     },
     {
       "id": "VBA-APPLY-WINDOW-DROP",

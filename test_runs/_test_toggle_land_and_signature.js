@@ -103,6 +103,63 @@ function runToggleOnTail({ stepTarget, currentFileId, headless }) {
   check("호출 시점에 다시 읽지 않는다",
     !/sigNull: _lastLiveAppliedSignature === null/.test(SRC));
 
+  console.log("[OFF 재료] 녹화 fast append 가 '적용 직전 사본'을 스텝에 달아 준다");
+  // [실측 2026-08-31 14:06] 녹화 추가 직후 OFF → fast_last_snapshot: no_snapshot_or_session
+  // → checkpoint_rollback 실패 → reconcile_fallback(전체 재적용). 서명은 있었는데(sigNull=false)
+  // 사본이 없었다. 녹화 시작 스냅샷 = 새 스텝의 적용 직전 상태이므로 그걸 달아 주면 된다.
+  {
+    const i = SRC.indexOf("function stampAppendedPreApplySnapshots(");
+    check("스탬프 함수가 있다", i >= 0);
+    const j = SRC.indexOf(NL + "function ", i + 1);
+    const stamp = new Function(SRC.slice(i, j) + NL + "return stampAppendedPreApplySnapshots;")();
+
+    const snaps = [{ excelId: "ex-rec", resultId: "r-anchor" },
+                   { excelId: "ex-other", resultId: "r-other" }];
+    const s1 = { id: "rec1" };
+    check("스탬프 성공", stamp([s1], snaps, "ex-rec") === true);
+    check("앵커 사본이 달린다", s1._preApplySnapshot
+      && s1._preApplySnapshot.resultId === "r-anchor"
+      && s1._preApplySnapshot.excelId === "ex-rec", s1._preApplySnapshot);
+    check("다른 세션 사본은 교차 목록으로", Array.isArray(s1._crossPreApplySnapshots)
+      && s1._crossPreApplySnapshots.length === 1
+      && s1._crossPreApplySnapshots[0].resultId === "r-other", s1._crossPreApplySnapshots);
+
+    const a = { id: "a" }, b = { id: "b" };
+    stamp([a, b], snaps, "ex-rec");
+    check("여러 스텝이면 첫 스텝에만(뒤 스텝은 사본이 부정확)", !!a._preApplySnapshot && !b._preApplySnapshot);
+
+    const s2 = { id: "x" };
+    check("앵커 스냅샷이 없으면 아무것도 안 단다",
+      stamp([s2], [{ excelId: "ex-other", resultId: "r1" }], "ex-rec") === false && !s2._preApplySnapshot);
+
+    check("재현 성공 블록이 실제로 호출한다(서명 기록과 같은 자리)",
+      /stampAppendedPreApplySnapshots\(appendedSteps, recPreSnapshots, recExcelId\)/.test(SRC));
+  }
+
+  console.log("[OFF 재료-b] 그 사본으로 빠른 OFF 복원이 실제로 성립한다");
+  {
+    const i = SRC.indexOf("async function restoreLastStepPreApplySnapshot(");
+    const j = Math.min(...[NL + "function ", NL + "async function "]
+      .map(m => SRC.indexOf(m, i + 1)).filter(x => x > 0));
+    const restored = [];
+    const env = {
+      inferPipelineStepTargetFileId: () => null,
+      preferredVbaRunFileId: () => null,
+      requirePipelineSessionExcelId: async () => null,
+      _restoreSnapshotByIds: async (rid, eid) => { restored.push([rid, eid]); return true; },
+    };
+    const names = Object.keys(env);
+    const fn = new Function(...names, SRC.slice(i, j) + NL + "return restoreLastStepPreApplySnapshot;")(
+      ...names.map(k => env[k]));
+    const step = { id: "rec1",
+      _preApplySnapshot: { resultId: "r-anchor", excelId: "ex-rec" },
+      _crossPreApplySnapshots: [{ resultId: "r-other", excelId: "ex-other" }] };
+    const ok = await fn(step, {});
+    check("복원 성공(재료가 갖춰졌으므로)", ok === true, ok);
+    check("교차 파일 먼저, 앵커 마지막(반쪽 복원 금지 순서)",
+      JSON.stringify(restored) === JSON.stringify([["r-other", "ex-other"], ["r-anchor", "ex-rec"]]), restored);
+  }
+
   console.log("");
   console.log(fails === 0 ? "RESULT: ALL PASS" : "RESULT: " + fails + " FAIL");
   process.exit(fails === 0 ? 0 : 1);

@@ -4631,6 +4631,29 @@ function stepHasFullRollbackSnapshots(step) {
   return known.every(id => covered.has(id));
 }
 
+function stampAppendedPreApplySnapshots(appendedSteps, recPreSnapshots, recExcelId) {
+  // [제보 2026-08-31] 녹화로 추가한 단계를 끄면 전체실행으로 돌았다(실측 route:
+  // fast_last_snapshot→no_snapshot_or_session → checkpoint_rollback 실패 → reconcile_fallback).
+  // 빠른 OFF 는 '적용 직전 사본'(_preApplySnapshot)이 재료인데, 녹화 fast append 는 일반 적용
+  // 경로(captureStepPreApplySnapshot)를 안 타서 그 사본이 없었다.
+  // 그런데 fast append 는 '녹화 시작 스냅샷 복원 + 새 스텝만 실행'이므로, 녹화 시작 스냅샷이
+  // 곧 새 스텝의 적용 직전 상태다 — 이미 있는 걸 달아 주기만 하면 된다.
+  // 여러 스텝이 한 번에 추가되면 이 스냅샷이 정확한 건 '첫 스텝'뿐이라 첫 스텝에만 단다
+  // (뒤 스텝 OFF 는 종전 폴백 그대로 — 틀린 사본으로 앞 스텝까지 되돌리면 안 된다).
+  const first = Array.isArray(appendedSteps) ? appendedSteps[0] : null;
+  if (!first || !recExcelId || !Array.isArray(recPreSnapshots)) return false;
+  const anchor = recPreSnapshots.find(s => s && s.excelId === recExcelId && s.resultId);
+  if (!anchor) return false;
+  first._preApplySnapshot = { resultId: anchor.resultId, excelId: recExcelId, capturedAt: Date.now() };
+  // 녹화 스텝은 교차파일을 쓸 수 있다(Windows().Activate) — 다른 세션 스냅샷도 함께 달아
+  // OFF 때 '모든 관여 파일'이 그 단계 직전으로 돌아가게 한다(복원 쪽이 이미 지원하는 형식).
+  const cross = recPreSnapshots
+    .filter(s => s && s.resultId && s.excelId && s.excelId !== recExcelId)
+    .map(s => ({ resultId: s.resultId, excelId: s.excelId }));
+  if (cross.length) first._crossPreApplySnapshots = cross;
+  return true;
+}
+
 function syncStepPreApplySnapshot(step, snap, stepIdx = null) {
   if (!step || !snap || !snap.resultId || !Array.isArray(state.pipeline)) return;
   const targets = [];
@@ -7732,6 +7755,11 @@ $("btn-run").onclick = async () => {
               // 녹화 전에 켜져 있었지만 아직 적용된 적 없는 스텝이 있으면 라이브에 없는 것을
               // '적용됨'으로 굳혀 이후 OFF 가 틀린 빠른 롤백을 한다. 그래서 '기존 켜진 스텝이
               // 전부 적용됨'일 때만 기록한다(대개 녹화 직전 상태가 그렇다).
+              // [OFF 빠른 경로 재료] 방금 추가한 스텝에 '적용 직전 사본'을 달아 둔다 — 녹화 시작
+              // 스냅샷이 곧 그것이다. 없으면 이 스텝을 끌 때 전체 재적용으로 돈다(실측 2026-08-31).
+              try {
+                stampAppendedPreApplySnapshots(appendedSteps, recPreSnapshots, recExcelId);
+              } catch (_) {}
               try {
                 const _appendedSet = new Set(appendedIds);
                 const _priorEnabled = (state.pipeline || []).filter(
