@@ -9,7 +9,7 @@ signature: "(self, sheet, predicate, dest_sheet, dest_cell, header_rows=1, inclu
 role: "조건에 맞는 행을 **이미 있는 시트의 정한 자리**에 붙인다(서식 보존, 원본은 그대로)."
 role_source: docstring
 version: "0.8.2"
-loc: "serve_b2b.py:13876-14034"
+loc: "serve_b2b.py:13909-14067"
 
 # ── 입출력 ──
 inputs:

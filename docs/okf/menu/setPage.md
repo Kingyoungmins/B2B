@@ -42,6 +42,7 @@ calls_external:
   - "resolve"
   - "then"
 called_by:
+  - "applyExtraMenus"
   - "assistHandleBridgeMessage"
   - "assistPutToDesignChat"
   - "bindList"
@@ -67,7 +68,7 @@ timestamp: "0.8.2-gen"
 
 ## 관계
 - 호출: `$`, `closeMenu`, `hideAllExcelMirrorWindows`, `postExcelMirror`, `publishNativeRunnerMode`, `refreshTabs`, `renderExcelViewer`, `renderRunnerWorkflow`, `scheduleRestoreActiveExcelMirror`, `toggle`
-- 피호출(영향 전파 경로): `assistHandleBridgeMessage`, `assistPutToDesignChat`, `bindList`, `openRunnerLogicEditor`, `showRunnerPipelineError`
+- 피호출(영향 전파 경로): `applyExtraMenus`, `assistHandleBridgeMessage`, `assistPutToDesignChat`, `bindList`, `openRunnerLogicEditor`, `showRunnerPipelineError`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

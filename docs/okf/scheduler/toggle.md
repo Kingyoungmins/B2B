@@ -26,6 +26,7 @@ raises: []
 calls: []
 calls_external: []
 called_by:
+  - "applyExtraMenus"
   - "assistSetButtonOn"
   - "assistToggleDrawer"
   - "beginUiBusy"
@@ -54,7 +55,7 @@ timestamp: "0.8.2-gen"
 
 ## 관계
 - 호출: 없음
-- 피호출(영향 전파 경로): `assistSetButtonOn`, `assistToggleDrawer`, `beginUiBusy`, `createReasoningBox`, `initialize`, `refreshChatState`, `renderRunnerWorkflow`, `runnerRenderMappingPanel`, `setNodeStatus`, `setPage`, `setupStreamingAssistantMessage`, `updateSkillEngineToggle`, `updateThinkToggle`, `viewSkillEditor`
+- 피호출(영향 전파 경로): `applyExtraMenus`, `assistSetButtonOn`, `assistToggleDrawer`, `beginUiBusy`, `createReasoningBox`, `initialize`, `refreshChatState`, `renderRunnerWorkflow`, `runnerRenderMappingPanel`, `setNodeStatus`, `setPage`, `setupStreamingAssistantMessage`, `updateSkillEngineToggle`, `updateThinkToggle`, `viewSkillEditor`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

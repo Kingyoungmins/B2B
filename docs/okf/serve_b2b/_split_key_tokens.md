@@ -8,7 +8,7 @@ signature: "(v)"
 role: "한 셀 안 다중 키(가입번호 등)를 분리 — 줄바꿈/공백/콤마/세미콜론/슬래시 구분. 각 토큰은 _norm_key."
 role_source: docstring
 version: "0.8.2"
-loc: "serve_b2b.py:16582-16594"
+loc: "serve_b2b.py:16615-16627"
 
 # ── 입출력 ──
 inputs:

@@ -8,7 +8,7 @@ signature: "(path_or_bytes)"
 role: "보호 문서 안에 적힌 **원본 라벨 GUID** 를 읽는다. 못 찾으면 \"\"."
 role_source: docstring
 version: "0.8.2"
-loc: "secure_doc.py:476-500"
+loc: "secure_doc.py:520-544"
 
 # ── 입출력 ──
 inputs:

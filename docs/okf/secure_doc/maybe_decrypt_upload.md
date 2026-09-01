@@ -8,7 +8,7 @@ signature: "(path, name, encrypted_checker=None)"
 role: "업로드 직후 훅. 보안문서면 서버로 풀어 '작업본을 제자리에서' 교체한다."
 role_source: docstring
 version: "0.8.2"
-loc: "secure_doc.py:398-470"
+loc: "secure_doc.py:442-514"
 
 # ── 입출력 ──
 inputs:

@@ -9,7 +9,7 @@ signature: "(self, src_sheet, src_range, dst_sheet, dst_cell)"
 role: "Excel 네이티브 복사(값+수식+서식+병합 보존). '복사/복붙' 요청의 기본 수단."
 role_source: docstring
 version: "0.8.2"
-loc: "serve_b2b.py:13101-13139"
+loc: "serve_b2b.py:13126-13172"
 
 # ── 입출력 ──
 inputs:
@@ -27,6 +27,7 @@ raises: []
 
 # ── 유기적 관계 ──
 calls:
+  - "_clamp_full_span"
   - "_ctx_and_sheet_from_spec"
   - "_journal_save"
   - "_mirror_unprotected_for_paste"
@@ -49,6 +50,7 @@ calls_external:
   - "ms"
   - "perf_counter"
   - "round"
+  - "src"
   - "src_range"
   - "src_sheet"
   - "src_sheet_name"
@@ -76,7 +78,7 @@ Excel 네이티브 복사(값+수식+서식+병합 보존). '복사/복붙' 요�
 - Excel COM 조작(파괴적일 수 있음)
 
 ## 관계
-- 호출: `_ctx_and_sheet_from_spec`, `_journal_save`, `_mirror_unprotected_for_paste`, `_resize_rng`, `_rng`, `_tick`, `_vba_trace`, `_ws`, `append`
+- 호출: `_clamp_full_span`, `_ctx_and_sheet_from_spec`, `_journal_save`, `_mirror_unprotected_for_paste`, `_resize_rng`, `_rng`, `_tick`, `_vba_trace`, `_ws`, `append`
 - 피호출(영향 전파 경로): `PythonComSkillContext.move_col_clear`, `PythonComSkillContext.move_cols`, `_opxl_copy_cell_presentation`
 
 ## 실패/예외

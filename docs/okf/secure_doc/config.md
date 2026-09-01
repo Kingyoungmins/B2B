@@ -8,7 +8,7 @@ signature: "()"
 role: "주소/키는 log_sync(로그 전송)와 같은 곳을 본다 — F9 에서 주소를 바꾸면 여기도 따라온다."
 role_source: docstring
 version: "0.8.2"
-loc: "secure_doc.py:95-126"
+loc: "secure_doc.py:99-130"
 
 # ── 입출력 ──
 inputs: []

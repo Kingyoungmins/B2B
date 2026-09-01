@@ -8,7 +8,7 @@ signature: "(data, filename)"
 role: "보안 해제. 반환 (released, out_bytes)."
 role_source: docstring
 version: "0.8.2"
-loc: "secure_doc.py:270-287"
+loc: "secure_doc.py:314-331"
 
 # ── 입출력 ──
 inputs:

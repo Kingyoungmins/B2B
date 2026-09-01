@@ -8,7 +8,7 @@ signature: "(before_inputs, before_output, after_inputs, after_output, current)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
 version: "0.8.2"
-loc: "serve_b2b.py:22344-22352"
+loc: "serve_b2b.py:22377-22385"
 
 # ── 입출력 ──
 inputs:

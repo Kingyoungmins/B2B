@@ -8,7 +8,7 @@ signature: "(backend_dir=None)"
 role: "이번 실행에 보안 해제한 문서가 하나라도 있나 — 있으면 문서 다운로드에 보안을 다시 건다."
 role_source: docstring
 version: "0.8.2"
-loc: "secure_doc.py:536-547"
+loc: "secure_doc.py:580-591"
 
 # ── 입출력 ──
 inputs:

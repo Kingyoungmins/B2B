@@ -8,7 +8,7 @@ signature: "(data)"
 role: "이 원본을 되돌릴 때 쓸 라벨 값. 못 정하면 \"\" (게이트웨이 기본값)."
 role_source: docstring
 version: "0.8.2"
-loc: "secure_doc.py:503-515"
+loc: "secure_doc.py:547-559"
 
 # ── 입출력 ──
 inputs:

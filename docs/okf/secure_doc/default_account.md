@@ -8,7 +8,7 @@ signature: "()"
 role: "MIP requestorAccount 기본값 — whoami 로 찍힌 이름의 '사용자' 부분."
 role_source: docstring
 version: "0.8.2"
-loc: "secure_doc.py:69-92"
+loc: "secure_doc.py:73-96"
 
 # ── 입출력 ──
 inputs: []

@@ -8,7 +8,7 @@ signature: "(path)"
 role: "정말 열리는 Office 문서(zip)인가 — 헤더만 PK 인 것과 가른다."
 role_source: docstring
 version: "0.8.2"
-loc: "secure_doc.py:307-325"
+loc: "secure_doc.py:351-369"
 
 # ── 입출력 ──
 inputs:

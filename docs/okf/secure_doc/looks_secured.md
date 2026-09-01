@@ -8,7 +8,7 @@ signature: "(head, name='', encrypted_checker=None, path=None)"
 role: "작업본이 보안문서로 '보이는가' — 최종 판정은 Gateway(-200)가 한다."
 role_source: docstring
 version: "0.8.2"
-loc: "secure_doc.py:328-395"
+loc: "secure_doc.py:372-439"
 
 # ── 입출력 ──
 inputs:

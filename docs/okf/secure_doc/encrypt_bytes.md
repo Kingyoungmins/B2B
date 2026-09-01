@@ -8,7 +8,7 @@ signature: "(data, filename, label_id='')"
 role: "보안 재적용. 실패는 예외 — 부르는 쪽(다운로드)이 반드시 중단해야 한다."
 role_source: docstring
 version: "0.8.2"
-loc: "secure_doc.py:290-299"
+loc: "secure_doc.py:334-343"
 
 # ── 입출력 ──
 inputs:

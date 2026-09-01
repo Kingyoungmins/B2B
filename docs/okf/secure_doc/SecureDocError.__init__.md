@@ -5,11 +5,11 @@ module: secure_doc.py
 lang: python
 extraction: ast
 class: SecureDocError
-signature: "(self, message, result='', result_msg='')"
+signature: "(self, message, result='', result_msg='', kind='')"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
 version: "0.8.2"
-loc: "secure_doc.py:54-57"
+loc: "secure_doc.py:54-61"
 
 # ── 입출력 ──
 inputs:
@@ -17,11 +17,12 @@ inputs:
   - "message"
   - "result"
   - "result_msg"
+  - "kind"
 returns: "(추정)"
 
 # ── 사이드이펙트 (정적 추정) ──
 side_effects:
-  - "상태 변경(전역/세션): self.result, self.result_msg"
+  - "상태 변경(전역/세션): self.kind, self.result, self.result_msg"
 raises: []
 
 # ── 유기적 관계 ──
@@ -33,6 +34,7 @@ calls_external:
 called_by: []
 reads: []
 writes:
+  - "self.kind"
   - "self.result"
   - "self.result_msg"
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
@@ -43,8 +45,8 @@ timestamp: "0.8.2-gen"
 (추정) 역할 주석 없음 — 담당자 1줄 보완 필요  _(자동 추정 — 확인 필요)_
 
 ## 사이드이펙트 & 주의
-- 상태 변경(전역/세션): self.result, self.result_msg
-- 변경 상태 `self.result, self.result_msg` — 수정 시 이 상태를 읽는 곳 동반 점검.
+- 상태 변경(전역/세션): self.kind, self.result, self.result_msg
+- 변경 상태 `self.kind, self.result, self.result_msg` — 수정 시 이 상태를 읽는 곳 동반 점검.
 
 ## 관계
 - 호출: 없음

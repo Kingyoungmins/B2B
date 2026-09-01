@@ -35,6 +35,7 @@ calls_external:
   - "cols"
   - "int"
 called_by:
+  - "PythonComSkillContext._clamp_full_span"
   - "PythonComSkillContext.copy"
   - "PythonComSkillContext.copy_values"
   - "PythonComSkillContext.paste_copied"
@@ -54,7 +55,7 @@ anchor 셀에서 rows×cols 명시 범위를 만든다.
 
 ## 관계
 - 호출: `Range`, `_col_letter`, `rows`
-- 피호출(영향 전파 경로): `PythonComSkillContext.copy`, `PythonComSkillContext.copy_values`, `PythonComSkillContext.paste_copied`, `PythonComSkillContext.write`, `PythonComSkillContext.write_formulas`
+- 피호출(영향 전파 경로): `PythonComSkillContext._clamp_full_span`, `PythonComSkillContext.copy`, `PythonComSkillContext.copy_values`, `PythonComSkillContext.paste_copied`, `PythonComSkillContext.write`, `PythonComSkillContext.write_formulas`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

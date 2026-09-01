@@ -8,7 +8,7 @@ signature: "(op, data, filename, extra_form=None, timeout=None, expect='stream')
 role: "POST {서버}/v1/drm/<op> (multipart). 성공=바이트, Gateway JSON 오류=SecureDocError."
 role_source: docstring
 version: "0.8.2"
-loc: "secure_doc.py:180-235"
+loc: "secure_doc.py:201-263"
 
 # ── 입출력 ──
 inputs:
@@ -30,6 +30,7 @@ raises:
 calls:
   - "_clean_name"
   - "_headers"
+  - "_note_network_failure"
   - "_try_json"
   - "append"
   - "config"
@@ -38,6 +39,7 @@ calls:
 calls_external:
   - "Request"
   - "SecureDocError"
+  - "_kind"
   - "body"
   - "bytes"
   - "cfg"
@@ -73,7 +75,7 @@ POST {서버}/v1/drm/<op> (multipart). 성공=바이트, Gateway JSON 오류=Sec
 - 네트워크 호출
 
 ## 관계
-- 호출: `_clean_name`, `_headers`, `_try_json`, `append`, `config`, `raw`, `read`
+- 호출: `_clean_name`, `_headers`, `_note_network_failure`, `_try_json`, `append`, `config`, `raw`, `read`
 - 피호출(영향 전파 경로): `decrypt_bytes`, `encrypt_bytes`, `secret_check`
 
 ## 실패/예외
