@@ -51,9 +51,13 @@ _STATE = {
 class SecureDocError(Exception):
     """릴레이/Gateway 실패 — result/result_msg 를 보존해 부르는 쪽이 안내문을 만들 수 있게."""
 
-    def __init__(self, message, result="", result_msg=""):
+    def __init__(self, message, result="", result_msg="", kind=""):
         self.result = str(result or "")
         self.result_msg = str(result_msg or "")
+        # [빠른 포기 2026-09-01] "network" = 상대가 응답 자체를 못/안 준 실패(연결 불가·무응답·
+        # 릴레이 504=게이트웨이 무응답). 게이트웨이가 명시적으로 거절한 실패(-100/-200/-999)와
+        # 갈라, 무응답 계열은 재시도 없이 빨리 포기하고 다음 대체 경로로 넘어가는 데 쓴다.
+        self.kind = str(kind or "")
         super().__init__(message)
 
 
@@ -153,6 +157,23 @@ def probe(force=False):
     return out
 
 
+def _note_network_failure(what):
+    """네트워크 무응답 실패 직후 30초(프로브 캐시)간 보안 호출을 쉬게 한다.
+
+    [제보 2026-09-01 "실패 시 대기가 길다"] 게이트웨이가 패킷을 버리는 유형의 실패는
+    릴레이의 제한시간(기본 60초)을 꽉 채우고서야 504 로 온다. 파일을 여러 개 올리면
+    **파일마다** 그 60초를 반복했다(해제 시도는 파일 단위라). 한 번 무응답을 확인했으면
+    프로브 캐시를 '죽음'으로 채워, 이후 파일들은 available() 게이트에서 즉시 건너뛰고
+    다음 대체 경로(원본 그대로 업로드 진행)로 넘어간다. 30초 뒤 프로브가 다시 살아나면
+    자동 복귀한다. 다운로드 보안 재적용은 available() 을 보지 않으므로(항상 실제 호출,
+    실패 시 다운로드 중단) 이 캐시로 평문이 새는 경로는 없다.
+    """
+    with _LOCK:
+        _STATE["probe"] = {"at": time.time(), "ok": False, "configured": False,
+                           "reason": "직전 호출이 무응답이라 %.0f초간 건너뜀 (%s)"
+                                     % (PROBE_CACHE_SECONDS, what)}
+
+
 def available():
     """지금 보안 해제/적용을 시도할 수 있는 상태인가(기능 켜짐 + 서버에 키 설정됨)."""
     cfg = config()
@@ -206,14 +227,21 @@ def _post_drm(op, data, filename, extra_form=None, timeout=None, expect="stream"
             raw = err.read()
         except Exception:
             pass
+        # 504 = 릴레이는 살아 있는데 게이트웨이가 무응답(연결 불가/타임아웃) — 명시 거절과 다르다.
+        _kind = "network" if err.code == 504 else ""
+        if _kind == "network":
+            _note_network_failure("게이트웨이 무응답(릴레이 504)")
         payload = _try_json(raw)
         if payload is not None:
             raise SecureDocError(str(payload.get("result_msg") or payload.get("error") or "HTTP %s" % err.code),
                                  result=str(payload.get("result") or ""),
-                                 result_msg=str(payload.get("result_msg") or "")) from err
-        raise SecureDocError("보안 서버 오류: HTTP %s" % err.code) from err
+                                 result_msg=str(payload.get("result_msg") or ""),
+                                 kind=_kind) from err
+        raise SecureDocError("보안 서버 오류: HTTP %s" % err.code, kind=_kind) from err
     except (TimeoutError, OSError, urllib.error.URLError) as err:
-        raise SecureDocError("보안 서버에 연결하지 못했습니다: %s" % getattr(err, "reason", err)) from err
+        _note_network_failure("릴레이 연결 실패/무응답")
+        raise SecureDocError("보안 서버에 연결하지 못했습니다: %s" % getattr(err, "reason", err),
+                             kind="network") from err
 
     if "json" in content_type:
         payload = _try_json(raw) or {}
@@ -250,11 +278,27 @@ def secret_check(data, filename):
     비밀등급 문서는 규격상 **복호화 자체가 거부**된다(-200 "비밀문서로 추가적인 작업을 진행할
     수 없습니다"). 미리 물어보면 어차피 실패할 요청을 아끼고, 사용자에게 정확한 이유를 준다.
     이 확인이 실패해도 흐름을 막지 않는다 — 최종 판정은 어차피 해제 호출이 한다.
+
+    [빠른 포기 2026-09-01] 예외 하나: **네트워크 무응답**(kind="network")은 삼키지 않고
+    올린다. 선행확인이 무응답이면 곧바로 이어질 해제 호출도 같은 길(릴레이→게이트웨이)이라
+    똑같이 제한시간을 꽉 채우고 실패한다 — 예전엔 그래서 무응답 상황에서 대기가 두 배였다
+    (선행확인 60초 삼킴 + 해제 60초). 올리면 maybe_decrypt_upload 의 except 가 즉시 실패로
+    돌리고 업로드는 원본 그대로 계속된다(다음 대체 경로). 판정용 작은 왕복이라 제한시간도
+    짧게 따로 건다(기본 20초, B2B_SECURE_DOC_PRECHECK_TIMEOUT 로 조절).
     """
     try:
         cfg = config()
+        try:
+            _pre_to = float(_env("B2B_SECURE_DOC_PRECHECK_TIMEOUT") or 20)
+        except Exception:
+            _pre_to = 20.0
         out = _post_drm("secret", data, filename, expect="json",
+                        timeout=max(3.0, min(cfg["timeout"], _pre_to)),
                         extra_form={"requestorAccount": cfg["account"]})
+    except SecureDocError as err:
+        if err.kind == "network":
+            raise                      # 무응답 — 해제 호출도 똑같이 실패한다, 여기서 빨리 접는다
+        return ""                      # 확인을 못 했을 뿐 — 흐름은 막지 않는다
     except Exception:
         return ""                      # 확인을 못 했을 뿐 — 흐름은 막지 않는다
     try:

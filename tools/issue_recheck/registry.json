@@ -4267,6 +4267,17 @@
         ]
       ],
       "fix": "수정 아님, 동작 검증 잠금. 실측(실제 Excel): 5단계(python+녹화VBA 3개, 그중 교차파일 1개) 중 4번째 녹화 VBA 가 없는 시트로 실패하는 시나리오. 확인된 계약: ① 실패는 PipelineExecutionError.info 로 stepIdx=3 + cause + promptGuide(일반 단계와 같은 포맷). ② 경계 스냅샷이 실패 이전까지 남는다 — 단 교차파일이 낀 경계는 자기조절 게이트(직전 경계 비용 9배 실행시간 경과 시에만 추가 저장, 오버헤드 10% 상한)로 생략될 수 있고, 그 경우 이어실행이 한 단계 앞 경계에서 재실행으로 보정한다(교차 쓰기를 잃는 쪽이 아니라 다시 도는 쪽 — 안전한 방향). ③ 실패 단계만 고쳐 재실행하면 앞 단계(녹화 포함)를 건너뛰고 연속 꼬리만 실행. ④ 건너뛴 녹화 단계의 결과가 최종본에 보존 — 교차파일(rC→rB Windows().Activate) 쓰기 포함(Saved 표식 함정 구간). ⑤ 재실패해도 이어실행 유지(앞 구간 낭비 없음). ⑥ 레코더 문체 (Sheets().Select/ActiveCell.FormulaR1C1/Windows().Activate)가 보안 게이트에 오탐되지 않음."
+    },
+    {
+      "id": "SECURE-DOC-FAILFAST-ON-SILENCE",
+      "title": "[제보 2026-09-01] 보안 해제 실패 시 대기가 길다 — 무응답 실패의 빠른 포기 + 파일 반복 대기 제거.",
+      "checks": [
+        [
+          "python",
+          "test_runs/_test_secure_doc_failfast.py"
+        ]
+      ],
+      "fix": "확인: 게이트웨이 '명시 실패'(-100/-200/-999)는 릴레이(versionTest drm.py)가 JSON 그대로 400/502 로 즉시 전달하고 양쪽 다 재시도 없음 — 받는 즉시 다음 단계로 넘어간다(이미 빠름). 느린 건 '무응답' 실패: 게이트웨이가 패킷을 버리면 릴레이 제한시간(MIP_TIMEOUT 기본 60초)을 채워야 504 가 오고, 해제가 파일 단위라 여러 파일이면 파일마다 60초 반복. secretPrecheck 켠 환경은 선행확인 실패가 삼켜져 60초를 두 번 기다렸다. 수정(secure_doc.py): ① SecureDocError.kind='network' 분류(연결 실패/타임아웃/릴레이 504) ② 무응답 1회 확인 시 _note_network_failure 가 프로브 캐시를 30초 '죽음' 처리 → 이후 파일은 available() 게이트에서 즉시 건너뛰고 원본 그대로 업로드 계속(대체 경로), 30초 뒤 자동 복귀 ③ secret_check 는 자체 짧은 제한시간(기본 20초, B2B_SECURE_DOC_PRECHECK_TIMEOUT)이고 network 실패는 삼키지 않고 올려 해제 60초를 또 기다리지 않음 ④ 다운로드 재적용은 available() 을 안 보므로(항상 실제 호출, 실패=다운로드 중단) 캐시 조작으로 평문이 새는 경로 없음 — 테스트 [7]로 잠금."
     }
   ]
 }
