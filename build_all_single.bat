@@ -9,7 +9,7 @@ rem   build_exe.bat 이 먼저다. 신선도 가드는 뒤 단계에 내장.)
 rem =====================================================
 
 echo [1/2] build_exe.bat
-call build_exe.bat
+call "%~dp0build_exe.bat"
 if errorlevel 1 (
     echo [ERROR] build_exe.bat failed - stop.
     exit /b 1
@@ -17,7 +17,7 @@ if errorlevel 1 (
 
 echo.
 echo [2/2] build_single_exe.bat
-call build_single_exe.bat
+call "%~dp0build_single_exe.bat"
 if errorlevel 1 (
     echo [ERROR] build_single_exe.bat failed.
     exit /b 1

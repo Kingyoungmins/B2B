@@ -1,6 +1,10 @@
 ﻿# -*- mode: python ; coding: utf-8 -*-
 from pathlib import Path
 import shutil
+import sys
+# [빌드 수정 2026-09-01] 이 PC 패키지 업그레이드 후 분석 임포트 체인이 깊어져 기본 재귀 한도
+# (1000, 중첩 ~115단)에서 RecursionError 로 죽었다 — PyInstaller 공식 처방대로 5배 상향.
+sys.setrecursionlimit(sys.getrecursionlimit() * 5)
 from PyInstaller.utils.hooks import collect_submodules
 
 ROOT = Path(SPECPATH)
@@ -83,7 +87,21 @@ a = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=[],
+    # [빌드 수정 2026-09-01] 앱은 matplotlib 계열을 전혀 안 쓰는데, 분석기가 (pandas 등의
+    # 선택적 import 를 따라) matplotlib 후크를 태우다 아나콘다의 numpy/matplotlib 바이너리
+    # 궁합 문제로 빌드가 통째로 죽었다(ImportError: numpy.core.multiarray — 실측).
+    # 안 쓰는 걸 명시적으로 제외하면 후크 자체가 안 돌고, exe 도 가벼워진다.
+    # pandas 도 제외 — 소스 미사용인데 이 PC 의 pandas 메타데이터가 깨져 있어(dist version=None,
+    # 중단된 업그레이드 잔해) hook-pandas 의 버전 검사가 TypeError 로 빌드를 죽였다(실측).
+    # nltk/sklearn/PIL 등도 제외 — 전부 소스 미사용인데, 이 PC 의 numpy 가 깨져 있어
+    # numpy 에 기대는 후크(hook-nltk→scipy 등)가 로드될 때마다 연쇄로 빌드가 죽었다(실측 3연속).
+    excludes=['matplotlib', 'PyQt5', 'PySide2', 'IPython', 'notebook', 'scipy', 'pandas', 'numpy',
+              'nltk', 'sklearn', 'PIL', 'torch', 'gensim', 'statsmodels', 'numba', 'sympy',
+              # [2026-09-01 실측] 이 PC 에 최근 설치된 LLM/클라우드 SDK 들이 분석 그래프에 휩쓸려
+              # (앱 소스는 전혀 import 안 함 — grep 확인) 깨진 transformers import 로 빌드가 죽었다.
+              'transformers', 'langchain', 'langchain_core', 'langsmith', 'anthropic', 'openai',
+              'sentry_sdk', 'botocore', 'boto3', 'google', 'tensorflow', 'keras', 'jiter',
+              'requests_toolbelt', 'tiktoken', 'tokenizers', 'safetensors', 'huggingface_hub'],
     noarchive=False,
     optimize=0,
 )
