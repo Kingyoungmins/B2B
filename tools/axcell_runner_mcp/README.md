@@ -5,6 +5,9 @@ b2b 로 저장한 스킬(zip)을 **b2b 프로그램/서버 없이** Excel COM �
 
 참조 계약: `ixi-FLOW/docs/maintainers/builtin-mcp-integration-guide.ko.md`
 
+> 현재 버전 **0.2.0** — ver0.8.2 브랜치에 병합되며 코드리뷰(12건) 반영 + **0.8.2 엔진** 기준으로
+> 재검증했다(실제 Excel 종단 실행 포함). 상세는 아래 '0.8.2 병합에서 바뀐 것' 절.
+
 ## 제공 기능 (요구 3종 → MCP 도구 5개)
 
 | 요구 | 도구 | 방식 |
@@ -43,16 +46,20 @@ out: {ok, run_id, status:"running", skill, total_steps, out_dir, zip_path}
 ```
 in : {run_id, after_cursor?, max_events?, include_events?, max_wait_seconds?(무시)}
 out: {ok, run_id, status: running|completed|failed|cancelled,
-      step, total_steps, step_label, cursor, events[],
+      step, total_steps, step_label, cursor,
+      events: {items:[{seq:int, type, summary, ...}], next_cursor:str},
       완료시: out_dir, files[], out_zip? / 실패시: error}
 ```
-이벤트 테일: `events[].cursor` 를 다음 호출 `after_cursor` 로 이어받기(§3.4 계약).
+이벤트 테일: `events.next_cursor` 를 다음 호출 `after_cursor` 로 이어받기
+(ixi-flow event_batch 계약 — 숫자 `seq` 없는 이벤트는 하네스가 버린다).
 
 ### run_stop  (L2 end_tool)
 ```
 in : {run_id}   out: {ok, run_id, status:"cancelled"}
 ```
 스텝 경계 취소 + 격리 Excel 프로세스 taskkill(긴 VBA 스텝 중간에도 정지).
+시작 직후처럼 Excel pid 가 아직 기록되지 않은 순간이면 최대 3초 기다렸다 죽인다.
+중간에 죽여서 COM 예외로 끝난 런도 상태는 "failed" 가 아니라 "cancelled" 로 보고된다.
 
 ### package_outputs
 ```
@@ -74,7 +81,10 @@ tools/axcell_runner_mcp/
 │   └── install.ps1      # 설치 훅 (멱등·검증만·네트워크 없음)
 ├── skills/axcell-runner-guide/SKILL.md   # 에이전트용 절차 스킬 (검사→실행→압축)
 ├── build_bundle.ps1     # Windows 번들 빌드 → dist/axcell_runner-deploy-<ver>-win64.tar.gz
-├── test_core.py         # self-check (Excel 불필요)
+├── install_manual.ps1   # 수동 설치기 (ixi-flow 범용 설치기가 생길 때까지)
+├── dist/axcell_runner-deploy-0.2.0-win64.tar.gz   # 미리 빌드된 번들(0.8.2 엔진 내장)
+├── test_core.py         # self-check (Excel 불필요 — 프로토콜/매핑/이벤트 계약)
+├── test_run_com.py      # 실제 Excel COM 종단 실행 검증 (Windows 전용)
 └── README.md
 ```
 
@@ -89,22 +99,18 @@ tools/axcell_runner_mcp/
 ```
 빌드가 BOM 검사 + 런타임 self-check(pywin32/엔진 로드)까지 수행한다.
 
-## 미리 빌드된 번들 (브랜치에 포함)
+## 미리 빌드된 번들 (저장소에 포함)
 
-빌드 PC 가 없어도 되도록 Windows(x64)에서 빌드한 번들을 브랜치에 함께 넣어 둔다.
+빌드 PC 가 없어도 되도록 Windows(x64)에서 빌드한 번들을 함께 넣어 둔다.
 
 ```
 tools/axcell_runner_mcp/dist/axcell_runner-deploy-0.2.0-win64.tar.gz
 ```
 
-> ⚠️ skillrunner → axcell_runner 전체 리네임으로 **기존 번들은 무효가 되어 제거했다**
-> (내부 패키지명·매니페스트가 구명). Windows 에서 `build_bundle.ps1` 로 재빌드해
-> 위 경로에 커밋하면 다시 브랜치에서 바로 받을 수 있다.
-
-번들에는 self-contained Python (CPython 3.12 + pywin32 + openpyxl) 과 엔진
-(serve_b2b.py) 이 들어 있어 배포 PC 에 Python/b2b 설치가 필요 없다. 소스를 고쳤으면
+번들에는 self-contained Python(+ pywin32 + openpyxl)과 **0.8.2 엔진**(serve_b2b.py)이
+들어 있어 배포 PC 에 Python/b2b 설치가 필요 없다. 소스나 엔진을 고쳤으면
 `build_bundle.ps1` 로 다시 만들어 이 파일을 교체한다(`dist/` 는 .gitignore 예외로
-tar.gz 만 추적한다).
+tar.gz 만 추적한다). 구 0.1.0 번들(0.8.0 엔진·리뷰 반영 전)은 제거했다.
 
 ## 설치 (배포 PC, 폐쇄망 OK)
 
@@ -133,10 +139,39 @@ run_start 는 ixi-flow 의 런 레지스트리/bg_wait/체크리스트 진행표
 - VBA 스텝이 있는 스킬: Excel 매크로 설정 "VBA 프로젝트 개체 모델에 대한 액세스 신뢰" ON
 - Python/b2b 설치 불필요 (번들에 self-contained 포함)
 
+## 0.8.2 병합에서 바뀐 것 (코드리뷰 반영 — 2026-09-01)
+
+실행 결과에 영향 있는 것 위주. 도구 구성/MCP 계약/매핑 로직은 그대로다.
+
+- **매크로 보안**: AutomationSecurity 를 ForceDisable(3)이 아니라 **Low(1)** 로 열고
+  Auto_Open 류는 `EnableEvents=False` 로 막는다. 3으로 '열면' 일부 Office 빌드에서 그
+  인스턴스의 매크로가 영구 비활성화되어 VBA 스텝이 전부 실패한다(엔진이 이미 밟았던 지뢰).
+- **파일 열기**: 맨 `Workbooks.Open` 대신 엔진 `excel_workbooks_open` — 형식 위장 파일
+  (.xls 인데 HTML/CSV) 변환, UpdateLinks/CorruptLoad 재시도, 원본명 별칭 등록 재사용.
+- **코드 정규화**: 실행 전 `normalize_python_pipeline_code` + stepFile 은 utf-8-sig 로 읽음.
+  (판별은 정규화하면서 실행은 원문 컴파일하던 불일치 — 앱에선 돌던 zip 이 러너에서만 죽었다)
+- **스텝 간 강제 재계산**: 수동계산으로 저장된 워크북의 미계산 값이 다음 스텝에 읽히는
+  무성 오답 방지(엔진 격리 전체실행과 같은 규칙). 열 때 Calculation 도 자동으로 강제.
+- **엔진 atexit 해제**: serve_b2b import 가 걸어 두는 종료 훅을 해제 — 러너 종료가 같은 PC
+  의 진짜 B2B 앱 스냅샷(%TEMP% 공유 경로)을 지우고 20초 행 걸리던 것.
+- **출력 파일명**: 실행 중엔 스킬이 기억하는 이름(코드 리터럴 해석용)으로 열되, 저장 후
+  **사용자가 준 입력 이름으로 복원**(4월 스킬 + 5월 파일 → 결과도 5월 이름. 실행기 앱과 동일).
+- **읽기전용 방어**: copy2 가 복사한 읽기전용 속성 해제(저장 무성 실패/재실행 PermissionError 방지).
+- **매핑 유일성**: 표기차 매칭 후보가 2개 이상이면 unmatched 로 알림(엔진 규칙).
+  `output:N` 대상 스텝은 role=output 파일이 유일할 때 그 파일로 바인딩.
+- **MCP 서버 안정성**: dict 아닌 JSON-RPC 입력(배치/스칼라)에 서버가 죽지 않음.
+- **설치/빌드 스크립트**: PS 5.1 함정 수정 — `-notmatch` 배열 필터 오판(성공을 실패로),
+  EAP=Stop + 네이티브 stderr 의 NativeCommandError(pip 포함), BOM 스캔 범위
+  (파이썬 표준 라이브러리·BOM 유지 파일인 engine/serve_b2b.py 는 제외).
+
 ## 검증 현황
 
-- `python3 test_core.py` → **5개 통과** (Mac에서): 스킬 로드/핸들복원, 자동 매핑
-  (실제 serve_b2b 로직으로), unmatched 검출, 출력 검증/압축(성공·실패 경로),
-  **MCP 프로토콜 + 런 생명주기**(run_start→실패 경로→run_report 상태 보고, 서브프로세스 실측).
-- **미검증**: 실제 Excel COM 스텝 실행, 번들 빌드, ixi-flow 설치 — 전부 Windows 에서
-  확인 필요 (가이드 §8 수용 테스트 체크리스트 참고).
+- `python test_core.py` → **6개 통과**: 스킬 로드/핸들복원, 자동 매핑(실제 serve_b2b
+  로직), unmatched 검출, 출력 검증/압축, MCP 프로토콜 + 런 생명주기(+비정상 입력 생존),
+  **이벤트 seq/summary/커서 계약**(가짜 run 서버로 플랫폼 무관 결정적 검증).
+- `python test_run_com.py` (Windows+Excel) → **실제 Excel COM 종단 실행 통과**:
+  python+VBA+교차파일 스텝, 다른 달 파일명 자동 매핑, 원본 무수정, 이벤트 순서,
+  출력 파일명 복원, package_outputs. 0.8.2 엔진 기준.
+- 번들 빌드(`build_bundle.ps1`) Windows 실측 통과(BOM/self-check 포함) → 0.2.0.
+- **미검증**: 실제 ixi-flow 에 설치·하네스 편입 — 배포 환경에서 확인 필요
+  (가이드 §8 수용 테스트 체크리스트 참고).
