@@ -4278,6 +4278,17 @@
         ]
       ],
       "fix": "확인: 게이트웨이 '명시 실패'(-100/-200/-999)는 릴레이(versionTest drm.py)가 JSON 그대로 400/502 로 즉시 전달하고 양쪽 다 재시도 없음 — 받는 즉시 다음 단계로 넘어간다(이미 빠름). 느린 건 '무응답' 실패: 게이트웨이가 패킷을 버리면 릴레이 제한시간(MIP_TIMEOUT 기본 60초)을 채워야 504 가 오고, 해제가 파일 단위라 여러 파일이면 파일마다 60초 반복. secretPrecheck 켠 환경은 선행확인 실패가 삼켜져 60초를 두 번 기다렸다. 수정(secure_doc.py): ① SecureDocError.kind='network' 분류(연결 실패/타임아웃/릴레이 504) ② 무응답 1회 확인 시 _note_network_failure 가 프로브 캐시를 30초 '죽음' 처리 → 이후 파일은 available() 게이트에서 즉시 건너뛰고 원본 그대로 업로드 계속(대체 경로), 30초 뒤 자동 복귀 ③ secret_check 는 자체 짧은 제한시간(기본 20초, B2B_SECURE_DOC_PRECHECK_TIMEOUT)이고 network 실패는 삼키지 않고 올려 해제 60초를 또 기다리지 않음 ④ 다운로드 재적용은 available() 을 안 보므로(항상 실제 호출, 실패=다운로드 중단) 캐시 조작으로 평문이 새는 경로 없음 — 테스트 [7]로 잠금."
+    },
+    {
+      "id": "COPY-FULL-COLUMN-CLAMP",
+      "title": "[실측 2026-09-01] 'D열 복사'가 104만 행을 다뤄 스텝 6초 — 실행 시점 끝행 자동 클램프.",
+      "checks": [
+        [
+          "python",
+          "test_runs/_test_copy_full_column_clamp_com.py"
+        ]
+      ],
+      "fix": "생성 테스트 로그 실측: ctx.copy(..., 'D:D', ...) 교차파일 스텝이 6초. 복사 자체는 0.3초(Excel 내부 최적화)인데 되돌리기 저널(_journal_save)이 붙는 쪽 104만 셀의 Formula 를 통째로 읽는 게 주범. 프롬프트에 '실사용 행까지 줄여라' 규칙이 있어도(file-schema PERFORMANCE 절) 모델이 안 지키는 날이 있고, 사용자 입력 자체가 엑셀 관성으로 열 단위('D열 해줘')라 엔진에서 줄이는 게 정답. 수정: PythonComSkillContext._clamp_full_span — 열 전체(D:D)/행 전체(3:3) 참조만 그 시트 UsedRange 끝행/끝열까지로 줄인다(실행 시점에 재므로 달 바뀌어 행수가 달라져도 동작). 유한 범위는 불변. 실패 시 원본 범위 반환(종전 동작 생존). python_com.copy 트레이스에 askedCells 로 클램프 기록. 실측: 60행 D:D 복사 1.50초→0.57초, 저널 $N:$N(열 전체)→N1:N60."
     }
   ]
 }

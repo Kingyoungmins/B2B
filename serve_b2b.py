@@ -13098,6 +13098,31 @@ class PythonComSkillContext:
             return self, sheet_spec
         return self.book(book_part), sheet_part
 
+    def _clamp_full_span(self, ws, rng):
+        """열 전체(D:D)/행 전체(3:3) 참조를 그 시트의 실제 사용 범위까지로 줄인다.
+
+        [실측 2026-09-01] 사용자는 엑셀 습관대로 열을 통째로 지정한다("D열 복사해줘" → D:D).
+        그대로 복사하면 104만 행을 다루게 되는데, 복사 자체(Excel 내부 최적화, ~0.3초)보다
+        **되돌리기 저널이 붙는 쪽 104만 셀을 통째로 읽는 비용**이 수 초를 먹었다(스텝 6초).
+        실행 시점의 끝행/끝열로 줄이므로 달이 바뀌어 행수가 달라져도 그대로 동작한다
+        (숫자를 구워 넣는 게 아니라 매번 잰다). 전체 스팬이 아닌 범위는 손대지 않는다.
+        """
+        try:
+            full_rows = int(rng.Rows.Count) >= int(ws.Rows.Count)
+            full_cols = int(rng.Columns.Count) >= int(ws.Columns.Count)
+            if not (full_rows or full_cols):
+                return rng
+            used = ws.UsedRange
+            last_row = int(used.Row) + int(used.Rows.Count) - 1
+            last_col = int(used.Column) + int(used.Columns.Count) - 1
+            rows = (max(1, last_row - int(rng.Row) + 1) if full_rows else int(rng.Rows.Count))
+            cols = (max(1, last_col - int(rng.Column) + 1) if full_cols else int(rng.Columns.Count))
+            if rows == int(rng.Rows.Count) and cols == int(rng.Columns.Count):
+                return rng
+            return self._resize_rng(ws, rng, rows, cols)
+        except Exception:
+            return rng                 # 줄이기 실패 = 종전 동작(전체 복사) — 기능은 항상 산다
+
     def copy(self, src_sheet, src_range, dst_sheet, dst_cell):
         """Excel 네이티브 복사(값+수식+서식+병합 보존). '복사/복붙' 요청의 기본 수단."""
         src_ctx, src_sheet_name = self._ctx_and_sheet_from_spec(src_sheet)
@@ -13105,6 +13130,12 @@ class PythonComSkillContext:
         src_ws = src_ctx._ws(src_sheet_name)
         dst_ws = dst_ctx._ws(dst_sheet_name)
         src = src_ctx._rng(src_ws, src_range)
+        _cells_asked = None
+        try:
+            _cells_asked = int(src.Rows.Count) * int(src.Columns.Count)
+        except Exception:
+            pass
+        src = src_ctx._clamp_full_span(src_ws, src)
         dst = dst_ctx._rng(dst_ws, dst_cell)
         self._tick(2)
         try:
@@ -13120,7 +13151,7 @@ class PythonComSkillContext:
         try:
             cells = int(src.Rows.Count) * int(src.Columns.Count)
             ms = (time.perf_counter() - t0) * 1000
-            if ms >= 200 or cells >= 100000:
+            if ms >= 200 or cells >= 100000 or (_cells_asked and _cells_asked != cells):
                 _vba_trace(
                     "python_com.copy",
                     srcSheet=str(src_sheet),
@@ -13128,6 +13159,8 @@ class PythonComSkillContext:
                     dstSheet=str(dst_sheet),
                     dstCell=str(dst_cell),
                     cells=cells,
+                    # 열/행 전체 지정을 실제 사용 범위로 줄였으면 원래 크기를 함께 남긴다
+                    askedCells=(_cells_asked if (_cells_asked and _cells_asked != cells) else None),
                     ms=round(ms, 1),
                 )
         except Exception:
