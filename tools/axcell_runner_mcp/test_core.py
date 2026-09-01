@@ -8,6 +8,7 @@ MCP 서버 프로토콜(initialize/tools/list/tools/call) + 런 생명주기(실
 실행: python3 test_core.py
 """
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -84,14 +85,38 @@ def test_package_outputs():
     print("ok  package_outputs")
 
 
+FAKE_RUN_SERVER = """# 테스트 전용 — core.run 을 가짜(즉시 open/step/saved 방출)로 바꾼 MCP 서버.
+# [리뷰 2026-09-01] 원래 테스트는 진짜 run 에 의존해서, Excel 없는 환경(맥/리눅스)이나
+# 깨진 입력에선 이벤트가 0개라 seq/summary 계약 검증이 '한 번도' 돌지 않았다(공허한 통과).
+import axcell_runner.mcp_server as m
+
+def _fake_run(skill_zip, input_dir, out_dir, on_event=None, cancel=None, excel_pid_holder=None):
+    emit = on_event or (lambda e: None)
+    emit({"type": "open", "file": "가짜.xlsx"})
+    emit({"type": "step", "step": 1, "total_steps": 1, "language": "python", "step_label": "가짜 스텝"})
+    emit({"type": "saved", "files": ["가짜.xlsx"]})
+    return {"ok": True, "out_dir": str(out_dir), "files": ["가짜.xlsx"], "skill": "가짜"}
+
+m.core.run = _fake_run
+m.main()
+"""
+
+
 class McpClient:
     """stdio MCP 서버 스모크 테스트용 최소 클라이언트."""
 
-    def __init__(self):
+    def __init__(self, fake_run=False):
+        if fake_run:
+            script = Path(tempfile.mkdtemp()) / "_fake_run_server.py"
+            script.write_text(FAKE_RUN_SERVER, encoding="utf-8")
+            cmd = [sys.executable, str(script)]
+        else:
+            cmd = [sys.executable, "-m", "axcell_runner.mcp_server"]
+        env = dict(os.environ)
+        env["PYTHONPATH"] = str(HERE) + os.pathsep + env.get("PYTHONPATH", "")
         self.proc = subprocess.Popen(
-            [sys.executable, "-m", "axcell_runner.mcp_server"],
-            cwd=str(HERE), stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL, text=True, encoding="utf-8")
+            cmd, cwd=str(HERE), stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL, text=True, encoding="utf-8", env=env)
         self._id = 0
 
     def call(self, method, params=None):
@@ -136,28 +161,19 @@ def test_mcp_protocol_and_lifecycle():
         r, is_err = c.tool("check_inputs", {"skill_zip": str(z), "input_dir": str(d)})
         assert r["ok"] and not is_err, r
 
-        # run_start → (Mac: win32com 없음) → 워커 실패 → run_report 가 failed 보고
+        # 실제 run 시작 → 상태 어휘 확인(플랫폼별 completed/failed — Excel/입력 유무에 따라)
         r, _ = c.tool("run_start", {"skill_zip": str(z), "input_dir": str(d),
                                      "out_dir": str(d / "out"), "make_zip": False})
         assert r["ok"] and r["run_id"] and r["total_steps"] == 1, r
         run_id = r["run_id"]
         status = None
-        for _ in range(50):
+        for _ in range(150):                      # 실 Excel 이면 열기까지 수십 초 걸릴 수 있다
             rep, _ = c.tool("run_report", {"run_id": run_id, "include_events": True})
             status = rep["status"]
-            # ixi-flow event_batch 계약: events = {items:[{seq:int,...}], next_cursor:str}
-            ev = rep["events"]
-            assert isinstance(ev, dict) and isinstance(ev["items"], list), ev
-            assert isinstance(ev["next_cursor"], str), ev
-            for item in ev["items"]:
-                assert isinstance(item.get("seq"), int) and item.get("summary"), item
             if status in ("completed", "failed", "cancelled"):
                 break
             time.sleep(0.2)
-        if sys.platform == "win32":
-            assert status in ("completed", "failed"), rep   # Windows+Excel 이면 completed 가능
-        else:
-            assert status == "failed" and "pywin32" in (rep.get("error") or ""), rep
+        assert status in ("completed", "failed"), rep
 
         # unknown run_id
         r, is_err = c.tool("run_report", {"run_id": "run_none"})
@@ -166,9 +182,54 @@ def test_mcp_protocol_and_lifecycle():
         # run_stop: 이미 끝난 런 → 현재 상태 그대로
         r, _ = c.tool("run_stop", {"run_id": run_id})
         assert r["ok"] and r["status"] in ("failed", "completed", "cancelled"), r
+
+        # [리뷰 2026-09-01] 서버는 dict 아닌 JSON-RPC 입력(배치/스칼라)에 죽지 않아야 한다.
+        c.proc.stdin.write("[1,2,3]\n"); c.proc.stdin.flush()
+        c.proc.stdin.write("null\n"); c.proc.stdin.flush()
+        pong = c.call("ping")                     # 죽었다면 여기서 무응답으로 실패한다
+        assert "result" in pong, pong
     finally:
         c.close()
     print("ok  mcp_protocol_and_lifecycle")
+
+
+def test_event_contract_with_fake_run():
+    """seq/summary/커서 계약을 '실제로 이벤트가 있는' 런으로 검증한다(가짜 run — 플랫폼 무관 결정적)."""
+    c = McpClient(fake_run=True)
+    try:
+        c.call("initialize", {"protocolVersion": "2024-11-05", "capabilities": {}})
+        z = make_skill_zip(
+            [{"language": "python", "code": "def transform(ctx):\n    pass\n"}],
+            [{"name": "청구내역_202606.xlsx", "role": "input"}])
+        d = Path(tempfile.mkdtemp())
+        (d / "청구내역_202607.xlsx").write_bytes(b"x")
+        r, _ = c.tool("run_start", {"skill_zip": str(z), "input_dir": str(d),
+                                     "out_dir": str(d / "out"), "make_zip": False})
+        assert r["ok"], r
+        run_id = r["run_id"]
+        status, items = None, []
+        for _ in range(50):
+            rep, _ = c.tool("run_report", {"run_id": run_id, "after_cursor": 0, "max_events": 50})
+            status = rep["status"]
+            items = rep["events"]["items"]
+            if status in ("completed", "failed", "cancelled"):
+                break
+            time.sleep(0.1)
+        assert status == "completed", (status, rep)
+        # ixi-flow event_batch 계약 — 이번엔 이벤트가 '반드시' 있으므로 공허하지 않다
+        assert len(items) == 3, items
+        assert [it["type"] for it in items] == ["open", "step", "saved"], items
+        for it in items:
+            assert isinstance(it.get("seq"), int) and it.get("summary"), it
+        assert [it["seq"] for it in items] == [1, 2, 3], items
+        assert isinstance(rep["events"]["next_cursor"], str) and rep["events"]["next_cursor"] == "3", rep["events"]
+        # 커서 이어받기: next_cursor 이후에는 새 이벤트가 없어야 한다
+        rep2, _ = c.tool("run_report", {"run_id": run_id, "after_cursor": 3})
+        assert rep2["events"]["items"] == [], rep2["events"]
+        assert rep["step"] == 1 and rep["total_steps"] == 1, rep
+    finally:
+        c.close()
+    print("ok  event_contract_with_fake_run")
 
 
 if __name__ == "__main__":
@@ -177,4 +238,5 @@ if __name__ == "__main__":
     test_check_inputs_unmatched()
     test_package_outputs()
     test_mcp_protocol_and_lifecycle()
+    test_event_contract_with_fake_run()
     print("\nALL PASS")

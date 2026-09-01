@@ -52,6 +52,20 @@ def _engine():
         raise RuntimeError("serve_b2b.py 를 찾지 못했습니다 (AXCELL_RUNNER_ENGINE_DIR 확인). 탐색: "
                            + ", ".join(str(c) for c in candidates))
     import serve_b2b as eng
+    # [리뷰 2026-09-01] serve_b2b 는 import 만으로 atexit 정리 핸들러를 건다. 그중
+    # cleanup_backend_runtime_files 는 '고정 공유 경로'(%TEMP%\b2b_backend_v044)의 스텝
+    # 스냅샷을 지우고, cleanup_excel_sessions 는 종료 시점에 COM 워커 스레드를 새로 띄워
+    # 최대 20초를 기다린다. 이 프로세스(MCP 러너)가 끝날 때 그 핸들러가 돌면
+    # **같은 PC 에서 돌고 있는 진짜 B2B 앱의 스냅샷을 지워 버리고**, 러너 종료가 20초씩
+    # 걸린다. 러너는 자기 Excel 을 finally 에서 직접 정리하므로 엔진 핸들러는 전부 해제.
+    import atexit
+    for _fn_name in ("cleanup_node_worker", "cleanup_backend_runtime_files", "cleanup_excel_sessions"):
+        _fn = getattr(eng, _fn_name, None)
+        if _fn is not None:
+            try:
+                atexit.unregister(_fn)
+            except Exception:
+                pass
     _ENGINE = eng
     return eng
 
@@ -71,7 +85,9 @@ def load_skill(zip_path):
         for step in data.get("pipeline", []):        # 외부 stepFile 이 있으면 그 내용 우선(save-load.js 규약)
             sf = step.get("stepFile")
             if sf and sf in z.namelist():
-                step["code"] = z.read(sf).decode("utf-8")
+                # [리뷰 2026-09-01] utf-8-sig — BOM 이 붙은 stepFile 을 utf-8 로 읽으면 ﻿ 가
+                # 코드 첫 글자로 남아 compile() 이 SyntaxError 를 낸다(앱은 로드 시 정규화해서 됨).
+                step["code"] = z.read(sf).decode("utf-8-sig")
     rfs = [rf for rf in (data.get("requiredFiles") or []) if rf.get("handle") and rf.get("name")]
     if rfs:
         for step in data.get("pipeline", []):
@@ -113,12 +129,13 @@ def _auto_map(required_names, files):
         if hit is None:
             try:
                 want_keys = eng._workbook_name_lookup_keys(want)
-                for f in files:
-                    if f.name in used:
-                        continue
-                    if eng._workbook_name_lookup_keys(f.name) & want_keys:
-                        hit = f
-                        break
+                # [리뷰 2026-09-01] 첫 히트로 끊지 않고 전부 모아 '유일할 때만' 채택 —
+                # 엔진(_normalized lookup)과 같은 규칙. 둘 이상 걸리면 잘못 짝지어 남의
+                # 파일을 덮는 것보다 unmatched 로 알리는 게 낫다.
+                cands = [f for f in files
+                         if f.name not in used and eng._workbook_name_lookup_keys(f.name) & want_keys]
+                if len(cands) == 1:
+                    hit = cands[0]
             except Exception:
                 pass
         if hit is None:
@@ -172,7 +189,7 @@ def _stable_key_fallback(name):
         return re.sub(r"[ _\-\.]+", "", s)
 
 
-def _pick_target_wb(target_file_id, opened, primary_wb):
+def _pick_target_wb(target_file_id, opened, primary_wb, output_names=()):
     tid = str(target_file_id or "")
     if tid.startswith("input:"):
         want = tid[len("input:"):]
@@ -182,6 +199,11 @@ def _pick_target_wb(target_file_id, opened, primary_wb):
         for name, wb in opened.items():
             if _stable_key_fallback(name) == wk:
                 return wb
+    # [리뷰 2026-09-01] 출력 템플릿 대상은 "output:N" 이라 이름이 없다(drop-handling.js).
+    # 예전엔 무조건 primary(첫 입력)로 떨어져 VBA 가 엉뚱한 워크북 컨텍스트로 돌 수 있었다.
+    # requiredFiles 의 role=="output" 파일이 정확히 하나면 그 파일이 대상이다.
+    if tid.startswith("output:") and len(output_names) == 1 and output_names[0] in opened:
+        return opened[output_names[0]]
     return primary_wb
 
 
@@ -220,40 +242,78 @@ def run(skill_zip, input_dir, out_dir, on_event=None, cancel: threading.Event | 
     work_copies = {}
     for name, src in mapping.items():
         dst = out_dir / Path(name).name        # ctx.book("이름")/VBA Workbooks("이름") 이 이 파일명으로 찾음
+        # [리뷰 2026-09-01] 지난 실행이 남긴(혹은 읽기전용 속성이 복사된) 기존 사본이 있으면
+        # copy2 가 PermissionError 로 죽는다 — 지우고 새로 만든다.
+        if dst.exists():
+            try:
+                os.chmod(dst, 0o666)
+            except Exception:
+                pass
+            dst.unlink()
         shutil.copy2(src, dst)
+        # copy2 는 읽기전용 속성까지 복사한다 — 그대로 열면 전부 실행하고도 Save 가 조용히
+        # 실패해 '작업 전 파일'이 결과로 나간다(공유폴더 원본이 읽기전용인 경우 실측 위험).
+        try:
+            os.chmod(dst, 0o666)
+        except Exception:
+            pass
         work_copies[name] = dst
     primary_name = req_names[0] if required else next(iter(work_copies))
+    output_names = tuple(rf["name"] for rf in required if str(rf.get("role") or "") == "output")
 
     total = len(pipeline)
     pythoncom.CoInitialize()
     app, opened = None, {}
+    open_temps = []
     try:
         app = win32com.client.DispatchEx("Excel.Application")
         if excel_pid_holder is not None:
             try:
                 excel_pid_holder["pid"] = eng._excel_process_id(app)
-            except Exception:
-                pass
+            except Exception as e:
+                # pid 를 못 얻으면 run_stop 의 강제 종료가 무력화된다 — 조용히 삼키지 않는다.
+                _log("excel pid capture failed (run_stop kill unavailable):", repr(e))
         app.Visible = False
         app.DisplayAlerts = False
+        # [리뷰 2026-09-01] AutomationSecurity 는 엔진과 같은 Low(1)로 연다.
+        # ForceDisable(3)로 '열면' 일부 Office 빌드에서 그 인스턴스의 모든 매크로가 영구
+        # 비활성화되어, 뒤에 주입하는 VBA 스텝의 Application.Run 이 전부 "매크로를 실행할
+        # 수 없습니다"로 죽는다(엔진 주석: 전체실행 100% 실패의 근본원인 — 나중에 낮춰도
+        # 이미 차단된 상태는 안 풀린다). 파일 자체의 Auto_Open 류는 EnableEvents=False 로 막는다.
         try:
-            app.AutomationSecurity = 3  # 열 때 매크로 자동실행 차단
+            app.EnableEvents = False
+        except Exception:
+            pass
+        try:
+            app.AutomationSecurity = 1  # msoAutomationSecurityLow — 엔진(excel_workbooks_open 경로)과 동일
         except Exception:
             pass
 
         for name, path in work_copies.items():
             if cancel is not None and cancel.is_set():
                 raise RunCancelled()
-            opened[name] = app.Workbooks.Open(str(path.resolve()))
+            # [리뷰 2026-09-01] 맨 Workbooks.Open 대신 엔진의 excel_workbooks_open —
+            # 형식 위장 파일(.xls 인데 HTML/CSV) 변환, UpdateLinks=0/CorruptLoad 재시도 사다리,
+            # 그리고 변환된 파일도 ctx.book("원본명")/VBA Workbooks("원본명") 으로 찾게 하는
+            # 이름 별칭 등록까지 전부 이 함수에 있다(ERP 내보내기 파일 대비).
+            wb, _tmp = eng.excel_workbooks_open(app, str(path.resolve()),
+                                                read_only=False, intended_name=Path(name).name)
+            if _tmp:
+                open_temps.append(_tmp)
+            opened[name] = wb
             emit({"type": "open", "file": name})
         primary_wb = opened[primary_name]
+        try:
+            app.Calculation = -4105     # xlCalculationAutomatic — 수동 저장된 워크북이 인스턴스
+        except Exception:               # 계산 모드를 수동으로 끌고 가는 것 방지(엔진과 동일 규칙)
+            pass
 
         for i, step in enumerate(pipeline, 1):
             if cancel is not None and cancel.is_set():
                 raise RunCancelled()
             code = step.get("code") or ""
             label = (step.get("title") or step.get("description") or "").strip()[:60]
-            target_wb = _pick_target_wb(step.get("targetFileId"), opened, primary_wb)
+            target_wb = _pick_target_wb(step.get("targetFileId"), opened, primary_wb, output_names)
             session = {"path": str(Path(target_wb.FullName)), "app": app, "workbook": target_wb}
             lang = "vba" if eng.is_vba_pipeline_step(step) else (
                 "python" if eng.is_python_pipeline_step(step) else "skip")
@@ -261,17 +321,53 @@ def run(skill_zip, input_dir, out_dir, on_event=None, cancel: threading.Event | 
             if lang == "vba":
                 eng._inject_and_run_vba(app, target_wb, code, eng.VBA_SKILL_ENTRY)
             elif lang == "python":
+                # [리뷰 2026-09-01] 실행 전 정규화 — BOM/``` 펜스/주석 머리말을 벗긴다.
+                # 판별(is_python_pipeline_step)은 정규화해서 보면서 실행은 원문 그대로 컴파일하면,
+                # 앱에서는 돌던 zip 이 러너에서만 SyntaxError 로 죽는다(앱은 로드 때 정규화).
+                try:
+                    code = eng.normalize_python_pipeline_code(code)
+                except Exception:
+                    pass
                 summary = eng._exec_python_com_skill(app, target_wb, session, code, skip_static=True)
                 if summary.get("warning"):
                     emit({"type": "warning", "step": i, "message": summary["warning"]})
+            # [리뷰 2026-09-01] 스텝 사이 강제 재계산 — 인스턴스 계산 모드가 수동으로 남는
+            # 드문 경우에도 앞 스텝이 쓴 수식이 미계산인 채 다음 스텝 read 에 읽히지 않게
+            # (엔진 격리 전체실행과 동일 규칙: 무성 오답 방지).
+            eng._safe_excel_calculate(app)
 
         saved = []
         for name, wb in opened.items():
             wb.Save()
-            saved.append(work_copies[name])
-        emit({"type": "saved", "files": [p.name for p in saved]})
+            saved.append((name, work_copies[name]))
+        # 성공 경로는 여기서 먼저 닫는다 — 파일 잠금이 풀려야 아래에서 이름을 되돌릴 수 있다.
+        for wb in list(opened.values()):
+            try:
+                wb.Close(SaveChanges=False)
+            except Exception:
+                pass
+        opened.clear()
+        # [0.8.2 호환 2026-09-01] 출력 파일명을 '사용자가 준 입력 이름'으로 되돌린다.
+        # 실행 중에는 스킬이 기억하는 이름(예: …4월)으로 열어야 코드/VBA 의 파일명 리터럴이
+        # 해석되지만(위 작업 사본 주석), 결과물까지 그 옛 이름으로 나가면 5월 데이터를 돌린
+        # 사용자가 헷갈린다. 실행기 앱은 입력 이름 그대로 저장한다 — 제품 동작과 맞춘다.
+        final_files = []
+        for name, path in saved:
+            src_match = mapping.get(name)
+            want = Path(src_match).name if src_match is not None else path.name
+            if want != path.name:
+                target = path.with_name(want)
+                try:
+                    if target.exists():
+                        target.unlink()
+                    path.rename(target)
+                    path = target
+                except Exception as e:
+                    _log("output rename failed (keep as-is):", path.name, "->", want, repr(e))
+            final_files.append(path)
+        emit({"type": "saved", "files": [p.name for p in final_files]})
         return {"ok": True, "out_dir": str(out_dir.resolve()),
-                "files": [p.name for p in saved], "skill": data.get("name") or Path(skill_zip).stem}
+                "files": [p.name for p in final_files], "skill": data.get("name") or Path(skill_zip).stem}
     finally:
         for wb in opened.values():
             try:
@@ -281,6 +377,11 @@ def run(skill_zip, input_dir, out_dir, on_event=None, cancel: threading.Event | 
         if app is not None:
             try:
                 app.Quit()
+            except Exception:
+                pass
+        for _tmp in open_temps:            # excel_workbooks_open 이 만든 형식변환 임시본 정리
+            try:
+                Path(_tmp).unlink()
             except Exception:
                 pass
         pythoncom.CoUninitialize()

@@ -94,7 +94,7 @@ tools/axcell_runner_mcp/
 빌드 PC 가 없어도 되도록 Windows(x64)에서 빌드한 번들을 브랜치에 함께 넣어 둔다.
 
 ```
-tools/axcell_runner_mcp/dist/axcell_runner-deploy-0.1.0-win64.tar.gz
+tools/axcell_runner_mcp/dist/axcell_runner-deploy-0.2.0-win64.tar.gz
 ```
 
 > ⚠️ skillrunner → axcell_runner 전체 리네임으로 **기존 번들은 무효가 되어 제거했다**
@@ -114,7 +114,7 @@ tar.gz 만 추적한다).
 > config 관리 블록(마커) 렌더링 + workspace/skills 배포 + self-check 를 수행하고 멱등이다.
 
 ```powershell
-.\install_manual.ps1 -Bundle .\dist\axcell_runner-deploy-0.1.0-win64.tar.gz
+.\install_manual.ps1 -Bundle .\dist\axcell_runner-deploy-0.2.0-win64.tar.gz
 # 기본 설치 위치: %USERPROFILE%\.ixi-flow\integrations\axcell_runner
 # config: %USERPROFILE%\.ixi-flow\config.toml 에 관리 블록 추가(기존 블록은 교체, 백업 생성)
 ```

@@ -29,7 +29,7 @@ import uuid
 from . import runner_core as core
 
 PROTOCOL_VERSION = "2024-11-05"
-SERVER_INFO = {"name": "axcell_runner", "version": "0.1.0"}
+SERVER_INFO = {"name": "axcell_runner", "version": "0.2.0"}
 
 # ---------------------------------------------------------------------------
 # 런 레지스트리 (프로세스 내 메모리 — 서버 수명과 함께)
@@ -108,10 +108,18 @@ def _run_worker(run):
         with RUNS_LOCK:
             run["status"] = "cancelled"
     except Exception as e:
-        _log("run failed:", repr(e))
-        with RUNS_LOCK:
-            run["status"] = "failed"
-            run["error"] = str(e)
+        # [리뷰 2026-09-01] run_stop 은 긴 스텝을 끊으려고 Excel 프로세스를 taskkill 한다.
+        # 그러면 워커는 RunCancelled 가 아니라 COM 예외로 깨어난다 — 취소 플래그를 안 보면
+        # 사용자가 직접 멈춘 런이 "failed"(+ COM 오류문)로 남아 오류로 오인된다.
+        if run["cancel"].is_set():
+            _log("run cancelled (mid-step kill):", repr(e))
+            with RUNS_LOCK:
+                run["status"] = "cancelled"
+        else:
+            _log("run failed:", repr(e))
+            with RUNS_LOCK:
+                run["status"] = "failed"
+                run["error"] = str(e)
     finally:
         with RUNS_LOCK:
             run["ended_at"] = time.time()
@@ -202,7 +210,17 @@ def tool_run_stop(args):
         return {"ok": True, "run_id": run_id, "status": run["status"]}
     run["cancel"].set()
     # 스텝 경계 취소를 기다리지 않고 Excel 프로세스를 직접 내린다 — 긴 VBA 스텝 중간에도 멈추게.
-    pid = (run.get("excel") or {}).get("pid")
+    # [리뷰 2026-09-01] pid 는 워커가 Excel 을 띄운 '직후'에야 기록된다 — 시작 직후 stop 이 오면
+    # 아직 비어 있어 taskkill 을 건너뛰고, 긴 VBA 는 취소 플래그도 안 보므로 Excel 이 고아로
+    # 남아 다음 run_start 의 사본 복사가 잠금으로 죽었다. 최대 3초 기다렸다 죽인다.
+    pid = None
+    for _ in range(30):
+        with RUNS_LOCK:
+            pid = (run.get("excel") or {}).get("pid")
+            status_now = run["status"]
+        if pid or status_now != "running":
+            break
+        time.sleep(0.1)
     if pid:
         try:
             subprocess.run(["taskkill", "/PID", str(pid), "/T", "/F"],
@@ -376,6 +394,12 @@ def main():
             msg = json.loads(line)
         except Exception:
             _log("bad json line (ignored):", line[:200])
+            continue
+        # [리뷰 2026-09-01] JSON-RPC 배치(list)/스칼라가 오면 msg.get 이 AttributeError 로 죽고,
+        # 그걸 잡은 except 안의 msg.get 이 '또' 죽어 서버 루프 전체가 내려갔다(실행 중이던
+        # Excel 런까지 고아가 됨). dict 아닌 입력은 로그만 남기고 무시한다(배치는 미지원 계약).
+        if not isinstance(msg, dict):
+            _log("non-object JSON-RPC message (ignored):", line[:200])
             continue
         try:
             _handle(msg)
