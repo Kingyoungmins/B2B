@@ -25,8 +25,14 @@ if (-not (Test-Path -LiteralPath $engine)) { Fail "engine (serve_b2b.py) not fou
 $env:PYTHONPATH = $root
 $env:AXCELL_RUNNER_ENGINE_DIR = Join-Path $root "axcell_runner\engine"
 $env:PYTHONUTF8 = "1"
+# [리뷰 2026-09-01] 네이티브 stderr 는 EAP=Stop 에서 NativeCommandError 로 터져 아래
+# 친절한 실패 문구가 영영 안 나온다 → 호출 동안만 Continue. 그리고 $check 는 여러 줄이면
+# 배열이라 -notmatch 가 '필터'로 동작(성공을 실패로 오판) → 한 문자열로 합쳐 비교한다.
+$prevEAP = $ErrorActionPreference; $ErrorActionPreference = "Continue"
 $check = & $py -c "import win32com.client, axcell_runner.runner_core as c; c._engine(); print('OK')" 2>&1
-if ($LASTEXITCODE -ne 0 -or ($check -notmatch "OK")) { Fail "runtime self-check failed: $check" }
+$ErrorActionPreference = $prevEAP
+$checkText = ($check | Out-String)
+if ($LASTEXITCODE -ne 0 -or $checkText -notmatch "OK") { Fail "runtime self-check failed: $checkText" }
 Diag "self-check OK"
 
 # Excel is a runtime requirement, not an install requirement — warn only.

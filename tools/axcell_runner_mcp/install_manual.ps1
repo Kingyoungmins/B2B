@@ -7,8 +7,8 @@
 # 멱등: 재실행하면 기존 관리 블록/스킬을 교체한다. 관리 블록 밖 사용자 설정은 건드리지 않는다.
 #
 # 사용:
-#   .\install_manual.ps1 -Bundle .\dist\axcell_runner-deploy-0.1.0-win64.tar.gz
-#   .\install_manual.ps1 -BundleRoot C:\ixi\axcell_runner\axcell_runner-deploy-0.1.0-win64   # 이미 풀린 경우
+#   .\install_manual.ps1 -Bundle .\dist\axcell_runner-deploy-0.2.0-win64.tar.gz
+#   .\install_manual.ps1 -BundleRoot C:\ixi\axcell_runner\axcell_runner-deploy-0.2.0-win64   # 이미 풀린 경우
 # 옵션: -IxiHome (기본 %USERPROFILE%\.ixi-flow) / -InstallDir (기본 <IxiHome>\integrations\axcell_runner)
 param(
     [string]$Bundle = "",
@@ -56,8 +56,14 @@ if (-not (Test-Path -LiteralPath $py)) { Fail "python-standalone\python.exe 가 
 $env:PYTHONPATH = $BundleRoot
 $env:AXCELL_RUNNER_ENGINE_DIR = Join-Path $BundleRoot "axcell_runner\engine"
 $env:PYTHONUTF8 = "1"
+# [리뷰 2026-09-01] 네이티브 stderr 는 EAP=Stop 에서 NativeCommandError 로 터져 아래
+# 친절한 실패 문구가 영영 안 나온다 → 호출 동안만 Continue. 그리고 $check 는 여러 줄이면
+# 배열이라 -notmatch 가 '필터'로 동작(성공을 실패로 오판) → 한 문자열로 합쳐 비교한다.
+$prevEAP = $ErrorActionPreference; $ErrorActionPreference = "Continue"
 $check = & $py -c "import win32com.client, axcell_runner.runner_core as c; c._engine(); print('OK')" 2>&1
-if ($LASTEXITCODE -ne 0 -or ($check -notmatch "OK")) { Fail "런타임 self-check 실패: $check" }
+$ErrorActionPreference = $prevEAP
+$checkText = ($check | Out-String)
+if ($LASTEXITCODE -ne 0 -or $checkText -notmatch "OK") { Fail "런타임 self-check 실패: $checkText" }
 Info "self-check OK"
 
 # ── 3) config.toml 관리 블록 렌더링 ──────────────────────────────────────────
