@@ -4289,6 +4289,21 @@
         ]
       ],
       "fix": "생성 테스트 로그 실측: ctx.copy(..., 'D:D', ...) 교차파일 스텝이 6초. 복사 자체는 0.3초(Excel 내부 최적화)인데 되돌리기 저널(_journal_save)이 붙는 쪽 104만 셀의 Formula 를 통째로 읽는 게 주범. 프롬프트에 '실사용 행까지 줄여라' 규칙이 있어도(file-schema PERFORMANCE 절) 모델이 안 지키는 날이 있고, 사용자 입력 자체가 엑셀 관성으로 열 단위('D열 해줘')라 엔진에서 줄이는 게 정답. 수정: PythonComSkillContext._clamp_full_span — 열 전체(D:D)/행 전체(3:3) 참조만 그 시트 UsedRange 끝행/끝열까지로 줄인다(실행 시점에 재므로 달 바뀌어 행수가 달라져도 동작). 유한 범위는 불변. 실패 시 원본 범위 반환(종전 동작 생존). python_com.copy 트레이스에 askedCells 로 클램프 기록. 실측: 60행 D:D 복사 1.50초→0.57초, 저널 $N:$N(열 전체)→N1:N60."
+    },
+    {
+      "id": "AXCELL-RUNNER-MCP-COMPAT",
+      "title": "[병합 2026-09-01] axcell_runner MCP(스킬 실행기 ixi-flow 빌트인) — 0.8.2 엔진 호환 + 코드리뷰 12건 반영.",
+      "checks": [
+        [
+          "python",
+          "tools/axcell_runner_mcp/test_core.py"
+        ],
+        [
+          "python",
+          "tools/axcell_runner_mcp/test_run_com.py"
+        ]
+      ],
+      "fix": "feat/skillrunner-mcp 병합 + 리뷰 반영. 핵심: AutomationSecurity 3→1(인스턴스 매크로 영구차단 지뢰), excel_workbooks_open 재사용(형식위장/CorruptLoad/별칭), 실행 전 normalize + utf-8-sig, 스텝 간 재계산, serve_b2b atexit 해제(공유 %TEMP% 스냅샷 삭제 방지), 읽기전용 속성 해제, 출력명 입력이름 복원, 매핑 유일성, MCP 서버 비-dict 입력 생존, run_stop pid 대기+cancelled 정정, PS 스크립트 -notmatch 배열/EAP/BOM 스캔 수정. 번들 0.2.0(0.8.2 엔진 내장) 재빌드."
     }
   ]
 }
