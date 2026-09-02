@@ -317,6 +317,68 @@ def _current_app_version():
 # version.txt(보안망)에 허용 버전을 한 줄에 하나씩 적는다. 지금 버전이 목록에 없으면
 # 화면(version-gate.js)이 "오래된 버전" 팝업을 띄운다. 서버가 죽어 있거나 주소가 없으면
 # 조용히 통과한다 — 버전 확인 때문에 업무가 막히면 안 된다.
+# ── [토큰 계측 0.8.3] LLM 프록시 usage 기록 — 대시보드 토큰 통계의 원천 ──
+
+def _inject_stream_usage(body):
+    """LLM 요청 본문에서 (모델, 스트림 여부)를 읽고, 스트리밍이면 stream_options.include_usage
+    를 주입해 vLLM 이 마지막 청크에 usage 를 실어 주게 한다. 반환 (본문, 모델, 스트림여부).
+    본문이 JSON 이 아니거나 파싱 실패면 그대로 돌려준다(프록시는 절대 요청을 막지 않는다)."""
+    if not body:
+        return body, "", False
+    try:
+        data = json.loads(body.decode("utf-8", errors="strict"))
+        if not isinstance(data, dict):
+            return body, "", False
+        model = str(data.get("model") or "")
+        stream = bool(data.get("stream"))
+        if stream:
+            so = data.get("stream_options")
+            if not isinstance(so, dict):
+                so = {}
+            if not so.get("include_usage"):
+                so["include_usage"] = True
+                data["stream_options"] = so
+                body = json.dumps(data, ensure_ascii=False).encode("utf-8")
+        return body, model, stream
+    except Exception:
+        return body, "", False
+
+
+_USAGE_RE = re.compile(rb'"usage"\s*:\s*\{[^{}]*\}')
+
+
+def _extract_llm_usage(tail):
+    """응답(비스트림 JSON 또는 SSE 꼬리)에서 마지막 usage 블록을 뽑는다. 실패 시 None."""
+    try:
+        m = None
+        for m in _USAGE_RE.finditer(tail or b""):
+            pass                                    # 마지막 매치(스트림은 끝 청크가 진짜)
+        if not m:
+            return None
+        u = json.loads(b"{" + m.group(0) + b"}")["usage"]
+        if not isinstance(u, dict):
+            return None
+        return {"prompt": int(u.get("prompt_tokens") or 0),
+                "completion": int(u.get("completion_tokens") or 0),
+                "total": int(u.get("total_tokens") or 0)}
+    except Exception:
+        return None
+
+
+def _note_llm_usage(tail, model, stream, path):
+    """프록시가 relay 를 끝낸 뒤 usage 를 트레이스로 남긴다 — 실패해도 조용히(계측은 덤)."""
+    try:
+        u = _extract_llm_usage(tail)
+        if not u or not (u["prompt"] or u["completion"] or u["total"]):
+            return
+        _vba_trace("llm.usage", model=str(model or "?"),
+                   promptTokens=u["prompt"], completionTokens=u["completion"],
+                   totalTokens=u["total"] or (u["prompt"] + u["completion"]),
+                   stream=bool(stream), endpoint=str(path or "")[:80])
+    except Exception:
+        pass
+
+
 VERSION_GATE_DEFAULT_DOWNLOAD_URL = "https://seulgi.lguplus.co.kr/desk/smart-billing"
 _VERSION_GATE = {"done": False, "result": None}   # 프로세스 수명 1회 — 새로고침(F5)에 또 안 뜨게
 
@@ -2923,6 +2985,13 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
         if self.command in {"POST", "PUT", "PATCH"}:
             length = int(self.headers.get("content-length") or 0)
             body = self.rfile.read(length) if length else None
+        # [토큰 계측 2026-09-02] 모든 LLM 호출이 이 프록시를 지난다 — 여기서 usage 를 남기면
+        # 채팅/도움/대시보드 질문까지 빠짐없이 잡힌다. 스트리밍은 vLLM 이 usage 를 마지막
+        # 청크로 주도록 stream_options 를 주입한다(클라 파서는 빈 choices 청크에 안전 — 실측).
+        _llm_call = self.command == "POST" and ("/chat/completions" in self.path or self.path.endswith("/completions"))
+        _llm_model, _llm_stream = "", False
+        if _llm_call:
+            body, _llm_model, _llm_stream = _inject_stream_usage(body)
 
         # 프런트 설정에서 지정한 실제 Violet/vLLM 주소가 있으면 그쪽으로 전달.
         base = VLLM_BASE
@@ -2957,12 +3026,17 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
                         self.send_header(key, value)
                     self.end_headers()
                     response_started = True
+                    _tail = b""                      # usage 추출용 꼬리 버퍼(전체를 안 쌓는다)
                     while True:
                         chunk = resp.read(8192)
                         if not chunk:
                             break
                         self.wfile.write(chunk)
                         self.wfile.flush()
+                        if _llm_call:
+                            _tail = (_tail + chunk)[-32768:]
+                    if _llm_call:
+                        _note_llm_usage(_tail, _llm_model, _llm_stream, self.path)
                     return
             except urllib.error.HTTPError as err:
                 payload = err.read()

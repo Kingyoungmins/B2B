@@ -4368,6 +4368,25 @@
         ]
       ],
       "fix": "요청(2026-09-02): 더 대시보드답게 + 요소 추가 + AI 가 로그 보고 답하기. UI: 고정 헤더(마지막 갱신 표시), 자동 새로고침 60초 토글, KPI 카드 아이콘·톤(정상/주의/위험)·직전 같은 기간 대비 증감 배지(stats 를 직전 기간으로 한 번 더 조회). 추가 카드: 신규 사용자(전체 세션에서 최초 등장일 계산), 오류율(오류/실행 %). 추가 차트: 체류 시간 분포(4구간), 자주 나는 오류 TOP(이벤트별 묶음+대표 사례 호버). AI에게 묻기: 화면에 로드된 집계를 buildDashDigest 로 압축(9KB 상한)해 앱과 같은 AI 설정(localStorage mvno_llm_settings_v4 공유)으로 /chat/completions 질문. 프리셋 칩 4종, '데이터만 근거로, 없으면 없다고' 시스템 계약, think 태그 제거, 조회 전이면 안내. digest 는 순수 함수라 테스트가 실제 실행으로 구조 검증."
+    },
+    {
+      "id": "LLM-TOKEN-USAGE-STATS",
+      "title": "[0.8.3] LLM 토큰 사용량 계측 — 프록시 캡처 → 수집 집계 → 대시보드(사용자/팀/모델별).",
+      "checks": [
+        [
+          "python",
+          "test_runs/_test_llm_usage_capture.py"
+        ],
+        [
+          "python",
+          "../versionTest/test_token_stats.py"
+        ],
+        [
+          "node",
+          "test_runs/_test_org_dashboard.js"
+        ]
+      ],
+      "fix": "요청(2026-09-02): 입력/출력/총 토큰, 사용자·팀·모델별. 원천: 모든 LLM 호출이 지나는 serve_b2b /v1 프록시 — _inject_stream_usage 가 스트리밍 요청에 stream_options.include_usage 주입(vLLM 이 마지막 청크에 usage; 클라 파서는 빈 choices 안전 — 실측), 응답 꼬리 32KB 버퍼에서 _extract_llm_usage 로 마지막 usage 블록 추출 → llm.usage 트레이스(모델/입출력/총/스트림여부). 실패해도 프록시 중계는 절대 안 막음. 수집(collector.py): 세션 스캔에 tokens 집계(캐시 v2 로 옛 캐시 재스캔), /admin/events 가 총량+byModel+byUser 반환. 대시보드: 토큰 카드(입/출 분리), 사용자별·팀별(조직 맵 결합)·모델별 토큰 차트, AI 질문 요약본에 토큰 포함. 구서버/구앱이면 안내 문구로 무해. 주의: versionTest 보안망 배포 필요."
     }
   ]
 }

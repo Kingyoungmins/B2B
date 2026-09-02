@@ -68,6 +68,22 @@ check("데이터만 근거로 답하라는 계약", HTML.includes("데이터에 
 check("스냅샷 없으면 조회 먼저 안내", HTML.includes("먼저 [조회] 로 데이터를 불러와 주세요"));
 check("think 태그 제거(원문 노출 방지)", HTML.includes("<think>[\s\S]*?<\/think>") || /replace\(\/<think>/.test(HTML));
 
+console.log("[10] 토큰 사용량");
+check("토큰 카드", HTML.includes("토큰 사용") && HTML.includes("function fmtTok"));
+check("사용자별 토큰 차트", HTML.includes("function tokenUsersHTML") && HTML.includes('chartBox("사용자별 토큰"'));
+check("팀별 토큰 차트(조직 맵 결합)", HTML.includes("function tokenTeamsHTML") && HTML.includes('chartBox("팀별 토큰"'));
+check("모델별 토큰 차트", HTML.includes("function tokenModelsHTML") && HTML.includes('chartBox("모델별 토큰"'));
+check("입력/출력 분리 표기", HTML.includes("입 ") && HTML.includes("/출 "));
+check("구서버(토큰 없음)면 안내 문구", (HTML.match(/0\.8\.3\+ 앱부터 수집/g) || []).length >= 3);
+check("AI 질문 요약본에 토큰 포함", HTML.includes("토큰사용:"));
+{
+  const i = HTML.indexOf("function fmtTok");
+  const j = HTML.indexOf("/* 사용자별 토큰 TOP", i);
+  const fmtTok = new Function(HTML.slice(i, j) + "\nreturn fmtTok;")();
+  check("표기 — 1.2M/340k/950", fmtTok(1234567) === "1.2M" && fmtTok(340000) === "340k"
+    && fmtTok(950) === "950" && fmtTok(0) === "0", [fmtTok(1234567), fmtTok(340000)].join(","));
+}
+
 console.log("[9] 요약본 내용(기능 실행)");
 {
   // buildDashDigest 를 실제로 돌려 요약 구조를 확인 — DOM 없이 도는 순수 함수다

@@ -525,6 +525,12 @@ function renderCards(t, errCount, outdated, extras) {
     { k: "📉 오류율", tone: errRate >= 20 ? "bad" : (errRate >= 5 ? "warn" : "ok"),
       v: errRate + " <small>%</small>" },
     { k: "🟢 수집 중", v: (t.openSessions || 0) + " <small>세션</small>" },
+    // [토큰 2026-09-02] LLM 토큰 사용량 — 프록시가 남긴 llm.usage 집계(0.8.3+ 앱).
+    ...(ex.tokens && ex.tokens.calls ? [{ k: "🔤 토큰 사용", tone: "",
+        v: fmtTok(ex.tokens.total) + " <small>토큰</small>"
+           + '<div style="font-size:11px; font-weight:600; color:var(--ink-2); margin-top:2px">'
+           + "입력 " + fmtTok(ex.tokens.prompt) + " · 출력 " + fmtTok(ex.tokens.completion)
+           + " · " + ex.tokens.calls.toLocaleString() + "회 호출</div>" }] : []),
     ...(outdated ? [{ k: "⬆ 구버전 사용", tone: outdated.count ? "warn" : "ok",
         v: '<span style="color:' + (outdated.count ? "var(--bad)" : "inherit") + '" title="'
         + esc(outdated.names.join(", ") || "없음") + '">' + outdated.count + "</span> <small>명</small>" }] : []),
@@ -675,6 +681,58 @@ function topErrorsHTML(errorRows) {
     + '<div class="val">' + v.n + '건</div></div>').join("");
 }
 
+/* [토큰 2026-09-02] 토큰 수 표기 — 1.2M / 340k / 950 */
+function fmtTok(n) {
+  n = Number(n) || 0;
+  if (n >= 1e6) return (n / 1e6).toFixed(1).replace(/\.0$/, "") + "M";
+  if (n >= 1e3) return (n / 1e3).toFixed(1).replace(/\.0$/, "") + "k";
+  return String(n);
+}
+
+/* 사용자별 토큰 TOP — 서버 집계(events.tokens.byUser) + 팀 표시 */
+function tokenUsersHTML(byUser) {
+  const rows = (byUser || []).slice(0, 12);
+  if (!rows.length) return '<div class="empty">토큰 기록이 없습니다 (0.8.3+ 앱부터 수집).</div>';
+  const max = Math.max(...rows.map(r => r.total || 0), 1);
+  return rows.map(r => {
+    const team = (userOrgMap[r.user] || {}).team || "";
+    return '<div class="hbar"><div class="lab" title="' + esc(r.user) + (team ? " · " + esc(team) : "") + '">'
+      + esc(userLabel(r.user)) + '</div>'
+      + '<div class="trk"><div class="fil" style="width:' + ((r.total || 0) / max * 100).toFixed(1) + '%"></div></div>'
+      + '<div class="val">' + fmtTok(r.total) + ' <span style="color:var(--ink-2)">(입 '
+      + fmtTok(r.prompt) + '/출 ' + fmtTok(r.completion) + ')</span></div></div>';
+  }).join("");
+}
+
+/* 모델별 토큰 — 어떤 모델이 얼마나 쓰나 */
+function tokenModelsHTML(byModel) {
+  const rows = (byModel || []).slice(0, 8);
+  if (!rows.length) return '<div class="empty">토큰 기록이 없습니다 (0.8.3+ 앱부터 수집).</div>';
+  const max = Math.max(...rows.map(r => r.total || 0), 1);
+  return rows.map(r =>
+    '<div class="hbar"><div class="lab" title="' + esc(r.model) + '">' + esc(r.model) + '</div>'
+    + '<div class="trk"><div class="fil" style="width:' + ((r.total || 0) / max * 100).toFixed(1) + '%"></div></div>'
+    + '<div class="val">' + fmtTok(r.total) + ' · ' + (r.calls || 0).toLocaleString() + '회</div></div>').join("");
+}
+
+/* 팀별 토큰 — byUser 를 조직 맵으로 묶는다 */
+function tokenTeamsHTML(byUser) {
+  const agg = {};
+  for (const r of (byUser || [])) {
+    const t = (userOrgMap[r.user] || {}).team || "(조직정보 없음)";
+    (agg[t] = agg[t] || { total: 0, prompt: 0, completion: 0 });
+    agg[t].total += r.total || 0; agg[t].prompt += r.prompt || 0; agg[t].completion += r.completion || 0;
+  }
+  const rows = Object.entries(agg).sort((a, b) => b[1].total - a[1].total).slice(0, 12);
+  if (!rows.length) return '<div class="empty">토큰 기록이 없습니다 (0.8.3+ 앱부터 수집).</div>';
+  const max = Math.max(...rows.map(([, v]) => v.total), 1);
+  return rows.map(([t, v]) =>
+    '<div class="hbar"><div class="lab" title="' + esc(t) + '">' + esc(t) + '</div>'
+    + '<div class="trk"><div class="fil" style="width:' + (v.total / max * 100).toFixed(1) + '%"></div></div>'
+    + '<div class="val">' + fmtTok(v.total) + ' <span style="color:var(--ink-2)">(입 '
+    + fmtTok(v.prompt) + '/출 ' + fmtTok(v.completion) + ')</span></div></div>').join("");
+}
+
 /* [AI 질문 2026-09-02] 화면 데이터 → LLM 에 넣을 압축 요약(JSON). 크기 상한을 지킨다. */
 function buildDashDigest(d) {
   const teamAgg = {};
@@ -715,6 +773,11 @@ function buildDashDigest(d) {
       .map(([k, v]) => ({ 이벤트: k, ...v })),
     최근오류: (d.errors || []).slice(0, 10)
       .map(e => ({ 시각: e.ts, 사용자: userLabel(e.user), 내용: String(e.summary || e.event || "").slice(0, 100) })),
+    토큰사용: d.tokens && d.tokens.calls ? { 총: d.tokens.total, 입력: d.tokens.prompt,
+        출력: d.tokens.completion, 호출: d.tokens.calls,
+        모델별: (d.tokens.byModel || []).slice(0, 5),
+        사용자TOP: (d.tokens.byUser || []).slice(0, 10).map(r => ({ 사용자: userLabel(r.user), 총: r.total })) }
+      : "기록없음(0.8.3+앱부터)",
     구버전사용: d.outdated ? d.outdated.names : "확인불가",
     신규사용자: d.newUsers ? d.newUsers.names : "기간미설정",
   };
@@ -888,7 +951,8 @@ async function load() {
       } catch (_e) { prevTotal = null; }
     }
     renderCards(stats.total || {}, errors.count, outdatedUsers(sessions, gate && gate.allowed),
-                { prevTotal, newUsers: newUsersIn(sess.sessions || [], from, to) });
+                { prevTotal, newUsers: newUsersIn(sess.sessions || [], from, to),
+                  tokens: events && events.tokens });
     try { $("last-updated").textContent = "마지막 갱신 " + new Date().toLocaleTimeString("ko-KR"); } catch (_e) {}
     // [AI 질문] 지금 화면 상태의 요약 스냅샷 — askDashboard() 가 근거로 쓴다
     window.__dashSnapshot = buildDashDigest({
@@ -898,6 +962,7 @@ async function load() {
       sessions, errors: errors.errors || [],
       outdated: outdatedUsers(sessions, gate && gate.allowed),
       newUsers: newUsersIn(sess.sessions || [], from, to),
+      tokens: events && events.tokens,
     });
     fillUsers(stats.byUsers || [], true);
     renderChips();
@@ -918,7 +983,10 @@ async function load() {
 
     if (events) {
       $("charts-analytics").innerHTML =
-        chartBox("언어별 단계 실행", "VBA/Python — 실행·성공률·평균 소요", C.langHTML(events.steps && events.steps.byLanguage))
+        chartBox("사용자별 토큰", "LLM 토큰 사용 상위 12명 (입력/출력)", tokenUsersHTML(events.tokens && events.tokens.byUser))
+        + chartBox("팀별 토큰", "소속 팀 기준 합산", tokenTeamsHTML(events.tokens && events.tokens.byUser))
+        + chartBox("모델별 토큰", "어떤 AI 모델을 얼마나 쓰나", tokenModelsHTML(events.tokens && events.tokens.byModel))
+        + chartBox("언어별 단계 실행", "VBA/Python — 실행·성공률·평균 소요", C.langHTML(events.steps && events.steps.byLanguage))
         + chartBox("단계 위치별 실패", "몇 번째 단계에서 자주 막히나 (빨강=실패율 20%↑)", C.stepIdxHTML(events.steps && events.steps.byStepIdx))
         + chartBox("느린 작업 TOP", "이벤트별 누적 소요(평균 × 횟수)", C.durationsHTML(events.durations));
     } else {
