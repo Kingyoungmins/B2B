@@ -5,16 +5,28 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>AX-Cell 관리 대시보드</title>
 <!--
-  [F9 관리 대시보드 2026-08-24]
+  [F9 관리 대시보드 2026-08-24 / 차트·교차필터 확장 2026-08-31]
   이 페이지는 AX-Cell 로컬 백엔드가 서빙하고, 데이터는 same-origin /api/logdash/* 로 받는다.
   백엔드가 게이트웨이 인증(Api-Key)을 붙여 수집 서버(보안망 /data/public/versionTest/logs)의
   /v1/admin/* 를 중계한다 — VM(사내망)에서 보안망 폴더를 직접 못 보는 구조를 프록시로 푼 것.
   서버 주소는 F9 의 '버전 서버 주소'를 그대로 따른다(log_sync 와 같은 설정).
+
+  차트는 전부 손수 그린 HTML/CSS + 인라인 SVG 다 — 보안망/오프라인 빌드라 CDN 을 못 쓰고,
+  차트 라이브러리를 vendor 에 얹으면 포터블 빌드가 무거워진다. 필요한 그림(막대/선/히트맵/누적)
+  은 이 정도로 충분히 그려진다.
+
+  '분석' 구역은 수집 서버의 /v1/admin/events(2026-08-31 추가)를 쓴다. 구버전 서버면 404 가
+  오는데, 그때는 그 구역만 접고 안내를 남긴다 — 나머지 화면은 그대로 동작해야 한다.
+
+  스크립트가 두 덩이인 이유: dash-core 블록은 DOM 없이 도는 순수 함수(집계·차트 문자열
+  생성)만 담아 node 테스트(test_runs/_test_dashboard_powerbi.js)가 그대로 실행한다.
+  아래 boot 스크립트만 DOM 을 만진다.
 -->
 <style>
   :root {
     --ink: #1f2430; --ink-2: #5a6272; --line: #e4e7ee; --bg: #f7f8fb; --card: #ffffff;
     --accent: #000000; --accent-2: #1a1a1a; --ok: #0a7d40; --warn: #b85c00; --bad: #c22525;
+    --bar: #2f3542; --bar-soft: #aeb6c4; --heat: 47, 53, 66;
   }
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--bg); color: var(--ink);
@@ -24,9 +36,9 @@
   header h1 { font-size: 17px; margin: 0; }
   header h1 b { color: var(--accent); }
   #server-line { color: var(--ink-2); font-size: 12px; }
-  main { padding: 18px 22px 40px; max-width: 1280px; margin: 0 auto; }
+  main { padding: 18px 22px 40px; max-width: 1320px; margin: 0 auto; }
 
-  .filters { display: flex; gap: 10px; align-items: end; flex-wrap: wrap; margin-bottom: 16px; }
+  .filters { display: flex; gap: 10px; align-items: end; flex-wrap: wrap; margin-bottom: 10px; }
   .filters label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--ink-2); }
   .filters input, .filters select { padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px;
                                     font: inherit; background: var(--card); min-width: 130px; }
@@ -35,12 +47,63 @@
   .filters button.ghost { background: var(--card); color: var(--ink-2); border: 1px solid var(--line); }
   #status-line { font-size: 12px; color: var(--ink-2); margin-left: auto; }
   #status-line.err { color: var(--bad); font-weight: 700; }
+  #chips { margin: 0 0 12px; min-height: 0; display: flex; gap: 6px; flex-wrap: wrap; }
+  .chip { display: inline-flex; align-items: center; gap: 6px; background: var(--accent-2); color: #fff;
+          border-radius: 20px; padding: 4px 12px; font-size: 12px; cursor: pointer; }
+  .chip:hover { opacity: .85; }
+  .hint { color: var(--ink-2); font-size: 11.5px; margin: 0 0 14px; }
 
-  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 20px; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 16px; }
   .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
   .card .k { font-size: 12px; color: var(--ink-2); }
   .card .v { font-size: 22px; font-weight: 800; margin-top: 4px; font-variant-numeric: tabular-nums; }
   .card .v small { font-size: 12px; font-weight: 600; color: var(--ink-2); }
+
+  .charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(380px, 1fr)); gap: 12px; margin-bottom: 22px; }
+  .chart { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; overflow: hidden; }
+  .chart h3 { margin: 0 0 10px; font-size: 13px; }
+  .chart h3 span { color: var(--ink-2); font-weight: 400; font-size: 11.5px; }
+  .chart .empty { padding: 24px 0; color: var(--ink-2); text-align: center; }
+
+  /* 가로 막대(랭킹류) */
+  .hbar { display: grid; grid-template-columns: minmax(80px, 150px) 1fr 78px; gap: 8px; align-items: center;
+          padding: 3px 0; font-size: 12px; }
+  .hbar .lab { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .hbar .trk { background: #f0f2f6; border-radius: 4px; height: 16px; position: relative; }
+  .hbar .fil { background: var(--bar); border-radius: 4px; height: 100%; min-width: 2px; }
+  .hbar .fil.err { background: var(--bad); }
+  .hbar .val { text-align: right; font-variant-numeric: tabular-nums; color: var(--ink-2); }
+  .hbar.clickable { cursor: pointer; border-radius: 6px; }
+  .hbar.clickable:hover { background: #f4f6fa; }
+  .hbar.active .fil { background: var(--accent); }
+  .hbar.active .lab { font-weight: 800; }
+
+  /* 세로 막대 + 선(추이) */
+  .combo { position: relative; }
+  .combo .cols { display: flex; align-items: flex-end; gap: 3px; height: 120px; }
+  .combo .col { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; height: 100%;
+                cursor: pointer; border-radius: 3px 3px 0 0; }
+  .combo .col:hover { background: #f1f3f8; }
+  .combo .col.active .bar { background: var(--accent); }
+  .combo .bar { background: var(--bar-soft); border-radius: 3px 3px 0 0; min-height: 2px; }
+  .combo .bar.err { background: var(--bad); }
+  .combo svg { position: absolute; inset: 0; width: 100%; height: 120px; pointer-events: none; }
+  .combo .xlabs { display: flex; gap: 3px; margin-top: 4px; }
+  .combo .xlabs span { flex: 1; text-align: center; font-size: 10px; color: var(--ink-2);
+                       overflow: hidden; white-space: nowrap; }
+  .legend { display: flex; gap: 12px; font-size: 11px; color: var(--ink-2); margin-top: 8px; }
+  .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
+
+  /* 히트맵 */
+  .heat { display: grid; grid-template-columns: 34px repeat(24, 1fr); gap: 2px; font-size: 10px; }
+  .heat .h { color: var(--ink-2); text-align: center; }
+  .heat .c { aspect-ratio: 1 / 1; border-radius: 2px; background: #f0f2f6; min-height: 10px; }
+
+  /* 누적 막대(버전) */
+  .stackrow { display: grid; grid-template-columns: 74px 1fr 40px; gap: 8px; align-items: center;
+              padding: 2px 0; font-size: 11.5px; }
+  .stackrow .trk { display: flex; height: 14px; border-radius: 4px; overflow: hidden; background: #f0f2f6; }
+  .stackrow .seg { height: 100%; }
 
   section { margin-bottom: 26px; }
   section h2 { font-size: 14px; margin: 0 0 8px; }
@@ -48,7 +111,9 @@
   .tbl-wrap { background: var(--card); border: 1px solid var(--line); border-radius: 10px; overflow-x: auto; }
   table { border-collapse: collapse; width: 100%; font-size: 12.5px; }
   th, td { padding: 7px 10px; border-bottom: 1px solid var(--line); text-align: left; white-space: nowrap; }
-  th { background: #fafbfd; color: var(--ink-2); font-weight: 700; position: sticky; top: 0; }
+  th { background: #fafbfd; color: var(--ink-2); font-weight: 700; position: sticky; top: 0; cursor: pointer; }
+  th:hover { color: var(--ink); }
+  th .arrow { font-size: 10px; }
   tr:last-child td { border-bottom: 0; }
   td.num { text-align: right; font-variant-numeric: tabular-nums; }
   td .zip { color: var(--accent); font-weight: 700; text-decoration: none; }
@@ -58,6 +123,7 @@
   .ev { font-family: Consolas, monospace; font-size: 11.5px; color: var(--bad); }
   .empty { padding: 18px; color: var(--ink-2); text-align: center; }
   .summary-cell { max-width: 420px; overflow: hidden; text-overflow: ellipsis; }
+  .note { font-size: 11.5px; color: var(--warn); margin-top: 6px; }
 </style>
 </head>
 <body>
@@ -72,14 +138,24 @@
     <label>사용자 <select id="f-user"><option value="">전체</option></select></label>
     <button id="btn-load">조회</button>
     <button id="btn-week" class="ghost">최근 7일</button>
+    <button id="btn-month" class="ghost">최근 30일</button>
     <button id="btn-all" class="ghost">전체</button>
     <span id="status-line"></span>
   </div>
+  <div id="chips"></div>
+  <p class="hint">차트의 막대(사용자·날짜)를 클릭하면 그 값으로 화면 전체가 필터됩니다. 다시 클릭하거나 위 ✕ 칩으로 해제.</p>
 
   <div class="cards" id="cards"></div>
 
+  <div class="charts" id="charts-usage"></div>
+
   <section>
-    <h2>사용자별 <span>— 누가 얼마나 썼나</span></h2>
+    <h2>분석 <span>— 단계 실행·소요시간 (수집 서버의 이벤트 집계 API 사용)</span></h2>
+    <div class="charts" id="charts-analytics"></div>
+  </section>
+
+  <section>
+    <h2>사용자별 <span>— 누가 얼마나 썼나 · 열 제목을 누르면 정렬</span></h2>
     <div class="tbl-wrap"><table id="tbl-users">
       <thead><tr><th>사용자</th><th>실행 횟수</th><th>총 체류</th><th>스킬 저장</th><th>로그 파일</th><th>용량</th><th>마지막 사용</th></tr></thead>
       <tbody></tbody></table></div>
@@ -100,43 +176,264 @@
   </section>
 
   <section>
-    <h2>오류 목록 <span>— 수집된 실행 기록에서 실패 이벤트만 추림(파일당 최근 구간)</span></h2>
+    <h2>오류 목록 <span id="err-scan-note">— 수집된 실행 기록에서 실패 이벤트만 추림</span></h2>
     <div class="tbl-wrap"><table id="tbl-errors">
       <thead><tr><th>시각</th><th>사용자</th><th>단계</th><th>이벤트</th><th>내용</th><th>세션</th></tr></thead>
       <tbody></tbody></table></div>
   </section>
 </main>
 
+<script id="dash-core">
+"use strict";
+/* DOM 없이 도는 순수 함수만 — node 테스트(_test_dashboard_powerbi.js)가 이 블록을 그대로 실행한다.
+   여기에 document/window 를 쓰면 테스트가 못 돈다. 화면 조작은 아래 boot 스크립트에서만. */
+(function (exports) {
+
+  const esc = s => String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+
+  function fmtBytes(n) {
+    n = Number(n || 0);
+    if (n >= 1024 * 1024 * 1024) return (n / 1024 / 1024 / 1024).toFixed(2) + " GB";
+    if (n >= 1024 * 1024) return (n / 1024 / 1024).toFixed(1) + " MB";
+    if (n >= 1024) return (n / 1024).toFixed(0) + " KB";
+    return n + " B";
+  }
+  function fmtMinutes(m) {
+    m = Number(m || 0);
+    if (m >= 60) return Math.floor(m / 60) + "시간 " + Math.round(m % 60) + "분";
+    return Math.round(m) + "분";
+  }
+  function fmtMs(v) {
+    v = Number(v || 0);
+    if (v >= 60000) return (v / 60000).toFixed(1) + "분";
+    if (v >= 1000) return (v / 1000).toFixed(1) + "초";
+    return Math.round(v) + "ms";
+  }
+  function fmtTs(s) { return s ? String(s).replace("T", " ").slice(0, 19) : "-"; }
+  function dwellOf(s) {
+    // 서버 stats 와 같은 규칙 — endedAt 없으면 lastSeenAt(마지막 업로드)로 물러난다.
+    const a = Date.parse(s.startedAt || ""), b = Date.parse(s.endedAt || s.lastSeenAt || "");
+    if (!a || !b || b < a) return 0;
+    return (b - a) / 60000;
+  }
+
+  /* 요일×시간 사용 히트맵 — sessions[].startedAt 이 초 단위라 시간대 분석이 가능하다
+     (stats 는 일 단위뿐이지만, 세션 행에는 시각이 살아 있다). */
+  function heatmap(sessions) {
+    const cells = Array.from({ length: 7 }, () => new Array(24).fill(0));
+    let max = 0;
+    for (const s of sessions || []) {
+      const t = new Date(s.startedAt || "");
+      if (isNaN(t)) continue;
+      const d = t.getDay(), h = t.getHours();
+      cells[d][h] += 1;
+      if (cells[d][h] > max) max = cells[d][h];
+    }
+    return { cells, max };
+  }
+
+  /* 날짜×버전 도입률 — stats 에는 버전 축이 없어 세션 행에서 직접 만든다. */
+  function versionByDate(sessions) {
+    const dates = [...new Set((sessions || []).map(s => s.date).filter(Boolean))].sort();
+    const versions = [...new Set((sessions || []).map(s => s.appVersion || "?"))].sort();
+    const matrix = {};
+    for (const v of versions) matrix[v] = new Array(dates.length).fill(0);
+    for (const s of sessions || []) {
+      const di = dates.indexOf(s.date);
+      if (di >= 0) matrix[s.appVersion || "?"][di] += 1;
+    }
+    return { dates, versions, matrix };
+  }
+
+  /* 오류 추이 — events API 의 일별 집계가 있으면 그걸(전량 스캔), 없으면 오류 목록에서 근사. */
+  function errorTrend(errorsByDate, errorsList) {
+    if (Array.isArray(errorsByDate) && errorsByDate.length) {
+      return errorsByDate.map(r => ({ date: r.date, count: r.count }));
+    }
+    const by = {};
+    for (const e of errorsList || []) {
+      const d = e.date || String(e.ts || "").slice(0, 10);
+      if (d) by[d] = (by[d] || 0) + 1;
+    }
+    return Object.keys(by).sort().map(d => ({ date: d, count: by[d] }));
+  }
+
+  /* 폴리라인 path — 추이 차트의 선(체류시간). 값이 하나뿐이면 수평선. */
+  function sparkPath(vals, w, h, pad) {
+    const v = (vals || []).map(Number);
+    if (!v.length) return "";
+    pad = pad == null ? 4 : pad;
+    const max = Math.max(...v, 1);
+    const step = v.length > 1 ? (w - pad * 2) / (v.length - 1) : 0;
+    return v.map((x, i) => {
+      const px = (pad + i * step).toFixed(1);
+      const py = (h - pad - (x / max) * (h - pad * 2)).toFixed(1);
+      return (i ? "L" : "M") + px + "," + py;
+    }).join(" ");
+  }
+
+  /* ── 차트 HTML 생성기 — 문자열만 만든다(그려 넣는 건 boot 몫) ── */
+
+  function comboHTML(byDate, activeDate) {
+    const rows = byDate || [];
+    if (!rows.length) return '<div class="empty">기간에 기록이 없습니다.</div>';
+    const maxS = Math.max(...rows.map(r => r.sessions || 0), 1);
+    const cols = rows.map(r => {
+      const hpct = ((r.sessions || 0) / maxS * 100).toFixed(1);
+      const act = r.date === activeDate ? " active" : "";
+      return '<div class="col' + act + '" data-filter-date="' + esc(r.date) + '" title="'
+        + esc(r.date + " — " + (r.sessions || 0) + "회 실행, 체류 " + fmtMinutes(r.dwellMinutes)) + '">'
+        + '<div class="bar" style="height:' + hpct + '%"></div></div>';
+    }).join("");
+    const path = sparkPath(rows.map(r => r.dwellMinutes || 0), 1000, 120);
+    const step = Math.max(1, Math.ceil(rows.length / 10));
+    const xlabs = rows.map((r, i) => "<span>" + (i % step ? "" : esc(r.date.slice(5))) + "</span>").join("");
+    return '<div class="combo"><div class="cols">' + cols + '</div>'
+      + '<svg viewBox="0 0 1000 120" preserveAspectRatio="none"><path d="' + path
+      + '" fill="none" stroke="#b85c00" stroke-width="2"/></svg>'
+      + '<div class="xlabs">' + xlabs + '</div></div>'
+      + '<div class="legend"><span><i style="background:var(--bar-soft)"></i>실행 횟수</span>'
+      + '<span><i style="background:#b85c00"></i>체류 시간(분)</span></div>';
+  }
+
+  function usersHTML(byUsers, activeUser) {
+    const rows = (byUsers || []).slice().sort((a, b) => (b.sessions || 0) - (a.sessions || 0)).slice(0, 12);
+    if (!rows.length) return '<div class="empty">기간에 기록이 없습니다.</div>';
+    const max = Math.max(...rows.map(r => r.sessions || 0), 1);
+    return rows.map(r => {
+      const act = r.user === activeUser ? " active" : "";
+      return '<div class="hbar clickable' + act + '" data-filter-user="' + esc(r.user) + '">'
+        + '<div class="lab" title="' + esc(r.user) + '">' + esc(r.user) + '</div>'
+        + '<div class="trk"><div class="fil" style="width:' + ((r.sessions || 0) / max * 100).toFixed(1) + '%"></div></div>'
+        + '<div class="val">' + (r.sessions || 0) + '회 · ' + esc(fmtMinutes(r.dwellMinutes)) + '</div></div>';
+    }).join("");
+  }
+
+  function heatmapHTML(hm) {
+    if (!hm || !hm.max) return '<div class="empty">기간에 기록이 없습니다.</div>';
+    const days = ["일", "월", "화", "수", "목", "금", "토"];
+    let out = '<div class="heat"><div></div>';
+    for (let h = 0; h < 24; h++) out += '<div class="h">' + (h % 3 ? "" : h) + '</div>';
+    for (let d = 0; d < 7; d++) {
+      out += '<div class="h" style="line-height:1.4">' + days[d] + '</div>';
+      for (let h = 0; h < 24; h++) {
+        const n = hm.cells[d][h];
+        const a = n ? (0.15 + 0.85 * n / hm.max).toFixed(2) : 0;
+        out += '<div class="c" title="' + days[d] + " " + h + '시 — ' + n + '회"'
+          + (n ? ' style="background:rgba(var(--heat),' + a + ')"' : "") + '></div>';
+      }
+    }
+    return out + "</div>";
+  }
+
+  const PALETTE = ["#2f3542", "#5b8def", "#0a7d40", "#b85c00", "#8452d8", "#c22525", "#3aa6a6", "#aeb6c4"];
+
+  function versionsHTML(vd) {
+    if (!vd || !vd.dates.length) return '<div class="empty">기간에 기록이 없습니다.</div>';
+    const color = {};
+    vd.versions.forEach((v, i) => { color[v] = PALETTE[i % PALETTE.length]; });
+    const rows = vd.dates.map((d, di) => {
+      const total = vd.versions.reduce((a, v) => a + vd.matrix[v][di], 0) || 1;
+      const segs = vd.versions.map(v => {
+        const n = vd.matrix[v][di];
+        return n ? '<div class="seg" style="width:' + (n / total * 100).toFixed(1) + '%;background:'
+          + color[v] + '" title="' + esc(v) + ' — ' + n + '회"></div>' : "";
+      }).join("");
+      return '<div class="stackrow"><div>' + esc(d.slice(5)) + '</div><div class="trk">' + segs
+        + '</div><div class="val" style="text-align:right;color:var(--ink-2)">' + total + '</div></div>';
+    }).join("");
+    const legend = vd.versions.map(v => '<span><i style="background:' + color[v] + '"></i>'
+      + esc(v) + "</span>").join("");
+    return rows + '<div class="legend">' + legend + "</div>";
+  }
+
+  function errorTrendHTML(trend, fullScan) {
+    if (!trend.length) return '<div class="empty">기간에 오류가 없습니다. 👍</div>';
+    const max = Math.max(...trend.map(r => r.count), 1);
+    const cols = trend.map(r =>
+      '<div class="col" data-filter-date="' + esc(r.date) + '" title="' + esc(r.date + " — 오류 " + r.count + "건") + '">'
+      + '<div class="bar err" style="height:' + (r.count / max * 100).toFixed(1) + '%"></div></div>').join("");
+    const step = Math.max(1, Math.ceil(trend.length / 10));
+    const xlabs = trend.map((r, i) => "<span>" + (i % step ? "" : esc(r.date.slice(5))) + "</span>").join("");
+    const note = fullScan ? "" :
+      '<div class="note">※ 수집 서버가 구버전이라 파일 뒷부분만 스캔한 수치입니다(과소집계 가능) — 서버 업데이트 시 전량 집계로 바뀝니다.</div>';
+    return '<div class="combo"><div class="cols">' + cols + '</div><div class="xlabs">' + xlabs + '</div></div>' + note;
+  }
+
+  /* ── 분석 구역(events API) ── */
+
+  function langHTML(byLanguage) {
+    const rows = byLanguage || [];
+    if (!rows.length) return '<div class="empty">기간에 단계 실행 기록이 없습니다.</div>';
+    const max = Math.max(...rows.map(r => r.runs || 0), 1);
+    return rows.map(r => {
+      const okPct = r.runs ? ((r.runs - r.error) / r.runs * 100).toFixed(1) : "0";
+      return '<div class="hbar"><div class="lab">' + esc(r.language) + '</div>'
+        + '<div class="trk"><div class="fil" style="width:' + ((r.runs || 0) / max * 100).toFixed(1) + '%"></div></div>'
+        + '<div class="val">' + r.runs + '회</div></div>'
+        + '<div style="font-size:11px;color:var(--ink-2);margin:-2px 0 6px 8px">성공 ' + okPct
+        + '% · 실패 ' + (r.error || 0) + '건 · 평균 ' + esc(fmtMs(r.avgMs)) + '</div>';
+    }).join("");
+  }
+
+  function stepIdxHTML(byStepIdx) {
+    const rows = (byStepIdx || []).filter(r => r.runs > 0).slice(0, 30);
+    if (!rows.length) return '<div class="empty">기간에 단계 실행 기록이 없습니다.</div>';
+    const max = Math.max(...rows.map(r => r.runs), 1);
+    return rows.map(r => {
+      const rate = (r.error / r.runs * 100);
+      return '<div class="hbar"><div class="lab">' + (r.stepIdx + 1) + '단계</div>'
+        + '<div class="trk"><div class="fil' + (rate >= 20 ? " err" : "") + '" style="width:'
+        + (r.runs / max * 100).toFixed(1) + '%"></div></div>'
+        + '<div class="val">' + r.runs + '회 · 실패 ' + r.error + '</div></div>';
+    }).join("");
+  }
+
+  function durationsHTML(durations) {
+    const rows = (durations || []).slice(0, 10);
+    if (!rows.length) return '<div class="empty">소요시간 기록이 없습니다.</div>';
+    const max = Math.max(...rows.map(r => r.totalMs || 0), 1);
+    return rows.map(r =>
+      '<div class="hbar"><div class="lab" title="' + esc(r.event) + '">' + esc(r.event) + '</div>'
+      + '<div class="trk"><div class="fil" style="width:' + ((r.totalMs || 0) / max * 100).toFixed(1) + '%"></div></div>'
+      + '<div class="val">' + esc(fmtMs(r.avgMs)) + ' × ' + r.count + '</div></div>').join("");
+  }
+
+  exports.esc = esc;
+  exports.fmtBytes = fmtBytes;
+  exports.fmtMinutes = fmtMinutes;
+  exports.fmtMs = fmtMs;
+  exports.fmtTs = fmtTs;
+  exports.dwellOf = dwellOf;
+  exports.heatmap = heatmap;
+  exports.versionByDate = versionByDate;
+  exports.errorTrend = errorTrend;
+  exports.sparkPath = sparkPath;
+  exports.comboHTML = comboHTML;
+  exports.usersHTML = usersHTML;
+  exports.heatmapHTML = heatmapHTML;
+  exports.versionsHTML = versionsHTML;
+  exports.errorTrendHTML = errorTrendHTML;
+  exports.langHTML = langHTML;
+  exports.stepIdxHTML = stepIdxHTML;
+  exports.durationsHTML = durationsHTML;
+})(typeof module !== "undefined" && module.exports ? module.exports : (window.DashCore = {}));
+</script>
+
 <script>
 "use strict";
 const $ = id => document.getElementById(id);
-const esc = s => String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-
-function fmtBytes(n) {
-  n = Number(n || 0);
-  if (n >= 1024 * 1024 * 1024) return (n / 1024 / 1024 / 1024).toFixed(2) + " GB";
-  if (n >= 1024 * 1024) return (n / 1024 / 1024).toFixed(1) + " MB";
-  if (n >= 1024) return (n / 1024).toFixed(0) + " KB";
-  return n + " B";
-}
-function fmtMinutes(m) {
-  m = Number(m || 0);
-  if (m >= 60) return Math.floor(m / 60) + "시간 " + Math.round(m % 60) + "분";
-  return Math.round(m) + "분";
-}
-function fmtTs(s) { return s ? String(s).replace("T", " ").slice(0, 19) : "-"; }
-function dwellOf(s) {
-  // 서버 stats 와 같은 규칙 — endedAt 없으면 lastSeenAt(마지막 업로드)로 물러난다.
-  const a = Date.parse(s.startedAt || ""), b = Date.parse(s.endedAt || s.lastSeenAt || "");
-  if (!a || !b || b < a) return 0;
-  return (b - a) / 60000;
-}
+const C = window.DashCore;
+const esc = C.esc;
 
 async function api(path) {
   const r = await fetch("/api/logdash/" + path);
   const d = await r.json().catch(() => null);
   if (!r.ok || !d || d.ok === false) {
-    throw new Error((d && (d.error || d.detail)) || ("HTTP " + r.status));
+    const e = new Error((d && (d.error || d.detail)) || ("HTTP " + r.status));
+    e.status = r.status;
+    throw e;
   }
   return d;
 }
@@ -154,9 +451,9 @@ function renderCards(t, errCount) {
   $("cards").innerHTML = [
     ["총 실행", (t.sessions || 0).toLocaleString() + " <small>회</small>"],
     ["사용자", (t.userCount || 0) + " <small>명</small>"],
-    ["총 체류", esc(fmtMinutes(t.dwellMinutes))],
+    ["총 체류", esc(C.fmtMinutes(t.dwellMinutes))],
     ["스킬 저장", (t.skills || 0).toLocaleString() + " <small>개</small>"],
-    ["수집 용량", esc(fmtBytes(t.bytes))],
+    ["수집 용량", esc(C.fmtBytes(t.bytes))],
     ["오류", '<span style="color:var(--bad)">' + (errCount || 0).toLocaleString() + "</span> <small>건</small>"],
     ["수집 중", (t.openSessions || 0) + " <small>세션</small>"],
   ].map(([k, v]) => `<div class="card"><div class="k">${k}</div><div class="v">${v}</div></div>`).join("");
@@ -169,48 +466,140 @@ function fillUsers(rows, keepSelection) {
   if (keepSelection) sel.value = cur;
 }
 
+function renderChips() {
+  const chips = [];
+  if ($("f-user").value) chips.push(["사용자: " + $("f-user").value, () => { $("f-user").value = ""; }]);
+  if ($("f-from").value && $("f-from").value === $("f-to").value)
+    chips.push(["날짜: " + $("f-from").value, () => setRange(7)]);
+  $("chips").innerHTML = chips.map((c, i) =>
+    `<span class="chip" data-chip="${i}">${esc(c[0])} ✕</span>`).join("");
+  $("chips").querySelectorAll(".chip").forEach((el, i) => {
+    el.onclick = () => { chips[i][1](); load(); };
+  });
+}
+
+/* 교차 필터 — 차트 클릭이 화면 전체 필터가 되게 한다(Power BI 의 그 동작).
+   클라이언트 데이터 모델을 만드는 대신 필터를 서버 쿼리로 되돌린다 — 단순하고, 표·카드까지
+   전부 일관되게 걸린다. 같은 값을 다시 클릭하면 해제. */
+document.addEventListener("click", ev => {
+  const u = ev.target.closest("[data-filter-user]");
+  if (u) {
+    const v = u.getAttribute("data-filter-user");
+    $("f-user").value = ($("f-user").value === v) ? "" : v;
+    load();
+    return;
+  }
+  const d = ev.target.closest("[data-filter-date]");
+  if (d) {
+    const v = d.getAttribute("data-filter-date");
+    if ($("f-from").value === v && $("f-to").value === v) setRange(7);
+    else { $("f-from").value = v; $("f-to").value = v; }
+    load();
+  }
+});
+
+/* 표 정렬 — 열 제목 클릭. 셀의 data-s(정렬용 값)가 있으면 숫자로, 없으면 글자로 비교한다. */
+function makeSortable(tbl) {
+  tbl.tHead.addEventListener("click", ev => {
+    const th = ev.target.closest("th");
+    if (!th) return;
+    const idx = [...th.parentNode.children].indexOf(th);
+    const dir = th.dataset.dir === "asc" ? "desc" : "asc";
+    tbl.tHead.querySelectorAll("th").forEach(h => { h.dataset.dir = ""; h.querySelector(".arrow")?.remove(); });
+    th.dataset.dir = dir;
+    th.insertAdjacentHTML("beforeend", '<span class="arrow">' + (dir === "asc" ? " ▲" : " ▼") + "</span>");
+    const rows = [...tbl.tBodies[0].rows].filter(r => r.cells.length > 1);
+    rows.sort((a, b) => {
+      const av = a.cells[idx]?.dataset.s ?? a.cells[idx]?.textContent ?? "";
+      const bv = b.cells[idx]?.dataset.s ?? b.cells[idx]?.textContent ?? "";
+      const an = Number(av), bn = Number(bv);
+      const cmp = (!isNaN(an) && !isNaN(bn) && av !== "" && bv !== "") ? an - bn : String(av).localeCompare(String(bv));
+      return dir === "asc" ? cmp : -cmp;
+    });
+    rows.forEach(r => tbl.tBodies[0].appendChild(r));
+  });
+}
+
+function chartBox(title, sub, body) {
+  return '<div class="chart"><h3>' + title + (sub ? ' <span>' + sub + '</span>' : "") + '</h3>' + body + "</div>";
+}
+
 async function load() {
   const st = $("status-line");
   st.classList.remove("err");
   st.textContent = "불러오는 중…";
   try {
-    const [stats, errors] = await Promise.all([api("stats" + q()), api("errors" + q())]);
+    const [stats, errors] = await Promise.all([api("stats" + q()), api("errors" + q() + (q() ? "&" : "?") + "limit=1000")]);
     // 세션 목록 — 서버 필터는 단일 date 만 받으므로 넉넉히 받아 기간은 여기서 거른다.
-    const sess = await api("sessions?limit=500" + ($("f-user").value ? "&user=" + encodeURIComponent($("f-user").value) : ""));
+    const sess = await api("sessions?limit=2000" + ($("f-user").value ? "&user=" + encodeURIComponent($("f-user").value) : ""));
     const from = $("f-from").value, to = $("f-to").value;
     const sessions = (sess.sessions || []).filter(s => (!from || s.date >= from) && (!to || s.date <= to));
 
+    // 분석 구역 — 서버가 구버전이면 404. 그때는 이 구역만 접는다(나머지는 그대로).
+    let events = null;
+    try { events = await api("events" + q()); } catch (_e) { events = null; }
+
     renderCards(stats.total || {}, errors.count);
     fillUsers(stats.byUsers || [], true);
+    renderChips();
+
+    const activeUser = $("f-user").value;
+    const activeDate = (from && from === to) ? from : "";
+    $("charts-usage").innerHTML =
+      chartBox("일별 추이", "막대=실행 · 선=체류(분) · 막대 클릭=그 날로 필터", C.comboHTML(stats.byDate || [], activeDate))
+      + chartBox("사용자 랭킹", "실행 횟수 상위 12명 · 클릭=그 사용자로 필터", C.usersHTML(stats.byUsers || [], activeUser))
+      + chartBox("사용 시간대", "요일 × 시(세션 시작 기준)", C.heatmapHTML(C.heatmap(sessions)))
+      + chartBox("버전 도입률", "날짜별 실행의 버전 구성", C.versionsHTML(C.versionByDate(sessions)))
+      + chartBox("오류 추이", "일별 오류 이벤트 수",
+          C.errorTrendHTML(C.errorTrend(events && events.errorsByDate, errors.errors || []),
+                           errors.fullScan === true));
+
+    if (events) {
+      $("charts-analytics").innerHTML =
+        chartBox("언어별 단계 실행", "VBA/Python — 실행·성공률·평균 소요", C.langHTML(events.steps && events.steps.byLanguage))
+        + chartBox("단계 위치별 실패", "몇 번째 단계에서 자주 막히나 (빨강=실패율 20%↑)", C.stepIdxHTML(events.steps && events.steps.byStepIdx))
+        + chartBox("느린 작업 TOP", "이벤트별 누적 소요(평균 × 횟수)", C.durationsHTML(events.durations));
+    } else {
+      $("charts-analytics").innerHTML =
+        '<div class="chart"><div class="empty">이 구역은 수집 서버의 이벤트 집계 API(/v1/admin/events)가 필요합니다.<br>'
+        + '수집 서버의 collector.py 를 2026-08-31 이후 판으로 올리면 자동으로 채워집니다.</div></div>';
+    }
 
     $("tbl-users").tBodies[0].innerHTML = (stats.byUsers || []).map(r =>
-      `<tr><td>${esc(r.user)}</td><td class="num">${r.sessions}</td><td class="num">${esc(fmtMinutes(r.dwellMinutes))}</td>
-       <td class="num">${r.skills}</td><td class="num">${r.logs}</td><td class="num">${esc(fmtBytes(r.bytes))}</td>
-       <td>${esc(fmtTs(r.lastSeenAt))}</td></tr>`).join("")
+      `<tr><td>${esc(r.user)}</td><td class="num" data-s="${r.sessions}">${r.sessions}</td>
+       <td class="num" data-s="${r.dwellMinutes}">${esc(C.fmtMinutes(r.dwellMinutes))}</td>
+       <td class="num" data-s="${r.skills}">${r.skills}</td><td class="num" data-s="${r.logs}">${r.logs}</td>
+       <td class="num" data-s="${r.bytes}">${esc(C.fmtBytes(r.bytes))}</td>
+       <td>${esc(C.fmtTs(r.lastSeenAt))}</td></tr>`).join("")
       || '<tr><td colspan="7" class="empty">기간에 해당하는 기록이 없습니다.</td></tr>';
 
     $("tbl-dates").tBodies[0].innerHTML = (stats.byDate || []).map(r =>
-      `<tr><td>${esc(r.date)}</td><td class="num">${r.sessions}</td><td class="num">${r.userCount}</td>
-       <td class="num">${esc(fmtMinutes(r.dwellMinutes))}</td><td class="num">${r.skills}</td>
-       <td class="num">${esc(fmtBytes(r.bytes))}</td></tr>`).join("")
+      `<tr><td>${esc(r.date)}</td><td class="num" data-s="${r.sessions}">${r.sessions}</td>
+       <td class="num" data-s="${r.userCount}">${r.userCount}</td>
+       <td class="num" data-s="${r.dwellMinutes}">${esc(C.fmtMinutes(r.dwellMinutes))}</td>
+       <td class="num" data-s="${r.skills}">${r.skills}</td>
+       <td class="num" data-s="${r.bytes}">${esc(C.fmtBytes(r.bytes))}</td></tr>`).join("")
       || '<tr><td colspan="6" class="empty">기간에 해당하는 기록이 없습니다.</td></tr>';
 
     $("tbl-sessions").tBodies[0].innerHTML = sessions.map(s => {
       const zip = "/api/logdash/session.zip?date=" + encodeURIComponent(s.date)
         + "&user=" + encodeURIComponent(s.user) + "&session=" + encodeURIComponent(s.sessionId);
       const state = s.closed ? '<span class="state-closed">종료</span>' : '<span class="state-open">수집 중</span>';
-      return `<tr><td>${esc(s.date)}</td><td>${esc(s.user)}</td><td>${esc(fmtTs(s.startedAt).slice(11) || "-")}</td>
-        <td class="num">${esc(fmtMinutes(dwellOf(s)))}</td><td>${esc(s.appVersion || "-")}</td><td>${esc(s.host || "-")}</td>
-        <td>${state}</td><td class="num">${(s.logFiles || []).length} / ${(s.skillFiles || []).length}</td>
-        <td class="num">${esc(fmtBytes(s.sizeBytes))}</td><td><a class="zip" href="${zip}">zip</a></td></tr>`;
+      const dw = C.dwellOf(s);
+      return `<tr><td>${esc(s.date)}</td><td>${esc(s.user)}</td><td>${esc(C.fmtTs(s.startedAt).slice(11) || "-")}</td>
+        <td class="num" data-s="${dw}">${esc(C.fmtMinutes(dw))}</td><td>${esc(s.appVersion || "-")}</td><td>${esc(s.host || "-")}</td>
+        <td>${state}</td><td class="num" data-s="${(s.logFiles || []).length}">${(s.logFiles || []).length} / ${(s.skillFiles || []).length}</td>
+        <td class="num" data-s="${s.sizeBytes || 0}">${esc(C.fmtBytes(s.sizeBytes))}</td><td><a class="zip" href="${zip}">zip</a></td></tr>`;
     }).join("") || '<tr><td colspan="10" class="empty">기간에 해당하는 실행이 없습니다.</td></tr>';
 
     $("tbl-errors").tBodies[0].innerHTML = (errors.errors || []).map(e =>
-      `<tr><td>${esc(fmtTs(e.ts))}</td><td>${esc(e.user)}</td>
+      `<tr><td>${esc(C.fmtTs(e.ts))}</td><td>${esc(e.user)}</td>
        <td class="num">${e.stepIdx != null ? (Number(e.stepIdx) + 1) + "단계" : "-"}</td>
        <td class="ev">${esc(e.event)}</td><td class="summary-cell" title="${esc(e.summary)}">${esc(e.summary || "-")}</td>
        <td>${esc(e.sessionId)}</td></tr>`).join("")
       || '<tr><td colspan="6" class="empty">기간에 오류가 없습니다. 👍</td></tr>';
+    $("err-scan-note").textContent = errors.fullScan === true
+      ? "— 전량 스캔(모든 로그 파일 전체)" : "— 수집된 실행 기록에서 실패 이벤트만 추림(파일당 최근 구간)";
 
     $("server-line").textContent = "수집 위치: " + (stats.root || "?");
     st.textContent = "갱신 " + new Date().toLocaleTimeString();
@@ -230,7 +619,9 @@ function setRange(days) {
 
 $("btn-load").onclick = load;
 $("btn-week").onclick = () => { setRange(7); load(); };
+$("btn-month").onclick = () => { setRange(30); load(); };
 $("btn-all").onclick = () => { setRange(0); load(); };
+["tbl-users", "tbl-dates", "tbl-sessions", "tbl-errors"].forEach(id => makeSortable($(id)));
 setRange(7);
 load();
 </script>
