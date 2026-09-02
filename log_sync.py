@@ -183,9 +183,13 @@ def current_user():
             startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
         out = subprocess.run(["whoami"], capture_output=True, timeout=5,
                              creationflags=flags, startupinfo=startupinfo)
-        text = (out.stdout or b"").decode("utf-8", errors="replace").strip()
-        if not text:
-            text = (out.stdout or b"").decode("cp949", errors="replace").strip()
+        raw = out.stdout or b""
+        # [한글 깨짐 수정 2026-09-02] org_info 와 같은 규칙 — 엄격 UTF-8 실패 시 CP949.
+        # (예전 폴백 조건 `if not text` 는 replace 디코드가 항상 비지 않아 죽은 코드였다)
+        try:
+            text = raw.decode("utf-8").strip()
+        except UnicodeDecodeError:
+            text = raw.decode("cp949", errors="replace").strip()
         if text:
             return text
     except Exception:
@@ -230,9 +234,15 @@ def org_info():
             startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
         run = subprocess.run(["whoami", "/fqdn"], capture_output=True, timeout=5,
                              creationflags=flags, startupinfo=startupinfo)
-        text = (run.stdout or b"").decode("utf-8", errors="replace").strip()
-        if "OU=" not in text and "CN=" not in text:
-            text = (run.stdout or b"").decode("cp949", errors="replace").strip()
+        raw = run.stdout or b""
+        # [한글 깨짐 수정 2026-09-02] 한국어 Windows 콘솔은 CP949 로 출력한다. 예전엔 UTF-8
+        # replace 로 풀고 "CN= 이 보이면 성공" 판정이었는데, CP949 를 UTF-8 로 잘못 풀어도
+        # 영문(CN=/OU=)은 살아남아 폴백이 영영 안 탔다 → 한글 이름만 �(U+FFFD)로 깨졌다
+        # (실측: 좌측 상단 "사용자 : ���"). 엄격 디코드 실패로 판정해야 한다.
+        try:
+            text = raw.decode("utf-8").strip()          # strict — CP949 한글이면 여기서 예외
+        except UnicodeDecodeError:
+            text = raw.decode("cp949", errors="replace").strip()
         out = parse_fqdn_org(text)
     except Exception:
         out = {}

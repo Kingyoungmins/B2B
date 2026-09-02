@@ -13,7 +13,12 @@ from pathlib import Path
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
+import json
 import log_sync as L
+
+
+def json_dumps(o):
+    return json.dumps(o, ensure_ascii=False)
 
 fails = []
 
@@ -91,6 +96,36 @@ finally:
     L._ORG_CACHE["done"] = False
 check("whoami 1회 호출", calls["n"] == 1, calls)
 check("두 번째는 캐시(같은 값)", r1 == r2 and r1.get("team") == "Foundation리서치팀", r1)
+
+print("[5] 한국어 Windows 콘솔(CP949) 출력 — 한글이 깨지지 않는다")
+# 실측(2026-09-02): VM 에서 "사용자 : ���" — CP949 바이트를 UTF-8 replace 로 풀고
+# 'CN= 이 보이면 성공' 판정이라 폴백이 영영 안 탔다. CP949 실바이트로 재현해 잠근다.
+L._ORG_CACHE["done"] = False
+def _spy949(*a, **k):
+    if a and isinstance(a[0], list) and "/fqdn" in a[0]:
+        class R: stdout = DN.encode("cp949")          # 한국어 콘솔 그대로
+        return R()
+    return orig_run(*a, **k)
+_sp.run = _spy949
+try:
+    r = L.org_info()
+finally:
+    _sp.run = orig_run
+    L._ORG_CACHE["done"] = False
+check("이름이 깨지지 않는다", r.get("displayName") == "서영민", r.get("displayName"))
+check("U+FFFD(�) 없음", "�" not in json_dumps(r), r)
+check("팀/경로도 정상", r.get("team") == "Foundation리서치팀"
+      and r.get("orgPath", "").startswith("LG유플러스"), r)
+
+print("[5b] UTF-8 콘솔(chcp 65001) 출력도 그대로 동작")
+L._ORG_CACHE["done"] = False
+_sp.run = _spy                                        # utf-8 bytes 스파이(위에서 정의)
+try:
+    r = L.org_info()
+finally:
+    _sp.run = orig_run
+    L._ORG_CACHE["done"] = False
+check("UTF-8 출력도 정상", r.get("displayName") == "서영민", r)
 
 print("")
 print("RESULT: ALL PASS" if not fails else "RESULT: %d FAIL -> %s" % (len(fails), fails))
