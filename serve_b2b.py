@@ -313,6 +313,100 @@ def _current_app_version():
     return {"version": "", "normalized": "", "source": ""}
 
 
+# ── [버전 게이트 0.8.3] 프로그램 시작 시 1회, 버전 서버의 '허용 버전 목록'과 대조 ──
+# version.txt(보안망)에 허용 버전을 한 줄에 하나씩 적는다. 지금 버전이 목록에 없으면
+# 화면(version-gate.js)이 "오래된 버전" 팝업을 띄운다. 서버가 죽어 있거나 주소가 없으면
+# 조용히 통과한다 — 버전 확인 때문에 업무가 막히면 안 된다.
+VERSION_GATE_DEFAULT_DOWNLOAD_URL = "https://seulgi.lguplus.co.kr/desk/smart-billing"
+_VERSION_GATE = {"done": False, "result": None}   # 프로세스 수명 1회 — 새로고침(F5)에 또 안 뜨게
+
+
+def _version_gate_check():
+    """버전 서버 /v1/version 의 allowed 목록과 지금 버전을 대조한다. 반환은 팝업에 필요한 전부."""
+    own = _current_app_version()
+    cur = own.get("normalized") or _normalize_version_text(own.get("version"))
+    out = {"ok": True, "current": cur or str(own.get("version") or ""),
+           "source": own.get("source") or "", "match": None, "allowed": [],
+           "latest": "", "downloadUrl": "", "checked": False, "configured": False, "error": ""}
+    try:
+        import log_sync
+        cfg = log_sync.config()
+        base = str(cfg.get("upstreamUrl") or "").rstrip("/")
+        if not base:
+            # 주소 자체가 없는 환경(개발 등)은 '점검중'이 아니라 게이트 미구성 — 조용히 통과.
+            out["error"] = "버전 서버 주소가 설정되지 않았습니다"
+            return out
+        out["configured"] = True
+        headers = {}
+        if cfg.get("apiKey"):
+            headers["Api-Key"] = cfg["apiKey"]
+        req = urllib.request.Request(base + "/v1/version", headers=headers)
+        # 시작 화면을 잡아 두는 검사라 짧게 — 방화벽이 패킷을 버리는 환경 대비(보안해제 프로브와 동일 근거)
+        with urllib.request.urlopen(req, timeout=3) as resp:
+            data = json.loads(resp.read().decode("utf-8", errors="replace"))
+        if not isinstance(data, dict) or data.get("ok") is False:
+            out["error"] = str((data or {}).get("error") or "버전 서버 응답 오류")
+            return out
+        allowed = [
+            _normalize_version_text(v)
+            for v in (data.get("allowed") or [data.get("normalized") or data.get("version")])
+            if _normalize_version_text(v)
+        ]
+        out["allowed"] = allowed
+        out["latest"] = _normalize_version_text(data.get("normalized") or data.get("version"))
+        out["downloadUrl"] = str(data.get("downloadUrl") or "")
+        out["checked"] = True
+        if cur and allowed:
+            out["match"] = cur in allowed
+        _vba_trace("version.gate.check", current=cur, allowed=",".join(allowed),
+                   match=out["match"], latest=out["latest"])
+    except Exception as err:
+        out["error"] = "버전 서버에 연결하지 못했습니다: %s" % err
+        try:
+            _vba_trace("version.gate.unreachable", error=str(err)[:200])
+        except Exception:
+            pass
+    return out
+
+
+def version_gate_status():
+    """시작 1회 검사 결과. 팝업 종류(kind)와 표시 여부(show)까지 정해서 준다.
+      · kind="outdated"    허용 목록에 없는 버전 → "오래된 버전..." + [다운로드][무시]
+      · kind="maintenance" 주소는 있는데 버전 정보를 못 가져옴(서버 오류/무응답)
+                           → "점검중입니다..." + [확인]  (요청 2026-09-02)
+      · kind=""            통과(목록에 있음) 또는 게이트 미구성(주소 없음) → 팝업 없음
+    show 는 이번 실행에서 첫 호출일 때만 True — 새로고침/다중 탭에 반복 팝업 금지."""
+    first = not _VERSION_GATE["done"]
+    if first:
+        _VERSION_GATE["result"] = _version_gate_check()
+        _VERSION_GATE["done"] = True
+    res = dict(_VERSION_GATE["result"] or {})
+    if res.get("match") is False:
+        res["kind"] = "outdated"
+    elif res.get("configured") and not res.get("checked"):
+        res["kind"] = "maintenance"
+    else:
+        res["kind"] = ""
+    res["show"] = bool(first and res["kind"])
+    if not res.get("downloadUrl"):
+        res["downloadUrl"] = VERSION_GATE_DEFAULT_DOWNLOAD_URL
+    return res
+
+
+def version_gate_open_download(url):
+    """'다운로드 하러가기' — 기본 브라우저로 연다(네이티브 WebView 새창 처리에 기대지 않는다)."""
+    u = str(url or "").strip() or VERSION_GATE_DEFAULT_DOWNLOAD_URL
+    if not (u.startswith("https://") or u.startswith("http://")):
+        return {"ok": False, "error": "http(s) 주소만 열 수 있습니다: %s" % u[:120]}
+    try:
+        import webbrowser
+        webbrowser.open(u)
+        _vba_trace("version.gate.open_download", url=u[:200])
+        return {"ok": True, "url": u}
+    except Exception as err:
+        return {"ok": False, "error": str(err)}
+
+
 def writable_app_dir():
     env_dir = os.environ.get("B2B_WRITABLE_APP_DIR")
     if env_dir:
@@ -1403,6 +1497,13 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
             # 버전 서버에 물어본다 — 여기서 외부로 나가지 않는다.
             self.send_json({"ok": True, **_current_app_version()})
             return
+        if self.path == "/api/app/version/gate":
+            # [버전 게이트 0.8.3] 시작 시 1회 — 허용 버전 목록 대조 결과(+팝업 표시 여부)
+            try:
+                self.send_json(version_gate_status())
+            except Exception as err:
+                self.send_json({"ok": False, "error": str(err), "show": False})
+            return
         if self.path.startswith("/v1/"):
             self.proxy()
             return
@@ -1417,6 +1518,14 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
             return
         if self.path.startswith("/api/assist/attachment"):
             self.handle_assist_attachment()
+            return
+        if self.path == "/api/app/version/open-download":
+            # [버전 게이트 0.8.3] "다운로드 하러가기" — 시스템 기본 브라우저로 연다.
+            try:
+                payload = self.read_json_body()
+                self.send_json(version_gate_open_download(payload.get("url")))
+            except Exception as err:
+                self.send_json({"ok": False, "error": str(err)}, status=500)
             return
         if self.path == "/api/workbooks/archive":
             self.handle_workbook_archive()

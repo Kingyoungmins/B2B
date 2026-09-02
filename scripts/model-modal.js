@@ -221,8 +221,8 @@ function openSettingsModal(devMode) {
     <div style="margin-top:16px; padding-top:14px; border-top:1px solid #eee">
       <div style="font-weight:700; font-size:12.5px; margin-bottom:2px">버전 확인</div>
       <div style="font-size:11px; color:#777; margin-bottom:8px">
-        지금 AX-Cell 의 파일 버전과 버전 서버의 최신 버전을 비교합니다.
-        (지금은 확인만 — 안내창은 배포 전에 붙일 예정)
+        지금 AX-Cell 의 파일 버전과 버전 서버의 허용 버전 목록을 비교합니다.
+        (0.8.3부터 프로그램 시작 시 자동으로 1회 확인하고, 목록에 없으면 안내창이 뜹니다)
       </div>
       <label style="font-size:11.5px; color:#666">버전 서버 실제 주소</label>
       <input type="text" id="set-ver-upstream" value="${escapeHtml(verCfg.upstreamUrl)}"
@@ -238,8 +238,15 @@ function openSettingsModal(devMode) {
         게이트웨이가 Api-Key 헤더를 요구합니다. 기본값이 채워져 있으니 그대로 두시면 되고,
         키가 바뀌면 여기서 고치면 됩니다(바꾼 값은 이 PC 에만 저장됩니다).
       </div>
+      <label style="font-size:11.5px; color:#666">업데이트 다운로드 주소 ("다운로드 하러가기" 버튼이 여는 곳)</label>
+      <input type="text" id="set-ver-download" value="${escapeHtml(localStorage.getItem("b2bUpdateDownloadUrl") || "")}"
+             placeholder="${escapeHtml(typeof VERSION_GATE_DOWNLOAD_DEFAULT === "string" ? VERSION_GATE_DOWNLOAD_DEFAULT : "https://seulgi.lguplus.co.kr/desk/smart-billing")}" />
+      <div style="font-size:11px; color:#777; margin:-6px 0 8px">
+        비워 두면 기본 주소(슬기 스마트빌링)를 씁니다. 바꾼 값은 이 PC 에만 저장됩니다.
+      </div>
       <div class="row" style="margin-top:6px; gap:8px">
         <button class="btn-secondary" id="btn-version-check">버전 확인</button>
+        <button class="btn-secondary" id="btn-version-download-save">다운로드 주소 저장</button>
         <button class="btn-secondary" id="btn-log-dashboard" title="수집 서버에 쌓인 사용 기록(누가·언제·체류·스킬·오류)을 봅니다">📊 관리 대시보드</button>
       </div>
       <div id="version-result" style="margin-top:8px; font-size:11.5px"></div>
@@ -371,6 +378,22 @@ function openSettingsModal(devMode) {
     };
   }
   // [버전 확인] 지금 AX-Cell 파일 버전 vs 버전 서버의 최신 버전. 확인만 하고 아무것도 강제하지 않는다.
+  if (devMode && $("btn-version-download-save")) {
+    // [버전 게이트 0.8.3] "다운로드 하러가기"가 열 주소를 이 PC 에 저장(비우면 기본값 사용).
+    $("btn-version-download-save").onclick = () => {
+      const res = $("version-result");
+      const u = String(($("set-ver-download") || {}).value || "").trim();
+      if (u && !/^https?:\/\//i.test(u)) {
+        if (res) res.textContent = "다운로드 주소는 http:// 또는 https:// 로 시작해야 합니다.";
+        return;
+      }
+      if (u) localStorage.setItem("b2bUpdateDownloadUrl", u);
+      else localStorage.removeItem("b2bUpdateDownloadUrl");
+      if (res) res.textContent = u
+        ? "다운로드 주소를 저장했습니다: " + u
+        : "다운로드 주소를 비웠습니다 — 기본 주소(슬기 스마트빌링)를 씁니다.";
+    };
+  }
   if (devMode && $("btn-version-check")) {
     $("btn-version-check").onclick = async () => {
       const res = $("version-result");
