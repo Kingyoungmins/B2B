@@ -34,6 +34,7 @@ import datetime
 import gzip
 import json
 import os
+import re
 import socket
 import subprocess
 import sys
@@ -200,6 +201,78 @@ def current_user():
         return "unknown"
 
 
+_ORG_CACHE = {"done": False, "value": {}}
+
+
+def org_info():
+    """`whoami /fqdn` 의 조직 계층을 파싱한다(도메인 VM 전용 — 실측 2026-09-02).
+
+      CN=서영민(s0min),OU=[VDIGRP_00058572]4^Foundation리서치팀,
+      OU=[VDIGRP_00058571]3^AI R_D Lab,OU=[VDIGRP_00058245]2^AI R_D센터,
+      OU=[VDIGRP_00055758]1^CTO,OU=[VDIGRP_00010000]0^LG유플러스,...
+
+    → {displayName:"서영민", empId:"s0min", team:"Foundation리서치팀",
+       orgPath:"LG유플러스 > CTO > AI R_D센터 > AI R_D Lab > Foundation리서치팀",
+       orgLevels:[레벨 오름차순 이름들]}
+
+    도메인에 안 물린 PC(개발 등)는 /fqdn 이 실패한다 → 빈 dict (로그 형식만 그대로,
+    값이 없을 뿐 — 구버전 서버와의 호환도 이걸로 지킨다). 세션당 한 번만 실행한다.
+    반드시 워커 스레드에서 부른다(whoami 는 최대 5초 — 시작 경로를 막으면 안 된다)."""
+    if _ORG_CACHE["done"]:
+        return dict(_ORG_CACHE["value"])
+    out = {}
+    try:
+        flags = 0
+        startupinfo = None
+        if os.name == "nt":
+            flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+            startupinfo = subprocess.STARTUPINFO()
+            startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+        run = subprocess.run(["whoami", "/fqdn"], capture_output=True, timeout=5,
+                             creationflags=flags, startupinfo=startupinfo)
+        text = (run.stdout or b"").decode("utf-8", errors="replace").strip()
+        if "OU=" not in text and "CN=" not in text:
+            text = (run.stdout or b"").decode("cp949", errors="replace").strip()
+        out = parse_fqdn_org(text)
+    except Exception:
+        out = {}
+    _ORG_CACHE["value"] = out
+    _ORG_CACHE["done"] = True
+    return dict(out)
+
+
+def parse_fqdn_org(dn):
+    """DN 문자열 → 조직 dict. 파싱만 하는 순수 함수(테스트용 분리)."""
+    dn = str(dn or "").strip()
+    if not dn or "=" not in dn:
+        return {}
+    # 콤마로 자르되 'CN=/OU=/DC=' 가 이어지는 경계에서만 — 이름 안의 콤마에 안전.
+    parts = re.split(r",(?=(?:CN|OU|DC)=)", dn)
+    out = {}
+    levels = {}
+    for p in parts:
+        p = p.strip()
+        if p.startswith("CN="):
+            cn = p[3:].strip()
+            m = re.match(r"^(.*?)\(([^()]+)\)\s*$", cn)   # "서영민(s0min)" → 이름 + 사번
+            if m:
+                out["displayName"] = m.group(1).strip()
+                out["empId"] = m.group(2).strip()
+            else:
+                out["displayName"] = cn
+        elif p.startswith("OU="):
+            ou = p[3:].strip()
+            m = re.match(r"^\[[^\]]*\]\s*(\d+)\^(.+)$", ou)  # "[VDIGRP_x]4^팀명" → 레벨 + 이름
+            if m:
+                levels[int(m.group(1))] = m.group(2).strip()
+    if levels:
+        ordered = [levels[k] for k in sorted(levels)]
+        out["orgLevels"] = ordered
+        out["orgPath"] = " > ".join(ordered)
+        out["team"] = ordered[-1]                     # 가장 깊은 레벨 = 소속 팀
+    return out if out else {}
+
+
 def _new_session_id():
     return "%s-%s-%s" % (time.strftime("%Y%m%d-%H%M%S"), os.getpid(), uuid.uuid4().hex[:4])
 
@@ -341,6 +414,9 @@ def _ensure_session(timeout=15.0):
         "appDir": _CONTEXT.get("appDir", ""),
         "logDir": ";".join(str(p) for p in _CONTEXT["logDirs"]),
         "skillDir": ";".join(str(p) for p in _CONTEXT["skillDirs"]),
+        # [조직 정보 2026-09-02] whoami /fqdn 의 팀/조직 계층 — 대시보드 조직별 조회용.
+        # 서버 SessionStart.extra 는 예전부터 있던 자리라 구버전 서버에도 그대로 저장된다.
+        "extra": {"org": org_info()},
     }
     try:
         result = _as_result(_post("session/start", payload, timeout=timeout))

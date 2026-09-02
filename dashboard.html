@@ -136,6 +136,7 @@
     <label>시작일 <input type="date" id="f-from"></label>
     <label>종료일 <input type="date" id="f-to"></label>
     <label>사용자 <select id="f-user"><option value="">전체</option></select></label>
+    <label>조직/팀 <select id="f-org"><option value="">전체</option></select></label>
     <button id="btn-load">조회</button>
     <button id="btn-week" class="ghost">최근 7일</button>
     <button id="btn-month" class="ghost">최근 30일</button>
@@ -171,7 +172,7 @@
   <section>
     <h2>실행(세션) 목록 <span>— 실행 1회 = 한 줄. zip 으로 그 실행의 로그·스킬을 통째로 받는다</span></h2>
     <div class="tbl-wrap"><table id="tbl-sessions">
-      <thead><tr><th>날짜</th><th>사용자</th><th>시작</th><th>체류</th><th>버전</th><th>PC</th><th>상태</th><th>로그/스킬</th><th>용량</th><th>받기</th></tr></thead>
+      <thead><tr><th>날짜</th><th>사용자</th><th>조직(팀)</th><th>시작</th><th>체류</th><th>버전</th><th>PC</th><th>상태</th><th>로그/스킬</th><th>용량</th><th>받기</th></tr></thead>
       <tbody></tbody></table></div>
   </section>
 
@@ -466,9 +467,18 @@ function fillUsers(rows, keepSelection) {
   if (keepSelection) sel.value = cur;
 }
 
+function fillOrgs(rows, keepSelection) {
+  const sel = $("f-org"), cur = sel.value;
+  const teams = [...new Set(rows.map(r => r.team).filter(Boolean))].sort();
+  sel.innerHTML = '<option value="">전체</option>'
+    + teams.map(t => `<option value="${esc(t)}">${esc(t)}</option>`).join("");
+  if (keepSelection) sel.value = cur;
+}
+
 function renderChips() {
   const chips = [];
   if ($("f-user").value) chips.push(["사용자: " + $("f-user").value, () => { $("f-user").value = ""; }]);
+  if ($("f-org").value) chips.push(["조직: " + $("f-org").value, () => { $("f-org").value = ""; }]);
   if ($("f-from").value && $("f-from").value === $("f-to").value)
     chips.push(["날짜: " + $("f-from").value, () => setRange(7)]);
   $("chips").innerHTML = chips.map((c, i) =>
@@ -533,7 +543,12 @@ async function load() {
     // 세션 목록 — 서버 필터는 단일 date 만 받으므로 넉넉히 받아 기간은 여기서 거른다.
     const sess = await api("sessions?limit=2000" + ($("f-user").value ? "&user=" + encodeURIComponent($("f-user").value) : ""));
     const from = $("f-from").value, to = $("f-to").value;
-    const sessions = (sess.sessions || []).filter(s => (!from || s.date >= from) && (!to || s.date <= to));
+    // [조직 정보 2026-09-02] 0.8.3+ 앱이 보낸 팀/조직(extra.org). 조직 필터는 세션 기반
+    // 구역(목록·시간대·버전 차트)에 적용된다 — 서버 집계(stats) 카드는 전체 기준 그대로.
+    const orgv = $("f-org").value;
+    const sessions = (sess.sessions || []).filter(s => (!from || s.date >= from) && (!to || s.date <= to)
+      && (!orgv || s.team === orgv));
+    fillOrgs(sess.sessions || [], true);
 
     // 분석 구역 — 서버가 구버전이면 404. 그때는 이 구역만 접는다(나머지는 그대로).
     let events = null;
@@ -586,11 +601,12 @@ async function load() {
         + "&user=" + encodeURIComponent(s.user) + "&session=" + encodeURIComponent(s.sessionId);
       const state = s.closed ? '<span class="state-closed">종료</span>' : '<span class="state-open">수집 중</span>';
       const dw = C.dwellOf(s);
-      return `<tr><td>${esc(s.date)}</td><td>${esc(s.user)}</td><td>${esc(C.fmtTs(s.startedAt).slice(11) || "-")}</td>
+      return `<tr><td>${esc(s.date)}</td><td>${esc(s.user)}</td>
+        <td title="${esc(s.orgPath || "")}">${esc(s.team || "-")}</td><td>${esc(C.fmtTs(s.startedAt).slice(11) || "-")}</td>
         <td class="num" data-s="${dw}">${esc(C.fmtMinutes(dw))}</td><td>${esc(s.appVersion || "-")}</td><td>${esc(s.host || "-")}</td>
         <td>${state}</td><td class="num" data-s="${(s.logFiles || []).length}">${(s.logFiles || []).length} / ${(s.skillFiles || []).length}</td>
         <td class="num" data-s="${s.sizeBytes || 0}">${esc(C.fmtBytes(s.sizeBytes))}</td><td><a class="zip" href="${zip}">zip</a></td></tr>`;
-    }).join("") || '<tr><td colspan="10" class="empty">기간에 해당하는 실행이 없습니다.</td></tr>';
+    }).join("") || '<tr><td colspan="11" class="empty">기간에 해당하는 실행이 없습니다.</td></tr>';
 
     $("tbl-errors").tBodies[0].innerHTML = (errors.errors || []).map(e =>
       `<tr><td>${esc(C.fmtTs(e.ts))}</td><td>${esc(e.user)}</td>
@@ -618,6 +634,7 @@ function setRange(days) {
 }
 
 $("btn-load").onclick = load;
+$("f-org").onchange = load;   // 조직/팀 선택 즉시 반영
 $("btn-week").onclick = () => { setRange(7); load(); };
 $("btn-month").onclick = () => { setRange(30); load(); };
 $("btn-all").onclick = () => { setRange(0); load(); };
