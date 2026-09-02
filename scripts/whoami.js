@@ -24,11 +24,18 @@ async function loadUserIdentity() {
       user: info.user || "",
       domain: info.domain || "",
       host: info.host || "",
+      displayName: info.displayName || "",
+      madangId: info.madangId || "",
     });
 
-    text.textContent = info.whoami;
+    // [사용자 표시 2026-09-02] VM(도메인)에서는 실명으로 — "사용자 : 서영민".
+    // 개발망(비도메인)은 displayName 이 비므로 종전 표기(도메인\계정) 그대로(충돌 없음).
+    text.textContent = info.displayName ? ("사용자 : " + info.displayName) : info.whoami;
     box.classList.add("ok");
     box.title = [
+      info.displayName ? "사용자: " + info.displayName : "",
+      info.madangId ? "마당 아이디: " + info.madangId : "",
+      info.orgPath ? "소속: " + info.orgPath : "",
       "로그인 계정: " + info.whoami,
       info.host ? "PC: " + info.host : "",
       info.userProfile ? "프로필: " + info.userProfile : "",

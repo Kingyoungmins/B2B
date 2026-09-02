@@ -31,7 +31,7 @@ DN = ("CN=서영민(s0min),OU=[VDIGRP_00058572]4^Foundation리서치팀,OU=[VDIG
 print("[1] 실측 DN 그대로 파싱")
 o = L.parse_fqdn_org(DN)
 check("이름", o.get("displayName") == "서영민", o)
-check("사번", o.get("empId") == "s0min", o)
+check("마당 아이디", o.get("madangId") == "s0min", o)
 check("팀(가장 깊은 레벨)", o.get("team") == "Foundation리서치팀", o)
 check("조직 경로(상위→하위)",
       o.get("orgPath") == "LG유플러스 > CTO > AI R_D센터 > AI R_D Lab > Foundation리서치팀",
@@ -45,10 +45,10 @@ print("[2] 어긋난 입력에 안 죽는다")
 check("빈 문자열 → 빈 dict", L.parse_fqdn_org("") == {})
 check("DN 아님 → 빈 dict", L.parse_fqdn_org("CLOUDPC\\s0min") == {})
 o2 = L.parse_fqdn_org("CN=홍길동(h001),OU=Users,DC=X")
-check("OU 계층 없으면 이름/사번만", o2.get("displayName") == "홍길동" and o2.get("empId") == "h001"
+check("OU 계층 없으면 이름/마당아이디만", o2.get("displayName") == "홍길동" and o2.get("madangId") == "h001"
       and "orgPath" not in o2, o2)
-o3 = L.parse_fqdn_org("CN=관리자계정,DC=X")           # 괄호 사번 없는 CN
-check("사번 없는 CN 도 이름은 잡는다", o3.get("displayName") == "관리자계정" and "empId" not in o3, o3)
+o3 = L.parse_fqdn_org("CN=관리자계정,DC=X")           # 괄호 아이디 없는 CN
+check("아이디 없는 CN 도 이름은 잡는다", o3.get("displayName") == "관리자계정" and "madangId" not in o3, o3)
 check("순서가 섞여 와도 레벨 기준 정렬",
       L.parse_fqdn_org("CN=a(b),OU=[v]0^회사,OU=[v]2^팀,OU=[v]1^본부,DC=x").get("orgPath")
       == "회사 > 본부 > 팀")

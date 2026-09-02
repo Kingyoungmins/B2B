@@ -63,7 +63,7 @@ def current_windows_user():
         except Exception:
             name = ""
     whoami = ("%s\\%s" % (domain, name)).lower() if domain and name else (name or "").lower()
-    return {
+    out = {
         "ok": bool(name),
         "whoami": whoami,                                   # cloudpc\wcoh
         "user": name,                                       # wcoh
@@ -71,6 +71,19 @@ def current_windows_user():
         "host": os.environ.get("COMPUTERNAME") or socket.gethostname(),
         "userProfile": os.environ.get("USERPROFILE") or "",
     }
+    # [사용자 표시 2026-09-02] VM(도메인)에서는 whoami /fqdn 의 실명/마당 아이디/조직을 같이 준다.
+    # 화면이 "사용자 : 서영민" 으로 보여줄 재료 — 개발망(비도메인)에서는 이 필드들이 비어
+    # 종전 표기(도메인\계정) 그대로다(충돌 없음). log_sync 가 캐시를 쥐고 있어 비용도 1회뿐.
+    try:
+        import log_sync
+        org = log_sync.org_info() or {}
+        out["displayName"] = str(org.get("displayName") or "")
+        out["madangId"] = str(org.get("madangId") or "")
+        out["team"] = str(org.get("team") or "")
+        out["orgPath"] = str(org.get("orgPath") or "")
+    except Exception:
+        pass
+    return out
 
 
 # ── 스케줄 등록 저장 ────────────────────────────────────────────────────────

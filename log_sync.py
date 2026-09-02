@@ -211,7 +211,7 @@ def org_info():
       OU=[VDIGRP_00058571]3^AI R_D Lab,OU=[VDIGRP_00058245]2^AI R_D센터,
       OU=[VDIGRP_00055758]1^CTO,OU=[VDIGRP_00010000]0^LG유플러스,...
 
-    → {displayName:"서영민", empId:"s0min", team:"Foundation리서치팀",
+    → {displayName:"서영민", madangId:"s0min", team:"Foundation리서치팀",
        orgPath:"LG유플러스 > CTO > AI R_D센터 > AI R_D Lab > Foundation리서치팀",
        orgLevels:[레벨 오름차순 이름들]}
 
@@ -254,10 +254,10 @@ def parse_fqdn_org(dn):
         p = p.strip()
         if p.startswith("CN="):
             cn = p[3:].strip()
-            m = re.match(r"^(.*?)\(([^()]+)\)\s*$", cn)   # "서영민(s0min)" → 이름 + 사번
+            m = re.match(r"^(.*?)\(([^()]+)\)\s*$", cn)   # "서영민(s0min)" → 이름 + 마당 아이디
             if m:
                 out["displayName"] = m.group(1).strip()
-                out["empId"] = m.group(2).strip()
+                out["madangId"] = m.group(2).strip()
             else:
                 out["displayName"] = cn
         elif p.startswith("OU="):
