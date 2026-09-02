@@ -44,9 +44,52 @@ check("어느 계층이든 매칭(sessionInOrg)", HTML.includes('split(" > ").in
 console.log("[6] 추가 요소");
 check("팀별 사용 랭킹 차트", HTML.includes('chartBox("팀별 사용"') && HTML.includes("function teamRankHTML"));
 check("팀 막대 클릭=소속 필터", HTML.includes('data-filter-org'));
-check("구버전 사용 카드(허용 목록 대조)", HTML.includes('"구버전 사용"') && HTML.includes("function outdatedUsers"));
+check("구버전 사용 카드(허용 목록 대조)", HTML.includes("구버전 사용") && HTML.includes("function outdatedUsers"));
 check("게이트 정보 없으면 카드 생략", HTML.includes("...(outdated ? ["));
 check("세션 표 구버전 버전 강조", HTML.includes("허용 버전 목록에 없는 버전"));
+
+console.log("[7] 대시보드 UI 강화");
+check("고정 헤더 + 마지막 갱신", HTML.includes("position: sticky") && HTML.includes('id="last-updated"'));
+check("자동 새로고침(60초)", HTML.includes('id="auto-refresh"') && HTML.includes("setInterval(load, 60000)"));
+check("카드 증감 배지(직전 기간 대비)", HTML.includes("function deltaBadge") && HTML.includes('title="직전 같은 기간 대비"'));
+check("카드 톤(정상/주의/위험)", HTML.includes("tone-ok") && HTML.includes("tone-warn") && HTML.includes("tone-bad"));
+check("신규 사용자 카드", HTML.includes("function newUsersIn") && HTML.includes("신규 사용자"));
+check("오류율 카드", HTML.includes("오류율"));
+check("체류 시간 분포 차트", HTML.includes("function dwellDistHTML") && HTML.includes('chartBox("체류 시간 분포"'));
+check("자주 나는 오류 TOP 차트", HTML.includes("function topErrorsHTML") && HTML.includes("자주 나는 오류 TOP"));
+
+console.log("[8] AI에게 묻기");
+check("질문 입력/버튼", HTML.includes('id="ask-input"') && HTML.includes("askDashboard()"));
+check("프리셋 질문 칩", (HTML.match(/class="ask-chip"/g) || []).length >= 3);
+check("요약본 생성기(buildDashDigest)", HTML.includes("function buildDashDigest"));
+check("요약본 크기 상한", HTML.includes("text.length > 9000"));
+check("앱과 같은 AI 설정 재사용", HTML.includes('localStorage.getItem("mvno_llm_settings_v4")'));
+check("데이터만 근거로 답하라는 계약", HTML.includes("데이터에 없는 것은 추측하지 말고"));
+check("스냅샷 없으면 조회 먼저 안내", HTML.includes("먼저 [조회] 로 데이터를 불러와 주세요"));
+check("think 태그 제거(원문 노출 방지)", HTML.includes("<think>[\s\S]*?<\/think>") || /replace\(\/<think>/.test(HTML));
+
+console.log("[9] 요약본 내용(기능 실행)");
+{
+  // buildDashDigest 를 실제로 돌려 요약 구조를 확인 — DOM 없이 도는 순수 함수다
+  const i = HTML.indexOf("function buildDashDigest");
+  const j = HTML.indexOf("/* 앱 채팅과 같은 AI 설정", i);
+  const fn = new Function("userLabel", "userOrgMap",
+    HTML.slice(i, j) + "\nreturn buildDashDigest;")(u => u, {});
+  const digest = JSON.parse(fn({
+    from: "2026-09-01", to: "2026-09-02", user: "", org: "",
+    total: { sessions: 5, userCount: 2, dwellMinutes: 100, skills: 3 }, errCount: 1,
+    prevTotal: { sessions: 2, userCount: 1, dwellMinutes: 40, errCount: 0 },
+    byDate: [{ date: "2026-09-02", sessions: 5, dwellMinutes: 100 }],
+    byUsers: [{ user: "u1", sessions: 5, dwellMinutes: 100 }],
+    sessions: [{ user: "u1", team: "A팀", appVersion: "0.8.3.0" }],
+    errors: [{ event: "step.fail", summary: "요약", ts: "t", user: "u1" }],
+    outdated: { count: 0, names: [] }, newUsers: { count: 1, names: ["u1"] },
+  }));
+  check("기간·요약·팀별·오류종류·직전기간이 담긴다",
+    digest["조회기간"] && digest["요약"]["총실행"] === 5
+    && digest["팀별"][0]["팀"] === "A팀" && digest["오류종류"][0]["이벤트"] === "step.fail"
+    && digest["직전기간"]["총실행"] === 2, JSON.stringify(digest).slice(0, 150));
+}
 
 console.log("");
 console.log(fails === 0 ? "RESULT: ALL PASS" : "RESULT: " + fails + " FAIL");

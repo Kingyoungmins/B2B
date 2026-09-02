@@ -32,7 +32,11 @@
   body { margin: 0; background: var(--bg); color: var(--ink);
          font-family: "Malgun Gothic", "Segoe UI", sans-serif; font-size: 13px; }
   header { background: var(--card); border-bottom: 1px solid var(--line);
-           padding: 14px 22px; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+           padding: 12px 22px; display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+           position: sticky; top: 0; z-index: 50; box-shadow: 0 1px 6px rgba(20,24,35,.06); }
+  #last-updated { color: var(--ink-2); font-size: 11.5px; margin-left: auto; }
+  #auto-refresh-label { display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px;
+                        color: var(--ink-2); cursor: pointer; user-select: none; }
   header h1 { font-size: 17px; margin: 0; }
   header h1 b { color: var(--accent); }
   #server-line { color: var(--ink-2); font-size: 12px; }
@@ -54,10 +58,20 @@
   .hint { color: var(--ink-2); font-size: 11.5px; margin: 0 0 14px; }
 
   .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 16px; }
-  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
-  .card .k { font-size: 12px; color: var(--ink-2); }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px;
+          border-top: 3px solid var(--bar-soft); transition: box-shadow .12s, transform .12s; }
+  .card:hover { box-shadow: 0 4px 14px rgba(20,24,35,.10); transform: translateY(-1px); }
+  .card.tone-ok { border-top-color: var(--ok); }
+  .card.tone-warn { border-top-color: var(--warn); }
+  .card.tone-bad { border-top-color: var(--bad); }
+  .card .k { font-size: 12px; color: var(--ink-2); display: flex; align-items: center; gap: 5px; }
   .card .v { font-size: 22px; font-weight: 800; margin-top: 4px; font-variant-numeric: tabular-nums; }
   .card .v small { font-size: 12px; font-weight: 600; color: var(--ink-2); }
+  .card .delta { display: inline-block; margin-left: 7px; font-size: 11px; font-weight: 800;
+                 padding: 1px 7px; border-radius: 10px; vertical-align: middle; }
+  .card .delta.up { background: rgba(10,125,64,.12); color: var(--ok); }
+  .card .delta.down { background: rgba(194,37,37,.10); color: var(--bad); }
+  .card .delta.flat { background: rgba(90,98,114,.10); color: var(--ink-2); }
 
   .charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(380px, 1fr)); gap: 12px; margin-bottom: 22px; }
   .chart { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; overflow: hidden; }
@@ -130,6 +144,8 @@
 <header>
   <h1><b>AX-Cell</b> 관리 대시보드</h1>
   <span id="server-line">수집 서버 확인 중…</span>
+  <span id="last-updated"></span>
+  <label id="auto-refresh-label"><input type="checkbox" id="auto-refresh">자동 새로고침(60초)</label>
 </header>
 <main>
   <div class="filters">
@@ -144,7 +160,30 @@
     <span id="status-line"></span>
   </div>
   <div id="chips"></div>
-  <p class="hint">차트의 막대(사용자·날짜)를 클릭하면 그 값으로 화면 전체가 필터됩니다. 다시 클릭하거나 위 ✕ 칩으로 해제.</p>
+  <p class="hint">차트의 막대(사용자·날짜·팀)를 클릭하면 그 값으로 화면 전체가 필터됩니다. 다시 클릭하거나 위 ✕ 칩으로 해제.</p>
+
+  <!-- [AI 질문 2026-09-02] 지금 화면에 로드된 집계(요약본)를 근거로 AI 가 답한다.
+       앱 채팅과 같은 AI 서버/설정(localStorage 공유)을 그대로 쓴다 — 별도 설정 없음. -->
+  <section id="ask-section" style="margin-bottom:16px">
+    <div style="background:var(--card); border:1px solid var(--line); border-radius:10px; padding:12px 14px">
+      <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap">
+        <span style="font-weight:800">🤖 AI에게 묻기</span>
+        <input id="ask-input" type="text" placeholder="예: 이번 기간에 오류가 왜 늘었어? 어느 팀이 제일 많이 써?"
+               style="flex:1; min-width:240px; padding:8px 10px; border:1px solid var(--line); border-radius:8px; font:inherit"
+               onkeydown="if(event.key==='Enter'){askDashboard();}">
+        <button id="ask-btn" onclick="askDashboard()"
+                style="padding:8px 18px; border:0; border-radius:8px; background:var(--accent-2); color:#fff; font-weight:700; cursor:pointer">질문</button>
+      </div>
+      <div id="ask-presets" style="display:flex; gap:6px; flex-wrap:wrap; margin-top:8px">
+        <button class="ask-chip" onclick="askDashboard('사용량이 가장 많은 팀과 사용자를 알려줘')" style="border:1px solid var(--line); background:var(--bg); border-radius:14px; padding:3px 10px; font-size:11.5px; cursor:pointer">사용 TOP</button>
+        <button class="ask-chip" onclick="askDashboard('이번 기간 오류를 종류별로 요약하고 조치가 필요한 것을 짚어줘')" style="border:1px solid var(--line); background:var(--bg); border-radius:14px; padding:3px 10px; font-size:11.5px; cursor:pointer">오류 요약</button>
+        <button class="ask-chip" onclick="askDashboard('구버전을 쓰고 있는 사용자와 소속을 알려줘')" style="border:1px solid var(--line); background:var(--bg); border-radius:14px; padding:3px 10px; font-size:11.5px; cursor:pointer">구버전 현황</button>
+        <button class="ask-chip" onclick="askDashboard('지난 기간과 비교해서 사용 추세를 평가해줘')" style="border:1px solid var(--line); background:var(--bg); border-radius:14px; padding:3px 10px; font-size:11.5px; cursor:pointer">추세 평가</button>
+      </div>
+      <div id="ask-answer" style="display:none; margin-top:10px; padding:10px 12px; background:var(--bg);
+           border-radius:8px; white-space:pre-wrap; line-height:1.6; font-size:12.5px"></div>
+    </div>
+  </section>
 
   <div class="cards" id="cards"></div>
 
@@ -449,21 +488,62 @@ function q() {
   return s ? "?" + s : "";
 }
 
-function renderCards(t, errCount, outdated) {
+/* 증감 배지 — 직전 같은 길이 기간과 비교(전체 조회처럼 비교 기준이 없으면 생략) */
+function deltaBadge(cur, prev, goodWhenDown) {
+  if (prev == null) return "";
+  const diff = (cur || 0) - (prev || 0);
+  if (!prev && !cur) return "";
+  const cls = diff === 0 ? "flat" : ((diff > 0) === !goodWhenDown ? "up" : "down");
+  const arrow = diff === 0 ? "―" : (diff > 0 ? "▲" : "▼");
+  const pct = prev ? Math.round(Math.abs(diff) / prev * 100) : null;
+  const txt = arrow + " " + Math.abs(diff).toLocaleString() + (pct != null ? " (" + pct + "%)" : "");
+  return '<span class="delta ' + cls + '" title="직전 같은 기간 대비">' + txt + "</span>";
+}
+
+function renderCards(t, errCount, outdated, extras) {
+  const ex = extras || {};
+  const prev = ex.prevTotal || null;
+  const errRate = (t.sessions || 0) ? Math.round((errCount || 0) / t.sessions * 100) : 0;
   $("cards").innerHTML = [
-    ["총 실행", (t.sessions || 0).toLocaleString() + " <small>회</small>"],
-    ["사용자", (t.userCount || 0) + " <small>명</small>"],
-    ["총 체류", esc(C.fmtMinutes(t.dwellMinutes))],
-    ["스킬 저장", (t.skills || 0).toLocaleString() + " <small>개</small>"],
-    ["수집 용량", esc(C.fmtBytes(t.bytes))],
-    ["오류", '<span style="color:var(--bad)">' + (errCount || 0).toLocaleString() + "</span> <small>건</small>"],
-    ["수집 중", (t.openSessions || 0) + " <small>세션</small>"],
-    // [추가 요소 2026-09-02] 허용 버전 목록(버전 게이트) 밖의 버전을 쓰는 사용자 수.
-    // 게이트 정보를 못 가져오면(옛 서버 등) 카드를 아예 안 그린다 — 잘못된 0 보다 낫다.
-    ...(outdated ? [["구버전 사용",
-        '<span style="color:' + (outdated.count ? "var(--bad)" : "inherit") + '" title="'
-        + esc(outdated.names.join(", ") || "없음") + '">' + outdated.count + "</span> <small>명</small>"]] : []),
-  ].map(([k, v]) => `<div class="card"><div class="k">${k}</div><div class="v">${v}</div></div>`).join("");
+    { k: "▶ 총 실행", v: (t.sessions || 0).toLocaleString() + " <small>회</small>"
+        + deltaBadge(t.sessions, prev && prev.sessions) },
+    { k: "👥 사용자", v: (t.userCount || 0) + " <small>명</small>"
+        + deltaBadge(t.userCount, prev && prev.userCount) },
+    // [추가 요소 2026-09-02] 기간 내 '처음 등장한' 사용자 — 도입 확산 추적
+    ...(ex.newUsers != null ? [{ k: "✨ 신규 사용자", tone: ex.newUsers.count ? "ok" : "",
+        v: '<span title="' + esc(ex.newUsers.names.join(", ") || "없음") + '">'
+           + ex.newUsers.count + "</span> <small>명</small>" }] : []),
+    { k: "⏱ 총 체류", v: esc(C.fmtMinutes(t.dwellMinutes))
+        + deltaBadge(t.dwellMinutes, prev && prev.dwellMinutes) },
+    { k: "💾 스킬 저장", v: (t.skills || 0).toLocaleString() + " <small>개</small>" },
+    { k: "🗂 수집 용량", v: esc(C.fmtBytes(t.bytes)) },
+    { k: "⚠ 오류", tone: (errCount || 0) ? "bad" : "ok",
+      v: '<span style="color:' + ((errCount || 0) ? "var(--bad)" : "inherit") + '">'
+         + (errCount || 0).toLocaleString() + "</span> <small>건</small>"
+         + deltaBadge(errCount, prev && prev.errCount, true) },
+    // 실행 대비 오류 비율 — 건수만으론 사용량 증가와 품질 악화를 못 가른다
+    { k: "📉 오류율", tone: errRate >= 20 ? "bad" : (errRate >= 5 ? "warn" : "ok"),
+      v: errRate + " <small>%</small>" },
+    { k: "🟢 수집 중", v: (t.openSessions || 0) + " <small>세션</small>" },
+    ...(outdated ? [{ k: "⬆ 구버전 사용", tone: outdated.count ? "warn" : "ok",
+        v: '<span style="color:' + (outdated.count ? "var(--bad)" : "inherit") + '" title="'
+        + esc(outdated.names.join(", ") || "없음") + '">' + outdated.count + "</span> <small>명</small>" }] : []),
+  ].map(c => `<div class="card${c.tone ? " tone-" + c.tone : ""}"><div class="k">${c.k}</div><div class="v">${c.v}</div></div>`).join("");
+}
+
+/* [추가 요소 2026-09-02] 기간 내 첫 등장 사용자 — 전체 세션에서 사용자별 최초 날짜를 구해
+   조회 기간 안이면 신규로 센다(기간 미설정이면 계산 불가 → null). */
+function newUsersIn(allSessions, from, to) {
+  if (!from && !to) return null;
+  const first = {};
+  for (const s of allSessions) {
+    if (!s.user || !s.date) continue;
+    if (!first[s.user] || s.date < first[s.user]) first[s.user] = s.date;
+  }
+  const names = Object.entries(first)
+    .filter(([, d]) => (!from || d >= from) && (!to || d <= to))
+    .map(([u]) => userLabel(u)).sort();
+  return { count: names.length, names };
 }
 
 /* 4자리 정규화(0.8.2 → 0.8.2.0) — 게이트 allowed 와 세션 appVersion 을 같은 자로 비교 */
@@ -554,6 +634,143 @@ function teamRankHTML(sessions, activeOrg) {
       + '<div class="trk"><div class="fil" style="width:' + (v.n / max * 100).toFixed(1) + '%"></div></div>'
       + '<div class="val">' + v.n + '회 · ' + v.users.size + '명</div></div>';
   }).join("");
+}
+
+/* [추가 요소 2026-09-02] 체류 시간 분포 — 잠깐 쓰고 마는지, 붙박이로 쓰는지 */
+function dwellDistHTML(sessions) {
+  const buckets = [["5분 미만", 0], ["5~30분", 0], ["30분~2시간", 0], ["2시간 이상", 0]];
+  let n = 0;
+  for (const s of sessions) {
+    const m = C.dwellOf(s);
+    if (m == null) continue;
+    n += 1;
+    if (m < 5) buckets[0][1] += 1;
+    else if (m < 30) buckets[1][1] += 1;
+    else if (m < 120) buckets[2][1] += 1;
+    else buckets[3][1] += 1;
+  }
+  if (!n) return '<div class="empty">기간에 기록이 없습니다.</div>';
+  const max = Math.max(...buckets.map(b => b[1]), 1);
+  return buckets.map(([lab, c]) =>
+    '<div class="hbar"><div class="lab">' + lab + '</div>'
+    + '<div class="trk"><div class="fil" style="width:' + (c / max * 100).toFixed(1) + '%"></div></div>'
+    + '<div class="val">' + c + '회 (' + Math.round(c / n * 100) + '%)</div></div>').join("");
+}
+
+/* [추가 요소 2026-09-02] 자주 나는 오류 TOP — 건수 나열이 아니라 '종류'로 묶어야 조치가 보인다 */
+function topErrorsHTML(errorRows) {
+  const agg = {};
+  for (const e of (errorRows || [])) {
+    const key = String(e.event || "unknown");
+    (agg[key] = agg[key] || { n: 0, sample: "" });
+    agg[key].n += 1;
+    if (!agg[key].sample && e.summary) agg[key].sample = String(e.summary).slice(0, 120);
+  }
+  const rows = Object.entries(agg).sort((a, b) => b[1].n - a[1].n).slice(0, 8);
+  if (!rows.length) return '<div class="empty">기간에 오류가 없습니다. 👍</div>';
+  const max = Math.max(...rows.map(([, v]) => v.n), 1);
+  return rows.map(([ev, v]) =>
+    '<div class="hbar"><div class="lab" title="' + esc(v.sample || ev) + '">' + esc(ev) + '</div>'
+    + '<div class="trk"><div class="fil" style="width:' + (v.n / max * 100).toFixed(1) + '%; background:var(--bad)"></div></div>'
+    + '<div class="val">' + v.n + '건</div></div>').join("");
+}
+
+/* [AI 질문 2026-09-02] 화면 데이터 → LLM 에 넣을 압축 요약(JSON). 크기 상한을 지킨다. */
+function buildDashDigest(d) {
+  const teamAgg = {};
+  for (const s of (d.sessions || [])) {
+    const t = s.team || "(조직정보 없음)";
+    (teamAgg[t] = teamAgg[t] || { 실행: 0, 사용자: new Set() });
+    teamAgg[t].실행 += 1; teamAgg[t].사용자.add(s.user);
+  }
+  const verAgg = {};
+  for (const s of (d.sessions || [])) {
+    const v = s.appVersion || "?";
+    verAgg[v] = (verAgg[v] || 0) + 1;
+  }
+  const errAgg = {};
+  for (const e of (d.errors || [])) {
+    const k = e.event || "unknown";
+    (errAgg[k] = errAgg[k] || { 건수: 0, 사례: "" });
+    errAgg[k].건수 += 1;
+    if (!errAgg[k].사례 && e.summary) errAgg[k].사례 = String(e.summary).slice(0, 100);
+  }
+  const digest = {
+    조회기간: (d.from || "처음") + " ~ " + (d.to || "지금"),
+    필터: { 사용자: d.user ? userLabel(d.user) : "전체", 소속: d.org || "전체" },
+    요약: { 총실행: d.total.sessions || 0, 사용자수: d.total.userCount || 0,
+           총체류분: d.total.dwellMinutes || 0, 스킬저장: d.total.skills || 0,
+           오류건수: d.errCount || 0 },
+    직전기간: d.prevTotal ? { 총실행: d.prevTotal.sessions || 0, 사용자수: d.prevTotal.userCount || 0,
+                            총체류분: d.prevTotal.dwellMinutes || 0, 오류건수: d.prevTotal.errCount || 0 } : null,
+    일별: (d.byDate || []).slice(-45).map(r => ({ 날짜: r.date, 실행: r.sessions, 체류분: r.dwellMinutes })),
+    사용자TOP: (d.byUsers || []).slice()
+      .sort((a, b) => (b.sessions || 0) - (a.sessions || 0)).slice(0, 15)
+      .map(r => ({ 사용자: userLabel(r.user), 소속: (userOrgMap[r.user] || {}).team || "",
+                  실행: r.sessions, 체류분: r.dwellMinutes })),
+    팀별: Object.entries(teamAgg).sort((a, b) => b[1].실행 - a[1].실행).slice(0, 15)
+      .map(([t, v]) => ({ 팀: t, 실행: v.실행, 인원: v.사용자.size })),
+    버전분포: verAgg,
+    오류종류: Object.entries(errAgg).sort((a, b) => b[1].건수 - a[1].건수).slice(0, 10)
+      .map(([k, v]) => ({ 이벤트: k, ...v })),
+    최근오류: (d.errors || []).slice(0, 10)
+      .map(e => ({ 시각: e.ts, 사용자: userLabel(e.user), 내용: String(e.summary || e.event || "").slice(0, 100) })),
+    구버전사용: d.outdated ? d.outdated.names : "확인불가",
+    신규사용자: d.newUsers ? d.newUsers.names : "기간미설정",
+  };
+  let text = JSON.stringify(digest, null, 0);
+  if (text.length > 9000) {                    // 상한 — 모델 컨텍스트/속도 보호
+    digest.일별 = digest.일별.slice(-14);
+    digest.최근오류 = digest.최근오류.slice(0, 5);
+    text = JSON.stringify(digest, null, 0).slice(0, 9000);
+  }
+  return text;
+}
+
+/* 앱 채팅과 같은 AI 설정(localStorage 공유)으로 질문한다 — 별도 서버·키 불필요 */
+async function askDashboard(preset) {
+  const input = $("ask-input"), out = $("ask-answer"), btn = $("ask-btn");
+  const q = String(preset || input.value || "").trim();
+  if (!q) { input.focus(); return; }
+  if (preset) input.value = preset;
+  if (!window.__dashSnapshot) { out.style.display = "block"; out.textContent = "먼저 [조회] 로 데이터를 불러와 주세요."; return; }
+  out.style.display = "block";
+  out.textContent = "분석 중…";
+  btn.disabled = true;
+  try {
+    let st = null;
+    try { st = JSON.parse(localStorage.getItem("mvno_llm_settings_v4") || "null"); } catch (_e) {}
+    const base = String((st && st.baseUrl) || (location.origin + "/v1")).replace(/\/$/, "");
+    const key = (st && st.apiKey) || "653265";
+    const headers = { "content-type": "application/json", "Api-Key": key };
+    if (st && st.network === "dev-vllm" && key) headers["Authorization"] = "Bearer " + key;
+    if (st && st.proxyUpstream && base.indexOf(location.origin) === 0) headers["X-B2B-Vllm-Base"] = st.proxyUpstream;
+    const body = {
+      model: (st && st.model) || "Qwen3.6-27B-FP8",
+      stream: false, temperature: 0.2, max_tokens: 900,
+      chat_template_kwargs: { enable_thinking: false },     // 상황판 질문 — 빠른 답 우선
+      messages: [
+        { role: "system",
+          content: "당신은 AX-Cell 관리 대시보드의 데이터 분석 도우미입니다. 아래 JSON 요약은 "
+            + "관리자가 지금 화면에서 보고 있는 사용 기록 집계입니다. 반드시 이 데이터만 근거로 "
+            + "한국어로 간결하게(필요하면 목록으로) 답하고, 데이터에 없는 것은 추측하지 말고 "
+            + "'데이터에 없다'고 말하세요. 숫자를 들어 설명하세요." },
+        { role: "user", content: "[대시보드 데이터]\n" + window.__dashSnapshot + "\n\n[질문]\n" + q },
+      ],
+    };
+    const resp = await fetch(base + "/chat/completions", { method: "POST", headers, body: JSON.stringify(body) });
+    if (!resp.ok) throw new Error("HTTP " + resp.status + " — AI 서버 응답 오류");
+    const data = await resp.json();
+    const answer = data && data.choices && data.choices[0] && data.choices[0].message
+      && data.choices[0].message.content;
+    out.textContent = String(answer || "").replace(/<think>[\s\S]*?<\/think>/g, "").trim()
+      || "답을 받지 못했습니다.";
+  } catch (err) {
+    out.textContent = "질문 실패: " + (err && err.message ? err.message : err)
+      + "\n(AI 서버 연결은 본 프로그램 F9 설정을 따릅니다)";
+  } finally {
+    btn.disabled = false;
+  }
 }
 
 /* 세션이 선택된 소속(어느 계층이든)에 속하는가 */
@@ -654,7 +871,34 @@ async function load() {
     try { gate = await (await fetch("/api/app/version/gate")).json(); } catch (_e) { gate = null; }
 
     window.__gateAllowed = (gate && gate.allowed) || null;
-    renderCards(stats.total || {}, errors.count, outdatedUsers(sessions, gate && gate.allowed));
+    // 직전 같은 길이 기간과 비교(증감 배지). 기간이 안 잡혀 있으면(전체 조회) 생략.
+    let prevTotal = null;
+    if (from && to) {
+      try {
+        const d0 = new Date(from), d1 = new Date(to);
+        const days = Math.round((d1 - d0) / 86400000) + 1;
+        const pf = new Date(d0); pf.setDate(pf.getDate() - days);
+        const pt = new Date(d0); pt.setDate(pt.getDate() - 1);
+        const fmt = (x) => x.toISOString().slice(0, 10);
+        const pq = new URLSearchParams({ from: fmt(pf), to: fmt(pt) });
+        if ($("f-user").value) pq.set("user", $("f-user").value);
+        const [pstats, perrs] = await Promise.all([
+          api("stats?" + pq), api("errors?" + pq + "&limit=1000")]);
+        prevTotal = { ...(pstats.total || {}), errCount: perrs.count || 0 };
+      } catch (_e) { prevTotal = null; }
+    }
+    renderCards(stats.total || {}, errors.count, outdatedUsers(sessions, gate && gate.allowed),
+                { prevTotal, newUsers: newUsersIn(sess.sessions || [], from, to) });
+    try { $("last-updated").textContent = "마지막 갱신 " + new Date().toLocaleTimeString("ko-KR"); } catch (_e) {}
+    // [AI 질문] 지금 화면 상태의 요약 스냅샷 — askDashboard() 가 근거로 쓴다
+    window.__dashSnapshot = buildDashDigest({
+      from, to, user: $("f-user").value, org: orgv,
+      total: stats.total || {}, errCount: errors.count || 0, prevTotal,
+      byDate: stats.byDate || [], byUsers: stats.byUsers || [],
+      sessions, errors: errors.errors || [],
+      outdated: outdatedUsers(sessions, gate && gate.allowed),
+      newUsers: newUsersIn(sess.sessions || [], from, to),
+    });
     fillUsers(stats.byUsers || [], true);
     renderChips();
 
@@ -664,11 +908,13 @@ async function load() {
       chartBox("일별 추이", "막대=실행 · 선=체류(분) · 막대 클릭=그 날로 필터", C.comboHTML(stats.byDate || [], activeDate))
       + chartBox("사용자 랭킹", "실행 횟수 상위 12명 · 클릭=그 사용자로 필터", C.usersHTML(stats.byUsers || [], activeUser, userLabel))
       + chartBox("팀별 사용", "실행 횟수 상위 12팀 · 클릭=그 팀으로 필터", teamRankHTML(sessions, orgv))
+      + chartBox("체류 시간 분포", "한 번 켜서 얼마나 오래 쓰나(세션 기준)", dwellDistHTML(sessions))
       + chartBox("사용 시간대", "요일 × 시(세션 시작 기준)", C.heatmapHTML(C.heatmap(sessions)))
       + chartBox("버전 도입률", "날짜별 실행의 버전 구성", C.versionsHTML(C.versionByDate(sessions)))
       + chartBox("오류 추이", "일별 오류 이벤트 수",
           C.errorTrendHTML(C.errorTrend(events && events.errorsByDate, errors.errors || []),
-                           errors.fullScan === true));
+                           errors.fullScan === true))
+      + chartBox("자주 나는 오류 TOP", "오류 종류별 건수 · 호버=대표 사례", topErrorsHTML(errors.errors || []));
 
     if (events) {
       $("charts-analytics").innerHTML =
@@ -738,6 +984,12 @@ function setRange(days) {
 
 $("btn-load").onclick = load;
 $("f-org").onchange = load;   // 조직/팀 선택 즉시 반영
+// [대시보드 UI 2026-09-02] 자동 새로고침 — 상황판처럼 띄워 두는 용도(60초).
+let _autoTimer = null;
+$("auto-refresh").onchange = (e) => {
+  if (_autoTimer) { clearInterval(_autoTimer); _autoTimer = null; }
+  if (e.target.checked) _autoTimer = setInterval(load, 60000);
+};
 $("btn-week").onclick = () => { setRange(7); load(); };
 $("btn-month").onclick = () => { setRange(30); load(); };
 $("btn-all").onclick = () => { setRange(0); load(); };
