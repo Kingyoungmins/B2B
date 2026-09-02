@@ -1801,6 +1801,12 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
                 cleanup_backend_runtime_files()
             except Exception:
                 pass
+            # [상태 '수집 중' 고착 수정 2026-09-02] 종료 신호(session/end)와 잔여 로그 전송은
+            # 반드시 '응답 전'에 끝내야 한다. 예전엔 응답 뒤 _exit_soon(0.5초 대기 후 flush)
+            # 이었는데, 호스트는 응답을 받자마자 serverProcess.Kill() 을 날린다 — 신호가 거의
+            # 항상 유실돼 대시보드에 모든 세션이 "수집 중"으로 남았다(실측: 종료는 몇 개뿐).
+            _log_sync_stop("app.shutdown", timeout=3.0)
+            _addon_telemetry_stop(timeout=1.5)
             self.send_json({"ok": True})
 
             def _exit_soon():
@@ -1817,10 +1823,8 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
                             _force_kill_pid(pid)
                 except Exception:
                     pass
-                # 남은 로그를 서버로 마저 보낸 뒤 내려간다(최대 4초). 실패해도 그냥 종료한다 —
-                # 주기 전송분까지는 이미 서버에 남아 있다.
-                _log_sync_stop("app.shutdown", timeout=4.0)
-                _addon_telemetry_stop(timeout=2.0)   # [애드온] 마지막 실행 로그가 유실되지 않게
+                # 로그/텔레메트리 마무리는 위(응답 전)에서 이미 끝냈다 — 여기서 하면 호스트의
+                # serverProcess.Kill() 과 경합해 유실된다(2026-09-02 수정).
                 os._exit(0)
 
             threading.Thread(target=_exit_soon, name="b2b-app-shutdown-exit", daemon=True).start()

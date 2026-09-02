@@ -133,6 +133,7 @@
   td .zip { color: var(--accent); font-weight: 700; text-decoration: none; }
   td .zip:hover { text-decoration: underline; }
   .state-open { color: var(--ok); font-weight: 700; }
+  .state-stale { color: var(--ink-2); }
   .state-closed { color: var(--ink-2); }
   .ev { font-family: Consolas, monospace; font-size: 11.5px; color: var(--bad); }
   .empty { padding: 18px; color: var(--ink-2); text-align: center; }
@@ -1014,7 +1015,11 @@ async function load() {
     $("tbl-sessions").tBodies[0].innerHTML = sessions.map(s => {
       const zip = "/api/logdash/session.zip?date=" + encodeURIComponent(s.date)
         + "&user=" + encodeURIComponent(s.user) + "&session=" + encodeURIComponent(s.sessionId);
-      const state = s.closed ? '<span class="state-closed">종료</span>' : '<span class="state-open">수집 중</span>';
+      // [끊김 추정 2026-09-02] 종료 신호 없이 죽은 세션(X 강제종료·크래시)은 서버가
+      // 10분 무소식 기준으로 stale 을 준다 — "수집 중" 고착 대신 종료(추정)로 표시.
+      const state = s.closed ? '<span class="state-closed">종료</span>'
+        : (s.stale ? '<span class="state-stale" title="10분 이상 수신 없음 — 강제 종료/끊김으로 추정">종료(추정)</span>'
+                   : '<span class="state-open">수집 중</span>');
       const dw = C.dwellOf(s);
       return `<tr><td>${esc(s.date)}</td><td title="${esc(s.user)}">${esc(userLabel(s.user))}</td>
         <td title="${esc(s.orgPath || "")}">${esc(s.team || "-")}</td><td>${esc(C.fmtTs(s.startedAt).slice(11) || "-")}</td>
