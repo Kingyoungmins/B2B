@@ -298,14 +298,15 @@
       + '<span><i style="background:#b85c00"></i>체류 시간(분)</span></div>';
   }
 
-  function usersHTML(byUsers, activeUser) {
+  function usersHTML(byUsers, activeUser, labelOf) {
+    const lab = typeof labelOf === "function" ? labelOf : (u => u);
     const rows = (byUsers || []).slice().sort((a, b) => (b.sessions || 0) - (a.sessions || 0)).slice(0, 12);
     if (!rows.length) return '<div class="empty">기간에 기록이 없습니다.</div>';
     const max = Math.max(...rows.map(r => r.sessions || 0), 1);
     return rows.map(r => {
       const act = r.user === activeUser ? " active" : "";
       return '<div class="hbar clickable' + act + '" data-filter-user="' + esc(r.user) + '">'
-        + '<div class="lab" title="' + esc(r.user) + '">' + esc(r.user) + '</div>'
+        + '<div class="lab" title="' + esc(r.user) + '">' + esc(lab(r.user)) + '</div>'
         + '<div class="trk"><div class="fil" style="width:' + ((r.sessions || 0) / max * 100).toFixed(1) + '%"></div></div>'
         + '<div class="val">' + (r.sessions || 0) + '회 · ' + esc(fmtMinutes(r.dwellMinutes)) + '</div></div>';
     }).join("");
@@ -448,7 +449,7 @@ function q() {
   return s ? "?" + s : "";
 }
 
-function renderCards(t, errCount) {
+function renderCards(t, errCount, outdated) {
   $("cards").innerHTML = [
     ["총 실행", (t.sessions || 0).toLocaleString() + " <small>회</small>"],
     ["사용자", (t.userCount || 0) + " <small>명</small>"],
@@ -457,22 +458,108 @@ function renderCards(t, errCount) {
     ["수집 용량", esc(C.fmtBytes(t.bytes))],
     ["오류", '<span style="color:var(--bad)">' + (errCount || 0).toLocaleString() + "</span> <small>건</small>"],
     ["수집 중", (t.openSessions || 0) + " <small>세션</small>"],
+    // [추가 요소 2026-09-02] 허용 버전 목록(버전 게이트) 밖의 버전을 쓰는 사용자 수.
+    // 게이트 정보를 못 가져오면(옛 서버 등) 카드를 아예 안 그린다 — 잘못된 0 보다 낫다.
+    ...(outdated ? [["구버전 사용",
+        '<span style="color:' + (outdated.count ? "var(--bad)" : "inherit") + '" title="'
+        + esc(outdated.names.join(", ") || "없음") + '">' + outdated.count + "</span> <small>명</small>"]] : []),
   ].map(([k, v]) => `<div class="card"><div class="k">${k}</div><div class="v">${v}</div></div>`).join("");
+}
+
+/* 4자리 정규화(0.8.2 → 0.8.2.0) — 게이트 allowed 와 세션 appVersion 을 같은 자로 비교 */
+function normVer(v) {
+  const parts = String(v || "").trim().replace(/^v/i, "").split(".").filter(Boolean);
+  if (!parts.length || parts.some(p => !/^\d+$/.test(p))) return "";
+  while (parts.length < 4) parts.push("0");
+  return parts.slice(0, 4).map(Number).join(".");
+}
+/* 허용 목록 밖 버전을 쓰는 사용자 집계 — 기간 내 세션 기준(사용자의 최신 세션 버전으로 판정) */
+function outdatedUsers(sessions, allowed) {
+  if (!allowed || !allowed.length) return null;
+  const okSet = new Set(allowed.map(normVer).filter(Boolean));
+  const latest = {};
+  for (const s of sessions) {
+    if (!s.user) continue;
+    if (!latest[s.user] || String(s.startedAt || "") > String(latest[s.user].startedAt || "")) latest[s.user] = s;
+  }
+  const names = Object.values(latest)
+    .filter(s => { const nv = normVer(s.appVersion); return nv && !okSet.has(nv); })
+    .map(s => userLabel(s.user) + " (" + (s.appVersion || "?") + ")").sort();
+  return { count: names.length, names };
 }
 
 function fillUsers(rows, keepSelection) {
   const sel = $("f-user"), cur = sel.value;
   sel.innerHTML = '<option value="">전체</option>'
-    + rows.map(r => `<option value="${esc(r.user)}">${esc(r.user)}</option>`).join("");
+    + rows.map(r => `<option value="${esc(r.user)}">${esc(userLabel(r.user))}</option>`).join("");
   if (keepSelection) sel.value = cur;
 }
 
+/* [조직 정보 2026-09-02] 사용자 → 실명/마당아이디/소속. 세션들에서 가장 최근 값을 쓴다. */
+let userOrgMap = {};
+function buildUserOrgMap(rows) {
+  const map = {};
+  for (const r of rows) {
+    if (!r.user || !r.displayName) continue;
+    const prev = map[r.user];
+    if (!prev || String(r.startedAt || "") > String(prev.startedAt || "")) {
+      map[r.user] = { displayName: r.displayName, madangId: r.madangId || "",
+                      team: r.team || "", orgPath: r.orgPath || "", startedAt: r.startedAt || "" };
+    }
+  }
+  userOrgMap = map;
+}
+/* "이름(마당아이디)" — 조직 정보가 없는 사용자(구버전 앱/개발망)는 종전 계정 그대로 */
+function userLabel(user) {
+  const o = userOrgMap[user];
+  if (!o || !o.displayName) return String(user || "");
+  return o.madangId ? (o.displayName + "(" + o.madangId + ")") : o.displayName;
+}
+
 function fillOrgs(rows, keepSelection) {
+  // [소속별 필터] 팀만이 아니라 orgPath 의 모든 단위(센터/Lab/팀…)를 고를 수 있게 한다.
+  // 레벨 0(회사)은 전원 공통이라 제외. 표시는 깊이만큼 들여쓰기.
   const sel = $("f-org"), cur = sel.value;
-  const teams = [...new Set(rows.map(r => r.team).filter(Boolean))].sort();
+  const units = new Map();                    // 이름 → 최소 깊이
+  for (const r of rows) {
+    const segs = String(r.orgPath || "").split(" > ").filter(Boolean);
+    segs.forEach((name, i) => {
+      if (i === 0) return;                    // 회사 레벨 제외
+      if (!units.has(name) || units.get(name) > i) units.set(name, i);
+    });
+  }
+  const opts = [...units.entries()].sort((a, b) => (a[1] - b[1]) || a[0].localeCompare(b[0], "ko"));
   sel.innerHTML = '<option value="">전체</option>'
-    + teams.map(t => `<option value="${esc(t)}">${esc(t)}</option>`).join("");
+    + opts.map(([name, depth]) =>
+        `<option value="${esc(name)}">${"  ".repeat(depth - 1)}${esc(name)}</option>`).join("");
   if (keepSelection) sel.value = cur;
+}
+/* [추가 요소 2026-09-02] 팀별 사용 랭킹 — 세션 기반(조직 필터와 같은 데이터) */
+function teamRankHTML(sessions, activeOrg) {
+  const agg = {};
+  for (const s of sessions) {
+    const t = s.team || "";
+    if (!t) continue;
+    (agg[t] = agg[t] || { n: 0, users: new Set() });
+    agg[t].n += 1;
+    agg[t].users.add(s.user);
+  }
+  const rows = Object.entries(agg).sort((a, b) => b[1].n - a[1].n).slice(0, 12);
+  if (!rows.length) return '<div class="empty">조직 정보가 있는 실행이 없습니다 (0.8.3+ 앱부터 수집).</div>';
+  const max = Math.max(...rows.map(([, v]) => v.n), 1);
+  return rows.map(([team, v]) => {
+    const act = team === activeOrg ? " active" : "";
+    return '<div class="hbar clickable' + act + '" data-filter-org="' + esc(team) + '">'
+      + '<div class="lab" title="' + esc(team) + '">' + esc(team) + '</div>'
+      + '<div class="trk"><div class="fil" style="width:' + (v.n / max * 100).toFixed(1) + '%"></div></div>'
+      + '<div class="val">' + v.n + '회 · ' + v.users.size + '명</div></div>';
+  }).join("");
+}
+
+/* 세션이 선택된 소속(어느 계층이든)에 속하는가 */
+function sessionInOrg(s, unit) {
+  if (!unit) return true;
+  return String(s.orgPath || "").split(" > ").includes(unit) || s.team === unit;
 }
 
 function renderChips() {
@@ -496,6 +583,13 @@ document.addEventListener("click", ev => {
   if (u) {
     const v = u.getAttribute("data-filter-user");
     $("f-user").value = ($("f-user").value === v) ? "" : v;
+    load();
+    return;
+  }
+  const o = ev.target.closest("[data-filter-org]");
+  if (o) {
+    const v = o.getAttribute("data-filter-org");
+    $("f-org").value = ($("f-org").value === v) ? "" : v;
     load();
     return;
   }
@@ -546,15 +640,21 @@ async function load() {
     // [조직 정보 2026-09-02] 0.8.3+ 앱이 보낸 팀/조직(extra.org). 조직 필터는 세션 기반
     // 구역(목록·시간대·버전 차트)에 적용된다 — 서버 집계(stats) 카드는 전체 기준 그대로.
     const orgv = $("f-org").value;
+    buildUserOrgMap(sess.sessions || []);
     const sessions = (sess.sessions || []).filter(s => (!from || s.date >= from) && (!to || s.date <= to)
-      && (!orgv || s.team === orgv));
+      && sessionInOrg(s, orgv));
     fillOrgs(sess.sessions || [], true);
 
     // 분석 구역 — 서버가 구버전이면 404. 그때는 이 구역만 접는다(나머지는 그대로).
     let events = null;
     try { events = await api("events" + q()); } catch (_e) { events = null; }
 
-    renderCards(stats.total || {}, errors.count);
+    // 허용 버전 목록 — 앱 백엔드의 버전 게이트 캐시(시작 시 1회 조회한 것)를 재사용
+    let gate = null;
+    try { gate = await (await fetch("/api/app/version/gate")).json(); } catch (_e) { gate = null; }
+
+    window.__gateAllowed = (gate && gate.allowed) || null;
+    renderCards(stats.total || {}, errors.count, outdatedUsers(sessions, gate && gate.allowed));
     fillUsers(stats.byUsers || [], true);
     renderChips();
 
@@ -562,7 +662,8 @@ async function load() {
     const activeDate = (from && from === to) ? from : "";
     $("charts-usage").innerHTML =
       chartBox("일별 추이", "막대=실행 · 선=체류(분) · 막대 클릭=그 날로 필터", C.comboHTML(stats.byDate || [], activeDate))
-      + chartBox("사용자 랭킹", "실행 횟수 상위 12명 · 클릭=그 사용자로 필터", C.usersHTML(stats.byUsers || [], activeUser))
+      + chartBox("사용자 랭킹", "실행 횟수 상위 12명 · 클릭=그 사용자로 필터", C.usersHTML(stats.byUsers || [], activeUser, userLabel))
+      + chartBox("팀별 사용", "실행 횟수 상위 12팀 · 클릭=그 팀으로 필터", teamRankHTML(sessions, orgv))
       + chartBox("사용 시간대", "요일 × 시(세션 시작 기준)", C.heatmapHTML(C.heatmap(sessions)))
       + chartBox("버전 도입률", "날짜별 실행의 버전 구성", C.versionsHTML(C.versionByDate(sessions)))
       + chartBox("오류 추이", "일별 오류 이벤트 수",
@@ -581,7 +682,7 @@ async function load() {
     }
 
     $("tbl-users").tBodies[0].innerHTML = (stats.byUsers || []).map(r =>
-      `<tr><td>${esc(r.user)}</td><td class="num" data-s="${r.sessions}">${r.sessions}</td>
+      `<tr><td title="${esc(r.user)}">${esc(userLabel(r.user))}</td><td class="num" data-s="${r.sessions}">${r.sessions}</td>
        <td class="num" data-s="${r.dwellMinutes}">${esc(C.fmtMinutes(r.dwellMinutes))}</td>
        <td class="num" data-s="${r.skills}">${r.skills}</td><td class="num" data-s="${r.logs}">${r.logs}</td>
        <td class="num" data-s="${r.bytes}">${esc(C.fmtBytes(r.bytes))}</td>
@@ -601,15 +702,17 @@ async function load() {
         + "&user=" + encodeURIComponent(s.user) + "&session=" + encodeURIComponent(s.sessionId);
       const state = s.closed ? '<span class="state-closed">종료</span>' : '<span class="state-open">수집 중</span>';
       const dw = C.dwellOf(s);
-      return `<tr><td>${esc(s.date)}</td><td>${esc(s.user)}</td>
+      return `<tr><td>${esc(s.date)}</td><td title="${esc(s.user)}">${esc(userLabel(s.user))}</td>
         <td title="${esc(s.orgPath || "")}">${esc(s.team || "-")}</td><td>${esc(C.fmtTs(s.startedAt).slice(11) || "-")}</td>
-        <td class="num" data-s="${dw}">${esc(C.fmtMinutes(dw))}</td><td>${esc(s.appVersion || "-")}</td><td>${esc(s.host || "-")}</td>
+        <td class="num" data-s="${dw}">${esc(C.fmtMinutes(dw))}</td>
+        <td${(window.__gateAllowed && normVer(s.appVersion) && !window.__gateAllowed.map(normVer).includes(normVer(s.appVersion)))
+             ? ' style="color:var(--bad); font-weight:700" title="허용 버전 목록에 없는 버전"' : ""}>${esc(s.appVersion || "-")}</td><td>${esc(s.host || "-")}</td>
         <td>${state}</td><td class="num" data-s="${(s.logFiles || []).length}">${(s.logFiles || []).length} / ${(s.skillFiles || []).length}</td>
         <td class="num" data-s="${s.sizeBytes || 0}">${esc(C.fmtBytes(s.sizeBytes))}</td><td><a class="zip" href="${zip}">zip</a></td></tr>`;
     }).join("") || '<tr><td colspan="11" class="empty">기간에 해당하는 실행이 없습니다.</td></tr>';
 
     $("tbl-errors").tBodies[0].innerHTML = (errors.errors || []).map(e =>
-      `<tr><td>${esc(C.fmtTs(e.ts))}</td><td>${esc(e.user)}</td>
+      `<tr><td>${esc(C.fmtTs(e.ts))}</td><td title="${esc(e.user)}">${esc(userLabel(e.user))}</td>
        <td class="num">${e.stepIdx != null ? (Number(e.stepIdx) + 1) + "단계" : "-"}</td>
        <td class="ev">${esc(e.event)}</td><td class="summary-cell" title="${esc(e.summary)}">${esc(e.summary || "-")}</td>
        <td>${esc(e.sessionId)}</td></tr>`).join("")
