@@ -25,7 +25,11 @@ function check(name, cond, detail) {
 console.log("[1] 팝업 문구 — 요구 문구 그대로");
 check("오래된 버전 문구", GATE.includes("오래된 버전을 사용하고 있습니다. 최신 버전으로 교체 해주세요."));
 check("다운로드 버튼", GATE.includes(">다운로드 하러가기<") || GATE.includes('"다운로드 하러가기<'));
-check("무시 버튼", GATE.includes("무시하고 사용하기"));
+check("무시 버튼(숨김 상태로 존재)", GATE.includes("무시하고 사용하기")
+    && /id="version-gate-ignore" style="display:none;/.test(GATE));
+  check("F2 로만 나타난다(개발자용)", GATE.includes('e.key !== "F2"')
+    && GATE.includes('ignoreBtn.style.display = ""'));
+  check("팝업 닫히면 키 리스너 정리", GATE.includes('removeEventListener("keydown", revealKey)'));
 check("점검중 문구", GATE.includes("점검중입니다. 문의사항이 있으시면 팀즈로 문의 부탁드립니다"));
 check("점검중은 확인 버튼", />확인</.test(GATE));
 check("기본 다운로드 주소 = 슬기 스마트빌링",

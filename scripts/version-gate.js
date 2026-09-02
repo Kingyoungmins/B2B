@@ -54,13 +54,15 @@ function showVersionGatePopup(info) {
           ' border-radius:8px; background:#111; color:#fff; font-weight:700; cursor:pointer">확인</button>' +
       "</div>";
   } else {
+    // [요청 2026-09-02] "무시하고 사용하기"는 기본 숨김 — 일반 사용자는 업데이트로 유도하고,
+    // 개발/운영자만 팝업이 떠 있는 동안 F2 를 누르면 버튼이 나타난다(개발자모드 관례).
     box.innerHTML =
       '<div style="font-weight:800; font-size:15px; margin-bottom:8px">업데이트 안내</div>' +
       '<div>오래된 버전을 사용하고 있습니다. 최신 버전으로 교체 해주세요.</div>' +
       '<div style="font-size:11.5px; color:#888; margin-top:6px">' +
         (cur ? "현재 버전 " + cur : "") + (latest ? " · 최신 버전 " + latest : "") + "</div>" +
       '<div style="display:flex; gap:8px; justify-content:flex-end; margin-top:16px">' +
-        '<button id="version-gate-ignore" style="padding:8px 14px; border:1px solid #ccc;' +
+        '<button id="version-gate-ignore" style="display:none; padding:8px 14px; border:1px solid #ccc;' +
           ' border-radius:8px; background:#fff; cursor:pointer">무시하고 사용하기</button>' +
         '<button id="version-gate-download" style="padding:8px 14px; border:0;' +
           ' border-radius:8px; background:#111; color:#fff; font-weight:700; cursor:pointer">' +
@@ -73,7 +75,21 @@ function showVersionGatePopup(info) {
   const okBtn = document.getElementById("version-gate-ok");
   if (okBtn) okBtn.onclick = () => overlay.remove();
   const ignoreBtn = document.getElementById("version-gate-ignore");
-  if (ignoreBtn) ignoreBtn.onclick = () => overlay.remove();
+  if (ignoreBtn) {
+    ignoreBtn.onclick = () => overlay.remove();
+    // F2 = 숨겨둔 [무시하고 사용하기] 표시. 팝업이 떠 있는 동안만 듣고, 닫히면 정리한다.
+    const revealKey = (e) => {
+      if (e.key !== "F2") return;
+      e.preventDefault();
+      ignoreBtn.style.display = "";
+    };
+    document.addEventListener("keydown", revealKey);
+    const _origRemove = overlay.remove.bind(overlay);
+    overlay.remove = () => {
+      document.removeEventListener("keydown", revealKey);
+      _origRemove();
+    };
+  }
   const dlBtn = document.getElementById("version-gate-download");
   if (dlBtn) dlBtn.onclick = async () => {
     dlBtn.disabled = true;
