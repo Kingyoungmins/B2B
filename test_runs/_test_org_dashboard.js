@@ -20,7 +20,7 @@ console.log("[2] 세션 표 — 조직(팀) 열");
 check("머리글에 조직(팀)", /<th>사용자<\/th><th>조직\(팀\)<\/th>/.test(HTML));
 check("셀에 팀 표시 + 마우스오버로 전체 경로", HTML.includes('title="${esc(s.orgPath || "")}"')
   && HTML.includes('${esc(s.team || "-")}'));
-check("빈 행 colspan 11 로 갱신", HTML.includes('colspan="11"'));
+check("빈 행 colspan 12 로 갱신(토큰 열 포함)", HTML.includes('colspan="12"') && !HTML.includes('colspan="11"'));
 
 console.log("[3] 데이터 배선");
 check("세션 필터에 소속 적용(sessionInOrg)", HTML.includes("sessionInOrg(s, orgv)"));
@@ -125,6 +125,9 @@ check("개별 파일 다운로드 링크(kind=logs/skills)",
 check("스킬 단계 수·켜짐 수·단계 목록 렌더",
   HTML.includes('"단계, 켜짐 "') && HTML.includes("sk.stepTitles.map"));
 check("구버전 수집 서버 안내(하위 호환 실패 메시지)", HTML.includes("collector.py 갱신 필요"));
+check("세션당 토큰 열(합계 + 입력/출력 호버, 구서버는 '-')",
+  HTML.includes("<th>토큰</th>") && HTML.includes("s.tokens && s.tokens.total")
+  && HTML.includes('s.tokens ? (s.tokens.total ? fmtTok(s.tokens.total) : "0") : "-"'));
 check("프록시 허용 경로에 session/detail·session/file 포함",
   (() => { const ld = fs.readFileSync(path.join(ROOT, "log_dash.py"), "utf8");
            return ld.includes('"session/detail"') && ld.includes('"session/file"'); })());

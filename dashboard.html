@@ -238,7 +238,7 @@
   <section>
     <h2>실행(세션) 목록 <span>— 실행 1회 = 한 줄. zip 으로 그 실행의 로그·스킬을 통째로 받는다</span> <button class="csv-btn" onclick="exportCSV('tbl-sessions','실행목록')" title="지금 필터·정렬 그대로 엑셀용 CSV 로 저장">⬇ CSV</button></h2>
     <div class="tbl-wrap"><table id="tbl-sessions">
-      <thead><tr><th>날짜</th><th>사용자</th><th>조직(팀)</th><th>시작</th><th>체류</th><th>버전</th><th>PC</th><th>상태</th><th>로그/스킬</th><th>용량</th><th>받기</th></tr></thead>
+      <thead><tr><th>날짜</th><th>사용자</th><th>조직(팀)</th><th>시작</th><th>체류</th><th>버전</th><th>PC</th><th>상태</th><th>로그/스킬</th><th>토큰</th><th>용량</th><th>받기</th></tr></thead>
       <tbody></tbody></table></div>
   </section>
 
@@ -1015,7 +1015,7 @@ async function toggleSessionDetail(td) {
   const key = td.dataset.date + "/" + td.dataset.user + "/" + td.dataset.session;
   const row = document.createElement("tr");
   row.className = "sess-detail";
-  row.innerHTML = '<td colspan="11" style="background:var(--bg); padding:10px 14px">불러오는 중…</td>';
+  row.innerHTML = '<td colspan="12" style="background:var(--bg); padding:10px 14px">불러오는 중…</td>';
   tr.after(row);
   let d = sessDetailCache[key];
   if (!d) {
@@ -1292,8 +1292,11 @@ async function load() {
         <td>${state}</td><td class="num sess-expand" data-s="${(s.logFiles || []).length}"
             data-date="${esc(s.date)}" data-user="${esc(s.user)}" data-session="${esc(s.sessionId)}"
             style="cursor:pointer" title="클릭하면 로그 파일·스킬 단계가 펼쳐집니다">${(s.logFiles || []).length} / ${(s.skillFiles || []).length} ▾</td>
+        <td class="num" data-s="${(s.tokens && s.tokens.total) || 0}"${s.tokens && s.tokens.total
+          ? ` title="입력 ${fmtTok(s.tokens.prompt)} · 출력 ${fmtTok(s.tokens.completion)} · ${s.tokens.calls}회 호출"` : ""}>${
+          s.tokens ? (s.tokens.total ? fmtTok(s.tokens.total) : "0") : "-"}</td>
         <td class="num" data-s="${s.sizeBytes || 0}">${esc(C.fmtBytes(s.sizeBytes))}</td><td><a class="zip" href="${zip}">zip</a></td></tr>`;
-    }).join("") || '<tr><td colspan="11" class="empty">기간에 해당하는 실행이 없습니다.</td></tr>';
+    }).join("") || '<tr><td colspan="12" class="empty">기간에 해당하는 실행이 없습니다.</td></tr>';
 
     $("tbl-errors").tBodies[0].innerHTML = (errors.errors || []).map(e =>
       `<tr><td>${esc(C.fmtTs(e.ts))}</td><td class="cell-link" data-filter-user="${esc(e.user)}"
