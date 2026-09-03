@@ -65,6 +65,20 @@ console.log("[4] 실행기 파일출력은 여전히 라이브 장부를 안 만
 check("outputMode=file → invalidateLivePipelineApplied(표시 없음)",
   /outputMode === "file"\) \{\s*\n\s*if \(typeof invalidateLivePipelineApplied === "function"\) invalidateLivePipelineApplied\(\);/.test(PIPE));
 
+console.log("[5] 수정/토글도 안전 — 흡수 표시를 되살리는 자는 실행기뿐");
+{
+  // lastRunnerOutputs 를 '새로 쓰는' 곳은 실행기 파일출력 완료 한 곳뿐이어야 한다.
+  // (수정·ON/OFF·추가 등 라이브 경로가 새 항목을 만들면 흡수 표시가 우회된다.)
+  const writers = [];
+  for (const f of fs.readdirSync(path.join(ROOT, "scripts")).filter(n => n.endsWith(".js"))) {
+    const src = fs.readFileSync(path.join(ROOT, "scripts", f), "utf8");
+    const m = src.match(/lastRunnerOutputs\s*=(?!=)/g);
+    if (m) writers.push(f + "×" + m.length);
+  }
+  check("작성 지점 1곳(pipeline.js 실행기 완료)뿐", writers.length === 1 && writers[0] === "pipeline.js×1",
+    writers.join(", "));
+}
+
 console.log("");
 console.log(fails === 0 ? "RESULT: ALL PASS" : "RESULT: " + fails + " FAIL");
 process.exit(fails === 0 ? 0 : 1);
