@@ -30,9 +30,10 @@ check("구버전 세션(팀 없음)도 그대로 그림('-' 표시)", HTML.inclu
 
 console.log("[4] 이름(마당아이디) 표기");
 check("라벨 헬퍼", HTML.includes("function userLabel") && HTML.includes('o.displayName + "(" + o.madangId + ")"'));
-check("세션 표 사용자 셀에 적용(원계정은 호버)", HTML.includes('title="${esc(s.user)}">${esc(userLabel(s.user))}'));
+check("세션 표 사용자 셀에 적용(원계정은 호버)",
+  HTML.includes('title="${esc(s.user)}') && HTML.includes("${esc(userLabel(s.user))}</td>"));
 check("사용자 표에도 적용", HTML.includes('title="${esc(r.user)}">${esc(userLabel(r.user))}'));
-check("오류 표에도 적용", HTML.includes('title="${esc(e.user)}">${esc(userLabel(e.user))}'));
+check("오류 표에도 적용", HTML.includes('title="${esc(e.user)}') && HTML.includes("${esc(userLabel(e.user))}</td>"));
 check("사용자 랭킹 차트에도 적용", HTML.includes("C.usersHTML(stats.byUsers || [], activeUser, userLabel)"));
 check("사용자 셀렉트 라벨에도 적용", HTML.includes('${esc(userLabel(r.user))}</option>'));
 
@@ -127,6 +128,39 @@ check("구버전 수집 서버 안내(하위 호환 실패 메시지)", HTML.inc
 check("프록시 허용 경로에 session/detail·session/file 포함",
   (() => { const ld = fs.readFileSync(path.join(ROOT, "log_dash.py"), "utf8");
            return ld.includes('"session/detail"') && ld.includes('"session/file"'); })());
+
+console.log("[12] 페이지 나눔(10줄) + 행 클릭 필터 매핑 — 0.8.4");
+check("쪽 크기 10", HTML.includes("const PAGE_SIZE = 10;"));
+check("네 표 모두 렌더 후 페이지 적용",
+  HTML.includes('["tbl-users", "tbl-dates", "tbl-sessions", "tbl-errors"].forEach(paginate);'));
+check("보던 쪽 유지 + 줄이 줄면 마지막 쪽으로 당김(클램프)",
+  HTML.includes("if (st.page >= pages) st.page = pages - 1;"));
+check("상세 행은 부모 행 표시를 따라간다",
+  HTML.includes('dr.style.display = (parent && parent.style.display !== "none") ? "" : "none";'));
+check("정렬 시 고아 상세 행 정리 + 현재 쪽 재적용",
+  HTML.includes("정렬로 부모와 떨어지는 상세 행 정리") && HTML.includes("if (pagers[tbl.id]) paginate(tbl.id);"));
+check("페이저 정보(건수·쪽)", HTML.includes('"건 · " + (st.page + 1) + "/" + pages + "쪽</span>"'));
+check("사용자별 행 클릭=그 사용자 필터(data-filter-user, 활성 행 표시)",
+  HTML.includes('class="row-click${r.user === activeUser ? " row-active" : ""}" data-filter-user="${esc(r.user)}"'));
+check("일별 행 클릭=시작·종료일을 그 날로(data-filter-date)",
+  HTML.includes('class="row-click${r.date === activeDate ? " row-active" : ""}" data-filter-date="${esc(r.date)}"'));
+check("실행 목록 날짜·사용자 셀 역방향 매핑",
+  HTML.includes('class="cell-link" data-filter-date="${esc(s.date)}"')
+  && HTML.includes('class="cell-link" data-filter-user="${esc(s.user)}"'));
+check("오류 목록 사용자 셀도 매핑", HTML.includes('class="cell-link" data-filter-user="${esc(e.user)}"'));
+check("행 클릭이 기존 교차 필터 핸들러로 흐른다(같은 토글 규칙)",
+  HTML.includes('ev.target.closest("[data-filter-user]")') && HTML.includes('ev.target.closest("[data-filter-date]")'));
+
+console.log("[13] 토큰 추이 + 필터 중 사용자 셀렉트 유지 — 0.8.4");
+check("토큰 추이 차트(일별, 입력/출력 쌓은 막대)",
+  HTML.includes("function tokenTrendHTML(byDate)") && HTML.includes('chartBox("토큰 추이"')
+  && HTML.includes("events.tokens && events.tokens.byDate"));
+check("막대 클릭=그 날로 필터(data-filter-date)",
+  /tokenTrendHTML[\s\S]{0,500}data-filter-date/.test(HTML));
+check("입력·출력 색 구분 + 범례",
+  HTML.includes(".bar.tok-in") && HTML.includes(".bar.tok-out") && /tok-out[\s\S]{0,900}범례|<i style="background:#f0a34d"><\/i>출력/.test(HTML));
+check("사용자 필터 중엔 셀렉트 전체 목록 유지",
+  HTML.includes('if (!$("f-user").value) fillUsers(stats.byUsers || [], true);'));
 
 console.log(fails === 0 ? "RESULT: ALL PASS" : "RESULT: " + fails + " FAIL");
 process.exit(fails === 0 ? 0 : 1);

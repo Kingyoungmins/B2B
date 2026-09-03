@@ -4443,6 +4443,21 @@
         ]
       ],
       "fix": "요청(2026-09-03) '로그/스킬/스킬 단계로 실행 목록 보게 — 지금은 개수만 나오니까'. 수정: ① 수집기 — /admin/session/detail(로그 파일 이름·크기 + 스킬 zip 을 열어 logic.json 의 단계 수/켜짐 수/단계 제목≤40개, 깨진 zip 은 error 필드로 개별 표시)과 /admin/session/file(kind=logs|skills 한 파일 다운로드, safe_filename+parent 검사로 ../ 차단). ② 앱 프록시 log_dash ALLOWED_PATHS 에 두 경로 추가. ③ 대시보드 — 로그/스킬 개수 셀 클릭 → colspan 상세 행(파일 목록+다운로드 링크, 스킬별 'N단계, 켜짐 M'+단계 목록), 세션별 캐시, 구버전 수집 서버면 collector.py 갱신 안내. versionTest 보안망 배포 필요."
+    },
+    {
+      "id": "DASH-PAGING-ROWFILTER-TOKENTREND",
+      "title": "[0.8.4] 대시보드 — 표 10줄 페이지, 행 클릭=필터 매핑, 토큰 일별 추이.",
+      "checks": [
+        [
+          "node",
+          "test_runs/_test_org_dashboard.js"
+        ],
+        [
+          "python",
+          "../versionTest/test_token_stats.py"
+        ]
+      ],
+      "fix": "요청(2026-09-03) ① 사용자별/일별/실행 목록을 10줄 페이지로(오류 목록도 함께) — paginate(): 보던 쪽 유지+줄이 줄면 클램프, 정렬 후 재적용, 세션 상세 행은 부모를 따라감. ② 행 클릭 필터 매핑 — 사용자별 행=그 사용자, 일별 행=시작·종료일을 그 날로(기존 교차 필터 핸들러 재사용, 재클릭=해제), 실행/오류 목록의 사용자·날짜 셀도 역방향 매핑. 구멍 수정: 사용자 필터 중 f-user 셀렉트가 한 명으로 줄어드는 문제 → 필터 중엔 전체 목록 유지. ③ 토큰 추이 — collector /admin/events tokens.byDate(세션 캐시 v3 재사용, 캐시 버전 변경 없음) + tokenTrendHTML 쌓은 막대(입력/출력, 막대 클릭=그 날 필터). versionTest 보안망 배포 필요."
     }
   ]
 }

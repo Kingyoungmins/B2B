@@ -101,6 +101,8 @@
   .combo .col.active .bar { background: var(--accent); }
   .combo .bar { background: var(--bar-soft); border-radius: 3px 3px 0 0; min-height: 2px; }
   .combo .bar.err { background: var(--bad); }
+  .bar.tok-in { background: var(--accent-2); }
+  .bar.tok-out { background: #f0a34d; }
   .combo svg { position: absolute; inset: 0; width: 100%; height: 120px; pointer-events: none; }
   .combo .xlabs { display: flex; gap: 3px; margin-top: 4px; }
   .combo .xlabs span { flex: 1; text-align: center; font-size: 10px; color: var(--ink-2);
@@ -131,6 +133,20 @@
   tr:last-child td { border-bottom: 0; }
   td.num { text-align: right; font-variant-numeric: tabular-nums; }
   td .zip { color: var(--accent); font-weight: 700; text-decoration: none; }
+  /* [페이지 나눔 2026-09-03] 표 아래 페이저 */
+  .pager { display: flex; align-items: center; gap: 4px; margin: 6px 2px 0; flex-wrap: wrap; }
+  .pager button { min-width: 28px; padding: 4px 8px; border: 1px solid var(--line); border-radius: 6px;
+                  background: var(--card); color: var(--ink-2); font: inherit; font-size: 12px; cursor: pointer; }
+  .pager button.on { background: var(--accent-2); color: #fff; border-color: var(--accent-2); font-weight: 700; }
+  .pager button:disabled { opacity: .35; cursor: default; }
+  .pager .pager-info { margin-left: 6px; color: var(--ink-2); font-size: 11.5px; }
+  /* 행 클릭 = 필터 매핑 */
+  tr.row-click { cursor: pointer; }
+  tr.row-click:hover td { background: #f0f4ff; }
+  tr.row-active td { background: #e8f0ff; }
+  td.cell-link { cursor: pointer; text-decoration: underline dotted; text-underline-offset: 3px; }
+  td.cell-link:hover { color: var(--accent-2); }
+  tr.row-active td:first-child { box-shadow: inset 3px 0 0 var(--accent-2); }
   td .zip:hover { text-decoration: underline; }
   .state-open { color: var(--ok); font-weight: 700; }
   .state-stale { color: var(--ink-2); }
@@ -700,6 +716,26 @@ function fmtTok(n) {
   return String(n);
 }
 
+/* [토큰 추이 2026-09-03] 일별 토큰 사용량 — 입력/출력을 쌓은 막대. 막대 클릭=그 날로 필터. */
+function tokenTrendHTML(byDate) {
+  const rows = byDate || [];
+  if (!rows.length) return '<div class="empty">기간에 토큰 사용 기록이 없습니다.</div>';
+  const max = Math.max(...rows.map(r => r.total || 0), 1);
+  const cols = rows.map(r => {
+    const hIn = (r.prompt || 0) / max * 100, hOut = (r.completion || 0) / max * 100;
+    return '<div class="col" data-filter-date="' + esc(r.date) + '" title="'
+      + esc(r.date + " — 총 " + fmtTok(r.total) + " (입력 " + fmtTok(r.prompt)
+            + " · 출력 " + fmtTok(r.completion) + " · " + (r.calls || 0) + "회)") + '">'
+      + '<div class="bar tok-out" style="height:' + hOut.toFixed(1) + '%"></div>'
+      + '<div class="bar tok-in" style="height:' + hIn.toFixed(1) + '%"></div></div>';
+  }).join("");
+  const step = Math.max(1, Math.ceil(rows.length / 10));
+  const xlabs = rows.map((r, i) => "<span>" + (i % step ? "" : esc(r.date.slice(5))) + "</span>").join("");
+  return '<div class="combo"><div class="cols">' + cols + '</div><div class="xlabs">' + xlabs + "</div></div>"
+    + '<div class="legend"><span><i style="background:var(--accent-2)"></i>입력</span>'
+    + '<span><i style="background:#f0a34d"></i>출력</span></div>';
+}
+
 /* 사용자별 토큰 TOP — 서버 집계(events.tokens.byUser) + 팀 표시 */
 function tokenUsersHTML(byUser) {
   const rows = (byUser || []).slice(0, 12);
@@ -951,6 +987,46 @@ document.addEventListener("click", ev => {
   }
 });
 
+/* [페이지 나눔 2026-09-03] 사용자별/일별/실행/오류 표 — 10줄씩만 보이게.
+   자동 새로고침(60초) 중에도 보던 쪽을 유지한다(줄이 줄면 마지막 쪽으로 당김). */
+const PAGE_SIZE = 10;
+const pagers = {};
+function paginate(id) {
+  const tbl = typeof id === "string" ? $(id) : id;
+  id = tbl.id;
+  const st = pagers[id] || (pagers[id] = { page: 0 });
+  const rows = [...tbl.tBodies[0].rows].filter(r => !r.classList.contains("sess-detail") && r.cells.length > 1);
+  const pages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
+  if (st.page >= pages) st.page = pages - 1;
+  if (st.page < 0) st.page = 0;
+  rows.forEach((r, i) => { r.style.display = (Math.floor(i / PAGE_SIZE) === st.page) ? "" : "none"; });
+  tbl.querySelectorAll("tr.sess-detail").forEach(dr => {   // 상세 행은 부모 행을 따라간다
+    const parent = dr.previousElementSibling;
+    dr.style.display = (parent && parent.style.display !== "none") ? "" : "none";
+  });
+  let pager = document.getElementById(id + "-pager");
+  if (!pager) {
+    pager = document.createElement("div");
+    pager.id = id + "-pager";
+    pager.className = "pager";
+    tbl.closest(".tbl-wrap").after(pager);
+    pager.addEventListener("click", ev => {
+      const b = ev.target.closest("button[data-page]");
+      if (b && !b.disabled) { pagers[id].page = Number(b.dataset.page); paginate(id); }
+    });
+  }
+  if (pages <= 1) { pager.innerHTML = ""; return; }
+  const btn = (pg, label, opts) => '<button data-page="' + pg + '"'
+    + ((opts || {}).dis ? " disabled" : "") + ((opts || {}).on ? ' class="on"' : "") + ">" + label + "</button>";
+  let s0 = Math.max(0, st.page - 3), e0 = Math.min(pages, s0 + 7);   // 번호는 최대 7칸 창
+  s0 = Math.max(0, e0 - 7);
+  const parts = [btn(st.page - 1, "‹", { dis: st.page === 0 })];
+  for (let pg = s0; pg < e0; pg++) parts.push(btn(pg, String(pg + 1), { on: pg === st.page }));
+  parts.push(btn(st.page + 1, "›", { dis: st.page === pages - 1 }));
+  pager.innerHTML = parts.join("")
+    + '<span class="pager-info">' + rows.length + "건 · " + (st.page + 1) + "/" + pages + "쪽</span>";
+}
+
 /* 표 정렬 — 열 제목 클릭. 셀의 data-s(정렬용 값)가 있으면 숫자로, 없으면 글자로 비교한다. */
 function makeSortable(tbl) {
   tbl.tHead.addEventListener("click", ev => {
@@ -969,7 +1045,9 @@ function makeSortable(tbl) {
       const cmp = (!isNaN(an) && !isNaN(bn) && av !== "" && bv !== "") ? an - bn : String(av).localeCompare(String(bv));
       return dir === "asc" ? cmp : -cmp;
     });
+    tbl.querySelectorAll("tr.sess-detail").forEach(dr => dr.remove());   // 정렬로 부모와 떨어지는 상세 행 정리
     rows.forEach(r => tbl.tBodies[0].appendChild(r));
+    if (pagers[tbl.id]) paginate(tbl.id);
   });
 }
 
@@ -1034,7 +1112,9 @@ async function load() {
       tokens: events && events.tokens,
       fullRuns: events && events.fullRuns,
     });
-    fillUsers(stats.byUsers || [], true);
+    // [구멍 수정 2026-09-03] 사용자 필터 중엔 stats.byUsers 가 그 한 명으로 줄어든다 —
+    // 셀렉트 목록까지 덮어쓰면 다른 사용자로 바로 못 갈아타므로, 필터 중엔 전체 목록을 유지.
+    if (!$("f-user").value) fillUsers(stats.byUsers || [], true);
     renderChips();
 
     const activeUser = $("f-user").value;
@@ -1053,7 +1133,9 @@ async function load() {
 
     if (events) {
       $("charts-analytics").innerHTML =
-        chartBox("사용자별 토큰", "LLM 토큰 사용 상위 12명 (입력/출력)", tokenUsersHTML(events.tokens && events.tokens.byUser))
+        chartBox("토큰 추이", "일별 토큰 사용량 (아래=입력, 위=출력) · 막대 클릭=그 날로 필터",
+                 tokenTrendHTML(events.tokens && events.tokens.byDate))
+        + chartBox("사용자별 토큰", "LLM 토큰 사용 상위 12명 (입력/출력)", tokenUsersHTML(events.tokens && events.tokens.byUser))
         + chartBox("팀별 토큰", "소속 팀 기준 합산", tokenTeamsHTML(events.tokens && events.tokens.byUser))
         + chartBox("모델별 토큰", "어떤 AI 모델을 얼마나 쓰나", tokenModelsHTML(events.tokens && events.tokens.byModel))
         + chartBox("언어별 단계 실행", "VBA/Python — 실행·성공률·평균 소요", C.langHTML(events.steps && events.steps.byLanguage))
@@ -1066,7 +1148,8 @@ async function load() {
     }
 
     $("tbl-users").tBodies[0].innerHTML = (stats.byUsers || []).map(r =>
-      `<tr><td title="${esc(r.user)}">${esc(userLabel(r.user))}</td><td class="num" data-s="${r.sessions}">${r.sessions}</td>
+      `<tr class="row-click${r.user === activeUser ? " row-active" : ""}" data-filter-user="${esc(r.user)}"
+           title="클릭하면 이 사용자로 필터 (다시 클릭=해제)"><td title="${esc(r.user)}">${esc(userLabel(r.user))}</td><td class="num" data-s="${r.sessions}">${r.sessions}</td>
        <td class="num" data-s="${r.dwellMinutes}">${esc(C.fmtMinutes(r.dwellMinutes))}</td>
        <td class="num" data-s="${r.skills}">${r.skills}</td><td class="num" data-s="${r.logs}">${r.logs}</td>
        <td class="num" data-s="${r.bytes}">${esc(C.fmtBytes(r.bytes))}</td>
@@ -1074,7 +1157,8 @@ async function load() {
       || '<tr><td colspan="7" class="empty">기간에 해당하는 기록이 없습니다.</td></tr>';
 
     $("tbl-dates").tBodies[0].innerHTML = (stats.byDate || []).map(r =>
-      `<tr><td>${esc(r.date)}</td><td class="num" data-s="${r.sessions}">${r.sessions}</td>
+      `<tr class="row-click${r.date === activeDate ? " row-active" : ""}" data-filter-date="${esc(r.date)}"
+           title="클릭하면 시작일·종료일이 이 날로 맞춰집니다 (다시 클릭=최근 7일)"><td>${esc(r.date)}</td><td class="num" data-s="${r.sessions}">${r.sessions}</td>
        <td class="num" data-s="${r.userCount}">${r.userCount}</td>
        <td class="num" data-s="${r.dwellMinutes}">${esc(C.fmtMinutes(r.dwellMinutes))}</td>
        <td class="num" data-s="${r.skills}">${r.skills}</td>
@@ -1090,7 +1174,8 @@ async function load() {
         : (s.stale ? '<span class="state-stale" title="10분 이상 수신 없음 — 강제 종료/끊김으로 추정">종료(추정)</span>'
                    : '<span class="state-open">수집 중</span>');
       const dw = C.dwellOf(s);
-      return `<tr><td>${esc(s.date)}</td><td title="${esc(s.user)}">${esc(userLabel(s.user))}</td>
+      return `<tr><td class="cell-link" data-filter-date="${esc(s.date)}" title="클릭하면 이 날로 기간 필터">${esc(s.date)}</td>
+        <td class="cell-link" data-filter-user="${esc(s.user)}" title="${esc(s.user)} — 클릭하면 이 사용자로 필터">${esc(userLabel(s.user))}</td>
         <td title="${esc(s.orgPath || "")}">${esc(s.team || "-")}</td><td>${esc(C.fmtTs(s.startedAt).slice(11) || "-")}</td>
         <td class="num" data-s="${dw}">${esc(C.fmtMinutes(dw))}</td>
         <td${(window.__gateAllowed && normVer(s.appVersion) && !window.__gateAllowed.map(normVer).includes(normVer(s.appVersion)))
@@ -1102,13 +1187,16 @@ async function load() {
     }).join("") || '<tr><td colspan="11" class="empty">기간에 해당하는 실행이 없습니다.</td></tr>';
 
     $("tbl-errors").tBodies[0].innerHTML = (errors.errors || []).map(e =>
-      `<tr><td>${esc(C.fmtTs(e.ts))}</td><td title="${esc(e.user)}">${esc(userLabel(e.user))}</td>
+      `<tr><td>${esc(C.fmtTs(e.ts))}</td><td class="cell-link" data-filter-user="${esc(e.user)}"
+           title="${esc(e.user)} — 클릭하면 이 사용자로 필터">${esc(userLabel(e.user))}</td>
        <td class="num">${e.stepIdx != null ? (Number(e.stepIdx) + 1) + "단계" : "-"}</td>
        <td class="ev">${esc(e.event)}</td><td class="summary-cell" title="${esc(e.summary)}">${esc(e.summary || "-")}</td>
        <td>${esc(e.sessionId)}</td></tr>`).join("")
       || '<tr><td colspan="6" class="empty">기간에 오류가 없습니다. 👍</td></tr>';
     $("err-scan-note").textContent = errors.fullScan === true
       ? "— 전량 스캔(모든 로그 파일 전체)" : "— 수집된 실행 기록에서 실패 이벤트만 추림(파일당 최근 구간)";
+
+    ["tbl-users", "tbl-dates", "tbl-sessions", "tbl-errors"].forEach(paginate);
 
     $("server-line").textContent = "수집 위치: " + (stats.root || "?");
     st.textContent = "갱신 " + new Date().toLocaleTimeString();
