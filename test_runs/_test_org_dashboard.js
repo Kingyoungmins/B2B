@@ -51,6 +51,7 @@ check("세션 표 구버전 버전 강조", HTML.includes("허용 버전 목록�
 console.log("[7] 대시보드 UI 강화");
 check("고정 헤더 + 마지막 갱신", HTML.includes("position: sticky") && HTML.includes('id="last-updated"'));
 check("자동 새로고침(60초)", HTML.includes('id="auto-refresh"') && HTML.includes("setInterval(load, 60000)"));
+check("수동 갱신 버튼(0.8.4)", HTML.includes('id="btn-refresh"') && HTML.includes('onclick="load()"'));
 check("카드 증감 배지(직전 기간 대비)", HTML.includes("function deltaBadge") && HTML.includes('title="직전 같은 기간 대비"'));
 check("카드 톤(정상/주의/위험)", HTML.includes("tone-ok") && HTML.includes("tone-warn") && HTML.includes("tone-bad"));
 check("신규 사용자 카드", HTML.includes("function newUsersIn") && HTML.includes("신규 사용자"));

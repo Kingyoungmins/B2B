@@ -4398,6 +4398,21 @@
         ]
       ],
       "fix": "원인: /api/app/shutdown 이 응답을 먼저 보내고 _exit_soon(0.5초 뒤 로그 flush + session/end) 을 돌렸는데, 호스트(NativeHost)는 응답을 받자마자 serverProcess.Kill() — 종료 신호가 거의 항상 유실됐다(정상 종료 몇 개만 '종료'). 수정: ① 앱 — _log_sync_stop/_addon_telemetry_stop 을 send_json '전'으로 이동(소스 순서 stop<respond<exit 를 테스트로 잠금). ② 수집기 — lastSeenAt 이 10분(전송 주기 10~30초의 배수) 넘게 무소식이고 closed 아니면 stale=True, stats.openSessions 도 stale 제외(기존에 쌓인 고착 세션·크래시·전원꺼짐까지 흡수). ③ 대시보드 — 종료 / 종료(추정: 10분 무수신) / 수집 중 3단 표시. versionTest 보안망 배포 필요."
+    },
+    {
+      "id": "FKEY-ACCESS-GUARD",
+      "title": "[0.8.4] F키 접근 권한 — Foundation리서치팀 기본 보유, F1 6연타 버프 획득.",
+      "checks": [
+        [
+          "node",
+          "test_runs/_test_fkey_guard.js"
+        ],
+        [
+          "node",
+          "test_runs/_test_org_dashboard.js"
+        ]
+      ],
+      "fix": "요청(2026-09-03): ① 대시보드 수동 갱신 버튼(btn-refresh). ② F키(F2/F6/F7/F8/F9) 접근 권한 — 기본 보유는 팀 'Foundation리서치팀'(/api/whoami 조직 정보). ③ F1 을 1.5초 간격 내 6연속 누르면 권한 획득('서영민님으로부터 버프 획득.' 팝업, localStorage 로 PC 유지). 구현: scripts/fkey-guard.js — index.html '첫 번째' 스크립트로 로드(capture 리스너 등록 순서가 곧 차단 능력), 비권한자는 stopImmediatePropagation 으로 조용히 무시. F1(도움말)/F5/F10(녹화)/F11(AI도움)은 게이트 제외. 개발망(조직 정보 없음)은 허용(충돌 방지), whoami 응답 전에도 차단 안 함(시작 직후 보호). 다른 키 개입/1.5초 초과 시 연타 리셋, 기보유자 6연타엔 팝업 없음 — 전부 실행 테스트로 잠금."
     }
   ]
 }

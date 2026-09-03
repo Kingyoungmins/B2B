@@ -18,6 +18,8 @@
       }
     } catch (e) {}
   </script>
+  <!-- [0.8.4] F키 접근 권한 가드 — capture 리스너 등록 순서 때문에 반드시 "첫 번째" 스크립트여야 한다 -->
+  <script src="scripts/fkey-guard.js"></script>
   <script src="vendor/xlsx.full.js"></script>
   <link rel="stylesheet" href="styles/base.css">
   <link rel="stylesheet" href="styles/layout.css">

@@ -146,6 +146,9 @@
   <h1><b>AX-Cell</b> 관리 대시보드</h1>
   <span id="server-line">수집 서버 확인 중…</span>
   <span id="last-updated"></span>
+  <button id="btn-refresh" title="지금 즉시 다시 불러오기" onclick="load()"
+          style="border:1px solid var(--line); background:var(--card); border-radius:8px;
+                 padding:5px 14px; font:inherit; font-weight:700; cursor:pointer">🔄 갱신</button>
   <label id="auto-refresh-label"><input type="checkbox" id="auto-refresh">자동 새로고침(60초)</label>
 </header>
 <main>
