@@ -529,6 +529,13 @@ function renderCards(t, errCount, outdated, extras) {
     { k: "📉 오류율", tone: errRate >= 20 ? "bad" : (errRate >= 5 ? "warn" : "ok"),
       v: errRate + " <small>%</small>" },
     { k: "🟢 수집 중", v: (t.openSessions || 0) + " <small>세션</small>" },
+    // [전체실행 2026-09-03] 스킬 전체실행 횟수 — telemetry_preview(0.8.4+ 앱이 동기화) 집계.
+    ...(ex.fullRuns && ex.fullRuns.count ? [{ k: "🏃 전체실행",
+        tone: ex.fullRuns.error ? "warn" : "ok",
+        v: ex.fullRuns.count.toLocaleString() + " <small>회</small>"
+           + '<div style="font-size:11px; font-weight:600; color:var(--ink-2); margin-top:2px">'
+           + "성공 " + ex.fullRuns.ok + " · 실패 " + ex.fullRuns.error
+           + (ex.fullRuns.avgMs ? " · 평균 " + Math.round(ex.fullRuns.avgMs / 1000) + "초" : "") + "</div>" }] : []),
     // [토큰 2026-09-02] LLM 토큰 사용량 — 프록시가 남긴 llm.usage 집계(0.8.3+ 앱).
     ...(ex.tokens && ex.tokens.calls ? [{ k: "🔤 토큰 사용", tone: "",
         v: fmtTok(ex.tokens.total) + " <small>토큰</small>"
@@ -777,6 +784,10 @@ function buildDashDigest(d) {
       .map(([k, v]) => ({ 이벤트: k, ...v })),
     최근오류: (d.errors || []).slice(0, 10)
       .map(e => ({ 시각: e.ts, 사용자: userLabel(e.user), 내용: String(e.summary || e.event || "").slice(0, 100) })),
+    전체실행: d.fullRuns && d.fullRuns.count ? { 횟수: d.fullRuns.count, 성공: d.fullRuns.ok,
+        실패: d.fullRuns.error, 사용자별: (d.fullRuns.byUser || []).slice(0, 10)
+          .map(r => ({ 사용자: userLabel(r.user), 횟수: r.count, 실패: r.error })) }
+      : "기록없음(0.8.4+앱부터)",
     토큰사용: d.tokens && d.tokens.calls ? { 총: d.tokens.total, 입력: d.tokens.prompt,
         출력: d.tokens.completion, 호출: d.tokens.calls,
         모델별: (d.tokens.byModel || []).slice(0, 5),
@@ -956,7 +967,7 @@ async function load() {
     }
     renderCards(stats.total || {}, errors.count, outdatedUsers(sessions, gate && gate.allowed),
                 { prevTotal, newUsers: newUsersIn(sess.sessions || [], from, to),
-                  tokens: events && events.tokens });
+                  tokens: events && events.tokens, fullRuns: events && events.fullRuns });
     try { $("last-updated").textContent = "마지막 갱신 " + new Date().toLocaleTimeString("ko-KR"); } catch (_e) {}
     // [AI 질문] 지금 화면 상태의 요약 스냅샷 — askDashboard() 가 근거로 쓴다
     window.__dashSnapshot = buildDashDigest({
@@ -967,6 +978,7 @@ async function load() {
       outdated: outdatedUsers(sessions, gate && gate.allowed),
       newUsers: newUsersIn(sess.sessions || [], from, to),
       tokens: events && events.tokens,
+      fullRuns: events && events.fullRuns,
     });
     fillUsers(stats.byUsers || [], true);
     renderChips();

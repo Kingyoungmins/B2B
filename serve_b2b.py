@@ -5697,7 +5697,10 @@ def _start_log_sync():
             log_dirs=[b2b_logs_dir()],
             skill_dirs=[logic_backup_dir()],
             # VBA 러너 실패 로그만 앱 폴더에 따로 쓴다(작성 경로와 같은 __file__ 기준).
-            extra_files=[Path(__file__).resolve().parent / "vba_runner_fail.log"],
+            # [전체실행 가시화 2026-09-03] 전체실행 1건 기록(telemetry_preview.jsonl)도 같이 올린다 —
+            # 예전엔 앱 폴더에만 남아 대시보드에서 전체실행 횟수/성공률을 볼 수 없었다.
+            extra_files=[Path(__file__).resolve().parent / "vba_runner_fail.log",
+                         Path(writable_app_dir()) / "telemetry_preview.jsonl"],
             app_dir=str(writable_app_dir()),
         )
     except Exception:

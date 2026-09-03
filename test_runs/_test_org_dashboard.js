@@ -77,6 +77,8 @@ check("모델별 토큰 차트", HTML.includes("function tokenModelsHTML") && HT
 check("입력/출력 분리 표기", HTML.includes("입 ") && HTML.includes("/출 "));
 check("구서버(토큰 없음)면 안내 문구", (HTML.match(/0\.8\.3\+ 앱부터 수집/g) || []).length >= 3);
 check("AI 질문 요약본에 토큰 포함", HTML.includes("토큰사용:"));
+check("전체실행 카드(0.8.4)", HTML.includes("전체실행") && HTML.includes("ex.fullRuns"));
+check("AI 질문 요약본에 전체실행 포함", HTML.includes("전체실행: d.fullRuns"));
 {
   const i = HTML.indexOf("function fmtTok");
   const j = HTML.indexOf("/* 사용자별 토큰 TOP", i);
