@@ -162,5 +162,22 @@ check("입력·출력 색 구분 + 범례",
 check("사용자 필터 중엔 셀렉트 전체 목록 유지",
   HTML.includes('if (!$("f-user").value) fillUsers(stats.byUsers || [], true);'));
 
+console.log("[14] 스킬 TOP·CSV·필터 URL·요약 복사 — 0.8.4");
+check("스킬 TOP 차트(skillFiles 이름 집계, 저장 횟수·사람 수)",
+  HTML.includes("function skillTopHTML(sessions)") && HTML.includes('chartBox("스킬 TOP"'));
+check("CSV 내보내기 — 4개 표 버튼 + BOM(한글 엑셀) + 상세·빈 행 제외",
+  (HTML.match(/exportCSV\('tbl-/g) || []).length === 4
+  && HTML.includes('"\\uFEFF"') && /exportCSV[\s\S]{0,600}sess-detail/.test(HTML));
+check("필터 URL 저장(해시) — 갱신 시 기록 + 시작 시 복원",
+  HTML.includes("history.replaceState") && HTML.includes("initFromHash")
+  && HTML.includes('hp.get("from")'));
+check("복원 시 임시 옵션 생성(옵션 목록이 아직 빈 셀렉트)",
+  HTML.includes("sel.add(new Option(v, v))"));
+check("보고용 요약 복사 버튼 + 클립보드 폴백",
+  HTML.includes('id="btn-report"') && HTML.includes("function copyReport(btn)")
+  && HTML.includes("function fallbackCopy(text, done)"));
+check("요약이 직전 기간 증감까지 사람 말로",
+  HTML.includes('" → 증가"') && HTML.includes('"[AX-Cell 사용 현황] "'));
+
 console.log(fails === 0 ? "RESULT: ALL PASS" : "RESULT: " + fails + " FAIL");
 process.exit(fails === 0 ? 0 : 1);

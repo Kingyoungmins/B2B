@@ -145,6 +145,10 @@
   tr.row-click:hover td { background: #f0f4ff; }
   tr.row-active td { background: #e8f0ff; }
   td.cell-link { cursor: pointer; text-decoration: underline dotted; text-underline-offset: 3px; }
+  .csv-btn { margin-left: 8px; padding: 2px 10px; border: 1px solid var(--line); border-radius: 6px;
+             background: var(--card); color: var(--ink-2); font: inherit; font-size: 11px;
+             font-weight: 700; cursor: pointer; vertical-align: 2px; }
+  .csv-btn:hover { color: var(--accent-2); border-color: var(--accent-2); }
   td.cell-link:hover { color: var(--accent-2); }
   tr.row-active td:first-child { box-shadow: inset 3px 0 0 var(--accent-2); }
   td .zip:hover { text-decoration: underline; }
@@ -162,6 +166,9 @@
   <h1><b>AX-Cell</b> 관리 대시보드</h1>
   <span id="server-line">수집 서버 확인 중…</span>
   <span id="last-updated"></span>
+  <button id="btn-report" title="팀즈에 붙여넣기 좋은 기간 요약을 클립보드로 복사" onclick="copyReport(this)"
+          style="border:1px solid var(--line); background:var(--card); border-radius:8px;
+                 padding:5px 14px; font:inherit; font-weight:700; cursor:pointer">📋 요약 복사</button>
   <button id="btn-refresh" title="지금 즉시 다시 불러오기" onclick="load()"
           style="border:1px solid var(--line); background:var(--card); border-radius:8px;
                  padding:5px 14px; font:inherit; font-weight:700; cursor:pointer">🔄 갱신</button>
@@ -215,28 +222,28 @@
   </section>
 
   <section>
-    <h2>사용자별 <span>— 누가 얼마나 썼나 · 열 제목을 누르면 정렬</span></h2>
+    <h2>사용자별 <span>— 누가 얼마나 썼나 · 열 제목을 누르면 정렬</span> <button class="csv-btn" onclick="exportCSV('tbl-users','사용자별')" title="지금 필터·정렬 그대로 엑셀용 CSV 로 저장">⬇ CSV</button></h2>
     <div class="tbl-wrap"><table id="tbl-users">
       <thead><tr><th>사용자</th><th>실행 횟수</th><th>총 체류</th><th>스킬 저장</th><th>로그 파일</th><th>용량</th><th>마지막 사용</th></tr></thead>
       <tbody></tbody></table></div>
   </section>
 
   <section>
-    <h2>일별 <span>— 기간 추이</span></h2>
+    <h2>일별 <span>— 기간 추이</span> <button class="csv-btn" onclick="exportCSV('tbl-dates','일별')" title="지금 필터·정렬 그대로 엑셀용 CSV 로 저장">⬇ CSV</button></h2>
     <div class="tbl-wrap"><table id="tbl-dates">
       <thead><tr><th>날짜</th><th>실행 횟수</th><th>사용자 수</th><th>총 체류</th><th>스킬</th><th>용량</th></tr></thead>
       <tbody></tbody></table></div>
   </section>
 
   <section>
-    <h2>실행(세션) 목록 <span>— 실행 1회 = 한 줄. zip 으로 그 실행의 로그·스킬을 통째로 받는다</span></h2>
+    <h2>실행(세션) 목록 <span>— 실행 1회 = 한 줄. zip 으로 그 실행의 로그·스킬을 통째로 받는다</span> <button class="csv-btn" onclick="exportCSV('tbl-sessions','실행목록')" title="지금 필터·정렬 그대로 엑셀용 CSV 로 저장">⬇ CSV</button></h2>
     <div class="tbl-wrap"><table id="tbl-sessions">
       <thead><tr><th>날짜</th><th>사용자</th><th>조직(팀)</th><th>시작</th><th>체류</th><th>버전</th><th>PC</th><th>상태</th><th>로그/스킬</th><th>용량</th><th>받기</th></tr></thead>
       <tbody></tbody></table></div>
   </section>
 
   <section>
-    <h2>오류 목록 <span id="err-scan-note">— 수집된 실행 기록에서 실패 이벤트만 추림</span></h2>
+    <h2>오류 목록 <span id="err-scan-note">— 수집된 실행 기록에서 실패 이벤트만 추림</span> <button class="csv-btn" onclick="exportCSV('tbl-errors','오류목록')" title="지금 필터·정렬 그대로 엑셀용 CSV 로 저장">⬇ CSV</button></h2>
     <div class="tbl-wrap"><table id="tbl-errors">
       <thead><tr><th>시각</th><th>사용자</th><th>단계</th><th>이벤트</th><th>내용</th><th>세션</th></tr></thead>
       <tbody></tbody></table></div>
@@ -716,6 +723,90 @@ function fmtTok(n) {
   return String(n);
 }
 
+/* [스킬 TOP 2026-09-03] 기간 내 많이 저장된 스킬 — 실행 목록의 skillFiles 이름 집계.
+   같은 이름이 여러 실행에서 저장되면 그만큼 손질/재저장이 잦다는 뜻. */
+function skillTopHTML(sessions) {
+  const map = {};
+  for (const s of sessions || []) for (const f of (s.skillFiles || [])) {
+    const name = String(f).replace(/\.zip$/i, "");
+    const t = map[name] || (map[name] = { count: 0, users: new Set() });
+    t.count++; t.users.add(s.user);
+  }
+  const rows = Object.entries(map).sort((a, b) => b[1].count - a[1].count).slice(0, 12);
+  if (!rows.length) return '<div class="empty">기간에 저장된 스킬이 없습니다.</div>';
+  const max = rows[0][1].count;
+  return rows.map(([name, t]) =>
+    '<div class="hbar"><div class="lab" title="' + esc(name) + '">' + esc(name) + "</div>"
+    + '<div class="trk"><div class="fil" style="width:' + (t.count / max * 100).toFixed(1) + '%"></div></div>'
+    + '<div class="val">' + t.count + "회 · " + t.users.size + "명</div></div>").join("");
+}
+
+/* [CSV 내보내기 2026-09-03] 표를 지금 보이는 필터·정렬 그대로 CSV 로 — 페이지에 상관없이
+   전체 행을 담는다(상세 행·빈 행 제외). BOM 을 붙여 한글 엑셀에서 바로 열린다. */
+function exportCSV(tblId, title) {
+  const tbl = $(tblId);
+  const cell = v => { v = String(v || "").trim().replace(/\s+/g, " ").replace(/"/g, '""');
+                      return /[",\n]/.test(v) ? '"' + v + '"' : v; };
+  const head = [...tbl.tHead.rows[0].cells].map(th => cell(th.textContent.replace(/[▲▼]/g, "")));
+  const rows = [...tbl.tBodies[0].rows]
+    .filter(r => !r.classList.contains("sess-detail") && r.cells.length > 1)
+    .map(r => [...r.cells].map(c => cell(c.textContent)).join(","));
+  if (!rows.length) return;
+  const blob = new Blob(["\uFEFF" + [head.join(",")].concat(rows).join("\r\n")],
+                        { type: "text/csv;charset=utf-8" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = title + "_" + ($("f-from").value || "전체") + "_" + ($("f-to").value || "") + ".csv";
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+}
+
+/* [요약 복사 2026-09-03] 팀즈 보고용 — AI 스냅샷(digest)과 같은 데이터를 사람 말로. */
+function copyReport(btn) {
+  const d = window.__dashSnapshot;
+  if (!d) return;
+  const L = [];
+  L.push("[AX-Cell 사용 현황] " + d.조회기간
+    + (d.필터 && (d.필터.사용자 !== "전체" || d.필터.소속 !== "전체")
+       ? " (필터 — 사용자: " + d.필터.사용자 + ", 소속: " + d.필터.소속 + ")" : ""));
+  const t = d.요약 || {}, pv = d.직전기간;
+  const cmp = (cur, prev) => (pv && prev != null && prev !== cur)
+    ? " (직전 기간 " + prev + (cur > prev ? " → 증가" : " → 감소") + ")" : "";
+  L.push("· 실행 " + (t.총실행 || 0) + "회" + cmp(t.총실행 || 0, pv && pv.총실행)
+    + " / 사용자 " + (t.사용자수 || 0) + "명 / 총 사용 " + Math.round((t.총체류분 || 0)) + "분"
+    + cmp(t.총체류분 || 0, pv && pv.총체류분));
+  L.push("· 스킬 저장 " + (t.스킬저장 || 0) + "건 / 오류 " + (t.오류건수 || 0) + "건"
+    + cmp(t.오류건수 || 0, pv && pv.오류건수));
+  if (d.토큰사용 && typeof d.토큰사용 === "object")
+    L.push("· 토큰 " + fmtTok(d.토큰사용.총) + " (입력 " + fmtTok(d.토큰사용.입력)
+      + " · 출력 " + fmtTok(d.토큰사용.출력) + " · " + d.토큰사용.호출 + "회 호출)");
+  if (d.전체실행 && typeof d.전체실행 === "object")
+    L.push("· 스킬 전체실행 " + d.전체실행.횟수 + "회 (성공 " + d.전체실행.성공 + " · 실패 " + d.전체실행.실패 + ")");
+  if ((d.사용자TOP || []).length)
+    L.push("· 많이 쓴 사람: " + d.사용자TOP.slice(0, 3)
+      .map(r => r.사용자 + "(" + r.실행 + "회)").join(", "));
+  if ((d.오류종류 || []).length)
+    L.push("· 잦은 오류: " + d.오류종류.slice(0, 2)
+      .map(r => r.이벤트 + " " + r.건수 + "건").join(", "));
+  if (Array.isArray(d.신규사용자) && d.신규사용자.length)
+    L.push("· 신규 사용자: " + d.신규사용자.join(", "));
+  if (Array.isArray(d.구버전사용) && d.구버전사용.length)
+    L.push("· 구버전 사용 중: " + d.구버전사용.join(", "));
+  const text = L.join("\n");
+  const done = () => { const old = btn.textContent; btn.textContent = "✅ 복사됨";
+                       setTimeout(() => { btn.textContent = old; }, 1500); };
+  if (navigator.clipboard && navigator.clipboard.writeText)
+    navigator.clipboard.writeText(text).then(done).catch(() => fallbackCopy(text, done));
+  else fallbackCopy(text, done);
+}
+function fallbackCopy(text, done) {
+  const ta = document.createElement("textarea");
+  ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
+  document.body.appendChild(ta); ta.select();
+  try { document.execCommand("copy"); done(); } catch (_e) {}
+  ta.remove();
+}
+
 /* [토큰 추이 2026-09-03] 일별 토큰 사용량 — 입력/출력을 쌓은 막대. 막대 클릭=그 날로 필터. */
 function tokenTrendHTML(byDate) {
   const rows = byDate || [];
@@ -1071,6 +1162,16 @@ async function load() {
     const sessions = (sess.sessions || []).filter(s => (!from || s.date >= from) && (!to || s.date <= to)
       && sessionInOrg(s, orgv));
     fillOrgs(sess.sessions || [], true);
+    // [필터 URL 저장 2026-09-03] 보던 조건을 주소창 #에 — F5·링크 공유에도 유지
+    try {
+      const hp = new URLSearchParams();
+      if (from) hp.set("from", from);
+      if (to) hp.set("to", to);
+      if ($("f-user").value) hp.set("user", $("f-user").value);
+      if (orgv) hp.set("org", orgv);
+      history.replaceState(null, "", hp.toString() ? "#" + hp.toString()
+                                                   : location.pathname + location.search);
+    } catch (_e) {}
 
     // 분석 구역 — 서버가 구버전이면 404. 그때는 이 구역만 접는다(나머지는 그대로).
     let events = null;
@@ -1124,6 +1225,7 @@ async function load() {
       + chartBox("사용자 랭킹", "실행 횟수 상위 12명 · 클릭=그 사용자로 필터", C.usersHTML(stats.byUsers || [], activeUser, userLabel))
       + chartBox("팀별 사용", "실행 횟수 상위 12팀 · 클릭=그 팀으로 필터", teamRankHTML(sessions, orgv))
       + chartBox("체류 시간 분포", "한 번 켜서 얼마나 오래 쓰나(세션 기준)", dwellDistHTML(sessions))
+      + chartBox("스킬 TOP", "기간 내 많이 저장된 스킬(저장 횟수 · 만든 사람 수)", skillTopHTML(sessions))
       + chartBox("사용 시간대", "요일 × 시(세션 시작 기준)", C.heatmapHTML(C.heatmap(sessions)))
       + chartBox("버전 도입률", "날짜별 실행의 버전 구성", C.versionsHTML(C.versionByDate(sessions)))
       + chartBox("오류 추이", "일별 오류 이벤트 수",
@@ -1226,8 +1328,28 @@ $("btn-week").onclick = () => { setRange(7); load(); };
 $("btn-month").onclick = () => { setRange(30); load(); };
 $("btn-all").onclick = () => { setRange(0); load(); };
 ["tbl-users", "tbl-dates", "tbl-sessions", "tbl-errors"].forEach(id => makeSortable($(id)));
-setRange(7);
-load();
+/* [필터 URL 저장 2026-09-03] 주소창 # 조건이 있으면 그걸로 시작 — 없으면 최근 7일 */
+(function initFromHash() {
+  let applied = false;
+  try {
+    const hp = new URLSearchParams(location.hash.replace(/^#/, ""));
+    if ([...hp.keys()].length) {
+      $("f-from").value = hp.get("from") || "";
+      $("f-to").value = hp.get("to") || "";
+      for (const [id, k] of [["f-user", "user"], ["f-org", "org"]]) {
+        const v = hp.get(k) || "";
+        if (v) {   // 옵션 목록은 첫 조회 후 채워지므로 임시 옵션을 만들어 선택해 둔다
+          const sel = $(id);
+          if (![...sel.options].some(o => o.value === v)) sel.add(new Option(v, v));
+          sel.value = v;
+        }
+      }
+      applied = true;
+    }
+  } catch (_e) {}
+  if (!applied) setRange(7);
+  load();
+})();
 </script>
 </body>
 </html>
