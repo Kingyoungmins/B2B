@@ -1006,29 +1006,26 @@ function renderChips() {
 
 /* [세션 상세 2026-09-03] 실행 목록 행 펼침 — 로그 파일 / 스킬(단계 수·단계 목록·개별 다운로드).
    요청: "로그/스킬/스킬 단계로 실행 목록 보게" — 개수만이 아니라 속살을 그 자리에서 본다. */
-const sessDetailCache = {};
 async function toggleSessionDetail(td) {
   const tr = td.closest("tr");
   const next = tr.nextElementSibling;
   if (next && next.classList.contains("sess-detail")) { next.remove(); return; }   // 접기
   document.querySelectorAll("tr.sess-detail").forEach(el => el.remove());          // 하나만 펼침
-  const key = td.dataset.date + "/" + td.dataset.user + "/" + td.dataset.session;
   const row = document.createElement("tr");
   row.className = "sess-detail";
   row.innerHTML = '<td colspan="12" style="background:var(--bg); padding:10px 14px">불러오는 중…</td>';
   tr.after(row);
-  let d = sessDetailCache[key];
-  if (!d) {
-    try {
-      d = await api("session/detail?date=" + encodeURIComponent(td.dataset.date)
-        + "&user=" + encodeURIComponent(td.dataset.user)
-        + "&session=" + encodeURIComponent(td.dataset.session));
-      sessDetailCache[key] = d;
-    } catch (err) {
-      row.cells[0].textContent = "상세를 불러오지 못했습니다: " + (err.message || err)
-        + " (수집 서버가 구버전이면 collector.py 갱신 필요)";
-      return;
-    }
+  // [실시간 2026-09-03] 캐시 안 한다 — 수집 중인 세션은 펼칠 때마다 방금 만든 스킬까지
+  // 봐야 한다(첫 응답을 영영 캐시하면 그 뒤 저장된 스킬이 다시 펼쳐도 안 보였음). API 가볍다.
+  let d;
+  try {
+    d = await api("session/detail?date=" + encodeURIComponent(td.dataset.date)
+      + "&user=" + encodeURIComponent(td.dataset.user)
+      + "&session=" + encodeURIComponent(td.dataset.session));
+  } catch (err) {
+    row.cells[0].textContent = "상세를 불러오지 못했습니다: " + (err.message || err)
+      + " (수집 서버가 구버전이면 collector.py 갱신 + 서버 재시작 필요)";
+    return;
   }
   const fileUrl = (kind, name) => "/api/logdash/session/file?date=" + encodeURIComponent(td.dataset.date)
     + "&user=" + encodeURIComponent(td.dataset.user) + "&session=" + encodeURIComponent(td.dataset.session)

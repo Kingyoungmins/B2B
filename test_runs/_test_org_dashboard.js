@@ -117,14 +117,14 @@ check("로그/스킬 셀이 펼침 토글(sess-expand + 좌표 데이터)",
   HTML.includes('class="num sess-expand"') && HTML.includes('data-session="${esc(s.sessionId)}"'));
 check("클릭 위임 → toggleSessionDetail",
   HTML.includes('closest("td.sess-expand")') && HTML.includes("toggleSessionDetail(td)"));
-check("상세 API 호출 + 세션별 캐시",
-  HTML.includes('api("session/detail?date="') && HTML.includes("sessDetailCache[key]"));
+check("상세 API 호출 — 펼칠 때마다 재조회(수집 중 세션의 새 스킬 반영)",
+  HTML.includes('api("session/detail?date="') && !HTML.includes("sessDetailCache"));
 check("개별 파일 다운로드 링크(kind=logs/skills)",
   HTML.includes("/api/logdash/session/file?date=") && HTML.includes('fileUrl("logs", f.name)')
   && HTML.includes('fileUrl("skills", sk.name)'));
 check("스킬 단계 수·켜짐 수·단계 목록 렌더",
   HTML.includes('"단계, 켜짐 "') && HTML.includes("sk.stepTitles.map"));
-check("구버전 수집 서버 안내(하위 호환 실패 메시지)", HTML.includes("collector.py 갱신 필요"));
+check("구버전 수집 서버 안내(하위 호환 실패 메시지)", HTML.includes("collector.py 갱신 + 서버 재시작 필요"));
 check("세션당 토큰 열(합계 + 입력/출력 호버, 구서버는 '-')",
   HTML.includes("<th>토큰</th>") && HTML.includes("s.tokens && s.tokens.total")
   && HTML.includes('s.tokens ? (s.tokens.total ? fmtTok(s.tokens.total) : "0") : "-"'));
