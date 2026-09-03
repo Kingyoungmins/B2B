@@ -26,7 +26,9 @@ import urllib.parse
 import urllib.request
 
 # 수집 서버의 admin API 중 대시보드가 쓰는 것만 연다.
-ALLOWED_PATHS = ("stats", "errors", "sessions", "dates", "events", "session.zip", "day.zip")
+ALLOWED_PATHS = ("stats", "errors", "sessions", "dates", "events", "session.zip", "day.zip",
+                 # [0.8.4] 세션 상세(로그 파일·스킬 단계)와 개별 파일 다운로드
+                 "session/detail", "session/file")
 # events: [2026-08-31] 수집 서버의 이벤트 전량 집계(/v1/admin/events) — 차트용.
 #         구버전 수집 서버에는 없으므로 404 가 올 수 있고, 대시보드가 알아서 접는다.
 

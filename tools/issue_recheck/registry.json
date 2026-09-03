@@ -4428,6 +4428,21 @@
         ]
       ],
       "fix": "질문(2026-09-03) '전체실행한 것도 실행 목록에 보이지?' — 세션 목록은 앱 실행 단위라 전체실행은 트레이스 이벤트로만 있었고, 전체실행 1건 기록(telemetry_preview.jsonl, agent.run)은 앱 폴더에만 남아 보안망에 안 올라갔다. 수정: ① 앱 — log_sync extra_files 에 telemetry_preview.jsonl 추가(기존 전송 메커니즘 재사용). ② 수집기 — event 없이 event_type=agent.run 인 레코드를 fullRuns{count,ok,error,totalMs}로 집계(캐시 v3), /admin/events 가 총량+avgMs+byUser 반환. ③ 대시보드 — 🏃 전체실행 카드(성공/실패/평균 소요), AI 질문 요약본 포함. 구버전 앱 데이터는 카드 생략. versionTest 보안망 배포 필요."
+    },
+    {
+      "id": "SESSION-DETAIL-DRILLDOWN",
+      "title": "[0.8.4] 대시보드 실행 목록 행 펼침 — 로그 파일·스킬 단계·개별 다운로드.",
+      "checks": [
+        [
+          "python",
+          "../versionTest/test_session_detail.py"
+        ],
+        [
+          "node",
+          "test_runs/_test_org_dashboard.js"
+        ]
+      ],
+      "fix": "요청(2026-09-03) '로그/스킬/스킬 단계로 실행 목록 보게 — 지금은 개수만 나오니까'. 수정: ① 수집기 — /admin/session/detail(로그 파일 이름·크기 + 스킬 zip 을 열어 logic.json 의 단계 수/켜짐 수/단계 제목≤40개, 깨진 zip 은 error 필드로 개별 표시)과 /admin/session/file(kind=logs|skills 한 파일 다운로드, safe_filename+parent 검사로 ../ 차단). ② 앱 프록시 log_dash ALLOWED_PATHS 에 두 경로 추가. ③ 대시보드 — 로그/스킬 개수 셀 클릭 → colspan 상세 행(파일 목록+다운로드 링크, 스킬별 'N단계, 켜짐 M'+단계 목록), 세션별 캐시, 구버전 수집 서버면 collector.py 갱신 안내. versionTest 보안망 배포 필요."
     }
   ]
 }
