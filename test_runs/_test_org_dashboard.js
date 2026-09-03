@@ -179,5 +179,50 @@ check("보고용 요약 복사 버튼 + 클립보드 폴백",
 check("요약이 직전 기간 증감까지 사람 말로",
   HTML.includes('" → 증가"') && HTML.includes('"[AX-Cell 사용 현황] "'));
 
+console.log("[15] 요약 복사 — 실제 실행(문자열 스냅샷 버그 회귀)");
+(async () => {
+check("digest 원본 객체 보관(__dashDigest) — 반환은 AI용 문자열이라 별도 보관 필수",
+  HTML.includes("window.__dashDigest = digest;"));
+check("copyReport 는 객체(__dashDigest)를 읽는다", HTML.includes("const d = window.__dashDigest;"));
+{
+  const i0 = HTML.indexOf("function copyReport(btn)");
+  const i1 = HTML.indexOf("/* [토큰 추이 2026-09-03]");
+  const SRC = HTML.slice(i0, i1);
+  let copied = null; const toasts = [];
+  const env = {
+    window: { __dashDigest: {
+      조회기간: "2026-08-27 ~ 2026-09-02",
+      필터: { 사용자: "전체", 소속: "전체" },
+      요약: { 총실행: 42, 사용자수: 8, 총체류분: 310, 스킬저장: 12, 오류건수: 3 },
+      직전기간: { 총실행: 30, 사용자수: 7, 총체류분: 200, 오류건수: 7 },
+      토큰사용: { 총: 1200000, 입력: 980000, 출력: 220000, 호출: 154 },
+      전체실행: { 횟수: 4, 성공: 3, 실패: 1 },
+      사용자TOP: [{ 사용자: "서영민(s0min)", 실행: 15 }],
+      오류종류: [{ 이벤트: "step.fail", 건수: 2 }],
+      신규사용자: ["김신규(knew1)"], 구버전사용: [],
+    } },
+    navigator: { clipboard: { writeText: t => { copied = t; return Promise.resolve(); } } },
+    fmtTok: n => String(n), toast: (m) => toasts.push(m),
+    setTimeout: () => 0, document: { createElement: () => ({ style: {} }) },
+  };
+  const run = new Function(...Object.keys(env), SRC + "\nreturn copyReport;")(...Object.values(env));
+  run({ textContent: "복사" });
+  await Promise.resolve();
+  check("복사 텍스트에 기간이 들어간다(undefined 아님)",
+    copied && copied.includes("[AX-Cell 사용 현황] 2026-08-27 ~ 2026-09-02") && !copied.includes("undefined"), copied);
+  check("실행·직전 기간 증감이 사람 말로",
+    copied && copied.includes("실행 42회 (직전 기간 30 → 증가)"), copied);
+  check("토큰·전체실행·TOP·잦은 오류 포함",
+    copied && copied.includes("토큰 1200000") && copied.includes("전체실행 4회")
+    && copied.includes("서영민(s0min)(15회)") && copied.includes("step.fail 2건"), copied);
+  copied = null;
+  env.window.__dashDigest = null;
+  const run2 = new Function(...Object.keys(env), SRC + "\nreturn copyReport;")(...Object.values(env));
+  run2({ textContent: "복사" });
+  check("조회 전엔 안내 토스트(무반응 금지)", toasts.some(m => String(m).includes("먼저 [조회]")), toasts);
+}
+console.log("");
 console.log(fails === 0 ? "RESULT: ALL PASS" : "RESULT: " + fails + " FAIL");
 process.exit(fails === 0 ? 0 : 1);
+})();
+

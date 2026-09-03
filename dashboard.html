@@ -763,8 +763,12 @@ function exportCSV(tblId, title) {
 
 /* [요약 복사 2026-09-03] 팀즈 보고용 — AI 스냅샷(digest)과 같은 데이터를 사람 말로. */
 function copyReport(btn) {
-  const d = window.__dashSnapshot;
-  if (!d) return;
+  const d = window.__dashDigest;   // __dashSnapshot 은 AI용 문자열 — 객체 원본을 쓴다
+  if (!d || typeof d !== "object") {
+    if (typeof toast === "function") toast("먼저 [조회]로 데이터를 불러와 주세요.", "error");
+    else alert("먼저 [조회]로 데이터를 불러와 주세요.");
+    return;
+  }
   const L = [];
   L.push("[AX-Cell 사용 현황] " + d.조회기간
     + (d.필터 && (d.필터.사용자 !== "전체" || d.필터.소속 !== "전체")
@@ -929,6 +933,9 @@ function buildDashDigest(d) {
     digest.최근오류 = digest.최근오류.slice(0, 5);
     text = JSON.stringify(digest, null, 0).slice(0, 9000);
   }
+  // [요약 복사 수정 2026-09-03] 반환값은 AI용 '문자열'(9KB 컷) — 요약 복사가 이걸 객체로
+  // 읽어 전부 undefined/0 이 나왔다. 자르기 전 원본 객체를 따로 보관한다.
+  try { window.__dashDigest = digest; } catch (_) {}
   return text;
 }
 
