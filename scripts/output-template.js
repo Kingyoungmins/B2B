@@ -24,7 +24,9 @@ async function downloadCurrentWorkbookFile(fileId) {
     // 최우선으로 받는다. 결과 파일명은 '결과_..._타임스탬프' 라 이름 매칭이 안 되므로 excelId(=라이브 세션 id)로
     // 매칭한다(전체실행 결과 불러오기가 쓰는 fileIdForExcelMirrorId 매핑과 동일).
     const runOuts = (typeof window !== "undefined" && Array.isArray(window.lastRunnerOutputs)) ? window.lastRunnerOutputs : [];
-    const runMatch = runOuts.find(o => o && o.downloadId && o.excelId && (
+    // [결과편집 후 다운로드 2026-09-03] liveAbsorbed = 결과편집이 이 결과를 라이브에 불러왔다는 표시.
+    // 그 뒤로는 라이브(현재 상태 저장)가 진실이므로 결과 우선 분기에서 제외한다.
+    const runMatch = runOuts.find(o => o && !o.liveAbsorbed && o.downloadId && o.excelId && (
       (excelId && String(o.excelId) === String(excelId)) ||
       (typeof fileIdForExcelMirrorId === "function" && fileIdForExcelMirrorId(o.excelId) === fileId)
     ));

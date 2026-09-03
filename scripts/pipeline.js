@@ -7109,8 +7109,11 @@ $("btn-run").onclick = async () => {
     if (!hasSteps) { if (typeof toast === "function") toast("라이브에 반영할 활성 스킬 단계가 없습니다.", "error"); return; }
     const busyReason = typeof pipelineEditBusyReason === "function" ? pipelineEditBusyReason() : "";
     if (busyReason) { if (typeof toast === "function") toast(busyReason, "error"); return; }
+    // [결과편집 후 다운로드 2026-09-03] liveAbsorbed(이미 라이브로 불러온 결과)는 제외 — 재클릭 시
+    // 옛 결과가 라이브를 다시 덮어 '그 뒤 라이브로 추가한 스킬'이 화면에서 사라지는 것을 막는다.
+    // 전부 흡수된 상태면 outs 가 비어 아래 재적용 폴백(현재 파이프라인 전체 반영)으로 흐른다 — 그게 정답.
     const outs = (typeof window !== "undefined" && Array.isArray(window.lastRunnerOutputs))
-      ? window.lastRunnerOutputs.filter(o => o && o.excelId && o.downloadId) : [];
+      ? window.lastRunnerOutputs.filter(o => o && !o.liveAbsorbed && o.excelId && o.downloadId) : [];
     const activeStepIds = getPipelineExecutionStepIds();
     if (typeof setGeneratorRunLoading === "function") {
       setGeneratorRunLoading(true, outs.length ? "최종 결과를 라이브에 불러오는 중..." : "최종 상태를 라이브에 반영 중...");
@@ -7152,6 +7155,16 @@ $("btn-run").onclick = async () => {
           }
         } catch (_) {}
         noteLivePipelineApplied(state.pipeline);  // 라이브 = 최종(전 스텝 적용) → 토글 fast-path 정합
+        // [결과편집 후 다운로드 2026-09-03] 방금 라이브가 이 결과 파일들을 '흡수'했다 — 이 순간부터
+        // 이 파일들의 진실은 라이브다. 표시를 안 하면 downloadCurrentWorkbookFile 이 여전히
+        // lastRunnerOutputs(옛 결과, 14:52:03 실측)를 우선해, 결과편집 뒤 라이브로 추가 적용한
+        // 스킬이 빠진 파일이 받아진다(뷰에는 적용돼 보임 — 크리티컬). 흡수된 항목만 표시해,
+        // 결과를 라이브에 안 불러온 파일의 '결과 우선' 다운로드(원본 오다운로드 방지)는 그대로 둔다.
+        try {
+          (window.lastRunnerOutputs || []).forEach(o => {
+            if (o && loadedExcelIds.includes(o.excelId)) o.liveAbsorbed = true;
+          });
+        } catch (_) {}
         setPipelineRuntimeStatus(activeStepIds, "applied", "적용됨");
         // [교차파일 뷰 결정성] 여러 파일을 로드했을 때, '마지막에 로드된 파일'(백엔드 나열 순서에 좌우 → 플래키)이
         // 아니라 '마지막으로 실행된 스텝이 건드린 파일'을 보여준다(라이브 단일적용과 대칭). 예: 마지막 스텝이
