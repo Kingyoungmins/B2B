@@ -20,7 +20,9 @@ import os
 import re
 import shutil
 import sys
+import tempfile
 import threading
+import uuid
 import zipfile
 from pathlib import Path
 
@@ -31,6 +33,124 @@ _ENGINE = None
 
 def _log(*a):
     print("[axcell_runner]", *a, file=sys.stderr, flush=True)
+
+
+# ---------------------------------------------------------------------------
+# 환경 방어 — OneDrive/SharePoint 동기화 폴더 · Protected View · Excel 경로 한도
+# [2026-09-05] SharePoint 동기화 폴더(긴 경로 + 특수문자)에서 0x800AC472 로 실패한 실측 대응.
+# 엔진(serve_b2b.py)은 건드리지 않고 러너가 넘기는 경로/사본만 다룬다.
+# ---------------------------------------------------------------------------
+EXCEL_MAX_PATH = 218   # Excel 이 Workbooks.Open/SaveAs 에 허용하는 전체 경로(파일명 포함) 최대 길이
+
+# Windows 파일 속성 — OneDrive Files On-Demand 자리표시자(내용이 아직 로컬에 없는 파일)
+_FILE_ATTRIBUTE_OFFLINE = 0x1000
+_FILE_ATTRIBUTE_RECALL_ON_OPEN = 0x40000
+_FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS = 0x400000
+_CLOUD_PLACEHOLDER_ATTRS = (_FILE_ATTRIBUTE_OFFLINE | _FILE_ATTRIBUTE_RECALL_ON_OPEN
+                            | _FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS)
+
+# COM 오류 HRESULT → 사람이 읽는 뜻. run_report.error 가 추측이 아니라 사실을 실어 나르게 한다.
+_KNOWN_HRESULTS = {
+    0x800AC472: "VBA_E_IGNORE — Excel 이 자동화 호출을 거부(숨은 모달 대화상자·Protected View·다른 OLE 작업 대기 중)",
+    0x80010001: "RPC_E_CALL_REJECTED — Excel 이 바쁨(호출 거부)",
+    0x8001010A: "RPC_E_SERVERCALL_RETRYLATER — Excel 이 바쁨(나중에 재시도)",
+    0x800A03EC: "Excel 런타임 오류 1004(파일 접근 불가·경로 218자 초과·보호된 시트 등 — 설명문 참조)",
+    0x80020009: "DISP_E_EXCEPTION — Excel 내부 예외(설명문 참조)",
+    0x80070005: "E_ACCESSDENIED — 접근 거부",
+    0x80004005: "E_FAIL — 지정되지 않은 오류",
+    0x800401F3: "CO_E_CLASSSTRING — Excel.Application 이 등록돼 있지 않음(Excel 미설치)",
+    0x80080005: "CO_E_SERVER_EXEC_FAILURE — Excel 프로세스 시작 실패",
+    0x800706BA: "RPC_S_SERVER_UNAVAILABLE — Excel 프로세스가 사라짐(강제 종료/충돌)",
+    0x800706BE: "RPC_S_CALL_FAILED — Excel 프로세스가 사라짐(강제 종료/충돌)",
+}
+
+
+def stage_root():
+    """실행 스테이징 루트. 기본 %LOCALAPPDATA%\\axcell_runner\\runs (비 Windows: TEMP 하위).
+    입력이 OneDrive/SharePoint 동기화 폴더에 있어도 Excel 은 항상 이 짧은 로컬 경로만 본다 —
+    동기화 잠금·AutoSave·URL FullName·218자 한도를 전부 피한다. $AXCELL_RUNNER_STAGE_DIR 로 재지정."""
+    env = os.environ.get("AXCELL_RUNNER_STAGE_DIR")
+    if env:
+        return Path(env)
+    base = os.environ.get("LOCALAPPDATA") if os.name == "nt" else None
+    root = Path(base) if base else Path(tempfile.gettempdir())
+    return root / "axcell_runner" / "runs"
+
+
+def is_cloud_placeholder(path):
+    """OneDrive Files On-Demand 자리표시자(내용 미다운로드)인지. 비 Windows 는 항상 False."""
+    try:
+        attrs = os.stat(path).st_file_attributes
+    except (AttributeError, OSError):
+        return False
+    return bool(attrs & _CLOUD_PLACEHOLDER_ATTRS)
+
+
+def strip_mark_of_the_web(path):
+    """작업 사본의 Zone.Identifier(인터넷 영역 표시) 제거. Windows 의 shutil.copy2 는 CopyFile2 로
+    대체 스트림까지 복사하므로 SharePoint 에서 내려온 파일의 표시가 사본에 그대로 따라온다 →
+    숨은 Excel 이 Protected View 로 열거나(이후 COM 호출 전부 거부) 정책이 주입 매크로를 차단한다."""
+    if os.name != "nt":
+        return False
+    try:
+        os.remove(str(path) + ":Zone.Identifier")
+        return True
+    except FileNotFoundError:
+        return False
+    except OSError as e:
+        _log("Zone.Identifier 제거 실패(무시):", path, repr(e))
+        return False
+
+
+def preflight_input_file(path):
+    """실행 전 입력 파일 경고 목록(차단은 아님 — 온라인이면 복사 시 자동 다운로드되므로)."""
+    warnings = []
+    if is_cloud_placeholder(path):
+        warnings.append(f"OneDrive 자리표시자(내용 미다운로드): {Path(path).name} — 오프라인이면 복사 실패. "
+                        f"탐색기에서 '항상 이 장치에 유지' 권장")
+    return warnings
+
+
+def _assert_not_protected_view(app, name):
+    """열린 직후 Protected View 창이 생겼으면 즉시 실패 — 그 상태의 COM 호출은 0x800AC472 류로 죽는다."""
+    try:
+        n = int(app.ProtectedViewWindows.Count)
+    except Exception:
+        return
+    if n > 0:
+        raise RuntimeError(
+            f"'{name}' 이(가) Protected View 로 열려 자동화가 불가합니다. 작업 사본의 인터넷 영역 표시는 "
+            f"제거했으므로 조직의 Office 보안 정책(Protected View 강제)을 확인하세요.")
+
+
+def format_error(err, phase=None):
+    """예외 → run_report.error 문자열. COM 오류면 HRESULT(16진수)+뜻+Excel 설명문, 앞에 실패 단계."""
+    parts = []
+    if phase:
+        parts.append(f"[{phase}]")
+    hres = getattr(err, "hresult", None)
+    if isinstance(hres, int):
+        code = hres & 0xFFFFFFFF
+        desc = ""
+        excepinfo = getattr(err, "excepinfo", None)
+        if isinstance(excepinfo, (tuple, list)):
+            if len(excepinfo) > 2 and excepinfo[2]:
+                desc = str(excepinfo[2]).strip()
+            # DISP_E_EXCEPTION 이면 진짜 코드는 excepinfo[5](scode)에 있다.
+            if code == 0x80020009 and len(excepinfo) > 5 and isinstance(excepinfo[5], int) and excepinfo[5]:
+                code = excepinfo[5] & 0xFFFFFFFF
+        meaning = _KNOWN_HRESULTS.get(code)
+        text = f"COM 0x{code:08X}"
+        if meaning:
+            text += f" ({meaning})"
+        if desc:
+            text += ": " + desc
+        elif getattr(err, "strerror", None):
+            text += ": " + str(err.strerror)
+        parts.append(text)
+    else:
+        parts.append(str(err) or repr(err))
+    return " ".join(parts)
 
 
 def _engine():
@@ -164,6 +284,9 @@ def check_inputs(skill_zip, input_dir):
     req_names = [rf["name"] for rf in required]
     mapping, unmatched, extra = _auto_map(req_names, files)
     langs = sorted({str(s.get("language") or "python").lower() for s in pipeline})
+    warnings = []
+    for f in mapping.values():
+        warnings.extend(preflight_input_file(f))
     return {
         "ok": not unmatched,
         "skill": data.get("name") or Path(skill_zip).stem,
@@ -173,6 +296,7 @@ def check_inputs(skill_zip, input_dir):
         "mapping": {k: str(v) for k, v in mapping.items()},
         "unmatched": unmatched,
         "extra_files": extra,          # 스킬이 안 쓰는 여분 — 무시되므로 있어도 됨
+        "warnings": warnings,          # 실행은 되지만 환경상 실패할 수 있는 징후(OneDrive 자리표시자 등)
         "input_dir": str(Path(input_dir).resolve()),
     }
 
@@ -238,26 +362,44 @@ def run(skill_zip, input_dir, out_dir, on_event=None, cancel: threading.Event | 
         mapping = {f.name: f for f in files}
 
     out_dir = Path(out_dir)
-    out_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        out_dir.mkdir(parents=True, exist_ok=True)
+    except OSError as e:
+        raise RuntimeError(f"출력 폴더를 만들 수 없습니다: {out_dir}: {e}")
+    # [2026-09-05] 작업 사본과 Excel 열기/저장은 전부 '로컬 스테이징 폴더'에서 한다. 사용자가 준
+    # out_dir(대개 입력 옆, 즉 OneDrive/SharePoint 동기화 폴더)에는 완료 후 결과만 복사한다.
+    # 동기화 폴더 안에서 직접 돌리면: 동기화 클라이언트 잠금으로 unlink/rename 실패, Excel 이
+    # FullName 을 https://… 로 바꾸고 AutoSave 개입, 인터넷 영역 표시로 Protected View, 깊은
+    # 경로 + 한글 파일명으로 Excel 218자 한도 초과 — 전부 실측 가능한 실패 경로다.
+    stage = stage_root() / ("run_" + uuid.uuid4().hex[:12])
+    try:
+        stage.mkdir(parents=True, exist_ok=False)
+    except OSError as e:
+        raise RuntimeError(f"스테이징 폴더를 만들 수 없습니다: {stage}: {e}")
     work_copies = {}
-    for name, src in mapping.items():
-        dst = out_dir / Path(name).name        # ctx.book("이름")/VBA Workbooks("이름") 이 이 파일명으로 찾음
-        # [리뷰 2026-09-01] 지난 실행이 남긴(혹은 읽기전용 속성이 복사된) 기존 사본이 있으면
-        # copy2 가 PermissionError 로 죽는다 — 지우고 새로 만든다.
-        if dst.exists():
+    try:
+        for name, src in mapping.items():
+            dst = stage / Path(name).name      # ctx.book("이름")/VBA Workbooks("이름") 이 이 파일명으로 찾음
+            if len(str(dst)) > EXCEL_MAX_PATH:
+                raise RuntimeError(f"Excel 경로 한도({EXCEL_MAX_PATH}자) 초과 — 파일명이 너무 깁니다: {dst}")
+            try:
+                shutil.copy2(src, dst)
+            except OSError as e:
+                hint = ""
+                if is_cloud_placeholder(src):
+                    hint = " (OneDrive 자리표시자 — 온라인 상태이거나 탐색기에서 '항상 이 장치에 유지' 필요)"
+                raise RuntimeError(f"입력 사본 생성 실패: {src}{hint}: {e}")
+            # copy2 는 읽기전용 속성까지 복사한다 — 그대로 열면 전부 실행하고도 Save 가 조용히
+            # 실패해 '작업 전 파일'이 결과로 나간다(공유폴더 원본이 읽기전용인 경우 실측 위험).
             try:
                 os.chmod(dst, 0o666)
             except Exception:
                 pass
-            dst.unlink()
-        shutil.copy2(src, dst)
-        # copy2 는 읽기전용 속성까지 복사한다 — 그대로 열면 전부 실행하고도 Save 가 조용히
-        # 실패해 '작업 전 파일'이 결과로 나간다(공유폴더 원본이 읽기전용인 경우 실측 위험).
-        try:
-            os.chmod(dst, 0o666)
-        except Exception:
-            pass
-        work_copies[name] = dst
+            strip_mark_of_the_web(dst)
+            work_copies[name] = dst
+    except Exception:
+        shutil.rmtree(stage, ignore_errors=True)   # Excel 을 띄우기 전 실패 — 스테이징만 치운다
+        raise
     primary_name = req_names[0] if required else next(iter(work_copies))
     output_names = tuple(rf["name"] for rf in required if str(rf.get("role") or "") == "output")
 
@@ -301,6 +443,7 @@ def run(skill_zip, input_dir, out_dir, on_event=None, cancel: threading.Event | 
             if _tmp:
                 open_temps.append(_tmp)
             opened[name] = wb
+            _assert_not_protected_view(app, name)
             emit({"type": "open", "file": name})
         primary_wb = opened[primary_name]
         try:
@@ -351,7 +494,7 @@ def run(skill_zip, input_dir, out_dir, on_event=None, cancel: threading.Event | 
         # 실행 중에는 스킬이 기억하는 이름(예: …4월)으로 열어야 코드/VBA 의 파일명 리터럴이
         # 해석되지만(위 작업 사본 주석), 결과물까지 그 옛 이름으로 나가면 5월 데이터를 돌린
         # 사용자가 헷갈린다. 실행기 앱은 입력 이름 그대로 저장한다 — 제품 동작과 맞춘다.
-        final_files = []
+        staged_final = []
         for name, path in saved:
             src_match = mapping.get(name)
             want = Path(src_match).name if src_match is not None else path.name
@@ -364,7 +507,25 @@ def run(skill_zip, input_dir, out_dir, on_event=None, cancel: threading.Event | 
                     path = target
                 except Exception as e:
                     _log("output rename failed (keep as-is):", path.name, "->", want, repr(e))
-            final_files.append(path)
+            staged_final.append(path)
+        # 스테이징 → 사용자 out_dir 로 결과 복사. 여기서만 동기화 폴더를 만지므로 실패 사유를
+        # 삼키지 않고 그대로 보고한다(이전엔 잠금 실패가 로그 한 줄로 사라졌다).
+        final_files = []
+        for path in staged_final:
+            target = out_dir / path.name
+            try:
+                if target.exists():
+                    try:
+                        os.chmod(target, 0o666)
+                    except Exception:
+                        pass
+                    target.unlink()
+                shutil.copy2(path, target)
+            except OSError as e:
+                raise RuntimeError(
+                    f"출력 폴더에 결과를 쓸 수 없습니다(OneDrive 동기화 또는 Excel 이 파일을 잠그고 있을 수 "
+                    f"있음): {target}: {e}")
+            final_files.append(target)
         emit({"type": "saved", "files": [p.name for p in final_files]})
         return {"ok": True, "out_dir": str(out_dir.resolve()),
                 "files": [p.name for p in final_files], "skill": data.get("name") or Path(skill_zip).stem}
@@ -385,6 +546,11 @@ def run(skill_zip, input_dir, out_dir, on_event=None, cancel: threading.Event | 
             except Exception:
                 pass
         pythoncom.CoUninitialize()
+        # 스테이징 정리 — Excel 이 완전히 내려간 뒤에. 진단용으로 남기려면 AXCELL_RUNNER_KEEP_STAGE=1.
+        if os.environ.get("AXCELL_RUNNER_KEEP_STAGE") not in ("1", "true", "yes"):
+            shutil.rmtree(stage, ignore_errors=True)
+        else:
+            _log("stage kept:", stage)
 
 
 # ---------------------------------------------------------------------------

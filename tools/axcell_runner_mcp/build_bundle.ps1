@@ -12,11 +12,18 @@
 param(
     [Parameter(Mandatory = $true)][string]$PythonDist,
     [string]$Wheels = "",
-    [string]$Version = "0.2.0"
+    [string]$Version = ""      # 비우면 ixi-flow\manifest.toml 의 version (버전 표기 드리프트 방지)
 )
 $ErrorActionPreference = "Stop"
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $repo = (Resolve-Path (Join-Path $here "..\..")).Path   # tools\axcell_runner_mcp → repo root
+
+if (-not $Version) {
+    $manifestText = Get-Content -Raw (Join-Path $here "ixi-flow\manifest.toml")
+    if ($manifestText -notmatch '(?m)^version\s*=\s*"([^"]+)"') { throw "manifest.toml 에서 version 을 읽지 못했습니다" }
+    $Version = $Matches[1]
+}
+Write-Host "bundle version: $Version"
 
 $pyExe = Join-Path $PythonDist "python.exe"
 if (-not (Test-Path -LiteralPath $pyExe)) { throw "python.exe 가 없습니다: $pyExe" }

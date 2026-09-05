@@ -1,0 +1,141 @@
+name: AXCell Runner 번들 빌드 (Windows)
+
+# tools/axcell_runner_mcp 의 ixi-flow 배포 번들을 GitHub 의 Windows 러너에서 빌드한다.
+# 로컬 Windows PC 없이도 build_bundle.ps1 + self-check + test_core.py 까지 돌고, 결과 tar.gz 를
+# (1) 워크플로 아티팩트로 항상 올리고 (2) 태그 푸시 또는 수동 실행의 publish_release=true 면
+# GitHub Release 자산으로 게시한다.
+#
+# 실행 방법
+#   - 태그:  git tag axcell_runner-v0.2.1 && git push origin axcell_runner-v0.2.1
+#            → 태그의 버전이 manifest.toml 의 version 과 같아야 한다(불일치면 실패).
+#   - 수동:  Actions → 이 워크플로 → Run workflow (version 비우면 manifest.toml 값 사용)
+#
+# Excel 은 빌드에 필요 없다(self-check 는 pywin32 import + 엔진 로드까지만). Excel COM 종단
+# 검증(test_run_com.py)은 여전히 Excel 이 있는 PC 에서 해야 한다.
+
+on:
+  push:
+    tags:
+      - "axcell_runner-v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "번들 버전 (비우면 ixi-flow/manifest.toml 의 version)"
+        required: false
+        default: ""
+      python_version:
+        description: "python-build-standalone CPython 버전"
+        required: false
+        default: "3.12.14"
+      python_release:
+        description: "python-build-standalone 릴리스 태그(날짜)"
+        required: false
+        default: "20260901"
+      publish_release:
+        description: "GitHub Release 로 게시"
+        type: boolean
+        required: false
+        default: false
+
+permissions:
+  contents: write
+
+defaults:
+  run:
+    shell: pwsh
+
+jobs:
+  build:
+    runs-on: windows-latest
+    env:
+      PY_VERSION: ${{ github.event.inputs.python_version || '3.12.14' }}
+      PY_RELEASE: ${{ github.event.inputs.python_release || '20260901' }}
+      PYTHONUTF8: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 버전 결정 (태그 / 입력 / manifest.toml)
+        id: ver
+        run: |
+          $manifest = Get-Content -Raw tools/axcell_runner_mcp/ixi-flow/manifest.toml
+          if ($manifest -notmatch '(?m)^version\s*=\s*"([^"]+)"') { throw "manifest.toml 에서 version 을 못 읽음" }
+          $manifestVer = $Matches[1]
+          $ver = ""
+          if ("${{ github.ref_type }}" -eq "tag") {
+            $ver = "${{ github.ref_name }}" -replace '^axcell_runner-v', ''
+            if ($ver -ne $manifestVer) { throw "태그 버전($ver) 과 manifest.toml version($manifestVer) 불일치 — manifest 를 먼저 올리세요" }
+          } elseif ("${{ github.event.inputs.version }}" -ne "") {
+            $ver = "${{ github.event.inputs.version }}"
+          } else {
+            $ver = $manifestVer
+          }
+          # mcp_server.py 의 SERVER_INFO 버전도 같아야 한다(initialize 응답에 노출되는 값)
+          $server = Get-Content -Raw tools/axcell_runner_mcp/axcell_runner/mcp_server.py
+          if ($server -notmatch '"version":\s*"([^"]+)"') { throw "mcp_server.py 에서 SERVER_INFO.version 을 못 읽음" }
+          if ($Matches[1] -ne $manifestVer) { throw "mcp_server.py SERVER_INFO.version($($Matches[1])) 과 manifest.toml($manifestVer) 불일치" }
+          Write-Host "bundle version: $ver"
+          "version=$ver" >> $env:GITHUB_OUTPUT
+
+      - name: python-build-standalone 내려받기 (install_only)
+        run: |
+          $name = "cpython-$env:PY_VERSION+$env:PY_RELEASE-x86_64-pc-windows-msvc-install_only.tar.gz"
+          $url = "https://github.com/astral-sh/python-build-standalone/releases/download/$env:PY_RELEASE/$name"
+          Write-Host "GET $url"
+          Invoke-WebRequest -Uri $url -OutFile $name
+          New-Item -ItemType Directory -Force -Path "$env:RUNNER_TEMP\pbs" | Out-Null
+          tar -xzf $name -C "$env:RUNNER_TEMP\pbs"
+          if ($LASTEXITCODE -ne 0) { throw "tar 해제 실패" }
+          $py = Join-Path "$env:RUNNER_TEMP\pbs\python" "python.exe"
+          if (-not (Test-Path $py)) { throw "python.exe 가 없음: $py" }
+          & $py --version
+          "PYTHON_DIST=$env:RUNNER_TEMP\pbs\python" >> $env:GITHUB_ENV
+
+      - name: 번들 빌드 (build_bundle.ps1 — pip/BOM/self-check 포함)
+        working-directory: tools/axcell_runner_mcp
+        run: |
+          .\build_bundle.ps1 -PythonDist "$env:PYTHON_DIST" -Version "${{ steps.ver.outputs.version }}"
+
+      - name: test_core.py (번들에 들어간 Python 으로)
+        working-directory: tools/axcell_runner_mcp
+        run: |
+          $stagedPy = "dist\_staging\axcell_runner-deploy-${{ steps.ver.outputs.version }}-win64\python-standalone\python.exe"
+          & $stagedPy test_core.py
+          if ($LASTEXITCODE -ne 0) { throw "test_core.py 실패" }
+
+      - name: 체크섬
+        id: sum
+        working-directory: tools/axcell_runner_mcp/dist
+        run: |
+          $tar = "axcell_runner-deploy-${{ steps.ver.outputs.version }}-win64.tar.gz"
+          $h = (Get-FileHash $tar -Algorithm SHA256).Hash.ToLower()
+          "$h  $tar" | Out-File -Encoding ascii "$tar.sha256"
+          Get-Content "$tar.sha256"
+          "tar=$tar" >> $env:GITHUB_OUTPUT
+
+      - name: 아티팩트 업로드
+        uses: actions/upload-artifact@v4
+        with:
+          name: axcell_runner-deploy-${{ steps.ver.outputs.version }}-win64
+          path: |
+            tools/axcell_runner_mcp/dist/${{ steps.sum.outputs.tar }}
+            tools/axcell_runner_mcp/dist/${{ steps.sum.outputs.tar }}.sha256
+          if-no-files-found: error
+
+      - name: GitHub Release 게시
+        if: github.ref_type == 'tag' || github.event.inputs.publish_release == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_type == 'tag' && github.ref_name || format('axcell_runner-v{0}', steps.ver.outputs.version) }}
+          name: AXCell Runner ${{ steps.ver.outputs.version }} (ixi-flow 번들)
+          body: |
+            ixi-flow 빌트인 MCP 배포 번들 — Windows x64, self-contained Python ${{ env.PY_VERSION }} + pywin32 + openpyxl + 엔진(serve_b2b.py).
+
+            설치 (배포 PC, 폐쇄망 OK):
+            ```powershell
+            .\install_manual.ps1 -Bundle .\${{ steps.sum.outputs.tar }}
+            ```
+            변경 내역: `tools/axcell_runner_mcp/README.md` 의 해당 버전 절 참고.
+            빌드 커밋: ${{ github.sha }}
+          files: |
+            tools/axcell_runner_mcp/dist/${{ steps.sum.outputs.tar }}
+            tools/axcell_runner_mcp/dist/${{ steps.sum.outputs.tar }}.sha256

@@ -1,5 +1,5 @@
 name = "axcell_runner"
-version = "0.2.0"
+version = "0.2.1"
 description = "b2b 스킬 실행기 — 저장된 스킬(zip)을 b2b 프로그램 없이 Excel COM 으로 직접 실행"
 
 # run_report 가 커서 기반 이벤트 테일(after_cursor/max_events/include_events)을 구현함

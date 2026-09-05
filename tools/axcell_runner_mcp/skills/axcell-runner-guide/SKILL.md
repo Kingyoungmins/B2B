@@ -35,6 +35,10 @@ b2b 프로그램을 켜지 않고, 저장된 스킬(zip)을 `axcell_runner__*` �
   `completed`/`failed`/`cancelled` 면 끝. `step`/`total_steps` 로 진행률을 알 수 있다.
 - 동시에 한 런만 실행된다. 이미 실행 중이면 시작이 거부된다.
 - **원본 입력 파일은 절대 수정되지 않는다** — 출력 폴더의 작업 사본에서만 처리.
+- 실행은 로컬 스테이징 폴더(`%LOCALAPPDATA%\axcell_runner\runs`)에서 하고, 끝나면 결과만
+  `out_dir` 로 복사된다. 입력/출력이 OneDrive·SharePoint 동기화 폴더여도 된다.
+- `check_inputs`/`run_start` 응답의 `warnings` 가 비어 있지 않으면(예: OneDrive 자리표시자)
+  실행 전에 사용자에게 그대로 전달하라. 실행은 되지만 오프라인이면 실패할 수 있다.
 
 ### 3. 결과 확인·압축
 
@@ -52,8 +56,13 @@ b2b 프로그램을 켜지 않고, 저장된 스킬(zip)을 `axcell_runner__*` �
 
 ## 실패 대응
 
-- `run_report.status == "failed"` → `error` 에 실패 스텝과 사유가 있다. 입력 파일이
-  잘못됐을 가능성이 크다 — 1단계 검사부터 다시 안내.
+- `run_report.status == "failed"` → `error` 에 실패 단계(`[open 파일명]`/`[step N/M]`/`[finalize]`)와
+  사유가 있다. COM 오류면 `COM 0x........ (뜻): Excel 설명문` 형식이다. 사용자에게 보고할 때
+  이 문자열을 **그대로** 옮겨라(요약하지 말 것 — 원인 분석의 유일한 단서다).
+- `error` 에 "Protected View" 가 있으면 조직의 Office 보안 정책 문제다 — 파일을 다른 폴더로
+  옮겨도 해결되지 않으니 IT 담당에게 안내.
+- `error` 에 "출력 폴더에 결과를 쓸 수 없습니다" 가 있으면 OneDrive 동기화가 파일을 잡고 있거나
+  사용자가 같은 파일을 Excel 로 열어 둔 것이다 — 닫고 재실행하거나 `out_dir` 을 바꿔 재실행.
 - 실행이 너무 오래 걸리거나 중단해야 하면 `axcell_runner__run_stop` `{"run_id": "..."}`.
 - VBA 단계가 있는 스킬이 "VBA 프로젝트에 접근할 수 없습니다"로 실패하면: Excel →
   파일 → 옵션 → 보안 센터 → 매크로 설정에서 "VBA 프로젝트 개체 모델에 대한 액세스

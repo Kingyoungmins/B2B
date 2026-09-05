@@ -54,6 +54,7 @@ def test_check_inputs_mapping():
     assert r["ok"], r
     assert r["mapping"]["한국전력_202606_v1.1.xlsx"].endswith("한국전력_202607_v1.1.xlsx"), r["mapping"]
     assert "여분파일.xlsx" in r["extra_files"], r
+    assert isinstance(r.get("warnings"), list), r      # [0.2.1] 환경 경고 필드(자리표시자 등)
     print("ok  check_inputs_mapping")
 
 
@@ -83,6 +84,37 @@ def test_package_outputs():
     r3 = core.package_outputs(d3, d3 / "z.zip")
     assert not r3["ok"], r3
     print("ok  package_outputs")
+
+
+def test_format_error_and_stage_root():
+    """[0.2.1] run_report.error 형식 — COM 오류는 HRESULT 16진수 + 뜻 + Excel 설명문, 앞에 실패 단계."""
+    class FakeComError(Exception):
+        def __init__(self, hresult, excepinfo=None, strerror=None):
+            super().__init__(hresult, strerror, excepinfo)
+            self.hresult, self.excepinfo, self.strerror = hresult, excepinfo, strerror
+    # VBA_E_IGNORE (-2146777998) — SharePoint 폴더 실측 코드. 음수 hresult → 0x800AC472.
+    m = core.format_error(FakeComError(-2146777998, strerror="호출이 거부되었습니다."), phase="open 청구.xlsx")
+    assert m.startswith("[open 청구.xlsx] COM 0x800AC472 (VBA_E_IGNORE"), m
+    assert "호출이 거부되었습니다." in m, m
+    # DISP_E_EXCEPTION 래핑 — 진짜 코드는 excepinfo[5](scode) 에 있다(Excel 1004 = 0x800A03EC).
+    m2 = core.format_error(FakeComError(-2147352567, excepinfo=(0, "Microsoft Excel", "파일에 액세스할 수 없습니다.", None, 0, -2146827284)),
+                           phase="step 3/7 정렬")
+    assert "COM 0x800A03EC" in m2 and "1004" in m2 and "파일에 액세스할 수 없습니다." in m2, m2
+    # 일반 예외는 그대로
+    assert core.format_error(RuntimeError("입력 파일이 없습니다"), phase=None) == "입력 파일이 없습니다"
+    # 스테이징 루트: 환경변수 재지정이 우선, 기본은 로컬 앱데이터/TEMP 하위 axcell_runner/runs
+    prev = os.environ.pop("AXCELL_RUNNER_STAGE_DIR", None)
+    try:
+        assert core.stage_root().parts[-2:] == ("axcell_runner", "runs"), core.stage_root()
+        os.environ["AXCELL_RUNNER_STAGE_DIR"] = str(Path(tempfile.mkdtemp()) / "custom_stage")
+        assert core.stage_root().name == "custom_stage"
+    finally:
+        os.environ.pop("AXCELL_RUNNER_STAGE_DIR", None)
+        if prev is not None:
+            os.environ["AXCELL_RUNNER_STAGE_DIR"] = prev
+    assert core.is_cloud_placeholder(__file__) is False       # 로컬 일반 파일
+    assert core.preflight_input_file(__file__) == []
+    print("ok  format_error_and_stage_root")
 
 
 FAKE_RUN_SERVER = """# 테스트 전용 — core.run 을 가짜(즉시 open/step/saved 방출)로 바꾼 MCP 서버.
@@ -237,6 +269,7 @@ if __name__ == "__main__":
     test_check_inputs_mapping()
     test_check_inputs_unmatched()
     test_package_outputs()
+    test_format_error_and_stage_root()
     test_mcp_protocol_and_lifecycle()
     test_event_contract_with_fake_run()
     print("\nALL PASS")

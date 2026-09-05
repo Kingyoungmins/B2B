@@ -5,7 +5,10 @@ b2b 로 저장한 스킬(zip)을 **b2b 프로그램/서버 없이** Excel COM �
 
 참조 계약: `ixi-FLOW/docs/maintainers/builtin-mcp-integration-guide.ko.md`
 
-> 현재 버전 **0.2.0** — ver0.8.2 브랜치에 병합되며 코드리뷰(12건) 반영 + **0.8.2 엔진** 기준으로
+> 현재 소스 버전 **0.2.1** — OneDrive/SharePoint 동기화 폴더 대응(로컬 스테이징 실행, 아래
+> '0.2.1 에서 바뀐 것'). **dist/ 의 번들은 아직 0.2.0** 이라 Windows 에서 재빌드해 교체해야 한다.
+>
+> 0.2.0 — ver0.8.2 브랜치에 병합되며 코드리뷰(12건) 반영 + **0.8.2 엔진** 기준으로
 > 재검증했다(실제 Excel 종단 실행 포함). 상세는 아래 '0.8.2 병합에서 바뀐 것' 절.
 
 ## 제공 기능 (요구 3종 → MCP 도구 5개)
@@ -29,9 +32,10 @@ b2b 로 저장한 스킬(zip)을 **b2b 프로그램/서버 없이** Excel COM �
 ```
 in : {skill_zip, input_dir}
 out: {ok, skill, total_steps, languages, required[], mapping{요구명:실제경로},
-      unmatched[], extra_files[], input_dir}
+      unmatched[], extra_files[], warnings[], input_dir}
 ```
 `unmatched` 가 비어야 실행 가능. `extra_files` 는 스킬이 안 쓰는 여분(무해).
+`warnings` 는 실행은 되지만 환경상 실패할 수 있는 징후(OneDrive 자리표시자 등) — 사용자에게 전달.
 
 ### run_start  (L2 start_tool)
 ```
@@ -39,6 +43,8 @@ in : {skill_zip, input_dir, out_dir?, make_zip?=true, zip_path?}
 out: {ok, run_id, status:"running", skill, total_steps, out_dir, zip_path}
 ```
 - 시작 전에 check_inputs 를 내부 수행 — 매핑 실패면 즉시 `{ok:false, unmatched}`.
+- 실행(작업 사본·Excel 열기/저장)은 `%LOCALAPPDATA%\axcell_runner\runs\<id>` 로컬 스테이징에서
+  하고 완료 후 결과만 `out_dir` 로 복사한다. `out_dir` 이 OneDrive/SharePoint 폴더여도 된다.
 - 동시 1런만 허용(저사양 Excel 보호). 원본 입력은 절대 수정 안 함(출력폴더 작업사본).
 - `make_zip:true` 면 완료 시 출력 검증(package_outputs) 후 zip 자동 생성.
 
@@ -48,7 +54,7 @@ in : {run_id, after_cursor?, max_events?, include_events?, max_wait_seconds?(무
 out: {ok, run_id, status: running|completed|failed|cancelled,
       step, total_steps, step_label, cursor,
       events: {items:[{seq:int, type, summary, ...}], next_cursor:str},
-      완료시: out_dir, files[], out_zip? / 실패시: error}
+      완료시: out_dir, files[], out_zip? / 실패시: error, error_phase}
 ```
 이벤트 테일: `events.next_cursor` 를 다음 호출 `after_cursor` 로 이어받기
 (ixi-flow event_batch 계약 — 숫자 `seq` 없는 이벤트는 하네스가 버린다).
@@ -98,6 +104,21 @@ tools/axcell_runner_mcp/
 .\build_bundle.ps1 -PythonDist C:\dl\cpython-3.11-win64 -Wheels C:\dl\wheels
 ```
 빌드가 BOM 검사 + 런타임 self-check(pywin32/엔진 로드)까지 수행한다.
+`-Version` 을 비우면 `ixi-flow/manifest.toml` 의 version 을 쓴다.
+
+### GitHub Actions 로 빌드 (Windows PC 없이)
+
+`.github/workflows/axcell-runner-bundle.yml` 이 GitHub 의 windows-latest 러너에서 위 빌드를 그대로
+수행한다(python-build-standalone 다운로드 → build_bundle.ps1 → 번들 Python 으로 test_core.py →
+sha256). 결과는 항상 워크플로 아티팩트로 남고, 다음 중 하나면 **GitHub Release** 자산으로 게시된다.
+
+```bash
+# 태그 푸시 → Release "axcell_runner-v0.2.1" 생성 (태그 버전 = manifest.toml version 이어야 함)
+git tag axcell_runner-v0.2.1 && git push origin axcell_runner-v0.2.1
+```
+또는 Actions 탭에서 수동 실행(`publish_release` 체크). 배포 PC 에서는 Release 의 tar.gz 를 내려받아
+`install_manual.ps1 -Bundle` 로 설치한다. Excel 은 빌드에 필요 없고, Excel COM 종단 검증
+(`test_run_com.py`)만 Excel 있는 PC 에서 따로 한다.
 
 ## 미리 빌드된 번들 (저장소에 포함)
 
@@ -139,6 +160,34 @@ run_start 는 ixi-flow 의 런 레지스트리/bg_wait/체크리스트 진행표
 - VBA 스텝이 있는 스킬: Excel 매크로 설정 "VBA 프로젝트 개체 모델에 대한 액세스 신뢰" ON
 - Python/b2b 설치 불필요 (번들에 self-contained 포함)
 
+## 0.2.1 에서 바뀐 것 (OneDrive/SharePoint 동기화 폴더 대응 — 2026-09-05)
+
+배경: SharePoint 동기화 폴더(146자 경로 + `[ ]`/공백)에서 실행이 `0x800AC472` 로 죽고
+`~/.ixi-flow/workspace` 에서는 되는 실측. ixi-flow 의 원인 리포트는 "긴 경로 + 특수문자로 COM
+초기화 시 ID 불일치"였지만 이는 틀렸다 — `0x800AC472` 는 `VBA_E_IGNORE`(Excel 이 자동화 호출을
+거부: 숨은 모달/Protected View/다른 OLE 작업 대기)이고 CoInitialize/DispatchEx 에서는 나올 수
+없는 코드다. 실제 차이는 동기화 폴더 고유 문제(인터넷 영역 표시 → Protected View·매크로 차단,
+동기화 잠금, FullName 의 URL 화·AutoSave, 자리표시자, Excel 218자 한도)다. 리포트가 분석한
+코드는 0.1.0(맨 `Workbooks.Open`, AutomationSecurity=3)이라 설치 번들 버전도 확인할 것.
+
+**엔진(serve_b2b.py)은 한 줄도 바꾸지 않았다** — 러너가 엔진에 넘기는 경로/사본만 바뀐다.
+
+- **로컬 스테이징 실행**: 작업 사본과 Excel 열기/저장/이름 복원을 `%LOCALAPPDATA%\axcell_runner\runs\<id>`
+  에서 하고, 끝나면 결과만 `out_dir` 로 복사. 동기화 잠금·AutoSave·URL FullName·218자 한도를 전부
+  피한다(리포트의 "workspace 에서 실행 후 복사" 우회를 러너가 자동화). `AXCELL_RUNNER_STAGE_DIR` 로
+  재지정, `AXCELL_RUNNER_KEEP_STAGE=1` 이면 진단용으로 남긴다.
+- **인터넷 영역 표시 제거**: Windows 의 `shutil.copy2` 는 `Zone.Identifier` 스트림까지 복사한다 →
+  사본에서 지우고 연다. 열린 직후 `ProtectedViewWindows` 가 있으면 즉시 명확한 메시지로 실패.
+- **잠금 실패를 드러냄**: 출력 폴더 복사 실패(OneDrive 동기화/Excel 열림)는 로그가 아니라 오류로 보고.
+  입력 사본 복사 실패는 자리표시자면 그 사실을 힌트로 붙인다.
+- **사전 검사**: `check_inputs`/`run_start` 가 `warnings[]`(OneDrive 자리표시자) 반환. 스테이징 경로가
+  Excel 218자 한도를 넘는 파일명은 실행 전에 거부.
+- **오류 형식**: `run_report.error` 가 `[실패 단계] COM 0x........ (뜻): Excel 설명문` — HRESULT 16진수와
+  알려진 코드 뜻(VBA_E_IGNORE/RPC_E_CALL_REJECTED/1004 등), DISP_E_EXCEPTION 은 scode 로 풀어 표기.
+  `error_phase` 필드 추가(open 파일명 / step N/M / finalize / package).
+- SKILL.md: 경고 전달, 오류 문자열 그대로 보고, Protected View·잠금 안내 추가.
+- 미검증: Windows+Excel 종단(`test_run_com.py`) — 스테이징 경로 실측 필요. `test_core.py` 는 통과.
+
 ## 0.8.2 병합에서 바뀐 것 (코드리뷰 반영 — 2026-09-01)
 
 실행 결과에 영향 있는 것 위주. 도구 구성/MCP 계약/매핑 로직은 그대로다.
@@ -166,7 +215,7 @@ run_start 는 ixi-flow 의 런 레지스트리/bg_wait/체크리스트 진행표
 
 ## 검증 현황
 
-- `python test_core.py` → **6개 통과**: 스킬 로드/핸들복원, 자동 매핑(실제 serve_b2b
+- `python test_core.py` → **7개 통과**: 스킬 로드/핸들복원, 자동 매핑(실제 serve_b2b
   로직), unmatched 검출, 출력 검증/압축, MCP 프로토콜 + 런 생명주기(+비정상 입력 생존),
   **이벤트 seq/summary/커서 계약**(가짜 run 서버로 플랫폼 무관 결정적 검증).
 - `python test_run_com.py` (Windows+Excel) → **실제 Excel COM 종단 실행 통과**:

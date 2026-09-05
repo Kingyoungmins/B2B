@@ -29,7 +29,7 @@ import uuid
 from . import runner_core as core
 
 PROTOCOL_VERSION = "2024-11-05"
-SERVER_INFO = {"name": "axcell_runner", "version": "0.2.0"}
+SERVER_INFO = {"name": "axcell_runner", "version": "0.2.1"}
 
 # ---------------------------------------------------------------------------
 # 런 레지스트리 (프로세스 내 메모리 — 서버 수명과 함께)
@@ -86,16 +86,26 @@ def _run_worker(run):
             e["summary"] = _event_summary(e)
             e["ts"] = time.time()
             run["events"].append(e)
-            if e.get("type") == "step":
+            # 실패 단계 추적 — error 문자열 머리에 붙어 "어느 호출에서 죽었는지"를 남긴다.
+            t = e.get("type")
+            if t == "open":
+                run["phase"] = f"open {e.get('file')}"
+            elif t == "step":
+                run["phase"] = f"step {e.get('step')}/{e.get('total_steps')} {e.get('step_label') or ''}".rstrip()
+            elif t == "saved":
+                run["phase"] = "finalize"
+            if t == "step":
                 run["step"] = e.get("step") or run["step"]
                 run["total_steps"] = e.get("total_steps") or run["total_steps"]
                 run["step_label"] = e.get("step_label") or ""
     try:
+        run["phase"] = "prepare"
         result = core.run(run["skill_zip"], run["input_dir"], run["out_dir"],
                           on_event=on_event, cancel=run["cancel"],
                           excel_pid_holder=run["excel"])
         zip_info = None
         if run["make_zip"]:
+            run["phase"] = "package"
             zip_info = core.package_outputs(result["out_dir"], run["zip_path"])
             if not zip_info.get("ok"):
                 raise RuntimeError("출력 검증 실패: " + "; ".join(zip_info.get("problems") or []))
@@ -116,10 +126,12 @@ def _run_worker(run):
             with RUNS_LOCK:
                 run["status"] = "cancelled"
         else:
-            _log("run failed:", repr(e))
+            msg = core.format_error(e, phase=run.get("phase"))
+            _log("run failed:", msg, "|", repr(e))
             with RUNS_LOCK:
                 run["status"] = "failed"
-                run["error"] = str(e)
+                run["error"] = msg
+                run["error_phase"] = run.get("phase")
     finally:
         with RUNS_LOCK:
             run["ended_at"] = time.time()
@@ -151,6 +163,7 @@ def tool_run_start(args):
         "skill_zip": args["skill_zip"], "input_dir": args["input_dir"],
         "out_dir": out_dir, "make_zip": make_zip, "zip_path": zip_path,
         "step": 0, "total_steps": chk["total_steps"], "step_label": "",
+        "phase": "queued", "error_phase": None,
         "events": [], "cursor": 0,
         "cancel": threading.Event(), "excel": {},
         "result": None, "error": None,
@@ -163,7 +176,8 @@ def tool_run_start(args):
     t.start()
     return {"ok": True, "run_id": run_id, "status": "running",
             "skill": chk["skill"], "total_steps": chk["total_steps"],
-            "out_dir": out_dir, "make_zip": make_zip, "zip_path": zip_path if make_zip else None}
+            "out_dir": out_dir, "make_zip": make_zip, "zip_path": zip_path if make_zip else None,
+            "warnings": chk.get("warnings") or []}
 
 
 def tool_run_report(args):
@@ -197,6 +211,7 @@ def tool_run_report(args):
                 rep["out_zip"] = run["result"]["out_zip"]
         if run["status"] == "failed":
             rep["error"] = run["error"]
+            rep["error_phase"] = run.get("error_phase")
     return rep
 
 
@@ -264,7 +279,7 @@ TOOLS = [
             "properties": {
                 "skill_zip": {"type": "string", "description": "스킬 zip 절대경로"},
                 "input_dir": {"type": "string", "description": "입력 디렉토리 절대경로"},
-                "out_dir": {"type": "string", "description": "출력 디렉토리(기본: <input_dir>/skill_out). 원본은 수정되지 않음"},
+                "out_dir": {"type": "string", "description": "출력 디렉토리(기본: <input_dir>/skill_out). 원본은 수정되지 않음. 실행 자체는 로컬 스테이징 폴더에서 하고 완료 후 결과만 여기로 복사되므로 OneDrive/SharePoint 폴더여도 됨"},
                 "make_zip": {"type": "boolean", "description": "완료 시 출력 검증 후 zip 생성(기본 true)"},
                 "zip_path": {"type": "string", "description": "결과 zip 경로(기본: <out_dir>.zip)"},
             },
