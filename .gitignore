@@ -66,3 +66,9 @@ test_runs/_flagged_dump.txt
 tools/issue_recheck/results_history.jsonl
 tools/issue_recheck/registry.json.bak
 keys.local.json
+
+# [axcell_runner 배포 번들] dist/ 는 위에서 통째로 무시하지만, ixi-flow 설치용 번들
+# tar.gz 는 브랜치에서 바로 내려받을 수 있어야 하므로 예외로 추적한다(_staging 등은 계속 무시).
+!tools/axcell_runner_mcp/dist/
+tools/axcell_runner_mcp/dist/*
+!tools/axcell_runner_mcp/dist/*.tar.gz
