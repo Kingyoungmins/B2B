@@ -17,6 +17,14 @@ on:
   push:
     tags:
       - "axcell_runner-v*"
+    # 러너/엔진/이 워크플로가 바뀐 브랜치 푸시마다 빌드(아티팩트만 — Release 는 태그/수동 게시 때만).
+    # workflow_dispatch 는 기본 브랜치에 워크플로가 있어야만 동작하므로, 기능 브랜치에서 검증하려면 이 경로가 필요.
+    branches:
+      - "**"
+    paths:
+      - "tools/axcell_runner_mcp/**"
+      - "serve_b2b.py"
+      - ".github/workflows/axcell-runner-bundle.yml"
   workflow_dispatch:
     inputs:
       version:
