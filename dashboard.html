@@ -542,9 +542,9 @@ function renderCards(t, errCount, outdated, extras) {
            + ex.newUsers.count + "</span> <small>명</small>" }] : []),
     { k: "⏱ 총 체류", v: esc(C.fmtMinutes(t.dwellMinutes))
         + deltaBadge(t.dwellMinutes, prev && prev.dwellMinutes) },
-    // [활성시간 2026-09-08] 트레이스 간격 근사(5분 무이벤트=자리비움) — 켜만 놓은 시간을 뺀 실사용
+    // [활성시간 2026-09-08] 트레이스 간격 근사(10분 무이벤트=자리비움) — 켜만 놓은 시간을 뺀 실사용
     ...(ex.active && ex.active.minutes > 0 ? [{ k: "🔥 활성 시간(추정)",
-        v: '<span title="로그 이벤트 간격으로 잰 실사용 시간 — 5분 넘게 조용하면 자리비움으로 봅니다">'
+        v: '<span title="로그 이벤트 간격으로 잰 실사용 시간 — 10분 넘게 조용하면 자리비움으로 봅니다">'
            + esc(C.fmtMinutes(ex.active.minutes)) + "</span>" }] : []),
     { k: "💾 스킬 저장", v: (t.skills || 0).toLocaleString() + " <small>개</small>" },
     { k: "🗂 수집 용량", v: esc(C.fmtBytes(t.bytes)) },
@@ -1267,7 +1267,7 @@ async function load() {
       `<tr class="row-click${r.user === activeUser ? " row-active" : ""}" data-filter-user="${esc(r.user)}"
            title="클릭하면 이 사용자로 필터 (다시 클릭=해제)"><td title="${esc(r.user)}">${esc(userLabel(r.user))}</td><td class="num" data-s="${r.sessions}">${r.sessions}</td>
        <td class="num" data-s="${r.dwellMinutes}">${esc(C.fmtMinutes(r.dwellMinutes))}</td>
-       <td class="num" data-s="${activeByUser[r.user] || 0}" title="로그 이벤트 간격 근사 — 5분 무이벤트는 자리비움">${
+       <td class="num" data-s="${activeByUser[r.user] || 0}" title="로그 이벤트 간격 근사 — 10분 무이벤트는 자리비움">${
          activeByUser[r.user] != null ? esc(C.fmtMinutes(activeByUser[r.user])) : "-"}</td>
        <td class="num" data-s="${r.skills}">${r.skills}</td><td class="num" data-s="${r.logs}">${r.logs}</td>
        <td class="num" data-s="${r.bytes}">${esc(C.fmtBytes(r.bytes))}</td>
@@ -1296,7 +1296,7 @@ async function load() {
         <td class="cell-link" data-filter-user="${esc(s.user)}" title="${esc(s.user)} — 클릭하면 이 사용자로 필터">${esc(userLabel(s.user))}</td>
         <td title="${esc(s.orgPath || "")}">${esc(s.team || "-")}</td><td>${esc(C.fmtTs(s.startedAt).slice(11) || "-")}</td>
         <td class="num" data-s="${dw}">${esc(C.fmtMinutes(dw))}</td>
-        <td class="num" data-s="${s.activeMinutes || 0}" title="로그 이벤트 간격 근사 — 5분 무이벤트는 자리비움">${
+        <td class="num" data-s="${s.activeMinutes || 0}" title="로그 이벤트 간격 근사 — 10분 무이벤트는 자리비움">${
           s.activeMinutes != null ? esc(C.fmtMinutes(s.activeMinutes)) : "-"}</td>
         <td${(window.__gateAllowed && normVer(s.appVersion) && !window.__gateAllowed.map(normVer).includes(normVer(s.appVersion)))
              ? ' style="color:var(--bad); font-weight:700" title="허용 버전 목록에 없는 버전"' : ""}>${esc(s.appVersion || "-")}</td><td>${esc(s.host || "-")}</td>

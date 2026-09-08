@@ -140,7 +140,7 @@ check("사용자별 표 활성 열(events.active.byUser 매핑)",
   HTML.includes("<th>총 체류</th><th>활성(추정)</th>") && HTML.includes("activeByUser[r.user] != null"));
 check("활성 시간 카드(구서버·0이면 생략)", HTML.includes('k: "🔥 활성 시간(추정)"')
   && HTML.includes("ex.active && ex.active.minutes > 0"));
-check("자리비움 기준 안내(호버)", (HTML.match(/5분 (무이벤트는|넘게)/g) || []).length >= 2);
+check("자리비움 기준 안내(호버, 10분)", (HTML.match(/10분 (무이벤트는|넘게)/g) || []).length >= 2);
 check("AI 요약에 활성분", HTML.includes("활성분추정:"));
 
 console.log("[12] 페이지 나눔(10줄) + 행 클릭 필터 매핑 — 0.8.4");
