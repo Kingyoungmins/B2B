@@ -35,8 +35,8 @@ console.log("[1] 마크업 — 숨길 것만 정확히 표식");
     const re = new RegExp('class="[^"]*menu-extra[^"]*"[^>]*data-page="' + page + '"');
     check("AX-Cell 은 표식 없음: " + page, !re.test(HTML));
   }
-  check("본체 그룹 라벨(B2B 스마트 빌링 에이전트)은 표식 없음",
-    /<div class="menu-group">B2B 스마트 빌링 에이전트<\/div>/.test(HTML));
+  check("본체 그룹 라벨(AX-Cell)은 표식 없음",   // 2026-09-08 지시: 이 라벨은 AX-Cell 로 유지
+    /<div class="menu-group">AX-Cell<\/div>/.test(HTML));
 }
 
 console.log("[2] CSS — Coming soon 블락(항상 보임, 잠금 시 덮개)");

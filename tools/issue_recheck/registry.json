@@ -4509,7 +4509,7 @@
           "test_runs/_test_app_version_label.js"
         ]
       ],
-      "fix": "지시(2026-09-08). 변경: index.html <title>·메뉴 그룹 라벨, 대시보드 제목/h1/요약복사/AI 프롬프트, assist 시스템 프롬프트(구 AX-Cell 병기), 이슈 제보 안내, F9 버전확인 문구, NativeHost.cs 창 제목·중복실행 안내·스플래시(다음 빌드에서 재컴파일 반영). 유지(예외): 생성기 U+ 로고 옆 #page-title 'AX-Cell'(사용자 지시), 스케줄러의 'AX-Cell 스킬/AX-Trace 스킬' 구분 라벨(스킬 종류 태그), 내부 식별자(AXCellScheduler·axcell.ico·exe명)."
+      "fix": "지시(2026-09-08). 변경: index.html <title>, 대시보드 제목/h1/요약복사/AI 프롬프트, assist 시스템 프롬프트(구 AX-Cell 병기), 이슈 제보 안내, F9 버전확인 문구, NativeHost.cs 창 제목·중복실행 안내·스플래시(다음 빌드에서 재컴파일 반영). 유지(예외): 생성기 U+ 로고 옆 #page-title 'AX-Cell' 과 좌측 메뉴 그룹 라벨 'AX-Cell'(둘 다 사용자 지시), 스케줄러의 'AX-Cell 스킬/AX-Trace 스킬' 구분 라벨(스킬 종류 태그), 내부 식별자(AXCellScheduler·axcell.ico·exe명)."
     },
     {
       "id": "EXTRA-MENUS-COMING-SOON",
