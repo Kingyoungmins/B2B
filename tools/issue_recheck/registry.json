@@ -4540,6 +4540,25 @@
         ]
       ],
       "fix": "요청(2026-09-08) '총시간 말고 실제 액티브 시간 / 과부하 없는 쪽'. A안 채택: 수집 서버가 이미 파싱하는 세션 로그의 ts 간격으로 계산 — 인접 이벤트 간격 ≤10분(_ACTIVE_GAP_SECONDS=600, 2026-09-08 5→10분 변경)만 실사용으로 합산, 초과=자리비움 0. 앱 수정 없음(과거 데이터 소급), 세션 이벤트 캐시 v5(기준 변경 시 재계산 위해 버전도 함께 올릴 것)(첫 조회 때 전량 재스캔 1회). admin_sessions.activeMinutes + admin_events.active{minutes,byUser,byDate}. 대시보드: 🔥 카드(0/구서버면 생략), 사용자별·실행 목록 활성(추정) 열('-'=구서버), AI 요약 활성분추정. 한계: 읽기만 하는 시간은 자리비움으로 잡힘 — 정밀화가 필요하면 B안(클라 입력 감지)을 같은 필드로 얹는다. versionTest 보안망 배포 필요."
+    },
+    {
+      "id": "MATCH-FILL-MULTIBLOCK-OVERFILL",
+      "title": "[0.8.4] match_fill 이 반복 블록 시트에서 다른 블록의 같은 이름까지 전부 채움 → 기본 '이 표까지만'.",
+      "checks": [
+        [
+          "python",
+          "test_runs/_test_match_fill_block_scope.py"
+        ],
+        [
+          "python",
+          "test_runs/_test_match_fill_com.py"
+        ],
+        [
+          "python",
+          "test_runs/_test_match_fill_e2e.py"
+        ]
+      ],
+      "fix": "실측(2026-09-08, cloudpc_spark32 15:46 세션): 검증파일 Sheet1 은 '구분' 헤더 블록 8개 반복(행 4,28,44,...) — match_fill 이 header_row+1~끝행을 스캔해 58행 매칭(의도 첫 블록 ~7행), 과거 달 블록 값이 덮임. 사용자의 rows=7 재시도는 '행 7부터 끝까지'로 해석돼 무효. 수정: scope=\"block\" 기본 — 대상 키열에 헤더 라벨(예 '구분')이 다시 나오면 그 앞에서 멈춤(헤더 반복 없는 시트는 기존과 동일). scope=\"all\"=전체 스캔 복원, 끝 명시 rows=(s,e)는 그대로 존중. file-schema.js LLM 문서 갱신. 실 Excel COM 검증: 블록만 채움/지난 블록 보존/scope=all/명시 rows 8건 + 기존 match_fill 4개 suite 회귀 PASS."
     }
   ]
 }

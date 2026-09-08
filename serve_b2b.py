@@ -15579,7 +15579,7 @@ class PythonComSkillContext:
 
     def match_fill(self, source, target, columns, key=None,
                    source_header_row=1, header_row=1, rows=None,
-                   aliases=None, allow_partial=False):
+                   aliases=None, allow_partial=False, scope="block"):
         """소스 표(예: 피벗)의 행을 대상 시트의 '키 열(구분명)'과 이름 매칭해서, 지정한 값 열들을 대상의
         해당 열에 '값만' 채운다. 이름이 완전히 일치하지 않아도 (정확→공백무시→기호무시→부분포함) 순서로
         자동 매칭하고, 확실히 못 맞춘 대상 이름은 '후보'와 함께 오류로 알려 한 번에 확정하게 한다.
@@ -15590,7 +15590,11 @@ class PythonComSkillContext:
                   {"MVNO상품명_count":"건수", "수납금액_sum":"고객납부금액", "가입자당단가_도매대가_sum":"청구금액"}
         key : (소스 키열, 대상 키열). 생략 시 둘 다 A열. 헤더명/열문자/번호 허용.
         source_header_row : 소스 헤더 행(피벗 값표는 보통 1). header_row : 대상 헤더 행(예: 4).
-        rows : 대상 데이터 행 (start, end). 생략 시 header_row+1 부터 키열 마지막 행까지(합계/소계 행은 자동 제외).
+        rows : 대상 데이터 행 (start, end). 생략 시 header_row+1 부터 '이 표(블록)' 끝까지 — 같은 헤더
+               라벨(예: '구분')이 다시 나오는 행 앞에서 멈춘다(월별 요약처럼 같은 표가 아래에 반복되는
+               시트에서 다른 블록의 같은 이름까지 덮어쓰지 않게, 2026-09-08 실측). 합계/소계 행은 자동 제외.
+        scope : "block"(기본) = 위 블록 경계에서 멈춤. "all" = 키열 마지막 행까지 전부(예전 동작).
+                rows=(시작,끝) 처럼 끝을 명시하면 scope 와 무관하게 그 범위를 그대로 쓴다.
         aliases : {대상이름: 소스이름} 강제 매핑 — 리포트에 뜬 못 맞춘 이름을 확정할 때 넣어 재실행.
         allow_partial : True 면 못 맞춘 행은 건너뛰고 맞춘 것만 채운다(오류 없이). 기본 False.
         반환: {"matched": n, "unmatched": [대상이름...], "rows": (start,end)}."""
@@ -15839,7 +15843,24 @@ class PythonComSkillContext:
             r1 = tgt_ctx.last_row(tgt_sheet, t_key)
         if r1 < r0:
             raise PythonComSkillError("match_fill: 대상 '%s' 에 채울 데이터 행이 없습니다." % tgt_sheet)
+        explicit_end = bool(parsed and parsed[1] is not None)
         t_keys = [r[0] for r in tgt_ctx.read(tgt_sheet, "%s%d:%s%d" % (_col_letter(t_key), r0, _col_letter(t_key), r1))]
+        # [블록 경계 2026-09-08] 같은 표가 아래로 반복되는 시트(월별 요약 등)에서, 키열에 대상 헤더
+        # 라벨(예: '구분')이 '다시' 나오면 거기부터는 다음 블록이다 — 기본은 이 표까지만 채운다.
+        # (실측: 8개 블록 시트에서 58행이 채워져 과거 블록 값이 덮였음. 끝을 명시한 rows 는 그대로.)
+        if scope != "all" and not explicit_end:
+            try:
+                hlab = _nlite((tgt_ctx.read(tgt_sheet, "%s%d" % (_col_letter(t_key), t_hr)) or [[None]])[0][0])
+            except Exception:
+                hlab = ""
+            if hlab:
+                for off, raw in enumerate(t_keys):
+                    if _nlite(raw) == hlab:
+                        t_keys = t_keys[:off]
+                        r1 = r0 + off - 1
+                        break
+            if r1 < r0:
+                raise PythonComSkillError("match_fill: 대상 '%s' 에 채울 데이터 행이 없습니다." % tgt_sheet)
 
         matched, unmatched, fills = {}, [], {t_idx: {} for _, t_idx in pairs}  # fills: 대상열idx -> {row: 값}
         for off, raw in enumerate(t_keys):
