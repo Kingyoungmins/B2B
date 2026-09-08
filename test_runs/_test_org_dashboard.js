@@ -180,7 +180,7 @@ check("보고용 요약 복사 버튼 + 클립보드 폴백",
   HTML.includes('id="btn-report"') && HTML.includes("function copyReport(btn)")
   && HTML.includes("function fallbackCopy(text, done)"));
 check("요약이 직전 기간 증감까지 사람 말로",
-  HTML.includes('" → 증가"') && HTML.includes('"[AX-Cell 사용 현황] "'));
+  HTML.includes('" → 증가"') && HTML.includes('"[B2B 스마트 빌링 에이전트 사용 현황] "'));
 
 console.log("[15] 요약 복사 — 실제 실행(문자열 스냅샷 버그 회귀)");
 (async () => {
@@ -212,7 +212,7 @@ check("copyReport 는 객체(__dashDigest)를 읽는다", HTML.includes("const d
   run({ textContent: "복사" });
   await Promise.resolve();
   check("복사 텍스트에 기간이 들어간다(undefined 아님)",
-    copied && copied.includes("[AX-Cell 사용 현황] 2026-08-27 ~ 2026-09-02") && !copied.includes("undefined"), copied);
+    copied && copied.includes("[B2B 스마트 빌링 에이전트 사용 현황] 2026-08-27 ~ 2026-09-02") && !copied.includes("undefined"), copied);
   check("실행·직전 기간 증감이 사람 말로",
     copied && copied.includes("실행 42회 (직전 기간 30 → 증가)"), copied);
   check("토큰·전체실행·TOP·잦은 오류 포함",

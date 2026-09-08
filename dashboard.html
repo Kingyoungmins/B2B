@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>AX-Cell 관리 대시보드</title>
+<title>B2B 스마트 빌링 에이전트 관리 대시보드</title>
 <!--
   [F9 관리 대시보드 2026-08-24 / 차트·교차필터 확장 2026-08-31]
   이 페이지는 AX-Cell 로컬 백엔드가 서빙하고, 데이터는 same-origin /api/logdash/* 로 받는다.
@@ -163,7 +163,7 @@
 </head>
 <body>
 <header>
-  <h1><b>AX-Cell</b> 관리 대시보드</h1>
+  <h1><b>B2B 스마트 빌링 에이전트</b> 관리 대시보드</h1>
   <span id="server-line">수집 서버 확인 중…</span>
   <span id="last-updated"></span>
   <button id="btn-report" title="팀즈에 붙여넣기 좋은 기간 요약을 클립보드로 복사" onclick="copyReport(this)"
@@ -770,7 +770,7 @@ function copyReport(btn) {
     return;
   }
   const L = [];
-  L.push("[AX-Cell 사용 현황] " + d.조회기간
+  L.push("[B2B 스마트 빌링 에이전트 사용 현황] " + d.조회기간
     + (d.필터 && (d.필터.사용자 !== "전체" || d.필터.소속 !== "전체")
        ? " (필터 — 사용자: " + d.필터.사용자 + ", 소속: " + d.필터.소속 + ")" : ""));
   const t = d.요약 || {}, pv = d.직전기간;
@@ -963,7 +963,7 @@ async function askDashboard(preset) {
       chat_template_kwargs: { enable_thinking: false },     // 상황판 질문 — 빠른 답 우선
       messages: [
         { role: "system",
-          content: "당신은 AX-Cell 관리 대시보드의 데이터 분석 도우미입니다. 아래 JSON 요약은 "
+          content: "당신은 B2B 스마트 빌링 에이전트 관리 대시보드의 데이터 분석 도우미입니다. 아래 JSON 요약은 "
             + "관리자가 지금 화면에서 보고 있는 사용 기록 집계입니다. 반드시 이 데이터만 근거로 "
             + "한국어로 간결하게(필요하면 목록으로) 답하고, 데이터에 없는 것은 추측하지 말고 "
             + "'데이터에 없다'고 말하세요. 숫자를 들어 설명하세요." },

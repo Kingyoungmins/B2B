@@ -104,15 +104,17 @@ document.addEventListener("click", e => {
   if (section) section.classList.toggle("collapsed");
 });
 
-// [숨김 메뉴 2026-08-31] AX-Cell 외 그룹(AX-Trace·E2E 작업 등록)은 준비 중이라 기본 숨김.
-// F6 으로 표시/숨김 토글(F8 디버그 패널과 같은 패턴 — localStorage 로 선택 유지).
+// [Coming soon 2026-09-08] 추가 그룹(AX-Trace·E2E)은 항상 보이되 'Coming soon' 반투명
+// 블락이 덮는다(styles/scheduler.css .menu-extra-block::after). F6 = 블락 해제/복귀 토글
+// (F8 디버그 패널과 같은 패턴 — localStorage 로 선택 유지). show-extra-menus 클래스가
+// '해제됨' 표식이라 기존 저장값·테스트와 호환된다.
 // 주의: F6 은 브라우저 기본이 '영역 간 포커스 이동'이라 preventDefault 필수.
 (function () {
   const KEY = "b2bShowExtraMenus";
   function applyExtraMenus(show) {
     document.body.classList.toggle("show-extra-menus", !!show);
-    // 숨기는 순간 그 그룹 페이지를 보고 있었으면 생성기로 돌려보낸다
-    // (메뉴에서 사라진 페이지에 갇히지 않게 — 항목 없이는 되돌아올 길이 없다).
+    // 다시 잠그는 순간 그 그룹 페이지를 보고 있었으면 생성기로 돌려보낸다
+    // (블락된 메뉴로는 되돌아올 길이 없다).
     const extraPages = ["trace-generator", "trace-runner", "scheduler", "schedules"];
     if (!show && typeof state === "object" && state && extraPages.includes(state.currentPage)) {
       try { setPage("generator"); } catch (_) {}
@@ -125,7 +127,8 @@ document.addEventListener("click", e => {
     localStorage.setItem(KEY, show ? "1" : "0");
     applyExtraMenus(show);
     if (typeof toast === "function") {
-      toast(show ? "추가 메뉴(AX-Trace·E2E)를 표시합니다." : "추가 메뉴를 숨겼습니다.", "success");
+      toast(show ? "Coming soon 잠금을 해제했습니다 (AX-Trace·E2E 사용 가능)."
+                 : "추가 메뉴를 Coming soon 상태로 잠갔습니다.", "success");
     }
   });
   if (localStorage.getItem(KEY) === "1") applyExtraMenus(true);

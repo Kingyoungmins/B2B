@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AX-Cell</title>
+  <title>B2B 스마트 빌링 에이전트</title>
   <!-- [앱 아이콘 2026-08-20] 브라우저 모드 탭 아이콘(아이콘이미지.png 에서 생성) -->
   <link rel="icon" type="image/png" href="assets/axcell-64.png">
   <script>
@@ -48,7 +48,7 @@
     <!-- [E2E 작업 등록 애드온] 메뉴 3그룹 — 그룹 라벨(.menu-group)·아이콘(.menu-ico) 스타일은 styles/scheduler.css -->
     <div class="menu-list">
       <!-- 청구서를 만드는 쪽 -->
-      <div class="menu-group">AX-Cell</div>
+      <div class="menu-group">B2B 스마트 빌링 에이전트</div>
       <button class="menu-item active" data-page="generator" type="button">
         <span class="menu-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4.5A1.5 1.5 0 0 1 5.5 3H15l5 5v12.5a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 20.5z"/><path d="M14.5 3v4.5a1 1 0 0 0 1 1H20"/><path d="M8.5 13h7M8.5 17h4.5"/></svg></span>
         <span>스킬 생성기</span>
@@ -59,8 +59,9 @@
       </button>
 
       <!-- 데이터를 가져오는 쪽 (준비 중) -->
-      <!-- [숨김 메뉴 2026-08-31] AX-Cell 외 그룹(AX-Trace·E2E)은 준비 중이라 기본 숨김.
-           F6 으로 표시 토글(scripts/menu.js) — .menu-extra 가 그 표식이다. -->
+      <!-- [Coming soon 2026-09-08] 추가 그룹(AX-Trace·E2E)은 항상 보이되 반투명 'Coming soon'
+           블락으로 덮는다. F6 이 블락을 해제/복귀(scripts/menu.js) — .menu-extra-block 참조. -->
+      <div class="menu-extra-block">
       <div class="menu-group menu-extra">AX-Trace</div>
       <button class="menu-item menu-extra" data-page="trace-generator" type="button">
         <span class="menu-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4.5A1.5 1.5 0 0 1 5.5 3H15l5 5v12.5a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 20.5z"/><path d="M14.5 3v4.5a1 1 0 0 0 1 1H20"/><path d="M8.5 13h7M8.5 17h4.5"/></svg></span>
@@ -81,6 +82,7 @@
         <span class="menu-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 5.2v13.6a.8.8 0 0 0 1.22.68l10.5-6.8a.8.8 0 0 0 0-1.36L9.22 4.52A.8.8 0 0 0 8 5.2z"/></svg></span>
         <span>스킬 목록</span>
       </button>
+      </div><!-- /.menu-extra-block -->
     </div>
   </div>
 </aside>

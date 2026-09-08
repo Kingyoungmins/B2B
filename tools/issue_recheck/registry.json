@@ -4495,6 +4495,36 @@
         ]
       ],
       "fix": "요청(2026-09-03). collector admin_sessions 가 세션별 이벤트 집계 캐시(_session_events, v3)를 재사용해 tokens{total,prompt,completion,calls}를 목록에 실음(집계 실패 시 None). 대시보드 실행 목록에 토큰 열(합계 fmtTok, 호버=입력/출력/호출, 구서버는 '-'), colspan 11→12. versionTest 보안망 배포 필요."
+    },
+    {
+      "id": "APP-RENAME-B2B-BILLING-AGENT",
+      "title": "[0.8.4] 프로그램명 'B2B 스마트 빌링 에이전트'로 변경(U+ 로고 옆 AX-Cell 은 유지).",
+      "checks": [
+        [
+          "node",
+          "test_runs/_test_org_dashboard.js"
+        ],
+        [
+          "node",
+          "test_runs/_test_app_version_label.js"
+        ]
+      ],
+      "fix": "지시(2026-09-08). 변경: index.html <title>·메뉴 그룹 라벨, 대시보드 제목/h1/요약복사/AI 프롬프트, assist 시스템 프롬프트(구 AX-Cell 병기), 이슈 제보 안내, F9 버전확인 문구, NativeHost.cs 창 제목·중복실행 안내·스플래시(다음 빌드에서 재컴파일 반영). 유지(예외): 생성기 U+ 로고 옆 #page-title 'AX-Cell'(사용자 지시), 스케줄러의 'AX-Cell 스킬/AX-Trace 스킬' 구분 라벨(스킬 종류 태그), 내부 식별자(AXCellScheduler·axcell.ico·exe명)."
+    },
+    {
+      "id": "EXTRA-MENUS-COMING-SOON",
+      "title": "[0.8.4] 추가 메뉴 숨김 → 항상 보이되 'Coming soon' 반투명 블락, F6=해제/복귀.",
+      "checks": [
+        [
+          "node",
+          "test_runs/_test_extra_menus_f6.js"
+        ],
+        [
+          "node",
+          "test_runs/_test_fkey_help.js"
+        ]
+      ],
+      "fix": "지시(2026-09-08). AX-Trace·E2E 그룹을 .menu-extra-block 으로 감싸고, 잠금 상태에선 ::after 'Coming soon' 반투명 덮개(inset:0, 클릭 차단 pointer-events:none)로 덮음. F6 토글·localStorage 키(b2bShowExtraMenus)·복귀 로직·F키 가드 대상은 기존 그대로(show-extra-menus 클래스가 '해제됨' 표식으로 의미만 바뀜). F1 도움말 문구 갱신."
     }
   ]
 }

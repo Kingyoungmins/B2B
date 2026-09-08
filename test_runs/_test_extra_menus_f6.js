@@ -1,10 +1,11 @@
-// [요청 2026-08-31] 좌측 3그룹 메뉴 중 AX-Cell 만 남기고 숨김 + F6 으로 표시 토글.
+// [요청 2026-08-31→2026-09-08] 추가 그룹(AX-Trace·E2E)은 항상 보이되 'Coming soon'
+// 반투명 블락으로 덮는다. F6 = 블락 해제/복귀 토글.
 //
 // 잠그는 것
-//   1) AX-Trace·E2E 그룹(라벨 2 + 버튼 4)만 .menu-extra 표식 — AX-Cell 은 표식 없음
-//   2) CSS: show-extra-menus 없으면 .menu-extra 숨김(!important — 원래 display 가 제각각이라)
+//   1) 추가 그룹(라벨 2 + 버튼 4)만 .menu-extra 표식 + .menu-extra-block 컨테이너
+//   2) CSS: show-extra-menus 없으면 블락 오버레이(::after 'Coming soon') + 클릭 차단
 //   3) F6: 토글 + preventDefault(브라우저 기본 '영역 포커스 이동' 차단) + 선택 유지(localStorage)
-//   4) 숨기는 순간 그 그룹 페이지를 보고 있었으면 생성기로 복귀(갇힘 방지)
+//   4) 다시 잠그는 순간 그 그룹 페이지를 보고 있었으면 생성기로 복귀(갇힘 방지)
 "use strict";
 const fs = require("fs");
 const path = require("path");
@@ -23,7 +24,8 @@ function check(name, cond, detail) {
 
 console.log("[1] 마크업 — 숨길 것만 정확히 표식");
 {
-  const extras = HTML.match(/class="[^"]*menu-extra[^"]*"/g) || [];
+  const extras = (HTML.match(/class="[^"]*menu-extra[^"]*"/g) || [])
+    .filter(m => !m.includes("menu-extra-block"));
   check("표식이 정확히 6개(라벨 2 + 버튼 4)", extras.length === 6, extras.length);
   for (const page of ["trace-generator", "trace-runner", "scheduler", "schedules"]) {
     const re = new RegExp('class="[^"]*menu-extra[^"]*"[^>]*data-page="' + page + '"');
@@ -33,16 +35,24 @@ console.log("[1] 마크업 — 숨길 것만 정확히 표식");
     const re = new RegExp('class="[^"]*menu-extra[^"]*"[^>]*data-page="' + page + '"');
     check("AX-Cell 은 표식 없음: " + page, !re.test(HTML));
   }
-  check("AX-Cell 그룹 라벨은 표식 없음", /<div class="menu-group">AX-Cell<\/div>/.test(HTML));
+  check("본체 그룹 라벨(B2B 스마트 빌링 에이전트)은 표식 없음",
+    /<div class="menu-group">B2B 스마트 빌링 에이전트<\/div>/.test(HTML));
 }
 
-console.log("[2] CSS — 기본 숨김 규칙");
-check("show-extra-menus 없으면 숨김(!important)",
-  /body:not\(\.show-extra-menus\) \.menu-extra \{ display: none !important; \}/.test(CSS));
+console.log("[2] CSS — Coming soon 블락(항상 보임, 잠금 시 덮개)");
+check("옛 숨김 규칙 제거(항상 보이게)", !CSS.includes(".menu-extra { display: none !important; }"));
+check("잠금 시 반투명 덮개(::after Coming soon)",
+  CSS.includes("body:not(.show-extra-menus) .menu-extra-block::after")
+  && CSS.includes('content: "Coming soon";') && /background: rgba\(255, 255, 255, 0\.7\d\)/.test(CSS));
+check("덮개가 클릭을 막는다(pointer-events + 전체 덮음)",
+  CSS.includes("body:not(.show-extra-menus) .menu-extra-block .menu-item { pointer-events: none; }")
+  && CSS.includes("position: absolute; inset: 0;"));
+check("마크업이 블락 컨테이너로 감싼다",
+  HTML.includes('<div class="menu-extra-block">') && HTML.includes("/.menu-extra-block"));
 
 console.log("[3] F6 토글 — 실제로 돌려본다");
 {
-  const i = MENU.indexOf("// [숨김 메뉴 2026-08-31]");
+  const i = MENU.indexOf("// [Coming soon 2026-09-08]");
   if (i < 0) throw new Error("토글 블록을 못 찾음");
   const block = MENU.slice(i);
   const cls = new Set();
@@ -77,13 +87,13 @@ console.log("[3] F6 토글 — 실제로 돌려본다");
   check("F6 → 표시", cls.has("show-extra-menus"));
   check("F6 은 기본 동작 차단(포커스 이동 방지)", seen.prevented === 1);
   check("선택이 저장된다", store.b2bShowExtraMenus === "1", store);
-  check("안내 문구", seen.toasts.some(m => m.includes("표시")), seen.toasts);
+  check("안내 문구(잠금 해제)", seen.toasts.some(m => m.includes("잠금을 해제")), seen.toasts);
 
   env.state.currentPage = "scheduler";       // 숨김 그룹 페이지를 보는 중에
   press("F6");
-  check("F6 다시 → 숨김", !cls.has("show-extra-menus"));
-  check("보고 있던 숨김 페이지에서 생성기로 복귀(갇힘 방지)", seen.page === "generator", seen.page);
-  check("숨김도 저장", store.b2bShowExtraMenus === "0", store);
+  check("F6 다시 → 잠금(블락 복귀)", !cls.has("show-extra-menus"));
+  check("보고 있던 추가 페이지에서 생성기로 복귀(갇힘 방지)", seen.page === "generator", seen.page);
+  check("잠금도 저장", store.b2bShowExtraMenus === "0", store);
 
   seen.page = null;
   env.state.currentPage = "generator";

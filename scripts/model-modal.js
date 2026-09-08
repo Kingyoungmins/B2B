@@ -221,7 +221,7 @@ function openSettingsModal(devMode) {
     <div style="margin-top:16px; padding-top:14px; border-top:1px solid #eee">
       <div style="font-weight:700; font-size:12.5px; margin-bottom:2px">버전 확인</div>
       <div style="font-size:11px; color:#777; margin-bottom:8px">
-        지금 AX-Cell 의 파일 버전과 버전 서버의 허용 버전 목록을 비교합니다.
+        지금 B2B 스마트 빌링 에이전트의 파일 버전과 버전 서버의 허용 버전 목록을 비교합니다.
         (0.8.3부터 프로그램 시작 시 자동으로 1회 확인하고, 목록에 없으면 안내창이 뜹니다)
       </div>
       <label style="font-size:11.5px; color:#666">버전 서버 실제 주소</label>

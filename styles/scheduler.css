@@ -1057,7 +1057,21 @@
 
 /* [숨김 메뉴 2026-08-31] AX-Cell 외 그룹(AX-Trace·E2E 작업 등록)은 기본 숨김 — F6 으로 토글.
    원래 display 값(라벨=block, 버튼=flex)이 달라 '숨김'만 규칙으로 걸고, 표시는 원복에 맡긴다. */
-body:not(.show-extra-menus) .menu-extra { display: none !important; }
+/* [Coming soon 2026-09-08] 추가 그룹은 항상 보이되, 잠금 상태(show-extra-menus 없음)에서는
+   반투명 블락이 덮어 클릭을 막는다. F6 이 잠금을 해제/복귀한다(scripts/menu.js). */
+.menu-extra-block { position: relative; border-radius: 10px; }
+body:not(.show-extra-menus) .menu-extra-block::after {
+  content: "Coming soon";
+  position: absolute; inset: 0; z-index: 2;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(1.5px);
+  border: 1px dashed rgba(0, 0, 0, 0.18); border-radius: 10px;
+  color: #6b7280; font-weight: 800; font-size: 13px; letter-spacing: 0.4px;
+  cursor: not-allowed;
+}
+/* 키보드 초점 등 우회 클릭도 차단 */
+body:not(.show-extra-menus) .menu-extra-block .menu-item { pointer-events: none; }
 
 .menu-sep {
   height: 1px;
