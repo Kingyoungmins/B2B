@@ -20,7 +20,7 @@ console.log("[2] 세션 표 — 조직(팀) 열");
 check("머리글에 조직(팀)", /<th>사용자<\/th><th>조직\(팀\)<\/th>/.test(HTML));
 check("셀에 팀 표시 + 마우스오버로 전체 경로", HTML.includes('title="${esc(s.orgPath || "")}"')
   && HTML.includes('${esc(s.team || "-")}'));
-check("빈 행 colspan 12 로 갱신(토큰 열 포함)", HTML.includes('colspan="12"') && !HTML.includes('colspan="11"'));
+check("빈 행 colspan 13 로 갱신(토큰·활성 열 포함)", HTML.includes('colspan="13"') && !HTML.includes('colspan="12"'));
 
 console.log("[3] 데이터 배선");
 check("세션 필터에 소속 적용(sessionInOrg)", HTML.includes("sessionInOrg(s, orgv)"));
@@ -131,6 +131,17 @@ check("세션당 토큰 열(합계 + 입력/출력 호버, 구서버는 '-')",
 check("프록시 허용 경로에 session/detail·session/file 포함",
   (() => { const ld = fs.readFileSync(path.join(ROOT, "log_dash.py"), "utf8");
            return ld.includes('"session/detail"') && ld.includes('"session/file"'); })());
+
+console.log("[11b] 활성 시간(추정) — 0.8.4 A안(트레이스 간격 근사)");
+check("실행 목록 활성 열(구서버는 '-')",
+  HTML.includes("<th>활성(추정)</th><th>버전</th>")
+  && HTML.includes('s.activeMinutes != null ? esc(C.fmtMinutes(s.activeMinutes)) : "-"'));
+check("사용자별 표 활성 열(events.active.byUser 매핑)",
+  HTML.includes("<th>총 체류</th><th>활성(추정)</th>") && HTML.includes("activeByUser[r.user] != null"));
+check("활성 시간 카드(구서버·0이면 생략)", HTML.includes('k: "🔥 활성 시간(추정)"')
+  && HTML.includes("ex.active && ex.active.minutes > 0"));
+check("자리비움 기준 안내(호버)", (HTML.match(/5분 (무이벤트는|넘게)/g) || []).length >= 2);
+check("AI 요약에 활성분", HTML.includes("활성분추정:"));
 
 console.log("[12] 페이지 나눔(10줄) + 행 클릭 필터 매핑 — 0.8.4");
 check("쪽 크기 10", HTML.includes("const PAGE_SIZE = 10;"));

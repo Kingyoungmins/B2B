@@ -224,7 +224,7 @@
   <section>
     <h2>사용자별 <span>— 누가 얼마나 썼나 · 열 제목을 누르면 정렬</span> <button class="csv-btn" onclick="exportCSV('tbl-users','사용자별')" title="지금 필터·정렬 그대로 엑셀용 CSV 로 저장">⬇ CSV</button></h2>
     <div class="tbl-wrap"><table id="tbl-users">
-      <thead><tr><th>사용자</th><th>실행 횟수</th><th>총 체류</th><th>스킬 저장</th><th>로그 파일</th><th>용량</th><th>마지막 사용</th></tr></thead>
+      <thead><tr><th>사용자</th><th>실행 횟수</th><th>총 체류</th><th>활성(추정)</th><th>스킬 저장</th><th>로그 파일</th><th>용량</th><th>마지막 사용</th></tr></thead>
       <tbody></tbody></table></div>
   </section>
 
@@ -238,7 +238,7 @@
   <section>
     <h2>실행(세션) 목록 <span>— 실행 1회 = 한 줄. zip 으로 그 실행의 로그·스킬을 통째로 받는다</span> <button class="csv-btn" onclick="exportCSV('tbl-sessions','실행목록')" title="지금 필터·정렬 그대로 엑셀용 CSV 로 저장">⬇ CSV</button></h2>
     <div class="tbl-wrap"><table id="tbl-sessions">
-      <thead><tr><th>날짜</th><th>사용자</th><th>조직(팀)</th><th>시작</th><th>체류</th><th>버전</th><th>PC</th><th>상태</th><th>로그/스킬</th><th>토큰</th><th>용량</th><th>받기</th></tr></thead>
+      <thead><tr><th>날짜</th><th>사용자</th><th>조직(팀)</th><th>시작</th><th>체류</th><th>활성(추정)</th><th>버전</th><th>PC</th><th>상태</th><th>로그/스킬</th><th>토큰</th><th>용량</th><th>받기</th></tr></thead>
       <tbody></tbody></table></div>
   </section>
 
@@ -542,6 +542,10 @@ function renderCards(t, errCount, outdated, extras) {
            + ex.newUsers.count + "</span> <small>명</small>" }] : []),
     { k: "⏱ 총 체류", v: esc(C.fmtMinutes(t.dwellMinutes))
         + deltaBadge(t.dwellMinutes, prev && prev.dwellMinutes) },
+    // [활성시간 2026-09-08] 트레이스 간격 근사(5분 무이벤트=자리비움) — 켜만 놓은 시간을 뺀 실사용
+    ...(ex.active && ex.active.minutes > 0 ? [{ k: "🔥 활성 시간(추정)",
+        v: '<span title="로그 이벤트 간격으로 잰 실사용 시간 — 5분 넘게 조용하면 자리비움으로 봅니다">'
+           + esc(C.fmtMinutes(ex.active.minutes)) + "</span>" }] : []),
     { k: "💾 스킬 저장", v: (t.skills || 0).toLocaleString() + " <small>개</small>" },
     { k: "🗂 수집 용량", v: esc(C.fmtBytes(t.bytes)) },
     { k: "⚠ 오류", tone: (errCount || 0) ? "bad" : "ok",
@@ -899,7 +903,8 @@ function buildDashDigest(d) {
     조회기간: (d.from || "처음") + " ~ " + (d.to || "지금"),
     필터: { 사용자: d.user ? userLabel(d.user) : "전체", 소속: d.org || "전체" },
     요약: { 총실행: d.total.sessions || 0, 사용자수: d.total.userCount || 0,
-           총체류분: d.total.dwellMinutes || 0, 스킬저장: d.total.skills || 0,
+           총체류분: d.total.dwellMinutes || 0,
+           활성분추정: (d.active && d.active.minutes) || 0, 스킬저장: d.total.skills || 0,
            오류건수: d.errCount || 0 },
     직전기간: d.prevTotal ? { 총실행: d.prevTotal.sessions || 0, 사용자수: d.prevTotal.userCount || 0,
                             총체류분: d.prevTotal.dwellMinutes || 0, 오류건수: d.prevTotal.errCount || 0 } : null,
@@ -1013,7 +1018,7 @@ async function toggleSessionDetail(td) {
   document.querySelectorAll("tr.sess-detail").forEach(el => el.remove());          // 하나만 펼침
   const row = document.createElement("tr");
   row.className = "sess-detail";
-  row.innerHTML = '<td colspan="12" style="background:var(--bg); padding:10px 14px">불러오는 중…</td>';
+  row.innerHTML = '<td colspan="13" style="background:var(--bg); padding:10px 14px">불러오는 중…</td>';
   tr.after(row);
   // [실시간 2026-09-03] 캐시 안 한다 — 수집 중인 세션은 펼칠 때마다 방금 만든 스킬까지
   // 봐야 한다(첫 응답을 영영 캐시하면 그 뒤 저장된 스킬이 다시 펼쳐도 안 보였음). API 가볍다.
@@ -1204,11 +1209,12 @@ async function load() {
     }
     renderCards(stats.total || {}, errors.count, outdatedUsers(sessions, gate && gate.allowed),
                 { prevTotal, newUsers: newUsersIn(sess.sessions || [], from, to),
-                  tokens: events && events.tokens, fullRuns: events && events.fullRuns });
+                  tokens: events && events.tokens, fullRuns: events && events.fullRuns,
+                  active: events && events.active });
     try { $("last-updated").textContent = "마지막 갱신 " + new Date().toLocaleTimeString("ko-KR"); } catch (_e) {}
     // [AI 질문] 지금 화면 상태의 요약 스냅샷 — askDashboard() 가 근거로 쓴다
     window.__dashSnapshot = buildDashDigest({
-      from, to, user: $("f-user").value, org: orgv,
+      from, to, user: $("f-user").value, org: orgv, active: events && events.active,
       total: stats.total || {}, errCount: errors.count || 0, prevTotal,
       byDate: stats.byDate || [], byUsers: stats.byUsers || [],
       sessions, errors: errors.errors || [],
@@ -1253,14 +1259,20 @@ async function load() {
         + '수집 서버의 collector.py 를 2026-08-31 이후 판으로 올리면 자동으로 채워집니다.</div></div>';
     }
 
+    // [활성시간 2026-09-08] 사용자별 활성분 — 수집 서버 events.active(구서버면 없음 → '-')
+    const activeByUser = {};
+    for (const r of ((events && events.active && events.active.byUser) || []))
+      activeByUser[r.user] = r.minutes;
     $("tbl-users").tBodies[0].innerHTML = (stats.byUsers || []).map(r =>
       `<tr class="row-click${r.user === activeUser ? " row-active" : ""}" data-filter-user="${esc(r.user)}"
            title="클릭하면 이 사용자로 필터 (다시 클릭=해제)"><td title="${esc(r.user)}">${esc(userLabel(r.user))}</td><td class="num" data-s="${r.sessions}">${r.sessions}</td>
        <td class="num" data-s="${r.dwellMinutes}">${esc(C.fmtMinutes(r.dwellMinutes))}</td>
+       <td class="num" data-s="${activeByUser[r.user] || 0}" title="로그 이벤트 간격 근사 — 5분 무이벤트는 자리비움">${
+         activeByUser[r.user] != null ? esc(C.fmtMinutes(activeByUser[r.user])) : "-"}</td>
        <td class="num" data-s="${r.skills}">${r.skills}</td><td class="num" data-s="${r.logs}">${r.logs}</td>
        <td class="num" data-s="${r.bytes}">${esc(C.fmtBytes(r.bytes))}</td>
        <td>${esc(C.fmtTs(r.lastSeenAt))}</td></tr>`).join("")
-      || '<tr><td colspan="7" class="empty">기간에 해당하는 기록이 없습니다.</td></tr>';
+      || '<tr><td colspan="8" class="empty">기간에 해당하는 기록이 없습니다.</td></tr>';
 
     $("tbl-dates").tBodies[0].innerHTML = (stats.byDate || []).map(r =>
       `<tr class="row-click${r.date === activeDate ? " row-active" : ""}" data-filter-date="${esc(r.date)}"
@@ -1284,6 +1296,8 @@ async function load() {
         <td class="cell-link" data-filter-user="${esc(s.user)}" title="${esc(s.user)} — 클릭하면 이 사용자로 필터">${esc(userLabel(s.user))}</td>
         <td title="${esc(s.orgPath || "")}">${esc(s.team || "-")}</td><td>${esc(C.fmtTs(s.startedAt).slice(11) || "-")}</td>
         <td class="num" data-s="${dw}">${esc(C.fmtMinutes(dw))}</td>
+        <td class="num" data-s="${s.activeMinutes || 0}" title="로그 이벤트 간격 근사 — 5분 무이벤트는 자리비움">${
+          s.activeMinutes != null ? esc(C.fmtMinutes(s.activeMinutes)) : "-"}</td>
         <td${(window.__gateAllowed && normVer(s.appVersion) && !window.__gateAllowed.map(normVer).includes(normVer(s.appVersion)))
              ? ' style="color:var(--bad); font-weight:700" title="허용 버전 목록에 없는 버전"' : ""}>${esc(s.appVersion || "-")}</td><td>${esc(s.host || "-")}</td>
         <td>${state}</td><td class="num sess-expand" data-s="${(s.logFiles || []).length}"
@@ -1293,7 +1307,7 @@ async function load() {
           ? ` title="입력 ${fmtTok(s.tokens.prompt)} · 출력 ${fmtTok(s.tokens.completion)} · ${s.tokens.calls}회 호출"` : ""}>${
           s.tokens ? (s.tokens.total ? fmtTok(s.tokens.total) : "0") : "-"}</td>
         <td class="num" data-s="${s.sizeBytes || 0}">${esc(C.fmtBytes(s.sizeBytes))}</td><td><a class="zip" href="${zip}">zip</a></td></tr>`;
-    }).join("") || '<tr><td colspan="12" class="empty">기간에 해당하는 실행이 없습니다.</td></tr>';
+    }).join("") || '<tr><td colspan="13" class="empty">기간에 해당하는 실행이 없습니다.</td></tr>';
 
     $("tbl-errors").tBodies[0].innerHTML = (errors.errors || []).map(e =>
       `<tr><td>${esc(C.fmtTs(e.ts))}</td><td class="cell-link" data-filter-user="${esc(e.user)}"

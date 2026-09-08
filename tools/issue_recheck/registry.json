@@ -4525,6 +4525,21 @@
         ]
       ],
       "fix": "지시(2026-09-08). AX-Trace·E2E 그룹을 .menu-extra-block 으로 감싸고, 잠금 상태에선 ::after 'Coming soon' 반투명 덮개(inset:0, 클릭 차단 pointer-events:none)로 덮음. F6 토글·localStorage 키(b2bShowExtraMenus)·복귀 로직·F키 가드 대상은 기존 그대로(show-extra-menus 클래스가 '해제됨' 표식으로 의미만 바뀜). F1 도움말 문구 갱신."
+    },
+    {
+      "id": "ACTIVE-TIME-ESTIMATE",
+      "title": "[0.8.4] 활성 시간(추정) — 트레이스 간격 근사(A안, 앱 무수정·서버 집계만).",
+      "checks": [
+        [
+          "python",
+          "../versionTest/test_active_time.py"
+        ],
+        [
+          "node",
+          "test_runs/_test_org_dashboard.js"
+        ]
+      ],
+      "fix": "요청(2026-09-08) '총시간 말고 실제 액티브 시간 / 과부하 없는 쪽'. A안 채택: 수집 서버가 이미 파싱하는 세션 로그의 ts 간격으로 계산 — 인접 이벤트 간격 ≤5분(_ACTIVE_GAP_SECONDS)만 실사용으로 합산, 초과=자리비움 0. 앱 수정 없음(과거 데이터 소급), 세션 이벤트 캐시 v3→v4(첫 조회 때 전량 재스캔 1회). admin_sessions.activeMinutes + admin_events.active{minutes,byUser,byDate}. 대시보드: 🔥 카드(0/구서버면 생략), 사용자별·실행 목록 활성(추정) 열('-'=구서버), AI 요약 활성분추정. 한계: 읽기만 하는 시간은 자리비움으로 잡힘 — 정밀화가 필요하면 B안(클라 입력 감지)을 같은 필드로 얹는다. versionTest 보안망 배포 필요."
     }
   ]
 }
