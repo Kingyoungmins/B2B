@@ -8,7 +8,7 @@ signature: "(sys, tail)"
 role: "사용자 메시지는 긴 문단만(soft), 도구 결과(<tool-data>)와 assistant 이전 답은 소스에서 뺀다."
 role_source: banner
 version: "0.8.4"
-loc: "assist-core.js:305-305"
+loc: "assist-core.js:307-307"
 
 # ── 입출력 ──
 inputs:

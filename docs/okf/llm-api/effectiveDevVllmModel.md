@@ -20,6 +20,7 @@ returns: "(추정)"
 # ── 사이드이펙트 (정적 추정) ──
 side_effects:
   - "네트워크/서버 호출"
+  - "타이머"
 raises: []
 
 # ── 유기적 관계 ──
@@ -27,7 +28,10 @@ calls:
   - "openAICompatAuthHeaders"
   - "traceClientUiEvent"
 calls_external:
+  - "AbortController"
   - "String"
+  - "abort"
+  - "clearTimeout"
   - "fetch"
   - "filter"
   - "includes"
@@ -35,6 +39,7 @@ calls_external:
   - "map"
   - "now"
   - "replace"
+  - "setTimeout"
   - "slice"
   - "warn"
 called_by:
@@ -51,6 +56,7 @@ timestamp: "0.8.4-gen"
 
 ## 사이드이펙트 & 주의
 - 네트워크/서버 호출
+- 타이머
 
 ## 관계
 - 호출: `openAICompatAuthHeaders`, `traceClientUiEvent`

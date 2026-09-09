@@ -8,7 +8,7 @@ signature: "(text)"
 role: "단 '오류 창 메모칸' 용 문장은 정당한 말-제시이므로 제외한다(재촉 문구에서도 그 선택지를 준다)."
 role_source: banner
 version: "0.8.4"
-loc: "assist-core.js:358-358"
+loc: "assist-core.js:373-373"
 
 # ── 입출력 ──
 inputs:

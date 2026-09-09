@@ -1,19 +1,19 @@
 ---
-type: method
-title: PythonComSkillContext.summary
-module: serve_b2b.py
-lang: python
-extraction: ast
-class: PythonComSkillContext
-signature: "(self)"
+type: endpoint
+title: run
+module: assist-core.js
+lang: js
+extraction: regex   # 정규식 근사
+signature: "(fn, ...a)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
 version: "0.8.4"
-loc: "serve_b2b.py:16283-16294"
+loc: "assist-core.js:957-957"
 
 # ── 입출력 ──
 inputs:
-  - "self"
+  - "fn"
+  - "...a"
 returns: "(추정)"
 
 # ── 사이드이펙트 (정적 추정) ──
@@ -22,16 +22,14 @@ side_effects:
 raises: []
 
 # ── 유기적 관계 ──
-calls: []
+calls:
+  - "push"
 calls_external:
-  - "get"
-  - "len"
-  - "list"
-  - "sorted"
+  - "fn"
 called_by:
-  - "_exec_python_com_skill"
-reads:
-  - "self._shared"
+  - "_assistGateReplacementCode"
+  - "assistBuildProposal"
+reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
 timestamp: "0.8.4-gen"
@@ -44,8 +42,8 @@ timestamp: "0.8.4-gen"
 - 없음(정적 분석 기준)
 
 ## 관계
-- 호출: 없음
-- 피호출(영향 전파 경로): `_exec_python_com_skill`
+- 호출: `push`
+- 피호출(영향 전파 경로): `_assistGateReplacementCode`, `assistBuildProposal`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

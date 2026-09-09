@@ -8,7 +8,7 @@ signature: "(app)"
 role: "Excel 앱 창의 (위치·크기, 표시 여부) — VBA 실행 전후 비교용."
 role_source: docstring
 version: "0.8.4"
-loc: "serve_b2b.py:20688-20703"
+loc: "serve_b2b.py:20736-20751"
 
 # ── 입출력 ──
 inputs:

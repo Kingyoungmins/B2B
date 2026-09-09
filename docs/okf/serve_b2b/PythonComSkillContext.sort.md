@@ -5,11 +5,11 @@ module: serve_b2b.py
 lang: python
 extraction: ast
 class: PythonComSkillContext
-signature: "(self, sheet, a1_range, key_col, ascending=True, has_header=True)"
+signature: "(self, sheet, a1_range, key_col, ascending=True, has_header=True, exclude_summary_rows=True)"
 role: "실제 범위 정렬. key_col 은 범위 내 1-based 열 번호/'B' 열 문자, 또는 이들의 리스트(다중키)."
 role_source: docstring
 version: "0.8.4"
-loc: "serve_b2b.py:15460-15522"
+loc: "serve_b2b.py:15460-15546"
 
 # ── 입출력 ──
 inputs:
@@ -19,6 +19,7 @@ inputs:
   - "key_col"
   - "ascending"
   - "has_header"
+  - "exclude_summary_rows"
 returns: "(추정)"
 
 # ── 사이드이펙트 (정적 추정) ──
@@ -29,14 +30,19 @@ raises:
 
 # ── 유기적 관계 ──
 calls:
+  - "Cells"
   - "Columns"
+  - "Range"
   - "_col_index"
+  - "_is_summary_or_blank_row"
   - "_journal_save"
+  - "_range_matrix"
   - "_rng"
   - "_tick"
   - "_ws"
   - "append"
   - "find_header"
+  - "row"
   - "sheet"
 calls_external:
   - "Add"
@@ -60,10 +66,16 @@ calls_external:
   - "kr"
   - "len"
   - "list"
+  - "max"
+  - "min"
+  - "n_cols"
+  - "n_rows"
+  - "reversed"
   - "rng"
   - "s"
   - "str"
   - "strip"
+  - "tail"
   - "ws"
 called_by:
   - "B2BHandler.handle_diag_recent_trace"
@@ -74,6 +86,7 @@ reads:
   - "self._col_index"
   - "self._journal_save"
   - "self._rng"
+  - "self._shared"
   - "self._tick"
   - "self._ws"
   - "self.find_header"
@@ -89,7 +102,7 @@ timestamp: "0.8.4-gen"
 - Excel COM 조작(파괴적일 수 있음)
 
 ## 관계
-- 호출: `Columns`, `_col_index`, `_journal_save`, `_rng`, `_tick`, `_ws`, `append`, `find_header`, `sheet`
+- 호출: `Cells`, `Columns`, `Range`, `_col_index`, `_is_summary_or_blank_row`, `_journal_save`, `_range_matrix`, `_rng`, `_tick`, `_ws`, `append`, `find_header`, `row`, `sheet`
 - 피호출(영향 전파 경로): `B2BHandler.handle_diag_recent_trace`, `PythonComSkillContext.match_fill`, `_browser_content_target`, `_spawn_dialog_confirmer`
 
 ## 실패/예외

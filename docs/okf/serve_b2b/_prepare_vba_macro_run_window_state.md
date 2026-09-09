@@ -8,7 +8,7 @@ signature: "(session, app, wb)"
 role: "Put Excel into the same non-visible state that reliably allows Application.Run."
 role_source: docstring
 version: "0.8.4"
-loc: "serve_b2b.py:20706-20733"
+loc: "serve_b2b.py:20754-20781"
 
 # ── 입출력 ──
 inputs:

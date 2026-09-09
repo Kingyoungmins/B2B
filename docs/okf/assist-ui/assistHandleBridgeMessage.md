@@ -8,7 +8,7 @@ signature: "(m)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
 version: "0.8.4"
-loc: "assist-ui.js:642-642"
+loc: "assist-ui.js:643-643"
 
 # ── 입출력 ──
 inputs:
@@ -19,6 +19,7 @@ returns: "(추정)"
 side_effects:
   - "DOM/브라우저 전역 조작"
   - "상태 변경: assist, currentPage"
+  - "타이머"
 raises: []
 
 # ── 유기적 관계 ──
@@ -41,6 +42,7 @@ calls_external:
   - "isArray"
   - "map"
   - "resolve"
+  - "setTimeout"
   - "slice"
   - "then"
 called_by:
@@ -61,6 +63,7 @@ timestamp: "0.8.4-gen"
 ## 사이드이펙트 & 주의
 - DOM/브라우저 전역 조작
 - 상태 변경: assist, currentPage
+- 타이머
 - 변경 상태 `assist, currentPage` — 수정 시 이 상태를 읽는 곳 동반 점검.
 
 ## 관계

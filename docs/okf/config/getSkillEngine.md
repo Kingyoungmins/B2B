@@ -8,7 +8,7 @@ signature: "()"
 role: "==================================================================="
 role_source: banner
 version: "0.8.4"
-loc: "config.js:534-534"
+loc: "config.js:535-535"
 
 # ── 입출력 ──
 inputs: []
