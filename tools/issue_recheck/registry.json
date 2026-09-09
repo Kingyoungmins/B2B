@@ -4626,6 +4626,28 @@
         ]
       ],
       "fix": "실측(2026-09-09 10:47): data.query 는 라이브 미리보기(_live_preview_schema max_rows=60)만 계산해 1,200행 합계가 '최소값'이었고 모델은 핸드오프로 도망갔다(교안 ②는 즉답을 기대). 수정: 실제 행수(dims.maxRow)가 캐시보다 많으면 그 시트만 preview-schema maxRows(≤20000, 단일 시트 조건)로 다시 읽어 전체 기준 집계(_assistFetchLiveRows — 캐시엔 안 넣어 생성 프롬프트 미리보기 비대 방지). 도구 설명에 '실제 행 전체 기준' 명시. 실 Excel 1,200행 합계 일치 검증. 부수: 도구 인자 {args:{...}} 포장 자동 해제(unknown_file 헛발 제거)."
+    },
+    {
+      "id": "ASSIST-DANGLING-VERB-ALLOWLIST",
+      "title": "[0.8.4] '먼저 1단계 코드를 볼게요.' 에서 또 멈춤 — 예고문 감지의 동사 허용목록 제거.",
+      "checks": [
+        [
+          "node",
+          "test_runs/_test_assist_dangling_announce.js"
+        ]
+      ],
+      "fix": "실측(2026-09-09 12:3x, 수정본 실행 중): 마지막 문장이 약속 어미(볼게요)로 끝났지만 동사 허용목록(확인/조회/읽…)에 '보다'가 없어 final 로 강등돼 멈춤. 수정: 약속 어미로 끝나는 짧은 문장은 인사말(필요하면/감사/수고/안녕/좋은 하루/봬요…)만 빼고 전부 예고로 판정(재촉 최대 2회라 오탐 비용 작음). 재촉 발동 시 assist.nudge 트레이스 기록."
+    },
+    {
+      "id": "ASSIST-VERIFY-SUMMARY-ROW-2X",
+      "title": "[0.8.4] 검산 요청에 '어디서 2배가 됐는지' 단계 탐색으로 샘 — 요약표 합계 행 중복 합산 오탐.",
+      "checks": [
+        [
+          "node",
+          "test_runs/_test_assist_echo_fulldata_args.js"
+        ]
+      ],
+      "fix": "실측(2026-09-09 12:3x): 회사별요약 매출 열을 data.query sum 하면 맨 아래 '합계/평균' 행까지 더해져 원본의 정확히 2배 → 모델이 불일치로 오판하고 pipeline.list·단계 코드 열람으로 빠짐(사용자: 검산은 두 값을 독립적으로 읽어 비교하면 되지 단계를 볼 일이 아님). 수정: ① data.query 집계(sum/count/distinct/group*)에서 요약 행(합계·소계·총계·누계·평균·'…계'·부가세/VAT·Total) 기본 제외 + 제외 개수/라벨을 note 로 안내, includeSummaryRows=true 로 포함 가능, sample 은 그대로. ② 시스템 프롬프트 [검산·비교 질문] 규칙: 두 값을 각각 읽어 결론부터, 단계/코드 탐색은 '어디서 달라졌는지' 요청 시에만, 정확히 2배면 합계 행 중복부터 의심."
     }
   ]
 }

@@ -49,6 +49,10 @@ function assistSystemPrompt() {
   도구로 **확인한 값만** 쓴다. 확인하지 않은 이름을 "Sheet1" 같은 추측으로 채우지 마라 — 모르면 먼저 그 도구를
   호출해 확인하고, 그래도 모르면 "시트명을 먼저 확인해야 한다"고 솔직히 밝혀라. 확인 안 된 이름으로 수정·복구
   지시문을 만들면 사용자가 그대로 따라 하다 더 틀린다. 아래 그라운딩 팩트(파일 목록·단계)에 없는 것도 지어내지 마라.
+- **[검산·비교 질문]** "A 합계가 원본 총합과 같은지" 같은 질문은 **두 값을 각각 도구로 읽어 비교**하고
+  결론(일치/불일치·두 값·차이)을 **먼저** 말한다. 스킬 단계나 코드를 뒤지지 마라 — 원인 추적은 사용자가
+  "어디서 달라졌는지 찾아줘"라고 따로 물을 때만 한다. 요약표 열을 합칠 때 data.query 는 합계/평균 행을
+  이미 빼고 계산하니 그 값을 그대로 비교에 쓰고, 값이 정확히 2배면 합계 행 중복 합산부터 의심하라.
 
 ## 당신이 할 수 없는 것 (중요)
 - 스킬을 직접 **실행/적용**할 수 없다. 그런 도구는 없다. 다만 네가 코드 수정을 제안하고 사용자가
@@ -322,8 +326,11 @@ function assistLooksLikeDanglingAnnouncement(text) {
     // ('겠습니' 허용: 위 문장 분리 정규식이 '다.' 를 삼켜 앞 문장이 "…보겠습니" 로 남는다)
     if (!/(겠습니다?|볼게요|할게요|드릴게요|해\s*보죠)\s*[.!…~]*\s*$/.test(p)) return false;
     // 맺음 인사·조건부 제안은 예고가 아니다("추가로 필요하면 말씀드리겠습니다" 등)
-    if (/(필요하면|필요하시면|필요할\s*때|언제든|원하시면|궁금한|말씀해\s*주|도움이\s*되|바랍니다)/.test(p)) return false;
-    return /(찾|확인|조회|살펴|알아보|검토|점검|파악|분석|읽|실행|적용|만들|정리|비교|계산|수정|제안|진행|시작|말씀드리)/.test(p);
+    if (/(필요하면|필요하시면|필요할\s*때|언제든|원하시면|궁금한|말씀해\s*주|도움이\s*되|바랍니다|감사|수고|안녕|좋은\s*하루|봬요|뵙겠)/.test(p)) return false;
+    // [실측 2026-09-09 12:3x] "먼저 1단계 코드를 볼게요." — 동사 허용목록(확인/조회/읽…)에 '보다'가
+    // 없어 빠졌다. 허용목록은 구멍이 계속 난다 → 약속 어미로 끝나는 짧은 문장은 인사말만 빼고 전부
+    // 예고로 본다(재촉은 최대 2회라 오탐 비용이 작다).
+    return true;
   };
   const last = pieces.length ? pieces[pieces.length - 1] : lastLine;
   if (isPromise(last)) return true;
@@ -747,6 +754,7 @@ async function assistHandleUserMessage(userText, ui, attachImages) {
         const finalText = (visible || salvaged || rawShown || "").trim();
         if (!lastRound && danglingNudges < 2 && assistLooksLikeDanglingAnnouncement(finalText)) {
           danglingNudges += 1;
+          try { if (typeof traceClientUiEvent === "function") traceClientUiEvent("assist.nudge", { kind: "dangling", n: danglingNudges, tail: finalText.slice(-80) }); } catch (_) {}
           tail.push({ role: "assistant", content: reply.slice(0, 1500) });
           tail.push({ role: "user", content:
             "방금 응답이 \"~하겠습니다\" 예고로 끝났고 아무것도 실행되지 않았습니다. 예고하지 말고 지금 바로 하세요: "

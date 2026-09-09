@@ -88,6 +88,24 @@ async function _assistFetchLiveRows(f, sheet, maxRows) {
   } catch (_) { return null; }
 }
 
+/* [검산 2배 오탐 2026-09-09] 요약표(회사별요약 등)의 열을 합치면 맨 아래 '합계/평균' 행까지 더해져
+   원본의 정확히 2배가 나온다 — AI 가 이를 '어디서 2배가 됐는지' 단계 탐색으로 오해했다(실측 12:3x).
+   집계(sum/count/distinct/group*)에서는 첫 3칸 중 요약 라벨이 있는 행을 기본 제외하고 개수를 알린다. */
+function _assistIsSummaryRow(row) {
+  if (!Array.isArray(row)) return false;
+  for (let i = 0; i < Math.min(3, row.length); i++) {
+    const v = row[i];
+    if (typeof v !== "string") continue;
+    const n = v.replace(/[\s()\[\]_.:/·\-]/g, "").toLowerCase();
+    if (!n) continue;
+    if (/^(계|합|합계|소계|총계|누계|총합|평균|합계평균|합계계|total|subtotal|grandtotal|sum|average|avg)$/.test(n)) return true;
+    if (/(합계|소계|총계|누계|평균|total|subtotal)/.test(n) && n.length <= 12) return true;
+    if (/(부가세|vat)/.test(n) && n.length <= 12) return true;          // '부가세 별도_계' 류(match_fill 과 동일 기준)
+    if (/계$/.test(n) && n.length <= 8 && !/\d/.test(n)) return true;   // 짧은 '…계' 라벨
+  }
+  return false;
+}
+
 // [헤더행 감지 통일] 실무 파일은 제목/빈 행이 헤더 위에 있는 경우가 흔하다. sheet.headers 는
 // 자동 감지하는데 data.query 는 rows[0] 을 하드코딩해 둘이 어긋났다(헤더가 2행이면 data.query 가
 // 제목행을 헤더로 봐 unknown_column/오열). 같은 규칙을 공유해 일치시킨다.
@@ -271,7 +289,7 @@ assistDefineTool("literals.scan", { desc: "코드에 박힌 월·날짜·파일�
 // ── 7. 데이터 질의 (클라이언트 미리보기 한정, 백엔드 호출 없음) ──────────────
 assistDefineTool("data.query", {
   desc: "시트 데이터 집계/조회(라이브로 열린 파일은 실제 행 전체 기준 — 합계·개수 검산에 바로 쓸 수 있다). op=count|sum|distinct|sample|groupSum|groupCount. groupSum/groupCount 는 groupBy 열로 묶어 상위 topN(기본20). where=[{col,op,value}] 로 조건.",
-  args: "file, sheet, op, column, groupBy?, topN?, where?, headerRow?",
+  args: "file, sheet, op, column, groupBy?, topN?, where?, headerRow?, includeSummaryRows?(기본 false — 합계/평균 행 제외)",
 }, async (a) => {
     const files = _assistFileList();
     const fname = String(a.file || "").trim();
@@ -344,8 +362,15 @@ assistDefineTool("data.query", {
       }
       return false;
     });
-    const hit = body.filter(r => Array.isArray(r) && pass(r));
     const op = String(a.op || "count").toLowerCase();
+    // [검산 2배 오탐 2026-09-09] 합계/평균 같은 요약 행은 집계에서 기본 제외 — 요약표의 열 합계가
+    // 원본의 2배로 나와 '이상'으로 오판하던 실측. includeSummaryRows=true 면 예전처럼 포함.
+    const _inclSum = a.includeSummaryRows === true || String(a.includeSummaryRows || "").toLowerCase() === "true";
+    const _summaryRows = (op === "sample" || _inclSum) ? [] : body.filter(r => Array.isArray(r) && _assistIsSummaryRow(r));
+    const hit = body.filter(r => Array.isArray(r) && pass(r) && (!_summaryRows.length || !_summaryRows.includes(r)));
+    const summaryNote = _summaryRows.length
+      ? ` 요약 행 ${_summaryRows.length}개(${_summaryRows.map(r => String(r.find(v => typeof v === "string" && v.trim()) || "").trim()).slice(0, 3).join("/")})는 집계에서 제외했습니다 — 이 값을 원본 총합과 비교할 때 '요약 열 합계'로 쓰면 안 되고, 대신 이 결과(요약 행 제외 합)가 곧 비교 대상입니다. 포함하려면 includeSummaryRows=true.`
+      : "";
     // [행상한 명시] 미리보기(라이브 직독도)는 최대 60행이라, 실제 데이터가 더 많으면 count/sum/
     // distinct 가 '최소값'일 뿐이다. dims 로 실제 데이터 행수를 얻어 truncated 를 크게 알린다 —
     // LLM 이 잘린 수를 '확정 개수'로 단정하던 실측 오답 방지.
@@ -353,9 +378,11 @@ assistDefineTool("data.query", {
     const _totalRows = _dims && Number(_dims.maxRow) ? Number(_dims.maxRow) : null;
     const _dataRowsTotal = _totalRows != null ? Math.max(0, _totalRows - (hr + 1)) : null;
     const _truncated = _dataRowsTotal != null && _dataRowsTotal > body.length;
-    const previewNote = _truncated
+    let previewNote = _truncated
       ? `⚠ 미리보기 ${body.length}행만 계산했습니다. 이 시트 실제 데이터는 약 ${_dataRowsTotal}행 — 개수/합계는 '최소값'이며 정확한 전체값이 아닙니다. 정확한 전체 집계가 필요하면 사용자에게 그 사실을 밝히세요.`
       : `데이터 ${body.length}행 전체 기준(잘림 없음).`;
+    const _previewNoteBase = previewNote;
+    previewNote = _previewNoteBase + summaryNote;
     const _trunc = { truncated: _truncated, previewRows: body.length, totalDataRowsEstimate: _dataRowsTotal };
     if (op === "count") {
       const nonEmpty = hit.filter(r => norm(r[ci]) !== "").length;

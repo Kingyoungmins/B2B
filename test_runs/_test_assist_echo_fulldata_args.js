@@ -99,6 +99,21 @@ console.log("[2] 도구 인자 {args:{...}} 포장 해제(실제 assistRunTool �
       && PY.includes("return _live_preview_schema(wb, max_rows=max_rows, only_sheet=only_sheet)"));
     check("도구 설명이 '전체 행 기준'임을 모델에 알린다", TOOLS.includes("실제 행 전체 기준"));
 
+    console.log("[4] 검산 2배 오탐 — 요약 행(합계/평균) 기본 제외(실제 판별 함수 실행)");
+    const isSum = extractFn(TOOLS, "_assistIsSummaryRow");
+    check("'합계 / 평균' 행 → 요약", isSum(["합계 / 평균", 3797128000, 2490660000]) === true);
+    check("'계' 행 → 요약", isSum(["계", 100]) === true);
+    check("'부가세 별도_계' → 요약", isSum(["부가세 별도_계", 1]) === true);
+    check("'Total' → 요약", isSum(["Total", 5]) === true);
+    check("회사명 행은 요약 아님", isSum(["ABC통신", 154580000]) === false);
+    check("'합계표'처럼 긴 일반 라벨은 요약 아님(13자 초과 규칙)", isSum(["2026년 상반기 매출 합계표 정리본", 1]) === false);
+    check("숫자만 있는 행은 요약 아님", isSum([1, 2, 3]) === false);
+    check("data.query 집계에서 요약 행 제외 배선 + includeSummaryRows 옵션",
+      TOOLS.includes("_assistIsSummaryRow(r)") && TOOLS.includes("includeSummaryRows") && TOOLS.includes("요약 행 ${_summaryRows.length}개"));
+    check("샘플(sample) 조회는 요약 행도 보여준다", TOOLS.includes('(op === "sample" || _inclSum) ? []'));
+    check("프롬프트: 검산은 두 값 독립 비교·결론 먼저, 단계 탐색은 요청 시에만",
+      CORE.includes("[검산·비교 질문]") && CORE.includes("스킬 단계나 코드를 뒤지지 마라"));
+
     console.log("");
     console.log(fails === 0 ? "RESULT: ALL PASS" : "RESULT: " + fails + " FAIL");
     process.exit(fails === 0 ? 0 : 1);
