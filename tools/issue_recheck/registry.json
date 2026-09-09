@@ -4589,6 +4589,43 @@
         ]
       ],
       "fix": "실측(2026-09-09 10:18): 생성 코드가 '합계 행(24행) 제외' 를 out.append([None]) + 통짜 ctx.write(overwrite_formulas=True) 로 구현 → Value2=None 이 C24 기존 수식을 지움(매출 열은 match_fill 이라 무사). 수정: write(skip_none_rows=True 기본) — 행 전체 None 은 건드리지 않고 연속 구간별로 기록(판정은 _as_2d 가 None→\"\" 로 바꾸기 '전' 원본으로). 일부 셀만 None 인 행은 기존대로 그 셀 비움. 내부 헬퍼는 예전 의미 고정: write_cell(단일 셀 None=비움)·match_fill·조회 채우기(15598)는 skip_none_rows=False. 부수효과 검토: write_cells_total 은 실제 기록 칸만 집계(전부 None 이면 0 → 무변경 판정으로 드러남), .Value2 직접 쓰는 9곳 무관, 값 삭제는 ctx.clear 사용(실측 스킬)이라 영향 없음. file-schema 문서 갱신. 실 Excel 검증 8건 + match_fill 4개 suite 회귀 PASS."
+    },
+    {
+      "id": "ASSIST-ECHO-STRIP-ATE-EVIDENCE",
+      "title": "[0.8.4] AI 도움 답이 '이유는 이래요.' 뒤 빈 답 — 에코 제거기가 도구 결과 인용을 지움.",
+      "checks": [
+        [
+          "node",
+          "test_runs/_test_assist_echo_fulldata_args.js"
+        ]
+      ],
+      "fix": "실측(2026-09-09 10:46, '실패하는 코드' 진단): assistStripPromptEcho 소스가 tail 전체(도구 결과·모델 이전 답 포함)라, 오류 메시지의 문장을 인용한 근거가 '프롬프트 에코'로 통째 삭제됨(테스트로 옛 방식 재현 확인). 수정: assistEchoSources — 시스템 프롬프트·내부 재촉문은 엄격, 사용자 메시지는 긴 문단(≥30자)만(soft), [도구 결과 …]와 assistant 이전 답은 제외. 본 루프·마무리(closeOut) 두 호출부 모두 적용."
+    },
+    {
+      "id": "ASSIST-DANGLING-WITH-ASIDE",
+      "title": "[0.8.4] '…맞춰 볼게요. 원본은 금액 열이에요.' 예고 뒤 부연 한 문장이면 감지 못해 대화 멈춤.",
+      "checks": [
+        [
+          "node",
+          "test_runs/_test_assist_dangling_announce.js"
+        ]
+      ],
+      "fix": "실측(2026-09-09 10:47 검산 요청): 예고문 감지가 마지막 문장만 봐서, 예고 뒤에 짧은 부연이 붙으면 final 로 강등돼 멈췄다(사용자가 '?' 로 재촉). 수정: 뒤따르는 문장이 '결과가 아닌 짧은 부연'(≤50자·숫자 없음·결과 어미 없음)이면 앞 문장(최대 2개)까지 예고 판정. 문장 분리기가 '다.' 를 삼키는 기존 특성 때문에 '겠습니' 도 허용. 결과가 실제로 붙은 답은 완결로 통과."
+    },
+    {
+      "id": "ASSIST-DATAQUERY-FULL-ROWS",
+      "title": "[0.8.4] AI 도움 검산이 미리보기 60행만 합산해 답 못 하고 설계 채팅으로 넘김 → 전체 행 집계.",
+      "checks": [
+        [
+          "node",
+          "test_runs/_test_assist_echo_fulldata_args.js"
+        ],
+        [
+          "python",
+          "test_runs/_test_live_preview_maxrows_com.py"
+        ]
+      ],
+      "fix": "실측(2026-09-09 10:47): data.query 는 라이브 미리보기(_live_preview_schema max_rows=60)만 계산해 1,200행 합계가 '최소값'이었고 모델은 핸드오프로 도망갔다(교안 ②는 즉답을 기대). 수정: 실제 행수(dims.maxRow)가 캐시보다 많으면 그 시트만 preview-schema maxRows(≤20000, 단일 시트 조건)로 다시 읽어 전체 기준 집계(_assistFetchLiveRows — 캐시엔 안 넣어 생성 프롬프트 미리보기 비대 방지). 도구 설명에 '실제 행 전체 기준' 명시. 실 Excel 1,200행 합계 일치 검증. 부수: 도구 인자 {args:{...}} 포장 자동 해제(unknown_file 헛발 제거)."
     }
   ]
 }

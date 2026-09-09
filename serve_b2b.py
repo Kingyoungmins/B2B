@@ -2828,6 +2828,13 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
         try:
             excel_id = payload.get("excelId")
             only_sheet = str(payload.get("sheet") or "").strip()
+            # [전체 집계 2026-09-09] AI 도움 data.query 가 합계/개수 검산용으로 시트 전체를 요청할 때만
+            # 큰 상한(≤20000행)을 허용한다 — 단일 시트 지정이 조건(전 시트 대량 읽기 방지).
+            try:
+                max_rows = int(payload.get("maxRows") or 0)
+            except Exception:
+                max_rows = 0
+            max_rows = max(0, min(max_rows, 20000)) if only_sheet else 0
             session = get_excel_session(excel_id)
 
             def _read():
@@ -2836,6 +2843,8 @@ class B2BHandler(http.server.SimpleHTTPRequestHandler):
                 # excel_call 워커 점유 시간을 최소화한다(전 시트 UsedRange 읽기 회피 → record-start
                 # 등 다른 excel_call 이 그 뒤에 줄서서 '준비 중'이 느려지던 커플링 완화). partial 표시.
                 if only_sheet:
+                    if max_rows:
+                        return _live_preview_schema(wb, max_rows=max_rows, only_sheet=only_sheet)
                     return _live_preview_schema(wb, only_sheet=only_sheet)
                 return _live_preview_schema(wb)
 

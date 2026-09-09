@@ -26,6 +26,12 @@ async function assistRunTool(name, args) {
   if (!tool) {
     return { ok: false, error: "unknown_tool", given: name, available: Object.keys(ASSIST_TOOLS) };
   }
+  // [실측 2026-09-09] 모델이 인자를 {args:{file,sheet,...}} 로 한 겹 감싸 보내 unknown_file 로 한 번
+  // 헛발 딛고 재호출했다(sheet.headers·data.query 각 1회). 겉껍질만 벗겨 준다.
+  if (args && typeof args === "object" && args.args && typeof args.args === "object" && !Array.isArray(args.args)
+      && Object.keys(args).every(k => k === "args" || k === "tool" || k === "name")) {
+    args = { ...args.args };
+  }
   try {
     const out = await tool.fn(args || {});
     return (out && typeof out === "object") ? out : { ok: true, value: out };
@@ -60,6 +66,26 @@ async function _assistRefreshLiveFile(f, sheet) {
     const r = await postExcelMirror("/api/excel/preview-schema", body, 0, { timeoutMs: 15000 });
     if (r && r.ok && r.schema) applyLiveSchemaToFileCache(excelId, r.schema);
   } catch (_) { /* 라이브 직독 실패는 무해 — 캐시 그대로 진행 */ }
+}
+
+/* [전체 집계 2026-09-09] 라이브 미리보기는 60행이라 1,200행 시트의 합계가 '최소값'으로만 나왔고,
+   AI 도움은 검산을 답하지 못한 채 설계 채팅으로 넘겼다(실측 10:47). 실제 행수가 더 많으면 그 시트만
+   큰 상한으로 다시 읽어 돌려준다. 캐시(f.sheets)엔 넣지 않는다 — 생성 프롬프트의 미리보기가 커지면 안 된다. */
+async function _assistFetchLiveRows(f, sheet, maxRows) {
+  try {
+    if (!f || typeof excelMirror === "undefined" || !excelMirror || !excelMirror.sessionsByFileId) return null;
+    if (typeof postExcelMirror !== "function") return null;
+    let excelId = null;
+    for (const [fid, eid] of Object.entries(excelMirror.sessionsByFileId)) {
+      if (typeof getFile === "function" && getFile(fid) === f) { excelId = eid; break; }
+    }
+    const sn = String(sheet || "").trim();
+    if (!excelId || !sn) return null;
+    const r = await postExcelMirror("/api/excel/preview-schema",
+      { excelId, sheet: sn, maxRows: Math.max(1, Math.min(20000, Number(maxRows) || 0)) }, 0, { timeoutMs: 30000 });
+    const rows = r && r.ok && r.schema && r.schema.sheets ? r.schema.sheets[sn] : null;
+    return Array.isArray(rows) ? rows : null;
+  } catch (_) { return null; }
 }
 
 // [헤더행 감지 통일] 실무 파일은 제목/빈 행이 헤더 위에 있는 경우가 흔하다. sheet.headers 는
@@ -244,7 +270,7 @@ assistDefineTool("literals.scan", { desc: "코드에 박힌 월·날짜·파일�
 
 // ── 7. 데이터 질의 (클라이언트 미리보기 한정, 백엔드 호출 없음) ──────────────
 assistDefineTool("data.query", {
-  desc: "업로드 미리보기 데이터 조회. op=count|sum|distinct|sample|groupSum|groupCount. groupSum/groupCount 는 groupBy 열로 묶어 상위 topN(기본20). where=[{col,op,value}] 로 조건.",
+  desc: "시트 데이터 집계/조회(라이브로 열린 파일은 실제 행 전체 기준 — 합계·개수 검산에 바로 쓸 수 있다). op=count|sum|distinct|sample|groupSum|groupCount. groupSum/groupCount 는 groupBy 열로 묶어 상위 topN(기본20). where=[{col,op,value}] 로 조건.",
   args: "file, sheet, op, column, groupBy?, topN?, where?, headerRow?",
 }, async (a) => {
     const files = _assistFileList();
@@ -255,12 +281,21 @@ assistDefineTool("data.query", {
     await _assistRefreshLiveFile(f, a.sheet);   // 라이브 세션 있으면 캐시를 '현재'로 갱신 후 읽는다
     const sheets = f.sheets || {};
     const sname = String(a.sheet || "").trim();
-    const rows = Array.isArray(sheets[sname]) ? sheets[sname] : null;
+    let rows = Array.isArray(sheets[sname]) ? sheets[sname] : null;
     if (!rows) {
       return { ok: false, error: "unknown_sheet", given: sname,
                available: f.sheetNames || Object.keys(sheets) };
     }
     if (!rows.length) return { ok: false, error: "empty_preview", note: "이 시트는 미리보기 데이터가 비어 있습니다." };
+    // [전체 집계 2026-09-09] 실제 행수가 미리보기보다 많으면 라이브에서 그 시트를 전체 행수만큼 다시 읽는다.
+    {
+      const d0 = (f.backendPreviewDimensions && f.backendPreviewDimensions[sname]) || null;
+      const total0 = d0 && Number(d0.maxRow) ? Number(d0.maxRow) : 0;
+      if (total0 > rows.length) {
+        const full = await _assistFetchLiveRows(f, sname, total0);
+        if (Array.isArray(full) && full.length > rows.length) rows = full;
+      }
+    }
     // 헤더행 자동 감지(sheet.headers 와 동일) — 제목행이 위에 있어도 정확한 헤더/데이터 분리.
     const hr = _assistDetectHeaderRow(rows, a.headerRow);
     const header = (rows[hr] || []).map(v => String(v == null ? "" : v).trim());

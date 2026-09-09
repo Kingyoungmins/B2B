@@ -294,18 +294,49 @@ ${facts}
    이제 전체 길이 대신 **마지막 문장**을 판정한다:
      · 예고 어미로 끝나고 · 조회/작업 동사가 있고 · 맺음 인사/조건부 표현("필요하면 말씀드리겠습니다",
      "언제든 도와드리겠습니다")이 아니면 → 예고. 길이와 무관하게 잡는다. */
+/* [빈 답 2026-09-09] 에코 제거 소스 분류. 예전엔 tail 전체(도구 결과·모델의 이전 답까지)를 소스로
+   넘겨, 오류 메시지·셀 값을 '인용한' 근거 문장이 프롬프트 에코로 오인돼 통째로 지워졌다
+   (실측 10:46: "이유는 이래요." 뒤가 빈 답). 지시문(시스템 프롬프트·재촉문)은 그대로 엄격히,
+   사용자 메시지는 긴 문단만(soft), 도구 결과(<tool-data>)와 assistant 이전 답은 소스에서 뺀다. */
+function assistEchoSources(sys, tail) {
+  const strict = [sys];
+  const soft = [];
+  for (const m of (tail || [])) {
+    if (!m || m.role !== "user") continue;
+    const c = String(m.content || "");
+    if (/^\[도구 결과 /.test(c)) continue;                       // 근거 데이터 — 인용 허용
+    if (/^\[핸드오프 거부\]|^\[제안 거부\]|^방금 응답|^도구는 더 쓸 수 없|^같은 조회를 반복/.test(c)) strict.push(c);
+    else soft.push(c);                                            // 사용자 본인 메시지
+  }
+  return { strict, soft };
+}
+
 function assistLooksLikeDanglingAnnouncement(text) {
   const t = String(text || "").trim();
   if (!t) return false;
   // 마지막 문장 추출: 마지막 비어있지 않은 줄 → 그 안의 마지막 문장 조각
   const lastLine = t.split(/\n+/).map(s => s.trim()).filter(Boolean).pop() || "";
   const pieces = lastLine.split(/(?:[.!?…]|다\.)\s+/).map(s => s.trim()).filter(Boolean);
+  const isPromise = (p) => {
+    if (!p || p.length > 140) return false;          // 예고문은 짧다 — 긴 문장은 완결된 설명일 가능성
+    // ('겠습니' 허용: 위 문장 분리 정규식이 '다.' 를 삼켜 앞 문장이 "…보겠습니" 로 남는다)
+    if (!/(겠습니다?|볼게요|할게요|드릴게요|해\s*보죠)\s*[.!…~]*\s*$/.test(p)) return false;
+    // 맺음 인사·조건부 제안은 예고가 아니다("추가로 필요하면 말씀드리겠습니다" 등)
+    if (/(필요하면|필요하시면|필요할\s*때|언제든|원하시면|궁금한|말씀해\s*주|도움이\s*되|바랍니다)/.test(p)) return false;
+    return /(찾|확인|조회|살펴|알아보|검토|점검|파악|분석|읽|실행|적용|만들|정리|비교|계산|수정|제안|진행|시작|말씀드리)/.test(p);
+  };
   const last = pieces.length ? pieces[pieces.length - 1] : lastLine;
-  if (!last || last.length > 140) return false;   // 예고문은 짧다 — 긴 문장은 완결된 설명일 가능성
-  if (!/(겠습니다|볼게요|할게요|드릴게요|해\s*보죠)\s*[.!…~]*\s*$/.test(last)) return false;
-  // 맺음 인사·조건부 제안은 예고가 아니다("추가로 필요하면 말씀드리겠습니다" 등)
-  if (/(필요하면|필요하시면|필요할\s*때|언제든|원하시면|궁금한|말씀해\s*주|도움이\s*되|바랍니다)/.test(last)) return false;
-  return /(찾|확인|조회|살펴|알아보|검토|점검|파악|분석|읽|실행|적용|만들|정리|비교|계산|수정|제안|진행|시작|말씀드리)/.test(last);
+  if (isPromise(last)) return true;
+  // [실측 2026-09-09] "…총합을 읽어서 맞춰 볼게요. 원본은 금액 열이에요." — 예고 뒤에 짧은 부연이
+  // 한 문장 붙으면 마지막 문장만 봐선 못 잡아 대화가 멈췄다(사용자가 "?" 를 쳐야 이어짐).
+  // 뒤따르는 문장이 '결과가 아닌 짧은 부연'(50자 이하·숫자 없음·결과 어미 없음)이면 앞 문장을 본다.
+  const isShortAside = (p) => p && p.length <= 50 && !/\d/.test(p)
+    && !/(결과|입니다|였습니다|같습니다|다릅니다|일치|맞습니다|틀립니다|없습니다|있습니다)/.test(p);
+  for (let i = pieces.length - 2; i >= 0 && i >= pieces.length - 3; i--) {
+    if (!pieces.slice(i + 1).every(isShortAside)) break;
+    if (isPromise(pieces[i])) return true;
+  }
+  return false;
 }
 
 /* [지라 SBAGENT-248 / 2026-08-10] "아래 버튼을 누르면 …" 이라 안내하고 [새 단계 만들기 요청하기]
@@ -447,9 +478,10 @@ async function assistHandleUserMessage(userText, ui, attachImages) {
           cp = assistParseAction(closing);
           if (cp.action === "tool") return false;
         }
+        const _es = assistEchoSources(closingSys, tail);
         let cText = assistStripPromptEcho(
           assistStripActionBlock(cp.block ? closing.split(cp.block).join("\n") : closing),
-          [closingSys, ...tail.map(m => m && m.content)],
+          _es.strict, _es.soft,
         );
         if (!cp.parsed && !cp.block) {
           // ③ [검증 항목6 대칭] 절단된(닫힘 없는) 액션 펜스는 스트리퍼가 못 걷는다 — 원시 JSON 노출 방지.
@@ -568,9 +600,10 @@ async function assistHandleUserMessage(userText, ui, attachImages) {
       const withoutBlock = parsed.block ? reply.split(parsed.block).join("\n") : reply;
       // [SBAGENT-293] 액션 잔해 + 프롬프트 에코를 함께 걷어낸다. 실측에서 모델이 시스템 지시문과
       // 사용자 질문 원문을 통째로 되풀이해 그대로 화면에 찍혔다(내부 지시문 노출).
+      const _es = assistEchoSources(sys, tail);
       const visible = assistStripPromptEcho(
         assistStripActionBlock(withoutBlock),
-        [sys, ...tail.map(m => m && m.content)],
+        _es.strict, _es.soft,
       );
 
       if (parsed.action === "tool" && !lastRound) {

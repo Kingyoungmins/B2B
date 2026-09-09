@@ -209,11 +209,15 @@ function assistStripActionBlock(reply) {
    (모델이 프롬프트를 되풀이하는 흔한 실패). 파싱이 성공해도 본문에 남을 수 있으므로,
    보낸 메시지들의 긴 문장이 응답에 그대로 있으면 그 조각을 지운다.
    sources = 이번 요청에 보낸 system/user 텍스트 배열. */
-function assistStripPromptEcho(visible, sources) {
+function assistStripPromptEcho(visible, sources, softSources) {
   let out = String(visible || "");
   if (!out) return out;
   const list = (Array.isArray(sources) ? sources : [sources]).map(s => String(s || "")).filter(Boolean);
-  if (!list.length) return out;
+  // [빈 답 2026-09-09] softSources(사용자 메시지)는 '긴 문단 에코(≥30자)'만 걷어낸다 — 짧은 요청문을
+  // 답 안에서 인용한 것("'실패하는 코드를 만들어줘'에 따라…")까지 지우면 문장이 비었다.
+  const soft = (Array.isArray(softSources) ? softSources : (softSources ? [softSources] : []))
+    .map(s => String(s || "")).filter(Boolean);
+  if (!list.length && !soft.length) return out;
   const splitSentences = (s) => String(s || "").split(/(?:\n|(?<=[.!?。])\s)/);
   // 1) 긴 조각(≥30자)은 본문 어디에 박혀 있어도 통째로 제거 — 지시문 문단 에코.
   const srcSentences = new Set();
@@ -231,6 +235,12 @@ function assistStripPromptEcho(visible, sources) {
   for (const frag of srcSentences) {
     if (frag.length < 12) continue;
     if (out.includes(frag)) out = out.split(frag).join(" ");
+  }
+  for (const src of soft) {
+    for (const raw of splitSentences(src)) {
+      const frag = raw.trim();
+      if (frag.length >= 30 && out.includes(frag)) out = out.split(frag).join(" ");
+    }
   }
   return out.replace(/[ \t]{2,}/g, " ").replace(/\n{3,}/g, "\n\n").trim();
 }
