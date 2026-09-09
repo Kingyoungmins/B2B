@@ -4678,9 +4678,13 @@ function lastLiveStepIndex(steps = state.pipeline) {
 
 function canFastEditLastPipelineStep(step, idx, beforeSteps) {
   if (!step || !step.code || !pipelineStepLiveLanguage(step)) return false;
-  // 교차파일 쓰기 스텝(dst_book)은 빠른 스냅샷 복구가 대상 파일만 되돌려 교차 목적지를 놓친다.
-  // 전체 reconcile 로 보내 목적지까지 pristine 으로 리셋되게 한다.
-  if (pipelineStepWritesCrossFile(step)) return false;
+  // [실측 2026-09-09] 교차파일 쓰기 스텝을 무조건 거부하던 게이트 완화 — 적용 직전 사본이
+  // '관여한 모든 파일'에 대해 있으면(stepHasFullRollbackSnapshots) 빠른 복구 가능하다.
+  // 복원부(restoreLastStepPreApplySnapshot)는 교차 목적지 사본 복원을 이미 지원하는데
+  // 게이트만 낡아, 마지막 교차 스텝 삭제/OFF 가 매번 전체 재적용(리셋+전 스텝)으로 돌았다
+  // (세션 10:19 실측: 사본 2개 저장돼 있었는데도 reset:True ×3 + 재적용). 사본이 하나라도
+  // 없거나 시점이 어긋나면 기존대로 전체 reconcile 로 간다(반쪽 복원 금지).
+  if (pipelineStepWritesCrossFile(step) && !stepHasFullRollbackSnapshots(step)) return false;
   const list = beforeSteps || state.pipeline || [];
   if (idx < 0 || idx !== lastLiveStepIndex(list)) return false;
   if (typeof getPipelineRuntimeStatus === "function") {
