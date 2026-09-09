@@ -8,8 +8,8 @@ class: PythonComSkillContext
 signature: "(self, ws, rng)"
 role: "열 전체(D:D)/행 전체(3:3) 참조를 그 시트의 실제 사용 범위까지로 줄인다."
 role_source: docstring
-version: "0.8.2"
-loc: "serve_b2b.py:13101-13124"
+version: "0.8.4"
+loc: "serve_b2b.py:13322-13345"
 
 # ── 입출력 ──
 inputs:
@@ -39,7 +39,7 @@ reads:
   - "self._resize_rng"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.2-gen"
+timestamp: "0.8.4-gen"
 ---
 
 ## 역할

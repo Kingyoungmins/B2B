@@ -7,8 +7,8 @@ extraction: ast
 signature: "(input_items, input_wbs, output_item, output_wb_record, active_steps)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
-version: "0.8.2"
-loc: "serve_b2b.py:20008-20016"
+version: "0.8.4"
+loc: "serve_b2b.py:20251-20259"
 
 # ── 입출력 ──
 inputs:
@@ -45,7 +45,7 @@ reads:
   - "PIPELINE_STEP_SNAPSHOTS"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.2-gen"
+timestamp: "0.8.4-gen"
 ---
 
 ## 역할

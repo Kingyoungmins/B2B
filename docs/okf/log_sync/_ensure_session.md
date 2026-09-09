@@ -7,8 +7,8 @@ extraction: ast
 signature: "(timeout=15.0)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
-version: "0.8.2"
-loc: "log_sync.py:330-358"
+version: "0.8.4"
+loc: "log_sync.py:413-444"
 
 # ── 입출력 ──
 inputs:
@@ -26,6 +26,7 @@ calls:
   - "_note_fail"
   - "_note_ok"
   - "_post"
+  - "org_info"
 calls_external:
   - "bool"
   - "err"
@@ -47,7 +48,7 @@ reads:
 writes:
   - "_STATE"
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.2-gen"
+timestamp: "0.8.4-gen"
 ---
 
 ## 역할
@@ -58,7 +59,7 @@ timestamp: "0.8.2-gen"
 - 변경 상태 `_STATE` — 수정 시 이 상태를 읽는 곳 동반 점검.
 
 ## 관계
-- 호출: `_as_result`, `_note_fail`, `_note_ok`, `_post`
+- 호출: `_as_result`, `_note_fail`, `_note_ok`, `_post`, `org_info`
 - 피호출(영향 전파 경로): `tick`
 
 ## 실패/예외

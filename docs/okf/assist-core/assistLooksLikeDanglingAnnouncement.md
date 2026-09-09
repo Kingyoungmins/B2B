@@ -5,10 +5,10 @@ module: assist-core.js
 lang: js
 extraction: regex   # 정규식 근사
 signature: "(text)"
-role: "\"언제든 도와드리겠습니다\")이 아니면 → 예고. 길이와 무관하게 잡는다."
-role_source: banner
-version: "0.8.2"
-loc: "assist-core.js:297-297"
+role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
+role_source: none
+version: "0.8.4"
+loc: "assist-core.js:318-318"
 
 # ── 입출력 ──
 inputs:
@@ -21,12 +21,15 @@ side_effects:
 raises: []
 
 # ── 유기적 관계 ──
-calls: []
+calls:
+  - "isPromise"
 calls_external:
   - "String"
+  - "every"
   - "filter"
   - "map"
   - "pop"
+  - "slice"
   - "split"
   - "test"
   - "trim"
@@ -35,17 +38,17 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.2-gen"
+timestamp: "0.8.4-gen"
 ---
 
 ## 역할
-"언제든 도와드리겠습니다")이 아니면 → 예고. 길이와 무관하게 잡는다.
+(추정) 역할 주석 없음 — 담당자 1줄 보완 필요  _(자동 추정 — 확인 필요)_
 
 ## 사이드이펙트 & 주의
 - 없음(정적 분석 기준)
 
 ## 관계
-- 호출: 없음
+- 호출: `isPromise`
 - 피호출(영향 전파 경로): `assistHandleUserMessage`
 
 ## 실패/예외

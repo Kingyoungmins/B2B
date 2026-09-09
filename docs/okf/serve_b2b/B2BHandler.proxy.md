@@ -8,8 +8,8 @@ class: B2BHandler
 signature: "(self)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
-version: "0.8.2"
-loc: "serve_b2b.py:2812-2898"
+version: "0.8.4"
+loc: "serve_b2b.py:2996-3094"
 
 # ── 입출력 ──
 inputs:
@@ -23,6 +23,8 @@ raises: []
 
 # ── 유기적 관계 ──
 calls:
+  - "_inject_stream_usage"
+  - "_note_llm_usage"
   - "end_headers"
   - "range"
   - "read"
@@ -31,9 +33,13 @@ calls:
 calls_external:
   - "PROXY_RETRY_ATTEMPTS"
   - "Request"
+  - "_llm_model"
+  - "_llm_stream"
+  - "_tail"
   - "body"
   - "chunk"
   - "encode"
+  - "endswith"
   - "flush"
   - "get"
   - "headers"
@@ -72,7 +78,7 @@ reads:
   - "self.wfile"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.2-gen"
+timestamp: "0.8.4-gen"
 ---
 
 ## 역할
@@ -82,7 +88,7 @@ timestamp: "0.8.2-gen"
 - 네트워크 호출
 
 ## 관계
-- 호출: `end_headers`, `range`, `read`, `value`, `write`
+- 호출: `_inject_stream_usage`, `_note_llm_usage`, `end_headers`, `range`, `read`, `value`, `write`
 - 피호출(영향 전파 경로): `B2BHandler.do_GET`, `B2BHandler.do_POST`
 
 ## 실패/예외

@@ -7,7 +7,7 @@ extraction: ast
 signature: "(data, filename)"
 role: "비밀문서인가 — drmSecretAPI. 반환 \"S_DOC\" / \"N_DOC\" / \"\" (판단 못 함)."
 role_source: docstring
-version: "0.8.2"
+version: "0.8.4"
 loc: "secure_doc.py:274-311"
 
 # ── 입출력 ──
@@ -46,7 +46,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.2-gen"
+timestamp: "0.8.4-gen"
 ---
 
 ## 역할

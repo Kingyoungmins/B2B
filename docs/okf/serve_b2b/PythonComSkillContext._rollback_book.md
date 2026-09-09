@@ -8,8 +8,8 @@ class: PythonComSkillContext
 signature: "(self, book_name)"
 role: "저널에 적힌 워크북을 같은 인스턴스에서 찾는다. 못 찾으면 고정 워크북(예전 동작)."
 role_source: docstring
-version: "0.8.2"
-loc: "serve_b2b.py:15980-15998"
+version: "0.8.4"
+loc: "serve_b2b.py:16223-16241"
 
 # ── 입출력 ──
 inputs:
@@ -34,7 +34,7 @@ reads:
   - "self._wb"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.2-gen"
+timestamp: "0.8.4-gen"
 ---
 
 ## 역할

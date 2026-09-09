@@ -7,8 +7,8 @@ extraction: ast
 signature: "(timeout=2.0)"
 role: "os._exit 직전 남은 로그를 밀어낸다 — 그 경로에선 atexit 이 돌지 않는다(_log_sync_stop 과 같은 이유)."
 role_source: docstring
-version: "0.8.2"
-loc: "serve_b2b.py:5556-5563"
+version: "0.8.4"
+loc: "serve_b2b.py:5755-5762"
 
 # ── 입출력 ──
 inputs:
@@ -34,7 +34,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.2-gen"
+timestamp: "0.8.4-gen"
 ---
 
 ## 역할

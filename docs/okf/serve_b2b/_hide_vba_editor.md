@@ -7,8 +7,8 @@ extraction: ast
 signature: "(app)"
 role: "VBE/디버거 창이 사용자 화면으로 올라오지 않게 숨긴다."
 role_source: docstring
-version: "0.8.2"
-loc: "serve_b2b.py:9245-9263"
+version: "0.8.4"
+loc: "serve_b2b.py:9444-9462"
 
 # ── 입출력 ──
 inputs:
@@ -35,7 +35,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.2-gen"
+timestamp: "0.8.4-gen"
 ---
 
 ## 역할

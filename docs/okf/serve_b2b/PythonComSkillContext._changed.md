@@ -8,8 +8,8 @@ class: PythonComSkillContext
 signature: "(self)"
 role: "---- 마무리/롤백 ----"
 role_source: banner
-version: "0.8.2"
-loc: "serve_b2b.py:15977-15978"
+version: "0.8.4"
+loc: "serve_b2b.py:16220-16221"
 
 # ── 입출력 ──
 inputs:
@@ -31,7 +31,7 @@ reads:
   - "self._shared"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.2-gen"
+timestamp: "0.8.4-gen"
 ---
 
 ## 역할

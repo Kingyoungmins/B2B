@@ -8,8 +8,8 @@ class: PythonComSkillContext
 signature: "(self, sheet, key_cols, header_row=1, keep='first')"
 role: "key_cols(열 리스트/단일) 조합이 같은 중복 행을 삭제한다. keep='first'면 처음 것, 'last'면 마지막 것을"
 role_source: docstring
-version: "0.8.2"
-loc: "serve_b2b.py:15732-15763"
+version: "0.8.4"
+loc: "serve_b2b.py:15975-16006"
 
 # ── 입출력 ──
 inputs:
@@ -67,7 +67,7 @@ reads:
   - "self.read"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.2-gen"
+timestamp: "0.8.4-gen"
 ---
 
 ## 역할

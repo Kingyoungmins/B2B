@@ -8,8 +8,8 @@ class: PythonComSkillContext
 signature: "(self, rng, data)"
 role: "이번 쓰기가 '보이던 값'을 빈칸으로 덮는지 판정한다."
 role_source: docstring
-version: "0.8.2"
-loc: "serve_b2b.py:12669-12688"
+version: "0.8.4"
+loc: "serve_b2b.py:12868-12887"
 
 # ── 입출력 ──
 inputs:
@@ -42,7 +42,7 @@ reads:
   - "self._tick"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.2-gen"
+timestamp: "0.8.4-gen"
 ---
 
 ## 역할

@@ -8,8 +8,8 @@ class: B2BHandler
 signature: "(self)"
 role: "[AI 도움 라이브 직독] 열린 라이브 세션의 '현재' 시트/그리드(경량 60행 미리보기)를 돌려준다."
 role_source: docstring
-version: "0.8.2"
-loc: "serve_b2b.py:2647-2675"
+version: "0.8.4"
+loc: "serve_b2b.py:2822-2859"
 
 # ── 입출력 ──
 inputs:
@@ -37,7 +37,11 @@ calls_external:
   - "err"
   - "excel_id"
   - "get"
+  - "int"
   - "len"
+  - "max"
+  - "max_rows"
+  - "min"
   - "only_sheet"
   - "perf_counter"
   - "round"
@@ -52,7 +56,7 @@ reads:
   - "self.send_json"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.2-gen"
+timestamp: "0.8.4-gen"
 ---
 
 ## 역할

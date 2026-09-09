@@ -8,8 +8,8 @@ class: B2BHandler
 signature: "(self, method)"
 role: "b2b_scheduler(애드온)가 맡는 경로면 여기서 응답까지 끝내고 True, 아니면 False."
 role_source: docstring
-version: "0.8.2"
-loc: "serve_b2b.py:1693-1727"
+version: "0.8.4"
+loc: "serve_b2b.py:1868-1902"
 
 # ── 입출력 ──
 inputs:
@@ -51,7 +51,7 @@ reads:
   - "self.send_json"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.2-gen"
+timestamp: "0.8.4-gen"
 ---
 
 ## 역할

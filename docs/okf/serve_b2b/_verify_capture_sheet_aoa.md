@@ -7,8 +7,8 @@ extraction: ast
 signature: "(wb, sheet_name)"
 role: "대상 시트(없으면 전 시트)의 UsedRange 값을 {시트명: 2차원리스트} 로 캡처(diff 입력용)."
 role_source: docstring
-version: "0.8.2"
-loc: "serve_b2b.py:16351-16374"
+version: "0.8.4"
+loc: "serve_b2b.py:16594-16617"
 
 # ── 입출력 ──
 inputs:
@@ -37,7 +37,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.2-gen"
+timestamp: "0.8.4-gen"
 ---
 
 ## 역할

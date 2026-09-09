@@ -7,8 +7,8 @@ extraction: ast
 signature: "(sub_path)"
 role: "프록시할 urllib Request 를 만든다. (요청 객체, 오류메시지) 중 하나만 채워 돌려준다."
 role_source: docstring
-version: "0.8.2"
-loc: "log_dash.py:50-68"
+version: "0.8.4"
+loc: "log_dash.py:54-72"
 
 # ── 입출력 ──
 inputs:
@@ -41,7 +41,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.2-gen"
+timestamp: "0.8.4-gen"
 ---
 
 ## 역할

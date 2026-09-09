@@ -7,7 +7,7 @@ extraction: ast
 signature: "(text)"
 role: "'0.7.2' / 'v0.7.2' / '0.7.2.0' 을 모두 '0.7.2.0' 으로 맞춘다."
 role_source: docstring
-version: "0.8.2"
+version: "0.8.4"
 loc: "serve_b2b.py:225-239"
 
 # ── 입출력 ──
@@ -34,10 +34,11 @@ calls_external:
   - "strip"
 called_by:
   - "_current_app_version"
+  - "_version_gate_check"
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.2-gen"
+timestamp: "0.8.4-gen"
 ---
 
 ## 역할
@@ -48,7 +49,7 @@ timestamp: "0.8.2-gen"
 
 ## 관계
 - 호출: 없음
-- 피호출(영향 전파 경로): `_current_app_version`
+- 피호출(영향 전파 경로): `_current_app_version`, `_version_gate_check`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

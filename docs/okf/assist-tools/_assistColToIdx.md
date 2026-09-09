@@ -7,8 +7,8 @@ extraction: regex   # 정규식 근사
 signature: "(col)"
 role: "── 13. [범용 읽기] 아무 파일/시트의 원시 범위 읽기 ──────────────────────────"
 role_source: banner
-version: "0.8.2"
-loc: "assist-tools.js:509-509"
+version: "0.8.4"
+loc: "assist-tools.js:571-571"
 
 # ── 입출력 ──
 inputs:
@@ -30,7 +30,7 @@ called_by: []
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.2-gen"
+timestamp: "0.8.4-gen"
 ---
 
 ## 역할

@@ -7,8 +7,8 @@ extraction: ast
 signature: "(path, tries=3, wait=0.15)"
 role: "이 파일이 '그때 어떤 모양이었는지'를 증거로 남긴다 — 원본을 못 꺼내는 환경을 위해."
 role_source: docstring
-version: "0.8.2"
-loc: "serve_b2b.py:3944-3999"
+version: "0.8.4"
+loc: "serve_b2b.py:4140-4195"
 
 # ── 입출력 ──
 inputs:
@@ -63,7 +63,7 @@ reads:
   - "VENDOR_DRM_MAGIC"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.2-gen"
+timestamp: "0.8.4-gen"
 ---
 
 ## 역할

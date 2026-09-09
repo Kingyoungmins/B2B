@@ -7,7 +7,7 @@ extraction: ast
 signature: "(what)"
 role: "네트워크 무응답 실패 직후 30초(프로브 캐시)간 보안 호출을 쉬게 한다."
 role_source: docstring
-version: "0.8.2"
+version: "0.8.4"
 loc: "secure_doc.py:160-174"
 
 # ── 입출력 ──
@@ -33,7 +33,7 @@ reads:
 writes:
   - "_STATE"
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.2-gen"
+timestamp: "0.8.4-gen"
 ---
 
 ## 역할

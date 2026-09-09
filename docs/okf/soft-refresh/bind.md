@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "()"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
-version: "0.8.2"
+version: "0.8.4"
 loc: "soft-refresh.js:313-313"
 
 # ── 입출력 ──
@@ -24,11 +24,12 @@ calls:
   - "softRefreshApp"
 calls_external:
   - "getElementById"
-called_by: []
+called_by:
+  - "showVersionGatePopup"
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.2-gen"
+timestamp: "0.8.4-gen"
 ---
 
 ## 역할
@@ -39,7 +40,7 @@ timestamp: "0.8.2-gen"
 
 ## 관계
 - 호출: `softRefreshApp`
-- 피호출(영향 전파 경로): 없음
+- 피호출(영향 전파 경로): `showVersionGatePopup`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

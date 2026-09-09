@@ -7,7 +7,7 @@ extraction: regex   # 정규식 근사
 signature: "(step, idx, beforeSteps)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
-version: "0.8.2"
+version: "0.8.4"
 loc: "pipeline.js:4679-4679"
 
 # ── 입출력 ──
@@ -28,6 +28,7 @@ calls:
   - "lastLiveStepIndex"
   - "pipelineStepLiveLanguage"
   - "pipelineStepWritesCrossFile"
+  - "stepHasFullRollbackSnapshots"
 calls_external: []
 called_by:
   - "_handlePipelineStepToggleImpl"
@@ -37,7 +38,7 @@ reads:
   - "state.pipeline"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.2-gen"
+timestamp: "0.8.4-gen"
 ---
 
 ## 역할
@@ -47,7 +48,7 @@ timestamp: "0.8.2-gen"
 - 없음(정적 분석 기준)
 
 ## 관계
-- 호출: `getPipelineRuntimeStatus`, `lastLiveStepIndex`, `pipelineStepLiveLanguage`, `pipelineStepWritesCrossFile`
+- 호출: `getPipelineRuntimeStatus`, `lastLiveStepIndex`, `pipelineStepLiveLanguage`, `pipelineStepWritesCrossFile`, `stepHasFullRollbackSnapshots`
 - 피호출(영향 전파 경로): `_handlePipelineStepToggleImpl`, `renderPipeline`, `replaceLogicAt`
 
 ## 실패/예외

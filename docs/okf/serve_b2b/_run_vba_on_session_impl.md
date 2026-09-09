@@ -7,8 +7,8 @@ extraction: ast
 signature: "(excel_id, code, entry=None, restore_window=True)"
 role: "라이브 세션에 떠 있는 실제 워크북에 VBA 매크로를 주입해 즉시 실행한다(저지연 리모콘, 단일 단계 append)."
 role_source: docstring
-version: "0.8.2"
-loc: "serve_b2b.py:10344-10489"
+version: "0.8.4"
+loc: "serve_b2b.py:10543-10688"
 
 # ── 입출력 ──
 inputs:
@@ -74,7 +74,7 @@ reads:
 writes:
   - "_VBA_WINDOW_HIDE"
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.2-gen"
+timestamp: "0.8.4-gen"
 ---
 
 ## 역할

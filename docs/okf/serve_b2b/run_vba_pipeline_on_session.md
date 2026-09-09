@@ -7,8 +7,8 @@ extraction: ast
 signature: "(excel_id, steps, reset=True, entry=None, view_sheet=None)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
-version: "0.8.2"
-loc: "serve_b2b.py:11265-11266"
+version: "0.8.4"
+loc: "serve_b2b.py:11464-11465"
 
 # ── 입출력 ──
 inputs:
@@ -41,7 +41,7 @@ reads:
   - "PY_UNLIMITED_OUTER_S"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.2-gen"
+timestamp: "0.8.4-gen"
 ---
 
 ## 역할

@@ -7,8 +7,8 @@ extraction: ast
 signature: "(code)"
 role: "[SBAGENT-293 실측 2026-08-26] 스냅샷 서명용 코드 정규화 — '실행 결과에 영향 없는' 부분 제거."
 role_source: docstring
-version: "0.8.2"
-loc: "serve_b2b.py:19923-19957"
+version: "0.8.4"
+loc: "serve_b2b.py:20166-20200"
 
 # ── 입출력 ──
 inputs:
@@ -44,7 +44,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.2-gen"
+timestamp: "0.8.4-gen"
 ---
 
 ## 역할

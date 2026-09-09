@@ -7,7 +7,7 @@ extraction: ast
 signature: "(force=False)"
 role: "릴레이 서버의 DRM 설정 상태(/v1/drm/health). 실패/미설정이면 기능이 조용히 꺼진 것처럼 동작."
 role_source: docstring
-version: "0.8.2"
+version: "0.8.4"
 loc: "secure_doc.py:133-157"
 
 # ── 입출력 ──
@@ -48,7 +48,7 @@ reads:
 writes:
   - "_STATE"
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.2-gen"
+timestamp: "0.8.4-gen"
 ---
 
 ## 역할

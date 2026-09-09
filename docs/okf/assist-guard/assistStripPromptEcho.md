@@ -4,16 +4,17 @@ title: assistStripPromptEcho
 module: assist-guard.js
 lang: js
 extraction: regex   # 정규식 근사
-signature: "(visible, sources)"
+signature: "(visible, sources, softSources)"
 role: "sources = 이번 요청에 보낸 system/user 텍스트 배열."
 role_source: banner
-version: "0.8.2"
+version: "0.8.4"
 loc: "assist-guard.js:212-212"
 
 # ── 입출력 ──
 inputs:
   - "visible"
   - "sources"
+  - "softSources"
 returns: "(추정)"
 
 # ── 사이드이펙트 (정적 추정) ──
@@ -34,6 +35,7 @@ calls_external:
   - "join"
   - "map"
   - "replace"
+  - "softSources"
   - "split"
   - "trim"
 called_by:
@@ -42,7 +44,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.2-gen"
+timestamp: "0.8.4-gen"
 ---
 
 ## 역할

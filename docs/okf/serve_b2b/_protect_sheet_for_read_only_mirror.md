@@ -7,8 +7,8 @@ extraction: ast
 signature: "(ws)"
 role: "시트 하나에 라이브 미러 편집 잠금을 건다(워크북 일괄 보호와 같은 옵션)."
 role_source: docstring
-version: "0.8.2"
-loc: "serve_b2b.py:3874-3908"
+version: "0.8.4"
+loc: "serve_b2b.py:4070-4104"
 
 # ── 입출력 ──
 inputs:
@@ -34,7 +34,7 @@ reads:
   - "EXCEL_MIRROR_PROTECT_PASSWORD"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.2-gen"
+timestamp: "0.8.4-gen"
 ---
 
 ## 역할

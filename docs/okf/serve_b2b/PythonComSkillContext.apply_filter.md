@@ -8,8 +8,8 @@ class: PythonComSkillContext
 signature: "(self, sheet, column, values, header_row=1)"
 role: "'눈으로만' 특정 값만 보이게 필터를 건다 — 데이터를 지우지 않고, 조건에 안 맞는 행을 화면에서 '숨김'"
 role_source: docstring
-version: "0.8.2"
-loc: "serve_b2b.py:13608-13650"
+version: "0.8.4"
+loc: "serve_b2b.py:13829-13871"
 
 # ── 입출력 ──
 inputs:
@@ -74,7 +74,7 @@ reads:
   - "self.used_last_row"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.2-gen"
+timestamp: "0.8.4-gen"
 ---
 
 ## 역할

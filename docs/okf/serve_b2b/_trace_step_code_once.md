@@ -7,8 +7,8 @@ extraction: ast
 signature: "(code, **fields)"
 role: "스텝 코드 '전문'을 해시당 한 번만 로그에 남긴다."
 role_source: docstring
-version: "0.8.2"
-loc: "serve_b2b.py:9521-9541"
+version: "0.8.4"
+loc: "serve_b2b.py:9720-9740"
 
 # ── 입출력 ──
 inputs:
@@ -43,7 +43,7 @@ reads:
   - "_TRACED_CODE_HASHES"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.2-gen"
+timestamp: "0.8.4-gen"
 ---
 
 ## 역할

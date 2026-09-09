@@ -7,8 +7,8 @@ extraction: ast
 signature: "(sub_path, write, send_headers, timeout=60.0)"
 role: "수집 서버 응답을 그대로 흘려보낸다."
 role_source: docstring
-version: "0.8.2"
-loc: "log_dash.py:71-106"
+version: "0.8.4"
+loc: "log_dash.py:75-110"
 
 # ── 입출력 ──
 inputs:
@@ -45,13 +45,14 @@ calls_external:
   - "urlopen"
 called_by:
   - "B2BHandler.do_GET"
+  - "_note_llm_usage"
   - "_unmarshal_app"
   - "excel_record_start"
 reads:
   - "CHUNK"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.2-gen"
+timestamp: "0.8.4-gen"
 ---
 
 ## 역할
@@ -62,7 +63,7 @@ timestamp: "0.8.2-gen"
 
 ## 관계
 - 호출: `build_request`, `read`, `write`
-- 피호출(영향 전파 경로): `B2BHandler.do_GET`, `_unmarshal_app`, `excel_record_start`
+- 피호출(영향 전파 경로): `B2BHandler.do_GET`, `_note_llm_usage`, `_unmarshal_app`, `excel_record_start`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

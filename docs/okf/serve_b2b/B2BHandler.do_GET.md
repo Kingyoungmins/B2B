@@ -8,8 +8,8 @@ class: B2BHandler
 signature: "(self)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
-version: "0.8.2"
-loc: "serve_b2b.py:1270-1409"
+version: "0.8.4"
+loc: "serve_b2b.py:1426-1572"
 
 # ── 입출력 ──
 inputs:
@@ -46,6 +46,7 @@ calls:
   - "send_json"
   - "status"
   - "stream"
+  - "version_gate_status"
 calls_external:
   - "BACKEND_DIR"
   - "Path"
@@ -99,7 +100,7 @@ reads:
   - "self.wfile"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.2-gen"
+timestamp: "0.8.4-gen"
 ---
 
 ## 역할
@@ -109,7 +110,7 @@ timestamp: "0.8.2-gen"
 - 파일시스템 변경/IO
 
 ## 관계
-- 호출: `_addon_scheduler_dispatch`, `_current_app_version`, `_excel_queue_size`, `_health_excel_diagnostics`, `_is_own_origin`, `_maintenance_status`, `_pipeline_job_stats`, `_pipeline_snapshot_stats`, `_runtime_counts_snapshot`, `app_base_dir`, `end_headers`, `excel_available`, `handle_backend_download`, `handle_cached_diff`, `handle_pipeline_progress`, `handle_pipeline_status`, `handle_workbook_source_download`, `logic_backup_dir_info`, `node_executable`, `proxy`, `send_json`, `status`, `stream`
+- 호출: `_addon_scheduler_dispatch`, `_current_app_version`, `_excel_queue_size`, `_health_excel_diagnostics`, `_is_own_origin`, `_maintenance_status`, `_pipeline_job_stats`, `_pipeline_snapshot_stats`, `_runtime_counts_snapshot`, `app_base_dir`, `end_headers`, `excel_available`, `handle_backend_download`, `handle_cached_diff`, `handle_pipeline_progress`, `handle_pipeline_status`, `handle_workbook_source_download`, `logic_backup_dir_info`, `node_executable`, `proxy`, `send_json`, `status`, `stream`, `version_gate_status`
 - 피호출(영향 전파 경로): 없음
 
 ## 실패/예외

@@ -7,8 +7,8 @@ extraction: regex   # 정규식 근사
 signature: "()"
 role: "반환값 true = 답을 냈다(호출자는 그대로 종료). false 면 예전 안내로 떨어진다."
 role_source: banner
-version: "0.8.2"
-loc: "assist-core.js:416-416"
+version: "0.8.4"
+loc: "assist-core.js:454-454"
 
 # ── 입출력 ──
 inputs: []
@@ -22,6 +22,7 @@ raises: []
 # ── 유기적 관계 ──
 calls:
   - "assistBuildProposal"
+  - "assistEchoSources"
   - "assistHasChineseLeak"
   - "assistParseAction"
   - "assistProposalIsVerifiable"
@@ -53,7 +54,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.2-gen"
+timestamp: "0.8.4-gen"
 ---
 
 ## 역할
@@ -63,7 +64,7 @@ timestamp: "0.8.2-gen"
 - 없음(정적 분석 기준)
 
 ## 관계
-- 호출: `assistBuildProposal`, `assistHasChineseLeak`, `assistParseAction`, `assistProposalIsVerifiable`, `assistPushAssistant`, `assistStripActionBlock`, `assistStripPromptEcho`, `assistSystemPrompt`, `assistVerifyProposal`, `callLLM`, `push`, `say`
+- 호출: `assistBuildProposal`, `assistEchoSources`, `assistHasChineseLeak`, `assistParseAction`, `assistProposalIsVerifiable`, `assistPushAssistant`, `assistStripActionBlock`, `assistStripPromptEcho`, `assistSystemPrompt`, `assistVerifyProposal`, `callLLM`, `push`, `say`
 - 피호출(영향 전파 경로): `assistHandleUserMessage`
 
 ## 실패/예외

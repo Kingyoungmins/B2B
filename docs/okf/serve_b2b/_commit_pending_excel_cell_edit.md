@@ -7,8 +7,8 @@ extraction: ast
 signature: "(app, max_wait_s=2.5)"
 role: "[셀 편집 확정] 사용자가 셀 편집(in-cell edit) 중이면 Excel 이 COM 을 거부해"
 role_source: docstring
-version: "0.8.2"
-loc: "serve_b2b.py:5904-5947"
+version: "0.8.4"
+loc: "serve_b2b.py:6103-6146"
 
 # ── 입출력 ──
 inputs:
@@ -43,7 +43,7 @@ reads:
   - "LIVE_EXCEL_APP_PID"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.2-gen"
+timestamp: "0.8.4-gen"
 ---
 
 ## 역할

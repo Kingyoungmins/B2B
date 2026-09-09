@@ -8,8 +8,8 @@ class: PythonComSkillContext
 signature: "(self, sheet, a1_start, formulas)"
 role: "수식 문자열 2차원 리스트를 한 번에 기록(예: [[\"=B2-C2\"],[\"=B3-C3\"]])."
 role_source: docstring
-version: "0.8.2"
-loc: "serve_b2b.py:13050-13071"
+version: "0.8.4"
+loc: "serve_b2b.py:13271-13292"
 
 # ── 입출력 ──
 inputs:
@@ -60,7 +60,7 @@ reads:
   - "self._ws"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.2-gen"
+timestamp: "0.8.4-gen"
 ---
 
 ## 역할

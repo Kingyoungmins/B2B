@@ -7,8 +7,8 @@ extraction: regex   # 정규식 근사
 signature: "(excelId, options = {})"
 role: "[매핑 보존] 수정 후 적용 / ON·OFF / 삽입 등 편집발 재적용의 최종 관문. 호출자가 steps 를 명시하지"
 role_source: banner
-version: "0.8.2"
-loc: "pipeline.js:5691-5691"
+version: "0.8.4"
+loc: "pipeline.js:5695-5695"
 
 # ── 입출력 ──
 inputs:
@@ -52,7 +52,7 @@ reads:
 writes:
   - "currentPage"
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.2-gen"
+timestamp: "0.8.4-gen"
 ---
 
 ## 역할

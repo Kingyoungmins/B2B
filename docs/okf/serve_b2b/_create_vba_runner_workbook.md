@@ -7,8 +7,8 @@ extraction: ast
 signature: "(app, context_wb)"
 role: "Create a local temporary .xlsm workbook used only to host injected VBA."
 role_source: docstring
-version: "0.8.2"
-loc: "serve_b2b.py:9402-9467"
+version: "0.8.4"
+loc: "serve_b2b.py:9601-9666"
 
 # ── 입출력 ──
 inputs:
@@ -44,7 +44,7 @@ called_by:
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.2-gen"
+timestamp: "0.8.4-gen"
 ---
 
 ## 역할

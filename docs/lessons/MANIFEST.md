@@ -74,3 +74,6 @@ Generated from selected lesson documents in B2B_ver0.5.6 ~ B2B_ver0.5.9.
 | `55_sbagent_293_297_generation_layer_chain.md` | 3654 |
 | `56_runner_8min_waste_chain.md` | 5081 |
 | `57_fullrun_had_no_resume_wrong_call_path.md` | 9135 |
+| `58_view_and_file_diverged_three_ways.md` | 7218 |
+| `59_edr_blocks_self_extracting_single_exe.md` | 4255 |
+| `60_assist_silent_failures_chain.md` | 6191 |

@@ -7,8 +7,8 @@ extraction: ast
 signature: "(payload)"
 role: "스케줄 한 건을 바탕화면 ESTB 아래에 저장한다."
 role_source: docstring
-version: "0.8.2"
-loc: "b2b_scheduler.py:208-254"
+version: "0.8.4"
+loc: "b2b_scheduler.py:221-267"
 
 # ── 입출력 ──
 inputs:
@@ -48,7 +48,7 @@ called_by: []
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.2-gen"
+timestamp: "0.8.4-gen"
 ---
 
 ## 역할

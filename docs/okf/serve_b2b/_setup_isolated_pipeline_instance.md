@@ -7,8 +7,8 @@ extraction: ast
 signature: "(session, excel_id, reset, work)"
 role: "격리 실행용 새 Excel 인스턴스를 띄우고 대상+동반 워크북을 '정확한 이름'으로 연다."
 role_source: docstring
-version: "0.8.2"
-loc: "serve_b2b.py:10555-10685"
+version: "0.8.4"
+loc: "serve_b2b.py:10754-10884"
 
 # ── 입출력 ──
 inputs:
@@ -76,7 +76,7 @@ reads:
   - "EXCEL_SESSIONS"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.2-gen"
+timestamp: "0.8.4-gen"
 ---
 
 ## 역할

@@ -7,8 +7,8 @@ extraction: ast
 signature: "(sub_path)"
 role: "'stats?from=...' → 허용 여부. 경로 부분만 보고 쿼리는 그대로 통과시킨다."
 role_source: docstring
-version: "0.8.2"
-loc: "log_dash.py:44-47"
+version: "0.8.4"
+loc: "log_dash.py:48-51"
 
 # ── 입출력 ──
 inputs:
@@ -28,13 +28,14 @@ calls_external:
   - "strip"
 called_by:
   - "_install_ctx_kwarg_tolerance"
+  - "_version_gate_check"
   - "_wrap_ctx_helper_kwargs"
   - "build_request"
 reads:
   - "ALLOWED_PATHS"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.2-gen"
+timestamp: "0.8.4-gen"
 ---
 
 ## 역할
@@ -45,7 +46,7 @@ timestamp: "0.8.2-gen"
 
 ## 관계
 - 호출: 없음
-- 피호출(영향 전파 경로): `_install_ctx_kwarg_tolerance`, `_wrap_ctx_helper_kwargs`, `build_request`
+- 피호출(영향 전파 경로): `_install_ctx_kwarg_tolerance`, `_version_gate_check`, `_wrap_ctx_helper_kwargs`, `build_request`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

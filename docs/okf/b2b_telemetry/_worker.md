@@ -7,7 +7,7 @@ extraction: ast
 signature: "()"
 role: "══════════════════════════════════════════════════════════════════════════"
 role_source: banner
-version: "0.8.2"
+version: "0.8.4"
 loc: "b2b_telemetry.py:343-363"
 
 # ── 입출력 ──
@@ -34,7 +34,7 @@ reads:
   - "_state"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.2-gen"
+timestamp: "0.8.4-gen"
 ---
 
 ## 역할

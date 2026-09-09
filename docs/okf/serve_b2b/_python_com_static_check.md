@@ -7,8 +7,8 @@ extraction: ast
 signature: "(code)"
 role: "실행 전 AST 정적 게이트. 위반은 사람이 읽을 수 있는 한국어 사유로 모아 한 번에 반환."
 role_source: docstring
-version: "0.8.2"
-loc: "serve_b2b.py:16030-16162"
+version: "0.8.4"
+loc: "serve_b2b.py:16273-16405"
 
 # ── 입출력 ──
 inputs:
@@ -56,7 +56,7 @@ reads:
   - "self.generic_visit"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
-timestamp: "0.8.2-gen"
+timestamp: "0.8.4-gen"
 ---
 
 ## 역할
