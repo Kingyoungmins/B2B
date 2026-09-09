@@ -875,14 +875,35 @@ def _logs_signature(logs_dir):
     return "|".join(parts)
 
 
+_CUMULATIVE_LOG_FILES = {"telemetry_preview.jsonl"}   # 앱이 세션마다 리셋하지 않고 누적하는 파일(세션 창 필터 대상)
 _ACTIVE_GAP_SECONDS = 600      # 이벤트 간격이 이 이하면 '계속 쓰는 중'(자리비움 기준 10분 — 2026-09-08 지시)
 
 
 def _parse_ts_seconds(ts):
-    """트레이스 ts(ISO, 뒤에 Z 허용) → epoch 초. 못 읽으면 None."""
+    """트레이스 ts(ISO) → epoch 초. 못 읽으면 None.
+    [2026-09-09] 'Z'/오프셋이 붙은 값은 UTC 로 해석해 변환한다(telemetry_preview 의 timestamp 가 UTC).
+    예전엔 Z 를 떼고 로컬로 읽어 9시간이 어긋났다. 오프셋 없는 값은 로컬 시각으로 본다."""
     try:
-        t = ts.strip().replace("Z", "")
-        return datetime.datetime.fromisoformat(t).timestamp()
+        t = str(ts).strip()
+        if t.endswith("Z") or t.endswith("z"):
+            return datetime.datetime.fromisoformat(t[:-1]).replace(tzinfo=datetime.timezone.utc).timestamp()
+        d = datetime.datetime.fromisoformat(t)
+        return d.timestamp()          # naive 면 로컬, tz 있으면 그 tz 기준
+    except Exception:
+        return None
+
+
+def _session_window_seconds(sdir, slack_sec=300):
+    """세션 폴더의 session.json 에서 (시작-slack, 끝+slack) epoch 창을 만든다. 못 읽으면 None.
+    끝은 endedAt → lastSeenAt → serverStartedAt 순. 열린 세션(끝 없음)은 상한을 두지 않는다."""
+    try:
+        meta = _read_meta(sdir)
+        st = _parse_ts_seconds(meta.get("startedAt") or meta.get("serverStartedAt") or "")
+        if st is None:
+            return None
+        en = _parse_ts_seconds(meta.get("endedAt") or meta.get("lastSeenAt") or "")
+        closed = bool(meta.get("endedAt"))
+        return (st - slack_sec, (en + slack_sec) if en is not None else None, closed)
     except Exception:
         return None
 
@@ -901,7 +922,16 @@ def _scan_session_events(sdir):
     logs_dir = sdir / "logs"
     if not logs_dir.is_dir():
         return agg
+    # [세션 창 2026-09-09] telemetry_preview.jsonl 은 앱 누적 파일이라 매 세션 통째로 올라온다 —
+    # 남의 세션(며칠 전) 기록이 이 세션의 활성시간·전체실행 횟수에 섞였다(실측: 세션 7건 중 6건이 과거분,
+    # 활성 +0.8분 고정 초과). 세션 시간창(시작-5분 ~ 끝+5분) 밖 타임스탬프의 기록은 집계에서 뺀다.
+    # 타임스탬프가 없는 옛 기록은 예전대로 센다.
+    window = _session_window_seconds(sdir)
+    agg["skippedOutOfWindow"] = 0
     for lf in sorted(logs_dir.glob("*.jsonl")):
+        # 창 필터는 '앱 누적 파일'에만 건다. vba/runtime 트레이스는 앱 시작 때 리셋되므로 세션 소속이 분명하고,
+        # 거기까지 걸면 시작 직전 정상 로그(또는 시계가 어긋난 PC)의 기록까지 버린다.
+        file_window = window if lf.name in _CUMULATIVE_LOG_FILES else None
         try:
             size = lf.stat().st_size
         except Exception:
@@ -928,6 +958,9 @@ def _scan_session_events(sdir):
                     if ts_raw:
                         sec = _parse_ts_seconds(str(ts_raw))
                         if sec is not None:
+                            if file_window and (sec < file_window[0] or (file_window[1] is not None and sec > file_window[1])):
+                                agg["skippedOutOfWindow"] += 1
+                                continue          # 다른 세션의 기록 — 이 세션 집계에서 제외
                             stamps.append(sec)
                     ev = str(rec.get("event") or "")
                     if not ev:
@@ -998,6 +1031,12 @@ def _scan_session_events(sdir):
             if 0 <= gap <= _ACTIVE_GAP_SECONDS:
                 active += gap
         agg["activeMinutes"] = round(active / 60.0, 1)
+        # 논리 상한: 활성은 체류(시작~끝)를 넘을 수 없다 — 창 필터가 놓친 잔여 오차를 여기서 자른다.
+        # 종료된 세션에만 건다. 열린 세션은 '끝'이 마지막 수신 시각이라 로그보다 뒤처질 수 있어 0 으로 잘린다(실측).
+        if window and window[1] is not None and window[2]:
+            dwell_min = max(0.0, ((window[1] - 300) - (window[0] + 300)) / 60.0)
+            if agg["activeMinutes"] > dwell_min:
+                agg["activeMinutes"] = round(dwell_min, 1)
     return agg
 
 
@@ -1008,8 +1047,8 @@ def _session_events(date, user, sdir):
     sig = _logs_signature(sdir / "logs")
     try:
         cached = json.loads(cache.read_text("utf-8"))
-        # v2: tokens / v3: fullRuns / v4: activeMinutes / v5 (2026-09-08): 자리비움 기준 5→10분
-        if cached.get("sig") == sig and cached.get("v") == 5:
+        # v2: tokens / v3: fullRuns / v4: activeMinutes / v5: 자리비움 10분 / v6 (2026-09-09): 세션 창 필터+UTC
+        if cached.get("sig") == sig and cached.get("v") == 6:
             return cached["agg"], True
     except Exception:
         pass
@@ -1017,7 +1056,7 @@ def _session_events(date, user, sdir):
     try:
         cache.parent.mkdir(parents=True, exist_ok=True)
         tmp = cache.with_suffix(".tmp")
-        tmp.write_text(json.dumps({"sig": sig, "v": 5, "agg": agg}, ensure_ascii=False), "utf-8")
+        tmp.write_text(json.dumps({"sig": sig, "v": 6, "agg": agg}, ensure_ascii=False), "utf-8")
         tmp.replace(cache)          # 원자적 교체 — 동시 요청이 반쪽 캐시를 읽지 않게
     except Exception:
         pass                        # 캐시 실패는 성능 문제일 뿐 — 결과는 그대로 준다

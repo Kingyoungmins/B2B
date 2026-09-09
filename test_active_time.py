@@ -71,16 +71,56 @@ check("activeMinutes = 1.0", row.get("activeMinutes") == 1.0, row.get("activeMin
 print("[4] /admin/events — 총합·사용자별·일별")
 r = client.get("/v1/admin/events").json()
 act = r.get("active") or {}
-check("총합 13분(3+9+0+1)", act.get("minutes") == 13.0, act)
+check("총합 13분(3+9+0+1) — 4b/4c 는 아래에서 별도 검증", act.get("minutes") == 13.0, act)
 bu = {x["user"]: x["minutes"] for x in act.get("byUser") or []}
 check("사용자별 — s0min 12분 / other 1분", bu.get("CLOUDPC_s0min") == 12.0 and bu.get("CLOUDPC_other") == 1.0, bu)
 bd = act.get("byDate") or []
 check("일별 — 오늘 13분", len(bd) == 1 and bd[0]["minutes"] == 13.0, bd)
 
-print("[5] 캐시 v4 — 두 번째 호출은 캐시, 값 동일")
+print("[4b] 세션 창 밖 기록(누적 telemetry, UTC) 은 활성·전체실행에서 제외")
+# 세션 시작을 서버 '지금' 기준으로 잡으므로, 세션 창 = start(±5분). 며칠 전 UTC 기록 2개(49초 간격)는
+# 실측에서 모든 세션에 +0.8분을 얹던 바로 그 패턴이다. 창 안 기록 1개만 살아남아야 한다.
+import datetime as _dt
+r = client.post("/v1/logs/session/start", json={"sessionId": "act-4b", "user": "CLOUDPC_win"})
+sdir4 = Path(r.json()["path"])
+now_utc = _dt.datetime.now(_dt.timezone.utc)
+def tele(t, status="success"):
+    return json.dumps({"timestamp": t.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z",
+                       "event_type": "agent.run", "status": status, "latency_ms": 1000}) + "\n"
+old1 = now_utc - _dt.timedelta(days=8); old2 = old1 + _dt.timedelta(seconds=49)
+inside = now_utc + _dt.timedelta(seconds=30)
+(sdir4 / "logs" / "telemetry_preview.jsonl").write_text(tele(old1) + tele(old2) + tele(inside, "failed"), "utf-8")
+(sdir4 / "logs" / "vba_pipeline_trace.jsonl").write_text(line(0) + line(60), "utf-8")   # 창 안 활동 1분
+d = client.get("/v1/admin/sessions").json()
+row = {x["sessionId"]: x for x in d["sessions"]}["act-4b"]
+check("활성 = 창 안 활동 1분(과거 49초 쌍 제외)", row.get("activeMinutes") == 1.0, row.get("activeMinutes"))
+ev = client.get("/v1/admin/events").json()
+fr = ev.get("fullRuns") or {}
+fru = {x["user"]: x for x in fr.get("byUser") or []}
+check("전체실행 — 이 세션은 1건(창 안 failed)만, 과거 2건 제외", fru.get("CLOUDPC_win", {}).get("count") == 1
+      and fru.get("CLOUDPC_win", {}).get("error") == 1, fru.get("CLOUDPC_win"))
+check("UTC 변환 — 창 안 판정이 Z 시각으로 정확(9시간 오차 없음)", row.get("activeMinutes") == 1.0)
+
+print("[4c] 활성은 체류를 넘지 못한다(클램프)")
+# 끝난 세션: 시작 = 지금, 끝 = +2분. 로그엔 창 안이지만 slack 덕에 들어온 +6분 활동 → 체류 2분으로 잘린다.
+r = client.post("/v1/logs/session/start", json={"sessionId": "act-4c", "user": "CLOUDPC_win"})
+sdir5 = Path(r.json()["path"])
+st = _dt.datetime.now()
+def loc(sec): return json.dumps({"ts": (st + _dt.timedelta(seconds=sec)).strftime("%Y-%m-%dT%H:%M:%S"), "event": "x"}) + "\n"
+(sdir5 / "logs" / "vba_pipeline_trace.jsonl").write_text("".join(loc(i * 60) for i in range(0, 7)), "utf-8")   # 0~6분
+client.post("/v1/logs/session/end", json={"sessionId": "act-4c", "user": "CLOUDPC_win",
+                                         "endedAt": (st + _dt.timedelta(minutes=2)).strftime("%Y-%m-%dT%H:%M:%S"), "reason": "normal"})
+d = client.get("/v1/admin/sessions").json()
+row = {x["sessionId"]: x for x in d["sessions"]}["act-4c"]
+check("체류 2분 세션의 활성 ≤ 2.0", row.get("activeMinutes") is not None and row["activeMinutes"] <= 2.0, row.get("activeMinutes"))
+
+print("[5] 캐시 v6 — 두 번째 호출은 캐시, 값 동일")
+r1 = client.get("/v1/admin/events").json()
 r2 = client.get("/v1/admin/events").json()
 check("캐시 히트", r2["scanned"]["cached"] >= 3, r2["scanned"])
-check("값 동일", (r2.get("active") or {}).get("minutes") == 13.0)
+check("값 동일(4b 1분 + 4c 클램프 2분 포함, 캐시 전후 일치)",
+      (r2.get("active") or {}).get("minutes") == (r1.get("active") or {}).get("minutes") == 16.0,
+      ((r1.get("active") or {}).get("minutes"), (r2.get("active") or {}).get("minutes")))
 
 print("")
 print("RESULT: ALL PASS" if not fails else "RESULT: %d FAIL" % fails)
