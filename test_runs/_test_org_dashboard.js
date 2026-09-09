@@ -13,13 +13,13 @@ function check(name, cond, detail) {
 
 console.log("[1] 필터 바 — 조직/팀 셀렉트");
 check("f-org 셀렉트 존재", HTML.includes('id="f-org"'));
-check("변경 즉시 재조회", HTML.includes('$("f-org").onchange = load'));
+check("변경 즉시 재조회(세션 고정은 풀고)", HTML.includes('$("f-org").onchange = () => { window.__filterSession = ""; load(); }'));
 check("필터 칩(해제 UI)", HTML.includes('"조직: " + $("f-org").value'));
 
 console.log("[2] 세션 표 — 조직(팀) 열");
 check("머리글에 조직(팀)", /<th>사용자<\/th><th>조직\(팀\)<\/th>/.test(HTML));
-check("셀에 팀 표시 + 마우스오버로 전체 경로", HTML.includes('title="${esc(s.orgPath || "")}"')
-  && HTML.includes('${esc(s.team || "-")}'));
+check("셀에 팀 표시(굵게) + 마우스오버로 전체 경로 — orgCellHTML", HTML.includes("function orgCellHTML")
+  && HTML.includes('title="\' + esc(s.orgPath || "") + \'"') && HTML.includes("${orgCellHTML(s, orgv)}"));
 check("빈 행 colspan 13 로 갱신(토큰·활성 열 포함)", HTML.includes('colspan="13"') && !HTML.includes('colspan="12"'));
 
 console.log("[3] 데이터 배선");
@@ -58,6 +58,27 @@ check("카드 톤(정상/주의/위험)", HTML.includes("tone-ok") && HTML.inclu
 check("신규 사용자 카드", HTML.includes("function newUsersIn") && HTML.includes("신규 사용자"));
 check("오류율 카드", HTML.includes("오류율"));
 check("체류 시간 분포 차트", HTML.includes("function dwellDistHTML") && HTML.includes('chartBox("체류 시간 분포"'));
+
+console.log("[7b] 2026-09-09 — 조직 단계별 · 조직 조각/버전 클릭 필터 · 오류→세션 이동 (DOM 동작은 _test_dashboard_org_ver_session_e2e.py)");
+check("조직 단계별 차트(탭) — orgLevelHTML + data-org-level 탭", HTML.includes("function orgLevelHTML") && HTML.includes('data-org-level="')
+  && HTML.includes('chartBox("조직 단계별 사용"'));
+check("탭 전환은 재조회 없이(window.__lastSessions 로 그 차트만)", HTML.includes("window.__lastSessions = sessions")
+  && HTML.includes('box.innerHTML = orgLevelHTML(window.__lastSessions || []'));
+check("회사(0단계) 제외 — orgUnitAt 은 i > 0 만", HTML.includes("(segs.length > i && i > 0) ? segs[i]"));
+check("실행 목록 조직 셀 = 조각(org-seg, data-filter-org) + 팀 굵게", HTML.includes('class="org-seg') && HTML.includes("'<b>' + seg(team) + '</b></td>'"));
+check("현재 필터 단위 조각 강조(.on)", HTML.includes('(name === activeOrg ? " on" : "")'));
+check("버전 필터 — f-ver 셀렉트·sessionInVer·fillVers", HTML.includes('id="f-ver"') && HTML.includes("function sessionInVer")
+  && HTML.includes("function fillVers") && HTML.includes("sessionInVer(s, verv)"));
+check("버전 클릭 — 실행 목록 셀·버전 도입률 조각/범례 data-filter-ver", HTML.includes('data-filter-ver="${esc(s.appVersion)}"')
+  && HTML.includes("'<div class=\"seg\" data-filter-ver=\"'") && HTML.includes("'<span data-filter-ver=\"'"));
+check("버전 칩 + URL #ver", HTML.includes('"버전: " + $("f-ver").value') && HTML.includes('hp.set("ver", verv)') && HTML.includes('["f-ver", "ver"]'));
+check("오류 목록 이벤트·세션 셀 data-filter-session", (HTML.match(/data-filter-session="\$\{esc\(e\.sessionId\)\}"/g) || []).length === 2);
+check("세션 고정 — 필터·칩·URL #session·행 강조·상세 자동 펼침", HTML.includes("(!sidv || s.sessionId === sidv)")
+  && HTML.includes('"세션: " + window.__filterSession') && HTML.includes('hp.set("session", sidv)')
+  && HTML.includes('class="row-pinned"') && HTML.includes("toggleSessionDetail(td);\n    });"));
+check("다른 필터 클릭 시 세션 고정 해제(사용자·조직·날짜·버전)", (HTML.match(/window\.__filterSession = "";/g) || []).length >= 6);
+check("없는 세션 안내 문구", HTML.includes("을(를) 목록에서 찾지 못했습니다"));
+check("AI 스냅샷 필터에 버전·세션 포함", HTML.includes('버전: d.ver || "전체"') && HTML.includes("...(d.session ? { 세션: d.session } : {})"));
 check("자주 나는 오류 TOP 차트", HTML.includes("function topErrorsHTML") && HTML.includes("자주 나는 오류 TOP"));
 
 console.log("[8] AI에게 묻기");

@@ -151,6 +151,27 @@
   .csv-btn:hover { color: var(--accent-2); border-color: var(--accent-2); }
   td.cell-link:hover { color: var(--accent-2); }
   tr.row-active td:first-child { box-shadow: inset 3px 0 0 var(--accent-2); }
+  /* [조직 단계 2026-09-09] 실행 목록의 조직 셀 — 상위 조직은 작은 조각, 팀은 굵게. 조각마다 클릭=그 단위 필터 */
+  td.org-cell { max-width: 240px; line-height: 1.25; }
+  td.org-cell .org-crumbs { display: block; font-size: 10.5px; color: var(--ink-2); white-space: normal; }
+  .org-seg { cursor: pointer; text-decoration: underline dotted; text-underline-offset: 2px; border-radius: 3px; padding: 0 1px; }
+  .org-seg:hover { color: var(--accent-2); background: #f0f4ff; }
+  .org-seg.on { color: var(--accent-2); font-weight: 800; background: #e8f0ff; }
+  .org-sep { color: #b8bfcc; white-space: pre; }
+  .org-sep.tail { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  /* 조직 단계 탭 */
+  .lvl-tabs { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 8px; }
+  .lvl-tabs button { padding: 2px 9px; border: 1px solid var(--line); border-radius: 999px; background: var(--card);
+                     color: var(--ink-2); font: inherit; font-size: 11px; font-weight: 700; cursor: pointer; }
+  .lvl-tabs button:hover { color: var(--accent-2); border-color: var(--accent-2); }
+  .lvl-tabs button.on { background: var(--accent-2); color: #fff; border-color: var(--accent-2); }
+  /* 버전 도입률 — 범례/조각 클릭 = 버전 필터 */
+  .legend span[data-filter-ver], .stackrow .seg[data-filter-ver] { cursor: pointer; }
+  .legend span[data-filter-ver]:hover { color: var(--accent-2); }
+  .legend span.on { color: var(--accent-2); font-weight: 800; }
+  /* 오류→세션 이동으로 골라낸 행 */
+  tr.row-pinned td { background: #fff7e0; }
+  tr.row-pinned td:first-child { box-shadow: inset 3px 0 0 #e0a100; }
   td .zip:hover { text-decoration: underline; }
   .state-open { color: var(--ok); font-weight: 700; }
   .state-stale { color: var(--ink-2); }
@@ -180,6 +201,7 @@
     <label>종료일 <input type="date" id="f-to"></label>
     <label>사용자 <select id="f-user"><option value="">전체</option></select></label>
     <label>조직/팀 <select id="f-org"><option value="">전체</option></select></label>
+    <label>버전 <select id="f-ver"><option value="">전체</option></select></label>
     <button id="btn-load">조회</button>
     <button id="btn-week" class="ghost">최근 7일</button>
     <button id="btn-month" class="ghost">최근 30일</button>
@@ -187,7 +209,8 @@
     <span id="status-line"></span>
   </div>
   <div id="chips"></div>
-  <p class="hint">차트의 막대(사용자·날짜·팀)를 클릭하면 그 값으로 화면 전체가 필터됩니다. 다시 클릭하거나 위 ✕ 칩으로 해제.</p>
+  <p class="hint">차트의 막대(사용자·날짜·조직)·실행 목록의 조직 조각/버전·오류 목록의 이벤트/세션을 클릭하면 그 값으로 필터됩니다.
+     다시 클릭하거나 위 ✕ 칩으로 해제. (조직·버전·세션 필터는 실행 목록 기반 구역에 걸리고, 요약 카드·사용자별·일별은 전체 기준)</p>
 
   <!-- [AI 질문 2026-09-02] 지금 화면에 로드된 집계(요약본)를 근거로 AI 가 답한다.
        앱 채팅과 같은 AI 서버/설정(localStorage 공유)을 그대로 쓴다 — 별도 설정 없음. -->
@@ -397,7 +420,8 @@
 
   const PALETTE = ["#2f3542", "#5b8def", "#0a7d40", "#b85c00", "#8452d8", "#c22525", "#3aa6a6", "#aeb6c4"];
 
-  function versionsHTML(vd) {
+  /* [버전 필터 2026-09-09] 조각·범례에 data-filter-ver — 클릭하면 그 버전으로 필터(activeVer 는 굵게) */
+  function versionsHTML(vd, activeVer) {
     if (!vd || !vd.dates.length) return '<div class="empty">기간에 기록이 없습니다.</div>';
     const color = {};
     vd.versions.forEach((v, i) => { color[v] = PALETTE[i % PALETTE.length]; });
@@ -405,13 +429,14 @@
       const total = vd.versions.reduce((a, v) => a + vd.matrix[v][di], 0) || 1;
       const segs = vd.versions.map(v => {
         const n = vd.matrix[v][di];
-        return n ? '<div class="seg" style="width:' + (n / total * 100).toFixed(1) + '%;background:'
-          + color[v] + '" title="' + esc(v) + ' — ' + n + '회"></div>' : "";
+        return n ? '<div class="seg" data-filter-ver="' + esc(v) + '" style="width:' + (n / total * 100).toFixed(1) + '%;background:'
+          + color[v] + '" title="' + esc(v) + ' — ' + n + '회 · 클릭=이 버전으로 필터"></div>' : "";
       }).join("");
       return '<div class="stackrow"><div>' + esc(d.slice(5)) + '</div><div class="trk">' + segs
         + '</div><div class="val" style="text-align:right;color:var(--ink-2)">' + total + '</div></div>';
     }).join("");
-    const legend = vd.versions.map(v => '<span><i style="background:' + color[v] + '"></i>'
+    const legend = vd.versions.map(v => '<span data-filter-ver="' + esc(v) + '"'
+      + (activeVer && v === activeVer ? ' class="on"' : "") + ' title="클릭=이 버전으로 필터"><i style="background:' + color[v] + '"></i>'
       + esc(v) + "</span>").join("");
     return rows + '<div class="legend">' + legend + "</div>";
   }
@@ -658,6 +683,83 @@ function fillOrgs(rows, keepSelection) {
         `<option value="${esc(name)}">${"  ".repeat(depth - 1)}${esc(name)}</option>`).join("");
   if (keepSelection) sel.value = cur;
 }
+/* [버전 필터 2026-09-09] 세션에 나온 버전 목록(최신 순) */
+function fillVers(rows, keepSelection) {
+  const sel = $("f-ver"), cur = sel.value;
+  const vers = [...new Set(rows.map(r => r.appVersion).filter(Boolean))]
+    .sort((a, b) => normVer(b).localeCompare(normVer(a), undefined, { numeric: true }));
+  sel.innerHTML = '<option value="">전체</option>' + vers.map(v => `<option value="${esc(v)}">${esc(v)}</option>`).join("");
+  if (keepSelection) { sel.value = cur; if (sel.value !== cur && cur) { sel.add(new Option(cur, cur)); sel.value = cur; } }
+}
+function sessionInVer(s, ver) {
+  if (!ver) return true;
+  return s.appVersion === ver || (normVer(s.appVersion) && normVer(s.appVersion) === normVer(ver));
+}
+
+/* [조직 단계 2026-09-09] orgPath("회사 > 부문 > 센터 > Lab > 팀")를 단계로 쪼개서 본다.
+   level = 1,2,3… 은 그 깊이의 단위(경로가 짧은 사람은 제외), "team" 은 마지막 단위(=팀).
+   회사(0단계)는 전원 공통이라 탭에서 뺀다. 탭 상태는 window.__orgLevel(URL # 의 lvl). */
+function orgSegs(s) { return String(s.orgPath || "").split(" > ").map(x => x.trim()).filter(Boolean); }
+function orgUnitAt(s, level) {
+  const segs = orgSegs(s);
+  if (level === "team") return s.team || segs[segs.length - 1] || "";
+  const i = Number(level);
+  return (segs.length > i && i > 0) ? segs[i] : "";
+}
+function orgMaxDepth(sessions) {
+  let d = 0;
+  for (const s of sessions) d = Math.max(d, orgSegs(s).length - 1);
+  return d;   // 회사 제외 단계 수
+}
+function orgLevelRows(sessions, level) {
+  const agg = {};
+  for (const s of sessions) {
+    const u = orgUnitAt(s, level);
+    if (!u) continue;
+    (agg[u] = agg[u] || { n: 0, users: new Set(), dwell: 0 });
+    agg[u].n += 1; agg[u].users.add(s.user); agg[u].dwell += (C.dwellOf(s) || 0);
+  }
+  return Object.entries(agg).map(([unit, v]) => ({ unit, n: v.n, users: v.users.size, dwell: v.dwell }))
+    .sort((a, b) => b.n - a.n || a.unit.localeCompare(b.unit, "ko"));
+}
+function orgLevelHTML(sessions, activeOrg, level) {
+  const depth = orgMaxDepth(sessions);
+  if (!depth) return '<div class="empty">조직 정보가 있는 실행이 없습니다 (0.8.3+ 앱부터 수집).</div>';
+  level = level || window.__orgLevel || "team";
+  if (level !== "team" && Number(level) > depth) level = "team";
+  const example = (lv) => { const ex = new Set(); for (const s of sessions) { const u = orgUnitAt(s, lv); if (u) ex.add(u); if (ex.size >= 2) break; } return [...ex].join(", "); };
+  const tabs = [];
+  for (let i = 1; i <= depth; i++) tabs.push([String(i), i + "단계"]);
+  tabs.push(["team", "팀"]);
+  const tabHTML = '<div class="lvl-tabs">' + tabs.map(([k, lab]) =>
+    '<button type="button" data-org-level="' + k + '"' + (k === String(level) ? ' class="on"' : "")
+    + ' title="예: ' + esc(example(k) || "-") + '">' + esc(lab) + '</button>').join("") + '</div>';
+  const rows = orgLevelRows(sessions, level).slice(0, 12);
+  if (!rows.length) return tabHTML + '<div class="empty">이 단계에 해당하는 조직이 없습니다.</div>';
+  const max = Math.max(...rows.map(r => r.n), 1);
+  return tabHTML + rows.map(r => {
+    const act = r.unit === activeOrg ? " active" : "";
+    return '<div class="hbar clickable' + act + '" data-filter-org="' + esc(r.unit) + '" title="' + esc(r.unit)
+      + ' — 실행 ' + r.n + '회 · ' + r.users + '명 · 체류 ' + C.fmtMinutes(r.dwell) + ' · 클릭=이 조직으로 필터">'
+      + '<div class="lab">' + esc(r.unit) + '</div>'
+      + '<div class="trk"><div class="fil" style="width:' + (r.n / max * 100).toFixed(1) + '%"></div></div>'
+      + '<div class="val">' + r.n + '회 · ' + r.users + '명</div></div>';
+  }).join("");
+}
+/* 실행 목록의 조직 셀 — 상위 조직 조각(작게) + 팀(굵게). 조각마다 data-filter-org, 현재 필터 단위는 강조 */
+function orgCellHTML(s, activeOrg) {
+  const segs = orgSegs(s);
+  if (!segs.length) return '<td class="org-cell">' + esc(s.team || "-") + '</td>';
+  const seg = (name) => '<span class="org-seg' + (name === activeOrg ? " on" : "") + '" data-filter-org="' + esc(name)
+    + '" title="' + esc(name) + ' — 클릭하면 이 조직으로 필터">' + esc(name) + '</span>';
+  const upper = segs.slice(1, -1);
+  const team = segs[segs.length - 1];
+  // 구분자에 공백을 넣고 팀 앞에는 안 보이는 구분자를 둔다 — CSV(textContent)로 "CTO › 센터 › Lab › 팀" 이 그대로 나오게
+  return '<td class="org-cell" title="' + esc(s.orgPath || "") + '">'
+    + (upper.length ? '<span class="org-crumbs">' + upper.map(seg).join('<span class="org-sep"> › </span>') + '</span><span class="org-sep tail"> › </span>' : "")
+    + '<b>' + seg(team) + '</b></td>';
+}
+
 /* [추가 요소 2026-09-02] 팀별 사용 랭킹 — 세션 기반(조직 필터와 같은 데이터) */
 function teamRankHTML(sessions, activeOrg) {
   const agg = {};
@@ -901,7 +1003,8 @@ function buildDashDigest(d) {
   }
   const digest = {
     조회기간: (d.from || "처음") + " ~ " + (d.to || "지금"),
-    필터: { 사용자: d.user ? userLabel(d.user) : "전체", 소속: d.org || "전체" },
+    필터: { 사용자: d.user ? userLabel(d.user) : "전체", 소속: d.org || "전체", 버전: d.ver || "전체",
+            ...(d.session ? { 세션: d.session } : {}) },
     요약: { 총실행: d.total.sessions || 0, 사용자수: d.total.userCount || 0,
            총체류분: d.total.dwellMinutes || 0,
            활성분추정: (d.active && d.active.minutes) || 0, 스킬저장: d.total.skills || 0,
@@ -1000,6 +1103,8 @@ function renderChips() {
   const chips = [];
   if ($("f-user").value) chips.push(["사용자: " + $("f-user").value, () => { $("f-user").value = ""; }]);
   if ($("f-org").value) chips.push(["조직: " + $("f-org").value, () => { $("f-org").value = ""; }]);
+  if ($("f-ver").value) chips.push(["버전: " + $("f-ver").value, () => { $("f-ver").value = ""; }]);
+  if (window.__filterSession) chips.push(["세션: " + window.__filterSession + " (오류에서 이동)", () => { window.__filterSession = ""; }]);
   if ($("f-from").value && $("f-from").value === $("f-to").value)
     chips.push(["날짜: " + $("f-from").value, () => setRange(7)]);
   $("chips").innerHTML = chips.map((c, i) =>
@@ -1068,14 +1173,56 @@ document.addEventListener("click", ev => {
   if (u) {
     const v = u.getAttribute("data-filter-user");
     $("f-user").value = ($("f-user").value === v) ? "" : v;
+    window.__filterSession = "";
     load();
     return;
   }
   const o = ev.target.closest("[data-filter-org]");
   if (o) {
     const v = o.getAttribute("data-filter-org");
+    // 셀렉트에 없는 단위(첫 조회 전 등)도 고를 수 있게 임시 옵션
+    if (![...$("f-org").options].some(op => op.value === v)) $("f-org").add(new Option(v, v));
     $("f-org").value = ($("f-org").value === v) ? "" : v;
+    window.__filterSession = "";
     load();
+    return;
+  }
+  // [버전 필터 2026-09-09] 실행 목록 버전 셀 · 버전 도입률 조각/범례
+  const vv = ev.target.closest("[data-filter-ver]");
+  if (vv) {
+    const v = vv.getAttribute("data-filter-ver");
+    if (![...$("f-ver").options].some(op => op.value === v)) $("f-ver").add(new Option(v, v));
+    $("f-ver").value = ($("f-ver").value === v) ? "" : v;
+    window.__filterSession = "";
+    load();
+    return;
+  }
+  // [오류→세션 2026-09-09] 오류 목록의 이벤트/세션 클릭 = 그 세션만 실행 목록에 남기고 거기로 스크롤 + 상세 펼침
+  const sc = ev.target.closest("[data-filter-session]");
+  if (sc) {
+    const sid = sc.getAttribute("data-filter-session");
+    if (window.__filterSession === sid) { window.__filterSession = ""; load(); return; }
+    window.__filterSession = sid;
+    load().then(() => {
+      const td = document.querySelector('#tbl-sessions td.sess-expand[data-session="' + (window.CSS && CSS.escape ? CSS.escape(sid) : sid) + '"]');
+      // 그 행이 화면 가운데 오게(표가 짧아 구역 머리를 맨 위로 못 올려도 행은 보인다). 못 찾으면 구역 머리로.
+      const target = td ? td.closest("tr") : ($("tbl-sessions").closest("section") || $("tbl-sessions"));
+      try { target.scrollIntoView({ behavior: "smooth", block: td ? "center" : "start" }); } catch (_e) { target.scrollIntoView(); }
+      if (td && !(td.closest("tr").nextElementSibling || {}).classList?.contains("sess-detail")) toggleSessionDetail(td);
+    });
+    return;
+  }
+  // [조직 단계 2026-09-09] 단계 탭 — 재조회 없이 그 차트만 다시 그린다
+  const lt = ev.target.closest("[data-org-level]");
+  if (lt) {
+    window.__orgLevel = lt.getAttribute("data-org-level");
+    const box = $("org-levels");
+    if (box) box.innerHTML = orgLevelHTML(window.__lastSessions || [], $("f-org").value, window.__orgLevel);
+    try {
+      const hp = new URLSearchParams(location.hash.replace(/^#/, ""));
+      if (window.__orgLevel && window.__orgLevel !== "team") hp.set("lvl", window.__orgLevel); else hp.delete("lvl");
+      history.replaceState(null, "", hp.toString() ? "#" + hp.toString() : location.pathname + location.search);
+    } catch (_e) {}
     return;
   }
   const d = ev.target.closest("[data-filter-date]");
@@ -1083,6 +1230,7 @@ document.addEventListener("click", ev => {
     const v = d.getAttribute("data-filter-date");
     if ($("f-from").value === v && $("f-to").value === v) setRange(7);
     else { $("f-from").value = v; $("f-to").value = v; }
+    window.__filterSession = "";
     load();
   }
 });
@@ -1167,10 +1315,14 @@ async function load() {
     // [조직 정보 2026-09-02] 0.8.3+ 앱이 보낸 팀/조직(extra.org). 조직 필터는 세션 기반
     // 구역(목록·시간대·버전 차트)에 적용된다 — 서버 집계(stats) 카드는 전체 기준 그대로.
     const orgv = $("f-org").value;
+    const verv = $("f-ver").value;                 // [버전 필터 2026-09-09]
+    const sidv = window.__filterSession || "";     // [오류→세션 2026-09-09] 한 세션만 보기
     buildUserOrgMap(sess.sessions || []);
     const sessions = (sess.sessions || []).filter(s => (!from || s.date >= from) && (!to || s.date <= to)
-      && sessionInOrg(s, orgv));
+      && sessionInOrg(s, orgv) && sessionInVer(s, verv) && (!sidv || s.sessionId === sidv));
+    window.__lastSessions = sessions;              // 조직 단계 탭이 재조회 없이 다시 그릴 때 쓴다
     fillOrgs(sess.sessions || [], true);
+    fillVers(sess.sessions || [], true);
     // [필터 URL 저장 2026-09-03] 보던 조건을 주소창 #에 — F5·링크 공유에도 유지
     try {
       const hp = new URLSearchParams();
@@ -1178,6 +1330,9 @@ async function load() {
       if (to) hp.set("to", to);
       if ($("f-user").value) hp.set("user", $("f-user").value);
       if (orgv) hp.set("org", orgv);
+      if (verv) hp.set("ver", verv);
+      if (sidv) hp.set("session", sidv);
+      if (window.__orgLevel && window.__orgLevel !== "team") hp.set("lvl", window.__orgLevel);
       history.replaceState(null, "", hp.toString() ? "#" + hp.toString()
                                                    : location.pathname + location.search);
     } catch (_e) {}
@@ -1214,7 +1369,7 @@ async function load() {
     try { $("last-updated").textContent = "마지막 갱신 " + new Date().toLocaleTimeString("ko-KR"); } catch (_e) {}
     // [AI 질문] 지금 화면 상태의 요약 스냅샷 — askDashboard() 가 근거로 쓴다
     window.__dashSnapshot = buildDashDigest({
-      from, to, user: $("f-user").value, org: orgv, active: events && events.active,
+      from, to, user: $("f-user").value, org: orgv, ver: verv, session: sidv, active: events && events.active,
       total: stats.total || {}, errCount: errors.count || 0, prevTotal,
       byDate: stats.byDate || [], byUsers: stats.byUsers || [],
       sessions, errors: errors.errors || [],
@@ -1233,11 +1388,13 @@ async function load() {
     $("charts-usage").innerHTML =
       chartBox("일별 추이", "막대=실행 · 선=체류(분) · 막대 클릭=그 날로 필터", C.comboHTML(stats.byDate || [], activeDate))
       + chartBox("사용자 랭킹", "실행 횟수 상위 12명 · 클릭=그 사용자로 필터", C.usersHTML(stats.byUsers || [], activeUser, userLabel))
+      + chartBox("조직 단계별 사용", "조직 경로를 단계로 쪼개 본다 · 탭=단계 · 막대 클릭=그 조직으로 필터",
+                 '<div id="org-levels">' + orgLevelHTML(sessions, orgv, window.__orgLevel) + '</div>')
       + chartBox("팀별 사용", "실행 횟수 상위 12팀 · 클릭=그 팀으로 필터", teamRankHTML(sessions, orgv))
       + chartBox("체류 시간 분포", "한 번 켜서 얼마나 오래 쓰나(세션 기준)", dwellDistHTML(sessions))
       + chartBox("스킬 TOP", "기간 내 많이 저장된 스킬(저장 횟수 · 만든 사람 수)", skillTopHTML(sessions))
       + chartBox("사용 시간대", "요일 × 시(세션 시작 기준)", C.heatmapHTML(C.heatmap(sessions)))
-      + chartBox("버전 도입률", "날짜별 실행의 버전 구성", C.versionsHTML(C.versionByDate(sessions)))
+      + chartBox("버전 도입률", "날짜별 실행의 버전 구성 · 조각/범례 클릭=그 버전으로 필터", C.versionsHTML(C.versionByDate(sessions), verv))
       + chartBox("오류 추이", "일별 오류 이벤트 수",
           C.errorTrendHTML(C.errorTrend(events && events.errorsByDate, errors.errors || []),
                            errors.fullScan === true))
@@ -1292,14 +1449,16 @@ async function load() {
         : (s.stale ? '<span class="state-stale" title="10분 이상 수신 없음 — 강제 종료/끊김으로 추정">종료(추정)</span>'
                    : '<span class="state-open">수집 중</span>');
       const dw = C.dwellOf(s);
-      return `<tr><td class="cell-link" data-filter-date="${esc(s.date)}" title="클릭하면 이 날로 기간 필터">${esc(s.date)}</td>
+      const outdated = window.__gateAllowed && normVer(s.appVersion) && !window.__gateAllowed.map(normVer).includes(normVer(s.appVersion));
+      return `<tr${sidv && s.sessionId === sidv ? ' class="row-pinned"' : ""}><td class="cell-link" data-filter-date="${esc(s.date)}" title="클릭하면 이 날로 기간 필터">${esc(s.date)}</td>
         <td class="cell-link" data-filter-user="${esc(s.user)}" title="${esc(s.user)} — 클릭하면 이 사용자로 필터">${esc(userLabel(s.user))}</td>
-        <td title="${esc(s.orgPath || "")}">${esc(s.team || "-")}</td><td>${esc(C.fmtTs(s.startedAt).slice(11) || "-")}</td>
+        ${orgCellHTML(s, orgv)}<td>${esc(C.fmtTs(s.startedAt).slice(11) || "-")}</td>
         <td class="num" data-s="${dw}">${esc(C.fmtMinutes(dw))}</td>
         <td class="num" data-s="${s.activeMinutes || 0}" title="로그 이벤트 간격 근사 — 10분 무이벤트는 자리비움">${
           s.activeMinutes != null ? esc(C.fmtMinutes(s.activeMinutes)) : "-"}</td>
-        <td${(window.__gateAllowed && normVer(s.appVersion) && !window.__gateAllowed.map(normVer).includes(normVer(s.appVersion)))
-             ? ' style="color:var(--bad); font-weight:700" title="허용 버전 목록에 없는 버전"' : ""}>${esc(s.appVersion || "-")}</td><td>${esc(s.host || "-")}</td>
+        <td${s.appVersion ? ` class="cell-link" data-filter-ver="${esc(s.appVersion)}"` : ""}${outdated
+             ? ' style="color:var(--bad); font-weight:700" title="허용 버전 목록에 없는 버전 · 클릭=이 버전으로 필터"'
+             : (s.appVersion ? ' title="클릭하면 이 버전으로 필터"' : "")}>${esc(s.appVersion || "-")}</td><td>${esc(s.host || "-")}</td>
         <td>${state}</td><td class="num sess-expand" data-s="${(s.logFiles || []).length}"
             data-date="${esc(s.date)}" data-user="${esc(s.user)}" data-session="${esc(s.sessionId)}"
             style="cursor:pointer" title="클릭하면 로그 파일·스킬 단계가 펼쳐집니다">${(s.logFiles || []).length} / ${(s.skillFiles || []).length} ▾</td>
@@ -1307,14 +1466,16 @@ async function load() {
           ? ` title="입력 ${fmtTok(s.tokens.prompt)} · 출력 ${fmtTok(s.tokens.completion)} · ${s.tokens.calls}회 호출"` : ""}>${
           s.tokens ? (s.tokens.total ? fmtTok(s.tokens.total) : "0") : "-"}</td>
         <td class="num" data-s="${s.sizeBytes || 0}">${esc(C.fmtBytes(s.sizeBytes))}</td><td><a class="zip" href="${zip}">zip</a></td></tr>`;
-    }).join("") || '<tr><td colspan="13" class="empty">기간에 해당하는 실행이 없습니다.</td></tr>';
+    }).join("") || `<tr><td colspan="13" class="empty">${sidv
+        ? "세션 " + esc(sidv) + " 을(를) 목록에서 찾지 못했습니다 — 기간·사용자 필터를 넓혀 보세요. (위 ✕ 칩으로 세션 고정 해제)"
+        : "기간에 해당하는 실행이 없습니다."}</td></tr>`;
 
     $("tbl-errors").tBodies[0].innerHTML = (errors.errors || []).map(e =>
       `<tr><td>${esc(C.fmtTs(e.ts))}</td><td class="cell-link" data-filter-user="${esc(e.user)}"
            title="${esc(e.user)} — 클릭하면 이 사용자로 필터">${esc(userLabel(e.user))}</td>
        <td class="num">${e.stepIdx != null ? (Number(e.stepIdx) + 1) + "단계" : "-"}</td>
-       <td class="ev">${esc(e.event)}</td><td class="summary-cell" title="${esc(e.summary)}">${esc(e.summary || "-")}</td>
-       <td>${esc(e.sessionId)}</td></tr>`).join("")
+       <td class="ev cell-link" data-filter-session="${esc(e.sessionId)}" title="클릭하면 이 오류가 난 세션으로 이동(실행 목록에서 zip 받기)">${esc(e.event)}</td><td class="summary-cell" title="${esc(e.summary)}">${esc(e.summary || "-")}</td>
+       <td class="cell-link" data-filter-session="${esc(e.sessionId)}" title="클릭하면 이 세션만 실행 목록에 보입니다">${esc(e.sessionId)}</td></tr>`).join("")
       || '<tr><td colspan="6" class="empty">기간에 오류가 없습니다. 👍</td></tr>';
     $("err-scan-note").textContent = errors.fullScan === true
       ? "— 전량 스캔(모든 로그 파일 전체)" : "— 수집된 실행 기록에서 실패 이벤트만 추림(파일당 최근 구간)";
@@ -1338,7 +1499,8 @@ function setRange(days) {
 }
 
 $("btn-load").onclick = load;
-$("f-org").onchange = load;   // 조직/팀 선택 즉시 반영
+$("f-org").onchange = () => { window.__filterSession = ""; load(); };   // 조직/팀 선택 즉시 반영
+$("f-ver").onchange = () => { window.__filterSession = ""; load(); };   // [버전 필터 2026-09-09]
 // [대시보드 UI 2026-09-02] 자동 새로고침 — 상황판처럼 띄워 두는 용도(60초).
 let _autoTimer = null;
 $("auto-refresh").onchange = (e) => {
@@ -1357,7 +1519,9 @@ $("btn-all").onclick = () => { setRange(0); load(); };
     if ([...hp.keys()].length) {
       $("f-from").value = hp.get("from") || "";
       $("f-to").value = hp.get("to") || "";
-      for (const [id, k] of [["f-user", "user"], ["f-org", "org"]]) {
+      window.__filterSession = hp.get("session") || "";
+      window.__orgLevel = hp.get("lvl") || "team";
+      for (const [id, k] of [["f-user", "user"], ["f-org", "org"], ["f-ver", "ver"]]) {
         const v = hp.get(k) || "";
         if (v) {   // 옵션 목록은 첫 조회 후 채워지므로 임시 옵션을 만들어 선택해 둔다
           const sel = $(id);
