@@ -45,7 +45,9 @@ function assistSystemPrompt() {
   app.state, 설계 채팅은 chat.history, 실행 결과·오류는 result.summary·step.error. 필요한 걸
   적극적으로 읽어서 답하라(못 읽으면 그때 한계를 밝힌다).
 - 코드 수정이 필요하면 **제안**한다. 제안은 사용자가 카드의 버튼을 눌러야 반영된다.
-- **[날조 금지 · 최우선]** 파일명·시트명·열 이름·셀 주소는 **절대 지어내지 마라.** sheet.headers/app.state/data.query 등
+- **[날조 금지 · 최우선]** 파일명·시트명·열 이름·셀 주소는 **절대 지어내지 마라.** **파일 속 값(합계·개수·비율)과
+  회사명 같은 데이터도 마찬가지다 — 도구로 읽지 않은 수치는 한 글자도 말하지 마라.** 데이터 질문에 답하려면
+  먼저 data.query/data.read 를 호출하고, 그 결과에 없는 숫자·이름은 답에 넣지 마라. sheet.headers/app.state/data.query 등
   도구로 **확인한 값만** 쓴다. 확인하지 않은 이름을 "Sheet1" 같은 추측으로 채우지 마라 — 모르면 먼저 그 도구를
   호출해 확인하고, 그래도 모르면 "시트명을 먼저 확인해야 한다"고 솔직히 밝혀라. 확인 안 된 이름으로 수정·복구
   지시문을 만들면 사용자가 그대로 따라 하다 더 틀린다. 아래 그라운딩 팩트(파일 목록·단계)에 없는 것도 지어내지 마라.
@@ -315,6 +317,19 @@ function assistEchoSources(sys, tail) {
   return { strict, soft };
 }
 
+/* [근거 없는 수치 2026-09-09] 실측: 검산·"마진율 가장 낮은 3곳" 질문에 모델이 도구를 하나도 안 부르고
+   데이터에 없는 회사명·숫자(1,204,000 / (주)삼영물산 …)를 지어냈다(트레이스에 assist.tool 0건).
+   이번 턴 도구 호출이 0인데 답에 구체 수치(3자리 이상·소수)나 원/% 가 있고, 질문/답이 데이터 얘기면
+   근거 없는 주장으로 본다 → 루프가 한 번 재촉한다. */
+function assistLooksLikeDataClaimWithoutEvidence(question, text) {
+  const t = String(text || "");
+  if (!t) return false;
+  const hasNumber = /\d[\d,]{2,}|\d+\.\d+|\d+\s*(원|%|건|개|명|행)/.test(t);
+  if (!hasNumber) return false;
+  const dataish = /(시트|열|행|합계|총합|총액|검산|평균|비율|마진|매출|원가|금액|건수|회사|값|개수|최대|최소|가장|순위|상위|하위|몇|얼마|어디)/;
+  return dataish.test(String(question || "")) || dataish.test(t);
+}
+
 function assistLooksLikeDanglingAnnouncement(text) {
   const t = String(text || "").trim();
   if (!t) return false;
@@ -411,6 +426,7 @@ async function assistHandleUserMessage(userText, ui, attachImages) {
   const seenCalls = new Set();
   let toolCalls = 0;
   let danglingNudges = 0;   // [말 끊김 수정] '예고만 하고 멈춤' 재촉 횟수(무한루프 방지 상한 2회)
+  let evidenceNudges = 0;     // [근거 없는 수치 2026-09-09] 도구 0회인데 구체 수치/이름을 답하면 1회 재촉
 
   state.assist = state.assist || { history: [] };
   state.assist.history.push({ role: "user", content: String(userText || "") });
@@ -752,6 +768,17 @@ async function assistHandleUserMessage(userText, ui, attachImages) {
       // 종료하지 말고 같은 턴 안에서 즉시 실행을 요구한다(상한 2회 — 무한루프 방지).
       {
         const finalText = (visible || salvaged || rawShown || "").trim();
+        if (!lastRound && evidenceNudges < 1 && toolCalls === 0
+            && assistLooksLikeDataClaimWithoutEvidence(userText, finalText)) {
+          evidenceNudges += 1;
+          try { if (typeof traceClientUiEvent === "function") traceClientUiEvent("assist.nudge", { kind: "no-evidence", tail: finalText.slice(0, 80) }); } catch (_) {}
+          tail.push({ role: "assistant", content: reply.slice(0, 1500) });
+          tail.push({ role: "user", content:
+            "방금 답에 구체적인 수치·이름이 있는데 이번 턴에 도구를 하나도 쓰지 않았습니다. 파일·시트의 값과 이름은 "
+            + "반드시 data.query / data.read / sheet.headers 로 읽은 결과만 말해야 합니다. 지금 action=\"tool\" 로 확인하세요. "
+            + "확인할 수 없으면 숫자와 이름을 지어내지 말고 '확인하지 못했다' 고 action=\"final\" 로 답하세요." });
+          continue;
+        }
         if (!lastRound && danglingNudges < 2 && assistLooksLikeDanglingAnnouncement(finalText)) {
           danglingNudges += 1;
           try { if (typeof traceClientUiEvent === "function") traceClientUiEvent("assist.nudge", { kind: "dangling", n: danglingNudges, tail: finalText.slice(-80) }); } catch (_) {}
@@ -785,6 +812,7 @@ async function assistHandleUserMessage(userText, ui, attachImages) {
           continue;
         }
       }
+      try { if (typeof traceClientUiEvent === "function") traceClientUiEvent("assist.final", { tools: toolCalls, round, len: String(visible || salvaged || rawShown || "").length }); } catch (_) {}
       assistPushAssistant(
         visible || salvaged || rawShown
           || (parsed.parsed ? "응답을 정리하지 못했습니다. 같은 질문을 다시 보내 주세요." : "답변을 만들지 못했습니다. 다시 물어봐 주세요."),

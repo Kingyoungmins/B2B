@@ -15,6 +15,7 @@
 
 ### 수정 — 2026-09-09 오후 (docs/lessons/61)
 
+- **AI 도움이 도구를 안 부르고 숫자·회사명을 지어냄** — 검산/마진율 질문에 `assist.tool` 0건인 채 데이터에 없는 값(1,204,000, (주)삼영물산)을 답했다(실제 3,949,012,800). 루프에 '근거 없는 수치 가드'(이번 턴 도구 0회 + 답에 구체 수치 + 데이터 질문 → 1회 재촉: 도구로 확인하거나 '확인 못 했다'고 답하라), 프롬프트 날조 금지에 수치 명시, `assist.final{tools}` 트레이스 ([scripts/assist-core.js](scripts/assist-core.js)).
 - **AI 도움 팝업: 진단 버튼을 눌러도 "창만 열리고 아무것도 안 뜸"** — 팝업 페이지는 닫아도 살아 있어 재오픈 땐 `ready` 가 다시 오지 않는데, 보관한 질문(`_assistPendingAsk`)을 `ready` 에서만 보내고 `popup-opened` 에서 폴백 타이머까지 지워 질문이 증발했다. `popup-opened` 에서도 보낸다(첫 로드는 1.5초 폴백). 팝업 쪽 `case "ask"` 가 busy 면 조용히 버리던 것도 busy 를 풀고 보내도록 ([scripts/assist-ui.js](scripts/assist-ui.js), [scripts/assist-popup.js](scripts/assist-popup.js)).
 - **개발망 vLLM 이전(.111→.108)으로 모든 LLM 호출이 연결 타임아웃 → "확인 중" 에서 분 단위 매달림** — 기본 주소를 `.108` 로 바꾸고 저장 설정의 `.111` 은 레거시 목록으로 자동 승격. `effectiveDevVllmModel` 의 `/models` 탐색 fetch 에 4초 타임아웃(예전엔 없어서 매 호출 앞단에서 OS 연결 타임아웃을 통째로 먹음) ([scripts/config.js](scripts/config.js), [scripts/llm-api.js](scripts/llm-api.js)).
 - **`ctx.sort` 가 합계 행까지 정렬해 맨 위로 올림** — 범위 맨 아래의 합계/평균/소계 행(과 빈 행)은 자동 제외해 그 자리에 둔다(`exclude_summary_rows=True` 기본). win32com `Range.Resize` 함정을 피해 `ws.Range(cells, cells)` 로 범위를 다시 잡는다. 실 Excel 검증 ([serve_b2b.py](serve_b2b.py), `test_runs/_test_sort_pins_summary_rows_com.py`).

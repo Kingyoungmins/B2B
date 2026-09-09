@@ -114,6 +114,22 @@ console.log("[2] 도구 인자 {args:{...}} 포장 해제(실제 assistRunTool �
     check("프롬프트: 검산은 두 값 독립 비교·결론 먼저, 단계 탐색은 요청 시에만",
       CORE.includes("[검산·비교 질문]") && CORE.includes("스킬 단계나 코드를 뒤지지 마라"));
 
+    console.log("[5] 근거 없는 수치 가드 — 도구 0회인데 구체 수치/이름을 답하면 재촉(실제 판별 함수 실행)");
+    const claim = extractFn(CORE, "assistLooksLikeDataClaimWithoutEvidence");
+    check("검산 질문 + 지어낸 합계(1,204,000) → 재촉 대상",
+      claim("회사별요약의 매출 합계가 매출 원본의 총합과 같은지 검산해줘", "일치하지 않습니다. 회사별요약 매출 합계: 1,205,000 / 원본: 1,204,000") === true);
+    check("마진율 TOP3 + 지어낸 회사·비율(0.042) → 재촉 대상",
+      claim("회사별요약에서 마진율이 가장 낮은 회사 3곳이 어디야?", "1. (주)삼영물산 — 마진율 0.042\n2. (주)대성유통 — 0.067") === true);
+    check("수치 없는 안내 답변은 통과", claim("이 스킬이 무슨 일을 해?", "1단계는 피벗을 만들고 2단계는 값을 채웁니다.") === false);
+    check("데이터와 무관한 질문의 숫자(버전)는 통과", claim("지금 버전이 뭐야?", "0.8.4 입니다.") === false);
+    check("'확인하지 못했다' 류 답은 통과(수치 없음)", claim("매출 합계 검산해줘", "파일을 읽지 못해 확인하지 못했습니다.") === false);
+    check("루프: 도구 0회 조건으로 1회만 재촉하고 예고문 재촉보다 먼저",
+      /evidenceNudges < 1 && toolCalls === 0[\s\S]{0,120}assistLooksLikeDataClaimWithoutEvidence\(userText, finalText\)/.test(CORE)
+      && CORE.indexOf("evidenceNudges < 1 && toolCalls === 0") < CORE.indexOf("danglingNudges < 2 && assistLooksLikeDanglingAnnouncement(finalText)"));
+    check("재촉 문구가 '지어내지 말고 확인 못 했다고 답하라'까지 요구", CORE.includes("숫자와 이름을 지어내지 말고 '확인하지 못했다' 고"));
+    check("프롬프트 날조 금지에 '도구로 읽지 않은 수치는 말하지 마라' 명시", CORE.includes("도구로 읽지 않은 수치는 한 글자도 말하지 마라"));
+    check("최종 답 트레이스(assist.final tools=N)", CORE.includes('traceClientUiEvent("assist.final", { tools: toolCalls'));
+
     console.log("");
     console.log(fails === 0 ? "RESULT: ALL PASS" : "RESULT: " + fails + " FAIL");
     process.exit(fails === 0 ? 0 : 1);
