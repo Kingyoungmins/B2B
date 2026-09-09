@@ -1,0 +1,333 @@
+========================================
+ AX-Cell 버전 확인 / 로그 수집 서버 - 실행 방법
+========================================
+
+이 서버가 하는 일은 둘입니다.
+
+ 1) "지금 최신 버전이 몇 번인가?" 를 알려주기
+      version.txt 에 최신 버전을 적어두면, AX-Cell 이 물어볼 때 그 값을 알려줍니다.
+
+ 2) 사용자 PC 의 로그와 스킬을 받아 쌓아두기
+      AX-Cell 이 켜져 있는 동안 알아서 보내옵니다. 서버는 날짜 -> 사용자 -> 실행(1회) 폴더에
+      쌓아 둡니다. 관리자는 그 폴더를 zip 으로 받으면 됩니다. (아래 12번)
+      사용자 PC 에서는 프로그램을 다시 켜면 로그가 지워지지만, 서버에 보낸 것은 남습니다.
+
+
+----------------------------------------
+ 0. 준비물
+----------------------------------------
+
+- Python 3.9 이상
+- 이 폴더의 파일 전부 (main.py, requirements.txt, version.txt)
+
+
+----------------------------------------
+ 0-1. 개발 PC 에서 그냥 해보고 싶다면 (제일 쉬움)
+----------------------------------------
+
+versionTest 폴더의 start_log_server.bat 을 두 번 클릭하면 끝입니다.
+
+    - 필요한 것 설치 확인
+    - 로그 쌓을 폴더 준비 (versionTest\logs)
+    - AX-Cell 이 '내 PC 서버'로 로그를 보내도록 설정
+    - 수집 서버 실행 + 관리자 화면(브라우저) 열기
+
+그 다음 AX-Cell 을 평소처럼 켜면 됩니다. (창을 띄운 '다음에' 켜는 것부터 적용)
+10초마다 올라오니 잠시 뒤 관리자 화면을 새로고침하면 보입니다.
+
+끝나고 원래대로(사내 서버로) 돌리려면 명령창에서 한 번 :
+
+    start_log_server.bat off
+
+아래 1~11번은 운영 서버에 직접 설치할 때 보는 내용입니다.
+
+
+----------------------------------------
+ 1. 설치 (처음 한 번만)
+----------------------------------------
+
+[Windows]
+    cd C:\경로\versionTest
+    python -m pip install -r requirements.txt
+
+[Linux]
+    cd /경로/versionTest
+    python3 -m pip install -r requirements.txt
+
+
+* 회사망이라 pip 이 막히면 사내 저장소를 지정하세요.
+    python -m pip install -r requirements.txt --index-url http://사내저장소/simple --trusted-host 사내저장소
+
+
+----------------------------------------
+ 2. version.txt 준비
+----------------------------------------
+
+아무 곳에나 두면 됩니다. 내용은 버전 한 줄.
+
+    0.7.2.0
+
+# 으로 시작하는 줄은 메모로 취급해 무시합니다.
+
+    # 2026-08-04 배포
+    0.7.2.0
+
+0.7.2 처럼 세 자리로 적어도 0.7.2.0 과 같은 것으로 봅니다.
+
+
+----------------------------------------
+ 3. 실행
+----------------------------------------
+
+[Windows]
+    cd C:\경로\versionTest
+    python main.py --version-file C:\axcell\version.txt --host 0.0.0.0 --port 8100
+
+[Linux]
+    cd /경로/versionTest
+    python3 main.py --version-file /srv/axcell/version.txt --host 0.0.0.0 --port 8100
+
+
+[Linux - 운영 서버(로그 수집까지)]
+    cd /data/public/versionTest
+    python3 main.py --version-file /data/public/versionTest/version.txt --log-root /data/public/versionTest/logs --host 0.0.0.0 --port 8100
+
+
+옵션 설명
+    --version-file     최신 버전이 적힌 파일 경로       (필수)
+    --host             0.0.0.0 이면 외부에서 접속 가능   (기본 0.0.0.0)
+    --port             포트 번호                        (기본 8100)
+
+  [로그 수집]
+    --log-root         로그/스킬을 쌓을 폴더            (기본 /data/public/versionTest/logs)
+                       폴더가 없으면 서버가 만듭니다.
+    --retention-days   이 일수보다 오래된 날짜 폴더 삭제 (기본 0 = 안 지움, 계속 쌓임)
+    --max-session-mb   한 번 실행(세션)당 최대 용량      (기본 300)
+    --ingest-key       보내는 쪽 인증 키                 (기본 없음 = 인증 없이 받음)
+    --admin-key        관리자 조회/다운로드 키           (기본 없음)
+    --no-collector     로그 수집을 끄고 버전 확인만 함
+
+
+아래처럼 뜨면 정상입니다.
+
+    [AX-Cell 버전 서버] version.txt = /data/public/versionTest/version.txt
+    [AX-Cell 버전 서버] http://0.0.0.0:8100/version
+    [AX-Cell 수집] 저장 위치 = /data/public/versionTest/logs
+    [AX-Cell 수집] 보관 = 무제한 / 세션당 최대 300MB / 수집 인증 없음
+    [AX-Cell 수집] 관리자 화면 http://0.0.0.0:8100/admin
+    INFO:     Uvicorn running on http://0.0.0.0:8100
+
+
+----------------------------------------
+ 4. 잘 떴는지 확인
+----------------------------------------
+
+같은 서버에서:
+
+    curl http://127.0.0.1:8100/v1/models
+        -> {"object":"list","data":[]}          (200 OK 면 정상)
+
+    curl http://127.0.0.1:8100/version
+        -> {"ok":true,"version":"0.7.2.0", ...}
+
+    curl "http://127.0.0.1:8100/version/check?v=0.7.1.0"
+        -> {..., "match":false}                 (버전이 다르다는 뜻)
+
+
+브라우저로 확인하려면:
+
+    http://서버주소:8100/docs
+
+
+----------------------------------------
+ 5. 버전을 새로 올릴 때
+----------------------------------------
+
+version.txt 의 버전 한 줄만 고치면 끝입니다.
+서버를 다시 켜지 않아도 됩니다. (요청이 올 때마다 파일을 다시 읽습니다)
+
+
+----------------------------------------
+ 6. 계속 떠 있게 하기
+----------------------------------------
+
+터미널을 닫으면 서버도 꺼집니다. 계속 돌리려면 아래 중 하나를 쓰세요.
+
+[Windows - 창을 닫아도 유지]
+    start "" /B python main.py --version-file C:\axcell\version.txt --host 0.0.0.0 --port 8100
+
+[Windows - 서비스로 등록 (권장, NSSM 사용)]
+    nssm install AXCellVersion "C:\Python39\python.exe" "C:\경로\versionTest\main.py --version-file C:\axcell\version.txt --host 0.0.0.0 --port 8100"
+    nssm start AXCellVersion
+
+[Linux - 잠깐 확인용]
+    nohup python3 main.py --version-file /srv/axcell/version.txt --host 0.0.0.0 --port 8100 > version.log 2>&1 &
+
+[Linux - 서비스로 등록 (권장, systemd)]
+    sudo tee /etc/systemd/system/axcell-version.service > /dev/null <<'EOF'
+    [Unit]
+    Description=AX-Cell Version Service
+    After=network.target
+
+    [Service]
+    WorkingDirectory=/data/public/versionTest
+    ExecStart=/usr/bin/python3 /data/public/versionTest/main.py --version-file /data/public/versionTest/version.txt --log-root /data/public/versionTest/logs --host 0.0.0.0 --port 8100
+    Restart=always
+    User=axcell
+
+    [Install]
+    WantedBy=multi-user.target
+    EOF
+
+    sudo systemctl daemon-reload
+    sudo systemctl enable --now axcell-version
+    sudo systemctl status axcell-version
+
+
+----------------------------------------
+ 7. 방화벽 열기
+----------------------------------------
+
+[Windows]
+    netsh advfirewall firewall add rule name="AXCell Version 8100" dir=in action=allow protocol=TCP localport=8100
+
+[Linux - firewalld]
+    sudo firewall-cmd --permanent --add-port=8100/tcp
+    sudo firewall-cmd --reload
+
+[Linux - ufw]
+    sudo ufw allow 8100/tcp
+
+
+----------------------------------------
+ 8. 끄기
+----------------------------------------
+
+[터미널에서 직접 돌린 경우]
+    Ctrl + C
+
+[Windows 서비스]
+    nssm stop AXCellVersion
+
+[Linux 서비스]
+    sudo systemctl stop axcell-version
+
+[포트로 찾아서 끄기 - Windows]
+    netstat -ano | findstr :8100
+    taskkill /PID 찾은번호 /F
+
+[포트로 찾아서 끄기 - Linux]
+    sudo lsof -i :8100
+    kill 찾은번호
+
+
+----------------------------------------
+ 9. AX-Cell 쪽 설정
+----------------------------------------
+
+AX-Cell 에서 F9 -> 개발자 설정 -> 맨 아래 "버전 확인" 칸에
+이 서버 주소를 적고 [버전 확인] 을 누르면 됩니다.
+
+    버전 서버 실제 주소:  http://서버주소:8100
+
+AI 서버와 같은 통로로 나가고, 이 주소만 따로 정합니다.
+
+
+----------------------------------------
+ 10. 안 될 때
+----------------------------------------
+
+"연결할 수 없습니다"
+    -> 서버가 떠 있는지 확인    : curl http://127.0.0.1:8100/v1/models
+    -> 방화벽이 열려 있는지 확인 (7번)
+    -> --host 가 0.0.0.0 인지 확인 (127.0.0.1 이면 그 서버에서만 접속됨)
+
+"version.txt 를 찾을 수 없습니다"
+    -> --version-file 경로에 오타가 없는지, 파일이 실제로 있는지 확인
+
+"버전 형식이 아닙니다"
+    -> version.txt 첫 줄이 숫자와 점으로만 되어 있는지 확인 (예: 0.7.2.0)
+
+"포트가 이미 사용 중입니다"
+    -> 다른 포트로 실행하거나(--port 8101), 8번으로 기존 프로세스를 끄세요
+
+
+----------------------------------------
+ 11. 테스트 돌려보기 (개발용)
+----------------------------------------
+
+    python test_version_service.py      (버전 확인)
+    python test_log_collector.py        (로그 수집)
+
+    -> RESULT: ALL PASS 가 나오면 정상입니다.
+
+
+----------------------------------------
+ 12. 로그 받아보기 (관리자)
+----------------------------------------
+
+브라우저에서 아래 주소를 엽니다.
+
+    http://서버주소:8100/admin
+
+날짜 / 사용자 / 실행(세션) 목록이 나옵니다. 줄 끝의 [zip 받기] 를 누르면
+그 실행의 로그와 스킬이 통째로 zip 으로 내려옵니다.
+
+    2026-08-24  kgm_hong  20260824-091530-13244-a1b2  0.7.4.0  종료  812 KB  3개/2개  [zip 받기]
+
+폴더로 직접 보고 싶으면 서버의 이 경로를 그대로 보면 됩니다.
+
+    /data/public/versionTest/logs/날짜/사용자/세션/
+        session.json   누가 / 어느 PC / 어느 버전 / 언제 켜고 껐는지
+        logs/          그 실행의 로그
+        skills/        그 실행에서 만들어진 스킬 zip
+
+'한 번 켠 것 = 폴더 하나' 라서 로그와 스킬이 항상 짝으로 있습니다.
+
+하루치를 통째로 받으려면:
+
+    http://서버주소:8100/admin/day.zip?date=2026-08-24
+
+잘 쌓이는지 확인:
+
+    curl http://127.0.0.1:8100/v1/logs/health
+        -> {"ok":true,"root":"/data/public/versionTest/logs", ...}
+
+안 쌓일 때
+    - ok 가 false 면 --log-root 폴더 권한을 확인하세요.
+    - 특정 PC 만 안 올라오면 그 PC 가 이 서버로 못 나가는 경우입니다(방화벽/프록시).
+    - 사용자 PC 쪽 상태는 그 PC 브라우저에서 http://127.0.0.1:18090/api/log-sync/status
+
+용량이 걱정되면
+    --retention-days 90  처럼 주면 90일보다 오래된 날짜 폴더를 자동으로 지웁니다.
+    (기본은 안 지웁니다)
+
+
+----------------------------------------
+ 13. 문서보안(DRM) 릴레이
+----------------------------------------
+
+AX-Cell 0.7.5 부터, 보안문서(AIP/DRM)를 업로드하면 이 서버를 거쳐 MIP Gateway 로
+풀고, 다운로드할 때 다시 겁니다. 서버에서 할 일은 하나 — .env 에 키를 넣는 것.
+
+    cd /data/public/versionTest
+    cp .env.example .env
+    (편집) MIP_API_KEY=발급받은키
+    (선택) MIP_REQUESTOR_ACCOUNT=기본계정   <- 클라이언트가 계정을 못 구했을 때의 예비값
+    기본이 '운영' Gateway(mipgw)입니다. 개발로 테스트할 때만 아래 줄을 넣으세요.
+    MIP_GATEWAY_BASE_URL=https://devmipgw.lguplus.co.kr/webapi/api/lguplusstreams/noSessiondo
+
+서버를 다시 켜면 시작 로그에 이렇게 뜹니다.
+
+    [문서보안] Gateway = https://mipgw.lguplus.co.kr/...
+    [문서보안] keyCode 설정됨 / 기본계정 있음 / 제한시간 60초
+
+확인:
+
+    curl http://127.0.0.1:8100/api/drm/health
+        -> {"ok":true,"configured":true, ...}
+
+주의
+    - 이 서버가 MIP Gateway 의 '허용 IP' 로 등록되어 있어야 합니다.
+      (-100 "허용되지 않은 IP" 가 나오면 등록 문제)
+    - 키가 없으면 DRM 만 503 으로 꺼지고, 버전 확인/로그 수집은 그대로 돕니다.
