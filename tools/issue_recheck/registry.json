@@ -4559,6 +4559,36 @@
         ]
       ],
       "fix": "실측(2026-09-08, cloudpc_spark32 15:46 세션): 검증파일 Sheet1 은 '구분' 헤더 블록 8개 반복(행 4,28,44,...) — match_fill 이 header_row+1~끝행을 스캔해 58행 매칭(의도 첫 블록 ~7행), 과거 달 블록 값이 덮임. 사용자의 rows=7 재시도는 '행 7부터 끝까지'로 해석돼 무효. 수정: scope=\"block\" 기본 — 대상 키열에 헤더 라벨(예 '구분')이 다시 나오면 그 앞에서 멈춤(헤더 반복 없는 시트는 기존과 동일). scope=\"all\"=전체 스캔 복원, 끝 명시 rows=(s,e)는 그대로 존중. file-schema.js LLM 문서 갱신. 실 Excel COM 검증: 블록만 채움/지난 블록 보존/scope=all/명시 rows 8건 + 기존 match_fill 4개 suite 회귀 PASS."
+    },
+    {
+      "id": "FAST-DELETE-CROSS-STEP-GATE",
+      "title": "[0.8.4] 마지막 교차파일 단계 삭제/OFF 가 전체 재적용으로 돌던 게이트 완화.",
+      "checks": [
+        [
+          "node",
+          "test_runs/_test_fast_delete_cross_gate.js"
+        ]
+      ],
+      "fix": "실측(2026-09-09 10:19): 마지막 4단계(교차파일 쓰기) 삭제 → reset:True ×3 + 전 스텝 재적용(reapply.enter reason=unknown). 적용 직전 사본은 두 파일 모두 저장돼 있었고(10:18:54 excel.save.snapshot ×2) 복원부(restoreLastStepPreApplySnapshot)는 _crossPreApplySnapshots 복원을 지원하는데, canFastEditLastPipelineStep 이 pipelineStepWritesCrossFile 이면 무조건 false 였다. 수정: 교차 스텝은 stepHasFullRollbackSnapshots(대상+모든 런타임 목적지 사본, 시점 일치)일 때만 빠른 경로 허용, 아니면 종전대로 전체 reconcile(반쪽 복원 금지). 삭제(3906)·OFF(4097) 두 호출부 모두 혜택. 기능 테스트 9건."
+    },
+    {
+      "id": "WRITE-NONE-ROW-CLEARED-FORMULA",
+      "title": "[0.8.4] ctx.write 가 None 행을 셀 비우기로 처리해 '제외한' 합계 행 수식이 지워짐 → None 행 스킵.",
+      "checks": [
+        [
+          "python",
+          "test_runs/_test_write_skip_none_rows.py"
+        ],
+        [
+          "python",
+          "test_runs/_test_match_fill_com.py"
+        ],
+        [
+          "python",
+          "test_runs/_test_match_fill_e2e.py"
+        ]
+      ],
+      "fix": "실측(2026-09-09 10:18): 생성 코드가 '합계 행(24행) 제외' 를 out.append([None]) + 통짜 ctx.write(overwrite_formulas=True) 로 구현 → Value2=None 이 C24 기존 수식을 지움(매출 열은 match_fill 이라 무사). 수정: write(skip_none_rows=True 기본) — 행 전체 None 은 건드리지 않고 연속 구간별로 기록(판정은 _as_2d 가 None→\"\" 로 바꾸기 '전' 원본으로). 일부 셀만 None 인 행은 기존대로 그 셀 비움. 내부 헬퍼는 예전 의미 고정: write_cell(단일 셀 None=비움)·match_fill·조회 채우기(15598)는 skip_none_rows=False. 부수효과 검토: write_cells_total 은 실제 기록 칸만 집계(전부 None 이면 0 → 무변경 판정으로 드러남), .Value2 직접 쓰는 9곳 무관, 값 삭제는 ctx.clear 사용(실측 스킬)이라 영향 없음. file-schema 문서 갱신. 실 Excel 검증 8건 + match_fill 4개 suite 회귀 PASS."
     }
   ]
 }

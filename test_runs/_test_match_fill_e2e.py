@@ -106,7 +106,7 @@ class FakeCtx:
             row = grid[r - 1] if 0 <= r - 1 < len(grid) else []
             out.append([(row[c - 1] if 0 <= c - 1 < len(row) else None) for c in range(c0, c1 + 1)])
         return out
-    def write(self, sheet, a1_start, values, overwrite_formulas=True):
+    def write(self, sheet, a1_start, values, overwrite_formulas=True, skip_none_rows=True):
         grid = self._book.sheets[sheet]; (r0, c0), _ = parse_range(a1_start)
         for dr, vrow in enumerate(values):
             for dc, val in enumerate(vrow):

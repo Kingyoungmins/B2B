@@ -13192,30 +13192,52 @@ class PythonComSkillContext:
         return [[isinstance(v, str) and v.startswith("=") for v in row] for row in f]
 
     # ---- 쓰기(벌크 전용) ----
-    def write(self, sheet, a1_start, values, overwrite_formulas=True):
-        """2차원 리스트를 시작 셀 기준으로 한 번에 쓴다(COM 1회).
+    def write(self, sheet, a1_start, values, overwrite_formulas=True, skip_none_rows=True):
+        """2차원 리스트를 시작 셀 기준으로 쓴다(연속 구간별 COM 소수회).
         0.5.9부터 요청받은 대상 범위는 기본적으로 값으로 덮어쓴다. 수식 보존은
-        생성 코드가 데이터 범위/요약 행을 정확히 제외하는 방식으로 처리한다."""
+        생성 코드가 데이터 범위/요약 행을 정확히 제외하는 방식으로 처리한다.
+        [제외 행 2026-09-09] '행 전체가 None' 인 행은 건드리지 않는다(그 행 제외 의미).
+        예전엔 None 이 셀 비우기가 돼, '합계 행은 제외합니다' 라며 [None] 을 끼워 넣은 생성
+        코드가 그 행의 기존 값/수식을 지웠다(실측: 회사별요약 C24 수식 소실). 값/수식을
+        지우려면 ctx.clear 를 쓴다. 행 안 일부 셀만 None 이면 그 셀은 기존대로 비워진다.
+        skip_none_rows=False 면 예전처럼 None 행도 비운다(내부 채우기 헬퍼가 '빈 값=비움' 의미를 지킬 때)."""
         t0 = time.perf_counter()
         ws = self._ws(sheet)
         data, rows, cols = self._as_2d(values)
+        # 판정은 '변환 전' 원본으로 — _as_2d 가 None 을 "" 로 바꿔 놓아 변환 후엔 구분이 안 된다.
+        # 명시적 "" 는 기존대로 그 셀을 비운다(빈 문자열 기록 의도 존중), None 만 '제외'다.
+        keep = [True] * rows if not skip_none_rows else [any(v is not None for v in row) for row in values]
+        if not any(keep):
+            return 0                      # 전부 제외 — 아무 것도 안 건드림
         try:
-            self._shared["write_cells_total"] += int(rows) * int(cols)
+            self._shared["write_cells_total"] += sum(int(cols) for k in keep if k)
             self._shared["write_cells_nonempty"] += sum(
                 1 for _row in data for _v in _row if _v is not None and str(_v).strip() != ""
             )
         except Exception:
             pass
         anchor = self._rng(ws, a1_start)
-        rng = self._resize_rng(ws, anchor, rows, cols)
-        self._tick(3)
-        self._journal_save(ws, rng, new_data=data)
-        try:
-            _apply_com_text_format_for_long_digit_columns(ws, data, int(anchor.Row), int(anchor.Column))
-        except Exception:
-            pass
-        rng.Value2 = data
-        self._tick(1)
+        a_row, a_col = int(anchor.Row), int(anchor.Column)
+        i = 0
+        while i < rows:
+            if not keep[i]:
+                i += 1
+                continue
+            j = i
+            while j + 1 < rows and keep[j + 1]:
+                j += 1
+            sub = data[i:j + 1]
+            sub_anchor = ws.Cells(a_row + i, a_col)
+            rng = self._resize_rng(ws, sub_anchor, j - i + 1, cols)
+            self._tick(3)
+            self._journal_save(ws, rng, new_data=sub)
+            try:
+                _apply_com_text_format_for_long_digit_columns(ws, sub, a_row + i, a_col)
+            except Exception:
+                pass
+            rng.Value2 = sub
+            self._tick(1)
+            i = j + 1
         try:
             ms = (time.perf_counter() - t0) * 1000
             cells = int(rows) * int(cols)
@@ -13235,7 +13257,7 @@ class PythonComSkillContext:
 
     def write_cell(self, sheet, a1, value, overwrite_formulas=True):
         """단일 셀 쓰기(소량 전용 — 루프에서 반복 호출하면 예산 초과로 차단됨)."""
-        return self.write(sheet, a1, [[value]], overwrite_formulas=overwrite_formulas)
+        return self.write(sheet, a1, [[value]], overwrite_formulas=overwrite_formulas, skip_none_rows=False)
 
     def write_formulas(self, sheet, a1_start, formulas):
         """수식 문자열 2차원 리스트를 한 번에 기록(예: [["=B2-C2"],["=B3-C3"]])."""
@@ -15574,7 +15596,7 @@ class PythonComSkillContext:
                 out.append([table_map[nk]]); matched += 1
             else:
                 out.append([default if default is not None else ""])
-        self.write(sheet, "%s%d" % (icl, hr + 1), out)
+        self.write(sheet, "%s%d" % (icl, hr + 1), out, skip_none_rows=False)   # 빈 값=비움(기존 의미)
         return matched
 
     def match_fill(self, source, target, columns, key=None,
@@ -15912,7 +15934,8 @@ class PythonComSkillContext:
                 while j + 1 < len(rs) and rs[j + 1] == rs[j] + 1:
                     j += 1
                 run = rs[i:j + 1]
-                tgt_ctx.write(tgt_sheet, "%s%d" % (cl, run[0]), [[rowvals[r]] for r in run])
+                tgt_ctx.write(tgt_sheet, "%s%d" % (cl, run[0]), [[rowvals[r]] for r in run],
+                              skip_none_rows=False)   # 소스가 빈 값이면 대상도 비움(기존 의미)
                 i = j + 1
 
         self._shared["structural"].append(
