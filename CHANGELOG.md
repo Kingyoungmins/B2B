@@ -1,5 +1,107 @@
 ﻿# Changelog
 
+개발자용 변경 이력입니다. "무엇을 왜 고쳤나"를 커밋 기준으로 적습니다.
+사용자용 안내는 `patch_notes/vX.Y.Z.txt`(평문), 코드 단위 명세는 `docs/okf/`, 삽질 기록은 `docs/lessons/` 를 봅니다.
+
+> 아래 `ver0.8.x` 가 현재 버전 체계입니다(단일 진실 = `launch_b2b.py` 의 `CURRENT_VERSION`).
+> 문서 맨 아래 `ver2.0` / `ver1.x` 는 2026-04 초기 모듈화 시절의 옛 numbering 기록으로, 연속된 번호가 아닙니다.
+> 0.5.14 ~ 0.8.2 구간은 이 파일에 없습니다 — `patch_notes/`(v0.5.16 이후 버전별 .txt)와 `docs/lessons/`(삽질·회귀 기록)를 보세요. 0.5.13 이하는 `README.md` 의 "최근 변경사항" 에 남아 있습니다.
+
+---
+
+## ver0.8.4 (2026-09-03 ~ 09-09)
+
+0.8.3 그대로에서 버전만 올린 갈래(`cdc6f860`). 제품명 변경, F키 접근 권한, 대시보드 실사용 보강, 그리고 "화면은 맞는데 파일이 다르다" 부류의 조용한 오류 수정이 중심입니다.
+
+### 수정 — 조용히 틀린 결과 (docs/lessons/58)
+
+- **[크리티컬] 결과편집 후 "현재 상태 다운로드"가 옛 실행 결과를 서빙** — 전체실행(19단계) → 결과편집 → 스킬 추가(라이브 적용) → 다운로드 시 **실행 시점**의 결과 파일이 받아져 추가한 스킬이 빠졌습니다(뷰에는 적용돼 보여 사용자가 받아 간 뒤에야 드러남). 결과편집이 라이브로 불러온 결과 항목에 `liveAbsorbed` 표시를 달고, 다운로드는 흡수된 항목을 건너뛰고 라이브 현재 상태를 `/api/excel/save` 로 저장합니다. 결과편집 재클릭 시 옛 결과가 라이브(추가 스킬)를 덮던 부수 구멍도 함께 막았습니다. 결과를 라이브에 안 불러온 파일의 "결과 우선 다운로드"(원본 방지)는 보존 ([scripts/output-template.js](scripts/output-template.js), [scripts/pipeline.js](scripts/pipeline.js), `3b79e27b`).
+  - 회귀 테스트에 **단일 작성 지점 가드**를 추가 — 수정·ON/OFF·추가 같은 라이브 경로가 `lastRunnerOutputs` 를 새로 만들면 흡수 표시가 우회되므로, 작성 지점이 실행기 완료 1곳뿐임을 검사합니다 (`1ce824da`).
+- **`ctx.write` 가 "제외한" 행의 기존 수식을 지웠다** — "합계 행(24행)은 제외합니다" 라던 생성 코드가 `out.append([None])` + 통짜 `ctx.write` 로 짜여 `C24` 의 `=SUM(...)` 이 사라졌습니다(`Value2=None` = 셀 비우기). 이제 **행 전체가 `None` 인 행은 스킵**하고 연속 구간별로 기록합니다(`skip_none_rows=True` 기본). 셀을 비우는 것은 `ctx.clear` 담당이고, 내부 헬퍼(`write_cell` · `match_fill` · 조회 채우기)는 `skip_none_rows=False` 로 예전 의미(빈 값=비움)를 고정했습니다 ([serve_b2b.py](serve_b2b.py), [scripts/file-schema.js](scripts/file-schema.js), `27041023`).
+- **`ctx.match_fill` 이 반복 블록 시트를 과채움** — 월별 요약처럼 같은 표(`구분` 헤더)가 8번 반복되는 시트에서 끝행까지 스캔해 58행이 채워지고(의도 ~7행) 다른 달 블록의 같은 이름 값이 덮였습니다. 기본 `scope="block"` — 키 열에 대상 헤더 라벨이 다시 나오면 그 앞에서 멈춥니다(헤더 반복이 없는 일반 시트는 동작 동일). `scope="all"` 이 예전 전체 스캔이고, 끝을 명시한 `rows=(s,e)` 는 그대로 존중합니다 ([serve_b2b.py](serve_b2b.py), `3f80f2cc`).
+
+### 수정 — AI 도움(F11) 조용한 실패 4건 (docs/lessons/60)
+
+- **답이 "이유는 이래요." 하고 비었다** — 에코 제거기가 도구 결과(오류 메시지) 인용까지 지워 근거 문단이 통째로 사라졌습니다. 제거 소스에서 도구 결과·이전 답을 제외하고, 사용자 메시지는 긴 문단만 대상으로 삼습니다 ([scripts/assist-core.js](scripts/assist-core.js), `fe4df2f8`).
+- **예고문 뒤에 부연이 붙으면 대화가 멈췄다** — "…맞춰 볼게요. 원본은 금액 열이에요." 처럼 한 문장이 더 붙으면 예고문 감지가 안 돼 재촉이 발동하지 않았습니다. 감지 보정 후, "먼저 1단계 코드를 볼게요." 에서 또 멈춘 건은 **동사 허용목록을 아예 제거**하고 약속 어미 전부(인사말 제외)를 감지하도록 바꿨습니다(`assist.nudge` 트레이스 추가) ([scripts/assist-guard.js](scripts/assist-guard.js), [scripts/assist-core.js](scripts/assist-core.js), `fe4df2f8` · `af0351a8`).
+- **검산이 미리보기 60행만 보고 답을 포기** — `data.query` 가 preview 스키마만 읽어 1,200행 검산을 못 하고 설계 채팅으로 넘겼습니다. 라이브 파일은 실제 행수만큼 다시 읽어 전체 기준으로 집계합니다(단일 시트, `maxRows ≤ 20000`) ([scripts/assist-tools.js](scripts/assist-tools.js), [serve_b2b.py](serve_b2b.py), `fe4df2f8`).
+- **검산 결과가 2배로 틀렸다** — 요약표의 합계/평균 행을 데이터 행과 함께 더해 중복 합산했습니다. `data.query` 집계에서 요약 행을 기본 제외하고(제외 개수 안내, `includeSummaryRows` 옵션), 프롬프트에 "두 값을 독립적으로 읽어 결론부터, 단계 탐색은 요청 시에만"을 명시했습니다 ([scripts/assist-tools.js](scripts/assist-tools.js), `af0351a8`).
+- 도구 인자 `{args:{...}}` 포장을 자동으로 벗깁니다 (`fe4df2f8`). 실제 앱+LLM으로 검산 흐름을 확인하는 수동 e2e 스크립트 추가 (`test_runs/_e2e_assist_verify_live.py`, `333c5f45`).
+
+### 변경 — 제품명 · 메뉴 · 접근 권한
+
+- **제품명 `B2B 스마트 빌링 에이전트`** — 창 제목(NativeHost), 문서 title, 드로어 상단, 대시보드 제목/요약/AI 프롬프트, 제보 안내, 버전확인 문구를 교체. **예외로 유지**: 생성기 U+ 로고 옆 `#page-title` 의 `AX-Cell`, 좌측 메뉴 그룹 라벨, 스킬 종류 태그(AX-Cell/AX-Trace 스킬), 내부 식별자(`AXCellScheduler`, `axcell.ico`, exe명) ([index.html](index.html), [native_host/NativeHost.cs](native_host/NativeHost.cs), [dashboard.html](dashboard.html), `a2ccba19` · `cf6a1687`).
+- **추가 메뉴는 숨김 대신 "Coming soon" 블락** — AX-Trace·E2E 메뉴를 항상 보이게 두고 반투명 블락으로 클릭만 차단합니다. **F6** = 블락 해제/복귀(저장키·복귀 로직·F키 가드는 기존 그대로) ([scripts/menu.js](scripts/menu.js), [styles/scheduler.css](styles/scheduler.css), `a2ccba19`).
+- **F키 접근 권한(버프)** — 개발·관리성 F키(F2·F6·F7·F8·F9)는 권한이 있어야 동작합니다. 기본 보유는 조직 정보상 팀이 `Foundation리서치팀` 인 사용자(`/api/whoami` 재사용), **F1 6연타**(1.5초 간격 내 연속, 다른 키 개입 시 리셋)로 획득하면 그 PC에 유지됩니다. 비권한자에게는 조용히 무시해 권한의 존재를 광고하지 않고, 조직 정보가 없는 개발망은 허용하며 whoami 응답 전에도 차단하지 않습니다(시작 직후 정상 사용자 보호). F1/F5/F10/F11은 일반 기능이라 제외 ([scripts/fkey-guard.js](scripts/fkey-guard.js), `4beab04e`).
+  - **`scripts/fkey-guard.js` 는 `index.html` 의 첫 번째 스크립트여야 합니다** — capture 리스너는 등록 순서대로 돌기 때문에, 먼저 등록해야 `stopImmediatePropagation` 으로 뒤의 F7/F8 핸들러를 막을 수 있습니다.
+
+### 변경 — 파이프라인
+
+- **마지막 교차파일 단계 삭제/OFF가 전체 재적용으로 돌던 것** — 적용 직전 사본이 두 파일 모두 있고 복원부가 교차 목적지를 지원하는데도 게이트가 교차 스텝을 무조건 거부해 `reset` ×3 + 전 스텝 재적용이 돌았습니다. `stepHasFullRollbackSnapshots` 를 통과할 때만 빠른 경로를 타고, 사본이 부족하거나 불일치면 종전대로 전체 reconcile 합니다 ([scripts/pipeline.js](scripts/pipeline.js), `da4c147d`).
+
+### 추가 — 관리 대시보드
+
+- 헤더에 **수동 `🔄 갱신`** 버튼 (`4beab04e`).
+- **실행(세션) 목록 행 펼침** — 로그/스킬 개수 셀을 누르면 상세 행에 로그 파일 목록(크기·다운로드)과 스킬별 단계 수/켜짐 수/단계 제목이 나옵니다. `log_dash.ALLOWED_PATHS` 에 `session/detail` · `session/file` 추가, 수집 서버에 상세/파일 API 추가(별도 배포) ([dashboard.html](dashboard.html), [log_dash.py](log_dash.py), `30404899`). 세션 상세는 **펼칠 때마다 재조회** — 첫 응답을 영구 캐시해 수집 중 세션의 새 스킬이 안 보이던 문제 수정 (`efd906ac`).
+- **표 10줄 페이지 나눔**(정렬·자동갱신과 공존, 상세 행은 부모 행을 따라감), **행 클릭 = 그 조건으로 필터**(사용자 행 → 그 사용자, 일별 행 → 시작·종료일, 실행/오류 목록의 날짜·사용자 셀 역방향 매핑, 재클릭 = 해제), **토큰 일별 추이 차트**(입력/출력 쌓은 막대) (`a89432ff`).
+- **스킬 TOP 차트**(기간 내 저장 횟수·만든 사람 수), 표 4종 **CSV 내보내기**(현재 필터·정렬 그대로, BOM으로 한글 엑셀 호환), **조회 조건을 주소창 `#` 에 저장**(F5·링크 공유에도 보던 화면 유지), **`📋 요약 복사`**(팀즈 붙여넣기용 기간 요약, 직전 기간 증감 포함) (`0e9e35d4`).
+- **세션당 토큰 합계 열**(호버 = 입력/출력/호출 수, 구서버는 `-`) (`0a9c9e65`).
+- **활성 시간(추정)** — 앱을 고치지 않고 수집기에서 세션 로그 `ts` 간격으로 근사합니다. 간격이 기준 이내면 실사용으로 합산하고 초과는 자리비움. 기준은 5분으로 시작했다가 **10분**으로 완화했습니다(`_ACTIVE_GAP_SECONDS=600`, 캐시 v5로 기존 값 재계산, 경계 테스트 9분 포함/11분 제외) (`fcaaf8f3` · `6f3edde5`).
+- **전체실행 카드**(성공·실패·평균 소요) — 세션 목록은 앱 실행 단위여서 전체실행 1건 기록(`telemetry_preview.jsonl`)이 앱 폴더에만 남고 보안망에 올라가지 않았습니다. `log_sync` 의 `extra_files` 에 그 파일을 추가해(새 통신선 없이 기존 전송 재사용) 수집기가 `agent.run` 을 `fullRuns` 로 집계하게 했습니다. AI 질문 요약본에도 포함 ([serve_b2b.py](serve_b2b.py), `3f98f55e`).
+- **요약 복사가 전부 `undefined/0`** — `buildDashDigest` 반환값은 AI용 JSON 문자열(9KB 컷)인데 `copyReport` 가 객체로 읽었습니다. 자르기 전 원본 객체를 `window.__dashDigest` 로 보관하고 요약 복사는 그것을 읽습니다. 조회 전에 누르면 무반응 대신 안내 토스트. 회귀 테스트는 `copyReport` 를 실제 실행해 복사 텍스트 내용까지 검사 (`0cf7db20`).
+
+### 회귀 테스트
+
+`_test_result_edit_download.js`, `_test_write_skip_none_rows.py`, `_test_match_fill_block_scope.py`, `_test_fast_delete_cross_gate.js`, `_test_fkey_guard.js`(24항목), `_test_extra_menus_f6.js`, `_test_app_version_label.js`, `_test_assist_echo_fulldata_args.js`, `_test_assist_dangling_announce.js`, `_test_live_preview_maxrows_com.py`, `_test_org_dashboard.js`, `../versionTest/test_session_detail.py`, `../versionTest/test_active_time.py` — 전부 `tools/issue_recheck/registry.json` 에 등록됐습니다.
+
+---
+
+## ver0.8.3 (2026-09-02)
+
+0.8.2 그대로에서 버전만 올린 갈래(`930a0a54`). 배포 관리(버전 게이트)와 사용 현황 파악(조직 정보·토큰 계측·대시보드)이 중심입니다.
+
+### 추가 — 시작 시 버전 게이트
+
+- **프로세스당 1회 허용 버전 확인** — 보안망 `version.txt` 의 허용 버전 목록(줄바꿈 구분)과 현재 버전을 대조합니다. 목록에 없으면 "오래된 버전을 사용하고 있습니다. 최신 버전으로 교체 해주세요." + `[다운로드 하러가기]`, 버전 정보를 못 가져오면(서버 오류 등) "점검중입니다. 문의사항이 있으시면 팀즈로 문의 부탁드립니다" + `[확인]`. 프로세스당 1회이므로 새로고침·다중 탭에 팝업이 반복되지 않고, 주소가 설정되지 않은 환경은 조용히 통과합니다 ([serve_b2b.py](serve_b2b.py) `/api/app/version/gate` · `/api/app/version/open-download`(http(s)만, 기본 브라우저), [scripts/version-gate.js](scripts/version-gate.js), `a34e2855`).
+  - 다운로드 주소 우선순위 = **F9 저장값 > 서버 `downloadUrl` > 기본값**. F9 설정 창에 입력란 추가 ([scripts/model-modal.js](scripts/model-modal.js)).
+  - 수집/버전 서버 쪽은 `version.txt` 여러 줄 = 허용 목록, `version` 필드는 최신값(구버전 앱 호환), `--download-url` 옵션 — `versionTest` 브랜치, **보안망 수동 배포 필요**.
+- **`[무시하고 사용하기]` 기본 숨김** — 일반 사용자에게는 `[다운로드 하러가기]` 만 보여 업데이트로 유도하고, 개발/운영자는 팝업이 떠 있는 동안 **F2** 를 누르면 나타납니다(팝업이 닫히면 리스너 정리, 기존 F키와 충돌 없음). 점검중 팝업의 `[확인]` 은 종전대로 항상 표시 (`ba692292`).
+
+### 추가 — 조직 정보 (whoami /fqdn)
+
+- **조직 계층을 로그에 실어 대시보드에서 조직별 조회** — VM의 `whoami /fqdn` 이 상위 조직을 전부 줍니다(`CN=이름(마당아이디), OU=[..]4^Foundation리서치팀, OU=[..]3^AI R_D Lab, …`). `parse_fqdn_org` 가 `CN` → 이름/마당아이디, `[VDIGRP_x]N^이름` OU → 레벨 정렬로 `team`(가장 깊은 레벨)·`orgPath`(상위→하위)·`orgLevels` 를 만듭니다. 이름 안의 콤마에 안전하고, 레벨 표기가 없는 OU(`LGUPlus Users` 등)는 제외하며, 비도메인 PC는 빈 값(형식 유지 — 구버전/개발 환경 무해). `org_info` 는 `whoami /fqdn` 실행당 1회 캐시하고 워커 스레드에서만 돌려 시작을 막지 않습니다. 세션 시작 payload의 `extra.org` 로 전송 — `SessionStart.extra` 는 기존 자리라 구버전 서버에도 그대로 저장됩니다(수집 중단 없음) ([log_sync.py](log_sync.py), `1326542f`).
+- **용어 정정: `CN` 괄호 값은 사번이 아니라 "마당 아이디"** — 필드명 `empId` → `madangId`, 주석·테스트 동반 수정 (`2e22028a`).
+- **좌상단 계정 표기를 `사용자 : 실명` 으로** — 도메인 PC에서는 `/api/whoami` 가 `log_sync` 의 조직 캐시를 병합해 실명을 보여주고, 툴팁에 마당아이디·소속(조직 경로)·원래 로그인 계정을 남깁니다. 비도메인(개발망)은 종전 표기(`도메인\계정`)를 유지하되 응답 형태는 항상 동일합니다 ([scripts/whoami.js](scripts/whoami.js), `2e22028a`).
+- **[수정] 한국어 콘솔(CP949)에서 사용자명 한글 깨짐(U+FFFD)** — `whoami /fqdn` 출력은 한국어 Windows 콘솔에서 CP949인데, UTF-8 `replace` 로 풀고 "`CN=` 이 보이면 성공"으로 판정해 **영문은 살아남으니 CP949 폴백이 영영 안 탔습니다**(한글만 깨진 채 통과). 판정 기준을 **strict UTF-8 디코드 실패**로 바꿔 실패 시 CP949로 폴백합니다. `current_user()` 의 같은 계열 죽은 폴백(`if not text`)도 동일하게 수정했고, CP949 실바이트와 UTF-8(chcp 65001) 양쪽을 실측으로 잠갔습니다 ([log_sync.py](log_sync.py), `bb100bf1`).
+
+### 추가 — F1 기능키 도움말
+
+- F키가 늘어나(F2/F5/F6/F7/F8/F9/F10/F11/F12) 무엇이 어디 있는지 알기 어려워, **F1** 에 매핑 표를 붙였습니다. F1 재입력/ESC/바깥 클릭/`[확인]` 으로 닫히고 브라우저 기본 도움말은 차단합니다. 테스트가 **실제 핸들러(`e.key === "Fn"`)를 소스에서 수집해 표와 교차검증**하므로, 새 F키를 달고 표를 안 고치면 테스트가 실패합니다(도움말이 코드와 어긋나는 것 방지) ([scripts/fkey-help.js](scripts/fkey-help.js), `66a4590f`).
+
+### 추가 — LLM 토큰 사용량 계측
+
+- **원천은 `/v1` 프록시** — 채팅·AI도움·대시보드 질문 등 모든 LLM 호출이 이 프록시를 지납니다. `_inject_stream_usage` 가 스트리밍 요청에 `stream_options.include_usage` 를 주입해 vLLM이 마지막 청크에 usage를 실어 주게 하고(클라 SSE 파서는 빈 `choices` 청크에 안전 — 실측 확인), 응답 꼬리 32KB 버퍼에서 마지막 usage 블록을 추출해 `llm.usage` 트레이스(model/promptTokens/completionTokens/totalTokens)를 남깁니다. **계측은 덤** — 어떤 실패도 프록시 중계를 막지 않도록 테스트로 잠갔습니다. 트레이스는 기존 `log_sync` 로 자동 동기화되므로 전송 경로 변경이 없습니다 ([serve_b2b.py](serve_b2b.py), `f95ba37f`).
+- 수집기는 세션 스캔에 tokens 집계(총/입/출/호출 + 모델별)를 추가하고 캐시 v2로 옛 캐시를 자동 재스캔합니다(`/admin/events` 응답에 `tokens{byModel[], byUser[]}`) — `versionTest` 브랜치, 보안망 배포 필요.
+- 대시보드에 `🔤 토큰 사용` 카드(총 + 입력/출력/호출수)와 사용자별·팀별·모델별 차트, AI 요약본에도 토큰 포함. 구서버/구앱 데이터면 안내 문구(0.8.3+ 앱부터 수집) ([dashboard.html](dashboard.html)).
+
+### 변경 — 관리 대시보드 (상황판화)
+
+- **고정 헤더**(마지막 갱신 시각 + 60초 자동 새로고침 토글), **KPI 카드**에 아이콘·톤 색(정상/주의/위험)·직전 같은 기간 대비 증감 배지(stats를 직전 기간으로 한 번 더 조회해 비교), 카드/차트 호버 효과 (`97230f3c`).
+- 추가 요소: **신규 사용자** 카드(기간 내 최초 등장, 호버 = 명단), **오류율** 카드(5%↑ 주의, 20%↑ 위험), **체류 시간 분포**(5분 미만~2시간+ 4구간), **자주 나는 오류 TOP**(이벤트 종류별 묶음, 호버 = 대표 사례) (`97230f3c`).
+- **`AI에게 묻기`** — 화면에 로드된 집계(기간/요약/직전기간/일별/사용자·팀 TOP/버전분포/오류종류/구버전/신규)를 9KB 상한으로 압축 요약해 질문과 함께 보냅니다. 앱 채팅과 **같은 AI 서버·설정을 그대로 재사용**(같은 출처 `localStorage`)하므로 F9에서 서버를 바꾸면 따라갑니다. "데이터만 근거로, 없으면 없다고" 시스템 계약 + think 태그 제거, 프리셋 질문 4종 (`97230f3c`).
+- **사용자 표기 = `이름(마당아이디)`** (세션·사용자·오류 표, 사용자 랭킹 차트, 사용자 셀렉트 전부. 원래 계정은 호버로, 조직 정보 없는 사용자는 종전 표기). **소속 필터를 조직 경로 전 계층으로** — 팀만이 아니라 센터/Lab/팀 어느 계층을 골라도 그 아래 소속 전체가 걸립니다(전원 공통인 회사 레벨 제외, 깊이 들여쓰기) (`f2390900` · `1326542f`).
+- **팀별 사용 랭킹** 차트(실행 횟수·인원, 막대 클릭 = 그 팀 필터)와 **구버전 사용** 카드(버전 게이트 허용 목록 × 사용자별 최신 세션 버전 대조 → 교체 안 한 사람 수, 호버 = 명단). 게이트 정보를 못 가져오면 카드를 생략해 잘못된 0을 만들지 않습니다. 세션 표에서 허용 목록 밖 버전은 빨강 강조 (`f2390900`).
+
+### 수정 — 세션 상태 '수집 중' 고착
+
+- 대시보드 세션 상태가 거의 전부 `수집 중` 이었습니다. `/api/app/shutdown` 이 응답을 **먼저** 보내고 0.5초 뒤 로그 flush + `session/end` 를 보냈는데, 호스트는 응답을 받자마자 `serverProcess.Kill()` — **X로 닫을 때마다 종료 신호가 유실**됐습니다. 종료 신호·잔여 로그 전송을 응답 **전**으로 옮기고 소스 순서(stop < respond < exit)를 테스트로 잠갔습니다. 수집기 쪽은 마지막 수신 후 10분 무소식 + 미종료를 `stale`(끊김)로 보아 크래시·전원꺼짐·기존 고착 세션까지 흡수하고, `수집 중` 카드에서도 stale을 제외합니다. 대시보드는 **종료 / 종료(추정) / 수집 중** 3단으로 표시합니다 ([serve_b2b.py](serve_b2b.py), [dashboard.html](dashboard.html), `c3364285`).
+
+### 회귀 테스트
+
+`_test_version_gate.py`(가짜 서버 실측), `_test_version_gate_client.js`, `_test_org_info.py`, `_test_whoami_display.py`, `_test_fkey_help.js`, `_test_llm_usage_capture.py`, `_test_org_dashboard.js`, `../versionTest/test_version_allowlist.py`, `../versionTest/test_token_stats.py`, `../versionTest/test_stale_sessions.py` — `VERSION-GATE-STARTUP` · `ORG-INFO-IN-LOGS` · `FKEY-HELP-F1` · `LLM-TOKEN-USAGE-STATS` · `SESSION-STATUS-STUCK-COLLECTING` 로 등록.
+
+---
+
 ## ver2.0 (2026-04-27)
 
 ### 추가 — 새 모듈 5개

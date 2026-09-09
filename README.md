@@ -1,10 +1,239 @@
-﻿# B2B 빌링 Agent
+﻿# B2B 스마트 빌링 에이전트
 
-엑셀 입력 파일과 출력 템플릿을 업로드한 뒤, AI가 생성한 Excel 스킬(Python COM 또는 VBA)을 단계별 파이프라인으로 실제로 떠 있는 Excel 워크북에 적용해 결과 xlsx를 만드는 로컬 웹앱입니다.
+LG U+ 사내용 Excel 자동화 데스크톱 앱입니다. 엑셀 입력 파일과 출력 템플릿을 올린 뒤, AI가 만든 Excel 스킬(라이브 Python COM 또는 VBA)을 단계별 파이프라인으로 **실제로 떠 있는 Excel 워크북**에 적용해 결과 xlsx를 만듭니다. 만들어 둔 스킬은 zip으로 저장해 다음 달 파일에 그대로 다시 돌릴 수 있습니다(스킬 실행기).
 
-브라우저에서 동작하는 SPA와 로컬 Python HTTP 서버로 구성되어 있으며, `/v1/*` 요청은 사내 OpenAI-compatible ixi 모델 서버로 프록시됩니다. F9 개발자 모드에서는 Claude API를 선택해 테스트할 수 있습니다.
+구성은 세 덩어리입니다.
+
+- **Python 백엔드** — `serve_b2b.py`. 로컬 HTTP 서버로 정적 파일 + `/api/*` + `/v1/*`(사내 ixi/vLLM OpenAI-compatible 프록시)을 담당합니다. Excel COM 제어와 스킬용 `ctx` 헬퍼 구현이 전부 여기 있습니다.
+- **브라우저 UI** — `index.html` + `scripts/*.js`. 스킬 생성기·실행기 SPA.
+- **C# 네이티브 셸** — `native_host/NativeHost.cs`. WebView2로 위 UI를 띄우고 오른쪽에 실제 Excel 창을 미러로 붙입니다. 배포본은 PyInstaller onefile(`B2B_Server.exe`)과 이 셸을 묶은 단일 EXE입니다.
+
+> **제품명**: 2026-09-08부터 **B2B 스마트 빌링 에이전트**(구 AX-Cell)입니다. 단, 지시에 따라 두 곳은 `AX-Cell` 을 그대로 둡니다 — ① 스킬 생성기 U+ 로고 옆 제목(`index.html` 의 `#page-title`) ② 좌측 메뉴 그룹 라벨. 내부 식별자(`AXCellScheduler`, `axcell.ico`, 단일 EXE 컴파일 출력명 `AX-Cell.exe`)도 바꾸지 않았습니다.
+
+## 화면 구성
+
+| 화면 | 진입 | 하는 일 |
+|---|---|---|
+| **스킬 생성기** (`data-page="generator"`) | 기본 화면 | 파일 업로드 → 채팅으로 작업 지시 → AI가 스킬 단계 생성 → 적용/전체실행. 오른쪽은 실제 Excel 미러 |
+| **스킬 실행기** (`data-page="runner"`) | 좌측 메뉴 | 저장한 스킬 zip을 올려 다른 달 파일에 그대로 실행. 결과는 파일로 출력(`output/`)하고, [결과편집]으로 라이브에 불러와 이어서 손볼 수 있습니다 |
+| **관리 대시보드** (`dashboard.html`) | F9 설정 창 → `📊 관리 대시보드` (새 창) | 보안망 수집 서버에 쌓인 사용 기록(사용자·조직·세션·오류·LLM 토큰) 조회 |
+| AX-Trace · E2E 작업 등록 | 좌측 메뉴 | 준비 중. 항상 보이지만 "Coming soon" 반투명 블락으로 덮여 있고, **F6** 으로 해제/복귀합니다 |
+
+## 개발 시작하기
+
+포맷한 PC에서 `git clone` 직후 순서입니다.
+
+### 1. 준비물
+
+- Windows x64 + **데스크톱 Excel 설치**(스킬은 실제 Excel COM에 붙습니다)
+- Python 3.10+
+- `python -m pip install pywin32 openpyxl psutil`
+  - 세 패키지는 `serve_b2b.py` 상단에서 try/except로 감싼 optional import입니다. 없어도 서버는 뜨지만 Excel 관련 기능이 **조용히 꺼집니다**. `pywin32`(=`win32com`/`pythoncom`)가 없으면 스킬 실행이 아예 안 됩니다.
+  - `psutil` 은 좀비 Excel 정리와 부하 샘플러용입니다.
+- Node.js는 **선택** — 백엔드 파이프라인 워커(`scripts/backend-pipeline-worker.js`)와 EXE 빌드에만 씁니다(`B2B_DISABLE_NODE_WORKER=1` 로 워커를 끌 수 있습니다).
+- `.NET Framework 4.x` 의 `csc.exe` — 네이티브 셸을 컴파일할 때만 필요합니다(Windows 기본 포함).
+
+확인은 `http://127.0.0.1:8090/api/backend/health` 에서 `openpyxl` / `excelCom` / `node` 가 각각 true인지로 합니다.
+
+### 2. 서버만 띄워 브라우저에서 열기 (가장 빠른 확인)
+
+```bat
+python serve_b2b.py
+```
+
+→ 브라우저에서 `http://127.0.0.1:8090/index.html`
+
+`python launch_b2b.py`(= `start_b2b.bat`)를 쓰면 서버를 띄우고 브라우저까지 열어 줍니다. 포트 기본값은 `8090`(`B2B_PORT`), 사용 중이면 `18090`~`18095`로 자동 fallback 합니다.
+
+> 브라우저 직접 실행은 UI/로직 확인용입니다. Excel 미러가 오른쪽 패널에 붙는 **정식 경로는 네이티브 셸**이므로, 실제 사용 흐름을 재현할 때는 아래를 씁니다.
+
+### 3. 정식 경로 — 네이티브 셸
+
+```bat
+start_b2b_native.bat
+```
+
+처음 실행하면 WebView2 패키지(NuGet)를 받아 C# 호스트를 자동 컴파일합니다. 폴더에 `B2B_Server.exe` 가 없으면 호스트가 `python serve_b2b.py` 로 서버를 띄우므로, 빌드하지 않고도 배포본과 같은 경로로 돌아갑니다. (반대로 **폴더에 낡은 `B2B_Server.exe` 가 있으면 소스를 고쳐도 그 exe가 뜹니다** — "고쳤는데 앱은 그대로"의 단골 원인.)
+
+| 고친 것 | 필요한 것 |
+|---|---|
+| `scripts/*.js` · `styles/*.css` · `index.html` · `dashboard.html` | 화면 새로고침(F5 = 작업 상태 유지 소프트 리프레시) |
+| `serve_b2b.py` 등 파이썬 | 서버 재시작 |
+| `native_host/NativeHost.cs` | 재컴파일 (`native_host/build_native_host.ps1`) |
+
+무엇을 고쳤을 때 무엇이 필요한지는 `tools/dev_run.ps1` 이 판단해 알려 줍니다.
+
+### 4. AI 서버
+
+기본 모델은 사내 ixi `Qwen3.6-27B-FP8` 이고, 화면의 모든 LLM 호출(설계 채팅·AI 도움·대시보드 질문)은 로컬 `/v1/*` 프록시를 지나 `B2B_VLLM_BASE` 로 나갑니다. F9 개발자 모드에서 Claude provider로 바꿔 테스트할 수 있습니다. Claude 키는 브라우저 `localStorage`, 또는 gitignore된 `keys.local.json`(`{"anthropicApiKey": "..."}`)에 두고 F9 의 `[저장된 키 불러오기]`(`/api/local-keys`)로 읽습니다.
+
+## 핵심 파일 지도
+
+### 백엔드 (Python)
+
+| 파일 | 역할 |
+|---|---|
+| `serve_b2b.py` | 전부의 중심(약 2.3만 줄). HTTP 라우팅, Excel COM 세션 관리, **`PythonComSkillContext`(= 스킬이 쓰는 `ctx` API 68개)**, `_python_com_static_check`(AST 정적 게이트), `_run_python_on_session_impl` / `_run_vba_on_session_impl` / `_run_vba_pipeline_on_session_impl`(격리 파이프라인), `/v1` 프록시 + LLM 토큰 계측, 시스템 프롬프트 일부. **UTF-8 BOM 유지 필수** |
+| `launch_b2b.py` | 런처. **버전의 단일 진실 `CURRENT_VERSION`**(현재 `0.8.4`). 프로즌 exe의 진입점이기도 하므로, 시작 시 1회 작업은 `serve_b2b.__main__` 이 아니라 `start_runtime_maintenance_threads` 에 넣어야 배포본에서도 돕니다. **UTF-8 BOM 유지 필수** |
+| `log_sync.py` | 로그·자동백업 스킬을 보안망 수집 서버로 조금씩 전송. `whoami /fqdn` 파싱(`parse_fqdn_org` → 이름·마당아이디·팀·조직경로)도 여기 |
+| `log_dash.py` | 관리 대시보드용 수집 서버 프록시(`/api/logdash/*` → 수집 서버 `/v1/admin/*`). `ALLOWED_PATHS` 화이트리스트 |
+| `secure_doc.py` | 문서보안(AIP/DRM) 해제·재적용 |
+| `record_service.py` · `native_macro_recorder.py` | F10 엑셀 작업 녹화 → 스킬 단계 역추적 |
+| `b2b_scheduler.py` · `b2b_telemetry.py` | E2E 작업 등록(스케줄) 서버측 / 스킬 실행 관측 로그(`telemetry_preview.jsonl`). 둘 다 독립 애드온이라 없어도 본체가 돕니다 |
+
+### 프런트 (브라우저)
+
+| 파일 | 역할 |
+|---|---|
+| `index.html` | SPA 셸. **script 로딩 순서에 의존**합니다. `scripts/fkey-guard.js` 는 반드시 **첫 번째** 스크립트여야 합니다(capture 리스너 등록 순서가 곧 차단 능력) |
+| `dashboard.html` | 관리 대시보드(단일 파일, 차트·필터·AI에게 묻기 포함) |
+| `assist.html` | AI 도움 팝업을 네이티브 별창으로 띄울 때의 페이지 |
+| `scripts/pipeline.js` | 스킬 파이프라인의 심장. 단계 적용/재적용/토글/삭제, 전체실행·이어실행, 스냅샷·빠른 복구, `pipelineStepLiveLanguage`(엔진 라우팅), 격리 파이프라인 호출 |
+| `scripts/chat-ui.js` | 설계 채팅 UI + 적용 전 클라이언트 1차 게이트(`pythonComStaticSafetyFailures`, `validateAssistantCodeBeforeApply`) |
+| `scripts/file-schema.js` | LLM에 넘기는 파일 스키마 + 시스템 프롬프트(`PYTHON_COM_SYSTEM_PROMPT`, VBA 프롬프트, 라우팅 규칙) |
+| `scripts/llm-api.js` | LLM 호출·히스토리 윈도우 |
+| `scripts/excel-mirror.js` | 실제 Excel 창 미러 제어(표시 대상 전환, 선택 폴링, 수식 표시줄) |
+| `scripts/assist-*.js` | **AI 도움**(F11) — `assist-core`(오케스트레이터), `assist-tools`(읽기 전용 도구만), `assist-llm`(설계 채팅과 격리된 배관), `assist-guard`(액션 파서/가드), `assist-report`(이슈 제보 zip), `assist-ui`(떠 있는 팝업) |
+| `scripts/fkey-guard.js` | F키 접근 권한(F2·F6·F7·F8·F9 게이트) |
+| `scripts/fkey-help.js` | F1 = F키 매핑 도움말 |
+| `scripts/version-gate.js` | 시작 시 1회 허용 버전 확인 팝업 |
+| `scripts/output-template.js` | 결과 파일 다운로드(원본 양식 보존, `liveAbsorbed` 처리) |
+| `scripts/save-load.js` | 스킬 zip 저장/불러오기 + 자동백업 |
+| `scripts/soft-refresh.js` | F5 = 파일·스킬을 유지한 채 프로그램만 재시작 |
+| `scripts/record-review.js` | 녹화 단계 의도 검토 모달 |
+| `scripts/secure-doc.js` | 보안문서 업로드/다운로드 안내 |
+| `scripts/whoami.js` | 좌상단 `사용자 : 홍길동` 표기(`/api/whoami`) |
+| `scripts/menu.js` | 페이지 전환, 메뉴, Coming soon 블락(F6) |
+| `scripts/scheduler.js` · `scripts/embed.js` | E2E 스킬 등록 화면 / AX-Trace iframe (둘 다 본체 전역을 쓰지 않는 독립 모듈) |
+| `scripts/backend-pipeline-worker.js` | Node 상주 워커(백엔드 openpyxl 경로에서 워크북 캐시 유지) |
+
+### 네이티브 / 빌드
+
+| 파일 | 역할 |
+|---|---|
+| `native_host/NativeHost.cs` | WebView2 셸. **오른쪽 파일 탭 등 일부 UI를 C#이 직접 그립니다**(`nativeFileTabs`) — 웹 쪽 `.right` 를 숨기므로, 그 부분을 바꾸려면 `.cs` 를 고치고 재컴파일해야 합니다 |
+| `launch_b2b.spec` | PyInstaller 스펙. `scripts/`·`styles/`·`vendor/` 는 폴더째 수집. 새 파이썬 모듈은 `datas` 와 `hiddenimports` **양쪽**에 넣어야 배포본에서 안 꺼집니다 |
+| `build_exe.bat` → `build_single_exe.bat` | 포터블 폴더+zip → 단일 EXE. 순서 고정. `build_all_single.bat` 은 둘을 한 번에 |
+| `single_exe/` | 단일 EXE 래퍼(C#) |
+
+## 테스트
+
+세 계층이고, 전부 **레포 루트에서 파일을 단독 실행**하는 규약입니다. 각 스크립트가 자기 결과를 세고 마지막에 `RESULT: ALL PASS` 또는 `RESULT: N FAIL` 을 출력합니다(실패 시 종료코드 1).
+
+```bat
+node diagnostics\_test_xxx.js          :: 프런트 로직 — 실제 소스에서 함수를 추출해 구동(가장 빠름)
+node test_runs\_test_xxx.js            :: 프런트/규약 회귀
+python test_runs\_test_xxx.py          :: 백엔드 순수 로직(Excel 불필요)
+python test_runs\_test_xxx_com.py      :: 실제 Excel 을 띄우는 실측(COM). 종료 시 프로세스 정리 필수
+```
+
+- `test_runs/` 에는 회귀 테스트(`_test_*`)와 조사용 재현기·프로브(`_repro_*`, `_probe_*`), 생성 품질 eval 스크립트(`_eval_*`)가 섞여 있습니다(현재 263개 파일). `diagnostics/` 는 프런트 회귀 50개.
+- **실제 Excel COM이 필요한 테스트가 있습니다**(`*_com.py`, `_test_match_fill_e2e.py` 등). Excel 없는 PC에서는 이 계층만 건너뜁니다.
+- COM 함정(Sort의 Header/Order 무시, Resize가 단일 셀로 둔갑, Copy After 무동작 등)은 실제 Excel 단위테스트로만 잡힙니다. 순수 로직 통과를 "고쳤다"로 읽지 마세요.
+
+### 회귀 일괄 확인 (배포 전 필수)
+
+과거에 고친 이슈가 다시 깨졌는지 `tools/issue_recheck/registry.json`(이슈 370건 매핑)으로 한 번에 돌립니다.
+
+```bat
+python tools\issue_recheck\recheck.py            :: 빠른 검사(node + 순수 python, Excel 불필요)
+python tools\issue_recheck\recheck.py --com      :: 실제 Excel COM 실측까지
+python tools\issue_recheck\recheck.py --only 토큰 :: id/제목 부분일치 필터
+python tools\issue_recheck\recheck.py --list     :: 등록 목록
+python tools\issue_recheck\recheck.py --serve    :: 관리 대시보드 http://127.0.0.1:8765/
+```
+
+**이슈를 고치면 회귀 테스트를 만들고 `registry.json` 에 등록하는 것이 운영 규칙입니다**(`tools/issue_recheck/README.md`). 최근(0.8.3~0.8.4) 등록분 예:
+
+| id | 검사 |
+|---|---|
+| `VERSION-GATE-STARTUP` | `test_runs/_test_version_gate.py`, `_test_version_gate_client.js` |
+| `ORG-INFO-IN-LOGS` · `FKEY-HELP-F1` | 조직 정보 파싱·F1 도움말 표 ↔ 실제 핸들러 교차검증 |
+| `LLM-TOKEN-USAGE-STATS` | `_test_llm_usage_capture.py`, `../versionTest/test_token_stats.py`, `_test_org_dashboard.js` |
+| `SESSION-STATUS-STUCK-COLLECTING` | `../versionTest/test_stale_sessions.py` |
+| `FKEY-ACCESS-GUARD` | `_test_fkey_guard.js` (24항목) |
+| `SESSION-DETAIL-DRILLDOWN` · `DASH-PAGING-ROWFILTER-TOKENTREND` · `DASH-SKILLTOP-CSV-URLSTATE-REPORT` | `_test_org_dashboard.js`, `../versionTest/test_session_detail.py` |
+| `RESULT-EDIT-STALE-DOWNLOAD` | `_test_result_edit_download.js` |
+| `APP-RENAME-B2B-BILLING-AGENT` · `EXTRA-MENUS-COMING-SOON` | `_test_app_version_label.js`, `_test_extra_menus_f6.js`, `_test_fkey_help.js` |
+| `MATCH-FILL-MULTIBLOCK-OVERFILL` | `_test_match_fill_block_scope.py`, `_test_match_fill_com.py`, `_test_match_fill_e2e.py` |
+| `WRITE-NONE-ROW-CLEARED-FORMULA` | `_test_write_skip_none_rows.py` |
+| `FAST-DELETE-CROSS-STEP-GATE` | `_test_fast_delete_cross_gate.js` |
+| `ASSIST-*`(4건) | `_test_assist_echo_fulldata_args.js`, `_test_assist_dangling_announce.js`, `_test_live_preview_maxrows_com.py` |
+| `ACTIVE-TIME-ESTIMATE` | `../versionTest/test_active_time.py` |
+
+> `../versionTest/*` 체크는 **수집 서버 코드**를 봅니다(같은 remote의 `versionTest` 브랜치를 옆 폴더에 체크아웃한 것). 그 폴더가 없으면 해당 체크만 실패/스킵합니다.
+
+## 문서 지도
+
+| 문서 | 내용 |
+|---|---|
+| [CLAUDE.md](CLAUDE.md) | clone 직후 가장 먼저 읽는 요약 — 구조 한 장, 절대 규칙, 자주 밟는 함정 |
+| [BUILD.md](BUILD.md) | **배포용 EXE 빌드 절차** — 준비물, 순서, Node 없이 빌드, 버전 올릴 때 손대야 하는 곳, 자주 막히는 지점 |
+| [OFFLINE_PORTABLE_BUILD.md](OFFLINE_PORTABLE_BUILD.md) | 폐쇄망/무설치 빌드(`build_exe_offline.bat`) |
+| [PYTHON_ENGINE_RISKS.md](PYTHON_ENGINE_RISKS.md) | openpyxl vs 실제 Excel COM 차이와 리스크 |
+| [EXCEL_MIRROR_ARCHITECTURE.md](EXCEL_MIRROR_ARCHITECTURE.md) | Excel 미러 구조 설계 |
+| `docs/okf/` | **코드 자동 명세**(함수 1개 = 문서 1개 + `_graph.json` 콜그래프). 소스에서 자동 추출하므로 손으로 고치지 말고 재생성합니다: `python tools/okf/regen.py` → `python tools/okf/check_okf.py`. 도구 설명은 `tools/okf/README.md` |
+| `docs/lessons/` | 삽질·회귀 기록(번호 파일 + `README.md`·`MANIFEST.md`·`by_version/`). 새 삽질은 여기 `NN_topic.md` 로 추가합니다 |
+| `docs/user-guide/`, `USER_GUIDE.html` | 사업팀용 사용 설명서 · `ctx` 명령 설명서 |
+| `patch_notes/vX.Y.Z.txt` | **고객용 패치노트(평문 .txt)**. 버전별 사용자 안내는 여기서 관리합니다 |
+| `tools/issue_recheck/README.md` | 회귀 재점검 도구 + 지라 완료 이슈 대조 |
+| `tools/callpath/` | 버튼 → 엔드포인트 → 실행 함수 호출 경로 추적기 |
+| `CHANGELOG.md` | 개발자용 변경 이력(0.8.3·0.8.4 및 초기 ver1~ver2 기록) |
+
+## 작업 규칙 (이어받는 사람이 반드시 알아야 할 것)
+
+1. **인코딩** — `serve_b2b.py` · `launch_b2b.py` · `index.html` · `scripts/*.js` 는 **UTF-8 BOM** 입니다. BOM을 떼면 프로즌 빌드/로딩이 깨집니다. `.bat` 는 **CRLF 유지** — LF로 바뀌면 단일 EXE 빌드가 `'""' is not recognized` 로 죽습니다(2회 실측).
+2. **API 키는 커밋 금지** — Claude 키는 브라우저 `localStorage` 또는 gitignore된 `keys.local.json` 에만 둡니다. `test_runs/_qwen_client.py` 등 엔드포인트/키가 들어간 스크래치도 gitignore 대상입니다.
+3. **빌드는 명시 지시가 있을 때만** — 코드 수정 턴에 EXE를 만들지 않습니다. 개발 확인은 `start_b2b_native.bat`(소스 구동)으로 합니다.
+4. **이슈를 고치면 회귀 테스트를 등록** — `diagnostics/`(프런트) 또는 `test_runs/`(백엔드·COM)에 만들고 `tools/issue_recheck/registry.json` 에 추가합니다.
+5. **버전 올릴 때 손댈 곳** — `launch_b2b.py`(`CURRENT_VERSION`), `build_exe.bat` / `build_single_exe.bat` / `build_exe_offline.bat`(`APP_VERSION`), `serve_b2b.py`(`APP_BUILD_STAMP`), `patch_notes/vX.Y.Z.txt`. 자세히는 [BUILD.md](BUILD.md) 4장.
+6. **정적 게이트는 "위험 차단"만** — 정상 코드는 통과해야 합니다. 특히 루프 검사는 들여쓰기를 보고 루프 **안**의 `ctx` 쓰기만 막습니다(루프 뒤 벌크 write가 권장 패턴).
+7. **`scripts/fkey-guard.js` 는 `index.html` 의 첫 스크립트** 자리를 유지합니다. 순서가 밀리면 F키 차단이 통째로 무력화됩니다.
+8. **문서를 코드와 맞추기** — 코드를 고쳤으면 `python tools/okf/regen.py` 로 `docs/okf` 를 재생성해 함께 커밋합니다(CI가 warn-only로 검사).
+
+## 보안망 연동 (로그·버전·대시보드)
+
+세 기능이 **같은 서버·같은 인증(Api-Key)** 을 씁니다. 서버 코드는 이 브랜치가 아니라 **같은 remote의 `versionTest` 브랜치**(로컬 체크아웃은 옆 폴더 `../versionTest`)에 있습니다 — 테스트가 `../versionTest/test_*.py` 를 참조하는 이유입니다.
+
+```
+앱                                수집/버전 서버(보안망)
+────────────────────────────────  ────────────────────────────
+log_sync.py       ──(백엔드 직접)──▶  로그·스킬 zip 적재   collector.py
+version-gate.js   ──(/v1 프록시)──▶  version.txt 허용목록  main.py
+dashboard.html ─▶ log_dash.py ────▶  /v1/admin/*(집계 API)
+```
+
+- **로그/스킬 전송** — `log_sync.py` 가 실행 중 `%LOCALAPPDATA%\B2B_logs` 의 새 로그와 `auto_backup` 의 스킬 zip을 조금씩 올립니다. "한 번 실행 = 한 세션 = 서버 폴더 하나". 끄기·주소 변경은 환경변수(`B2B_LOG_SYNC=0`, `B2B_LOG_SYNC_URL`, `B2B_LOG_SYNC_KEY`, `B2B_LOG_SYNC_INGEST_KEY`, `B2B_LOG_SYNC_INTERVAL`). 전송 실패는 전부 삼키고 다음 주기에 재시도합니다 — 앱을 절대 방해하지 않습니다.
+- **대시보드** — 브라우저는 게이트웨이가 요구하는 `Api-Key` 헤더를 붙일 수 없으므로 화면을 직접 열면 막힙니다. 그래서 `dashboard.html` 은 로컬 백엔드가 서빙하고 데이터는 same-origin `/api/logdash/*` → `log_dash.py` 가 인증을 붙여 중계합니다. `log_dash.ALLOWED_PATHS` 에 없는 경로는 통과하지 않습니다(GET 전용·스트리밍).
+- **수집 서버를 고쳤다면** — `collector.py` / `main.py` 변경은 보안망 서버에 **수동 복사 + 서버 재시작**이 필요합니다. 재시작하지 않으면 옛 프로세스가 그대로 응답해 "앱은 고쳤는데 대시보드만 옛 데이터"가 됩니다. 반대로 `version.txt` 는 요청마다 다시 읽으므로 재시작이 필요 없습니다.
+- 앱이 새 필드를 보내도 구버전 수집 서버에서 수집이 끊기지 않도록, 기존 자리(`SessionStart.extra`)에 실어 보냅니다. 반대로 대시보드는 구버전 서버 응답에서 없는 값은 `-` 로 접습니다.
 
 ## 최근 변경사항
+
+> 0.8.3 · 0.8.4 의 개발자용 상세 이력은 [CHANGELOG.md](CHANGELOG.md) 에, 버전별 고객 안내는 `patch_notes/vX.Y.Z.txt`(v0.5.16 이후) 에 있습니다. 아래는 이 README에 누적돼 온 기록입니다 — **0.5.14 ~ 0.8.2 구간은 여기에 없으니** `patch_notes/` 와 `docs/lessons/` 를 보세요.
+
+### ver0.8.4 (2026-09-03 ~ 09-09)
+
+- **제품명 변경**: 창 제목(NativeHost)·문서 title·드로어 상단·대시보드 제목/요약/AI 프롬프트·제보 안내·버전확인 문구를 "B2B 스마트 빌링 에이전트"로. 생성기 U+ 로고 옆 제목과 좌측 메뉴 그룹 라벨은 지시대로 `AX-Cell` 유지, 내부 식별자도 그대로.
+- **추가 메뉴 Coming soon 블락**: AX-Trace·E2E 메뉴를 숨기는 대신 항상 보이게 두고 반투명 "Coming soon" 블락으로 클릭만 차단. **F6** = 블락 해제/복귀.
+- **F키 접근 권한(버프)**: 개발·관리성 F키(F2·F6·F7·F8·F9)는 권한이 있어야 동작합니다. 기본 보유는 `whoami /fqdn` 조직 정보상 "Foundation리서치팀", 조직 정보가 없는 개발망은 허용. **F1 6연타**(1.5초 간격 내 연속)로 권한 획득. 비권한자에게는 조용히 무시합니다. F1/F5/F10/F11은 일반 기능이라 게이트 대상이 아닙니다. 구현은 `scripts/fkey-guard.js` — `index.html` 의 첫 번째 스크립트여야 동작합니다.
+- **크리티컬 — 결과편집 후 다운로드가 옛 결과를 서빙**: 전체실행 → 결과편집 → 스킬 추가(라이브 적용) → "현재 상태 다운로드" 시 실행 시점 결과 파일이 받아져 추가한 스킬이 빠졌습니다(뷰에는 적용돼 보임). 결과편집이 라이브로 불러온 항목에 `liveAbsorbed` 표시를 달고, 다운로드는 그 항목을 건너뛰고 라이브 현재 상태를 저장하도록 수정. 결과편집 재클릭 시 옛 결과가 라이브를 덮는 구멍도 함께 막았습니다. 같은 부류(화면은 맞는데 파일이 다름) 세 건은 `docs/lessons/58_view_and_file_diverged_three_ways.md`.
+- **`ctx.match_fill` 기본 범위 = 이 표(블록)까지만**: 같은 표가 여러 번 반복되는 시트(월별 요약 등)에서 끝행까지 스캔해 다른 달 블록의 같은 이름까지 덮던 문제. 기본 `scope="block"`(키 열에 대상 헤더 라벨이 다시 나오면 그 앞에서 멈춤), `scope="all"` 이 예전 전체 스캔. 끝을 명시한 `rows=(s,e)` 는 그대로 존중합니다.
+- **`ctx.write` — 행 전체가 `None` 이면 그 행은 건드리지 않음**: "합계 행은 제외합니다" 라며 `[None]` 행을 끼워 넣은 생성 코드가 그 행의 기존 수식을 지웠습니다. 이제 `None` 행은 스킵하고 연속 구간별로 기록합니다(`skip_none_rows=True` 기본). 셀을 비우는 것은 `ctx.clear` 담당. 내부 헬퍼(`write_cell`·`match_fill`·조회 채우기)는 `skip_none_rows=False` 로 예전 의미를 유지합니다.
+- **마지막 교차파일 단계 삭제/OFF 빠른 복구**: 게이트가 교차파일 스텝을 무조건 거부해 전체 재적용(reset ×3 + 전 스텝)으로 돌았습니다. 적용 직전 사본이 관련 파일에 모두 있으면(`stepHasFullRollbackSnapshots`) 빠른 복구, 부족하거나 불일치면 종전대로 전체 reconcile.
+- **AI 도움(F11) 수정 묶음**: ① 에코 제거기가 도구 결과(오류 메시지) 인용까지 지워 "이유는 이래요." 뒤가 비던 문제 ② "…볼게요. 원본은 금액 열이에요." 처럼 예고문 뒤에 부연이 붙으면 감지 못해 대화가 멈추던 문제(동사 허용목록 제거) ③ 검산 시 요약표의 합계 행을 중복 합산해 2배로 보이던 오탐(요약 행 기본 제외, `includeSummaryRows` 옵션) ④ `data.query` 가 미리보기 60행만 보고 답을 못 하던 문제(라이브 파일은 실제 행수만큼 재조회, ≤20,000행·단일 시트) ⑤ 도구 인자 `{args:{...}}` 포장 자동 해제. 자세한 조사 기록은 `docs/lessons/60_assist_silent_failures_chain.md`.
+- **관리 대시보드 확장**: 수동 `🔄 갱신` 버튼, 실행(세션) 목록 행 펼침(로그 파일 목록·크기·다운로드, 스킬별 단계 수/켜짐 수/제목), 표 10줄 페이지 나눔, 행 클릭 = 그 조건으로 필터(재클릭 해제), 토큰 일별 추이 차트, 세션당 토큰 합계 열, 활성 시간(추정 — 세션 로그 간격 ≤10분만 실사용으로 합산, 초과는 자리비움), 스킬 TOP 차트, 표 4종 CSV 내보내기(BOM 포함), 조회 조건을 주소창 `#` 에 저장, 팀즈 붙여넣기용 `📋 요약 복사`(직전 기간 증감 포함), 전체실행 카드(`telemetry_preview.jsonl` 을 `log_sync` 로 함께 전송).
+- **세션 상태 '수집 중' 고착 수정**: `/api/app/shutdown` 이 응답을 먼저 보내고 0.5초 뒤 종료 신호를 보내는데 호스트가 응답 직후 서버를 kill 해, X로 닫을 때마다 종료 신호가 유실됐습니다. 종료 신호·잔여 로그 전송을 응답 **전**으로 옮기고(소스 순서를 테스트로 잠금), 수집 서버는 마지막 수신 후 10분 무소식 + 미종료를 `stale`(끊김)로 흡수 → 대시보드는 종료 / 종료(추정) / 수집 중 3단 표시.
+- 요약 복사가 전부 `undefined/0` 으로 나오던 버그(digest 객체를 AI용 JSON 문자열로 자른 뒤 객체처럼 읽었음) 수정. 세션 상세는 펼칠 때마다 재조회(첫 응답 영구 캐시 제거).
+
+### ver0.8.3 (2026-09-02)
+
+- **시작 시 버전 게이트**: 프로세스당 1회, 보안망 `version.txt` 의 **허용 버전 목록**과 현재 버전을 대조합니다(`/api/app/version/gate`). 목록에 없으면 "오래된 버전을 사용하고 있습니다" + `[다운로드 하러가기]`, 버전 정보를 못 가져오면 "점검중입니다…" + `[확인]`. 다운로드 주소 우선순위는 F9 저장값 > 서버 `downloadUrl` > 기본값이고 F9에서 바꿉니다(`/api/app/version/open-download`, http(s)만 기본 브라우저로). `[무시하고 사용하기]` 는 기본 숨김이고 팝업이 떠 있는 동안 **F2** 로만 나타납니다(개발자용). 주소가 설정되지 않은 환경은 조용히 통과합니다.
+- **조직 정보(`whoami /fqdn`)**: `CN=이름(마당아이디)` + `[VDIGRP_x]N^조직명` OU들을 레벨 순으로 파싱해 이름·마당아이디·팀(가장 깊은 레벨)·조직경로를 만들고, 세션 시작 payload의 `extra.org` 로 보냅니다(기존 자리라 구버전 서버도 그대로 저장). 좌상단 계정 표기는 도메인 PC에서 `사용자 : 홍길동` 이 되고 툴팁에 마당아이디·소속·원래 로그인 계정이 남습니다. 비도메인(개발망)은 종전 표기 유지.
+  - **CP949 한글 깨짐 수정**: `whoami /fqdn` 출력은 한국어 콘솔에서 CP949인데 UTF-8 `replace` 로 풀고 "`CN=` 이 보이면 성공"으로 판정해, 영문만 살아남고 한글은 U+FFFD로 깨진 채 통과했습니다. **strict UTF-8 디코드 실패**를 판정 기준으로 바꿔 실패 시 CP949로 폴백합니다.
+- **F1 = F키 도움말**: F키가 늘어(F2/F5/F6/F7/F8/F9/F10/F11/F12) 매핑 표를 F1로 띄웁니다. 테스트가 실제 핸들러(`e.key === "Fn"`)를 소스에서 수집해 표와 교차검증하므로, 새 F키를 달고 표를 안 고치면 테스트가 실패합니다.
+- **LLM 토큰 사용량 계측**: 모든 LLM 호출이 지나는 `/v1` 프록시에서 스트리밍 요청에 `stream_options.include_usage` 를 주입하고 응답 꼬리 32KB에서 마지막 usage 블록을 추출해 `llm.usage` 트레이스(model/prompt/completion/total)를 남깁니다. 계측 실패가 프록시 중계를 막지 않도록 테스트로 잠갔고, 트레이스는 기존 `log_sync` 로 자동 동기화됩니다(새 통신선 없음). 대시보드에 총량 카드 + 사용자별·팀별·모델별 차트.
+- **관리 대시보드 강화**: 고정 헤더(마지막 갱신 시각·60초 자동 새로고침), KPI 카드에 톤 색과 직전 같은 기간 대비 증감 배지, 신규 사용자·오류율 카드, 체류 시간 분포, 자주 나는 오류 TOP, 사용자 표기 `이름(마당아이디)`, 조직 경로 전 계층 필터(어느 계층을 골라도 그 아래 전체), 팀별 사용 랭킹, 버전 게이트 허용 목록과 대조한 "구버전 사용" 카드, **AI에게 묻기**(화면에 로드된 집계를 9KB로 압축 요약해 앱과 같은 AI 서버로 질문, 프리셋 4종).
 
 ### ver0.5.13
 
@@ -368,35 +597,9 @@ ver0.5.4(라이브 COM 기본 전환)의 실사용 안정화 릴리스.
 - 수식 재계산 미리보기
 - 단계별 실행 오류 표시
 
-## 실행 방법
+## 실행 / 빌드
 
-### 개발 모드
-
-```bat
-start_b2b.bat
-```
-
-또는:
-
-```bat
-python launch_b2b.py
-```
-
-기본 주소:
-
-```text
-http://127.0.0.1:8090/index.html
-```
-
-포트가 사용 중이면 `18090`부터 `18095`까지 자동 fallback 합니다.
-
-### 네이티브 셸 실행 (실제 Excel 미러)
-
-```bat
-start_b2b_native.bat
-```
-
-최초 실행 시 WebView2 참조 DLL을 내려받아 네이티브 호스트를 빌드합니다. 데스크톱 Excel이 설치되어 있어야 합니다.
+개발 중 실행 방법은 위 [개발 시작하기](#개발-시작하기)를 보세요(`python serve_b2b.py` · `start_b2b.bat` · `start_b2b_native.bat`).
 
 ### EXE 빌드
 
@@ -408,18 +611,23 @@ start_b2b_native.bat
 ```bat
 build_exe.bat          :: 포터블 폴더 + zip
 build_single_exe.bat   :: 단일 EXE (위 폴더를 감싼 것)
+build_all_single.bat   :: 위 둘을 한 번에
 ```
 
-빌드 결과 (버전은 `launch_b2b.py` 의 `CURRENT_VERSION` 을 따릅니다):
+빌드 결과 (버전은 `launch_b2b.py` 의 `CURRENT_VERSION` 을 따릅니다 — 현재 `0.8.4`):
 
 ```text
-dist\B2B_ver0.8.1\B2B_ver0.8.1.exe   (네이티브 호스트 — 사용자가 누르는 것)
-dist\B2B_ver0.8.1\B2B_Server.exe     (PyInstaller 서버)
-dist\B2B_ver0.8.1_portable.zip       (배포용 zip)
-dist\B2B_ver0.8.1_single.exe         (단일 EXE — 배포는 이것 하나면 됩니다)
+dist\B2B_ver0.8.4\B2B_ver0.8.4.exe   (네이티브 호스트 — 사용자가 누르는 것)
+dist\B2B_ver0.8.4\B2B_Server.exe     (PyInstaller 서버)
+dist\B2B_ver0.8.4_portable.zip       (배포용 zip — 현재 권장)
+dist\B2B_ver0.8.4_single.exe         (단일 EXE — 아래 EDR 주의)
 ```
 
-`dist/`와 `build/`는 git 추적 대상이 아닙니다.
+폐쇄망 빌드는 `build_exe_offline.bat` + [OFFLINE_PORTABLE_BUILD.md](OFFLINE_PORTABLE_BUILD.md).
+
+> **0.8.3부터 단일 EXE가 사내 EDR(CrowdStrike Falcon)에 행위 기반으로 차단됩니다** — "지정한 장치, 경로 또는 파일에 액세스할 수 없습니다". `%TEMP%` 에 실행파일을 풀어 실행하는 패턴(드로퍼)이 원인이고 파일 자체는 정상입니다. **배포는 포터블 폴더/zip 으로** 하세요(추출이 없어 차단되지 않음 — 실측). 단일 EXE를 계속 쓰려면 해시 허용 요청 또는 코드 서명이 필요합니다. 조사 기록: `docs/lessons/59_edr_blocks_self_extracting_single_exe.md`.
+
+`dist/`, `build/`, `build_meta/`, `native_host/bin/`, `native_host/packages/` 는 모두 git 추적 대상이 아닙니다.
 
 ## 환경 변수
 
@@ -435,7 +643,19 @@ dist\B2B_ver0.8.1_single.exe         (단일 EXE — 배포는 이것 하나면 
 | `B2B_PY_COM_BUDGET` | `400` | Python COM 스킬 1회당 COM 호출 예산(초과 시 실패 — 셀 루프 방지) |
 | `B2B_PY_SKILL_TIMEOUT` | `120` | Python COM 스킬 실행 데드라인(초) |
 | `B2B_PY_READ_MAX_CELLS` | `6000000` | `ctx.read` 1회 최대 셀 수 |
+| `B2B_PY_SKILL_RECOVERY_TIMEOUT` | `0`(무제한) | 에러복구 실행 데드라인(초) |
 | `B2B_ALWAYS_SAVE_INPUTS` | 없음 | `1`이면 백엔드 적용 시 입력 파일을 항상 저장(기본은 변경 감지 스킵) |
+| `B2B_VLLM_KEY` | `khkim` | 사내 vLLM 호출 키(백엔드 직접 호출분) |
+| `B2B_VLLM_MODEL` | `Qwen/Qwen3.6-27B-FP8` | 백엔드 직접 호출 시 모델명 |
+| `B2B_DISABLE_NODE_WORKER` | 없음 | `1`이면 Node 상주 파이프라인 워커를 쓰지 않음 |
+| `B2B_RUNTIME_SAMPLER_INTERVAL` | `30` | `runtime_load_trace.jsonl` 부하 샘플러 주기(초) |
+| `B2B_LOG_SYNC` | `1` | `0`이면 로그·스킬 자동 전송 끄기 |
+| `B2B_LOG_SYNC_URL` | 버전 서버와 같은 주소 | 수집 서버 주소 |
+| `B2B_LOG_SYNC_KEY` | 내장 기본값 | 게이트웨이 `Api-Key` |
+| `B2B_LOG_SYNC_INGEST_KEY` | 없음 | 수집 서버가 `--ingest-key` 를 요구할 때 |
+| `B2B_LOG_SYNC_INTERVAL` | `30` | 전송 주기(초) |
+| `B2B_LOG_ADMIN_KEY` | 없음 | 수집 서버 admin API 키(대시보드 프록시가 붙임) |
+| `B2B_NATIVE_DEVTOOLS` | 없음 | `1`이면 네이티브 셸에서 F12 웹 개발자 도구 허용 |
 
 ## 주요 기능
 
@@ -458,7 +678,9 @@ dist\B2B_ver0.8.1_single.exe         (단일 EXE — 배포는 이것 하나면 
 ### 파이프라인
 - AI가 만든 스킬을 단계별로 적용, 수정, 삭제, 비활성화할 수 있습니다.
 - 셀 직접 편집도 파이프라인 단계로 기록됩니다.
-- 전체 실행 시 원본 입력/출력 상태에서 모든 단계를 순서대로 재실행합니다.
+- 전체 실행 시 원본 입력/출력 상태에서 모든 단계를 순서대로 재실행합니다. 실행기에서는 경계 스냅샷으로 **이어실행**도 됩니다.
+- 마지막 단계 ON/OFF·삭제는 그 단계 적용 직전 스냅샷(`_preApplySnapshot`)으로 **빠른 복구**합니다. 교차파일 스텝도 관련 파일 사본이 모두 있으면 빠른 경로를 타고, 부족하면 전체 reconcile로 물러납니다.
+- VBA가 하나라도 섞이면 생성기 전체실행·실행기 전체실행·on/off·삭제·undo/redo가 모두 `/api/excel/run-vba-pipeline` 격리 파이프라인 하나로 통일됩니다.
 - 실행 실패 시 어느 단계에서 실패했는지 메시지와 stack을 표시합니다.
 - 적용 전후 변경 검증으로 실제 변경이 없는 작업을 `적용됨`으로 오인하지 않도록 방어합니다.
 
@@ -475,10 +697,20 @@ def transform(ctx):
     other = ctx.book("원가.xlsx")                 # 다른 업로드 파일 접근
 ```
 
-주요 메서드: `read / read_formulas / write / write_cell / write_formulas / copy / clear / sort /
-insert_rows·cols / delete_rows·cols / add_sheet / delete_sheet / merge / unmerge / set_number_format /
-find_header / last_row / last_col / used_range / book(파일명)`. 수식 셀은 기본적으로 보호되며
-덮어쓰려면 `overwrite_formulas=True`를 명시해야 합니다.
+`ctx` 는 `serve_b2b.py` 의 `PythonComSkillContext` 이고 현재 공개 메서드는 68개입니다(전체 목록·인자는 `docs/okf/serve_b2b/` 와 `docs/user-guide/AX-Cell_스킬_함수_설명서_*.txt`).
+
+- 읽기/찾기: `read / read_cell / read_formulas / has_formulas / formula_mask / sheets / used_range / last_row / last_col / used_last_row / used_last_col / first_empty_col / find_header / find_header_row / column_is / summary`
+- 쓰기: `write / write_cell / write_formulas / copy / copy_values / paste_copied / clear / replace / set_number_format / set_fill / set_font / set_border / merge / unmerge`
+- 구조: `insert_rows·insert_cols / delete_rows·delete_cols / delete_rows_where / move_cols / move_col_clear / copy_col / swap_cols / hide_cols / hide_rows / sort / dedupe / split_column / add_total_row / shift_months`
+- 시트/파일: `add_sheet / rename_sheet / move_sheet / delete_sheet / copy_sheet / append_same_format_sheets / book(파일명)`
+- 집계·매칭(손코딩 루프 대신 이걸 쓰는 것이 규약): `pivot / native_pivot / filter_to_sheet / filter_to_range / lookup / match_fill / sum_where / sum_lookup / sum_column / fill_sum_col / copy_key_blocks / enable_filter / apply_filter / clear_filter / normalize`
+
+동작상 주의:
+
+- `ctx.write` 는 요청받은 대상 범위를 **기본적으로 값으로 덮어씁니다**(`overwrite_formulas=True` 기본, 0.5.9부터). 수식 보존은 생성 코드가 데이터 범위/요약 행을 정확히 제외하는 방식으로 합니다.
+- `ctx.write` 에서 **행 전체가 `None` 인 행은 건드리지 않습니다**(그 행 제외 의미, 0.8.4). 셀을 비우려면 `ctx.clear` 를 씁니다. 내부 채우기 헬퍼는 `skip_none_rows=False` 로 예전 의미(빈 값=비움)를 유지합니다.
+- `ctx.match_fill` 은 기본 `scope="block"` — 키 열에 대상 헤더 라벨이 다시 나오면 그 앞에서 멈춥니다(반복 블록 시트 과채움 방지, 0.8.4). 예전처럼 끝행까지 스캔하려면 `scope="all"`.
+- `delete_cols/insert_cols/delete_rows/insert_rows` 는 범위 문자열(`"Q:AU"`, `"5:9"`)도 받습니다.
 
 **폴백(openpyxl) `ctx` 헬퍼** — `# B2B_ENGINE: openpyxl` 마커 스텝과 백엔드 시뮬 경로에서만 사용됩니다:
 
@@ -502,75 +734,124 @@ ctx.write_grid(ws, [[123]], start_row=4, start_col=2)
 - 스킬 파이프라인을 zip으로 저장합니다.
 - zip 안에는 `.logic.json` 매니페스트와 단계별 스킬 코드 파일이 포함됩니다.
 - 저장된 대화 기록도 함께 복원됩니다.
+- 자동백업 zip은 실행 파일 옆 `auto_backup/` 에 쌓이고, 보안망 수집 서버로도 함께 올라갑니다.
+- 스킬 zip을 다시 패키징할 때는 **`ZIP_STORED` 로만** 압축합니다(DEFLATE면 로더가 거부).
+
+### 기능키(F키)
+
+**F1** 을 누르면 아래 표가 화면에 뜹니다(`scripts/fkey-help.js` — 표와 실제 핸들러가 테스트로 교차검증됩니다).
+
+| 키 | 기능 |
+|---|---|
+| `F1` | 이 도움말 표시/닫기 (6연타 = F키 접근 권한 획득) |
+| `F2` | 업데이트 안내 창이 떠 있을 때 숨겨진 `[무시하고 사용하기]` 표시(개발자용) |
+| `F5` | 화면 새로고침 — 파일·스킬을 유지하는 소프트 리프레시 |
+| `F6` | Coming soon 메뉴(AX-Trace · E2E 작업 등록) 잠금 해제/잠금 |
+| `F7` | 스킬 엔진 전환 (Python ↔ VBA) |
+| `F8` | 디버그 패널 표시/숨김 |
+| `F9` | 설정 창(모델·버전 서버·다운로드 주소·관리 대시보드 등 개발자 설정 포함) |
+| `F10` | 엑셀 작업 녹화 시작/정지 |
+| `F11` | AI 도움 열기 |
+| `F12` | 웹 개발자 도구 (`B2B_NATIVE_DEVTOOLS=1` 로 실행했을 때만) |
+
+**F2·F6·F7·F8·F9 는 접근 권한이 필요합니다**(`scripts/fkey-guard.js`). 기본 보유는 조직 정보상 팀이 "Foundation리서치팀" 인 사용자이고, 조직 정보가 없는 개발망 PC는 허용됩니다. 권한이 없으면 조용히 무시하고, F1 6연타로 획득하면 그 PC에 유지됩니다.
+
+### 시작 시 버전 확인
+
+프로세스당 1회 보안망 `version.txt` 의 허용 버전 목록과 대조합니다. 구버전이면 교체 안내 팝업 + `[다운로드 하러가기]`, 서버 오류면 "점검중" 팝업 + `[확인]`. 다운로드 주소는 F9에서 바꿉니다(우선순위: F9 저장값 > 서버가 준 값 > 기본값). 주소가 설정되지 않은 환경은 조용히 통과합니다.
+
+### 사용 기록 / 관리 대시보드
+
+- 로그는 `%LOCALAPPDATA%\B2B_logs` 에 쌓이고 프로그램을 다시 켜면 비워집니다(사용자 PC 부하 완화). 그래서 `log_sync.py` 가 실행 중 조금씩 보안망 수집 서버로 올립니다.
+- 관리 대시보드(F9 → `📊 관리 대시보드`)에서 사용자·조직·세션·오류·LLM 토큰·전체실행·활성 시간(추정)을 조회하고, 표를 CSV로 내보내거나 팀즈용 요약을 복사할 수 있습니다. `AI에게 묻기` 는 화면에 로드된 집계만 근거로 답합니다.
+- 사용자 표기는 `이름(마당아이디)` 이고, 조직 경로 전 계층으로 필터할 수 있습니다.
+
+### AI 도움 (F11)
+
+떠 있는 별창에서 "왜 이렇게 나왔지 / 이 값 맞나" 를 물어보는 창구입니다. 설계 채팅과 DOM·상태·LLM 배관이 완전히 분리돼 있고, **도구 레지스트리에는 읽기 도구만 있습니다**(쓰기 함수가 존재하지 않아 규약을 어길 수 없는 구조). 해결이 안 되는 프로그램 오류로 판단되면 재현용 zip(스킬·로그·화면 정보)을 만들어 지라 제보 방법을 안내합니다.
+
+### 그 외
+
+- **엑셀 작업 녹화(F10)** — 사용자가 Excel에서 한 조작을 되짚어 스킬 단계로 만듭니다(`record_service.py`, `native_macro_recorder.py`, 삽입 전 의도 검토 모달).
+- **문서보안(AIP/DRM)** — 보안 문서를 업로드할 때 해제하고 다운로드 시 재적용합니다(`secure_doc.py`, `scripts/secure-doc.js`).
+- **소프트 리프레시(F5)** — 초기화(전부 삭제) 대신 올린 파일과 만들어 둔 스킬·대화를 유지한 채 프로그램만 새로 시작합니다.
 
 ## 디렉터리 구조
 
 ```text
-B2B_ver0.5.12/
-├─ index.html
-├─ serve_b2b.py
-├─ launch_b2b.py
-├─ b2b_scheduler.py     (E2E 작업 등록 애드온: 스케줄 등록·목록 서버측, 독립 모듈)
-├─ b2b_telemetry.py     (애드온: 스킬 실행 관측 로그 — 접속 정보 없으면 telemetry_preview.jsonl 에만 기록)
-├─ launch_b2b.spec
-├─ start_b2b.bat
-├─ start_b2b_native.bat
-├─ build_exe.bat
-├─ build_single_exe.bat
-├─ EXCEL_MIRROR_ARCHITECTURE.md
-├─ native_host/
-├─ single_exe/
+B2B_ver0.8.4/
+├─ index.html                 SPA 셸 (script 로딩 순서 의존 — fkey-guard.js 가 첫 번째)
+├─ dashboard.html             관리 대시보드 (F9 → 📊)
+├─ assist.html                AI 도움 별창
+├─ serve_b2b.py               백엔드 전체 (UTF-8 BOM)
+├─ launch_b2b.py              런처 + CURRENT_VERSION (UTF-8 BOM)
+├─ log_sync.py                로그·스킬 보안망 전송 + whoami /fqdn 조직 파싱
+├─ log_dash.py                대시보드용 수집 서버 프록시 (ALLOWED_PATHS)
+├─ secure_doc.py              문서보안(AIP/DRM) 해제·재적용
+├─ record_service.py          엑셀 작업 녹화(F10) 서버측
+├─ native_macro_recorder.py   녹화 캡처
+├─ b2b_scheduler.py           (애드온) E2E 스킬 등록·목록 서버측, 독립 모듈
+├─ b2b_telemetry.py           (애드온) 스킬 실행 관측 로그 → telemetry_preview.jsonl
+├─ launch_b2b.spec            PyInstaller 스펙
+├─ start_b2b.bat              서버 + 브라우저
+├─ start_b2b_native.bat       네이티브 셸 (정식 실행 경로)
+├─ build_exe.bat              포터블 폴더 + zip          ┐ CRLF 유지
+├─ build_single_exe.bat       단일 EXE                   │
+├─ build_exe_offline.bat      폐쇄망 빌드                │
+├─ build_all_single.bat       위 둘을 한 번에            ┘
+├─ BUILD.md / OFFLINE_PORTABLE_BUILD.md / PYTHON_ENGINE_RISKS.md
+├─ EXCEL_MIRROR_ARCHITECTURE.md / CHANGELOG.md / USER_GUIDE.html
+├─ keys.local.json            (gitignore) 개발 PC 전용 Claude 키
+├─ native_host/               NativeHost.cs · build_native_host.ps1 (bin/·packages/ 는 미추적)
+├─ single_exe/                B2BSingleExeLauncher.cs
+├─ assets/                    axcell.ico · axcell-64.png (내부 식별자 유지)
+├─ styles/                    base · layout · panels · components · chat · pipeline ·
+│                             workflow · runner · scheduler · theme-classic
+├─ scripts/                   48개 모듈 — 로드 순서는 index.html 이 기준
+│  ├─ fkey-guard.js           ★ index.html 의 첫 번째 스크립트여야 한다
+│  ├─ config · state · util · lifecycle · server-monitor · click-recovery · ui-theme
+│  ├─ file-parsing · parse-worker · drop-handling · backend-workbooks · sheet-ops
+│  ├─ excel-viewer · excel-mirror · search · table-detect · fuzzy · formula-engine
+│  ├─ file-schema · llm-api · chat-ui · mentions · disambiguate · history
+│  ├─ pipeline · output-template · save-load · soft-refresh · record-review
+│  ├─ assist-{llm,tools,guard,report,core,ui}      AI 도움(F11)
+│  ├─ version-gate · fkey-help · app-version · model-modal · debug-panel
+│  ├─ secure-doc · menu · resizer · whoami · scheduler · embed · main
+│  └─ backend-pipeline-worker.js   (Node 상주 워커)
+├─ vendor/                    xlsx.full.js · pretendard-variable.woff2
+├─ diagnostics/               프런트 회귀 테스트(node, 50개)
+├─ test_runs/                 백엔드·COM 회귀 테스트와 재현기(263개)
+├─ tests/vba_regression/      VBA 생성 품질 회귀
+├─ test_data/ · test_mapping/ 회귀용 샘플 엑셀
 ├─ tools/
-├─ styles/
-│  ├─ base.css
-│  ├─ layout.css
-│  ├─ panels.css
-│  ├─ components.css
-│  ├─ chat.css
-│  ├─ pipeline.css
-│  ├─ workflow.css
-│  ├─ runner.css
-│  └─ scheduler.css      (E2E 작업 등록 애드온)
-├─ scripts/
-│  ├─ config.js
-│  ├─ state.js
-│  ├─ util.js
-│  ├─ history.js
-│  ├─ fuzzy.js
-│  ├─ formula-engine.js
-│  ├─ table-detect.js
-│  ├─ sheet-ops.js
-│  ├─ file-parsing.js
-│  ├─ drop-handling.js
-│  ├─ excel-viewer.js
-│  ├─ search.js
-│  ├─ file-schema.js
-│  ├─ llm-api.js
-│  ├─ disambiguate.js
-│  ├─ chat-ui.js
-│  ├─ mentions.js
-│  ├─ pipeline.js
-│  ├─ output-template.js
-│  ├─ save-load.js
-│  ├─ menu.js
-│  ├─ whoami.js         (애드온: 좌상단 로그인 계정)
-│  ├─ scheduler.js      (애드온: 스킬 등록·목록 화면, 독립 모듈)
-│  ├─ embed.js          (애드온: AX-Trace 생성기 iframe)
-│  ├─ resizer.js
-│  ├─ model-modal.js
-│  └─ main.js
-├─ vendor/
-│  ├─ xlsx.full.js
-│  └─ pretendard-variable.woff2
-└─ test_data/
+│  ├─ okf/                    코드 자동 명세 생성기(regen·check·diff)
+│  ├─ issue_recheck/          완료 이슈 ↔ 회귀 테스트 매핑 + 러너 + 대시보드
+│  ├─ callpath/               버튼 → 엔드포인트 → 실행 함수 추적기
+│  ├─ axcell_runner_mcp/      저장한 스킬 zip을 앱 없이 Excel COM으로 돌리는 MCP(ixi-flow 빌트인)
+│  ├─ offline/                폐쇄망 빌드 보조
+│  ├─ dev_run.ps1 · gen_version_meta.py · check_payload_fresh.py · verify_single_exe.py
+├─ docs/
+│  ├─ okf/                    자동 생성 명세 (손으로 고치지 말고 regen)
+│  ├─ lessons/                삽질·회귀 기록
+│  ├─ user-guide/             사업팀용 설명서(ctx 함수·프롬프트 예시)
+│  ├─ images/ · patent/
+├─ patch_notes/               고객용 패치노트 (.txt)
+├─ axcell_addon/              애드온 원본·리뷰 기록
+├─ ixicellr/                  (vendored) ixi-Cell-R 녹화·정제 엔진 — recorder + distiller
+├─ embed_proto/               Excel 임베드 검증 프로토타입
+└─ output/ · auto_backup/     (gitignore) 실행기 결과 · 스킬 자동백업
 ```
 
 ## 개발 메모
 
-- JS 파일은 `index.html`의 script 로딩 순서에 의존합니다. 새 모듈을 추가하면 의존하는 파일보다 뒤에 배치해야 합니다.
-- `launch_b2b.spec`는 `styles/`, `scripts/`, `vendor/`와 서버 실행에 필요한 파일을 EXE에 포함합니다.
+- JS 파일은 `index.html`의 script 로딩 순서에 의존합니다. 새 모듈을 추가하면 의존하는 파일보다 뒤에 배치해야 합니다. 단 `scripts/fkey-guard.js` 는 **첫 번째** 자리를 지켜야 합니다.
+- `launch_b2b.spec`는 `styles/`, `scripts/`, `vendor/`와 서버 실행에 필요한 파일을 EXE에 포함합니다. 새 파이썬 모듈은 `datas` 와 `hiddenimports` 양쪽에 넣어야 배포본에서 조용히 꺼지지 않습니다.
 - AI가 생성한 스킬은 라이브 Python COM(기본)/VBA/백엔드 openpyxl(폴백) 경로에서 실행됩니다. 신뢰하지 않는 스킬 파일은 불러오지 마세요.
 - 엔진 코드 위치: 서버 `serve_b2b.py`의 `PythonComSkillContext`(ctx API+저널)·`_python_com_static_check`(AST 게이트)·`_run_python_on_session_impl`, 프론트 `scripts/pipeline.js`의 `pipelineStepLiveLanguage`(라우팅)·`reapplyVbaPipelineToLive`(리셋-재적용), `scripts/chat-ui.js`의 `pythonComStaticSafetyFailures`(클라 1차 게이트)·`validateAssistantCodeBeforeApply`, `scripts/file-schema.js`의 `PYTHON_COM_SYSTEM_PROMPT`.
 - 게이트를 수정할 때는 "위험 차단"만 하고 정상 코드는 통과해야 합니다 — 특히 루프 검사는 들여쓰기를 보고 루프 **안**의 ctx 쓰기만 차단해야 합니다(루프 뒤 벌크 write가 권장 패턴).
-- API key는 브라우저 `localStorage`에 저장됩니다. 코드에 실제 키를 하드코딩하지 마세요.
+- API key는 브라우저 `localStorage`(또는 gitignore된 `keys.local.json`)에 저장됩니다. 코드에 실제 키를 하드코딩하지 마세요.
+- 네이티브 셸에서는 웹 UI의 우측 영역(`.right`, 파일 탭 포함)을 숨기고 **C#(`NativeHost.cs`의 `nativeFileTabs`)이 직접 그립니다**. 그 부분을 바꾸려면 `.cs` 를 고치고 재컴파일해야 합니다.
+- 진단 로그는 `%LOCALAPPDATA%\B2B_logs`(`_perf_trace`/`_vba_trace`/`runtime_load_trace.jsonl` 등)에 남습니다. 여러 스레드가 같은 파일에 append 하므로 **쓰기 락(`_TRACE_WRITE_LOCK`) 없이 추가하면 줄이 유실·손상됩니다** — 거의 모든 진단이 이 로그에 걸려 있으니 락을 지키세요.
+- 증상 진단은 로그 추정보다 **재현기 실행**이 먼저입니다(`test_runs/_repro_*.py`, `_probe_*.py`). 로그 개수 불일치를 버그로 읽기 전에 그 로그가 사실인지부터 확인하세요.
+- 함수 단위 테스트 통과가 "그 화면에서 동작"을 뜻하지 않습니다. 버튼 → 엔드포인트 → 구현이 실제로 닿는지 `tools/callpath/` 로 확인하세요.
 

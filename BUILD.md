@@ -129,7 +129,8 @@ python tools\okf\regen.py
 python tools\okf\check_okf.py
 ```
 
-> **CHANGELOG.md 는 쓰지 않습니다.** 구 numbering(`ver2.0`)에서 멈춰 있고 릴리즈 노트는 `patch_notes\` 를 씁니다.
+> **문서 두 갈래**: 고객 안내는 `patch_notes\v<버전>.txt`(평문), 개발자용 변경 이력은 `CHANGELOG.md` 입니다.
+> (CHANGELOG 는 구 numbering `ver2.0` 에서 한동안 멈춰 있었고 2026-09-09 에 0.8.3·0.8.4 부터 다시 씁니다.)
 > **배치 파일은 CRLF 줄바꿈을 유지하세요.** LF 로 바뀌면 단일 빌드가 `'""' is not recognized` 로 죽습니다(2회 실측).
 
 ---
