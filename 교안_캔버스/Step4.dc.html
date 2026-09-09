@@ -1,0 +1,68 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    body { margin: 0; font-family: 'Pretendard Variable', 'Pretendard', 'Segoe UI', 'Malgun Gothic', sans-serif; background: #ffffff; color: #1f2937; }
+    a { color: #0a66c2; } a:hover { color: #084a94; }
+    table.xl { border-collapse: collapse; font-size: 11.5px; background: #ffffff; }
+    table.xl td { border: 1px solid #e4e9f1; padding: 4px 9px; color: #1A1A1A; }
+    table.xl td.h { background: #f1f4f9; color: #8a93a5; text-align: center; font-weight: 700; font-size: 10.5px; }
+    table.xl td.th { background: #F2F2F2; font-weight: 800; }
+    table.xl td.n { text-align: right; font-variant-numeric: tabular-nums; }
+    table.xl td.new { background: #FFF6D6; }
+    table.xl td.calc { background: #E8F7EF; }
+  </style>
+</helmet>
+<div style="width: 920px; height: 740px; background: #ffffff; padding: 34px 40px; display: flex; flex-direction: column; gap: 14px">
+
+  <div style="display: flex; align-items: center; gap: 12px">
+    <span style="width: 38px; height: 38px; border-radius: 12px; background: linear-gradient(135deg, #0a66c2, #1caa6e); color: #ffffff; display: flex; align-items: center; justify-content: center; font-size: 17px; font-weight: 900">4</span>
+    <span style="font-size: 21px; font-weight: 900; color: #142033">같은 패턴으로 원가까지 — 청구서 완성</span>
+    <span style="margin-left: auto; padding: 6px 12px; border-radius: 999px; background: #eaf3fc; border: 1px solid #cfe3f5; color: #084a94; font-size: 12px; font-weight: 900">5분</span>
+  </div>
+
+  <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px">
+    <div>
+      <div style="font-size: 12px; font-weight: 900; color: #128a56; margin-bottom: 6px">문장 ① — 원가 피벗</div>
+      <div style="background: #e6f2ff; border: 1px solid #cfe3f7; border-radius: 12px; padding: 11px 14px; font-size: 12.5px; color: #084a94; line-height: 1.6"><b>@시트[input_원가_2026_4월.xlsx/원가]</b> 회사별로 원가 합계를 요약표로 만들어줘</div>
+    </div>
+    <div>
+      <div style="font-size: 12px; font-weight: 900; color: #128a56; margin-bottom: 6px">문장 ② — 청구서에 채우기 (①이 끝난 뒤)</div>
+      <div style="background: #e6f2ff; border: 1px solid #cfe3f7; border-radius: 12px; padding: 11px 14px; font-size: 12.5px; color: #084a94; line-height: 1.6"><b>@시트[교안_청구서.xlsx/회사별요약]</b> 방금 만든 원가 요약을 회사명에 맞춰 원가 열에 채워줘</div>
+    </div>
+  </div>
+
+  <div>
+    <div style="font-size: 12px; font-weight: 900; color: #128a56; margin-bottom: 6px">실행하면 이렇게 됩니다 — 마진율까지 전부 계산된 완성본</div>
+    <div style="border: 1px solid #d9e6f2; border-radius: 14px; overflow: hidden; box-shadow: 0 12px 32px rgba(20,40,70,0.10); background: #FAFAFD; padding: 12px">
+      <table class="xl" style="width: 100%">
+        <tr><td class="h" style="width: 30px"></td><td class="h">A</td><td class="h" style="width: 122px">B</td><td class="h" style="width: 92px">C</td><td class="h" style="width: 122px">D</td><td class="h" style="width: 78px">E</td></tr>
+        <tr><td class="h">3</td><td class="th">회사명</td><td class="th">매출</td><td class="th">원가</td><td class="th">마진</td><td class="th">마진율</td></tr>
+        <tr><td class="h">4</td><td>ABC통신</td><td class="n">154580000</td><td class="n new">174883</td><td class="n calc">154405117</td><td class="n calc">1.00</td></tr>
+        <tr><td class="h">5</td><td>글로벌네트워크</td><td class="n">220393000</td><td class="n new">172766</td><td class="n calc">220220234</td><td class="n calc">1.00</td></tr>
+        <tr><td class="h">6</td><td>스마트링크</td><td class="n">197270000</td><td class="n new">294836</td><td class="n calc">196975164</td><td class="n calc">1.00</td></tr>
+        <tr><td class="h">7</td><td>코리아텔레콤</td><td class="n">178135000</td><td class="n new">292577</td><td class="n calc">177842423</td><td class="n calc">1.00</td></tr>
+        <tr><td class="h">…</td><td style="color: #8a93a5">… 16곳 더</td><td class="n" style="color: #8a93a5">…</td><td class="n new" style="color: #8a93a5">…</td><td class="n calc" style="color: #8a93a5">…</td><td class="n calc" style="color: #8a93a5">…</td></tr>
+        <tr><td class="h">24</td><td class="th">합계 / 평균</td><td class="n th">3797128000</td><td class="n th new">5491071</td><td class="n th calc">3791636929</td><td class="n th calc">1.00</td></tr>
+      </table>
+      <div style="display: flex; gap: 14px; font-size: 11px; color: #8a93a5; margin-top: 8px">
+        <span><span style="display: inline-block; width: 10px; height: 10px; background: #FFF6D6; border: 1px solid #e4d9a8; border-radius: 2px; vertical-align: -1px"></span> 이번 단계가 채운 값</span>
+        <span><span style="display: inline-block; width: 10px; height: 10px; background: #E8F7EF; border: 1px solid #bfe4cf; border-radius: 2px; vertical-align: -1px"></span> 수식이 저절로 계산된 값</span>
+        <span>마진율 표시는 실습 9에서 백분율(99.9%)로 바꿉니다</span>
+      </div>
+    </div>
+  </div>
+
+  <div style="border-left: 4px solid #1caa6e; background: #e8f7ef; color: #0e7a4e; padding: 12px 16px; border-radius: 12px; font-size: 13px; line-height: 1.7">
+    <b>확인</b> — ABC통신 원가 <b>174,883</b> · 마진 <b>154,405,117</b> · 스킬 단계 <b>4개</b>. 피벗 → 채우기 두 문장이 자동화의 기본기입니다.
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

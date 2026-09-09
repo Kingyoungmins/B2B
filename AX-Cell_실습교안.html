@@ -1,0 +1,1853 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AX-Cell 실습 교안 — 청구서 자동화 따라하기</title>
+<!--
+  [실습 교안 2026-09-08 · 디자인 개편]
+  · 시연테스트 폴더의 실제 파일(매출/원가/output_청구서)로 처음부터 끝까지 따라하는 교안.
+  · 디자인은 팀 교재(스마트빌링 에이전트 교재_vff)와 같은 체계 — 사이드바 로드맵, 히어로,
+    그라데이션 스텝 카드, 복사 버튼 프롬프트. 단 폰트 CDN 은 넣지 않는다(보안망에서 안 뜨고,
+    Pretendard 미설치 PC 는 맑은고딕으로 자연 폴백).
+  · 완전 자립형 — 외부 요청 0건. 파일만 열어도 전부 동작해야 한다.
+  · 기대값(ABC통신 154,580,000 등)은 동봉된 파일에서 실제로 계산해 넣은 값 — 파일을 바꾸면 갱신.
+-->
+<style>
+:root{
+  --mg:#0a66c2; --mg-dark:#084a94; --vt:#1caa6e; --vt-dark:#128a56;
+  --ink:#142033; --text:#1f2937; --muted:#667085; --line:#d9e6f2;
+  --bg:#f5f9fd; --card:#fff; --soft:#eaf3fc; --soft-vt:#e8f7ef;
+  --mix:linear-gradient(135deg,#eaf3fc 0%,#e8f7ef 100%);
+  --sidebar-bg:#0f2038; --sidebar-w:250px;
+  --shadow:0 12px 32px rgba(20,40,70,.10); --r:18px; --rs:12px;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+html{scroll-behavior:smooth;scroll-padding-top:20px;}
+body{font-family:'Pretendard',"Segoe UI","Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+     color:var(--text);background:var(--bg);line-height:1.7;font-size:14.5px;}
+
+/* ── sidebar ── */
+.sidebar{position:fixed;left:0;top:0;bottom:0;width:var(--sidebar-w);background:var(--sidebar-bg);
+         color:#a9bdd6;display:flex;flex-direction:column;z-index:100;overflow-y:auto;padding:16px 0;}
+.sidebar::-webkit-scrollbar{width:4px;}
+.sidebar::-webkit-scrollbar-thumb{background:#28405f;border-radius:4px;}
+.sb-brand{padding:0 18px 12px;border-bottom:1px solid #1e3654;margin-bottom:6px;}
+.sb-brand .badge{display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;
+  border-radius:9px;background:linear-gradient(135deg,var(--mg),var(--vt));color:#fff;font-size:11px;
+  font-weight:900;box-shadow:0 6px 16px rgba(10,102,194,.3);margin-bottom:6px;}
+.sb-brand .title{font-size:13px;font-weight:800;color:#fff;line-height:1.35;}
+.sb-brand .sub{font-size:11px;color:#5f7898;margin-top:2px;}
+.sb-nav{list-style:none;padding:0 10px;flex:1;}
+.sb-nav li{margin-bottom:1px;}
+.sb-nav a{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:9px;font-size:13px;
+  font-weight:600;color:#8fa5c2;text-decoration:none;transition:all .15s;}
+.sb-nav a:hover{background:#182c47;color:#dce8f7;}
+.sb-nav a.active{background:linear-gradient(135deg,rgba(10,102,194,.22),rgba(28,170,110,.22));
+  color:#fff;font-weight:800;}
+.sb-nav .nav-num{display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;
+  border-radius:6px;background:#1e3654;color:#8fa5c2;font-size:10px;font-weight:800;flex:none;}
+.sb-nav a.active .nav-num{background:linear-gradient(135deg,var(--mg),var(--vt));color:#fff;}
+.sb-nav .nav-t{margin-left:auto;font-size:10px;color:#4d6485;font-weight:800;}
+.sb-section{padding:4px 18px;font-size:10px;font-weight:800;color:#4d6485;text-transform:uppercase;
+  letter-spacing:.04em;margin-top:8px;}
+
+/* ── main / hero ── */
+.main{margin-left:var(--sidebar-w);min-height:100vh;}
+.container{max-width:1020px;margin:0 auto;padding:0 28px;}
+.hero{padding:52px 0 34px;background:
+  radial-gradient(circle at 10% 0%,rgba(10,102,194,.09),transparent 24%),
+  radial-gradient(circle at 95% 0%,rgba(28,170,110,.08),transparent 20%),
+  linear-gradient(180deg,#f7fbff,#f2f8f4);}
+.eyebrow{display:inline-flex;align-items:center;gap:8px;padding:7px 14px;border-radius:999px;
+  background:var(--soft-vt);color:var(--vt-dark);font-weight:900;font-size:12px;}
+.hero h1{margin:18px 0 12px;font-size:clamp(26px,3.6vw,42px);line-height:1.14;letter-spacing:-.03em;color:var(--ink);}
+.hero .lead{color:var(--muted);font-size:clamp(14.5px,1.7vw,17px);max-width:780px;}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:22px;}
+.stat{background:rgba(255,255,255,.85);border:1px solid rgba(217,230,242,.9);border-radius:14px;padding:16px;}
+.stat .num{font-size:26px;font-weight:900;line-height:1;color:var(--mg-dark);margin-bottom:6px;}
+.stat .label{color:var(--muted);font-size:12.5px;}
+.hero-pills{display:flex;flex-wrap:wrap;gap:8px;margin-top:18px;}
+.pill{display:inline-flex;align-items:center;padding:6px 12px;border-radius:999px;background:var(--soft-vt);
+  color:var(--vt-dark);font-weight:800;font-size:12px;border:1px solid #cdeedd;}
+
+/* ── sections / cards ── */
+section{padding:32px 0 6px;}
+.sec-head h2{font-size:clamp(21px,2.6vw,30px);letter-spacing:-.02em;color:var(--ink);margin-bottom:6px;}
+.sec-head p{color:var(--muted);max-width:800px;}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);
+      box-shadow:var(--shadow);padding:22px;margin-top:16px;}
+.note{border-left:4px solid var(--mg);background:var(--soft);color:var(--mg-dark);
+  padding:13px 16px;border-radius:var(--rs);margin-top:14px;font-size:13.5px;line-height:1.7;}
+.note.info{border-left-color:var(--vt);background:var(--soft-vt);color:#0e7a4e;}
+.note.todo{border-left-color:#c98a1d;background:#fdf3e2;color:#8a5c0d;}
+
+/* ── timeline (로드맵) ── */
+.timeline-item{display:flex;align-items:flex-start;gap:16px;padding:12px 4px;border-bottom:1px solid var(--line);}
+.timeline-item:last-child{border-bottom:none;}
+.timeline-dot{flex-shrink:0;min-width:34px;height:34px;padding:0 4px;border-radius:17px;
+  display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:900;color:#fff;margin-top:2px;
+  background:linear-gradient(135deg,var(--mg),var(--vt));}
+.timeline-body{flex:1;}
+.timeline-body .tl-title{font-size:15px;font-weight:800;color:var(--ink);}
+.timeline-body .tl-desc{font-size:13px;color:var(--muted);margin-top:2px;}
+.timeline-time{flex-shrink:0;font-size:12px;font-weight:900;color:var(--muted);padding:5px 10px;
+  border-radius:999px;background:var(--bg);white-space:nowrap;margin-top:2px;}
+.timeline-item-main{background:var(--mix);border-radius:12px;padding:12px 8px;margin:2px 0;border-bottom:none;}
+.timeline-item-main .timeline-time{background:#fff;color:var(--mg-dark);}
+.tl-main-badge{display:inline-block;font-size:10.5px;font-weight:900;color:#fff;
+  background:linear-gradient(135deg,var(--mg),var(--vt));padding:2px 8px;border-radius:999px;
+  margin-left:6px;vertical-align:middle;}
+
+/* ── 준비물 표 ── */
+table{border-collapse:collapse;width:100%;font-size:13.5px;background:#fff;}
+th,td{border:1px solid var(--line);padding:9px 13px;text-align:left;vertical-align:top;}
+th{background:#f4f9fe;color:var(--mg-dark);font-size:12.5px;}
+.tagref{font-family:ui-monospace,Consolas,monospace;font-size:12px;font-weight:700;background:var(--soft);
+  border:1px solid var(--line);border-radius:4px;padding:1px 6px;color:var(--mg-dark);white-space:nowrap;}
+
+/* ── 화면 지도 ── */
+.screen-box{border:1px solid var(--line);border-radius:14px;overflow:hidden;background:#fff;margin-top:16px;}
+.screen-head{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 16px;
+  background:#182c47;color:#dce8f7;font-size:12.5px;font-weight:700;}
+.screen-diagram{position:relative;background:linear-gradient(135deg,#eef5fc,#eaf8f0);padding:28px;min-height:230px;}
+.zone{position:absolute;border:1.5px dashed #9dc3e6;border-radius:10px;background:rgba(255,255,255,.75);
+  font-size:11.5px;color:var(--mg-dark);font-weight:800;padding:6px 10px;display:flex;align-items:center;gap:6px;}
+.zone .z-no{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;
+  border-radius:50%;background:var(--mg);color:#fff;font-size:10px;flex-shrink:0;}
+.legend-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:16px;background:#fbfdff;border-top:1px solid var(--line);}
+.legend-item{display:flex;gap:10px;align-items:flex-start;font-size:13px;}
+.legend-item .legend-no{display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;
+  width:20px;height:20px;border-radius:50%;background:var(--soft);color:var(--mg-dark);font-size:11px;
+  font-weight:900;margin-top:1px;}
+.legend-item strong{display:block;color:var(--ink);margin-bottom:2px;}
+.legend-item span{color:var(--muted);}
+
+/* ── 좋은 예 / 나쁜 예 ── */
+.gb-compare{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:10px;}
+.gb-box{border-radius:var(--rs);padding:13px 15px;border:1.5px solid var(--line);background:var(--card);}
+.gb-box.bad{background:#f4f6f9;}
+.gb-box.good{background:var(--soft-vt);border-color:#cdeedd;}
+.gb-tag{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:900;
+  padding:2px 9px;border-radius:999px;margin-bottom:8px;}
+.gb-box.bad .gb-tag{background:var(--muted);color:#fff;}
+.gb-box.good .gb-tag{background:var(--vt);color:#fff;}
+.gb-box .gb-text{font-size:13.5px;line-height:1.6;}
+.gb-box.bad .gb-text{color:var(--muted);}
+.gb-box.good .gb-text{color:var(--vt-dark);}
+.gb-case-title{font-size:13.5px;font-weight:800;color:var(--ink);margin:18px 0 6px;}
+.gb-case-title:first-child{margin-top:0;}
+
+/* ── step 카드 ── */
+.step{border:1px solid var(--line);border-radius:var(--r);background:#fff;box-shadow:var(--shadow);
+  overflow:hidden;margin-top:18px;}
+.step.step-main{border:2px solid var(--mg);box-shadow:0 16px 40px rgba(10,102,194,.16);}
+.step-head{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:16px 22px;
+  background:var(--mix);border-bottom:1px solid var(--line);}
+.step-main .step-head{background:linear-gradient(135deg,rgba(10,102,194,.14),rgba(28,170,110,.14));}
+.step-head-left{display:flex;align-items:center;gap:14px;min-width:0;}
+.step-num{flex-shrink:0;width:40px;height:40px;border-radius:12px;
+  background:linear-gradient(135deg,var(--mg),var(--vt));color:#fff;display:flex;align-items:center;
+  justify-content:center;font-size:18px;font-weight:900;box-shadow:0 6px 16px rgba(10,102,194,.25);}
+.step-head h3{margin:0;font-size:19px;letter-spacing:-.01em;color:var(--ink);}
+.time{white-space:nowrap;padding:7px 12px;border-radius:999px;background:rgba(255,255,255,.9);
+  border:1px solid #cfe3f5;color:var(--mg-dark);font-size:12px;font-weight:900;}
+.time.time-main{background:linear-gradient(135deg,var(--mg),var(--vt));color:#fff;border:none;
+  box-shadow:0 6px 16px rgba(10,102,194,.3);}
+.step-body{padding:20px 22px 24px;}
+.block{margin-bottom:20px;padding-top:20px;border-top:1px dashed var(--line);}
+.block:first-child{margin-top:0;padding-top:0;border-top:none;}
+.block:last-child{margin-bottom:0;}
+.block-title{font-size:13px;font-weight:900;color:var(--vt-dark);letter-spacing:.02em;margin-bottom:12px;
+  display:flex;align-items:center;gap:8px;text-transform:uppercase;}
+.block-title .bt-icon{font-size:14px;width:26px;height:26px;border-radius:8px;flex-shrink:0;
+  background:var(--soft-vt);display:flex;align-items:center;justify-content:center;text-transform:none;}
+
+/* ── 따라하기 체크 + 프롬프트 ── */
+.todo-list{display:grid;gap:8px;}
+.todo-check{display:flex;gap:10px;align-items:flex-start;padding:9px 12px;border:1px solid var(--line);
+  border-radius:10px;background:#fff;font-size:14px;cursor:pointer;}
+.todo-check input[type=checkbox]{width:17px;height:17px;margin-top:3px;accent-color:var(--vt);cursor:pointer;flex-shrink:0;}
+.todo-check .tc-body{flex:1;min-width:0;}
+.copy-wrapper{position:relative;margin-top:8px;}
+.copy-btn{position:absolute;top:8px;right:10px;padding:5px 12px;font-size:11px;font-weight:800;
+  border-radius:8px;border:none;cursor:pointer;background:linear-gradient(135deg,var(--mg),var(--vt));
+  color:#fff;box-shadow:0 4px 12px rgba(10,102,194,.22);transition:all .15s;z-index:2;}
+.copy-btn:hover{transform:translateY(-1px);}
+.copy-btn.done{background:#1f9d55;box-shadow:0 4px 12px rgba(31,157,85,.25);}
+pre{margin:0;background:#e6f2ff;color:var(--mg-dark);border-radius:12px;padding:36px 16px 13px;
+  overflow:auto;white-space:pre-wrap;word-break:break-all;font-size:13.5px;line-height:1.6;
+  border:1px solid #cfe3f7;font-family:inherit;}
+.prompt-hint{font-size:12px;color:var(--muted);margin-top:5px;}
+
+/* ── 채팅 목업 ── */
+.mockup{border:1px solid var(--line);border-radius:14px;overflow:hidden;background:#f6f9fc;margin-top:12px;}
+.mockup-bar{background:#182c47;color:#a9bdd6;font-size:12px;font-weight:700;padding:8px 14px;
+  display:flex;align-items:center;gap:8px;}
+.mockup-bar .dot{width:8px;height:8px;border-radius:50%;display:inline-block;}
+.dot.r{background:#ff5f57;}.dot.y{background:#febc2e;}.dot.g{background:#28c840;}
+.mockup-body{padding:16px;}
+.mockup-user,.mockup-ai{padding:11px 14px;border-radius:12px;margin-bottom:10px;font-size:13.5px;line-height:1.6;}
+.mockup-user{background:#e6f2ff;color:var(--mg-dark);border:1px solid #cfe3f7;text-align:right;}
+.mockup-ai{background:#fff;border:1px solid var(--line);color:var(--text);}
+.mockup-ai:last-child,.mockup-user:last-child{margin-bottom:0;}
+.mockup-ai strong{color:var(--ink);}
+
+/* ── 결과 미리보기(엑셀 그리드) + 실제 앱 톤 화면 목업 ── */
+table.xl{border-collapse:collapse;font-size:12px;background:#fff;width:100%;}
+table.xl td{border:1px solid #e4e9f1;padding:4px 9px;color:#1A1A1A;text-align:left;}
+table.xl td.h{background:#f1f4f9;color:#8a93a5;text-align:center;font-weight:700;font-size:10.5px;}
+table.xl td.th{background:#F2F2F2;font-weight:800;}
+table.xl td.gth{background:#D6D6D6;font-weight:800;}
+table.xl td.n{text-align:right;font-variant-numeric:tabular-nums;}
+table.xl td.new{background:#FFF6D6;}
+table.xl td.calc{background:#E8F7EF;}
+.result-box{border:1px solid var(--line);border-radius:14px;background:#FAFAFD;padding:12px;margin-top:10px;}
+.result-legend{display:flex;flex-wrap:wrap;gap:14px;font-size:11.5px;color:#8a93a5;margin-top:8px;}
+.result-legend .sw{display:inline-block;width:10px;height:10px;border-radius:2px;vertical-align:-1px;margin-right:4px;}
+.sw.sw-new{background:#FFF6D6;border:1px solid #e4d9a8;}
+.sw.sw-calc{background:#E8F7EF;border:1px solid #bfe4cf;}
+.sheettabs{display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap;}
+.sheettab{font-size:11px;color:#747474;border:1px solid #E0E0E0;border-radius:6px;padding:3px 9px;background:#fff;}
+.sheettab.on{font-weight:800;color:#1A1A1A;border-color:#1A1A1A;}
+.stepchip{font-size:10.5px;font-weight:800;color:#747474;background:#F2F2F2;border-radius:999px;padding:3px 10px;display:inline-flex;align-items:center;gap:5px;}
+.stepchip.editing{color:#fff;background:#1A1A1A;}
+.compare-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:10px;}
+@media(max-width:620px){.compare-grid{grid-template-columns:1fr;}}
+
+/* ── 접기: 스킬 함수 설명서 ── */
+details.fn-ref{margin-top:14px;border:1px solid var(--line);border-radius:var(--rs);background:#fbfdff;overflow:hidden;}
+details.fn-ref summary{cursor:pointer;padding:13px 16px;font-weight:800;color:var(--mg-dark);font-size:14px;list-style:none;}
+details.fn-ref summary::-webkit-details-marker{display:none;}
+details.fn-ref summary::before{content:"▸ ";}
+details.fn-ref[open] summary::before{content:"▾ ";}
+details.fn-ref .fn-pre{margin:0;border:none;border-top:1px solid var(--line);border-radius:0;background:#fff;
+  color:var(--text);padding:16px;max-height:620px;overflow:auto;
+  font-family:ui-monospace,Consolas,monospace;font-size:12px;line-height:1.6;white-space:pre-wrap;word-break:normal;}
+
+/* ── Q&A / 부록 ── */
+.qa-item{border:1px solid var(--line);border-radius:12px;background:#fff;padding:15px 18px;margin-top:12px;}
+.qa-item .q{font-weight:800;color:var(--ink);font-size:14.5px;margin-bottom:6px;}
+.qa-item .q .qtag{color:var(--mg-dark);}
+.qa-item .a{font-size:13.5px;color:var(--text);line-height:1.75;}
+.qa-item .a .atag{color:var(--vt-dark);font-weight:800;}
+.btn-name{display:inline-block;background:#182c47;color:#fff;border-radius:6px;padding:1px 10px;
+  font-size:12px;font-weight:700;white-space:nowrap;}
+
+.footer{padding:36px 0 48px;color:var(--muted);font-size:13px;}
+.footer .card{text-align:center;}
+
+/* ── 모바일 / 인쇄 ── */
+#mobileNavToggle{display:none;position:fixed;top:12px;left:12px;z-index:200;width:40px;height:40px;
+  border-radius:10px;border:none;background:var(--sidebar-bg);color:#fff;font-size:18px;cursor:pointer;}
+@media(max-width:900px){
+  .sidebar{transform:translateX(-100%);transition:transform .2s;}
+  .sidebar.open{transform:none;}
+  #mobileNavToggle{display:block;}
+  .main{margin-left:0;}
+  .stats,.legend-grid,.gb-compare{grid-template-columns:1fr 1fr;}
+}
+@media(max-width:620px){.stats,.legend-grid,.gb-compare{grid-template-columns:1fr;}}
+@media print{
+  .sidebar,#mobileNavToggle,.copy-btn{display:none !important;}
+  .main{margin-left:0;}
+  body{background:#fff;}
+  .step,.card{box-shadow:none;break-inside:avoid;}
+  .hero{background:#fff;}
+}
+</style>
+</head>
+<body>
+
+<button id="mobileNavToggle" aria-label="메뉴">☰</button>
+<nav class="sidebar" id="sidebar">
+  <div class="sb-brand">
+    <span class="badge">AX</span>
+    <div class="title">AX-Cell 실습 교안</div>
+    <div class="sub">청구서 자동화 따라하기</div>
+  </div>
+  <ul class="sb-nav">
+    <li><a href="#hero"><span class="nav-num">🎯</span> 과정 개요</a></li>
+    <li><a href="#roadmap"><span class="nav-num">⏰</span> 실습 로드맵</a></li>
+    <li><a href="#prep"><span class="nav-num">📂</span> 준비물</a></li>
+    <li><a href="#screen"><span class="nav-num">🖥</span> 화면 구성</a></li>
+    <li><a href="#rules"><span class="nav-num">✔</span> 규칙 4가지</a></li>
+    <li class="sb-section">실습</li>
+    <li><a href="#s1"><span class="nav-num">1</span> 파일 업로드 <span class="nav-t">5′</span></a></li>
+    <li><a href="#s2"><span class="nav-num">2</span> 피벗 <span class="nav-t">5′</span></a></li>
+    <li><a href="#s3"><span class="nav-num">3</span> 이름 맞춰 채우기 <span class="nav-t">5′</span></a></li>
+    <li><a href="#s4"><span class="nav-num">4</span> 원가 반복 <span class="nav-t">5′</span></a></li>
+    <li><a href="#s5"><span class="nav-num">5</span> 복사·붙여넣기 <span class="nav-t">5′</span></a></li>
+    <li><a href="#s6"><span class="nav-num">6</span> 보기 좋게 <span class="nav-t">5′</span></a></li>
+    <li><a href="#s7"><span class="nav-num">7</span> 스킬 저장·실행 <span class="nav-t">5′</span></a></li>
+    <li><a href="#s8"><span class="nav-num">8</span> 다음 달 재실행 <span class="nav-t">5′</span></a></li>
+    <li><a href="#s9"><span class="nav-num">9</span> 중간 단계 수정 <span class="nav-t">5′</span></a></li>
+    <li class="sb-section">참고</li>
+    <li><a href="#help"><span class="nav-num">?</span> 막힐 때</a></li>
+    <li><a href="#aihelp"><span class="nav-num">🤖</span> AI 도움 활용</a></li>
+    <li><a href="#appendix"><span class="nav-num">📚</span> 요청문 모음</a></li>
+  </ul>
+</nav>
+
+<div class="main">
+
+<section class="hero" id="hero">
+  <div class="container">
+    <span class="eyebrow">🤖 AX-Cell 따라하기 실습</span>
+    <h1>청구서 자동화,<br>45분이면 스킬이 됩니다</h1>
+    <p class="lead">매출 1,200건과 원가표로 청구서 요약을 완성하고, 그 과정을 <b>스킬로 저장</b>해
+      다음 달 파일에 그대로 재사용하는 것까지 — 실제 파일로 처음부터 끝까지 따라합니다.</p>
+    <div class="stats">
+      <div class="stat"><div class="num">9</div><div class="label">실습 단계</div></div>
+      <div class="stat"><div class="num">45′</div><div class="label">총 소요 시간</div></div>
+      <div class="stat"><div class="num">5</div><div class="label">실습 파일</div></div>
+      <div class="stat"><div class="num">1,200</div><div class="label">자동 처리할 매출 건수</div></div>
+    </div>
+    <div class="hero-pills">
+      <span class="pill">피벗</span><span class="pill">이름 맞춰 채우기</span><span class="pill">복사·붙여넣기</span>
+      <span class="pill">서식</span><span class="pill">스킬 저장</span><span class="pill">다음 달 재실행</span>
+      <span class="pill">중간 단계 수정</span><span class="pill">오류 복구·AI 도움</span>
+    </div>
+  </div>
+</section>
+
+<section id="roadmap">
+  <div class="container">
+    <div class="sec-head"><h2>⏰ 실습 로드맵</h2>
+      <p>앞의 세 실습(피벗 → 채우기 → 반복)이 자동화의 기본기, 실습 8이 오늘의 하이라이트입니다.
+        마지막 실습 9에서는 완성된 스킬을 <b>고쳐 쓰는 법</b>까지 익힙니다.</p></div>
+    <div class="card">
+      <div class="timeline-item"><div class="timeline-dot">1</div>
+        <div class="timeline-body"><div class="tl-title">파일 업로드</div><div class="tl-desc">실습 파일 3개를 올리고 화면 구경</div></div>
+        <div class="timeline-time">5′</div></div>
+      <div class="timeline-item"><div class="timeline-dot">2</div>
+        <div class="timeline-body"><div class="tl-title">피벗</div><div class="tl-desc">매출 1,200건 → 회사별 합계 요약표</div></div>
+        <div class="timeline-time">5′</div></div>
+      <div class="timeline-item"><div class="timeline-dot">3</div>
+        <div class="timeline-body"><div class="tl-title">이름 맞춰 채우기</div><div class="tl-desc">요약값을 청구서 매출 열에 회사명 기준으로</div></div>
+        <div class="timeline-time">5′</div></div>
+      <div class="timeline-item"><div class="timeline-dot">4</div>
+        <div class="timeline-body"><div class="tl-title">원가로 반복</div><div class="tl-desc">같은 패턴 한 번 더 → 마진율 완성</div></div>
+        <div class="timeline-time">5′</div></div>
+      <div class="timeline-item"><div class="timeline-dot">5</div>
+        <div class="timeline-body"><div class="tl-title">복사·붙여넣기</div><div class="tl-desc">월별 집계 옮기기 + 복붙 캡처로 단계 추가</div></div>
+        <div class="timeline-time">5′</div></div>
+      <div class="timeline-item"><div class="timeline-dot">6</div>
+        <div class="timeline-body"><div class="tl-title">보기 좋게 다듬기</div><div class="tl-desc">천 단위 쉼표, 머리글 서식</div></div>
+        <div class="timeline-time">5′</div></div>
+      <div class="timeline-item"><div class="timeline-dot">7</div>
+        <div class="timeline-body"><div class="tl-title">스킬 저장 · 전체 실행</div><div class="tl-desc">8단계 묶음을 스킬로 등록하고 재현</div></div>
+        <div class="timeline-time">5′</div></div>
+      <div class="timeline-item timeline-item-main"><div class="timeline-dot">8</div>
+        <div class="timeline-body"><div class="tl-title">다음 달 파일로 재실행 <span class="tl-main-badge">하이라이트</span></div>
+          <div class="tl-desc">5월 파일로 갈아끼우고 그대로 실행 — 이게 스킬의 목적</div></div>
+        <div class="timeline-time">5′</div></div>
+      <div class="timeline-item"><div class="timeline-dot">9</div>
+        <div class="timeline-body"><div class="tl-title">중간 단계 수정</div>
+          <div class="tl-desc">✏ 수정 모드로 단계 하나만 고치면 결과 전체에 반영</div></div>
+        <div class="timeline-time">5′</div></div>
+    </div>
+  </div>
+</section>
+
+<section id="prep">
+  <div class="container">
+    <div class="sec-head"><h2>📂 준비물</h2>
+      <p>먼저 <b>B2B 스마트 빌링</b> 프로그램을 설치하고, 실습 파일은 아래 링크를 통해 다운로드 받아주세요.
+        폴더명은 <b>교육 교안</b>입니다.</p></div>
+    <div class="card">
+      <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:14px">
+        <a href="https://seulgi.lguplus.co.kr/desk/smart-billing"
+           target="_blank" rel="noopener"
+           style="display:inline-flex;align-items:center;gap:8px;padding:10px 18px;border-radius:10px;
+                  background:#182c47;color:#fff;font-weight:800;font-size:13.5px;
+                  text-decoration:none;box-shadow:0 6px 16px rgba(20,40,70,.22)">
+          💻 프로그램 설치 — B2B 스마트 빌링 (슬기로운 업무생활)</a>
+        <a href="https://lgupluscorp-my.sharepoint.com/:f:/g/personal/s0min_lguplus_co_kr/IgC0il_CbQNOQZ4ib2sGe4rtAXzYSFQpibH5-8YspcUxL1U"
+           target="_blank" rel="noopener"
+           style="display:inline-flex;align-items:center;gap:8px;padding:10px 18px;border-radius:10px;
+                  background:linear-gradient(135deg,var(--mg),var(--vt));color:#fff;font-weight:800;font-size:13.5px;
+                  text-decoration:none;box-shadow:0 6px 16px rgba(10,102,194,.25)">
+          📥 실습 파일 다운로드 (교육 교안 폴더)</a>
+      </div>
+      <table>
+        <tr><th style="width:44%">파일</th><th>무엇</th><th style="width:18%">쓰는 실습</th></tr>
+        <tr><td><span class="tagref">input_매출_2026_4월.xlsx</span></td><td>4월 매출 1,200건 — 회사명·상품·건수·금액</td><td>1 ~ 7</td></tr>
+        <tr><td><span class="tagref">input_원가_2026_4월.xlsx</span></td><td>4월 원가 120건 — 회사명·상품·단가·수량·원가</td><td>1 ~ 7</td></tr>
+        <tr><td><span class="tagref">output_청구서.xlsx</span></td><td>완성할 청구서 — 매출·원가 칸이 <b>비어 있음</b></td><td>1 ~ 7</td></tr>
+        <tr><td><span class="tagref">input_매출_2026_5월.xlsx</span></td><td>다음 달 매출 — 재실행 실습용</td><td>8</td></tr>
+        <tr><td><span class="tagref">input_원가_2026_5월.xlsx</span></td><td>다음 달 원가 — 재실행 실습용</td><td>8</td></tr>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section id="screen">
+  <div class="container">
+    <div class="sec-head"><h2>🖥 화면 구성</h2><p>30초면 됩니다. 네 군데만 기억하세요.</p></div>
+    <div class="screen-box">
+      <div class="screen-head"><span>AX-Cell 화면 지도</span><span>스킬 생성기 기준</span></div>
+      <div style="padding:14px;background:linear-gradient(135deg,#eef5fc,#eaf8f0)">
+        <div style="border:1px solid #d9e6f2;border-radius:12px;overflow:hidden;background:#fff">
+          <div style="height:42px;background:#fff;border-bottom:1px solid #EBE9F1;display:flex;align-items:center;gap:10px;padding:0 14px;overflow:hidden">
+            <span style="flex:none;width:22px;height:22px;border-radius:6px;background:#1A1A1A;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:9px;font-weight:900">AX</span>
+            <span style="font-size:12.5px;font-weight:800;color:#1A1A1A">AX-Cell</span>
+            <span style="margin-left:16px;font-size:12px;color:#1A1A1A;font-weight:800;border-bottom:2px solid #1A1A1A;padding:10px 2px;white-space:nowrap">output_청구서.xlsx</span>
+            <span style="font-size:12px;color:#747474;padding:10px 2px;white-space:nowrap">input_매출_2026_4월.xlsx</span>
+            <span style="font-size:12px;color:#747474;padding:10px 2px;white-space:nowrap">input_원가_2026_4월.xlsx</span>
+            <span style="margin-left:auto;flex:none;font-size:11px;color:#fff;background:#1A1A1A;border-radius:7px;padding:5px 11px;font-weight:800;white-space:nowrap">파일 업로드</span>
+          </div>
+          <div style="display:flex;background:#FAFAFD;min-height:290px">
+            <div style="width:34%;min-width:230px;border-right:1px solid #EBE9F1;padding:12px;display:flex;flex-direction:column;gap:8px;position:relative">
+              <div style="align-self:flex-end;max-width:92%;background:#F2F2F2;border:1px solid #E0E0E0;border-radius:12px;padding:8px 11px;font-size:11.5px;color:#1A1A1A;margin-top:44px">회사별로 금액 합계를 요약표로 만들어줘</div>
+              <div style="align-self:flex-start;max-width:92%;background:#fff;border:1px solid #EBE9F1;border-radius:12px;padding:8px 11px;font-size:11.5px;color:#3D3D3D">1단계 완료 — 요약 시트를 만들었습니다.</div>
+              <div style="margin-top:auto;border:1px solid #E0E0E0;border-radius:9px;background:#fff;padding:8px 10px;font-size:11px;color:#A8A8A8">각 요청은 하나의 단계로 작성됩니다…</div>
+              <div style="position:absolute;left:8px;right:8px;top:8px;border:1.5px dashed var(--mg);border-radius:10px;background:rgba(234,243,252,.8);padding:5px 9px;font-size:11px;font-weight:800;color:var(--mg-dark);display:flex;align-items:center;gap:6px">
+                <span style="flex:none;width:17px;height:17px;border-radius:50%;background:var(--mg);color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:10px">1</span>스킬 생성기(채팅) — 요청 하나 = 단계 하나
+              </div>
+            </div>
+            <div style="flex:1;padding:12px;position:relative">
+              <div class="sheettabs"><span class="sheettab on">회사별요약</span><span class="sheettab">월별실적</span></div>
+              <div style="background:#fff;border:1px solid #E0E0E0;border-radius:8px;height:200px;padding:10px;font-size:11px;color:#A8A8A8">엑셀 화면 — 업로드한 파일이 진짜 엑셀로 열리고, 요청 결과가 즉시 반영됩니다</div>
+              <div style="position:absolute;right:16px;top:16px;border:1.5px dashed var(--mg);border-radius:10px;background:rgba(234,243,252,.9);padding:5px 9px;font-size:11px;font-weight:800;color:var(--mg-dark);display:flex;align-items:center;gap:6px">
+                <span style="flex:none;width:17px;height:17px;border-radius:50%;background:var(--mg);color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:10px">2</span>엑셀 화면 · 위 탭으로 파일 전환
+              </div>
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;background:#fff;border-top:1px solid #EBE9F1;padding:22px 14px 10px;position:relative;flex-wrap:wrap">
+            <span class="stepchip">1단계 피벗 ✓</span>
+            <span style="font-size:11px;color:#A8A8A8;border:1px dashed #D6D6D6;border-radius:999px;padding:4px 11px">다음 단계…</span>
+            <span style="margin-left:auto;font-size:11px;color:#fff;background:#1A1A1A;border-radius:7px;padding:5px 12px;font-weight:800;white-space:nowrap">전체 실행</span>
+            <span style="font-size:11px;color:#1A1A1A;background:#fff;border:1px solid #1A1A1A;border-radius:7px;padding:4px 12px;font-weight:800;white-space:nowrap">스킬 등록</span>
+            <span style="font-size:11px;color:#1A1A1A;background:#fff;border:1px solid #E0E0E0;border-radius:7px;padding:4px 12px;font-weight:800;white-space:nowrap">다운로드</span>
+            <div style="position:absolute;left:12px;top:-14px;border:1.5px dashed var(--vt);border-radius:10px;background:rgba(232,247,239,.95);padding:4px 9px;font-size:11px;font-weight:800;color:var(--vt-dark);display:inline-flex;align-items:center;gap:6px">
+              <span style="flex:none;width:17px;height:17px;border-radius:50%;background:var(--vt);color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:10px">3</span>스킬 단계 목록
+            </div>
+            <div style="position:absolute;right:12px;top:-14px;border:1.5px dashed var(--vt);border-radius:10px;background:rgba(232,247,239,.95);padding:4px 9px;font-size:11px;font-weight:800;color:var(--vt-dark);display:inline-flex;align-items:center;gap:6px">
+              <span style="flex:none;width:17px;height:17px;border-radius:50%;background:var(--vt);color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:10px">4</span>실행 버튼들
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="legend-grid">
+        <div class="legend-item"><span class="legend-no">1</span><div><strong>스킬 생성기(채팅)</strong>
+          <span>우리말로 요청을 입력합니다. 요청 하나가 스킬 <b>단계 하나</b>로 쌓입니다.</span></div></div>
+        <div class="legend-item"><span class="legend-no">2</span><div><strong>엑셀 화면</strong>
+          <span>업로드한 파일이 진짜 엑셀로 열리고, 결과가 즉시 보입니다. 위 탭으로 파일 전환.</span></div></div>
+        <div class="legend-item"><span class="legend-no">3</span><div><strong>스킬 단계 목록</strong>
+          <span>지금까지의 요청이 1단계, 2단계… 로 쌓인 것. 단계별로 켜고 끌 수 있습니다.</span></div></div>
+        <div class="legend-item"><span class="legend-no">4</span><div><strong>실행 버튼들</strong>
+          <span><b>전체 실행</b>=처음부터 재적용, <b>스킬 등록</b>=저장, <b>다운로드</b>=완성본 받기.</span></div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="rules">
+  <div class="container">
+    <div class="sec-head"><h2>✔ 시작 전 규칙 4가지</h2><p>이것만 지키면 대부분 한 번에 됩니다.</p></div>
+    <div class="card">
+      <div class="gb-case-title">① 한 번에 한 가지씩 — 한 메시지 = 스킬 한 단계</div>
+      <div class="gb-compare">
+        <div class="gb-box bad"><span class="gb-tag">✕ 이렇게 말고</span>
+          <div class="gb-text">"중복 지우고 정렬하고 합계도 넣어줘"</div></div>
+        <div class="gb-box good"><span class="gb-tag">✓ 이렇게</span>
+          <div class="gb-text">세 번에 나눠 요청 — 단계가 하나씩 쌓여야 나중에 끄고 켤 수 있습니다</div></div>
+      </div>
+      <div class="gb-case-title">② 대상은 <span class="tagref">@</span> 멘션으로 — 열은 머리글 이름으로</div>
+      <div class="gb-compare">
+        <div class="gb-box bad"><span class="gb-tag">✕</span>
+          <div class="gb-text">"세 번째 열을 합계 내줘" (파일마다 열이 밀립니다)</div></div>
+        <div class="gb-box good"><span class="gb-tag">✓</span>
+          <div class="gb-text">입력창에 <span class="tagref">@</span> 를 치면 파일·시트 목록이 떠서 클릭으로 선택 —
+          열은 "금액 열"처럼 <b>머리글 이름</b>으로</div></div>
+      </div>
+      <div class="gb-case-title">③ 틀리면 같은 문장 반복 금지 — 무엇이 틀렸는지 붙여서</div>
+      <div class="gb-compare">
+        <div class="gb-box bad"><span class="gb-tag">✕</span>
+          <div class="gb-text">(같은 문장을 그대로 다시 전송)</div></div>
+        <div class="gb-box good"><span class="gb-tag">✓</span>
+          <div class="gb-text">"아니야, 건수 말고 <b>금액 기준</b>으로 해줘"</div></div>
+      </div>
+
+      <div class="gb-case-title">④ 범위는 타이핑하지 말고 <b>엑셀에서 그냥 선택</b>하세요</div>
+      <div class="gb-compare">
+        <div class="gb-box bad"><span class="gb-tag">✕ 이렇게 말고</span>
+          <div class="gb-text">"A3부터 E24까지…" 를 손으로 받아 적기 (주소를 잘못 옮기면 엉뚱한 곳이 바뀝니다)</div></div>
+        <div class="gb-box good"><span class="gb-tag">✓ 이렇게</span>
+          <div class="gb-text">오른쪽 엑셀에서 <b>셀을 클릭하거나 드래그</b>, 또는 <b>행·열 머리를 눌러 전체 선택</b>하면
+            채팅 입력창에 범위가 <b>저절로 들어갑니다</b></div></div>
+      </div>
+      <div style="border:1px solid var(--line);border-radius:10px;background:#fff;padding:9px 12px;margin-top:8px;
+                  font-family:ui-monospace,Consolas,monospace;font-size:12.5px;color:var(--mg-dark)">
+        선택 범위: @범위[output_청구서.xlsx/회사별요약!A3:E24]
+      </div>
+      <p class="prompt-hint">이 줄은 그대로 두고 <b>하고 싶은 말만 이어서</b> 적으면 됩니다 —
+        예: 윗줄 아래에 "이 표를 마진율 높은 순으로 정렬해줘". 다시 선택하면 <b>줄이 새 범위로 바뀌고</b>,
+        Ctrl 을 누른 채 여러 곳을 고르면 <b>줄이 하나씩 늘어납니다</b>.</p>
+    </div>
+  </div>
+</section>
+
+<section id="s1">
+  <div class="container">
+    <div class="step">
+      <div class="step-head"><div class="step-head-left"><span class="step-num">1</span>
+        <h3>파일 업로드 — 재료 준비</h3></div><span class="time">5분</span></div>
+      <div class="step-body">
+        <div class="block"><div class="block-title"><span class="bt-icon">🎯</span>목표</div>
+          <p>실습 파일 3개를 올리고, 오늘 채울 빈칸이 어디인지 눈으로 확인합니다.</p></div>
+        <div class="block"><div class="block-title"><span class="bt-icon">🖱</span>따라하기</div>
+          <div class="todo-list">
+            <label class="todo-check"><input type="checkbox" data-done="s1a"><span class="tc-body">
+              <span class="btn-name">파일 업로드</span> 로 3개를 올린다 —
+              <span class="tagref">input_매출_2026_4월.xlsx</span> ·
+              <span class="tagref">input_원가_2026_4월.xlsx</span> ·
+              <span class="tagref">output_청구서.xlsx</span></span></label>
+            <label class="todo-check"><input type="checkbox" data-done="s1b"><span class="tc-body">
+              오른쪽 엑셀 위 <b>탭</b>을 눌러 파일을 전환해 본다</span></label>
+            <label class="todo-check"><input type="checkbox" data-done="s1c"><span class="tc-body">
+              <b>output_청구서 → 회사별요약</b> 시트를 연다 — 회사 20곳의 매출·원가 칸이 비어 있고,
+              마진·마진율에는 수식이 미리 들어 있다</span></label>
+          </div></div>
+        <div class="block"><div class="block-title"><span class="bt-icon">✅</span>확인</div>
+          <div class="note info">탭에 파일 3개 · 회사별요약 4~23행에 회사 20곳 · 24행에 합계 행. 오늘 목표는 이 빈칸 채우기입니다.</div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="s2">
+  <div class="container">
+    <div class="step">
+      <div class="step-head"><div class="step-head-left"><span class="step-num">2</span>
+        <h3>피벗 — 1,200건을 20줄로</h3></div><span class="time">5분</span></div>
+      <div class="step-body">
+        <div class="block"><div class="block-title"><span class="bt-icon">🎯</span>목표</div>
+          <p>매출 시트는 1,200행입니다. 손으로 회사별 합계를 내려면 한참이지만, <b>한 문장</b>이면 됩니다.</p></div>
+        <div class="block"><div class="block-title"><span class="bt-icon">💬</span>채팅에 입력</div>
+          <div class="copy-wrapper"><button class="copy-btn" onclick="copyPrompt(this)">복사</button>
+<pre>@시트[input_매출_2026_4월.xlsx/매출] 회사별로 금액 합계를 요약표로 만들어줘</pre></div>
+          <p class="prompt-hint">@ 부분은 직접 타이핑하지 말고, 입력창에 <b>@</b> 를 친 뒤 목록에서 매출 시트를 고르세요.</p>
+          <div class="mockup"><div class="mockup-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span> 이렇게 진행됩니다</div>
+            <div class="mockup-body">
+              <div class="mockup-user">@시트[input_매출_2026_4월.xlsx/매출] 회사별로 금액 합계를 요약표로 만들어줘</div>
+              <div class="mockup-ai"><strong>1단계 완료</strong> — 회사별 요약 시트를 만들었습니다. 회사 20곳, 오른쪽 엑셀에서 확인하세요.</div>
+            </div></div></div>
+        <div class="block"><div class="block-title"><span class="bt-icon">🖥</span>실행하면 이렇게 됩니다 — 실제 데이터로 계산한 결과</div>
+          <div class="result-box">
+            <div class="sheettabs"><span class="sheettab">매출</span><span class="sheettab on">회사별 요약 ← 새 시트</span></div>
+            <table class="xl">
+              <tr><td class="h" style="width:30px"></td><td class="h">A</td><td class="h" style="width:34%">B</td></tr>
+              <tr><td class="h">1</td><td class="th new">회사명</td><td class="th new">금액</td></tr>
+              <tr><td class="h">2</td><td class="new">ABC통신</td><td class="n new">154,580,000</td></tr>
+              <tr><td class="h">3</td><td class="new">글로벌네트워크</td><td class="n new">220,393,000</td></tr>
+              <tr><td class="h">4</td><td class="new">스마트링크</td><td class="n new">197,270,000</td></tr>
+              <tr><td class="h">5</td><td class="new">코리아텔레콤</td><td class="n new">178,135,000</td></tr>
+              <tr><td class="h">6</td><td class="new">디지털파트너스</td><td class="n new">216,344,000</td></tr>
+              <tr><td class="h">…</td><td class="new" style="color:#8a93a5">… 15곳 더</td><td class="n new" style="color:#8a93a5">…</td></tr>
+            </table>
+            <div class="result-legend"><span><span class="sw sw-new"></span>이번 단계로 새로 생긴 부분</span></div>
+          </div></div>
+        <div class="block"><div class="block-title"><span class="bt-icon">✅</span>확인</div>
+          <div class="note info">요약표에 회사가 <b>20곳</b> · ABC통신 합계 <b>154,580,000</b> · 왼쪽에 <b>1단계</b>가 쌓임</div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="s3">
+  <div class="container">
+    <div class="step">
+      <div class="step-head"><div class="step-head-left"><span class="step-num">3</span>
+        <h3>이름 맞춰 채우기 — 요약을 청구서로</h3></div><span class="time">5분</span></div>
+      <div class="step-body">
+        <div class="block"><div class="block-title"><span class="bt-icon">🎯</span>목표</div>
+          <p>방금 만든 요약을 청구서의 매출 열에 <b>회사명 기준으로</b> 붙입니다. 행 순서가 달라도 이름으로 맞춰 들어갑니다.</p></div>
+        <div class="block"><div class="block-title"><span class="bt-icon">💬</span>채팅에 입력</div>
+          <div class="copy-wrapper"><button class="copy-btn" onclick="copyPrompt(this)">복사</button>
+<pre>@시트[output_청구서.xlsx/회사별요약] 방금 만든 회사별 요약의 금액을 회사명에 맞춰 매출 열에 채워줘</pre></div></div>
+        <div class="block"><div class="block-title"><span class="bt-icon">🖥</span>실행하면 이렇게 됩니다 — output_청구서.xlsx / 회사별요약</div>
+          <div class="result-box">
+            <table class="xl">
+              <tr><td class="h" style="width:30px"></td><td class="h">A</td><td class="h">B</td><td class="h">C</td><td class="h">D</td><td class="h" style="width:64px">E</td></tr>
+              <tr><td class="h">3</td><td class="th">회사명</td><td class="th">매출</td><td class="th">원가</td><td class="th">마진</td><td class="th">마진율</td></tr>
+              <tr><td class="h">4</td><td>ABC통신</td><td class="n new">154580000</td><td class="n"></td><td class="n calc">154580000</td><td class="n calc">1.00</td></tr>
+              <tr><td class="h">5</td><td>글로벌네트워크</td><td class="n new">220393000</td><td class="n"></td><td class="n calc">220393000</td><td class="n calc">1.00</td></tr>
+              <tr><td class="h">6</td><td>스마트링크</td><td class="n new">197270000</td><td class="n"></td><td class="n calc">197270000</td><td class="n calc">1.00</td></tr>
+              <tr><td class="h">…</td><td style="color:#8a93a5">… 17곳 더</td><td class="n new" style="color:#8a93a5">…</td><td></td><td class="n calc" style="color:#8a93a5">…</td><td class="n calc" style="color:#8a93a5">…</td></tr>
+              <tr><td class="h">24</td><td class="th">합계 / 평균</td><td class="n th new">3797128000</td><td class="n th"></td><td class="n th calc">3797128000</td><td class="n th calc">1.00</td></tr>
+            </table>
+            <div class="result-legend">
+              <span><span class="sw sw-new"></span>이번 단계가 채운 값</span>
+              <span><span class="sw sw-calc"></span>원래 있던 수식이 저절로 계산된 값</span>
+            </div>
+          </div></div>
+        <div class="block"><div class="block-title"><span class="bt-icon">✅</span>확인</div>
+          <div class="note info">매출 열이 채워지고 <b>마진 열이 저절로 계산</b>됩니다(원래 있던 수식이 살아 있어서) ·
+            24행 합계 <b>3,797,128,000</b></div>
+          <div class="note todo">아직 원가가 비어 있어 마진 = 매출인 상태 — 다음 실습에서 완성합니다.</div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="s4">
+  <div class="container">
+    <div class="step">
+      <div class="step-head"><div class="step-head-left"><span class="step-num">4</span>
+        <h3>같은 패턴으로 원가까지</h3></div><span class="time">5분</span></div>
+      <div class="step-body">
+        <div class="block"><div class="block-title"><span class="bt-icon">🎯</span>목표</div>
+          <p>실습 2·3과 똑같은 <b>피벗 → 채우기</b> 패턴을 원가 파일로 반복합니다. 이 두 문장이 자동화의 기본기입니다.</p></div>
+        <div class="block"><div class="block-title"><span class="bt-icon">💬</span>① 원가 피벗</div>
+          <div class="copy-wrapper"><button class="copy-btn" onclick="copyPrompt(this)">복사</button>
+<pre>@시트[input_원가_2026_4월.xlsx/원가] 회사별로 원가 합계를 요약표로 만들어줘</pre></div></div>
+        <div class="block"><div class="block-title"><span class="bt-icon">💬</span>② 청구서에 채우기 (①이 끝난 뒤)</div>
+          <div class="copy-wrapper"><button class="copy-btn" onclick="copyPrompt(this)">복사</button>
+<pre>@시트[output_청구서.xlsx/회사별요약] 방금 만든 원가 요약을 회사명에 맞춰 원가 열에 채워줘</pre></div></div>
+        <div class="block"><div class="block-title"><span class="bt-icon">🖥</span>실행하면 이렇게 됩니다 — 마진율까지 전부 계산된 모습</div>
+          <div class="result-box">
+            <table class="xl">
+              <tr><td class="h" style="width:30px"></td><td class="h">A</td><td class="h">B</td><td class="h">C</td><td class="h">D</td><td class="h" style="width:64px">E</td></tr>
+              <tr><td class="h">3</td><td class="th">회사명</td><td class="th">매출</td><td class="th">원가</td><td class="th">마진</td><td class="th">마진율</td></tr>
+              <tr><td class="h">4</td><td>ABC통신</td><td class="n">154580000</td><td class="n new">103590000</td><td class="n calc">50990000</td><td class="n calc">0.33</td></tr>
+              <tr><td class="h">5</td><td>글로벌네트워크</td><td class="n">220393000</td><td class="n new">136595000</td><td class="n calc">83798000</td><td class="n calc">0.38</td></tr>
+              <tr><td class="h">6</td><td>스마트링크</td><td class="n">197270000</td><td class="n new">116450000</td><td class="n calc">80820000</td><td class="n calc">0.41</td></tr>
+              <tr><td class="h">…</td><td style="color:#8a93a5">… 17곳 더</td><td class="n" style="color:#8a93a5">…</td><td class="n new" style="color:#8a93a5">…</td><td class="n calc" style="color:#8a93a5">…</td><td class="n calc" style="color:#8a93a5">…</td></tr>
+              <tr><td class="h">24</td><td class="th">합계 / 평균</td><td class="n th">3797128000</td><td class="n th new">2490660000</td><td class="n th calc">1306468000</td><td class="n th calc">0.34</td></tr>
+            </table>
+            <div class="result-legend">
+              <span><span class="sw sw-new"></span>이번 단계가 채운 값</span>
+              <span><span class="sw sw-calc"></span>수식이 저절로 계산된 값</span>
+              <span>마진율 표시는 실습 9에서 백분율(33.0%)로 바꿉니다</span>
+            </div>
+          </div></div>
+        <div class="block"><div class="block-title"><span class="bt-icon">✅</span>확인</div>
+          <div class="note info">원가 열이 채워지고 <b>마진율까지 전부 계산</b> · ABC통신 원가 <b>103,590,000</b> ·
+            마진 <b>50,990,000</b>(마진율 33%) · 스킬 단계 4개</div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="s5">
+  <div class="container">
+    <div class="step">
+      <div class="step-head"><div class="step-head-left"><span class="step-num">5</span>
+        <h3>복사·붙여넣기 — 월별 집계 옮기기</h3></div><span class="time">5분</span></div>
+      <div class="step-body">
+        <div class="block"><div class="block-title"><span class="bt-icon">🎯</span>목표</div>
+          <p>매출 파일의 <b>월별집계</b> 시트에서 1~4월 건수·금액을 청구서의 <b>월별실적</b> 시트로 옮깁니다.</p></div>
+        <div class="block"><div class="block-title"><span class="bt-icon">💬</span>채팅에 입력</div>
+          <div class="copy-wrapper"><button class="copy-btn" onclick="copyPrompt(this)">복사</button>
+<pre>@시트[output_청구서.xlsx/월별실적] @시트[input_매출_2026_4월.xlsx/월별집계] 의 1월부터 4월까지 건수와 금액을 월에 맞춰 채워줘</pre></div></div>
+        <div class="block"><div class="block-title"><span class="bt-icon">🖥</span>실행하면 이렇게 됩니다 — output_청구서.xlsx / 월별실적</div>
+          <div class="result-box">
+            <table class="xl">
+              <tr><td class="h" style="width:30px"></td><td class="h" style="width:64px">A</td><td class="h">B</td><td class="h">C</td><td class="h">D</td></tr>
+              <tr><td class="h">3</td><td class="th">월</td><td class="th">건수</td><td class="th">금액</td><td class="th">전월대비</td></tr>
+              <tr><td class="h">4</td><td>1월</td><td class="n new">1,077</td><td class="n new">165,496,128</td><td class="n">0</td></tr>
+              <tr><td class="h">5</td><td>2월</td><td class="n new">1,078</td><td class="n new">105,635,376</td><td class="n calc">-59,860,752</td></tr>
+              <tr><td class="h">6</td><td>3월</td><td class="n new">911</td><td class="n new">146,395,878</td><td class="n calc">40,760,502</td></tr>
+              <tr><td class="h">7</td><td>4월</td><td class="n new">1,400</td><td class="n new">155,908,200</td><td class="n calc">9,512,322</td></tr>
+            </table>
+            <div class="result-legend">
+              <span><span class="sw sw-new"></span>이번 단계가 채운 값</span>
+              <span><span class="sw sw-calc"></span>전월대비 수식이 저절로 계산</span>
+            </div>
+          </div></div>
+        <div class="block"><div class="block-title"><span class="bt-icon">🖱</span>이어서 — 진짜 복붙도 스킬이 됩니다 (복붙 캡처)</div>
+          <div class="todo-list">
+            <label class="todo-check"><input type="checkbox" data-done="s5a"><span class="tc-body">
+              오른쪽 엑셀에서 직접 원하는 범위를 골라 <b>Ctrl+C → Ctrl+V</b> 로 복사해 붙여넣는다
+              — 예: 월별실적 표(A3:D7)를 옆 빈 자리에</span></label>
+            <label class="todo-check"><input type="checkbox" data-done="s5b"><span class="tc-body">
+              붙여넣은 직후 <span class="btn-name">복붙 캡처</span> 를 누른다 —
+              방금 한 복사·붙여넣기가 그대로 <b>스킬 단계로 저장</b>된다</span></label>
+          </div>
+          <p class="prompt-hint">말로 설명하기 애매한 복사는 이쪽이 빠릅니다.</p></div>
+        <div class="block"><div class="block-title"><span class="bt-icon">✅</span>확인</div>
+          <div class="note info">월별실적 1~4월이 채워지고 <b>전월대비 수식이 계산</b> · 4월 <b>1,400건 / 155,908,200</b> ·
+            복붙 캡처까지 마치면 스킬 단계 <b>6개</b></div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="s6">
+  <div class="container">
+    <div class="step">
+      <div class="step-head"><div class="step-head-left"><span class="step-num">6</span>
+        <h3>보기 좋게 다듬기</h3></div><span class="time">5분</span></div>
+      <div class="step-body">
+        <div class="block"><div class="block-title"><span class="bt-icon">💬</span>① 천 단위 쉼표</div>
+          <div class="copy-wrapper"><button class="copy-btn" onclick="copyPrompt(this)">복사</button>
+<pre>@시트[output_청구서.xlsx/회사별요약] 매출, 원가, 마진 열에 천 단위 쉼표를 넣어줘</pre></div></div>
+        <div class="block"><div class="block-title"><span class="bt-icon">💬</span>② 머리글 꾸미기</div>
+          <div class="copy-wrapper"><button class="copy-btn" onclick="copyPrompt(this)">복사</button>
+<pre>@시트[output_청구서.xlsx/회사별요약] 3행 머리글을 굵게 하고 회색 배경을 칠해줘</pre></div></div>
+        <div class="block"><div class="block-title"><span class="bt-icon">✅</span>확인</div>
+          <div class="note info">청구서가 완성된 모습 · 스킬 단계 총 <b>8개</b></div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="s7">
+  <div class="container">
+    <div class="step">
+      <div class="step-head"><div class="step-head-left"><span class="step-num">7</span>
+        <h3>스킬로 저장하고 전체 실행</h3></div><span class="time">5분</span></div>
+      <div class="step-body">
+        <div class="block"><div class="block-title"><span class="bt-icon">🎯</span>목표</div>
+          <p>지금까지 쌓인 8단계 묶음이 곧 <b>스킬</b>입니다. 저장해 두면 언제든, 어떤 파일로든 다시 돌릴 수 있습니다.</p></div>
+        <div class="block"><div class="block-title"><span class="bt-icon">🖱</span>따라하기</div>
+          <div class="todo-list">
+            <label class="todo-check"><input type="checkbox" data-done="s7a"><span class="tc-body">
+              <span class="btn-name">스킬 등록</span> 을 누르고 이름을 붙인다 — 예: <span class="tagref">청구서_월마감</span></span></label>
+            <label class="todo-check"><input type="checkbox" data-done="s7d"><span class="tc-body">
+              저장을 누르고, 스킬 목록에 <span class="tagref">청구서_월마감</span> 이 <b>저장됐는지 확인</b>한다</span></label>
+            <label class="todo-check"><input type="checkbox" data-done="s7b"><span class="tc-body">
+              <span class="btn-name">전체 실행</span> — 원본을 처음 상태부터 다시 읽어 8단계를 순서대로 재적용한다</span></label>
+            <label class="todo-check"><input type="checkbox" data-done="s7c"><span class="tc-body">
+              끝나면 <span class="btn-name">다운로드</span> 로 완성본을 받는다</span></label>
+            <label class="todo-check"><input type="checkbox" data-done="s7e"><span class="tc-body">
+              여기까지 확인했으면 <b>프로그램을 재실행</b>하거나 <span class="btn-name">초기화</span> 버튼을 눌러 화면을 비운다
+              — 다음 실습은 스킬만 불러와서 <b>빈 상태에서 시작</b>합니다</span></label>
+          </div></div>
+        <div class="block"><div class="block-title"><span class="bt-icon">✅</span>확인</div>
+          <div class="note info">스킬 목록에 <b>청구서_월마감</b> · 전체 실행 후에도 같은 결과(ABC통신 매출 154,580,000) ·
+            다운로드 파일이 엑셀에서 정상으로 열림</div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="s8">
+  <div class="container">
+    <div class="step step-main">
+      <div class="step-head"><div class="step-head-left"><span class="step-num">8</span>
+        <h3>다음 달 파일로 재실행</h3></div><span class="time time-main">하이라이트 · 5분</span></div>
+      <div class="step-body">
+        <div class="block"><div class="block-title"><span class="bt-icon">🎯</span>목표</div>
+          <p>다음 달이 되면 이 작업을 다시 할 필요가 없습니다 — <b>파일만 바꿔서 스킬을 돌리면</b> 끝입니다.</p></div>
+        <div class="block"><div class="block-title"><span class="bt-icon">🖱</span>따라하기</div>
+          <div class="todo-list">
+            <label class="todo-check"><input type="checkbox" data-done="s8a"><span class="tc-body">
+              <span class="btn-name">스킬 실행기</span> 탭으로 이동해 <span class="tagref">청구서_월마감</span> 을 선택한다</span></label>
+            <label class="todo-check"><input type="checkbox" data-done="s8b"><span class="tc-body">
+              파일을 올린다 — <b>5월 매출</b>(<span class="tagref">input_매출_2026_5월.xlsx</span>) ·
+              <b>5월 원가</b>(<span class="tagref">input_원가_2026_5월.xlsx</span>) · <span class="tagref">output_청구서.xlsx</span></span></label>
+            <label class="todo-check"><input type="checkbox" data-done="s8c"><span class="tc-body">
+              <span class="btn-name">전체 실행</span> — 스킬은 4월 파일로 만들었지만 <b>이름이 비슷한 5월 파일에 알아서 연결</b>된다</span></label>
+          </div></div>
+        <div class="block"><div class="block-title"><span class="bt-icon">🖥</span>실행하면 이렇게 됩니다 — 4월 결과와 5월 재실행 결과 비교 (실제 계산값)</div>
+          <div class="compare-grid">
+            <div class="result-box" style="margin-top:0">
+              <div style="font-size:12px;font-weight:800;color:var(--muted);margin-bottom:8px">4월 파일로 실행 (실습 7)</div>
+              <table class="xl">
+                <tr><td class="th">회사명</td><td class="th n">매출</td><td class="th n">원가</td><td class="th n">마진</td></tr>
+                <tr><td>ABC통신</td><td class="n">154,580,000</td><td class="n">103,590,000</td><td class="n">50,990,000</td></tr>
+                <tr><td>글로벌네트워크</td><td class="n">220,393,000</td><td class="n">136,595,000</td><td class="n">83,798,000</td></tr>
+                <tr><td>스마트링크</td><td class="n">197,270,000</td><td class="n">116,450,000</td><td class="n">80,820,000</td></tr>
+                <tr><td class="th">합계</td><td class="n th">3,797,128,000</td><td class="n th">2,490,660,000</td><td class="n th">1,306,468,000</td></tr>
+              </table>
+            </div>
+            <div class="result-box" style="margin-top:0;border:1.5px solid var(--mg)">
+              <div style="font-size:12px;font-weight:800;color:var(--mg-dark);margin-bottom:8px">5월 파일로 재실행 (실습 8)</div>
+              <table class="xl">
+                <tr><td class="th">회사명</td><td class="th n">매출</td><td class="th n">원가</td><td class="th n">마진</td></tr>
+                <tr><td>ABC통신</td><td class="n new">160,763,100</td><td class="n new">108,765,000</td><td class="n new">51,998,100</td></tr>
+                <tr><td>글로벌네트워크</td><td class="n new">229,208,600</td><td class="n new">143,435,000</td><td class="n new">85,773,600</td></tr>
+                <tr><td>스마트링크</td><td class="n new">205,160,900</td><td class="n new">122,195,000</td><td class="n new">82,965,900</td></tr>
+                <tr><td class="th">합계</td><td class="n th new">3,949,012,800</td><td class="n th new">2,615,495,000</td><td class="n th new">1,333,517,800</td></tr>
+              </table>
+            </div>
+          </div>
+          <div class="result-legend"><span><span class="sw sw-new"></span>파일을 5월로 바꿨더니 달라진 값 —
+            5월은 원가가 매출보다 더 많이 올라 마진율 평균이 34.3% → 33.7% 로 살짝 내려갔습니다</span></div></div>
+        <div class="block"><div class="block-title"><span class="bt-icon">✅</span>확인</div>
+          <div class="note info">ABC통신 매출 4월 <b>154,580,000</b> → 5월 <b>160,763,100</b> ·
+            원가 <b>103,590,000</b> → <b>108,765,000</b> — 5월 청구서가 새로 완성됐습니다</div>
+          <div class="note">🎉 사람 손을 안 대고 청구서가 새로 완성됐습니다 — <b>이게 스킬의 목적입니다.</b>
+            매달 하는 작업이 있다면, 오늘 배운 그대로 스킬 하나로 만들어 두세요.</div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="s9">
+  <div class="container">
+    <div class="step">
+      <div class="step-head"><div class="step-head-left"><span class="step-num">9</span>
+        <h3>중간 단계 수정 — 스킬은 고쳐 쓰는 것</h3></div><span class="time">5분</span></div>
+      <div class="step-body">
+        <div class="block"><div class="block-title"><span class="bt-icon">🎯</span>목표</div>
+          <p>스킬은 한 번 만들면 끝이 아닙니다. <b>중간 단계 하나만 고치면</b> 그 단계부터 뒤까지
+            자동으로 다시 적용돼 결과 전체에 반영됩니다. 처음부터 새로 만들 필요가 없습니다.</p></div>
+        <div class="block"><div class="block-title"><span class="bt-icon">🖱</span>따라하기</div>
+          <div class="todo-list">
+            <label class="todo-check"><input type="checkbox" data-done="s9a"><span class="tc-body">
+              스킬 단계 목록에서 <b>7단계(천 단위 쉼표)</b>의 <b>✏ 수정</b> 버튼을 누른다 —
+              "수정 모드 활성화" 안내가 뜨고, <b>입력창에 원래 요청문이 자동으로 채워진다</b></span></label>
+            <label class="todo-check"><input type="checkbox" data-done="s9b"><span class="tc-body">
+              채워진 문장 뒤에 <b>마진율 백분율</b> 부분만 덧붙여 전송한다 (아래 문장 참고)</span></label>
+            <label class="todo-check"><input type="checkbox" data-done="s9c"><span class="tc-body">
+              잠시 기다린다 — 7단계가 새 내용으로 바뀌고, <b>그 뒤 단계까지 처음부터 다시 적용</b>되는 것을 본다</span></label>
+          </div></div>
+        <div class="block"><div class="block-title"><span class="bt-icon">🖥</span>이렇게 조작합니다 — 7단계의 ✏ 수정 버튼을 누르면</div>
+          <div class="result-box" style="display:flex;flex-direction:column;gap:10px">
+            <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+              <span class="stepchip">5단계 월별 ✓</span>
+              <span class="stepchip">6단계 복붙 ✓</span>
+              <span class="stepchip editing">7단계 쉼표 ✏ 수정 모드</span>
+              <span class="stepchip">8단계 머리글 ✓</span>
+            </div>
+            <div style="border:1.5px solid #1A1A1A;border-radius:10px;background:#fff;padding:9px 12px;font-size:12.5px;color:#1A1A1A;line-height:1.6">
+              <span style="color:#A8A8A8;font-size:11px;display:block;margin-bottom:3px">입력창 — 원래 요청문이 자동으로 채워집니다. 뒤에 덧붙이기만 하세요</span>
+              @시트[output_청구서.xlsx/회사별요약] 매출, 원가, 마진 열에 천 단위 쉼표를 넣고, <b style="background:#FFF6D6">마진율 열은 백분율로 바꿔줘</b>
+            </div>
+          </div></div>
+        <div class="block"><div class="block-title"><span class="bt-icon">💬</span>수정해서 보낼 문장</div>
+          <div class="copy-wrapper"><button class="copy-btn" onclick="copyPrompt(this)">복사</button>
+<pre>@시트[output_청구서.xlsx/회사별요약] 매출, 원가, 마진 열에 천 단위 쉼표를 넣고, 마진율 열은 백분율로 바꿔줘</pre></div>
+          <p class="prompt-hint">수정 모드에서는 새 단계가 추가되는 게 아니라 <b>그 단계가 이 내용으로 교체</b>됩니다.
+            수정 모드를 그냥 끄고 싶으면 ✏ 버튼을 한 번 더 누르면 됩니다.</p></div>
+        <div class="block"><div class="block-title"><span class="bt-icon">🖥</span>실행하면 이렇게 됩니다 — 서식까지 완성된 최종본</div>
+          <div class="result-box">
+            <table class="xl">
+              <tr><td class="h" style="width:30px"></td><td class="h">A</td><td class="h">B</td><td class="h">C</td><td class="h">D</td><td class="h" style="width:64px">E</td></tr>
+              <tr><td class="h">3</td><td class="gth">회사명</td><td class="gth">매출</td><td class="gth">원가</td><td class="gth">마진</td><td class="gth">마진율</td></tr>
+              <tr><td class="h">4</td><td>ABC통신</td><td class="n">154,580,000</td><td class="n">103,590,000</td><td class="n">50,990,000</td><td class="n new">33.0%</td></tr>
+              <tr><td class="h">5</td><td>글로벌네트워크</td><td class="n">220,393,000</td><td class="n">136,595,000</td><td class="n">83,798,000</td><td class="n new">38.0%</td></tr>
+              <tr><td class="h">6</td><td>스마트링크</td><td class="n">197,270,000</td><td class="n">116,450,000</td><td class="n">80,820,000</td><td class="n new">41.0%</td></tr>
+              <tr><td class="h">…</td><td style="color:#8a93a5">… 17곳 더</td><td class="n" style="color:#8a93a5">…</td><td class="n" style="color:#8a93a5">…</td><td class="n" style="color:#8a93a5">…</td><td class="n new" style="color:#8a93a5">…</td></tr>
+              <tr><td class="h">24</td><td class="gth">합계 / 평균</td><td class="n gth">3,797,128,000</td><td class="n gth">2,490,660,000</td><td class="n gth">1,306,468,000</td><td class="n gth new">34.3%</td></tr>
+            </table>
+            <div class="result-legend">
+              <span><span class="sw sw-new"></span>이번 수정으로 바뀐 표시(0.33 → 33.0%)</span>
+              <span>진한 회색 머리글 = 실습 6에서 만든 서식 그대로</span>
+            </div>
+          </div></div>
+        <div class="block"><div class="block-title"><span class="bt-icon">✅</span>확인</div>
+          <div class="note info">마진율이 0.33 같은 소수 대신 <b>33.0%</b> 처럼 백분율로 보인다 ·
+            쉼표 등 나머지 결과는 그대로 · 단계 개수는 여전히 <b>8개</b>(교체됐으므로)</div>
+          <div class="note">💡 <b>앞쪽 단계를 고쳐도 방법은 같습니다.</b> 예를 들어 1단계(피벗)를 고치면
+            그 결과를 쓰는 뒤 단계들까지 전부 처음부터 다시 적용됩니다 — 앞 단계일수록 다시 도는 범위가
+            넓어져 시간이 조금 더 걸릴 뿐, 스킬을 새로 만들 일은 없습니다.</div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="help">
+  <div class="container">
+    <div class="sec-head"><h2>🧯 막힐 때</h2></div>
+    <div class="qa-item"><div class="q"><span class="qtag">Q.</span> 프롬프트(요청문)를 어떻게 써야 할지 어려워요</div>
+      <div class="a"><span class="atag">A.</span> <b>AI 도움(F11)을 활용해보세요!</b>
+        하고 싶은 목표를 평소 말하듯 편하게 말하면 — "이 표를 회사별로 보기 좋게 정리하고 싶어" —
+        어떻게 요청하면 되는지 대답해 줍니다. 활용 예시는 아래 <a href="#aihelp">🤖 AI 도움 활용하기</a> 를 보세요.</div></div>
+    <div class="qa-item"><div class="q"><span class="qtag">Q.</span> 결과가 틀리게 나왔어요</div>
+      <div class="a"><span class="atag">A.</span> 같은 문장을 반복하지 말고 <b>무엇이 틀렸는지 붙여서</b> 다시 —
+        "아니야, 건수 말고 금액 기준으로 해줘"</div></div>
+    <div class="qa-item"><div class="q"><span class="qtag">Q.</span> 계속 이상하게 만들어요</div>
+      <div class="a"><span class="atag">A.</span> <span class="btn-name">비우기</span> 로 대화 기억을 비우고 다시 요청하세요.
+        쌓인 스킬 단계는 유지됩니다.</div></div>
+    <div class="qa-item"><div class="q"><span class="qtag">Q.</span> 프로그램/엑셀이 먹통이에요</div>
+      <div class="a"><span class="atag">A.</span> <b>F5 새로고침</b> — 파일·스킬·대화를 유지한 채 새로 시작하고 스킬을 자동으로 다시 적용합니다.</div></div>
+    <div class="qa-item"><div class="q"><span class="qtag">Q.</span> 스킬이 뭘 잘못했는지 모르겠어요</div>
+      <div class="a"><span class="atag">A.</span> <b>F11 AI 도움</b> — 프로그램 안의 도우미가 스킬 진단·수정·데이터 질의를 도와줍니다.</div></div>
+    <div class="qa-item"><div class="q"><span class="qtag">Q.</span> 단계 하나만 빼고 싶어요</div>
+      <div class="a"><span class="atag">A.</span> 스킬 단계 목록에서 그 단계를 <b>OFF</b> 하고 전체 실행하면 됩니다.</div></div>
+  </div>
+</section>
+
+<section id="aihelp">
+  <div class="container">
+    <div class="sec-head"><h2>🤖 AI 도움 (F11) 활용하기</h2>
+      <p><b>F11</b> 을 누르면 프로그램 안의 AI 도우미가 열립니다(오류가 났을 때는 안내창의
+        <b>[✦ AI 도움에게 진단 요청]</b> 버튼으로도 열립니다). 스킬 진단·수정과 데이터 질문을 도와줍니다 —
+        아래처럼 <b>상황을 그대로 말하면</b> 됩니다.</p></div>
+    <div class="card">
+      <div class="gb-case-title">① 오류가 났을 때 — 일부러 내보고, 화면 안에서 고쳐봅시다</div>
+      <p style="font-size:13.5px;color:var(--muted)">오류는 나도 괜찮습니다. <b>실패한 단계는 자동으로 되돌려지고</b>,
+        오류 안내창의 버튼 두 개로 대부분 그 자리에서 해결됩니다. 일부러 한 번 내보겠습니다.</p>
+      <div class="todo-list" style="margin-top:8px">
+        <label class="todo-check"><input type="checkbox" data-done="aih1"><span class="tc-body">
+          채팅에 아래 문장을 보낸다 — 회사별요약의 머리글은 회사명·매출·원가·마진·마진율 뿐이라
+          <b>"가입자수"라는 열은 없다</b>. 없는 열을 <b>읽어서 정렬</b>하라고 시키는 것이라 실행 단계에서 걸린다</span></label>
+      </div>
+      <div class="copy-wrapper"><button class="copy-btn" onclick="copyPrompt(this)">복사</button>
+<pre>@시트[output_청구서.xlsx/회사별요약] 가입자수 열을 기준으로 내림차순 정렬해줘</pre></div>
+      <p class="prompt-hint">"그런 열이 없는데 어느 열로 할까요?" 하고 되물으면 <b>"그냥 진행해줘"</b> 라고 답하세요.
+        그래야 실제로 실행까지 가서 오류를 볼 수 있습니다.</p>
+
+      <div class="mockup"><div class="mockup-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span> 오류 안내 — 스킬 생성기 채팅</div>
+        <div class="mockup-body">
+          <div class="mockup-ai" style="border-left:4px solid #c98a1d;background:#fdf3e2;color:#8a5c0d">
+            <b style="color:#8a5c0d">스킬을 적용하지 못했습니다</b><br>
+            <span style="font-size:12.5px">Step 9 · 회사별요약을 가입자수 기준으로 내림차순 정렬</span><br>
+            <span style="font-size:12.5px">표의 헤더(열 이름)를 찾지 못했습니다.</span><br>
+            <span style="font-size:12.5px">🙂 회사별요약 시트에는 '가입자수'라는 열이 없어서 정렬 기준을 못 찾았습니다.
+              정렬 기준으로 쓸 열 이름을 알려주시면 바로 고칠 수 있어요 — 예: "마진율 기준 내림차순으로"</span>
+            <div style="margin-top:8px;border:1px dashed #d9c39a;border-radius:8px;padding:7px 10px;font-size:11.5px;color:#a98a55">
+              (선택) 무엇을 하려 했는지·실제로 어떻게 됐는지·기대 결과를 적으면 복구가 더 정확해집니다.</div>
+            <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">
+              <span style="font-size:11.5px;font-weight:800;background:#182c47;color:#fff;border-radius:6px;padding:4px 11px">에러 복구 시도</span>
+              <span style="font-size:11.5px;font-weight:800;background:#fff;color:#8a5c0d;border:1px solid #d9c39a;border-radius:6px;padding:4px 11px">✦ AI 도움에게 진단 요청</span>
+            </div>
+            <div style="margin-top:6px;font-size:11.5px;color:#a98a55">▸ 상세 오류 보기 (기술 세부)</div>
+          </div>
+        </div></div>
+
+      <div class="todo-list" style="margin-top:10px">
+        <label class="todo-check"><input type="checkbox" data-done="aih2"><span class="tc-body">
+          <b>1차 — 에러 복구 시도</b>를 누른다. 메모칸에 무엇을 하려 했는지 한 줄 적고 누르면 더 정확하다</span></label>
+        <label class="todo-check"><input type="checkbox" data-done="aih3"><span class="tc-body">
+          <b>2차 — ✦ AI 도움에게 진단 요청</b>을 누른다. AI 도움 창이 열리면서 <b>질문이 저절로 들어가</b>
+          원인을 찾고 <b>고친 코드를 제안</b>한다</span></label>
+        <label class="todo-check"><input type="checkbox" data-done="aih4"><span class="tc-body">
+          제안 카드의 <b>[이대로 수정]</b> 을 누른다 — "코드를 교체했습니다. 스위치를 켜(ON) 주시면 적용됩니다" 안내대로
+          해당 단계를 켜면 반영된다</span></label>
+      </div>
+      <div class="note info">단계를 만들다 실패한 경우에는 <b>그 단계가 스킬 목록에 남지 않습니다</b> —
+        자동으로 되돌려지니 화면이 지저분해질 걱정은 안 하셔도 됩니다.</div>
+      <p class="prompt-hint"><b>전체 실행 중에 실패했다면</b> 조금 다릅니다 — 실패한 단계에 빨간 <b>오류</b> 배지,
+        그 뒤 단계에는 <b>오류 후 보류</b> 배지가 남습니다. 프로그램이 먼저 <b>자동 복구</b>를 시도해 보고
+        (배지가 자동 복구 → 자동 복구됨 으로 바뀝니다), 고쳐지면 좌측 아래 <b>[⏯ 보류 일괄 실행]</b> 으로 이어서 돌리면 됩니다.</p>
+
+      <div class="gb-case-title">② 오류는 없는데 결과가 미덥지 않을 때 — 검산시키기</div>
+      <div class="copy-wrapper"><button class="copy-btn" onclick="copyPrompt(this)">복사</button>
+<pre>회사별요약의 매출 합계가 매출 원본의 총합과 같은지 검산해줘</pre></div>
+      <div class="mockup"><div class="mockup-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span> AI 도움 (F11)</div>
+        <div class="mockup-body">
+          <div class="mockup-ai">매출 원본 <b>1,200행</b>의 금액 총합과 회사별요약 24행의 합계가
+            둘 다 <b>3,797,128,000</b> 으로 일치합니다. 빠진 회사나 중복 집계는 없습니다.</div>
+        </div></div>
+      <p class="prompt-hint">눈대중이 아니라 <b>원본 1,200행을 전부 읽어서 직접 계산</b>한 답입니다.
+        숫자가 다르게 나오면 "어느 단계에서 달라졌는지 찾아줘" 라고 이어서 물으면 됩니다.</p>
+
+      <div class="gb-case-title">③ 스킬이 뭘 하는지 모를 때 (남이 만든 스킬 포함)</div>
+      <div class="copy-wrapper"><button class="copy-btn" onclick="copyPrompt(this)">복사</button>
+<pre>이 스킬이 무슨 일을 하는지 단계별로 쉽게 설명해줘</pre></div>
+      <div class="mockup"><div class="mockup-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span> AI 도움 (F11)</div>
+        <div class="mockup-body">
+          <div class="mockup-ai"><strong>청구서_월마감 (8단계)</strong> — ① 매출을 회사별로 집계하고
+            ② 그 값을 청구서 매출 열에 채웁니다. ③④ 원가도 같은 방식으로 채우고
+            ⑤ 월별 집계를 월별실적으로 옮기고 ⑥ 표를 복사해 붙입니다.
+            ⑦ 금액에 쉼표를 넣고 ⑧ 머리글을 꾸밉니다.</div>
+        </div></div>
+
+      <div class="gb-case-title">④ 데이터에 대해 물어볼 때</div>
+      <div class="copy-wrapper"><button class="copy-btn" onclick="copyPrompt(this)">복사</button>
+<pre>회사별요약에서 마진율이 가장 낮은 회사 3곳이 어디야?</pre></div>
+      <div class="mockup"><div class="mockup-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span> AI 도움 (F11)</div>
+        <div class="mockup-body">
+          <div class="mockup-ai">마진율이 낮은 순서로 <b>오리진네트(21.0%) · 네오링크(23.0%) ·
+            메이저텔레콤(24.0%)</b> 입니다. 가장 높은 곳은 위즈컴(48.0%)입니다.</div>
+        </div></div>
+      <p class="prompt-hint">표를 바꾸지 않고 궁금한 것만 확인할 때 좋습니다 — 스킬 단계로 쌓이지 않습니다.</p>
+
+      <div class="note">💡 <b>요령은 채팅과 같습니다</b> — 한 번에 한 가지씩, 무엇이 문제인지 구체적으로.
+        "안 돼요" 보다는 <b>"4단계 원가 채우기가 0으로 들어갔어"</b> 처럼 말해 주세요.</div>
+      <div class="note todo"><b>"↪ 설계 채팅으로 넘기기" 카드가 보인다면</b> — 그 요청은 <b>새 단계를 만들어야 하는 작업</b>이라는 뜻입니다.
+        위 ②·④ 처럼 검산하거나 물어보기만 하는 요청은 카드 없이 바로 답이 나옵니다.
+        단순 질문인데 카드가 떴다면 요청이 작업 지시처럼 읽힌 것이니, 문장을 다시 다듬어 물어보세요.</div>
+    </div>
+  </div>
+</section>
+
+<section id="appendix">
+  <div class="container">
+    <div class="sec-head"><h2>📚 자주 쓰는 요청문 모음</h2>
+      <p>실습이 끝나면 내 업무 파일로 이 문장들을 시험해 보세요. 뜻만 같으면 그대로 따라 쓸 필요는 없습니다.</p></div>
+    <div class="card">
+      <table>
+        <tr><th style="width:20%">하고 싶은 것</th><th>이렇게 말하면 됩니다</th></tr>
+        <tr><td>피벗(집계표)</td><td>회사별 청구금액 합계를 요약표로 만들어줘 · 행은 지점, 열은 월, 값은 매출로 크로스탭 만들어줘</td></tr>
+        <tr><td>이름 맞춰 채우기</td><td>피벗 결과를 회사명에 맞춰 대상 시트에 채워줘</td></tr>
+        <tr><td>찾아서 가져오기</td><td>단가표에서 상품명으로 단가를 찾아서 단가 열에 채워줘</td></tr>
+        <tr><td>복사</td><td>A1:F50 을 다른 시트 같은 자리에 서식까지 그대로 복사해줘 · 계산 결과를 값으로 붙여넣어줘</td></tr>
+        <tr><td>정렬</td><td>청구금액 기준 내림차순으로 정렬해줘</td></tr>
+        <tr><td>필터·추출</td><td>상태가 "정상"인 행만 골라서 새 시트에 정리해줘</td></tr>
+        <tr><td>중복 제거</td><td>가입번호와 청구월이 같은 중복 행은 지워줘</td></tr>
+        <tr><td>조건 삭제</td><td>금액이 0인 행은 지워줘</td></tr>
+        <tr><td>합계</td><td>표 맨 아래에 합계 행 추가해줘 · 조건에 맞는 것만 합계 내줘</td></tr>
+        <tr><td>서식</td><td>금액 열에 천 단위 쉼표 넣어줘 · 머리글 줄에 회색 배경 칠해줘</td></tr>
+        <tr><td>행·열 편집</td><td>Q열과 R열 사이에 열 1개 추가해줘 · 1행부터 9행까지 지워줘</td></tr>
+        <tr><td>시트</td><td>"요약"이라는 새 시트를 맨 앞에 만들어줘 · 임시 시트를 지워줘</td></tr>
+      </table>
+      <a href="https://lgucorp.atlassian.net/wiki/spaces/aBWfUCNTxunr/pages/1412531072/AX-Cell+Main+Page"
+         target="_blank" rel="noopener"
+         style="display:flex;align-items:center;gap:14px;margin-top:14px;padding:16px 18px;border-radius:var(--rs);
+                background:var(--mix);border:1.5px solid #cfe3f5;text-decoration:none">
+        <span style="flex:none;width:38px;height:38px;border-radius:12px;background:linear-gradient(135deg,var(--mg),var(--vt));
+                     color:#fff;display:flex;align-items:center;justify-content:center;font-size:17px">📘</span>
+        <span style="flex:1">
+          <span style="display:block;font-weight:800;color:var(--ink);font-size:14.5px">더 많은 고객사의 스킬셋 예시가 궁금하다면?</span>
+          <span style="display:block;font-size:12.5px;color:var(--muted);margin-top:2px">AX-Cell 위키(Confluence)로 이동 —
+            실제 고객사 업무를 스킬로 만든 사례들이 정리되어 있습니다</span>
+        </span>
+        <span style="flex:none;font-weight:900;color:var(--mg-dark);font-size:16px">→</span>
+      </a>
+      <details class="fn-ref">
+        <summary>📖 스킬 함수 설명서 전체 보기 — 스킬 안에서 쓸 수 있는 명령 67가지 (누르면 펼쳐집니다)</summary>
+        <pre class="fn-pre">====================================================================
+ AX-Cell 스킬 함수 설명서
+ - 스킬 안에서 쓸 수 있는 명령(ctx) 67가지, 용도와 예시
+ - 버전 0.8.0 / 2026-08-26
+====================================================================
+
+[이 문서는 무엇인가요?]
+
+AX-Cell 이 엑셀 작업을 자동으로 해 줄 때, 뒤에서는 &quot;스킬&quot;이라는 작은
+작업 지시서가 돌아갑니다. 그 지시서 안에서 쓸 수 있는 명령어들을
+정리한 문서입니다.
+
+이 문서를 보면 좋은 경우
+  - AX-Cell 이 어떤 작업까지 할 수 있는지 미리 알고 싶을 때
+  - &quot;이런 요청을 하면 되나?&quot; 를 판단하고 싶을 때
+  - 만들어진 스킬의 코드를 열어 봤는데 무슨 뜻인지 알고 싶을 때
+
+프로그램을 몰라도 읽을 수 있게 썼습니다. 각 명령마다
+  · 무엇을 하나   · 언제 쓰나   · 쓰는 법   · 예시
+순서로 적었습니다.
+
+
+====================================================================
+ 1. 먼저 알아 둘 것 세 가지
+====================================================================
+
+1-1. 스킬 코드는 이렇게 생겼습니다
+
+    def transform(ctx):
+        ctx.write(&quot;매출&quot;, &quot;B2&quot;, [[&quot;100&quot;]])
+
+  첫 줄은 항상 똑같습니다. 그 아래에 &quot;ctx.무엇무엇(...)&quot; 형태로
+  할 일을 한 줄씩 적습니다. ctx 는 &quot;지금 열려 있는 엑셀 파일&quot;이라고
+  생각하시면 됩니다.
+
+
+1-2. 위치를 가리키는 세 가지 방법
+
+  시트    &quot;매출&quot;          시트 탭에 보이는 이름 그대로
+  칸(셀)  &quot;B2&quot;            엑셀에서 보이는 그 주소 그대로
+  범위    &quot;A1:D20&quot;        시작칸:끝칸
+
+  열(세로줄)을 가리킬 때는 세 가지 다 됩니다.
+      &quot;C&quot;          열 문자
+      3            왼쪽에서 세 번째
+      &quot;청구금액&quot;    머리글(제목) 이름
+
+  ★ 머리글 이름으로 지정하는 것을 가장 권합니다. 파일마다 열 위치가
+    조금씩 달라도 알아서 찾아가기 때문입니다.
+
+
+1-3. 다른 파일을 함께 다룰 때
+
+  실행기에서 파일을 여러 개 올리면 한 화면에서 같이 다룰 수 있습니다.
+
+      ctx.book(&quot;정산자료.xlsx&quot;).write(&quot;Sheet1&quot;, &quot;A1&quot;, [[&quot;값&quot;]])
+                              ↑ 다른 파일을 지정
+
+  일부 명령은 시트 이름 자리에 &quot;파일이름!시트이름&quot; 형태도 받습니다.
+
+      ctx.sum_lookup(&quot;input.xlsx!Sheet1&quot;, ... )
+
+
+====================================================================
+ 2. 한눈에 보기
+====================================================================
+
+ 가. 표 살펴보기 (14개)
+     sheets  used_range  last_row  last_col  used_last_row  used_last_col
+     first_empty_col  find_header_row  find_header  read  read_cell
+     read_formulas  has_formulas  formula_mask
+
+ 나. 값 쓰기·지우기 (6개)
+     write  write_cell  write_formulas  clear  replace  shift_months
+
+ 다. 복사·붙여넣기 (6개)
+     copy  copy_values  paste_copied  copy_col  copy_key_blocks
+     append_same_format_sheets
+
+ 라. 행·열 다루기 (13개)
+     insert_rows  insert_cols  delete_rows  delete_rows_where  delete_cols
+     move_cols  move_col_clear  swap_cols  hide_cols  hide_rows
+     merge  unmerge  split_column
+
+ 마. 필터 (6개)
+     enable_filter  apply_filter  clear_filter  filter_to_sheet
+     filter_to_range  column_is
+
+ 바. 합계·피벗 (6개)
+     pivot  native_pivot  sum_column  sum_where  fill_sum_col  add_total_row
+
+ 사. 다른 표에서 값 가져오기 (4개)
+     lookup  sum_lookup  match_fill  normalize
+
+ 아. 시트 다루기 (5개)
+     add_sheet  rename_sheet  move_sheet  copy_sheet  delete_sheet
+
+ 자. 보기 좋게 꾸미기 (4개)
+     set_fill  set_font  set_border  set_number_format
+
+ 차. 정리 (2개)
+     sort  dedupe
+
+ 카. 다른 파일 (1개)
+     book
+
+
+====================================================================
+ 3. 가. 표 살펴보기
+====================================================================
+
+--------------------------------------------------------------------
+ctx.sheets()
+--------------------------------------------------------------------
+ 무엇을 하나 : 이 파일에 있는 시트 이름을 전부 알려 줍니다.
+ 언제 쓰나   : 시트 이름을 모를 때, 시트마다 같은 작업을 반복할 때.
+ 예시        : for s in ctx.sheets():
+                   ctx.clear_filter(s)
+
+--------------------------------------------------------------------
+ctx.used_range(시트)
+--------------------------------------------------------------------
+ 무엇을 하나 : 그 시트에서 실제로 쓰고 있는 영역의 크기를
+               (행 개수, 열 개수) 로 알려 줍니다.
+ 언제 쓰나   : 표가 얼마나 큰지 먼저 확인할 때.
+ 예시        : rows, cols = ctx.used_range(&quot;데이터&quot;)
+
+--------------------------------------------------------------------
+ctx.last_row(시트, col=1)
+--------------------------------------------------------------------
+ 무엇을 하나 : 지정한 열을 기준으로 데이터가 있는 마지막 행 번호.
+ 언제 쓰나   : 표 맨 아래가 몇 행인지 알아야 할 때.
+ 주의        : 그 열에 중간중간 빈칸이 많으면 실제보다 짧게 나올 수
+               있습니다. 시트 전체 기준이 필요하면 아래 used_last_row.
+ 예시        : last = ctx.last_row(&quot;데이터&quot;, col=2)
+
+--------------------------------------------------------------------
+ctx.last_col(시트, row=1)
+--------------------------------------------------------------------
+ 무엇을 하나 : 지정한 행을 기준으로 데이터가 있는 마지막 열 번호.
+ 예시        : n = ctx.last_col(&quot;데이터&quot;, row=1)
+
+--------------------------------------------------------------------
+ctx.used_last_row(시트)
+--------------------------------------------------------------------
+ 무엇을 하나 : 시트 전체 기준 마지막 행 번호.
+ 언제 쓰나   : &quot;시트 전체를 복사/처리&quot; 하는 작업. 한 열만 보는
+               last_row 는 그 열이 비어 있으면 표 아래쪽을 놓칩니다
+               (예: A열 기준으로는 22행인데 실제 표는 28행까지).
+ 예시        : end = ctx.used_last_row(&quot;청구내역&quot;)
+
+--------------------------------------------------------------------
+ctx.used_last_col(시트)
+--------------------------------------------------------------------
+ 무엇을 하나 : 시트 전체 기준 마지막 열 번호.
+ 언제 쓰나   : 머리글이 병합되어 있어 한 행만으로는 끝 열을 못 잡을 때.
+
+--------------------------------------------------------------------
+ctx.first_empty_col(시트, after=None, header_row=1)
+--------------------------------------------------------------------
+ 무엇을 하나 : 완전히 비어 있는 첫 열을 찾아 열 문자(&quot;N&quot;)로 알려 줍니다.
+ 언제 쓰나   : &quot;옆 빈 칸에 계산해서 넣어 줘&quot; 같은 요청.
+ 왜 필요한가 : 데이터 바로 옆 칸이 이미 합계 수식으로 차 있는 경우가
+               많습니다. 그걸 덮어쓰는 사고를 막아 줍니다.
+ 예시        : col = ctx.first_empty_col(&quot;요금&quot;, after=&quot;L&quot;)   # -&gt; &quot;N&quot;
+               ctx.write_cell(&quot;요금&quot;, col + &quot;8&quot;, &quot;행별MAX&quot;)
+
+--------------------------------------------------------------------
+ctx.find_header_row(시트, 머리글이름, max_scan=30)
+--------------------------------------------------------------------
+ 무엇을 하나 : 그 머리글이 몇 번째 행에 있는지 찾아 줍니다.
+ 언제 쓰나   : 표 위쪽 안내 문구를 지워야 할 때.
+ 왜 중요한가 : 시스템에서 뽑은 보고서는 표 위 안내 줄 수가 달마다
+               바뀝니다(실제로 9줄이 10줄이 된 적이 있습니다).
+               &quot;위에서 9줄 삭제&quot; 처럼 고정해 두면 그 달에 표가 통째로
+               어긋납니다. 항상 머리글 행을 찾아서 그 위를 지웁니다.
+ 예시        : hdr = ctx.find_header_row(&quot;청구내역&quot;, &quot;가입번호&quot;)
+               if hdr &gt; 1:
+                   ctx.delete_rows(&quot;청구내역&quot;, &quot;1:&quot; + str(hdr - 1))
+
+--------------------------------------------------------------------
+ctx.find_header(시트, 머리글이름, header_row=1)
+--------------------------------------------------------------------
+ 무엇을 하나 : 머리글 이름으로 그게 몇 번째 열인지 찾아 줍니다.
+ 언제 쓰나   : 열 위치를 손으로 정하지 않고 이름으로 잡을 때. 거의 항상.
+ 참고        : 지정한 행에서 못 찾으면 바로 위/아래 행도 찾아봅니다
+               (2줄짜리 병합 머리글 구제).
+ 주의        : 사용자가 &quot;Q열&quot; 처럼 열 문자를 직접 지정했다면 굳이
+               다시 찾지 말고 그 열을 그대로 쓰는 게 가장 안전합니다.
+ 예시        : c = ctx.find_header(&quot;매출&quot;, &quot;청구금액&quot;)
+
+--------------------------------------------------------------------
+ctx.read(시트, 범위)        ※ 범위를 빼면 시트 전체
+--------------------------------------------------------------------
+ 무엇을 하나 : 범위를 표 모양(가로세로)으로 한 번에 읽어 옵니다.
+ 언제 쓰나   : 값을 가져와서 가공할 때. 범위를 생략하면 시트 전체.
+ 주의        : 아주 큰 표를 통째로 읽으면 느립니다. 조건에 맞는 값만
+               더하는 거라면 ctx.sum_where 를 쓰세요.
+ 예시        : data = ctx.read(&quot;데이터&quot;, &quot;A1:D100&quot;)
+
+--------------------------------------------------------------------
+ctx.read_cell(시트, 칸)
+--------------------------------------------------------------------
+ 무엇을 하나 : 칸 하나의 값을 읽습니다. 빈 칸이면 아무것도 없음(None).
+ 예시        : v = ctx.read_cell(&quot;요약&quot;, &quot;B2&quot;)
+
+--------------------------------------------------------------------
+ctx.read_formulas(시트, 범위)
+--------------------------------------------------------------------
+ 무엇을 하나 : 계산 결과가 아니라 &quot;수식 글자&quot; 를 읽습니다.
+               (수식이 없는 칸은 그냥 값)
+ 언제 쓰나   : 원래 들어 있던 수식을 확인하거나 옮길 때.
+
+--------------------------------------------------------------------
+ctx.has_formulas(시트, 범위)
+--------------------------------------------------------------------
+ 무엇을 하나 : 그 범위에 수식이 하나라도 있으면 &quot;있음&quot; 이라고 알려 줍니다.
+
+--------------------------------------------------------------------
+ctx.formula_mask(시트, 범위)
+--------------------------------------------------------------------
+ 무엇을 하나 : 칸마다 수식인지 아닌지를 표 모양으로 알려 줍니다.
+ 언제 쓰나   : &quot;수식 칸은 건드리지 말고 값 칸만 처리&quot; 할 때.
+               위의 has_formulas 는 범위 전체에 대한 예/아니오라서
+               칸별로 판단하려면 이걸 씁니다.
+
+
+====================================================================
+ 4. 나. 값 쓰기·지우기
+====================================================================
+
+--------------------------------------------------------------------
+ctx.write(시트, 시작칸, 값들)
+--------------------------------------------------------------------
+ 무엇을 하나 : 표 모양의 값 묶음을 시작칸부터 한 번에 씁니다.
+ 언제 쓰나   : 여러 칸에 값을 넣을 때. 가장 많이 쓰는 명령입니다.
+ 값 모양     : 대괄호 두 겹입니다. 바깥은 행, 안쪽은 열.
+                 [[1, 2], [3, 4]]  →  1  2
+                                      3  4
+ 예시        : ctx.write(&quot;요약&quot;, &quot;B2&quot;, [[&quot;서울&quot;, 100], [&quot;부산&quot;, 200]])
+
+--------------------------------------------------------------------
+ctx.write_cell(시트, 칸, 값)
+--------------------------------------------------------------------
+ 무엇을 하나 : 칸 하나에 값을 씁니다.
+ 주의        : 반복문에서 수백 번 부르면 느려서 중단됩니다.
+               많은 칸을 채울 때는 위의 ctx.write 를 쓰세요.
+ 예시        : ctx.write_cell(&quot;요약&quot;, &quot;B2&quot;, 12345)
+
+--------------------------------------------------------------------
+ctx.write_formulas(시트, 시작칸, 수식들)
+--------------------------------------------------------------------
+ 무엇을 하나 : 값이 아니라 &quot;수식&quot; 을 한 번에 넣습니다.
+ 예시        : ctx.write_formulas(&quot;정산&quot;, &quot;D2&quot;, [[&quot;=B2-C2&quot;], [&quot;=B3-C3&quot;]])
+
+--------------------------------------------------------------------
+ctx.clear(시트, 범위, keep_formulas=False)
+--------------------------------------------------------------------
+ 무엇을 하나 : 범위의 내용을 지웁니다. 서식(색·테두리)은 남습니다.
+ 옵션        : keep_formulas=True 로 하면 수식 칸은 그대로 두고
+               직접 입력된 값만 지웁니다.
+ 언제 쓰나   : &quot;데이터만 비우고 수식은 살려 줘&quot; 요청.
+ 예시        : ctx.clear(&quot;양식&quot;, &quot;B5:H200&quot;, keep_formulas=True)
+
+--------------------------------------------------------------------
+ctx.replace(시트, 범위, 찾을값, 바꿀값, match_entire=False)
+--------------------------------------------------------------------
+ 무엇을 하나 : 범위 안 글자를 바꿔치기 합니다. 수식 칸은 건드리지 않습니다.
+ 옵션        : match_entire=True 면 칸 전체가 똑같을 때만 바꿉니다.
+ 결과        : 바뀐 칸 개수를 돌려줍니다.
+ 예시        : ctx.replace(&quot;목록&quot;, &quot;C1:C500&quot;, &quot;(주)&quot;, &quot;주식회사&quot;)
+
+--------------------------------------------------------------------
+ctx.shift_months(시트, 범위, delta=1)
+--------------------------------------------------------------------
+ 무엇을 하나 : 글자 안에 있는 &quot;N월&quot; 을 한꺼번에 몇 달 앞뒤로 옮깁니다.
+ 예시로 보면 : &quot;2026년 06월 (05월 1일 ~ 05월 31일)&quot; 에 +1 을 하면
+               &quot;2026년 07월 (06월 1일 ~ 06월 30일)&quot; 이 됩니다.
+ 알아서 해 줌: 12월을 넘으면 연도가 바뀌고, 말일(30일/31일/윤년)도
+               맞춰 줍니다. 숫자·날짜·수식 칸은 건드리지 않습니다.
+ 언제 쓰나   : &quot;다음 달 양식으로 바꿔 줘&quot;, &quot;월 정보 +1&quot; 요청.
+ 예시        : ctx.shift_months(&quot;표지&quot;, &quot;A1:F5&quot;, 1)
+
+
+====================================================================
+ 5. 다. 복사·붙여넣기
+====================================================================
+
+--------------------------------------------------------------------
+ctx.copy(원본시트, 원본범위, 대상시트, 대상칸)
+--------------------------------------------------------------------
+ 무엇을 하나 : 엑셀에서 Ctrl+C / Ctrl+V 한 것과 같습니다.
+               값·수식·색·테두리·병합이 전부 따라갑니다.
+ 언제 쓰나   : 그냥 &quot;복사해 줘&quot; 요청의 기본 수단.
+ 주의        : 수식이 그대로 옮겨지므로 참조 위치가 밀릴 수 있습니다.
+               결과값만 필요하면 아래 copy_values.
+ 예시        : ctx.copy(&quot;원본&quot;, &quot;A1:F30&quot;, &quot;요약&quot;, &quot;A1&quot;)
+
+--------------------------------------------------------------------
+ctx.copy_values(원본시트, 원본범위, 대상시트, 대상칸)
+--------------------------------------------------------------------
+ 무엇을 하나 : &quot;값으로 붙여넣기&quot; 입니다. 계산 결과와 서식은 가져오고
+               수식은 가져오지 않습니다.
+ 왜 필요한가 : 제목이 =다른시트!A2 같은 수식이면 위치를 옮길 때
+               =다른시트!J2 로 어긋납니다. 이 명령은 그런 밀림이 없습니다.
+ 언제 쓰나   : &quot;글자 그대로 복사&quot;, &quot;값으로 복사&quot; 요청.
+ 예시        : ctx.copy_values(&quot;원본&quot;, &quot;A1:A5&quot;, &quot;요약&quot;, &quot;J1&quot;)
+
+--------------------------------------------------------------------
+ctx.paste_copied(...)
+--------------------------------------------------------------------
+ 무엇을 하나 : 사용자가 실제로 했던 Ctrl+C / Ctrl+V 동작을 그대로
+               다시 재생합니다.
+ 언제 쓰나   : &quot;복붙 녹화&quot; 기능으로 만든 스킬에서 자동으로 쓰입니다.
+               직접 쓸 일은 거의 없습니다.
+ 특징        : 추측이 아니라 실제로 눌렀던 좌표로 실행하므로
+               &quot;값인지 수식인지&quot; 헷갈릴 일이 없습니다.
+               다른 파일 사이 복사도 됩니다.
+
+--------------------------------------------------------------------
+ctx.copy_col(시트, 원본열, 대상열, header_row=None)
+--------------------------------------------------------------------
+ 무엇을 하나 : 한 열을 통째로 다른 열에 복사합니다(원본 유지).
+               값·수식·서식·세로 병합이 따라갑니다.
+ 알아서 해 줌: 맨 위 제목처럼 가로로 병합된 부분은 알아서 피해 갑니다
+               (&quot;병합된 셀에서는 실행할 수 없습니다&quot; 오류 방지).
+ 예시        : ctx.copy_col(&quot;정산&quot;, &quot;D&quot;, &quot;K&quot;)
+
+--------------------------------------------------------------------
+ctx.copy_key_blocks(...)
+--------------------------------------------------------------------
+ 무엇을 하나 : 가입번호처럼 하나의 번호가 여러 행에 걸쳐 병합된 표에서,
+               같은 번호 덩어리 &quot;전체&quot; 를 통째로 옮겨 옵니다.
+ 왜 필요한가 : 단순 검색으로 옮기면 덩어리의 첫 줄 하나만 복사되고
+               소계 등 나머지 줄이 사라집니다.
+ 안전장치    : 원본과 대상의 덩어리 높이가 다르면 기본적으로 건너뛰고
+               보고합니다(아래 줄을 덮어쓰는 사고 방지).
+ 결과        : 복사한 개수 / 원본에 없던 번호 / 높이가 다른 번호를 알려 줍니다.
+ 예시        : ctx.copy_key_blocks(&quot;로우데이터.xlsx!sheet&quot;, &quot;콜센터&quot;,
+                                   &quot;B&quot;, &quot;B&quot;, &quot;N&quot;, &quot;B3:B345&quot;, &quot;B4:B89&quot;)
+
+--------------------------------------------------------------------
+ctx.append_same_format_sheets(파일목록, dest_sheet=&quot;통합&quot;)
+--------------------------------------------------------------------
+ 무엇을 하나 : 같은 양식의 여러 파일을 새 시트 하나에 이어 붙입니다.
+ 알아서 해 줌: 첫 파일만 머리글을 포함하고, 나머지는 머리글 다음 줄부터
+               붙입니다. 머리글이 몇 행인지도 알아서 찾습니다
+               (1행이 비어 있는 청구내역 양식도 처리됩니다).
+ 특징        : 엑셀 복사를 쓰기 때문에 긴 가입번호·날짜·회계 서식이
+               그대로 유지됩니다.
+ 언제 쓰나   : &quot;여러 파일 합쳐 줘&quot; 요청.
+
+
+====================================================================
+ 6. 라. 행·열 다루기
+====================================================================
+
+--------------------------------------------------------------------
+ctx.insert_rows(시트, 행, count=1)      /  ctx.delete_rows(시트, 행, count=1)
+--------------------------------------------------------------------
+ 무엇을 하나 : 행을 끼워 넣거나 지웁니다.
+ 쓰는 법     : 행 번호와 개수로 주거나, &quot;3:7&quot; 처럼 범위로 줘도 됩니다.
+ 예시        : ctx.insert_rows(&quot;데이터&quot;, 5)          # 5행 위에 1줄
+               ctx.delete_rows(&quot;데이터&quot;, &quot;1:9&quot;)      # 1~9행 삭제
+
+--------------------------------------------------------------------
+ctx.insert_cols(시트, 열, count=1)      /  ctx.delete_cols(시트, 열, count=1)
+--------------------------------------------------------------------
+ 무엇을 하나 : 열을 끼워 넣거나 지웁니다. 병합이 있어도 안전합니다.
+ 쓰는 법     : &quot;B&quot; / 2 / &quot;B:D&quot; 다 됩니다.
+ 예시        : ctx.insert_cols(&quot;요금&quot;, &quot;B&quot;)
+               ctx.delete_cols(&quot;요금&quot;, &quot;Q:AU&quot;)
+
+--------------------------------------------------------------------
+ctx.delete_rows_where(시트, 조건, header_rows=1)
+--------------------------------------------------------------------
+ 무엇을 하나 : 조건에 맞는 행만 그 자리에서 지웁니다.
+ 왜 중요한가 : 남는 행의 색·테두리·표시형식·수식·병합이 그대로 유지됩니다.
+               &quot;임시 시트에 값만 복사했다가 다시 붙이는&quot; 방식은 서식을
+               통째로 깨뜨립니다. 그 대신 쓰는 명령입니다.
+ 언제 쓰나   : &quot;특정 값인 행만 남기고 나머지 지워 줘&quot; 요청.
+ 결과        : 지운 행 개수를 돌려줍니다.
+ 예시        : ctx.delete_rows_where(&quot;무선간선망&quot;,
+                   lambda r: ctx.normalize(r[2]) != ctx.normalize(&quot;512102403338&quot;))
+               (r[2] 는 왼쪽에서 세 번째 열. 0부터 셉니다)
+
+--------------------------------------------------------------------
+ctx.move_cols(시트, 열목록, before열, header_row=1)
+--------------------------------------------------------------------
+ 무엇을 하나 : 여러 열을 머리글부터 데이터까지 통째로 다른 위치 앞으로
+               옮깁니다(원래 자리는 없어짐).
+ 쓰는 법     : 열 목록은 머리글 이름이나 열 문자로 줍니다.
+ 언제 쓰나   : &quot;열 순서 바꿔 줘&quot; 요청.
+ 예시        : ctx.move_cols(&quot;정산&quot;, [&quot;단가&quot;, &quot;금액&quot;], &quot;J&quot;)
+
+--------------------------------------------------------------------
+ctx.move_col_clear(시트, 원본열, 대상열)
+--------------------------------------------------------------------
+ 무엇을 하나 : 한 열의 내용을 다른 열로 옮기고 원래 열은 비웁니다.
+               열 자체는 그대로 있습니다(삭제·밀림 없음).
+ 언제 쓰나   : &quot;D열 내용을 K열로 옮기고 D는 비워 줘&quot;.
+ 참고        : 열 순서 자체를 재배치하려면 move_cols 를 쓰세요.
+
+--------------------------------------------------------------------
+ctx.swap_cols(시트, 열A, 열B)
+--------------------------------------------------------------------
+ 무엇을 하나 : 붙어 있는 두 열의 자리를 서로 바꿉니다.
+ 왜 안전한가 : 엑셀의 잘라내기/삽입 기능을 쓰기 때문에 =SUM(D..) 같은
+               수식 참조가 자동으로 따라옵니다(#REF! 오류가 안 납니다).
+ 참고        : 떨어져 있는 열을 재배치하려면 move_cols 를 쓰세요.
+
+--------------------------------------------------------------------
+ctx.hide_cols(시트, 범위, hidden=True)  /  ctx.hide_rows(시트, 범위, hidden=True)
+--------------------------------------------------------------------
+ 무엇을 하나 : 열이나 행을 숨기거나 다시 보이게 합니다.
+ 예시        : ctx.hide_cols(&quot;매출&quot;, &quot;B:D&quot;)            # 숨기기
+               ctx.hide_cols(&quot;매출&quot;, &quot;B:D&quot;, False)     # 다시 보이기
+
+--------------------------------------------------------------------
+ctx.merge(시트, 범위)  /  ctx.unmerge(시트, 범위)
+--------------------------------------------------------------------
+ 무엇을 하나 : 칸을 병합하거나 병합을 풉니다.
+ 예시        : ctx.merge(&quot;표지&quot;, &quot;A1:F1&quot;)
+
+--------------------------------------------------------------------
+ctx.split_column(시트, 열, 구분자, into=None, header_row=1)
+--------------------------------------------------------------------
+ 무엇을 하나 : 한 칸에 붙어 있는 값을 구분자로 잘라 오른쪽 새 열들에
+               나눠 넣습니다. 원본 열은 그대로 둡니다.
+ 예시로 보면 : &quot;1001/홍길동&quot;  →  1001 | 홍길동
+ 예시        : ctx.split_column(&quot;명단&quot;, &quot;C&quot;, &quot;/&quot;, into=[&quot;가입번호&quot;, &quot;고객명&quot;])
+
+
+====================================================================
+ 7. 마. 필터
+====================================================================
+
+--------------------------------------------------------------------
+ctx.enable_filter(시트, header_row=1)        ※ 시트를 빼면 지금 보고 있는 시트
+--------------------------------------------------------------------
+ 무엇을 하나 : 머리글 줄에 필터 화살표만 켭니다(조건은 걸지 않음).
+ 언제 쓰나   : &quot;필터 걸어 줘(조건 없이)&quot;, &quot;필터 켜 줘&quot;.
+
+--------------------------------------------------------------------
+ctx.apply_filter(시트, 열, 값들, header_row=1)
+--------------------------------------------------------------------
+ 무엇을 하나 : 특정 값만 화면에 보이게 필터를 겁니다.
+               데이터를 지우는 게 아니라 &quot;숨기는&quot; 것이라 언제든 되돌릴
+               수 있습니다.
+ 언제 쓰나   : &quot;완료·진행인 것만 보이게 해 줘&quot;.
+ 예시        : ctx.apply_filter(&quot;상품번호별&quot;, &quot;상태&quot;, [&quot;완료&quot;, &quot;진행&quot;])
+ 참고        : 조건에 맞는 행만 &quot;뽑아서 새 시트로&quot; 옮기려면
+               ctx.filter_to_sheet 를 쓰세요.
+
+--------------------------------------------------------------------
+ctx.clear_filter(시트)        ※ 시트를 빼면 지금 보고 있는 시트
+--------------------------------------------------------------------
+ 무엇을 하나 : 걸려 있는 필터를 모두 풉니다. 숨겨진 행이 다시 보이고
+               필터 화살표도 없어집니다.
+ 언제 쓰나   : &quot;필터 풀어 줘 / 해제해 줘 / 필터 걸린 거 없애 줘&quot;.
+ 참고        : 필터가 하나도 없어도 오류가 나지 않고 그냥 지나갑니다.
+
+--------------------------------------------------------------------
+ctx.filter_to_sheet(시트, 조건, 새시트이름, header_rows=1)
+--------------------------------------------------------------------
+ 무엇을 하나 : 조건에 맞는 행만 골라 새 시트에 정리합니다.
+               원본 시트는 그대로 둡니다.
+ 특징        : 엑셀 복사로 옮기기 때문에 색·테두리·표시형식·열 너비가
+               그대로 유지됩니다.
+ 언제 쓰나   : &quot;○○만 뽑아서 새 시트로 정리해 줘&quot;.
+ 예시        : ctx.filter_to_sheet(&quot;Sheet1&quot;,
+                   lambda r: r[2] == &quot;안전제일&quot;, &quot;안전제일목록&quot;)
+
+--------------------------------------------------------------------
+ctx.filter_to_range(시트, 조건, 대상시트, 시작칸, header_rows=1,
+                    include_header=False, clear_existing=False)
+--------------------------------------------------------------------
+ 무엇을 하나 : 조건에 맞는 행을 **이미 있는 시트(양식)의 정한 자리**부터
+               붙입니다. 원본은 그대로 두고, 서식도 따라갑니다.
+ 무엇이 다른가: 바로 위 filter_to_sheet 는 결과를 &#x27;새 시트&#x27;에 만듭니다.
+               이미 쓰고 있는 양식에 채워 넣어야 하면 이걸 씁니다.
+ 왜 중요한가 : 복붙 캡처로 &#x27;필터→복사→붙여넣기&#x27;를 녹화하면 그 순간의 범위가
+               코드에 그대로 굳습니다(예: A2:N57). 다음 달 가입번호가 늘면
+               범위가 안 맞아 못 씁니다. 이 명령은 돌릴 때마다 조건에 맞는
+               행을 다시 찾으므로, 행이 늘든 줄든 같은 코드가 그대로 됩니다.
+ 옵션
+     clear_existing=True : 붙이기 전에 그 자리 아래를 지웁니다(붙일 열만).
+                           지난달 값이 남아 섞이는 걸 막습니다.
+     include_header=True : 머리글도 함께 붙입니다(기본은 안 붙임 —
+                           양식에는 보통 머리글이 이미 있습니다).
+ 결과        : 붙인 행 수. 해당하는 행이 없으면 0(오류 아님).
+ 예시        : col = ctx.find_header(&quot;회선 현황&quot;, &quot;상태&quot;)
+               ctx.filter_to_range(&quot;회선 현황&quot;, ctx.column_is(col, [&quot;정지&quot;]),
+                                   &quot;대상양식&quot;, &quot;A3&quot;, clear_existing=True)
+ 주의        : 열은 꼭 find_header 로 이름에서 찾으세요. 열 번호를 직접 쓰면
+               열이 하나만 추가돼도 어긋납니다.
+
+--------------------------------------------------------------------
+ctx.column_is(열, 값들)
+--------------------------------------------------------------------
+ 무엇을 하나 : 필터 조건을 만들어 주는 보조 명령입니다.
+               직접 쓸 일은 거의 없습니다.
+
+
+====================================================================
+ 8. 바. 합계·피벗
+====================================================================
+
+--------------------------------------------------------------------
+ctx.pivot(시트, group_by, value=None, agg=&quot;sum&quot;, dest_name=None, column=None)
+--------------------------------------------------------------------
+ 무엇을 하나 : &quot;○○별 합계/개수/평균&quot; 요약표를 새 시트에 만듭니다.
+               기본은 엑셀의 진짜 피벗테이블로 만들고, 그게 실패하면
+               자동으로 값만 있는 요약표로 바꿔서 만듭니다.
+ 쓰는 법
+     group_by  : 기준이 되는 항목(머리글 이름). 여러 개면 목록으로.
+     value     : 합칠 값(머리글 이름). 안 주면 &quot;개수&quot; 를 셉니다.
+     agg       : sum(합계) / count(개수) / avg(평균) / max / min
+     column    : 가로축도 나누고 싶을 때(교차표)
+     dest_name : 만들 시트 이름
+ 언제 쓰나   : &quot;○○별로 합계 내 줘&quot;, &quot;요약해 줘&quot;, &quot;피벗 만들어 줘&quot;.
+ 예시        : ctx.pivot(&quot;매출&quot;, group_by=&quot;지점&quot;, value=&quot;금액&quot;,
+                         agg=&quot;sum&quot;, dest_name=&quot;지점별요약&quot;)
+
+--------------------------------------------------------------------
+ctx.native_pivot(시트, group_by, value=None, agg=&quot;sum&quot;, dest_name=None)
+--------------------------------------------------------------------
+ 무엇을 하나 : 엑셀의 &quot;진짜 피벗테이블&quot; 만 만듭니다. 원본과 연결되어
+               있어서 새로 고침이 되고 필드를 마우스로 옮길 수 있습니다.
+ 언제 쓰나   : &quot;새로고침 되는 피벗으로 만들어 줘&quot;, &quot;슬라이서 쓸 거야&quot;.
+ 참고        : 보통은 ctx.pivot 하나만 쓰면 됩니다.
+
+--------------------------------------------------------------------
+ctx.sum_column(시트, 열, header_row=None, exclude_total_rows=True)
+--------------------------------------------------------------------
+ 무엇을 하나 : 한 열의 숫자를 더한 &quot;값&quot; 을 돌려줍니다.
+               (파일에 쓰지는 않습니다. 결과를 write_cell 로 넣으세요)
+ 알아서 해 줌: 표 안에 이미 있는 합계/총계/소계 행을 자동으로 빼서
+               이중 계산을 막습니다. 첫 총계 행 아래의 부가세·검산 같은
+               꼬리도 더하지 않습니다.
+ 예시        : total = ctx.sum_column(&quot;요약&quot;, &quot;합계&quot;, header_row=4)
+               ctx.write_cell(&quot;요약&quot;, &quot;J15&quot;, total)
+
+--------------------------------------------------------------------
+ctx.sum_where(시트, 값열, 조건목록, header_row=None)
+--------------------------------------------------------------------
+ 무엇을 하나 : 조건을 모두 만족하는 행만 골라 합계를 냅니다(SUMIFS 와 비슷).
+ 왜 좋은가   : 큰 표를 통째로 읽지 않고 필요한 열만 좁게 읽어서 계산하므로
+               대용량에서도 빠릅니다.
+ 조건 쓰는 법: [(열, 값), ...] 또는 [(열, 비교, 값), ...]
+               비교는 == / != / contains(포함) / &gt; / &gt;= / &lt; / &lt;=
+               글자 비교는 공백·전각 차이를 알아서 무시합니다.
+ 예시        : t = ctx.sum_where(&quot;SO사업자별요금&quot;, &quot;M&quot;,
+                     [(&quot;D&quot;, &quot;인터넷&quot;), (&quot;G&quot;, &quot;매 출&quot;)], header_row=5)
+               ctx.write_cell(&quot;SO사업자별요금&quot;, &quot;AG4&quot;, t)
+
+--------------------------------------------------------------------
+ctx.fill_sum_col(시트, 대상열, 원본열들, header_row=None)
+--------------------------------------------------------------------
+ 무엇을 하나 : 합계 열을 =SUM(...) 수식으로 채웁니다.
+ 알아서 해 줌: 대상 열이 여러 행씩 세로로 병합된 표(계정별 그룹)면
+               병합 덩어리 단위로 합계를 넣습니다.
+               숫자가 아닌 라벨·단위·소제목 행은 건너뜁니다.
+ 예시        : ctx.fill_sum_col(&quot;정산&quot;, &quot;합계&quot;, [&quot;1월&quot;, &quot;2월&quot;, &quot;3월&quot;])
+
+--------------------------------------------------------------------
+ctx.add_total_row(시트, sum_cols, label_col=None, label=&quot;합계&quot;, header_row=1)
+--------------------------------------------------------------------
+ 무엇을 하나 : 표 맨 아래에 합계 행을 만들고 =SUM 수식을 넣습니다.
+ 결과        : 만들어진 합계 행 번호를 돌려줍니다.
+ 예시        : ctx.add_total_row(&quot;매출&quot;, [&quot;금액&quot;, &quot;수량&quot;], label_col=&quot;A&quot;)
+
+
+====================================================================
+ 9. 사. 다른 표에서 값 가져오기
+====================================================================
+
+--------------------------------------------------------------------
+ctx.lookup(시트, 키열, 넣을열, 표시트, 표키열, 표값열, header_row=1, default=None)
+--------------------------------------------------------------------
+ 무엇을 하나 : VLOOKUP 과 같습니다. 키를 다른 표에서 찾아 그 행의
+               값을 가져와 채웁니다.
+ 알아서 해 줌: 키를 비교할 때 공백·전각·대소문자·숫자와 글자 차이를
+               무시하므로 &quot;분명 같은 값인데 안 찾아짐&quot; 이 잘 안 생깁니다.
+ 결과        : 찾아서 채운 행 개수를 돌려줍니다.
+ 예시        : ctx.lookup(&quot;청구내역&quot;, &quot;상품코드&quot;, &quot;단가&quot;,
+                          &quot;단가표&quot;, &quot;코드&quot;, &quot;단가&quot;)
+
+--------------------------------------------------------------------
+ctx.sum_lookup(원본시트, 원본키열, 원본값열,
+               대상시트, 대상키열, 대상넣을열, header_row=None)
+--------------------------------------------------------------------
+ 무엇을 하나 : 키가 같은 행들의 값을 &quot;모두 더해서&quot; 가져옵니다.
+ 특별한 점   : 대상 칸에 가입번호가 여러 개 들어 있으면(줄바꿈·공백·쉼표로
+               구분) 각각 나눠서 전부 더합니다. KT/HCN 처럼 한 칸에 번호가
+               여러 개인 자료 때문에 만든 기능입니다.
+ 결과        : 값을 채운 행 수와 원본 키 개수를 알려 줍니다.
+ 예시        : ctx.sum_lookup(&quot;input.xlsx!Sheet1&quot;, &quot;BP&quot;, &quot;BQ&quot;,
+                              &quot;SO사업자별요금&quot;, &quot;P&quot;, &quot;H&quot;,
+                              header_row=1, dst_start_row=6)
+
+--------------------------------------------------------------------
+ctx.match_fill(원본, 대상, columns, key=None, header_row=1, ...)
+--------------------------------------------------------------------
+ 무엇을 하나 : 피벗이나 요약표의 값을 다른 시트에 &quot;이름을 맞춰서&quot; 넣습니다.
+ 알아서 해 줌: 이름이 정확히 같지 않아도 순서대로 시도합니다.
+               정확히 일치 → 공백 무시 → 기호 무시 → 부분 포함
+               그래도 확실히 못 맞춘 이름은 후보와 함께 알려 줘서
+               한 번에 확정할 수 있게 합니다.
+ 쓰는 법
+     columns   : {원본 값열 : 대상 값열} 형태의 짝
+     key       : (원본 키열, 대상 키열). 생략하면 둘 다 A열
+     aliases   : 못 맞춘 이름을 직접 짝지어 줄 때
+     allow_partial=True : 못 맞춘 건 건너뛰고 맞춘 것만 채우기
+ 언제 쓰나   : &quot;피벗 결과를 양식에 이름 맞춰 붙여 줘&quot;.
+ 예시        : ctx.match_fill(&quot;input.xlsx!MVNO요약&quot;, &quot;청구서&quot;,
+                   {&quot;수납금액_sum&quot;: &quot;고객납부금액&quot;},
+                   key=(&quot;상품명&quot;, &quot;구분&quot;), header_row=4)
+
+--------------------------------------------------------------------
+ctx.normalize(값)
+--------------------------------------------------------------------
+ 무엇을 하나 : 글자에서 공백·표기 차이를 없애 비교하기 좋게 만듭니다.
+ 언제 쓰나   : 값을 서로 비교할 때 보조로.
+ 예시        : if ctx.normalize(a) == ctx.normalize(b): ...
+
+
+====================================================================
+ 10. 아. 시트 다루기
+====================================================================
+
+--------------------------------------------------------------------
+ctx.add_sheet(이름, after=None, before=None)
+--------------------------------------------------------------------
+ 무엇을 하나 : 새 시트를 만듭니다. 위치를 지정할 수 있습니다.
+ 주의        : 같은 이름의 시트가 이미 있으면 오류가 납니다.
+ 예시        : ctx.add_sheet(&quot;요약&quot;, after=&quot;데이터&quot;)
+
+--------------------------------------------------------------------
+ctx.rename_sheet(옛이름, 새이름)
+--------------------------------------------------------------------
+ 무엇을 하나 : 시트 이름만 바꿉니다. 위치와 내용은 그대로.
+
+--------------------------------------------------------------------
+ctx.move_sheet(이름, before=None, after=None)
+--------------------------------------------------------------------
+ 무엇을 하나 : 시트 탭의 순서를 바꿉니다. 내용과 이름은 그대로.
+ 예시        : ctx.move_sheet(&quot;요약&quot;, before=&quot;데이터&quot;)
+
+--------------------------------------------------------------------
+ctx.copy_sheet(원본시트, dst_book=None, new_name=None, before=None, after=None)
+--------------------------------------------------------------------
+ 무엇을 하나 : 시트 한 장을 통째로 복사합니다(서식·수식·값 유지).
+               dst_book 을 주면 다른 파일로 복사합니다.
+ 참고        : 원본은 그대로 남습니다. &quot;이동&quot; 을 원하면 복사한 뒤
+               ctx.delete_sheet 로 원본을 지우세요.
+ 주의        : 구조를 바꾸는 작업이라 실패해도 자동으로 되돌려지지 않습니다.
+ 예시        : ctx.copy_sheet(&quot;가시트&quot;, dst_book=&quot;출력.xlsx&quot;)
+               ctx.copy_sheet(&quot;요약&quot;, new_name=&quot;요약본&quot;, after=&quot;데이터&quot;)
+
+--------------------------------------------------------------------
+ctx.delete_sheet(이름)
+--------------------------------------------------------------------
+ 무엇을 하나 : 시트를 지웁니다.
+
+
+====================================================================
+ 11. 자. 보기 좋게 꾸미기
+====================================================================
+
+--------------------------------------------------------------------
+ctx.set_fill(시트, 범위, color=None)
+--------------------------------------------------------------------
+ 무엇을 하나 : 칸 배경색을 칠합니다. color 를 비우면 색을 지웁니다.
+ 색 쓰는 법  : &quot;노랑&quot; 같은 한글 이름, &quot;red&quot; 같은 영어 이름, &quot;#DDEBF7&quot; 다 됩니다.
+ 예시        : ctx.set_fill(&quot;매출&quot;, &quot;A1:C1&quot;, &quot;노랑&quot;)
+
+--------------------------------------------------------------------
+ctx.set_font(시트, 범위, size=None, bold=None, italic=None, color=None, name=None)
+--------------------------------------------------------------------
+ 무엇을 하나 : 글꼴을 바꿉니다. 지정한 것만 바뀌고 나머지는 그대로입니다.
+ 예시        : ctx.set_font(&quot;매출&quot;, &quot;A1:C1&quot;, bold=True, size=12)
+               ctx.set_font(&quot;매출&quot;, &quot;B2&quot;, italic=True, color=&quot;빨강&quot;)
+
+--------------------------------------------------------------------
+ctx.set_border(시트, 범위, style=&quot;thin&quot;, color=None, edges=&quot;all&quot;)
+--------------------------------------------------------------------
+ 무엇을 하나 : 테두리를 그립니다.
+ 굵기(style) : thin(가늘게) / medium / thick(굵게) / double(이중) / none(지우기)
+ 위치(edges) : all(칸마다 사방+안쪽) / outline(바깥 테두리만) /
+               top·bottom·left·right (쉼표로 여러 개, 한글 위·아래·왼쪽·오른쪽도 됨)
+ 예시        : ctx.set_border(&quot;매출&quot;, &quot;A1:D20&quot;)
+               ctx.set_border(&quot;매출&quot;, &quot;A1:D1&quot;, style=&quot;thick&quot;, edges=&quot;bottom&quot;)
+
+--------------------------------------------------------------------
+ctx.set_number_format(시트, 범위, 형식)
+--------------------------------------------------------------------
+ 무엇을 하나 : 표시 형식을 바꿉니다(천 단위 쉼표, 날짜 모양, 퍼센트 등).
+ 예시        : ctx.set_number_format(&quot;매출&quot;, &quot;C2:C100&quot;, &quot;#,##0&quot;)
+               ctx.set_number_format(&quot;매출&quot;, &quot;A2:A100&quot;, &quot;yyyy-mm-dd&quot;)
+
+
+====================================================================
+ 12. 차. 정리
+====================================================================
+
+--------------------------------------------------------------------
+ctx.sort(시트, 범위, key_col, ascending=True, has_header=True)
+--------------------------------------------------------------------
+ 무엇을 하나 : 범위를 정렬합니다.
+ 쓰는 법     : key_col 은 범위 안에서 몇 번째 열인지(1부터) 또는 열 문자.
+               여러 기준으로 정렬하려면 목록으로 주고, 오름/내림도
+               기준마다 따로 줄 수 있습니다.
+ 예시        : ctx.sort(&quot;데이터&quot;, &quot;A1:F200&quot;, &quot;B&quot;)
+               ctx.sort(&quot;데이터&quot;, &quot;A1:F200&quot;, [&quot;B&quot;, &quot;C&quot;], [True, False])
+
+--------------------------------------------------------------------
+ctx.dedupe(시트, key_cols, header_row=1, keep=&quot;first&quot;)
+--------------------------------------------------------------------
+ 무엇을 하나 : 지정한 열 조합이 같은 중복 행을 지웁니다.
+ 옵션        : keep=&quot;first&quot; 는 처음 것, &quot;last&quot; 는 마지막 것을 남깁니다.
+ 결과        : 지운 행 수를 돌려줍니다.
+ 주의        : 행을 하나씩 지우는 방식이라 중복이 아주 많은 대용량
+               파일에서는 느립니다.
+ 예시        : ctx.dedupe(&quot;명단&quot;, [&quot;가입번호&quot;, &quot;청구월&quot;])
+
+
+====================================================================
+ 13. 카. 다른 파일 함께 쓰기
+====================================================================
+
+--------------------------------------------------------------------
+ctx.book(파일이름)
+--------------------------------------------------------------------
+ 무엇을 하나 : 같이 열려 있는 다른 파일을 가리킵니다. 그 뒤에 앞에서
+               본 명령들을 똑같이 붙여 쓰면 됩니다.
+ 예시        : out = ctx.book(&quot;output_검증파일.xlsx&quot;)
+               out.write(&quot;Sheet1&quot;, &quot;A1&quot;, [[&quot;값&quot;]])
+
+
+====================================================================
+ 14. 자주 하는 실수와 권장 방법
+====================================================================
+
+(1) 열 위치를 숫자로 고정하지 마세요
+    파일마다 열이 한두 칸씩 밀립니다.
+    권장 : ctx.find_header 로 머리글 이름으로 찾기
+    예외 : 요청하신 분이 &quot;Q열&quot; 처럼 직접 지정했다면 그대로 쓰는 게 정확합니다.
+
+(2) &quot;위에서 몇 줄 삭제&quot; 를 고정하지 마세요
+    시스템 추출 보고서는 안내 줄 수가 달마다 바뀝니다.
+    권장 : ctx.find_header_row 로 머리글 행을 찾아 그 위를 삭제
+
+(3) 서식을 지키고 싶으면 &quot;다시 만들기&quot; 대신 &quot;제자리 편집&quot;
+    임시 시트에 값만 복사했다가 되붙이면 색·테두리가 다 깨집니다.
+    권장 : ctx.delete_rows_where, ctx.filter_to_sheet
+
+(4) 합계를 직접 계산하지 말고 전용 명령을 쓰세요
+    권장 : ctx.pivot(요약) / ctx.sum_where(조건 합계) / ctx.sum_column(열 합계)
+    이유 : 표 안의 소계·총계 행을 이중으로 더하는 실수를 막아 줍니다.
+
+(5) 칸 하나씩 반복해서 쓰지 마세요
+    ctx.write_cell 을 반복문에서 수백 번 부르면 중단됩니다.
+    권장 : 값을 모아서 ctx.write 로 한 번에
+
+(6) 큰 표를 통째로 읽지 마세요
+    권장 : 조건 합계는 ctx.sum_where, 값 가져오기는 ctx.lookup / ctx.sum_lookup
+
+(7) 수식이 밀리는 게 싫으면 값으로 복사
+    권장 : ctx.copy_values (서식은 유지, 수식은 값으로 고정)
+
+
+====================================================================
+ 15. 참고
+====================================================================
+
+ - 이 문서는 AX-Cell 0.8.0 기준입니다. 명령이 추가되면 갱신됩니다.
+ - 여기 없는 작업이라고 해서 불가능한 것은 아닙니다. AX-Cell 은
+   필요하면 엑셀 매크로(VBA)로도 처리합니다.
+ - 실제로 어떤 명령이 쓰였는지는 스킬의 각 단계 코드를 열어 보면
+   그대로 보입니다.
+
+====================================================================</pre>
+      </details>
+    </div>
+  </div>
+</section>
+
+<div class="footer"><div class="container"><div class="card">
+  AX-Cell 실습 교안 · 시연테스트 데이터 기준 · 확인란의 숫자는 동봉된 파일에서 실제로 계산한 기대값입니다
+</div></div></div>
+
+</div><!-- /.main -->
+
+<script>
+"use strict";
+// ── 프롬프트 복사: 보안망 file:// 에서 clipboard API 가 막히는 경우의 fallback 포함 ──
+function copyPrompt(button) {
+  const pre = button.parentElement.querySelector("pre");
+  const text = pre.innerText.trim();
+  const showResult = (message, ok) => {
+    const orig = button.dataset.orig || button.innerText;
+    button.dataset.orig = orig;
+    button.innerText = message;
+    button.classList.toggle("done", !!ok);
+    setTimeout(() => { button.innerText = orig; button.classList.remove("done"); }, 1500);
+  };
+  const fallbackCopy = () => {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.setAttribute("readonly", "");
+    ta.style.position = "fixed";
+    ta.style.left = "-9999px";
+    document.body.appendChild(ta);
+    ta.select();
+    try {
+      const ok = document.execCommand("copy");
+      showResult(ok ? "복사완료 ✔" : "복사실패", ok);
+    } catch (e) {
+      showResult("복사실패", false);
+    } finally {
+      document.body.removeChild(ta);
+    }
+  };
+  if (navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard.writeText(text).then(() => showResult("복사완료 ✔", true)).catch(fallbackCopy);
+  } else {
+    fallbackCopy();
+  }
+}
+
+// ── 사이드바: 스크롤 위치에 따라 현재 구간 표시 ──
+const navLinks = document.querySelectorAll(".sb-nav a");
+const sections = document.querySelectorAll("section[id]");
+function setActive(id) {
+  navLinks.forEach(a => a.classList.toggle("active", a.getAttribute("href") === "#" + id));
+}
+const spy = new IntersectionObserver(entries => {
+  entries.forEach(en => { if (en.isIntersecting) setActive(en.target.id); });
+}, { rootMargin: "-30% 0px -60% 0px" });
+sections.forEach(s => spy.observe(s));
+
+// ── 모바일 사이드바 토글 ──
+const sb = document.getElementById("sidebar");
+document.getElementById("mobileNavToggle").addEventListener("click", () => sb.classList.toggle("open"));
+navLinks.forEach(a => a.addEventListener("click", () => sb.classList.remove("open")));
+
+// ── 진행 체크 저장(브라우저별) — 실패해도 교안 동작에는 지장 없음 ──
+document.querySelectorAll("input[data-done]").forEach(cb => {
+  const key = "axcell-tut-" + cb.dataset.done;
+  try { cb.checked = localStorage.getItem(key) === "1"; } catch (_) {}
+  cb.addEventListener("change", () => {
+    try { localStorage.setItem(key, cb.checked ? "1" : "0"); } catch (_) {}
+  });
+});
+</script>
+</body>
+</html>

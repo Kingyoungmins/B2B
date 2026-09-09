@@ -1,0 +1,76 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    body { margin: 0; font-family: 'Pretendard Variable', 'Pretendard', 'Segoe UI', 'Malgun Gothic', sans-serif; background: #ffffff; color: #1f2937; }
+    a { color: #0a66c2; } a:hover { color: #084a94; }
+    table.xl { border-collapse: collapse; font-size: 11.5px; background: #ffffff; }
+    table.xl td { border: 1px solid #e4e9f1; padding: 4px 9px; color: #1A1A1A; }
+    table.xl td.h { background: #f1f4f9; color: #8a93a5; text-align: center; font-weight: 700; font-size: 10.5px; }
+    table.xl td.th { background: #D6D6D6; font-weight: 800; }
+    table.xl td.n { text-align: right; font-variant-numeric: tabular-nums; }
+    table.xl td.chg { background: #FFF6D6; }
+  </style>
+</helmet>
+<div style="width: 920px; height: 760px; background: #ffffff; padding: 34px 40px; display: flex; flex-direction: column; gap: 14px">
+
+  <div style="display: flex; align-items: center; gap: 12px">
+    <span style="width: 38px; height: 38px; border-radius: 12px; background: linear-gradient(135deg, #0a66c2, #1caa6e); color: #ffffff; display: flex; align-items: center; justify-content: center; font-size: 17px; font-weight: 900">9</span>
+    <span style="font-size: 21px; font-weight: 900; color: #142033">중간 단계 수정 — 스킬은 고쳐 쓰는 것</span>
+    <span style="margin-left: auto; padding: 6px 12px; border-radius: 999px; background: #eaf3fc; border: 1px solid #cfe3f5; color: #084a94; font-size: 12px; font-weight: 900">5분</span>
+  </div>
+
+  <div style="font-size: 13px; color: #667085">스킬은 한 번 만들면 끝이 아닙니다 — <b style="color: #142033">중간 단계 하나만 고치면</b> 그 단계부터 뒤까지 자동으로 다시 적용됩니다.</div>
+
+  <div>
+    <div style="font-size: 12px; font-weight: 900; color: #128a56; margin-bottom: 6px">이렇게 조작합니다 — 6단계의 ✎ 수정 버튼을 누르면</div>
+    <div style="border: 1px solid #d9e6f2; border-radius: 14px; overflow: hidden; box-shadow: 0 12px 32px rgba(20,40,70,0.10); background: #FAFAFD; padding: 12px; display: flex; flex-direction: column; gap: 10px">
+      <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap">
+        <span style="font-size: 10.5px; font-weight: 800; color: #747474; background: #F2F2F2; border-radius: 999px; padding: 3px 10px">4단계 원가 채우기 ✓</span>
+        <span style="font-size: 10.5px; font-weight: 800; color: #747474; background: #F2F2F2; border-radius: 999px; padding: 3px 10px">5단계 월별 ✓</span>
+        <span style="font-size: 10.5px; font-weight: 800; color: #ffffff; background: #1A1A1A; border-radius: 999px; padding: 3px 10px; display: inline-flex; align-items: center; gap: 5px">6단계 쉼표
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.8 2.8 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"></path></svg>
+          수정 모드</span>
+        <span style="font-size: 10.5px; font-weight: 800; color: #747474; background: #F2F2F2; border-radius: 999px; padding: 3px 10px">7단계 머리글 ✓</span>
+      </div>
+      <div style="border: 1.5px solid #1A1A1A; border-radius: 10px; background: #ffffff; padding: 9px 12px; font-size: 12px; color: #1A1A1A; line-height: 1.6">
+        <span style="color: #A8A8A8; font-size: 11px; display: block; margin-bottom: 3px">입력창 — 원래 요청문이 자동으로 채워집니다. 뒤에 덧붙이기만 하세요</span>
+        @시트[교안_청구서.xlsx/회사별요약] 매출, 원가, 마진 열에 천 단위 쉼표를 넣고, <b style="background: #FFF6D6">마진율 열은 백분율로 바꿔줘</b>
+      </div>
+      <div style="font-size: 11.5px; color: #8a93a5">전송하면 새 단계가 추가되는 게 아니라 <b style="color: #3D3D3D">6단계가 이 내용으로 교체</b>되고, 뒤 단계까지 처음부터 다시 적용됩니다. 수정 모드를 그냥 끄려면 ✎ 를 한 번 더.</div>
+    </div>
+  </div>
+
+  <div>
+    <div style="font-size: 12px; font-weight: 900; color: #128a56; margin-bottom: 6px">실행하면 이렇게 됩니다 — 서식까지 완성된 최종본</div>
+    <div style="border: 1px solid #d9e6f2; border-radius: 14px; background: #FAFAFD; padding: 12px">
+      <table class="xl" style="width: 100%">
+        <tr><td class="h" style="width: 30px"></td><td class="h">A</td><td class="h" style="width: 122px">B</td><td class="h" style="width: 92px">C</td><td class="h" style="width: 122px">D</td><td class="h" style="width: 78px">E</td></tr>
+        <tr><td class="h">3</td><td class="th">회사명</td><td class="th">매출</td><td class="th">원가</td><td class="th">마진</td><td class="th">마진율</td></tr>
+        <tr><td class="h">4</td><td>ABC통신</td><td class="n">154,580,000</td><td class="n">174,883</td><td class="n">154,405,117</td><td class="n chg">99.9%</td></tr>
+        <tr><td class="h">5</td><td>글로벌네트워크</td><td class="n">220,393,000</td><td class="n">172,766</td><td class="n">220,220,234</td><td class="n chg">99.9%</td></tr>
+        <tr><td class="h">6</td><td>스마트링크</td><td class="n">197,270,000</td><td class="n">294,836</td><td class="n">196,975,164</td><td class="n chg">99.9%</td></tr>
+        <tr><td class="h">7</td><td>코리아텔레콤</td><td class="n">178,135,000</td><td class="n">292,577</td><td class="n">177,842,423</td><td class="n chg">99.8%</td></tr>
+        <tr><td class="h">…</td><td style="color: #8a93a5">… 16곳 더</td><td class="n" style="color: #8a93a5">…</td><td class="n" style="color: #8a93a5">…</td><td class="n" style="color: #8a93a5">…</td><td class="n chg" style="color: #8a93a5">…</td></tr>
+        <tr><td class="h">24</td><td class="th">합계 / 평균</td><td class="n th">3,797,128,000</td><td class="n th">5,491,071</td><td class="n th">3,791,636,929</td><td class="n th chg">99.9%</td></tr>
+      </table>
+      <div style="font-size: 11px; color: #8a93a5; margin-top: 6px">노란 칠 = 이번 수정으로 바뀐 표시(0.998… → 99.9%) · 회색 머리글 = 실습 6에서 만든 서식 그대로</div>
+    </div>
+  </div>
+
+  <div style="border-left: 4px solid #1caa6e; background: #e8f7ef; color: #0e7a4e; padding: 12px 16px; border-radius: 12px; font-size: 13px; line-height: 1.7">
+    <b>확인</b> — 마진율이 백분율로 표시 · 단계 개수는 여전히 <b>7개</b>(교체됐으므로) · 나머지 결과는 그대로
+  </div>
+  <div style="border-left: 4px solid #0a66c2; background: #eaf3fc; color: #084a94; padding: 11px 16px; border-radius: 12px; font-size: 12.5px; line-height: 1.6">
+    앞쪽 단계를 고쳐도 방법은 같습니다 — 예를 들어 1단계(피벗)를 고치면 그 결과를 쓰는 뒤 단계들까지 전부 다시 적용됩니다. 앞 단계일수록 다시 도는 범위가 넓어 시간이 조금 더 걸릴 뿐입니다.
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

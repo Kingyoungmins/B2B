@@ -1,0 +1,63 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    body { margin: 0; font-family: 'Pretendard Variable', 'Pretendard', 'Segoe UI', 'Malgun Gothic', sans-serif; background: #ffffff; color: #1f2937; }
+    a { color: #0a66c2; } a:hover { color: #084a94; }
+    table.xl { border-collapse: collapse; font-size: 11.5px; background: #ffffff; }
+    table.xl td { border: 1px solid #e4e9f1; padding: 4px 9px; color: #1A1A1A; }
+    table.xl td.h { background: #f1f4f9; color: #8a93a5; text-align: center; font-weight: 700; font-size: 10.5px; }
+    table.xl td.th { background: #F2F2F2; font-weight: 800; }
+    table.xl td.n { text-align: right; font-variant-numeric: tabular-nums; }
+    table.xl td.new { background: #FFF6D6; }
+    table.xl td.calc { background: #E8F7EF; }
+  </style>
+</helmet>
+<div style="width: 920px; height: 720px; background: #ffffff; padding: 34px 40px; display: flex; flex-direction: column; gap: 14px">
+
+  <div style="display: flex; align-items: center; gap: 12px">
+    <span style="width: 38px; height: 38px; border-radius: 12px; background: linear-gradient(135deg, #0a66c2, #1caa6e); color: #ffffff; display: flex; align-items: center; justify-content: center; font-size: 17px; font-weight: 900">3</span>
+    <span style="font-size: 21px; font-weight: 900; color: #142033">이름 맞춰 채우기 — 요약을 청구서로</span>
+    <span style="margin-left: auto; padding: 6px 12px; border-radius: 999px; background: #eaf3fc; border: 1px solid #cfe3f5; color: #084a94; font-size: 12px; font-weight: 900">5분</span>
+  </div>
+
+  <div style="font-size: 13px; color: #667085">행 순서가 달라도 <b style="color:#142033">회사명 기준으로</b> 맞춰 들어갑니다 — 이게 손 붙여넣기와 다른 점입니다.</div>
+
+  <div style="background: #e6f2ff; border: 1px solid #cfe3f7; border-radius: 12px; padding: 12px 15px; font-size: 13.5px; color: #084a94; line-height: 1.6"><b>@시트[교안_청구서.xlsx/회사별요약]</b> 방금 만든 회사별 요약의 금액을 회사명에 맞춰 매출 열에 채워줘</div>
+
+  <div>
+    <div style="font-size: 12px; font-weight: 900; color: #128a56; margin-bottom: 6px">실행하면 이렇게 됩니다 — 교안_청구서.xlsx / 회사별요약</div>
+    <div style="border: 1px solid #d9e6f2; border-radius: 14px; overflow: hidden; box-shadow: 0 12px 32px rgba(20,40,70,0.10); background: #FAFAFD; padding: 12px">
+      <table class="xl" style="width: 100%">
+        <tr><td class="h" style="width: 30px"></td><td class="h">A</td><td class="h" style="width: 122px">B</td><td class="h" style="width: 92px">C</td><td class="h" style="width: 122px">D</td><td class="h" style="width: 78px">E</td></tr>
+        <tr><td class="h">3</td><td class="th">회사명</td><td class="th">매출</td><td class="th">원가</td><td class="th">마진</td><td class="th">마진율</td></tr>
+        <tr><td class="h">4</td><td>ABC통신</td><td class="n new">154580000</td><td class="n" style="color:#A8A8A8"></td><td class="n calc">154580000</td><td class="n calc">1.00</td></tr>
+        <tr><td class="h">5</td><td>글로벌네트워크</td><td class="n new">220393000</td><td class="n" style="color:#A8A8A8"></td><td class="n calc">220393000</td><td class="n calc">1.00</td></tr>
+        <tr><td class="h">6</td><td>스마트링크</td><td class="n new">197270000</td><td class="n" style="color:#A8A8A8"></td><td class="n calc">197270000</td><td class="n calc">1.00</td></tr>
+        <tr><td class="h">7</td><td>코리아텔레콤</td><td class="n new">178135000</td><td class="n" style="color:#A8A8A8"></td><td class="n calc">178135000</td><td class="n calc">1.00</td></tr>
+        <tr><td class="h">…</td><td style="color: #8a93a5">… 16곳 더</td><td class="n new" style="color: #8a93a5">…</td><td></td><td class="n calc" style="color: #8a93a5">…</td><td class="n calc" style="color: #8a93a5">…</td></tr>
+        <tr><td class="h">24</td><td class="th">합계 / 평균</td><td class="n th new">3797128000</td><td class="n th"></td><td class="n th calc">3797128000</td><td class="n th calc">1.00</td></tr>
+      </table>
+      <div style="display: flex; gap: 14px; font-size: 11px; color: #8a93a5; margin-top: 8px">
+        <span><span style="display: inline-block; width: 10px; height: 10px; background: #FFF6D6; border: 1px solid #e4d9a8; border-radius: 2px; vertical-align: -1px"></span> 이번 단계가 채운 값</span>
+        <span><span style="display: inline-block; width: 10px; height: 10px; background: #E8F7EF; border: 1px solid #bfe4cf; border-radius: 2px; vertical-align: -1px"></span> 원래 있던 수식이 저절로 계산된 값</span>
+      </div>
+    </div>
+  </div>
+
+  <div style="border-left: 4px solid #1caa6e; background: #e8f7ef; color: #0e7a4e; padding: 12px 16px; border-radius: 12px; font-size: 13px; line-height: 1.7">
+    <b>확인</b> — 매출 열이 채워지고 <b>마진 열이 저절로 계산</b>된다 · 24행 합계 <b>3,797,128,000</b>
+  </div>
+  <div style="border-left: 4px solid #c98a1d; background: #fdf3e2; color: #8a5c0d; padding: 10px 16px; border-radius: 12px; font-size: 12.5px">
+    아직 원가가 비어 있어 마진 = 매출, 마진율 = 1.00 인 상태 — 다음 실습에서 완성됩니다.
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

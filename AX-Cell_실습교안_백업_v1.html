@@ -1,0 +1,723 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AX-Cell 실습 교안 — 청구서 자동화 따라하기</title>
+<!--
+  [실습 교안 2026-09-08 · 디자인 개편]
+  · 시연테스트 폴더의 실제 파일(매출/원가/교안_청구서)로 처음부터 끝까지 따라하는 교안.
+  · 디자인은 팀 교재(스마트빌링 에이전트 교재_vff)와 같은 체계 — 사이드바 로드맵, 히어로,
+    그라데이션 스텝 카드, 복사 버튼 프롬프트. 단 폰트 CDN 은 넣지 않는다(보안망에서 안 뜨고,
+    Pretendard 미설치 PC 는 맑은고딕으로 자연 폴백).
+  · 완전 자립형 — 외부 요청 0건. 파일만 열어도 전부 동작해야 한다.
+  · 기대값(ABC통신 154,580,000 등)은 동봉된 파일에서 실제로 계산해 넣은 값 — 파일을 바꾸면 갱신.
+-->
+<style>
+:root{
+  --mg:#0a66c2; --mg-dark:#084a94; --vt:#1caa6e; --vt-dark:#128a56;
+  --ink:#142033; --text:#1f2937; --muted:#667085; --line:#d9e6f2;
+  --bg:#f5f9fd; --card:#fff; --soft:#eaf3fc; --soft-vt:#e8f7ef;
+  --mix:linear-gradient(135deg,#eaf3fc 0%,#e8f7ef 100%);
+  --sidebar-bg:#0f2038; --sidebar-w:250px;
+  --shadow:0 12px 32px rgba(20,40,70,.10); --r:18px; --rs:12px;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+html{scroll-behavior:smooth;scroll-padding-top:20px;}
+body{font-family:'Pretendard',"Segoe UI","Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+     color:var(--text);background:var(--bg);line-height:1.7;font-size:14.5px;}
+
+/* ── sidebar ── */
+.sidebar{position:fixed;left:0;top:0;bottom:0;width:var(--sidebar-w);background:var(--sidebar-bg);
+         color:#a9bdd6;display:flex;flex-direction:column;z-index:100;overflow-y:auto;padding:16px 0;}
+.sidebar::-webkit-scrollbar{width:4px;}
+.sidebar::-webkit-scrollbar-thumb{background:#28405f;border-radius:4px;}
+.sb-brand{padding:0 18px 12px;border-bottom:1px solid #1e3654;margin-bottom:6px;}
+.sb-brand .badge{display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;
+  border-radius:9px;background:linear-gradient(135deg,var(--mg),var(--vt));color:#fff;font-size:11px;
+  font-weight:900;box-shadow:0 6px 16px rgba(10,102,194,.3);margin-bottom:6px;}
+.sb-brand .title{font-size:13px;font-weight:800;color:#fff;line-height:1.35;}
+.sb-brand .sub{font-size:11px;color:#5f7898;margin-top:2px;}
+.sb-nav{list-style:none;padding:0 10px;flex:1;}
+.sb-nav li{margin-bottom:1px;}
+.sb-nav a{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:9px;font-size:13px;
+  font-weight:600;color:#8fa5c2;text-decoration:none;transition:all .15s;}
+.sb-nav a:hover{background:#182c47;color:#dce8f7;}
+.sb-nav a.active{background:linear-gradient(135deg,rgba(10,102,194,.22),rgba(28,170,110,.22));
+  color:#fff;font-weight:800;}
+.sb-nav .nav-num{display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;
+  border-radius:6px;background:#1e3654;color:#8fa5c2;font-size:10px;font-weight:800;flex:none;}
+.sb-nav a.active .nav-num{background:linear-gradient(135deg,var(--mg),var(--vt));color:#fff;}
+.sb-nav .nav-t{margin-left:auto;font-size:10px;color:#4d6485;font-weight:800;}
+.sb-section{padding:4px 18px;font-size:10px;font-weight:800;color:#4d6485;text-transform:uppercase;
+  letter-spacing:.04em;margin-top:8px;}
+
+/* ── main / hero ── */
+.main{margin-left:var(--sidebar-w);min-height:100vh;}
+.container{max-width:1020px;margin:0 auto;padding:0 28px;}
+.hero{padding:52px 0 34px;background:
+  radial-gradient(circle at 10% 0%,rgba(10,102,194,.09),transparent 24%),
+  radial-gradient(circle at 95% 0%,rgba(28,170,110,.08),transparent 20%),
+  linear-gradient(180deg,#f7fbff,#f2f8f4);}
+.eyebrow{display:inline-flex;align-items:center;gap:8px;padding:7px 14px;border-radius:999px;
+  background:var(--soft-vt);color:var(--vt-dark);font-weight:900;font-size:12px;}
+.hero h1{margin:18px 0 12px;font-size:clamp(26px,3.6vw,42px);line-height:1.14;letter-spacing:-.03em;color:var(--ink);}
+.hero .lead{color:var(--muted);font-size:clamp(14.5px,1.7vw,17px);max-width:780px;}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:22px;}
+.stat{background:rgba(255,255,255,.85);border:1px solid rgba(217,230,242,.9);border-radius:14px;padding:16px;}
+.stat .num{font-size:26px;font-weight:900;line-height:1;color:var(--mg-dark);margin-bottom:6px;}
+.stat .label{color:var(--muted);font-size:12.5px;}
+.hero-pills{display:flex;flex-wrap:wrap;gap:8px;margin-top:18px;}
+.pill{display:inline-flex;align-items:center;padding:6px 12px;border-radius:999px;background:var(--soft-vt);
+  color:var(--vt-dark);font-weight:800;font-size:12px;border:1px solid #cdeedd;}
+
+/* ── sections / cards ── */
+section{padding:32px 0 6px;}
+.sec-head h2{font-size:clamp(21px,2.6vw,30px);letter-spacing:-.02em;color:var(--ink);margin-bottom:6px;}
+.sec-head p{color:var(--muted);max-width:800px;}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);
+      box-shadow:var(--shadow);padding:22px;margin-top:16px;}
+.note{border-left:4px solid var(--mg);background:var(--soft);color:var(--mg-dark);
+  padding:13px 16px;border-radius:var(--rs);margin-top:14px;font-size:13.5px;line-height:1.7;}
+.note.info{border-left-color:var(--vt);background:var(--soft-vt);color:#0e7a4e;}
+.note.todo{border-left-color:#c98a1d;background:#fdf3e2;color:#8a5c0d;}
+
+/* ── timeline (로드맵) ── */
+.timeline-item{display:flex;align-items:flex-start;gap:16px;padding:12px 4px;border-bottom:1px solid var(--line);}
+.timeline-item:last-child{border-bottom:none;}
+.timeline-dot{flex-shrink:0;min-width:34px;height:34px;padding:0 4px;border-radius:17px;
+  display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:900;color:#fff;margin-top:2px;
+  background:linear-gradient(135deg,var(--mg),var(--vt));}
+.timeline-body{flex:1;}
+.timeline-body .tl-title{font-size:15px;font-weight:800;color:var(--ink);}
+.timeline-body .tl-desc{font-size:13px;color:var(--muted);margin-top:2px;}
+.timeline-time{flex-shrink:0;font-size:12px;font-weight:900;color:var(--muted);padding:5px 10px;
+  border-radius:999px;background:var(--bg);white-space:nowrap;margin-top:2px;}
+.timeline-item-main{background:var(--mix);border-radius:12px;padding:12px 8px;margin:2px 0;border-bottom:none;}
+.timeline-item-main .timeline-time{background:#fff;color:var(--mg-dark);}
+.tl-main-badge{display:inline-block;font-size:10.5px;font-weight:900;color:#fff;
+  background:linear-gradient(135deg,var(--mg),var(--vt));padding:2px 8px;border-radius:999px;
+  margin-left:6px;vertical-align:middle;}
+
+/* ── 준비물 표 ── */
+table{border-collapse:collapse;width:100%;font-size:13.5px;background:#fff;}
+th,td{border:1px solid var(--line);padding:9px 13px;text-align:left;vertical-align:top;}
+th{background:#f4f9fe;color:var(--mg-dark);font-size:12.5px;}
+.tagref{font-family:ui-monospace,Consolas,monospace;font-size:12px;font-weight:700;background:var(--soft);
+  border:1px solid var(--line);border-radius:4px;padding:1px 6px;color:var(--mg-dark);white-space:nowrap;}
+
+/* ── 화면 지도 ── */
+.screen-box{border:1px solid var(--line);border-radius:14px;overflow:hidden;background:#fff;margin-top:16px;}
+.screen-head{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 16px;
+  background:#182c47;color:#dce8f7;font-size:12.5px;font-weight:700;}
+.screen-diagram{position:relative;background:linear-gradient(135deg,#eef5fc,#eaf8f0);padding:28px;min-height:230px;}
+.zone{position:absolute;border:1.5px dashed #9dc3e6;border-radius:10px;background:rgba(255,255,255,.75);
+  font-size:11.5px;color:var(--mg-dark);font-weight:800;padding:6px 10px;display:flex;align-items:center;gap:6px;}
+.zone .z-no{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;
+  border-radius:50%;background:var(--mg);color:#fff;font-size:10px;flex-shrink:0;}
+.legend-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:16px;background:#fbfdff;border-top:1px solid var(--line);}
+.legend-item{display:flex;gap:10px;align-items:flex-start;font-size:13px;}
+.legend-item .legend-no{display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;
+  width:20px;height:20px;border-radius:50%;background:var(--soft);color:var(--mg-dark);font-size:11px;
+  font-weight:900;margin-top:1px;}
+.legend-item strong{display:block;color:var(--ink);margin-bottom:2px;}
+.legend-item span{color:var(--muted);}
+
+/* ── 좋은 예 / 나쁜 예 ── */
+.gb-compare{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:10px;}
+.gb-box{border-radius:var(--rs);padding:13px 15px;border:1.5px solid var(--line);background:var(--card);}
+.gb-box.bad{background:#f4f6f9;}
+.gb-box.good{background:var(--soft-vt);border-color:#cdeedd;}
+.gb-tag{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:900;
+  padding:2px 9px;border-radius:999px;margin-bottom:8px;}
+.gb-box.bad .gb-tag{background:var(--muted);color:#fff;}
+.gb-box.good .gb-tag{background:var(--vt);color:#fff;}
+.gb-box .gb-text{font-size:13.5px;line-height:1.6;}
+.gb-box.bad .gb-text{color:var(--muted);}
+.gb-box.good .gb-text{color:var(--vt-dark);}
+.gb-case-title{font-size:13.5px;font-weight:800;color:var(--ink);margin:18px 0 6px;}
+.gb-case-title:first-child{margin-top:0;}
+
+/* ── step 카드 ── */
+.step{border:1px solid var(--line);border-radius:var(--r);background:#fff;box-shadow:var(--shadow);
+  overflow:hidden;margin-top:18px;}
+.step.step-main{border:2px solid var(--mg);box-shadow:0 16px 40px rgba(10,102,194,.16);}
+.step-head{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:16px 22px;
+  background:var(--mix);border-bottom:1px solid var(--line);}
+.step-main .step-head{background:linear-gradient(135deg,rgba(10,102,194,.14),rgba(28,170,110,.14));}
+.step-head-left{display:flex;align-items:center;gap:14px;min-width:0;}
+.step-num{flex-shrink:0;width:40px;height:40px;border-radius:12px;
+  background:linear-gradient(135deg,var(--mg),var(--vt));color:#fff;display:flex;align-items:center;
+  justify-content:center;font-size:18px;font-weight:900;box-shadow:0 6px 16px rgba(10,102,194,.25);}
+.step-head h3{margin:0;font-size:19px;letter-spacing:-.01em;color:var(--ink);}
+.time{white-space:nowrap;padding:7px 12px;border-radius:999px;background:rgba(255,255,255,.9);
+  border:1px solid #cfe3f5;color:var(--mg-dark);font-size:12px;font-weight:900;}
+.time.time-main{background:linear-gradient(135deg,var(--mg),var(--vt));color:#fff;border:none;
+  box-shadow:0 6px 16px rgba(10,102,194,.3);}
+.step-body{padding:20px 22px 24px;}
+.block{margin-bottom:20px;padding-top:20px;border-top:1px dashed var(--line);}
+.block:first-child{margin-top:0;padding-top:0;border-top:none;}
+.block:last-child{margin-bottom:0;}
+.block-title{font-size:13px;font-weight:900;color:var(--vt-dark);letter-spacing:.02em;margin-bottom:12px;
+  display:flex;align-items:center;gap:8px;text-transform:uppercase;}
+.block-title .bt-icon{font-size:14px;width:26px;height:26px;border-radius:8px;flex-shrink:0;
+  background:var(--soft-vt);display:flex;align-items:center;justify-content:center;text-transform:none;}
+
+/* ── 따라하기 체크 + 프롬프트 ── */
+.todo-list{display:grid;gap:8px;}
+.todo-check{display:flex;gap:10px;align-items:flex-start;padding:9px 12px;border:1px solid var(--line);
+  border-radius:10px;background:#fff;font-size:14px;cursor:pointer;}
+.todo-check input[type=checkbox]{width:17px;height:17px;margin-top:3px;accent-color:var(--vt);cursor:pointer;flex-shrink:0;}
+.todo-check .tc-body{flex:1;min-width:0;}
+.copy-wrapper{position:relative;margin-top:8px;}
+.copy-btn{position:absolute;top:8px;right:10px;padding:5px 12px;font-size:11px;font-weight:800;
+  border-radius:8px;border:none;cursor:pointer;background:linear-gradient(135deg,var(--mg),var(--vt));
+  color:#fff;box-shadow:0 4px 12px rgba(10,102,194,.22);transition:all .15s;z-index:2;}
+.copy-btn:hover{transform:translateY(-1px);}
+.copy-btn.done{background:#1f9d55;box-shadow:0 4px 12px rgba(31,157,85,.25);}
+pre{margin:0;background:#e6f2ff;color:var(--mg-dark);border-radius:12px;padding:36px 16px 13px;
+  overflow:auto;white-space:pre-wrap;word-break:break-all;font-size:13.5px;line-height:1.6;
+  border:1px solid #cfe3f7;font-family:inherit;}
+.prompt-hint{font-size:12px;color:var(--muted);margin-top:5px;}
+
+/* ── 채팅 목업 ── */
+.mockup{border:1px solid var(--line);border-radius:14px;overflow:hidden;background:#f6f9fc;margin-top:12px;}
+.mockup-bar{background:#182c47;color:#a9bdd6;font-size:12px;font-weight:700;padding:8px 14px;
+  display:flex;align-items:center;gap:8px;}
+.mockup-bar .dot{width:8px;height:8px;border-radius:50%;display:inline-block;}
+.dot.r{background:#ff5f57;}.dot.y{background:#febc2e;}.dot.g{background:#28c840;}
+.mockup-body{padding:16px;}
+.mockup-user,.mockup-ai{padding:11px 14px;border-radius:12px;margin-bottom:10px;font-size:13.5px;line-height:1.6;}
+.mockup-user{background:#e6f2ff;color:var(--mg-dark);border:1px solid #cfe3f7;text-align:right;}
+.mockup-ai{background:#fff;border:1px solid var(--line);color:var(--text);}
+.mockup-ai:last-child,.mockup-user:last-child{margin-bottom:0;}
+.mockup-ai strong{color:var(--ink);}
+
+/* ── Q&A / 부록 ── */
+.qa-item{border:1px solid var(--line);border-radius:12px;background:#fff;padding:15px 18px;margin-top:12px;}
+.qa-item .q{font-weight:800;color:var(--ink);font-size:14.5px;margin-bottom:6px;}
+.qa-item .q .qtag{color:var(--mg-dark);}
+.qa-item .a{font-size:13.5px;color:var(--text);line-height:1.75;}
+.qa-item .a .atag{color:var(--vt-dark);font-weight:800;}
+.btn-name{display:inline-block;background:#182c47;color:#fff;border-radius:6px;padding:1px 10px;
+  font-size:12px;font-weight:700;white-space:nowrap;}
+
+.footer{padding:36px 0 48px;color:var(--muted);font-size:13px;}
+.footer .card{text-align:center;}
+
+/* ── 모바일 / 인쇄 ── */
+#mobileNavToggle{display:none;position:fixed;top:12px;left:12px;z-index:200;width:40px;height:40px;
+  border-radius:10px;border:none;background:var(--sidebar-bg);color:#fff;font-size:18px;cursor:pointer;}
+@media(max-width:900px){
+  .sidebar{transform:translateX(-100%);transition:transform .2s;}
+  .sidebar.open{transform:none;}
+  #mobileNavToggle{display:block;}
+  .main{margin-left:0;}
+  .stats,.legend-grid,.gb-compare{grid-template-columns:1fr 1fr;}
+}
+@media(max-width:620px){.stats,.legend-grid,.gb-compare{grid-template-columns:1fr;}}
+@media print{
+  .sidebar,#mobileNavToggle,.copy-btn{display:none !important;}
+  .main{margin-left:0;}
+  body{background:#fff;}
+  .step,.card{box-shadow:none;break-inside:avoid;}
+  .hero{background:#fff;}
+}
+</style>
+</head>
+<body>
+
+<button id="mobileNavToggle" aria-label="메뉴">☰</button>
+<nav class="sidebar" id="sidebar">
+  <div class="sb-brand">
+    <span class="badge">AX</span>
+    <div class="title">AX-Cell 실습 교안</div>
+    <div class="sub">청구서 자동화 따라하기</div>
+  </div>
+  <ul class="sb-nav">
+    <li><a href="#hero"><span class="nav-num">🎯</span> 과정 개요</a></li>
+    <li><a href="#roadmap"><span class="nav-num">⏰</span> 실습 로드맵</a></li>
+    <li><a href="#prep"><span class="nav-num">📂</span> 준비물</a></li>
+    <li><a href="#screen"><span class="nav-num">🖥</span> 화면 구성</a></li>
+    <li><a href="#rules"><span class="nav-num">✔</span> 규칙 3가지</a></li>
+    <li class="sb-section">실습</li>
+    <li><a href="#s1"><span class="nav-num">1</span> 파일 업로드 <span class="nav-t">5′</span></a></li>
+    <li><a href="#s2"><span class="nav-num">2</span> 피벗 <span class="nav-t">5′</span></a></li>
+    <li><a href="#s3"><span class="nav-num">3</span> 이름 맞춰 채우기 <span class="nav-t">5′</span></a></li>
+    <li><a href="#s4"><span class="nav-num">4</span> 원가 반복 <span class="nav-t">5′</span></a></li>
+    <li><a href="#s5"><span class="nav-num">5</span> 복사·붙여넣기 <span class="nav-t">5′</span></a></li>
+    <li><a href="#s6"><span class="nav-num">6</span> 보기 좋게 <span class="nav-t">5′</span></a></li>
+    <li><a href="#s7"><span class="nav-num">7</span> 스킬 저장·실행 <span class="nav-t">5′</span></a></li>
+    <li><a href="#s8"><span class="nav-num">8</span> 다음 달 재실행 <span class="nav-t">5′</span></a></li>
+    <li><a href="#s9"><span class="nav-num">9</span> 중간 단계 수정 <span class="nav-t">5′</span></a></li>
+    <li class="sb-section">참고</li>
+    <li><a href="#help"><span class="nav-num">?</span> 막힐 때</a></li>
+    <li><a href="#appendix"><span class="nav-num">📚</span> 요청문 모음</a></li>
+  </ul>
+</nav>
+
+<div class="main">
+
+<section class="hero" id="hero">
+  <div class="container">
+    <span class="eyebrow">🤖 AX-Cell 따라하기 실습</span>
+    <h1>청구서 자동화,<br>40분이면 스킬이 됩니다</h1>
+    <p class="lead">매출 1,200건과 원가표로 청구서 요약을 완성하고, 그 과정을 <b>스킬로 저장</b>해
+      다음 달 파일에 그대로 재사용하는 것까지 — 실제 파일로 처음부터 끝까지 따라합니다.</p>
+    <div class="stats">
+      <div class="stat"><div class="num">9</div><div class="label">실습 단계</div></div>
+      <div class="stat"><div class="num">45′</div><div class="label">총 소요 시간</div></div>
+      <div class="stat"><div class="num">4</div><div class="label">실습 파일</div></div>
+      <div class="stat"><div class="num">1,200</div><div class="label">자동 처리할 매출 건수</div></div>
+    </div>
+    <div class="hero-pills">
+      <span class="pill">피벗</span><span class="pill">이름 맞춰 채우기</span><span class="pill">복사·붙여넣기</span>
+      <span class="pill">서식</span><span class="pill">스킬 저장</span><span class="pill">다음 달 재실행</span>
+    </div>
+  </div>
+</section>
+
+<section id="roadmap">
+  <div class="container">
+    <div class="sec-head"><h2>⏰ 실습 로드맵</h2>
+      <p>앞의 세 실습(피벗 → 채우기 → 반복)이 자동화의 기본기, 실습 8이 오늘의 하이라이트입니다.
+        마지막 실습 9에서는 완성된 스킬을 <b>고쳐 쓰는 법</b>까지 익힙니다.</p></div>
+    <div class="card">
+      <div class="timeline-item"><div class="timeline-dot">1</div>
+        <div class="timeline-body"><div class="tl-title">파일 업로드</div><div class="tl-desc">실습 파일 3개를 올리고 화면 구경</div></div>
+        <div class="timeline-time">5′</div></div>
+      <div class="timeline-item"><div class="timeline-dot">2</div>
+        <div class="timeline-body"><div class="tl-title">피벗</div><div class="tl-desc">매출 1,200건 → 회사별 합계 요약표</div></div>
+        <div class="timeline-time">5′</div></div>
+      <div class="timeline-item"><div class="timeline-dot">3</div>
+        <div class="timeline-body"><div class="tl-title">이름 맞춰 채우기</div><div class="tl-desc">요약값을 청구서 매출 열에 회사명 기준으로</div></div>
+        <div class="timeline-time">5′</div></div>
+      <div class="timeline-item"><div class="timeline-dot">4</div>
+        <div class="timeline-body"><div class="tl-title">원가로 반복</div><div class="tl-desc">같은 패턴 한 번 더 → 마진율 완성</div></div>
+        <div class="timeline-time">5′</div></div>
+      <div class="timeline-item"><div class="timeline-dot">5</div>
+        <div class="timeline-body"><div class="tl-title">복사·붙여넣기</div><div class="tl-desc">월별 집계 옮기기 + 복붙 캡처 소개</div></div>
+        <div class="timeline-time">5′</div></div>
+      <div class="timeline-item"><div class="timeline-dot">6</div>
+        <div class="timeline-body"><div class="tl-title">보기 좋게 다듬기</div><div class="tl-desc">천 단위 쉼표, 머리글 서식</div></div>
+        <div class="timeline-time">5′</div></div>
+      <div class="timeline-item"><div class="timeline-dot">7</div>
+        <div class="timeline-body"><div class="tl-title">스킬 저장 · 전체 실행</div><div class="tl-desc">7단계 묶음을 스킬로 등록하고 재현</div></div>
+        <div class="timeline-time">5′</div></div>
+      <div class="timeline-item timeline-item-main"><div class="timeline-dot">8</div>
+        <div class="timeline-body"><div class="tl-title">다음 달 파일로 재실행 <span class="tl-main-badge">하이라이트</span></div>
+          <div class="tl-desc">5월 원가로 갈아끼우고 그대로 실행 — 이게 스킬의 목적</div></div>
+        <div class="timeline-time">5′</div></div>
+      <div class="timeline-item"><div class="timeline-dot">9</div>
+        <div class="timeline-body"><div class="tl-title">중간 단계 수정</div>
+          <div class="tl-desc">✏ 수정 모드로 단계 하나만 고치면 결과 전체에 반영</div></div>
+        <div class="timeline-time">5′</div></div>
+    </div>
+  </div>
+</section>
+
+<section id="prep">
+  <div class="container">
+    <div class="sec-head"><h2>📂 준비물</h2><p>모두 이 교안과 같은 폴더(시연테스트)에 있습니다.</p></div>
+    <div class="card">
+      <table>
+        <tr><th style="width:44%">파일</th><th>무엇</th><th style="width:18%">쓰는 실습</th></tr>
+        <tr><td><span class="tagref">input_매출_2026_4월.xlsx</span></td><td>4월 매출 1,200건 — 회사명·상품·건수·금액</td><td>1 ~ 7</td></tr>
+        <tr><td><span class="tagref">input_원가_2026_4월.xlsx</span></td><td>4월 원가 120건 — 회사명·상품·단가·원가</td><td>1 ~ 7</td></tr>
+        <tr><td><span class="tagref">교안_청구서.xlsx</span></td><td>완성할 청구서 — 매출·원가 칸이 <b>비어 있음</b></td><td>1 ~ 7</td></tr>
+        <tr><td><span class="tagref">input_원가_2026_5월.xlsx</span></td><td>다음 달 원가 — 재실행 실습용</td><td>8</td></tr>
+      </table>
+      <div class="note">📌 <b>output_청구서_템플릿.xlsx</b> 는 내부 테스트용 시트가 섞여 있어 이 교안에서는 쓰지 않습니다.
+        실습에는 깨끗하게 정리된 <b>교안_청구서.xlsx</b> 를 씁니다.</div>
+    </div>
+  </div>
+</section>
+
+<section id="screen">
+  <div class="container">
+    <div class="sec-head"><h2>🖥 화면 구성</h2><p>30초면 됩니다. 네 군데만 기억하세요.</p></div>
+    <div class="screen-box">
+      <div class="screen-head"><span>AX-Cell 화면 지도</span><span>스킬 생성기 기준</span></div>
+      <div class="screen-diagram" style="height:250px">
+        <div class="zone" style="left:28px;top:24px;width:38%;height:120px"><span class="z-no">1</span>스킬 생성기 (채팅)</div>
+        <div class="zone" style="right:28px;top:24px;width:48%;height:160px"><span class="z-no">2</span>엑셀 화면 (실시간 반영)</div>
+        <div class="zone" style="left:28px;top:158px;width:38%;height:64px"><span class="z-no">3</span>스킬 단계 목록</div>
+        <div class="zone" style="right:28px;bottom:22px;width:48%;height:40px"><span class="z-no">4</span>전체 실행 · 스킬 등록 · 다운로드</div>
+      </div>
+      <div class="legend-grid">
+        <div class="legend-item"><span class="legend-no">1</span><div><strong>스킬 생성기(채팅)</strong>
+          <span>우리말로 요청을 입력합니다. 요청 하나가 스킬 <b>단계 하나</b>로 쌓입니다.</span></div></div>
+        <div class="legend-item"><span class="legend-no">2</span><div><strong>엑셀 화면</strong>
+          <span>업로드한 파일이 진짜 엑셀로 열리고, 결과가 즉시 보입니다. 위 탭으로 파일 전환.</span></div></div>
+        <div class="legend-item"><span class="legend-no">3</span><div><strong>스킬 단계 목록</strong>
+          <span>지금까지의 요청이 1단계, 2단계… 로 쌓인 것. 단계별로 켜고 끌 수 있습니다.</span></div></div>
+        <div class="legend-item"><span class="legend-no">4</span><div><strong>실행 버튼들</strong>
+          <span><b>전체 실행</b>=처음부터 재적용, <b>스킬 등록</b>=저장, <b>다운로드</b>=완성본 받기.</span></div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="rules">
+  <div class="container">
+    <div class="sec-head"><h2>✔ 시작 전 규칙 3가지</h2><p>이것만 지키면 대부분 한 번에 됩니다.</p></div>
+    <div class="card">
+      <div class="gb-case-title">① 한 번에 한 가지씩 — 한 메시지 = 스킬 한 단계</div>
+      <div class="gb-compare">
+        <div class="gb-box bad"><span class="gb-tag">✕ 이렇게 말고</span>
+          <div class="gb-text">"중복 지우고 정렬하고 합계도 넣어줘"</div></div>
+        <div class="gb-box good"><span class="gb-tag">✓ 이렇게</span>
+          <div class="gb-text">세 번에 나눠 요청 — 단계가 하나씩 쌓여야 나중에 끄고 켤 수 있습니다</div></div>
+      </div>
+      <div class="gb-case-title">② 대상은 <span class="tagref">@</span> 멘션으로 — 열은 머리글 이름으로</div>
+      <div class="gb-compare">
+        <div class="gb-box bad"><span class="gb-tag">✕</span>
+          <div class="gb-text">"세 번째 열을 합계 내줘" (파일마다 열이 밀립니다)</div></div>
+        <div class="gb-box good"><span class="gb-tag">✓</span>
+          <div class="gb-text">입력창에 <span class="tagref">@</span> 를 치면 파일·시트 목록이 떠서 클릭으로 선택 —
+          열은 "금액 열"처럼 <b>머리글 이름</b>으로</div></div>
+      </div>
+      <div class="gb-case-title">③ 틀리면 같은 문장 반복 금지 — 무엇이 틀렸는지 붙여서</div>
+      <div class="gb-compare">
+        <div class="gb-box bad"><span class="gb-tag">✕</span>
+          <div class="gb-text">(같은 문장을 그대로 다시 전송)</div></div>
+        <div class="gb-box good"><span class="gb-tag">✓</span>
+          <div class="gb-text">"아니야, 건수 말고 <b>금액 기준</b>으로 해줘"</div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="s1">
+  <div class="container">
+    <div class="step">
+      <div class="step-head"><div class="step-head-left"><span class="step-num">1</span>
+        <h3>파일 업로드 — 재료 준비</h3></div><span class="time">5분</span></div>
+      <div class="step-body">
+        <div class="block"><div class="block-title"><span class="bt-icon">🎯</span>목표</div>
+          <p>실습 파일 3개를 올리고, 오늘 채울 빈칸이 어디인지 눈으로 확인합니다.</p></div>
+        <div class="block"><div class="block-title"><span class="bt-icon">🖱</span>따라하기</div>
+          <div class="todo-list">
+            <label class="todo-check"><input type="checkbox" data-done="s1a"><span class="tc-body">
+              <span class="btn-name">파일 업로드</span> 로 3개를 올린다 —
+              <span class="tagref">input_매출_2026_4월.xlsx</span> ·
+              <span class="tagref">input_원가_2026_4월.xlsx</span> ·
+              <span class="tagref">교안_청구서.xlsx</span></span></label>
+            <label class="todo-check"><input type="checkbox" data-done="s1b"><span class="tc-body">
+              오른쪽 엑셀 위 <b>탭</b>을 눌러 파일을 전환해 본다</span></label>
+            <label class="todo-check"><input type="checkbox" data-done="s1c"><span class="tc-body">
+              <b>교안_청구서 → 회사별요약</b> 시트를 연다 — 회사 20곳의 매출·원가 칸이 비어 있고,
+              마진·마진율에는 수식이 미리 들어 있다</span></label>
+          </div></div>
+        <div class="block"><div class="block-title"><span class="bt-icon">✅</span>확인</div>
+          <div class="note info">탭에 파일 3개 · 회사별요약 4~23행에 회사 20곳 · 24행에 합계 행. 오늘 목표는 이 빈칸 채우기입니다.</div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="s2">
+  <div class="container">
+    <div class="step">
+      <div class="step-head"><div class="step-head-left"><span class="step-num">2</span>
+        <h3>피벗 — 1,200건을 20줄로</h3></div><span class="time">5분</span></div>
+      <div class="step-body">
+        <div class="block"><div class="block-title"><span class="bt-icon">🎯</span>목표</div>
+          <p>매출 시트는 1,200행입니다. 손으로 회사별 합계를 내려면 한참이지만, <b>한 문장</b>이면 됩니다.</p></div>
+        <div class="block"><div class="block-title"><span class="bt-icon">💬</span>채팅에 입력</div>
+          <div class="copy-wrapper"><button class="copy-btn" onclick="copyPrompt(this)">복사</button>
+<pre>@시트[input_매출_2026_4월.xlsx/매출] 회사별로 금액 합계를 요약표로 만들어줘</pre></div>
+          <p class="prompt-hint">@ 부분은 직접 타이핑하지 말고, 입력창에 <b>@</b> 를 친 뒤 목록에서 매출 시트를 고르세요.</p>
+          <div class="mockup"><div class="mockup-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span> 이렇게 진행됩니다</div>
+            <div class="mockup-body">
+              <div class="mockup-user">@시트[input_매출_2026_4월.xlsx/매출] 회사별로 금액 합계를 요약표로 만들어줘</div>
+              <div class="mockup-ai"><strong>1단계 완료</strong> — 회사별 요약 시트를 만들었습니다. 회사 20곳, 오른쪽 엑셀에서 확인하세요.</div>
+            </div></div></div>
+        <div class="block"><div class="block-title"><span class="bt-icon">✅</span>확인</div>
+          <div class="note info">요약표에 회사가 <b>20곳</b> · ABC통신 합계 <b>154,580,000</b> · 왼쪽에 <b>1단계</b>가 쌓임</div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="s3">
+  <div class="container">
+    <div class="step">
+      <div class="step-head"><div class="step-head-left"><span class="step-num">3</span>
+        <h3>이름 맞춰 채우기 — 요약을 청구서로</h3></div><span class="time">5분</span></div>
+      <div class="step-body">
+        <div class="block"><div class="block-title"><span class="bt-icon">🎯</span>목표</div>
+          <p>방금 만든 요약을 청구서의 매출 열에 <b>회사명 기준으로</b> 붙입니다. 행 순서가 달라도 이름으로 맞춰 들어갑니다.</p></div>
+        <div class="block"><div class="block-title"><span class="bt-icon">💬</span>채팅에 입력</div>
+          <div class="copy-wrapper"><button class="copy-btn" onclick="copyPrompt(this)">복사</button>
+<pre>@시트[교안_청구서.xlsx/회사별요약] 방금 만든 회사별 요약의 금액을 회사명에 맞춰 매출 열에 채워줘</pre></div></div>
+        <div class="block"><div class="block-title"><span class="bt-icon">✅</span>확인</div>
+          <div class="note info">매출 열이 채워지고 <b>마진 열이 저절로 계산</b>됩니다(원래 있던 수식이 살아 있어서) ·
+            24행 합계 <b>3,797,128,000</b></div>
+          <div class="note todo">아직 원가가 비어 있어 마진 = 매출인 상태 — 다음 실습에서 완성합니다.</div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="s4">
+  <div class="container">
+    <div class="step">
+      <div class="step-head"><div class="step-head-left"><span class="step-num">4</span>
+        <h3>같은 패턴으로 원가까지</h3></div><span class="time">5분</span></div>
+      <div class="step-body">
+        <div class="block"><div class="block-title"><span class="bt-icon">🎯</span>목표</div>
+          <p>실습 2·3과 똑같은 <b>피벗 → 채우기</b> 패턴을 원가 파일로 반복합니다. 이 두 문장이 자동화의 기본기입니다.</p></div>
+        <div class="block"><div class="block-title"><span class="bt-icon">💬</span>① 원가 피벗</div>
+          <div class="copy-wrapper"><button class="copy-btn" onclick="copyPrompt(this)">복사</button>
+<pre>@시트[input_원가_2026_4월.xlsx/원가] 회사별로 원가 합계를 요약표로 만들어줘</pre></div></div>
+        <div class="block"><div class="block-title"><span class="bt-icon">💬</span>② 청구서에 채우기 (①이 끝난 뒤)</div>
+          <div class="copy-wrapper"><button class="copy-btn" onclick="copyPrompt(this)">복사</button>
+<pre>@시트[교안_청구서.xlsx/회사별요약] 방금 만든 원가 요약을 회사명에 맞춰 원가 열에 채워줘</pre></div></div>
+        <div class="block"><div class="block-title"><span class="bt-icon">✅</span>확인</div>
+          <div class="note info">원가 열이 채워지고 <b>마진율까지 전부 계산</b> · ABC통신 원가 <b>174,883</b> · 스킬 단계 4개</div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="s5">
+  <div class="container">
+    <div class="step">
+      <div class="step-head"><div class="step-head-left"><span class="step-num">5</span>
+        <h3>복사·붙여넣기 — 월별 집계 옮기기</h3></div><span class="time">5분</span></div>
+      <div class="step-body">
+        <div class="block"><div class="block-title"><span class="bt-icon">🎯</span>목표</div>
+          <p>매출 파일의 <b>월별집계</b> 시트에서 1~4월 건수·금액을 청구서의 <b>월별실적</b> 시트로 옮깁니다.</p></div>
+        <div class="block"><div class="block-title"><span class="bt-icon">💬</span>채팅에 입력</div>
+          <div class="copy-wrapper"><button class="copy-btn" onclick="copyPrompt(this)">복사</button>
+<pre>@시트[교안_청구서.xlsx/월별실적] @시트[input_매출_2026_4월.xlsx/월별집계] 의 1월부터 4월까지 건수와 금액을 월에 맞춰 채워줘</pre></div></div>
+        <div class="block"><div class="block-title"><span class="bt-icon">✅</span>확인</div>
+          <div class="note info">월별실적 1~4월이 채워지고 <b>전월대비 수식이 계산</b> · 4월 <b>1,400건 / 155,908,200</b></div>
+          <div class="note">💡 <b>진짜 복붙도 됩니다.</b> 오른쪽 엑셀에서 직접 범위를 <b>Ctrl+C → Ctrl+V</b> 한 직후
+            <span class="btn-name">복붙 캡처</span> 를 누르면, 방금 한 복사·붙여넣기가 그대로 스킬 단계로 저장됩니다.
+            말로 설명하기 애매한 복사는 이쪽이 빠릅니다.</div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="s6">
+  <div class="container">
+    <div class="step">
+      <div class="step-head"><div class="step-head-left"><span class="step-num">6</span>
+        <h3>보기 좋게 다듬기</h3></div><span class="time">5분</span></div>
+      <div class="step-body">
+        <div class="block"><div class="block-title"><span class="bt-icon">💬</span>① 천 단위 쉼표</div>
+          <div class="copy-wrapper"><button class="copy-btn" onclick="copyPrompt(this)">복사</button>
+<pre>@시트[교안_청구서.xlsx/회사별요약] 매출, 원가, 마진 열에 천 단위 쉼표를 넣어줘</pre></div></div>
+        <div class="block"><div class="block-title"><span class="bt-icon">💬</span>② 머리글 꾸미기</div>
+          <div class="copy-wrapper"><button class="copy-btn" onclick="copyPrompt(this)">복사</button>
+<pre>@시트[교안_청구서.xlsx/회사별요약] 3행 머리글을 굵게 하고 회색 배경을 칠해줘</pre></div></div>
+        <div class="block"><div class="block-title"><span class="bt-icon">✅</span>확인</div>
+          <div class="note info">청구서가 완성된 모습 · 스킬 단계 총 <b>7개</b></div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="s7">
+  <div class="container">
+    <div class="step">
+      <div class="step-head"><div class="step-head-left"><span class="step-num">7</span>
+        <h3>스킬로 저장하고 전체 실행</h3></div><span class="time">5분</span></div>
+      <div class="step-body">
+        <div class="block"><div class="block-title"><span class="bt-icon">🎯</span>목표</div>
+          <p>지금까지 쌓인 7단계 묶음이 곧 <b>스킬</b>입니다. 저장해 두면 언제든, 어떤 파일로든 다시 돌릴 수 있습니다.</p></div>
+        <div class="block"><div class="block-title"><span class="bt-icon">🖱</span>따라하기</div>
+          <div class="todo-list">
+            <label class="todo-check"><input type="checkbox" data-done="s7a"><span class="tc-body">
+              <span class="btn-name">스킬 등록</span> 을 누르고 이름을 붙인다 — 예: <span class="tagref">청구서_월마감</span></span></label>
+            <label class="todo-check"><input type="checkbox" data-done="s7b"><span class="tc-body">
+              <span class="btn-name">전체 실행</span> — 원본을 처음 상태부터 다시 읽어 7단계를 순서대로 재적용한다</span></label>
+            <label class="todo-check"><input type="checkbox" data-done="s7c"><span class="tc-body">
+              끝나면 <span class="btn-name">다운로드</span> 로 완성본을 받는다</span></label>
+          </div></div>
+        <div class="block"><div class="block-title"><span class="bt-icon">✅</span>확인</div>
+          <div class="note info">스킬 목록에 <b>청구서_월마감</b> · 전체 실행 후에도 같은 결과(ABC통신 매출 154,580,000) ·
+            다운로드 파일이 엑셀에서 정상으로 열림</div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="s8">
+  <div class="container">
+    <div class="step step-main">
+      <div class="step-head"><div class="step-head-left"><span class="step-num">8</span>
+        <h3>다음 달 파일로 재실행</h3></div><span class="time time-main">하이라이트 · 5분</span></div>
+      <div class="step-body">
+        <div class="block"><div class="block-title"><span class="bt-icon">🎯</span>목표</div>
+          <p>다음 달이 되면 이 작업을 다시 할 필요가 없습니다 — <b>파일만 바꿔서 스킬을 돌리면</b> 끝입니다.</p></div>
+        <div class="block"><div class="block-title"><span class="bt-icon">🖱</span>따라하기</div>
+          <div class="todo-list">
+            <label class="todo-check"><input type="checkbox" data-done="s8a"><span class="tc-body">
+              <span class="btn-name">스킬 실행기</span> 탭으로 이동해 <span class="tagref">청구서_월마감</span> 을 선택한다</span></label>
+            <label class="todo-check"><input type="checkbox" data-done="s8b"><span class="tc-body">
+              파일을 올린다 — 매출 4월, <b>원가는 5월</b>(<span class="tagref">input_원가_2026_5월.xlsx</span>), 교안_청구서</span></label>
+            <label class="todo-check"><input type="checkbox" data-done="s8c"><span class="tc-body">
+              <span class="btn-name">전체 실행</span> — 원가 파일이 4월이 아니어도 <b>이름이 비슷한 5월 파일에 알아서 연결</b>된다</span></label>
+          </div></div>
+        <div class="block"><div class="block-title"><span class="bt-icon">✅</span>확인</div>
+          <div class="note info">ABC통신 원가 4월 <b>174,883</b> → 5월 <b>183,628</b> (5월은 원가가 올라 마진이 줄었습니다)</div>
+          <div class="note">🎉 사람 손을 안 대고 청구서가 새로 완성됐습니다 — <b>이게 스킬의 목적입니다.</b>
+            매달 하는 작업이 있다면, 오늘 배운 그대로 스킬 하나로 만들어 두세요.</div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="s9">
+  <div class="container">
+    <div class="step">
+      <div class="step-head"><div class="step-head-left"><span class="step-num">9</span>
+        <h3>중간 단계 수정 — 스킬은 고쳐 쓰는 것</h3></div><span class="time">5분</span></div>
+      <div class="step-body">
+        <div class="block"><div class="block-title"><span class="bt-icon">🎯</span>목표</div>
+          <p>스킬은 한 번 만들면 끝이 아닙니다. <b>중간 단계 하나만 고치면</b> 그 단계부터 뒤까지
+            자동으로 다시 적용돼 결과 전체에 반영됩니다. 처음부터 새로 만들 필요가 없습니다.</p></div>
+        <div class="block"><div class="block-title"><span class="bt-icon">🖱</span>따라하기</div>
+          <div class="todo-list">
+            <label class="todo-check"><input type="checkbox" data-done="s9a"><span class="tc-body">
+              스킬 단계 목록에서 <b>6단계(천 단위 쉼표)</b>의 <b>✏ 수정</b> 버튼을 누른다 —
+              "수정 모드 활성화" 안내가 뜨고, <b>입력창에 원래 요청문이 자동으로 채워진다</b></span></label>
+            <label class="todo-check"><input type="checkbox" data-done="s9b"><span class="tc-body">
+              채워진 문장 뒤에 <b>마진율 백분율</b> 부분만 덧붙여 전송한다 (아래 문장 참고)</span></label>
+            <label class="todo-check"><input type="checkbox" data-done="s9c"><span class="tc-body">
+              잠시 기다린다 — 6단계가 새 내용으로 바뀌고, <b>그 뒤 단계까지 처음부터 다시 적용</b>되는 것을 본다</span></label>
+          </div></div>
+        <div class="block"><div class="block-title"><span class="bt-icon">💬</span>수정해서 보낼 문장</div>
+          <div class="copy-wrapper"><button class="copy-btn" onclick="copyPrompt(this)">복사</button>
+<pre>@시트[교안_청구서.xlsx/회사별요약] 매출, 원가, 마진 열에 천 단위 쉼표를 넣고, 마진율 열은 백분율로 바꿔줘</pre></div>
+          <p class="prompt-hint">수정 모드에서는 새 단계가 추가되는 게 아니라 <b>그 단계가 이 내용으로 교체</b>됩니다.
+            수정 모드를 그냥 끄고 싶으면 ✏ 버튼을 한 번 더 누르면 됩니다.</p></div>
+        <div class="block"><div class="block-title"><span class="bt-icon">✅</span>확인</div>
+          <div class="note info">마진율이 0.998… 같은 소수 대신 <b>99.9%</b> 처럼 백분율로 보인다 ·
+            쉼표 등 나머지 결과는 그대로 · 단계 개수는 여전히 <b>7개</b>(교체됐으므로)</div>
+          <div class="note">💡 <b>앞쪽 단계를 고쳐도 방법은 같습니다.</b> 예를 들어 1단계(피벗)를 고치면
+            그 결과를 쓰는 뒤 단계들까지 전부 처음부터 다시 적용됩니다 — 앞 단계일수록 다시 도는 범위가
+            넓어져 시간이 조금 더 걸릴 뿐, 스킬을 새로 만들 일은 없습니다.</div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="help">
+  <div class="container">
+    <div class="sec-head"><h2>🧯 막힐 때</h2></div>
+    <div class="qa-item"><div class="q"><span class="qtag">Q.</span> 결과가 틀리게 나왔어요</div>
+      <div class="a"><span class="atag">A.</span> 같은 문장을 반복하지 말고 <b>무엇이 틀렸는지 붙여서</b> 다시 —
+        "아니야, 건수 말고 금액 기준으로 해줘"</div></div>
+    <div class="qa-item"><div class="q"><span class="qtag">Q.</span> 계속 이상하게 만들어요</div>
+      <div class="a"><span class="atag">A.</span> <span class="btn-name">비우기</span> 로 대화 기억을 비우고 다시 요청하세요.
+        쌓인 스킬 단계는 유지됩니다.</div></div>
+    <div class="qa-item"><div class="q"><span class="qtag">Q.</span> 프로그램/엑셀이 먹통이에요</div>
+      <div class="a"><span class="atag">A.</span> <b>F5 새로고침</b> — 파일·스킬·대화를 유지한 채 새로 시작하고 스킬을 자동으로 다시 적용합니다.</div></div>
+    <div class="qa-item"><div class="q"><span class="qtag">Q.</span> 스킬이 뭘 잘못했는지 모르겠어요</div>
+      <div class="a"><span class="atag">A.</span> <b>F11 AI 도움</b> — 프로그램 안의 도우미가 스킬 진단·수정·데이터 질의를 도와줍니다.</div></div>
+    <div class="qa-item"><div class="q"><span class="qtag">Q.</span> 단계 하나만 빼고 싶어요</div>
+      <div class="a"><span class="atag">A.</span> 스킬 단계 목록에서 그 단계를 <b>OFF</b> 하고 전체 실행하면 됩니다.</div></div>
+  </div>
+</section>
+
+<section id="appendix">
+  <div class="container">
+    <div class="sec-head"><h2>📚 자주 쓰는 요청문 모음</h2>
+      <p>실습이 끝나면 내 업무 파일로 이 문장들을 시험해 보세요. 뜻만 같으면 그대로 따라 쓸 필요는 없습니다.</p></div>
+    <div class="card">
+      <table>
+        <tr><th style="width:20%">하고 싶은 것</th><th>이렇게 말하면 됩니다</th></tr>
+        <tr><td>피벗(집계표)</td><td>회사별 청구금액 합계를 요약표로 만들어줘 · 행은 지점, 열은 월, 값은 매출로 크로스탭 만들어줘</td></tr>
+        <tr><td>이름 맞춰 채우기</td><td>피벗 결과를 회사명에 맞춰 대상 시트에 채워줘</td></tr>
+        <tr><td>찾아서 가져오기</td><td>단가표에서 상품명으로 단가를 찾아서 단가 열에 채워줘</td></tr>
+        <tr><td>복사</td><td>A1:F50 을 다른 시트 같은 자리에 서식까지 그대로 복사해줘 · 계산 결과를 값으로 붙여넣어줘</td></tr>
+        <tr><td>정렬</td><td>청구금액 기준 내림차순으로 정렬해줘</td></tr>
+        <tr><td>필터·추출</td><td>상태가 "정상"인 행만 골라서 새 시트에 정리해줘</td></tr>
+        <tr><td>중복 제거</td><td>가입번호와 청구월이 같은 중복 행은 지워줘</td></tr>
+        <tr><td>조건 삭제</td><td>금액이 0인 행은 지워줘</td></tr>
+        <tr><td>합계</td><td>표 맨 아래에 합계 행 추가해줘 · 조건에 맞는 것만 합계 내줘</td></tr>
+        <tr><td>서식</td><td>금액 열에 천 단위 쉼표 넣어줘 · 머리글 줄에 회색 배경 칠해줘</td></tr>
+        <tr><td>행·열 편집</td><td>Q열과 R열 사이에 열 1개 추가해줘 · 1행부터 9행까지 지워줘</td></tr>
+        <tr><td>시트</td><td>"요약"이라는 새 시트를 맨 앞에 만들어줘 · 임시 시트를 지워줘</td></tr>
+      </table>
+      <div class="note">더 많은 표현은 함께 배포되는 <b>스킬 함수 설명서(HTML)</b>를 참고하세요 —
+        명령마다 "이렇게 말하면" 예문이 붙어 있습니다.</div>
+    </div>
+  </div>
+</section>
+
+<div class="footer"><div class="container"><div class="card">
+  AX-Cell 실습 교안 · 시연테스트 데이터 기준 · 확인란의 숫자는 동봉된 파일에서 실제로 계산한 기대값입니다
+</div></div></div>
+
+</div><!-- /.main -->
+
+<script>
+"use strict";
+// ── 프롬프트 복사: 보안망 file:// 에서 clipboard API 가 막히는 경우의 fallback 포함 ──
+function copyPrompt(button) {
+  const pre = button.parentElement.querySelector("pre");
+  const text = pre.innerText.trim();
+  const showResult = (message, ok) => {
+    const orig = button.dataset.orig || button.innerText;
+    button.dataset.orig = orig;
+    button.innerText = message;
+    button.classList.toggle("done", !!ok);
+    setTimeout(() => { button.innerText = orig; button.classList.remove("done"); }, 1500);
+  };
+  const fallbackCopy = () => {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.setAttribute("readonly", "");
+    ta.style.position = "fixed";
+    ta.style.left = "-9999px";
+    document.body.appendChild(ta);
+    ta.select();
+    try {
+      const ok = document.execCommand("copy");
+      showResult(ok ? "복사완료 ✔" : "복사실패", ok);
+    } catch (e) {
+      showResult("복사실패", false);
+    } finally {
+      document.body.removeChild(ta);
+    }
+  };
+  if (navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard.writeText(text).then(() => showResult("복사완료 ✔", true)).catch(fallbackCopy);
+  } else {
+    fallbackCopy();
+  }
+}
+
+// ── 사이드바: 스크롤 위치에 따라 현재 구간 표시 ──
+const navLinks = document.querySelectorAll(".sb-nav a");
+const sections = document.querySelectorAll("section[id]");
+function setActive(id) {
+  navLinks.forEach(a => a.classList.toggle("active", a.getAttribute("href") === "#" + id));
+}
+const spy = new IntersectionObserver(entries => {
+  entries.forEach(en => { if (en.isIntersecting) setActive(en.target.id); });
+}, { rootMargin: "-30% 0px -60% 0px" });
+sections.forEach(s => spy.observe(s));
+
+// ── 모바일 사이드바 토글 ──
+const sb = document.getElementById("sidebar");
+document.getElementById("mobileNavToggle").addEventListener("click", () => sb.classList.toggle("open"));
+navLinks.forEach(a => a.addEventListener("click", () => sb.classList.remove("open")));
+
+// ── 진행 체크 저장(브라우저별) — 실패해도 교안 동작에는 지장 없음 ──
+document.querySelectorAll("input[data-done]").forEach(cb => {
+  const key = "axcell-tut-" + cb.dataset.done;
+  try { cb.checked = localStorage.getItem(key) === "1"; } catch (_) {}
+  cb.addEventListener("change", () => {
+    try { localStorage.setItem(key, cb.checked ? "1" : "0"); } catch (_) {}
+  });
+});
+</script>
+</body>
+</html>

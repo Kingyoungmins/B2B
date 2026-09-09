@@ -1,0 +1,77 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    body { margin: 0; font-family: 'Pretendard Variable', 'Pretendard', 'Segoe UI', 'Malgun Gothic', sans-serif; background: #ffffff; color: #1f2937; }
+    a { color: #0a66c2; } a:hover { color: #084a94; }
+  </style>
+</helmet>
+<div style="width: 920px; height: 620px; background: #ffffff; padding: 34px 40px; display: flex; flex-direction: column; gap: 16px">
+
+  <div style="display: flex; align-items: center; gap: 12px">
+    <span style="width: 38px; height: 38px; border-radius: 12px; background: linear-gradient(135deg, #0a66c2, #1caa6e); color: #ffffff; display: flex; align-items: center; justify-content: center; font-size: 17px; font-weight: 900">1</span>
+    <span style="font-size: 21px; font-weight: 900; color: #142033">화면 구성 — 네 군데만 기억하세요</span>
+    <span style="margin-left: auto; padding: 6px 12px; border-radius: 999px; background: #eaf3fc; border: 1px solid #cfe3f5; color: #084a94; font-size: 12px; font-weight: 900">5분</span>
+  </div>
+
+  <!-- 실제 앱 톤(화이트 + 블랙)의 화면 목업 -->
+  <div style="border: 1px solid #d9e6f2; border-radius: 14px; overflow: hidden; box-shadow: 0 12px 32px rgba(20,40,70,0.10)">
+    <div style="height: 42px; background: #ffffff; border-bottom: 1px solid #EBE9F1; display: flex; align-items: center; gap: 10px; padding: 0 14px">
+      <span style="width: 22px; height: 22px; border-radius: 6px; background: #1A1A1A; color: #ffffff; display: inline-flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 900">AX</span>
+      <span style="font-size: 12.5px; font-weight: 800; color: #1A1A1A">AX-Cell</span>
+      <span style="margin-left: 16px; font-size: 12px; color: #1A1A1A; font-weight: 800; border-bottom: 2px solid #1A1A1A; padding: 10px 2px">교안_청구서.xlsx</span>
+      <span style="font-size: 12px; color: #747474; padding: 10px 2px">input_매출_2026_4월.xlsx</span>
+      <span style="font-size: 12px; color: #747474; padding: 10px 2px">input_원가_2026_4월.xlsx</span>
+      <span style="margin-left: auto; font-size: 11px; color: #ffffff; background: #1A1A1A; border-radius: 7px; padding: 5px 11px; font-weight: 800">파일 업로드</span>
+    </div>
+    <div style="display: flex; background: #FAFAFD; height: 300px">
+      <div style="width: 300px; border-right: 1px solid #EBE9F1; padding: 12px; display: flex; flex-direction: column; gap: 8px; position: relative">
+        <div style="align-self: flex-end; max-width: 92%; background: #F2F2F2; border: 1px solid #E0E0E0; border-radius: 12px; padding: 8px 11px; font-size: 11.5px; color: #1A1A1A">회사별로 금액 합계를 요약표로 만들어줘</div>
+        <div style="align-self: flex-start; max-width: 92%; background: #ffffff; border: 1px solid #EBE9F1; border-radius: 12px; padding: 8px 11px; font-size: 11.5px; color: #3D3D3D">1단계 완료 — 요약 시트를 만들었습니다.</div>
+        <div style="margin-top: auto; border: 1px solid #E0E0E0; border-radius: 9px; background: #ffffff; padding: 8px 10px; font-size: 11px; color: #A8A8A8">각 요청은 하나의 단계로 작성됩니다…</div>
+        <div style="position: absolute; inset: 8px 8px auto 8px; border: 1.5px dashed #0a66c2; border-radius: 10px; background: rgba(234,243,252,0.75); padding: 5px 9px; font-size: 11px; font-weight: 800; color: #084a94; display: flex; align-items: center; gap: 6px">
+          <span style="width: 17px; height: 17px; border-radius: 50%; background: #0a66c2; color: #ffffff; display: inline-flex; align-items: center; justify-content: center; font-size: 10px">1</span>스킬 생성기(채팅) — 요청 하나 = 단계 하나
+        </div>
+      </div>
+      <div style="flex: 1; padding: 12px; position: relative">
+        <div style="display: flex; gap: 6px; margin-bottom: 8px">
+          <span style="font-size: 11px; font-weight: 800; color: #1A1A1A; border: 1px solid #1A1A1A; border-radius: 6px; padding: 3px 9px; background: #ffffff">회사별요약</span>
+          <span style="font-size: 11px; color: #747474; border: 1px solid #E0E0E0; border-radius: 6px; padding: 3px 9px; background: #ffffff">월별실적</span>
+        </div>
+        <div style="background: #ffffff; border: 1px solid #E0E0E0; border-radius: 8px; height: 200px; padding: 10px; font-size: 11px; color: #A8A8A8">엑셀 화면 — 업로드한 파일이 진짜 엑셀로 열리고, 요청 결과가 즉시 반영됩니다</div>
+        <div style="position: absolute; right: 16px; top: 16px; border: 1.5px dashed #0a66c2; border-radius: 10px; background: rgba(234,243,252,0.85); padding: 5px 9px; font-size: 11px; font-weight: 800; color: #084a94; display: flex; align-items: center; gap: 6px">
+          <span style="width: 17px; height: 17px; border-radius: 50%; background: #0a66c2; color: #ffffff; display: inline-flex; align-items: center; justify-content: center; font-size: 10px">2</span>엑셀 화면 · 위 탭으로 파일 전환
+        </div>
+      </div>
+    </div>
+    <div style="display: flex; align-items: center; gap: 8px; background: #ffffff; border-top: 1px solid #EBE9F1; padding: 9px 14px; position: relative">
+      <span style="font-size: 11px; font-weight: 800; color: #1A1A1A; background: #F2F2F2; border-radius: 999px; padding: 4px 11px">1단계 피벗 ✓</span>
+      <span style="font-size: 11px; color: #A8A8A8; border: 1px dashed #D6D6D6; border-radius: 999px; padding: 4px 11px">다음 단계…</span>
+      <span style="margin-left: auto; font-size: 11px; color: #ffffff; background: #1A1A1A; border-radius: 7px; padding: 5px 12px; font-weight: 800">전체 실행</span>
+      <span style="font-size: 11px; color: #1A1A1A; background: #ffffff; border: 1px solid #1A1A1A; border-radius: 7px; padding: 4px 12px; font-weight: 800">스킬 등록</span>
+      <span style="font-size: 11px; color: #1A1A1A; background: #ffffff; border: 1px solid #E0E0E0; border-radius: 7px; padding: 4px 12px; font-weight: 800">다운로드</span>
+      <div style="position: absolute; left: 12px; top: -14px; border: 1.5px dashed #1caa6e; border-radius: 10px; background: rgba(232,247,239,0.9); padding: 4px 9px; font-size: 11px; font-weight: 800; color: #128a56; display: inline-flex; align-items: center; gap: 6px">
+        <span style="width: 17px; height: 17px; border-radius: 50%; background: #1caa6e; color: #ffffff; display: inline-flex; align-items: center; justify-content: center; font-size: 10px">3</span>스킬 단계 목록
+      </div>
+      <div style="position: absolute; right: 12px; top: -14px; border: 1.5px dashed #1caa6e; border-radius: 10px; background: rgba(232,247,239,0.9); padding: 4px 9px; font-size: 11px; font-weight: 800; color: #128a56; display: inline-flex; align-items: center; gap: 6px">
+        <span style="width: 17px; height: 17px; border-radius: 50%; background: #1caa6e; color: #ffffff; display: inline-flex; align-items: center; justify-content: center; font-size: 10px">4</span>실행 버튼들
+      </div>
+    </div>
+  </div>
+
+  <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; font-size: 12.5px; color: #667085">
+    <div><b style="color: #142033">① 스킬 생성기(채팅)</b> — 우리말 요청 하나가 스킬 단계 하나로 쌓입니다.</div>
+    <div><b style="color: #142033">② 엑셀 화면</b> — 결과가 즉시 보입니다. 위 탭으로 파일 전환.</div>
+    <div><b style="color: #142033">③ 스킬 단계 목록</b> — 쌓인 단계를 켜고 끄고, ✏ 로 수정합니다.</div>
+    <div><b style="color: #142033">④ 실행 버튼</b> — 전체 실행 = 처음부터 재적용 · 스킬 등록 = 저장 · 다운로드 = 완성본.</div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

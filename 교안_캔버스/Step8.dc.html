@@ -1,0 +1,80 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    body { margin: 0; font-family: 'Pretendard Variable', 'Pretendard', 'Segoe UI', 'Malgun Gothic', sans-serif; background: #ffffff; color: #1f2937; }
+    a { color: #0a66c2; } a:hover { color: #084a94; }
+    table.xl { border-collapse: collapse; font-size: 11.5px; background: #ffffff; }
+    table.xl td { border: 1px solid #e4e9f1; padding: 4px 9px; color: #1A1A1A; }
+    table.xl td.h { background: #f1f4f9; color: #8a93a5; text-align: center; font-weight: 700; font-size: 10.5px; }
+    table.xl td.th { background: #F2F2F2; font-weight: 800; }
+    table.xl td.n { text-align: right; font-variant-numeric: tabular-nums; }
+    table.xl td.chg { background: #FFF6D6; }
+  </style>
+</helmet>
+<div style="width: 920px; height: 780px; background: #ffffff; padding: 34px 40px; display: flex; flex-direction: column; gap: 14px; border: 2px solid #0a66c2; border-radius: 18px; box-sizing: border-box">
+
+  <div style="display: flex; align-items: center; gap: 12px">
+    <span style="width: 38px; height: 38px; border-radius: 12px; background: linear-gradient(135deg, #0a66c2, #1caa6e); color: #ffffff; display: flex; align-items: center; justify-content: center; font-size: 17px; font-weight: 900">7·8</span>
+    <span style="font-size: 21px; font-weight: 900; color: #142033">스킬 저장 → 다음 달 파일로 재실행</span>
+    <span style="margin-left: auto; padding: 6px 12px; border-radius: 999px; background: linear-gradient(135deg, #0a66c2, #1caa6e); color: #ffffff; font-size: 12px; font-weight: 900">하이라이트 · 10분</span>
+  </div>
+
+  <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px">
+    <div style="border: 1px solid #d9e6f2; border-radius: 12px; padding: 12px 14px; background: #fbfdff">
+      <div style="font-size: 12px; font-weight: 900; color: #084a94; margin-bottom: 4px">① 스킬 등록</div>
+      <div style="font-size: 12.5px; color: #667085; line-height: 1.6"><span style="display: inline-block; background: #1A1A1A; color: #ffffff; border-radius: 6px; padding: 1px 9px; font-size: 11px; font-weight: 800">스킬 등록</span> 을 누르고 이름을 붙인다 — 예: <b style="color: #142033">청구서_월마감</b> (7단계)</div>
+    </div>
+    <div style="border: 1px solid #d9e6f2; border-radius: 12px; padding: 12px 14px; background: #fbfdff">
+      <div style="font-size: 12px; font-weight: 900; color: #084a94; margin-bottom: 4px">② 실행기에서 파일 교체</div>
+      <div style="font-size: 12.5px; color: #667085; line-height: 1.6"><span style="display: inline-block; background: #1A1A1A; color: #ffffff; border-radius: 6px; padding: 1px 9px; font-size: 11px; font-weight: 800">스킬 실행기</span> 탭 → 스킬 선택 → 매출 4월 + <b style="color: #142033">원가 5월</b> + 교안_청구서 업로드</div>
+    </div>
+    <div style="border: 1px solid #d9e6f2; border-radius: 12px; padding: 12px 14px; background: #fbfdff">
+      <div style="font-size: 12px; font-weight: 900; color: #084a94; margin-bottom: 4px">③ 전체 실행</div>
+      <div style="font-size: 12.5px; color: #667085; line-height: 1.6">파일이 4월이 아니어도 <b style="color: #142033">이름이 비슷한 5월 파일에 알아서 연결</b>돼 7단계가 다시 돈다</div>
+    </div>
+  </div>
+
+  <div>
+    <div style="font-size: 12px; font-weight: 900; color: #128a56; margin-bottom: 6px">실행하면 이렇게 됩니다 — 4월 결과와 5월 재실행 결과 비교 (실제 계산값)</div>
+    <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px">
+      <div style="border: 1px solid #d9e6f2; border-radius: 14px; background: #FAFAFD; padding: 12px">
+        <div style="font-size: 12px; font-weight: 800; color: #667085; margin-bottom: 8px">원가 4월로 실행 (실습 7)</div>
+        <table class="xl" style="width: 100%">
+          <tr><td class="th">회사명</td><td class="th n">원가</td><td class="th n">마진</td></tr>
+          <tr><td>ABC통신</td><td class="n">174,883</td><td class="n">154,405,117</td></tr>
+          <tr><td>글로벌네트워크</td><td class="n">172,766</td><td class="n">220,220,234</td></tr>
+          <tr><td>스마트링크</td><td class="n">294,836</td><td class="n">196,975,164</td></tr>
+          <tr><td class="th">합계</td><td class="n th">5,491,071</td><td class="n th">3,791,636,929</td></tr>
+        </table>
+      </div>
+      <div style="border: 1.5px solid #0a66c2; border-radius: 14px; background: #FAFAFD; padding: 12px">
+        <div style="font-size: 12px; font-weight: 800; color: #084a94; margin-bottom: 8px">원가 5월로 재실행 (실습 8) — 원가만 바뀜</div>
+        <table class="xl" style="width: 100%">
+          <tr><td class="th">회사명</td><td class="th n">원가</td><td class="th n">마진</td></tr>
+          <tr><td>ABC통신</td><td class="n chg">183,628</td><td class="n chg">154,396,372</td></tr>
+          <tr><td>글로벌네트워크</td><td class="n chg">181,403</td><td class="n chg">220,211,597</td></tr>
+          <tr><td>스마트링크</td><td class="n chg">309,578</td><td class="n chg">196,960,422</td></tr>
+          <tr><td class="th">합계</td><td class="n th chg">5,765,623</td><td class="n th chg">3,791,362,377</td></tr>
+        </table>
+      </div>
+    </div>
+    <div style="font-size: 11px; color: #8a93a5; margin-top: 6px">노란 칠 = 파일을 5월로 바꿨더니 달라진 값 — 5월은 원가가 올라 마진이 줄었습니다</div>
+  </div>
+
+  <div style="border-left: 4px solid #1caa6e; background: #e8f7ef; color: #0e7a4e; padding: 12px 16px; border-radius: 12px; font-size: 13px; line-height: 1.7">
+    <b>확인</b> — ABC통신 원가 4월 <b>174,883</b> → 5월 <b>183,628</b> · 사람 손을 안 대고 청구서가 새로 완성됐다
+  </div>
+  <div style="border: 1px solid #cdeedd; border-radius: 12px; padding: 12px 16px; background: #e8f7ef; font-size: 13.5px; color: #128a56; font-weight: 700">
+    이게 스킬의 목적입니다 — 매달 하는 작업이 있다면, 오늘 배운 그대로 스킬 하나로 만들어 두세요.
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

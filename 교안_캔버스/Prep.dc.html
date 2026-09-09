@@ -1,0 +1,79 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    body { margin: 0; font-family: 'Pretendard Variable', 'Pretendard', 'Segoe UI', 'Malgun Gothic', sans-serif; background: #ffffff; color: #1f2937; }
+    a { color: #0a66c2; } a:hover { color: #084a94; }
+    table { border-collapse: collapse; width: 100%; font-size: 13px; }
+    th, td { border: 1px solid #d9e6f2; padding: 8px 12px; text-align: left; vertical-align: top; }
+    th { background: #f4f9fe; color: #084a94; font-size: 12px; }
+  </style>
+</helmet>
+<div style="width: 920px; height: 780px; background: #ffffff; padding: 34px 40px; display: flex; flex-direction: column; gap: 20px">
+
+  <div style="display: flex; align-items: center; gap: 12px">
+    <span style="width: 38px; height: 38px; border-radius: 12px; background: linear-gradient(135deg, #0a66c2, #1caa6e); color: #ffffff; display: flex; align-items: center; justify-content: center; font-size: 17px; font-weight: 900">0</span>
+    <span style="font-size: 21px; font-weight: 900; color: #142033; letter-spacing: -0.01em">준비물과 규칙</span>
+    <span style="margin-left: auto; padding: 6px 12px; border-radius: 999px; background: #eaf3fc; border: 1px solid #cfe3f5; color: #084a94; font-size: 12px; font-weight: 900">시작 전 5분</span>
+  </div>
+
+  <div>
+    <div style="font-size: 12px; font-weight: 900; color: #128a56; letter-spacing: 0.02em; margin-bottom: 8px">준비물 — 모두 시연테스트 폴더에 있습니다</div>
+    <table>
+      <tr><th style="width: 42%">파일</th><th>무엇</th><th style="width: 15%">쓰는 실습</th></tr>
+      <tr><td style="font-family: Consolas, monospace; font-size: 12px; color: #084a94">input_매출_2026_4월.xlsx</td><td>4월 매출 1,200건 — 회사명·상품·건수·금액</td><td>1 ~ 7</td></tr>
+      <tr><td style="font-family: Consolas, monospace; font-size: 12px; color: #084a94">input_원가_2026_4월.xlsx</td><td>4월 원가 120건 — 회사명·상품·단가·원가</td><td>1 ~ 7</td></tr>
+      <tr><td style="font-family: Consolas, monospace; font-size: 12px; color: #084a94">교안_청구서.xlsx</td><td>완성할 청구서 — 매출·원가 칸이 <b>비어 있음</b></td><td>1 ~ 7</td></tr>
+      <tr><td style="font-family: Consolas, monospace; font-size: 12px; color: #084a94">input_원가_2026_5월.xlsx</td><td>다음 달 원가 — 재실행 실습용</td><td>8</td></tr>
+    </table>
+  </div>
+
+  <div>
+    <div style="font-size: 12px; font-weight: 900; color: #128a56; letter-spacing: 0.02em; margin-bottom: 8px">규칙 3가지 — 이것만 지키면 대부분 한 번에 됩니다</div>
+    <div style="display: flex; flex-direction: column; gap: 10px">
+      <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px">
+        <div style="border: 1.5px solid #d9e6f2; border-radius: 12px; padding: 12px 14px; background: #f4f6f9">
+          <span style="display: inline-flex; font-size: 11px; font-weight: 900; padding: 2px 9px; border-radius: 999px; background: #667085; color: #ffffff; margin-bottom: 6px">이렇게 말고</span>
+          <div style="font-size: 13px; color: #667085">"중복 지우고 정렬하고 합계도 넣어줘"</div>
+        </div>
+        <div style="border: 1.5px solid #cdeedd; border-radius: 12px; padding: 12px 14px; background: #e8f7ef">
+          <span style="display: inline-flex; font-size: 11px; font-weight: 900; padding: 2px 9px; border-radius: 999px; background: #1caa6e; color: #ffffff; margin-bottom: 6px">이렇게</span>
+          <div style="font-size: 13px; color: #128a56"><b>한 번에 한 가지씩</b> — 한 메시지 = 스킬 한 단계. 단계가 하나씩 쌓여야 나중에 끄고 켤 수 있습니다.</div>
+        </div>
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px">
+        <div style="border: 1.5px solid #d9e6f2; border-radius: 12px; padding: 12px 14px; background: #f4f6f9">
+          <span style="display: inline-flex; font-size: 11px; font-weight: 900; padding: 2px 9px; border-radius: 999px; background: #667085; color: #ffffff; margin-bottom: 6px">이렇게 말고</span>
+          <div style="font-size: 13px; color: #667085">"세 번째 열을 합계 내줘" — 파일마다 열이 밀립니다</div>
+        </div>
+        <div style="border: 1.5px solid #cdeedd; border-radius: 12px; padding: 12px 14px; background: #e8f7ef">
+          <span style="display: inline-flex; font-size: 11px; font-weight: 900; padding: 2px 9px; border-radius: 999px; background: #1caa6e; color: #ffffff; margin-bottom: 6px">이렇게</span>
+          <div style="font-size: 13px; color: #128a56">입력창에 <b>@</b> 를 치면 파일·시트 목록이 떠서 클릭으로 선택 — 열은 <b>"금액 열"처럼 머리글 이름</b>으로.</div>
+        </div>
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px">
+        <div style="border: 1.5px solid #d9e6f2; border-radius: 12px; padding: 12px 14px; background: #f4f6f9">
+          <span style="display: inline-flex; font-size: 11px; font-weight: 900; padding: 2px 9px; border-radius: 999px; background: #667085; color: #ffffff; margin-bottom: 6px">이렇게 말고</span>
+          <div style="font-size: 13px; color: #667085">(틀렸는데 같은 문장을 그대로 다시 전송)</div>
+        </div>
+        <div style="border: 1.5px solid #cdeedd; border-radius: 12px; padding: 12px 14px; background: #e8f7ef">
+          <span style="display: inline-flex; font-size: 11px; font-weight: 900; padding: 2px 9px; border-radius: 999px; background: #1caa6e; color: #ffffff; margin-bottom: 6px">이렇게</span>
+          <div style="font-size: 13px; color: #128a56">"아니야, 건수 말고 <b>금액 기준</b>으로 해줘" — 무엇이 틀렸는지 붙여서.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div style="border-left: 4px solid #c98a1d; background: #fdf3e2; color: #8a5c0d; padding: 12px 16px; border-radius: 12px; font-size: 13px; line-height: 1.6">
+    <b>output_청구서_템플릿.xlsx 는 쓰지 않습니다</b> — 내부 테스트용 시트가 섞여 있습니다. 실습에는 깨끗하게 정리된 <b>교안_청구서.xlsx</b> 를 씁니다.
+  </div>
+</div>
+</x-dc>
+</body>
+</html>
