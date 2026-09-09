@@ -155,8 +155,15 @@ async function effectiveDevVllmModel(base, wanted, apiKey) {
     return _devVllmModelCache.model;
   }
   try {
-    const resp = await fetch(base.replace(/\/$/, "") + "/models",
-      { headers: openAICompatAuthHeaders(apiKey, "dev-vllm") });
+    // [2026-09-09] 타임아웃 없이 fetch 하면 주소가 죽었을 때(서버 이전 .111→.108 실측) OS 연결 타임아웃
+    // (수십 초)을 매 호출 앞단에서 먹는다 — AI 도움이 "확인 중" 에서 몇 분씩 매달린 원인의 한 축.
+    const _ac = (typeof AbortController === "function") ? new AbortController() : null;
+    const _tm = _ac ? setTimeout(() => { try { _ac.abort(); } catch (_) {} }, 4000) : null;
+    let resp;
+    try {
+      resp = await fetch(base.replace(/\/$/, "") + "/models",
+        { headers: openAICompatAuthHeaders(apiKey, "dev-vllm"), signal: _ac ? _ac.signal : undefined });
+    } finally { if (_tm) clearTimeout(_tm); }
     const data = await resp.json();
     const ids = ((data && data.data) || []).map(m => m && m.id).filter(Boolean);
     if (ids.length) {

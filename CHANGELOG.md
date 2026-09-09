@@ -13,6 +13,13 @@
 
 0.8.3 그대로에서 버전만 올린 갈래(`cdc6f860`). 제품명 변경, F키 접근 권한, 대시보드 실사용 보강, 그리고 "화면은 맞는데 파일이 다르다" 부류의 조용한 오류 수정이 중심입니다.
 
+### 수정 — 2026-09-09 오후 (docs/lessons/61)
+
+- **AI 도움 팝업: 진단 버튼을 눌러도 "창만 열리고 아무것도 안 뜸"** — 팝업 페이지는 닫아도 살아 있어 재오픈 땐 `ready` 가 다시 오지 않는데, 보관한 질문(`_assistPendingAsk`)을 `ready` 에서만 보내고 `popup-opened` 에서 폴백 타이머까지 지워 질문이 증발했다. `popup-opened` 에서도 보낸다(첫 로드는 1.5초 폴백). 팝업 쪽 `case "ask"` 가 busy 면 조용히 버리던 것도 busy 를 풀고 보내도록 ([scripts/assist-ui.js](scripts/assist-ui.js), [scripts/assist-popup.js](scripts/assist-popup.js)).
+- **개발망 vLLM 이전(.111→.108)으로 모든 LLM 호출이 연결 타임아웃 → "확인 중" 에서 분 단위 매달림** — 기본 주소를 `.108` 로 바꾸고 저장 설정의 `.111` 은 레거시 목록으로 자동 승격. `effectiveDevVllmModel` 의 `/models` 탐색 fetch 에 4초 타임아웃(예전엔 없어서 매 호출 앞단에서 OS 연결 타임아웃을 통째로 먹음) ([scripts/config.js](scripts/config.js), [scripts/llm-api.js](scripts/llm-api.js)).
+- **`ctx.sort` 가 합계 행까지 정렬해 맨 위로 올림** — 범위 맨 아래의 합계/평균/소계 행(과 빈 행)은 자동 제외해 그 자리에 둔다(`exclude_summary_rows=True` 기본). win32com `Range.Resize` 함정을 피해 `ws.Range(cells, cells)` 로 범위를 다시 잡는다. 실 Excel 검증 ([serve_b2b.py](serve_b2b.py), `test_runs/_test_sort_pins_summary_rows_com.py`).
+- 재현 방법 기록: 네이티브 셸에 `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=9333` 로 CDP 를 붙여 팝업 모드를 자동화 (`test_runs/_e2e_native_popup_assist_live.py`, 수동).
+
 ### 수정 — 조용히 틀린 결과 (docs/lessons/58)
 
 - **[크리티컬] 결과편집 후 "현재 상태 다운로드"가 옛 실행 결과를 서빙** — 전체실행(19단계) → 결과편집 → 스킬 추가(라이브 적용) → 다운로드 시 **실행 시점**의 결과 파일이 받아져 추가한 스킬이 빠졌습니다(뷰에는 적용돼 보여 사용자가 받아 간 뒤에야 드러남). 결과편집이 라이브로 불러온 결과 항목에 `liveAbsorbed` 표시를 달고, 다운로드는 흡수된 항목을 건너뛰고 라이브 현재 상태를 `/api/excel/save` 로 저장합니다. 결과편집 재클릭 시 옛 결과가 라이브(추가 스킬)를 덮던 부수 구멍도 함께 막았습니다. 결과를 라이브에 안 불러온 파일의 "결과 우선 다운로드"(원본 방지)는 보존 ([scripts/output-template.js](scripts/output-template.js), [scripts/pipeline.js](scripts/pipeline.js), `3b79e27b`).

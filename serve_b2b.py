@@ -15457,12 +15457,36 @@ class PythonComSkillContext:
         self._shared["structural"].append(f"append_same_format_sheets:{len(books)}->{dest_name}({copied_rows})")
         return dest_name
 
-    def sort(self, sheet, a1_range, key_col, ascending=True, has_header=True):
+    def sort(self, sheet, a1_range, key_col, ascending=True, has_header=True, exclude_summary_rows=True):
         """실제 범위 정렬. key_col 은 범위 내 1-based 열 번호/'B' 열 문자, 또는 이들의 리스트(다중키).
-        ascending 도 단일 bool 또는 키별 bool 리스트를 받는다."""
+        ascending 도 단일 bool 또는 키별 bool 리스트를 받는다.
+        exclude_summary_rows(기본 True): 범위 **맨 아래**에 붙은 합계/평균/소계/총계 행(과 빈 행)은 정렬에서
+        빼고 그 자리에 둔다 — [실측 2026-09-09] '마진 내림차순' 에 24행 '합계 / 평균' 이 딸려 올라가
+        헤더 바로 밑에 박혔다. 요약 행을 일부러 섞어 정렬하려면 False."""
         ws = self._ws(sheet)
         rng = self._rng(ws, a1_range)
         self._tick(3)
+        if exclude_summary_rows:
+            try:
+                n_rows = int(rng.Rows.Count)
+                n_cols = int(rng.Columns.Count)
+                probe_n = min(6, max(0, n_rows - (2 if has_header else 1)))   # 헤더+데이터 1행은 남긴다
+                if probe_n > 0:
+                    look = ws.Range(rng.Cells(n_rows - probe_n + 1, 1), rng.Cells(n_rows, min(3, n_cols)))
+                    tail = _range_matrix(look.Value2)
+                    self._tick(1)
+                    drop = 0
+                    for row in reversed(tail):
+                        if _is_summary_or_blank_row(row):
+                            drop += 1
+                        else:
+                            break
+                    if drop:
+                        # win32com 의 Range.Resize 는 단일 셀/엉뚱한 범위를 돌려준다(실측 함정) — 좌표로 다시 잡는다.
+                        rng = ws.Range(rng.Cells(1, 1), rng.Cells(n_rows - drop, n_cols))
+                        self._shared["structural"].append("sort:summary_rows_pinned:%d" % drop)
+            except Exception:
+                pass   # 판별 실패 시 예전대로 전체 범위 정렬
         self._journal_save(ws, rng)
         keys = list(key_col) if isinstance(key_col, (list, tuple)) else [key_col]
         if not keys:
@@ -16770,6 +16794,30 @@ def _range_matrix(value):
         return [list(value)]
     return [list(row) for row in value]
 
+
+
+_SUMMARY_LABEL_RE = re.compile(r"(합계|소계|총계|누계|평균|부가세|vat|total|subtotal|average|avg)")
+
+
+def _is_summary_or_blank_row(row):
+    """[정렬 요약행 고정 2026-09-08] 행의 앞 3칸에 합계/평균 류 라벨이 있거나, 행이 통째로 비었으면 True.
+    (match_fill 의 _is_summary · AI 도움 data.query 의 _assistIsSummaryRow 와 같은 기준)"""
+    cells = [c for c in (row or [])]
+    if all(c is None or str(c).strip() == "" for c in cells):
+        return True
+    for c in cells[:3]:
+        if not isinstance(c, str):
+            continue
+        n = re.sub(r"[\s()\[\]_.:/·\-]", "", c).lower()
+        if not n:
+            continue
+        if n in ("계", "합", "합계계", "합계평균"):
+            return True
+        if _SUMMARY_LABEL_RE.search(n) and len(n) <= 12:
+            return True
+        if n.endswith("계") and len(n) <= 8 and not re.search(r"\d", n):
+            return True
+    return False
 
 def _excel_address(obj):
     address = getattr(obj, "Address", "")

@@ -41,7 +41,7 @@ const DEFAULTS = {
     apiKey: "khkim",
     model: "Qwen/Qwen3.8-27B-FP8",
     // 개발망 vLLM — 별도 PC(LAN)의 vLLM 서버. --api-key 를 켜고 떠 있어 Authorization: Bearer 필수.
-    baseUrl: "http://192.168.219.111:8000/v1",
+    baseUrl: "http://192.168.219.108:8000/v1",   // [2026-09-09] .111 → .108 로 이전(사용자 통보)
     fallbackBaseUrls: [],
     thinkControlMode: "chat_template_kwargs",
   },
@@ -345,12 +345,13 @@ function normalizeStoredSkillEngine(parsed) {
   return DEFAULT_SKILL_ENGINE;
 }
 
-// 옛 개발망 vLLM(WSL 8016 계열) 잔재 — 서버가 192.168.219.111:8000(다른 PC)으로 이전됐다.
+// 옛 개발망 vLLM 잔재 — WSL 8016 계열 → 192.168.219.111:8000 → [2026-09-09] 192.168.219.108:8000 으로 이전.
 // 저장 설정이 죽은 주소·키·모델을 물고 있으면 devModeSet 여부와 무관하게 새 값으로 승격한다.
 const DEV_VLLM_LEGACY_BASE_URLS = [
   "http://localhost:8016/v1",
   "http://127.0.0.1:8016/v1",
   "http://192.168.219.105:8016/v1",
+  "http://192.168.219.111:8000/v1",
 ];
 function normalizeDevVllmBaseUrl(value) {
   const raw = String(value || "").trim().replace(/\/$/, "");

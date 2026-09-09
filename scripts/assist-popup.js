@@ -354,7 +354,11 @@
       case "report": renderReport(m.meta || {}); setBusy(false); break;
       case "report-result": onReportResult(m); break;
       case "ask":            // [실패 진단 연동] 메인이 자동 질문을 넣어줌 — 사용자가 친 것처럼 전송
-        if (!busy) submit(String(m.text || ""));
+        // [실측 2026-09-09] busy 가 걸린 채 남아 있으면(앞선 요청이 LLM 무응답으로 매달린 뒤) 진단 질문이
+        // 조용히 버려져 "창만 열리고 아무것도 안 뜸" 이 됐다. 메인은 이 메시지를 보내기 전에
+        // 새 주제로 전환하며 in-flight 를 이미 중단하므로, 여기서도 busy 를 풀고 보낸다.
+        if (busy) { setBusy(false); setStatus(""); addMsg("system", "이전 요청을 중단하고 새 진단을 시작합니다."); }
+        submit(String(m.text || ""));
         break;
       case "handoff": renderHandoff(m.meta || {}); setBusy(false); break;
       case "handoff-done":

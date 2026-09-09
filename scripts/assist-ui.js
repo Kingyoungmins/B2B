@@ -610,6 +610,7 @@ function assistToggleDrawer(force) {
    엔진(assistHandleUserMessage/assistCommitProposal)과 창 사이를 메시지로 중계한다.
    구버전 exe(중계 미지원)면 열기 요청에 응답이 없다 → 1.2초 내 무응답 시 DOM 팝업으로 폴백. */
 let _assistNativeMode = false;      // 네이티브 창이 떠 있는가(버튼 표시용)
+let _assistPopupReadyOnce = false;  // 팝업 페이지가 한 번이라도 'ready' 를 보냈는가(재오픈 시엔 ready 가 다시 안 온다)
 let _assistNativeAckTimer = null;
 
 function assistNativeShellAvailable() {
@@ -645,6 +646,25 @@ function assistHandleBridgeMessage(m) {
       _assistNativeMode = true;
       clearTimeout(_assistNativeAckTimer);
       assistSetButtonOn(true);
+      // [실측 2026-09-09] 팝업 페이지는 닫아도 살아 있어(숨김/표시) 재오픈 땐 'ready' 가 다시 오지 않는다.
+      // 진단 버튼이 보관한 질문(_assistPendingAsk)은 ready 에서만 보냈고, 여기서 폴백 타이머까지
+      // 지우니 질문이 증발했다("창만 켜지고 아무것도 안 뜸"). 한 번이라도 ready 였던 팝업이면 지금 보낸다
+      // (첫 오픈은 페이지 로드 전일 수 있어 ready 를 기다린다).
+      if (_assistPendingAsk) {
+        if (_assistPopupReadyOnce) {
+          const q = _assistPendingAsk; _assistPendingAsk = null;
+          assistSendToPopup({ t: "ask", text: q });
+        } else {
+          // 메인 페이지만 새로 고쳐져 ReadyOnce 가 지워졌는데 팝업 페이지는 살아 있는 경우 — ready 가
+          // 1.5초 안에 안 오면 이미 로드된 팝업으로 보고 보낸다(첫 로드면 ready 가 먼저 와서 비운다).
+          setTimeout(() => {
+            if (_assistPendingAsk && _assistNativeMode) {
+              const q = _assistPendingAsk; _assistPendingAsk = null;
+              assistSendToPopup({ t: "ask", text: q });
+            }
+          }, 1500);
+        }
+      }
       break;
     case "popup-closed":
       _assistNativeMode = false;
@@ -661,6 +681,7 @@ function assistHandleBridgeMessage(m) {
       assistToggleDrawer(true);            // 네이티브 실패 → DOM 팝업으로라도 연다
       break;
     case "ready":                          // 팝업 페이지 로드 완료 → 대화 이력 재생
+      _assistPopupReadyOnce = true;
       assistSendToPopup({
         t: "history",
         items: ((state.assist && state.assist.history) || []).slice(-40)
