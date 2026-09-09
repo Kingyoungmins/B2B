@@ -7,6 +7,10 @@ API 가 없었고, /admin/errors 는 파일 끝 256KB 만 봐서 큰 세션의 �
 
 실행: python test_admin_events.py
 """
+import sys
+
+sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
 import base64
 import json
 import tempfile

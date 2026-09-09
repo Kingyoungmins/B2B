@@ -8,8 +8,18 @@
 실행: python test_dashboard_api.py
 """
 import base64
+import datetime
 import json
+import sys
 import tempfile
+
+sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
+# [2026-09-09] 날짜를 하드코딩하면 깨진다. SessionStart 모델에는 date 필드가 없어서 세션 폴더는
+# 항상 '서버의 오늘' 로 만들어지는데, date 를 보는 /logs/append 는 그 날짜 폴더를 따로 만든다
+# → 세션이 2개가 아니라 4개로 집계됐다. 오늘 날짜로 통일해 둘이 같은 폴더를 가리키게 한다.
+TODAY = datetime.date.today().isoformat()
+TOMORROW = (datetime.date.today() + datetime.timedelta(days=1)).isoformat()
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -37,22 +47,23 @@ c = TestClient(app)
 enc = lambda b: base64.b64encode(b).decode()
 
 print("[준비] 세션 2개(사용자 2명) — 로그 + 오류 이벤트 2건 + 스킬 zip")
-for user, sid, start, end in (("kim_a", "20260824-100000-1-aaaa", "2026-08-24T10:00:00", "2026-08-24T10:42:00"),
-                              ("lee_b", "20260824-110000-2-bbbb", "2026-08-24T11:00:00", "2026-08-24T11:05:00")):
-    assert c.post("/logs/session/start", json={"sessionId": sid, "user": user, "date": "2026-08-24",
+_ymd = TODAY.replace("-", "")
+for user, sid, start, end in ((("kim_a", _ymd + "-100000-1-aaaa", TODAY + "T10:00:00", TODAY + "T10:42:00")),
+                              (("lee_b", _ymd + "-110000-2-bbbb", TODAY + "T11:00:00", TODAY + "T11:05:00"))):
+    assert c.post("/logs/session/start", json={"sessionId": sid, "user": user, "date": TODAY,
                                                "startedAt": start, "appVersion": "0.7.5.0",
                                                "host": "VM-01"}).json()["ok"]
     lines = (json.dumps({"ts": start, "event": "pipeline.step.ok", "stepIdx": 0}) + "\n"
              + json.dumps({"ts": start, "event": "pipeline.step.error", "stepIdx": 1,
                            "stepId": "abc123", "error": "시트 'VIEW' 를 찾을 수 없습니다"}) + "\n"
              + json.dumps({"ts": start, "event": "fullrun.file.save_error", "error": "저장 실패: 잠김"}) + "\n")
-    assert c.post("/logs/append", json={"sessionId": sid, "user": user, "date": "2026-08-24",
+    assert c.post("/logs/append", json={"sessionId": sid, "user": user, "date": TODAY,
                                         "name": "vba_pipeline_trace.jsonl", "offset": 0,
                                         "encoding": "b64", "data": enc(lines.encode())}).json()["ok"]
-    assert c.post("/logs/file", json={"sessionId": sid, "user": user, "date": "2026-08-24",
+    assert c.post("/logs/file", json={"sessionId": sid, "user": user, "date": TODAY,
                                       "kind": "skill", "name": "스킬_3단계.zip",
                                       "encoding": "b64", "data": enc(b"PK fake zip")}).json()["ok"]
-    c.post("/logs/session/end", json={"sessionId": sid, "user": user, "date": "2026-08-24",
+    c.post("/logs/session/end", json={"sessionId": sid, "user": user, "date": TODAY,
                                       "endedAt": end, "reason": "normal"})
 
 print("[stats]")
@@ -65,7 +76,7 @@ check("체류 합(42+5분)", abs(t["dwellMinutes"] - 47.0) < 0.2, t["dwellMinute
 check("byDate 에 사용자 수", d["byDate"][0]["userCount"] == 2, d["byDate"])
 check("byUsers 정렬·값", {r["user"]: r["dwellMinutes"] for r in d["byUsers"]} == {"kim_a": 42.0, "lee_b": 5.0})
 check("사용자 필터", c.get("/admin/stats?user=kim_a").json()["total"]["sessions"] == 1)
-check("기간 필터(밖)", c.get("/admin/stats?from=2026-08-25").json()["total"]["sessions"] == 0)
+check("기간 필터(밖)", c.get("/admin/stats?from=" + TOMORROW).json()["total"]["sessions"] == 0)
 check("/v1 별칭", c.get("/v1/admin/stats").status_code == 200)
 check("날짜 형식 검증", c.get("/admin/stats?from=abc").status_code == 400)
 
