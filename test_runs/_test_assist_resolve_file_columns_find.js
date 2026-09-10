@@ -129,6 +129,55 @@ console.log("[4b] rank — 값 열로 정렬한 상위/하위 N (도구가 정�
   check("없는 열은 unknown_column + hint", un.ok === false && un.error === "unknown_column" && /열 이름 하나/.test(un.hint));
 }
 
+console.log("[4c] 광역 실기(2026-09-10 17:04) 후속 — groupCount 열 불필요 · ctx.help · 근거 가드 오탐");
+{
+  const gc = await run("data.query", { file: "input_매출_2026_4월.xlsx", sheet: "매출", op: "groupCount", groupBy: ["상품"], order: "desc" });
+  check("groupCount 는 column 없이 된다(배열 groupBy)", gc.ok && gc.groupCount === 2 && gc.top[0].key === "5G" && gc.top[0].value === 2, JSON.stringify(gc).slice(0, 200));
+  // ctx.help — file-schema.js 의 실제 설명서를 읽는다
+  const FS = read("scripts/file-schema.js");
+  vm.runInContext(FS, ctx, { filename: "file-schema.js" });
+  const all = await run("ctx.help", {});
+  check("ctx.help 전체: 헬퍼 이름 목록(write·match_fill 포함, sheet 없음)", all.ok && all.helpers.includes("write") && all.helpers.includes("match_fill") && !all.helpers.includes("sheet"), JSON.stringify(all).slice(0, 200));
+  check("ctx.help 전체에 서명(signatures) 포함 — 인자 추측 방지", Array.isArray(all.signatures) && all.signatures.some(x => x.startsWith("ctx.write(")) && all.signatures.some(x => x.startsWith("ctx.match_fill(")), JSON.stringify(all.signatures || []).slice(0, 200));
+  const w = await run("ctx.help", { name: "match_fill" });
+  check("ctx.help(match_fill) → 서명 줄", w.ok && w.exists === true && w.matches.some(m => /ctx\.match_fill\(/.test(m)), JSON.stringify(w).slice(0, 200));
+  const no = await run("ctx.help", { name: "ctx.sheet(" });
+  check("ctx.help(sheet) → 없다 + 대안 목록", no.ok && no.exists === false && /ctx\.sheet 는 없다/.test(no.note) && no.helpers.includes("read"), JSON.stringify(no).slice(0, 200));
+  // 근거 가드 오탐 — 실제 함수 실행(파일명·단계 id·연월·목록 번호는 수치가 아니다)
+  const at0 = CORE.indexOf("function assistLooksLikeDataClaimWithoutEvidence");
+  let dd = 0, j = CORE.indexOf("{", at0), end0 = -1;
+  for (; j < CORE.length; j++) { if (CORE[j] === "{") dd++; else if (CORE[j] === "}") { dd--; if (dd === 0) { end0 = j + 1; break; } } }
+  ctx.state.pipeline = [{ id: "azk3o404", code: "x" }];
+  vm.runInContext(CORE.slice(at0, end0) + "\nthis.assistLooksLikeDataClaimWithoutEvidence = assistLooksLikeDataClaimWithoutEvidence;", ctx);
+  const G = (q, a) => ctx.assistLooksLikeDataClaimWithoutEvidence(q, a);
+  check("사용법 안내(파일명 2026_4월 + 목록 번호 + F11)는 오탐 아님", G("스킬은 어떻게 만들어? 처음이라 순서를 모르겠어.",
+    "지금 올라온 파일은 input_매출_2026_4월.xlsx, output_청구서.xlsx 입니다.\n1. 파일 올리기\n2. 말로 지시하기\n3. F11 로 AI 도움 열기") === false);
+  check("단계 id(azk3o404)·연월(2026년 4월) 언급도 오탐 아님", G("5단계 왜 실패했어?", "5단계(azk3o404)는 2026년 4월 파일의 회사별요약 시트에 쓰는 단계입니다.") === false);
+  check("진짜 수치 주장(도구 0회)은 여전히 잡는다", G("마진율 제일 낮은 3곳", "오리진네트 21.0%, 네오링크 23.0%, 매출 214,198,000") === true);
+  check("금액 단위 수치도 잡는다", G("합계 얼마야", "합계는 3,797,128,000원입니다") === true);
+  // [2차 실측] '5가지' 처럼 숫자 규칙에 안 걸리는 데이터 답도 — 값을 묻는 질문이면 도구 근거 필수
+  check("'상품 종류가 몇 가지야?' 에 도구 0회 답(5가지+상품명)은 잡는다", G("매출 시트에 상품 종류가 몇 가지야? 제일 많이 팔린 상품은?", "상품 종류는 5가지입니다. 클라우드호스팅, 데이터백업, 보안솔루션, 서버렌탈, 네트워크장비") === true);
+  check("값 질문이라도 '확인하지 못했다' 고 답하면 통과", G("회사별요약에 값이 비어 있는 회사 있어?", "지금은 파일 값을 확인하지 못했습니다. 시트 이름을 알려 주시면 읽어 보겠습니다.") === false);
+  check("사용법 질문은 숫자(파일 3개)가 있어도 오탐 아님", G("스킬은 어떻게 만들어? 처음이라 순서를 모르겠어.", "지금 파일 3개가 올라와 있습니다. 시트는 회사별요약입니다. 설계 채팅에 한 문장씩 적으세요.") === false);
+  check("스킬 만드는 법('어떻게 요청하면 돼?')은 값 질문이 아니다", G("원가 파일의 회사별원가합계 시트 값을 요약표 원가 열에 채우는 단계를 추가하고 싶어. 어떻게 요청하면 돼?", "설계 채팅에 이렇게 넣으세요: 원가 시트에서 회사별 원가 합계를 회사별요약 원가 열에 채워 주세요.") === false);
+  ctx.state.pipeline = [];
+  // 재촉 메타 문장 제거(assist-guard) — 실측 문장 그대로
+  const GUARD = read("scripts/assist-guard.js");
+  vm.runInContext(GUARD + "\nthis.assistStripNudgeMeta = assistStripNudgeMeta;", ctx, { filename: "assist-guard.js" });
+  const M = s => ctx.assistStripNudgeMeta(s);
+  const m1 = M("죄송합니다. 방금 수치와 회사명은 도구로 읽지 않고 제가 만들어낸 것이었습니다. 실제 값을 다시 확인했습니다.\n\n회사별요약 시트에는 20개 회사가 있는데, 비어 있는 회사는 없습니다.");
+  check("사과·'만들어낸 것' 문단 제거, 내용 문단 유지", !/죄송|만들어낸|다시 확인했습니다/.test(m1) && /20개 회사/.test(m1), m1);
+  const m1b = M("회사별요약 시트에는 20개 회사가 있습니다. 죄송합니다. 방금 전 턴에서 말한 값은 틀렸습니다. 비어 있는 회사는 없습니다.");
+  check("본문 사이에 낀 메타+사과 문장만 제거", !/죄송|방금 전 턴/.test(m1b) && /20개 회사/.test(m1b) && /비어 있는 회사는 없습니다/.test(m1b), m1b);
+  const m2 = M("다시 확인해 봤습니다. 방금 답변에 따옴표로 감싼 '요청문'은 없었어요. 그래서 handoff 카드가 필요 없고, 같은 답변을 그대로 다시 드립니다.\n\n처음 쓰시는 거라면 순서는 이렇게 됩니다.\n\n1. 파일을 올립니다.");
+  check("handoff 메타 문단 제거, 안내 본문 유지", !/handoff|다시 확인해 봤습니다|따옴표/.test(m2) && /처음 쓰시는 거라면/.test(m2) && /1\. 파일을 올립니다/.test(m2), m2);
+  const m3 = M("두 시트를 실제로 읽어서 비교했습니다. 전부 일치합니다.\n\n참고로, 방금 전 턴에서 제가 \"DEF에너지·QRS미디어가 5,000 차이 난다\"고 말한 것은 틀린 것이었습니다. 그 회사명은 이 파일에 아예 없습니다. 죄송합니다.");
+  check("본문 뒤에 붙은 '방금 전 턴' 정정 문단 제거", !/방금 전 턴|DEF에너지|죄송/.test(m3) && /전부 일치합니다/.test(m3), m3);
+  const m4 = M("마진율이 가장 낮은 3곳은 오리진네트, 네오링크, 메이저텔레콤입니다. 방금 읽은 rank 결과 그대로입니다.");
+  check("일반 문장은 그대로", m4.includes("오리진네트") && m4.includes("rank 결과 그대로"), m4);
+  check("전부 메타면 원문 유지(정보 유실 방지)", M("죄송합니다. 방금 답변은 제가 만들어낸 것이었습니다.").length > 0);
+}
+
 console.log("[5] schema.summary 에 시트별 헤더");
 {
   const s = await run("schema.summary", {});

@@ -26,6 +26,7 @@ calls_external:
   - "forEach"
 called_by:
   - "_assistResolveFile"
+  - "assistLooksLikeDataClaimWithoutEvidence"
 reads:
   - "state.inputs"
   - "state.outputTemplates"
@@ -42,7 +43,7 @@ timestamp: "0.8.4-gen"
 
 ## 관계
 - 호출: `push`
-- 피호출(영향 전파 경로): `_assistResolveFile`
+- 피호출(영향 전파 경로): `_assistResolveFile`, `assistLooksLikeDataClaimWithoutEvidence`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

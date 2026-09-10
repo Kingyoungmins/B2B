@@ -1,19 +1,18 @@
 ---
 type: endpoint
-title: run
-module: assist-core.js
+title: assistStripNudgeMeta
+module: assist-guard.js
 lang: js
 extraction: regex   # 정규식 근사
-signature: "(fn, ...a)"
-role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
-role_source: none
+signature: "(text)"
+role: "history 에 남아 다음 턴까지 사과 톤을 끌고 갔다(실측 2026-09-10 17:13). 그런 문장만 걷어낸다 — 내용 문장은 건드리지 않는다."
+role_source: banner
 version: "0.8.4"
-loc: "assist-core.js:988-988"
+loc: "assist-guard.js:17-17"
 
 # ── 입출력 ──
 inputs:
-  - "fn"
-  - "...a"
+  - "text"
 returns: "(추정)"
 
 # ── 사이드이펙트 (정적 추정) ──
@@ -25,10 +24,13 @@ raises: []
 calls:
   - "push"
 calls_external:
-  - "fn"
-called_by:
-  - "_assistGateReplacementCode"
-  - "assistBuildProposal"
+  - "String"
+  - "filter"
+  - "join"
+  - "split"
+  - "test"
+  - "trim"
+called_by: []
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
@@ -36,14 +38,14 @@ timestamp: "0.8.4-gen"
 ---
 
 ## 역할
-(추정) 역할 주석 없음 — 담당자 1줄 보완 필요  _(자동 추정 — 확인 필요)_
+history 에 남아 다음 턴까지 사과 톤을 끌고 갔다(실측 2026-09-10 17:13). 그런 문장만 걷어낸다 — 내용 문장은 건드리지 않는다.
 
 ## 사이드이펙트 & 주의
 - 없음(정적 분석 기준)
 
 ## 관계
 - 호출: `push`
-- 피호출(영향 전파 경로): `_assistGateReplacementCode`, `assistBuildProposal`
+- 피호출(영향 전파 경로): 없음
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

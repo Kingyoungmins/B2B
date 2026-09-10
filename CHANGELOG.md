@@ -27,7 +27,20 @@
   - **본문 없는 final** — 도구 결과 직후 `{"action":"final","args":{}}` 만 보내 "응답을 정리하지 못했습니다" 로 끝나던
     것(6회 중 1회)을 1회 재촉(`emptyFinalNudges`, `assist.nudge kind=empty-final`)으로 회수. 상한 1.
   - 최종 실기: 같은 질문 6/6 정답, 다른 표현("마진율 낮은 회사 셋만", "매출이 제일 큰 회사 어디야?")도 rank 한 방으로 정답.
-- 검증: `test_runs/_test_assist_resolve_file_columns_find.js`(실제 함수 실행 40여 건), `_test_assist_empty_final_nudge_e2e.py`
+- **광역 실기 후속(같은 날 오후, 오류 진단·스킬 생성 방법·실데이터·상태·다른 달 12문항 × 3회)** — 실패 코드를 주입한 실제 오류 상태에서:
+  - 근거 가드 오탐: 답 속 파일명(`…2026_4월.xlsx`)·단계 id·연월·목록 번호의 숫자를 '파일 값'으로 봐 사용법 답이 재촉에 꼬임 → 알려진 이름 제거 후 판정,
+    사용법 질문(`어떻게 요청/만들`, `순서`)은 가드 제외.
+  - 근거 가드 v2: "상품 종류가 몇 가지야?" 에 도구 0회로 상품명 5개를 지어냈는데 '5가지'는 숫자 규칙에 안 걸림 → **값을 묻는 질문은 숫자 유무와 무관하게
+    도구 근거 필수**('확인하지 못했다'만 예외). 재촉 2회, 그래도 지어내면 확인 안 된 답을 내보내지 않는다(`assist.final{unverifiedRefused}`).
+  - 재촉 메타 누출: "죄송합니다. 방금 답변은 … 만들어낸 것이었습니다", "handoff 카드가 필요 없고 같은 답변을 그대로" 가 화면·history 에 남아 다음 턴까지
+    사과 톤 → 모든 재촉 문구에 '이전 답은 사용자에게 안 보였다' + 최종 답에서 메타·사과 문장 제거(`assistStripNudgeMeta`, assist-guard.js).
+  - `data.query groupCount` 는 column 없이, `ctx.help(name?)` 도구(스킬 생성 프롬프트 `PYTHON_COM_SYSTEM_PROMPT` 의 실제 헬퍼 줄에서 이름·서명 추출,
+    정확한 이름만 exists=true), 프롬프트에 "제안 전 ctx.help 로 확인 + 제안 블록과 함께 원인 설명 2~3문장 + '어떻게 요청하면 돼?' 는 handoff".
+  - **격리 검증 실패 시 1회 재제안** — 제안 코드가 `ctx.sheets` 인자 오류·`ctx.workbook`(없음)으로 격리 실행에 실패한 채 카드로 나가던 것을,
+    오류를 되먹여 다시 제안시킨다(`proposeRetries`, `assist.nudge kind=verify-failed`). serve_b2b 의 없는 헬퍼 안내 문구도 자연스럽게.
+  - 3차 실기 12/12 정상(오류 진단 = 설명 + 검증 통과한 수정 카드, 새 단계 = handoff 카드, 데이터 질문 전부 도구 근거). 시험 환경 교훈:
+    백엔드를 `taskkill /T` 로 죽이면 숨은 Excel 이 남아 다음 스킬 적용이 실패한다 — Excel 까지 정리할 것.
+- 검증: `test_runs/_test_assist_resolve_file_columns_find.js`(실제 함수 실행 60여 건), `_test_assist_empty_final_nudge_e2e.py`
   (LLM 을 route 로 각본 모의 → 실제 루프에서 재촉 1회·상한·정상 경로 결정적 확인, 백엔드 없으면 스스로 띄움),
   `_e2e_assist_vague_margin_live.py`(개발망 Qwen 실기, 반복 횟수·질문 인자). registry `ASSIST-VAGUE-DATA-QUESTION-SHEET-RESOLVE`,
   `ASSIST-EMPTY-FINAL-NUDGE`.

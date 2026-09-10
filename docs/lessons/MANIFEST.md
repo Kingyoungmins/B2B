@@ -78,4 +78,4 @@ Generated from selected lesson documents in B2B_ver0.5.6 ~ B2B_ver0.5.9.
 | `59_edr_blocks_self_extracting_single_exe.md` | 4255 |
 | `60_assist_silent_failures_chain.md` | 6191 |
 | `61_popup_reopen_lost_ask_and_dead_endpoint_hang.md` | 6584 |
-| `62_vague_data_question_wrong_sheet_and_empty_final.md` | 5081 |
+| `62_vague_data_question_wrong_sheet_and_empty_final.md` | 8123 |

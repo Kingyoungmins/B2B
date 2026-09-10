@@ -4733,6 +4733,25 @@
         ]
       ],
       "fix": "실측 2026-09-10: rank 정답을 받은 직후 모델이 빈 final 만 보냄(6회 중 1회, 앞선 5회 중 2회). 루프는 visible/salvaged/rawShown 모두 비면 안내 문구로 끝냈다 — 근거를 손에 쥔 채 빈 답. 수정: parsed.parsed && !lastRound && emptyFinalNudges<1 이면 '본문 없는 final 은 답이 아니다, 받은 도구 결과 rows 순서 그대로 본문을 써서 다시' 재촉(assist.nudge kind=empty-final), 상한 1. 검증은 LLM 을 Playwright route 로 각본 모의해 실제 루프에서: tool→빈final→재촉→정상final 이 사용자에게 정상 본문으로, 두 번 연속 비면 상한 후 종전 안내, 본문 있는 final 은 재촉 없음."
+    },
+    {
+      "id": "ASSIST-BATTERY-GUARD-V2-CTX-HELP-VERIFY-RETRY",
+      "title": "[0.8.4] AI 도움 광역 실기 후속 — 근거 가드 오탐/침묵(값 질문은 근거 필수, 2회 재촉 후 거부) · 재촉 메타 문장 제거 · groupCount 열 불필요 · ctx.help · 제안 검증 실패 1회 재제안.",
+      "checks": [
+        [
+          "node",
+          "test_runs/_test_assist_resolve_file_columns_find.js"
+        ],
+        [
+          "node",
+          "test_runs/_test_assist_echo_fulldata_args.js"
+        ],
+        [
+          "python",
+          "test_runs/_test_assist_empty_final_nudge_e2e.py"
+        ]
+      ],
+      "fix": "실측 2026-09-10 오후(실제 앱+Qwen3.8, 실패 코드 주입한 오류 상태, 12문항×3회): ① 가드가 파일명·단계 id 의 숫자를 값으로 봐 사용법 답 재촉(연쇄 소진) → 알려진 이름·연월·목록번호 제거, 사용법 질문 제외 ② '5가지' 처럼 숫자 규칙에 안 걸리는 지어낸 답 → 값 질문이면 도구 근거 필수, 재촉 2회 후 확인 안 된 답은 내보내지 않음 ③ 재촉 반응('죄송합니다. 방금 답변은 만들어낸 것', 'handoff 카드가 필요 없고')이 화면·history 에 남음 → assistStripNudgeMeta + 재촉 문구에 '이전 답은 안 보였다' ④ groupCount column 불필요 ⑤ ctx.help(이름/서명, 정확 일치만 exists) + 프롬프트 규칙 ⑥ 격리 검증 실패한 제안은 오류 되먹여 1회 재제안(proposeRetries). 3차 실기 12/12 정상. docs/lessons/62 광역 실기 절."
     }
   ]
 }

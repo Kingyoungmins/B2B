@@ -9,7 +9,7 @@ signature: "(self, sheet, key_cols, header_row=1, keep='first')"
 role: "key_cols(열 리스트/단일) 조합이 같은 중복 행을 삭제한다. keep='first'면 처음 것, 'last'면 마지막 것을"
 role_source: docstring
 version: "0.8.4"
-loc: "serve_b2b.py:15999-16030"
+loc: "serve_b2b.py:16001-16032"
 
 # ── 입출력 ──
 inputs:

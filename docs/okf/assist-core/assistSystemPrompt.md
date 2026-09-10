@@ -34,6 +34,7 @@ calls_external:
   - "error"
   - "filter"
   - "find"
+  - "help"
   - "isArray"
   - "join"
   - "map"

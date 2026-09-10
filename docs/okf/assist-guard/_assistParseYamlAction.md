@@ -8,7 +8,7 @@ signature: "(text)"
 role: "반환 형식은 JSON 경로와 동일하며, block 에 '걷어낼 원문 조각'을 정확히 담는다."
 role_source: banner
 version: "0.8.4"
-loc: "assist-guard.js:143-143"
+loc: "assist-guard.js:173-173"
 
 # ── 입출력 ──
 inputs:

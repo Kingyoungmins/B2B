@@ -272,6 +272,34 @@ assistDefineTool("schema.summary", { desc: "현재 업로드된 입력/출력 �
              note: "headersBySheet 의 시트/열 이름을 data.query·data.read 에 그대로 쓴다. 열 이름만 알 땐 columns.find." };
   });
 
+// ── [2026-09-10] ctx 헬퍼 설명서 조회 — 코드 수정 제안 전에 '그 함수가 진짜 있나' 확인용 ──────────
+// 실측: 모델이 ctx.sheet(없는 헬퍼)를 그대로 둔 채 시트명만 바꿔 제안 → 격리 검증 실패. 스킬 생성 프롬프트(file-schema.js 의
+// PYTHON_COM_SYSTEM_PROMPT)에 있는 "- `ctx.xxx(...)` → 설명" 줄이 곧 실제 API 다. 그 줄을 그대로 돌려준다(따로 관리하지 않아 안 어긋난다).
+function _assistCtxHelperLines() {
+  const src = (typeof PYTHON_COM_SYSTEM_PROMPT === "string") ? PYTHON_COM_SYSTEM_PROMPT : "";
+  return src.split("\n").filter(l => /^\s*-\s*`ctx\./.test(l)).map(l => l.trim());
+}
+assistDefineTool("ctx.help", {
+  desc: "스킬 코드에서 쓸 수 있는 ctx 헬퍼(실제 API) 서명과 설명. 이름 일부(예: write, match_fill, sheet)로 거르거나 비우면 전체 이름 목록. 코드 수정을 제안하기 전에 반드시 확인.",
+  args: "name?",
+}, async (a) => {
+    const lines = _assistCtxHelperLines();
+    if (!lines.length) return { ok: false, error: "no_reference", note: "ctx 설명서를 찾지 못했습니다(file-schema.js 미로드)." };
+    const nameOf = l => { const m = /`ctx\.([A-Za-z_][A-Za-z0-9_]*)\s*\(/.exec(l); return m ? m[1] : ""; };
+    const q = String(a.name || a.helper || a.query || "").trim().replace(/^ctx\./, "").replace(/\(.*$/, "").toLowerCase();
+    const sigOf = l => { const m = /`(ctx\.[^`]+)`/.exec(l); return m ? m[1].slice(0, 140) : ""; };
+    if (!q) return { ok: true, helpers: [...new Set(lines.map(nameOf).filter(Boolean))], count: lines.length,
+                     signatures: [...new Set(lines.map(sigOf).filter(Boolean))].slice(0, 80),
+                     note: "이 목록에 없는 ctx.xxx 는 존재하지 않는다(예: ctx.sheet / ctx.workbook / ctx.Sheets / ctx.Range 없음). signatures 의 인자 순서·개수를 그대로 지켜라. 이름을 넣어 다시 부르면 설명까지 나온다." };
+    // 정확히 그 이름의 헬퍼가 있을 때만 exists=true. "sheet" 가 ctx.sheets/add_sheet 에 부분 일치한다고 '있다'고 하면 안 된다(실측).
+    const exact = lines.filter(l => nameOf(l).toLowerCase() === q);
+    const similar = lines.filter(l => { const n = nameOf(l).toLowerCase(); return n !== q && (n.includes(q) || (q.includes(n) && n.length >= 4)); });
+    if (exact.length) return { ok: true, name: q, exists: true, matches: exact.map(l => l.slice(0, 700)), similar: [...new Set(similar.map(nameOf))].slice(0, 8) };
+    return { ok: true, name: q, exists: false, similar: similar.map(l => l.slice(0, 300)).slice(0, 6),
+             helpers: [...new Set(lines.map(nameOf).filter(Boolean))],
+             note: `ctx.${q} 는 없다(정확히 그 이름의 헬퍼가 없음). similar/helpers 중에서 골라라(시트 읽기 ctx.read, 쓰기 ctx.write, 이름 맞춰 채우기 ctx.match_fill, 시트 추가 ctx.add_sheet 등).` };
+  });
+
 // ── [2026-09-10] 열 이름으로 파일/시트 찾기 ─────────────────────────────────
 // 실측: "마진율 제일 적은거 3개" 처럼 시트명 없는 질문에 모델이 Sheet1 을 추측하거나 원본 두 파일을 머릿속에서
 // 결합해 계산하다 3위를 틀렸다(3회 중 1회만 정답). 이미 '마진율' 열이 있는 요약 시트를 한 번에 찾게 한다.
@@ -471,7 +499,7 @@ assistDefineTool("data.query", {
     let _colArg = Array.isArray(a.column) ? a.column[0] : a.column;
     if (typeof _colArg === "string" && _colArg.includes(",")) _colArg = _colArg.split(",")[0];
     const ci = colIdx(_colArg);
-    if (ci < 0 && !(op === "sample" && !String(_colArg || "").trim()))
+    if (ci < 0 && !((op === "sample" || op === "groupcount") && !String(_colArg || "").trim()))
       return { ok: false, error: "unknown_column", given: a.column, available: header.slice(0, 40),
                hint: "column 에는 열 이름 하나(또는 열문자)만 넣어라. 여러 열을 보려면 op=sample 이나 data.read." };
     const body = rows.slice(hr + 1);

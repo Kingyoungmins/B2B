@@ -9,7 +9,7 @@ signature: "(self, src_books, dest_sheet='통합', src_sheet=None, header_row=No
 role: "동일 포맷 여러 입력 파일의 표를 현재 워크북 새 시트에 이어붙인다."
 role_source: docstring
 version: "0.8.4"
-loc: "serve_b2b.py:15330-15458"
+loc: "serve_b2b.py:15332-15460"
 
 # ── 입출력 ──
 inputs:

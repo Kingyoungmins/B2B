@@ -8,7 +8,7 @@ signature: "(reply)"
 role: "응답에서 액션 JSON 을 뽑는다. 3단 폴백(펜스 → 느슨한 펜스 → 중괄호 균형 스캔)."
 role_source: banner
 version: "0.8.4"
-loc: "assist-guard.js:18-18"
+loc: "assist-guard.js:48-48"
 
 # ── 입출력 ──
 inputs:

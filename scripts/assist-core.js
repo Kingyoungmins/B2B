@@ -224,6 +224,11 @@ args: {"summary":"증상 한 줄","reason":"해결 불가 판단 근거","tried"
 - 사실을 더 알아야 하면 action="tool" (한 응답에 도구 하나만).
   **도구는 반드시 이 액션 블록으로만 호출한다** — \`\`\`python 코드블록에 step.error() 처럼 쓰는 것은
   호출이 아니라 사용자에게 코드 텍스트를 보여주는 것일 뿐이다(실행되지 않는다). 금지.
+- **[코드를 제안하기 전에]** 쓰려는 ctx 헬퍼가 실제로 있는지 **ctx.help(이름)** 로 확인하라 — ctx.sheet 처럼 없는 함수를 그대로
+  두거나 지어내면 제안이 검증에서 실패한다(실측). 제안 블록과 **함께 본문에 원인 설명 2~3문장**(무엇이 왜 실패했고 어떻게 고치는지)을
+  써라 — 카드만 보내면 사용자는 이유를 못 본다.
+- "이런 단계를 추가하고 싶은데 **어떻게 요청하면 돼?**" 류 질문의 결론은 설계 채팅에 넣을 요청문이다 — 말로만 제시하지 말고
+  **action="handoff"** 로 넘겨라(카드가 떠야 사용자가 바로 넣는다). 파일/시트/열 이름은 위 팩트의 이름을 그대로 쓴다.
 - 코드 수정을 제안하려면 action="propose". kind 는 아래 중 하나:
   · replaceLiteral — 값 하나 치환. args={"kind":"replaceLiteral","stepId":"...","from":"바꿀 문자열","to":"새 문자열","reason":"왜"}
   · replaceStepCode — 코드 전체 교체. args={"kind":"replaceStepCode","stepId":"...","newCode":"전체 코드","reason":"왜"}
@@ -339,12 +344,33 @@ function assistEchoSources(sys, tail) {
    이번 턴 도구 호출이 0인데 답에 구체 수치(3자리 이상·소수)나 원/% 가 있고, 질문/답이 데이터 얘기면
    근거 없는 주장으로 본다 → 루프가 한 번 재촉한다. */
 function assistLooksLikeDataClaimWithoutEvidence(question, text) {
-  const t = String(text || "");
+  let t = String(text || "");
   if (!t) return false;
-  const hasNumber = /\d[\d,]{2,}|\d+\.\d+|\d+\s*(원|%|건|개|명|행)/.test(t);
+  // [오탐 수정 2026-09-10] 파일명(input_매출_2026_4월.xlsx)·단계 id(azk3o404)·연월(2026년 4월) 속 숫자는 '파일 값'이 아니다 —
+  // "스킬은 어떻게 만들어?" 안내 답이 이 숫자들 때문에 재촉을 맞고 "지어낸 것 없습니다"류 메타 답으로 꼬였다(실측).
+  try {
+    const names = [];
+    if (typeof _assistAllFiles === "function") {
+      for (const f of _assistAllFiles()) { names.push(f.name); for (const sn of (f.sheetNames || Object.keys(f.sheets || {}))) names.push(sn); }
+    }
+    for (const s of (Array.isArray(state && state.pipeline) ? state.pipeline : [])) if (s && s.id) names.push(String(s.id));
+    names.sort((a, b) => b.length - a.length).forEach(n => { if (n && n.length >= 3) t = t.split(n).join(" "); });
+  } catch (_e) {}
+  t = t.replace(/(19|20)\d{2}\s*[년._-]?\s*(\d{1,2}\s*월)?(\s*\d{1,2}\s*일)?/g, " ")   // 연월일
+       .replace(/\bF\d{1,2}\b/g, " ")                                                    // F9·F11 같은 키 이름
+       .replace(/^\s*\d+[.)]\s/gm, " ");                                                  // 목록 번호 "1. "
+  const q = String(question || "");
+  // [2026-09-10 2차] "상품 종류가 몇 가지야?" 에 도구 0회로 상품명 5개를 지어냈는데 '5가지'는 숫자 규칙에 안 걸려 가드가 침묵했다.
+  // 파일 '값'을 묻는 질문이면 숫자 유무와 무관하게 도구 근거가 있어야 한다 — "확인하지 못했다"고 솔직히 답한 경우만 예외.
+  const dataQ = /(시트|열\b|행\b|합계|총합|총액|검산|평균|비율|마진|매출|원가|금액|건수|회사|값|개수|최대|최소|가장|순위|상위|하위|몇|얼마|어디|상품|종류|가지|비어|빈\s*칸|중복|누락|일치)/;
+  const howTo = /(어떻게\s*(요청|말|시키|부탁)|요청문|설계\s*채팅|어떻게\s*만들|순서를)/;                 // 스킬 만드는 법 — 값 질문이 아니다
+  const cannot = /(확인하지\s*못|확인할\s*수\s*없|읽지\s*못|읽을\s*수\s*없|알\s*수\s*없|확인이\s*필요|도구.{0,12}(오류|실패))/;
+  if (howTo.test(q)) return false;                                            // 사용법 안내는 파일 값 주장이 아니다(숫자가 있어도)
+  if (dataQ.test(q) && !cannot.test(t)) return true;
+  const hasNumber = /\d[\d,]{2,}|\d+\.\d+|\d+\s*(원|%|건|개|명|행|가지|곳|군데|종|개사|줄)/.test(t);
   if (!hasNumber) return false;
-  const dataish = /(시트|열|행|합계|총합|총액|검산|평균|비율|마진|매출|원가|금액|건수|회사|값|개수|최대|최소|가장|순위|상위|하위|몇|얼마|어디)/;
-  return dataish.test(String(question || "")) || dataish.test(t);
+  const dataish = /(시트|열|행|합계|총합|총액|검산|평균|비율|마진|매출|원가|금액|건수|회사|값|개수|최대|최소|가장|순위|상위|하위|몇|얼마|어디|상품|종류)/;
+  return dataish.test(q) || dataish.test(t);
 }
 
 function assistLooksLikeDanglingAnnouncement(text) {
@@ -445,6 +471,7 @@ async function assistHandleUserMessage(userText, ui, attachImages) {
   let danglingNudges = 0;   // [말 끊김 수정] '예고만 하고 멈춤' 재촉 횟수(무한루프 방지 상한 2회)
   let evidenceNudges = 0;     // [근거 없는 수치 2026-09-09] 도구 0회인데 구체 수치/이름을 답하면 1회 재촉
   let emptyFinalNudges = 0;   // [빈 최종 답 2026-09-10] {"action":"final","args":{}} 처럼 본문 없는 final 이면 1회 재촉
+  let proposeRetries = 0;     // [검증 실패 재시도 2026-09-10] 격리 검증에 실패한 코드 제안은 오류를 되먹여 1회 다시 제안시킨다
 
   state.assist = state.assist || { history: [] };
   state.assist.history.push({ role: "user", content: String(userText || "") });
@@ -642,10 +669,12 @@ async function assistHandleUserMessage(userText, ui, attachImages) {
       // [SBAGENT-293] 액션 잔해 + 프롬프트 에코를 함께 걷어낸다. 실측에서 모델이 시스템 지시문과
       // 사용자 질문 원문을 통째로 되풀이해 그대로 화면에 찍혔다(내부 지시문 노출).
       const _es = assistEchoSources(sys, tail);
-      const visible = assistStripPromptEcho(
+      // [재촉 메타 2026-09-10] "죄송합니다. 방금 답변은 도구로 확인하지 않고 제가 만들어낸 것이었습니다", "handoff 카드가 필요 없고 같은
+      // 답변을 그대로" 같은 문장은 재촉(사용자에게 안 보인 턴)에 대한 반응이다 — 화면·history 에 남으면 다음 턴까지 사과 톤이 이어졌다.
+      const visible = (typeof assistStripNudgeMeta === "function" ? assistStripNudgeMeta : (x => x))(assistStripPromptEcho(
         assistStripActionBlock(withoutBlock),
         _es.strict, _es.soft,
-      );
+      ));
 
       if (parsed.action === "tool" && !lastRound) {
         const toolName = String(parsed.args.tool || parsed.args.name || "").trim();
@@ -742,7 +771,6 @@ async function assistHandleUserMessage(userText, ui, attachImages) {
           tail.push({ role: "user", content: `[제안 거부] ${p.error}\n다시 시도하거나 action="final" 로 설명하세요.` });
           continue;
         }
-        if (visible) assistPushAssistant(visible, ui);
         // [Tier2 · option A] 코드 수정 제안은 카드를 띄우기 전에 '격리 인스턴스'에서 조용히 돌려본다.
         // 성공하면 카드에 '검증됨(실측)' 배지가, 실패/불가면 '미검증'으로 폴백(오늘 동작 그대로).
         // 라이브는 절대 안 건드린다. 여기서 예외가 나도 카드는 반드시 뜬다(폴백 보장).
@@ -752,6 +780,21 @@ async function assistHandleUserMessage(userText, ui, attachImages) {
             p.proposal.verify = await assistVerifyProposal(p.proposal, signal);
           }
         } catch (_) { p.proposal.verify = null; }
+        // [검증 실패 재시도 2026-09-10] 실측: 제안 코드가 ctx.sheets 인자 오류·ctx.workbook(없는 헬퍼)로 격리 실행에 실패했는데
+        // 그대로 카드가 떴다 — 사용자가 눌러도 또 실패한다. 실패 원인을 되먹여 한 번 다시 제안시킨다(본문은 재시도 뒤에 한 번만 보여준다).
+        const _v = p.proposal.verify;
+        if (_v && _v.ok === false && _v.verifiable && !lastRound && proposeRetries < 1) {
+          proposeRetries += 1;
+          try { if (typeof traceClientUiEvent === "function") traceClientUiEvent("assist.nudge", { kind: "verify-failed", error: String(_v.error || "").slice(0, 120) }); } catch (_) {}
+          tail.push({ role: "assistant", content: reply.slice(0, 1500) });
+          tail.push({ role: "user", content:
+            "[격리 검증 실패] 방금 제안한 코드를 격리 인스턴스에서 실행했더니 실패했습니다: " + String(_v.error || "").slice(0, 400) + "\n"
+            + "(이전 답은 사용자에게 보이지 않았습니다 — 사과·정정·'방금 전 턴' 언급 없이 답만 새로 쓰세요.) "
+            + "실패 원인을 고쳐 같은 단계에 다시 action=\"propose\" 하세요. 코드에 쓰는 ctx 헬퍼마다 ctx.help(이름)으로 서명(인자 순서·개수)을 "
+            + "먼저 확인하고, ctx.help 목록에 없는 헬퍼(ctx.workbook, ctx.sheet 등)는 절대 쓰지 마세요. 고칠 수 없으면 action=\"final\" 로 원인만 설명하세요." });
+          continue;
+        }
+        if (visible) assistPushAssistant(visible, ui);
         try { ui.onProposal && ui.onProposal(p.proposal); } catch (_) {}
         return;
       }
@@ -786,23 +829,31 @@ async function assistHandleUserMessage(userText, ui, attachImages) {
       // 종료하지 말고 같은 턴 안에서 즉시 실행을 요구한다(상한 2회 — 무한루프 방지).
       {
         const finalText = (visible || salvaged || rawShown || "").trim();
-        if (!lastRound && evidenceNudges < 1 && toolCalls === 0
-            && assistLooksLikeDataClaimWithoutEvidence(userText, finalText)) {
-          evidenceNudges += 1;
-          try { if (typeof traceClientUiEvent === "function") traceClientUiEvent("assist.nudge", { kind: "no-evidence", tail: finalText.slice(0, 80) }); } catch (_) {}
-          tail.push({ role: "assistant", content: reply.slice(0, 1500) });
-          tail.push({ role: "user", content:
-            "방금 답에 구체적인 수치·이름이 있는데 이번 턴에 도구를 하나도 쓰지 않았습니다. 파일·시트의 값과 이름은 "
-            + "반드시 data.query / data.read / sheet.headers 로 읽은 결과만 말해야 합니다. 지금 action=\"tool\" 로 확인하세요. "
-            + "확인할 수 없으면 숫자와 이름을 지어내지 말고 '확인하지 못했다' 고 action=\"final\" 로 답하세요." });
-          continue;
+        if (!lastRound && toolCalls === 0 && assistLooksLikeDataClaimWithoutEvidence(userText, finalText)) {
+          if (evidenceNudges < 2) {
+            evidenceNudges += 1;
+            try { if (typeof traceClientUiEvent === "function") traceClientUiEvent("assist.nudge", { kind: "no-evidence", n: evidenceNudges, tail: finalText.slice(0, 80) }); } catch (_) {}
+            tail.push({ role: "assistant", content: reply.slice(0, 1500) });
+            tail.push({ role: "user", content: (evidenceNudges === 1
+              ? "방금 답은 파일 값을 묻는 질문에 도구를 하나도 쓰지 않고 답한 것이라 폐기됩니다. "
+              : "또 도구 없이 답했습니다. 이 답도 폐기됩니다. 이번에는 반드시 ") + "(이전 답은 사용자에게 보이지 않았습니다 — 사과·정정·'방금 전 턴' 언급 없이 답만 새로 쓰세요.) "
+              + "파일·시트의 값과 이름(회사명·상품명·개수·합계)은 data.query / data.read / columns.find 로 읽은 결과만 말할 수 있습니다. "
+              + "지금 action=\"tool\" 블록을 출력해 확인하세요. 확인할 수 없으면 숫자와 이름을 지어내지 말고 "
+              + "'확인하지 못했다' 고만 action=\"final\" 로 답하세요." });
+            continue;
+          }
+          // 두 번 재촉해도 도구 없이 값을 말한다 — 확인 안 된 수치·이름은 화면에 내보내지 않는다(실측: '실제 값을 다시 확인했습니다' 라며 지어냄).
+          try { if (typeof traceClientUiEvent === "function") traceClientUiEvent("assist.final", { tools: 0, round, unverifiedRefused: true, tail: finalText.slice(0, 80) }); } catch (_) {}
+          assistPushAssistant("파일 값을 도구로 확인하지 못해 이 질문에는 답하지 않겠습니다 — 확인되지 않은 수치·이름을 말하지 않기 위해서입니다. "
+            + "질문에 파일과 시트 이름을 넣어 다시 물어봐 주세요. 예: \"output_청구서.xlsx 의 회사별요약 시트에서 마진율이 가장 낮은 3곳\"", ui);
+          return;
         }
         if (!lastRound && danglingNudges < 2 && assistLooksLikeDanglingAnnouncement(finalText)) {
           danglingNudges += 1;
           try { if (typeof traceClientUiEvent === "function") traceClientUiEvent("assist.nudge", { kind: "dangling", n: danglingNudges, tail: finalText.slice(-80) }); } catch (_) {}
           tail.push({ role: "assistant", content: reply.slice(0, 1500) });
           tail.push({ role: "user", content:
-            "방금 응답이 \"~하겠습니다\" 예고로 끝났고 아무것도 실행되지 않았습니다. 예고하지 말고 지금 바로 하세요: "
+            "방금 응답이 \"~하겠습니다\" 예고로 끝났고 아무것도 실행되지 않았습니다. " + "(이전 답은 사용자에게 보이지 않았습니다 — 사과·정정·'방금 전 턴' 언급 없이 답만 새로 쓰세요.) " + "예고하지 말고 지금 바로 하세요: "
             + "조회가 필요하면 action=\"tool\" 블록을 출력하고, 필요 없으면 지금 아는 것으로 완결된 답(action=\"final\")을 작성하세요." });
           continue;
         }
@@ -812,7 +863,7 @@ async function assistHandleUserMessage(userText, ui, attachImages) {
           danglingNudges += 1;
           tail.push({ role: "assistant", content: reply.slice(0, 1500) });
           tail.push({ role: "user", content:
-            "방금 응답이 '버튼'을 안내했지만 실제 버튼은 만들어지지 않았습니다 — 대괄호 글자는 버튼이 되지 않습니다. "
+            "방금 응답이 '버튼'을 안내했지만 실제 버튼은 만들어지지 않았습니다 — 대괄호 글자는 버튼이 되지 않습니다. " + "(이전 답은 사용자에게 보이지 않았습니다 — 사과·정정·'방금 전 턴' 언급 없이 답만 새로 쓰세요.) "
             + "새 단계를 설계 채팅에 넘기려던 것이면 지금 즉시 action=\"handoff\" 블록을 출력하세요(그래야 카드가 뜹니다). "
             + "아니면 버튼 안내를 빼고 완결된 답(action=\"final\")을 작성하세요." });
           continue;
@@ -823,7 +874,7 @@ async function assistHandleUserMessage(userText, ui, attachImages) {
           danglingNudges += 1;
           tail.push({ role: "assistant", content: reply.slice(0, 1500) });
           tail.push({ role: "user", content:
-            "방금 답변이 고친 요청문(따옴표 문장)을 말로만 제시했습니다. 그 문장이 '설계 채팅에 넣을 작업 지시문'이면 "
+            "방금 답변이 고친 요청문(따옴표 문장)을 말로만 제시했습니다. " + "(이전 답은 사용자에게 보이지 않았습니다 — 사과·정정·'방금 전 턴' 언급 없이 답만 새로 쓰세요.) " + "그 문장이 '설계 채팅에 넣을 작업 지시문'이면 "
             + "지금 즉시 action=\"handoff\" 블록을 출력하세요(args.request 에 그 문장을 담으면 [채팅에 넣기] 카드가 떠서 "
             + "사용자가 바로 넣을 수 있습니다). 반대로 '오류 창 메모칸에 붙여넣을 문장'이면 handoff 를 내지 말고 "
             + "같은 답변을 action=\"final\" 로 그대로 다시 출력하세요." });
@@ -838,7 +889,7 @@ async function assistHandleUserMessage(userText, ui, attachImages) {
         try { if (typeof traceClientUiEvent === "function") traceClientUiEvent("assist.nudge", { kind: "empty-final", tools: toolCalls, round }); } catch (_) {}
         tail.push({ role: "assistant", content: String(reply || "").slice(0, 1500) });
         tail.push({ role: "user", content:
-          "방금 응답은 action=\"final\" 인데 사용자가 읽을 본문이 비어 있습니다. 본문 없는 final 은 답이 아닙니다. "
+          "방금 응답은 action=\"final\" 인데 사용자가 읽을 본문이 비어 있습니다. 본문 없는 final 은 답이 아닙니다. " + "(이전 답은 사용자에게 보이지 않았습니다 — 사과·정정·'방금 전 턴' 언급 없이 답만 새로 쓰세요.) " + ""
           + (toolCalls ? "이미 받은 도구 결과(rows 의 순서와 값 그대로)를 바탕으로 " : "")
           + "완결된 답을 본문에 써서 action=\"final\" 로 다시 보내세요." });
         continue;

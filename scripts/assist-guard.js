@@ -9,6 +9,36 @@
    =================================================================== */
 
 const ASSIST_FENCE = "b2b-action";
+
+/* [재촉 메타 제거 2026-09-10] 루프의 재촉(근거 없음·예고만·빈 final·요청문 산문)은 사용자에게 보이지 않는 내부 턴이다.
+   그런데 모델은 거기에 "죄송합니다. 방금 답변은 도구로 확인하지 않고 제가 만들어낸 것이었습니다", "다시 확인해 봤습니다. 방금 답변에
+   따옴표로 감싼 요청문은 없었어요. 그래서 handoff 카드가 필요 없고, 같은 답변을 그대로 다시 드립니다" 처럼 반응하고, 그 문장이 화면과
+   history 에 남아 다음 턴까지 사과 톤을 끌고 갔다(실측 2026-09-10 17:13). 그런 문장만 걷어낸다 — 내용 문장은 건드리지 않는다. */
+function assistStripNudgeMeta(text) {
+  const src = String(text || "");
+  if (!src.trim()) return src;
+  const META = /(방금\s*(전\s*)?(턴|답변|응답|답)에?서?|만들어낸\s*것이|지어낸\s*것이|도구로\s*(읽|확인)하지\s*않고|handoff\s*카드가?\s*필요\s*없|같은\s*답변을\s*그대로|따옴표로\s*감싼|재촉|다시\s*확인해\s*봤습니다|틀린\s*것이었습니다|폐기)/;
+  const SORRY = /^(죄송합니다|죄송해요|정정합니다|확인했습니다|알겠습니다)[.!]?\s*$/;
+  const paras = src.split(/\n{2,}/);
+  const out = [];
+  for (const para of paras) {
+    const sents = para.split(/(?<=[.!?。])\s+/).filter(x => x.trim());
+    if (!sents.length) continue;
+    // 문단이 메타 문장(또는 "죄송합니다." + 메타)으로 시작하면 정정·사과 문단이다 — 뒷문장("그 회사명은 없습니다. 죄송합니다.")까지 통째로 뺀다
+    const first = sents[0].trim();
+    if (META.test(first) || (SORRY.test(first) && sents.length > 1 && META.test(sents[1]))) continue;
+    const kept = [];
+    for (let i = 0; i < sents.length; i++) {
+      const s = sents[i].trim();
+      if (META.test(s)) continue;                                                    // 본문 사이에 낀 메타 문장
+      if (SORRY.test(s) && ((i > 0 && META.test(sents[i - 1].trim())) || (i + 1 < sents.length && META.test(sents[i + 1].trim())))) continue;   // 메타 문장 앞뒤의 "죄송합니다."
+      kept.push(sents[i]);
+    }
+    if (kept.length) out.push(kept.join(" "));
+  }
+  const res = out.join("\n\n").trim();
+  return res || src;   // 전부 지워지면 원문 유지(정보 유실 방지)
+}
 // 액션 블록 스캔 상한. replaceStepCode 의 newCode 는 pipeline.step 이 주는 코드(최대 12000자)에
 // JSON 이스케이프(줄바꿈/따옴표)가 붙어 1.5~2배로 불어난다 — 8000이면 통짜 제안이 파싱 실패로
 // 유실되고 원문 JSON 이 노출됐다(검토 #12). 32000 이면 12000자 코드도 여유 있게 담긴다.

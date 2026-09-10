@@ -8,7 +8,7 @@ signature: "(question, text)"
 role: "근거 없는 주장으로 본다 → 루프가 한 번 재촉한다."
 role_source: banner
 version: "0.8.4"
-loc: "assist-core.js:341-341"
+loc: "assist-core.js:346-346"
 
 # ── 입출력 ──
 inputs:
@@ -22,13 +22,24 @@ side_effects:
 raises: []
 
 # ── 유기적 관계 ──
-calls: []
+calls:
+  - "_assistAllFiles"
+  - "push"
 calls_external:
   - "String"
+  - "forEach"
+  - "id"
+  - "isArray"
+  - "join"
+  - "keys"
+  - "replace"
+  - "sort"
+  - "split"
   - "test"
 called_by:
   - "assistHandleUserMessage"
-reads: []
+reads:
+  - "state.pipeline"
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
 timestamp: "0.8.4-gen"
@@ -41,7 +52,7 @@ timestamp: "0.8.4-gen"
 - 없음(정적 분석 기준)
 
 ## 관계
-- 호출: 없음
+- 호출: `_assistAllFiles`, `push`
 - 피호출(영향 전파 경로): `assistHandleUserMessage`
 
 ## 실패/예외

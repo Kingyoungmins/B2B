@@ -8,7 +8,7 @@ signature: "(reply)"
 role: "응답 본문에서 액션 블록을 걷어낸 '사람이 읽을 부분'"
 role_source: banner
 version: "0.8.4"
-loc: "assist-guard.js:195-195"
+loc: "assist-guard.js:225-225"
 
 # ── 입출력 ──
 inputs:

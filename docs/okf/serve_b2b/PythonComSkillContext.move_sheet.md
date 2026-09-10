@@ -9,7 +9,7 @@ signature: "(self, name, before=None, after=None)"
 role: "[SBAGENT-295] 같은 파일 안에서 기존 시트의 '위치'를 바꾼다(내용·이름 유지)."
 role_source: docstring
 version: "0.8.4"
-loc: "serve_b2b.py:15122-15149"
+loc: "serve_b2b.py:15124-15151"
 
 # ── 입출력 ──
 inputs:

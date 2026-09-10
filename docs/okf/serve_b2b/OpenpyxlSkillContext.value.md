@@ -9,7 +9,7 @@ signature: "(self, sheet_or_name, row, col, workbook=None)"
 role: "Return the displayed/calculated value for one cell."
 role_source: docstring
 version: "0.8.4"
-loc: "serve_b2b.py:19484-19494"
+loc: "serve_b2b.py:19486-19496"
 
 # ── 입출력 ──
 inputs:

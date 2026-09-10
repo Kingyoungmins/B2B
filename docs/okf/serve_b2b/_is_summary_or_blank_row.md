@@ -8,7 +8,7 @@ signature: "(row)"
 role: "[정렬 요약행 고정 2026-09-08] 행의 앞 3칸에 합계/평균 류 라벨이 있거나, 행이 통째로 비었으면 True."
 role_source: docstring
 version: "0.8.4"
-loc: "serve_b2b.py:16802-16820"
+loc: "serve_b2b.py:16804-16822"
 
 # ── 입출력 ──
 inputs:

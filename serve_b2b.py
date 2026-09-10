@@ -15115,9 +15115,11 @@ class PythonComSkillContext:
             "Workbooks": "다른 파일은 ctx.book(파일명)",
             "Application": "원시 COM 접근은 지원되지 않습니다(ctx 헬퍼만 사용)",
         }
-        hint = _hints.get(name, "ctx 가 제공하는 헬퍼만 사용할 수 있습니다")
+        hint = _hints.get(name)
         raise AttributeError(
-            f"ctx.{name} 는 없습니다 — {hint} 를 사용하세요(VBA/COM 식 접근 금지).")
+            f"ctx.{name} 는 없습니다 — {hint} 를 사용하세요(VBA/COM 식 접근 금지)." if hint else
+            f"ctx.{name} 는 없습니다 — ctx 가 제공하는 헬퍼만 사용할 수 있습니다(시트 읽기 ctx.read, 쓰기 ctx.write, "
+            f"이름 맞춰 채우기 ctx.match_fill, 시트 추가 ctx.add_sheet 등. VBA/COM 식 접근 금지).")
 
     def move_sheet(self, name, before=None, after=None):
         """[SBAGENT-295] 같은 파일 안에서 기존 시트의 '위치'를 바꾼다(내용·이름 유지).

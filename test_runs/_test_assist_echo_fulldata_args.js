@@ -123,10 +123,12 @@ console.log("[2] 도구 인자 {args:{...}} 포장 해제(실제 assistRunTool �
     check("수치 없는 안내 답변은 통과", claim("이 스킬이 무슨 일을 해?", "1단계는 피벗을 만들고 2단계는 값을 채웁니다.") === false);
     check("데이터와 무관한 질문의 숫자(버전)는 통과", claim("지금 버전이 뭐야?", "0.8.4 입니다.") === false);
     check("'확인하지 못했다' 류 답은 통과(수치 없음)", claim("매출 합계 검산해줘", "파일을 읽지 못해 확인하지 못했습니다.") === false);
-    check("루프: 도구 0회 조건으로 1회만 재촉하고 예고문 재촉보다 먼저",
-      /evidenceNudges < 1 && toolCalls === 0[\s\S]{0,120}assistLooksLikeDataClaimWithoutEvidence\(userText, finalText\)/.test(CORE)
-      && CORE.indexOf("evidenceNudges < 1 && toolCalls === 0") < CORE.indexOf("danglingNudges < 2 && assistLooksLikeDanglingAnnouncement(finalText)"));
-    check("재촉 문구가 '지어내지 말고 확인 못 했다고 답하라'까지 요구", CORE.includes("숫자와 이름을 지어내지 말고 '확인하지 못했다' 고"));
+    // [2026-09-10 2차] 재촉은 2회, 그래도 도구 없이 값을 말하면 확인 안 된 답은 내보내지 않는다 — 예고문 재촉보다 먼저
+    check("루프: 도구 0회 조건으로 재촉(최대 2회)하고 예고문 재촉보다 먼저",
+      /toolCalls === 0 && assistLooksLikeDataClaimWithoutEvidence\(userText, finalText\)\) \{\s*if \(evidenceNudges < 2\)/.test(CORE)
+      && CORE.indexOf("toolCalls === 0 && assistLooksLikeDataClaimWithoutEvidence(userText, finalText)") < CORE.indexOf("danglingNudges < 2 && assistLooksLikeDanglingAnnouncement(finalText)"));
+    check("재촉 문구가 '지어내지 말고 확인 못 했다고 답하라'까지 요구", CORE.includes("숫자와 이름을 지어내지 말고 ") && CORE.includes("'확인하지 못했다' 고만 action="));
+    check("2회 재촉 뒤에도 도구 0회면 확인 안 된 답을 내보내지 않는다", CORE.includes("unverifiedRefused: true") && CORE.includes("파일 값을 도구로 확인하지 못해 이 질문에는 답하지 않겠습니다"));
     check("프롬프트 날조 금지에 '도구로 읽지 않은 수치는 말하지 마라' 명시", CORE.includes("도구로 읽지 않은 수치는 한 글자도 말하지 마라"));
     check("최종 답 트레이스(assist.final tools=N)", CORE.includes('traceClientUiEvent("assist.final", { tools: toolCalls'));
 
