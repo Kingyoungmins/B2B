@@ -86,14 +86,14 @@ start_b2b_native.bat
 | 파일 | 역할 |
 |---|---|
 | `index.html` | SPA 셸. **script 로딩 순서에 의존**합니다. `scripts/fkey-guard.js` 는 반드시 **첫 번째** 스크립트여야 합니다(capture 리스너 등록 순서가 곧 차단 능력) |
-| `dashboard.html` | 관리 대시보드(단일 파일, 차트·필터·AI에게 묻기 포함) |
+| `dashboard.html` | 관리 대시보드(단일 파일, 차트·필터·AI에게 묻기 포함). 조직 단계별 탭, 조직 조각·버전·세션(오류→실행 목록) 클릭 필터, 조건은 URL `#` 에 유지 |
 | `assist.html` | AI 도움 팝업을 네이티브 별창으로 띄울 때의 페이지 |
 | `scripts/pipeline.js` | 스킬 파이프라인의 심장. 단계 적용/재적용/토글/삭제, 전체실행·이어실행, 스냅샷·빠른 복구, `pipelineStepLiveLanguage`(엔진 라우팅), 격리 파이프라인 호출 |
 | `scripts/chat-ui.js` | 설계 채팅 UI + 적용 전 클라이언트 1차 게이트(`pythonComStaticSafetyFailures`, `validateAssistantCodeBeforeApply`) |
 | `scripts/file-schema.js` | LLM에 넘기는 파일 스키마 + 시스템 프롬프트(`PYTHON_COM_SYSTEM_PROMPT`, VBA 프롬프트, 라우팅 규칙) |
 | `scripts/llm-api.js` | LLM 호출·히스토리 윈도우 |
 | `scripts/excel-mirror.js` | 실제 Excel 창 미러 제어(표시 대상 전환, 선택 폴링, 수식 표시줄) |
-| `scripts/assist-*.js` | **AI 도움**(F11) — `assist-core`(오케스트레이터), `assist-tools`(읽기 전용 도구만), `assist-llm`(설계 채팅과 격리된 배관), `assist-guard`(액션 파서/가드), `assist-report`(이슈 제보 zip), `assist-ui`(떠 있는 팝업) |
+| `scripts/assist-*.js` | **AI 도움**(F11) — `assist-core`(오케스트레이터), `assist-tools`(읽기 전용 도구만 — `data.query`(count/sum/rank/groupSum…)·`columns.find`·`ctx.help`·`sheet.headers`·`step.error` 등, 파일·시트 이름은 유일할 때만 관대 해석), `assist-llm`(설계 채팅과 격리된 배관), `assist-guard`(액션 파서/가드), `assist-report`(이슈 제보 zip), `assist-ui`(떠 있는 팝업) |
 | `scripts/fkey-guard.js` | F키 접근 권한(F2·F6·F7·F8·F9 게이트) |
 | `scripts/fkey-help.js` | F1 = F키 매핑 도움말 |
 | `scripts/version-gate.js` | 시작 시 1회 허용 버전 확인 팝업 |
@@ -158,6 +158,8 @@ python tools\issue_recheck\recheck.py --serve    :: 관리 대시보드 http://1
 | `MATCH-FILL-MULTIBLOCK-OVERFILL` | `_test_match_fill_block_scope.py`, `_test_match_fill_com.py`, `_test_match_fill_e2e.py` |
 | `WRITE-NONE-ROW-CLEARED-FORMULA` | `_test_write_skip_none_rows.py` |
 | `FAST-DELETE-CROSS-STEP-GATE` | `_test_fast_delete_cross_gate.js` |
+| `DASH-ORG-LEVELS-VER-SESSION-FILTERS` | `_test_dashboard_org_ver_session_e2e.py`(정적 서버 + Playwright 모의 API, 실제 브라우저), `_test_org_dashboard.js` |
+| `ASSIST-VAGUE-DATA-QUESTION-SHEET-RESOLVE` · `ASSIST-EMPTY-FINAL-NUDGE` · `ASSIST-BATTERY-GUARD-V2-CTX-HELP-VERIFY-RETRY` | `_test_assist_resolve_file_columns_find.js`(실제 함수 실행), `_test_assist_empty_final_nudge_e2e.py`(LLM 을 route 로 각본 모의, 백엔드 자동 기동), 실기 `_e2e_assist_vague_margin_live.py` · `_e2e_assist_battery_live.py`(개발망 Qwen 필요) |
 | `ASSIST-*`(4건) | `_test_assist_echo_fulldata_args.js`, `_test_assist_dangling_announce.js`, `_test_live_preview_maxrows_com.py` |
 | `ACTIVE-TIME-ESTIMATE` | `../versionTest/test_active_time.py` |
 
@@ -212,7 +214,7 @@ dashboard.html ─▶ log_dash.py ────▶  /v1/admin/*(집계 API)
 
 > 0.8.3 · 0.8.4 의 개발자용 상세 이력은 [CHANGELOG.md](CHANGELOG.md) 에, 버전별 고객 안내는 `patch_notes/vX.Y.Z.txt`(v0.5.16 이후) 에 있습니다. 아래는 이 README에 누적돼 온 기록입니다 — **0.5.14 ~ 0.8.2 구간은 여기에 없으니** `patch_notes/` 와 `docs/lessons/` 를 보세요.
 
-### ver0.8.4 (2026-09-03 ~ 09-09)
+### ver0.8.4 (2026-09-03 ~ 09-10)
 
 - **제품명 변경**: 창 제목(NativeHost)·문서 title·드로어 상단·대시보드 제목/요약/AI 프롬프트·제보 안내·버전확인 문구를 "B2B 스마트 빌링 에이전트"로. 생성기 U+ 로고 옆 제목과 좌측 메뉴 그룹 라벨은 지시대로 `AX-Cell` 유지, 내부 식별자도 그대로.
 - **추가 메뉴 Coming soon 블락**: AX-Trace·E2E 메뉴를 숨기는 대신 항상 보이게 두고 반투명 "Coming soon" 블락으로 클릭만 차단. **F6** = 블락 해제/복귀.
@@ -225,6 +227,9 @@ dashboard.html ─▶ log_dash.py ────▶  /v1/admin/*(집계 API)
 - **관리 대시보드 확장**: 수동 `🔄 갱신` 버튼, 실행(세션) 목록 행 펼침(로그 파일 목록·크기·다운로드, 스킬별 단계 수/켜짐 수/제목), 표 10줄 페이지 나눔, 행 클릭 = 그 조건으로 필터(재클릭 해제), 토큰 일별 추이 차트, 세션당 토큰 합계 열, 활성 시간(추정 — 세션 로그 간격 ≤10분만 실사용으로 합산, 초과는 자리비움), 스킬 TOP 차트, 표 4종 CSV 내보내기(BOM 포함), 조회 조건을 주소창 `#` 에 저장, 팀즈 붙여넣기용 `📋 요약 복사`(직전 기간 증감 포함), 전체실행 카드(`telemetry_preview.jsonl` 을 `log_sync` 로 함께 전송).
 - **세션 상태 '수집 중' 고착 수정**: `/api/app/shutdown` 이 응답을 먼저 보내고 0.5초 뒤 종료 신호를 보내는데 호스트가 응답 직후 서버를 kill 해, X로 닫을 때마다 종료 신호가 유실됐습니다. 종료 신호·잔여 로그 전송을 응답 **전**으로 옮기고(소스 순서를 테스트로 잠금), 수집 서버는 마지막 수신 후 10분 무소식 + 미종료를 `stale`(끊김)로 흡수 → 대시보드는 종료 / 종료(추정) / 수집 중 3단 표시.
 - 요약 복사가 전부 `undefined/0` 으로 나오던 버그(digest 객체를 AI용 JSON 문자열로 자른 뒤 객체처럼 읽었음) 수정. 세션 상세는 펼칠 때마다 재조회(첫 응답 영구 캐시 제거).
+
+- **관리 대시보드 골라 보기(09-09)**: 조직 경로를 단계별(1단계…팀)로 쪼개 보는 "조직 단계별 사용" 차트(탭, 재조회 없음), 실행 목록 조직 칸을 조각으로 그려 조각 클릭 = 그 단위 필터, 버전 클릭 필터(실행 목록·버전 도입률·필터 바), 오류 목록 이벤트/세션 클릭 → 그 세션만 실행 목록에 남기고 스크롤·상세 펼침(zip 디버깅용). 조건은 `#org/ver/session/lvl` 로 유지. 실제 브라우저 검증 `_test_dashboard_org_ver_session_e2e.py`.
+- **AI 도움(F11) 안정화(09-10)** — "마진율 제일 적은거 3개" 같은 시트명 없는 질문이 3회 중 1회만 정답이던 것을 실기 6/6 으로: 파일·시트 이름 관대 해석(유일할 때만), 프롬프트 팩트에 파일별 시트(열 이름), `columns.find`, `data.query op=rank`(정렬은 도구가), groupBy 배열, 본문 없는 final 재촉. 광역 실기(오류 진단·스킬 생성 방법·실데이터·상태·다른 달 12문항×3회) 후속으로 근거 가드 v2(값 질문은 도구 근거 필수, 2회 재촉 후 확인 안 된 답은 내보내지 않음), 재촉 메타·사과 문장 제거, `ctx.help`(실제 헬퍼 서명), 격리 검증 실패한 수정 제안 1회 재제안. 상세는 `docs/lessons/62`.
 
 ### ver0.8.3 (2026-09-02)
 
