@@ -1,18 +1,19 @@
 ---
 type: endpoint
-title: _nonEmptyInCol
+title: _assistHasSheet
 module: assist-tools.js
 lang: js
 extraction: regex   # 정규식 근사
-signature: "(idx)"
-role: "[중복 헤더 개선] 같은 이름 헤더가 여러 열이면(예: 템플릿의 빈 '회사' A열 + 붙여넣은 '회사' D열)"
-role_source: banner
+signature: "(f, sn)"
+role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
+role_source: none
 version: "0.8.4"
-loc: "assist-tools.js:442-442"
+loc: "assist-tools.js:171-171"
 
 # ── 입출력 ──
 inputs:
-  - "idx"
+  - "f"
+  - "sn"
 returns: "(추정)"
 
 # ── 사이드이펙트 (정적 추정) ──
@@ -22,9 +23,12 @@ raises: []
 
 # ── 유기적 관계 ──
 calls: []
-calls_external: []
+calls_external:
+  - "includes"
+  - "isArray"
 called_by:
-  - "_pickBestCol"
+  - "_assistResolveFile"
+  - "_assistResolveSheet"
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
@@ -32,14 +36,14 @@ timestamp: "0.8.4-gen"
 ---
 
 ## 역할
-[중복 헤더 개선] 같은 이름 헤더가 여러 열이면(예: 템플릿의 빈 '회사' A열 + 붙여넣은 '회사' D열)
+(추정) 역할 주석 없음 — 담당자 1줄 보완 필요  _(자동 추정 — 확인 필요)_
 
 ## 사이드이펙트 & 주의
 - 없음(정적 분석 기준)
 
 ## 관계
 - 호출: 없음
-- 피호출(영향 전파 경로): `_pickBestCol`
+- 피호출(영향 전파 경로): `_assistResolveFile`, `_assistResolveSheet`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

@@ -28,11 +28,21 @@ function assistSystemPrompt() {
   const files = (state.inputs || []).map(f => f && f.name).filter(Boolean);
   const outs = (state.outputTemplates || []).map(t => (t && (t.file || t.original) || {}).name).filter(Boolean);
   // 그라운딩 팩트: 모델이 지어낼 수 없도록 '실재하는 것'만 열거해 준다.
+  // [2026-09-10] 파일명만 주던 팩트에 시트·열 이름을 붙인다 — 실측: 모델이 'Sheet1' 을 추측하고, 이미 '마진율' 열이 있는
+  // 요약 시트를 두고 원본 두 파일을 뒤져 머릿속 계산으로 틀렸다. 시트(열…) 가 보이면 첫 호출부터 맞는 시트를 부른다.
+  const brief = (typeof _assistFileHeadersBrief === "function") ? (function () { try { return _assistFileHeadersBrief(12); } catch (_e) { return []; } })() : [];
+  const fmtFile = it => `${it.name} — 시트: ` + Object.entries(it.sheets || {})
+    .map(([sn, h]) => (h && h.length) ? `${sn}(${h.join(",")})` : sn).join(" | ");
+  const inputLines = brief.filter(x => x.role === "input").map(fmtFile);
+  const outLines = brief.filter(x => x.role === "output").map(fmtFile);
   const facts = [
     `현재 스킬 단계 수: ${steps.length}`,
     steps.length ? `단계 목록: ${steps.map((s, i) => `${i + 1}:${s.id}`).join(", ")}` : "",
     files.length ? `업로드 입력 파일: ${files.join(" | ")}` : "업로드된 입력 파일 없음",
     outs.length ? `출력 템플릿: ${outs.join(" | ")}` : "",
+    (inputLines.length || outLines.length)
+      ? "파일별 시트(열 이름) — 아래 이름만 실재한다. 이 목록에 없는 시트명(예: Sheet1)을 부르지 마라:\n  "
+        + inputLines.concat(outLines).join("\n  ") : "",
   ].filter(Boolean).join("\n");
 
   return `${typeof OUTPUT_LANGUAGE_RULE === "string" ? OUTPUT_LANGUAGE_RULE + "\n\n" : ""}${typeof PLAIN_LANGUAGE_RULE === "string" ? PLAIN_LANGUAGE_RULE + "\n\n" : ""}당신은 'B2B 스마트 빌링 에이전트'(구 AX-Cell) 프로그램 '안에서' 동작하는 도우미입니다.
@@ -55,6 +65,13 @@ function assistSystemPrompt() {
   결론(일치/불일치·두 값·차이)을 **먼저** 말한다. 스킬 단계나 코드를 뒤지지 마라 — 원인 추적은 사용자가
   "어디서 달라졌는지 찾아줘"라고 따로 물을 때만 한다. 요약표 열을 합칠 때 data.query 는 합계/평균 행을
   이미 빼고 계산하니 그 값을 그대로 비교에 쓰고, 값이 정확히 2배면 합계 행 중복 합산부터 의심하라.
+- **[값을 묻는 질문 — 시트를 모르면 먼저 찾아라]** "마진율 낮은 3곳", "합계가 얼마" 처럼 열 이름만 있고 시트명이
+  없으면 **columns.find(열 이름)** 로 그 열이 있는 파일/시트를 먼저 찾아라(위 팩트의 "파일별 시트(열 이름)" 도 같은 정보다).
+  **이미 계산된 요약/출력 시트에 그 열이 있으면 그 시트를 읽어 답하라.** 원본 두 시트를 각각 읽어 머릿속에서 빼기·나누기로
+  만든 수치는 답하지 마라 — 실측(2026-09-10)에서 그렇게 만든 순위가 틀렸다. 도구가 unknown_file/unknown_sheet 를 돌려주면
+  그 안의 available 이름으로 **한 번 더 호출**하라. 파일은 위 팩트에 있으니 "파일이 없다/못 찾겠다"고 답하지 마라.
+  **"가장 낮은/높은 N개", "순위"는 data.query op=rank(column=값 열, order=asc|desc, topN=N)** 로 받아 그 rows 순서 그대로 답하라.
+  표를 sample/data.read 로 읽고 눈으로 고르지 마라 — 실측에서 21행짜리 표에서 3위를 틀렸다.
 
 ## 당신이 할 수 없는 것 (중요)
 - 스킬을 직접 **실행/적용**할 수 없다. 그런 도구는 없다. 다만 네가 코드 수정을 제안하고 사용자가
@@ -427,6 +444,7 @@ async function assistHandleUserMessage(userText, ui, attachImages) {
   let toolCalls = 0;
   let danglingNudges = 0;   // [말 끊김 수정] '예고만 하고 멈춤' 재촉 횟수(무한루프 방지 상한 2회)
   let evidenceNudges = 0;     // [근거 없는 수치 2026-09-09] 도구 0회인데 구체 수치/이름을 답하면 1회 재촉
+  let emptyFinalNudges = 0;   // [빈 최종 답 2026-09-10] {"action":"final","args":{}} 처럼 본문 없는 final 이면 1회 재촉
 
   state.assist = state.assist || { history: [] };
   state.assist.history.push({ role: "user", content: String(userText || "") });
@@ -811,6 +829,19 @@ async function assistHandleUserMessage(userText, ui, attachImages) {
             + "같은 답변을 action=\"final\" 로 그대로 다시 출력하세요." });
           continue;
         }
+      }
+      // [빈 최종 답 2026-09-10] 실측(Qwen, 같은 질문 6회 중 1회·앞선 5회 중 2회): 도구 결과(rank 정답)를 받은 직후
+      // {"action":"final","args":{}} 만 보내 본문이 없었다 → "응답을 정리하지 못했습니다" 로 끝나 사용자는 빈 답을 봤다.
+      // 근거는 이미 손에 있으니 버리지 말고 한 번 재촉해 본문을 채우게 한다(상한 1회 — 그래도 비면 종전 안내).
+      if (!visible && !salvaged && !rawShown && parsed.parsed && !lastRound && emptyFinalNudges < 1) {
+        emptyFinalNudges += 1;
+        try { if (typeof traceClientUiEvent === "function") traceClientUiEvent("assist.nudge", { kind: "empty-final", tools: toolCalls, round }); } catch (_) {}
+        tail.push({ role: "assistant", content: String(reply || "").slice(0, 1500) });
+        tail.push({ role: "user", content:
+          "방금 응답은 action=\"final\" 인데 사용자가 읽을 본문이 비어 있습니다. 본문 없는 final 은 답이 아닙니다. "
+          + (toolCalls ? "이미 받은 도구 결과(rows 의 순서와 값 그대로)를 바탕으로 " : "")
+          + "완결된 답을 본문에 써서 action=\"final\" 로 다시 보내세요." });
+        continue;
       }
       try { if (typeof traceClientUiEvent === "function") traceClientUiEvent("assist.final", { tools: toolCalls, round, len: String(visible || salvaged || rawShown || "").length }); } catch (_) {}
       assistPushAssistant(

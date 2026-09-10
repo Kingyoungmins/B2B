@@ -159,6 +159,77 @@ function _assistFileList() {
   return out;
 }
 
+/* [파일 해석 2026-09-10] 파일 인자를 '정확 일치'만 받던 것을 관대하게. 실측: 모델이 확장자 없이·시트명을 파일 자리에·
+   이름 일부만 적어 unknown_file 을 맞고는 "파일이 없다"고 답했다(Qwen3.6 제보, Qwen3.8 재현). 반환 {file, note?, sheet?};
+   못 찾으면 null. 여러 개에 걸리면(모호) 고치지 않고 null — 엉뚱한 파일을 읽는 것보다 available 목록을 돌려주는 게 낫다. */
+function _assistAllFiles() {
+  const all = [];
+  (state.inputs || []).forEach(f => { if (f && f.name) all.push(f); });
+  (state.outputTemplates || []).forEach(t => { const f = t && (t.file || t.original); if (f && f.name) all.push(f); });
+  return all;
+}
+function _assistHasSheet(f, sn) {
+  if (!f || !sn) return false;
+  return Array.isArray((f.sheets || {})[sn]) || (Array.isArray(f.sheetNames) && f.sheetNames.includes(sn));
+}
+function _assistResolveFile(fname, sheetHint) {
+  const all = _assistAllFiles();
+  const q = String(fname || "").trim();
+  const sheet = String(sheetHint || "").trim();
+  const lower = s => String(s || "").toLowerCase().replace(/\s+/g, "");
+  const stem = s => lower(s).replace(/\.(xlsx|xlsm|xls|csv)$/i, "");
+  if (q) {
+    let f = all.find(x => x.name === q);
+    if (f) return { file: f };
+    f = all.filter(x => lower(x.name) === lower(q));
+    if (f.length === 1) return { file: f[0], note: `파일명 보정: '${q}' → '${f[0].name}'` };
+    f = all.filter(x => stem(x.name) === stem(q));
+    if (f.length === 1) return { file: f[0], note: `확장자 보정: '${q}' → '${f[0].name}'` };
+    f = all.filter(x => stem(x.name).includes(stem(q)) || stem(q).includes(stem(x.name)));
+    if (f.length === 1) return { file: f[0], note: `파일명 일부 일치: '${q}' → '${f[0].name}'` };
+    f = all.filter(x => _assistHasSheet(x, q));                  // 시트명을 파일 자리에 적은 경우
+    if (f.length === 1) return { file: f[0], sheet: q, note: `'${q}' 는 시트명 — 파일 '${f[0].name}' 의 시트로 해석` };
+  }
+  if (sheet) {                                                    // 파일은 못 찾았지만 그 시트를 가진 파일이 하나뿐
+    const f = all.filter(x => _assistHasSheet(x, sheet));
+    if (f.length === 1) return { file: f[0], note: `시트 '${sheet}' 를 가진 파일 '${f[0].name}' 으로 해석` };
+  }
+  return null;
+}
+/* 시트명도 같은 규칙으로 — 공백/대소문자/일부 일치가 유일하면 그 이름으로. 아니면 준 그대로(→ unknown_sheet 가 available 을 돌려준다) */
+function _assistResolveSheet(f, sname) {
+  const q = String(sname || "").trim();
+  if (!f || !q || _assistHasSheet(f, q)) return q;
+  const names = [...new Set([...(f.sheetNames || []), ...Object.keys(f.sheets || {})])];
+  const lower = s => String(s).toLowerCase().replace(/\s+/g, "");
+  let m = names.filter(n => lower(n) === lower(q));
+  if (m.length === 1) return m[0];
+  m = names.filter(n => lower(n).includes(lower(q)) || lower(q).includes(lower(n)));
+  if (m.length === 1) return m[0];
+  return q;
+}
+/* 파일별 시트별 헤더(열 이름) 요약 — schema.summary 와 시스템 프롬프트 그라운딩 팩트가 같이 쓴다.
+   실측: 팩트에 파일명만 있으니 모델이 'Sheet1' 을 추측하고, 이미 '마진율' 열이 있는 요약 시트를 두고 원본 두 파일을 뒤졌다. */
+function _assistFileHeadersBrief(maxCols) {
+  maxCols = maxCols || 15;
+  const out = [];
+  const add = (role, f) => {
+    if (!f || !f.name) return;
+    const sheets = {};
+    const names = [...new Set([...(f.sheetNames || []), ...Object.keys(f.sheets || {})])];
+    for (const sn of names) {
+      const rows = (f.sheets || {})[sn];
+      if (!Array.isArray(rows) || !rows.length) { sheets[sn] = null; continue; }
+      const hr = _assistDetectHeaderRow(rows);
+      sheets[sn] = (rows[hr] || []).map(v => String(v == null ? "" : v).trim()).filter(Boolean).slice(0, maxCols);
+    }
+    out.push({ role, name: f.name, sheets });
+  };
+  (state.inputs || []).forEach(f => add("input", f));
+  (state.outputTemplates || []).forEach(t => add("output", t && (t.file || t.original)));
+  return out;
+}
+
 // ── 1. 스킬 전체 개요 ────────────────────────────────────────────────────────
 assistDefineTool("pipeline.list", { desc: "스킬 전체 단계 목록(번호·설명·언어·대상 파일/시트·활성 여부·코드 길이)" },
   () => ({
@@ -193,8 +264,52 @@ assistDefineTool("pipeline.step", { desc: "특정 단계의 코드 원문과 메
   });
 
 // ── 3. 업로드 파일/시트 구조 ─────────────────────────────────────────────────
-assistDefineTool("schema.summary", { desc: "현재 업로드된 입력/출력 파일과 각 시트 이름" },
-  () => ({ ok: true, files: _assistFileList() }));
+assistDefineTool("schema.summary", { desc: "현재 업로드된 입력/출력 파일과 각 시트 이름 + 시트별 헤더(열 이름). 시트명·열 이름을 모를 때 먼저 호출." },
+  () => {
+    const heads = {};
+    for (const it of _assistFileHeadersBrief(20)) heads[it.name] = it.sheets;
+    return { ok: true, files: _assistFileList().map(it => ({ ...it, headersBySheet: heads[it.name] || {} })),
+             note: "headersBySheet 의 시트/열 이름을 data.query·data.read 에 그대로 쓴다. 열 이름만 알 땐 columns.find." };
+  });
+
+// ── [2026-09-10] 열 이름으로 파일/시트 찾기 ─────────────────────────────────
+// 실측: "마진율 제일 적은거 3개" 처럼 시트명 없는 질문에 모델이 Sheet1 을 추측하거나 원본 두 파일을 머릿속에서
+// 결합해 계산하다 3위를 틀렸다(3회 중 1회만 정답). 이미 '마진율' 열이 있는 요약 시트를 한 번에 찾게 한다.
+assistDefineTool("columns.find", {
+  desc: "열 이름(또는 일부)으로 그 열이 있는 파일/시트/열문자를 모든 파일에서 찾는다. 시트명을 모르는 데이터 질문은 data.query 전에 이걸 먼저 호출.",
+  args: "column",
+}, async (a) => {
+    const q = String(a.column || a.name || a.header || a.query || "").trim();
+    if (!q) return { ok: false, error: "missing_column", hint: "column 에 찾을 열 이름을 넣어라(예: 마진율)" };
+    const norm = s => String(s == null ? "" : s).toLowerCase().replace(/\s+/g, "");
+    const nq = norm(q);
+    const inputs = state.inputs || [];
+    const hits = [];
+    for (const f of _assistAllFiles()) {
+      const sheets = f.sheets || {};
+      for (const sn of Object.keys(sheets)) {
+        const rows = sheets[sn];
+        if (!Array.isArray(rows) || !rows.length) continue;
+        const hr = _assistDetectHeaderRow(rows);
+        (rows[hr] || []).forEach((v, i) => {
+          const name = String(v == null ? "" : v).trim();
+          if (!name) return;
+          const nn = norm(name);
+          const exact = nn === nq;
+          if (exact || nn.includes(nq)) {
+            hits.push({ file: f.name, sheet: sn, col: _assistColLetter(i), header: name, headerRow: hr + 1, exact,
+                        role: inputs.includes(f) ? "input" : "output" });
+          }
+        });
+      }
+    }
+    // 정확 일치 먼저, 그다음 출력(요약) 시트 먼저 — 이미 계산된 열을 원본보다 우선 읽게
+    hits.sort((x, y) => (Number(y.exact) - Number(x.exact)) || (Number(y.role === "output") - Number(x.role === "output")));
+    return { ok: true, query: q, matchCount: hits.length, matches: hits.slice(0, 30),
+             note: hits.length
+               ? "matches 의 file/sheet/col 을 data.query·data.read 에 그대로 넣어라. 출력(요약) 시트에 이미 계산된 열이 있으면 원본 시트들을 다시 계산하지 말고 그 열을 읽어 답하라."
+               : "이 이름의 열은 어느 시트 헤더에도 없다. 비슷한 이름은 schema.summary 의 headersBySheet 에서 골라라." };
+  });
 
 // ── 4. 적용 상태 진단 (백엔드 호출 없음, 가장 자주 맞는 진단) ────────────────
 assistDefineTool("diag.stepStatus", { desc: "각 단계가 라이브에 실제로 반영돼 있는지 3중 대조(상태칩·적용시그니처·스냅샷 신선도)" },
@@ -288,21 +403,25 @@ assistDefineTool("literals.scan", { desc: "코드에 박힌 월·날짜·파일�
 
 // ── 7. 데이터 질의 (클라이언트 미리보기 한정, 백엔드 호출 없음) ──────────────
 assistDefineTool("data.query", {
-  desc: "시트 데이터 집계/조회(라이브로 열린 파일은 실제 행 전체 기준 — 합계·개수 검산에 바로 쓸 수 있다). op=count|sum|distinct|sample|groupSum|groupCount. groupSum/groupCount 는 groupBy 열로 묶어 상위 topN(기본20). where=[{col,op,value}] 로 조건.",
-  args: "file, sheet, op, column, groupBy?, topN?, where?, headerRow?, includeSummaryRows?(기본 false — 합계/평균 행 제외)",
+  desc: "시트 데이터 집계/조회(라이브로 열린 파일은 실제 행 전체 기준 — 합계·개수 검산에 바로 쓸 수 있다). op=count|sum|distinct|sample|groupSum|groupCount|rank. rank=값 열(column)로 정렬해 상위/하위 topN 행(order=asc 가 '가장 낮은/적은', desc 가 '가장 높은/많은') — 순위·최저·최고 질문은 반드시 이걸로(표를 읽고 눈으로 고르지 마라). groupSum/groupCount 는 groupBy 열(배열이면 복합 키)로 묶어 topN(기본20, order 로 오름/내림). where=[{col,op,value}] 로 조건.",
+  args: "file, sheet, op, column, order?(asc|desc), topN?, labelColumn?, groupBy?, where?, headerRow?, includeSummaryRows?(기본 false — 합계/평균 행 제외)",
 }, async (a) => {
     const files = _assistFileList();
     const fname = String(a.file || "").trim();
-    const f = (state.inputs || []).find(x => x && x.name === fname)
-      || ((state.outputTemplates || []).map(t => t && (t.file || t.original)).find(x => x && x.name === fname));
-    if (!f) return { ok: false, error: "unknown_file", given: fname, available: files.map(x => x.name) };
+    const _res = _assistResolveFile(fname, a.sheet);
+    if (!_res) return { ok: false, error: "unknown_file", given: fname, available: files.map(x => x.name),
+                        hint: "available 의 이름을 그대로 다시 넣어라. 열 이름만 알면 columns.find(열 이름)로 파일/시트를 먼저 찾아라. '파일이 없다'고 답하지 마라." };
+    const f = _res.file;
+    if (_res.sheet && (!a.sheet || !_assistHasSheet(f, a.sheet))) a.sheet = _res.sheet;
+    a.sheet = _assistResolveSheet(f, a.sheet);
     await _assistRefreshLiveFile(f, a.sheet);   // 라이브 세션 있으면 캐시를 '현재'로 갱신 후 읽는다
     const sheets = f.sheets || {};
     const sname = String(a.sheet || "").trim();
     let rows = Array.isArray(sheets[sname]) ? sheets[sname] : null;
     if (!rows) {
-      return { ok: false, error: "unknown_sheet", given: sname,
-               available: f.sheetNames || Object.keys(sheets) };
+      return { ok: false, error: "unknown_sheet", given: sname, file: f.name,
+               available: f.sheetNames || Object.keys(sheets),
+               hint: "available 의 시트명을 그대로 넣어 다시 호출하라. 어느 시트인지 모르면 columns.find(열 이름)." };
     }
     if (!rows.length) return { ok: false, error: "empty_preview", note: "이 시트는 미리보기 데이터가 비어 있습니다." };
     // [전체 집계 2026-09-09] 실제 행수가 미리보기보다 많으면 라이브에서 그 시트를 전체 행수만큼 다시 읽는다.
@@ -342,8 +461,19 @@ assistDefineTool("data.query", {
       }
       return -1;
     };
-    const ci = colIdx(a.column);
-    if (ci < 0) return { ok: false, error: "unknown_column", given: a.column, available: header.slice(0, 40) };
+    // [2026-09-10] op 별칭(bottom/lowest/min → rank asc, top/highest/max → rank desc) — 모델이 자연어 그대로 적는 실측.
+    const _opRaw = String(a.op || "count").toLowerCase().replace(/[\s_-]/g, "");
+    const _opAlias = { bottom: "rank", bottomn: "rank", lowest: "rank", min: "rank", smallest: "rank", top: "rank", topn: "rank", highest: "rank", max: "rank", largest: "rank", sort: "rank", order: "rank" };
+    const op = _opAlias[_opRaw] || _opRaw;
+    if (!a.order && /^(bottom|bottomn|lowest|min|smallest)$/.test(_opRaw)) a.order = "asc";
+    if (!a.order && /^(top|topn|highest|max|largest)$/.test(_opRaw)) a.order = "desc";
+    // [2026-09-10] sample 은 열이 없어도 되고, 모델이 "회사명,매출,원가" 처럼 콤마 목록/배열을 넘겨도 첫 열로 받는다(실측 3회 헛발).
+    let _colArg = Array.isArray(a.column) ? a.column[0] : a.column;
+    if (typeof _colArg === "string" && _colArg.includes(",")) _colArg = _colArg.split(",")[0];
+    const ci = colIdx(_colArg);
+    if (ci < 0 && !(op === "sample" && !String(_colArg || "").trim()))
+      return { ok: false, error: "unknown_column", given: a.column, available: header.slice(0, 40),
+               hint: "column 에는 열 이름 하나(또는 열문자)만 넣어라. 여러 열을 보려면 op=sample 이나 data.read." };
     const body = rows.slice(hr + 1);
     const conds = Array.isArray(a.where) ? a.where : [];
     const norm = v => String(v == null ? "" : v).trim();
@@ -362,7 +492,7 @@ assistDefineTool("data.query", {
       }
       return false;
     });
-    const op = String(a.op || "count").toLowerCase();
+    // (op 는 위에서 별칭까지 정규화했다)
     // [검산 2배 오탐 2026-09-09] 합계/평균 같은 요약 행은 집계에서 기본 제외 — 요약표의 열 합계가
     // 원본의 2배로 나와 '이상'으로 오판하던 실측. includeSummaryRows=true 면 예전처럼 포함.
     const _inclSum = a.includeSummaryRows === true || String(a.includeSummaryRows || "").toLowerCase() === "true";
@@ -405,25 +535,53 @@ assistDefineTool("data.query", {
     if (op === "sample") {
       return { ok: true, op, header, rows: hit.slice(0, 8).map(r => r.slice(0, 12)), matchedRows: hit.length, note: previewNote };
     }
+    // [순위 2026-09-10] 값 열로 정렬해 상위/하위 N 행. 실측: "마진율 제일 적은 3곳" 에 모델이 21행을 읽고 눈으로 고르다
+    // 3위를 틀렸다(5회 중 2회). 정렬은 도구가 한다 — 요약 행 제외, 숫자 아닌 셀 건너뜀, 라벨 열은 첫 문자열 열(또는 labelColumn).
+    if (op === "rank") {
+      const order = String(a.order || "desc").toLowerCase().startsWith("a") ? "asc" : "desc";
+      const topN = Math.max(1, Math.min(50, Number(a.topN) || 5));
+      const toNum = v => parseFloat(norm(v).replace(/[,\s₩%]/g, ""));
+      let li = -1;
+      if (a.labelColumn || a.groupBy) li = colIdx(Array.isArray(a.groupBy) ? a.groupBy[0] : (a.labelColumn || a.groupBy));
+      if (li < 0) {   // 첫 '문자열' 열(값 열 제외)
+        for (let i = 0; i < header.length; i++) {
+          if (i === ci) continue;
+          if (hit.some(r => { const v = norm(r[i]); return v && !isFinite(toNum(v)); })) { li = i; break; }
+        }
+      }
+      const scored = [];
+      let skipped = 0;
+      hit.forEach(r => { const x = toNum(r[ci]); if (isFinite(x)) scored.push({ x, r }); else if (norm(r[ci])) skipped += 1; });
+      scored.sort((p, q) => order === "asc" ? p.x - q.x : q.x - p.x);
+      const rowsOut = scored.slice(0, topN).map((s, i) => ({
+        rank: i + 1, label: li >= 0 ? norm(s.r[li]) : null, value: s.x, row: s.r.slice(0, 12) }));
+      return { ok: true, op, order, column: header[ci], labelColumn: li >= 0 ? header[li] : null, topN,
+               rows: rowsOut, rankedCount: scored.length, skippedNonNumeric: skipped, scannedRows: body.length, ..._trunc,
+               note: previewNote + (order === "asc" ? " rows 는 값이 작은 순(1위=가장 낮음)." : " rows 는 값이 큰 순(1위=가장 높음).")
+                     + " 이 순서를 그대로 답하라 — 다시 정렬하거나 다른 행을 고르지 마라." };
+    }
     // [Tier0] 그룹별 집계 — 정산 실무의 기본 질의("거래처별 합계", "요금제별 건수 상위 N").
     // groupBy 열로 묶어 대상 열을 합산(groupSum)하거나 건수를 센다(groupCount). 상위 topN 만 반환.
     if (op === "groupsum" || op === "groupcount") {
-      const gi = colIdx(a.groupBy);
-      if (gi < 0) return { ok: false, error: "unknown_groupBy", given: a.groupBy, available: header.slice(0, 40) };
+      // [2026-09-10] groupBy 는 열 하나 또는 배열(복합 키 "회사명 | 상품"). 실측: 모델이 ["회사명","상품"] 을 두 번 보내 헛발.
+      const gcols = Array.isArray(a.groupBy) ? a.groupBy : [a.groupBy];
+      const gis = gcols.map(colIdx);
+      if (!gis.length || gis.some(i => i < 0)) return { ok: false, error: "unknown_groupBy", given: a.groupBy, available: header.slice(0, 40) };
       const topN = Math.max(1, Math.min(50, Number(a.topN) || 20));
       const agg = new Map();
       hit.forEach(r => {
-        const key = norm(r[gi]); if (!key) return;
+        const key = gis.map(i => norm(r[i])).join(" | "); if (!key.replace(/[\s|]/g, "")) return;
         if (op === "groupcount") { agg.set(key, (agg.get(key) || 0) + 1); return; }
         const x = parseFloat(norm(r[ci]).replace(/[,\s₩]/g, ""));
         if (isFinite(x)) agg.set(key, (agg.get(key) || 0) + x);
       });
-      const groups = [...agg.entries()].sort((x, y) => y[1] - x[1]).slice(0, topN)
+      const _asc = String(a.order || "").toLowerCase().startsWith("a");
+      const groups = [...agg.entries()].sort((x, y) => _asc ? x[1] - y[1] : y[1] - x[1]).slice(0, topN)
         .map(([k, v]) => ({ key: k, value: op === "groupsum" ? Math.round(v * 100) / 100 : v }));
-      return { ok: true, op, groupBy: a.groupBy, valueColumn: op === "groupsum" ? a.column : null,
+      return { ok: true, op, order: _asc ? "asc" : "desc", groupBy: a.groupBy, valueColumn: op === "groupsum" ? a.column : null,
                groupCount: agg.size, top: groups, scannedRows: body.length, note: previewNote };
     }
-    return { ok: false, error: "unknown_op", given: a.op, available: ["count", "sum", "distinct", "sample", "groupSum", "groupCount"] };
+    return { ok: false, error: "unknown_op", given: a.op, available: ["count", "sum", "distinct", "sample", "groupSum", "groupCount", "rank"] };
   });
 
 // ── 8. 되돌리기 가능성 안내 ──────────────────────────────────────────────────
@@ -516,20 +674,23 @@ assistDefineTool("run.trace", {
 assistDefineTool("sheet.headers", { desc: "특정 파일/시트의 헤더(열 이름) 목록. data.query 전에 열 이름을 미리 알아 unknown_column 재시도를 없앤다.", args: "file, sheet, headerRow?" },
   async (a) => {
     const fname = String(a.file || "").trim();
-    const f = (state.inputs || []).find(x => x && x.name === fname)
-      || ((state.outputTemplates || []).map(t => t && (t.file || t.original)).find(x => x && x.name === fname));
-    if (!f) return { ok: false, error: "unknown_file", given: fname, available: _assistFileList().map(x => x.name) };
+    const _res = _assistResolveFile(fname, a.sheet);
+    if (!_res) return { ok: false, error: "unknown_file", given: fname, available: _assistFileList().map(x => x.name),
+                        hint: "available 의 이름을 그대로 다시 넣어라. 열 이름만 알면 columns.find(열 이름)." };
+    const f = _res.file;
+    if (_res.sheet && (!a.sheet || !_assistHasSheet(f, a.sheet))) a.sheet = _res.sheet;
+    a.sheet = _assistResolveSheet(f, a.sheet);
     await _assistRefreshLiveFile(f, a.sheet);
     const sheets = f.sheets || {};
     const sname = String(a.sheet || "").trim();
     const rows = Array.isArray(sheets[sname]) ? sheets[sname] : null;
-    if (!rows) return { ok: false, error: "unknown_sheet", given: sname, available: f.sheetNames || Object.keys(sheets) };
+    if (!rows) return { ok: false, error: "unknown_sheet", given: sname, file: f.name, available: f.sheetNames || Object.keys(sheets) };
     if (!rows.length) return { ok: false, error: "empty_preview", note: "이 시트는 미리보기 데이터가 비어 있습니다." };
     // 헤더 행 자동 추정(지정 없으면) — data.query 와 동일 규칙(공용 헬퍼)으로 일치.
     const hr = _assistDetectHeaderRow(rows, a.headerRow);
     const header = (rows[hr] || []).map((v, i) => ({ col: _assistColLetter(i), name: String(v == null ? "" : v).trim() }))
       .filter(h => h.name);
-    return { ok: true, file: fname, sheet: sname, headerRow: hr + 1, columnCount: header.length,
+    return { ok: true, file: f.name, sheet: sname, headerRow: hr + 1, columnCount: header.length,
              headers: header.slice(0, 60),
              note: "col 은 엑셀 열문자(A,B,…), name 은 헤더 텍스트다. data.query 의 column 에는 둘 중 아무거나 넣어도 된다." };
   });
@@ -577,14 +738,17 @@ assistDefineTool("data.read", {
   args: "file, sheet, range",
 }, async (a) => {
   const fname = String(a.file || "").trim();
-  const f = (state.inputs || []).find(x => x && x.name === fname)
-    || ((state.outputTemplates || []).map(t => t && (t.file || t.original)).find(x => x && x.name === fname));
-  if (!f) return { ok: false, error: "unknown_file", given: fname, available: _assistFileList().map(x => x.name) };
+  const _res = _assistResolveFile(fname, a.sheet);
+  if (!_res) return { ok: false, error: "unknown_file", given: fname, available: _assistFileList().map(x => x.name),
+                      hint: "available 의 이름을 그대로 다시 넣어라. 열 이름만 알면 columns.find(열 이름)." };
+  const f = _res.file;
+  if (_res.sheet && (!a.sheet || !_assistHasSheet(f, a.sheet))) a.sheet = _res.sheet;
+  a.sheet = _assistResolveSheet(f, a.sheet);
   await _assistRefreshLiveFile(f, a.sheet);
   const sheets = f.sheets || {};
   const sname = String(a.sheet || "").trim();
   const rows = Array.isArray(sheets[sname]) ? sheets[sname] : null;
-  if (!rows) return { ok: false, error: "unknown_sheet", given: sname, available: f.sheetNames || Object.keys(sheets) };
+  if (!rows) return { ok: false, error: "unknown_sheet", given: sname, file: f.name, available: f.sheetNames || Object.keys(sheets) };
   const nRows = rows.length, nCols = rows.reduce((m, r) => Math.max(m, (r || []).length), 0);
   // A1 파싱: "A2:C20" | "F:F" | "B5"
   const m = /^\s*([A-Za-z]{1,3})?(\d+)?(?::([A-Za-z]{1,3})?(\d+)?)?\s*$/.exec(String(a.range || ""));

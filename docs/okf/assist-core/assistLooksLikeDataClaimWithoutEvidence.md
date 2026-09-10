@@ -8,7 +8,7 @@ signature: "(question, text)"
 role: "근거 없는 주장으로 본다 → 루프가 한 번 재촉한다."
 role_source: banner
 version: "0.8.4"
-loc: "assist-core.js:324-324"
+loc: "assist-core.js:341-341"
 
 # ── 입출력 ──
 inputs:

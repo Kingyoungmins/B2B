@@ -8,7 +8,7 @@ signature: "(p)"
 role: "[실측 2026-09-09] \"…총합을 읽어서 맞춰 볼게요. 원본은 금액 열이에요.\" — 예고 뒤에 짧은 부연이"
 role_source: banner
 version: "0.8.4"
-loc: "assist-core.js:355-355"
+loc: "assist-core.js:372-372"
 
 # ── 입출력 ──
 inputs:

@@ -32,7 +32,9 @@ calls_external:
   - "max"
   - "min"
   - "trim"
-called_by: []
+called_by:
+  - "_assistFileHeadersBrief"
+  - "add"
 reads: []
 writes: []
 affects: []                # (수동 보완) 정적 추출 불가 — 이게 틀어지면 깨지는 상위 기능
@@ -47,7 +49,7 @@ timestamp: "0.8.4-gen"
 
 ## 관계
 - 호출: 없음
-- 피호출(영향 전파 경로): 없음
+- 피호출(영향 전파 경로): `_assistFileHeadersBrief`, `add`
 
 ## 실패/예외
 - `(명시적 raise 없음/미탐지)`

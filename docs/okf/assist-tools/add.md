@@ -1,19 +1,19 @@
 ---
 type: endpoint
 title: add
-module: drop-handling.js
+module: assist-tools.js
 lang: js
 extraction: regex   # 정규식 근사
-signature: "(book, sheet)"
+signature: "(role, f)"
 role: "(추정) 역할 주석 없음 — 담당자 1줄 보완 필요"   # (추정)
 role_source: none
 version: "0.8.4"
-loc: "drop-handling.js:1184-1184"
+loc: "assist-tools.js:216-216"
 
 # ── 입출력 ──
 inputs:
-  - "book"
-  - "sheet"
+  - "role"
+  - "f"
 returns: "(추정)"
 
 # ── 사이드이펙트 (정적 추정) ──
@@ -23,11 +23,17 @@ raises: []
 
 # ── 유기적 관계 ──
 calls:
+  - "_assistDetectHeaderRow"
   - "push"
-  - "runnerLooksLikeA1Address"
-  - "runnerMappingNorm"
 calls_external:
-  - "has"
+  - "Set"
+  - "String"
+  - "filter"
+  - "isArray"
+  - "keys"
+  - "map"
+  - "slice"
+  - "trim"
 called_by:
   - "_assistFileHeadersBrief"
   - "_flashChatMessage"
@@ -133,7 +139,7 @@ timestamp: "0.8.4-gen"
 - 없음(정적 분석 기준)
 
 ## 관계
-- 호출: `push`, `runnerLooksLikeA1Address`, `runnerMappingNorm`
+- 호출: `_assistDetectHeaderRow`, `push`
 - 피호출(영향 전파 경로): `_assistFileHeadersBrief`, `_flashChatMessage`, `_highlightCurrent`, `_recordedWindowSheetPairs`, `_renderViewerInitial`, `_toggleSheetSelection`, `addCell`, `analyze`, `applyBackendPipelineResult`, `askUserChoice`, `assistHandleUserMessage`, `assistStripPromptEcho`, `augmentUserPromptWithMentions`, `autoRegenerateAsVbaFallback`, `autoRegenerateForMissingCode`, `autoRegenerateForStaticSafety`, `beginUiBusy`, `bind`, `bindChatHistoryEntryToMessage`, `captureCrossFileDestinationSnapshots`, `captureCurrentViewSnapshot`, `chooseBackendRestoreView`, `codeHasBroadValueRewrite`, `codeLiterals`, `collectPipelineReferencedFileIds`, `crossWriteDestinationScan`, `ensurePipelineStepIds`, `exactSheetNamesFromMentions`, `finalizeActionButtonFromResult`, `findPhantoms`, `flashChangedViewCells`, `flashFilled`, `loadLogicFiles`, `loadUserIdentity`, `negativeSignLossFailures`, `offerMissingDependencySkillCandidate`, `onDown`, `openDownloadModal`, `openInsertPositionDialog`, `openMenu`, `openRunnerFileEditor`, `openRunnerLogicEditor`, `openSaveModal`, `openSettingsModal`, `openUserSettingsModal`, `paintViewerSelections`, `pipelineCollectWorkbookNames`, `pipelineExactSheetNamesFromText`, `pipelineKnownFiles`, `pipelinePythonMutatedBookNames`, `pipelineRuntimeExecutionBlockersForStep`, `pipelineSheetLiteralsFromCode`, `pipelineStableWorkbookKey`, `pipelineSuffixCrossUnresolvedNames`, `pipelineTargetSheetNames`, `pipelineVbaTargetWorkbookNames`, `push`, `pythonComStaticSafetyFailures`, `renderEditingBanner`, `renderPipeline`, `renderRunnerWorkflow`, `repairPasteCopiedInternalBookNames`, `repairStalePromptBookNames`, `repairStaleTargetFileIds`, `replaceSimulatorWithMirrorShell`, `requestErrorRecovery`, `requestedExcelColumnLetters`, `restorePipelineCheckpointForSuffix`, `restorePipelineToCheckpointAndHold`, `runIsolatedLivePipelineSteps`, `runPipeline`, `runSearch`, `runnerBuildMappingRows`, `runnerCanonicalizeRequirementsByEnv`, `runnerGeneratedSheetNameSet`, `runnerSheetOwnersFromCode`, `sendChat`, `setActionButtonPending`, `setGeneratorRunLoading`, `setupDrop`, `setupNodeDrop`, `setupStreamingAssistantMessage`, `showFindBar`, `showRecordReviewDialog`, `showThinkRetryPrompt`, `snapExcel`, `syncStepPreApplySnapshot`, `vbaSheetReferenceLiterals`, `vbaStaticSafetyFailures`, `verifyPrefixRestoreCoverage`, `wholeColumnCountRowTwoFailures`
 
 ## 실패/예외

@@ -13,6 +13,25 @@
 
 0.8.3 그대로에서 버전만 올린 갈래(`cdc6f860`). 제품명 변경, F키 접근 권한, 대시보드 실사용 보강, 그리고 "화면은 맞는데 파일이 다르다" 부류의 조용한 오류 수정이 중심입니다.
 
+### 수정 — 2026-09-10 (AI 도움: 시트명 없는 데이터 질문, docs/lessons/62)
+
+- **"마진율 제일 적은거 3개 뽑아줘" 가 흔들림** — 제보(사내 Qwen3.6): "파일이 없다"며 못 찾음. 개발망 Qwen3.8 실기 3회:
+  정답 1 / "짝짓기가 안 돼요" 포기 1 / 원본 두 시트를 머릿속에서 결합해 3위 오답 1. 세 가지 원인을 각각 고쳤다.
+  - 도구 파일 인자가 **정확 일치만** 통과 → `_assistResolveFile/_assistResolveSheet`: 확장자·대소문자·이름 일부·"시트명을 파일로"
+    를 **유일할 때만** 보정(모호하면 available 을 돌려준다). `data.query`·`sheet.headers`·`data.read` 공용. unknown_* 에 hint.
+  - 프롬프트 그라운딩 팩트에 **파일별 시트(열 이름)** 추가(`_assistFileHeadersBrief`) + `columns.find(열 이름)` 도구 +
+    `schema.summary.headersBySheet` — 'Sheet1' 추측·원본 뒤지기가 사라져 5/5 첫 호출부터 `회사별요약` 을 읽음.
+  - **정렬은 도구가**: `data.query op=rank(column, order=asc|desc, topN, labelColumn?)`(별칭 bottom/lowest/min·top/highest/max),
+    `groupSum/groupCount` 에 `order`, `groupBy` 배열(복합 키), `sample` 은 column 없이/콤마 목록 허용.
+    모델이 21행 표를 눈으로 골라 3위를 틀리던 것(5회 중 2회)이 사라짐.
+  - **본문 없는 final** — 도구 결과 직후 `{"action":"final","args":{}}` 만 보내 "응답을 정리하지 못했습니다" 로 끝나던
+    것(6회 중 1회)을 1회 재촉(`emptyFinalNudges`, `assist.nudge kind=empty-final`)으로 회수. 상한 1.
+  - 최종 실기: 같은 질문 6/6 정답, 다른 표현("마진율 낮은 회사 셋만", "매출이 제일 큰 회사 어디야?")도 rank 한 방으로 정답.
+- 검증: `test_runs/_test_assist_resolve_file_columns_find.js`(실제 함수 실행 40여 건), `_test_assist_empty_final_nudge_e2e.py`
+  (LLM 을 route 로 각본 모의 → 실제 루프에서 재촉 1회·상한·정상 경로 결정적 확인, 백엔드 없으면 스스로 띄움),
+  `_e2e_assist_vague_margin_live.py`(개발망 Qwen 실기, 반복 횟수·질문 인자). registry `ASSIST-VAGUE-DATA-QUESTION-SHEET-RESOLVE`,
+  `ASSIST-EMPTY-FINAL-NUDGE`.
+
 ### 추가 — 2026-09-09 저녁 (대시보드 골라 보기 4건, `dashboard.html`)
 
 - **조직 단계별 보기** — `orgPath("회사 > 부문 > 센터 > Lab > 팀")` 를 단계로 쪼개는 "조직 단계별 사용" 차트.

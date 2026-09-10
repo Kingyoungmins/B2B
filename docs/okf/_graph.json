@@ -20421,6 +20421,7 @@
       "loc": "assist-core.js:26-26",
       "signature": "()",
       "calls": [
+        "_assistFileHeadersBrief",
         "assistToolCatalog",
         "read"
       ],
@@ -20440,7 +20441,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "assist-core.js:307-307",
+      "loc": "assist-core.js:324-324",
       "signature": "(sys, tail)",
       "calls": [
         "push"
@@ -20457,7 +20458,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "assist-core.js:324-324",
+      "loc": "assist-core.js:341-341",
       "signature": "(question, text)",
       "calls": [],
       "side_effects": [
@@ -20472,7 +20473,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "assist-core.js:333-333",
+      "loc": "assist-core.js:350-350",
       "signature": "(text)",
       "calls": [
         "isPromise"
@@ -20489,7 +20490,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "assist-core.js:339-339",
+      "loc": "assist-core.js:356-356",
       "signature": "(p)",
       "calls": [],
       "side_effects": [
@@ -20504,7 +20505,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "assist-core.js:355-355",
+      "loc": "assist-core.js:372-372",
       "signature": "(p)",
       "calls": [],
       "side_effects": [
@@ -20519,7 +20520,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "assist-core.js:373-373",
+      "loc": "assist-core.js:390-390",
       "signature": "(text)",
       "calls": [],
       "side_effects": [
@@ -20534,7 +20535,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "assist-core.js:388-388",
+      "loc": "assist-core.js:405-405",
       "signature": "(text)",
       "calls": [],
       "side_effects": [
@@ -20549,7 +20550,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "assist-core.js:398-398",
+      "loc": "assist-core.js:415-415",
       "signature": "()",
       "calls": [],
       "side_effects": [
@@ -20564,7 +20565,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "assist-core.js:399-399",
+      "loc": "assist-core.js:416-416",
       "signature": "()",
       "calls": [],
       "side_effects": [
@@ -20579,7 +20580,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "assist-core.js:408-408",
+      "loc": "assist-core.js:425-425",
       "signature": "(userText, ui, attachImages)",
       "calls": [
         "add",
@@ -20626,7 +20627,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "assist-core.js:410-410",
+      "loc": "assist-core.js:427-427",
       "signature": "(s)",
       "calls": [],
       "side_effects": [
@@ -20641,7 +20642,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "assist-core.js:445-445",
+      "loc": "assist-core.js:463-463",
       "signature": "()",
       "calls": [],
       "side_effects": [
@@ -20656,7 +20657,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "assist-core.js:452-452",
+      "loc": "assist-core.js:470-470",
       "signature": "(chunk)",
       "calls": [
         "armStall",
@@ -20674,7 +20675,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "assist-core.js:457-457",
+      "loc": "assist-core.js:475-475",
       "signature": "(sys, imgs)",
       "calls": [
         "armStall",
@@ -20692,7 +20693,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "assist-core.js:470-470",
+      "loc": "assist-core.js:488-488",
       "signature": "()",
       "calls": [
         "assistBuildProposal",
@@ -20721,7 +20722,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "assist-core.js:840-840",
+      "loc": "assist-core.js:871-871",
       "signature": "(text, ui)",
       "calls": [
         "push"
@@ -20742,7 +20743,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "assist-core.js:847-847",
+      "loc": "assist-core.js:878-878",
       "signature": "(newCode, step, kind)",
       "calls": [
         "push",
@@ -20760,7 +20761,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "assist-core.js:851-851",
+      "loc": "assist-core.js:882-882",
       "signature": "(fn, ...a)",
       "calls": [
         "push"
@@ -20777,7 +20778,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "assist-core.js:866-866",
+      "loc": "assist-core.js:897-897",
       "signature": "(args)",
       "calls": [
         "_assistGateReplacementCode",
@@ -20807,7 +20808,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "assist-core.js:957-957",
+      "loc": "assist-core.js:988-988",
       "signature": "(fn, ...a)",
       "calls": [
         "push"
@@ -20824,7 +20825,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "assist-core.js:990-990",
+      "loc": "assist-core.js:1021-1021",
       "signature": "(field, label)",
       "calls": [
         "push"
@@ -20841,7 +20842,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "assist-core.js:1054-1054",
+      "loc": "assist-core.js:1085-1085",
       "signature": "(id)",
       "calls": [],
       "side_effects": [
@@ -20858,7 +20859,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "assist-core.js:1063-1063",
+      "loc": "assist-core.js:1094-1094",
       "signature": "(p)",
       "calls": [],
       "side_effects": [
@@ -20875,7 +20876,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "assist-core.js:1080-1080",
+      "loc": "assist-core.js:1111-1111",
       "signature": "(p, signal)",
       "calls": [
         "postExcelMirror"
@@ -20894,7 +20895,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "assist-core.js:1098-1098",
+      "loc": "assist-core.js:1129-1129",
       "signature": "(p, pickedIdx)",
       "calls": [],
       "side_effects": [
@@ -20912,7 +20913,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "assist-core.js:1118-1118",
+      "loc": "assist-core.js:1149-1149",
       "signature": "(proposalId, accepted)",
       "calls": [
         "assistApplyCompanions",
@@ -21910,12 +21911,122 @@
       "writes": []
     },
     {
+      "id": "_assistAllFiles",
+      "module": "assist-tools.js",
+      "lang": "js",
+      "kind": "function",
+      "extraction": "regex",
+      "loc": "assist-tools.js:165-165",
+      "signature": "()",
+      "calls": [
+        "push"
+      ],
+      "side_effects": [
+        "없음(정적 분석 기준)"
+      ],
+      "reads": [
+        "state.inputs",
+        "state.outputTemplates"
+      ],
+      "writes": []
+    },
+    {
+      "id": "_assistHasSheet",
+      "module": "assist-tools.js",
+      "lang": "js",
+      "kind": "function",
+      "extraction": "regex",
+      "loc": "assist-tools.js:171-171",
+      "signature": "(f, sn)",
+      "calls": [],
+      "side_effects": [
+        "없음(정적 분석 기준)"
+      ],
+      "reads": [],
+      "writes": []
+    },
+    {
+      "id": "_assistResolveFile",
+      "module": "assist-tools.js",
+      "lang": "js",
+      "kind": "function",
+      "extraction": "regex",
+      "loc": "assist-tools.js:175-175",
+      "signature": "(fname, sheetHint)",
+      "calls": [
+        "_assistAllFiles",
+        "_assistHasSheet"
+      ],
+      "side_effects": [
+        "없음(정적 분석 기준)"
+      ],
+      "reads": [],
+      "writes": []
+    },
+    {
+      "id": "_assistResolveSheet",
+      "module": "assist-tools.js",
+      "lang": "js",
+      "kind": "function",
+      "extraction": "regex",
+      "loc": "assist-tools.js:200-200",
+      "signature": "(f, sname)",
+      "calls": [
+        "_assistHasSheet"
+      ],
+      "side_effects": [
+        "없음(정적 분석 기준)"
+      ],
+      "reads": [],
+      "writes": []
+    },
+    {
+      "id": "_assistFileHeadersBrief",
+      "module": "assist-tools.js",
+      "lang": "js",
+      "kind": "function",
+      "extraction": "regex",
+      "loc": "assist-tools.js:213-213",
+      "signature": "(maxCols)",
+      "calls": [
+        "_assistDetectHeaderRow",
+        "add",
+        "push"
+      ],
+      "side_effects": [
+        "없음(정적 분석 기준)"
+      ],
+      "reads": [
+        "state.inputs",
+        "state.outputTemplates"
+      ],
+      "writes": []
+    },
+    {
+      "id": "add",
+      "module": "assist-tools.js",
+      "lang": "js",
+      "kind": "function",
+      "extraction": "regex",
+      "loc": "assist-tools.js:216-216",
+      "signature": "(role, f)",
+      "calls": [
+        "_assistDetectHeaderRow",
+        "push"
+      ],
+      "side_effects": [
+        "없음(정적 분석 기준)"
+      ],
+      "reads": [],
+      "writes": []
+    },
+    {
       "id": "_nonEmptyInCol",
       "module": "assist-tools.js",
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "assist-tools.js:323-323",
+      "loc": "assist-tools.js:442-442",
       "signature": "(idx)",
       "calls": [],
       "side_effects": [
@@ -21930,7 +22041,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "assist-tools.js:324-324",
+      "loc": "assist-tools.js:443-443",
       "signature": "(indices)",
       "calls": [
         "_nonEmptyInCol"
@@ -21947,7 +22058,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "assist-tools.js:330-330",
+      "loc": "assist-tools.js:449-449",
       "signature": "(name)",
       "calls": [
         "_pickBestCol",
@@ -21966,7 +22077,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "assist-tools.js:350-350",
+      "loc": "assist-tools.js:480-480",
       "signature": "(row)",
       "calls": [],
       "side_effects": [
@@ -21981,7 +22092,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "assist-tools.js:571-571",
+      "loc": "assist-tools.js:732-732",
       "signature": "(col)",
       "calls": [],
       "side_effects": [
@@ -21996,7 +22107,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "assist-tools.js:620-620",
+      "loc": "assist-tools.js:784-784",
       "signature": "(()",
       "calls": [
         "_assistColLetter"
@@ -22016,7 +22127,7 @@
       "lang": "js",
       "kind": "function",
       "extraction": "regex",
-      "loc": "assist-tools.js:629-629",
+      "loc": "assist-tools.js:793-793",
       "signature": "(()",
       "calls": [],
       "side_effects": [
@@ -61177,6 +61288,11 @@
     },
     {
       "from": "assistSystemPrompt",
+      "to": "_assistFileHeadersBrief",
+      "lang": "js"
+    },
+    {
+      "from": "assistSystemPrompt",
       "to": "assistToolCatalog",
       "lang": "js"
     },
@@ -61947,6 +62063,51 @@
     },
     {
       "from": "_assistFileList",
+      "to": "push",
+      "lang": "js"
+    },
+    {
+      "from": "_assistAllFiles",
+      "to": "push",
+      "lang": "js"
+    },
+    {
+      "from": "_assistResolveFile",
+      "to": "_assistAllFiles",
+      "lang": "js"
+    },
+    {
+      "from": "_assistResolveFile",
+      "to": "_assistHasSheet",
+      "lang": "js"
+    },
+    {
+      "from": "_assistResolveSheet",
+      "to": "_assistHasSheet",
+      "lang": "js"
+    },
+    {
+      "from": "_assistFileHeadersBrief",
+      "to": "_assistDetectHeaderRow",
+      "lang": "js"
+    },
+    {
+      "from": "_assistFileHeadersBrief",
+      "to": "add",
+      "lang": "js"
+    },
+    {
+      "from": "_assistFileHeadersBrief",
+      "to": "push",
+      "lang": "js"
+    },
+    {
+      "from": "add",
+      "to": "_assistDetectHeaderRow",
+      "lang": "js"
+    },
+    {
+      "from": "add",
       "to": "push",
       "lang": "js"
     },
@@ -78837,11 +78998,11 @@
     }
   ],
   "stats": {
-    "functions": 2329,
-    "edges": 6430,
+    "functions": 2335,
+    "edges": 6440,
     "by_lang": {
       "python": 832,
-      "js": 1240,
+      "js": 1245,
       "csharp": 62
     }
   }

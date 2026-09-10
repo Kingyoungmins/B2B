@@ -21,19 +21,24 @@ raises: []
 
 # ── 유기적 관계 ──
 calls:
+  - "_assistFileHeadersBrief"
   - "assistToolCatalog"
   - "read"
 calls_external:
   - "F5"
   - "F9"
   - "N건"
+  - "concat"
   - "depth_forced"
+  - "entries"
   - "error"
   - "filter"
+  - "find"
   - "isArray"
   - "join"
   - "map"
   - "query"
+  - "rank"
   - "step"
   - "trace"
   - "zip"
@@ -56,7 +61,7 @@ timestamp: "0.8.4-gen"
 - 없음(정적 분석 기준)
 
 ## 관계
-- 호출: `assistToolCatalog`, `read`
+- 호출: `_assistFileHeadersBrief`, `assistToolCatalog`, `read`
 - 피호출(영향 전파 경로): `assistCloseOut`, `assistHandleUserMessage`
 
 ## 실패/예외
