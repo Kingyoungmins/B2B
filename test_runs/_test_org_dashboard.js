@@ -3,7 +3,7 @@
 const fs = require("fs");
 const path = require("path");
 const ROOT = path.join(__dirname, "..");
-const HTML = fs.readFileSync(path.join(ROOT, "dashboard.html"), "utf8");
+const HTML = fs.readFileSync(path.join(ROOT, "dashboard.html"), "utf8").replace(/\r\n/g, "\n");   // CRLF 체크아웃에서도 개행 포함 검사가 같게
 
 let fails = 0;
 function check(name, cond, detail) {

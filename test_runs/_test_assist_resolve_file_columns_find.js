@@ -8,7 +8,7 @@ const fs = require("fs");
 const path = require("path");
 const vm = require("vm");
 const ROOT = path.join(__dirname, "..");
-const read = f => fs.readFileSync(path.join(ROOT, f), "utf8").replace(/^﻿/, "");
+const read = f => fs.readFileSync(path.join(ROOT, f), "utf8").replace(/^﻿/, "").replace(/\r\n/g, "\n");
 const TOOLS = read("scripts/assist-tools.js");
 const CORE = read("scripts/assist-core.js");
 
