@@ -5,8 +5,10 @@ import json, os, sys, time, re
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 from playwright.sync_api import sync_playwright
 
-# 실기 데이터 폴더(input_매출/원가_2026_4월.xlsx, output_청구서.xlsx, skill5.zip) — 환경변수 B2B_ASSIST_E2E_DIR 로 지정
-E = os.environ.get("B2B_ASSIST_E2E_DIR", "C:/Users/Admin/AppData/Local/Temp/claude/c--Users-Admin-Desktop-KGM-git/32a9a6e8-840a-419c-9ada-a1a6b9a81a9b/scratchpad/e2e")
+# 실기 데이터 폴더: input_매출/원가_2026_4월.xlsx, output_청구서.xlsx, 스킬 zip(skill5.zip 또는 skill5_회사별요약_5단계.zip).
+# 기본은 같은 remote 의 교육교안 브랜치 폴더(../교육교안). 환경변수 B2B_ASSIST_E2E_DIR 로 바꿀 수 있다.
+E = os.environ.get("B2B_ASSIST_E2E_DIR", os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "..", "교육교안"))
+SKILL_ZIP = next((os.path.join(E, n) for n in ("skill5.zip", "skill5_회사별요약_5단계.zip") if os.path.exists(os.path.join(E, n))), os.path.join(E, "skill5.zip"))
 BASE = "http://127.0.0.1:18091/"
 N = int(sys.argv[1]) if len(sys.argv) > 1 else 3
 QS = [q for q in sys.argv[2:]] or ["마진율 제일 적은거 3개 뽑아줘"]
@@ -25,7 +27,7 @@ with sync_playwright() as p:
     page.set_input_files("#output-file", [os.path.join(E, "output_청구서.xlsx")])
     page.wait_for_function("""() => (state.inputs||[]).length >= 2 && ((state.outputTemplates||[]).some(t => t && t.file) || state.output)
         && Object.keys((typeof excelMirror !== 'undefined' && excelMirror.sessionsByFileId) || {}).length >= 3""", timeout=180000)
-    page.set_input_files("#logic-files", [os.path.join(E, "skill5.zip")])
+    page.set_input_files("#logic-files", [SKILL_ZIP])
     page.wait_for_function("(state.pipeline||[]).length >= 5", timeout=60000)
     log("apply:", page.evaluate("""async () => { try { await runPipelineWithAutoRepair({ source: "generator", ignoreCheckpoint: true, backgroundMode: true }); return "ok"; } catch (e) { return "ERR " + String(e && e.message || e).slice(0,160); } }"""))
     log("files:", page.evaluate("() => _assistFileList().map(f => f.name + ' [' + (f.sheets||[]).join('|') + ']')"))

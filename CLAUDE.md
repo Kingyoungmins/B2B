@@ -1,7 +1,7 @@
 # CLAUDE.md — 이 저장소에서 작업할 때 알아야 할 것
 
 > 새로 clone 했다면 이 파일부터 읽으세요. 상세 문서는 `README.md`, 코드 명세는 `docs/okf/`,
-> 과거 삽질은 `docs/lessons/` 에 있습니다.
+> 과거 삽질은 `docs/lessons/` 에 있습니다. **PC 를 포맷했거나 새 PC 라면 `docs/RESTORE_AFTER_FORMAT.md`** 부터.
 
 ## 이게 뭔가
 

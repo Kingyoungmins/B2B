@@ -181,6 +181,7 @@ python tools\issue_recheck\recheck.py --serve    :: 관리 대시보드 http://1
 | `tools/issue_recheck/README.md` | 회귀 재점검 도구 + 지라 완료 이슈 대조 |
 | `tools/callpath/` | 버튼 → 엔드포인트 → 실행 함수 호출 경로 추적기 |
 | `CHANGELOG.md` | 개발자용 변경 이력(0.8.3·0.8.4 및 초기 ver1~ver2 기록) |
+| `docs/RESTORE_AFTER_FORMAT.md` | **포맷/새 PC 복구 절차** — git 에 없는 것(키·.env·logs·dist·Claude 메모리) 목록, 설치, 같은 경로로 클론, 확인, 빌드 |
 
 ## 작업 규칙 (이어받는 사람이 반드시 알아야 할 것)
 
